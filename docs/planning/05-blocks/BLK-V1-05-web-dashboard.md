@@ -27,10 +27,10 @@ Owns the phone-responsive browser dashboard, state coverage, approved visual dir
 
 | Contract/data item | Owner | Rules | Validation |
 | --- | --- | --- | --- |
-| Session card view model | Web/contracts | Attention sort first; shows required metadata and recent output summary. | Component tests with mixed fixture statuses. |
-| Session detail view model | Web/contracts | Recent Codex output and safe prompt/slash controls precede raw terminal fallback. | Component tests and screenshots. |
-| Write control state | Web/core contracts | Controls disabled for untrusted/read-only/locked/stale/stopped/crashed/unknown states before write attempt. | UI state tests and API integration tests. |
-| Raw fallback state | Web/server contracts | Raw input hidden by default and requires advanced mode plus confirmation. | UI/API tests. |
+| Session card view model | `@hostdeck/contracts` schema; later web implementation | Attention sort first; shows required metadata and recent output summary. | Contract tests now; later component tests with mixed fixture statuses. |
+| Session detail view model | `@hostdeck/contracts` schema; later web implementation | Recent Codex output and safe prompt/slash controls precede raw terminal fallback. | Contract tests now; later component tests and screenshots. |
+| Write control state | `@hostdeck/contracts` and core write rules; later web implementation | Controls disabled for untrusted/read-only/locked/stale/stopped/crashed/unknown states before write attempt. | Contract tests now; later UI state tests and API integration tests. |
+| Raw fallback state | `@hostdeck/contracts` and server contracts; later web implementation | Raw input hidden by default and requires advanced mode plus confirmation. | Contract tests now; later UI/API tests. |
 | Mockup assets | `assets/ui-concepts/` | Two options generated, selected by human, stored in repo before UI implementation. | `SPK-UX-001` artifact and decision log entry. |
 
 ## Implementation Blueprint

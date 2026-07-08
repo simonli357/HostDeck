@@ -44,8 +44,9 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 5 | `FND-V1-004` Command intents and write eligibility | done | none | Write safety and slash controls depend on this headless rule set. |
 | 6 | `FND-V1-006` API and stream contract schemas | done | none | API and stream routes now have runtime contract schemas and contract tests. |
 | 7 | `FND-V1-012` Storage/config/auth/audit/retention contract schemas | done | none | Storage and safety contracts now have runtime schemas and contract tests. |
-| 8 | `FND-V1-013` UI fixture and view-model contract schemas | ready | none | UI state contracts should exist before fake session/host fixtures and later mockup-backed UI work. |
-| 9 | `FND-V1-007` Deterministic fake Codex/session/host fixtures | todo | `FND-V1-013` | Fixture work should wait until UI contract shapes are defined. |
+| 8 | `FND-V1-013` UI fixture and view-model contract schemas | done | none | UI state contracts now have runtime schemas and contract tests. |
+| 9 | `FND-V1-007` Deterministic fake Codex/session/host fixtures | ready | none | Fixture work is unblocked now that API, storage, and UI contract shapes exist. |
+| 10 | `FND-V1-008` Conservative status/attention classifier tests | todo | `FND-V1-007` | Classification must consume deterministic fixture categories rather than ad hoc samples. |
 
 ## Current Blocked Gates
 

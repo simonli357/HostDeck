@@ -5,12 +5,12 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `FND-V1-013` UI fixture and view-model contract schemas
+- Active task: `FND-V1-007` deterministic fake Codex/session/host fixtures
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
 - Release state: Foundation implementation started.
-- Last validation: `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit`, `pnpm test:contract`, and `git diff --check` passed after `FND-V1-012`.
-- Next action: Implement `FND-V1-013` UI fixture and view-model contract schemas.
+- Last validation: `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit`, `pnpm test:contract`, and `git diff --check` passed after `FND-V1-013`.
+- Next action: Implement `FND-V1-007` deterministic fake Codex/session/host fixtures.
 - Blockers: Visual mockups before UI implementation.
 - Last commit:
 - Last push:
@@ -27,6 +27,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `FND-V1-004` command intents and write eligibility are in place with V1 slash allowlists, one-session targeting, trust/read-only/lock checks, raw-input confirmation, audit availability, and non-writable lifecycle denials.
 - Implementation: `FND-V1-006` API and stream contract schemas are in place with runtime validation for host status, sessions, output, stream events, writes, pairing, security, lock, and network state.
 - Implementation: `FND-V1-012` storage/config/auth/audit/retention contract schemas are in place with runtime validation for migration, session, metadata, output cursor, retention boundary, hashed auth, pairing, settings, and bounded audit records.
+- Implementation: `FND-V1-013` UI fixture and view-model contract schemas are in place for session cards, session detail, host safety, trust state, output boundaries, and disabled write controls.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
@@ -48,7 +49,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | FND-V1-004 | Implementation | done | `docs/tracking/backlog/foundation.md` | Command intents, write eligibility, and `artifacts/fnd-v1-004-command-intents.md`. |
 | FND-V1-006 | Implementation | done | `docs/tracking/backlog/foundation.md` | API and stream contracts and `artifacts/fnd-v1-006-api-contracts.md`. |
 | FND-V1-012 | Implementation | done | `docs/tracking/backlog/foundation.md` | Storage/config/auth/audit/retention contracts and `artifacts/fnd-v1-012-storage-contracts.md`. |
-| FND-V1-013 | Implementation | ready | `docs/tracking/backlog/foundation.md` | Next ready leaf after storage contract completion. |
+| FND-V1-013 | Implementation | done | `docs/tracking/backlog/foundation.md` | UI fixture/view-model contracts and `artifacts/fnd-v1-013-ui-contracts.md`. |
+| FND-V1-007 | Implementation | ready | `docs/tracking/backlog/foundation.md` | Next ready leaf after contract shape completion. |
 
 ## Decisions Needed
 
