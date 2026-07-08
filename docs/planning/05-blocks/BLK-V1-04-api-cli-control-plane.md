@@ -53,9 +53,9 @@ Owns the host-agent service boundary, typed local API, write pipeline, CLI surfa
 
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
-| Server startup and route contracts | `IFC-V1-001` to `IFC-V1-003` | Planned | `docs/tracking/backlog/api-cli-control-plane.md` |
+| Server startup and route contracts | `IFC-V1-001` to `IFC-V1-003`, `IFC-V1-010` | Planned | `docs/tracking/backlog/api-cli-control-plane.md` |
 | Write pipeline and trust routes | `IFC-V1-004`, `IFC-V1-005` | Planned | `docs/tracking/backlog/api-cli-control-plane.md` |
-| CLI surface and service controls | `IFC-V1-006` to `IFC-V1-012` | Planned | `docs/tracking/backlog/api-cli-control-plane.md` |
+| CLI surface and service controls | `IFC-V1-006` to `IFC-V1-014` | Planned | `docs/tracking/backlog/api-cli-control-plane.md` |
 | Interface hardening | `IFC-V1-090` | Planned | `docs/tracking/backlog/api-cli-control-plane.md` |
 
 ## Done Criteria

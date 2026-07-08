@@ -55,7 +55,7 @@ Owns durable local truth for sessions, settings, trust state, lock/LAN state, au
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
 | Architecture spikes | `DAT-V1-001` to `DAT-V1-003` | Planned | `docs/tracking/backlog/local-state-auth-audit.md` |
-| Storage foundation | `DAT-V1-010` to `DAT-V1-016` | Planned | `docs/tracking/backlog/local-state-auth-audit.md` |
+| Storage foundation | `DAT-V1-010` to `DAT-V1-017` | Planned | `docs/tracking/backlog/local-state-auth-audit.md` |
 | Storage hardening | `DAT-V1-090` | Planned | `docs/tracking/backlog/local-state-auth-audit.md` |
 
 ## Done Criteria

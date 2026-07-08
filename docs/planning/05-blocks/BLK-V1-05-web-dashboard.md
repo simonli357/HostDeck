@@ -55,7 +55,7 @@ Owns the phone-responsive browser dashboard, state coverage, approved visual dir
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
 | UI state coverage and visual direction | `FE-V1-001` to `FE-V1-003` | Planned | `docs/tracking/backlog/web-dashboard.md` |
-| Dashboard screen groups | `FE-V1-010` to `FE-V1-015` | Planned | `docs/tracking/backlog/web-dashboard.md` |
+| Dashboard screen groups | `FE-V1-010` to `FE-V1-015`, `FE-V1-019` to `FE-V1-021` | Planned | `docs/tracking/backlog/web-dashboard.md` |
 | Responsive, accessibility, and fidelity | `FE-V1-016` to `FE-V1-018`, `FE-V1-090` | Planned | `docs/tracking/backlog/web-dashboard.md` |
 
 ## Done Criteria

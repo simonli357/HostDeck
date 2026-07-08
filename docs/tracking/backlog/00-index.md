@@ -21,16 +21,16 @@ Track meaningful ordering dependencies here. Group files own exact task cards.
 | --- | --- | --- |
 | Backlog approval and implementation authorization | `FND-V1-001` | Product code remains blocked until the human authorizes implementation. |
 | `FND-V1-001` workspace scaffold | All implementation tasks | Creates runnable workspace, packages, and planned command surface. |
-| `FND-V1-002` to `FND-V1-009` contracts/core/fixtures | `DAT-V1-001`, `INT-V1-001`, `IFC-V1-001`, `FE-V1-001` | Adapters, API, CLI, and UI consume typed contracts and deterministic fixtures. |
-| `DAT-V1-001` SQLite spike | `DAT-V1-010` to `DAT-V1-016` | Storage implementation waits for driver and migration decision. |
+| `FND-V1-002` to `FND-V1-013` contracts/core/fixtures | `DAT-V1-001`, `INT-V1-001`, `IFC-V1-001`, `FE-V1-001` | Adapters, API, CLI, and UI consume typed contracts and deterministic fixtures. |
+| `DAT-V1-001` SQLite spike | `DAT-V1-010` to `DAT-V1-017` | Storage implementation waits for driver and migration decision. |
 | `DAT-V1-002` token transport spike | `DAT-V1-013`, `IFC-V1-005`, `FE-V1-013` | Auth routes and UI trust states wait for token transport decision. |
 | `DAT-V1-003` retention spike | `DAT-V1-015`, `INT-V1-014`, `FE-V1-015` | Output/audit retention and replay-boundary behavior wait for cap decisions. |
 | `INT-V1-001` tmux capture spike | `INT-V1-014`, `IFC-V1-003`, output smoke tasks | Stream/replay implementation waits for capture mechanism and cursor semantics. |
-| `DAT-V1-010` to `DAT-V1-016` local state foundation | `INT-V1-015`, `IFC-V1-004`, release privacy checks | Restart, auth, audit, and settings are durable before write paths harden. |
+| `DAT-V1-010` to `DAT-V1-017` local state foundation | `INT-V1-015`, `IFC-V1-004`, release privacy checks | Restart, auth, audit, settings, and optional branch metadata are durable before write paths harden. |
 | `INT-V1-010` to `INT-V1-016` tmux/output foundation | `IFC-V1-003`, `IFC-V1-004`, `FE-V1-012`, real smoke tasks | API/CLI and dashboard read/write real managed session state through adapters. |
-| `IFC-V1-001` to `IFC-V1-012` API/CLI foundation | `FE-V1-010` to `FE-V1-016`, command reference tasks | Web and delivery docs consume stable local API and CLI behavior. |
+| `IFC-V1-001` to `IFC-V1-014` API/CLI foundation | `FE-V1-010` to `FE-V1-021`, command reference tasks | Web and delivery docs consume stable local API and CLI behavior. |
 | `FE-V1-001` UI state matrix | `FE-V1-002` visual direction spike | Mockups are generated from approved state coverage, not before it. |
-| `FE-V1-002` and `FE-V1-003` visual direction approval | `FE-V1-010` to `FE-V1-018` UI implementation/fidelity | UI implementation waits for generated options, human selection, and recorded decision. |
+| `FE-V1-002` and `FE-V1-003` visual direction approval | `FE-V1-010` to `FE-V1-021` UI implementation/fidelity | UI implementation waits for generated options, human selection, and recorded decision. |
 | Block hardening tasks `FND-V1-010`, `DAT-V1-090`, `INT-V1-090`, `IFC-V1-090`, `FE-V1-090` | `REL-V1-006` to `REL-V1-010` | Release readiness waits for module/workflow hardening evidence. |
 | `REL-V1-001` to `REL-V1-010` | V1 human acceptance and `REL-V1-999` | Release go/no-go depends on aggregate validation, docs, smoke, security/privacy, and known gaps. |
 
@@ -38,13 +38,13 @@ Track meaningful ordering dependencies here. Group files own exact task cards.
 
 | Requirement group | Leaf task coverage |
 | --- | --- |
-| `FR-001` to `FR-004`, `FR-013`, `FR-014` session lifecycle/output/restart | `INT-V1-010` to `INT-V1-016`, `IFC-V1-002` to `IFC-V1-004`, `INT-V1-090` |
-| `FR-005` output refresh/streaming | `INT-V1-014`, `IFC-V1-003`, `FE-V1-012`, `FE-V1-015` |
-| `FR-006` to `FR-008`, `FR-015` prompt/slash writes | `FND-V1-004`, `IFC-V1-004`, `IFC-V1-007`, `FE-V1-012`, `FE-V1-013` |
+| `FR-001` to `FR-004`, `FR-013`, `FR-014` session lifecycle/output/restart | `INT-V1-010` to `INT-V1-016`, `IFC-V1-002` to `IFC-V1-004`, `IFC-V1-014`, `INT-V1-090` |
+| `FR-005` output refresh/streaming | `INT-V1-014`, `IFC-V1-003`, `FE-V1-012`, `FE-V1-015`, `FE-V1-019` |
+| `FR-006` to `FR-008`, `FR-015` prompt/slash writes | `FND-V1-004`, `IFC-V1-004`, `IFC-V1-007`, `FE-V1-020`, `FE-V1-021` |
 | `FR-009`, `SFR-011` status and fixture heuristics | `FND-V1-007`, `FND-V1-008`, `FE-V1-001`, `FE-V1-015` |
-| `FR-010`, `IR-001` to `IR-009`, `PR-005` dashboard UX | `FE-V1-001` to `FE-V1-018`, `FE-V1-090` |
-| `FR-011`, `FR-012`, `PR-002` to `PR-004`, `PR-007`, `PR-008` API/CLI/service | `IFC-V1-001` to `IFC-V1-012`, `REL-V1-003` |
-| `DR-001` to `DR-010` data/audit | `DAT-V1-001` to `DAT-V1-016`, `DAT-V1-090` |
+| `FR-010`, `IR-001` to `IR-009`, `PR-005` dashboard UX | `FE-V1-001` to `FE-V1-021`, `FE-V1-090` |
+| `FR-011`, `FR-012`, `PR-002` to `PR-004`, `PR-007`, `PR-008` API/CLI/service | `IFC-V1-001` to `IFC-V1-014`, `REL-V1-003` |
+| `DR-001` to `DR-010` data/audit | `DAT-V1-001` to `DAT-V1-017`, `DAT-V1-090` |
 | `SFR-001` to `SFR-010` trust/safety/failure | `FND-V1-004`, `DAT-V1-002`, `DAT-V1-013`, `DAT-V1-014`, `IFC-V1-004`, `IFC-V1-005`, `FE-V1-013`, `FE-V1-014`, hardening tasks |
 | `NFR-001` to `NFR-009`, `PR-001` to `PR-009` platform/local-first/release | `IFC-V1-001`, `IFC-V1-011`, `REL-V1-001` to `REL-V1-010` |
 

@@ -40,8 +40,9 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 1 | `FND-V1-001` Scaffold workspace and validation command skeleton | blocked | Backlog approval and implementation authorization | First implementation leaf; all later packages and validation commands depend on it. |
 | 2 | `FND-V1-002` Shared TypeScript/lint/test conventions | todo | `FND-V1-001` | Establishes repo-wide engineering guardrails before core contracts. |
 | 3 | `FND-V1-003` Core session model | todo | `FND-V1-002` | Contracts, storage, tmux, API, and UI need stable session states first. |
-| 4 | `FND-V1-004` Command intents and write eligibility | todo | `FND-V1-003` | Write safety and slash controls depend on this headless rule set. |
-| 5 | `FND-V1-006` Contract schemas | todo | `FND-V1-003`, `FND-V1-005` | Cross-module API/storage/UI work must consume typed contracts. |
+| 4 | `FND-V1-005` Shared API/CLI error envelope | todo | `FND-V1-002` | Route, CLI, storage, and UI failures need one bounded error contract. |
+| 5 | `FND-V1-004` Command intents and write eligibility | todo | `FND-V1-003` | Write safety and slash controls depend on this headless rule set. |
+| 6 | `FND-V1-006` API and stream contract schemas | todo | `FND-V1-003`, `FND-V1-005` | API and stream routes must be typed before server work. |
 
 ## Current Blocked Gates
 
