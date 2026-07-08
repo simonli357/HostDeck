@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `DAT-V1-011` settings/config repository
+- Active task: `DAT-V1-012` session registry and metadata repositories
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
-- Release state: Foundation block complete; data/auth/storage spikes are underway.
-- Last validation: `pnpm install --frozen-lockfile`, `pnpm install --frozen-lockfile --force`, `pnpm --filter @hostdeck/storage exec node -e "import Database from 'better-sqlite3'; ..."`, `pnpm --filter @hostdeck/storage typecheck`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit -- packages/storage/src/migration-runner.test.ts`, `pnpm test:unit`, `pnpm test:contract`, and `git diff --check` passed for `DAT-V1-010`.
-- Next action: Commit `DAT-V1-010`, then start `DAT-V1-011`.
+- Release state: Foundation block complete; data/auth/storage repositories are underway.
+- Last validation: `pnpm install --frozen-lockfile`, `pnpm --filter @hostdeck/storage typecheck`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit -- packages/storage/src/settings-repository.test.ts`, `pnpm test:unit`, `pnpm test:contract`, and `git diff --check` passed for `DAT-V1-011`.
+- Next action: Start `DAT-V1-012` session registry and metadata repositories.
 - Blockers: `INT-V1-001` needs `tmux` in the environment; visual mockups before UI implementation.
-- Last commit:
-- Last push:
+- Last commit: `DAT-V1-011` settings repository commit.
+- Last push: `origin/main` after the `DAT-V1-011` commit.
 
 ## What Is Proven
 
@@ -37,12 +37,12 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Planning/spike: `DAT-V1-002` chose host-only `HttpOnly` cookie device-token transport plus CSRF write headers for dashboard writes.
 - Planning/spike: `DAT-V1-003` chose output/audit retention defaults and replay/audit boundary semantics.
 - Implementation: `DAT-V1-010` added the SQLite migration runner, base schema, `better-sqlite3` dependency, and native build approval.
+- Implementation: `DAT-V1-011` added the SQLite-backed settings/config repository with safe localhost defaults, bind-host validation, lock/LAN persistence, and invalid-startup rejection.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
 
-- Planning sign-off.
-- Foundation implementation.
+- Remaining data/auth/storage repositories and restart persistence.
 - Module hardening.
 - UI fidelity evidence.
 - Release/handoff validation.
@@ -68,7 +68,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | DAT-V1-002 | Spike | done | `docs/tracking/backlog/local-state-auth-audit.md` | Token transport decision/API contract and `artifacts/dat-v1-002-token-transport-spike.md`. |
 | DAT-V1-003 | Spike | done | `docs/tracking/backlog/local-state-auth-audit.md` | Retention defaults/boundary decision and `artifacts/dat-v1-003-retention-caps-spike.md`. |
 | DAT-V1-010 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | SQLite migration runner/base schema and `artifacts/dat-v1-010-sqlite-migration-runner.md`. |
-| DAT-V1-011 | Implementation | ready | `docs/tracking/backlog/local-state-auth-audit.md` | Next ready leaf: implement settings/config repository. |
+| DAT-V1-011 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Settings/config repository and `artifacts/dat-v1-011-settings-repository.md`. |
+| DAT-V1-012 | Implementation | ready | `docs/tracking/backlog/local-state-auth-audit.md` | Next ready leaf: implement session registry and metadata repositories. |
 
 ## Decisions Needed
 

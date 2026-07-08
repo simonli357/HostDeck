@@ -11,3 +11,10 @@ export {
   hostDeckBaseSchemaMigration,
   type StorageMigration
 } from "./migrations.js";
+export {
+  type CreateDefaultSettingsInput,
+  createDefaultSettings,
+  createSettingsRepository,
+  HostDeckSettingsError,
+  type SettingsRepository
+} from "./settings-repository.js";

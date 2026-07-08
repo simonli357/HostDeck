@@ -4,7 +4,7 @@ Owns milestone, module maturity, production pass, and release truth.
 
 ## Snapshot
 
-- Current pass: Data/auth/storage architecture spikes underway; fake-adapter foundation also ready
+- Current pass: Data/auth/storage repositories underway; fake-adapter foundation also ready
 - Current milestone: M1 Foundation complete
 - Release state: Not release-ready; product workflow blocks remain unimplemented
 - Go/no-go:
@@ -22,7 +22,7 @@ Owns milestone, module maturity, production pass, and release truth.
 | Module | Status | Open gaps | Evidence |
 | --- | --- | --- | --- |
 | `BLK-V1-01` Foundation / Contracts | Complete | Product workflow behavior still unproven until storage, tmux, API/CLI, UI, and release blocks complete. | `artifacts/fnd-v1-001-scaffold.md` through `artifacts/fnd-v1-011-foundation-completion.md` |
-| `BLK-V1-02` Local State / Auth / Audit | In progress | Settings, session, auth, audit, retention, restart, optional branch metadata, and hardening remain. | `artifacts/dat-v1-001-sqlite-driver-spike.md`, `artifacts/dat-v1-002-token-transport-spike.md`, `artifacts/dat-v1-003-retention-caps-spike.md`, `artifacts/dat-v1-010-sqlite-migration-runner.md` |
+| `BLK-V1-02` Local State / Auth / Audit | In progress | Session, auth, audit, retention, restart, optional branch metadata, and hardening remain. | `artifacts/dat-v1-001-sqlite-driver-spike.md`, `artifacts/dat-v1-002-token-transport-spike.md`, `artifacts/dat-v1-003-retention-caps-spike.md`, `artifacts/dat-v1-010-sqlite-migration-runner.md`, `artifacts/dat-v1-011-settings-repository.md` |
 
 ## Release Gates
 

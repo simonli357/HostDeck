@@ -54,7 +54,7 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 15 | `DAT-V1-002` Dashboard token transport spike | done | none | `DEC-015` chose host-only `HttpOnly` cookie token transport plus CSRF write headers. |
 | 16 | `DAT-V1-003` Output and audit retention caps spike | done | none | `DEC-016` chose output/audit caps, cleanup timing, and replay/audit boundary semantics. |
 | 17 | `DAT-V1-010` SQLite migration runner and base schema | done | none | Base storage schema and migration runner are implemented with migration failure tests. |
-| 18 | `DAT-V1-011` Settings/config repository | ready | none | Settings persistence can now build on the base schema. |
+| 18 | `DAT-V1-011` Settings/config repository | done | none | Settings repository now persists safe defaults, lock/LAN state, state dir, port, retention values, and invalid-startup rejection. |
 | 19 | `DAT-V1-012` Session registry and metadata repositories | ready | none | Session persistence can now build on the base schema. |
 | 20 | `DAT-V1-013` Auth devices and pairing-code repositories | ready | none | Auth persistence can now build on the base schema and token transport decision. |
 | 21 | `DAT-V1-014` Durable audit repository and bounded payload summaries | ready | none | Audit persistence can now build on the base schema and audit contracts. |
