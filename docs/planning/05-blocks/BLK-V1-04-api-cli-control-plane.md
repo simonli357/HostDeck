@@ -53,11 +53,10 @@ Owns the host-agent service boundary, typed local API, write pipeline, CLI surfa
 
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
-| Server startup and route shell | Pending backlog decomposition. | Planned | Evidence defined in this block. |
-| Write pipeline and route contracts | Pending backlog decomposition. | Planned | Evidence defined in this block and `SPK-ARCH-003`. |
-| CLI command surface | Pending backlog decomposition. | Planned | Evidence defined in this block. |
-| LAN/service controls | Pending backlog decomposition. | Planned | Evidence defined in this block. |
-| Block hardening | Pending backlog decomposition. | Planned | Evidence defined in this block. |
+| Server startup and route contracts | `IFC-V1-001` to `IFC-V1-003` | Planned | `docs/tracking/backlog/api-cli-control-plane.md` |
+| Write pipeline and trust routes | `IFC-V1-004`, `IFC-V1-005` | Planned | `docs/tracking/backlog/api-cli-control-plane.md` |
+| CLI surface and service controls | `IFC-V1-006` to `IFC-V1-012` | Planned | `docs/tracking/backlog/api-cli-control-plane.md` |
+| Interface hardening | `IFC-V1-090` | Planned | `docs/tracking/backlog/api-cli-control-plane.md` |
 
 ## Done Criteria
 

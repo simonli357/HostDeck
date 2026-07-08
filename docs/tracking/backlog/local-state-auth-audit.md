@@ -1,0 +1,29 @@
+# Data / Local State Backlog
+
+Owns `BLK-V1-02`: SQLite-backed local state, auth/pairing, audit, retention, config, and storage hardening.
+
+## EP-DAT-01 Architecture Spikes
+
+| ID | Status | Refs | Requires | Blocked by | Blocks | Description | Success criteria | Validation / evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DAT-V1-001` | todo | `BLK-V1-02`, `SPK-ARCH-002`, `DR-001` to `DR-010`, `PR-009` | none | `FND-V1-001` | `DAT-V1-010`, `DAT-V1-016`, `REL-V1-002` | Spike SQLite Node driver and migration approach. | Driver choice covers install friction, license, Node LTS, migration ergonomics, test isolation, sync/async behavior, and failure behavior. | Spike artifact with decision, rejected options, setup implications, and decision-log update. |
+| `DAT-V1-002` | todo | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05`, `SPK-ARCH-003`, `SFR-001`, `SFR-002`, `SFR-007` | none | `FND-V1-006` | `DAT-V1-013`, `IFC-V1-005`, `FE-V1-013` | Spike dashboard token transport for localhost and LAN opt-in. | Chosen transport has revocation, expiry/one-time pairing, CSRF posture, UI trust-state implications, and no ambient write grant. | Security spike artifact, API contract update, decision-log entry. |
+| `DAT-V1-003` | todo | `BLK-V1-02`, `BLK-V1-03`, `SPK-ARCH-004`, `DR-004`, `DR-008`, `DR-010`, `IR-009` | none | `FND-V1-007` | `DAT-V1-015`, `INT-V1-014`, `FE-V1-015` | Spike output and audit retention caps. | Output/audit caps, cleanup timing, truncation markers, replay-boundary semantics, and payload bounds are chosen and testable. | Retention spike artifact with fixture estimates and bounded append/replay result. |
+
+## EP-DAT-02 Storage Foundation
+
+| ID | Status | Refs | Requires | Blocked by | Blocks | Description | Success criteria | Validation / evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DAT-V1-010` | todo | `BLK-V1-02`, `DR-001` to `DR-010`, `NFR-008` | none | `FND-V1-010`, `DAT-V1-001` | `DAT-V1-011`, `DAT-V1-012`, `DAT-V1-013`, `DAT-V1-014` | Implement SQLite migration runner and base schema. | Unknown/failed migrations fail startup; schema includes migrations, sessions, metadata, output index/events, auth devices, pairing codes, settings, audit events. | Migration tests for fresh DB, upgrade, failed migration, corrupt/unknown schema. |
+| `DAT-V1-011` | todo | `BLK-V1-02`, `PR-002`, `PR-003`, `PR-009`, `SFR-004`, `SFR-008` | none | `DAT-V1-010` | `IFC-V1-001`, `IFC-V1-011`, `FE-V1-013` | Implement settings/config repository for bind host/port, LAN enabled, locked, state dir, and retention values. | Defaults are localhost, LAN off, valid port/state dir; invalid settings block startup; lock/LAN state persists. | Config repository tests and startup negative tests. |
+| `DAT-V1-012` | todo | `BLK-V1-02`, `BLK-V1-03`, `DR-001` to `DR-003`, `DR-007`, `FR-014` | none | `DAT-V1-010`, `FND-V1-003` | `INT-V1-015`, `IFC-V1-002` | Implement session registry and metadata repositories. | Stable ids, unique V1 names, absolute cwd, backend/tmux target, lifecycle, status/attention, last activity, branch and summary metadata are persisted. | Repository tests for create/read/update, duplicate name, invalid cwd, stale mark, restart reload. |
+| `DAT-V1-013` | todo | `BLK-V1-02`, `SFR-001`, `SFR-002`, `SFR-004`, `SFR-007`, `DR-009` | none | `DAT-V1-002`, `DAT-V1-010` | `IFC-V1-004`, `IFC-V1-005`, `FE-V1-013` | Implement auth devices and pairing-code repositories. | Raw tokens/codes are never stored; expired/used/revoked credentials cannot write; read-only and trusted modes are distinct. | Auth lifecycle tests plus local state inspection artifact. |
+| `DAT-V1-014` | todo | `BLK-V1-02`, `DR-005`, `DR-010`, `SFR-006`, `SFR-005` | none | `DAT-V1-010`, `FND-V1-009` | `IFC-V1-004`, `DAT-V1-090` | Implement durable audit repository and bounded payload summaries. | Required action types exist for prompt, slash, stop, raw input, pair, lock, unlock, LAN enable, LAN disable; unbounded payloads reject or truncate visibly. | Audit unit/integration tests and payload-bound fixtures. |
+| `DAT-V1-015` | todo | `BLK-V1-02`, `BLK-V1-03`, `DR-004`, `DR-008`, `DR-010`, `IR-009` | none | `DAT-V1-003`, `DAT-V1-010` | `INT-V1-014`, `FE-V1-015` | Implement retention cleanup and replay-boundary storage metadata. | One noisy session cannot grow storage without limit; output and audit boundaries are explicit to API/UI consumers. | Retention integration tests for cap enforcement, cleanup timing, cursor boundary, audit payload bounds. |
+| `DAT-V1-016` | todo | `BLK-V1-02`, `FR-014`, `NFR-008`, `DR-007`, `DR-009` | none | `DAT-V1-011`, `DAT-V1-012`, `DAT-V1-013`, `DAT-V1-014` | `INT-V1-015`, `IFC-V1-001` | Add storage restart-persistence tests for registry, auth, settings, and audit state. | Restart reload preserves durable records and distinguishes ephemeral subscriptions/output readers. | Integration test artifact with temp DB, restart steps, and cleanup notes. |
+
+## EP-DAT-03 Storage Hardening
+
+| ID | Status | Refs | Requires | Blocked by | Blocks | Description | Success criteria | Validation / evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DAT-V1-090` | todo | `BLK-V1-02`, `04b:Write Rejection Matrix`, `production-hardening` | none | `DAT-V1-013`, `DAT-V1-014`, `DAT-V1-015`, `DAT-V1-016` | `REL-V1-005`, `REL-V1-008` | Harden local state, auth, audit, config, retention, and restart behavior. | Invalid/corrupt state, audit unavailable, revoked/expired token, invalid bind/port, and retention boundary failures are explicit and tested; no raw secrets leak. | Hardening artifact with commands, local state inspection, remaining gaps, and block matrix update. |

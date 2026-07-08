@@ -52,11 +52,9 @@ Owns aggregate validation, setup/support docs, command reference, release readin
 
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
-| Validation command wiring | Pending backlog decomposition. | Planned | Evidence defined in this block. |
-| Setup and command docs | Pending backlog decomposition. | Planned | Evidence defined in this block. |
-| Module hardening gates | Pending backlog decomposition. | Planned | Evidence defined in this block and each required block. |
-| Security/privacy release review | Pending backlog decomposition. | Planned | Evidence defined in this block. |
-| Go/no-go and handoff | Pending backlog decomposition. | Planned | Evidence defined in this block. |
+| Validation and documentation wiring | `REL-V1-001` to `REL-V1-004` | Planned | `docs/tracking/backlog/hardening-release.md` |
+| Release validation | `REL-V1-005` to `REL-V1-010` | Planned | `docs/tracking/backlog/hardening-release.md` |
+| Next version gate | `REL-V1-999` | Planned | `docs/tracking/backlog/hardening-release.md` |
 
 ## Done Criteria
 

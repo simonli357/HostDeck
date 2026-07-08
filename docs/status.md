@@ -5,13 +5,13 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Planning
-- Active task: Capability block review
+- Active task: Backlog review
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
 - Release state: Pre-implementation.
 - Last validation: Planning docs consistency checks only; no product validation yet.
-- Next action: Human reviews the V1 block index and six block specs before backlog decomposition.
-- Blockers: Capability block approval before backlog decomposition; visual mockups before UI implementation.
+- Next action: Human reviews the decomposed backlog and authorizes foundation implementation if the scope is accepted.
+- Blockers: Backlog approval and implementation authorization before product code; visual mockups before UI implementation.
 - Last commit:
 - Last push:
 
@@ -31,13 +31,13 @@ Current handoff only. Keep detail in owner docs or artifacts.
 
 | ID | Type | Status | Owner doc | Evidence |
 | --- | --- | --- | --- | --- |
-| PLAN-BLOCKS | Planning | review | `docs/planning/05-blocks/00-index.md` | Block index and six required V1 block specs drafted with requirement coverage, dependencies, completion matrix, implementation slices, validation plans, backlog placeholders, done criteria, and spike dependencies. |
+| PLAN-BACKLOG | Planning | review | `docs/tracking/backlog/00-index.md` | Backlog decomposed into selected program areas, dependency graph, requirement trace, group files, leaf tasks, architecture spikes, module-hardening tasks, UI-fidelity tasks, release-readiness tasks, and current next queue. |
 
 ## Decisions Needed
 
 | Question | Owner | Blocking? |
 | --- | --- | --- |
-| Do the V1 block index and six block specs cover every required V1 capability well enough to decompose a dependency-aware backlog? | `docs/planning/05-blocks/00-index.md` | Yes |
+| Does the decomposed backlog map every V1 requirement and block to leaf tasks, spikes, evidence, and release gates well enough to authorize foundation implementation? | `docs/tracking/backlog/00-index.md` | Yes |
 
 ## Repo Hygiene
 

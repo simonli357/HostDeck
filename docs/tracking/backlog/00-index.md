@@ -1,98 +1,69 @@
 # Backlog Index
 
-Execution map for the release. Detailed task cards live in the group files. Capability blocks live in `docs/planning/05-blocks/`.
-
-## Program Area Profiles
-
-Choose or adapt one profile after planning. Profiles are starting points, not mandatory modules. Do not seed auth, lobby, currency, hardware, or UI/interface-fidelity work unless the active version requires it.
-
-### Web App
-
-| Program area | Typical epics | Prefix |
-| --- | --- | --- |
-| Frontend | Pages, components, state, accessibility, visual fidelity | `FE-V1-*` |
-| Backend | API, auth if needed, services, background jobs | `BE-V1-*` |
-| Data | Schema, migrations, import/export, redaction | `DAT-V1-*` |
-| Infrastructure | Hosting, CI/CD, env, observability | `OPS-V1-*` |
-
-### Mobile App
-
-| Program area | Typical epics | Prefix |
-| --- | --- | --- |
-| Mobile UI | Screens, navigation, device states, accessibility | `MOB-V1-*` |
-| Native Capabilities | Camera, location, notifications, storage, permissions | `NAT-V1-*` |
-| Data / Sync | Local data, API sync, offline behavior, migrations | `DAT-V1-*` |
-| Store Release | Device QA, signing, privacy labels, release metadata | `REL-V1-*` |
-
-### Desktop App
-
-| Program area | Typical epics | Prefix |
-| --- | --- | --- |
-| Shell / UI | Windows, menus, shortcuts, accessibility, visual fidelity | `UI-V1-*` |
-| Local System | Files, OS integration, permissions, background processes | `SYS-V1-*` |
-| Persistence | Local storage, migrations, import/export, redaction | `DAT-V1-*` |
-| Packaging | Installers, signing, updates, smoke tests | `REL-V1-*` |
-
-### General Program / CLI
-
-| Program area | Typical epics | Prefix |
-| --- | --- | --- |
-| Core Logic | Algorithms, validation, transformations, workflows | `CORE-V1-*` |
-| Interface | CLI/API/config/files/jobs/notebooks | `IFC-V1-*` |
-| Integrations | External services, adapters, import/export | `INT-V1-*` |
-| Release | Packaging, docs, examples, reproducibility | `REL-V1-*` |
-
-### Robotics / Hardware
-
-| Program area | Typical epics | Prefix |
-| --- | --- | --- |
-| Simulation | Sim environment, fixtures, virtual sensors | `SIM-V1-*` |
-| Perception | Sensor parsing, filtering, world model | `PER-V1-*` |
-| Planning / Control | Path planning, control loops, fail-safes | `CTL-V1-*` |
-| Hardware Interface | Motors, sensors, drivers, HIL | `HW-V1-*` |
-| Safety | Timeout, e-stop, degraded mode | `SAFE-V1-*` |
-
-### Game
-
-| Program area | Typical epics | Prefix |
-| --- | --- | --- |
-| Core Loop | Player, rules, win/loss, progression | `GAME-V1-*` |
-| Systems | Physics, AI, inventory, combat, save/load | `SYS-V1-*` |
-| Content | Levels, assets, audio, animation | `CNT-V1-*` |
-| Performance | FPS, memory, loading, platform checks | `PERF-V1-*` |
+Execution map for V1. Detailed task cards live in the group files. Capability blocks live in `docs/planning/05-blocks/`.
 
 ## Selected Program Areas
 
-Replace these rows after planning with the chosen profile or blend.
-
-| Program area | Block refs | Group file | Typical epics | Leaf task prefix |
+| Program area | Block refs | Group file | Epics | Leaf task prefix |
 | --- | --- | --- | --- | --- |
-| Foundation / Contracts | `BLK-V1-01` | `foundation.md` | Active-version contracts, fixtures, first runnable path | `FND-V1-*` |
+| Foundation / Contracts | `BLK-V1-01` | `foundation.md` | Workspace, core model, contracts, fixtures, foundation hardening | `FND-V1-*` |
+| Data / Local State | `BLK-V1-02` | `local-state-auth-audit.md` | Storage spikes, migrations, auth, audit, retention, config hardening | `DAT-V1-*` |
+| Integrations / Tmux Output | `BLK-V1-03` | `tmux-output.md` | Tmux spike, adapter, output reader, restart reconciliation, tmux hardening | `INT-V1-*` |
+| Interface / API And CLI | `BLK-V1-04` | `api-cli-control-plane.md` | Server startup, API routes, write pipeline, CLI, network controls, interface hardening | `IFC-V1-*` |
+| Frontend / Dashboard UX | `BLK-V1-05` | `web-dashboard.md` | UI fixtures, visual direction, screen groups, responsive states, UI fidelity | `FE-V1-*` |
+| Release / Hardening | `BLK-V1-06` | `hardening-release.md` | Aggregate validation, docs, security/privacy, release smoke, go/no-go | `REL-V1-*` |
+
+## Dependency Graph
+
+Track meaningful ordering dependencies here. Group files own exact task cards.
+
+| Block/task | Enables | Notes |
+| --- | --- | --- |
+| Backlog approval and implementation authorization | `FND-V1-001` | Product code remains blocked until the human authorizes implementation. |
+| `FND-V1-001` workspace scaffold | All implementation tasks | Creates runnable workspace, packages, and planned command surface. |
+| `FND-V1-002` to `FND-V1-009` contracts/core/fixtures | `DAT-V1-001`, `INT-V1-001`, `IFC-V1-001`, `FE-V1-001` | Adapters, API, CLI, and UI consume typed contracts and deterministic fixtures. |
+| `DAT-V1-001` SQLite spike | `DAT-V1-010` to `DAT-V1-016` | Storage implementation waits for driver and migration decision. |
+| `DAT-V1-002` token transport spike | `DAT-V1-013`, `IFC-V1-005`, `FE-V1-013` | Auth routes and UI trust states wait for token transport decision. |
+| `DAT-V1-003` retention spike | `DAT-V1-015`, `INT-V1-014`, `FE-V1-015` | Output/audit retention and replay-boundary behavior wait for cap decisions. |
+| `INT-V1-001` tmux capture spike | `INT-V1-014`, `IFC-V1-003`, output smoke tasks | Stream/replay implementation waits for capture mechanism and cursor semantics. |
+| `DAT-V1-010` to `DAT-V1-016` local state foundation | `INT-V1-015`, `IFC-V1-004`, release privacy checks | Restart, auth, audit, and settings are durable before write paths harden. |
+| `INT-V1-010` to `INT-V1-016` tmux/output foundation | `IFC-V1-003`, `IFC-V1-004`, `FE-V1-012`, real smoke tasks | API/CLI and dashboard read/write real managed session state through adapters. |
+| `IFC-V1-001` to `IFC-V1-012` API/CLI foundation | `FE-V1-010` to `FE-V1-016`, command reference tasks | Web and delivery docs consume stable local API and CLI behavior. |
+| `FE-V1-001` UI state matrix | `FE-V1-002` visual direction spike | Mockups are generated from approved state coverage, not before it. |
+| `FE-V1-002` and `FE-V1-003` visual direction approval | `FE-V1-010` to `FE-V1-018` UI implementation/fidelity | UI implementation waits for generated options, human selection, and recorded decision. |
+| Block hardening tasks `FND-V1-010`, `DAT-V1-090`, `INT-V1-090`, `IFC-V1-090`, `FE-V1-090` | `REL-V1-006` to `REL-V1-010` | Release readiness waits for module/workflow hardening evidence. |
+| `REL-V1-001` to `REL-V1-010` | V1 human acceptance and `REL-V1-999` | Release go/no-go depends on aggregate validation, docs, smoke, security/privacy, and known gaps. |
+
+## Requirement Trace
+
+| Requirement group | Leaf task coverage |
+| --- | --- |
+| `FR-001` to `FR-004`, `FR-013`, `FR-014` session lifecycle/output/restart | `INT-V1-010` to `INT-V1-016`, `IFC-V1-002` to `IFC-V1-004`, `INT-V1-090` |
+| `FR-005` output refresh/streaming | `INT-V1-014`, `IFC-V1-003`, `FE-V1-012`, `FE-V1-015` |
+| `FR-006` to `FR-008`, `FR-015` prompt/slash writes | `FND-V1-004`, `IFC-V1-004`, `IFC-V1-007`, `FE-V1-012`, `FE-V1-013` |
+| `FR-009`, `SFR-011` status and fixture heuristics | `FND-V1-007`, `FND-V1-008`, `FE-V1-001`, `FE-V1-015` |
+| `FR-010`, `IR-001` to `IR-009`, `PR-005` dashboard UX | `FE-V1-001` to `FE-V1-018`, `FE-V1-090` |
+| `FR-011`, `FR-012`, `PR-002` to `PR-004`, `PR-007`, `PR-008` API/CLI/service | `IFC-V1-001` to `IFC-V1-012`, `REL-V1-003` |
+| `DR-001` to `DR-010` data/audit | `DAT-V1-001` to `DAT-V1-016`, `DAT-V1-090` |
+| `SFR-001` to `SFR-010` trust/safety/failure | `FND-V1-004`, `DAT-V1-002`, `DAT-V1-013`, `DAT-V1-014`, `IFC-V1-004`, `IFC-V1-005`, `FE-V1-013`, `FE-V1-014`, hardening tasks |
+| `NFR-001` to `NFR-009`, `PR-001` to `PR-009` platform/local-first/release | `IFC-V1-001`, `IFC-V1-011`, `REL-V1-001` to `REL-V1-010` |
 
 ## Backlog Quality Gates
 
 Before implementation starts, the backlog must satisfy these checks:
 
 - Every active-version requirement maps to at least one leaf task, explicit spike, or explicit release deferral.
-- Every required V1 block in `docs/planning/05-blocks/00-index.md` maps to backlog epics, leaf tasks, validation evidence, and a completion-matrix row.
+- Every required V1 block in `docs/planning/05-blocks/00-index.md` maps to backlog epics, leaf tasks, validation evidence, and completion-matrix status.
 - Every selected program area has a group file with epics, leaf tasks, dependencies, success criteria, and validation/evidence.
 - Every user-facing screen group has state coverage, accessibility/fidelity validation, and asset tasks when UI exists.
 - Every native capability, service, data store, account, certificate, or permission has setup, denial/failure-state, and validation tasks.
-- Every module or workflow has a module-hardening task with strict success criteria and simulator/device inspection where applicable.
-- Release readiness is represented with build/package, device QA, signing, privacy labels, docs/support, and human acceptance gates.
-- No `TBD` placeholder remains outside intentionally blocked human decisions, spikes, or explicit deferrals.
-
-## Dependency Graph
-
-Track only meaningful ordering dependencies here. Do not duplicate every task row.
-
-| Block/task | Enables | Notes |
-| --- | --- | --- |
-| TBD | TBD | Replace with block and task IDs after planning. |
+- Every module or workflow has a module-hardening task with strict success criteria and manual inspection where automation cannot prove behavior.
+- Release readiness is represented with build/package, clean local setup, docs/support, security/privacy, and go/no-go tasks.
+- No broad implementation task is allowed as a leaf task.
 
 ## Ordering Rules
 
-Prefer this order unless the product needs a different dependency chain:
+Prefer this order unless a task dependency requires a narrower sequence:
 
 1. Contracts and data models.
 2. Fixtures, mocks, and sample data.
@@ -102,5 +73,5 @@ Prefer this order unless the product needs a different dependency chain:
 6. Error, empty, loading, and failure states.
 7. Persistence, sync, import/export, and redaction.
 8. Performance, accessibility, privacy, and security hardening.
-9. Device QA, signing, and store release gates.
+9. Device/runtime/release gates.
 10. Human acceptance.

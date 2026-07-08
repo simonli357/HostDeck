@@ -1,0 +1,29 @@
+# Release / Hardening Backlog
+
+Owns `BLK-V1-06`: aggregate validation, setup/support docs, security/privacy review, clean local smoke, release readiness, and handoff gates.
+
+## EP-REL-01 Validation And Documentation Wiring
+
+| ID | Status | Refs | Requires | Blocked by | Blocks | Description | Success criteria | Validation / evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `REL-V1-001` | todo | `BLK-V1-06`, `04b:Planned Commands`, `NFR-007` | none | `FND-V1-001` | `REL-V1-007` | Wire aggregate validation command names and artifact locations without claiming unavailable scripts are verified. | Planned commands exist or fail loudly with clear unavailable status; artifact directories are documented for future evidence. | Validation wiring diff and command smoke output. |
+| `REL-V1-002` | todo | `BLK-V1-06`, `PR-001`, `PR-008`, `PR-009`, `DAT-V1-001`, `IFC-V1-012` | none | `DAT-V1-001`, `IFC-V1-012` | `REL-V1-006` | Update developer guide setup only after runtime/package manager/service facts are validated. | Guide names Ubuntu, tmux, Codex CLI, package manager, state dir, ports, foreground/service mode, and common failures based on actual behavior. | Docs diff plus setup smoke artifact references. |
+| `REL-V1-003` | todo | `BLK-V1-06`, `FR-011`, `PR-008`, `IFC-V1-006` to `IFC-V1-008` | none | `IFC-V1-007`, `IFC-V1-008` | `REL-V1-006` | Update command reference after CLI commands are runnable. | Command reference includes only copy-paste commands that have been run or marked as explicit gaps in release artifacts. | Command smoke output and command-reference diff. |
+| `REL-V1-004` | todo | `BLK-V1-06`, `IR-007`, `UX-001` to `UX-009`, `FE-V1-018` | none | `FE-V1-018`, `IFC-V1-009` | `REL-V1-010` | Update user guide and troubleshooting after user-facing behavior exists. | Guide covers access, supported platform, pairing/trust, session scan, prompt/slash, lock/LAN, raw fallback, and known failure recovery. | User guide diff plus browser/manual evidence links. |
+
+## EP-REL-02 Release Validation
+
+| ID | Status | Refs | Requires | Blocked by | Blocks | Description | Success criteria | Validation / evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `REL-V1-005` | todo | `BLK-V1-06`, `SFR-001` to `SFR-010`, `NFR-001`, `release-readiness` | none | `DAT-V1-090`, `IFC-V1-090`, `FE-V1-013` | `REL-V1-010` | Run security/privacy release review. | Local-first default, no hosted relay/account, token storage, audit bounds, LAN opt-in, CLI-only unlock, raw input gate, and secret handling are inspected. | Security/privacy checklist artifact with test links and unresolved gaps. |
+| `REL-V1-006` | todo | `BLK-V1-06`, `PR-001` to `PR-009`, `NFR-001`, `NFR-009`, `release-readiness` | Ubuntu with tmux and Codex CLI | `INT-V1-016`, `IFC-V1-011`, `IFC-V1-012`, `IFC-V1-009`, `REL-V1-002`, `REL-V1-003` | `REL-V1-007`, `REL-V1-010` | Run clean Ubuntu install/run/service smoke. | Normal user can install, run foreground/service mode, open dashboard, check status, start/stop service, and no root/router changes are required. | Clean-environment smoke artifact with OS/tool versions, commands, logs, pass/fail. |
+| `REL-V1-007` | todo | `BLK-V1-06`, `04b:Validation Layers` | none | `REL-V1-001`, `REL-V1-006`, `IFC-V1-010`, `FE-V1-017` | `REL-V1-010` | Run aggregate validation path. | Typecheck, lint, unit, contract, integration, web, E2E, tmux smoke, build, and release smoke are run or explicit validated gaps are recorded. | Aggregate validation artifact with command outputs and gaps. |
+| `REL-V1-008` | todo | `BLK-V1-01` to `BLK-V1-06`, `docs/planning/05-blocks/00-index.md` | none | `FND-V1-011`, `DAT-V1-090`, `INT-V1-090`, `IFC-V1-090`, `FE-V1-090`, `REL-V1-007` | `REL-V1-009`, `REL-V1-010` | Update V1 block completion matrix with concrete evidence. | Every required block row links completed leaf tasks and artifacts or records an approved release gap. | Docs diff plus artifact references in block matrix and task cards. |
+| `REL-V1-009` | todo | `BLK-V1-06`, `docs/tracking/05-delivery-plan.md`, `release-readiness` | none | `REL-V1-008` | `REL-V1-010` | Update delivery plan module maturity and release gates. | Delivery plan reflects actual module maturity, blockers, go/no-go state, validation, docs/support, and release truth. | Delivery plan diff tied to evidence artifacts. |
+| `REL-V1-010` | blocked | `BLK-V1-06`, `release-readiness`, `human acceptance` | human acceptance | `REL-V1-004`, `REL-V1-005`, `REL-V1-006`, `REL-V1-007`, `REL-V1-008`, `REL-V1-009` | `REL-V1-999` | Produce final V1 go/no-go and handoff status. | Release-ready or no-go result is explicit; blockers and known gaps are visible in status/release artifacts; commit/push state is recorded. | Release-readiness artifact, status update, and human acceptance decision. |
+
+## EP-REL-99 Next Version Gate
+
+| ID | Status | Refs | Requires | Blocked by | Blocks | Description | Success criteria | Validation / evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `REL-V1-999` | blocked | `docs/planning/00-roadmap.md`, `docs/planning/07-decisions.md`, `REL-V1-010` | human acceptance | V1 release acceptance | V2 planning pipeline | Review V1 outcome, update roadmap, choose next active version, and run the planning pipeline before creating V2 work. | V2 planning is not started until V1 acceptance and human approval; roadmap reflects the chosen next active scope. | Decision log entry and roadmap/status update. |

@@ -52,11 +52,9 @@ Owns the real process adapter for HostDeck-managed Codex sessions and ordered ou
 
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
-| Tmux adapter foundation | Pending backlog decomposition. | Planned | Evidence defined in this block and `SPK-ARCH-001`. |
-| Output capture and replay | Pending backlog decomposition. | Planned | Evidence defined in this block and `SPK-ARCH-004`. |
-| Restart reconciliation | Pending backlog decomposition. | Planned | Evidence defined in this block. |
-| Real tmux smoke path | Pending backlog decomposition. | Planned | Evidence defined in this block. |
-| Block hardening | Pending backlog decomposition. | Planned | Evidence defined in this block. |
+| Tmux capture spike and adapter foundation | `INT-V1-001`, `INT-V1-010` to `INT-V1-013` | Planned | `docs/tracking/backlog/tmux-output.md` |
+| Output and restart | `INT-V1-014` to `INT-V1-016` | Planned | `docs/tracking/backlog/tmux-output.md` |
+| Tmux hardening | `INT-V1-090` | Planned | `docs/tracking/backlog/tmux-output.md` |
 
 ## Done Criteria
 
