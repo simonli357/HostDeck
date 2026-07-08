@@ -9,6 +9,7 @@ Owns setup context, environment policy, services, and operational notes.
 - Install: `corepack enable`, then `pnpm install --frozen-lockfile`.
 - Env file: none required for the scaffold.
 - Local services: none required for the scaffold.
+- Native dependency: `@hostdeck/storage` uses `better-sqlite3`; `pnpm-workspace.yaml` approves its build script through `onlyBuiltDependencies`.
 
 ## Development
 
@@ -27,6 +28,6 @@ Owns setup context, environment policy, services, and operational notes.
 ## Operations
 
 - Secrets: none created by the scaffold.
-- Data/reset: remove `node_modules/` and rerun `pnpm install --frozen-lockfile`.
+- Data/reset: remove `node_modules/` and rerun `pnpm install --frozen-lockfile`; if a pre-approval local install skipped the SQLite native build, use a clean reinstall so `better-sqlite3` rebuilds.
 - Logs/artifacts: task evidence lives under `artifacts/`.
 - Common failures: placeholder scripts exiting nonzero are expected until the referenced owning task replaces them.

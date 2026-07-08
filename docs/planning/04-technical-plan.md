@@ -47,7 +47,7 @@ The scaffold should use a `pnpm` workspace with these intended packages unless t
 | `@hostdeck/server` | Application services, API routes, WebSocket streams, trust enforcement, registry orchestration, audit orchestration, startup checks. | `core`, `contracts`, storage and tmux adapter packages. | React UI internals. |
 | `@hostdeck/cli` | `codexdeck` command parser, local client calls, bootstrap/admin operations, user-facing CLI output. | `contracts`, local API client, minimal admin storage helper for bootstrap/lock/unlock only. | UI components, test-only fakes outside test builds. |
 | `@hostdeck/tmux-adapter` | tmux command execution, target naming, output capture/pipe setup, stale target detection, fake adapter interface implementation. | `core`, `contracts`. | Fastify or React. |
-| `@hostdeck/storage` | SQLite schema, migrations, repositories for registry, output metadata, auth state, settings, and audit events. | `core`, `contracts`. | tmux process execution, React. |
+| `@hostdeck/storage` | SQLite schema, migrations, repositories for registry, output metadata, auth state, settings, and audit events. | `core`, `contracts`, `better-sqlite3`. | tmux process execution, React. |
 | `@hostdeck/web` | Mobile-responsive dashboard, API client, WebSocket client, UI state, visual states, advanced raw fallback. | `contracts`, generated or hand-written API client. | Direct storage, tmux, Codex process control. |
 | `@hostdeck/test-fixtures` | Fake Codex command, representative Codex-like outputs, fake adapter helpers, UI fixture data. | `core`, `contracts`. | Production runtime packages. |
 
@@ -166,7 +166,7 @@ SQLite is the durable state owner for structured V1 records. Output bytes may be
 | Commander or equivalent | npm, pinned | MIT-compatible, verify before add | `codexdeck` CLI command parsing | CLI behavior must stay contract-tested. |
 | React | npm, pinned | MIT | Dashboard UI | UI can sprawl; keep components contract-driven. |
 | Vite | npm, pinned | MIT | Dashboard dev/build tooling | Build config churn; keep frontend package isolated. |
-| SQLite engine and Node driver | Local SQLite plus `better-sqlite3`, pinned when added in `DAT-V1-010` | SQLite is public domain; `better-sqlite3` is MIT | Durable local registry, auth, audit, and output metadata | Native driver install friction; clean Ubuntu install smoke must prove the supported path or reopen `DEC-014`. |
+| SQLite engine and Node driver | Local SQLite plus `better-sqlite3@12.11.1`, pinned in `DAT-V1-010` | SQLite is public domain; `better-sqlite3` is MIT | Durable local registry, auth, audit, and output metadata | Native driver install friction; `pnpm-workspace.yaml` allows the `better-sqlite3` build script and clean Ubuntu install smoke must prove the supported path. |
 | tmux | Ubuntu package | ISC | Detachable session backend and laptop attach path | Platform dependency; startup checks must fail loudly if missing. |
 | Codex CLI | User-installed external binary | Not bundled; verify current license before packaging references | Managed agent process | Output/contracts may change; treat status parsing as advisory. |
 
