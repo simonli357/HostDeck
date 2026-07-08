@@ -10,7 +10,6 @@ In `/plan` mode, the AI should read this file, ask focused follow-up questions, 
 
 # Brainstorm: Mobile Control App for Many Codex CLI Sessions on Ubuntu
 name: HostDeck
-target v1: android only
 
 ## 1. Core idea
 
