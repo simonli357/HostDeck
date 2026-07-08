@@ -57,8 +57,8 @@ Owns the typed foundation that later storage, tmux, API, CLI, and UI work must c
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
 | Workspace and command skeleton | `FND-V1-001`, `FND-V1-002` | Done | `artifacts/fnd-v1-001-scaffold.md`, `artifacts/fnd-v1-002-conventions.md` |
-| Core model and contracts | `FND-V1-003` to `FND-V1-006`, `FND-V1-012`, `FND-V1-013` | In progress | `artifacts/fnd-v1-003-core-model.md`, `artifacts/fnd-v1-004-command-intents.md`, `artifacts/fnd-v1-005-errors.md`, `artifacts/fnd-v1-006-api-contracts.md`, `artifacts/fnd-v1-012-storage-contracts.md`, `artifacts/fnd-v1-013-ui-contracts.md`, `docs/tracking/backlog/foundation.md` |
-| Fixtures and classifiers | `FND-V1-007` to `FND-V1-009` | In progress | `artifacts/fnd-v1-007-fixtures.md`, `artifacts/fnd-v1-008-classifier.md`, `docs/tracking/backlog/foundation.md` |
+| Core model and contracts | `FND-V1-003` to `FND-V1-006`, `FND-V1-012`, `FND-V1-013` | Done | `artifacts/fnd-v1-003-core-model.md`, `artifacts/fnd-v1-004-command-intents.md`, `artifacts/fnd-v1-005-errors.md`, `artifacts/fnd-v1-006-api-contracts.md`, `artifacts/fnd-v1-012-storage-contracts.md`, `artifacts/fnd-v1-013-ui-contracts.md`, `docs/tracking/backlog/foundation.md` |
+| Fixtures and classifiers | `FND-V1-007` to `FND-V1-009` | Done | `artifacts/fnd-v1-007-fixtures.md`, `artifacts/fnd-v1-008-classifier.md`, `artifacts/fnd-v1-009-cross-package-contracts.md`, `docs/tracking/backlog/foundation.md` |
 | Foundation hardening | `FND-V1-010`, `FND-V1-011` | Planned | `docs/tracking/backlog/foundation.md` |
 
 ## Done Criteria

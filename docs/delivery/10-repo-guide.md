@@ -41,6 +41,7 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | Storage/config/auth/audit contracts | `packages/contracts/src/storage.ts` | `packages/contracts/src/storage.contract.test.ts`, `pnpm test:contract` |
 | UI fixture and view-model contracts | `packages/contracts/src/ui.ts` | `packages/contracts/src/ui.contract.test.ts`, `pnpm test:contract` |
 | Deterministic fake Codex/session/host fixtures | `packages/test-fixtures/src/` | `packages/test-fixtures/src/fixtures.test.ts`, `pnpm test:unit` |
+| Cross-package contract compatibility | `packages/test-fixtures/src/cross-package.contract.test.ts` | `pnpm test:contract` |
 | Later validation layers | `scripts/not-implemented.mjs` placeholders | Placeholder scripts fail loudly with owning task IDs |
 
 ## Boundaries
