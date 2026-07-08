@@ -50,10 +50,11 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 11 | `FND-V1-009` Cross-package contract compatibility tests | done | none | API, storage, audit, and UI fixture contract compatibility is now tested. |
 | 12 | `FND-V1-010` Foundation production-hardening pass | done | none | Hardening tightened cross-field contracts and classifier boundaries before downstream modules consume foundation packages. |
 | 13 | `FND-V1-011` Foundation completion evidence update | done | none | `BLK-V1-01` completion evidence is recorded and downstream ready tasks are surfaced. |
-| 14 | `DAT-V1-001` SQLite driver and migration spike | ready | none | Storage implementation needs a driver/migration decision before schema work starts. |
+| 14 | `DAT-V1-001` SQLite driver and migration spike | done | none | `better-sqlite3` and a first-party migration runner were selected in `DEC-014`. |
 | 15 | `DAT-V1-002` Dashboard token transport spike | ready | none | Auth/API/UI trust work needs the token transport and CSRF posture decision. |
 | 16 | `DAT-V1-003` Output and audit retention caps spike | ready | none | Storage, output replay, and UI boundary work need explicit retention caps. |
-| 17 | `INT-V1-010` Tmux adapter interface and fake adapter | ready | none | Fake adapter work can proceed without real tmux and unblocks later API/session tasks. |
+| 17 | `DAT-V1-010` SQLite migration runner and base schema | ready | none | Base storage schema can start after the driver/migration decision. |
+| 18 | `INT-V1-010` Tmux adapter interface and fake adapter | ready | none | Fake adapter work can proceed without real tmux and unblocks later API/session tasks. |
 
 ## Current Blocked Gates
 

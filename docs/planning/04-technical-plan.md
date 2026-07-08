@@ -33,7 +33,7 @@ The V1 architecture is good enough for approval only when these are true:
 | CLI | Commander-style command parser wrapping local services/API. | Conventional command surface for `codexdeck` operations. |
 | UI | React plus Vite. | Standard mobile-responsive dashboard path with component tests and shared TypeScript contracts. |
 | Contracts | Zod schemas shared by server, CLI, and UI. | Runtime validation for API/config plus generated/static TypeScript types. |
-| Storage | Local SQLite database in the HostDeck state directory. | Durable local registry, auth state, audit log, and output metadata without external services. |
+| Storage | Local SQLite database in the HostDeck state directory using `better-sqlite3` when storage implementation starts. | Durable local registry, auth state, audit log, and output metadata without external services; driver decision recorded in `DEC-014`. |
 | Terminal backend | tmux-managed sessions with per-session tmux targets and output capture. | Detachable sessions, laptop attach path, and compatibility with the intended Ubuntu terminal workflow. |
 
 ## Package Boundaries
@@ -166,7 +166,7 @@ SQLite is the durable state owner for structured V1 records. Output bytes may be
 | Commander or equivalent | npm, pinned | MIT-compatible, verify before add | `codexdeck` CLI command parsing | CLI behavior must stay contract-tested. |
 | React | npm, pinned | MIT | Dashboard UI | UI can sprawl; keep components contract-driven. |
 | Vite | npm, pinned | MIT | Dashboard dev/build tooling | Build config churn; keep frontend package isolated. |
-| SQLite engine and Node driver | Local SQLite plus npm driver, pinned after driver check | SQLite is public domain; driver license verified before add | Durable local registry, auth, audit, and output metadata | Native driver install friction; driver selection remains a blueprint detail. |
+| SQLite engine and Node driver | Local SQLite plus `better-sqlite3`, pinned when added in `DAT-V1-010` | SQLite is public domain; `better-sqlite3` is MIT | Durable local registry, auth, audit, and output metadata | Native driver install friction; clean Ubuntu install smoke must prove the supported path or reopen `DEC-014`. |
 | tmux | Ubuntu package | ISC | Detachable session backend and laptop attach path | Platform dependency; startup checks must fail loudly if missing. |
 | Codex CLI | User-installed external binary | Not bundled; verify current license before packaging references | Managed agent process | Output/contracts may change; treat status parsing as advisory. |
 
@@ -188,7 +188,7 @@ These are required before backlog decomposition if they remain unresolved after 
 | ID | Question | Method | Exit evidence | Blocks |
 | --- | --- | --- | --- | --- |
 | SPK-ARCH-001 | Can tmux `pipe-pane` or an equivalent mechanism provide ordered, reconnectable per-session output for V1? | Prototype fake Codex output through tmux, capture ordered events, restart reader, compare cursor replay and truncation behavior. | Spike artifact with command transcript, chosen capture method, failure modes, and fixture strategy. | Output ingestion tasks, stream API tasks. |
-| SPK-ARCH-002 | Which SQLite Node driver should V1 use? | Compare `better-sqlite3`, async wrapper options, and pinned Node built-in SQLite availability for license, install friction, sync/async behavior, migrations, and test ergonomics. | Decision note naming driver, install constraints, migration approach, and fallback if native build fails. | Storage tasks, setup docs. |
+| SPK-ARCH-002 | Which SQLite Node driver should V1 use? | Compared `better-sqlite3`, `sqlite3`/`sqlite`, and pinned Node built-in SQLite availability for license, install friction, sync/async behavior, migrations, and test ergonomics. | Resolved by `DEC-014` and `artifacts/dat-v1-001-sqlite-driver-spike.md`: use `better-sqlite3` plus a first-party migration runner; no silent fallback to `node:sqlite`. | Storage tasks, setup docs. |
 | SPK-ARCH-003 | What exact token transport should the dashboard use for local pairing? | Prototype HttpOnly same-origin cookie vs bearer token in local storage/session memory under localhost and LAN opt-in. | Security note choosing transport, CSRF posture, revocation behavior, and browser UX. | Pairing/auth tasks, API contract tasks. |
 | SPK-ARCH-004 | What retention defaults keep output/audit useful without unbounded growth? | Run fixture sizing for output events and audit records, choose event/byte/day caps. | Test-plan values for output caps, audit caps, truncation markers, and cleanup behavior. | Storage, output, and audit tasks. |
 
@@ -205,7 +205,7 @@ These are required before backlog decomposition if they remain unresolved after 
 
 | Question | Options | Recommended default | Owner |
 | --- | --- | --- | --- |
-| Which SQLite Node driver should V1 use? | `better-sqlite3`, async SQLite wrapper, Node built-in SQLite if stable in pinned runtime | Choose during implementation blueprint after install/license check. | Implementation blueprint. |
+| Which SQLite Node driver should V1 use? | `better-sqlite3`, async SQLite wrapper, Node built-in SQLite if stable in pinned runtime | Resolved in `DEC-014`: use `better-sqlite3`; revisit only if clean Ubuntu install fails or the pinned runtime changes. | Decision log and `DAT-V1-001`. |
 | What are default retention caps? | Fixed per-session event count, fixed bytes, time-window retention, hybrid | Hybrid cap: bounded event count plus byte cap for output; bounded days plus max records for audit. Exact values in blueprint/test plan. | Implementation blueprint and test plan. |
 | What token transport should the dashboard use after pairing? | HttpOnly same-origin cookie, bearer token in memory, bearer token in browser storage | Prefer HttpOnly same-origin cookie if the local/LAN CSRF and pairing UX are acceptable; prove with `SPK-ARCH-003`. | Implementation blueprint spike. |
 | Is tmux `pipe-pane` required for V1 streaming? | Required, optional optimization, capture-pane polling only | Prefer `pipe-pane` or equivalent ordered log ingestion; prove with `SPK-ARCH-001` before backlog decomposition. | Implementation blueprint spike. |
