@@ -5,12 +5,12 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `FND-V1-005` shared API/CLI error envelope
+- Active task: `FND-V1-004` command intents and write eligibility
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
 - Release state: Foundation implementation started.
-- Last validation: `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, and `pnpm test:unit` passed after `FND-V1-003`.
-- Next action: Implement `FND-V1-005` shared API/CLI error envelope.
+- Last validation: `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, and `pnpm test:unit` passed after `FND-V1-005`.
+- Next action: Implement `FND-V1-004` command intents and write eligibility.
 - Blockers: Visual mockups before UI implementation.
 - Last commit:
 - Last push:
@@ -23,6 +23,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `FND-V1-001` workspace scaffold is in place with 8 package shells, pinned Node/pnpm/TypeScript versions, a passing scaffold check, and failing placeholders for later validation layers.
 - Implementation: `FND-V1-002` shared conventions are in place with Biome linting, package export checks, Vitest unit runner, and source export conventions.
 - Implementation: `FND-V1-003` core session model is in place with stable ids/names, lifecycle/status/attention states, metadata validation, and unknown/stale write-safety helpers.
+- Implementation: `FND-V1-005` shared error envelope is in place with stable code families, retryability, bounded details, and sensitive-detail rejection.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
@@ -40,7 +41,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | FND-V1-001 | Implementation | done | `docs/tracking/backlog/foundation.md` | Workspace scaffold, package shells, root validation scripts, pinned lockfile, command/setup docs, and `artifacts/fnd-v1-001-scaffold.md`. |
 | FND-V1-002 | Implementation | done | `docs/tracking/backlog/foundation.md` | Shared strict TypeScript/lint/test conventions, package exports, command docs, and `artifacts/fnd-v1-002-conventions.md`. |
 | FND-V1-003 | Implementation | done | `docs/tracking/backlog/foundation.md` | Core session model and `artifacts/fnd-v1-003-core-model.md`. |
-| FND-V1-005 | Implementation | ready | `docs/tracking/backlog/foundation.md` | Next ready leaf after core model completion. |
+| FND-V1-005 | Implementation | done | `docs/tracking/backlog/foundation.md` | Shared error envelope and `artifacts/fnd-v1-005-errors.md`. |
+| FND-V1-004 | Implementation | ready | `docs/tracking/backlog/foundation.md` | Next ready leaf after error-envelope completion. |
 
 ## Decisions Needed
 

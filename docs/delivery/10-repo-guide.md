@@ -33,6 +33,7 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | Lint and package exports | `biome.json`, `scripts/check-package-exports.mjs`, `packages/*/package.json` | `pnpm lint` |
 | Workspace conventions | `tests/workspace-conventions.test.ts` | `pnpm test:unit` |
 | Core session model | `packages/core/src/session.ts` | `packages/core/src/session.test.ts` |
+| Shared error envelope | `packages/core/src/errors.ts` | `packages/core/src/errors.test.ts` |
 | Later validation layers | `scripts/not-implemented.mjs` placeholders | Placeholder scripts fail loudly with owning task IDs |
 
 ## Boundaries
