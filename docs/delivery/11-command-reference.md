@@ -5,29 +5,37 @@ Copy-paste commands only. Put explanation in `docs/delivery/09-developer-guide.m
 ## Setup
 
 ```bash
-
+corepack enable
+pnpm install --frozen-lockfile
 ```
 
 ## Run
 
 ```bash
-
+pnpm check:scaffold
 ```
 
 ## Test
 
 ```bash
-
+pnpm typecheck
+pnpm lint
+pnpm test:unit
+pnpm test:contract
+pnpm test:integration
+pnpm test:tmux
+pnpm test:web
+pnpm test:e2e
 ```
 
 ## Build / Package
 
 ```bash
-
+pnpm build
 ```
 
 ## Release / Handoff
 
 ```bash
-
+pnpm smoke:local
 ```

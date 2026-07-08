@@ -37,8 +37,8 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FND-V1-001` Scaffold workspace and validation command skeleton | blocked | Backlog approval and implementation authorization | First implementation leaf; all later packages and validation commands depend on it. |
-| 2 | `FND-V1-002` Shared TypeScript/lint/test conventions | todo | `FND-V1-001` | Establishes repo-wide engineering guardrails before core contracts. |
+| 1 | `FND-V1-001` Scaffold workspace and validation command skeleton | done | none | First implementation leaf completed; all later packages and validation commands now have a workspace base. |
+| 2 | `FND-V1-002` Shared TypeScript/lint/test conventions | ready | none | Establishes repo-wide engineering guardrails before core contracts. |
 | 3 | `FND-V1-003` Core session model | todo | `FND-V1-002` | Contracts, storage, tmux, API, and UI need stable session states first. |
 | 4 | `FND-V1-005` Shared API/CLI error envelope | todo | `FND-V1-002` | Route, CLI, storage, and UI failures need one bounded error contract. |
 | 5 | `FND-V1-004` Command intents and write eligibility | todo | `FND-V1-003` | Write safety and slash controls depend on this headless rule set. |
@@ -48,7 +48,6 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 
 | Gate | Owning leaf task(s) | Requires | Blocker |
 | --- | --- | --- | --- |
-| Implementation authorization | `FND-V1-001` | human acceptance | Backlog is ready for review, but product code is not authorized yet. |
 | Architecture spikes | `DAT-V1-001`, `DAT-V1-002`, `DAT-V1-003`, `INT-V1-001` | spike artifacts | Spikes wait for foundation scaffold/contracts and block dependent implementation tasks. |
 | UI visual direction | `FE-V1-002`, `FE-V1-003` | human acceptance | Mockups require UI state coverage first, then human selection before UI implementation. |
 | Release readiness | `REL-V1-005` to `REL-V1-010` | validation artifacts and human acceptance | Release tasks wait for module hardening, docs, smoke evidence, and go/no-go review. |

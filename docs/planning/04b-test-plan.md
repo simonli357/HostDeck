@@ -25,7 +25,7 @@ This plan is not ready to approve unless these checks are true:
 
 ## Planned Commands
 
-These commands do not exist yet. The workspace scaffold and block specs must create exact scripts, then update `docs/delivery/11-command-reference.md` only after commands are runnable.
+These root scripts now exist after `FND-V1-001`. `pnpm check:scaffold` and `pnpm typecheck` run real checks; later-layer commands intentionally fail loudly until their owning tasks replace the placeholders.
 
 | Purpose | Planned command after scaffold | Required for | Evidence |
 | --- | --- | --- | --- |
