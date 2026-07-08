@@ -27,11 +27,11 @@ Owns durable local truth for sessions, settings, trust state, lock/LAN state, au
 
 | Contract/data item | Owner | Rules | Validation |
 | --- | --- | --- | --- |
-| `schema_migrations` | Storage package | Server cannot accept requests after failed or unknown migration. | Migration tests and startup negative tests. |
-| `sessions` and `session_metadata` | Storage package | Stable id, unique V1 name, absolute cwd, backend/tmux target, lifecycle, status, attention, summary. | Repository tests and restart integration tests. |
-| `auth_devices` and `pairing_codes` | Storage package | Store hashed secrets only; pairing is time-bounded and one-time; revoked/expired cannot write. | Auth lifecycle tests and local state inspection. |
-| `settings` | Storage package | Defaults are localhost, LAN off, configured state dir and port, visible lock state. | Config tests and network smoke. |
-| `audit_events` | Storage package | Required before remote write dispatch except emergency lock; payload summary is bounded. | Audit unit/integration tests and write-pipeline tests. |
+| `schema_migrations` | `@hostdeck/contracts` schema; later storage package repository | Server cannot accept requests after failed or unknown migration. | Contract tests now; later migration tests and startup negative tests. |
+| `sessions` and `session_metadata` | `@hostdeck/contracts` schemas; later storage package repositories | Stable id, unique V1 name, absolute cwd, backend/tmux target, lifecycle, status, attention, summary. | Contract tests now; later repository tests and restart integration tests. |
+| `auth_devices` and `pairing_codes` | `@hostdeck/contracts` schemas; later storage package repositories | Store hashed secrets only; pairing is time-bounded and one-time; revoked/expired cannot write. | Contract tests now; later auth lifecycle tests and local state inspection. |
+| `settings` | `@hostdeck/contracts` schema; later storage package repository | Defaults are localhost, LAN off, configured state dir and port, visible lock state. | Contract tests now; later config tests and network smoke. |
+| `audit_events` | `@hostdeck/contracts` schema; later storage package repository | Required before remote write dispatch except emergency lock; payload summary is bounded. | Contract tests now; later audit unit/integration tests and write-pipeline tests. |
 
 ## Implementation Blueprint
 

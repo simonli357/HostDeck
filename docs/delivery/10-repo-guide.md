@@ -36,6 +36,8 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | Command intents and write eligibility | `packages/core/src/commands.ts` | `packages/core/src/commands.test.ts` |
 | Shared error envelope | `packages/core/src/errors.ts` | `packages/core/src/errors.test.ts` |
 | API and stream contracts | `packages/contracts/src/api.ts` | `packages/contracts/src/api.contract.test.ts`, `pnpm test:contract` |
+| Contract scalar validators | `packages/contracts/src/scalars.ts` | Covered through API and storage contract tests |
+| Storage/config/auth/audit contracts | `packages/contracts/src/storage.ts` | `packages/contracts/src/storage.contract.test.ts`, `pnpm test:contract` |
 | Later validation layers | `scripts/not-implemented.mjs` placeholders | Placeholder scripts fail loudly with owning task IDs |
 
 ## Boundaries

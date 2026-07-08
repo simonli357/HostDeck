@@ -31,6 +31,7 @@ Owns the typed foundation that later storage, tmux, API, CLI, and UI work must c
 | `CommandIntent` and slash command allowlist | `@hostdeck/core` | V1 slash commands are `/model`, `/goal`, `/plan`, `/usage`, `/compact`, `/skills`; other slash commands reject. | Unit tests for allowed and unsupported commands. |
 | API error envelope | `@hostdeck/contracts` | Every API error uses stable code/message plus bounded optional context. | Contract tests reject malformed errors and unbounded details. |
 | API and stream payloads | `@hostdeck/contracts` | Host status, sessions read, output read, stream, write, pairing, security, lock, and network payloads validate at runtime and reject malformed shapes. | `pnpm test:contract` covers valid and malformed API/stream fixtures. |
+| Storage, config, auth, audit, and retention payloads | `@hostdeck/contracts` | Migration, session, metadata, output, retention, hashed auth, pairing, settings, and bounded audit records validate at runtime. | `pnpm test:contract` covers valid records, malformed state, raw-secret rejection, and bounded audit summaries. |
 | Fixture suites | `@hostdeck/test-fixtures` | Include question, approval, command running, tests passed, tests failed, compact warning, idle/no-output, unknown output. | `SFR-011` fixture coverage tests. |
 
 ## Implementation Blueprint
@@ -55,7 +56,7 @@ Owns the typed foundation that later storage, tmux, API, CLI, and UI work must c
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
 | Workspace and command skeleton | `FND-V1-001`, `FND-V1-002` | Done | `artifacts/fnd-v1-001-scaffold.md`, `artifacts/fnd-v1-002-conventions.md` |
-| Core model and contracts | `FND-V1-003` to `FND-V1-006`, `FND-V1-012`, `FND-V1-013` | In progress | `artifacts/fnd-v1-003-core-model.md`, `artifacts/fnd-v1-004-command-intents.md`, `artifacts/fnd-v1-005-errors.md`, `artifacts/fnd-v1-006-api-contracts.md`, `docs/tracking/backlog/foundation.md` |
+| Core model and contracts | `FND-V1-003` to `FND-V1-006`, `FND-V1-012`, `FND-V1-013` | In progress | `artifacts/fnd-v1-003-core-model.md`, `artifacts/fnd-v1-004-command-intents.md`, `artifacts/fnd-v1-005-errors.md`, `artifacts/fnd-v1-006-api-contracts.md`, `artifacts/fnd-v1-012-storage-contracts.md`, `docs/tracking/backlog/foundation.md` |
 | Fixtures and classifiers | `FND-V1-007` to `FND-V1-009` | Planned | `docs/tracking/backlog/foundation.md` |
 | Foundation hardening | `FND-V1-010`, `FND-V1-011` | Planned | `docs/tracking/backlog/foundation.md` |
 
