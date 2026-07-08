@@ -5,12 +5,12 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `FND-V1-007` deterministic fake Codex/session/host fixtures
+- Active task: `FND-V1-008` conservative status/attention classifier tests
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
 - Release state: Foundation implementation started.
-- Last validation: `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit`, `pnpm test:contract`, and `git diff --check` passed after `FND-V1-013`.
-- Next action: Implement `FND-V1-007` deterministic fake Codex/session/host fixtures.
+- Last validation: `pnpm install`, `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit`, `pnpm test:contract`, and `git diff --check` passed after `FND-V1-007`.
+- Next action: Implement `FND-V1-008` conservative status/attention classifier tests.
 - Blockers: Visual mockups before UI implementation.
 - Last commit:
 - Last push:
@@ -28,6 +28,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `FND-V1-006` API and stream contract schemas are in place with runtime validation for host status, sessions, output, stream events, writes, pairing, security, lock, and network state.
 - Implementation: `FND-V1-012` storage/config/auth/audit/retention contract schemas are in place with runtime validation for migration, session, metadata, output cursor, retention boundary, hashed auth, pairing, settings, and bounded audit records.
 - Implementation: `FND-V1-013` UI fixture and view-model contract schemas are in place for session cards, session detail, host safety, trust state, output boundaries, and disabled write controls.
+- Implementation: `FND-V1-007` deterministic fake Codex/session/host fixtures cover all required `SFR-011` categories and parse fake API/UI/host states through shared contracts.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
@@ -50,7 +51,9 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | FND-V1-006 | Implementation | done | `docs/tracking/backlog/foundation.md` | API and stream contracts and `artifacts/fnd-v1-006-api-contracts.md`. |
 | FND-V1-012 | Implementation | done | `docs/tracking/backlog/foundation.md` | Storage/config/auth/audit/retention contracts and `artifacts/fnd-v1-012-storage-contracts.md`. |
 | FND-V1-013 | Implementation | done | `docs/tracking/backlog/foundation.md` | UI fixture/view-model contracts and `artifacts/fnd-v1-013-ui-contracts.md`. |
-| FND-V1-007 | Implementation | ready | `docs/tracking/backlog/foundation.md` | Next ready leaf after contract shape completion. |
+| FND-V1-007 | Implementation | done | `docs/tracking/backlog/foundation.md` | Codex/session/host fixtures and `artifacts/fnd-v1-007-fixtures.md`. |
+| FND-V1-008 | Implementation | ready | `docs/tracking/backlog/foundation.md` | Next ready leaf after fixture inventory completion. |
+| FND-V1-009 | Implementation | ready | `docs/tracking/backlog/foundation.md` | Ready after fixture inventory completion; run after classifier tests unless priority changes. |
 
 ## Decisions Needed
 

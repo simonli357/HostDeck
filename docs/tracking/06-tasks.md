@@ -45,8 +45,9 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 6 | `FND-V1-006` API and stream contract schemas | done | none | API and stream routes now have runtime contract schemas and contract tests. |
 | 7 | `FND-V1-012` Storage/config/auth/audit/retention contract schemas | done | none | Storage and safety contracts now have runtime schemas and contract tests. |
 | 8 | `FND-V1-013` UI fixture and view-model contract schemas | done | none | UI state contracts now have runtime schemas and contract tests. |
-| 9 | `FND-V1-007` Deterministic fake Codex/session/host fixtures | ready | none | Fixture work is unblocked now that API, storage, and UI contract shapes exist. |
-| 10 | `FND-V1-008` Conservative status/attention classifier tests | todo | `FND-V1-007` | Classification must consume deterministic fixture categories rather than ad hoc samples. |
+| 9 | `FND-V1-007` Deterministic fake Codex/session/host fixtures | done | none | Fixture inventory now covers required Codex-like output categories and fake session/host/UI states. |
+| 10 | `FND-V1-008` Conservative status/attention classifier tests | ready | none | Classification must consume deterministic fixture categories rather than ad hoc samples. |
+| 11 | `FND-V1-009` Cross-package contract compatibility tests | ready | none | API, storage, audit, and UI fixture contracts can now be tested together. |
 
 ## Current Blocked Gates
 
