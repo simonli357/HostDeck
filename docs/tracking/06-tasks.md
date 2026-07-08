@@ -48,8 +48,8 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 9 | `FND-V1-007` Deterministic fake Codex/session/host fixtures | done | none | Fixture inventory now covers required Codex-like output categories and fake session/host/UI states. |
 | 10 | `FND-V1-008` Conservative status/attention classifier tests | done | none | Classifier covers every required fixture category and keeps unknown output unknown. |
 | 11 | `FND-V1-009` Cross-package contract compatibility tests | done | none | API, storage, audit, and UI fixture contract compatibility is now tested. |
-| 12 | `FND-V1-010` Foundation production-hardening pass | ready | none | Contracts, core state, write eligibility, classifier, and fixtures now have baseline evidence for hardening. |
-| 13 | `FND-V1-011` Foundation completion evidence update | todo | `FND-V1-010` | Completion evidence waits for the hardening pass. |
+| 12 | `FND-V1-010` Foundation production-hardening pass | done | none | Hardening tightened cross-field contracts and classifier boundaries before downstream modules consume foundation packages. |
+| 13 | `FND-V1-011` Foundation completion evidence update | ready | none | Completion evidence can now roll up the completed foundation hardening pass. |
 
 ## Current Blocked Gates
 

@@ -104,7 +104,15 @@ export const settingsRecordSchema = z
     retention: retentionPolicySchema,
     updated_at: isoTimestampSchema
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.bind_mode === "lan") !== value.lan_enabled) {
+      context.addIssue({
+        code: "custom",
+        message: "Stored bind mode and LAN flag must describe the same configured network state."
+      });
+    }
+  });
 
 export const storageSessionRecordSchema = z
   .object({
@@ -254,6 +262,7 @@ export const auditEventRecordSchema = z
   .strict()
   .superRefine((value, context) => {
     const failed = value.result === "rejected" || value.result === "failed";
+    const sessionScopedActions = new Set(["prompt", "slash", "stop", "raw_input"]);
 
     if (failed && value.error_code === null) {
       context.addIssue({
@@ -266,6 +275,27 @@ export const auditEventRecordSchema = z
       context.addIssue({
         code: "custom",
         message: "Accepted or succeeded audit events must not carry an error code."
+      });
+    }
+
+    if (value.actor.type === "dashboard" && (value.actor.client_id === null || value.actor.permission === null)) {
+      context.addIssue({
+        code: "custom",
+        message: "Dashboard audit actors must include client identity and permission mode."
+      });
+    }
+
+    if (value.actor.type === "system" && (value.actor.client_id !== null || value.actor.permission !== null)) {
+      context.addIssue({
+        code: "custom",
+        message: "System audit actors must not carry client identity or permission mode."
+      });
+    }
+
+    if (sessionScopedActions.has(value.action) && value.session_id === null) {
+      context.addIssue({
+        code: "custom",
+        message: "Session write audit actions must reference the selected session."
       });
     }
   });

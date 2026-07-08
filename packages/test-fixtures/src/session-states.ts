@@ -239,9 +239,9 @@ export const fakeMissionControlViewModels = {
       message: null
     },
     sessions: [
+      sessionCardFixture(fakeApiSessions.testsFailed, enabledPromptControl),
       sessionCardFixture(fakeApiSessions.approvalWaiting, enabledPromptControl),
       sessionCardFixture(fakeApiSessions.questionWaiting, enabledPromptControl),
-      sessionCardFixture(fakeApiSessions.testsFailed, enabledPromptControl),
       sessionCardFixture(fakeApiSessions.unknownOutput, unknownSessionWriteDisabled)
     ],
     attention_sorted: true,

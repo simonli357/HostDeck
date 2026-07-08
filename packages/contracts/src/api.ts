@@ -80,7 +80,10 @@ export const hostStatusResponseSchema = z
     stale_session_count: z.number().int().nonnegative(),
     last_error: apiErrorEnvelopeSchema.nullable()
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    assertLanModeConsistency(value.bind.mode, value.lan_enabled, context);
+  });
 
 export const apiSessionSchema = z
   .object({
@@ -159,7 +162,15 @@ export const replayBoundaryEventSchema = z
     next_cursor: outputCursorSchema,
     reason: z.enum(["retention", "stale_cursor", "restart"])
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.after !== null && value.next_cursor <= value.after) {
+      context.addIssue({
+        code: "custom",
+        message: "Replay boundaries must advance to a cursor after the requested cursor."
+      });
+    }
+  });
 
 export const streamStatusEventSchema = z
   .object({
@@ -194,7 +205,40 @@ export const sessionOutputResponseSchema = z
     next_cursor: outputCursorSchema,
     truncated: z.boolean()
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    let previousCursor: number | null = null;
+
+    for (const [index, event] of value.events.entries()) {
+      if (event.session_id !== value.session_id) {
+        context.addIssue({
+          code: "custom",
+          message: "Output responses must not mix events from multiple sessions.",
+          path: ["events", index, "session_id"]
+        });
+      }
+
+      const eventCursor = event.type === "output" ? event.cursor : event.next_cursor;
+
+      if (previousCursor !== null && eventCursor < previousCursor) {
+        context.addIssue({
+          code: "custom",
+          message: "Output response events must be ordered by cursor.",
+          path: ["events", index]
+        });
+      }
+
+      if (eventCursor > value.next_cursor) {
+        context.addIssue({
+          code: "custom",
+          message: "Output response next_cursor must be at or after every event cursor.",
+          path: ["next_cursor"]
+        });
+      }
+
+      previousCursor = eventCursor;
+    }
+  });
 
 export const promptInputRequestSchema = z
   .object({
@@ -275,7 +319,10 @@ export const networkStateResponseSchema = z
     port: z.number().int().min(1).max(65_535),
     lan_enabled: z.boolean()
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    assertLanModeConsistency(value.mode, value.lan_enabled, context);
+  });
 
 export type ApiErrorEnvelope = z.infer<typeof apiErrorEnvelopeSchema>;
 export type ApiSession = z.infer<typeof apiSessionSchema>;
@@ -311,5 +358,14 @@ function createEnvelopeResult(value: ApiErrorEnvelopeCandidate) {
       ok: false as const,
       message: error instanceof Error ? error.message : "Invalid error envelope."
     };
+  }
+}
+
+function assertLanModeConsistency(mode: z.infer<typeof bindModeSchema>, lanEnabled: boolean, context: z.RefinementCtx): void {
+  if ((mode === "lan") !== lanEnabled) {
+    context.addIssue({
+      code: "custom",
+      message: "LAN bind mode and lan_enabled must describe the same current network state."
+    });
   }
 }

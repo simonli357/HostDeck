@@ -254,6 +254,21 @@ describe("auth, pairing, and settings schemas", () => {
         updated_at: timestamp
       })
     ).toThrow();
+
+    expect(() =>
+      settingsRecordSchema.parse({
+        id: "hostdeck_settings",
+        schema_version: 1,
+        state_dir: "/home/simonli/.local/state/hostdeck",
+        bind_mode: "lan",
+        bind_host: "0.0.0.0",
+        bind_port: 3777,
+        lan_enabled: false,
+        locked: false,
+        retention: retentionPolicy,
+        updated_at: timestamp
+      })
+    ).toThrow();
   });
 });
 
@@ -354,6 +369,59 @@ describe("audit event schema", () => {
         payload_summary: {},
         result: "accepted",
         error_code: "validation_error"
+      })
+    ).toThrow();
+
+    expect(() =>
+      auditEventRecordSchema.parse({
+        id: "audit_dashboard_identity",
+        at: timestamp,
+        actor: {
+          type: "dashboard",
+          client_id: null,
+          permission: "write"
+        },
+        action: "prompt",
+        session_id: sessionId,
+        payload_summary: {},
+        result: "accepted",
+        error_code: null
+      })
+    ).toThrow();
+
+    expect(() =>
+      auditEventRecordSchema.parse({
+        id: "audit_missing_session",
+        at: timestamp,
+        actor: {
+          type: "dashboard",
+          client_id: "client_phone",
+          permission: "write"
+        },
+        action: "slash",
+        session_id: null,
+        payload_summary: {
+          command: "/plan"
+        },
+        result: "accepted",
+        error_code: null
+      })
+    ).toThrow();
+
+    expect(() =>
+      auditEventRecordSchema.parse({
+        id: "audit_system_identity",
+        at: timestamp,
+        actor: {
+          type: "system",
+          client_id: "client_phone",
+          permission: null
+        },
+        action: "lock",
+        session_id: null,
+        payload_summary: {},
+        result: "accepted",
+        error_code: null
       })
     ).toThrow();
   });

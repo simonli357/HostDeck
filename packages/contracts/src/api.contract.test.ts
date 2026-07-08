@@ -139,6 +139,85 @@ describe("session read and output schemas", () => {
       }).events
     ).toHaveLength(2);
   });
+
+  it("rejects output responses that mix events from another session", () => {
+    expect(() =>
+      sessionOutputResponseSchema.parse({
+        session_id: sessionId,
+        events: [
+          {
+            type: "output",
+            session_id: "sess_other_contract_01",
+            cursor: 5,
+            captured_at: timestamp,
+            text: "line from another session"
+          }
+        ],
+        next_cursor: 6,
+        truncated: false
+      })
+    ).toThrow();
+  });
+
+  it("rejects replay boundaries and output responses with cursor drift", () => {
+    expect(() =>
+      sessionOutputResponseSchema.parse({
+        session_id: sessionId,
+        events: [
+          {
+            type: "replay_boundary",
+            session_id: sessionId,
+            after: 10,
+            next_cursor: 10,
+            reason: "stale_cursor"
+          }
+        ],
+        next_cursor: 10,
+        truncated: true
+      })
+    ).toThrow();
+
+    expect(() =>
+      sessionOutputResponseSchema.parse({
+        session_id: sessionId,
+        events: [
+          {
+            type: "output",
+            session_id: sessionId,
+            cursor: 8,
+            captured_at: timestamp,
+            text: "newer"
+          },
+          {
+            type: "output",
+            session_id: sessionId,
+            cursor: 7,
+            captured_at: timestamp,
+            text: "older"
+          }
+        ],
+        next_cursor: 9,
+        truncated: false
+      })
+    ).toThrow();
+
+    expect(() =>
+      sessionOutputResponseSchema.parse({
+        session_id: sessionId,
+        events: [
+          {
+            type: "output",
+            session_id: sessionId,
+            cursor: 12,
+            captured_at: timestamp,
+            text: "past next cursor"
+          }
+        ],
+        next_cursor: 11,
+        truncated: false
+      })
+    ).toThrow();
+  });
 });
 
 describe("stream event schemas", () => {
@@ -262,6 +341,26 @@ describe("write, pairing, security, and network schemas", () => {
       }).trusted
     ).toBe(true);
   });
+
+  it("rejects contradictory network LAN state", () => {
+    expect(() =>
+      networkStateResponseSchema.parse({
+        mode: "lan",
+        host: "0.0.0.0",
+        port: 3777,
+        lan_enabled: false
+      })
+    ).toThrow();
+
+    expect(() =>
+      networkStateResponseSchema.parse({
+        mode: "localhost",
+        host: "127.0.0.1",
+        port: 3777,
+        lan_enabled: true
+      })
+    ).toThrow();
+  });
 });
 
 describe("host status schema", () => {
@@ -297,5 +396,38 @@ describe("host status schema", () => {
         last_error: null
       }).tmux.state
     ).toBe("degraded");
+  });
+
+  it("rejects host status with contradictory LAN bind state", () => {
+    expect(() =>
+      hostStatusResponseSchema.parse({
+        version: "0.0.0",
+        bind: {
+          mode: "lan",
+          host: "0.0.0.0",
+          port: 3777
+        },
+        locked: false,
+        lan_enabled: false,
+        storage: {
+          state: "ok",
+          checked_at: timestamp
+        },
+        tmux: {
+          state: "ok"
+        },
+        stream: {
+          state: "ok"
+        },
+        startup_checks: [
+          {
+            name: "state_dir",
+            state: "ok"
+          }
+        ],
+        stale_session_count: 0,
+        last_error: null
+      })
+    ).toThrow();
   });
 });

@@ -1,4 +1,4 @@
-import { allowedSlashCommands, attentionLevels, lifecycleStates, sessionStatuses, writeActions } from "@hostdeck/core";
+import { allowedSlashCommands, attentionLevels, attentionPriority, lifecycleStates, sessionStatuses, writeActions } from "@hostdeck/core";
 import { z } from "zod";
 import {
   apiSessionSchema,
@@ -124,7 +124,16 @@ export const uiSessionCardSchema = z
       .strict(),
     write_control: uiWriteControlStateSchema
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.lifecycle_state !== "running" && value.write_control.enabled) {
+      context.addIssue({
+        code: "custom",
+        message: "Session cards must not expose enabled write controls for non-running sessions.",
+        path: ["write_control", "enabled"]
+      });
+    }
+  });
 
 export const uiTrustStateViewModelSchema = z
   .object({
@@ -139,10 +148,10 @@ export const uiTrustStateViewModelSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if ((value.state === "unpaired" || value.state === "expired" || value.state === "revoked") && value.trusted) {
+    if ((value.state === "unpaired" || value.state === "expired" || value.state === "revoked" || value.state === "permission_denied") && value.trusted) {
       context.addIssue({
         code: "custom",
-        message: "Unpaired, expired, or revoked trust states must not be trusted."
+        message: "Unpaired, expired, revoked, or permission-denied trust states must not be trusted."
       });
     }
 
@@ -150,6 +159,45 @@ export const uiTrustStateViewModelSchema = z
       context.addIssue({
         code: "custom",
         message: "Write controls must be disabled before writes when trust, read-only, or lock state forbids writes."
+      });
+    }
+
+    if (value.state !== "locked" && value.locked) {
+      context.addIssue({
+        code: "custom",
+        message: "Locked trust flags must use the locked trust state."
+      });
+    }
+
+    if (value.state === "trusted_write") {
+      if (!value.trusted || value.read_only || value.locked || !value.write_controls_enabled || value.client_id === null) {
+        context.addIssue({
+          code: "custom",
+          message: "Trusted write state must be trusted, writable, unlocked, identified, and have write controls enabled."
+        });
+      }
+    }
+
+    if (value.state === "trusted_read_only") {
+      if (!value.trusted || !value.read_only || value.locked || value.write_controls_enabled || value.client_id === null) {
+        context.addIssue({
+          code: "custom",
+          message: "Trusted read-only state must be trusted, read-only, unlocked, identified, and have write controls disabled."
+        });
+      }
+    }
+
+    if (value.state === "locked" && (!value.locked || value.write_controls_enabled)) {
+      context.addIssue({
+        code: "custom",
+        message: "Locked trust state must carry a locked flag and disabled write controls."
+      });
+    }
+
+    if ((value.state === "unpaired" || value.state === "expired" || value.state === "revoked" || value.state === "permission_denied") && value.write_controls_enabled) {
+      context.addIssue({
+        code: "custom",
+        message: "Untrusted trust states must keep write controls disabled."
       });
     }
   });
@@ -188,6 +236,23 @@ export const uiMissionControlViewModelSchema = z
         code: "custom",
         message: "Ready Mission Control state must not carry an error message."
       });
+    }
+
+    for (let index = 1; index < value.sessions.length; index += 1) {
+      const previous = value.sessions[index - 1];
+      const current = value.sessions[index];
+
+      if (previous === undefined || current === undefined) {
+        continue;
+      }
+
+      if (attentionPriority(previous.attention) < attentionPriority(current.attention)) {
+        context.addIssue({
+          code: "custom",
+          message: "Mission Control sessions must be sorted by descending attention priority.",
+          path: ["sessions", index]
+        });
+      }
     }
   });
 

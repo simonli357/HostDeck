@@ -73,11 +73,19 @@ function hasRunningCommand(value: string): boolean {
 }
 
 function hasTestSuccess(value: string): boolean {
-  return value.includes("test files") && value.includes("passed") && !value.includes("failed");
+  const hasPassedMarker =
+    (value.includes("test files") && value.includes("passed")) || /\ball tests passed\b/u.test(value) || /\b\d+\s+passed\b/u.test(value);
+
+  return hasPassedMarker && !hasTestFailure(value);
 }
 
 function hasTestFailure(value: string): boolean {
-  return value.includes("fail ") || value.includes("fail\n") || value.includes("failed") || value.includes("tests failed");
+  return (
+    /\bfail\b/u.test(value) ||
+    /\btests?\s+failed\b/u.test(value) ||
+    /\b[1-9]\d*\s+(?:failed|failures)\b/u.test(value) ||
+    /\bfailures?:\s*[1-9]\d*\b/u.test(value)
+  );
 }
 
 function hasCompactWarning(value: string): boolean {

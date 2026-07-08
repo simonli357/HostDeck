@@ -5,12 +5,12 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `FND-V1-010` foundation production-hardening pass
+- Active task: `FND-V1-011` foundation completion evidence update
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
-- Release state: Foundation implementation started.
-- Last validation: `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit`, `pnpm test:contract`, and `git diff --check` passed after `FND-V1-009`.
-- Next action: Run `FND-V1-010` foundation production-hardening pass.
+- Release state: Foundation implementation hardening completed; completion rollup remains.
+- Last validation: `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit`, `pnpm test:contract`, and `git diff --check` passed after `FND-V1-010`.
+- Next action: Run `FND-V1-011` foundation completion evidence update.
 - Blockers: Visual mockups before UI implementation.
 - Last commit:
 - Last push:
@@ -31,6 +31,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `FND-V1-007` deterministic fake Codex/session/host fixtures cover all required `SFR-011` categories and parse fake API/UI/host states through shared contracts.
 - Implementation: `FND-V1-008` conservative status/attention classifier is in place and keeps unrecognized output as `unknown`.
 - Implementation: `FND-V1-009` cross-package contract compatibility tests cover fixture/API/UI compatibility, API error shape, and audit payload bounds.
+- Implementation: `FND-V1-010` foundation production-hardening tightened output/session, cursor, LAN, UI trust/sort/write-control, classifier, storage settings, and audit invariants.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
@@ -56,7 +57,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | FND-V1-007 | Implementation | done | `docs/tracking/backlog/foundation.md` | Codex/session/host fixtures and `artifacts/fnd-v1-007-fixtures.md`. |
 | FND-V1-008 | Implementation | done | `docs/tracking/backlog/foundation.md` | Conservative classifier and `artifacts/fnd-v1-008-classifier.md`. |
 | FND-V1-009 | Implementation | done | `docs/tracking/backlog/foundation.md` | Cross-package compatibility tests and `artifacts/fnd-v1-009-cross-package-contracts.md`. |
-| FND-V1-010 | Hardening | ready | `docs/tracking/backlog/foundation.md` | Next ready leaf after compatibility completion. |
+| FND-V1-010 | Hardening | done | `docs/tracking/backlog/foundation.md` | Foundation hardening and `artifacts/fnd-v1-010-foundation-hardening.md`. |
+| FND-V1-011 | Documentation | ready | `docs/tracking/backlog/foundation.md` | Next ready leaf: update foundation completion evidence and block matrix rollup. |
 
 ## Decisions Needed
 

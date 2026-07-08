@@ -255,6 +255,14 @@ describe("UI session card and detail schemas", () => {
     ).toThrow();
 
     expect(() =>
+      uiSessionCardSchema.parse({
+        ...sessionCard,
+        lifecycle_state: "stale",
+        write_control: enabledPromptControl
+      })
+    ).toThrow();
+
+    expect(() =>
       uiSessionDetailViewModelSchema.parse({
         screen: "session_detail",
         session: sessionFixture,
@@ -314,6 +322,32 @@ describe("UI host safety, trust, and mission control schemas", () => {
         write_controls_enabled: true,
         message: null
       }).write_controls_enabled
+    ).toBe(true);
+
+    expect(
+      uiTrustStateViewModelSchema.parse({
+        state: "trusted_read_only",
+        trusted: true,
+        read_only: true,
+        locked: false,
+        lan_enabled: false,
+        client_id: "phone",
+        write_controls_enabled: false,
+        message: "Read-only access."
+      }).read_only
+    ).toBe(true);
+
+    expect(
+      uiTrustStateViewModelSchema.parse({
+        state: "locked",
+        trusted: true,
+        read_only: false,
+        locked: true,
+        lan_enabled: false,
+        client_id: "phone",
+        write_controls_enabled: false,
+        message: "Remote writes are locked."
+      }).locked
     ).toBe(true);
   });
 
@@ -387,6 +421,32 @@ describe("UI host safety, trust, and mission control schemas", () => {
     ).toThrow();
 
     expect(() =>
+      uiTrustStateViewModelSchema.parse({
+        state: "trusted_write",
+        trusted: true,
+        read_only: true,
+        locked: false,
+        lan_enabled: false,
+        client_id: "phone",
+        write_controls_enabled: false,
+        message: null
+      })
+    ).toThrow();
+
+    expect(() =>
+      uiTrustStateViewModelSchema.parse({
+        state: "trusted_read_only",
+        trusted: true,
+        read_only: false,
+        locked: false,
+        lan_enabled: false,
+        client_id: "phone",
+        write_controls_enabled: true,
+        message: null
+      })
+    ).toThrow();
+
+    expect(() =>
       uiMissionControlViewModelSchema.parse({
         screen: "mission_control",
         state: "empty",
@@ -408,6 +468,47 @@ describe("UI host safety, trust, and mission control schemas", () => {
           message: null
         },
         sessions: [sessionCard],
+        attention_sorted: true,
+        error_message: null
+      })
+    ).toThrow();
+
+    expect(() =>
+      uiMissionControlViewModelSchema.parse({
+        screen: "mission_control",
+        state: "ready",
+        host_safety: {
+          host: hostStatusFixture,
+          security: securityFixture,
+          network: networkFixture,
+          remote_unlock_available: false,
+          dashboard_lan_mutation_available: false
+        },
+        trust: {
+          state: "trusted_write",
+          trusted: true,
+          read_only: false,
+          locked: false,
+          lan_enabled: false,
+          client_id: "phone",
+          write_controls_enabled: true,
+          message: null
+        },
+        sessions: [
+          {
+            ...sessionCard,
+            id: "sess_low_attention_01",
+            name: "low-attention",
+            attention: "none"
+          },
+          {
+            ...sessionCard,
+            id: "sess_high_attention_01",
+            name: "high-attention",
+            attention: "failed",
+            status: "tests_failed"
+          }
+        ],
         attention_sorted: true,
         error_message: null
       })

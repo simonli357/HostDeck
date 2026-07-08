@@ -23,4 +23,26 @@ describe("Codex output classifier over deterministic fixtures", () => {
       attention: "unknown"
     });
   });
+
+  it("does not mistake explicit zero-failure wording for failed tests", () => {
+    expect(classifyCodexOutput("Test Files 4 passed (4)\nTests 31 passed (31) | 0 failed\nDuration 821ms")).toMatchObject({
+      status: "tests_passed",
+      attention: "none",
+      reason: "tests_passed"
+    });
+
+    expect(classifyCodexOutput("All tests passed. No failed tests were found.")).toMatchObject({
+      status: "tests_passed",
+      attention: "none",
+      reason: "tests_passed"
+    });
+  });
+
+  it("keeps explicit test failure counts as failed", () => {
+    expect(classifyCodexOutput("Test Files 1 failed | 3 passed\nTests 2 failed | 29 passed")).toMatchObject({
+      status: "tests_failed",
+      attention: "failed",
+      reason: "tests_failed"
+    });
+  });
 });
