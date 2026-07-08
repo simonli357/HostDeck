@@ -33,6 +33,7 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | Lint and package exports | `biome.json`, `scripts/check-package-exports.mjs`, `packages/*/package.json` | `pnpm lint` |
 | Workspace conventions | `tests/workspace-conventions.test.ts` | `pnpm test:unit` |
 | Core session model | `packages/core/src/session.ts` | `packages/core/src/session.test.ts` |
+| Conservative Codex output classifier | `packages/core/src/classifier.ts` | `packages/test-fixtures/src/classifier.test.ts`, `pnpm test:unit` |
 | Command intents and write eligibility | `packages/core/src/commands.ts` | `packages/core/src/commands.test.ts` |
 | Shared error envelope | `packages/core/src/errors.ts` | `packages/core/src/errors.test.ts` |
 | API and stream contracts | `packages/contracts/src/api.ts` | `packages/contracts/src/api.contract.test.ts`, `pnpm test:contract` |
