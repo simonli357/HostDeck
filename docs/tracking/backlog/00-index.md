@@ -24,7 +24,7 @@ Track meaningful ordering dependencies here. Group files own exact task cards.
 | `BLK-V1-01` complete via `FND-V1-001` to `FND-V1-013` plus `FND-V1-010`/`FND-V1-011` | `DAT-V1-001`, `DAT-V1-002`, `DAT-V1-003`, `INT-V1-010`, later API/CLI/UI consumers | Storage, fake adapters, API, CLI, and UI consume typed contracts and deterministic fixtures; real tmux capture still requires `tmux`. |
 | `DAT-V1-001` SQLite spike | `DAT-V1-010` to `DAT-V1-017` | Resolved by `DEC-014`; storage implementation uses `better-sqlite3` plus a first-party migration runner. |
 | `DAT-V1-002` token transport spike | `DAT-V1-013`, `IFC-V1-005`, `FE-V1-013` | Resolved by `DEC-015`; auth routes and UI trust states use host-only `HttpOnly` cookie transport with CSRF write headers. |
-| `DAT-V1-003` retention spike | `DAT-V1-015`, `INT-V1-014`, `FE-V1-015` | Output/audit retention and replay-boundary behavior wait for cap decisions. |
+| `DAT-V1-003` retention spike | `DAT-V1-015`, `INT-V1-014`, `FE-V1-015` | Resolved by `DEC-016`; output/audit retention and replay-boundary behavior use visible boundaries and exported default caps. |
 | `INT-V1-001` tmux capture spike | `INT-V1-014`, `IFC-V1-003`, output smoke tasks | Stream/replay implementation waits for capture mechanism and cursor semantics. |
 | `DAT-V1-010` to `DAT-V1-017` local state foundation | `INT-V1-015`, `IFC-V1-004`, release privacy checks | Restart, auth, audit, settings, and optional branch metadata are durable before write paths harden. |
 | `INT-V1-010` to `INT-V1-016` tmux/output foundation | `IFC-V1-003`, `IFC-V1-004`, `FE-V1-012`, real smoke tasks | API/CLI and dashboard read/write real managed session state through adapters. |

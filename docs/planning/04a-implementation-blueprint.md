@@ -81,11 +81,11 @@ All API errors use the contract envelope: `code`, `message`, optional `field`, o
 | `schema_migrations` | `version`, `applied_at`, checksum if used. | Server does not accept requests with unknown failed migration. | Startup fails loudly. |
 | `sessions` | `id`, `name`, `cwd`, `backend`, `tmux_session`, `tmux_window` or target, `lifecycle_state`, `created_at`, `updated_at`, `stale_reason`. | `id` stable; `name` unique in V1; cwd is absolute and validated on start. | Corrupt/missing target marks stale, not recreated. |
 | `session_metadata` | `session_id`, `branch`, `last_activity_at`, `status`, `attention`, `summary`, `last_output_cursor`. | Derived values may be stale but must be labeled. | Failed derivation yields `unknown`, not healthy. |
-| `output_events` or log index | `session_id`, `cursor`, `order`, `captured_at`, `kind`, `payload_or_pointer`, `truncated_before`. | Cursors monotonic per session; retention boundaries explicit. | Invalid cursor returns boundary/error. |
+| `output_events` or log index | `session_id`, `cursor`, `order`, `captured_at`, `kind`, `payload_or_pointer`, `truncated_before`. | Cursors monotonic per session; V1 retains 10,000 output events or 10 MB payload per session, whichever is lower. | Invalid cursor returns boundary/error; pruning records visible replay boundaries. |
 | `auth_devices` | `id`, hashed token, permission mode, `created_at`, `last_used_at`, `revoked_at`, expiry if used. | Raw tokens never stored. Revoked/expired cannot write. | Invalid token returns permission error. |
 | `pairing_codes` | hashed code, permission mode, `created_at`, `expires_at`, `used_at`. | One-time use and time-bounded. | Expired/used code fails and may be audited. |
 | `settings` | bind host/port, LAN enabled, locked, state dir metadata, retention settings. | Defaults are safe: localhost, LAN off, writes locked only when user locks. | Invalid bind/port blocks startup. |
-| `audit_events` | `id`, `at`, `actor`, `action`, `session_id`, bounded payload summary, result, error code. | Required before remote write dispatch except emergency lock. | Failed audit preflight blocks writes. |
+| `audit_events` | `id`, `at`, `actor`, `action`, `session_id`, bounded payload summary, result, error code. | Required before remote write dispatch except emergency lock; V1 retains 5,000 audit events or 30 days globally, whichever is lower. | Failed audit preflight blocks writes; pruning records audit retention boundaries. |
 
 ## Critical Sequences
 
@@ -133,7 +133,7 @@ All API errors use the contract envelope: `code`, `message`, optional `field`, o
 2. Server authenticates read permission.
 3. Server checks session existence/stale state.
 4. Server replays retained events after cursor if contiguous.
-5. If retention boundary was crossed, server sends boundary marker before latest retained events.
+5. If retention boundary was crossed, server sends a boundary marker before latest retained events, with `next_cursor` set to the first retained cursor after pruning.
 6. Server subscribes client to live fanout.
 7. Reader failure sends typed stream error and updates host/session health.
 
@@ -179,7 +179,7 @@ All API errors use the contract envelope: `code`, `message`, optional `field`, o
 | Requirement group | Blueprint owner | Candidate blocks | Spike dependency | Validation owner |
 | --- | --- | --- | --- | --- |
 | FR-001 to FR-004 session lifecycle | Tmux lifecycle, session registry, CLI/API | BLK-V1-03, BLK-V1-04 | SPK-ARCH-001 for output-adjacent tmux behavior | Adapter/API/CLI tests plus Ubuntu smoke |
-| FR-005, FR-013 output streaming | Output ingestion, stream reconnect | BLK-V1-03, BLK-V1-04 | SPK-ARCH-001, SPK-ARCH-004 | Stream integration tests |
+| FR-005, FR-013 output streaming | Output ingestion, stream reconnect | BLK-V1-03, BLK-V1-04 | SPK-ARCH-001; retention caps resolved by `DEC-016` | Stream integration tests |
 | FR-006 to FR-008, FR-015 writes/slash | Write pipeline, slash commands | BLK-V1-01, BLK-V1-04, BLK-V1-05 | Token transport resolved by `DEC-015`; no remaining write-safety spike here | API/UI/CLI tests |
 | FR-009, SFR-011 heuristics/fixtures | Core classifiers, test fixtures | BLK-V1-01 | None | Unit fixture tests |
 | FR-010 and IR-001 to IR-009 UI | Web dashboard, visual mockups | BLK-V1-05 | SPK-UX-001 | Component tests and screenshot evidence |
@@ -188,7 +188,7 @@ All API errors use the contract envelope: `code`, `message`, optional `field`, o
 | FR-014, NFR-002, DR-007 restart | Startup/reconciliation, storage, tmux adapter | BLK-V1-02, BLK-V1-03 | SPK-ARCH-001, SPK-ARCH-002 | Restart integration tests |
 | NFR-001, PR-001 to PR-009 platform | Config/startup/service lifecycle | BLK-V1-04, BLK-V1-06 | SPK-ARCH-002 may affect setup | Setup smoke and startup tests |
 | NFR-005, NFR-006, SFR-005 failures | Core errors, API envelope, CLI exit behavior | All blocks | None | Negative tests |
-| DR-001 to DR-010 data/audit | Storage model, audit, retention | BLK-V1-02 | SPK-ARCH-002, SPK-ARCH-004 | Storage/audit tests |
+| DR-001 to DR-010 data/audit | Storage model, audit, retention | BLK-V1-02 | SQLite and retention decisions resolved by `DEC-014`/`DEC-016` | Storage/audit tests |
 | SFR-001 to SFR-010 trust/safety | Pairing/trust, lock, write eligibility | BLK-V1-02, BLK-V1-04, BLK-V1-05 | Auth transport resolved by `DEC-015` | Auth/API/UI tests |
 
 ## Candidate Capability Blocks
@@ -198,7 +198,7 @@ These are still candidate blocks. The next `05-blocks` stage must create block s
 | Block ID | Capability/workflow | Requirement refs | Why required | Proposed spec | Depends on | Completion evidence |
 | --- | --- | --- | --- | --- | --- | --- |
 | BLK-V1-01 | Contracts, core model, and fixtures | FR-002, FR-009, NFR-003, NFR-005, NFR-006, NFR-007, SFR-011 | Gives every later module stable types, state machines, errors, and fake Codex/tmux fixtures. | `docs/planning/05-blocks/BLK-V1-01-contracts-core-fixtures.md` | Approved requirements and architecture | Core tests and fixture classifier evidence |
-| BLK-V1-02 | Local state, auth, audit, and config | DR-001 to DR-010, SFR-001, SFR-002, SFR-004, SFR-006 to SFR-008, PR-009 | Durable local truth for sessions, pairing, lock/LAN, audit, retention, and restart. | `docs/planning/05-blocks/BLK-V1-02-local-state-auth-audit.md` | BLK-V1-01, SPK-ARCH-004; SPK-ARCH-002/003 resolved by `DEC-014`/`DEC-015` | Storage migration/auth/audit tests |
+| BLK-V1-02 | Local state, auth, audit, and config | DR-001 to DR-010, SFR-001, SFR-002, SFR-004, SFR-006 to SFR-008, PR-009 | Durable local truth for sessions, pairing, lock/LAN, audit, retention, and restart. | `docs/planning/05-blocks/BLK-V1-02-local-state-auth-audit.md` | BLK-V1-01; SPK-ARCH-002/003/004 resolved by `DEC-014`/`DEC-015`/`DEC-016` | Storage migration/auth/audit tests |
 | BLK-V1-03 | Tmux session lifecycle and output ingestion | FR-001, FR-003 to FR-005, FR-013, FR-014, NFR-002, PR-001, PR-006, SFR-010 | Foundation for managed Codex sessions, attach path, output streaming, and restart reconciliation. | `docs/planning/05-blocks/BLK-V1-03-tmux-output.md` | BLK-V1-01, BLK-V1-02, SPK-ARCH-001 | Fake adapter tests plus Ubuntu tmux smoke evidence |
 | BLK-V1-04 | Local API and CLI control plane | FR-006 to FR-008, FR-011, FR-012, FR-015, PR-002 to PR-004, PR-007, PR-008, SFR-003, SFR-005 | Exposes the host agent through typed API and `codexdeck` commands. | `docs/planning/05-blocks/BLK-V1-04-api-cli-control-plane.md` | BLK-V1-01 through BLK-V1-03 | API/CLI contract tests and failure-path evidence |
 | BLK-V1-05 | Web dashboard UX | FR-005 to FR-010, IR-001 to IR-009, PR-005, SFR-001 to SFR-003, SFR-009 | Delivers Mission Control, Session Detail, trust states, safe commands, and advanced fallback. | `docs/planning/05-blocks/BLK-V1-05-web-dashboard.md` | BLK-V1-01, BLK-V1-04, SPK-UX-001 | Responsive UI tests and screenshot evidence |
@@ -227,7 +227,7 @@ Use spikes only for uncertainty that blocks requirements, architecture, detailed
 | SPK-ARCH-001 | Can tmux `pipe-pane` or an equivalent mechanism provide ordered, reconnectable per-session output for V1? | Prototype fake Codex output in tmux, capture events, restart reader, verify cursor replay/truncation. | Choose output capture method, reader supervision behavior, and replay boundary semantics. | BLK-V1-03, BLK-V1-04, output tests | Artifact with commands, chosen mechanism, observed failure modes, and fixture plan. |
 | SPK-ARCH-002 | Which SQLite Node driver should V1 use? | Compared `better-sqlite3`, pinned-runtime `node:sqlite`, `sqlite3`, and `sqlite` wrapper for install friction, license, sync/async behavior, migrations, test ergonomics, and Node LTS support. | Resolved in `DEC-014`: use `better-sqlite3` plus a first-party migration runner; do not silently fall back to `node:sqlite`. | BLK-V1-02, setup docs | `artifacts/dat-v1-001-sqlite-driver-spike.md`. |
 | SPK-ARCH-003 | What token transport should dashboard pairing use? | Compared HttpOnly same-origin cookie versus bearer token approaches under localhost and LAN opt-in. | Resolved in `DEC-015`: host-only `HttpOnly` cookie for the device token, server-bound CSRF token for same-origin write headers, no durable JavaScript-readable bearer-token storage. | BLK-V1-02, BLK-V1-04, BLK-V1-05 | `artifacts/dat-v1-002-token-transport-spike.md` and API contract update. |
-| SPK-ARCH-004 | What retention caps should output and audit use? | Estimate fixture sizes, run bounded append/replay tests, choose byte/event/day caps. | Pick output and audit retention defaults plus cleanup timing. | BLK-V1-02, BLK-V1-03, test plan | Test-plan values and cleanup rules. |
+| SPK-ARCH-004 | What retention caps should output and audit use? | Measured fixture sizes and simulated bounded append/replay behavior. | Resolved in `DEC-016`: 10,000 output events or 10 MB per session; 5,000 audit events or 30 days globally; cleanup writes visible boundaries. | BLK-V1-02, BLK-V1-03, test plan | `artifacts/dat-v1-003-retention-caps-spike.md` and exported `defaultRetentionPolicy`. |
 | SPK-UX-001 | What visual direction and mockup set should UI implementation target? | After test/state matrix, generate two image-based visual directions covering Mission Control, Session Detail, trust/status, and raw fallback. | Human selects one option and approves screen-group references. | BLK-V1-05 UI implementation | Assets under `assets/ui-concepts/`, decision log entry, UX spec update. |
 
 ## Pre-Backlog Readiness Checks

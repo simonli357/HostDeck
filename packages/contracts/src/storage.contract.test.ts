@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   auditEventRecordSchema,
   authDeviceRecordSchema,
+  defaultRetentionPolicy,
   outputEventRecordSchema,
   pairingCodeRecordSchema,
   retentionBoundaryRecordSchema,
@@ -14,13 +15,6 @@ import {
 const sessionId = "sess_storage_01";
 const timestamp = "2026-07-08T19:00:00.000Z";
 const hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef";
-
-const retentionPolicy = {
-  output_event_limit: 10_000,
-  output_byte_limit: 10_000_000,
-  audit_event_limit: 5_000,
-  audit_retention_days: 30
-};
 
 const sessionRecord = {
   id: sessionId,
@@ -206,7 +200,7 @@ describe("auth, pairing, and settings schemas", () => {
         bind_port: 3777,
         lan_enabled: false,
         locked: false,
-        retention: retentionPolicy,
+        retention: defaultRetentionPolicy,
         updated_at: timestamp
       }).bind_port
     ).toBe(3777);
@@ -250,7 +244,7 @@ describe("auth, pairing, and settings schemas", () => {
         bind_port: 0,
         lan_enabled: false,
         locked: false,
-        retention: retentionPolicy,
+        retention: defaultRetentionPolicy,
         updated_at: timestamp
       })
     ).toThrow();
@@ -265,7 +259,7 @@ describe("auth, pairing, and settings schemas", () => {
         bind_port: 3777,
         lan_enabled: false,
         locked: false,
-        retention: retentionPolicy,
+        retention: defaultRetentionPolicy,
         updated_at: timestamp
       })
     ).toThrow();

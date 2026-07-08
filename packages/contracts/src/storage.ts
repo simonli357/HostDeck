@@ -91,6 +91,13 @@ export const retentionPolicySchema = z
   })
   .strict();
 
+export const defaultRetentionPolicy = {
+  output_event_limit: 10_000,
+  output_byte_limit: 10_000_000,
+  audit_event_limit: 5_000,
+  audit_retention_days: 30
+} as const;
+
 export const settingsRecordSchema = z
   .object({
     id: z.literal("hostdeck_settings"),

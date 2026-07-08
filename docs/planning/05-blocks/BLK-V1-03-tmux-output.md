@@ -19,7 +19,7 @@ Owns the real process adapter for HostDeck-managed Codex sessions and ordered ou
 | --- | --- | --- | --- | --- |
 | Tmux adapter interface | Abstract tmux start/list/attach/send/stop/output operations for fakes and real adapter. | Core contracts, storage session records. | Deterministic fake behavior and real adapter commands. | Unsupported operation, missing tmux, target mismatch, invalid session id. |
 | Real tmux adapter | Create named targets, launch Codex, send input, stop targets, expose attach metadata. | Codex executable path, cwd, session id/name, tmux binary. | Running tmux target and lifecycle results. | Missing binary, invalid cwd, launch failure, stale/missing target, partial start cleanup. |
-| Output reader | Capture ordered output events and feed storage/API stream. | Output capture mechanism from `SPK-ARCH-001`, retention policy from `SPK-ARCH-004`. | Monotonic cursors, replay boundary markers, live fanout input. | Reader crash, retention boundary, invalid cursor, reordered output. |
+| Output reader | Capture ordered output events and feed storage/API stream. | Output capture mechanism from `SPK-ARCH-001`, retention policy from `DEC-016`. | Monotonic cursors, replay boundary markers, live fanout input. | Reader crash, retention boundary, invalid cursor, reordered output. |
 | Restart reconciler | Compare registry records with live tmux targets at daemon startup. | Durable session registry and tmux target list. | Running or stale session state, restarted output readers. | Missing target, unknown HostDeck-looking target, unreconciled session, stale write attempt. |
 
 ## Contracts And Data
@@ -35,7 +35,7 @@ Owns the real process adapter for HostDeck-managed Codex sessions and ordered ou
 
 | Slice | Goal | Epics/tasks | Dependencies | Exit evidence |
 | --- | --- | --- | --- | --- |
-| Foundation | Build fake adapter, real adapter skeleton, and output capture spike. | Backlog must create leaf tasks for adapter interface, fake adapter, `SPK-ARCH-001`, tmux target naming, real start/list/send/stop, output reader, and registry integration. | `BLK-V1-01`, `BLK-V1-02`, `SPK-ARCH-001`, `SPK-ARCH-004`. | Fake adapter tests and spike artifact. |
+| Foundation | Build fake adapter, real adapter skeleton, and output capture spike. | Backlog must create leaf tasks for adapter interface, fake adapter, `SPK-ARCH-001`, tmux target naming, real start/list/send/stop, output reader, and registry integration. | `BLK-V1-01`, `BLK-V1-02`, `SPK-ARCH-001`; retention resolved by `DEC-016`. | Fake adapter tests and spike artifact. |
 | Hardening | Prove process failures, stale targets, restart reconciliation, output ordering, and write rejection. | Backlog must create hardening tasks for missing tmux/Codex, invalid cwd, partial start cleanup, stale target, reader failure, cursor boundary, and restart recovery. | Foundation adapter/output tasks. | Real tmux smoke and negative-test artifacts. |
 | Release readiness | Provide Ubuntu smoke instructions and capture supported tmux/Codex assumptions. | Backlog must create docs/release tasks through `BLK-V1-06` once commands exist. | Real adapter works. | Release smoke artifact with OS/tool versions. |
 
@@ -72,4 +72,4 @@ Owns the real process adapter for HostDeck-managed Codex sessions and ordered ou
 | ID | Question | Owner | Exit evidence |
 | --- | --- | --- | --- |
 | `SPK-ARCH-001` | Can tmux `pipe-pane` or an equivalent mechanism provide ordered, reconnectable per-session output for V1? | Architecture/tmux task | Prototype artifact with chosen capture mechanism, cursor behavior, and failure modes. |
-| `SPK-ARCH-004` | What output and audit retention caps should V1 use? | Architecture/storage task | Retention defaults and truncation/replay boundary behavior. |
+| `SPK-ARCH-004` | What output and audit retention caps should V1 use? | Resolved by `DEC-016` / `DAT-V1-003` | `artifacts/dat-v1-003-retention-caps-spike.md`. |

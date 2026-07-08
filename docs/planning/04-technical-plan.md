@@ -73,7 +73,7 @@ Blocks own local design; this table owns the system-level contracts between bloc
 | --- | --- | --- | --- |
 | Host agent/core | tmux adapter | Create, stop, attach target, send literal text, send Enter, capture target state, and mark stale/unavailable sessions. | Missing tmux, failed tmux command, stale target, or unsupported session state returns a typed error; no silent recreate or buffered write. |
 | Host agent/core | Codex launcher | Start new managed `codex` process in a tmux target using a validated cwd and environment inherited from the host process. | Missing Codex executable, invalid cwd, duplicate name, or failed launch fails before registry success is recorded. |
-| Output ingestion | Storage and stream fanout | Append ordered output events with per-session cursors, truncation metadata, and bounded retention. | Reader errors surface in host status and session state; dashboard shows stream disconnected or stale output boundary. |
+| Output ingestion | Storage and stream fanout | Append ordered output events with per-session cursors, truncation metadata, and `DEC-016` bounded retention. | Reader errors surface in host status and session state; dashboard shows stream disconnected or stale output boundary. |
 | API/CLI | Trust service | Read-only access can inspect allowed state; writes require paired/trusted token and unlocked host. | Untrusted, locked, revoked, expired, or read-only clients get explicit authorization errors. |
 | Dashboard | Local API | Dashboard uses typed HTTP/WebSocket contracts for sessions, output, writes, slash commands, pairing, lock state, and LAN state. | Contract failures render visible error states and do not retry writes indefinitely. |
 | Audit writer | Storage | Every write/risky/control action records bounded action metadata before or with the action result. | If audit cannot be recorded for a write action, the write fails unless the action is a local emergency lock. |
@@ -117,11 +117,11 @@ SQLite is the durable state owner for structured V1 records. Output bytes may be
 | `schema_migrations` | Applied migration versions. | Blocks startup on mismatch or failed migration. |
 | `sessions` | Session id, name, cwd, backend, tmux target, lifecycle state, created time, last known state, stale/unavailable reason. | Durable across daemon restart; reconciled against tmux. |
 | `session_metadata` | Project/cwd display fields, git branch when available, last activity, status, attention, summary/recent-output cue. | Derived fields can be recomputed; stale values must be marked. |
-| `output_events` or output log index | Per-session cursor, order, capture time, truncation/replay boundary, storage pointer or bounded payload. | Hybrid event/byte cap; exact caps in blueprint/test plan. |
+| `output_events` or output log index | Per-session cursor, order, capture time, truncation/replay boundary, storage pointer or bounded payload. | V1 keeps 10,000 output events or 10 MB output payload per session, whichever is lower; exact boundary semantics in `DEC-016`. |
 | `auth_devices` | Hashed device tokens, permission mode, created/last-used time, revoked/expired state. | Does not store raw tokens. |
 | `pairing_codes` | Hashed short-lived pairing codes and expiry/use state. | One-time use; cleanup policy in blueprint. |
 | `settings` | Bind host/port, LAN enabled, locked state, state directory metadata, retention settings. | Mutated only by trusted service/admin paths. |
-| `audit_events` | Bounded records for prompt, slash, stop, raw input, pair, lock, unlock, token revoke, LAN enable/disable, startup failures where useful. | Retention cap required; payload summaries are bounded/sanitized. |
+| `audit_events` | Bounded records for prompt, slash, stop, raw input, pair, lock, unlock, token revoke, LAN enable/disable, startup failures where useful. | V1 keeps 5,000 audit events or 30 days globally, whichever is lower; payload summaries are bounded/sanitized. |
 
 ## Output And Streaming Contract
 
@@ -190,7 +190,7 @@ These are required before backlog decomposition if they remain unresolved after 
 | SPK-ARCH-001 | Can tmux `pipe-pane` or an equivalent mechanism provide ordered, reconnectable per-session output for V1? | Prototype fake Codex output through tmux, capture ordered events, restart reader, compare cursor replay and truncation behavior. | Spike artifact with command transcript, chosen capture method, failure modes, and fixture strategy. | Output ingestion tasks, stream API tasks. |
 | SPK-ARCH-002 | Which SQLite Node driver should V1 use? | Compared `better-sqlite3`, `sqlite3`/`sqlite`, and pinned Node built-in SQLite availability for license, install friction, sync/async behavior, migrations, and test ergonomics. | Resolved by `DEC-014` and `artifacts/dat-v1-001-sqlite-driver-spike.md`: use `better-sqlite3` plus a first-party migration runner; no silent fallback to `node:sqlite`. | Storage tasks, setup docs. |
 | SPK-ARCH-003 | What exact token transport should the dashboard use for local pairing? | Compared HttpOnly same-origin cookie against bearer token storage approaches under localhost and LAN opt-in. | Resolved by `DEC-015` and `artifacts/dat-v1-002-token-transport-spike.md`: use host-only `HttpOnly` cookie transport with CSRF write headers; reject browser durable bearer-token storage. | Pairing/auth tasks, API contract tasks. |
-| SPK-ARCH-004 | What retention defaults keep output/audit useful without unbounded growth? | Run fixture sizing for output events and audit records, choose event/byte/day caps. | Test-plan values for output caps, audit caps, truncation markers, and cleanup behavior. | Storage, output, and audit tasks. |
+| SPK-ARCH-004 | What retention defaults keep output/audit useful without unbounded growth? | Measured current Codex-like fixture sizes and simulated bounded append/replay behavior. | Resolved by `DEC-016` and `artifacts/dat-v1-003-retention-caps-spike.md`: 10,000 output events or 10 MB per session; 5,000 audit events or 30 days globally; visible replay/audit boundaries. | Storage, output, and audit tasks. |
 
 ## Data, Privacy, Security
 
@@ -206,6 +206,6 @@ These are required before backlog decomposition if they remain unresolved after 
 | Question | Options | Recommended default | Owner |
 | --- | --- | --- | --- |
 | Which SQLite Node driver should V1 use? | `better-sqlite3`, async SQLite wrapper, Node built-in SQLite if stable in pinned runtime | Resolved in `DEC-014`: use `better-sqlite3`; revisit only if clean Ubuntu install fails or the pinned runtime changes. | Decision log and `DAT-V1-001`. |
-| What are default retention caps? | Fixed per-session event count, fixed bytes, time-window retention, hybrid | Hybrid cap: bounded event count plus byte cap for output; bounded days plus max records for audit. Exact values in blueprint/test plan. | Implementation blueprint and test plan. |
+| What are default retention caps? | Fixed per-session event count, fixed bytes, time-window retention, hybrid | Resolved in `DEC-016`: 10,000 output events or 10 MB per session; 5,000 audit events or 30 days globally; visible replay/audit boundaries. | Decision log and `DAT-V1-003`. |
 | What token transport should the dashboard use after pairing? | HttpOnly same-origin cookie, bearer token in memory, bearer token in browser storage | Resolved in `DEC-015`: use host-only `HttpOnly` cookie transport with CSRF write headers; reject browser durable bearer-token storage. | Decision log and `DAT-V1-002`. |
 | Is tmux `pipe-pane` required for V1 streaming? | Required, optional optimization, capture-pane polling only | Prefer `pipe-pane` or equivalent ordered log ingestion; prove with `SPK-ARCH-001` before backlog decomposition. | Implementation blueprint spike. |

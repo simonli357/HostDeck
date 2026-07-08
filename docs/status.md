@@ -5,12 +5,12 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `DAT-V1-003` output and audit retention caps spike
+- Active task: `DAT-V1-010` SQLite migration runner and base schema
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
 - Release state: Foundation block complete; data/auth/storage spikes are underway.
-- Last validation: `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit`, `pnpm test:contract`, and `git diff --check` passed for `DAT-V1-002`.
-- Next action: Run `DAT-V1-003` output and audit retention caps spike after committing `DAT-V1-002`.
+- Last validation: `node --input-type=module ...` fixture measurement, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit`, `pnpm test:contract`, and `git diff --check` passed for `DAT-V1-003`.
+- Next action: Run `DAT-V1-010` SQLite migration runner and base schema.
 - Blockers: `INT-V1-001` needs `tmux` in the environment; visual mockups before UI implementation.
 - Last commit:
 - Last push:
@@ -35,6 +35,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `FND-V1-011` marks `BLK-V1-01` complete and promotes downstream data spikes plus fake-adapter work.
 - Planning/spike: `DAT-V1-001` chose `better-sqlite3` plus a first-party migration runner for V1 local storage.
 - Planning/spike: `DAT-V1-002` chose host-only `HttpOnly` cookie device-token transport plus CSRF write headers for dashboard writes.
+- Planning/spike: `DAT-V1-003` chose output/audit retention defaults and replay/audit boundary semantics.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
@@ -64,7 +65,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | FND-V1-011 | Documentation | done | `docs/tracking/backlog/foundation.md` | Foundation completion rollup and `artifacts/fnd-v1-011-foundation-completion.md`. |
 | DAT-V1-001 | Spike | done | `docs/tracking/backlog/local-state-auth-audit.md` | SQLite driver/migration decision and `artifacts/dat-v1-001-sqlite-driver-spike.md`. |
 | DAT-V1-002 | Spike | done | `docs/tracking/backlog/local-state-auth-audit.md` | Token transport decision/API contract and `artifacts/dat-v1-002-token-transport-spike.md`. |
-| DAT-V1-003 | Spike | ready | `docs/tracking/backlog/local-state-auth-audit.md` | Next ready leaf: choose output and audit retention caps. |
+| DAT-V1-003 | Spike | done | `docs/tracking/backlog/local-state-auth-audit.md` | Retention defaults/boundary decision and `artifacts/dat-v1-003-retention-caps-spike.md`. |
+| DAT-V1-010 | Implementation | ready | `docs/tracking/backlog/local-state-auth-audit.md` | Next ready leaf: implement SQLite migration runner and base schema. |
 
 ## Decisions Needed
 
