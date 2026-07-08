@@ -4,14 +4,14 @@ Current handoff only. Keep detail in owner docs or artifacts.
 
 ## Snapshot
 
-- Phase:
-- Active task:
-- End goal:
-- UI direction:
-- Release state:
-- Last validation:
-- Next action:
-- Blockers:
+- Phase: Planning
+- Active task: Test plan review
+- End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
+- UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
+- Release state: Pre-implementation.
+- Last validation: Planning docs consistency read-through only; no product validation yet.
+- Next action: Human reviews the V1 test plan before capability block specs are created.
+- Blockers: Test plan approval before capability block planning; visual mockups before UI implementation.
 - Last commit:
 - Last push:
 
@@ -31,13 +31,13 @@ Current handoff only. Keep detail in owner docs or artifacts.
 
 | ID | Type | Status | Owner doc | Evidence |
 | --- | --- | --- | --- | --- |
-| None | - | - | - | - |
+| PLAN-TEST | Planning | review | `docs/planning/04b-test-plan.md` | Test plan drafted with approval criteria, planned command surface, requirement coverage, block coverage, spike validation, regression matrices, validation layers, manual inspection, and evidence policy. |
 
 ## Decisions Needed
 
 | Question | Owner | Blocking? |
 | --- | --- | --- |
-| None | - | - |
+| Does the V1 test plan cover requirements, candidate blocks, architecture/UX spikes, failure matrices, manual inspection, and release evidence well enough to create capability block specs? | `docs/planning/04b-test-plan.md` | Yes |
 
 ## Repo Hygiene
 
