@@ -53,8 +53,8 @@ Owns the typed foundation that later storage, tmux, API, CLI, and UI work must c
 
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
-| Workspace and command skeleton | `FND-V1-001`, `FND-V1-002` | Planned | `docs/tracking/backlog/foundation.md` |
-| Core model and contracts | `FND-V1-003` to `FND-V1-006`, `FND-V1-012`, `FND-V1-013` | Planned | `docs/tracking/backlog/foundation.md` |
+| Workspace and command skeleton | `FND-V1-001`, `FND-V1-002` | Done | `artifacts/fnd-v1-001-scaffold.md`, `artifacts/fnd-v1-002-conventions.md` |
+| Core model and contracts | `FND-V1-003` to `FND-V1-006`, `FND-V1-012`, `FND-V1-013` | In progress | `artifacts/fnd-v1-003-core-model.md`, `docs/tracking/backlog/foundation.md` |
 | Fixtures and classifiers | `FND-V1-007` to `FND-V1-009` | Planned | `docs/tracking/backlog/foundation.md` |
 | Foundation hardening | `FND-V1-010`, `FND-V1-011` | Planned | `docs/tracking/backlog/foundation.md` |
 
