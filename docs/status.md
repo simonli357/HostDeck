@@ -5,12 +5,12 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `FND-V1-004` command intents and write eligibility
+- Active task: `FND-V1-006` API and stream contract schemas
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
 - Release state: Foundation implementation started.
-- Last validation: `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, and `pnpm test:unit` passed after `FND-V1-005`.
-- Next action: Implement `FND-V1-004` command intents and write eligibility.
+- Last validation: `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, and `pnpm test:unit` passed after `FND-V1-004`.
+- Next action: Implement `FND-V1-006` API and stream contract schemas.
 - Blockers: Visual mockups before UI implementation.
 - Last commit:
 - Last push:
@@ -24,6 +24,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `FND-V1-002` shared conventions are in place with Biome linting, package export checks, Vitest unit runner, and source export conventions.
 - Implementation: `FND-V1-003` core session model is in place with stable ids/names, lifecycle/status/attention states, metadata validation, and unknown/stale write-safety helpers.
 - Implementation: `FND-V1-005` shared error envelope is in place with stable code families, retryability, bounded details, and sensitive-detail rejection.
+- Implementation: `FND-V1-004` command intents and write eligibility are in place with V1 slash allowlists, one-session targeting, trust/read-only/lock checks, raw-input confirmation, audit availability, and non-writable lifecycle denials.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
@@ -42,7 +43,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | FND-V1-002 | Implementation | done | `docs/tracking/backlog/foundation.md` | Shared strict TypeScript/lint/test conventions, package exports, command docs, and `artifacts/fnd-v1-002-conventions.md`. |
 | FND-V1-003 | Implementation | done | `docs/tracking/backlog/foundation.md` | Core session model and `artifacts/fnd-v1-003-core-model.md`. |
 | FND-V1-005 | Implementation | done | `docs/tracking/backlog/foundation.md` | Shared error envelope and `artifacts/fnd-v1-005-errors.md`. |
-| FND-V1-004 | Implementation | ready | `docs/tracking/backlog/foundation.md` | Next ready leaf after error-envelope completion. |
+| FND-V1-004 | Implementation | done | `docs/tracking/backlog/foundation.md` | Command intents, write eligibility, and `artifacts/fnd-v1-004-command-intents.md`. |
+| FND-V1-006 | Implementation | ready | `docs/tracking/backlog/foundation.md` | Next ready leaf after write eligibility completion. |
 
 ## Decisions Needed
 
