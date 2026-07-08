@@ -19,8 +19,9 @@ pnpm check:scaffold
 
 ```bash
 pnpm typecheck
-pnpm lint
+pnpm test
 pnpm test:unit
+pnpm lint
 pnpm test:contract
 pnpm test:integration
 pnpm test:tmux

@@ -11,8 +11,9 @@
   "scripts": {
     "check:scaffold": "node scripts/check-scaffold.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "node scripts/not-implemented.mjs lint FND-V1-002",
-    "test:unit": "node scripts/not-implemented.mjs test:unit FND-V1-007",
+    "lint": "biome check . && node scripts/check-package-exports.mjs",
+    "test": "pnpm test:unit",
+    "test:unit": "vitest run",
     "test:contract": "node scripts/not-implemented.mjs test:contract FND-V1-006",
     "test:integration": "node scripts/not-implemented.mjs test:integration DAT-V1-016",
     "test:tmux": "node scripts/not-implemented.mjs test:tmux INT-V1-016",
@@ -22,6 +23,9 @@
     "smoke:local": "node scripts/not-implemented.mjs smoke:local REL-V1-006"
   },
   "devDependencies": {
-    "typescript": "7.0.2"
+    "@biomejs/biome": "2.5.3",
+    "@types/node": "26.1.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
   }
 }

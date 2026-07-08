@@ -24,6 +24,7 @@ const requiredScripts = [
   "check:scaffold",
   "typecheck",
   "lint",
+  "test",
   "test:unit",
   "test:contract",
   "test:integration",

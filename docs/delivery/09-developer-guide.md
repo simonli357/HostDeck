@@ -17,8 +17,9 @@ Owns setup context, environment policy, services, and operational notes.
 | Install | `pnpm install --frozen-lockfile` | Uses the committed `pnpm-lock.yaml`. |
 | Scaffold check | `pnpm check:scaffold` | Verifies root files, package directories, and root script names. |
 | Typecheck | `pnpm typecheck` | Runs a strict TypeScript no-emit check across package source files. |
-| Lint | `pnpm lint` | Placeholder; fails loudly until `FND-V1-002`. |
-| Tests | `pnpm test:unit`, `pnpm test:contract`, `pnpm test:integration`, `pnpm test:tmux`, `pnpm test:web`, `pnpm test:e2e` | Placeholders; fail loudly until their owning tasks implement them. |
+| Lint | `pnpm lint` | Runs Biome plus package export convention checks. |
+| Unit tests | `pnpm test` or `pnpm test:unit` | Runs Vitest unit tests. |
+| Later tests | `pnpm test:contract`, `pnpm test:integration`, `pnpm test:tmux`, `pnpm test:web`, `pnpm test:e2e` | Placeholders; fail loudly until their owning tasks implement them. |
 | Build/package | `pnpm build` | Placeholder; fails loudly until release/build tasks implement it. |
 | Local smoke | `pnpm smoke:local` | Placeholder; fails loudly until release smoke exists. |
 
