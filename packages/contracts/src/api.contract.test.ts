@@ -337,9 +337,87 @@ describe("write, pairing, security, and network schemas", () => {
         read_only: false,
         locked: false,
         lan_enabled: false,
-        client_id: "phone"
+        client_id: "phone",
+        auth_transport: "http_only_cookie",
+        csrf_token: "csrf_token_for_phone_writes_123456"
       }).trusted
     ).toBe(true);
+  });
+
+  it("validates token transport state without granting ambient writes", () => {
+    expect(
+      securityStateResponseSchema.parse({
+        trusted: false,
+        read_only: false,
+        locked: false,
+        lan_enabled: false,
+        client_id: null,
+        auth_transport: "none",
+        csrf_token: null
+      }).auth_transport
+    ).toBe("none");
+
+    expect(
+      securityStateResponseSchema.parse({
+        trusted: true,
+        read_only: true,
+        locked: false,
+        lan_enabled: false,
+        client_id: "read-phone",
+        auth_transport: "http_only_cookie",
+        csrf_token: null
+      }).read_only
+    ).toBe(true);
+  });
+
+  it("rejects incoherent token transport state", () => {
+    expect(() =>
+      securityStateResponseSchema.parse({
+        trusted: true,
+        read_only: false,
+        locked: false,
+        lan_enabled: false,
+        client_id: "phone",
+        auth_transport: "none",
+        csrf_token: "csrf_token_for_phone_writes_123456"
+      })
+    ).toThrow();
+
+    expect(() =>
+      securityStateResponseSchema.parse({
+        trusted: true,
+        read_only: false,
+        locked: false,
+        lan_enabled: false,
+        client_id: "phone",
+        auth_transport: "http_only_cookie",
+        csrf_token: null
+      })
+    ).toThrow();
+
+    expect(() =>
+      securityStateResponseSchema.parse({
+        trusted: false,
+        read_only: false,
+        locked: false,
+        lan_enabled: false,
+        client_id: null,
+        auth_transport: "http_only_cookie",
+        csrf_token: null
+      })
+    ).toThrow();
+
+    expect(() =>
+      securityStateResponseSchema.parse({
+        trusted: true,
+        read_only: true,
+        locked: false,
+        lan_enabled: false,
+        client_id: "read-phone",
+        auth_transport: "http_only_cookie",
+        csrf_token: "csrf_token_for_read_only_123456789"
+      })
+    ).toThrow();
   });
 
   it("rejects contradictory network LAN state", () => {

@@ -11,7 +11,7 @@ Owns the host-agent service boundary, typed local API, write pipeline, CLI surfa
 - Out / deferred: Hosted relay, multi-user/team auth, remote unlock, all-session write routes, native mobile app packaging.
 - Requirement refs: `FR-001` to `FR-008`, `FR-011`, `FR-012`, `FR-015`, `NFR-001`, `NFR-005` to `NFR-007`, `PR-002` to `PR-004`, `PR-007`, `PR-008`, `SFR-003`, `SFR-005`.
 - UX refs: `UX-001` to `UX-009`, `IR-005`, `IR-006`, `IR-008`, `IR-009`.
-- Decision refs: `DEC-003`, `DEC-004`, `DEC-005`, `DEC-008`, `DEC-010`, `DEC-011`.
+- Decision refs: `DEC-003`, `DEC-004`, `DEC-005`, `DEC-008`, `DEC-010`, `DEC-011`, `DEC-015`.
 
 ## Local Architecture
 
@@ -19,7 +19,7 @@ Owns the host-agent service boundary, typed local API, write pipeline, CLI surfa
 | --- | --- | --- | --- | --- |
 | Server startup | Parse config, validate binaries/state/bind policy, open storage, reconcile sessions, start API/dashboard. | CLI flags, settings, storage, tmux adapter. | Ready API only after required checks pass. | Missing tmux, invalid state dir, invalid bind/port, failed migration, unreconciled startup. |
 | Route layer | Fastify route registration, request/response validation, auth checks, stream setup. | Contract schemas, application services. | Typed host/session/security/network API responses and streams. | Malformed request, permission denied, stale cursor/session, stream reader unavailable. |
-| Write pipeline | Validate one-session request, trust, lock, session writability, audit preflight, tmux send, audit result. | Auth/storage, core write eligibility, tmux adapter. | Accepted/rejected write result without claiming command outcome. | Untrusted, read-only, locked, stale/stopped/crashed/unknown, unsupported slash, audit unavailable. |
+| Write pipeline | Validate one-session request, cookie auth/CSRF trust, lock, session writability, audit preflight, tmux send, audit result. | Auth/storage, core write eligibility, tmux adapter. | Accepted/rejected write result without claiming command outcome. | Untrusted, missing/invalid CSRF, read-only, locked, stale/stopped/crashed/unknown, unsupported slash, audit unavailable. |
 | CLI | Local user entrypoint for service, session, pairing, lock/unlock, LAN, and attach operations. | API client, local admin paths where allowed. | Stable commands, exit codes, and actionable messages. | Daemon unavailable, remote unlock attempt, duplicate name, invalid cwd, missing binary. |
 
 ## Contracts And Data
@@ -73,4 +73,4 @@ Owns the host-agent service boundary, typed local API, write pipeline, CLI surfa
 
 | ID | Question | Owner | Exit evidence |
 | --- | --- | --- | --- |
-| `SPK-ARCH-003` | What token transport should dashboard pairing use? | Architecture/auth/API task | Security note, contract update, dashboard trust-state model. |
+| `SPK-ARCH-003` | What token transport should dashboard pairing use? | Resolved by `DEC-015` / `DAT-V1-002` | `artifacts/dat-v1-002-token-transport-spike.md` and API contract update. |

@@ -21,6 +21,8 @@ import {
 
 const healthStateSchema = z.enum(["ok", "degraded", "error", "unknown"]);
 const streamStatusSchema = z.enum(["connected", "reconnecting", "closed"]);
+const authTransportSchema = z.enum(["none", "http_only_cookie"]);
+const csrfTokenSchema = z.string().min(32).max(256).regex(/^[a-zA-Z0-9._~-]+$/u);
 
 export { absoluteCwdSchema, bindModeSchema, isoTimestampSchema, outputCursorSchema, sessionIdSchema, sessionNameSchema };
 
@@ -297,9 +299,54 @@ export const trustStateSchema = z
     read_only: z.boolean(),
     locked: z.boolean(),
     lan_enabled: z.boolean(),
-    client_id: z.string().min(1).max(120).nullable()
+    client_id: z.string().min(1).max(120).nullable(),
+    auth_transport: authTransportSchema,
+    csrf_token: csrfTokenSchema.nullable()
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const writable = value.trusted && !value.read_only && !value.locked;
+
+    if (!value.trusted && value.auth_transport !== "none") {
+      context.addIssue({
+        code: "custom",
+        message: "Untrusted clients must not advertise an authenticated browser transport.",
+        path: ["auth_transport"]
+      });
+    }
+
+    if (value.auth_transport === "http_only_cookie" && value.client_id === null) {
+      context.addIssue({
+        code: "custom",
+        message: "Cookie-authenticated browser state must identify the paired client.",
+        path: ["client_id"]
+      });
+    }
+
+    if (writable && value.auth_transport !== "http_only_cookie") {
+      context.addIssue({
+        code: "custom",
+        message: "Trusted writable browser state must use the http_only_cookie transport.",
+        path: ["auth_transport"]
+      });
+    }
+
+    if (writable && value.csrf_token === null) {
+      context.addIssue({
+        code: "custom",
+        message: "Trusted writable browser state must expose a CSRF token for same-origin write headers.",
+        path: ["csrf_token"]
+      });
+    }
+
+    if (!writable && value.csrf_token !== null) {
+      context.addIssue({
+        code: "custom",
+        message: "CSRF write tokens must not be exposed when browser writes are disabled.",
+        path: ["csrf_token"]
+      });
+    }
+  });
 
 export const pairClaimResponseSchema = trustStateSchema;
 export const pairStatusResponseSchema = trustStateSchema;
@@ -330,6 +377,7 @@ export type HostStatusResponse = z.infer<typeof hostStatusResponseSchema>;
 export type SessionStreamEvent = z.infer<typeof sessionStreamEventSchema>;
 export type SessionOutputResponse = z.infer<typeof sessionOutputResponseSchema>;
 export type WriteResponse = z.infer<typeof writeResponseSchema>;
+export type TrustState = z.infer<typeof trustStateSchema>;
 
 interface ApiErrorEnvelopeCandidate {
   code: (typeof errorCodes)[number];

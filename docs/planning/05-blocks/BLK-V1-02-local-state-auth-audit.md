@@ -11,7 +11,7 @@ Owns durable local truth for sessions, settings, trust state, lock/LAN state, au
 - Out / deferred: Hosted relay, team accounts, cloud sync, long-term Codex history sync, remote dashboard unlock.
 - Requirement refs: `DR-001` to `DR-010`, `SFR-001`, `SFR-002`, `SFR-004`, `SFR-006` to `SFR-008`, `PR-009`, `NFR-001`, `NFR-008`.
 - UX refs: `IR-005`, `IR-008`, `UX-001`, `UX-008`, `UX-009`.
-- Decision refs: `DEC-004`, `DEC-005`, `DEC-007`, `DEC-008`, `DEC-010`, `DEC-011`, `DEC-014`.
+- Decision refs: `DEC-004`, `DEC-005`, `DEC-007`, `DEC-008`, `DEC-010`, `DEC-011`, `DEC-014`, `DEC-015`.
 
 ## Local Architecture
 
@@ -19,7 +19,7 @@ Owns durable local truth for sessions, settings, trust state, lock/LAN state, au
 | --- | --- | --- | --- | --- |
 | Migration runner | Initialize and upgrade local SQLite schema. | State directory, `better-sqlite3`, migration files. | Opened database at known schema version. | Corrupt database, failed migration, unknown future schema, read-only state dir. |
 | Session registry repository | Persist managed-session identity and tmux metadata. | Session start/reconcile operations from server/tmux block. | Durable records for restart reconciliation and stale marking. | Duplicate name, missing required fields, invalid cwd, stale target metadata. |
-| Auth and pairing repository | Store hashed tokens, pairing codes, permission mode, revocation, expiry, lock state. | CLI pair/unlock, dashboard claim, API trust checks. | Trusted/read-only/untrusted state with no raw token persistence. | Expired/used pairing code, revoked token, ambient write grant, raw token leakage. |
+| Auth and pairing repository | Store hashed tokens, pairing codes, permission mode, revocation, expiry, lock state, CSRF token binding metadata as needed. | CLI pair/unlock, dashboard claim, API trust checks. | Trusted/read-only/untrusted state with no raw token persistence and no cookie-only write grant. | Expired/used pairing code, revoked token, missing/invalid CSRF header, ambient write grant, raw token leakage. |
 | Audit repository | Record bounded action events for writes and risky state changes. | Write pipeline, pairing, lock/unlock, LAN changes, stop/raw actions. | Durable audit events with bounded payload summaries. | Audit unavailable, unbounded payload, missing action type, failed preflight. |
 | Retention cleanup | Enforce output and audit bounds. | Retention defaults from `SPK-ARCH-004`. | Explicit truncation/replay boundary state and bounded local storage. | Silent data loss, unbounded growth, invisible replay boundary. |
 
@@ -54,7 +54,7 @@ Owns durable local truth for sessions, settings, trust state, lock/LAN state, au
 
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
-| Architecture spikes | `DAT-V1-001` to `DAT-V1-003` | In progress: `DAT-V1-001` done; `DAT-V1-002` and `DAT-V1-003` ready | `artifacts/dat-v1-001-sqlite-driver-spike.md`, `docs/tracking/backlog/local-state-auth-audit.md` |
+| Architecture spikes | `DAT-V1-001` to `DAT-V1-003` | In progress: `DAT-V1-001` and `DAT-V1-002` done; `DAT-V1-003` ready | `artifacts/dat-v1-001-sqlite-driver-spike.md`, `artifacts/dat-v1-002-token-transport-spike.md`, `docs/tracking/backlog/local-state-auth-audit.md` |
 | Storage foundation | `DAT-V1-010` to `DAT-V1-017` | Planned | `docs/tracking/backlog/local-state-auth-audit.md` |
 | Storage hardening | `DAT-V1-090` | Planned | `docs/tracking/backlog/local-state-auth-audit.md` |
 
@@ -74,5 +74,5 @@ Owns durable local truth for sessions, settings, trust state, lock/LAN state, au
 | ID | Question | Owner | Exit evidence |
 | --- | --- | --- | --- |
 | `SPK-ARCH-002` | Which SQLite Node driver and migration approach should V1 use? | Resolved by `DEC-014` / `DAT-V1-001` | `artifacts/dat-v1-001-sqlite-driver-spike.md`. |
-| `SPK-ARCH-003` | What token transport should dashboard pairing use? | Architecture/auth task | Security note, API contract update, revocation behavior. |
+| `SPK-ARCH-003` | What token transport should dashboard pairing use? | Resolved by `DEC-015` / `DAT-V1-002` | `artifacts/dat-v1-002-token-transport-spike.md` and API contract update. |
 | `SPK-ARCH-004` | What output and audit retention caps should V1 use? | Architecture/storage task | Retention values, cleanup rules, replay/truncation behavior. |

@@ -72,7 +72,9 @@ const securityFixture = {
   read_only: false,
   locked: false,
   lan_enabled: false,
-  client_id: "phone"
+  client_id: "phone",
+  auth_transport: "http_only_cookie",
+  csrf_token: "csrf_token_for_phone_writes_123456"
 };
 
 const networkFixture = {

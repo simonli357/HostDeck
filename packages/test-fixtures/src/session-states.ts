@@ -167,7 +167,9 @@ const securityTrusted = {
   read_only: false,
   locked: false,
   lan_enabled: false,
-  client_id: "fixture-phone"
+  client_id: "fixture-phone",
+  auth_transport: "http_only_cookie",
+  csrf_token: "csrf_token_for_fixture_phone_123456"
 } as const;
 
 const networkLocalhost = {

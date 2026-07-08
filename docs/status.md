@@ -5,12 +5,12 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `DAT-V1-002` dashboard token transport spike
+- Active task: `DAT-V1-003` output and audit retention caps spike
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
 - Release state: Foundation block complete; data/auth/storage spikes are underway.
-- Last validation: `git diff --check` passed after docs-only `DAT-V1-001`; latest full code validation was `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit`, `pnpm test:contract`, and `git diff --check` after `FND-V1-010`.
-- Next action: Run `DAT-V1-002` dashboard token transport spike.
+- Last validation: `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit`, `pnpm test:contract`, and `git diff --check` passed for `DAT-V1-002`.
+- Next action: Run `DAT-V1-003` output and audit retention caps spike after committing `DAT-V1-002`.
 - Blockers: `INT-V1-001` needs `tmux` in the environment; visual mockups before UI implementation.
 - Last commit:
 - Last push:
@@ -34,6 +34,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `FND-V1-010` foundation production-hardening tightened output/session, cursor, LAN, UI trust/sort/write-control, classifier, storage settings, and audit invariants.
 - Implementation: `FND-V1-011` marks `BLK-V1-01` complete and promotes downstream data spikes plus fake-adapter work.
 - Planning/spike: `DAT-V1-001` chose `better-sqlite3` plus a first-party migration runner for V1 local storage.
+- Planning/spike: `DAT-V1-002` chose host-only `HttpOnly` cookie device-token transport plus CSRF write headers for dashboard writes.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
@@ -62,7 +63,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | FND-V1-010 | Hardening | done | `docs/tracking/backlog/foundation.md` | Foundation hardening and `artifacts/fnd-v1-010-foundation-hardening.md`. |
 | FND-V1-011 | Documentation | done | `docs/tracking/backlog/foundation.md` | Foundation completion rollup and `artifacts/fnd-v1-011-foundation-completion.md`. |
 | DAT-V1-001 | Spike | done | `docs/tracking/backlog/local-state-auth-audit.md` | SQLite driver/migration decision and `artifacts/dat-v1-001-sqlite-driver-spike.md`. |
-| DAT-V1-002 | Spike | ready | `docs/tracking/backlog/local-state-auth-audit.md` | Next ready leaf: choose dashboard token transport. |
+| DAT-V1-002 | Spike | done | `docs/tracking/backlog/local-state-auth-audit.md` | Token transport decision/API contract and `artifacts/dat-v1-002-token-transport-spike.md`. |
+| DAT-V1-003 | Spike | ready | `docs/tracking/backlog/local-state-auth-audit.md` | Next ready leaf: choose output and audit retention caps. |
 
 ## Decisions Needed
 

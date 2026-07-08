@@ -11,7 +11,7 @@ Owns the phone-responsive browser dashboard, state coverage, approved visual dir
 - Out / deferred: Native Android/iOS app, push notifications, voice input, full terminal/editor replacement, bulk writes, team/multi-user UI.
 - Requirement refs: `FR-005` to `FR-010`, `FR-015`, `IR-001` to `IR-009`, `NFR-003`, `NFR-004`, `PR-005`, `SFR-001` to `SFR-003`, `SFR-005`, `SFR-009`, `SFR-010`.
 - UX refs: `UX-001` to `UX-009`.
-- Decision refs: `DEC-003`, `DEC-004`, `DEC-005`, `DEC-009`, `DEC-010`, `DEC-011`.
+- Decision refs: `DEC-003`, `DEC-004`, `DEC-005`, `DEC-009`, `DEC-010`, `DEC-011`, `DEC-015`.
 
 ## Local Architecture
 
@@ -20,7 +20,7 @@ Owns the phone-responsive browser dashboard, state coverage, approved visual dir
 | Web app shell | Load host/session state, route between Mission Control and Session Detail, handle disconnected states. | API contracts, UI fixtures, host status. | Responsive browser UI with bounded state. | Loading failure, disconnected daemon, permission denied, agent error. |
 | Mission Control | Attention-sorted session overview. | Session list API, status/attention model. | Cards with name, cwd/project cue, branch when available, status, attention, last activity, recent output. | Empty list, all idle, mixed attention, unknown/stale, LAN disabled, locked. |
 | Session Detail | Recent Codex output, prompt composer, slash controls, stop action, raw fallback entry. | Session detail/output/stream/write APIs. | One-session control surface and output view. | Session not found, stale/stopped/crashed/unknown, output boundary, stream reconnecting. |
-| Trust and safety UI | Reflect pairing/token, read-only/untrusted, locked, LAN state, advanced raw mode. | Security/network API state, token transport from `SPK-ARCH-003`. | Disabled or enabled controls before write attempts. | Expired token, revoked client, locked host, remote unlock rejected, raw input not confirmed. |
+| Trust and safety UI | Reflect pairing/token, read-only/untrusted, locked, LAN state, advanced raw mode. | Security/network API state, token transport from `DEC-015`. | Disabled or enabled controls before write attempts; CSRF token is used only for same-origin writes. | Expired token, revoked client, locked host, missing CSRF token, remote unlock rejected, raw input not confirmed. |
 | Visual system | Approved generated mockups, state matrix, design-system mapping, screenshots. | `SPK-UX-001`, UX spec, test plan state matrix. | Implementation targets and drift evidence. | Missing mockups, unselected direction, responsive overlap, inaccessible controls. |
 
 ## Contracts And Data
@@ -74,5 +74,5 @@ Owns the phone-responsive browser dashboard, state coverage, approved visual dir
 
 | ID | Question | Owner | Exit evidence |
 | --- | --- | --- | --- |
-| `SPK-ARCH-003` | What token transport should dashboard pairing use? | Architecture/auth/API task | Dashboard trust-state model and API contract update. |
+| `SPK-ARCH-003` | What token transport should dashboard pairing use? | Resolved by `DEC-015` / `DAT-V1-002` | `artifacts/dat-v1-002-token-transport-spike.md`, dashboard trust-state model, and API contract update. |
 | `SPK-UX-001` | What visual direction and mockup set should UI implementation target? | UI-fidelity task | Assets under `assets/ui-concepts/`, selected direction decision, screenshot targets. |
