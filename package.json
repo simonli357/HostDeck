@@ -14,7 +14,7 @@
     "lint": "biome check . && node scripts/check-package-exports.mjs",
     "test": "pnpm test:unit",
     "test:unit": "vitest run",
-    "test:contract": "node scripts/not-implemented.mjs test:contract FND-V1-006",
+    "test:contract": "vitest run --config vitest.contract.config.ts",
     "test:integration": "node scripts/not-implemented.mjs test:integration DAT-V1-016",
     "test:tmux": "node scripts/not-implemented.mjs test:tmux INT-V1-016",
     "test:web": "node scripts/not-implemented.mjs test:web FE-V1-001",

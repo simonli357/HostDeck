@@ -42,7 +42,10 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 3 | `FND-V1-003` Core session model | done | none | Contracts, storage, tmux, API, and UI need stable session states first. |
 | 4 | `FND-V1-005` Shared API/CLI error envelope | done | none | Route, CLI, storage, and UI failures need one bounded error contract. |
 | 5 | `FND-V1-004` Command intents and write eligibility | done | none | Write safety and slash controls depend on this headless rule set. |
-| 6 | `FND-V1-006` API and stream contract schemas | ready | none | API and stream routes must be typed before server work. |
+| 6 | `FND-V1-006` API and stream contract schemas | done | none | API and stream routes now have runtime contract schemas and contract tests. |
+| 7 | `FND-V1-012` Storage/config/auth/audit/retention contract schemas | ready | none | Storage and safety contracts should exist before fixtures and adapters consume durable state. |
+| 8 | `FND-V1-013` UI fixture and view-model contract schemas | ready | none | UI state contracts should exist before fake session/host fixtures and later mockup-backed UI work. |
+| 9 | `FND-V1-007` Deterministic fake Codex/session/host fixtures | todo | `FND-V1-012`, `FND-V1-013` | Fixture work should wait until storage and UI contract shapes are defined. |
 
 ## Current Blocked Gates
 

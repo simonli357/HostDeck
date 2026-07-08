@@ -10,7 +10,7 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | `pnpm-workspace.yaml` | Workspace package selection |
 | `tsconfig.base.json`, `tsconfig.json` | Shared strict TypeScript scaffold configuration |
 | `biome.json` | Shared lint configuration |
-| `vitest.config.ts`, `tests/` | Shared unit-test runner and convention tests |
+| `vitest.config.ts`, `vitest.contract.config.ts`, `tests/` | Shared unit-test and contract-test runners plus convention tests |
 | `scripts/` | Scaffold checks, package export checks, and placeholder validation-script failures |
 | `packages/core/` | Domain/core package shell |
 | `packages/contracts/` | Shared contract package shell |
@@ -35,6 +35,7 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | Core session model | `packages/core/src/session.ts` | `packages/core/src/session.test.ts` |
 | Command intents and write eligibility | `packages/core/src/commands.ts` | `packages/core/src/commands.test.ts` |
 | Shared error envelope | `packages/core/src/errors.ts` | `packages/core/src/errors.test.ts` |
+| API and stream contracts | `packages/contracts/src/api.ts` | `packages/contracts/src/api.contract.test.ts`, `pnpm test:contract` |
 | Later validation layers | `scripts/not-implemented.mjs` placeholders | Placeholder scripts fail loudly with owning task IDs |
 
 ## Boundaries

@@ -12,5 +12,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hostdeck/core": "workspace:*",
+    "zod": "4.4.3"
   }
 }

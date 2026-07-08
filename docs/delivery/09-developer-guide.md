@@ -19,7 +19,8 @@ Owns setup context, environment policy, services, and operational notes.
 | Typecheck | `pnpm typecheck` | Runs a strict TypeScript no-emit check across package source files. |
 | Lint | `pnpm lint` | Runs Biome plus package export convention checks. |
 | Unit tests | `pnpm test` or `pnpm test:unit` | Runs Vitest unit tests. |
-| Later tests | `pnpm test:contract`, `pnpm test:integration`, `pnpm test:tmux`, `pnpm test:web`, `pnpm test:e2e` | Placeholders; fail loudly until their owning tasks implement them. |
+| Contract tests | `pnpm test:contract` | Runs Vitest contract tests for shared schemas. |
+| Later tests | `pnpm test:integration`, `pnpm test:tmux`, `pnpm test:web`, `pnpm test:e2e` | Placeholders; fail loudly until their owning tasks implement them. |
 | Build/package | `pnpm build` | Placeholder; fails loudly until release/build tasks implement it. |
 | Local smoke | `pnpm smoke:local` | Placeholder; fails loudly until release smoke exists. |
 

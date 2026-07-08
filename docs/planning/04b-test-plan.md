@@ -25,7 +25,7 @@ This plan is not ready to approve unless these checks are true:
 
 ## Planned Commands
 
-These root scripts now exist. `pnpm check:scaffold`, `pnpm typecheck`, `pnpm lint`, and `pnpm test:unit` run real checks; later-layer commands intentionally fail loudly until their owning tasks replace the placeholders.
+These root scripts now exist. `pnpm check:scaffold`, `pnpm typecheck`, `pnpm lint`, `pnpm test:unit`, and `pnpm test:contract` run real checks; later-layer commands intentionally fail loudly until their owning tasks replace the placeholders.
 
 | Purpose | Planned command after scaffold | Required for | Evidence |
 | --- | --- | --- | --- |
