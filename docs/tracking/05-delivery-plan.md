@@ -4,16 +4,16 @@ Owns milestone, module maturity, production pass, and release truth.
 
 ## Snapshot
 
-- Current pass: Foundation / Module hardening / Release hardening
-- Current milestone:
-- Release state:
+- Current pass: Foundation complete; data/storage and fake-adapter foundation next
+- Current milestone: M1 Foundation complete
+- Release state: Not release-ready; product workflow blocks remain unimplemented
 - Go/no-go:
 
 ## Milestones
 
 | Milestone | Scope | Status | Evidence |
 | --- | --- | --- | --- |
-| M1 Foundation |  | Planned |  |
+| M1 Foundation | Workspace, core model, contracts, fixtures, compatibility, and foundation hardening | Complete | `artifacts/fnd-v1-011-foundation-completion.md` |
 | M2 Module hardening |  | Planned |  |
 | M3 Release hardening |  | Planned |  |
 
@@ -21,7 +21,7 @@ Owns milestone, module maturity, production pass, and release truth.
 
 | Module | Status | Open gaps | Evidence |
 | --- | --- | --- | --- |
-|  | Planned |  |  |
+| `BLK-V1-01` Foundation / Contracts | Complete | Product workflow behavior still unproven until storage, tmux, API/CLI, UI, and release blocks complete. | `artifacts/fnd-v1-001-scaffold.md` through `artifacts/fnd-v1-011-foundation-completion.md` |
 
 ## Release Gates
 

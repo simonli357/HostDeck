@@ -49,13 +49,17 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 10 | `FND-V1-008` Conservative status/attention classifier tests | done | none | Classifier covers every required fixture category and keeps unknown output unknown. |
 | 11 | `FND-V1-009` Cross-package contract compatibility tests | done | none | API, storage, audit, and UI fixture contract compatibility is now tested. |
 | 12 | `FND-V1-010` Foundation production-hardening pass | done | none | Hardening tightened cross-field contracts and classifier boundaries before downstream modules consume foundation packages. |
-| 13 | `FND-V1-011` Foundation completion evidence update | ready | none | Completion evidence can now roll up the completed foundation hardening pass. |
+| 13 | `FND-V1-011` Foundation completion evidence update | done | none | `BLK-V1-01` completion evidence is recorded and downstream ready tasks are surfaced. |
+| 14 | `DAT-V1-001` SQLite driver and migration spike | ready | none | Storage implementation needs a driver/migration decision before schema work starts. |
+| 15 | `DAT-V1-002` Dashboard token transport spike | ready | none | Auth/API/UI trust work needs the token transport and CSRF posture decision. |
+| 16 | `DAT-V1-003` Output and audit retention caps spike | ready | none | Storage, output replay, and UI boundary work need explicit retention caps. |
+| 17 | `INT-V1-010` Tmux adapter interface and fake adapter | ready | none | Fake adapter work can proceed without real tmux and unblocks later API/session tasks. |
 
 ## Current Blocked Gates
 
 | Gate | Owning leaf task(s) | Requires | Blocker |
 | --- | --- | --- | --- |
-| Architecture spikes | `DAT-V1-001`, `DAT-V1-002`, `DAT-V1-003`, `INT-V1-001` | spike artifacts | Spikes wait for foundation scaffold/contracts and block dependent implementation tasks. |
+| Tmux capture spike | `INT-V1-001` | Ubuntu host with `tmux` available | Current environment lacks `tmux`; `command -v tmux && tmux -V` exited 1 with no output on 2026-07-08. |
 | UI visual direction | `FE-V1-002`, `FE-V1-003` | human acceptance | Mockups require UI state coverage first, then human selection before UI implementation. |
 | Release readiness | `REL-V1-005` to `REL-V1-010` | validation artifacts and human acceptance | Release tasks wait for module hardening, docs, smoke evidence, and go/no-go review. |
 

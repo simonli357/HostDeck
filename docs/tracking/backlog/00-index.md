@@ -21,7 +21,7 @@ Track meaningful ordering dependencies here. Group files own exact task cards.
 | --- | --- | --- |
 | Backlog approval and implementation authorization | `FND-V1-001` | Product code remains blocked until the human authorizes implementation. |
 | `FND-V1-001` workspace scaffold | All implementation tasks | Creates runnable workspace, packages, and planned command surface. |
-| `FND-V1-002` to `FND-V1-013` contracts/core/fixtures | `DAT-V1-001`, `INT-V1-001`, `IFC-V1-001`, `FE-V1-001` | Adapters, API, CLI, and UI consume typed contracts and deterministic fixtures. |
+| `BLK-V1-01` complete via `FND-V1-001` to `FND-V1-013` plus `FND-V1-010`/`FND-V1-011` | `DAT-V1-001`, `DAT-V1-002`, `DAT-V1-003`, `INT-V1-010`, later API/CLI/UI consumers | Storage, fake adapters, API, CLI, and UI consume typed contracts and deterministic fixtures; real tmux capture still requires `tmux`. |
 | `DAT-V1-001` SQLite spike | `DAT-V1-010` to `DAT-V1-017` | Storage implementation waits for driver and migration decision. |
 | `DAT-V1-002` token transport spike | `DAT-V1-013`, `IFC-V1-005`, `FE-V1-013` | Auth routes and UI trust states wait for token transport decision. |
 | `DAT-V1-003` retention spike | `DAT-V1-015`, `INT-V1-014`, `FE-V1-015` | Output/audit retention and replay-boundary behavior wait for cap decisions. |
