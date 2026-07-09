@@ -15,6 +15,14 @@ export {
   type PairingCodeRepository
 } from "./auth-repository.js";
 export {
+  type CaptureGitBranchMetadataInput,
+  captureGitBranchMetadata,
+  type GitBranchMetadataErrorCode,
+  type GitExecFile,
+  type GitExecFileOptions,
+  HostDeckGitBranchMetadataError
+} from "./branch-metadata.js";
+export {
   HostDeckMigrationError,
   type MigrationResult,
   type OpenMigratedDatabaseOptions,

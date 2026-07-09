@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `DAT-V1-017` optional git branch metadata capture
+- Active task: `DAT-V1-016` storage restart-persistence tests
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
 - Release state: Foundation block complete; data/auth/storage repositories are underway.
-- Last validation: `pnpm install --frozen-lockfile`, `pnpm --filter @hostdeck/storage typecheck`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit -- packages/storage/src/retention-repository.test.ts packages/storage/src/audit-repository.test.ts packages/contracts/src/storage.contract.test.ts`, `pnpm test:contract`, and `git diff --check` passed for `DAT-V1-015`.
-- Next action: Start `DAT-V1-017` optional git branch metadata capture.
+- Last validation: `command -v git && git --version`, `pnpm install --frozen-lockfile`, `pnpm --filter @hostdeck/storage typecheck`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit -- packages/storage/src/branch-metadata.test.ts packages/storage/src/session-repository.test.ts packages/contracts/src/storage.contract.test.ts`, `pnpm test:contract`, and `git diff --check` passed for `DAT-V1-017`.
+- Next action: Start `DAT-V1-016` storage restart-persistence tests.
 - Blockers: `INT-V1-001` needs `tmux` in the environment; visual mockups before UI implementation.
-- Last commit: `DAT-V1-015` retention repository commit.
-- Last push: `origin/main` after the `DAT-V1-015` commit.
+- Last commit: `DAT-V1-017` branch metadata commit.
+- Last push: `origin/main` after the `DAT-V1-017` commit.
 
 ## What Is Proven
 
@@ -42,6 +42,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `DAT-V1-013` added hash-only pairing/auth repositories with CSRF hash storage, one-time pairing claim, read-only/write distinction, revocation/expiry checks, and direct SQLite raw-secret absence assertions.
 - Implementation: `DAT-V1-014` added durable audit event append/read/list with bounded payload summaries, required V1 action coverage, duplicate/missing errors, and invalid persisted JSON rejection.
 - Implementation: `DAT-V1-015` added retention cleanup and replay-boundary storage metadata with output event/byte caps, audit event/age caps, monotonic cursor checks, and corrupt boundary rejection.
+- Implementation: `DAT-V1-017` added optional git branch metadata capture with real worktree persistence, non-git null behavior, missing-git tolerance, malformed output rejection, and invalid-cwd failure.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
@@ -77,7 +78,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | DAT-V1-013 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Auth/pairing repositories and `artifacts/dat-v1-013-auth-repositories.md`. |
 | DAT-V1-014 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Audit repository and `artifacts/dat-v1-014-audit-repository.md`. |
 | DAT-V1-015 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Retention repository and `artifacts/dat-v1-015-retention-repository.md`. |
-| DAT-V1-017 | Implementation | ready | `docs/tracking/backlog/local-state-auth-audit.md` | Next ready leaf: capture optional git branch metadata without making git mandatory. |
+| DAT-V1-017 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Optional git branch metadata and `artifacts/dat-v1-017-branch-metadata.md`. |
+| DAT-V1-016 | Implementation | ready | `docs/tracking/backlog/local-state-auth-audit.md` | Next ready leaf: storage restart-persistence tests for registry, auth, settings, audit, and durable state. |
 
 ## Decisions Needed
 
