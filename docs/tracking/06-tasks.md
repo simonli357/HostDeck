@@ -78,8 +78,10 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 39 | `IFC-V1-003` One-session stream endpoint with reconnect and replay boundary behavior | done | none | Headless stream route handlers now validate one-session auth, ordered replay, reconnect boundaries, live-source identity, and typed stream failures. |
 | 40 | `IFC-V1-004` Prompt, slash, stop, and raw-input write pipeline ordering | done | none | Headless write route handlers now enforce schema, auth/CSRF, lock, lifecycle, slash, raw confirmation, audit preflight, tmux dispatch, and typed failures. |
 | 41 | `IFC-V1-010` API route and stream contract tests | done | none | Aggregate API route contract manifest now covers 16 current V1 routes with method, auth mode, request/response/stream schemas, route error body schema, and typed error assertions. |
-| 42 | `IFC-V1-006` CLI command shell, API client, config loading, error rendering, and exit-code families | ready | none | First ready CLI leaf after aggregate route contracts; startup is complete enough to build the daemon client shell and daemon-unavailable/error-rendering behavior. |
-| 43 | `IFC-V1-011` Localhost/LAN config and network smoke coverage | ready | none | Startup now validates localhost bind and invalid port settings; network smoke can extend this to bind/listener evidence. |
+| 42 | `IFC-V1-006` CLI command shell, API client, config loading, error rendering, and exit-code families | done | none | CLI core shell, API client, config loading, stable exit-code families, and daemon/API error rendering are implemented and contract-tested. |
+| 43 | `IFC-V1-011` Localhost/LAN config and network smoke coverage | ready | none | Next existing ready leaf; startup now validates localhost bind and invalid port settings, and network smoke can extend this to bind/listener evidence. |
+| 44 | `IFC-V1-007` CLI session commands: `start`, `list`, `send`, `attach`, `stop`, and status display | ready | none | Unblocked by the CLI shell/API client foundation from `IFC-V1-006`. |
+| 45 | `IFC-V1-008` CLI pairing, lock, unlock, and LAN enable/disable commands | ready | none | Unblocked by security routes and the CLI shell/API client foundation. |
 
 ## Current Blocked Gates
 

@@ -18,7 +18,7 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | `packages/storage/` | Local storage package shell |
 | `packages/tmux-adapter/` | tmux adapter package shell |
 | `packages/server/` | Host daemon/server package shell |
-| `packages/cli/` | `codexdeck` CLI package shell |
+| `packages/cli/` | `codexdeck` CLI core shell, API client, config loading, and error rendering |
 | `packages/web/` | Dashboard web package shell |
 | `docs/` | Planning, tracking, delivery docs |
 | `assets/` | UI concepts and product assets |
@@ -37,6 +37,7 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | Command intents and write eligibility | `packages/core/src/commands.ts` | `packages/core/src/commands.test.ts` |
 | Shared error envelope | `packages/core/src/errors.ts` | `packages/core/src/errors.test.ts` |
 | API and stream contracts | `packages/contracts/src/api.ts` | `packages/contracts/src/api.contract.test.ts`, `pnpm test:contract` |
+| CLI shell/API client | `packages/cli/src/` | `packages/cli/src/config.test.ts`, `packages/cli/src/api-client.test.ts`, `packages/cli/src/cli.contract.test.ts`, `pnpm test`, `pnpm test:contract` |
 | Contract scalar validators | `packages/contracts/src/scalars.ts` | Covered through API and storage contract tests |
 | Storage/config/auth/audit contracts | `packages/contracts/src/storage.ts` | `packages/contracts/src/storage.contract.test.ts`, `pnpm test:contract` |
 | UI fixture and view-model contracts | `packages/contracts/src/ui.ts` | `packages/contracts/src/ui.contract.test.ts`, `pnpm test:contract` |
