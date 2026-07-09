@@ -1,164 +1,206 @@
 # Requirements
 
-Owns stable requirements for the active version.
+Owns stable requirements for the active version. A requirement is not complete until its production path and listed validation route are proven.
 
 ## Functional
 
 | ID | Requirement | Priority | Validation |
 | --- | --- | --- | --- |
-| FR-001 | The host agent must start new HostDeck-managed Codex CLI sessions through a tmux-backed lifecycle with a required session name and working directory. | Must | Automated adapter test with a fake Codex command plus manual Ubuntu smoke test starting multiple sessions. |
-| FR-002 | The host agent must list managed sessions with name, id, cwd, backend, lifecycle state, last activity, status, attention level, and recent output summary. | Must | API/CLI contract tests for list output and dashboard rendering with fixture sessions. |
-| FR-003 | The host agent must attach or expose enough tmux metadata for the user to inspect a managed session from the laptop when phone/dashboard control is insufficient. | Must | Manual tmux attach smoke test and task evidence showing a live managed session remains reachable. |
-| FR-004 | The host agent must stop a managed session through an explicit user action and record the stop event. | Must | Adapter test for stop behavior plus audit-log assertion. |
-| FR-005 | The dashboard must stream or refresh recent session output without requiring the user to reload the page. | Must | WebSocket or polling integration test plus browser inspection with changing fake output. |
-| FR-006 | The dashboard must send normal text prompts to one selected managed session only. | Must | API test verifies exact session targeting; manual smoke test shows prompt appears in the selected tmux session. |
-| FR-007 | The dashboard must expose primary slash-command controls for `/model`, `/goal`, and `/plan`. | Must | UI test verifies controls exist and API test verifies literal command injection for selected session. |
-| FR-008 | The dashboard must expose utility slash-command controls for `/usage`, `/compact`, and `/skills`. | Must | UI test verifies controls exist and API test verifies literal command injection for selected session. |
-| FR-009 | The host agent must classify basic session status and attention using conservative heuristics, including waiting for user, waiting for approval, running, idle, failed, and unknown. | Should | Unit tests over captured/fixture terminal output patterns plus manual review of unknown fallback behavior. |
-| FR-010 | The dashboard must provide an advanced raw terminal fallback for a selected session, separate from the default conversation/control view. | Should | Responsive browser inspection verifies raw output is reachable but not the default session detail surface. |
-| FR-011 | The V1 CLI surface must provide operations equivalent to `codexdeck serve`, `status`, `start --name <name> --cwd <path>`, `list`, `send <session> <text>`, `attach <session>`, `stop <session>`, `pair`, `lock`, `unlock`, `lan enable`, and `lan disable`. | Must | CLI contract tests cover each operation with fake Codex/tmux adapters; command reference is updated when command names finalize. |
-| FR-012 | The V1 local API must provide session start, session list/detail/output, session stream, prompt input, slash command input, session stop, host status, pairing/token claim, lock state, dashboard lock, and LAN state operations; unlock remains constrained to a local CLI/admin path. | Must | API contract tests verify method, route, auth requirement, request schema, response schema, and error schema for each operation. |
-| FR-013 | Session output streaming must preserve terminal output order per session and expose monotonically increasing output cursors or equivalent replay markers. | Must | Stream integration test injects ordered fake output, reconnects from a cursor, and verifies no reordering or duplicate replay beyond documented behavior. |
-| FR-014 | The host agent must reconcile managed session registry state with tmux on agent restart; unrecoverable sessions must be marked unavailable or stale rather than silently recreated. | Must | Restart integration test creates sessions, restarts the agent, verifies tmux-backed sessions remain listed, and verifies stale-session write attempts fail explicitly. |
-| FR-015 | V1 write actions must target exactly one selected session; bulk prompt, bulk slash-command, and all-session operations are deferred. | Must | API and UI tests reject or omit multi-session write requests. |
+| FR-001 | The host must start a named HostDeck-managed Codex thread in a validated cwd through the selected app-server runtime and return the stable Codex thread id only after startup is proven. | Must | Version-gated adapter test plus real Codex start smoke without fake process output. |
+| FR-002 | Mission Control, API, and CLI must list managed sessions with alias, thread id, cwd/project, branch when available, lifecycle/turn status, attention, last activity, model/goal cue, and bounded recent summary. | Must | Contract/API/UI tests with mixed real and fixture states. |
+| FR-003 | The local CLI must resume the exact managed thread in the normal Codex TUI through the private app-server endpoint. | Must | Real `codex resume --remote unix://PATH <thread-id>` smoke. |
+| FR-004 | The user must be able to interrupt an active turn and archive a managed thread as distinct, explicit, audited actions. | Must | Protocol/API/CLI/UI tests prove interrupt does not imply archive or deletion. |
+| FR-005 | The dashboard must receive ordered structured thread, turn, item, status, and approval updates without reloading. | Must | Real event-stream integration test plus browser inspection. |
+| FR-006 | The dashboard must send one normal text prompt to exactly one selected thread and distinguish accepted, running, completed, interrupted, and failed outcomes. | Must | Exact-target API/protocol test and real Codex event smoke. |
+| FR-007 | `/model`, `/goal`, and `/plan` must be primary controls implemented through tested structured Codex operations, not blind terminal-text injection. | Must | Capability/version tests plus UI/API integration for each control. |
+| FR-008 | `/usage`, `/compact`, and `/skills` must be available as structured utility surfaces when the installed Codex capability exists. | Must | Capability tests verify supported, unavailable, and failure states. |
+| FR-009 | HostDeck must derive session status and attention primarily from structured runtime events, using conservative heuristics only for explicitly unstructured fallback fields. | Must | Event projection tests and unknown-state regression tests. |
+| FR-010 | Session Detail must expose bounded read-only event diagnostics and replay/truncation boundaries without exposing arbitrary phone shell input. | Must | Responsive UI and API projection tests. |
+| FR-011 | The V1 CLI must provide runnable `serve`, `status`, `start`, `list`, `send`, `resume`, `interrupt`, `archive`, `pair`, `devices`, `revoke`, `lock`, `unlock`, `lan configure`, `lan enable`, `lan disable`, and `service` operations. | Must | Packaged CLI contract tests and clean-install command smoke. |
+| FR-012 | The local HostDeck API must provide host/runtime status, session start/list/detail/events/stream, prompt, structured controls, approval response, interrupt/archive, pairing/device/security, lock, and network state operations. | Must | Route manifest, schema, auth, failure, and integration tests. |
+| FR-013 | Event streaming must preserve per-session order with monotonic HostDeck cursors, replay markers, and an explicit boundary whenever continuity cannot be proved. | Must | Concurrent replay/live handoff and retention-boundary tests. |
+| FR-014 | On HostDeck or app-server restart, the host must reconcile durable mappings with persisted Codex threads, identify interrupted/stale projections, resubscribe to events, and reject ambiguous writes. | Must | Multi-process restart and partial-failure integration tests. |
+| FR-015 | Every V1 mutation must identify exactly one thread, approval request, device, or host action; bulk operations are deferred. | Must | Contract tests reject missing, ambiguous, and multi-target writes. |
+| FR-016 | Session Detail must render structured approval requests and support approve/deny for exactly one pending request with visible scope and an audit result. | Must | Real approval request/response/expiry integration plus phone UI test. |
+| FR-017 | Startup must negotiate and record Codex runtime version/capabilities and reject unsupported schema or required-operation drift before accepting session mutations. | Must | Generated-schema checksum/version tests and incompatible-runtime smoke. |
+| FR-018 | Foreground and service modes must supervise one dedicated app-server runtime, one HostDeck API service, and their connection without exposing app-server to LAN. | Must | Process ownership, crash, restart, duplicate-owner, and network-listener tests. |
 
 ## Non-Functional
 
 | ID | Requirement | Priority | Validation |
 | --- | --- | --- | --- |
-| NFR-001 | HostDeck V1 must be local-first and must not require a hosted relay, cloud account, or public laptop listener. | Must | Configuration review and network smoke test showing default localhost bind. |
-| NFR-002 | Session supervision must remain usable if the phone/browser disconnects; managed sessions must continue running under tmux. | Must | Manual disconnect/reconnect test with a long-running fake or real Codex session. |
-| NFR-003 | Status and attention indicators must be advisory and visibly fall back to unknown when the agent cannot classify terminal output confidently. | Must | Unit tests for unrecognized output and UI inspection of unknown state. |
-| NFR-004 | The dashboard must remain usable on phone-sized screens without relying on raw terminal width as the primary experience. | Must | Responsive browser screenshot/inspection at phone and desktop widths. |
-| NFR-005 | The implementation must fail loudly for missing required binaries, invalid cwd, duplicate session names, invalid session ids, and malformed write requests. | Must | Negative CLI/API tests for each invalid condition. |
-| NFR-006 | V1 must avoid hidden fallback behavior that pretends a command, write, or session state succeeded when the host agent could not prove it. | Must | Test assertions for explicit errors and manual review of failure surfaces. |
-| NFR-007 | The host agent and dashboard must be testable without a live Codex account or real Codex model call by using a fake Codex command and fake or isolated tmux adapter. | Must | CI or local test command runs core lifecycle, output, input, status, and UI fixtures against fakes. |
-| NFR-008 | The system must clearly separate durable local state from ephemeral process state. | Must | Architecture review plus restart tests verify registry, audit log, and pairing/token state are durable while live stream subscriptions are ephemeral. |
-| NFR-009 | V1 must not require privileged OS access, root permissions, or router/firewall changes. | Must | Setup smoke test runs as a normal Ubuntu user and verifies default localhost operation. |
+| NFR-001 | V1 is local-first and requires no HostDeck cloud account, hosted relay, telemetry service, or public listener. | Must | Configuration/network/privacy review. |
+| NFR-002 | Codex work continues across phone disconnects and a HostDeck-only service restart; any work interrupted by app-server failure is labeled honestly and recoverable from persisted thread history. | Must | Browser disconnect and independent service restart tests. |
+| NFR-003 | Status and attention never infer healthy/completed from missing, stale, disconnected, or unknown data. | Must | Projection and UI unknown-state tests. |
+| NFR-004 | Every V1 journey is usable at 360 x 800 CSS px; desktop is a responsive expansion of the same information architecture. | Must | Playwright and real-device screenshot/interaction evidence. |
+| NFR-005 | Missing binaries, incompatible Codex, invalid cwd/config/certificate, duplicate owner/name, malformed protocol/API data, and impossible state fail loudly. | Must | Negative startup, contract, protocol, and CLI tests. |
+| NFR-006 | No fallback may claim a prompt, control, approval, audit, or lifecycle action succeeded without proof from its owning boundary. | Must | Partial-failure and response/audit consistency tests. |
+| NFR-007 | Contracts, projections, UI, and most orchestration must be testable without a live model call; a bounded real-Codex suite proves the external boundary. | Must | Fake protocol fixtures plus opt-in real integration command. |
+| NFR-008 | Codex owns full thread history; HostDeck owns only mappings, bounded event projections, trust/settings, and audit. Durable and ephemeral state are explicit. | Must | Storage review and restart tests. |
+| NFR-009 | V1 runs as a normal Ubuntu user without root, router changes, or privileged ports. | Must | Clean Ubuntu setup/service smoke. |
+| NFR-010 | Startup, readiness, degradation, graceful shutdown, and restart each have one process owner and bounded timeouts; duplicate daemons for one state directory fail. | Must | Lifecycle and daemon-lease tests. |
+| NFR-011 | Request bodies, headers, open connections, event queues, subscriber counts, retained data, protocol requests, and CLI calls are bounded. | Must | Limit, overload, timeout, and backpressure tests. |
+| NFR-012 | Runtime/client compatibility is explicit: supported Codex versions are pinned or ranged, generated schemas are traceable, and upgrade failures are actionable. | Must | Compatibility matrix artifact and upgrade/downgrade tests. |
+| NFR-013 | State and runtime directories, database files, sockets, keys, and certificates are owner-only or startup fails/repairs them observably. | Must | Permission inspection and hostile-permission tests. |
 
 ## Interface And UX
 
 | ID | Requirement | Priority | Validation |
 | --- | --- | --- | --- |
-| IR-001 | The default dashboard surface must show session cards sorted by attention before alphabetical or creation order. | Must | UI test or screenshot evidence with mixed fixture statuses. |
-| IR-002 | Each session card must show session name, project/cwd cue, branch when available, status, attention level, last activity, and recent meaningful output. | Must | Component test with fixture data plus responsive screenshot. |
-| IR-003 | Session detail must prioritize recent Codex output, prompt input, and slash-command actions over raw terminal display. | Must | Screenshot evidence for session detail at phone width. |
-| IR-004 | Risky controls, including stop and raw terminal input, must be visually separated from safe prompt and slash-command controls. | Must | UI inspection and component test for control grouping. |
-| IR-005 | Write-disabled or unpaired clients must be able to read allowed session state but must not see enabled write controls. | Must | Browser/API test with read-only or untrusted client state. |
-| IR-006 | The dashboard must provide clear empty, loading, disconnected, permission-denied, session-not-found, and agent-error states. | Must | Component or integration tests covering each state. |
-| IR-007 | V1 UI copy must frame the product as a session mission-control dashboard, not a generic SSH terminal or code editor. | Should | Manual UX review against PRD non-goals. |
-| IR-008 | Pairing/token, locked, read-only, and LAN-disabled states must be visible in the dashboard before the user attempts a write. | Must | Component tests and screenshot evidence for trusted, untrusted, locked, and LAN-disabled states. |
-| IR-009 | Output truncation or replay boundaries must be visible when the dashboard is not showing the full terminal buffer. | Must | Component test with oversized fixture output verifies truncation marker or replay boundary copy appears. |
+| IR-001 | The default phone route is Mission Control with attention ordering: approval, input, failure, stale/interrupted, running, quiet/completed. | Must | Mixed-state phone screenshot and ordering test. |
+| IR-002 | Each session row shows name, project cue, status/attention, last activity, and bounded summary; branch/model/goal cues are secondary. | Must | Long-content component and responsive tests. |
+| IR-003 | Session Detail prioritizes structured conversation/events, inline approval, composer, and `/model`, `/goal`, `/plan` over diagnostics. | Must | 390 x 844 screenshot and interaction evidence. |
+| IR-004 | Interrupt, archive, approval, lock, revoke, and other risky controls are separated from routine prompt/model/goal actions and confirmed according to risk. | Must | Component semantics and confirmation tests. |
+| IR-005 | LAN clients must pair before reading session data; read-only, write, expired, revoked, locked, and loopback-local states have distinct UI behavior. | Must | Browser/API permission-state tests. |
+| IR-006 | UI covers empty, loading, offline, incompatible runtime, certificate error, permission denied, not found, stale, boundary, degraded, and fatal host states. | Must | State matrix and screenshots. |
+| IR-007 | Copy frames HostDeck as mobile session mission control, never as SSH, a terminal emulator, editor, or generic desktop operations console. | Must | UX review against PRD non-goals. |
+| IR-008 | Connection origin, HTTPS/LAN mode, pairing permission, lock, Codex compatibility, and stream health are visible before a write. | Must | Host/access state tests and screenshots. |
+| IR-009 | Projection truncation, replay boundaries, redaction, and stale timestamps are visible and never imply complete history. | Must | Boundary fixture and UI tests. |
+| IR-010 | The phone first viewport shows host/access state and useful session content; desktop-only navigation or controls cannot gate a V1 flow. | Must | Reference viewport screenshot audit. |
+| IR-011 | Approval cards expose action, scope, reason, request state, and exact approve/deny result without duplicate submission. | Must | Accessibility, concurrency, and expired-request tests. |
+| IR-012 | Structured control surfaces show current value, loading, unsupported, conflict, success, and failure states rather than behaving as decorative slash chips. | Must | Per-control component/API tests. |
 
 ## Data
 
 | ID | Requirement | Priority | Validation |
 | --- | --- | --- | --- |
-| DR-001 | Each managed session must have a stable unique id and human-readable name. | Must | Unit/API tests for session creation and duplicate-name handling. |
-| DR-002 | Session records must include cwd, backend type, tmux target metadata, lifecycle state, status, attention level, last activity time, and recent output buffer metadata. | Must | Contract tests over session serialization. |
-| DR-003 | Branch information should be captured when the cwd is inside a git worktree, without making git a hard requirement for non-git directories. | Should | Unit tests for git and non-git cwd fixtures. |
-| DR-004 | Recent output must be bounded so one noisy session cannot grow storage or memory without limit. | Must | Unit/integration test for output retention cap. |
-| DR-005 | Remote write actions must create audit events with timestamp, client identity or trust mode, session id, action type, and sanitized payload summary. | Must | API tests for prompt, slash-command, and stop audit events. |
-| DR-006 | V1 must not store long-term cloud session history or sync session content outside the local host agent. | Must | Architecture review and configuration inspection. |
-| DR-007 | The local session registry must persist enough information to reconnect to tmux-managed sessions after host-agent restart, including session id, name, cwd, backend type, tmux target, created time, and last known lifecycle state. | Must | Restart test verifies registry reload and tmux reconciliation. |
-| DR-008 | Recent output buffers must record cursor/order metadata, capture time when available, truncation state, and source session id. | Must | Output-buffer unit tests verify ordered append, capped retention, truncation marker, and cursor replay. |
-| DR-009 | Pairing/token state must be stored locally with client identity, permission mode, created time, last-used time when available, and revoked/locked state. | Must | Auth-state unit tests cover create, read, revoke, lock, unlock, and restart persistence. |
-| DR-010 | Audit logs must be durable local records with bounded payload fields, retention policy, and explicit action types for prompt, slash command, stop, raw input, pair, lock, unlock, LAN enable, and LAN disable. | Must | Audit tests verify required action types, bounded payloads, and persistence after agent restart. |
+| DR-001 | Each managed session has a HostDeck id, human alias, and stable Codex thread id; identity never depends on display text. | Must | Storage/contract uniqueness tests. |
+| DR-002 | Session mappings include cwd/project, branch when available, runtime source/version, lifecycle/turn state, attention, activity, summary, and last event cursor. | Must | Migration and serialization tests. |
+| DR-003 | Branch capture is optional and cannot make non-git directories fail. | Should | Git/non-git/missing-git tests. |
+| DR-004 | Event projections are bounded per session by event count and bytes; pruning creates a visible replay boundary. | Must | Production retention invocation and boundary tests. |
+| DR-005 | Every remote mutation creates an audit record with actor/device, target, action, bounded summary, accepted/result state, and error when applicable. | Must | API/protocol mutation audit assertions. |
+| DR-006 | HostDeck stores no cloud copy or redundant full Codex transcript. | Must | Storage/privacy inspection. |
+| DR-007 | Durable mappings contain enough information to reconcile and resume managed Codex threads after restart without inventing a new thread. | Must | Restart and missing-thread tests. |
+| DR-008 | Projected events contain session id, HostDeck cursor, Codex event identity/type when available, capture time, bounded payload, redaction, and boundary metadata. | Must | Contract/storage ordering tests. |
+| DR-009 | Device/pairing records include hashed secrets, identity/label, permission, creation/expiry/last-used/revoked data, and CSRF rotation state without raw durable tokens. | Must | Raw-storage and lifecycle tests. |
+| DR-010 | Audit storage is durable and bounded by count/age with explicit types for pair, claim, revoke, lock/unlock, LAN/certificate changes, prompt/control, approval, interrupt, and archive. | Must | Retention/restart/type coverage tests. |
+| DR-011 | Runtime compatibility metadata records the observed Codex version, protocol/schema identity, negotiated capabilities, and last compatibility result. | Must | Startup/restart/upgrade tests. |
 
 ## Platform And Environment
 
 | ID | Requirement | Priority | Validation |
 | --- | --- | --- | --- |
-| PR-001 | The supported V1 host platform is Ubuntu with local Codex CLI and tmux installed. | Must | Developer-guide setup check and manual Ubuntu smoke test. |
-| PR-002 | The host service must bind to localhost by default. | Must | Startup/config test verifying default bind address. |
-| PR-003 | LAN access must require an explicit opt-in setting or command. | Must | Config/API test showing LAN bind is rejected or absent unless enabled. |
-| PR-004 | The web dashboard must be served locally by the host agent or a documented local dev command. | Must | Manual smoke test opening the dashboard locally. |
-| PR-005 | Phone access in V1 is through a mobile-responsive browser on a trusted local/LAN connection, not a native app. | Must | Responsive browser evidence and roadmap trace. |
-| PR-006 | New managed `codex` sessions are required in V1; `codex resume`, arbitrary terminal discovery, and arbitrary existing terminal import are deferred unless later planning explicitly adds them. | Must | CLI/API tests cover new-session start; backlog defers resume/import work. |
-| PR-007 | Startup must validate required binaries and configuration before accepting session start or write requests. | Must | Startup/config tests cover missing `tmux`, missing Codex executable, invalid state directory, invalid bind address, and duplicate ports. |
-| PR-008 | The host agent must provide a documented foreground development mode and a documented long-running local service mode. | Must | Developer-guide commands and smoke tests cover starting, stopping, and checking host status in both modes. |
-| PR-009 | V1 must support configurable local state directory and port values, with documented defaults. | Should | Config tests verify defaults and override behavior. |
+| PR-001 | V1 supports Ubuntu with a locally authenticated, supported Codex CLI; tmux is not a product runtime requirement after migration. | Must | Clean Ubuntu compatibility smoke. |
+| PR-002 | HostDeck binds loopback by default and exposes no non-loopback listener or app-server socket to the network. | Must | Listener inventory test. |
+| PR-003 | LAN access requires explicit configuration and HTTPS; plaintext non-loopback startup is rejected. | Must | Config, certificate, and network smoke. |
+| PR-004 | The production host service serves the built dashboard and typed API from one origin. | Must | Packaged browser smoke. |
+| PR-005 | V1 phone access uses a responsive browser, including at least one real Android or iOS validation pass. | Must | Device evidence. |
+| PR-006 | V1 supports new HostDeck-managed threads and resuming those exact threads; arbitrary import remains deferred. | Must | Start/resume/import-rejection tests. |
+| PR-007 | Startup validates Codex version/capabilities, state/runtime dirs, socket ownership, storage migration, bind/cert policy, and required ports before readiness. | Must | Startup matrix. |
+| PR-008 | Foreground development and unprivileged long-running user-service modes share the same runtime contracts and have documented lifecycle commands. | Must | Foreground/service parity smoke. |
+| PR-009 | State directory, runtime directory, loopback/LAN ports, bind address, certificate paths, retention, and timeouts have documented defaults and validated overrides. | Must | Config tests and command reference. |
+| PR-010 | App-server communicates only through a user-private local transport and is never the browser-facing trust boundary. | Must | Socket/listener inspection and architecture test. |
+| PR-011 | Supported release browsers include current Chromium mobile/desktop and one second engine or an explicit release limitation. | Should | Browser matrix evidence. |
+| PR-012 | V1 produces a runnable `codexdeck` package/binary entry, built web assets, and install/uninstallable user-service definitions. | Must | Clean build/package/install/uninstall smoke. |
 
 ## Safety And Failure
 
 | ID | Requirement | Priority | Validation |
 | --- | --- | --- | --- |
-| SFR-001 | Write actions must require a one-user local pairing/token trust gate before the dashboard can send prompts, slash commands, stop requests, or raw terminal input. | Must | API authorization tests for trusted and untrusted clients. |
-| SFR-002 | Read-only or untrusted clients must not be able to mutate session state. | Must | API tests reject write attempts without trust token. |
-| SFR-003 | Stop session and raw terminal input must require explicit confirmation or advanced-mode entry. | Must | UI test verifies confirmation/advanced gate; API records risky action type. |
-| SFR-004 | The agent must expose a local disable or lock action that blocks further dashboard writes until re-enabled. | Must | Integration test toggles lock and verifies write rejection. |
-| SFR-005 | API and UI errors must preserve the true failure reason without swallowing command failures or reporting fake success. | Must | Negative tests assert non-2xx/API error payloads and visible UI error state. |
-| SFR-006 | Sensitive data in audit logs must be minimized; prompt/slash audit payloads should use summaries or bounded snippets rather than full unbounded terminal content. | Should | Audit-log unit tests for truncation/sanitization. |
-| SFR-007 | Pairing/token creation must produce a time-bounded local secret or equivalent trust artifact that can be revoked without deleting session history. | Must | Auth tests cover token expiry or one-time use, revocation, and continued read access where permitted. |
-| SFR-008 | LAN enablement must be explicit, visible, and reversible through CLI/API controls. | Must | Config and audit tests verify LAN enable/disable changes bind behavior and records audit events. |
-| SFR-009 | Raw terminal input must be disabled by default and require both trusted write permission and advanced-mode confirmation. | Must | UI/API tests verify default rejection and accepted advanced-mode writes are audited separately from prompt writes. |
-| SFR-010 | The host agent must reject writes to stale, stopped, crashed, unknown, or unreconciled sessions instead of buffering them for possible later delivery. | Must | Negative API tests cover each non-writable session state. |
-| SFR-011 | Test fixtures must include representative Codex-like outputs for questions, approval prompts, command running, tests passed, tests failed, compact/context warnings, idle/no-output, and unknown output. | Must | Heuristic unit tests cover every fixture category and assert expected status/attention classification. |
+| SFR-001 | Non-loopback session reads and all remote mutations require a valid paired device with the required permission. | Must | LAN read/write authorization tests. |
+| SFR-002 | Read-only, unpaired, expired, revoked, locked, or CSRF-invalid devices cannot mutate; unauthorized LAN clients cannot read metadata or events. | Must | Permission matrix. |
+| SFR-003 | Approval, interrupt, archive, lock, revoke, and other risky actions use explicit intent and risk-appropriate confirmation. | Must | UI/API/protocol confirmation tests. |
+| SFR-004 | A paired writer or local CLI can lock remote mutations immediately; unlock remains local-admin only. | Must | Lock race and emergency-path tests. |
+| SFR-005 | API/UI/CLI errors preserve the bounded true cause and whether retry is safe; success and audit results cannot contradict the owning operation. | Must | Partial-failure consistency tests. |
+| SFR-006 | Audit summaries exclude raw secrets and unbounded prompt, output, command, or approval payloads. | Must | Sanitization and raw-storage inspection. |
+| SFR-007 | Pairing codes are high-entropy, one-time, short-lived, rate-limited, and revocable without deleting session data. | Must | Brute-force/rate/lifecycle tests. |
+| SFR-008 | LAN enablement, address/certificate configuration, and disablement are explicit, visible, reversible, and audited. | Must | CLI/config/network/audit tests. |
+| SFR-009 | V1 phone APIs and UI do not accept arbitrary raw shell/terminal input. | Must | Route manifest and UI absence tests. |
+| SFR-010 | Mutations to missing, archived, stale, incompatible, unresolved, or non-writable targets reject instead of buffering for later delivery. | Must | State rejection matrix. |
+| SFR-011 | Fixtures cover structured running, user input, approval, completed, interrupted, failed, compacting, rate limit, incompatible/unknown event, disconnect, and replay boundary cases. | Must | Fixture inventory test. |
+| SFR-012 | Browser requests enforce configured Host and Origin allowlists; DNS rebinding, wildcard credentialed CORS, and cross-origin mutations fail. | Must | Host/Origin/CORS security tests. |
+| SFR-013 | Pair claim and mutation endpoints have per-source/device rate and concurrency limits; device list/revoke is user accessible. | Must | Rate, concurrency, and revocation tests. |
+| SFR-014 | A paired browser reload can obtain a fresh CSRF posture without exposing the device bearer token to JavaScript-readable durable storage. | Must | Reload/rotation/revocation browser tests. |
+| SFR-015 | State, key, certificate, database, and socket permissions are owner-only, and one daemon lease protects each state directory. | Must | Permission and duplicate-daemon tests. |
+| SFR-016 | Pair request/claim, revoke, lock/unlock, LAN/certificate change, prompt/control, approval, interrupt, and archive record accepted plus terminal outcome or an explicit incomplete outcome after crash. | Must | Audit state-machine and crash tests. |
+| SFR-017 | HTTP/SSE/protocol clients enforce body/header/request/idle/shutdown timeouts, backpressure, heartbeat, subscriber cleanup, and bounded queues. | Must | Slow-client, disconnect, overload, and shutdown tests. |
+| SFR-018 | LAN cookies are Secure, HttpOnly, host-only, and SameSite=Strict where compatible; no write credential is issued over plaintext non-loopback transport. | Must | Browser header/cookie and plaintext-rejection tests. |
 
 ## Traceability
 
 | Requirement | Block refs | Task refs | Evidence route |
 | --- | --- | --- | --- |
-| FR-001 | `BLK-V1-03`, `BLK-V1-04` | `INT-V1-012`, `IFC-V1-007`, `INT-V1-016`, `INT-V1-090` | Adapter and CLI lifecycle tests plus Ubuntu smoke evidence. |
-| FR-002 | `BLK-V1-01`, `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `FND-V1-003`, `DAT-V1-012`, `IFC-V1-002`, `FE-V1-011` | API/CLI/UI contract tests and dashboard screenshots. |
-| FR-003 | `BLK-V1-03`, `BLK-V1-04` | `INT-V1-013`, `IFC-V1-007`, `INT-V1-016` | Manual tmux attach smoke and CLI attach contract evidence. |
-| FR-004 | `BLK-V1-02`, `BLK-V1-03`, `BLK-V1-04` | `INT-V1-013`, `DAT-V1-014`, `IFC-V1-004`, `IFC-V1-007` | Stop adapter/API/CLI tests with audit assertion. |
-| FR-005 | `BLK-V1-03`, `BLK-V1-04`, `BLK-V1-05` | `INT-V1-014`, `IFC-V1-003`, `FE-V1-012`, `FE-V1-015`, `FE-V1-019` | Stream/reconnect integration tests and browser inspection. |
-| FR-006 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-04`, `BLK-V1-05` | `FND-V1-004`, `INT-V1-013`, `IFC-V1-004`, `FE-V1-020` | Selected-session prompt tests and manual smoke evidence. |
-| FR-007 | `BLK-V1-01`, `BLK-V1-04`, `BLK-V1-05` | `FND-V1-004`, `IFC-V1-004`, `FE-V1-021` | Primary slash-command UI/API tests. |
-| FR-008 | `BLK-V1-01`, `BLK-V1-04`, `BLK-V1-05` | `FND-V1-004`, `IFC-V1-004`, `FE-V1-021` | Utility slash-command UI/API tests. |
-| FR-009 | `BLK-V1-01`, `BLK-V1-05` | `FND-V1-003`, `FND-V1-007`, `FND-V1-008`, `FE-V1-015` | Classifier fixture tests and unknown-state UI inspection. |
-| FR-010 | `BLK-V1-04`, `BLK-V1-05` | `FE-V1-014`, `IFC-V1-004`, `FE-V1-017` | Raw fallback UI/API tests and screenshot evidence. |
-| FR-011 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-006`, `IFC-V1-007`, `IFC-V1-008`, `IFC-V1-013`, `REL-V1-003` | CLI contract tests and command-reference verification. |
-| FR-012 | `BLK-V1-01`, `BLK-V1-04` | `FND-V1-006`, `IFC-V1-002`, `IFC-V1-003`, `IFC-V1-004`, `IFC-V1-005`, `IFC-V1-010` | API route, schema, auth, stream, and error contract tests. |
-| FR-013 | `BLK-V1-01`, `BLK-V1-02`, `BLK-V1-03`, `BLK-V1-04` | `FND-V1-006`, `DAT-V1-003`, `DAT-V1-015`, `INT-V1-001`, `INT-V1-014`, `IFC-V1-003` | Output order, cursor, retention, and reconnect tests. |
-| FR-014 | `BLK-V1-02`, `BLK-V1-03`, `BLK-V1-04` | `DAT-V1-012`, `DAT-V1-016`, `INT-V1-015`, `IFC-V1-001`, `INT-V1-090` | Restart reconciliation and stale-write rejection tests. |
-| FR-015 | `BLK-V1-01`, `BLK-V1-04`, `BLK-V1-05` | `FND-V1-004`, `IFC-V1-004`, `FE-V1-020`, `FE-V1-021` | One-session write tests and multi-session rejection checks. |
-| NFR-001 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-001`, `IFC-V1-011`, `REL-V1-005`, `REL-V1-006` | Config review, localhost bind tests, and release smoke evidence. |
-| NFR-002 | `BLK-V1-03`, `BLK-V1-05`, `BLK-V1-06` | `INT-V1-015`, `INT-V1-016`, `FE-V1-015`, `REL-V1-006` | Disconnect/reconnect smoke and output continuity evidence. |
-| NFR-003 | `BLK-V1-01`, `BLK-V1-05` | `FND-V1-008`, `FE-V1-015`, `FE-V1-017` | Unknown classifier tests and UI state inspection. |
-| NFR-004 | `BLK-V1-05` | `FE-V1-016`, `FE-V1-017`, `FE-V1-090` | Phone and desktop responsive screenshots with UI hardening evidence. |
-| NFR-005 | `BLK-V1-01`, `BLK-V1-04` | `FND-V1-005`, `IFC-V1-001`, `IFC-V1-014`, `FND-V1-010`, `DAT-V1-090`, `INT-V1-090`, `IFC-V1-090` | Negative startup, CLI, API, and module-hardening tests. |
-| NFR-006 | `BLK-V1-01`, `BLK-V1-04`, `BLK-V1-05` | `FND-V1-005`, `FND-V1-010`, `IFC-V1-014`, `DAT-V1-090`, `INT-V1-090`, `IFC-V1-090`, `FE-V1-090` | Explicit-error assertions and manual failure-surface review. |
-| NFR-007 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-06` | `FND-V1-001`, `FND-V1-007`, `INT-V1-010`, `REL-V1-001` | Fake Codex/tmux validation commands and setup evidence. |
-| NFR-008 | `BLK-V1-02`, `BLK-V1-03`, `BLK-V1-06` | `DAT-V1-016`, `INT-V1-015`, `REL-V1-008` | Restart tests and release evidence for durable versus ephemeral state. |
-| NFR-009 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-011`, `REL-V1-006` | Normal-user setup and localhost/LAN network smoke evidence. |
-| IR-001 | `BLK-V1-05` | `FE-V1-001`, `FE-V1-011` | Fixture matrix, component tests, and session-list screenshot. |
-| IR-002 | `BLK-V1-01`, `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `FND-V1-003`, `DAT-V1-017`, `IFC-V1-002`, `FE-V1-011` | Session card contract tests with optional branch fixtures. |
-| IR-003 | `BLK-V1-05` | `FE-V1-012`, `FE-V1-017` | Session-detail screenshots and fidelity review. |
-| IR-004 | `BLK-V1-05` | `FE-V1-014`, `FE-V1-017` | Risk-control grouping tests and UI inspection. |
-| IR-005 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-002`, `IFC-V1-005`, `FE-V1-013` | Read-only/untrusted API and browser-state tests. |
-| IR-006 | `BLK-V1-05` | `FE-V1-001`, `FE-V1-010`, `FE-V1-019`, `FE-V1-015` | Empty, loading, disconnected, permission, not-found, and agent-error states. |
-| IR-007 | `BLK-V1-05`, `BLK-V1-06` | `FE-V1-018`, `REL-V1-004` | UX copy review against PRD non-goals and release docs. |
-| IR-008 | `BLK-V1-05` | `FE-V1-013`, `FE-V1-017` | Trust, locked, read-only, and LAN-disabled screenshots/tests. |
-| IR-009 | `BLK-V1-02`, `BLK-V1-03`, `BLK-V1-05` | `DAT-V1-003`, `DAT-V1-015`, `INT-V1-014`, `FE-V1-015` | Truncation and replay-boundary tests and UI screenshots. |
-| DR-001 | `BLK-V1-01`, `BLK-V1-02` | `FND-V1-003`, `DAT-V1-012` | Session creation and duplicate-name tests. |
-| DR-002 | `BLK-V1-01`, `BLK-V1-02`, `BLK-V1-04` | `FND-V1-003`, `FND-V1-012`, `DAT-V1-012`, `IFC-V1-002` | Session serialization and API contract tests. |
-| DR-003 | `BLK-V1-02`, `BLK-V1-05` | `DAT-V1-017`, `FE-V1-011` | Git and non-git cwd fixture tests plus session-card rendering. |
-| DR-004 | `BLK-V1-02` | `DAT-V1-003`, `DAT-V1-015` | Retention-cap spike and integration evidence. |
-| DR-005 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-014`, `IFC-V1-004` | Prompt, slash, stop, and raw-input audit assertions. |
-| DR-006 | `BLK-V1-06` | `REL-V1-005`, `IFC-V1-011` | Privacy review and local-first configuration inspection. |
-| DR-007 | `BLK-V1-02`, `BLK-V1-03` | `DAT-V1-012`, `DAT-V1-016`, `INT-V1-015` | Registry reload and tmux reconciliation tests. |
-| DR-008 | `BLK-V1-02`, `BLK-V1-03` | `DAT-V1-003`, `DAT-V1-015`, `INT-V1-014` | Ordered output-buffer, cursor, and truncation tests. |
-| DR-009 | `BLK-V1-02` | `DAT-V1-013`, `DAT-V1-016` | Auth lifecycle and restart persistence tests. |
-| DR-010 | `BLK-V1-01`, `BLK-V1-02` | `FND-V1-012`, `DAT-V1-014`, `DAT-V1-015` | Audit schema, bounded payload, and retention tests. |
-| PR-001 | `BLK-V1-03`, `BLK-V1-06` | `INT-V1-001`, `INT-V1-016`, `REL-V1-002`, `REL-V1-006` | Ubuntu setup, tmux smoke, and release smoke evidence. |
-| PR-002 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-011`, `IFC-V1-011` | Default bind configuration and network smoke tests. |
-| PR-003 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-011`, `IFC-V1-008`, `IFC-V1-011`, `FE-V1-013` | LAN opt-in config, CLI/API, audit, and UI-state evidence. |
-| PR-004 | `BLK-V1-04`, `BLK-V1-05`, `BLK-V1-06` | `IFC-V1-009`, `FE-V1-010`, `FE-V1-019`, `REL-V1-006` | Local dashboard serve smoke and browser evidence. |
-| PR-005 | `BLK-V1-05`, `BLK-V1-06` | `FE-V1-016`, `FE-V1-017`, `REL-V1-004` | Responsive browser screenshots and roadmap trace. |
-| PR-006 | `BLK-V1-03`, `BLK-V1-04` | `INT-V1-012`, `IFC-V1-007` | New-session tests and explicit resume/import deferral trace. |
-| PR-007 | `BLK-V1-04` | `IFC-V1-001`, `IFC-V1-014` | Startup validation and malformed write rejection tests. |
-| PR-008 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-006`, `IFC-V1-012`, `REL-V1-002`, `REL-V1-006` | Foreground/service-mode CLI smoke and developer-guide evidence. |
-| PR-009 | `BLK-V1-01`, `BLK-V1-02`, `BLK-V1-06` | `FND-V1-012`, `DAT-V1-011`, `REL-V1-002` | Config schema tests and documented default/override commands. |
-| SFR-001 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-002`, `DAT-V1-013`, `IFC-V1-004`, `IFC-V1-005`, `FE-V1-013` | Pairing/token spike, auth tests, and write-control UI evidence. |
-| SFR-002 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-013`, `IFC-V1-004`, `IFC-V1-005`, `FE-V1-013` | Untrusted/read-only mutation rejection tests. |
-| SFR-003 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-004`, `FE-V1-014` | Stop/raw confirmation tests and risky-action audit checks. |
-| SFR-004 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-011`, `DAT-V1-013`, `IFC-V1-008`, `FE-V1-013` | Lock/unlock persistence, CLI, API, and UI-state tests. |
-| SFR-005 | `BLK-V1-01`, `BLK-V1-04`, `BLK-V1-05` | `FND-V1-005`, `IFC-V1-014`, `FE-V1-019`, `FE-V1-090` | Error envelope, failure-path, API-client, and UI-hardening evidence. |
-| SFR-006 | `BLK-V1-02`, `BLK-V1-06` | `DAT-V1-014`, `REL-V1-005` | Audit minimization tests and privacy review evidence. |
-| SFR-007 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-002`, `DAT-V1-013`, `IFC-V1-005` | Token expiry, one-time use, revocation, and claim-route tests. |
-| SFR-008 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-011`, `IFC-V1-008`, `IFC-V1-011`, `FE-V1-013` | LAN enable/disable config, audit, network, and UI visibility tests. |
-| SFR-009 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-004`, `FE-V1-014` | Raw-input default rejection and advanced-mode acceptance/audit tests. |
-| SFR-010 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-04`, `BLK-V1-05` | `FND-V1-004`, `INT-V1-015`, `IFC-V1-004`, `IFC-V1-014`, `FE-V1-015` | Non-writable state tests with no queued hidden delivery. |
-| SFR-011 | `BLK-V1-01` | `FND-V1-007`, `FND-V1-008` | Fixture inventory and heuristic classifier tests. |
+| FR-001 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-04` | `FND-V1-015`, `INT-V1-003` to `INT-V1-006`, `IFC-V1-019` | Generated-schema, adapter, API/CLI, and real Codex start evidence. |
+| FR-002 | `BLK-V1-01` to `BLK-V1-05` | `FND-V1-015`, `DAT-V1-018`, `INT-V1-006`, `IFC-V1-019`, `FE-V1-011` | Projection/API/UI tests and phone screenshots. |
+| FR-003 | `BLK-V1-03`, `BLK-V1-04` | `INT-V1-005`, `IFC-V1-019` | Exact-thread remote TUI smoke. |
+| FR-004 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-006`, `IFC-V1-019`, `FE-V1-014` | Interrupt/archive protocol, audit, and UI tests. |
+| FR-005 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-004`, `INT-V1-006`, `IFC-V1-016`, `IFC-V1-018`, `FE-V1-012` | Real event stream, SSE, and browser evidence. |
+| FR-006 | `BLK-V1-01`, `BLK-V1-03` to `BLK-V1-05` | `FND-V1-015`, `INT-V1-006`, `IFC-V1-019`, `FE-V1-020` | Exact-thread prompt lifecycle tests. |
+| FR-007 | `BLK-V1-01`, `BLK-V1-03` to `BLK-V1-05` | `FND-V1-015`, `INT-V1-006`, `IFC-V1-019`, `FE-V1-021` | Model/goal/plan capability and UI tests. |
+| FR-008 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-006`, `IFC-V1-019`, `FE-V1-021` | Usage/compact/skills capability tests. |
+| FR-009 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-05` | `FND-V1-015`, `FND-V1-016`, `INT-V1-006`, `FE-V1-015` | Structured projection and unknown-state tests. |
+| FR-010 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-019`, `FE-V1-014` | Read-only diagnostic projection and route-absence tests. |
+| FR-011 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-019`, `IFC-V1-021`, `REL-V1-003`, `REL-V1-006` | Packaged CLI matrix and clean install smoke. |
+| FR-012 | `BLK-V1-01`, `BLK-V1-04` | `FND-V1-015`, `IFC-V1-016` to `IFC-V1-020`, `IFC-V1-091` | Route manifest, auth, failure, and hardening evidence. |
+| FR-013 | `BLK-V1-01` to `BLK-V1-04` | `FND-V1-015`, `DAT-V1-018`, `DAT-V1-020`, `INT-V1-006`, `IFC-V1-018` | Replay/live race, retention, and cursor tests. |
+| FR-014 | `BLK-V1-02` to `BLK-V1-04` | `DAT-V1-018`, `INT-V1-007`, `IFC-V1-018` | Host/app-server restart and reconciliation matrix. |
+| FR-015 | `BLK-V1-01`, `BLK-V1-04`, `BLK-V1-05` | `FND-V1-015`, `IFC-V1-019`, `FE-V1-020` to `FE-V1-022` | Target-identity contract tests. |
+| FR-016 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-006`, `IFC-V1-019`, `FE-V1-022` | Real approval and phone UI evidence. |
+| FR-017 | `BLK-V1-01`, `BLK-V1-03` | `FND-V1-015`, `INT-V1-003`, `INT-V1-091` | Schema/version compatibility matrix. |
+| FR-018 | `BLK-V1-03`, `BLK-V1-04`, `BLK-V1-06` | `INT-V1-007`, `IFC-V1-018`, `IFC-V1-021`, `REL-V1-006` | Process/listener ownership and service smoke. |
+| NFR-001 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-015`, `REL-V1-005`, `REL-V1-006` | Network and privacy review. |
+| NFR-002 | `BLK-V1-03`, `BLK-V1-06` | `INT-V1-007`, `IFC-V1-018`, `REL-V1-006` | Disconnect/restart evidence. |
+| NFR-003 | `BLK-V1-01`, `BLK-V1-05` | `FND-V1-016`, `FE-V1-015`, `FE-V1-090` | Unknown/stale tests and screenshots. |
+| NFR-004 | `BLK-V1-05` | `FE-V1-002` to `FE-V1-004`, `FE-V1-016`, `FE-V1-017`, `FE-V1-090` | Reference viewport and real-device evidence. |
+| NFR-005 | `BLK-V1-01` to `BLK-V1-04` | `FND-V1-016`, `INT-V1-003`, `INT-V1-091`, `IFC-V1-091` | Negative startup/protocol/API tests. |
+| NFR-006 | `BLK-V1-01` to `BLK-V1-06` | `FND-V1-016`, `DAT-V1-020`, `INT-V1-091`, `IFC-V1-091`, `REL-V1-007` | Partial-failure and aggregate hardening evidence. |
+| NFR-007 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-06` | `FND-V1-015`, `INT-V1-006`, `REL-V1-007` | Fake plus bounded real-Codex suites. |
+| NFR-008 | `BLK-V1-02`, `BLK-V1-03` | `DAT-V1-018`, `DAT-V1-020`, `INT-V1-007` | Storage ownership and restart tests. |
+| NFR-009 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-021`, `REL-V1-006` | Normal-user install/service smoke. |
+| NFR-010 | `BLK-V1-02` to `BLK-V1-04` | `DAT-V1-019`, `INT-V1-007`, `IFC-V1-018`, `IFC-V1-020` | Ownership, lease, timeout, shutdown tests. |
+| NFR-011 | `BLK-V1-02` to `BLK-V1-04` | `DAT-V1-020`, `IFC-V1-018`, `IFC-V1-020` | Resource/overload matrix. |
+| NFR-012 | `BLK-V1-03`, `BLK-V1-06` | `INT-V1-003`, `INT-V1-091`, `REL-V1-006` | Codex compatibility artifact. |
+| NFR-013 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-019`, `IFC-V1-015`, `REL-V1-005` | Permission/certificate inspection. |
+| IR-001 | `BLK-V1-05` | `FE-V1-004`, `FE-V1-011` | Attention-order fixture, component test, and phone screenshot. |
+| IR-002 | `BLK-V1-01`, `BLK-V1-02`, `BLK-V1-05` | `FND-V1-015`, `DAT-V1-017`, `DAT-V1-018`, `FE-V1-011` | Session-row contract and long-content screenshots. |
+| IR-003 | `BLK-V1-05` | `FE-V1-004`, `FE-V1-012`, `FE-V1-020` to `FE-V1-022` | Session Detail component/API/screenshots. |
+| IR-004 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-019`, `FE-V1-014`, `FE-V1-022` | Risk grouping and confirmation tests. |
+| IR-005 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-021`, `IFC-V1-017`, `FE-V1-013` | Permission matrix and UI state evidence. |
+| IR-006 | `BLK-V1-05` | `FE-V1-004`, `FE-V1-015`, `FE-V1-019` | Complete state-matrix tests/screenshots. |
+| IR-007 | `BLK-V1-05`, `BLK-V1-06` | `FE-V1-018`, `REL-V1-004` | UX copy/non-goal review. |
+| IR-008 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-017`, `IFC-V1-018`, `FE-V1-013` | Host/access status contract and screenshots. |
+| IR-009 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-020`, `IFC-V1-018`, `FE-V1-012`, `FE-V1-015` | Boundary/redaction/staleness tests. |
+| IR-010 | `BLK-V1-05` | `FE-V1-002` to `FE-V1-004`, `FE-V1-010`, `FE-V1-011`, `FE-V1-016` | Reference-viewport mockup and implementation audit. |
+| IR-011 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-006`, `IFC-V1-019`, `FE-V1-022` | Approval semantics, concurrency, accessibility, screenshots. |
+| IR-012 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-006`, `IFC-V1-019`, `FE-V1-021` | Per-control capability/state tests. |
+| DR-001 | `BLK-V1-01`, `BLK-V1-02` | `FND-V1-015`, `DAT-V1-018` | Mapping identity and uniqueness tests. |
+| DR-002 | `BLK-V1-01`, `BLK-V1-02` | `FND-V1-015`, `DAT-V1-018` | Migration/serialization/projection tests. |
+| DR-003 | `BLK-V1-02`, `BLK-V1-05` | `DAT-V1-017`, `DAT-V1-018`, `FE-V1-011` | Git/non-git capture and session-row tests. |
+| DR-004 | `BLK-V1-02` | `DAT-V1-018`, `DAT-V1-020`, `DAT-V1-091` | Production retention and boundary tests. |
+| DR-005 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-020`, `IFC-V1-019` | Mutation audit accepted/result assertions. |
+| DR-006 | `BLK-V1-02`, `BLK-V1-06` | `DAT-V1-018`, `REL-V1-005` | Storage/privacy transcript-absence inspection. |
+| DR-007 | `BLK-V1-02`, `BLK-V1-03` | `DAT-V1-018`, `INT-V1-007` | Restart mapping and missing-thread tests. |
+| DR-008 | `BLK-V1-01`, `BLK-V1-02` | `FND-V1-015`, `DAT-V1-018`, `DAT-V1-020` | Event contract/order/redaction tests. |
+| DR-009 | `BLK-V1-02` | `DAT-V1-021` | Device/pairing/CSRF raw-storage and lifecycle tests. |
+| DR-010 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-020`, `DAT-V1-021`, `IFC-V1-019` | Audit type/outcome/retention/restart tests. |
+| DR-011 | `BLK-V1-02`, `BLK-V1-03` | `DAT-V1-018`, `INT-V1-003` | Compatibility persistence tests. |
+| PR-001 | `BLK-V1-03`, `BLK-V1-06` | `INT-V1-003`, `INT-V1-006`, `REL-V1-006` | Ubuntu real-Codex smoke. |
+| PR-002 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-015`, `IFC-V1-016`, `REL-V1-006` | Loopback/listener inventory tests. |
+| PR-003 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-015`, `IFC-V1-017`, `REL-V1-006` | HTTPS configuration and plaintext rejection. |
+| PR-004 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-016`, `IFC-V1-021`, `REL-V1-006` | Built same-origin dashboard smoke. |
+| PR-005 | `BLK-V1-05`, `BLK-V1-06` | `FE-V1-016`, `FE-V1-017`, `REL-V1-006` | Real phone/browser evidence. |
+| PR-006 | `BLK-V1-03`, `BLK-V1-04` | `INT-V1-005`, `IFC-V1-019` | Managed start/resume and import rejection. |
+| PR-007 | `BLK-V1-02` to `BLK-V1-04` | `DAT-V1-019`, `INT-V1-003`, `INT-V1-007`, `IFC-V1-015`, `IFC-V1-018` | Startup validation matrix. |
+| PR-008 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-021`, `REL-V1-006` | Foreground/user-service parity smoke. |
+| PR-009 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-06` | `DAT-V1-019`, `IFC-V1-015`, `IFC-V1-021`, `REL-V1-003` | Config defaults/override and command-reference tests. |
+| PR-010 | `BLK-V1-03`, `BLK-V1-04` | `INT-V1-004`, `INT-V1-007`, `IFC-V1-018` | Private socket and listener inspection. |
+| PR-011 | `BLK-V1-05`, `BLK-V1-06` | `FE-V1-016`, `REL-V1-007` | Browser matrix. |
+| PR-012 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-021`, `REL-V1-006` | Build/package/install/uninstall smoke. |
+| SFR-001 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-021`, `IFC-V1-017`, `IFC-V1-019`, `REL-V1-005` | Paired LAN read/write authorization tests. |
+| SFR-002 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-021`, `IFC-V1-017`, `FE-V1-013` | Permission/revocation/lock matrix. |
+| SFR-003 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-019`, `FE-V1-014`, `FE-V1-022` | Intent/confirmation/API/UI tests. |
+| SFR-004 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-021`, `IFC-V1-017`, `FE-V1-013` | Lock race and local unlock tests. |
+| SFR-005 | `BLK-V1-01`, `BLK-V1-02`, `BLK-V1-04` | `FND-V1-016`, `DAT-V1-020`, `IFC-V1-019`, `IFC-V1-091` | Failure cause/response/audit consistency tests. |
+| SFR-006 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-06` | `DAT-V1-020`, `DAT-V1-021`, `IFC-V1-017`, `REL-V1-005` | Sanitization/raw-storage/log inspection. |
+| SFR-007 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-021`, `IFC-V1-017` | Pair entropy/one-time/expiry/rate/revoke tests. |
+| SFR-008 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-015`, `IFC-V1-017`, `FE-V1-013` | LAN/certificate CLI, audit, and UI visibility tests. |
+| SFR-009 | `BLK-V1-04`, `BLK-V1-05` | `FND-V1-015`, `IFC-V1-019`, `FE-V1-014` | Route manifest and UI absence checks. |
+| SFR-010 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-04` | `FND-V1-016`, `INT-V1-006`, `IFC-V1-019` | Non-writable target rejection matrix. |
+| SFR-011 | `BLK-V1-01`, `BLK-V1-03` | `FND-V1-015`, `INT-V1-006` | Structured fixture inventory and real-event comparison. |
+| SFR-012 | `BLK-V1-04` | `IFC-V1-015`, `IFC-V1-017` | Host/Origin/CORS/DNS-rebinding tests. |
+| SFR-013 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-021`, `IFC-V1-017`, `IFC-V1-020` | Pair/mutation rate, concurrency, device revoke tests. |
+| SFR-014 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-021`, `IFC-V1-017` | CSRF reload/rotation/revocation browser tests. |
+| SFR-015 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-019`, `IFC-V1-021` | Filesystem/socket/lease tests. |
+| SFR-016 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-020`, `DAT-V1-021`, `IFC-V1-019` | Audit outcome/crash matrix. |
+| SFR-017 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-016`, `IFC-V1-018`, `IFC-V1-020`, `REL-V1-005` | Slow-client, overload, disconnect, heartbeat, shutdown tests. |
+| SFR-018 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-015`, `IFC-V1-017`, `REL-V1-005` | Cookie attributes and plaintext credential rejection. |

@@ -22,6 +22,7 @@ const rootFiles = [
 
 const requiredScripts = [
   "check:scaffold",
+  "check:planning",
   "typecheck",
   "lint",
   "test",

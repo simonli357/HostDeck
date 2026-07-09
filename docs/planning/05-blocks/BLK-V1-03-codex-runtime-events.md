@@ -1,0 +1,63 @@
+# BLK-V1-03 Codex Runtime, Threads, And Events
+
+Owns the selected Codex boundary: dedicated app-server process, private Unix transport, normalized adapter, real session/turn/control/approval/event behavior, TUI resume, and restart.
+
+## Outcome
+
+- HostDeck controls supported Codex through generated, version-checked app-server contracts rather than TUI text.
+- One dedicated runtime supports multiple managed threads plus a normal laptop TUI client.
+- Real events drive durable projections, attention, controls, approvals, and replay.
+- HostDeck/app-server restart and uncertain outcomes are honest and recoverable.
+- Legacy tmux runtime code is removed or explicitly deferred after the structured path passes.
+
+Requirement refs: `FR-001`, `FR-003` to `FR-009`, `FR-013` to `FR-018`, `NFR-002`, `NFR-005` to `NFR-007`, `NFR-010`, `NFR-012`, `PR-001`, `PR-006`, `PR-007`, `PR-010`, `SFR-010`, `SFR-011`.
+
+## Local Architecture
+
+| Part | Responsibility | Failure state |
+| --- | --- | --- |
+| Runtime supervisor | Start/await dedicated app-server and private socket according to foreground/service ownership. | Missing/incompatible binary, socket collision, crash loop, wrong owner/mode. |
+| IPC adapter | `ws+unix:` connection, initialize handshake, request broker, frame/message validation, reconnect. | Timeout, malformed/unknown required message, overload, disconnect/incomplete mutation. |
+| Thread service port | Start/list/read/archive and stable id mapping. | Duplicate alias, uncertain partial start, missing/archived thread. |
+| Turn/control port | Prompt/steer/interrupt/model/goal/plan/usage/compact/skills. | Unsupported capability, active-turn conflict, unknown outcome. |
+| Approval router | Pending server request registration and exact response. | Duplicate/expired/superseded/connection-generation mismatch. |
+| Event decoder | Normalize runtime notifications to HostDeck events and health. | Unknown required semantic, malformed payload, unmanaged thread. |
+
+## Required Real Proof
+
+- Schema generation/drift and supported-version startup.
+- Two threads, exact targeting, ordered event/status projection.
+- Model, goal, plan, usage, compact, and skills behavior for the pinned runtime.
+- Safe approval approve/deny/duplicate/expiry.
+- Interrupt distinct from completion/archive.
+- TUI resume of the exact thread on the same Unix socket while HostDeck is connected.
+- HostDeck-only restart, app-server crash/restart, event gap/boundary, and persisted-thread recovery.
+- Bounded request/frame/in-flight/reconnect behavior.
+
+No fake-Codex or fake-tmux test can satisfy these gates.
+
+## Task Map
+
+| Work | Tasks | Status |
+| --- | --- | --- |
+| Historical tmux/capture adapter and smoke | `INT-V1-001`, `INT-V1-010` to `INT-V1-016`, `INT-V1-090` | Retained legacy evidence; not block completion. |
+| Architecture reassessment | `INT-V1-002` | Done: `artifacts/int-v1-002-codex-integration-reassessment.md`. |
+| Version/schema/capability gate | `INT-V1-003` | Blocked by normalized contract rebaseline. |
+| Unix IPC client and request broker | `INT-V1-004` | Blocked by `INT-V1-003`. |
+| Thread lifecycle and exact TUI resume | `INT-V1-005` | Blocked by adapter and data migration. |
+| Real turn/event/control/approval vertical | `INT-V1-006` | Blocked by thread lifecycle. |
+| Supervision, multi-client, reconnect, restart | `INT-V1-007` | Blocked by real vertical. |
+| Legacy tmux disposition | `INT-V1-008` | Blocked by `INT-V1-007`. |
+| Reopened runtime hardening | `INT-V1-091` | Blocked by `INT-V1-008`. |
+
+Owning backlog: `docs/tracking/backlog/tmux-output.md` (filename retained to preserve historical links; title/scope are rebaselined).
+
+## Done Criteria
+
+- Supported Codex versions and generated schema identity are explicit and validated.
+- Real required operations and approval semantics pass with no terminal-text fallback.
+- HostDeck and TUI share the runtime/thread safely.
+- Restart/disconnect marks stale, interrupted, boundary, and incomplete outcomes truthfully.
+- App-server remains private to the user and has one process owner per mode.
+- Legacy tmux path has one explicit disposition and is absent from the selected production path.
+- `INT-V1-091` passes and the block matrix links L2/L3 current evidence.

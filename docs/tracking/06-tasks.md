@@ -1,109 +1,37 @@
 # Tasks
 
-Task dashboard and current execution queue. Detailed task cards live in `docs/tracking/backlog/`.
+Current execution queue only. Detailed cards and historical evidence live in `docs/tracking/backlog/`.
 
 ## Rules
 
-- Use concrete leaf tasks, not broad rollups, for implementation work.
-- Pick from Current Next Queue first unless the user changes priority.
-- Read only the relevant backlog group file before starting a task.
-- Respect `Blocked by` and `Blocks`; do not mark a task `ready` until its dependencies are done.
-- Update the task card that owns the changed fact; update `docs/status.md` only when handoff truth changes.
-- Store bulky command output, simulator/device screenshots, videos, and JSON evidence in `artifacts/`.
-
-## Backlog Structure
-
-| Layer | Meaning | Owner |
-| --- | --- | --- |
-| Capability block | Required V1 capability, workflow, screen group, native capability, infrastructure area, or release path | `docs/planning/05-blocks/` |
-| Program area | Stable workstream selected from the program area profiles | `docs/tracking/backlog/00-index.md` |
-| Epic | Small outcome group inside a program area | Backlog group file |
-| Leaf task | Concrete action with refs, requirements, dependencies, success criteria, and validation/evidence | Backlog group file |
-
-## Pre-Implementation Backlog Checks
-
-Before replacing the placeholder queue:
-
-- Every active-version requirement maps to a leaf task, spike, or explicit deferral.
-- Every required V1 block maps to backlog epics, leaf tasks, and completion evidence.
-- Current Next Queue uses leaf tasks only; no broad rollups like "finish UI", "add auth", or "ship release".
-- Each ready task has block refs, requirement refs, dependencies, success criteria, and validation/evidence.
-- Module-hardening, applicable UI-fidelity, and release-readiness gates exist.
-- Ambiguity is represented as a spike or blocked human decision, not hidden inside a task description.
+- Execute leaf tasks from this queue unless the user changes priority.
+- `ready` requires every task dependency done and validation known.
+- Keep completed history out of this file; completion remains in the owning backlog/artifact.
+- Do not start React screen implementation before `FE-V1-003` human visual selection.
+- Do not use tmux/fake-Codex evidence to complete the selected app-server runtime.
+- Update status only for handoff truth and run `pnpm check:planning` before completion/commit.
 
 ## Current Next Queue
 
-Create this queue after planning. Keep only unblocked or intentionally blocked next work here.
-
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FND-V1-001` Scaffold workspace and validation command skeleton | done | none | First implementation leaf completed; all later packages and validation commands now have a workspace base. |
-| 2 | `FND-V1-002` Shared TypeScript/lint/test conventions | done | none | Establishes repo-wide engineering guardrails before core contracts. |
-| 3 | `FND-V1-003` Core session model | done | none | Contracts, storage, tmux, API, and UI need stable session states first. |
-| 4 | `FND-V1-005` Shared API/CLI error envelope | done | none | Route, CLI, storage, and UI failures need one bounded error contract. |
-| 5 | `FND-V1-004` Command intents and write eligibility | done | none | Write safety and slash controls depend on this headless rule set. |
-| 6 | `FND-V1-006` API and stream contract schemas | done | none | API and stream routes now have runtime contract schemas and contract tests. |
-| 7 | `FND-V1-012` Storage/config/auth/audit/retention contract schemas | done | none | Storage and safety contracts now have runtime schemas and contract tests. |
-| 8 | `FND-V1-013` UI fixture and view-model contract schemas | done | none | UI state contracts now have runtime schemas and contract tests. |
-| 9 | `FND-V1-007` Deterministic fake Codex/session/host fixtures | done | none | Fixture inventory now covers required Codex-like output categories and fake session/host/UI states. |
-| 10 | `FND-V1-008` Conservative status/attention classifier tests | done | none | Classifier covers every required fixture category and keeps unknown output unknown. |
-| 11 | `FND-V1-009` Cross-package contract compatibility tests | done | none | API, storage, audit, and UI fixture contract compatibility is now tested. |
-| 12 | `FND-V1-010` Foundation production-hardening pass | done | none | Hardening tightened cross-field contracts and classifier boundaries before downstream modules consume foundation packages. |
-| 13 | `FND-V1-011` Foundation completion evidence update | done | none | `BLK-V1-01` completion evidence is recorded and downstream ready tasks are surfaced. |
-| 14 | `DAT-V1-001` SQLite driver and migration spike | done | none | `better-sqlite3` and a first-party migration runner were selected in `DEC-014`. |
-| 15 | `DAT-V1-002` Dashboard token transport spike | done | none | `DEC-015` chose host-only `HttpOnly` cookie token transport plus CSRF write headers. |
-| 16 | `DAT-V1-003` Output and audit retention caps spike | done | none | `DEC-016` chose output/audit caps, cleanup timing, and replay/audit boundary semantics. |
-| 17 | `DAT-V1-010` SQLite migration runner and base schema | done | none | Base storage schema and migration runner are implemented with migration failure tests. |
-| 18 | `DAT-V1-011` Settings/config repository | done | none | Settings repository now persists safe defaults, lock/LAN state, state dir, port, retention values, and invalid-startup rejection. |
-| 19 | `DAT-V1-012` Session registry and metadata repositories | done | none | Session and metadata repositories now persist registry state and validate failed/reload cases. |
-| 20 | `DAT-V1-013` Auth devices and pairing-code repositories | done | none | Auth persistence now stores only hashed pairing/device/CSRF secrets and rejects expired, used, revoked, read-only, and CSRF-mismatched writes. |
-| 21 | `DAT-V1-014` Durable audit repository and bounded payload summaries | done | none | Audit repository now persists bounded payload summaries and required V1 action types. |
-| 22 | `DAT-V1-015` Retention cleanup and replay-boundary storage metadata | done | none | Retention repository now enforces output/audit caps and records replay/audit boundaries. |
-| 23 | `DAT-V1-017` Optional git branch metadata capture | done | none | Optional git branch capture now persists branch metadata when available and returns null when git/non-git state is unavailable. |
-| 24 | `DAT-V1-016` Storage restart-persistence tests | done | none | Cross-repository restart persistence now covers settings, session, metadata, auth, audit, output retention, and durable/ephemeral separation. |
-| 25 | `DAT-V1-090` Local state/auth/audit/config hardening | done | none | Storage-owned hardening now covers migration drift, malformed raw secrets, audit unavailability, retention boundaries, newest-output retention, restart persistence, and local state inspection. |
-| 26 | `INT-V1-010` Tmux adapter interface and fake adapter | done | none | Fake adapter interface now covers deterministic lifecycle, send, stop, attach, output, stale, and missing-target cases without real tmux/Codex. |
-| 27 | `IFC-V1-005` Pairing/token claim and security/network state API routes | done | none | Security route handlers now cover pairing claim, trust/security state, network state, dashboard lock, remote unlock rejection, LAN mutation rejection, CSRF enforcement, and revoked/expired/used/invalid pairing-code rejection. |
-| 28 | `REL-V1-001` Wire aggregate validation command names and artifact locations | done | none | Validation command wiring now distinguishes implemented commands from planned placeholders, and unavailable commands fail loudly with future owner task IDs. |
-| 29 | `INT-V1-001` Prototype tmux output capture with fake Codex output | done | none | `DEC-017` selects live `pipe-pane` plus bounded `capture-pane` startup/restart recovery for V1 output ingestion. |
-| 30 | `INT-V1-011` Real tmux target naming, lookup, and list/reconcile primitives | done | none | Real HostDeck-only tmux target naming, lookup, list, and reconcile primitives are implemented and validated with isolated real tmux tests. |
-| 31 | `INT-V1-012` Managed Codex session start with cwd validation and partial-failure cleanup | done | none | Real tmux managed start/list/get behavior is implemented with cwd/command preflight, duplicate checks, launch verification, and partial cleanup. |
-| 32 | `INT-V1-013` Send, stop, and attach metadata operations | done | none | Real send, stop, and attach metadata operations target exact HostDeck tmux panes and fail loudly for missing/stale targets. |
-| 33 | `INT-V1-014` Output reader, cursor assignment, storage append, and replay-boundary handoff | done | none | Live pipe capture, bounded capture reads, storage append, replay-boundary mapping, and reader failure state are implemented. |
-| 34 | `INT-V1-015` Restart reconciliation between durable registry and live tmux targets | done | none | Restart reconciliation updates live durable sessions, marks missing ones stale, ignores stopped records, and reports unmanaged HostDeck-looking targets without import. |
-| 35 | `INT-V1-016` Real Ubuntu tmux smoke path for managed sessions | done | none | Real smoke now exercises start, attach metadata, send targeting, stop, output read, SQLite output drain, restart reconciliation, output-reader restart hook, and stale target behavior. |
-| 36 | `INT-V1-090` Tmux lifecycle/output hardening | done | none | Tmux/output hardening now covers bounded output suffix continuity, restart reader-start failures, invalid replay, append failure state, repeated lifecycle cleanup, and real tmux smoke. |
-| 37 | `IFC-V1-001` `codexdeck serve` startup sequence and host readiness checks | done | none | Startup readiness now validates state dir, storage migrations, settings/bind policy, tmux discovery, registry reconciliation, and output-reader startup before returning ready status. |
-| 38 | `IFC-V1-002` Host status, sessions list/detail, and output-read route contracts | done | none | Headless read route handlers now validate host status, attention-sorted sessions, session detail, output replay, and typed read failures. |
-| 39 | `IFC-V1-003` One-session stream endpoint with reconnect and replay boundary behavior | done | none | Headless stream route handlers now validate one-session auth, ordered replay, reconnect boundaries, live-source identity, and typed stream failures. |
-| 40 | `IFC-V1-004` Prompt, slash, stop, and raw-input write pipeline ordering | done | none | Headless write route handlers now enforce schema, auth/CSRF, lock, lifecycle, slash, raw confirmation, audit preflight, tmux dispatch, and typed failures. |
-| 41 | `IFC-V1-010` API route and stream contract tests | done | none | Aggregate API route contract manifest now covers 17 current V1 routes with method, auth mode, request/response/stream schemas, route error body schema, and typed error assertions. |
-| 42 | `IFC-V1-006` CLI command shell, API client, config loading, error rendering, and exit-code families | done | none | CLI core shell, API client, config loading, stable exit-code families, and daemon/API error rendering are implemented and contract-tested. |
-| 43 | `IFC-V1-011` Localhost/LAN config and network smoke coverage | done | none | Startup now validates bind availability, fails duplicate ports before ready, and real listener smoke covers localhost plus LAN on/off persistence. |
-| 44 | `IFC-V1-007` CLI session commands: `start`, `list`, `send`, `attach`, `stop`, and status display | done | none | CLI session commands, session-start API contract/handler, local-admin CLI writes, exact target resolution, stale/non-running failures, and fake/real tmux smoke evidence are complete. Evidence: `artifacts/ifc-v1-007-cli-session-commands.md`. |
-| 45 | `IFC-V1-008` CLI pairing, lock, unlock, and LAN enable/disable commands | done | none | CLI local admin pairing, lock/unlock, and LAN enable/disable commands are implemented with audit/state inspection evidence. Evidence: `artifacts/ifc-v1-008-cli-admin-commands.md`. |
-| 46 | `IFC-V1-012` Foreground and long-running service-mode smoke behavior | done | none | Foreground service startup, status, stop/unavailable, and restart smoke is implemented and evidenced. Evidence: `artifacts/ifc-v1-012-service-mode-smoke.md`. |
-| 47 | `IFC-V1-013` Add CLI command contract tests | done | none | Full V1 CLI command matrix coverage is implemented and evidenced. Evidence: `artifacts/ifc-v1-013-cli-command-contracts.md`. |
-| 48 | `IFC-V1-014` Add write rejection and failure-path integration tests | done | none | Write rejection/failure-path integration coverage is implemented and evidenced. Evidence: `artifacts/ifc-v1-014-write-rejection-integration.md`. |
-| 49 | `IFC-V1-090` Harden API/CLI startup, write path, service controls, LAN behavior, and failure surfaces | done | none | API/CLI hardening now registers the real foreground HTTP route families, enforces loopback local-admin plus browser cookie/CSRF boundaries, proves CLI start/list/send/stop through the service, and records evidence in `artifacts/ifc-v1-090-api-cli-hardening.md`. |
-| 50 | `REL-V1-002` Update developer guide setup after runtime/service facts are validated | done | none | Developer guide setup/service docs now reflect validated runtime/package manager/tool versions, state/config defaults, foreground service behavior, known release gaps, and `artifacts/rel-v1-002-developer-guide.md`. |
-| 51 | `REL-V1-003` Update command reference after CLI commands are runnable | done | none | Command reference now contains only verified runnable setup/validation commands plus explicit release gaps for unavailable CLI/web/E2E/build/local-smoke commands. Evidence: `artifacts/rel-v1-003-command-reference.md`. |
-| 52 | `FE-V1-001` Build UI state fixtures and view-model helpers for every required dashboard state | done | none | Dashboard view-model helpers, required state fixture inventory, and real `pnpm test:web` coverage are complete. Evidence: `artifacts/fe-v1-001-ui-state-fixtures.md`. |
-| 53 | `FE-V1-002` Generate two image-based visual direction/mockup sets from approved state coverage | done | none | Two image-generated options are stored with supporting notes. Evidence: `artifacts/fe-v1-002-visual-direction-mockups.md`. |
-| 54 | `FE-V1-003` Record human-selected visual direction and implementation targets | blocked | human selection | Option A and Option B are generated; UI implementation waits for the human to select one and approve any noted drift. |
+| 1 | `REL-V1-011` Audit and rebaseline the complete V1 system | in_progress | none | Corrects product, architecture, security, mobile UX, block, task, and release truth before further implementation. |
 
-## Current Blocked Gates
+## Intentional Blockers
 
-| Gate | Owning leaf task(s) | Requires | Blocker |
+| Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
-| Clean release tmux setup | `REL-V1-006` | clean Ubuntu install/run path | User-local tmux smoke now passes on Ubuntu 24.04.4 LTS with `tmux 3.4`; clean release setup still needs documented install/run/service smoke evidence. |
-| UI visual direction | `FE-V1-003` | human acceptance | Option A and Option B mockups are generated; UI implementation waits for human selection in `FE-V1-003`. |
-| Release readiness | `REL-V1-005` to `REL-V1-010` | validation artifacts and human acceptance | Release tasks wait for module hardening, docs, smoke evidence, and go/no-go review. |
+| Selected runtime contracts | `FND-V1-015` | Current rebaseline completion | Storage/adapter/API state implementation. |
+| LAN security | `IFC-V1-015` | Real phone certificate-enrollment proof | Auth lifecycle, pairing UI, security/release review. |
+| Real Codex semantics | `INT-V1-006` | Contracts, adapter, mapping, and thread lifecycle | Production operation API, mobile state matrix, approvals. |
+| Mobile visual direction | Reopened `FE-V1-002`, `FE-V1-003` | Real state matrix, two replacement options, human selection | React screen implementation. |
+| Release | `REL-V1-010` | All module hardening, clean package/service/phone/security evidence, human acceptance | V1 release and V2 planning. |
 
 ## Status Vocabulary
 
-- `ready`: all dependencies are done, requirements are available, and validation is known.
-- `todo`: planned but waiting for earlier implementation or sequencing.
-- `blocked`: waiting on physical devices, app-store accounts, certificates, permissions, human acceptance, legal/privacy review, or another task.
-- `done`: validation/evidence exists in the owning backlog file or linked artifact.
-- `deferred`: not in the current release; keep visible for roadmap planning.
+- `ready`: all task dependencies are done and scope/evidence are executable.
+- `todo`: defined and ordered behind unfinished task dependencies.
+- `blocked`: requires human choice, physical device/account/certificate, or external state beyond task dependencies.
+- `in_progress`: active work.
+- `done`: current wording and evidence are complete.
+- `deferred`: explicitly outside V1.

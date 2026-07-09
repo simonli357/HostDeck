@@ -1,78 +1,67 @@
-# BLK-V1-05 Web Dashboard UX
+# BLK-V1-05 Mobile Dashboard UX
 
-Owns the phone-responsive browser dashboard, state coverage, approved visual direction, screen groups, and UI fidelity evidence.
+Owns the phone-first dashboard, visual gate, structured controls/approvals, responsive expansion, accessibility, and fidelity evidence.
 
-## Summary
+## Outcome
 
-- Goal: Deliver a browser-based Mission Control and Session Detail experience that consumes typed host state and safely controls one selected Codex session at a time.
-- Required for V1: Yes.
-- User/workflow value: The user can monitor many laptop Codex sessions from a phone and send focused prompts or slash commands without using a raw terminal as the primary UI.
-- In scope: Mission Control, Session Detail, prompt composer, primary/utility slash commands, pairing/trust state, host safety state, disconnected/stale/error states, advanced raw fallback, responsive layout, accessibility, approved mockups.
-- Out / deferred: Native Android/iOS app, push notifications, voice input, full terminal/editor replacement, bulk writes, team/multi-user UI.
-- Requirement refs: `FR-005` to `FR-010`, `FR-015`, `IR-001` to `IR-009`, `NFR-003`, `NFR-004`, `PR-005`, `SFR-001` to `SFR-003`, `SFR-005`, `SFR-009`, `SFR-010`.
-- UX refs: `UX-001` to `UX-009`.
-- Decision refs: `DEC-003`, `DEC-004`, `DEC-005`, `DEC-009`, `DEC-010`, `DEC-011`, `DEC-015`.
+- Mission Control is the default phone route and surfaces the highest-attention session immediately.
+- Session Detail is conversation/event-first with a sticky prompt composer, `/model`, `/goal`, `/plan`, utilities, and inline structured approvals.
+- Trust, lock, HTTPS/certificate, incompatibility, stale/boundary, and failure states are visible before action.
+- No phone raw-shell input, terminal emulator, editor, file tree, or desktop-only required workflow exists.
+- Approved mockups, implementation screenshots/diffs, accessibility checks, and a real-phone pass are recorded.
 
-## Local Architecture
+Requirement refs: `FR-002`, `FR-005` to `FR-010`, `FR-016`, `NFR-004`, `IR-001` to `IR-012`, `PR-005`, `SFR-001` to `SFR-004`, `SFR-009`, `SFR-018`.
 
-| Part | Responsibility | Inputs | Outputs | Failure states |
-| --- | --- | --- | --- | --- |
-| Web app shell | Load host/session state, route between Mission Control and Session Detail, handle disconnected states. | API contracts, UI fixtures, host status. | Responsive browser UI with bounded state. | Loading failure, disconnected daemon, permission denied, agent error. |
-| Mission Control | Attention-sorted session overview. | Session list API, status/attention model. | Cards with name, cwd/project cue, branch when available, status, attention, last activity, recent output. | Empty list, all idle, mixed attention, unknown/stale, LAN disabled, locked. |
-| Session Detail | Recent Codex output, prompt composer, slash controls, stop action, raw fallback entry. | Session detail/output/stream/write APIs. | One-session control surface and output view. | Session not found, stale/stopped/crashed/unknown, output boundary, stream reconnecting. |
-| Trust and safety UI | Reflect pairing/token, read-only/untrusted, locked, LAN state, advanced raw mode. | Security/network API state, token transport from `DEC-015`. | Disabled or enabled controls before write attempts; CSRF token is used only for same-origin writes. | Expired token, revoked client, locked host, missing CSRF token, remote unlock rejected, raw input not confirmed. |
-| Visual system | Approved generated mockups, state matrix, design-system mapping, screenshots. | `SPK-UX-001`, UX spec, test plan state matrix. | Implementation targets and drift evidence. | Missing mockups, unselected direction, responsive overlap, inaccessible controls. |
+## Screen Groups
 
-## Contracts And Data
+| Group | Required behavior |
+| --- | --- |
+| Mission Control | Host/access strip, attention ordering, compact stable session rows, empty/offline/degraded states. |
+| Session Detail | Structured feed, status, composer, primary controls, utilities, boundaries, interrupt/archive/resume actions. |
+| Inline approval | Scope/reason/action, approve/deny, confirmation policy, exact pending/resolved/expired state. |
+| Model/goal/plan/utilities | Runtime-sourced current values and capability-aware loading/unsupported/conflict/failure states. |
+| Host/access | Pairing, permission, CSRF reload state, lock, HTTPS/LAN/certificate, Codex compatibility, stream health. |
+| Event details | Bounded read-only diagnostic projection with redaction/truncation/boundary. |
 
-| Contract/data item | Owner | Rules | Validation |
-| --- | --- | --- | --- |
-| Session card view model | `@hostdeck/contracts` schema; later web implementation | Attention sort first; shows required metadata and recent output summary. | Contract tests now; later component tests with mixed fixture statuses. |
-| Session detail view model | `@hostdeck/contracts` schema; later web implementation | Recent Codex output and safe prompt/slash controls precede raw terminal fallback. | Contract tests now; later component tests and screenshots. |
-| Write control state | `@hostdeck/contracts` and core write rules; later web implementation | Controls disabled for untrusted/read-only/locked/stale/stopped/crashed/unknown states before write attempt. | Contract tests now; later UI state tests and API integration tests. |
-| Raw fallback state | `@hostdeck/contracts` and server contracts; later web implementation | Raw input hidden by default and requires advanced mode plus confirmation. | Contract tests now; later UI/API tests. |
-| Mockup assets | `assets/ui-concepts/` | Two options generated, selected by human, stored in repo before UI implementation. | Generated options in `assets/ui-concepts/`; selection remains pending in `FE-V1-003`. |
+## Visual Gate
 
-## Implementation Blueprint
+- Existing Option A/B boards are rejected evidence, not targets.
+- Rebased state fixtures and interaction contracts complete first.
+- Two new image-generated directions each show required phone states plus desktop expansion and differ structurally, not only by palette.
+- Mockup review checks 360, 390, 412, 768, and 1280 widths before human selection.
+- Human `FE-V1-003` selects exact assets before React screen implementation.
 
-| Slice | Goal | Epics/tasks | Dependencies | Exit evidence |
-| --- | --- | --- | --- | --- |
-| Foundation | Build UI state fixtures and a fake dashboard shell against typed contracts. | Backlog must create leaf tasks for web package shell, fixture states, Mission Control components, Session Detail components, composer/slash controls, trust state, disconnected/error states. | `BLK-V1-01`, fake API from `BLK-V1-04`. | Component/state test outputs. |
-| Hardening | Prove responsive behavior, disabled write controls, failure states, accessibility, and UI fidelity. | Backlog must create hardening tasks for state matrix coverage, phone/desktop screenshots, accessibility pass, raw fallback gating, visual drift review. | `SPK-UX-001`, implemented screen groups. | Screenshot/fidelity artifact and UI-fidelity evidence. |
-| Release readiness | Ensure dashboard behavior is documented and supportable through local service paths. | Backlog must create release tasks through `BLK-V1-06` for user guide and troubleshooting when behavior exists. | Stable API/CLI and selected mockups. | User guide/support evidence and release checklist. |
+## Task Map
 
-## Validation Plan
-
-| Layer | What to prove | Evidence |
+| Work | Tasks | Status |
 | --- | --- | --- |
-| Unit | View-model helpers, sort order, disabled-control logic, raw mode gating. | Planned `pnpm test:web` or unit output. |
-| Integration | Web components against fake API fixtures for trust, lock, stale, disconnected, output boundary, and write errors. | Component/integration test output. |
-| System / E2E | Browser dashboard can read live/fake sessions, stream updates, send one-session writes, and recover from disconnect. | Planned local E2E artifact. |
-| Manual / device | Approved mockup comparison plus phone/desktop screenshots for major screen states. | UI-fidelity screenshot artifact. |
+| Historical view-model/state helpers | `FE-V1-001` | Retained; requires structured mobile rebaseline. |
+| Mobile structured state/interaction rebaseline | `FE-V1-004` | Blocked by contracts and real event semantics. |
+| Replacement visual directions | Reopened `FE-V1-002` | Blocked by `FE-V1-004`. |
+| Human selection | `FE-V1-003` | Blocked by replacement options. |
+| App shell/API client/Mission Control/Session Detail | `FE-V1-010` to `FE-V1-012`, `FE-V1-019` | Blocked by selection and production API. |
+| Trust/diagnostics/status states | `FE-V1-013` to `FE-V1-015` | Blocked by production security/runtime contracts. |
+| Composer and structured controls | `FE-V1-020`, `FE-V1-021` | Blocked by selected adapter API. |
+| Inline approvals | `FE-V1-022` | Blocked by real approval vertical/API. |
+| Responsive/accessibility/fidelity/copy hardening | `FE-V1-016` to `FE-V1-018`, `FE-V1-090` | Blocked by implemented screens. |
 
-## Backlog Links
+Owning backlog: `docs/tracking/backlog/web-dashboard.md`.
 
-| Epic | Leaf tasks | Status | Evidence |
-| --- | --- | --- | --- |
-| UI state coverage and visual direction | `FE-V1-001` to `FE-V1-003` | In progress | `artifacts/fe-v1-001-ui-state-fixtures.md`, `artifacts/fe-v1-002-visual-direction-mockups.md`; human selection pending in `FE-V1-003` |
-| Dashboard screen groups | `FE-V1-010` to `FE-V1-015`, `FE-V1-019` to `FE-V1-021` | Planned | `docs/tracking/backlog/web-dashboard.md` |
-| Responsive, accessibility, and fidelity | `FE-V1-016` to `FE-V1-018`, `FE-V1-090` | Planned | `docs/tracking/backlog/web-dashboard.md` |
+## Validation
+
+| Level | Evidence |
+| --- | --- |
+| L1 | View-model, component, accessibility semantics, disabled/risky control, long-content states. |
+| L2/L3 | Browser API/SSE flow, replay, approval races, keyboard/safe-area behavior, screenshots/diffs. |
+| L4 | Real phone HTTPS enrollment, pair/reload, scan, prompt, approval, lock, disconnect recovery. |
 
 ## Done Criteria
 
-- Mission Control and Session Detail consume typed API/contracts rather than parsing terminal output directly.
-- All required UI states in the test-plan matrix have component/state coverage.
-- Prompt and slash writes target exactly one selected session.
-- Write controls are disabled before attempts when trust, lock, or session state forbids writes.
-- Raw input remains hidden by default and requires advanced confirmation.
-- Two visual directions are generated, one is selected by the human, and approved assets are stored in repo.
-- Phone and desktop screenshots prove responsive layout and visual drift.
-- Block evidence is recorded in this file, owning tasks, or artifacts.
-- V1 completion matrix in `00-index.md` is updated.
-
-## Open Questions / Spikes
-
-| ID | Question | Owner | Exit evidence |
-| --- | --- | --- | --- |
-| `SPK-ARCH-003` | What token transport should dashboard pairing use? | Resolved by `DEC-015` / `DAT-V1-002` | `artifacts/dat-v1-002-token-transport-spike.md`, dashboard trust-state model, and API contract update. |
-| `SPK-UX-001` | What visual direction and mockup set should UI implementation target? | UI-fidelity task | Assets under `assets/ui-concepts/`, selected direction decision, screenshot targets. |
+- Every UX flow in `03-ux-spec.md` completes at 360 x 800 without horizontal scroll or desktop dependency.
+- Approved visual targets and design-system mapping are recorded.
+- UI invokes structured controls and never blind slash/terminal input.
+- Approval duplicate/expiry/reconnect and trust/certificate/incompatibility states are truthful.
+- Playwright screenshots cover all reference viewports and required states with no incoherent overlap/clipping.
+- Keyboard, focus, screen reader, contrast, reduced motion, touch, zoom, and reflow checks pass.
+- Real phone evidence passes and visible drift is fixed/approved.
+- `FE-V1-090` passes and block matrix marks complete.

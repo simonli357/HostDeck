@@ -1,66 +1,49 @@
-# V1 Blocks
+# V1 Capability Blocks
 
-Owns the active-version capability block map and V1 completion matrix. Blocks are the middle layer between global planning docs and backlog leaf tasks.
-
-Use blocks for meaningful V1 capabilities, workflows, screen groups, native capabilities, infrastructure areas, or release paths. Do not create a separate block for every epic.
+Owns the required V1 capability map and completion truth between global planning and leaf tasks.
 
 ## Rules
 
-- Block IDs use `BLK-V1-01`, `BLK-V1-02`, and so on.
-- The global planning docs own cross-block scope, architecture, UX contracts, validation strategy, and release truth.
-- Block specs own local architecture, detailed design, implementation sequence, validation, epics, and task links.
-- Every active-version requirement must map to a block, explicit spike, or explicit release deferral.
-- Every backlog group and epic should reference one or more block IDs.
-- V1 is not complete until every required block has completion evidence.
+- A block is complete only when its required production outcome and evidence level are met.
+- Historical task evidence remains linked after a rebaseline but does not complete a changed outcome.
+- Every requirement maps to at least one block and executable leaf task in `02-requirements.md`.
+- Every block has foundation, integration, hardening, and release evidence appropriate to its risk.
+- Completion status is one of `reopened`, `in progress`, `blocked`, or `complete`; qualified phrases such as "complete for owned scope" are not release truth.
 
 ## Block Map
 
-| Block ID | Block | Required for V1? | Spec | Requirements | Depends on | Backlog groups | Status |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| BLK-V1-01 | Contracts, core model, and fixtures | Yes | `BLK-V1-01-contracts-core-fixtures.md` | `FR-002`, `FR-006` to `FR-009`, `FR-015`, `NFR-003`, `NFR-005` to `NFR-007`, `SFR-005`, `SFR-011` | Approved requirements, architecture, and test plan | `docs/tracking/backlog/foundation.md` | Complete |
-| BLK-V1-02 | Local state, auth, audit, and config | Yes | `BLK-V1-02-local-state-auth-audit.md` | `DR-001` to `DR-010`, `SFR-001`, `SFR-002`, `SFR-004`, `SFR-006` to `SFR-008`, `PR-009` | `BLK-V1-01`; `SPK-ARCH-002` resolved by `DEC-014`, `SPK-ARCH-003` resolved by `DEC-015`, `SPK-ARCH-004` resolved by `DEC-016` | `docs/tracking/backlog/local-state-auth-audit.md` | Complete for storage-owned scope |
-| BLK-V1-03 | Tmux session lifecycle and output ingestion | Yes | `BLK-V1-03-tmux-output.md` | `FR-001`, `FR-003` to `FR-005`, `FR-013`, `FR-014`, `NFR-002`, `PR-001`, `PR-006`, `SFR-010` | `BLK-V1-01`, `BLK-V1-02`, `SPK-ARCH-001`; `SPK-ARCH-004` resolved by `DEC-016` | `docs/tracking/backlog/tmux-output.md` | Complete for tmux-owned scope |
-| BLK-V1-04 | Local API and CLI control plane | Yes | `BLK-V1-04-api-cli-control-plane.md` | `FR-006` to `FR-008`, `FR-011`, `FR-012`, `FR-015`, `PR-002` to `PR-004`, `PR-007`, `PR-008`, `SFR-003`, `SFR-005` | `BLK-V1-01` to `BLK-V1-03`; `SPK-ARCH-003` resolved by `DEC-015` | `docs/tracking/backlog/api-cli-control-plane.md` | API/CLI hardening done; dashboard serving remains planned |
-| BLK-V1-05 | Web dashboard UX | Yes | `BLK-V1-05-web-dashboard.md` | `FR-005` to `FR-010`, `IR-001` to `IR-009`, `PR-005`, `SFR-001` to `SFR-003`, `SFR-009` | `BLK-V1-01`, `BLK-V1-04`, `SPK-UX-001`; `SPK-ARCH-003` resolved by `DEC-015` | `docs/tracking/backlog/web-dashboard.md` | In progress |
-| BLK-V1-06 | Hardening, setup, and release readiness | Yes | `BLK-V1-06-hardening-release.md` | `NFR-001` to `NFR-009`, `PR-001` to `PR-009`, release gates | `BLK-V1-01` to `BLK-V1-05` | `docs/tracking/backlog/hardening-release.md` | Backlog mapped |
+| Block | Required outcome | Primary requirements | Depends on | Backlog | Status |
+| --- | --- | --- | --- | --- | --- |
+| `BLK-V1-01` Contracts, core, fixtures | Stable normalized HostDeck contracts for app-server threads/turns/events/approvals/controls, strict invariants, deterministic fixtures, and planning integrity validation. | `FR-002`, `FR-006` to `FR-009`, `FR-012` to `FR-017`, `NFR-003`, `NFR-005` to `NFR-007`, `SFR-005`, `SFR-010`, `SFR-011` | Rebaselined planning | `foundation.md` | Reopened |
+| `BLK-V1-02` Local state, auth, audit | Durable app-server mappings/projections, compatibility state, production retention, CSRF/device lifecycle, audit outcomes, permissions, and one-daemon lease. | `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-013`, `SFR-006`, `SFR-007`, `SFR-014` to `SFR-016` | `BLK-V1-01` | `local-state-auth-audit.md` | Reopened |
+| `BLK-V1-03` Codex runtime and events | Private app-server runtime, version/schema gate, IPC adapter, real thread/turn/control/approval/events, TUI resume, restart/multi-client behavior, and legacy tmux disposition. | `FR-001`, `FR-003` to `FR-009`, `FR-013` to `FR-018`, `NFR-002`, `NFR-012`, `PR-001`, `PR-006`, `PR-010` | `BLK-V1-01`, storage mapping work | `tmux-output.md` | In progress |
+| `BLK-V1-04` Host API, security, CLI | Fastify API/SSE/static production path, HTTPS LAN, authorization/CSRF/rate/origin controls, runtime orchestration/health, runnable CLI/build, and user services. | `FR-011`, `FR-012`, `FR-018`, `NFR-001`, `NFR-009` to `NFR-011`, `PR-002` to `PR-004`, `PR-007` to `PR-012`, `SFR-001` to `SFR-008`, `SFR-012` to `SFR-018` | `BLK-V1-01` to `BLK-V1-03` | `api-cli-control-plane.md` | Reopened |
+| `BLK-V1-05` Mobile dashboard | Approved mobile-first design and implemented Mission Control, Session Detail, structured controls/approvals, trust/failure states, accessibility, screenshots, and real-phone evidence. | `FR-002`, `FR-005` to `FR-010`, `FR-016`, `IR-001` to `IR-012`, `NFR-004`, `PR-005` | Stable contracts/API plus visual selection | `web-dashboard.md` | Reopened |
+| `BLK-V1-06` Hardening and release | Clean Ubuntu package/service install, security/privacy, browser/phone/real-Codex/aggregate validation, support docs, completion matrix, and explicit go/no-go. | All NFR/platform/safety release gates | `BLK-V1-01` to `BLK-V1-05` | `hardening-release.md` | In progress |
 
-## V1 Completion Matrix
+## Completion Matrix
 
-| Block ID | Required outcome | Task coverage | Automated evidence | Manual/device evidence | Release impact | Status |
-| --- | --- | --- | --- | --- | --- | --- |
-| BLK-V1-01 | Stable typed contracts, core state model, errors, write eligibility, and Codex-like fixtures exist before adapters/UI. | `FND-V1-001` to `FND-V1-013` in `foundation.md`. | `artifacts/fnd-v1-001-scaffold.md` through `artifacts/fnd-v1-010-foundation-hardening.md`; completion rollup in `artifacts/fnd-v1-011-foundation-completion.md`. | Fixture review in `artifacts/fnd-v1-010-foundation-hardening.md` confirms unknown/failure states are not treated as healthy success. | Downstream storage, tmux fake-adapter, API/CLI, and UI state tasks can consume foundation contracts. | Complete on 2026-07-08; product workflow behavior remains unproven until later blocks complete |
-| BLK-V1-02 | Durable local state, pairing/token trust, lock/LAN settings, audit records, retention, config rules, and optional branch metadata work locally. | `DAT-V1-001` to `DAT-V1-017`, `DAT-V1-090` in `local-state-auth-audit.md`. | `DAT-V1-001` spike evidence in `artifacts/dat-v1-001-sqlite-driver-spike.md`; `DAT-V1-002` token transport evidence in `artifacts/dat-v1-002-token-transport-spike.md`; `DAT-V1-003` retention evidence in `artifacts/dat-v1-003-retention-caps-spike.md`; `DAT-V1-010` migration/base-schema evidence in `artifacts/dat-v1-010-sqlite-migration-runner.md`; `DAT-V1-011` settings repository evidence in `artifacts/dat-v1-011-settings-repository.md`; `DAT-V1-012` session repository evidence in `artifacts/dat-v1-012-session-repositories.md`; `DAT-V1-013` auth repository evidence in `artifacts/dat-v1-013-auth-repositories.md`; `DAT-V1-014` audit repository evidence in `artifacts/dat-v1-014-audit-repository.md`; `DAT-V1-015` retention repository evidence in `artifacts/dat-v1-015-retention-repository.md`; `DAT-V1-016` restart persistence evidence in `artifacts/dat-v1-016-restart-persistence.md`; `DAT-V1-017` branch metadata evidence in `artifacts/dat-v1-017-branch-metadata.md`; `DAT-V1-090` hardening evidence in `artifacts/dat-v1-090-storage-hardening.md`. | Token/code/CSRF row inspection exists in `DAT-V1-013`; bounded audit payload tests exist in `DAT-V1-014`; retention boundary tests exist in `DAT-V1-015`; restart persistence tests exist in `DAT-V1-016`; git/non-git branch metadata tests exist in `DAT-V1-017`; local raw-secret/audit-payload inspection exists in `DAT-V1-090`; visible lock/LAN release inspection remains planned. | Enables safe writes, restart truth, and release privacy posture. | Complete for storage-owned scope on 2026-07-08; API write preflight and release privacy docs remain in later blocks |
-| BLK-V1-03 | HostDeck can manage tmux-backed Codex sessions, ingest ordered output, reconnect streams, attach locally, and reconcile stale sessions. | `INT-V1-001`, `INT-V1-010` to `INT-V1-016`, `INT-V1-090` in `tmux-output.md`. | Output capture spike evidence in `artifacts/int-v1-001-tmux-capture-spike.md`; fake adapter evidence in `artifacts/int-v1-010-fake-tmux-adapter.md`; real target primitive evidence in `artifacts/int-v1-011-real-tmux-targets.md`; real managed start evidence in `artifacts/int-v1-012-real-tmux-start.md`; real send/stop/attach evidence in `artifacts/int-v1-013-real-tmux-operations.md`; output reader evidence in `artifacts/int-v1-014-output-reader.md`; restart reconciliation evidence in `artifacts/int-v1-015-restart-reconciliation.md`; real smoke evidence in `artifacts/int-v1-016-real-tmux-smoke.md`; hardening evidence in `artifacts/int-v1-090-tmux-output-hardening.md`. | User-local tmux smoke for output capture exists; isolated real tmux target discovery, managed-start, send, stop, attach, live pipe, output-reader, restart-reconciliation, full smoke, bounded-output continuity, repeated lifecycle cleanup, and failure-path hardening tests exist; clean release install/run/service smoke remains planned. | Enables the core host-agent workflow and real-process evidence for API/CLI and dashboard consumers. | Complete for tmux-owned scope on 2026-07-09; API stream/CLI/dashboard exposure and clean release setup remain in later blocks |
-| BLK-V1-04 | Typed local API and `codexdeck` CLI expose host status, sessions, writes, pairing state, lock/LAN state, and service modes with loud failures. | `IFC-V1-001` to `IFC-V1-014`, `IFC-V1-090` in `api-cli-control-plane.md`. | Startup readiness evidence in `artifacts/ifc-v1-001-startup-readiness.md`; read-route evidence in `artifacts/ifc-v1-002-read-routes.md`; stream-route evidence in `artifacts/ifc-v1-003-stream-routes.md`; write-route evidence in `artifacts/ifc-v1-004-write-routes.md`; pairing/security route evidence in `artifacts/ifc-v1-005-security-routes.md`; CLI shell/API client evidence in `artifacts/ifc-v1-006-cli-shell.md`; CLI session command evidence in `artifacts/ifc-v1-007-cli-session-commands.md`; CLI admin command evidence in `artifacts/ifc-v1-008-cli-admin-commands.md`; aggregate route contract evidence in `artifacts/ifc-v1-010-api-route-contracts.md`; localhost/LAN network smoke evidence in `artifacts/ifc-v1-011-network-smoke.md`; foreground service smoke evidence in `artifacts/ifc-v1-012-service-mode-smoke.md`; CLI command matrix evidence in `artifacts/ifc-v1-013-cli-command-contracts.md`; write rejection integration evidence in `artifacts/ifc-v1-014-write-rejection-integration.md`; API/CLI hardening evidence in `artifacts/ifc-v1-090-api-cli-hardening.md`. | Real server/tmux smoke and CLI real-tmux smoke pass for completed session-command scope; local SQLite inspection proves CLI pairing hash-only storage and lock/LAN audit events; foreground service smoke proves host status, stop/unavailable, and restart behavior; integration tests prove write rejection/failure ordering before tmux dispatch; service hardening tests prove registered HTTP route families, browser cookie+CSRF boundaries, local-admin CLI path, same-host Origin rejection, and CLI start/list/send/stop through the foreground service. | Owns user/operator control plane and command reference updates. | In progress: API/CLI route registration and module hardening done; dashboard static serving remains planned with web work and release command/setup docs remain in `BLK-V1-06` |
-| BLK-V1-05 | Phone-responsive dashboard delivers Mission Control, Session Detail, trust/safety states, prompt/slash controls, and raw fallback against approved mockups. | `FE-V1-001` to `FE-V1-021`, `FE-V1-090` in `web-dashboard.md`. | `FE-V1-001` web state evidence in `artifacts/fe-v1-001-ui-state-fixtures.md`; `FE-V1-002` visual direction evidence in `artifacts/fe-v1-002-visual-direction-mockups.md`; later component/state tests, UI integration tests, accessibility checks, and disabled-write control tests remain planned. | Human-selected mockup comparison, phone/desktop screenshots, drift notes, failure-state inspection remain planned. | Owns visible V1 user experience and UI-fidelity release evidence. | In progress: UI state fixtures, view-model helpers, and visual direction/mockups done; human visual direction selection is next |
-| BLK-V1-06 | V1 can be installed, run, validated, documented, and judged go/no-go from a clean Ubuntu workflow. | `REL-V1-001` to `REL-V1-010`, `REL-V1-999` in `hardening-release.md`. | Validation command wiring evidence in `artifacts/rel-v1-001-validation-wiring.md`; full typecheck/lint/test/build aggregate, release smoke script, and setup checks remain planned. | Clean Ubuntu install/run, service start/stop/status, support docs review, and go/no-go checklist remain planned. | Owns release readiness, handoff truth, and known-gap visibility. | In progress: validation wiring done; release validation and handoff remain planned or blocked |
+| Block | Historical evidence retained | New blocking evidence | Minimum level | Status |
+| --- | --- | --- | --- | --- |
+| `BLK-V1-01` | `FND-V1-001` to `FND-V1-013`, prior foundation artifacts. | `FND-V1-014` to `FND-V1-016`, `FND-V1-091`; new contract consumers pass. | L1/L2 | Reopened by app-server and mobile/security contract changes. |
+| `BLK-V1-02` | `DAT-V1-001` to `DAT-V1-017`, `DAT-V1-090`, prior storage artifacts. | `DAT-V1-018` to `DAT-V1-021`, `DAT-V1-091`; production invocation and permission/lease proof. | L1/L2/L3 inspection | Reopened by mapping/auth/audit/retention ownership changes. |
+| `BLK-V1-03` | Tmux artifacts `INT-V1-001`, `INT-V1-010` to `INT-V1-016`, `INT-V1-090`. | `INT-V1-002` to `INT-V1-008`, `INT-V1-091`; real Codex vertical and TUI/restart evidence. | L2/L3 | In progress; architecture spike done, implementation absent. |
+| `BLK-V1-04` | `IFC-V1-001` to `IFC-V1-014`, `IFC-V1-090`, prior headless/custom-listener artifacts. | `IFC-V1-015` to `IFC-V1-021`, `IFC-V1-091`; production Fastify/HTTPS/SSE/package/service proof. | L2/L3/L4 | Reopened; current CLI is source-only and LAN is unsafe. |
+| `BLK-V1-05` | `FE-V1-001` fixture helpers and rejected `FE-V1-002` boards. | `FE-V1-004`, reopened `FE-V1-002`, human `FE-V1-003`, implementation `FE-V1-010` to `FE-V1-022`, `FE-V1-090`. | L1/L3/L4 | Reopened; no approved target or implemented UI. |
+| `BLK-V1-06` | `REL-V1-001` to `REL-V1-003` and baseline audit commands. | `REL-V1-011`, all module gates, clean install/phone/security/aggregate/go-no-go tasks. | L4 | In progress; release no-go. |
 
-## Requirement Coverage
+## Cross-Block Gates
 
-| Requirement group | Coverage route |
-| --- | --- |
-| `FR-001` to `FR-004`, `FR-013`, `FR-014` session lifecycle/output/restart | `BLK-V1-03` with API/CLI exposure in `BLK-V1-04` |
-| `FR-005` output refresh/streaming | Output ownership in `BLK-V1-03`, API stream in `BLK-V1-04`, dashboard rendering in `BLK-V1-05` |
-| `FR-006` to `FR-008`, `FR-015` prompt/slash writes | Core write eligibility in `BLK-V1-01`, API/CLI write path in `BLK-V1-04`, dashboard controls in `BLK-V1-05` |
-| `FR-009`, `SFR-011` status and fixture heuristics | `BLK-V1-01`, with UI representation in `BLK-V1-05` |
-| `FR-010`, `IR-001` to `IR-009`, `PR-005` dashboard UX | `BLK-V1-05` |
-| `FR-011`, `FR-012`, `PR-002` to `PR-004`, `PR-007`, `PR-008` API/CLI/service | `BLK-V1-04`, with release docs in `BLK-V1-06` |
-| `DR-001` to `DR-010`, `SFR-001`, `SFR-002`, `SFR-004`, `SFR-006` to `SFR-008` data/auth/audit | `BLK-V1-02`, with write enforcement in `BLK-V1-04` and UI state in `BLK-V1-05` |
-| `NFR-001` to `NFR-009`, `PR-001` to `PR-009`, `SFR-003`, `SFR-005`, `SFR-009`, `SFR-010` safety/platform/failure | Distributed across blocks with aggregate proof in `BLK-V1-06` |
+| Gate | Requires | Enables |
+| --- | --- | --- |
+| Planning integrity | `REL-V1-011`, `FND-V1-014` | Reliable execution queue and traceability. |
+| Structured contract gate | `FND-V1-015`, `FND-V1-016` | Adapter/storage/API implementation. |
+| Real Codex gate | `INT-V1-003` to `INT-V1-007` | Legacy decision, production interface, mobile state/mockups. |
+| LAN security gate | `IFC-V1-015` | LAN/auth UI and release phone smoke. |
+| Visual gate | `FE-V1-004`, `FE-V1-002`, human `FE-V1-003` | React screen implementation. |
+| Module hardening | `FND-V1-091`, `DAT-V1-091`, `INT-V1-091`, `IFC-V1-091`, `FE-V1-090` | Aggregate release validation. |
+| Release gate | Security/privacy, clean install/service, real Codex, browser/phone, docs, aggregate validation | Human go/no-go. |
 
-## Backlog Decomposition Rules
+## Completion Rule
 
-- Create backlog group files that correspond to the block map rather than broad feature buckets.
-- Every epic and leaf task must reference at least one block ID and requirement ID.
-- Architecture spikes from `docs/planning/04a-implementation-blueprint.md` become leaf tasks before dependent implementation tasks.
-- `SPK-UX-001` must be represented as a blocked UI-fidelity task before UI implementation tasks.
-- Each block needs a foundation epic, at least one hardening epic, and validation evidence tasks before it can be marked complete.
-- Do not add implementation tasks that require deciding product scope, route semantics, storage policy, trust model, visual direction, or validation strategy during coding.
-
-## Coverage Checks
-
-- Every user journey and critical failure state maps to a required block.
-- Every native capability, integration, datastore, credential, platform, and store-release dependency maps to a block or explicit deferral.
-- Every mobile screen group has a block or is covered inside a larger workflow block.
-- Every block has at least one hardening task before V1 completion.
-- Every block has validation evidence before it is marked complete.
+`REL-V1-008` may mark a block complete only when this matrix links current selected-path evidence, all blocking leaf tasks are done, validation gaps are explicit and approved, and `pnpm check:planning` passes. Historical evidence alone cannot restore completion after a block is reopened.

@@ -10,6 +10,7 @@
   },
   "scripts": {
     "check:scaffold": "node scripts/check-scaffold.mjs",
+    "check:planning": "node --test scripts/check-planning.test.mjs && node scripts/check-planning.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "biome check . && node scripts/check-package-exports.mjs",
     "test": "pnpm test:unit",

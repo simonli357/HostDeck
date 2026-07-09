@@ -1,152 +1,43 @@
 # Status
 
-Current handoff only. Keep detail in owner docs or artifacts.
+Current handoff only. Detailed scope, tasks, and evidence live in owning docs/artifacts.
 
 ## Snapshot
 
-- Phase: Implementation
-- Active task: `FE-V1-003` visual direction selection, blocked on human selection
-- End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
-- UI direction: Option A dense operations console and Option B calm control room mockup boards are generated and stored; human selection in `FE-V1-003` is pending.
-- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart/smoke path/hardening, pairing/security API route foundation, validation command wiring, headless startup/readiness, headless host/session/output read route contracts, headless one-session stream route contracts, headless write pipeline route contracts, aggregate API route/stream contract tests, CLI shell/API client foundation, localhost/LAN network smoke, CLI session commands, CLI pairing/lock/LAN commands, foreground service smoke, CLI command matrix, write rejection/failure-path integration coverage, API/CLI module hardening, developer-guide setup/service docs, command reference docs, UI state coverage, and visual direction/mockups are complete; human visual direction selection is next.
-- Last validation: For `FE-V1-002`, built-in `image_gen` produced two repo-stored mockup boards, manual visual inspection checked required panels/states and V1 safety-contract drift, `identify assets/ui-concepts/option-a/dense-operations-console-board.png assets/ui-concepts/option-b/calm-control-room-board.png`, `git diff --check`, and `pnpm lint` passed.
-- Next action: Human selects Option A dense operations console or Option B calm control room for `FE-V1-003`.
-- Blockers: Clean release install/build/local smoke remain later gates; UI implementation waits for human visual direction selection.
-- Last commit: `FE-V1-002` visual direction mockups commit.
-- Last push: `origin/main` after the `FE-V1-002` commit.
+- Phase: V1 architecture and delivery rebaseline; product implementation paused.
+- Active task: `REL-V1-011` system hardening audit/rebaseline.
+- Next task after rebaseline: `FND-V1-015` normalized contract/fixture rebase.
+- Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
+- UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
+- Release state: no-go. All capability blocks affected by the new runtime/security/mobile outcome are reopened.
 
-## What Is Proven
+## Proven
 
-- Planning: every active V1 requirement has a trace row to blocks, leaf tasks, and evidence route.
-- Planning: referenced V1 task IDs resolve to defined leaf tasks.
-- Planning: the V1 backlog dependency graph has no detected task cycles.
-- Implementation: `FND-V1-001` workspace scaffold is in place with 8 package shells, pinned Node/pnpm/TypeScript versions, a passing scaffold check, and failing placeholders for later validation layers.
-- Implementation: `FND-V1-002` shared conventions are in place with Biome linting, package export checks, Vitest unit runner, and source export conventions.
-- Implementation: `FND-V1-003` core session model is in place with stable ids/names, lifecycle/status/attention states, metadata validation, and unknown/stale write-safety helpers.
-- Implementation: `FND-V1-005` shared error envelope is in place with stable code families, retryability, bounded details, and sensitive-detail rejection.
-- Implementation: `FND-V1-004` command intents and write eligibility are in place with V1 slash allowlists, one-session targeting, trust/read-only/lock checks, raw-input confirmation, audit availability, and non-writable lifecycle denials.
-- Implementation: `FND-V1-006` API and stream contract schemas are in place with runtime validation for host status, sessions, output, stream events, writes, pairing, security, lock, and network state.
-- Implementation: `FND-V1-012` storage/config/auth/audit/retention contract schemas are in place with runtime validation for migration, session, metadata, output cursor, retention boundary, hashed auth, pairing, settings, and bounded audit records.
-- Implementation: `FND-V1-013` UI fixture and view-model contract schemas are in place for session cards, session detail, host safety, trust state, output boundaries, and disabled write controls.
-- Implementation: `FND-V1-007` deterministic fake Codex/session/host fixtures cover all required `SFR-011` categories and parse fake API/UI/host states through shared contracts.
-- Implementation: `FND-V1-008` conservative status/attention classifier is in place and keeps unrecognized output as `unknown`.
-- Implementation: `FND-V1-009` cross-package contract compatibility tests cover fixture/API/UI compatibility, API error shape, and audit payload bounds.
-- Implementation: `FND-V1-010` foundation production-hardening tightened output/session, cursor, LAN, UI trust/sort/write-control, classifier, storage settings, and audit invariants.
-- Implementation: `FND-V1-011` marks `BLK-V1-01` complete and promotes downstream data spikes plus fake-adapter work.
-- Planning/spike: `DAT-V1-001` chose `better-sqlite3` plus a first-party migration runner for V1 local storage.
-- Planning/spike: `DAT-V1-002` chose host-only `HttpOnly` cookie device-token transport plus CSRF write headers for dashboard writes.
-- Planning/spike: `DAT-V1-003` chose output/audit retention defaults and replay/audit boundary semantics.
-- Implementation: `DAT-V1-010` added the SQLite migration runner, base schema, `better-sqlite3` dependency, and native build approval.
-- Implementation: `DAT-V1-011` added the SQLite-backed settings/config repository with safe localhost defaults, bind-host validation, lock/LAN persistence, and invalid-startup rejection.
-- Implementation: `DAT-V1-012` added SQLite-backed session registry and metadata repositories, duplicate-name/id handling, invalid cwd/stale/reload rejection, and a migration for the valid `failed` metadata status.
-- Implementation: `DAT-V1-013` added hash-only pairing/auth repositories with CSRF hash storage, one-time pairing claim, read-only/write distinction, revocation/expiry checks, and direct SQLite raw-secret absence assertions.
-- Implementation: `DAT-V1-014` added durable audit event append/read/list with bounded payload summaries, required V1 action coverage, duplicate/missing errors, and invalid persisted JSON rejection.
-- Implementation: `DAT-V1-015` added retention cleanup and replay-boundary storage metadata with output event/byte caps, audit event/age caps, monotonic cursor checks, and corrupt boundary rejection.
-- Implementation: `DAT-V1-017` added optional git branch metadata capture with real worktree persistence, non-git null behavior, missing-git tolerance, malformed output rejection, and invalid-cwd failure.
-- Implementation: `DAT-V1-016` added cross-repository restart persistence coverage for settings, sessions, metadata, auth/pairing, audit, output retention, migration no-op reopen, and durable/ephemeral storage separation.
-- Implementation: `DAT-V1-090` hardened storage-owned behavior for migration drift, raw secret validation, audit unavailable errors, retention boundary schema, newest-output retention, restart persistence, and local state privacy inspection.
-- Implementation: `INT-V1-010` added the typed tmux adapter interface and deterministic fake adapter with lifecycle, send, stop, attach, output, stale, and missing-target coverage.
-- Implementation: `INT-V1-011` added HostDeck-only deterministic real tmux target naming, live target lookup/listing, and live/stale/unmanaged reconciliation without importing arbitrary terminals.
-- Implementation: `INT-V1-012` added real tmux managed start/list/get behavior with cwd and command preflight, duplicate id/name checks, launch verification, and partial-target cleanup.
-- Implementation: `INT-V1-013` added real tmux pane-targeted send, explicit stop, socket-aware attach metadata, and missing/stale target failures.
-- Implementation: `INT-V1-014` added live pipe capture, bounded capture reads, storage output append, replay-boundary response mapping, and observable output-reader failures.
-- Implementation: `INT-V1-015` added storage-backed restart reconciliation for live, missing, stopped, and unmanaged HostDeck tmux targets.
-- Implementation: `INT-V1-016` added required real Ubuntu tmux smoke coverage for managed start, attach metadata, send targeting, stop, output read, SQLite output drain, restart reconciliation, output-reader restart hook, and stale target behavior.
-- Hardening: `INT-V1-090` tightened tmux/output suffix continuity, repeated lifecycle cleanup, invalid replay, append/capture failure visibility, and restart output-reader failure reporting.
-- Implementation: `IFC-V1-005` added storage-backed pairing/security/network route handlers, revoked pairing-code support, CSRF-backed dashboard lock, and explicit remote unlock/LAN mutation rejection.
-- Implementation: `IFC-V1-001` added headless host startup/readiness with state directory access, SQLite migrations, settings/bind validation, tmux discovery, registry reconciliation, output-reader startup gating for live sessions, non-ready typed failure statuses, and startup negative tests.
-- Implementation: `IFC-V1-002` added headless host status/session read/output route handlers with schema-validated responses, attention-sorted sessions, bounded recent-output summaries, explicit read authorization injection, and typed permission/not-found/invalid-cursor/stale failures.
-- Implementation: `IFC-V1-003` added headless one-session stream route handlers with explicit read authorization, retained replay after cursor, stale-cursor/retention boundaries, live-source session validation, and typed stream failure events.
-- Implementation: `IFC-V1-004` added headless prompt, slash, stop, and raw-input write route handlers with auth/CSRF, lock, lifecycle, one-session, slash allowlist, raw confirmation, audit preflight, tmux dispatch, stopped-state persistence, and typed rejection coverage.
-- Implementation: `IFC-V1-010` added aggregate API route contract coverage for 17 current V1 host/session/stream/write/pairing/security/network routes with method, auth, request, response, stream-event, route error body, and typed error assertions.
-- Implementation: `IFC-V1-006` added the CLI core shell, API client, config loading, stable exit-code families, status rendering, and daemon/API error rendering with unit and contract coverage.
-- Implementation: `IFC-V1-011` added startup network bind preflight plus real localhost/LAN listener smoke for default localhost, LAN on/off persistence, invalid port, and duplicate port failure.
-- Implementation: `IFC-V1-007` added CLI `start`, `list`, `send`, `attach`, and `stop`; a typed session-start API contract/handler; local-admin CLI writes; exact session target resolution; stale/non-running command failures; and fake plus real tmux smoke evidence.
-- Implementation: `IFC-V1-008` added CLI local-admin state/database config plus storage-backed `pair`, `lock`, `unlock`, `lan enable`, and `lan disable` commands with transactional audit writes, hash-only pairing storage inspection, and explicit LAN reversal/rebind output.
-- Implementation: `IFC-V1-012` added the foreground host HTTP service wrapper, CLI `serve` shell path, host-status HTTP listener, stop/unavailable/restart smoke, and CLI status smoke against the real service.
-- Implementation: `IFC-V1-013` added the CLI command contract matrix for parser coverage, success output, malformed-argument usage failures, invalid serve config, daemon-unavailable behavior, and typed API failures.
-- Implementation: `IFC-V1-014` added the integration test command plus write rejection/failure-path matrix for malformed, untrusted, read-only, locked, stale, stopped, crashed, unknown, unsupported slash, multi-session, audit-unavailable, tmux dispatch failure, and daemon-unavailable cases.
-- Hardening: `IFC-V1-090` registered foreground HTTP route families for host/session/output/stream/write/pairing/security/network, preserved loopback local-admin CLI routing and browser cookie+CSRF boundaries, proved CLI start/list/send/stop through the real service path, seeded restarted tmux adapters with reconciled targets, and recorded API/CLI hardening evidence.
-- Release support: `REL-V1-001` wired validation command placeholders to future owner tasks and recorded command smoke evidence without claiming unavailable layers are implemented.
-- Release support: `REL-V1-002` updated the developer guide with validated runtime/package-manager/tool versions, setup command, state/config defaults, foreground service behavior, LAN/safety notes, common failures, evidence links, and packaged-binary/service-wrapper gaps.
-- Release support: `REL-V1-003` tightened the command reference to verified runnable commands, recorded unavailable CLI/web/E2E/build/local-smoke gaps, and corrected CLI help flag ordering.
-- Frontend: `FE-V1-001` added dashboard view-model helpers, required UI state fixture inventory, and real `pnpm test:web` coverage for state fixtures.
-- Frontend: `FE-V1-002` generated two repo-stored UI visual direction options with safety-contract notes and supporting asset/design-system documentation.
-- Planning/spike: `INT-V1-001` chose tmux `pipe-pane` for live output ingestion plus bounded `capture-pane` startup/restart recovery.
-- No end-to-end HostDeck dashboard or real Codex product workflow is proven yet; the CLI-to-foreground-service path is proven with the fake tmux adapter.
+- Baseline workspace checks pass: scaffold, typecheck, lint, unit, contract, integration, web, and historical tmux smoke.
+- Existing core, storage, tmux, headless API/CLI, and UI-fixture packages contain substantial reusable package-level work.
+- Local Codex 0.144.0 app-server smoke proved generated TypeScript bindings, initialize, model/thread listing, persisted goal set/get/delete, and normal TUI attachment over loopback and Unix-socket transports without a model call.
 
-## Open Gates
+## Not Proven
 
-- Module hardening.
-- UI fidelity evidence.
-- Release/handoff validation.
+- Real Codex turn/event/control/approval/restart behavior through HostDeck.
+- Production Fastify/SSE composition, continuous projection/fanout, runtime health, retention invocation, or graceful shutdown.
+- HTTPS LAN certificate enrollment, paired LAN reads, CSRF reload, rate limits, device revocation, owner-only state, or one-daemon lease.
+- Runnable packaged CLI, built dashboard, user services, clean Ubuntu install, real phone workflow, or release readiness.
 
-## Active Work
+## Blockers
 
-| ID | Type | Status | Owner doc | Evidence |
-| --- | --- | --- | --- | --- |
-| FND-V1-001 | Implementation | done | `docs/tracking/backlog/foundation.md` | Workspace scaffold, package shells, root validation scripts, pinned lockfile, command/setup docs, and `artifacts/fnd-v1-001-scaffold.md`. |
-| FND-V1-002 | Implementation | done | `docs/tracking/backlog/foundation.md` | Shared strict TypeScript/lint/test conventions, package exports, command docs, and `artifacts/fnd-v1-002-conventions.md`. |
-| FND-V1-003 | Implementation | done | `docs/tracking/backlog/foundation.md` | Core session model and `artifacts/fnd-v1-003-core-model.md`. |
-| FND-V1-005 | Implementation | done | `docs/tracking/backlog/foundation.md` | Shared error envelope and `artifacts/fnd-v1-005-errors.md`. |
-| FND-V1-004 | Implementation | done | `docs/tracking/backlog/foundation.md` | Command intents, write eligibility, and `artifacts/fnd-v1-004-command-intents.md`. |
-| FND-V1-006 | Implementation | done | `docs/tracking/backlog/foundation.md` | API and stream contracts and `artifacts/fnd-v1-006-api-contracts.md`. |
-| FND-V1-012 | Implementation | done | `docs/tracking/backlog/foundation.md` | Storage/config/auth/audit/retention contracts and `artifacts/fnd-v1-012-storage-contracts.md`. |
-| FND-V1-013 | Implementation | done | `docs/tracking/backlog/foundation.md` | UI fixture/view-model contracts and `artifacts/fnd-v1-013-ui-contracts.md`. |
-| FND-V1-007 | Implementation | done | `docs/tracking/backlog/foundation.md` | Codex/session/host fixtures and `artifacts/fnd-v1-007-fixtures.md`. |
-| FND-V1-008 | Implementation | done | `docs/tracking/backlog/foundation.md` | Conservative classifier and `artifacts/fnd-v1-008-classifier.md`. |
-| FND-V1-009 | Implementation | done | `docs/tracking/backlog/foundation.md` | Cross-package compatibility tests and `artifacts/fnd-v1-009-cross-package-contracts.md`. |
-| FND-V1-010 | Hardening | done | `docs/tracking/backlog/foundation.md` | Foundation hardening and `artifacts/fnd-v1-010-foundation-hardening.md`. |
-| FND-V1-011 | Documentation | done | `docs/tracking/backlog/foundation.md` | Foundation completion rollup and `artifacts/fnd-v1-011-foundation-completion.md`. |
-| DAT-V1-001 | Spike | done | `docs/tracking/backlog/local-state-auth-audit.md` | SQLite driver/migration decision and `artifacts/dat-v1-001-sqlite-driver-spike.md`. |
-| DAT-V1-002 | Spike | done | `docs/tracking/backlog/local-state-auth-audit.md` | Token transport decision/API contract and `artifacts/dat-v1-002-token-transport-spike.md`. |
-| DAT-V1-003 | Spike | done | `docs/tracking/backlog/local-state-auth-audit.md` | Retention defaults/boundary decision and `artifacts/dat-v1-003-retention-caps-spike.md`. |
-| DAT-V1-010 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | SQLite migration runner/base schema and `artifacts/dat-v1-010-sqlite-migration-runner.md`. |
-| DAT-V1-011 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Settings/config repository and `artifacts/dat-v1-011-settings-repository.md`. |
-| DAT-V1-012 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Session registry/metadata repositories and `artifacts/dat-v1-012-session-repositories.md`. |
-| DAT-V1-013 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Auth/pairing repositories and `artifacts/dat-v1-013-auth-repositories.md`. |
-| DAT-V1-014 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Audit repository and `artifacts/dat-v1-014-audit-repository.md`. |
-| DAT-V1-015 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Retention repository and `artifacts/dat-v1-015-retention-repository.md`. |
-| DAT-V1-017 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Optional git branch metadata and `artifacts/dat-v1-017-branch-metadata.md`. |
-| DAT-V1-016 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Restart persistence and `artifacts/dat-v1-016-restart-persistence.md`. |
-| DAT-V1-090 | Hardening | done | `docs/tracking/backlog/local-state-auth-audit.md` | Storage hardening and `artifacts/dat-v1-090-storage-hardening.md`. |
-| INT-V1-010 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Fake tmux adapter and `artifacts/int-v1-010-fake-tmux-adapter.md`. |
-| IFC-V1-005 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Security routes and `artifacts/ifc-v1-005-security-routes.md`. |
-| REL-V1-001 | Release support | done | `docs/tracking/backlog/hardening-release.md` | Validation wiring and `artifacts/rel-v1-001-validation-wiring.md`. |
-| INT-V1-001 | Spike | done | `docs/tracking/backlog/tmux-output.md` | Tmux output capture spike and `artifacts/int-v1-001-tmux-capture-spike.md`. |
-| INT-V1-011 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Real tmux target primitives and `artifacts/int-v1-011-real-tmux-targets.md`. |
-| INT-V1-012 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Real tmux managed start and `artifacts/int-v1-012-real-tmux-start.md`. |
-| INT-V1-013 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Real tmux send/stop/attach and `artifacts/int-v1-013-real-tmux-operations.md`. |
-| INT-V1-014 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Output reader/replay handoff and `artifacts/int-v1-014-output-reader.md`. |
-| INT-V1-015 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Restart reconciliation and `artifacts/int-v1-015-restart-reconciliation.md`. |
-| INT-V1-016 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Real Ubuntu tmux smoke and `artifacts/int-v1-016-real-tmux-smoke.md`. |
-| INT-V1-090 | Hardening | done | `docs/tracking/backlog/tmux-output.md` | Tmux/output hardening and `artifacts/int-v1-090-tmux-output-hardening.md`. |
-| IFC-V1-001 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Startup readiness service and `artifacts/ifc-v1-001-startup-readiness.md`. |
-| IFC-V1-002 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Read route handlers and `artifacts/ifc-v1-002-read-routes.md`. |
-| IFC-V1-003 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Stream route handlers and `artifacts/ifc-v1-003-stream-routes.md`. |
-| IFC-V1-004 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Write route handlers and `artifacts/ifc-v1-004-write-routes.md`. |
-| IFC-V1-010 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Aggregate API route contracts and `artifacts/ifc-v1-010-api-route-contracts.md`. |
-| IFC-V1-006 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | CLI shell/API client and `artifacts/ifc-v1-006-cli-shell.md`. |
-| IFC-V1-011 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Localhost/LAN network smoke and `artifacts/ifc-v1-011-network-smoke.md`. |
-| IFC-V1-007 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | CLI session commands, start route, local-admin writes, target resolution, stale/non-running failures, and `artifacts/ifc-v1-007-cli-session-commands.md`. |
-| IFC-V1-008 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | CLI local-admin pairing, lock/unlock, LAN command implementation and `artifacts/ifc-v1-008-cli-admin-commands.md`. |
-| IFC-V1-012 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Foreground service smoke and `artifacts/ifc-v1-012-service-mode-smoke.md`. |
-| IFC-V1-013 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | CLI command contract matrix and `artifacts/ifc-v1-013-cli-command-contracts.md`. |
-| IFC-V1-014 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Write rejection/failure-path integration tests and `artifacts/ifc-v1-014-write-rejection-integration.md`. |
-| IFC-V1-090 | Hardening | done | `docs/tracking/backlog/api-cli-control-plane.md` | API/CLI hardening and `artifacts/ifc-v1-090-api-cli-hardening.md`. |
-| REL-V1-002 | Release docs | done | `docs/tracking/backlog/hardening-release.md` | Developer guide setup/service docs and `artifacts/rel-v1-002-developer-guide.md`. |
-| REL-V1-003 | Release docs | done | `docs/tracking/backlog/hardening-release.md` | Command reference docs and `artifacts/rel-v1-003-command-reference.md`. |
-| FE-V1-001 | Frontend | done | `docs/tracking/backlog/web-dashboard.md` | UI state fixtures, view-model helpers, and `artifacts/fe-v1-001-ui-state-fixtures.md`. |
-| FE-V1-002 | Frontend | done | `docs/tracking/backlog/web-dashboard.md` | Two image-generated visual direction options and `artifacts/fe-v1-002-visual-direction-mockups.md`. |
-| FE-V1-003 | Frontend | blocked | `docs/tracking/backlog/web-dashboard.md` | Human visual direction selection is required before dashboard UI implementation. |
+- Finish `REL-V1-011` owner-doc/task rebaseline; `FND-V1-014` planning validation now passes.
+- Prove Codex compatibility/real vertical (`INT-V1-003` to `INT-V1-007`).
+- Prove phone HTTPS enrollment (`IFC-V1-015`).
+- Regenerate/select mobile mockups only after real structured states are stable.
 
-## Decisions Needed
+## Validation
 
-| Question | Owner | Blocking? |
-| --- | --- | --- |
-| UI visual direction selection between Option A dense operations console and Option B calm control room. | `docs/tracking/backlog/web-dashboard.md` | Yes, before UI implementation |
+- Pre-audit baseline: `pnpm check:scaffold`, `pnpm typecheck`, `pnpm lint`, `pnpm test:unit` (184 passed, 1 skipped), `pnpm test:contract` (68), `pnpm test:integration` (15), `pnpm test:web` (14), and `pnpm test:tmux` passed.
+- Current rebaseline validation and planning check are pending completion of `REL-V1-011`.
 
-## Repo Hygiene
+## Git
 
-- Use `git status --short` for dirty-state truth.
-- Keep routine evidence updates to 0-2 owner docs when possible.
+- Working tree: audit/rebaseline changes in progress; stage only intended files.
+- Last push: `origin/main` before `REL-V1-011`.
+- Next action: finish consistency/validation, close `REL-V1-011`, then commit and push one coherent audit/planning unit.

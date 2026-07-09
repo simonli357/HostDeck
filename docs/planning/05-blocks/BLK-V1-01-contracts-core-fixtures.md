@@ -1,78 +1,61 @@
-# BLK-V1-01 Contracts, Core Model, And Fixtures
+# BLK-V1-01 Contracts, Core, And Fixtures
 
-Owns the typed foundation that later storage, tmux, API, CLI, and UI work must consume.
+Owns the normalized HostDeck language consumed by storage, Codex adapter, API/CLI, and UI.
 
-## Summary
+## Outcome
 
-- Goal: Define stable contracts, core state rules, write eligibility, errors, and deterministic fixtures before adapters or UI exist.
-- Required for V1: Yes.
-- User/workflow value: Prevents later HostDeck behavior from drifting into ad hoc terminal parsing, fake success states, or UI-only truth.
-- In scope: Workspace scaffold inputs, `@hostdeck/core`, `@hostdeck/contracts`, shared fixture package, lifecycle/status/attention model, API error envelope, write eligibility, Codex-like output fixtures.
-- Out / deferred: Real tmux process control, SQLite persistence, browser visual design, release packaging.
-- Requirement refs: `FR-002`, `FR-006` to `FR-009`, `FR-015`, `NFR-003`, `NFR-005` to `NFR-007`, `SFR-005`, `SFR-011`.
-- UX refs: `IR-001`, `IR-002`, `IR-006`, `IR-008`, `UX-002` to `UX-005`, `UX-009`.
-- Decision refs: `DEC-003`, `DEC-007`, `DEC-008`, `DEC-010`, `DEC-011`.
+- App-server generated types are isolated behind stable HostDeck thread, turn, event, approval, control, compatibility, trust, and audit contracts.
+- Strict core invariants reject invalid timestamps, unsafe cursors, impossible transitions, ambiguous targets, unsupported capabilities, and contradictory outcomes.
+- Deterministic fixtures cover required structured runtime, security, replay, and mobile states.
+- Planning validation makes task/requirement/dependency drift fail in the normal check path.
 
-## Local Architecture
+Requirement refs: `FR-002`, `FR-006` to `FR-009`, `FR-012` to `FR-017`, `NFR-003`, `NFR-005` to `NFR-007`, `IR-001` to `IR-012`, `SFR-005`, `SFR-010`, `SFR-011`.
 
-| Part | Responsibility | Inputs | Outputs | Failure states |
-| --- | --- | --- | --- | --- |
-| Core model | Session ids/names, lifecycle states, attention/status values, command intent, write eligibility. | Requirements, blueprint public interfaces. | Pure TypeScript types and functions with no filesystem, network, tmux, or browser dependency. | Impossible transitions, duplicate names, invalid ids, non-writable lifecycle states. |
-| Contract schemas | Zod schemas and inferred types for API payloads, stream events, storage records, config, audit events, UI fixtures. | Core types and route families. | Runtime validators and shared TypeScript types. | Malformed payloads, invalid enum values, unbounded detail fields, schema mismatch. |
-| Error model | Stable error envelope and code families shared by API, CLI, and UI. | Failure matrix and test-plan negative cases. | `code`, `message`, optional bounded context, and retryable flag. | Hidden fallback, swallowed error, fake success, sensitive details in error context. |
-| Fixture package | Fake Codex outputs, fake session records, fake host states, fake stream events. | `SFR-011`, UI state matrix, output/status fixture matrix. | Deterministic fixtures used by unit, contract, integration, and UI tests. | Missing fixture category, fixture that implies unsupported V1 behavior, unknown output classified as healthy. |
+## Local Design
 
-## Contracts And Data
-
-| Contract/data item | Owner | Rules | Validation |
-| --- | --- | --- | --- |
-| `SessionId` and `SessionName` | `@hostdeck/core` | Stable id is identity; display name is unique for V1 but not identity. | Unit tests for id/name validation and duplicate-name rejection helpers. |
-| `LifecycleState`, `SessionStatus`, `AttentionLevel` | `@hostdeck/core` | Advisory status cannot make `unknown` appear healthy; writes require explicitly writable states. | Fixture-backed classifier tests and write eligibility tests. |
-| `CommandIntent` and slash command allowlist | `@hostdeck/core` | V1 slash commands are `/model`, `/goal`, `/plan`, `/usage`, `/compact`, `/skills`; other slash commands reject. | Unit tests for allowed and unsupported commands. |
-| API error envelope | `@hostdeck/contracts` | Every API error uses stable code/message plus bounded optional context. | Contract tests reject malformed errors and unbounded details. |
-| API and stream payloads | `@hostdeck/contracts` | Host status, sessions read, output read, stream, write, pairing, security, lock, and network payloads validate at runtime and reject malformed shapes. | `pnpm test:contract` covers valid and malformed API/stream fixtures. |
-| Storage, config, auth, audit, and retention payloads | `@hostdeck/contracts` | Migration, session, metadata, output, retention, hashed auth, pairing, settings, and bounded audit records validate at runtime. | `pnpm test:contract` covers valid records, malformed state, raw-secret rejection, and bounded audit summaries. |
-| UI fixture and view-model payloads | `@hostdeck/contracts` | Session card, Session Detail, host safety, trust state, output boundary, and write-control state validate against shared contracts. | `pnpm test:contract` covers one-session compatibility, disabled writes, visible boundaries, and unsupported UI-only state rejection. |
-| Fixture suites | `@hostdeck/test-fixtures` | Include question, approval, command running, tests passed, tests failed, compact warning, idle/no-output, unknown output, plus fake API/UI/host states. | Unit tests cover `SFR-011` inventory and shared-contract compatibility. |
-
-## Implementation Blueprint
-
-| Slice | Goal | Epics/tasks | Dependencies | Exit evidence |
-| --- | --- | --- | --- | --- |
-| Foundation | Build the workspace, core model, contracts, and fixture suites. | Backlog must create leaf tasks for workspace scaffold, core state model, error envelope, contract schemas, fixture package, and baseline tests. | Approved requirements, architecture, blueprint, and test plan. | `pnpm typecheck`, `pnpm test:unit`, and `pnpm test:contract` equivalents once scaffold exists. |
-| Hardening | Make invalid state, schema mismatch, unsupported slash commands, and unknown output fail loudly. | Backlog must create hardening tasks for write eligibility, error bounds, classifier unknowns, fixture completeness, and schema compatibility. | Foundation tasks in this block. | Negative-test artifact and fixture coverage artifact. |
-| Release readiness | Prove every downstream block can consume contracts without duplicating state shapes. | Backlog must create release check for public contract export review and command-reference updates only after scripts exist. | Dependent blocks have started consuming contracts. | Contract compatibility note referenced from completion matrix. |
-
-## Validation Plan
-
-| Layer | What to prove | Evidence |
+| Part | Owns | Must prove |
 | --- | --- | --- |
-| Unit | Core state, write eligibility, slash allowlist, classifier fixtures, impossible states. | Planned `pnpm test:unit` output and fixture coverage artifact. |
-| Contract | API, stream, storage, audit, config, and UI fixture schemas reject malformed shapes. | Planned `pnpm test:contract` output. |
-| System / E2E | Fake vertical can exchange typed session records and errors across packages. | Later `BLK-V1-04` and `BLK-V1-05` fake vertical evidence. |
-| Manual / device | Unknown and failed fixture examples are reviewed for truthful user-facing interpretation. | Fixture review notes or artifact. |
+| Core | Stable ids, lifecycle/reconciliation transitions, status/attention, control intent, eligibility, audit outcome. | Normal, invalid, impossible, repeated, and concurrent decisions are deterministic. |
+| Contracts | API, persistence, projection, compatibility, trust, audit, and UI runtime schemas. | Malformed/unknown required shapes fail with bounded errors. |
+| Codex normalization port | HostDeck-owned adapter input/output/event interfaces. | No generated app-server type leaks to consumers. |
+| Fixtures | Structured events, approvals, turns, controls, errors, trust/network, replay/boundary, mobile states. | Complete inventory from `SFR-011` and UX state matrix. |
+| Planning checker | Markdown task/requirement graph validation. | Duplicate/unknown refs, cycles, invalid ready state, and uncovered requirement fail. |
 
-## Backlog Links
+## Invariants
 
-| Epic | Leaf tasks | Status | Evidence |
-| --- | --- | --- | --- |
-| Workspace and command skeleton | `FND-V1-001`, `FND-V1-002` | Done | `artifacts/fnd-v1-001-scaffold.md`, `artifacts/fnd-v1-002-conventions.md` |
-| Core model and contracts | `FND-V1-003` to `FND-V1-006`, `FND-V1-012`, `FND-V1-013` | Done | `artifacts/fnd-v1-003-core-model.md`, `artifacts/fnd-v1-004-command-intents.md`, `artifacts/fnd-v1-005-errors.md`, `artifacts/fnd-v1-006-api-contracts.md`, `artifacts/fnd-v1-012-storage-contracts.md`, `artifacts/fnd-v1-013-ui-contracts.md`, `docs/tracking/backlog/foundation.md` |
-| Fixtures and classifiers | `FND-V1-007` to `FND-V1-009` | Done | `artifacts/fnd-v1-007-fixtures.md`, `artifacts/fnd-v1-008-classifier.md`, `artifacts/fnd-v1-009-cross-package-contracts.md`, `docs/tracking/backlog/foundation.md` |
-| Foundation hardening | `FND-V1-010`, `FND-V1-011` | Done | `artifacts/fnd-v1-010-foundation-hardening.md`, `artifacts/fnd-v1-011-foundation-completion.md`, `docs/tracking/backlog/foundation.md` |
+- `HostDeckSessionId`, Codex thread id, alias, approval request id, and client operation id are distinct types.
+- Timestamp parsing validates the actual calendar value and canonical round trip.
+- Cursor/count values are non-negative safe integers.
+- User lifecycle and reconciliation transitions are separate explicit tables.
+- Accepted dispatch and terminal success are separate audit/result states.
+- A required unsupported Codex capability is `incompatible`, not `unknown` or a terminal-text fallback.
+- One mutation has one typed target; union ambiguity rejects at schema boundary.
+
+## Task Map
+
+| Work | Tasks | Status |
+| --- | --- | --- |
+| Historical workspace/core/contracts/fixtures | `FND-V1-001` to `FND-V1-013` | Done for superseded contract set; evidence retained. |
+| Planning integrity | `FND-V1-014` | Ready. |
+| App-server/mobile/security contract rebaseline | `FND-V1-015` | Ready after audit decision. |
+| Core invariant and reconciliation hardening | `FND-V1-016` | Blocked by `FND-V1-015`. |
+| Reopened module hardening | `FND-V1-091` | Blocked by new consumers and tests. |
+
+Owning backlog: `docs/tracking/backlog/foundation.md`.
+
+## Validation
+
+| Layer | Evidence |
+| --- | --- |
+| L1 | Core and contract tests for every invariant and fixture category. |
+| L2 | Cross-package tests prove storage/adapter/server/web consume normalized contracts only. |
+| Manual | Fixture review confirms unknown, stale, unsupported, and incomplete never appear healthy/successful. |
 
 ## Done Criteria
 
-- Core and contract packages exist and are consumed by later packages.
-- Required lifecycle, status, attention, command intent, write eligibility, and error states are typed and tested.
-- All `SFR-011` fixture categories exist and are asserted.
-- Malformed contracts fail with stable errors.
-- Unknown output remains visibly unknown and does not become idle/success.
-- Block evidence is recorded in this file, owning tasks, or artifacts.
-- V1 completion matrix in `00-index.md` is updated.
-
-## Open Questions / Spikes
-
-| ID | Question | Owner | Exit evidence |
-| --- | --- | --- | --- |
-| None | No block-local spike is required; downstream spikes consume this block's contracts. | `BLK-V1-01` | Contract and fixture evidence. |
+- `pnpm check:planning`, typecheck, lint, unit, and contract tests pass.
+- Every active requirement is traceable to defined tasks and no dependency cycle/invalid ready task exists.
+- Generated Codex bindings are private to the adapter boundary.
+- Required structured and UI fixture inventories are complete.
+- Timestamp, cursor, lifecycle, target, compatibility, and audit outcome defects identified by `REL-V1-011` have regression tests.
+- `FND-V1-091` links current evidence and the block matrix marks complete without qualification.

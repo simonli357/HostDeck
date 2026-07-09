@@ -1,37 +1,51 @@
 # Delivery Plan
 
-Owns milestone, module maturity, production pass, and release truth.
+Owns milestone, module maturity, production passes, and release truth.
 
 ## Snapshot
 
-- Current pass: Storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target primitives, real managed start/send/stop/attach/output/restart/smoke/hardening, pairing/security API route foundation, validation wiring, headless API/CLI startup readiness, headless read/stream/write route contracts, aggregate route contracts, localhost/LAN network smoke, CLI shell, CLI session commands, CLI pairing/lock/LAN commands, foreground service smoke, CLI command matrix, write rejection integration, API/CLI hardening, developer-guide setup/service docs, command reference docs, UI state coverage, and visual direction/mockups complete; human visual direction selection is next
-- Current milestone: M1 Foundation complete
-- Release state: Not release-ready; product workflow blocks remain incomplete
-- Go/no-go:
+- Current pass: system audit and architecture/mobile/security/backlog rebaseline.
+- Current milestone: M0 Rebaseline.
+- Release state: no-go; selected production path is not implemented.
+- Next exit: `REL-V1-011` and `FND-V1-014` complete, then normalized contract and HTTPS spikes begin.
 
 ## Milestones
 
-| Milestone | Scope | Status | Evidence |
+| Milestone | Scope | Exit | Status |
 | --- | --- | --- | --- |
-| M1 Foundation | Workspace, core model, contracts, fixtures, compatibility, and foundation hardening | Complete | `artifacts/fnd-v1-011-foundation-completion.md` |
-| M2 Module hardening |  | Planned |  |
-| M3 Release hardening |  | Planned |  |
+| M0 Rebaseline | Audit prior direction/evidence; select app-server/mobile/HTTPS path; repair requirements, blueprint, blocks, tasks, queue, planning checker. | Owner docs agree, `pnpm check:planning` passes, selected-path leaf graph is executable. | In progress |
+| M1 Selected foundation | Normalized contracts/invariants; mapping/projection/auth/permissions/retention migrations; Codex compatibility and IPC adapter. | `FND-V1-091`, data foundation tasks, adapter handshake/broker pass. | Planned |
+| M2 Real structured vertical | Real thread start/resume, prompt/events/status, controls, approval, interrupt, TUI multi-client, reconnect/restart; legacy disposition. | `INT-V1-091` with L3 real-Codex artifact. | Planned |
+| M3 Production host interface | HTTPS phone enrollment, Fastify/SSE/static, auth/rate/origin/CSRF, fanout/health/shutdown, selected API/CLI, bounds, build/user services. | `IFC-V1-091`, clean production-path smoke. | Planned |
+| M4 Mobile dashboard | Rebased state matrix, two mobile options, human selection, complete screens/controls/approval/trust states, responsive/accessibility/fidelity, phone proof. | `FE-V1-090` with screenshots and L4 device artifact. | Planned |
+| M5 Release hardening | Security/privacy, clean Ubuntu package/service/real-Codex/browser/phone, docs, aggregate validation, block matrix, go/no-go. | `REL-V1-010` human decision. | Planned |
 
 ## Module Maturity
 
-| Module | Status | Open gaps | Evidence |
+| Block | Current maturity | Reopened gap | Completion owner |
 | --- | --- | --- | --- |
-| `BLK-V1-01` Foundation / Contracts | Complete | Product workflow behavior still unproven until storage, tmux, API/CLI, UI, and release blocks complete. | `artifacts/fnd-v1-001-scaffold.md` through `artifacts/fnd-v1-011-foundation-completion.md` |
-| `BLK-V1-02` Local State / Auth / Audit | Complete for storage-owned scope | API write preflight and release privacy/setup evidence remain in later blocks. | `artifacts/dat-v1-001-sqlite-driver-spike.md`, `artifacts/dat-v1-002-token-transport-spike.md`, `artifacts/dat-v1-003-retention-caps-spike.md`, `artifacts/dat-v1-010-sqlite-migration-runner.md`, `artifacts/dat-v1-011-settings-repository.md`, `artifacts/dat-v1-012-session-repositories.md`, `artifacts/dat-v1-013-auth-repositories.md`, `artifacts/dat-v1-014-audit-repository.md`, `artifacts/dat-v1-015-retention-repository.md`, `artifacts/dat-v1-016-restart-persistence.md`, `artifacts/dat-v1-017-branch-metadata.md`, `artifacts/dat-v1-090-storage-hardening.md` |
-| `BLK-V1-03` Tmux Session / Output | Complete for tmux-owned scope | API stream/CLI/dashboard exposure and clean release setup remain in later blocks. | `artifacts/int-v1-001-tmux-capture-spike.md`, `artifacts/int-v1-010-fake-tmux-adapter.md`, `artifacts/int-v1-011-real-tmux-targets.md`, `artifacts/int-v1-012-real-tmux-start.md`, `artifacts/int-v1-013-real-tmux-operations.md`, `artifacts/int-v1-014-output-reader.md`, `artifacts/int-v1-015-restart-reconciliation.md`, `artifacts/int-v1-016-real-tmux-smoke.md`, `artifacts/int-v1-090-tmux-output-hardening.md` |
-| `BLK-V1-04` API / CLI Control Plane | In progress | Dashboard static serving remains planned with the web/dashboard block; release command/setup docs remain in `BLK-V1-06`. | `artifacts/ifc-v1-001-startup-readiness.md`, `artifacts/ifc-v1-002-read-routes.md`, `artifacts/ifc-v1-003-stream-routes.md`, `artifacts/ifc-v1-004-write-routes.md`, `artifacts/ifc-v1-005-security-routes.md`, `artifacts/ifc-v1-006-cli-shell.md`, `artifacts/ifc-v1-007-cli-session-commands.md`, `artifacts/ifc-v1-008-cli-admin-commands.md`, `artifacts/ifc-v1-010-api-route-contracts.md`, `artifacts/ifc-v1-011-network-smoke.md`, `artifacts/ifc-v1-012-service-mode-smoke.md`, `artifacts/ifc-v1-013-cli-command-contracts.md`, `artifacts/ifc-v1-014-write-rejection-integration.md`, `artifacts/ifc-v1-090-api-cli-hardening.md` |
-| `BLK-V1-05` Web Dashboard UX | In progress | Human visual direction selection, web app shell, API client, screen groups, responsive/accessibility, screenshots, and UI hardening remain planned. | `artifacts/fe-v1-001-ui-state-fixtures.md`, `artifacts/fe-v1-002-visual-direction-mockups.md` |
-| `BLK-V1-06` Hardening / Release | In progress | Web, E2E, build, local smoke, security review, and go/no-go remain planned or blocked by product workflow gaps. | `artifacts/rel-v1-001-validation-wiring.md`, `artifacts/ifc-v1-014-write-rejection-integration.md`, `artifacts/ifc-v1-090-api-cli-hardening.md`, `artifacts/rel-v1-002-developer-guide.md`, `artifacts/rel-v1-003-command-reference.md` |
+| `BLK-V1-01` Contracts/core/fixtures | Strong historical tmux-shaped L1 base. | App-server/events/approval/mobile/security contracts, strict invariants, planning checker. | `FND-V1-014` to `FND-V1-016`, `FND-V1-091` |
+| `BLK-V1-02` State/auth/audit | Strong historical repository L1/L2 base. | Thread projection migration, production retention/audit, CSRF lifecycle, secure paths/lease. | `DAT-V1-018` to `DAT-V1-021`, `DAT-V1-091` |
+| `BLK-V1-03` Codex runtime/events | Architecture spike complete; tmux mechanics are legacy. | Selected adapter and real turn/control/approval/TUI/restart path absent. | `INT-V1-003` to `INT-V1-008`, `INT-V1-091` |
+| `BLK-V1-04` API/CLI/security/service | Historical headless/custom listener and source CLI base. | Fastify/SSE/HTTPS/full auth/fanout/health/bounds/build/services absent. | `IFC-V1-015` to `IFC-V1-021`, `IFC-V1-091` |
+| `BLK-V1-05` Mobile dashboard | View-model helpers only; old boards rejected. | Mobile state/visual gate and all product UI/device evidence absent. | `FE-V1-004`, reopened `FE-V1-002`, `FE-V1-003`, `FE-V1-010` to `FE-V1-022`, `FE-V1-090` |
+| `BLK-V1-06` Release | Baseline commands and historical docs exist. | Selected-path clean install/security/device/aggregate/docs/go-no-go absent. | `REL-V1-004` to `REL-V1-011` |
+
+## Delivery Passes
+
+1. Foundation: M0 through M3 establishes one runnable selected vertical with bounded failure behavior.
+2. Module hardening: `FND-V1-091`, `DAT-V1-091`, `INT-V1-091`, `IFC-V1-091`, and `FE-V1-090` close each module against strict matrices.
+3. Release hardening: M5 validates packaging, setup, security/privacy, docs/support, actual phone/browser/Codex workflows, and handoff.
 
 ## Release Gates
 
-| Gate | Status | Owner | Evidence |
-| --- | --- | --- | --- |
-| Build/package | Planned |  |  |
-| Validation | Planned |  |  |
-| Docs/support | Planned |  |  |
+| Gate | Status | Blocking owner |
+| --- | --- | --- |
+| Planning/trace/dependency integrity | In progress | `REL-V1-011`, `FND-V1-014` |
+| Real Codex compatibility and vertical | Blocked | `INT-V1-003` to `INT-V1-091` |
+| HTTPS/auth/security boundary | Blocked | `IFC-V1-015`, `DAT-V1-021`, `IFC-V1-017`, `IFC-V1-091` |
+| Build/package/user services | Blocked | `IFC-V1-021` |
+| Mobile visual selection/UI/device | Blocked | `FE-V1-004`, `FE-V1-002`, human `FE-V1-003`, `FE-V1-090` |
+| Security/privacy | Blocked | `REL-V1-005` |
+| Clean Ubuntu/aggregate/docs | Blocked | `REL-V1-004`, `REL-V1-006`, `REL-V1-007` |
+| Final go/no-go | Blocked | `REL-V1-008` to `REL-V1-010` |

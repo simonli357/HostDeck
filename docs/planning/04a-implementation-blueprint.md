@@ -1,253 +1,255 @@
 # Implementation Blueprint
 
-Owns global detailed design, module boundaries, block decomposition, sequencing, spike results, and rollout notes for the active version. Block specs in `docs/planning/05-blocks/` own local architecture, validation, epics, and task links.
+Owns detailed module design, invariants, cross-module sequences, capability-block mapping, migration order, and rollout gates for V1. Local block detail lives under `docs/planning/05-blocks/`; executable leaf tasks live under `docs/tracking/backlog/`.
 
-## Blueprint Approval Criteria
+## Approval Criteria
 
-This blueprint is not ready to approve unless these checks are true:
+This blueprint is implementation-ready only when:
 
-- Every V1 requirement has an owning module, candidate block, and planned validation route.
-- Every risky workflow has an explicit sequence: startup, start session, write, output replay, lock, pairing, restart, stale-session handling.
-- Every cross-boundary interaction uses typed contracts, not implicit object shapes or ad hoc terminal parsing.
-- All write paths prove this order: validate request, authenticate/trust, check lock, check session writability, audit preflight, send to tmux, record result.
-- Unknowns are named spikes with method, exit evidence, blocking scope, and required decision.
-- UI implementation remains blocked until visual direction/mockups are generated from approved state coverage and selected by the human.
-- The future backlog can be decomposed into leaf tasks without requiring the implementer to decide product scope, architecture, or validation strategy while coding.
+- every requirement in `02-requirements.md` resolves to defined leaf tasks and evidence;
+- generated Codex bindings are isolated behind a normalized adapter contract;
+- real turn, approval, structured controls, multi-client TUI, reconnect, and restart behavior are proven for the pinned Codex version;
+- LAN certificate enrollment is proven on a real phone;
+- storage migration and legacy tmux disposition are explicit;
+- the production Fastify/SSE/auth path has one lifecycle owner and bounded resources;
+- replacement mobile mockups pass the screen/state gate and receive human selection before React screen work;
+- no task must decide product scope, architecture, security policy, or validation while implementing.
 
-## Module Map
+## Maturity Truth
 
-| Module | Owns | Depends on | Must prove | Maturity |
-| --- | --- | --- | --- | --- |
-| Workspace scaffold | `pnpm` workspace, package scripts, strict TypeScript config, shared lint/test/build commands, local dev entrypoints. | Approved stack in `docs/planning/04-technical-plan.md` | Clean install, typecheck, test, build commands run from repo root. | Planned |
-| `@hostdeck/core` | Session ids/names, lifecycle states, attention/status model, command intent types, write eligibility rules, error model, fixture-based classifiers. | Requirements, limited shared utility code. | Pure unit tests cover normal, invalid, impossible, and unknown states without filesystem/network/tmux. | Planned |
-| `@hostdeck/contracts` | Zod schemas and TypeScript contract types for API requests/responses, stream events, config, storage records, audit events, and UI fixtures. | `@hostdeck/core` public types where useful. | Contract tests reject malformed API/config/storage payloads with stable errors. | Planned |
-| `@hostdeck/storage` | SQLite migrations, config/state repositories, session registry, auth/pairing records, audit records, output cursor metadata, retention cleanup. | `core`, `contracts`, `better-sqlite3`. | Restart, migration, retention, audit sanitization, token revocation, and corrupted-state failures. | Base schema and migration runner done; repositories planned |
-| `@hostdeck/tmux-adapter` | tmux target naming, session start/stop/attach/send, output capture/pipe setup, stale target detection, fake adapter implementation. | `core`, `contracts`, `DEC-017` output capture decision. | Fake adapter tests plus real Ubuntu tmux smoke cover start/list/send/stop/stale/restart. | Fake adapter done; output capture spike resolved; real adapter planned |
-| `@hostdeck/server` | `codexdeck serve`, startup checks, reconciliation, application services, local HTTP route listener, stream fanout, write pipeline, dashboard serving. | `core`, `contracts`, `storage`, `tmux-adapter`. | Startup refuses bad config; route schemas and write ordering are integration-tested. | Host status HTTP listener done; remaining route registration planned |
-| `@hostdeck/cli` | `codexdeck` commands, local API client behavior, bootstrap/admin direct paths, CLI-only unlock, LAN enable/disable, user-facing errors. | `contracts`, server API contracts, storage admin helper. | Commands have stable exit codes, daemon-unavailable behavior, and command-reference coverage. | Planned |
-| `@hostdeck/web` | Mission Control, Session Detail, Pairing/Trust, Host Status/Safety, composer, slash commands, advanced raw fallback, responsive states. | `contracts`, UX spec, later approved mockups. | Component/state tests and screenshots prove trust, lock, stale, disconnected, unknown, and responsive states. | Planned |
-| `@hostdeck/test-fixtures` | Fake Codex command, Codex-like output fixtures, fake tmux/storage helpers, UI fixture sessions and host states. | `core`, `contracts`. | All required fixture categories from SFR-011 exist and are used by tests. | Planned |
-
-## Public Interfaces
-
-### Core Types
-
-| Type / concept | Required states or fields | Owner | Notes |
+| Area | Current evidence | V1 maturity now | Missing production proof |
 | --- | --- | --- | --- |
-| `SessionId` | Stable unique id, generated by server/core id provider. | `core` | Never use display name as identity. |
-| `SessionName` | Human-readable, unique for V1 unless later architecture supports namespaces. | `core` | Duplicate names fail before tmux launch. |
-| `LifecycleState` | `starting`, `running`, `stopping`, `stopped`, `crashed`, `stale`, `unknown`. | `core` | Writes allowed only for explicitly writable states. |
-| `AttentionLevel` | `none`, `watch`, `needs_input`, `needs_approval`, `failed`, `stuck`, `unknown`. | `core` | Advisory; UI must not treat unknown as healthy. |
-| `SessionStatus` | `idle`, `running`, `waiting_for_user`, `waiting_for_approval`, `tests_failed`, `tests_passed`, `compacting`, `disconnected`, `unknown`. | `core` | Derived from lifecycle plus heuristics. |
-| `CommandIntent` | `prompt`, `slash`, `stop`, `raw_input`, `lock`, `unlock`, `lan_enable`, `lan_disable`, `pair`, `token_revoke`. | `core` | Audit action types derive from this set. |
-| `WriteEligibility` | `allowed` or denied with code: `untrusted`, `read_only`, `locked`, `stale`, `stopped`, `crashed`, `unknown`, `invalid_action`, `audit_unavailable`. | `core` | Used by API, CLI, and UI state tests. |
-| `OutputCursor` | Monotonic per-session cursor plus optional replay boundary marker. | `core/contracts` | Cursor semantics must survive reconnect and truncation. |
+| Workspace/conventions | Pinned workspace, strict TypeScript, Biome, Vitest, package shells. | Reusable foundation. | Real build/package, planning checker, new adapter package. |
+| Core/contracts | Session/write/error/storage/UI schemas and fixture classifiers. | Implemented for superseded tmux-shaped model. | Thread/turn/event/approval/runtime-compatibility rebaseline and invariant hardening. |
+| Storage | Migrations, settings, sessions, metadata, auth, audit, retention repositories. | Strong package-local base. | App-server mapping migration, production cleanup invocation, CSRF rotation, permissions, daemon lease, audit outcomes. |
+| Tmux adapter | Real target/start/send/capture/reconcile tests with fake Codex producer. | Legacy integration evidence. | Not the selected V1 runtime. Disposition waits for structured vertical. |
+| Codex adapter | Local architecture spike only. | Not implemented. | Generated bindings, IPC client, broker, real session/turn/control/approval/restart proof. |
+| API/CLI | Headless handlers, custom Node listener, source-level CLI shell/tests. | Partial foundation, not packaged production path. | Fastify/SSE/static build, selected adapter wiring, full auth, HTTPS, timeouts, service units, runnable `bin`. |
+| Web | View-model helpers/fixtures only. Existing mockups rejected. | Pre-implementation. | Mobile state rebaseline, two options, selection, React/Vite UI, screenshots/device evidence. |
+| Release | Baseline commands pass; developer/command docs record gaps. | No-go. | Clean package/service/phone/security/aggregate evidence. |
 
-### API Route Families
+Done task records remain historical evidence for their stated scope. They do not imply the selected V1 block is complete.
 
-Route names can be refined during implementation, but each family must keep the semantics below.
+## Normalized Domain Contracts
 
-| Family | Operations | Request rules | Response / stream rules | Required failures |
-| --- | --- | --- | --- | --- |
-| Host status | `GET /api/host/status` | No mutation. Reflects actual startup, tmux, storage, stream, lock, and LAN state. | Returns version, bind mode, lock/LAN, health checks, stale count, stream health, last bounded error. | Must not report healthy when startup checks, storage, or tmux checks fail. |
-| Session start | `POST /api/sessions` | Local admin API path used by CLI. V1 starts new managed `codex` sessions only. | Returns the created managed session after tmux launch, durable registry write, metadata write, and output-reader start when configured. | Invalid cwd, duplicate name, missing Codex binary, tmux start failure, storage failure, output-reader start failure. |
-| Sessions read | `GET /api/sessions`, `GET /api/sessions/:id`, `GET /api/sessions/:id/output?after=` | Read token or local read policy. `after` cursor is optional. | Returns attention-sorted data for list consumers and bounded output with cursor/truncation metadata. | Not found, stale, invalid cursor, permission denied. |
-| Session stream | `GET /api/sessions/:id/stream?after=` using WebSocket or SSE. | Must identify one session. No all-session stream in V1. | Sends ordered output events or replay boundary. Closes with typed reason on server shutdown. | Stale cursor, stale session, permission denied, stream reader unavailable. |
-| Session writes | `POST /api/sessions/:id/input`, `/slash`, `/stop`, optional `/raw-input`. | Exactly one session id. Trusted dashboard write token or explicit local-admin CLI policy. Host unlocked. Writable session. | Returns accepted/rejected result. Output arrives later through stream. | Untrusted, read-only, locked, stale, stopped, crashed, unknown, malformed, unsupported slash, multi-session request, audit unavailable. |
-| Pairing/token | `POST /api/pair/claim`, optional `GET /api/pair/status`. | Claim uses short-lived one-time code. | Sets host-only `HttpOnly` device-token cookie and returns trusted device state with a CSRF token only when browser writes are enabled. | Expired, used, revoked, invalid code; cookie-only requests never grant ambient write permission. |
-| Security/network | `GET /api/security/state`, `POST /api/security/lock`, `GET /api/network/state`. | Lock can be trusted dashboard or CLI. Unlock is CLI-only. LAN mutation is CLI/admin path. | State responses drive UI disabled controls. | Remote unlock rejected, LAN mutation rejected from dashboard, audit failure handled per emergency-lock policy. |
+| Contract | Required shape/invariant | Owner |
+| --- | --- | --- |
+| `ManagedSession` | HostDeck id, alias, Codex thread id, cwd/project, optional branch, runtime version/source, archived state. Ids are immutable and distinct. | core/contracts |
+| `SessionProjection` | Lifecycle, turn state, attention, summary, last activity, model/goal cue, last HostDeck cursor, freshness/degraded reason. | core/contracts |
+| `ProjectedEvent` | Session id, safe integer cursor, normalized kind, Codex event id/type when available, timestamp, bounded payload, redaction/truncation/boundary metadata. | contracts/storage |
+| `RuntimeCompatibility` | Codex version, generated binding identity, negotiated capabilities, check result/time, bounded incompatibility reason. | contracts/codex adapter/storage |
+| `ControlIntent` | Prompt, model, goal, plan, usage, compact, skills, approval response, interrupt, archive. Exactly one typed target. | core/contracts |
+| `PendingApproval` | Session/thread, app-server request id, action/scope/reason, created/expiry, state, response policy. | contracts/server ephemeral projection |
+| `TrustContext` | Loopback/local-admin or paired device identity, read/write permission, expiry/revocation, CSRF generation, origin. | contracts/server |
+| `AuditOutcome` | `accepted`, `succeeded`, `failed`, `rejected`, or `incomplete`; accepted is never treated as terminal success. | core/contracts/storage |
 
-All API errors use the contract envelope: `code`, `message`, optional `field`, optional `session_id`, optional `retryable`, optional bounded `details`.
+Timestamps use strict RFC 3339/ISO 8601 parsing with round-trip calendar validation. Cursors and counts are non-negative safe integers. Lifecycle transitions use explicit normal and reconciliation transition tables.
 
-### CLI Contract
+## Codex Adapter Interfaces
 
-| Command | Calls daemon API? | Direct local/admin path allowed? | Exit behavior |
+```ts
+interface CodexRuntimeAdapter {
+  connect(signal: AbortSignal): Promise<RuntimeCompatibility>;
+  close(reason: string): Promise<void>;
+  listThreads(input: ListThreadsInput): Promise<ThreadPage>;
+  startThread(input: StartThreadInput): Promise<ThreadSnapshot>;
+  readThread(threadId: string): Promise<ThreadSnapshot>;
+  archiveThread(threadId: string): Promise<void>;
+  startTurn(input: StartTurnInput): Promise<TurnSnapshot>;
+  steerTurn(input: SteerTurnInput): Promise<TurnSnapshot>;
+  interruptTurn(input: InterruptTurnInput): Promise<void>;
+  invokeControl(input: StructuredControlInput): Promise<ControlResult>;
+  resolveApproval(input: ApprovalResponseInput): Promise<void>;
+  subscribe(listener: CodexRuntimeListener): Unsubscribe;
+}
+```
+
+The adapter implementation contains:
+
+| Component | Responsibility | Failure rule |
+| --- | --- | --- |
+| Binding loader | Generated app-server types/schema identity for the pinned compatibility policy. | Missing/drifted required type blocks build/startup. |
+| IPC transport | `ws+unix:` connection, open/close/ping, bounded frame size, socket error mapping. | No TCP fallback. |
+| Handshake | `initialize`/`initialized`, client identity, capabilities. | Pre-initialize message or repeat initialize is fatal to connection. |
+| Request broker | Id assignment, pending map, deadlines, cancellation, response validation, max in-flight. | Timeout/disconnect yields typed unknown outcome for mutations. |
+| Notification decoder | Validate and normalize required events. | Unknown optional events counted; unknown required semantics degrade compatibility. |
+| Server-request router | Approval and other supported server-initiated requests. | Unsupported request gets explicit protocol error and runtime degradation. |
+| Fake adapter | Deterministic operations/events/failures matching normalized interface. | Cannot bypass contract parsing in tests. |
+
+Raw generated app-server types never cross into storage, API, or UI packages.
+
+## Application Services
+
+| Service | Inputs | Outputs | Key invariant |
 | --- | --- | --- | --- |
-| `codexdeck serve` | No, it is the daemon. | Yes. | Nonzero if startup checks fail before accepting requests. |
-| `codexdeck status` | Prefer API. | Read-only local fallback allowed if daemon unavailable. | Nonzero only for inaccessible or corrupt state; clearly labels fallback mode. |
-| `codexdeck start --name <name> --cwd <path>` | Yes. | No for V1 normal use. | Nonzero with typed cause if daemon unavailable, duplicate name, invalid cwd, missing binary, or launch failure. |
-| `codexdeck list` | Yes. | Optional read-only fallback later; not required for V1. | Shows stale/unknown honestly. |
-| `codexdeck send <session> <text>` | Yes. | No. | Nonzero unless the write was accepted by daemon after audit preflight. |
-| `codexdeck attach <session>` | Prefer API for lookup, then local tmux attach command. | Yes after lookup if enough local state exists. | Nonzero for stale/missing target; prints tmux target when not auto-attaching. |
-| `codexdeck stop <session>` | Yes. | No. | Nonzero unless stop is accepted and audited. |
-| `codexdeck pair` | Prefer API if daemon running. | Yes to create local pairing code when daemon unavailable only if safe state access is possible. | Prints expiry and does not expose durable token. |
-| `codexdeck lock` | Prefer API. | Yes as emergency local path. | Must succeed when storage is writable enough to set lock. |
-| `codexdeck unlock` | No remote/dashboard unlock. | Yes, CLI-only local admin path. | Nonzero unless lock state is cleared and audited. |
-| `codexdeck lan enable/disable` | Prefer API/admin service. | Yes local config path if daemon stopped. | Must make bind change explicit and auditable; restart/rebind behavior documented later. |
+| Runtime supervisor | Mode, Codex path, socket path, process port, clock. | Process/socket readiness and ownership. | Kills only processes it owns; service mode keeps app-server independent of HostDeck restart. |
+| Compatibility service | Adapter handshake and policy. | Ready/degraded/incompatible state. | Mutation readiness requires current successful compatibility result. |
+| Session service | Codex adapter, mapping repo, projection repo. | Start/list/detail/resume/archive. | Never creates a second thread to hide an uncertain first start. |
+| Turn/control dispatcher | Trust, lock, compatibility, target, audit, adapter. | Accepted/rejected/terminal result. | Validation -> auth/origin/CSRF -> lock -> target/capability -> audit accepted -> dispatch -> audit terminal outcome. |
+| Approval service | Pending server requests, trust, lock, audit, adapter. | Exact approve/deny response. | At most one terminal response per request id. |
+| Projection service | Normalized runtime events, transaction, classifier. | Committed event plus updated session projection. | Publish only after durable commit and retention. |
+| Replay/fanout hub | Projection repo, per-session queues, abort signals. | Ordered replay/live SSE source. | No gap/duplicate at handoff; bounded slow-client queue. |
+| Trust service | Pairing/device repos, cookie/CSRF/origin/rate policy. | Read/write trust context. | Raw device token never enters JS-readable durable storage or database. |
+| Host health | Storage, runtime, projector, fanout, listener, cert/lease. | Bounded readiness/degradation snapshot. | Health updates after startup; it is not a frozen boot result. |
 
-## Storage Model Outline
+## Storage Migration
 
-| Store/table | Minimum fields | Invariants | Failure handling |
-| --- | --- | --- | --- |
-| `schema_migrations` | `version`, `applied_at`, checksum if used. | Server does not accept requests with unknown failed migration. | Startup fails loudly. |
-| `sessions` | `id`, `name`, `cwd`, `backend`, `tmux_session`, `tmux_window` or target, `lifecycle_state`, `created_at`, `updated_at`, `stale_reason`. | `id` stable; `name` unique in V1; cwd is absolute and validated on start. | Corrupt/missing target marks stale, not recreated. |
-| `session_metadata` | `session_id`, `branch`, `last_activity_at`, `status`, `attention`, `summary`, `last_output_cursor`. | Derived values may be stale but must be labeled. | Failed derivation yields `unknown`, not healthy. |
-| `output_events` or log index | `session_id`, `cursor`, `order`, `captured_at`, `kind`, `payload_or_pointer`, `truncated_before`. | Cursors monotonic per session; V1 retains 10,000 output events or 10 MB payload per session, whichever is lower. | Invalid cursor returns boundary/error; pruning records visible replay boundaries. |
-| `auth_devices` | `id`, hashed token, hashed CSRF token, permission mode, `created_at`, `last_used_at`, `revoked_at`, expiry if used. | Raw tokens and raw CSRF tokens are never stored. Revoked/expired or CSRF-mismatched devices cannot write. | Invalid token or CSRF mismatch returns permission error. |
-| `pairing_codes` | hashed code, permission mode, `created_at`, `expires_at`, `used_at`. | One-time use and time-bounded. | Expired/used code fails and may be audited. |
-| `settings` | bind host/port, LAN enabled, locked, state dir metadata, retention settings. | Defaults are safe: localhost, LAN off, writes locked only when user locks. | Invalid bind/port blocks startup. |
-| `audit_events` | `id`, `at`, `actor`, `action`, `session_id`, bounded payload summary, result, error code. | Required before remote write dispatch except emergency lock; V1 retains 5,000 audit events or 30 days globally, whichever is lower. | Failed audit preflight blocks writes; pruning records audit retention boundaries. |
+The selected runtime requires a new migration, not in-place reinterpretation of tmux fields.
+
+1. Add app-server compatibility and normalized projected-event tables/columns.
+2. Add `codex_thread_id`, runtime source/version, projection freshness, and archive semantics to managed sessions.
+3. Preserve old tmux fields as nullable legacy columns until migration disposition is complete.
+4. Mark pre-release tmux records `legacy_unmigrated`; do not expose them as live app-server sessions.
+5. Provide a local reset/archive path for pre-release data if thread identity cannot be proven.
+6. Remove legacy columns only in a later reviewed migration after `INT-V1-008`.
+
+Session start uses a recoverable saga because Codex thread creation and SQLite cannot share a transaction:
+
+1. Validate request and reserve HostDeck id/alias as `starting` in SQLite.
+2. Call `thread/start` with a client operation id where supported.
+3. Persist returned thread id and initial projection transactionally.
+4. If Codex fails before a thread id, remove/mark failed reservation for safe retry.
+5. If Codex returns a thread id but persistence fails, retain an explicit recovery record outside the failed transaction or query by operation metadata; never create another thread automatically.
+6. A response-serialization failure after success does not retry start.
 
 ## Critical Sequences
 
-### Daemon Startup
+### Startup
 
-1. Parse config and CLI flags.
-2. Validate state directory and bind policy.
-3. Open SQLite and run migrations.
-4. Validate required binaries: `tmux`; Codex executable before starting sessions.
-5. Load settings, auth state, and registry.
-6. Reconcile registry with tmux targets.
-7. Mark missing/unrecoverable targets stale with reason.
-8. Start output readers for live sessions.
-9. Start local HTTP API/dashboard listener.
-10. Report ready host status only after all required checks pass.
+1. Resolve paths/config and acquire owner-only daemon lease.
+2. Open/migrate storage and validate settings/certificates.
+3. Start or await mode-owned app-server and private socket.
+4. Complete compatibility handshake and start adapter reader.
+5. Load managed mappings and reconcile each against `thread/read`/list.
+6. Mark uncertain prior active states interrupted/stale; never infer running from persistence alone.
+7. Subscribe to managed thread events and rebuild bounded projections where supported.
+8. Run due retention and initialize live health.
+9. Start Fastify HTTPS/HTTP listener, routes, SSE, and static assets.
+10. Report ready only when required dependencies are current.
 
-### Start Session
+### Prompt Or Structured Control
 
-1. Validate request schema.
-2. Validate session name uniqueness and cwd.
-3. Check Codex executable availability.
-4. Reserve session id/registry transaction or create pending record.
-5. Create tmux target and launch `codex`.
-6. Verify tmux target exists.
-7. Store running session metadata and start output reader.
-8. Return session record.
-9. On partial failure, cleanup tmux target or mark pending record failed/stale with explicit reason.
+1. Fastify validates path, body, content type, and size.
+2. Trust service validates configured Host, Origin, device cookie/permission, CSRF generation, expiry/revocation, and rate/concurrency limit.
+3. Dispatcher checks host lock.
+4. Load exact managed session and current runtime/projection state.
+5. Check runtime compatibility and operation capability.
+6. Validate operation-specific input and active-turn conflict behavior.
+7. Append bounded audit `accepted` in a transaction.
+8. Dispatch once with request deadline/idempotency metadata where supported.
+9. Append `succeeded`, `failed`, or `incomplete` outcome.
+10. Return accepted/terminal response consistent with the owning operation; later turn outcome arrives by event stream.
 
-### Write Prompt Or Slash Command
+### Approval
 
-1. Validate one-session request and command type.
-2. Authenticate client cookie token and permission mode.
-3. Validate same-origin browser write posture: matching `Origin` when present and valid CSRF header for dashboard writes.
-4. Check host lock.
-5. Load session and verify lifecycle is writable.
-6. Validate slash command against V1 allowlist if action is `slash`.
-7. Create bounded audit preflight event.
-8. Send literal text through tmux adapter.
-9. Record audit result.
-10. Return accepted result. Do not report command outcome until output/status later proves it.
+1. Adapter receives a supported app-server server request and validates it.
+2. Approval service registers one pending request with expiry/connection generation and projects it to the session.
+3. Browser receives the committed approval projection.
+4. Approve/deny passes the normal mutation gate and verifies request is still pending on the same connection generation.
+5. Audit `accepted`, send exactly one app-server response, then audit terminal outcome.
+6. Duplicate, expired, disconnected, or superseded responses reject without sending.
+7. Reconnect expires prior connection-bound pending approvals unless app-server reissues them.
 
-### Stream Reconnect
+### Replay To Live SSE
 
-1. Client connects with session id and optional cursor.
-2. Server authenticates read permission.
-3. Server checks session existence/stale state.
-4. Server replays retained events after cursor if contiguous.
-5. If retention boundary was crossed, server sends a boundary marker before latest retained events, with `next_cursor` set to the first retained cursor after pruning.
-6. Server subscribes client to live fanout.
-7. Reader failure sends typed stream error and updates host/session health.
+1. Authenticate read and validate session/cursor.
+2. Register paused subscriber; capture committed high-water cursor.
+3. Query retained projection after requested cursor through high-water.
+4. Emit boundary if requested history was pruned, then ordered replay.
+5. Drain queued committed events above high-water and switch to live.
+6. Send heartbeat comments within idle timeout.
+7. On request abort, queue overflow, auth revocation, session archive, or shutdown, unregister immediately and close with bounded reason where possible.
 
-### Restart Reconciliation
+### Runtime Reconnect
 
-1. Server reloads durable session registry.
-2. tmux adapter lists known HostDeck targets.
-3. Registry records with live targets become running or last-known derived state.
-4. Registry records without targets become stale/unavailable.
-5. Unknown HostDeck-looking tmux targets are ignored or flagged for later import; no arbitrary import in V1.
-6. Output readers restart for live targets.
-7. Writes to stale/unreconciled sessions fail.
+1. Mark compatibility/runtime disconnected and projections stale; reject new mutations.
+2. Fail pending requests with `incomplete`/unknown outcome as appropriate and expire connection-bound approvals.
+3. Retry connection with capped exponential backoff and jitter while host remains active.
+4. Repeat handshake/version checks.
+5. Reconcile managed threads and current statuses without starting turns.
+6. Persist an explicit replay boundary when events during disconnect cannot be recovered.
+7. Resume subscriptions and mutation readiness only after reconciliation.
 
-### Lock And Unlock
+### Browser Pair/Reload/Revoke
 
-1. Lock request validates actor.
-2. Lock writes setting/audit through normal path where possible.
-3. Write dispatcher checks lock before any tmux send.
-4. Dashboard shows locked state and disables all writes.
-5. Unlock is only accepted from CLI local admin path.
-6. Unlock audits the state change and dashboard reflects unlocked state after refresh.
+1. Local CLI creates one-time hashed code with permission and expiry.
+2. HTTPS claim validates origin/host/rate, atomically consumes code, creates hashed device token, sets cookie, and audits outcome.
+3. Browser calls CSRF bootstrap; server rotates generation/hash and returns raw token to memory.
+4. Reload repeats bootstrap using HttpOnly cookie.
+5. Revoke invalidates device and CSRF state, audits outcome, and causes active SSE/mutations to fail on next authorization check.
 
-## Failure Matrix
+### Graceful Shutdown
 
-| Failure | User-visible behavior | Code owner | Validation |
-| --- | --- | --- | --- |
-| Missing `tmux` | `serve` fails before ready; host status cannot claim healthy. | server/tmux adapter | Startup negative test. |
-| Missing Codex executable | Session start fails before registry success. | server/tmux adapter | Start negative test with fake path. |
-| Duplicate session name | Start rejected with field error. | core/server | Unit/API test. |
-| Invalid cwd | Start rejected before tmux command. | core/server | Unit/API/CLI test. |
-| Daemon unavailable for normal CLI command | CLI exits nonzero with actionable message. | cli | CLI contract test. |
-| Pairing code expired/used | Claim rejected; no write controls enabled. | storage/server/web | Auth tests and UI state test. |
-| Host locked | Writes disabled in UI; API rejects writes. | core/server/web | API/UI tests. |
-| Audit unavailable | Remote write rejected before tmux send. | server/storage | Integration test. |
-| tmux target missing after restart | Session marked stale; writes rejected; attach unavailable. | tmux adapter/server | Restart test. |
-| Output retention boundary crossed | UI shows replay/truncation boundary. | storage/server/web | Output replay test and UI fixture. |
-| Status heuristic cannot classify | UI shows unknown advisory state, not idle/success. | core/web | Fixture test and component test. |
-| LAN disabled | Dashboard/host state shows LAN off; service binds localhost. | server/cli/web | Config/network smoke test. |
-| Raw input requested from default view | UI requires advanced mode and confirmation; API distinguishes raw input. | web/server | UI/API tests. |
+1. Set not-ready and reject new mutations.
+2. Stop accepting HTTP connections.
+3. Close SSE and fanout queues by deadline.
+4. Stop reconnect loops and fail pending broker requests truthfully.
+5. Flush projection/audit work and close SQLite.
+6. Close adapter transport.
+7. Terminate app-server only when foreground ownership says HostDeck owns it.
+8. Release socket/runtime files and daemon lease.
 
-## Requirement Coverage
+## Failure And Concurrency Matrix
 
-| Requirement group | Blueprint owner | Candidate blocks | Spike dependency | Validation owner |
-| --- | --- | --- | --- | --- |
-| FR-001 to FR-004 session lifecycle | Tmux lifecycle, session registry, CLI/API | BLK-V1-03, BLK-V1-04 | SPK-ARCH-001 for output-adjacent tmux behavior | Adapter/API/CLI tests plus Ubuntu smoke |
-| FR-005, FR-013 output streaming | Output ingestion, stream reconnect | BLK-V1-03, BLK-V1-04 | SPK-ARCH-001; retention caps resolved by `DEC-016` | Stream integration tests |
-| FR-006 to FR-008, FR-015 writes/slash | Write pipeline, slash commands | BLK-V1-01, BLK-V1-04, BLK-V1-05 | Token transport resolved by `DEC-015`; no remaining write-safety spike here | API/UI/CLI tests |
-| FR-009, SFR-011 heuristics/fixtures | Core classifiers, test fixtures | BLK-V1-01 | None | Unit fixture tests |
-| FR-010 and IR-001 to IR-009 UI | Web dashboard, visual mockups | BLK-V1-05 | SPK-UX-001 | Component tests and screenshot evidence |
-| FR-011 CLI | CLI contract | BLK-V1-04, BLK-V1-06 | Storage/token choices may affect admin commands | CLI tests and command reference |
-| FR-012 API | Local API contract | BLK-V1-04 | Auth transport resolved by `DEC-015` | API contract tests |
-| FR-014, NFR-002, DR-007 restart | Startup/reconciliation, storage, tmux adapter | BLK-V1-02, BLK-V1-03 | SPK-ARCH-001, SPK-ARCH-002 | Restart integration tests |
-| NFR-001, PR-001 to PR-009 platform | Config/startup/service lifecycle | BLK-V1-04, BLK-V1-06 | SPK-ARCH-002 may affect setup | Setup smoke and startup tests |
-| NFR-005, NFR-006, SFR-005 failures | Core errors, API envelope, CLI exit behavior | All blocks | None | Negative tests |
-| DR-001 to DR-010 data/audit | Storage model, audit, retention | BLK-V1-02 | SQLite and retention decisions resolved by `DEC-014`/`DEC-016` | Storage/audit tests |
-| SFR-001 to SFR-010 trust/safety | Pairing/trust, lock, write eligibility | BLK-V1-02, BLK-V1-04, BLK-V1-05 | Auth transport resolved by `DEC-015` | Auth/API/UI tests |
+| Case | Required behavior | Test owner |
+| --- | --- | --- |
+| Invalid calendar timestamp or unsafe cursor | Contract rejection before persistence/dispatch. | `FND-V1-016` |
+| Two starts with same alias | One reservation succeeds; the other gets duplicate conflict. | `DAT-V1-018`, `INT-V1-006` |
+| Thread created, DB write fails | No automatic second thread; explicit recoverable/incomplete result. | `INT-V1-006` |
+| App-server disconnect after accepted mutation | Audit becomes incomplete/unknown unless a terminal event proves outcome. | `INT-V1-007` |
+| HostDeck restart while turn runs | Service-mode app-server continues; reconciliation restores projection or explicit boundary. | `INT-V1-007`, `IFC-V1-018` |
+| Approval double tap/two clients | Exactly one response wins; loser sees resolved conflict. | `INT-V1-006`, `IFC-V1-019` |
+| CSRF reload/revoke race | Rotated/revoked generation invalidates stale header; no bearer token exposure. | `DAT-V1-021`, `IFC-V1-017` |
+| Slow SSE subscriber | Subscriber closes at bounded queue without blocking projector/other clients. | `IFC-V1-018`, `IFC-V1-020` |
+| Retention during replay | Transactional boundary and high-water handoff remain ordered. | `DAT-V1-020`, `IFC-V1-018` |
+| Duplicate daemon | Second owner exits before opening DB/listener/runtime mutation. | `DAT-V1-019` |
+| LAN HTTP/mismatched Host/Origin | Startup/request rejected; no cookie or data. | `IFC-V1-015`, `IFC-V1-017` |
+| Unsupported `/plan` semantic | Control disabled/incompatible; no literal slash fallback. | `INT-V1-003`, `INT-V1-006`, `FE-V1-021` |
+| TUI plus HostDeck clients | Both address the same thread without subscription corruption. | `INT-V1-006` |
 
-## Candidate Capability Blocks
+## Required Capability Blocks
 
-These are still candidate blocks. The next `05-blocks` stage must create block specs and a completion matrix before backlog decomposition.
+| Block | Scope after rebaseline | Completion gate |
+| --- | --- | --- |
+| `BLK-V1-01` | Normalized contracts, events, approvals, compatibility, fixtures, planning validation. | Rebaseline tests and `FND-V1-091`; old tmux-shaped completion is insufficient. |
+| `BLK-V1-02` | App-server mapping/projection migration, auth/CSRF, audit outcomes, production retention, permissions/lease. | Integration/storage evidence and `DAT-V1-091`. |
+| `BLK-V1-03` | Codex adapter, private runtime, real thread/turn/control/approval/event/restart/TUI path. | Real vertical plus `INT-V1-091`; no fake producer. |
+| `BLK-V1-04` | Fastify API/SSE/static, selected adapter orchestration, HTTPS/auth, CLI/build/service packaging, resource controls. | Packaged production path plus `IFC-V1-091`. |
+| `BLK-V1-05` | Mobile state rebaseline, replacement visual options/selection, phone-first dashboard, approvals, controls, fidelity/device evidence. | `FE-V1-090`. |
+| `BLK-V1-06` | Security/privacy, clean install/service/browser/phone, aggregate validation, completion matrix, go/no-go. | Release-readiness artifact and human acceptance. |
 
-| Block ID | Capability/workflow | Requirement refs | Why required | Proposed spec | Depends on | Completion evidence |
-| --- | --- | --- | --- | --- | --- | --- |
-| BLK-V1-01 | Contracts, core model, and fixtures | FR-002, FR-009, NFR-003, NFR-005, NFR-006, NFR-007, SFR-011 | Gives every later module stable types, state machines, errors, and fake Codex/tmux fixtures. | `docs/planning/05-blocks/BLK-V1-01-contracts-core-fixtures.md` | Approved requirements and architecture | Core tests and fixture classifier evidence |
-| BLK-V1-02 | Local state, auth, audit, and config | DR-001 to DR-010, SFR-001, SFR-002, SFR-004, SFR-006 to SFR-008, PR-009 | Durable local truth for sessions, pairing, lock/LAN, audit, retention, and restart. | `docs/planning/05-blocks/BLK-V1-02-local-state-auth-audit.md` | BLK-V1-01; SPK-ARCH-002/003/004 resolved by `DEC-014`/`DEC-015`/`DEC-016` | Storage migration/auth/audit tests |
-| BLK-V1-03 | Tmux session lifecycle and output ingestion | FR-001, FR-003 to FR-005, FR-013, FR-014, NFR-002, PR-001, PR-006, SFR-010 | Foundation for managed Codex sessions, attach path, output streaming, and restart reconciliation. | `docs/planning/05-blocks/BLK-V1-03-tmux-output.md` | BLK-V1-01, BLK-V1-02, SPK-ARCH-001 | Fake adapter tests plus Ubuntu tmux smoke evidence |
-| BLK-V1-04 | Local API and CLI control plane | FR-006 to FR-008, FR-011, FR-012, FR-015, PR-002 to PR-004, PR-007, PR-008, SFR-003, SFR-005 | Exposes the host agent through typed API and `codexdeck` commands. | `docs/planning/05-blocks/BLK-V1-04-api-cli-control-plane.md` | BLK-V1-01 through BLK-V1-03 | API/CLI contract tests and failure-path evidence |
-| BLK-V1-05 | Web dashboard UX | FR-005 to FR-010, IR-001 to IR-009, PR-005, SFR-001 to SFR-003, SFR-009 | Delivers Mission Control, Session Detail, trust states, safe commands, and advanced fallback. | `docs/planning/05-blocks/BLK-V1-05-web-dashboard.md` | BLK-V1-01, BLK-V1-04, SPK-UX-001 | Responsive UI tests and screenshot evidence |
-| BLK-V1-06 | Hardening, setup, and release readiness | NFR-001 to NFR-009, PR-001 to PR-009, release gates | Proves V1 can be installed, run, locked, audited, and validated from a clean Ubuntu workflow. | `docs/planning/05-blocks/BLK-V1-06-hardening-release.md` | BLK-V1-01 through BLK-V1-05 | Release checklist, docs, smoke tests, go/no-go evidence |
+## Delivery Order
 
-## Delivery Slices
+| Order | Gate/slice | Exit evidence |
+| --- | --- | --- |
+| 1 | Audit and planning integrity | `REL-V1-011`, `FND-V1-014`; owner docs/backlog/checker agree. |
+| 2 | Normalized contract rebaseline | `FND-V1-015`, `FND-V1-016`, generated fixtures and strict invariants. |
+| 3 | Codex compatibility and IPC adapter | `INT-V1-003`, `INT-V1-004`; handshake/broker/fake tests. |
+| 4 | Mapping/projection/auth storage migration | `DAT-V1-018` to `DAT-V1-021`; secure/retained durable state. |
+| 5 | Real structured vertical | `INT-V1-005` to `INT-V1-007`; real thread, prompt, events, controls, approval, TUI, restart. |
+| 6 | Legacy disposition and integration hardening | `INT-V1-008`, `INT-V1-091`; one selected runtime remains. |
+| 7 | HTTPS and production host interface | `IFC-V1-015` to `IFC-V1-021`; Fastify/SSE/auth/fanout/build/service. |
+| 8 | Interface hardening | `IFC-V1-091`; slow clients, failure matrix, real production path. |
+| 9 | Mobile state and visual gate | `FE-V1-004`, reopened `FE-V1-002`, human `FE-V1-003`. This precedes React screen implementation. |
+| 10 | Dashboard implementation | `FE-V1-010` to `FE-V1-022`, then responsive/fidelity/copy tasks. |
+| 11 | Module and release hardening | `FE-V1-090`, release/security/clean-install/aggregate tasks. |
+| 12 | Human acceptance | `REL-V1-010`; explicit go/no-go. |
 
-| Order | Slice | Goal | Scope | Exit evidence |
-| --- | --- | --- | --- | --- |
-| 1 | Foundation contracts | Stable headless model and schemas. | Workspace scaffold; `core`; `contracts`; fixture categories; error envelope. | Unit/contract tests. |
-| 2 | Foundation fake vertical | Smallest coherent app path without live Codex. | Fake storage; fake Codex/tmux; daemon status; start/list fake session; mission-control shell. | Local dashboard smoke with fake data. |
-| 3 | Foundation storage/auth | Durable local state and trust foundation. | SQLite choice; migrations; settings; pairing/token; lock; audit preflight. | Storage/auth/audit integration tests. |
-| 4 | Foundation tmux | First real managed tmux path. | Start/list/attach/send/stop; output capture spike result; registry persistence. | Ubuntu smoke evidence with managed sessions. |
-| 5 | Foundation API/CLI | User-facing local control plane. | Route families; CLI commands; stable errors; daemon unavailable behavior; LAN controls. | API/CLI contract tests. |
-| 6 | Foundation UI | Usable browser dashboard with fake/real API fixtures. | Mission Control, Session Detail, trust states, command controls, raw fallback shell. | Component tests and preliminary screenshots. |
-| 7 | Module hardening | Production-grade block passes. | Storage/auth/audit; tmux/output; API/CLI; dashboard. | Block-specific hardening evidence. |
-| 8 | Visual mockup gate | Approved UI implementation target. | Generate two visual directions from state matrix; human selects one; approved screen references recorded. | Assets in `assets/ui-concepts/` and decision log entry. |
-| 9 | Release hardening | Clean local V1 handoff. | Setup docs, command reference, clean install/run, smoke script, release checklist, known gaps. | Release-readiness artifact and status update. |
+Tasks may overlap only when dependencies and shared contracts make the work independent. No UI screen implementation starts before order 9 is complete.
 
-## Spikes
+## Rollout And Rollback
 
-Use spikes only for uncertainty that blocks requirements, architecture, detailed design, test strategy, or task decomposition.
+- All app-server behavior is behind the new adapter and selected-runtime configuration during migration.
+- Before pre-release migration, current tmux tests remain runnable to prevent accidental loss of evidence.
+- If the real structured vertical fails a required semantic, V1 returns to planning. It does not silently ship both runtimes or resume TUI scraping.
+- Database migrations are forward-only and tested on a copy; destructive pre-release reset requires explicit CLI confirmation and preserves an exportable diagnostic.
+- Dependency additions are committed separately from UI work and include license/version rationale in the owning task.
+- A completed block is reopened whenever its production outcome changes, even if historical package tests still pass.
 
-| ID | Question | Method | Decision needed | Blocks | Exit evidence |
-| --- | --- | --- | --- | --- | --- |
-| SPK-ARCH-001 | Can tmux `pipe-pane` or an equivalent mechanism provide ordered, reconnectable per-session output for V1? | Prototyped fake Codex output in tmux, live pipe capture, reader restart, bounded capture recovery, and missing-target failures. | Resolved in `DEC-017`: live `pipe-pane`, bounded `capture-pane` startup/restart recovery, HostDeck-assigned cursors, replay boundary when continuity cannot be proven. | BLK-V1-03, BLK-V1-04, output tests | `artifacts/int-v1-001-tmux-capture-spike.md`. |
-| SPK-ARCH-002 | Which SQLite Node driver should V1 use? | Compared `better-sqlite3`, pinned-runtime `node:sqlite`, `sqlite3`, and `sqlite` wrapper for install friction, license, sync/async behavior, migrations, test ergonomics, and Node LTS support. | Resolved in `DEC-014`: use `better-sqlite3` plus a first-party migration runner; do not silently fall back to `node:sqlite`. | BLK-V1-02, setup docs | `artifacts/dat-v1-001-sqlite-driver-spike.md`. |
-| SPK-ARCH-003 | What token transport should dashboard pairing use? | Compared HttpOnly same-origin cookie versus bearer token approaches under localhost and LAN opt-in. | Resolved in `DEC-015`: host-only `HttpOnly` cookie for the device token, server-bound CSRF token for same-origin write headers, no durable JavaScript-readable bearer-token storage. | BLK-V1-02, BLK-V1-04, BLK-V1-05 | `artifacts/dat-v1-002-token-transport-spike.md` and API contract update. |
-| SPK-ARCH-004 | What retention caps should output and audit use? | Measured fixture sizes and simulated bounded append/replay behavior. | Resolved in `DEC-016`: 10,000 output events or 10 MB per session; 5,000 audit events or 30 days globally; cleanup writes visible boundaries. | BLK-V1-02, BLK-V1-03, test plan | `artifacts/dat-v1-003-retention-caps-spike.md` and exported `defaultRetentionPolicy`. |
-| SPK-UX-001 | What visual direction and mockup set should UI implementation target? | After test/state matrix, generate two image-based visual directions covering Mission Control, Session Detail, trust/status, and raw fallback. | Human selects one option and approves screen-group references. | BLK-V1-05 UI implementation | Assets under `assets/ui-concepts/`, decision log entry, UX spec update. |
+## Pre-Implementation Checks
 
-## Pre-Backlog Readiness Checks
-
-Before backlog decomposition, all of these must be true:
-
-- Architecture spikes are either resolved or represented as spike leaf tasks that block affected implementation tasks.
-- `docs/planning/04b-test-plan.md` maps each requirement group and candidate block to validation commands/evidence.
-- `docs/planning/05-blocks/00-index.md` defines required V1 blocks and completion matrix.
-- Each required block has a spec file with local architecture, validation, epics, and task links.
-- Visual mockup generation is represented as a blocked UI-fidelity task or completed before UI implementation tasks.
-- No broad implementation task such as "build dashboard", "add API", "integrate tmux", or "finish auth" appears as a leaf task.
-
-## Integration Notes
-
-- Contracts first: Implement `core` and `contracts` before adapters/UI. API, CLI, storage, and UI all consume the same schemas and error envelope.
-- Adapters: tmux, storage, filesystem, git, clock, ids, and output readers stay behind interfaces with fakes for tests. Real adapters fail loudly for missing config or unsupported state.
-- UI boundaries: Dashboard never parses tmux output directly and never owns lifecycle truth. It renders API state, disables invalid writes, and shows unknown/stale/replay boundaries honestly.
-- Write ordering: Trust, lock, session writability, audit preflight, then tmux send. Any failure before tmux send returns an explicit error and no fake success.
-- Restart behavior: Durable registry/auth/audit/settings reload first; tmux reconciliation marks stale sessions; output readers restart; writes to unreconciled sessions fail.
-- Visual assets: Do not generate or approve implementation mockups until the test/state matrix exists. Generated mockups must be copied into `assets/ui-concepts/` and selected in the decision log before UI tasks.
-- Rollback/cleanup: Stopping HostDeck leaves tmux/Codex sessions running unless explicitly stopped. Failed session starts must clean partial registry/tmux state or mark it recoverable with an explicit error.
+- `pnpm check:planning` passes and detects unknown refs, duplicate tasks, dependency cycles, invalid ready states, and uncovered requirements.
+- Current queue contains only active in-progress/ready tasks and intentional human/external blockers.
+- Every new task has status, block/requirement refs, real `Blocked by` and `Blocks`, description, criteria, and evidence.
+- `docs/status.md` reports the rebaseline and no-go state without historical completion inventory.
+- No product implementation claim relies on the rejected visual boards or fake-Codex tmux smoke.

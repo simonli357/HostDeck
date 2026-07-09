@@ -1,68 +1,150 @@
 # UX Spec
 
-Owns active-version user flows, screens, states, accessibility, and UI contract decisions.
+Owns active-version user flows, information architecture, screens, states, accessibility, responsive behavior, and visual implementation gates.
 
-## Surfaces
+## Product Posture
 
-| Surface | Purpose | States |
+- Primary device: a phone browser held in one hand.
+- Primary job: scan several Codex threads, open the one needing attention, understand its current state, and take one safe action.
+- Secondary device: a laptop or wide browser showing the same information architecture with more simultaneous context.
+- Full-control fallback: the normal Codex TUI resumed on the laptop for the exact thread.
+- Explicit non-surface: HostDeck V1 does not expose a phone shell, terminal emulator, file tree, code editor, Git review screen, dedicated approval inbox, or storage console.
+
+## Reference Viewports
+
+| Class | Required viewport | Purpose |
 | --- | --- | --- |
-| Mission Control | Default dashboard for scanning all managed sessions and deciding what needs attention first. | Empty, loading, ready, mixed attention, all idle, disconnected, locked, read-only, LAN-disabled, agent error |
-| Session Detail | Phone-friendly control thread for one session with recent output, status, prompt composer, and slash-command controls. | Loading, ready, waiting for user, waiting for approval, running, failed, unknown, stale, stopped, permission denied, stream disconnected |
-| Prompt And Slash Composer | Safe write surface for normal prompts and approved slash commands. | Empty, composing, sending, sent, failed, disabled by lock, disabled by read-only, disabled by stale session |
-| Advanced Raw Fallback | Explicit lower-level session view for bounded terminal output and risky raw input controls. | Hidden by default, read-only, advanced enabled, confirmation required, sending, failed, stale/unwritable |
-| Pairing And Trust | Local pairing/token flow and trust-state visibility for write access. | Unpaired, pairing code entry, paired read/write, token expired, revoked, locked, permission denied |
-| Host Status And Safety | Host-level state for daemon health, startup checks, lock, LAN mode, and stream health. | Healthy, degraded, locked, LAN enabled, LAN disabled, tmux unhealthy, storage unhealthy, startup check failed |
-| Confirmations | Confirmation surface for stop, raw input, lock, LAN changes, and any future risky action. | Open, confirming, success, failed |
+| Primary phone | 390 x 844 CSS px | Main design and screenshot target. |
+| Narrow phone | 360 x 800 CSS px | Long-label, wrapping, and minimum-width stress target. |
+| Large phone | 412 x 915 CSS px | Larger mobile target and sticky-control validation. |
+| Tablet | 768 x 1024 CSS px | Responsive expansion without changing navigation hierarchy. |
+| Desktop | 1280 x 800 CSS px | Secondary two-pane enhancement of the mobile information architecture. |
 
-## Flows
+No screen may require horizontal scrolling. Desktop-only affordances must not be required to complete a V1 journey.
 
-| ID | Flow | Entry | Exit |
-| --- | --- | --- | --- |
-| UX-001 | Pair a browser for write access. | User opens dashboard or runs `codexdeck pair`. | Dashboard shows trusted write state or a clear pairing failure. |
-| UX-002 | Scan sessions by attention. | User opens Mission Control. | User identifies the highest-priority session or sees a truthful empty/all-idle state. |
-| UX-003 | Read a session and send a prompt. | User taps a session card. | Prompt is sent to exactly one session, audited, and resulting output appears or a clear error is shown. |
-| UX-004 | Send a primary slash command. | User taps `/model`, `/goal`, or `/plan` in Session Detail. | Literal slash command is sent to the selected session and output stream continues. |
-| UX-005 | Send a utility slash command. | User taps `/usage`, `/compact`, or `/skills` in Session Detail. | Literal slash command is sent to the selected session and output stream continues. |
-| UX-006 | Use advanced raw fallback. | User opens advanced controls from Session Detail. | User inspects bounded raw output or sends confirmed raw input; stale/untrusted sessions reject writes. |
-| UX-007 | Stop a session. | User chooses stop from a session action area. | Confirmation appears, stop request is audited, and session state updates or error is shown. |
-| UX-008 | Lock remote writes. | User triggers lock from Host Status/Safety or CLI. | Dashboard moves to locked state and all write controls become disabled. |
-| UX-009 | Recover from disconnect or stale stream. | Stream or daemon connection fails. | UI shows disconnected/stale state, preserves last bounded output with replay boundary, and reconnects without fake success. |
+## Information Architecture
+
+| Level | Surface | Purpose |
+| --- | --- | --- |
+| 1 | Mission Control | Default route and session triage. |
+| 2 | Session Detail | Conversation, current work, prompt, structured controls, and inline approval for one thread. |
+| 2 | Host And Access sheet | Pairing state, lock, connection, runtime health, and device management. |
+| 3 | Model, Goal, Plan, Utility sheets | Focused controls opened from Session Detail and dismissed back to the same thread. |
+| 3 | Event details | Read-only structured diagnostic detail for an item, failure, or replay boundary. |
+| External | Laptop TUI resume | Full local TUI for the selected thread; not embedded in the dashboard. |
+
+Mission Control and Session Detail are the only full-page V1 product routes. Supporting controls use sheets/dialogs so phone navigation remains shallow and predictable.
+
+## Surfaces And States
+
+| Surface | Required states |
+| --- | --- |
+| App shell | Booting, ready, offline, host unavailable, incompatible Codex version, update required. |
+| Mission Control | Empty, loading, mixed attention, all quiet, reconnecting, locked, read-only, LAN unavailable, degraded runtime, fatal host error. |
+| Session card | Running, waiting for input, approval needed, idle, completed, interrupted, failed, unknown, stale projection, unread activity. |
+| Session Detail | Loading, ready, active turn, waiting for input, approval requested, interrupting, completed, failed, unknown, archived/not found, stream reconnecting. |
+| Composer | Empty, composing, sending, accepted, failed, disabled by trust, disabled by lock, disabled by runtime/session state. |
+| Structured controls | Loading, available, unsupported by installed Codex, submitting, succeeded, failed, conflict with active operation. |
+| Pairing/access | Unpaired, claim in progress, paired read-only, paired write, expired, revoked, locked, certificate/HTTPS error. |
+| Event details | Complete event, truncated projection, replay boundary, redacted content, unsupported event type. |
+| Confirmation | Interrupt turn, archive thread, approval decision, lock writes, revoke device. |
+
+## Primary Flows
+
+| ID | Flow | Success contract |
+| --- | --- | --- |
+| UX-001 | Pair a phone. | The user reaches the HTTPS HostDeck origin, claims one time-bounded code, sees the device permission, and can reload without losing a valid CSRF posture. |
+| UX-002 | Scan sessions. | Mission Control puts approval, input, and failure attention before running/quiet work and identifies the session without opening every card. |
+| UX-003 | Read and prompt. | Tapping a card opens the same thread; the user sees recent structured conversation context, sends one prompt, and sees accepted plus resulting progress or a truthful error. |
+| UX-004 | Change model. | `/model` opens a model/effort selector sourced from the installed Codex runtime and applies only to the selected thread/next turn. |
+| UX-005 | Manage goal or plan. | `/goal` shows objective and lifecycle controls; `/plan` enters the tested Codex plan behavior. Unsupported runtime behavior is disabled with an update requirement. |
+| UX-006 | Use utilities. | `/usage`, `/compact`, and `/skills` open structured, task-specific surfaces; they are not sent as blind terminal text. |
+| UX-007 | Handle approval. | An inline approval card shows the action and scope, then approve/deny targets exactly one pending request and produces an audit result. |
+| UX-008 | Interrupt or archive. | Risky actions require explicit confirmation and update the selected thread without implying that conversation history was deleted. |
+| UX-009 | Recover connectivity. | The UI keeps the last bounded projection, marks it stale, reconnects from a cursor, and shows a boundary if continuity cannot be proved. |
+| UX-010 | Resume on laptop. | The dashboard/CLI provides the exact local resume command for the selected thread; no phone shell is exposed. |
+| UX-011 | Lock or revoke. | Lock immediately disables all remote writes; a local admin path can revoke a paired device and restore or inspect access. |
 
 ## Screen Contracts
 
-| Screen group | Required content | Interaction rules |
-| --- | --- | --- |
-| Mission Control | Host state banner, attention-sorted session list, session status/attention, cwd/project cue, branch when available, last activity, recent output cue, quick safe actions. | Attention ordering comes before alphabetical order. Cards must not resize unexpectedly when status/output changes. Write controls reflect trust/lock/session state. |
-| Session Detail | Session header, status, attention, cwd/branch, recent Codex output, prompt input, primary slash commands, utility slash commands, stream/replay boundary, advanced entry. | Conversation/control view is default. Raw terminal is secondary. Sending is disabled until trust, lock, and writable-session checks pass. |
-| Advanced Raw Fallback | Bounded raw output, cursor/truncation marker, raw input affordance, stop/control affordances, confirmation copy. | Hidden behind explicit advanced entry. Raw input requires confirmation and trusted write permission. |
-| Pairing/Trust | Pairing code input or pairing instructions, current permission mode, token expiry/revocation message, locked/LAN state. | Never imply write access before token claim succeeds. Expired or revoked tokens show visible action guidance. |
-| Host Status/Safety | Daemon health, tmux/storage health, bind mode, LAN state, lock state, stale session count, last classified host error. | Lock is easy to reach. Unlock is not available from remote dashboard in V1. LAN mutation is not a normal dashboard control unless later approved. |
+### Mission Control
+
+- First paint shows a compact host/access strip and the session list; no marketing hero, desktop toolbar, or empty decorative panel.
+- The first viewport on a 390 x 844 phone shows the host state plus at least two normal-height session rows when data exists.
+- Default ordering: approval needed, input needed, failed, interrupted/stale, running, quiet/completed; recency breaks ties.
+- A session row shows name, project cue, status/attention, relative activity time, and one bounded meaningful summary. Branch is secondary and may wrap below the project cue.
+- Status must use text plus icon/shape, not color alone.
+- Tapping the row opens detail. Quick actions are limited to context-safe actions and must not crowd the scan path.
+
+### Session Detail
+
+- Header contains back, session identity, status, project cue, and an overflow menu for interrupt/archive/laptop-resume.
+- The event/conversation feed is the main scroll region. User messages, agent messages, tool/command progress, approvals, failures, and boundaries have distinct semantic treatments.
+- A sticky bottom composer remains reachable above the mobile browser safe area and on-screen keyboard.
+- The primary control strip contains `/model`, `/goal`, and `/plan`. Utilities live in one overflow/sheet containing `/usage`, `/compact`, and `/skills`.
+- Controls display their actual state, for example selected model, active/paused goal, or active plan mode. They are not decorative command chips.
+- New events do not force-scroll when the user has scrolled away from the bottom; a new-activity affordance returns to live position.
+
+### Inline Approval
+
+- Show the requested command/action, working directory or affected scope, permission reason, and whether the request is one-time or changes ongoing policy.
+- Approve and deny remain visually distinct. Elevated or broad approval requires a confirmation step.
+- A decision disables duplicate submission immediately and remains pending until the server confirms the exact request id.
+- Expired, superseded, or already-resolved approvals become read-only with a truthful result.
+
+### Host And Access
+
+- Show connection origin, loopback/LAN mode, HTTPS/certificate state, paired device permission, lock state, Codex compatibility, stream health, and bounded last error.
+- Lock is available to a paired writer. Unlock and LAN/certificate mutation remain local-admin operations.
+- Device revocation is available through a user-accessible local-admin CLI path in V1 and is reflected here after refresh.
+
+### Event Details
+
+- Read-only details can expose bounded stdout/stderr, tool arguments/results, error metadata, and replay boundaries when allowed by the server projection.
+- Redaction and truncation are explicit. This surface never accepts arbitrary terminal input.
 
 ## Content Rules
 
-- Use "session", "attention", "locked", "read-only", "stale", and "unknown" consistently.
-- Do not frame HostDeck as SSH, a terminal emulator, a code editor, or a Git UI.
-- Status labels are advisory unless backed by explicit lifecycle state.
-- Unknown or stale state must be visible and must not look like success.
-- Slash-command labels use literal command text: `/model`, `/goal`, `/plan`, `/usage`, `/compact`, `/skills`.
+- Use `thread` only for Codex/runtime detail; use `session` in primary user-facing navigation and labels.
+- Use `Needs approval`, `Needs input`, `Running`, `Quiet`, `Interrupted`, `Failed`, `Unknown`, and `Stale` consistently.
+- Do not call an accepted prompt completed. Completion follows a terminal turn event.
+- Do not call a disconnected or unknown session healthy.
+- Literal labels `/model`, `/goal`, `/plan`, `/usage`, `/compact`, and `/skills` are retained because they match the user's Codex mental model, but each invokes a structured operation.
+- Error copy states what failed, whether retry is safe, and whether laptop action is required. It does not expose secrets or unbounded server details.
 
-## Visual Direction
+## Responsive Rules
 
-- Gate: visual directions and generated mockups are required before UI implementation, but should be created after the UX contract, detailed design, state coverage, and validation plan are defined enough to make them useful implementation targets.
-- Planned option A: dense operations console, generated at `assets/ui-concepts/option-a/dense-operations-console-board.png`.
-- Planned option B: calm control room, generated at `assets/ui-concepts/option-b/calm-control-room-board.png`.
-- Recommended starting hypothesis: dense operations console, because V1 is a power-user operational dashboard where scanning density and status hierarchy matter more than spacious ambience.
-- Selected option: Pending human selection.
-- Approved mockups: Pending human selection in `FE-V1-003`.
-- Known divergences: No behavior divergences are approved; mockup text that says "from host CLI" is guidance only, and remote unlock/LAN mutation remains rejected in V1.
+- Phone is one column. Desktop may use a session-list/detail split only after both routes work independently at phone width.
+- No viewport-width font scaling. Use stable type tokens and allow labels to wrap.
+- Interactive targets are at least 44 x 44 CSS px where practical and never below 40 x 40.
+- Sticky regions account for safe-area insets and keyboard resizing.
+- Session rows, command controls, and approval actions use stable min/max dimensions so streaming content cannot shift controls under the pointer.
+- Long repository names, paths, model names, and localized error text wrap or truncate with an accessible full label; they never overlap adjacent controls.
 
 ## Accessibility
 
 | Area | Requirement |
 | --- | --- |
-| Keyboard | All dashboard controls must be reachable by keyboard, with visible focus and predictable tab order across session list, detail, composer, and confirmations. |
-| Screen reader | Session cards, statuses, attention levels, disabled write states, stream errors, and confirmation dialogs need semantic labels and live-region behavior where updates matter. |
-| Contrast | Text, status chips, focus rings, disabled states, and error/warning indicators must meet WCAG AA contrast in selected theme tokens. |
-| Motion | Avoid required animation. Respect reduced-motion preferences. Streaming output should update without scroll hijacking. |
-| Touch targets | Primary phone controls should use stable target sizes of at least 44px where practical; compact metadata can be smaller only when not interactive. |
-| Error recovery | Permission, lock, stale, disconnected, and startup-failure states must explain what changed and which controls are unavailable. |
+| Semantics | Use landmarks, a real list for sessions, headings for feed groups, buttons for commands, and dialogs/sheets with labelled titles. |
+| Keyboard | All flows work by keyboard with visible focus, logical order, escape-to-dismiss, and focus restoration. |
+| Screen reader | Status changes and newly requested approvals use restrained live regions; streaming token deltas are not announced character by character. |
+| Contrast | Text, icons, focus, status, disabled, and error states meet WCAG 2.2 AA in both selected themes if two themes ship. |
+| Motion | Respect reduced motion; no required animation or scroll hijacking. |
+| Touch | Primary actions meet target size and spacing requirements; destructive controls are not adjacent to send/approve. |
+| Zoom/reflow | Core flows remain usable at 200 percent zoom and 320 CSS px reflow without horizontal scrolling. |
+
+## Visual Direction Gate
+
+- The existing Option A and Option B boards are rejected as implementation targets because both are desktop-led, omit phone Mission Control, and show only write-disabled phone detail.
+- `FE-V1-002` is reopened after this UX rebaseline and the structured state-contract update.
+- Each replacement option must show, at minimum: phone Mission Control mixed-attention state; phone Session Detail active/writable state with composer and primary controls; inline approval; locked/read-only state; disconnected/replay-boundary state; and a desktop expansion of the same design.
+- The two options must differ in information hierarchy, density, navigation, and component treatment, not only color/theme.
+- Mockup notes must map every visible element to a design-system token/component and identify generated imagery that is reference-only.
+- Human selection in `FE-V1-003` remains required before React screen implementation.
+
+## Acceptance Evidence
+
+- Mockup review at every reference viewport before selection.
+- Implemented Playwright screenshots for required states at 360 x 800, 390 x 844, 412 x 915, 768 x 1024, and 1280 x 800.
+- Real-browser inspection with mobile keyboard open, long labels, slow/disconnected stream, approval arrival, lock transition, and expired pairing.
+- At least one actual Android or iOS browser pass over the selected HTTPS LAN setup before V1 release.

@@ -1,155 +1,166 @@
 # Test Plan
 
-Owns active-version validation strategy, regression coverage, and release checks.
+Owns V1 validation layers, commands, matrices, real-boundary policy, UI/device evidence, and release proof. Passing package tests is necessary but never sufficient for production or release completion.
 
-## Approval Criteria
+## Evidence Levels
 
-This plan is not ready to approve unless these checks are true:
-
-- Every V1 requirement group has an automated or manual evidence route.
-- Every candidate V1 block has planned validation before it can be marked complete.
-- Architecture and UX spikes have explicit proof artifacts and decision outputs.
-- Failure, security, privacy, persistence, restart, and UI state coverage are planned before implementation tasks are decomposed.
-- Planned commands are labeled as planned until the workspace scaffold creates real scripts and the command reference is updated.
-- UI mockups remain blocked until state coverage exists and `SPK-UX-001` produces two human-reviewed visual directions.
-
-## Validation Principles
-
-- Validate headless contracts and core state rules before adapters or UI consume them.
-- Use fake Codex/tmux/storage fixtures for deterministic coverage, then add Ubuntu tmux smoke tests for real process behavior.
-- Treat status and attention classification as advisory; unrecognized output must become `unknown`, not success.
-- Treat write paths as security-sensitive: request schema, trust, lock, session writability, audit preflight, tmux send, and result recording are all separate checks.
-- Prove restart behavior with durable state and tmux reconciliation rather than assuming in-memory process state is enough.
-- Record manual inspection for runtime behavior, responsive UI, failure surfaces, and release paths that automation cannot fully prove.
-- Do not close tasks with hidden fallbacks, swallowed errors, fake success states, or evidence that only covers the happy path.
-
-## Planned Commands
-
-These root scripts now exist. `pnpm check:scaffold`, `pnpm typecheck`, `pnpm lint`, `pnpm test:unit`, `pnpm test:contract`, and `pnpm test:integration` run real checks; remaining later-layer commands intentionally fail loudly until their owning tasks replace the placeholders.
-
-| Purpose | Planned command after scaffold | Required for | Evidence |
-| --- | --- | --- | --- |
-| Install check | `pnpm install --frozen-lockfile` or project-equivalent frozen install | Workspace scaffold and release smoke | Terminal artifact from a clean checkout or documented local environment |
-| Type and schema check | `pnpm typecheck` | Every product-code task | Command output in the owning task evidence |
-| Lint/static check | `pnpm lint` | Shared packages, server, CLI, and web tasks | Command output in the owning task evidence |
-| Core unit tests | `pnpm test:unit` | `core`, fixtures, write eligibility, classifiers, config parsing | Command output with covered requirement refs |
-| Contract tests | `pnpm test:contract` | API, stream, storage, audit, and CLI schemas | Command output plus schema fixture snapshots when useful |
-| Adapter integration tests | `pnpm test:integration` | Storage/auth/audit, fake tmux, fake Codex, API services | Command output and temporary-state cleanup notes |
-| Real tmux smoke | `pnpm test:tmux` or a documented smoke script | Tmux lifecycle, attach, output reader, restart reconciliation | Artifact with Ubuntu version, tmux version, commands, and observed result |
-| Web component/state tests | `pnpm test:web` | Dashboard states, trust/lock/permission surfaces, responsive components | Command output plus fixture names |
-| Local E2E smoke | `pnpm test:e2e` | Fake vertical through daemon/API/web | Browser or API artifact with server logs |
-| Build/package check | `pnpm build` | Release-readiness block and handoff | Build artifact path and command output |
-| Release smoke | `pnpm smoke:local` or documented manual checklist | Clean local V1 handoff | Release-readiness artifact with pass/fail and known gaps |
-
-## Coverage Matrix
-
-| Requirement / flow | Automated coverage planned | Manual inspection planned | Evidence owner |
-| --- | --- | --- | --- |
-| `FR-001` to `FR-004`, `PR-006`: managed session lifecycle and laptop attach path | Core/session tests, fake adapter lifecycle tests, API/CLI start/list/stop contract tests | Ubuntu tmux smoke starts multiple named sessions, attaches or prints target metadata, stops one session, and verifies the other remains reachable | `BLK-V1-03`, `BLK-V1-04` task evidence |
-| `FR-005`, `FR-013`, `DR-004`, `DR-008`, `IR-009`: output stream, cursor replay, ordering, retention, truncation | Ordered output fixture tests, reconnect-after-cursor integration test, `DEC-016` retention boundary tests | Browser inspection shows live update and replay/truncation boundary without reload | `SPK-ARCH-001`, `DEC-016`, `BLK-V1-03`, `BLK-V1-05` |
-| `FR-006` to `FR-008`, `FR-015`: prompt and slash commands to one selected session | API/CLI write tests assert exact session id, literal command payload, slash allowlist, and multi-session rejection | Manual smoke verifies one selected tmux session receives the input and no other session changes | `BLK-V1-04`, `BLK-V1-05` |
-| `FR-009`, `NFR-003`, `SFR-011`: status and attention heuristics | Unit tests cover Codex-like fixtures for questions, approvals, running commands, pass/fail, compact warnings, idle/no-output, and unknown output | UX review confirms unknown is visible and not styled as healthy success | `BLK-V1-01`, `BLK-V1-05` |
-| `FR-010`, `IR-001` to `IR-009`, `NFR-004`, `PR-005`: dashboard and phone-responsive browser UX | Component/state tests for Mission Control, Session Detail, Host Status/Safety, pairing, empty/loading/disconnected/error states | Phone and desktop screenshots after approved mockups; visual drift recorded against selected direction | `SPK-UX-001`, `BLK-V1-05` |
-| `FR-011`, `PR-008`: CLI surface and service modes | CLI contract tests cover each command, exit code family, daemon-unavailable behavior, and local admin-only unlock | Foreground and long-running local service smoke test on Ubuntu | `BLK-V1-04`, `BLK-V1-06` |
-| `FR-012`: local API route families and error envelope | Route contract tests verify method, auth mode, request schema, response schema, stream event schema, and typed error envelope | API inspection with sample failures verifies actionable messages without leaking secrets | `BLK-V1-04` |
-| `FR-014`, `NFR-002`, `NFR-008`, `DR-007`, `SFR-010`: restart, durable state, stale sessions, write rejection | Restart integration tests reload registry/auth/audit/settings, reconcile tmux targets, restart readers, and reject stale/stopped/crashed/unknown writes | Manual disconnect/reconnect and daemon restart smoke while tmux session continues | `BLK-V1-02`, `BLK-V1-03`, `BLK-V1-04` |
-| `NFR-001`, `PR-001` to `PR-004`, `PR-007`, `PR-009`: local-first platform, startup checks, config, bind policy | Config/startup tests cover missing binaries, invalid state dir, invalid bind/port, default localhost bind, explicit LAN opt-in, and configurable state/port | Network smoke confirms no hosted relay/account/public listener and no root/router setup | `BLK-V1-04`, `BLK-V1-06` |
-| `NFR-005`, `NFR-006`, `SFR-005`: loud failures and no fake success | Negative tests assert nonzero CLI exits, non-2xx API errors, typed UI errors, and no tmux send after failed preconditions | Failure-path review confirms messages preserve true cause and do not promise success before output proves it | All block hardening tasks |
-| `DR-001` to `DR-010`: storage, audit, pairing/token, retention, payload bounds | Storage migration/repository tests, auth persistence tests, audit action type tests, bounded payload tests, retention cleanup tests | Local state inspection verifies raw tokens are not stored and audit entries are bounded | `BLK-V1-02`, `BLK-V1-06` |
-| `SFR-001` to `SFR-009`: trust, lock, LAN, raw input, risky controls | Auth/API/UI tests cover trusted, read-only, untrusted, revoked, expired, locked, LAN-disabled, and advanced raw input states | Browser inspection verifies disabled controls are visible before write attempts and unlock is CLI-only | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` |
-
-## Block Coverage
-
-Use this as the overall validation map. Block-specific validation details live in `docs/planning/05-blocks/`.
-
-| Block ID | Automated coverage | Manual/device coverage | Release evidence |
-| --- | --- | --- | --- |
-| BLK-V1-01 | Unit and contract tests for session identity, lifecycle states, attention/status model, error envelope, write eligibility, and required fixture categories | Fixture review confirms unknown/failure cases are not collapsed into healthy states | Core/contract test artifact referenced by block completion matrix |
-| BLK-V1-02 | SQLite migration/repository tests, auth/token lifecycle tests, audit sanitization tests, retention tests, restart persistence tests | Local state inspection for hashed tokens, bounded audit payloads, and durable settings | Storage/auth/audit hardening artifact and selected SQLite/token/retention decisions |
-| BLK-V1-03 | Fake tmux adapter tests, real tmux lifecycle smoke, output capture/replay tests, restart/stale tests | Ubuntu smoke with at least two managed sessions, attach path, send, stop, restart, and stale-target behavior | Tmux/output hardening artifact plus `SPK-ARCH-001` result |
-| BLK-V1-04 | API route contract tests, write-pipeline ordering tests, CLI command tests, startup/config tests, LAN/lock tests | Foreground and service-mode smoke, daemon-unavailable CLI behavior, localhost/LAN network check | API/CLI hardening artifact and command-reference update after scripts/commands exist |
-| BLK-V1-05 | Web component/state tests, UI integration tests against fake API fixtures, accessibility checks, write-disabled control tests | Approved mockup comparison, phone/desktop screenshots, disconnected/stale/error manual inspection | UI-fidelity artifact, selected visual-direction decision, and screenshot paths |
-| BLK-V1-06 | Build/typecheck/lint/test aggregate, release smoke script, setup validation, security/privacy checklist | Clean Ubuntu user install/run path, local service start/stop/status, support/troubleshooting review | Release-readiness artifact with go/no-go, known gaps, and push/commit state |
-
-## Spike Validation
-
-| Spike | Proof artifact must include | Decision output | Blocks |
-| --- | --- | --- | --- |
-| `SPK-ARCH-001` tmux output capture | Prototype commands, fake Codex fixture, captured ordered events, reader restart behavior, cursor/replay boundary behavior, observed failure modes | Chosen capture mechanism, reader supervision policy, cursor semantics, and test fixture plan | `BLK-V1-03`, `BLK-V1-04`, output coverage |
-| `SPK-ARCH-002` SQLite driver | Install/build notes, license check, Node LTS compatibility, migration approach, test isolation behavior, failure handling | Chosen driver, migration library or local approach, setup impact | `BLK-V1-02`, developer setup when dependency is added |
-| `SPK-ARCH-003` token transport | Resolved by `artifacts/dat-v1-002-token-transport-spike.md`: same-origin/LAN notes, HttpOnly-cookie versus bearer-token comparison, CSRF/revocation posture | `DEC-015`: host-only `HttpOnly` cookie transport, CSRF write header, dashboard trust-state contract update | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` |
-| `SPK-ARCH-004` output/audit retention | Resolved by `artifacts/dat-v1-003-retention-caps-spike.md`: fixture size estimates, bounded append/replay simulation, cleanup timing, audit payload bounds | `DEC-016`: 10,000 output events or 10 MB per session; 5,000 audit events or 30 days globally; visible replay/audit boundaries | `BLK-V1-02`, `BLK-V1-03`, `BLK-V1-05` |
-| `SPK-UX-001` visual direction/mockups | State matrix, two generated visual directions, Mission Control, Session Detail, trust/status, raw fallback, phone/desktop framing | Human-selected direction, assets copied under `assets/ui-concepts/`, decision log entry, UX spec update if contract changes | `BLK-V1-05` UI implementation |
-
-## Regression Matrices
-
-### Output And Status Fixtures
-
-| Fixture suite | Required cases | Must assert |
+| Level | Proves | Does not prove |
 | --- | --- | --- |
-| Codex-like status text | Question waiting, approval waiting, command running, tests passed, tests failed, compact/context warning, idle/no-output, unknown output | Expected `SessionStatus`, `AttentionLevel`, and conservative `unknown` fallback |
-| Output ordering | Interleaved lines, bursts, partial lines if supported, reconnect after cursor, retention boundary | Monotonic cursor order, no undocumented duplicate replay, visible boundary when older output is unavailable |
-| Session summaries | Recent meaningful output, noisy output, empty output, stale output | Bounded summary, last activity update, no unbounded storage growth |
+| L1 Unit/contract | Pure invariants, schema rejection, deterministic projections, package APIs. | Process, database, network, browser, or Codex behavior. |
+| L2 Integration | Real SQLite, IPC transport, Fastify injection/listener, process orchestration, concurrency, retention. | Complete user workflow or real phone behavior. |
+| L3 System | Packaged HostDeck plus real Codex app-server/TUI/browser on Ubuntu. | Clean-machine setup or release support quality by itself. |
+| L4 Device/release | Clean install, user services, HTTPS phone access, supported browsers, security/privacy, handoff. | Future-version compatibility. |
 
-### Write Rejection Matrix
+Task and block evidence names its level. "Complete for package scope" cannot satisfy a block whose outcome requires L3/L4.
 
-| Gate | Rejection cases | Must assert |
-| --- | --- | --- |
-| Request schema | Missing session id, malformed payload, unsupported action, unsupported slash command, multi-session request | Typed validation error, no audit success, no tmux send |
-| Trust and permission | Untrusted, read-only, expired token, revoked token, pairing code expired/used | Permission error, UI write controls disabled, no ambient write grant |
-| Host safety | Locked host, LAN mutation from dashboard, remote unlock attempt | Explicit rejection, CLI-only unlock preserved, audit event when required |
-| Session writability | Stale, stopped, crashed, unknown, unreconciled, missing tmux target | Explicit denial, no buffering for later delivery |
-| Audit preflight | Audit storage unavailable, payload summary cannot be bounded | Remote write rejected before tmux send |
+## Commands
 
-### Startup And Config Matrix
-
-| Area | Cases | Must assert |
-| --- | --- | --- |
-| Required binaries | Missing `tmux`, missing Codex executable for session start | `serve` or start fails loudly before claiming readiness or creating a successful registry record |
-| Paths and state | Invalid cwd, invalid state dir, corrupt migration, read-only state dir | Nonzero CLI/API failure with typed cause and no fake success |
-| Network | Default bind, explicit LAN enable, LAN disable, invalid port, duplicate port | Localhost by default, LAN visible/reversible, startup refuses invalid bind |
-| Restart | Live target present, target missing, unknown HostDeck-looking target, output reader failure | Registry reconciliation marks truthfully running/stale/ignored/error state |
-
-### UI State Matrix
-
-| Surface | States requiring tests/screenshots | Evidence |
-| --- | --- | --- |
-| Mission Control | Empty, loading, all idle, mixed attention, disconnected, permission-denied, agent-error, LAN-disabled, locked | Component/state tests first; screenshots after selected mockups |
-| Session Detail | Running, waiting for input, waiting for approval, failed, unknown, stale, stopped, output boundary, stream reconnecting | Component/state tests first; phone screenshot after selected mockups |
-| Composer and slash controls | Trusted writable, read-only, untrusted, locked, unsupported slash, prompt error, accepted write pending output | Component/API integration tests plus browser inspection |
-| Advanced raw fallback | Hidden by default, advanced mode entered, raw input confirmation, raw write rejected, raw write accepted and audited | UI/API test and screenshot after selected mockups |
-| Pairing and Host Status/Safety | Pairing pending, trusted, expired/used code, revoked client, lock active, LAN enabled/disabled | Component/API integration tests plus manual browser inspection |
-
-## Validation Layers
-
-| Layer | Applies to | Purpose | Evidence |
+| Command | Required owner | Purpose | Release expectation |
 | --- | --- | --- | --- |
-| Unit | Core, contracts, classifiers, write eligibility, config parsing, storage helpers | Prove pure logic and boundary behavior without tmux/network/browser | Planned unit command output linked from leaf task |
-| Contract | API, stream events, CLI output/exit families, storage/audit records | Keep cross-module behavior typed and stable | Planned contract command output and fixture snapshots |
-| Integration | Storage, auth, audit, API services, fake tmux/Codex, output readers | Prove module boundaries and failure ordering | Planned integration command output and temp-state cleanup notes |
-| System / E2E | Local daemon/API/web fake vertical, CLI against daemon | Prove complete workflows before real Codex dependence | Local E2E artifact with server log and browser/API evidence |
-| Real adapter smoke | Ubuntu tmux, local service, filesystem, network bind | Prove environment assumptions not covered by fakes | Smoke artifact with OS/tool versions and commands |
-| Visual fidelity | Web UI after `SPK-UX-001` approval | Compare implementation against selected mockups and state matrix | Screenshots or visual diffs with drift notes |
-| Accessibility/responsive | Phone browser, keyboard/focus, readable status/error controls | Prove V1 is usable without terminal-width assumptions | Screenshot/checklist artifact |
-| Security/privacy | Pairing/token, lock/unlock, LAN, audit bounds, no secret storage | Prove trust gate and local-first safety posture | Test output plus security checklist |
-| Release packaging | Clean local setup, service start/stop/status, support docs, command reference | Prove handoff path from a normal Ubuntu user environment | Release-readiness artifact and go/no-go |
+| `pnpm check:scaffold` | Foundation | Workspace/package/export skeleton. | Pass. |
+| `pnpm check:planning` | `FND-V1-014` | Task/requirement/dependency/current-queue integrity. | Pass. |
+| `pnpm typecheck` | Foundation | Strict workspace TypeScript. | Pass. |
+| `pnpm lint` | Foundation | Formatting/lint/package-export checks. | Pass. |
+| `pnpm test:unit` | All modules | L1 pure behavior. | Pass. |
+| `pnpm test:contract` | Contracts/interfaces | L1 normalized API/storage/UI/Codex-adapter contracts. | Pass. |
+| `pnpm test:integration` | Storage/runtime/server | L2 SQLite/process/IPC/Fastify/SSE/auth/concurrency. | Pass. |
+| `pnpm test:web` | Web | Component/state/API-client tests. | Pass. |
+| `pnpm test:codex` | `INT-V1-006` | Opt-in L3 real app-server thread/turn/control/approval/TUI/reconnect suite. | Pass on release host with recorded version; may be excluded from ordinary CI when credentials/model use are required. |
+| `pnpm test:e2e` | Interface/web | Packaged browser workflow against isolated fixture runtime. | Pass. |
+| `pnpm build` | `IFC-V1-021` | Production CLI/server/web artifacts. | Pass from clean checkout. |
+| `pnpm smoke:local` | `REL-V1-006` | Installed user-service, real Codex, browser/phone workflow. | Pass with artifact. |
 
-## Manual Inspection
+Unavailable commands fail loudly with owning task id. No placeholder command may exit zero.
 
-| Area | What to inspect | Evidence |
-| --- | --- | --- |
-| Real tmux behavior | Start, list, attach, send, stop, restart, stale target handling with HostDeck-managed sessions | Ubuntu smoke artifact with versions, commands, result, and gaps |
-| Local-first networking | Default localhost bind, explicit LAN enable/disable, dashboard visibility of LAN state | Network smoke artifact |
-| Browser UX | Mission Control and Session Detail on phone and desktop widths, including trust, lock, unknown, stale, disconnected, and output-boundary states | Screenshot set after visual direction approval |
-| Failure paths | Missing binaries, invalid cwd, daemon unavailable, audit unavailable, expired pairing, locked host, stale session, unsupported slash command | Failure-path notes or artifact with exact visible/API/CLI behavior |
-| Security/privacy | Token storage, audit payload bounds, revoked/expired trust, CLI-only unlock, no hosted relay/account assumption | Security checklist and targeted test output |
-| Release | Clean install/run/build, foreground and service mode, support docs, command reference, known gaps | Release-readiness checklist and status update |
+## Foundation Matrix
+
+| Area | Normal | Boundary/invalid | Repeated/concurrent |
+| --- | --- | --- | --- |
+| Timestamps | Valid UTC/offset round trip. | Invalid calendar date, offset, format reject. | Stable serialize/parse. |
+| Cursors/counts | Zero and safe integer max policy. | Negative, fraction, unsafe integer reject. | Monotonic under concurrent append. |
+| Lifecycle | Documented user and reconciliation transitions. | Impossible transition rejects. | Repeated terminal transition is deliberate idempotency or conflict. |
+| Error envelope | Bounded safe detail. | Secret/unbounded/unknown shape reject. | Nested failures preserve one stable cause. |
+| Target identity | One session/request/device/host target. | Missing, unknown, multiple, mismatched ids reject. | Duplicate operation ids do not duplicate mutation where idempotency exists. |
+
+## Codex Compatibility Matrix
+
+| Case | Required assertion |
+| --- | --- |
+| Supported version | Binding regeneration matches reviewed identity; handshake and required capabilities pass. |
+| Older/newer unsupported version | Startup is incompatible before session mutation; message names observed and supported policy. |
+| Additive optional notification | Count/ignore according to compatibility policy without changing status. |
+| Unknown required response/server request | Runtime degrades/incompatible; no fallback text injection. |
+| Malformed frame/message | Connection closes or request fails with bounded protocol error. |
+| Request timeout/disconnect | Read may retry by policy; mutation becomes incomplete/unknown unless proven idempotent. |
+| Max in-flight/frame/queue | New work rejects with overload; process remains healthy. |
+| Multi-client | HostDeck and TUI connect to one runtime and address the same thread without corruption. |
+
+## Real Codex Vertical
+
+The release host records Codex version, HostDeck commit, commands, thread ids in redacted form, and cleanup result. Required sequence:
+
+1. Start dedicated app-server on private Unix socket and complete handshake.
+2. Start two managed threads in separate temporary repositories without alias collision.
+3. Start one bounded real turn and verify ordered item/status events through HostDeck projection and SSE.
+4. Send/steer exactly one selected thread and prove the second is unchanged.
+5. Exercise model listing/selection, goal set/get/clear, plan behavior, usage read, compact, and skills list according to supported capabilities.
+6. Trigger a safe approval request in an isolated temporary repository; approve once, deny once, reject duplicate/expired response.
+7. Interrupt an active turn and verify interrupted is not completed/archived.
+8. Resume the exact thread in the normal TUI through the same Unix socket.
+9. Restart HostDeck only and prove app-server/thread work remains; restart app-server and prove honest interruption/boundary/reconciliation.
+10. Archive/clean temporary threads and remove temporary repositories/runtime state.
+
+If a safe deterministic approval trigger cannot be created, the approval feature remains blocked; a fake-only approval is not release evidence.
+
+## Storage And Audit Matrix
+
+| Area | Cases |
+| --- | --- |
+| Migration | Empty DB, current DB, prior tmux-shaped DB, interrupted migration, checksum/version drift, incompatible future schema. |
+| Session mapping | Start saga success; Codex failure; thread created/DB failure; duplicate alias/id/thread; missing/archived thread; pre-release legacy record. |
+| Projection | Ordered append, malformed event, transaction rollback, classifier failure, branch failure, restart freshness. |
+| Retention | Event-count cap, byte cap, audit-count cap, age cap, newest item larger than byte cap, cleanup on production append/startup, boundary persistence. |
+| Audit | Accepted/succeeded/failed/rejected/incomplete, crash between accepted/result, emergency lock under audit degradation, sanitization, retention. |
+| Auth | Pair create/consume/expire/revoke, device read/write permission, raw-secret absence, CSRF rotate/reload/revoke race, last-used update. |
+| Permissions/lease | Fresh paths, over-permissive path/file/key/socket, symlink/path substitution, second daemon, stale lease recovery. |
+
+## HTTP, SSE, And Security Matrix
+
+| Dimension | Required cases |
+| --- | --- |
+| Bind policy | Default loopback only; explicit LAN HTTPS; plaintext LAN rejected; app-server socket never TCP/LAN. |
+| Host/Origin | Valid configured origin; missing Origin on non-browser safe reads by policy; foreign Origin; reflected/mismatched Host; DNS-rebinding names; wildcard CORS absent. |
+| Cookies/CSRF | Secure/HttpOnly/host-only/SameSite, no raw bearer in JS storage, reload bootstrap, stale generation, cross-origin form/fetch, revoked device. |
+| Pair/rate | Invalid/expired/used codes, per-source rate, global cap, concurrent claim, audit each outcome without secret. |
+| Authorization | Loopback policy, unpaired LAN read, read-only write, locked write, expired/revoked, wrong target, local-admin-only operation. |
+| Limits/timeouts | Oversized headers/body, slow body, request deadline, idle connection, max connections/subscribers, protocol deadline, CLI timeout. |
+| SSE | Initial replay, empty replay, `Last-Event-ID`, explicit cursor, invalid/future/pruned cursor, event during handoff, heartbeat, abort cleanup, queue overflow, auth revoke, shutdown. |
+| Lifecycle | Failed startup leaves no listener/lease/socket; readiness updates after runtime/storage/projector failure; shutdown completes with active SSE. |
+| TLS | Trusted configured certificate, unknown CA, expired/not-yet-valid, wrong SAN, weak/invalid key, key permission, renewal/reconfigure, no secret logging. |
+
+Security tests assert both response behavior and side effects: no dispatch, no leaked session data, no success audit, and no credential issuance where rejection is expected.
+
+## UI State Matrix
+
+Every row is tested at 390 x 844; marked stress states also run at 360 x 800 and 1280 x 800.
+
+| Screen | Required states |
+| --- | --- |
+| Mission Control | Loading, empty, mixed attention, all quiet, long names/paths, offline, locked, read-only, incompatible runtime, certificate error, degraded host. |
+| Session Detail | Active writable turn, waiting input, approval, completed, interrupted, failed, unknown, stale, archived/not found, reconnecting, replay boundary. |
+| Composer | Empty, keyboard open, sending, accepted/running, failed retryable/nonretryable, disabled by each trust/runtime state. |
+| Model/goal/plan | Current value, loading, changed, active/paused/complete goal, plan active, unsupported version, conflict, failure. |
+| Usage/compact/skills | Loading, content, empty, unsupported, compact running/completed/failed. |
+| Approval | Normal, broad/elevated confirmation, approve pending/success/fail, deny, duplicate tap, expired/resolved, connection generation changed. |
+| Host/access | Unpaired, pair claim, read-only, writer, reload/CSRF bootstrap, expired/revoked, locked, LAN/HTTPS state. |
+| Event details | Normal, redacted, truncated, unknown optional type, boundary. |
+
+## UI Fidelity And Accessibility
+
+- Two complete mobile-first directions are inspected against `03-ux-spec.md`; theme-only variations fail the gate.
+- Human selection is recorded before React screen implementation.
+- Playwright captures 360 x 800, 390 x 844, 412 x 915, 768 x 1024, and 1280 x 800 for required groups/states.
+- Screenshot review checks overlap, clipping, first-viewport usefulness, sticky composer/keyboard behavior, long content, safe areas, and desktop expansion.
+- Keyboard, focus restoration, dialog semantics, live-region restraint, 200 percent zoom, 320 px reflow, contrast, reduced motion, and touch targets are inspected.
+- At least one real Android or iOS browser proves HTTPS enrollment, pairing, reload, prompt, approval, lock, and disconnect recovery.
+- Drift from approved mockups is fixed or explicitly approved and recorded; generated assets are stored in the repo.
+
+## Release Matrix
+
+| Gate | Evidence |
+| --- | --- |
+| Clean checkout/install | Exact Node/pnpm/Codex/Ubuntu versions, frozen install, build, tests. |
+| Package/CLI | Runnable `codexdeck`, help/exit codes, no source-only invocation dependency. |
+| User services | Install, start, status, restart each unit, HostDeck-only restart, app-server crash, stop, uninstall, log inspection. |
+| Data/privacy | Path/file/socket/key permissions, no raw secrets/transcript copy, retention, no external telemetry/listener. |
+| Network | Listener inventory, loopback default, LAN HTTPS, host/origin/rate/cookie tests. |
+| Browser/device | Supported desktop browser and real phone workflow. |
+| Recovery | Reboot/login or documented service lifecycle, stale runtime files, incompatible Codex update, certificate renewal, DB backup/recovery policy. |
+| Documentation | User/developer/command/repo docs contain only verified commands and behavior. |
+| Go/no-go | Block completion matrix links L1-L4 evidence and lists zero hidden blockers. |
+
+## Requirement And Block Coverage
+
+| Scope | Minimum evidence |
+| --- | --- |
+| `FR-001` to `FR-018` | Contract plus integration; real Codex for runtime-owned semantics; UI/device where user-facing. |
+| `NFR-001` to `NFR-013` | Architecture inspection, negative/resource/lifecycle tests, clean release smoke. |
+| `IR-001` to `IR-012` | State/component/API tests, approved mockups, Playwright screenshots, accessibility, real phone. |
+| `DR-001` to `DR-011` | Migration/repository/transaction/retention/restart/raw-storage evidence. |
+| `PR-001` to `PR-012` | Ubuntu/Codex/browser/package/service/network compatibility evidence. |
+| `SFR-001` to `SFR-018` | Security matrix, side-effect assertions, privacy review, device proof. |
+| `BLK-V1-01` | Rebased contracts/fixtures/planning checker plus module hardening. |
+| `BLK-V1-02` | Migrated secure state, production retention/audit/auth/lease plus hardening. |
+| `BLK-V1-03` | Real structured Codex vertical, restart/TUI/multi-client, legacy disposition, hardening. |
+| `BLK-V1-04` | Fastify/SSE/HTTPS/auth/CLI/package/service production path plus hardening. |
+| `BLK-V1-05` | Mobile-first selected design, complete dashboard, screenshot/device/fidelity hardening. |
+| `BLK-V1-06` | L1-L4 aggregate, clean setup, docs, privacy/security, explicit go/no-go. |
 
 ## Evidence Policy
 
-- Store durable command logs, smoke notes, screenshots, and spike results under `artifacts/` when they are more detailed than a task card should carry.
-- Each leaf task must reference requirement IDs, block IDs, command names run, pass/fail result, and artifact paths or explicit validation gaps.
-- Screenshots are required for UI screen groups after mockup selection; component tests alone do not prove responsive layout or visual drift.
-- Spike results must record the rejected options, chosen option, commands or prototypes used, and docs/tasks changed by the decision.
-- A release blocker must be visible in status, release tracking, or the owning backlog task; it cannot live only inside an artifact.
-- Planned commands become real documentation only after scripts exist and have been run at least once.
+- Artifacts record command, environment/version, scope, result, failures, manual observations, and cleanup.
+- Secrets, full prompts/transcripts, private paths beyond what is necessary, cookies, pairing codes, certificates keys, and approval payloads are redacted.
+- A skipped test is a gap unless its owning requirement explicitly permits it.
+- Flaky retries are recorded; a retry is not evidence that the first failure was harmless.
+- Human visual and acceptance decisions link exact assets/build/commit.
+- Release claims use the current selected production path, never superseded tmux/fake evidence.
