@@ -2,7 +2,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createPairingCodeRepository } from "@hostdeck/storage";
 import {
+  createFakeTmuxAdapter,
   parseSessionIdFromTmuxSessionName,
   type RealTmuxTargetDiscovery,
   tmuxSessionNameForSession
@@ -84,6 +86,226 @@ describe("foreground host service smoke", () => {
       await restarted.close();
     }
   });
+
+  it("registers session, write, security, and network route families with typed failures", async () => {
+    const port = await getAvailablePort("127.0.0.1");
+    const stateDir = tempDir("hostdeck-service-routes-state-");
+    const service = await startHostHttpService({
+      version: "0.0.0-service-routes",
+      stateDir,
+      bindPort: port,
+      discovery: emptyDiscovery(),
+      tmux: createFakeTmuxAdapter({ now: fixedNow }),
+      now: fixedNow
+    });
+
+    try {
+      const started = await fetchJson(service.baseUrl, "/api/sessions", {
+        method: "POST",
+        body: {
+          name: "http-demo",
+          cwd: stateDir
+        }
+      });
+
+      expect(started.status).toBe(201);
+      expect(started.body).toMatchObject({
+        session: {
+          name: "http-demo",
+          lifecycle_state: "running"
+        }
+      });
+
+      const sessionId = (started.body as { session: { id: string } }).session.id;
+      await expect(fetchJson(service.baseUrl, "/api/sessions")).resolves.toMatchObject({
+        status: 200,
+        body: {
+          sessions: [expect.objectContaining({ id: sessionId })]
+        }
+      });
+      await expect(fetchJson(service.baseUrl, `/api/sessions/${sessionId}`)).resolves.toMatchObject({
+        status: 200,
+        body: {
+          session: expect.objectContaining({ id: sessionId })
+        }
+      });
+      await expect(fetchJson(service.baseUrl, `/api/sessions/${sessionId}/output?after=0`)).resolves.toMatchObject({
+        status: 200,
+        body: {
+          session_id: sessionId,
+          events: []
+        }
+      });
+
+      const browserWriteWithoutCookie = await fetchJson(service.baseUrl, `/api/sessions/${sessionId}/input`, {
+        method: "POST",
+        headers: {
+          origin: service.baseUrl.origin
+        },
+        body: { text: "browser should need trust" }
+      });
+      expect(browserWriteWithoutCookie).toMatchObject({
+        status: 401,
+        body: {
+          accepted: false,
+          error: {
+            code: "permission_denied"
+          }
+        }
+      });
+
+      await expect(
+        fetchJson(service.baseUrl, "/api/pair/claim", {
+          method: "POST",
+          headers: {
+            origin: "http://example.invalid"
+          },
+          body: { code: "123456" }
+        })
+      ).resolves.toMatchObject({
+        status: 403,
+        body: {
+          error: {
+            code: "permission_denied",
+            field: "origin"
+          }
+        }
+      });
+
+      createPairingCodeRepository(service.startup.db).create({
+        id: "pair_http_routes_01",
+        rawCode: "123456",
+        permission: "write",
+        clientLabel: "phone",
+        createdAt: fixedNow(),
+        expiresAt: new Date("2026-07-09T09:00:00.000Z")
+      });
+      const claim = await fetchRaw(service.baseUrl, "/api/pair/claim", {
+        method: "POST",
+        headers: {
+          origin: service.baseUrl.origin
+        },
+        body: { code: "123456", client_label: "phone" }
+      });
+      expect(claim.status).toBe(200);
+      expect(claim.body).toMatchObject({
+        trusted: true,
+        read_only: false,
+        auth_transport: "http_only_cookie"
+      });
+      const csrfToken = (claim.body as { csrf_token: string }).csrf_token;
+      const cookie = claim.headers.get("set-cookie")?.split(";")[0];
+      expect(cookie).toMatch(/^hostdeck_device=/u);
+
+      const cookieOnlyWrite = await fetchJson(service.baseUrl, `/api/sessions/${sessionId}/input`, {
+        method: "POST",
+        headers: {
+          cookie: cookie ?? "",
+          origin: service.baseUrl.origin
+        },
+        body: { text: "cookie alone should fail" }
+      });
+      expect(cookieOnlyWrite).toMatchObject({
+        status: 401,
+        body: {
+          accepted: false,
+          error: {
+            code: "permission_denied"
+          }
+        }
+      });
+
+      await expect(
+        fetchJson(service.baseUrl, `/api/sessions/${sessionId}/input`, {
+          method: "POST",
+          headers: {
+            cookie: cookie ?? "",
+            origin: service.baseUrl.origin,
+            "x-hostdeck-csrf": csrfToken
+          },
+          body: { text: "trusted browser write" }
+        })
+      ).resolves.toMatchObject({
+        status: 202,
+        body: {
+          accepted: true,
+          action: "prompt",
+          session_id: sessionId
+        }
+      });
+
+      await expect(fetchJson(service.baseUrl, "/api/security/state")).resolves.toMatchObject({
+        status: 200,
+        body: {
+          trusted: false,
+          locked: false,
+          lan_enabled: false
+        }
+      });
+      await expect(fetchJson(service.baseUrl, "/api/network/state")).resolves.toMatchObject({
+        status: 200,
+        body: {
+          mode: "localhost",
+          host: "127.0.0.1",
+          lan_enabled: false
+        }
+      });
+      await expect(fetchJson(service.baseUrl, "/api/security/unlock", { method: "POST" })).resolves.toMatchObject({
+        status: 403,
+        body: {
+          error: {
+            code: "permission_denied"
+          }
+        }
+      });
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("returns typed HTTP adapter errors for unsupported methods, unknown routes, and malformed JSON", async () => {
+    const port = await getAvailablePort("127.0.0.1");
+    const service = await startHostHttpService({
+      version: "0.0.0-service-errors",
+      stateDir: tempDir("hostdeck-service-errors-state-"),
+      bindPort: port,
+      discovery: emptyDiscovery(),
+      tmux: createFakeTmuxAdapter({ now: fixedNow }),
+      now: fixedNow
+    });
+
+    try {
+      await expect(fetchJson(service.baseUrl, "/api/host/status", { method: "POST" })).resolves.toMatchObject({
+        status: 405,
+        body: {
+          error: {
+            code: "validation_error",
+            field: "method"
+          }
+        }
+      });
+      await expect(fetchJson(service.baseUrl, "/api/not-real")).resolves.toMatchObject({
+        status: 404,
+        body: {
+          error: {
+            code: "malformed_request",
+            field: "route"
+          }
+        }
+      });
+      await expect(fetchRawText(service.baseUrl, "/api/sessions", "{", { method: "POST" })).resolves.toMatchObject({
+        status: 400,
+        body: {
+          error: {
+            code: "malformed_request",
+            field: "body"
+          }
+        }
+      });
+    } finally {
+      await service.close();
+    }
+  });
 });
 
 async function fetchStatus(baseUrl: URL): Promise<unknown> {
@@ -94,6 +316,77 @@ async function fetchStatus(baseUrl: URL): Promise<unknown> {
   }
 
   return response.json();
+}
+
+async function fetchJson(
+  baseUrl: URL,
+  path: string,
+  init: {
+    readonly method?: "GET" | "POST";
+    readonly headers?: Readonly<Record<string, string>>;
+    readonly body?: unknown;
+  } = {}
+): Promise<{ readonly status: number; readonly body: unknown }> {
+  const response = await fetch(new URL(path, baseUrl), {
+    method: init.method ?? "GET",
+    headers: {
+      ...(init.body !== undefined ? { "content-type": "application/json" } : {}),
+      ...(init.headers ?? {})
+    },
+    ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {})
+  });
+
+  return {
+    status: response.status,
+    body: await response.json()
+  };
+}
+
+async function fetchRaw(
+  baseUrl: URL,
+  path: string,
+  init: {
+    readonly method: "POST";
+    readonly headers?: Readonly<Record<string, string>>;
+    readonly body: unknown;
+  }
+): Promise<{ readonly status: number; readonly headers: Headers; readonly body: unknown }> {
+  const response = await fetch(new URL(path, baseUrl), {
+    method: init.method,
+    headers: {
+      "content-type": "application/json",
+      ...(init.headers ?? {})
+    },
+    body: JSON.stringify(init.body)
+  });
+
+  return {
+    status: response.status,
+    headers: response.headers,
+    body: await response.json()
+  };
+}
+
+async function fetchRawText(
+  baseUrl: URL,
+  path: string,
+  body: string,
+  init: {
+    readonly method: "POST";
+  }
+): Promise<{ readonly status: number; readonly body: unknown }> {
+  const response = await fetch(new URL(path, baseUrl), {
+    method: init.method,
+    headers: {
+      "content-type": "application/json"
+    },
+    body
+  });
+
+  return {
+    status: response.status,
+    body: await response.json()
+  };
 }
 
 function emptyDiscovery(): RealTmuxTargetDiscovery {

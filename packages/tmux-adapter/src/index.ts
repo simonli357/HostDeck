@@ -120,6 +120,7 @@ export interface RealTmuxAdapterOptions extends RealTmuxTargetDiscoveryOptions {
   readonly now?: () => Date;
   readonly path?: string;
   readonly startupVerifyDelayMs?: number;
+  readonly expectedTargets?: readonly ExpectedTmuxTarget[];
 }
 
 export interface TmuxArmOutputPipeInput {
@@ -341,7 +342,9 @@ export function createRealTmuxAdapter(options: RealTmuxAdapterOptions = {}): Tmu
   const commandOptions = createTmuxCommandOptions(tmuxBinary, options.socketName);
   const startupVerifyDelayMs = options.startupVerifyDelayMs ?? defaultStartupVerifyDelayMs;
   const discovery = createRealTmuxTargetDiscovery(options);
-  const expectedTargets = new Map<string, ExpectedTmuxTarget>();
+  const expectedTargets = new Map<string, ExpectedTmuxTarget>(
+    (options.expectedTargets ?? []).map((target) => [parseRequiredSessionId(target.sessionId), target])
+  );
   const capturedOutputs = new Map<string, TmuxOutputEvent[]>();
 
   function timestamp(): IsoTimestamp {

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cliExitCodes, runCli } from "../packages/cli/src/index.js";
 import { startHostHttpService } from "../packages/server/src/index.js";
 import {
+  createFakeTmuxAdapter,
   parseSessionIdFromTmuxSessionName,
   type RealTmuxTargetDiscovery,
   tmuxSessionNameForSession
@@ -64,6 +65,51 @@ describe("service-mode CLI smoke", () => {
       expect(status.stdout).toContain("HostDeck daemon: ready");
     } finally {
       await restarted.close();
+    }
+  });
+
+  it("runs CLI start, list, send, and stop through the foreground HTTP service", async () => {
+    const port = await getAvailablePort("127.0.0.1");
+    const stateDir = tempDir("hostdeck-service-cli-routes-state-");
+    const fakeTmux = createFakeTmuxAdapter({ now: fixedNow });
+    const service = await startHostHttpService({
+      version: "0.0.0-service-cli-routes",
+      stateDir,
+      databasePath: join(stateDir, "hostdeck.sqlite"),
+      bindPort: port,
+      discovery: emptyDiscovery(),
+      tmux: fakeTmux,
+      now: fixedNow
+    });
+
+    try {
+      const start = await runCli(["--api-url", service.baseUrl.toString(), "start", "--name", "cli-http-demo", "--cwd", stateDir], {
+        env: {}
+      });
+      expect(start.exitCode).toBe(cliExitCodes.ok);
+      expect(start.stdout).toContain("Started session: cli-http-demo");
+
+      const list = await runCli(["--api-url", service.baseUrl.toString(), "list"], { env: {} });
+      expect(list.exitCode).toBe(cliExitCodes.ok);
+      expect(list.stdout).toContain("cli-http-demo");
+      expect(list.stdout).toContain("lifecycle=running");
+
+      const send = await runCli(["--api-url", service.baseUrl.toString(), "send", "cli-http-demo", "Continue", "from", "CLI"], {
+        env: {}
+      });
+      expect(send.exitCode).toBe(cliExitCodes.ok);
+      expect(send.stdout).toContain("prompt accepted");
+      expect(fakeTmux.sentInputs()).toHaveLength(1);
+      expect(fakeTmux.sentInputs()[0]).toMatchObject({
+        text: "Continue from CLI",
+        enter: true
+      });
+
+      const stop = await runCli(["--api-url", service.baseUrl.toString(), "stop", "cli-http-demo"], { env: {} });
+      expect(stop.exitCode).toBe(cliExitCodes.ok);
+      expect(stop.stdout).toContain("stop accepted");
+    } finally {
+      await service.close();
     }
   });
 });
