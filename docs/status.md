@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `IFC-V1-011` Localhost/LAN config and network smoke coverage
+- Active task: `IFC-V1-007` CLI session commands: `start`, `list`, `send`, `attach`, `stop`, and status display
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
-- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart/smoke path/hardening, pairing/security API route foundation, validation command wiring, headless `codexdeck serve` startup/readiness, headless host/session/output read route contracts, headless one-session stream route contracts, headless write pipeline route contracts, aggregate API route/stream contract tests, and CLI shell/API client foundation are complete; localhost/LAN network smoke is next.
-- Last validation: `command -v codex && codex --version && command -v tmux && tmux -V && lsb_release -ds && date -Iseconds`, `pnpm install --frozen-lockfile`, `pnpm --filter @hostdeck/cli typecheck`, `pnpm --filter @hostdeck/contracts typecheck`, `pnpm test:contract`, `pnpm lint`, `pnpm check:scaffold`, `pnpm -r --if-present typecheck`, `pnpm test`, `pnpm test:tmux`, and `git diff --check` passed for `IFC-V1-006`.
-- Next action: Start `IFC-V1-011` localhost/LAN config and network smoke coverage.
+- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart/smoke path/hardening, pairing/security API route foundation, validation command wiring, headless `codexdeck serve` startup/readiness, headless host/session/output read route contracts, headless one-session stream route contracts, headless write pipeline route contracts, aggregate API route/stream contract tests, CLI shell/API client foundation, and localhost/LAN network smoke are complete; CLI session commands are next.
+- Last validation: `command -v codex && codex --version && command -v tmux && tmux -V && lsb_release -ds && date -Iseconds`, `pnpm install --frozen-lockfile`, `pnpm --filter @hostdeck/server typecheck`, `pnpm --filter @hostdeck/contracts typecheck`, `pnpm test:unit -- packages/server/src/network-smoke.test.ts packages/server/src/startup.test.ts packages/server/src/security-routes.test.ts`, `pnpm test:contract`, `pnpm lint`, `pnpm check:scaffold`, `pnpm -r --if-present typecheck`, `pnpm test`, `pnpm test:tmux`, and `git diff --check` passed for `IFC-V1-011`.
+- Next action: Start `IFC-V1-007` CLI session commands.
 - Blockers: Clean release tmux setup still needs later install/run/service smoke docs; visual mockups before UI implementation.
-- Last commit: `IFC-V1-006` CLI shell/API client commit.
-- Last push: `origin/main` after the `IFC-V1-006` commit.
+- Last commit: `IFC-V1-011` localhost/LAN network smoke commit.
+- Last push: `origin/main` after the `IFC-V1-011` commit.
 
 ## What Is Proven
 
@@ -60,6 +60,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `IFC-V1-004` added headless prompt, slash, stop, and raw-input write route handlers with auth/CSRF, lock, lifecycle, one-session, slash allowlist, raw confirmation, audit preflight, tmux dispatch, stopped-state persistence, and typed rejection coverage.
 - Implementation: `IFC-V1-010` added aggregate API route contract coverage for 16 current V1 host/session/stream/write/pairing/security/network routes with method, auth, request, response, stream-event, route error body, and typed error assertions.
 - Implementation: `IFC-V1-006` added the CLI core shell, API client, config loading, stable exit-code families, status rendering, and daemon/API error rendering with unit and contract coverage.
+- Implementation: `IFC-V1-011` added startup network bind preflight plus real localhost/LAN listener smoke for default localhost, LAN on/off persistence, invalid port, and duplicate port failure.
 - Release support: `REL-V1-001` wired validation command placeholders to future owner tasks and recorded command smoke evidence without claiming unavailable layers are implemented.
 - Planning/spike: `INT-V1-001` chose tmux `pipe-pane` for live output ingestion plus bounded `capture-pane` startup/restart recovery.
 - No end-to-end HostDeck product workflow through API, CLI, or UI is proven yet.
@@ -116,9 +117,10 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | IFC-V1-004 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Write route handlers and `artifacts/ifc-v1-004-write-routes.md`. |
 | IFC-V1-010 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Aggregate API route contracts and `artifacts/ifc-v1-010-api-route-contracts.md`. |
 | IFC-V1-006 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | CLI shell/API client and `artifacts/ifc-v1-006-cli-shell.md`. |
-| IFC-V1-011 | Implementation | ready | `docs/tracking/backlog/api-cli-control-plane.md` | Next ready localhost/LAN config and network smoke leaf. |
-| IFC-V1-007 | Implementation | ready | `docs/tracking/backlog/api-cli-control-plane.md` | Unblocked CLI session command leaf after CLI shell/API client foundation. |
+| IFC-V1-011 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Localhost/LAN network smoke and `artifacts/ifc-v1-011-network-smoke.md`. |
+| IFC-V1-007 | Implementation | ready | `docs/tracking/backlog/api-cli-control-plane.md` | Next ready CLI session command leaf after CLI shell/API client foundation. |
 | IFC-V1-008 | Implementation | ready | `docs/tracking/backlog/api-cli-control-plane.md` | Unblocked CLI pairing, lock/unlock, and LAN command leaf after security routes and CLI shell/API client foundation. |
+| IFC-V1-012 | Implementation | ready | `docs/tracking/backlog/api-cli-control-plane.md` | Unblocked foreground and long-running service-mode smoke leaf after localhost/LAN network smoke. |
 
 ## Decisions Needed
 

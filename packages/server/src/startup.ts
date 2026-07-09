@@ -1,5 +1,6 @@
 import { constants as fsConstants } from "node:fs";
 import { access, mkdir, stat } from "node:fs/promises";
+import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import {
   type ApiErrorEnvelope,
@@ -33,6 +34,7 @@ export type HostStartupErrorCode =
   | "invalid_state_dir"
   | "migration_failed"
   | "invalid_settings"
+  | "network_bind_failed"
   | "tmux_unavailable"
   | "tmux_check_failed"
   | "registry_reconciliation_failed"
@@ -52,9 +54,10 @@ export class HostDeckStartupError extends Error {
 
 type OpenMigratedDatabaseResult = ReturnType<typeof openMigratedDatabase>;
 type OpenDatabase = (path: string, options: OpenMigratedDatabaseOptions) => OpenMigratedDatabaseResult;
+type NetworkBindCheck = (bind: HostStatusResponse["bind"]) => Promise<void> | void;
 type HealthCheck = HostStatusResponse["storage"];
 type StartupCheck = HostStatusResponse["startup_checks"][number];
-type StartupCheckName = "state_dir" | "storage_migrations" | "settings" | "tmux" | "registry_reconciliation";
+type StartupCheckName = "state_dir" | "storage_migrations" | "settings" | "network_bind" | "tmux" | "registry_reconciliation";
 type StartupHealthState = HealthCheck["state"];
 
 export interface StartHostAgentInput {
@@ -67,6 +70,7 @@ export interface StartHostAgentInput {
   readonly now?: () => Date;
   readonly ensureStateDirectory?: (stateDir: string) => Promise<void> | void;
   readonly openDatabase?: OpenDatabase;
+  readonly checkNetworkBind?: NetworkBindCheck;
   readonly discovery?: RealTmuxTargetDiscovery;
   readonly startOutputReader?: (target: TmuxTarget) => Promise<void> | void;
 }
@@ -209,6 +213,25 @@ export async function startHostAgent(input: StartHostAgentInput): Promise<HostSt
     });
   }
 
+  try {
+    await (input.checkNetworkBind ?? checkNetworkBindAvailability)(bind);
+    startupChecks.push(startupCheck("network_bind", "ok", `Network bind is available at ${bind.host}:${bind.port}.`));
+  } catch (error) {
+    fail({
+      startupCode: "network_bind_failed",
+      errorCode: "invalid_config",
+      checkName: "network_bind",
+      message: `HostDeck cannot bind ${bind.mode} listener at ${bind.host}:${bind.port}.`,
+      cause: error,
+      field: "bind",
+      details: {
+        bind_mode: bind.mode,
+        bind_host: bind.host,
+        bind_port: bind.port
+      }
+    });
+  }
+
   const discovery =
     input.discovery ??
     createRealTmuxTargetDiscovery({
@@ -308,6 +331,40 @@ async function ensureUsableStateDirectory(stateDir: string): Promise<void> {
 
 function missingOutputReader(target: TmuxTarget): never {
   throw new Error(`Output reader startup is not configured for live session ${target.sessionId}.`);
+}
+
+function checkNetworkBindAvailability(bind: HostStatusResponse["bind"]): Promise<void> {
+  return new Promise((resolveBind, rejectBind) => {
+    const server = createServer();
+    let settled = false;
+
+    function settle(error?: unknown): void {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+
+      if (error !== undefined) {
+        rejectBind(error);
+        return;
+      }
+
+      resolveBind();
+    }
+
+    server.once("error", settle);
+    server.listen(
+      {
+        host: bind.host,
+        port: bind.port,
+        exclusive: true
+      },
+      () => {
+        server.close((error) => settle(error ?? undefined));
+      }
+    );
+  });
 }
 
 function normalizedStateDir(stateDir: string): string {

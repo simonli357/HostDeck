@@ -47,6 +47,7 @@ describe("host startup", () => {
         version: "0.0.0-test",
         stateDir,
         databasePath,
+        checkNetworkBind: noopNetworkBindCheck,
         discovery: fakeDiscovery({
           liveTargets: [targetForSession(live, "%7")],
           staleTargets: [
@@ -83,6 +84,7 @@ describe("host startup", () => {
           ["state_dir", "ok"],
           ["storage_migrations", "ok"],
           ["settings", "ok"],
+          ["network_bind", "ok"],
           ["tmux", "ok"],
           ["registry_reconciliation", "ok"]
         ]);
@@ -111,6 +113,7 @@ describe("host startup", () => {
         version: "0.0.0-test",
         stateDir: tempDir("hostdeck-startup-state-"),
         tmuxBinary: join(tempDir("hostdeck-missing-tmux-"), "missing-tmux"),
+        checkNetworkBind: noopNetworkBindCheck,
         now: fixedNow
       })
     );
@@ -155,6 +158,7 @@ describe("host startup", () => {
         version: "0.0.0-test",
         stateDir: tempDir("hostdeck-startup-state-"),
         bindPort: 0,
+        checkNetworkBind: noopNetworkBindCheck,
         discovery: emptyDiscovery(),
         now: fixedNow
       })
@@ -205,6 +209,7 @@ describe("host startup", () => {
           version: "0.0.0-test",
           stateDir,
           databasePath,
+          checkNetworkBind: noopNetworkBindCheck,
           discovery: fakeDiscovery({
             liveTargets: [targetForSession(live, "%8")],
             staleTargets: [],
@@ -243,6 +248,10 @@ async function expectStartupFailure(startup: Promise<unknown>): Promise<HostDeck
   }
 
   throw new Error("Expected startup to fail.");
+}
+
+function noopNetworkBindCheck(): void {
+  return;
 }
 
 function emptyDiscovery(): RealTmuxTargetDiscovery {
