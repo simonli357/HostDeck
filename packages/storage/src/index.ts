@@ -35,6 +35,7 @@ export {
   defaultMigrations,
   hostDeckBaseSchemaMigration,
   hostDeckRetentionBoundaryScopeChecksMigration,
+  hostDeckSelectedRuntimeStateMigration,
   hostDeckSessionMetadataFailedStatusMigration,
   type StorageMigration
 } from "./migrations.js";
@@ -49,6 +50,24 @@ export {
   type OutputReplayResult,
   type RetentionRepository
 } from "./retention-repository.js";
+export {
+  createRuntimeCompatibilityRepository,
+  HostDeckRuntimeCompatibilityRepositoryError,
+  type RuntimeCompatibilityRepository,
+  type RuntimeCompatibilityRepositoryErrorCode
+} from "./runtime-compatibility-repository.js";
+export {
+  type AppendSelectedEventResult,
+  createSelectedStateRepository,
+  HostDeckSelectedStateRepositoryError,
+  type ListSelectedEventsInput,
+  type SelectedSessionState,
+  type SelectedStateRepository,
+  type SelectedStateRepositoryErrorCode,
+  type SelectedStateRevision,
+  selectedProjectedEventByteLength,
+  selectedStateRevision
+} from "./selected-state-repository.js";
 export {
   createSessionMetadataRepository,
   createSessionRepository,

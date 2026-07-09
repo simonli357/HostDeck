@@ -116,6 +116,9 @@ export const selectedSessionStartRecoveryRecordSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.state === "reserved" && value.codex_thread_id !== null) {
+      context.addIssue({ code: "custom", message: "Reserved session-start recovery records cannot claim a Codex thread id." });
+    }
     if (["thread_created", "persisted"].includes(value.state) && value.codex_thread_id === null) {
       context.addIssue({ code: "custom", message: "Thread-created and persisted recovery states require the returned thread id." });
     }

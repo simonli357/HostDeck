@@ -184,13 +184,13 @@ describe("session registry and metadata repositories", () => {
             ) VALUES (
               'sess_repo_01',
               'repo-demo',
-              'relative/path',
+              '/home/simonli/work/corrupt',
               'tmux',
               'hostdeck-repo-demo',
               NULL,
               '%1',
               'running',
-              '2026-07-08T22:00:00.000Z',
+              '2026-02-30T22:00:00.000Z',
               '2026-07-08T22:00:00.000Z',
               NULL
             )

@@ -36,9 +36,9 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | Work | Tasks | Status |
 | --- | --- | --- |
 | Historical migrations/settings/session/auth/audit/retention/branch/restart | `DAT-V1-001` to `DAT-V1-017`, `DAT-V1-090` | Done for prior schema; reusable evidence retained. |
-| App-server mapping and projection migration | `DAT-V1-018` | Blocked by `FND-V1-015`. |
-| Secure paths and daemon lease | `DAT-V1-019` | Blocked by normalized config contracts. |
-| Production retention and audit outcome integration | `DAT-V1-020` | Blocked by mapping/event contracts. |
+| App-server mapping and projection migration | `DAT-V1-018` | Done; selected migration/repository evidence recorded. |
+| Secure paths and daemon lease | `DAT-V1-019` | Ready. |
+| Production retention and audit outcome integration | `DAT-V1-020` | Ready. |
 | Device/CSRF/rate/audit lifecycle storage | `DAT-V1-021` | Blocked by auth contracts and HTTPS design inputs. |
 | Reopened module hardening | `DAT-V1-091` | Blocked by all new data tasks. |
 
