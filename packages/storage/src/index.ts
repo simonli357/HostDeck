@@ -1,4 +1,10 @@
 export {
+  type AuditEventRepository,
+  createAuditEventRepository,
+  HostDeckAuditRepositoryError,
+  type ListAuditEventsInput
+} from "./audit-repository.js";
+export {
   type AuthDeviceAuthentication,
   type AuthDeviceRepository,
   createAuthDeviceRepository,

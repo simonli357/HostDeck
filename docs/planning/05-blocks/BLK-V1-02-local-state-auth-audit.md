@@ -31,7 +31,7 @@ Owns durable local truth for sessions, settings, trust state, lock/LAN state, au
 | `sessions` and `session_metadata` | `@hostdeck/contracts` schemas and `@hostdeck/storage` repositories | Stable id, unique V1 name, absolute cwd, backend/tmux target, lifecycle, status, attention, summary. | Contract tests and repository tests now; later restart integration tests. |
 | `auth_devices` and `pairing_codes` | `@hostdeck/contracts` schemas and `@hostdeck/storage` repositories | Store hashed secrets only, including device tokens, CSRF tokens, and pairing codes; pairing is time-bounded and one-time; revoked/expired/read-only/CSRF-mismatched devices cannot write. | Contract tests, auth lifecycle tests, and local state inspection now. |
 | `settings` | `@hostdeck/contracts` schema and `@hostdeck/storage` repository | Defaults are localhost, LAN off, configured state dir and port, visible lock state. | Contract tests and settings repository tests now; later startup/network smoke. |
-| `audit_events` | `@hostdeck/contracts` schema; later storage package repository | Required before remote write dispatch except emergency lock; payload summary is bounded. | Contract tests now; later audit unit/integration tests and write-pipeline tests. |
+| `audit_events` | `@hostdeck/contracts` schema and `@hostdeck/storage` repository | Required before remote write dispatch except emergency lock; payload summary is bounded. | Contract tests and audit repository tests now; later write-pipeline tests. |
 
 ## Implementation Blueprint
 
@@ -55,7 +55,7 @@ Owns durable local truth for sessions, settings, trust state, lock/LAN state, au
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
 | Architecture spikes | `DAT-V1-001` to `DAT-V1-003` | Done | `artifacts/dat-v1-001-sqlite-driver-spike.md`, `artifacts/dat-v1-002-token-transport-spike.md`, `artifacts/dat-v1-003-retention-caps-spike.md`, `docs/tracking/backlog/local-state-auth-audit.md` |
-| Storage foundation | `DAT-V1-010` to `DAT-V1-017` | In progress: `DAT-V1-010` to `DAT-V1-013` done; `DAT-V1-014`, `DAT-V1-015`, and `DAT-V1-017` ready | `artifacts/dat-v1-010-sqlite-migration-runner.md`, `artifacts/dat-v1-011-settings-repository.md`, `artifacts/dat-v1-012-session-repositories.md`, `artifacts/dat-v1-013-auth-repositories.md`, `docs/tracking/backlog/local-state-auth-audit.md` |
+| Storage foundation | `DAT-V1-010` to `DAT-V1-017` | In progress: `DAT-V1-010` to `DAT-V1-014` done; `DAT-V1-015` to `DAT-V1-017` ready | `artifacts/dat-v1-010-sqlite-migration-runner.md`, `artifacts/dat-v1-011-settings-repository.md`, `artifacts/dat-v1-012-session-repositories.md`, `artifacts/dat-v1-013-auth-repositories.md`, `artifacts/dat-v1-014-audit-repository.md`, `docs/tracking/backlog/local-state-auth-audit.md` |
 | Storage hardening | `DAT-V1-090` | Planned | `docs/tracking/backlog/local-state-auth-audit.md` |
 
 ## Done Criteria

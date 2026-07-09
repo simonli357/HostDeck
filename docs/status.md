@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `DAT-V1-014` durable audit repository and bounded payload summaries
+- Active task: `DAT-V1-015` retention cleanup and replay-boundary storage metadata
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
 - Release state: Foundation block complete; data/auth/storage repositories are underway.
-- Last validation: `pnpm install --frozen-lockfile`, `pnpm --filter @hostdeck/storage typecheck`, `pnpm --filter @hostdeck/contracts typecheck`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit -- packages/storage/src/auth-repository.test.ts packages/storage/src/migration-runner.test.ts packages/contracts/src/storage.contract.test.ts`, `pnpm test:contract`, and `git diff --check` passed for `DAT-V1-013`.
-- Next action: Start `DAT-V1-014` durable audit repository and bounded payload summaries.
+- Last validation: `pnpm install --frozen-lockfile`, `pnpm --filter @hostdeck/storage typecheck`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit -- packages/storage/src/audit-repository.test.ts packages/contracts/src/storage.contract.test.ts`, `pnpm test:contract`, and `git diff --check` passed for `DAT-V1-014`.
+- Next action: Start `DAT-V1-015` retention cleanup and replay-boundary storage metadata.
 - Blockers: `INT-V1-001` needs `tmux` in the environment; visual mockups before UI implementation.
-- Last commit: `DAT-V1-013` auth repository commit.
-- Last push: `origin/main` after the `DAT-V1-013` commit.
+- Last commit: `DAT-V1-014` audit repository commit.
+- Last push: `origin/main` after the `DAT-V1-014` commit.
 
 ## What Is Proven
 
@@ -40,6 +40,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `DAT-V1-011` added the SQLite-backed settings/config repository with safe localhost defaults, bind-host validation, lock/LAN persistence, and invalid-startup rejection.
 - Implementation: `DAT-V1-012` added SQLite-backed session registry and metadata repositories, duplicate-name/id handling, invalid cwd/stale/reload rejection, and a migration for the valid `failed` metadata status.
 - Implementation: `DAT-V1-013` added hash-only pairing/auth repositories with CSRF hash storage, one-time pairing claim, read-only/write distinction, revocation/expiry checks, and direct SQLite raw-secret absence assertions.
+- Implementation: `DAT-V1-014` added durable audit event append/read/list with bounded payload summaries, required V1 action coverage, duplicate/missing errors, and invalid persisted JSON rejection.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
@@ -73,7 +74,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | DAT-V1-011 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Settings/config repository and `artifacts/dat-v1-011-settings-repository.md`. |
 | DAT-V1-012 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Session registry/metadata repositories and `artifacts/dat-v1-012-session-repositories.md`. |
 | DAT-V1-013 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Auth/pairing repositories and `artifacts/dat-v1-013-auth-repositories.md`. |
-| DAT-V1-014 | Implementation | ready | `docs/tracking/backlog/local-state-auth-audit.md` | Next ready leaf: implement durable audit repository and bounded payload summaries. |
+| DAT-V1-014 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Audit repository and `artifacts/dat-v1-014-audit-repository.md`. |
+| DAT-V1-015 | Implementation | ready | `docs/tracking/backlog/local-state-auth-audit.md` | Next ready leaf: implement retention cleanup and replay-boundary storage metadata. |
 
 ## Decisions Needed
 
