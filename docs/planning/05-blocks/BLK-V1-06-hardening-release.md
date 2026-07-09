@@ -38,7 +38,7 @@ Requirement refs: all `NFR-*`, `PR-*`, `SFR-*` release gates and all requirement
 | Aggregate validation | `REL-V1-007` | Blocked by module/device smoke. |
 | Completion matrix and delivery truth | `REL-V1-008`, `REL-V1-009` | Blocked by aggregate evidence. |
 | Go/no-go | `REL-V1-010` | Blocked by all release gates and human acceptance. |
-| System hardening audit/rebaseline | `REL-V1-011` | In progress. |
+| System hardening audit/rebaseline | `REL-V1-011` | Done; rebaseline commit `2e06d4b` pushed. |
 | Next-version gate | `REL-V1-999` | Blocked by V1 acceptance. |
 
 Owning backlog: `docs/tracking/backlog/hardening-release.md`.

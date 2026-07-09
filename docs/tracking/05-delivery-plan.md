@@ -4,16 +4,16 @@ Owns milestone, module maturity, production passes, and release truth.
 
 ## Snapshot
 
-- Current pass: system audit and architecture/mobile/security/backlog rebaseline.
-- Current milestone: M0 Rebaseline.
+- Current pass: selected foundation contracts and blocking HTTPS phone spike.
+- Current milestone: M1 Selected foundation.
 - Release state: no-go; selected production path is not implemented.
-- Next exit: `REL-V1-011` and `FND-V1-014` complete, then normalized contract and HTTPS spikes begin.
+- Next exit: normalized contracts/invariants, compatibility/IPC foundation, and secure state migration are executable.
 
 ## Milestones
 
 | Milestone | Scope | Exit | Status |
 | --- | --- | --- | --- |
-| M0 Rebaseline | Audit prior direction/evidence; select app-server/mobile/HTTPS path; repair requirements, blueprint, blocks, tasks, queue, planning checker. | Owner docs agree, `pnpm check:planning` passes, selected-path leaf graph is executable. | In progress |
+| M0 Rebaseline | Audit prior direction/evidence; select app-server/mobile/HTTPS path; repair requirements, blueprint, blocks, tasks, queue, planning checker. | Owner docs agree, `pnpm check:planning` passes, selected-path leaf graph is executable. | Complete |
 | M1 Selected foundation | Normalized contracts/invariants; mapping/projection/auth/permissions/retention migrations; Codex compatibility and IPC adapter. | `FND-V1-091`, data foundation tasks, adapter handshake/broker pass. | Planned |
 | M2 Real structured vertical | Real thread start/resume, prompt/events/status, controls, approval, interrupt, TUI multi-client, reconnect/restart; legacy disposition. | `INT-V1-091` with L3 real-Codex artifact. | Planned |
 | M3 Production host interface | HTTPS phone enrollment, Fastify/SSE/static, auth/rate/origin/CSRF, fanout/health/shutdown, selected API/CLI, bounds, build/user services. | `IFC-V1-091`, clean production-path smoke. | Planned |
@@ -41,7 +41,7 @@ Owns milestone, module maturity, production passes, and release truth.
 
 | Gate | Status | Blocking owner |
 | --- | --- | --- |
-| Planning/trace/dependency integrity | In progress | `REL-V1-011`, `FND-V1-014` |
+| Planning/trace/dependency integrity | Complete | `REL-V1-011`, `FND-V1-014` |
 | Real Codex compatibility and vertical | Blocked | `INT-V1-003` to `INT-V1-091` |
 | HTTPS/auth/security boundary | Blocked | `IFC-V1-015`, `DAT-V1-021`, `IFC-V1-017`, `IFC-V1-091` |
 | Build/package/user services | Blocked | `IFC-V1-021` |

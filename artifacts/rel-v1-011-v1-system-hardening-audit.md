@@ -156,7 +156,7 @@ Passed:
 
 ## Current Audit Status
 
-- Audit and rebaseline: complete after final commit/push bookkeeping.
+- Audit and rebaseline: complete; rebaseline commit `2e06d4b` pushed to `origin/main` and closure handoff committed separately.
 - Existing package-level tests: passing.
 - Production integration/security readiness: no-go until blocker tasks are completed.
 - UI visual selection readiness: no-go; current options are retained as rejected audit evidence, not implementation targets.

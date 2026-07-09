@@ -15,7 +15,8 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `REL-V1-011` Audit and rebaseline the complete V1 system | in_progress | none | Corrects product, architecture, security, mobile UX, block, task, and release truth before further implementation. |
+| 1 | `FND-V1-015` Rebase normalized contracts and fixtures | ready | none | First selected-path implementation dependency; unlocks data migration, Codex compatibility, production API contracts, and mobile state work. |
+| 2 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the other blocking architecture boundary before auth/LAN/UI implementation. |
 
 ## Intentional Blockers
 
