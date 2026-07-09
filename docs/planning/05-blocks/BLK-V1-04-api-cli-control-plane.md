@@ -53,7 +53,7 @@ Owns the host-agent service boundary, typed local API, write pipeline, CLI surfa
 
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
-| Server startup and route contracts | `IFC-V1-001` to `IFC-V1-003`, `IFC-V1-010` | Startup readiness done; `IFC-V1-002` route contracts are ready next, stream/aggregate contract tasks remain planned | `artifacts/ifc-v1-001-startup-readiness.md`; `docs/tracking/backlog/api-cli-control-plane.md` |
+| Server startup and route contracts | `IFC-V1-001` to `IFC-V1-003`, `IFC-V1-010` | Startup readiness and read routes done; `IFC-V1-003` stream route contracts are ready next, aggregate contract task remains planned | `artifacts/ifc-v1-001-startup-readiness.md`; `artifacts/ifc-v1-002-read-routes.md`; `docs/tracking/backlog/api-cli-control-plane.md` |
 | Write pipeline and trust routes | `IFC-V1-004`, `IFC-V1-005` | In progress | `IFC-V1-005` security route evidence in `artifacts/ifc-v1-005-security-routes.md`; write dispatch remains in `IFC-V1-004`. |
 | CLI surface and service controls | `IFC-V1-006` to `IFC-V1-014` | `IFC-V1-006` and `IFC-V1-011` are unblocked by startup; remaining CLI/service tasks remain planned | `docs/tracking/backlog/api-cli-control-plane.md` |
 | Interface hardening | `IFC-V1-090` | Planned | `docs/tracking/backlog/api-cli-control-plane.md` |
