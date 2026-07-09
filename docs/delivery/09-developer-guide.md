@@ -28,7 +28,9 @@ Owns setup context, environment policy, services, and operational notes.
 
 ## Operations
 
-- Secrets: none created by the scaffold.
-- Data/reset: remove `node_modules/` and rerun `pnpm install --frozen-lockfile`; if a pre-approval local install skipped the SQLite native build, use a clean reinstall so `better-sqlite3` rebuilds.
+- Secrets: CLI pairing creates short-lived one-time pairing codes; durable pairing/device/CSRF secrets are stored as hashes by the storage repositories.
+- State: CLI local admin paths default to `${XDG_STATE_HOME}/hostdeck` when `XDG_STATE_HOME` is set, otherwise `~/.local/state/hostdeck`; the default SQLite file is `hostdeck.sqlite` inside that state directory.
+- State overrides: CLI config accepts `--state-dir`, `--database` / `--database-path`, `HOSTDECK_STATE_DIR`, `HOSTDECK_DATABASE_PATH`, and JSON config keys `state_dir` / `stateDir` plus `database_path` / `databasePath`.
+- Data/reset: remove `node_modules/` and rerun `pnpm install --frozen-lockfile`; if a pre-approval local install skipped the SQLite native build, use a clean reinstall so `better-sqlite3` rebuilds. Remove the local HostDeck state directory only when intentionally resetting HostDeck sessions, settings, pairing codes, and audit records.
 - Logs/artifacts: task evidence lives under `artifacts/`.
 - Common failures: placeholder scripts exiting nonzero are expected until the referenced owning task replaces them.

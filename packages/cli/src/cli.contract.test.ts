@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { HttpResponse } from "./api-client.js";
 import { cliExitCodes } from "./exit-codes.js";
+import type { LocalAdmin } from "./local-admin.js";
 import { runCli } from "./shell.js";
 
 const statusResponse = {
@@ -184,6 +185,59 @@ describe("CLI shell contract", () => {
     expect(result.stdout).toContain("stop accepted for sess_cli_contract_01");
   });
 
+  it("creates pairing codes through the local admin path with expiry visible", async () => {
+    const calls: unknown[] = [];
+    const result = await runCli(["pair", "--label", "phone", "--ttl-minutes", "5", "--read-only"], {
+      env: {},
+      localAdmin: fakeLocalAdmin(calls)
+    });
+
+    expect(result.exitCode).toBe(cliExitCodes.ok);
+    expect(result.stderr).toBe("");
+    expect(result.stdout).toContain("Pairing code created.");
+    expect(result.stdout).toContain("Code: 135790");
+    expect(result.stdout).toContain("Permission: read");
+    expect(result.stdout).toContain("Expires: 2026-07-09T08:05:00.000Z");
+    expect(result.stdout).toContain("No device token was created or stored by this command.");
+    expect(calls).toEqual([{ method: "pair", permission: "read", ttlMinutes: 5, label: "phone" }]);
+  });
+
+  it("locks, unlocks, and mutates LAN through local admin commands", async () => {
+    const calls: unknown[] = [];
+
+    const lock = await runCli(["lock", "--reason", "maintenance"], {
+      env: {},
+      localAdmin: fakeLocalAdmin(calls)
+    });
+    const unlock = await runCli(["unlock", "--json"], {
+      env: {},
+      localAdmin: fakeLocalAdmin(calls)
+    });
+    const lanEnable = await runCli(["lan", "enable", "--bind-host", "0.0.0.0"], {
+      env: {},
+      localAdmin: fakeLocalAdmin(calls)
+    });
+    const lanDisable = await runCli(["lan", "disable"], {
+      env: {},
+      localAdmin: fakeLocalAdmin(calls)
+    });
+
+    expect(lock.exitCode).toBe(cliExitCodes.ok);
+    expect(lock.stdout).toContain("HostDeck is now locked.");
+    expect(JSON.parse(unlock.stdout)).toMatchObject({ locked: false, audit_event_id: "audit_unlock" });
+    expect(lanEnable.stdout).toContain("LAN access enabled.");
+    expect(lanEnable.stdout).toContain("Run `codexdeck lan disable` to return to localhost-only mode.");
+    expect(lanEnable.stdout).toContain("Restart or rebind the daemon for listener changes to take effect.");
+    expect(lanDisable.stdout).toContain("LAN access disabled.");
+    expect(lanDisable.stdout).toContain("Bind setting: localhost (127.0.0.1:3777)");
+    expect(calls).toEqual([
+      { method: "lock", locked: true, reason: "maintenance" },
+      { method: "lock", locked: false },
+      { method: "lan", enabled: true, bindHost: "0.0.0.0" },
+      { method: "lan", enabled: false }
+    ]);
+  });
+
   it("fails stale attach and send without posting unproven writes", async () => {
     const staleAttach = await runCli(["attach", staleSession.name], {
       env: {},
@@ -287,5 +341,41 @@ function jsonResponse(status: number, body: unknown): HttpResponse {
     ok: status >= 200 && status < 300,
     json: async () => body,
     text: async () => JSON.stringify(body)
+  };
+}
+
+function fakeLocalAdmin(calls: unknown[]): LocalAdmin {
+  return {
+    createPairingCode(input) {
+      calls.push({ method: "pair", ...input });
+      return {
+        pairing_id: "pair_contract",
+        code: "135790",
+        permission: input.permission,
+        client_label: input.label ?? null,
+        created_at: "2026-07-09T08:00:00.000Z",
+        expires_at: "2026-07-09T08:05:00.000Z",
+        audit_event_id: "audit_pair"
+      };
+    },
+    setLock(input) {
+      calls.push({ method: "lock", ...input });
+      return {
+        locked: input.locked,
+        updated_at: "2026-07-09T08:00:00.000Z",
+        audit_event_id: input.locked ? "audit_lock" : "audit_unlock"
+      };
+    },
+    setLanEnabled(input) {
+      calls.push({ method: "lan", ...input });
+      return {
+        lan_enabled: input.enabled,
+        bind_mode: input.enabled ? "lan" : "localhost",
+        bind_host: input.enabled ? (input.bindHost ?? "0.0.0.0") : "127.0.0.1",
+        bind_port: 3777,
+        updated_at: "2026-07-09T08:00:00.000Z",
+        audit_event_id: input.enabled ? "audit_lan_enable" : "audit_lan_disable"
+      };
+    }
   };
 }

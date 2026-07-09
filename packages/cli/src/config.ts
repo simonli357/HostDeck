@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { isAbsolute, join, resolve } from "node:path";
 import { configFailure } from "./errors.js";
 
 export interface CliConfigFlags {
@@ -7,11 +8,15 @@ export interface CliConfigFlags {
   readonly host?: string;
   readonly port?: string;
   readonly configPath?: string;
+  readonly stateDir?: string;
+  readonly databasePath?: string;
 }
 
 export interface CliConfig {
   readonly baseUrl: URL;
   readonly source: string;
+  readonly stateDir: string;
+  readonly databasePath: string;
 }
 
 export interface LoadCliConfigOptions {
@@ -26,10 +31,15 @@ type RawConfigFile = {
   readonly apiUrl?: unknown;
   readonly host?: unknown;
   readonly port?: unknown;
+  readonly state_dir?: unknown;
+  readonly stateDir?: unknown;
+  readonly database_path?: unknown;
+  readonly databasePath?: unknown;
 };
 
 const defaultHost = "127.0.0.1";
 const defaultPort = 3777;
+const defaultDatabaseFileName = "hostdeck.sqlite";
 
 export function loadCliConfig(options: LoadCliConfigOptions = {}): CliConfig {
   const flags = options.flags ?? {};
@@ -39,11 +49,29 @@ export function loadCliConfig(options: LoadCliConfigOptions = {}): CliConfig {
   const fileBaseUrl = readString(configFile.api_url ?? configFile.apiUrl, "api_url");
   const flagBaseUrl = readString(flags.apiUrl, "--api-url");
   const baseUrl = flagBaseUrl ?? envBaseUrl ?? fileBaseUrl;
+  const stateDir = resolveStoragePath(
+    readString(flags.stateDir, "--state-dir") ??
+      readString(env.HOSTDECK_STATE_DIR, "HOSTDECK_STATE_DIR") ??
+      readString(configFile.state_dir ?? configFile.stateDir, "state_dir") ??
+      defaultStateDir(env),
+    options.cwd,
+    "state_dir"
+  );
+  const databasePath = resolveStoragePath(
+    readString(flags.databasePath, "--database") ??
+      readString(env.HOSTDECK_DATABASE_PATH, "HOSTDECK_DATABASE_PATH") ??
+      readString(configFile.database_path ?? configFile.databasePath, "database_path") ??
+      join(stateDir, defaultDatabaseFileName),
+    options.cwd,
+    "database_path"
+  );
 
   if (baseUrl !== undefined) {
     return {
       baseUrl: normalizeBaseUrl(parseBaseUrl(baseUrl, sourceOf(["--api-url", flagBaseUrl], ["HOSTDECK_API_BASE_URL", envBaseUrl], ["config api_url", fileBaseUrl]))),
-      source: sourceOf(["--api-url", flagBaseUrl], ["HOSTDECK_API_BASE_URL", envBaseUrl], ["config api_url", fileBaseUrl])
+      source: sourceOf(["--api-url", flagBaseUrl], ["HOSTDECK_API_BASE_URL", envBaseUrl], ["config api_url", fileBaseUrl]),
+      stateDir,
+      databasePath
     };
   }
 
@@ -55,7 +83,9 @@ export function loadCliConfig(options: LoadCliConfigOptions = {}): CliConfig {
 
   return {
     baseUrl: new URL(`http://${host}:${port}`),
-    source: flags.configPath === undefined ? "defaults/env/flags" : resolveConfigPath(flags.configPath, options.cwd)
+    source: flags.configPath === undefined ? "defaults/env/flags" : resolveConfigPath(flags.configPath, options.cwd),
+    stateDir,
+    databasePath
   };
 }
 
@@ -169,6 +199,41 @@ function readString(value: unknown, source: string): string | undefined {
 
 function resolveConfigPath(configPath: string, cwd = process.cwd()): string {
   return resolve(cwd, configPath);
+}
+
+function resolveStoragePath(path: string, cwd = process.cwd(), field: string): string {
+  const trimmed = path.trim();
+
+  if (trimmed.length === 0) {
+    throw configFailure(`${field} must not be empty.`, field);
+  }
+
+  return isAbsolute(trimmed) ? resolve(trimmed) : resolve(cwd, trimmed);
+}
+
+function defaultStateDir(env: Readonly<Record<string, string | undefined>>): string {
+  const xdgStateHome = readOptionalPath(env.XDG_STATE_HOME);
+
+  if (xdgStateHome !== undefined) {
+    return join(xdgStateHome, "hostdeck");
+  }
+
+  const home = readOptionalPath(env.HOME) ?? readOptionalPath(homedir());
+
+  if (home === undefined) {
+    throw configFailure("HOSTDECK_STATE_DIR is required when no home directory is available.", "state_dir");
+  }
+
+  return join(home, ".local", "state", "hostdeck");
+}
+
+function readOptionalPath(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
 }
 
 function sourceOf(...candidates: readonly [string, unknown][]): string {

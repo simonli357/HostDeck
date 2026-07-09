@@ -26,6 +26,9 @@ importers:
       '@hostdeck/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@hostdeck/storage':
+        specifier: workspace:*
+        version: link:../storage
 
   packages/contracts:
     dependencies:

@@ -1,5 +1,6 @@
 import type { ApiSession, HostStatusResponse, SessionListResponse, StartSessionResponse, WriteResponse } from "@hostdeck/contracts";
 import type { CliFailure } from "./errors.js";
+import type { LanCommandResult, LockCommandResult, PairingCommandResult } from "./local-admin.js";
 
 export function renderHelp(): string {
   return [
@@ -10,15 +11,22 @@ export function renderHelp(): string {
     "  codexdeck send SESSION TEXT...",
     "  codexdeck attach SESSION",
     "  codexdeck stop SESSION",
+    "  codexdeck pair [--label LABEL] [--ttl-minutes MINUTES] [--read-only] [--json]",
+    "  codexdeck lock [--reason TEXT] [--json]",
+    "  codexdeck unlock [--json]",
+    "  codexdeck lan enable [--bind-host HOST] [--json]",
+    "  codexdeck lan disable [--json]",
     "  codexdeck help",
     "  codexdeck version",
     "",
     "Options:",
-    "  --api-url URL     HostDeck daemon base URL.",
-    "  --host HOST       HostDeck daemon host. Defaults to 127.0.0.1.",
-    "  --port PORT       HostDeck daemon port. Defaults to 3777.",
-    "  --config PATH     JSON config file with api_url or host/port.",
-    "  --json            Print machine-readable output for supported commands.",
+    "  --api-url URL      HostDeck daemon base URL.",
+    "  --host HOST        HostDeck daemon host. Defaults to 127.0.0.1.",
+    "  --port PORT        HostDeck daemon port. Defaults to 3777.",
+    "  --state-dir PATH   Local HostDeck state directory for admin commands.",
+    "  --database PATH    SQLite database path for local admin commands.",
+    "  --config PATH      JSON config file with api_url, host/port, or state paths.",
+    "  --json             Print machine-readable output for supported commands.",
     ""
   ].join("\n");
 }
@@ -65,6 +73,52 @@ export function renderWriteAccepted(response: WriteResponse): string {
   }
 
   return `${response.action} accepted for ${response.session_id}. Audit required: ${response.audit_required ? "yes" : "no"}\n`;
+}
+
+export function renderPairingCode(response: PairingCommandResult, json: boolean): string {
+  if (json) {
+    return `${JSON.stringify(response, null, 2)}\n`;
+  }
+
+  return [
+    "Pairing code created.",
+    `Code: ${response.code}`,
+    `Permission: ${response.permission}`,
+    `Expires: ${response.expires_at}`,
+    `Pairing ID: ${response.pairing_id}`,
+    "No device token was created or stored by this command.",
+    ""
+  ].join("\n");
+}
+
+export function renderLockCommand(response: LockCommandResult, json: boolean): string {
+  if (json) {
+    return `${JSON.stringify(response, null, 2)}\n`;
+  }
+
+  return [
+    `HostDeck is now ${response.locked ? "locked" : "unlocked"}.`,
+    `Audit event: ${response.audit_event_id}`,
+    ""
+  ].join("\n");
+}
+
+export function renderLanCommand(response: LanCommandResult, json: boolean): string {
+  if (json) {
+    return `${JSON.stringify(response, null, 2)}\n`;
+  }
+
+  const action = response.lan_enabled ? "enabled" : "disabled";
+  const reverse = response.lan_enabled ? "Run `codexdeck lan disable` to return to localhost-only mode." : "Run `codexdeck lan enable` to allow LAN binding again.";
+
+  return [
+    `LAN access ${action}.`,
+    `Bind setting: ${response.bind_mode} (${response.bind_host}:${response.bind_port})`,
+    reverse,
+    "Restart or rebind the daemon for listener changes to take effect.",
+    `Audit event: ${response.audit_event_id}`,
+    ""
+  ].join("\n");
 }
 
 export function renderVersion(version: string): string {

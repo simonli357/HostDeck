@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@hostdeck/contracts": "workspace:*"
+    "@hostdeck/contracts": "workspace:*",
+    "@hostdeck/storage": "workspace:*"
   }
 }

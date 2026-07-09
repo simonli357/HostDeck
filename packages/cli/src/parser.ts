@@ -8,7 +8,17 @@ export type ParsedCliCommand =
   | { readonly kind: "list"; readonly json: boolean }
   | { readonly kind: "send"; readonly session: string; readonly text: string }
   | { readonly kind: "attach"; readonly session: string }
-  | { readonly kind: "stop"; readonly session: string };
+  | { readonly kind: "stop"; readonly session: string }
+  | {
+      readonly kind: "pair";
+      readonly label?: string;
+      readonly permission: "read" | "write";
+      readonly ttlMinutes: number;
+      readonly json: boolean;
+    }
+  | { readonly kind: "lock"; readonly reason?: string; readonly json: boolean }
+  | { readonly kind: "unlock"; readonly json: boolean }
+  | { readonly kind: "lan"; readonly action: "enable" | "disable"; readonly bindHost?: string; readonly json: boolean };
 
 export interface ParsedCliArgs {
   readonly command: ParsedCliCommand;
@@ -17,6 +27,8 @@ export interface ParsedCliArgs {
     readonly host?: string;
     readonly port?: string;
     readonly configPath?: string;
+    readonly stateDir?: string;
+    readonly databasePath?: string;
   };
 }
 
@@ -25,6 +37,8 @@ type MutableConfigFlags = {
   host?: string;
   port?: string;
   configPath?: string;
+  stateDir?: string;
+  databasePath?: string;
 };
 
 export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
@@ -96,6 +110,33 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
       continue;
     }
 
+    if (token === "--state-dir") {
+      configFlags.stateDir = readOptionValue(args, index, "--state-dir");
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith("--state-dir=")) {
+      configFlags.stateDir = readInlineOptionValue(token, "--state-dir");
+      continue;
+    }
+
+    if (token === "--database" || token === "--database-path") {
+      configFlags.databasePath = readOptionValue(args, index, token);
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith("--database=")) {
+      configFlags.databasePath = readInlineOptionValue(token, "--database");
+      continue;
+    }
+
+    if (token.startsWith("--database-path=")) {
+      configFlags.databasePath = readInlineOptionValue(token, "--database-path");
+      continue;
+    }
+
     if (token === "--") {
       positionals.push(...args.slice(index + 1));
       break;
@@ -131,25 +172,17 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
   }
 
   if (command === "status") {
-    if (rest.length > 0) {
-      throw usageFailure("The status command does not accept positional arguments.");
-    }
-
-    return { command: { kind: "status", json }, configFlags };
+    return { command: { kind: "status", json: parseNoArgJsonOptions("status", rest, json) }, configFlags };
   }
 
   if (command === "start") {
     const parsed = parseStartOptions(rest);
 
-    return { command: { kind: "start", name: parsed.name, cwd: parsed.cwd, json }, configFlags };
+    return { command: { kind: "start", name: parsed.name, cwd: parsed.cwd, json: parsed.json || json }, configFlags };
   }
 
   if (command === "list") {
-    if (rest.length > 0) {
-      throw usageFailure("The list command does not accept positional arguments.");
-    }
-
-    return { command: { kind: "list", json }, configFlags };
+    return { command: { kind: "list", json: parseNoArgJsonOptions("list", rest, json) }, configFlags };
   }
 
   if (command === "send") {
@@ -177,12 +210,59 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
     return { command: { kind: "stop", session: singleSessionArgument("stop", rest) }, configFlags };
   }
 
+  if (command === "pair") {
+    const parsed = parsePairOptions(rest, json);
+
+    return {
+      command: {
+        kind: "pair",
+        ...(parsed.label !== undefined ? { label: parsed.label } : {}),
+        permission: parsed.permission,
+        ttlMinutes: parsed.ttlMinutes,
+        json: parsed.json
+      },
+      configFlags
+    };
+  }
+
+  if (command === "lock") {
+    const parsed = parseLockOptions(rest, json);
+
+    return {
+      command: {
+        kind: "lock",
+        ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}),
+        json: parsed.json
+      },
+      configFlags
+    };
+  }
+
+  if (command === "unlock") {
+    return { command: { kind: "unlock", json: parseNoArgJsonOptions("unlock", rest, json) }, configFlags };
+  }
+
+  if (command === "lan") {
+    const parsed = parseLanOptions(rest, json);
+
+    return {
+      command: {
+        kind: "lan",
+        action: parsed.action,
+        ...(parsed.bindHost !== undefined ? { bindHost: parsed.bindHost } : {}),
+        json: parsed.json
+      },
+      configFlags
+    };
+  }
+
   throw usageFailure(`Unknown command: ${command ?? ""}`);
 }
 
-function parseStartOptions(args: readonly string[]): { readonly name: string; readonly cwd: string } {
+function parseStartOptions(args: readonly string[]): { readonly name: string; readonly cwd: string; readonly json: boolean } {
   let name: string | undefined;
   let cwd: string | undefined;
+  let json = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
@@ -213,6 +293,11 @@ function parseStartOptions(args: readonly string[]): { readonly name: string; re
       continue;
     }
 
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
+
     if (token.startsWith("-")) {
       throw usageFailure(`Unknown start option: ${token}`);
     }
@@ -228,7 +313,191 @@ function parseStartOptions(args: readonly string[]): { readonly name: string; re
     throw usageFailure("The start command requires --cwd.");
   }
 
-  return { name, cwd };
+  return { name, cwd, json };
+}
+
+function parseNoArgJsonOptions(command: string, args: readonly string[], globalJson: boolean): boolean {
+  let json = globalJson;
+
+  for (const token of args) {
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
+
+    if (token.startsWith("-")) {
+      throw usageFailure(`Unknown ${command} option: ${token}`);
+    }
+
+    throw usageFailure(`The ${command} command does not accept positional arguments.`);
+  }
+
+  return json;
+}
+
+function parsePairOptions(args: readonly string[], globalJson: boolean): {
+  readonly label?: string;
+  readonly permission: "read" | "write";
+  readonly ttlMinutes: number;
+  readonly json: boolean;
+} {
+  let label: string | undefined;
+  let permission: "read" | "write" = "write";
+  let ttlMinutes = 10;
+  let json = globalJson;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+
+    if (token === undefined) {
+      continue;
+    }
+
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
+
+    if (token === "--label") {
+      label = readOptionValue(args, index, "--label");
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith("--label=")) {
+      label = readInlineOptionValue(token, "--label");
+      continue;
+    }
+
+    if (token === "--ttl-minutes") {
+      ttlMinutes = parsePositiveInteger(readOptionValue(args, index, "--ttl-minutes"), "--ttl-minutes");
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith("--ttl-minutes=")) {
+      ttlMinutes = parsePositiveInteger(readInlineOptionValue(token, "--ttl-minutes"), "--ttl-minutes");
+      continue;
+    }
+
+    if (token === "--read-only") {
+      permission = "read";
+      continue;
+    }
+
+    if (token === "--write") {
+      permission = "write";
+      continue;
+    }
+
+    if (token.startsWith("-")) {
+      throw usageFailure(`Unknown pair option: ${token}`);
+    }
+
+    throw usageFailure(`Unexpected pair argument: ${token}`);
+  }
+
+  return {
+    ...(label !== undefined ? { label } : {}),
+    permission,
+    ttlMinutes,
+    json
+  };
+}
+
+function parseLockOptions(args: readonly string[], globalJson: boolean): { readonly reason?: string; readonly json: boolean } {
+  let reason: string | undefined;
+  let json = globalJson;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+
+    if (token === undefined) {
+      continue;
+    }
+
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
+
+    if (token === "--reason") {
+      reason = readOptionValue(args, index, "--reason");
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith("--reason=")) {
+      reason = readInlineOptionValue(token, "--reason");
+      continue;
+    }
+
+    if (token.startsWith("-")) {
+      throw usageFailure(`Unknown lock option: ${token}`);
+    }
+
+    throw usageFailure(`Unexpected lock argument: ${token}`);
+  }
+
+  return {
+    ...(reason !== undefined ? { reason } : {}),
+    json
+  };
+}
+
+function parseLanOptions(args: readonly string[], globalJson: boolean): {
+  readonly action: "enable" | "disable";
+  readonly bindHost?: string;
+  readonly json: boolean;
+} {
+  const [action, ...rest] = args;
+
+  if (action !== "enable" && action !== "disable") {
+    throw usageFailure("The lan command requires enable or disable.");
+  }
+
+  let bindHost: string | undefined;
+  let json = globalJson;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const token = rest[index];
+
+    if (token === undefined) {
+      continue;
+    }
+
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
+
+    if (token === "--bind-host") {
+      bindHost = readOptionValue(rest, index, "--bind-host");
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith("--bind-host=")) {
+      bindHost = readInlineOptionValue(token, "--bind-host");
+      continue;
+    }
+
+    if (token.startsWith("-")) {
+      throw usageFailure(`Unknown lan option: ${token}`);
+    }
+
+    throw usageFailure(`Unexpected lan argument: ${token}`);
+  }
+
+  if (action === "disable" && bindHost !== undefined) {
+    throw usageFailure("The lan disable command does not accept --bind-host.", "--bind-host");
+  }
+
+  return {
+    action,
+    ...(bindHost !== undefined ? { bindHost } : {}),
+    json
+  };
 }
 
 function singleSessionArgument(command: string, args: readonly string[]): string {
@@ -257,4 +526,18 @@ function readInlineOptionValue(token: string, optionName: string): string {
   }
 
   return value;
+}
+
+function parsePositiveInteger(value: string, optionName: string): number {
+  if (!/^\d+$/u.test(value)) {
+    throw usageFailure(`${optionName} must be a positive integer.`, optionName);
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 1440) {
+    throw usageFailure(`${optionName} must be between 1 and 1440.`, optionName);
+  }
+
+  return parsed;
 }

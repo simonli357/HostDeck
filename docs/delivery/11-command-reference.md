@@ -15,6 +15,23 @@ pnpm install --frozen-lockfile
 pnpm check:scaffold
 ```
 
+## CLI Surface
+
+```bash
+# Packaged codexdeck binary is pending REL-V1-003; these command forms are implemented in the CLI shell.
+codexdeck status
+codexdeck start --name demo --cwd /path/to/worktree
+codexdeck list
+codexdeck send demo "Continue"
+codexdeck attach demo
+codexdeck stop demo
+codexdeck pair --label phone --ttl-minutes 10
+codexdeck lock --reason "maintenance"
+codexdeck unlock
+codexdeck lan enable --bind-host 0.0.0.0
+codexdeck lan disable
+```
+
 ## Test
 
 ```bash

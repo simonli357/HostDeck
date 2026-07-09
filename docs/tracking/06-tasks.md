@@ -81,8 +81,9 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 42 | `IFC-V1-006` CLI command shell, API client, config loading, error rendering, and exit-code families | done | none | CLI core shell, API client, config loading, stable exit-code families, and daemon/API error rendering are implemented and contract-tested. |
 | 43 | `IFC-V1-011` Localhost/LAN config and network smoke coverage | done | none | Startup now validates bind availability, fails duplicate ports before ready, and real listener smoke covers localhost plus LAN on/off persistence. |
 | 44 | `IFC-V1-007` CLI session commands: `start`, `list`, `send`, `attach`, `stop`, and status display | done | none | CLI session commands, session-start API contract/handler, local-admin CLI writes, exact target resolution, stale/non-running failures, and fake/real tmux smoke evidence are complete. Evidence: `artifacts/ifc-v1-007-cli-session-commands.md`. |
-| 45 | `IFC-V1-008` CLI pairing, lock, unlock, and LAN enable/disable commands | ready | none | Unblocked by security routes and the CLI shell/API client foundation. |
+| 45 | `IFC-V1-008` CLI pairing, lock, unlock, and LAN enable/disable commands | done | none | CLI local admin pairing, lock/unlock, and LAN enable/disable commands are implemented with audit/state inspection evidence. Evidence: `artifacts/ifc-v1-008-cli-admin-commands.md`. |
 | 46 | `IFC-V1-012` Foreground and long-running service-mode smoke behavior | ready | none | Unblocked by localhost/LAN network smoke; service-mode smoke can now exercise startup bind behavior. |
+| 47 | `IFC-V1-013` Add CLI command contract tests | ready | none | Unblocked by `IFC-V1-008`; full V1 CLI command matrix coverage can now be added after service-mode smoke. |
 
 ## Current Blocked Gates
 

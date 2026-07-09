@@ -8,6 +8,32 @@ describe("CLI config loading", () => {
     expect(loadCliConfig({ env: {} }).baseUrl.toString()).toBe("http://127.0.0.1:3777/");
   });
 
+  it("uses XDG or home state defaults and lets flags override storage paths", () => {
+    const defaultConfig = loadCliConfig({
+      env: {
+        HOME: "/home/simonli",
+        XDG_STATE_HOME: "/tmp/state"
+      }
+    });
+
+    expect(defaultConfig.stateDir).toBe("/tmp/state/hostdeck");
+    expect(defaultConfig.databasePath).toBe("/tmp/state/hostdeck/hostdeck.sqlite");
+
+    const flagConfig = loadCliConfig({
+      cwd: "/tmp/project",
+      env: {
+        HOME: "/home/simonli"
+      },
+      flags: {
+        stateDir: "state",
+        databasePath: "hostdeck.db"
+      }
+    });
+
+    expect(flagConfig.stateDir).toBe("/tmp/project/state");
+    expect(flagConfig.databasePath).toBe("/tmp/project/hostdeck.db");
+  });
+
   it("loads an explicit config file and lets flags override it", () => {
     const config = loadCliConfig({
       cwd: "/tmp",
@@ -18,11 +44,13 @@ describe("CLI config loading", () => {
       },
       readFile: (path) => {
         expect(path).toBe("/tmp/hostdeck.json");
-        return JSON.stringify({ host: "localhost", port: 4555 });
+        return JSON.stringify({ host: "localhost", port: 4555, state_dir: "state", database_path: "db.sqlite" });
       }
     });
 
     expect(config.baseUrl.toString()).toBe("http://localhost:4888/");
+    expect(config.stateDir).toBe("/tmp/state");
+    expect(config.databasePath).toBe("/tmp/db.sqlite");
   });
 
   it("rejects invalid config with the stable config exit family", () => {

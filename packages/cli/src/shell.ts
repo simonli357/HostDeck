@@ -3,11 +3,15 @@ import { createHostDeckApiClient, type HostDeckApiClient, type HttpFetch } from 
 import { type LoadCliConfigOptions, loadCliConfig } from "./config.js";
 import { apiFailure, toCliFailure, usageFailure } from "./errors.js";
 import { type CliExitCode, cliExitCodes } from "./exit-codes.js";
+import { createLocalAdmin, type LocalAdmin } from "./local-admin.js";
 import { parseCliArgs } from "./parser.js";
 import {
   renderAttachCommand,
   renderFailure,
   renderHelp,
+  renderLanCommand,
+  renderLockCommand,
+  renderPairingCode,
   renderSessionList,
   renderStartSession,
   renderStatus,
@@ -27,6 +31,7 @@ export interface CliRunOptions {
   readonly readFile?: LoadCliConfigOptions["readFile"];
   readonly fetch?: HttpFetch;
   readonly client?: HostDeckApiClient;
+  readonly localAdmin?: LocalAdmin;
   readonly version?: string;
 }
 
@@ -61,6 +66,12 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     const config = loadCliConfig(configOptions);
+    const localAdmin =
+      options.localAdmin ??
+      createLocalAdmin({
+        stateDir: config.stateDir,
+        databasePath: config.databasePath
+      });
     const clientOptions = { baseUrl: config.baseUrl };
 
     if (options.fetch !== undefined) {
@@ -97,6 +108,47 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
       const session = await resolveManagedSession(client, parsed.command.session);
       requireWritableSession(session);
       return success(renderWriteAccepted(await client.stopSession(session.id)));
+    }
+
+    if (parsed.command.kind === "pair") {
+      return success(
+        renderPairingCode(
+          localAdmin.createPairingCode({
+            permission: parsed.command.permission,
+            ttlMinutes: parsed.command.ttlMinutes,
+            ...(parsed.command.label !== undefined ? { label: parsed.command.label } : {})
+          }),
+          parsed.command.json
+        )
+      );
+    }
+
+    if (parsed.command.kind === "lock") {
+      return success(
+        renderLockCommand(
+          localAdmin.setLock({
+            locked: true,
+            ...(parsed.command.reason !== undefined ? { reason: parsed.command.reason } : {})
+          }),
+          parsed.command.json
+        )
+      );
+    }
+
+    if (parsed.command.kind === "unlock") {
+      return success(renderLockCommand(localAdmin.setLock({ locked: false }), parsed.command.json));
+    }
+
+    if (parsed.command.kind === "lan") {
+      return success(
+        renderLanCommand(
+          localAdmin.setLanEnabled({
+            enabled: parsed.command.action === "enable",
+            ...(parsed.command.bindHost !== undefined ? { bindHost: parsed.command.bindHost } : {})
+          }),
+          parsed.command.json
+        )
+      );
     }
 
     return failure(toCliFailure(new Error("Unsupported HostDeck CLI command.")));
