@@ -61,6 +61,7 @@ export const healthCheckSchema = z
   })
   .strict();
 
+/** @deprecated Legacy tmux-shaped status retained until INT-V1-008. Use selected runtime and mobile contracts. */
 export const hostStatusResponseSchema = z
   .object({
     version: z.string().min(1),
@@ -93,6 +94,7 @@ export const hostStatusResponseSchema = z
     assertLanModeConsistency(value.bind.mode, value.lan_enabled, context);
   });
 
+/** @deprecated Legacy tmux-backed session shape retained until INT-V1-008. Use managedSessionProjectionSchema. */
 export const apiSessionSchema = z
   .object({
     id: sessionIdSchema,
@@ -215,6 +217,7 @@ export const sessionStreamEventSchema = z.discriminatedUnion("type", [
   streamErrorEventSchema
 ]);
 
+/** @deprecated Legacy terminal-output projection retained until INT-V1-008. Use selectedSessionEventStreamSchema. */
 export const sessionOutputResponseSchema = z
   .object({
     session_id: sessionIdSchema,
@@ -263,6 +266,7 @@ export const promptInputRequestSchema = z
   })
   .strict();
 
+/** @deprecated V1 does not use blind slash-command injection. Use selected structured operation intents. */
 export const slashCommandRequestSchema = z
   .object({
     command: z.enum(allowedSlashCommands),
@@ -276,6 +280,7 @@ export const stopSessionRequestSchema = z
   })
   .strict();
 
+/** @deprecated V1 phone APIs must not expose arbitrary terminal input. */
 export const rawInputRequestSchema = z
   .object({
     text: z.string().min(1).max(20_000),
@@ -299,6 +304,7 @@ export const writeRejectedResponseSchema = z
   })
   .strict();
 
+/** @deprecated Legacy terminal-write response. Use selectedOperationDispatchSchema and terminal outcomes. */
 export const writeResponseSchema = z.discriminatedUnion("accepted", [writeAcceptedResponseSchema, writeRejectedResponseSchema]);
 
 export const pairClaimRequestSchema = z

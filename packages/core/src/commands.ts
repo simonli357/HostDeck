@@ -1,6 +1,7 @@
 import type { ErrorCode } from "./errors.js";
 import { isWritableLifecycleState, type LifecycleState, type SessionId } from "./session.js";
 
+/** @deprecated Legacy terminal-write intents retained until INT-V1-008. Use selectedOperationKinds. */
 export const commandIntents = [
   "prompt",
   "slash",
@@ -16,6 +17,7 @@ export const commandIntents = [
 
 export type CommandIntent = (typeof commandIntents)[number];
 
+/** @deprecated Legacy tmux write actions retained until route migration. Use selectedMutationOperationKinds. */
 export const writeActions = ["prompt", "slash", "stop", "raw_input"] as const;
 export type WriteAction = (typeof writeActions)[number];
 

@@ -49,6 +49,7 @@ export const attentionLevels = [
 
 export type AttentionLevel = (typeof attentionLevels)[number];
 
+/** @deprecated Legacy pre-DEC-018 backend. New V1 code uses selectedRuntimeSource and CodexThreadId. */
 export type SessionBackend = "tmux";
 
 export interface TmuxTargetMetadata {

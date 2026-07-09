@@ -653,12 +653,26 @@ function statusForErrorCode(code: ErrorCode): number {
       return 404;
     case "stale_session":
     case "session_not_writable":
+    case "operation_conflict":
+    case "capability_unavailable":
+    case "approval_not_pending":
       return 409;
+    case "rate_limited":
+      return 429;
     case "audit_unavailable":
     case "daemon_unavailable":
+    case "runtime_unavailable":
+    case "incompatible_runtime":
       return 503;
     case "tmux_error":
+    case "protocol_error":
       return 502;
+    case "operation_timeout":
+      return 504;
+    case "invalid_origin":
+      return 403;
+    case "insecure_transport":
+      return 426;
     case "storage_error":
     case "internal_error":
     case "unknown_error":

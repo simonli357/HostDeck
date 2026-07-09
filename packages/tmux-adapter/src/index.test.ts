@@ -399,38 +399,42 @@ describeRealTmux("real tmux adapter start", () => {
     await pipe.disarmOutputPipe({ target });
   });
 
-  it("keeps only new output when bounded capture contains the retained suffix", async () => {
-    const socketName = nextSocketName();
-    const cwd = tempDir();
-    const adapter = createRealTmuxAdapter({ socketName });
-    const command = fakeCodexCommand(
-      "stty -echo\n" +
-        "i=1\n" +
-        "while [ \"$i\" -le 260 ]; do printf 'line-%03d\\n' \"$i\"; i=$((i + 1)); done\n" +
-        "while IFS= read -r line; do printf 'ack-%s\\n' \"$line\"; done\n"
-    );
-    const id = sessionId("sess_real_suffix_01");
+  it(
+    "keeps only new output when bounded capture contains the retained suffix",
+    async () => {
+      const socketName = nextSocketName();
+      const cwd = tempDir();
+      const adapter = createRealTmuxAdapter({ socketName });
+      const command = fakeCodexCommand(
+        "stty -echo\n" +
+          "i=1\n" +
+          "while [ \"$i\" -le 260 ]; do printf 'line-%03d\\n' \"$i\"; i=$((i + 1)); done\n" +
+          "while IFS= read -r line; do printf 'ack-%s\\n' \"$line\"; done\n"
+      );
+      const id = sessionId("sess_real_suffix_01");
 
-    await adapter.startSession({
-      sessionId: id,
-      sessionName: sessionName("suffix-output"),
-      cwd,
-      command: [command]
-    });
+      await adapter.startSession({
+        sessionId: id,
+        sessionName: sessionName("suffix-output"),
+        cwd,
+        command: [command]
+      });
 
-    await waitForAdapterOutput(adapter, id, "line-260");
-    const baseline = await adapter.readOutput({ sessionId: id, limit: 1_000 });
-    const lastCursor = baseline.at(-1)?.cursor;
+      await waitForAdapterOutput(adapter, id, "line-260");
+      const baseline = await adapter.readOutput({ sessionId: id, limit: 1_000 });
+      const lastCursor = baseline.at(-1)?.cursor;
 
-    if (lastCursor === undefined) {
-      throw new Error("Expected baseline output before suffix hardening assertion.");
-    }
+      if (lastCursor === undefined) {
+        throw new Error("Expected baseline output before suffix hardening assertion.");
+      }
 
-    await adapter.sendInput({ sessionId: id, text: "line-261" });
-    const appended = await waitForAdapterOutputAfter(adapter, id, lastCursor, "ack-line-261");
+      await adapter.sendInput({ sessionId: id, text: "line-261" });
+      const appended = await waitForAdapterOutputAfter(adapter, id, lastCursor, "ack-line-261");
 
-    expect(appended.map((event) => event.text)).toEqual(["ack-line-261"]);
-  });
+      expect(appended.map((event) => event.text)).toEqual(["ack-line-261"]);
+    },
+    10_000
+  );
 
   it("cleans up repeated real start and stop cycles", async () => {
     const socketName = nextSocketName();

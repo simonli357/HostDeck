@@ -121,6 +121,7 @@ export const settingsRecordSchema = z
     }
   });
 
+/** @deprecated Legacy tmux mapping retained until the selected storage migration and INT-V1-008. */
 export const storageSessionRecordSchema = z
   .object({
     id: sessionIdSchema,
@@ -156,6 +157,7 @@ export const storageSessionRecordSchema = z
     }
   });
 
+/** @deprecated Legacy terminal projection metadata. Use selectedSessionProjectionRecordSchema. */
 export const sessionMetadataRecordSchema = z
   .object({
     session_id: sessionIdSchema,
@@ -169,6 +171,7 @@ export const sessionMetadataRecordSchema = z
   })
   .strict();
 
+/** @deprecated Legacy terminal-output storage. Use selectedProjectedEventRecordSchema. */
 export const outputEventRecordSchema = z
   .object({
     session_id: sessionIdSchema,
@@ -265,6 +268,7 @@ export const pairingCodeRecordSchema = z
   })
   .strict();
 
+/** @deprecated Legacy terminal action audit shape. Use selectedAuditEventRecordSchema. */
 export const auditEventRecordSchema = z
   .object({
     id: recordIdSchema,

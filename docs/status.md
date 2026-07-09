@@ -5,8 +5,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: None at handoff.
-- Next ready task: `FND-V1-015` normalized contract/fixture rebase; `IFC-V1-015` HTTPS phone spike is also ready.
+- Active task: `FND-V1-016` strict selected-core invariant hardening.
+- Other ready tasks: `IFC-V1-015`, `DAT-V1-018`, `INT-V1-003`, `DAT-V1-019`, and `IFC-V1-016`.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
 - Release state: no-go. All capability blocks affected by the new runtime/security/mobile outcome are reopened.
@@ -16,6 +16,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Baseline workspace checks pass: scaffold, typecheck, lint, unit, contract, integration, web, and historical tmux smoke.
 - Existing core, storage, tmux, headless API/CLI, and UI-fixture packages contain substantial reusable package-level work.
 - Local Codex 0.144.0 app-server smoke proved generated TypeScript bindings, initialize, model/thread listing, persisted goal set/get/delete, and normal TUI attachment over loopback and Unix-socket transports without a model call.
+- Selected app-server runtime, operation, storage, audit, and phone view-model contracts now replace legacy assumptions for new work; required structured/mobile fixture inventories pass public contract tests.
+- Legacy tmux, terminal-output, slash-injection, raw-input, storage, and desktop-led UI contracts remain exported only as explicitly deprecated migration surfaces pending `INT-V1-008`.
 
 ## Not Proven
 
@@ -26,18 +28,19 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Blockers
 
-- Implement `FND-V1-015` normalized contracts and fixtures; run `IFC-V1-015` when the real phone/LAN test setup is available.
+- Complete `FND-V1-016` strict timestamp, cursor, transition, target, capability, and audit-trail hardening.
+- Run `IFC-V1-015` when the real phone/LAN test setup is available.
 - Prove Codex compatibility/real vertical (`INT-V1-003` to `INT-V1-007`).
 - Prove phone HTTPS enrollment (`IFC-V1-015`).
 - Regenerate/select mobile mockups only after real structured states are stable.
 
 ## Validation
 
-- Pre-audit baseline: `pnpm check:scaffold`, `pnpm typecheck`, `pnpm lint`, `pnpm test:unit` (184 passed, 1 skipped), `pnpm test:contract` (68), `pnpm test:integration` (15), `pnpm test:web` (14), and `pnpm test:tmux` passed.
-- Rebaseline validation passed: planning, scaffold, typecheck, lint, unit, contract, integration, web, historical tmux regression, and diff checks.
+- `FND-V1-015`: scaffold, root/package typechecks, lint/exports, unit (193 passed, 1 skipped), contract (92), integration (15), web (14), planning, and diff checks passed.
+- Evidence: `artifacts/fnd-v1-015-selected-path-contracts.md`.
 
 ## Git
 
-- Last implementation/planning push: `2e06d4b` on `origin/main`.
-- Audit closure: recorded in the current handoff commit and pushed to `origin/main`.
-- Next action: start `FND-V1-015` from `foundation.md`.
+- Last pushed baseline before this unit: `9dd5a9b` on `origin/main`.
+- `FND-V1-015` completion is committed and pushed with this handoff.
+- Next action: complete `FND-V1-016`, then advance the first ready dependency-aware selected-runtime task.

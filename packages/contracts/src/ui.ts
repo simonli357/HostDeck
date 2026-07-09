@@ -43,6 +43,7 @@ export const uiDisabledWriteReasonSchema = z.enum([
   "stream_disconnected"
 ]);
 
+/** @deprecated Legacy terminal write controls. Use selected prompt, structured, and risky control schemas. */
 export const uiWriteControlStateSchema = z
   .object({
     action: z.enum(writeActions),
@@ -104,6 +105,7 @@ export const uiOutputBoundarySchema = z
     }
   });
 
+/** @deprecated Legacy tmux session card. Use selectedMobileSessionRowSchema. */
 export const uiSessionCardSchema = z
   .object({
     id: sessionIdSchema,
@@ -212,6 +214,7 @@ export const uiHostSafetyViewModelSchema = z
   })
   .strict();
 
+/** @deprecated Desktop-led pre-DEC-019 view model. Use selectedMissionControlViewModelSchema. */
 export const uiMissionControlViewModelSchema = z
   .object({
     screen: z.literal("mission_control"),
@@ -256,6 +259,7 @@ export const uiMissionControlViewModelSchema = z
     }
   });
 
+/** @deprecated Terminal-output pre-DEC-019 detail model. Use selectedSessionDetailViewModelSchema. */
 export const uiSessionDetailViewModelSchema = z
   .object({
     screen: z.literal("session_detail"),

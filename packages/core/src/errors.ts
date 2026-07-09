@@ -19,6 +19,16 @@ export const errorCodes = [
   "tmux_error",
   "storage_error",
   "daemon_unavailable",
+  "runtime_unavailable",
+  "incompatible_runtime",
+  "protocol_error",
+  "operation_timeout",
+  "operation_conflict",
+  "capability_unavailable",
+  "approval_not_pending",
+  "rate_limited",
+  "invalid_origin",
+  "insecure_transport",
   "internal_error",
   "unknown_error"
 ] as const;

@@ -25,6 +25,10 @@ describe("error codes", () => {
     expect(errorCodes).toContain("duplicate_session_name");
     expect(errorCodes).toContain("missing_binary");
     expect(errorCodes).toContain("daemon_unavailable");
+    expect(errorCodes).toContain("incompatible_runtime");
+    expect(errorCodes).toContain("capability_unavailable");
+    expect(errorCodes).toContain("approval_not_pending");
+    expect(errorCodes).toContain("insecure_transport");
     expect(errorCodes).toContain("audit_unavailable");
     expect(isErrorCode("host_locked")).toBe(true);
     expect(isErrorCode("not-a-code")).toBe(false);
