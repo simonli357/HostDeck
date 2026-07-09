@@ -13,7 +13,7 @@ import {
   tmuxSessionNameForSession
 } from "@hostdeck/tmux-adapter";
 import { afterEach, describe, expect, it } from "vitest";
-import { createRestartReconciler } from "./restart-reconciler.js";
+import { createRestartReconciler, HostDeckRestartReconcilerError } from "./restart-reconciler.js";
 
 const tempDirs: string[] = [];
 
@@ -83,6 +83,56 @@ describe("restart reconciler", () => {
         lifecycle_state: "stopped"
       });
       expect(sessions.get(unmanaged.sessionId)).toBeNull();
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("marks stale sessions and fails loudly when a reconciled output reader cannot start", async () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+
+    try {
+      const sessions = createSessionRepository(open.db);
+      const live = sessions.create(sessionRecord("sess_restart_reader_fail_01", "reader-fail"));
+      const missing = sessions.create(sessionRecord("sess_restart_reader_missing_01", "reader-missing"));
+      const discovery = fakeDiscovery({
+        liveTargets: [targetForSession(live, "%8")],
+        staleTargets: [
+          {
+            sessionId: missing.id,
+            sessionName: missing.name,
+            cwd: missing.cwd,
+            tmuxSession: missing.backend.tmux_session,
+            staleReason: "tmux target missing"
+          }
+        ],
+        unmanagedTargets: []
+      });
+      const reconciler = createRestartReconciler({
+        sessions,
+        discovery,
+        now: laterNow,
+        startOutputReader() {
+          throw new Error("pipe failed");
+        }
+      });
+
+      await expect(reconciler.reconcile()).rejects.toMatchObject({
+        code: "output_reader_start_failed",
+        sessionIds: [live.id]
+      });
+      await expect(reconciler.reconcile()).rejects.toBeInstanceOf(HostDeckRestartReconcilerError);
+      expect(sessions.require(live.id)).toMatchObject({
+        lifecycle_state: "running",
+        backend: {
+          tmux_pane: "%8"
+        },
+        stale_reason: null
+      });
+      expect(sessions.require(missing.id)).toMatchObject({
+        lifecycle_state: "stale",
+        stale_reason: "tmux target missing"
+      });
     } finally {
       open.db.close();
     }

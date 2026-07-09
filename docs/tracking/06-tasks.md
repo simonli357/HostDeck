@@ -72,7 +72,8 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 33 | `INT-V1-014` Output reader, cursor assignment, storage append, and replay-boundary handoff | done | none | Live pipe capture, bounded capture reads, storage append, replay-boundary mapping, and reader failure state are implemented. |
 | 34 | `INT-V1-015` Restart reconciliation between durable registry and live tmux targets | done | none | Restart reconciliation updates live durable sessions, marks missing ones stale, ignores stopped records, and reports unmanaged HostDeck-looking targets without import. |
 | 35 | `INT-V1-016` Real Ubuntu tmux smoke path for managed sessions | done | none | Real smoke now exercises start, attach metadata, send targeting, stop, output read, SQLite output drain, restart reconciliation, output-reader restart hook, and stale target behavior. |
-| 36 | `INT-V1-090` Tmux lifecycle/output hardening | ready | none | Real smoke is complete; tmux negative cases and repeated lifecycle behavior can now be hardened before API/CLI consumers and release gates rely on them. |
+| 36 | `INT-V1-090` Tmux lifecycle/output hardening | done | none | Tmux/output hardening now covers bounded output suffix continuity, restart reader-start failures, invalid replay, append failure state, repeated lifecycle cleanup, and real tmux smoke. |
+| 37 | `IFC-V1-001` `codexdeck serve` startup sequence and host readiness checks | ready | none | Tmux reconciliation and hardening are complete enough for the host startup sequence to validate config, storage, tmux, settings, registry reconciliation, and readiness gates. |
 
 ## Current Blocked Gates
 

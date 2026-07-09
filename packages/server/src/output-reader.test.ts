@@ -141,6 +141,42 @@ describe("output reader", () => {
     }
   });
 
+  it("uses retained suffix continuity when the current snapshot is bounded", async () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+
+    try {
+      createSessionRepository(open.db).create(sessionRecord());
+      const capture = new MutableCapture("one\ntwo\nthree\nfour\n");
+      const reader = createOutputReader({
+        retention: createRetentionRepository(open.db),
+        capture,
+        now: fixedNow
+      });
+
+      await reader.drainSession({ sessionId });
+      capture.text = "three\nfour\nfive\n";
+
+      await expect(reader.drainSession({ sessionId })).resolves.toMatchObject({
+        appended: [
+          {
+            cursor: 5,
+            kind: "output",
+            payload: "five"
+          }
+        ]
+      });
+      expect(reader.replaySession({ sessionId }).events).toEqual([
+        { type: "output", session_id: sessionId, cursor: 1, captured_at: "2026-07-08T22:00:00.000Z", text: "one" },
+        { type: "output", session_id: sessionId, cursor: 2, captured_at: "2026-07-08T22:00:00.000Z", text: "two" },
+        { type: "output", session_id: sessionId, cursor: 3, captured_at: "2026-07-08T22:00:00.000Z", text: "three" },
+        { type: "output", session_id: sessionId, cursor: 4, captured_at: "2026-07-08T22:00:00.000Z", text: "four" },
+        { type: "output", session_id: sessionId, cursor: 5, captured_at: "2026-07-08T22:00:00.000Z", text: "five" }
+      ]);
+    } finally {
+      open.db.close();
+    }
+  });
+
   it("makes reader capture failures observable", async () => {
     const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
 
@@ -163,6 +199,43 @@ describe("output reader", () => {
           code: "capture_failed"
         }
       });
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("makes storage append and invalid replay failures observable", async () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+
+    try {
+      const capture = new MutableCapture("orphan output\n");
+      const reader = createOutputReader({
+        retention: createRetentionRepository(open.db),
+        capture,
+        now: fixedNow
+      });
+
+      await expect(reader.drainSession({ sessionId })).rejects.toMatchObject({
+        code: "storage_append_failed"
+      });
+      expect(reader.state()).toMatchObject({
+        status: "error",
+        last_error: {
+          code: "storage_append_failed"
+        }
+      });
+
+      createSessionRepository(open.db).create(sessionRecord());
+      expect(() => reader.replaySession({ sessionId, after: -1 })).toThrowError(
+        expect.objectContaining({
+          code: "invalid_replay"
+        })
+      );
+      expect(() => reader.replaySession({ sessionId, limit: 0 })).toThrowError(
+        expect.objectContaining({
+          code: "invalid_replay"
+        })
+      );
     } finally {
       open.db.close();
     }

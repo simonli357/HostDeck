@@ -987,13 +987,31 @@ function newCapturedLines(previousLines: readonly string[], capturedLines: reado
     return capturedLines;
   }
 
-  const start = findSubsequenceStart(capturedLines, previousLines);
+  const overlap = findLongestPreviousSuffixOverlap(previousLines, capturedLines);
 
-  if (start === null) {
+  if (overlap === null) {
     return capturedLines;
   }
 
-  return capturedLines.slice(start + previousLines.length);
+  return capturedLines.slice(overlap.start + overlap.length);
+}
+
+function findLongestPreviousSuffixOverlap(
+  previousLines: readonly string[],
+  capturedLines: readonly string[]
+): { readonly start: number; readonly length: number } | null {
+  const maxOverlap = Math.min(previousLines.length, capturedLines.length);
+
+  for (let length = maxOverlap; length > 0; length -= 1) {
+    const suffix = previousLines.slice(previousLines.length - length);
+    const start = findSubsequenceStart(capturedLines, suffix);
+
+    if (start !== null) {
+      return { start, length };
+    }
+  }
+
+  return null;
 }
 
 function findSubsequenceStart(haystack: readonly string[], needle: readonly string[]): number | null {
