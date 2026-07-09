@@ -5,8 +5,8 @@ import type { LanCommandResult, LockCommandResult, PairingCommandResult } from "
 export function renderHelp(): string {
   return [
     "Usage:",
-    "  codexdeck serve [--state-dir PATH] [--database PATH] [--port PORT]",
-    "  codexdeck status [--json] [--api-url URL | --host HOST --port PORT]",
+    "  codexdeck [--state-dir PATH] [--database PATH] [--port PORT] serve",
+    "  codexdeck [--api-url URL | --host HOST --port PORT] status [--json]",
     "  codexdeck start --name NAME --cwd PATH [--json]",
     "  codexdeck list [--json]",
     "  codexdeck send SESSION TEXT...",
@@ -28,6 +28,8 @@ export function renderHelp(): string {
     "  --database PATH    SQLite database path for local admin commands.",
     "  --config PATH      JSON config file with api_url, host/port, or state paths.",
     "  --json             Print machine-readable output for supported commands.",
+    "",
+    "Global connection and state options must appear before the command.",
     ""
   ].join("\n");
 }

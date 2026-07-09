@@ -15,46 +15,23 @@ pnpm install --frozen-lockfile
 pnpm check:scaffold
 ```
 
-## CLI Surface
-
-```bash
-# Packaged codexdeck binary is pending REL-V1-003; these command forms are implemented in the CLI shell.
-codexdeck serve --state-dir ~/.local/state/hostdeck --port 3777
-codexdeck status
-codexdeck start --name demo --cwd /path/to/worktree
-codexdeck list
-codexdeck send demo "Continue"
-codexdeck attach demo
-codexdeck stop demo
-codexdeck pair --label phone --ttl-minutes 10
-codexdeck lock --reason "maintenance"
-codexdeck unlock
-codexdeck lan enable --bind-host 0.0.0.0
-codexdeck lan disable
-```
-
-## Test
+## Validate
 
 ```bash
 pnpm typecheck
+pnpm lint
 pnpm test
 pnpm test:unit
-pnpm lint
 pnpm test:contract
 pnpm test:integration
 pnpm test:tmux
-pnpm test:web
-pnpm test:e2e
+pnpm exec vitest run tests/service-mode-smoke.test.ts
 ```
 
-## Build / Package
+## Explicit Gaps
 
-```bash
-pnpm build
-```
-
-## Release / Handoff
-
-```bash
-pnpm smoke:local
-```
+- CLI binary: `codexdeck` is not installed as a workspace or packaged executable yet; `pnpm exec codexdeck --help` currently fails with command not found. Keep `codexdeck ...` examples out of copy-paste command blocks until build/package or clean install smoke provides a runnable executable path.
+- Web validation: `pnpm test:web` intentionally exits nonzero until `FE-V1-001` implements it.
+- E2E validation: `pnpm test:e2e` intentionally exits nonzero until `REL-V1-007` implements it.
+- Build/package: `pnpm build` intentionally exits nonzero until `REL-V1-007` implements it.
+- Local release smoke: `pnpm smoke:local` intentionally exits nonzero until `REL-V1-006` implements it.

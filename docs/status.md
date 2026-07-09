@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `REL-V1-003` command reference update
+- Active task: `FE-V1-001` UI state fixtures and view-model helpers
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
-- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart/smoke path/hardening, pairing/security API route foundation, validation command wiring, headless startup/readiness, headless host/session/output read route contracts, headless one-session stream route contracts, headless write pipeline route contracts, aggregate API route/stream contract tests, CLI shell/API client foundation, localhost/LAN network smoke, CLI session commands, CLI pairing/lock/LAN commands, foreground service smoke, CLI command matrix, write rejection/failure-path integration coverage, API/CLI module hardening, and developer-guide setup/service docs are complete; command reference docs are next.
-- Last validation: `pnpm install --frozen-lockfile`, `pnpm exec vitest run tests/service-mode-smoke.test.ts`, `pnpm check:scaffold`, `git diff --check`, and `pnpm lint` passed for `REL-V1-002`.
-- Next action: Start `REL-V1-003` command reference update.
-- Blockers: Clean release tmux setup still needs later install/run/service smoke docs; visual mockups before UI implementation.
-- Last commit: `REL-V1-002` developer guide setup/service docs commit.
-- Last push: `origin/main` after the `REL-V1-002` commit.
+- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart/smoke path/hardening, pairing/security API route foundation, validation command wiring, headless startup/readiness, headless host/session/output read route contracts, headless one-session stream route contracts, headless write pipeline route contracts, aggregate API route/stream contract tests, CLI shell/API client foundation, localhost/LAN network smoke, CLI session commands, CLI pairing/lock/LAN commands, foreground service smoke, CLI command matrix, write rejection/failure-path integration coverage, API/CLI module hardening, developer-guide setup/service docs, and command reference docs are complete; UI state coverage is next.
+- Last validation: For `REL-V1-003`, `corepack enable`, `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit`, `pnpm test:contract`, `pnpm exec vitest run --config vitest.contract.config.ts packages/cli/src/cli.contract.test.ts`, `pnpm test:integration`, `pnpm test:tmux`, `pnpm exec vitest run tests/service-mode-smoke.test.ts`, and `git diff --check` passed; unavailable CLI/web/E2E/build/local-smoke commands were recorded as explicit gaps.
+- Next action: Start `FE-V1-001` UI state fixtures and view-model helpers.
+- Blockers: Clean release install/build/local smoke remain later gates; visual mockups wait on `FE-V1-001` state coverage and human selection.
+- Last commit: `REL-V1-003` command reference docs commit.
+- Last push: `origin/main` after the `REL-V1-003` commit.
 
 ## What Is Proven
 
@@ -69,6 +69,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Hardening: `IFC-V1-090` registered foreground HTTP route families for host/session/output/stream/write/pairing/security/network, preserved loopback local-admin CLI routing and browser cookie+CSRF boundaries, proved CLI start/list/send/stop through the real service path, seeded restarted tmux adapters with reconciled targets, and recorded API/CLI hardening evidence.
 - Release support: `REL-V1-001` wired validation command placeholders to future owner tasks and recorded command smoke evidence without claiming unavailable layers are implemented.
 - Release support: `REL-V1-002` updated the developer guide with validated runtime/package-manager/tool versions, setup command, state/config defaults, foreground service behavior, LAN/safety notes, common failures, evidence links, and packaged-binary/service-wrapper gaps.
+- Release support: `REL-V1-003` tightened the command reference to verified runnable commands, recorded unavailable CLI/web/E2E/build/local-smoke gaps, and corrected CLI help flag ordering.
 - Planning/spike: `INT-V1-001` chose tmux `pipe-pane` for live output ingestion plus bounded `capture-pane` startup/restart recovery.
 - No end-to-end HostDeck dashboard or real Codex product workflow is proven yet; the CLI-to-foreground-service path is proven with the fake tmux adapter.
 
@@ -132,7 +133,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | IFC-V1-014 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Write rejection/failure-path integration tests and `artifacts/ifc-v1-014-write-rejection-integration.md`. |
 | IFC-V1-090 | Hardening | done | `docs/tracking/backlog/api-cli-control-plane.md` | API/CLI hardening and `artifacts/ifc-v1-090-api-cli-hardening.md`. |
 | REL-V1-002 | Release docs | done | `docs/tracking/backlog/hardening-release.md` | Developer guide setup/service docs and `artifacts/rel-v1-002-developer-guide.md`. |
-| REL-V1-003 | Release docs | ready | `docs/tracking/backlog/hardening-release.md` | Unblocked command reference task after CLI and service-mode smoke; packaged-binary gap remains to handle in the task. |
+| REL-V1-003 | Release docs | done | `docs/tracking/backlog/hardening-release.md` | Command reference docs and `artifacts/rel-v1-003-command-reference.md`. |
+| FE-V1-001 | Frontend | ready | `docs/tracking/backlog/web-dashboard.md` | Next task; required state coverage before visual direction/mockups. |
 
 ## Decisions Needed
 

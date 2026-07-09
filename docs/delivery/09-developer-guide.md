@@ -42,7 +42,7 @@ The frozen install was validated for the current workspace on 2026-07-09. If a p
 
 ## CLI And Service State
 
-The CLI shell and service entrypoints are implemented in `packages/cli/src/` and `packages/server/src/`, but a packaged runnable `codexdeck` binary is not installed yet. `REL-V1-003` owns the final copy-paste command reference, including executable path and flag ordering.
+The CLI shell and service entrypoints are implemented in `packages/cli/src/` and `packages/server/src/`, but a packaged runnable `codexdeck` binary is not installed yet. `REL-V1-003` verified this gap and keeps `codexdeck ...` examples out of the copy-paste command reference until build/package or clean install smoke provides a runnable executable path.
 
 Default local configuration:
 

@@ -178,8 +178,10 @@ describe("CLI shell contract", () => {
       exitCode: cliExitCodes.ok,
       stderr: ""
     });
-    expect(help.stdout).toContain("codexdeck serve");
+    expect(help.stdout).toContain("codexdeck [--state-dir PATH] [--database PATH] [--port PORT] serve");
+    expect(help.stdout).toContain("codexdeck [--api-url URL | --host HOST --port PORT] status [--json]");
     expect(help.stdout).toContain("codexdeck lan disable");
+    expect(help.stdout).toContain("Global connection and state options must appear before the command.");
     expect(version).toMatchObject({
       exitCode: cliExitCodes.ok,
       stdout: "codexdeck 1.2.3-contract\n",
