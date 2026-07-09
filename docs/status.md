@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `REL-V1-001` aggregate validation command names and artifact locations
+- Active task: None ready in the current queue after `REL-V1-001`
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
-- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, and pairing/security API route foundation are complete; real tmux/startup-dependent implementation remains blocked.
-- Last validation: `pnpm --filter @hostdeck/server typecheck`, `pnpm --filter @hostdeck/storage typecheck`, `pnpm --filter @hostdeck/contracts typecheck`, focused security/storage/contract unit tests, `pnpm lint`, `pnpm typecheck`, `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm -r --if-present typecheck`, `pnpm test`, `pnpm test:contract`, and `git diff --check` passed for `IFC-V1-005`.
-- Next action: Start `REL-V1-001` validation command/artifact wiring, unless `tmux` becomes available to unblock real tmux/API startup work.
+- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, pairing/security API route foundation, and validation command wiring are complete; real tmux/startup-dependent implementation remains blocked.
+- Last validation: `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:contract`, planned placeholder command smoke, and `git diff --check` passed or failed as expected for `REL-V1-001`; full `IFC-V1-005` validation also passed in `artifacts/ifc-v1-005-security-routes.md`.
+- Next action: Unblock real tmux/startup-dependent work, or revisit the queue to promote a new leaf if scope changes.
 - Blockers: `INT-V1-001` and `INT-V1-011` need `tmux` in the environment; visual mockups before UI implementation.
-- Last commit: `IFC-V1-005` security routes commit.
-- Last push: `origin/main` after the `IFC-V1-005` commit.
+- Last commit: `REL-V1-001` validation wiring commit.
+- Last push: `origin/main` after the `REL-V1-001` commit.
 
 ## What Is Proven
 
@@ -47,6 +47,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `DAT-V1-090` hardened storage-owned behavior for migration drift, raw secret validation, audit unavailable errors, retention boundary schema, newest-output retention, restart persistence, and local state privacy inspection.
 - Implementation: `INT-V1-010` added the typed tmux adapter interface and deterministic fake adapter with lifecycle, send, stop, attach, output, stale, and missing-target coverage.
 - Implementation: `IFC-V1-005` added storage-backed pairing/security/network route handlers, revoked pairing-code support, CSRF-backed dashboard lock, and explicit remote unlock/LAN mutation rejection.
+- Release support: `REL-V1-001` wired validation command placeholders to future owner tasks and recorded command smoke evidence without claiming unavailable layers are implemented.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
@@ -86,7 +87,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | DAT-V1-090 | Hardening | done | `docs/tracking/backlog/local-state-auth-audit.md` | Storage hardening and `artifacts/dat-v1-090-storage-hardening.md`. |
 | INT-V1-010 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Fake tmux adapter and `artifacts/int-v1-010-fake-tmux-adapter.md`. |
 | IFC-V1-005 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Security routes and `artifacts/ifc-v1-005-security-routes.md`. |
-| REL-V1-001 | Release support | ready | `docs/tracking/backlog/hardening-release.md` | Next ready leaf: aggregate validation command names and artifact locations. |
+| REL-V1-001 | Release support | done | `docs/tracking/backlog/hardening-release.md` | Validation wiring and `artifacts/rel-v1-001-validation-wiring.md`. |
 
 ## Decisions Needed
 

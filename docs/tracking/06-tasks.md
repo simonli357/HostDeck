@@ -64,13 +64,14 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 25 | `DAT-V1-090` Local state/auth/audit/config hardening | done | none | Storage-owned hardening now covers migration drift, malformed raw secrets, audit unavailability, retention boundaries, newest-output retention, restart persistence, and local state inspection. |
 | 26 | `INT-V1-010` Tmux adapter interface and fake adapter | done | none | Fake adapter interface now covers deterministic lifecycle, send, stop, attach, output, stale, and missing-target cases without real tmux/Codex. |
 | 27 | `IFC-V1-005` Pairing/token claim and security/network state API routes | done | none | Security route handlers now cover pairing claim, trust/security state, network state, dashboard lock, remote unlock rejection, LAN mutation rejection, CSRF enforcement, and revoked/expired/used/invalid pairing-code rejection. |
-| 28 | `REL-V1-001` Wire aggregate validation command names and artifact locations | ready | none | No main API/tmux/UI implementation leaf is unblocked while real tmux/startup dependencies remain blocked; this support leaf can tighten validation wiring without claiming unavailable product behavior. |
+| 28 | `REL-V1-001` Wire aggregate validation command names and artifact locations | done | none | Validation command wiring now distinguishes implemented commands from planned placeholders, and unavailable commands fail loudly with future owner task IDs. |
 
 ## Current Blocked Gates
 
 | Gate | Owning leaf task(s) | Requires | Blocker |
 | --- | --- | --- | --- |
 | Real tmux work | `INT-V1-001`, `INT-V1-011` | Ubuntu host with `tmux` available | Current environment lacks `tmux`; `command -v tmux && tmux -V` exited 1 with no output on 2026-07-08. |
+| Main implementation queue | `IFC-V1-001`, `IFC-V1-002`, `IFC-V1-004`, `FE-V1-001`, downstream release tasks | real tmux/startup prerequisites or completed API dependencies | After `REL-V1-001`, no current queue leaf is ready without unblocking tmux/startup-dependent work or completing prerequisite API/session tasks. |
 | UI visual direction | `FE-V1-002`, `FE-V1-003` | human acceptance | Mockups require UI state coverage first, then human selection before UI implementation. |
 | Release readiness | `REL-V1-005` to `REL-V1-010` | validation artifacts and human acceptance | Release tasks wait for module hardening, docs, smoke evidence, and go/no-go review. |
 

@@ -15,11 +15,11 @@
     "test": "pnpm test:unit",
     "test:unit": "vitest run",
     "test:contract": "vitest run --config vitest.contract.config.ts",
-    "test:integration": "node scripts/not-implemented.mjs test:integration DAT-V1-016",
+    "test:integration": "node scripts/not-implemented.mjs test:integration IFC-V1-014",
     "test:tmux": "node scripts/not-implemented.mjs test:tmux INT-V1-016",
     "test:web": "node scripts/not-implemented.mjs test:web FE-V1-001",
-    "test:e2e": "node scripts/not-implemented.mjs test:e2e REL-V1-001",
-    "build": "node scripts/not-implemented.mjs build REL-V1-001",
+    "test:e2e": "node scripts/not-implemented.mjs test:e2e REL-V1-007",
+    "build": "node scripts/not-implemented.mjs build REL-V1-007",
     "smoke:local": "node scripts/not-implemented.mjs smoke:local REL-V1-006"
   },
   "devDependencies": {
