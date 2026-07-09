@@ -15,7 +15,7 @@
     "test": "pnpm test:unit",
     "test:unit": "vitest run",
     "test:contract": "vitest run --config vitest.contract.config.ts",
-    "test:integration": "node scripts/not-implemented.mjs test:integration IFC-V1-014",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:tmux": "HOSTDECK_REQUIRE_TMUX_SMOKE=1 vitest run packages/server/src/tmux-smoke.test.ts",
     "test:web": "node scripts/not-implemented.mjs test:web FE-V1-001",
     "test:e2e": "node scripts/not-implemented.mjs test:e2e REL-V1-007",

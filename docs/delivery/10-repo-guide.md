@@ -10,7 +10,7 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | `pnpm-workspace.yaml` | Workspace package selection |
 | `tsconfig.base.json`, `tsconfig.json` | Shared strict TypeScript scaffold configuration |
 | `biome.json` | Shared lint configuration |
-| `vitest.config.ts`, `vitest.contract.config.ts`, `tests/` | Shared unit-test and contract-test runners plus convention tests |
+| `vitest.config.ts`, `vitest.contract.config.ts`, `vitest.integration.config.ts`, `tests/` | Shared unit, contract, and integration test runners plus convention tests |
 | `scripts/` | Scaffold checks, package export checks, and placeholder validation-script failures |
 | `packages/core/` | Domain/core package shell |
 | `packages/contracts/` | Shared contract package shell |
@@ -38,12 +38,13 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | Shared error envelope | `packages/core/src/errors.ts` | `packages/core/src/errors.test.ts` |
 | API and stream contracts | `packages/contracts/src/api.ts` | `packages/contracts/src/api.contract.test.ts`, `pnpm test:contract` |
 | CLI shell/API client | `packages/cli/src/` | `packages/cli/src/config.test.ts`, `packages/cli/src/api-client.test.ts`, `packages/cli/src/cli.contract.test.ts`, `pnpm test`, `pnpm test:contract` |
+| Write rejection integration | `tests/write-rejection.integration.test.ts`, `packages/server/src/write-routes.ts` | `pnpm test:integration` |
 | Contract scalar validators | `packages/contracts/src/scalars.ts` | Covered through API and storage contract tests |
 | Storage/config/auth/audit contracts | `packages/contracts/src/storage.ts` | `packages/contracts/src/storage.contract.test.ts`, `pnpm test:contract` |
 | UI fixture and view-model contracts | `packages/contracts/src/ui.ts` | `packages/contracts/src/ui.contract.test.ts`, `pnpm test:contract` |
 | Deterministic fake Codex/session/host fixtures | `packages/test-fixtures/src/` | `packages/test-fixtures/src/fixtures.test.ts`, `pnpm test:unit` |
 | Cross-package contract compatibility | `packages/test-fixtures/src/cross-package.contract.test.ts` | `pnpm test:contract` |
-| Later validation layers | `scripts/not-implemented.mjs` placeholders | Placeholder scripts fail loudly with owning task IDs |
+| Remaining later validation layers | `scripts/not-implemented.mjs` placeholders | Web, E2E, build, and local smoke placeholders fail loudly with owning task IDs |
 
 ## Boundaries
 

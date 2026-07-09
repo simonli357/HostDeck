@@ -21,8 +21,9 @@ Owns setup context, environment policy, services, and operational notes.
 | Lint | `pnpm lint` | Runs Biome plus package export convention checks. |
 | Unit tests | `pnpm test` or `pnpm test:unit` | Runs Vitest unit tests. |
 | Contract tests | `pnpm test:contract` | Runs Vitest contract tests for shared schemas. |
+| Integration tests | `pnpm test:integration` | Runs Vitest integration tests for cross-module failure ordering. |
 | Tmux smoke | `pnpm test:tmux` | Requires `tmux` and `codex` on `PATH`; runs the required real managed-session smoke. |
-| Later tests | `pnpm test:integration`, `pnpm test:web`, `pnpm test:e2e` | Placeholders; fail loudly until their owning tasks implement them. |
+| Later tests | `pnpm test:web`, `pnpm test:e2e` | Placeholders; fail loudly until their owning tasks implement them. |
 | Build/package | `pnpm build` | Placeholder; fails loudly until release/build tasks implement it. |
 | Local smoke | `pnpm smoke:local` | Placeholder; fails loudly until release smoke exists. |
 
