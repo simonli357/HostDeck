@@ -77,8 +77,8 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 38 | `IFC-V1-002` Host status, sessions list/detail, and output-read route contracts | done | none | Headless read route handlers now validate host status, attention-sorted sessions, session detail, output replay, and typed read failures. |
 | 39 | `IFC-V1-003` One-session stream endpoint with reconnect and replay boundary behavior | done | none | Headless stream route handlers now validate one-session auth, ordered replay, reconnect boundaries, live-source identity, and typed stream failures. |
 | 40 | `IFC-V1-004` Prompt, slash, stop, and raw-input write pipeline ordering | done | none | Headless write route handlers now enforce schema, auth/CSRF, lock, lifecycle, slash, raw confirmation, audit preflight, tmux dispatch, and typed failures. |
-| 41 | `IFC-V1-010` API route and stream contract tests | ready | none | Read, stream, write, and security route families now exist; aggregate contract coverage is the next route-validation leaf before CLI. |
-| 42 | `IFC-V1-006` CLI command shell, API client, config loading, error rendering, and exit-code families | ready | none | Startup is complete enough to build the daemon client shell and daemon-unavailable/error-rendering behavior after aggregate route contracts. |
+| 41 | `IFC-V1-010` API route and stream contract tests | done | none | Aggregate API route contract manifest now covers 16 current V1 routes with method, auth mode, request/response/stream schemas, route error body schema, and typed error assertions. |
+| 42 | `IFC-V1-006` CLI command shell, API client, config loading, error rendering, and exit-code families | ready | none | First ready CLI leaf after aggregate route contracts; startup is complete enough to build the daemon client shell and daemon-unavailable/error-rendering behavior. |
 | 43 | `IFC-V1-011` Localhost/LAN config and network smoke coverage | ready | none | Startup now validates localhost bind and invalid port settings; network smoke can extend this to bind/listener evidence. |
 
 ## Current Blocked Gates

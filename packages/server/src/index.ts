@@ -17,6 +17,7 @@ import {
   type SettingsRepository
 } from "@hostdeck/storage";
 
+export * from "./api-route-contracts.js";
 export * from "./output-reader.js";
 export * from "./read-routes.js";
 export * from "./restart-reconciler.js";

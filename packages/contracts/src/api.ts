@@ -47,6 +47,12 @@ export const apiErrorEnvelopeSchema = z
     }
   });
 
+export const apiRouteErrorBodySchema = z
+  .object({
+    error: apiErrorEnvelopeSchema
+  })
+  .strict();
+
 export const healthCheckSchema = z
   .object({
     state: healthStateSchema,
@@ -372,6 +378,7 @@ export const networkStateResponseSchema = z
   });
 
 export type ApiErrorEnvelope = z.infer<typeof apiErrorEnvelopeSchema>;
+export type ApiRouteErrorBody = z.infer<typeof apiRouteErrorBodySchema>;
 export type ApiSession = z.infer<typeof apiSessionSchema>;
 export type HostStatusResponse = z.infer<typeof hostStatusResponseSchema>;
 export type SessionListResponse = z.infer<typeof sessionListResponseSchema>;

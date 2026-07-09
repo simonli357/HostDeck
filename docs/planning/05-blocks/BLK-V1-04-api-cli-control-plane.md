@@ -53,9 +53,9 @@ Owns the host-agent service boundary, typed local API, write pipeline, CLI surfa
 
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
-| Server startup and route contracts | `IFC-V1-001` to `IFC-V1-003`, `IFC-V1-010` | Startup readiness, read routes, and one-session stream routes done; aggregate route/stream contract task is ready next | `artifacts/ifc-v1-001-startup-readiness.md`; `artifacts/ifc-v1-002-read-routes.md`; `artifacts/ifc-v1-003-stream-routes.md`; `docs/tracking/backlog/api-cli-control-plane.md` |
+| Server startup and route contracts | `IFC-V1-001` to `IFC-V1-003`, `IFC-V1-010` | Startup readiness, read routes, one-session stream routes, and aggregate route/stream contracts done | `artifacts/ifc-v1-001-startup-readiness.md`; `artifacts/ifc-v1-002-read-routes.md`; `artifacts/ifc-v1-003-stream-routes.md`; `artifacts/ifc-v1-010-api-route-contracts.md`; `docs/tracking/backlog/api-cli-control-plane.md` |
 | Write pipeline and trust routes | `IFC-V1-004`, `IFC-V1-005` | Security routes and headless write route pipeline done; broader failure-path hardening remains planned | `artifacts/ifc-v1-004-write-routes.md`; `artifacts/ifc-v1-005-security-routes.md`; broader write rejection/failure-path coverage remains in `IFC-V1-014`. |
-| CLI surface and service controls | `IFC-V1-006` to `IFC-V1-014` | `IFC-V1-006` and `IFC-V1-011` are unblocked by startup; remaining CLI/service tasks remain planned | `docs/tracking/backlog/api-cli-control-plane.md` |
+| CLI surface and service controls | `IFC-V1-006` to `IFC-V1-014` | `IFC-V1-006` and `IFC-V1-011` are unblocked; remaining CLI/service tasks remain planned | `docs/tracking/backlog/api-cli-control-plane.md` |
 | Interface hardening | `IFC-V1-090` | Planned | `docs/tracking/backlog/api-cli-control-plane.md` |
 
 ## Done Criteria

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   apiErrorEnvelopeSchema,
+  apiRouteErrorBodySchema,
   hostStatusResponseSchema,
   lockRequestSchema,
   networkStateResponseSchema,
@@ -64,6 +65,16 @@ describe("API error envelope schema", () => {
       code: "validation_error",
       retryable: false
     });
+
+    expect(
+      apiRouteErrorBodySchema.parse({
+        error: {
+          code: "permission_denied",
+          message: "Read token is required.",
+          retryable: false
+        }
+      }).error.code
+    ).toBe("permission_denied");
   });
 
   it("rejects sensitive or unbounded error details", () => {
