@@ -31,7 +31,7 @@ Owns the phone-responsive browser dashboard, state coverage, approved visual dir
 | Session detail view model | `@hostdeck/contracts` schema; later web implementation | Recent Codex output and safe prompt/slash controls precede raw terminal fallback. | Contract tests now; later component tests and screenshots. |
 | Write control state | `@hostdeck/contracts` and core write rules; later web implementation | Controls disabled for untrusted/read-only/locked/stale/stopped/crashed/unknown states before write attempt. | Contract tests now; later UI state tests and API integration tests. |
 | Raw fallback state | `@hostdeck/contracts` and server contracts; later web implementation | Raw input hidden by default and requires advanced mode plus confirmation. | Contract tests now; later UI/API tests. |
-| Mockup assets | `assets/ui-concepts/` | Two options generated, selected by human, stored in repo before UI implementation. | `SPK-UX-001` artifact and decision log entry. |
+| Mockup assets | `assets/ui-concepts/` | Two options generated, selected by human, stored in repo before UI implementation. | Generated options in `assets/ui-concepts/`; selection remains pending in `FE-V1-003`. |
 
 ## Implementation Blueprint
 
@@ -54,7 +54,7 @@ Owns the phone-responsive browser dashboard, state coverage, approved visual dir
 
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
-| UI state coverage and visual direction | `FE-V1-001` to `FE-V1-003` | Planned | `docs/tracking/backlog/web-dashboard.md` |
+| UI state coverage and visual direction | `FE-V1-001` to `FE-V1-003` | In progress | `artifacts/fe-v1-001-ui-state-fixtures.md`, `artifacts/fe-v1-002-visual-direction-mockups.md`; human selection pending in `FE-V1-003` |
 | Dashboard screen groups | `FE-V1-010` to `FE-V1-015`, `FE-V1-019` to `FE-V1-021` | Planned | `docs/tracking/backlog/web-dashboard.md` |
 | Responsive, accessibility, and fidelity | `FE-V1-016` to `FE-V1-018`, `FE-V1-090` | Planned | `docs/tracking/backlog/web-dashboard.md` |
 

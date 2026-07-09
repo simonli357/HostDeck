@@ -49,12 +49,12 @@ Owns active-version user flows, screens, states, accessibility, and UI contract 
 ## Visual Direction
 
 - Gate: visual directions and generated mockups are required before UI implementation, but should be created after the UX contract, detailed design, state coverage, and validation plan are defined enough to make them useful implementation targets.
-- Planned option A: dense operations console.
-- Planned option B: calm control room.
+- Planned option A: dense operations console, generated at `assets/ui-concepts/option-a/dense-operations-console-board.png`.
+- Planned option B: calm control room, generated at `assets/ui-concepts/option-b/calm-control-room-board.png`.
 - Recommended starting hypothesis: dense operations console, because V1 is a power-user operational dashboard where scanning density and status hierarchy matter more than spacious ambience.
 - Selected option: Pending human selection.
-- Approved mockups: Pending later image-generation/mockup pass.
-- Known divergences: None approved yet.
+- Approved mockups: Pending human selection in `FE-V1-003`.
+- Known divergences: No behavior divergences are approved; mockup text that says "from host CLI" is guidance only, and remote unlock/LAN mutation remains rejected in V1.
 
 ## Accessibility
 

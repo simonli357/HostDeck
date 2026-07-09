@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `FE-V1-002` visual direction/mockup generation
+- Active task: `FE-V1-003` visual direction selection, blocked on human selection
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
-- UI direction: Pending `FE-V1-002` image-generated visual direction/mockup pass, then human selection in `FE-V1-003`.
-- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart/smoke path/hardening, pairing/security API route foundation, validation command wiring, headless startup/readiness, headless host/session/output read route contracts, headless one-session stream route contracts, headless write pipeline route contracts, aggregate API route/stream contract tests, CLI shell/API client foundation, localhost/LAN network smoke, CLI session commands, CLI pairing/lock/LAN commands, foreground service smoke, CLI command matrix, write rejection/failure-path integration coverage, API/CLI module hardening, developer-guide setup/service docs, command reference docs, and UI state coverage are complete; visual direction/mockups are next.
-- Last validation: For `FE-V1-001`, `pnpm install`, `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm test:web`, `pnpm typecheck`, `pnpm lint`, `pnpm test:unit`, `pnpm test:contract`, and `git diff --check` passed.
-- Next action: Start `FE-V1-002` image-generated visual direction/mockup sets from approved state coverage.
-- Blockers: Clean release install/build/local smoke remain later gates; UI implementation waits for generated mockups and human selection.
-- Last commit: `FE-V1-001` UI state fixtures commit.
-- Last push: `origin/main` after the `FE-V1-001` commit.
+- UI direction: Option A dense operations console and Option B calm control room mockup boards are generated and stored; human selection in `FE-V1-003` is pending.
+- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart/smoke path/hardening, pairing/security API route foundation, validation command wiring, headless startup/readiness, headless host/session/output read route contracts, headless one-session stream route contracts, headless write pipeline route contracts, aggregate API route/stream contract tests, CLI shell/API client foundation, localhost/LAN network smoke, CLI session commands, CLI pairing/lock/LAN commands, foreground service smoke, CLI command matrix, write rejection/failure-path integration coverage, API/CLI module hardening, developer-guide setup/service docs, command reference docs, UI state coverage, and visual direction/mockups are complete; human visual direction selection is next.
+- Last validation: For `FE-V1-002`, built-in `image_gen` produced two repo-stored mockup boards, manual visual inspection checked required panels/states and V1 safety-contract drift, `identify assets/ui-concepts/option-a/dense-operations-console-board.png assets/ui-concepts/option-b/calm-control-room-board.png`, `git diff --check`, and `pnpm lint` passed.
+- Next action: Human selects Option A dense operations console or Option B calm control room for `FE-V1-003`.
+- Blockers: Clean release install/build/local smoke remain later gates; UI implementation waits for human visual direction selection.
+- Last commit: `FE-V1-002` visual direction mockups commit.
+- Last push: `origin/main` after the `FE-V1-002` commit.
 
 ## What Is Proven
 
@@ -71,6 +71,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Release support: `REL-V1-002` updated the developer guide with validated runtime/package-manager/tool versions, setup command, state/config defaults, foreground service behavior, LAN/safety notes, common failures, evidence links, and packaged-binary/service-wrapper gaps.
 - Release support: `REL-V1-003` tightened the command reference to verified runnable commands, recorded unavailable CLI/web/E2E/build/local-smoke gaps, and corrected CLI help flag ordering.
 - Frontend: `FE-V1-001` added dashboard view-model helpers, required UI state fixture inventory, and real `pnpm test:web` coverage for state fixtures.
+- Frontend: `FE-V1-002` generated two repo-stored UI visual direction options with safety-contract notes and supporting asset/design-system documentation.
 - Planning/spike: `INT-V1-001` chose tmux `pipe-pane` for live output ingestion plus bounded `capture-pane` startup/restart recovery.
 - No end-to-end HostDeck dashboard or real Codex product workflow is proven yet; the CLI-to-foreground-service path is proven with the fake tmux adapter.
 
@@ -136,13 +137,14 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | REL-V1-002 | Release docs | done | `docs/tracking/backlog/hardening-release.md` | Developer guide setup/service docs and `artifacts/rel-v1-002-developer-guide.md`. |
 | REL-V1-003 | Release docs | done | `docs/tracking/backlog/hardening-release.md` | Command reference docs and `artifacts/rel-v1-003-command-reference.md`. |
 | FE-V1-001 | Frontend | done | `docs/tracking/backlog/web-dashboard.md` | UI state fixtures, view-model helpers, and `artifacts/fe-v1-001-ui-state-fixtures.md`. |
-| FE-V1-002 | Frontend | ready | `docs/tracking/backlog/web-dashboard.md` | Next task; generate two image-based visual direction/mockup sets before human selection. |
+| FE-V1-002 | Frontend | done | `docs/tracking/backlog/web-dashboard.md` | Two image-generated visual direction options and `artifacts/fe-v1-002-visual-direction-mockups.md`. |
+| FE-V1-003 | Frontend | blocked | `docs/tracking/backlog/web-dashboard.md` | Human visual direction selection is required before dashboard UI implementation. |
 
 ## Decisions Needed
 
 | Question | Owner | Blocking? |
 | --- | --- | --- |
-| UI visual direction selection after state coverage and generated mockups. | `docs/tracking/backlog/web-dashboard.md` | Later, before UI implementation |
+| UI visual direction selection between Option A dense operations console and Option B calm control room. | `docs/tracking/backlog/web-dashboard.md` | Yes, before UI implementation |
 
 ## Repo Hygiene
 
