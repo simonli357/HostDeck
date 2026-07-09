@@ -17,6 +17,8 @@ import {
   type SettingsRepository
 } from "@hostdeck/storage";
 
+export * from "./output-reader.js";
+
 export interface BrowserAuthInput {
   readonly rawDeviceToken?: string | null;
   readonly rawCsrfToken?: string | null;

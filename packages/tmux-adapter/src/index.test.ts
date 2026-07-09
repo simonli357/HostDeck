@@ -19,9 +19,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createFakeTmuxAdapter,
   createRealTmuxAdapter,
+  createRealTmuxPipePaneController,
   createRealTmuxTargetDiscovery,
   HostDeckTmuxAdapterError,
   parseSessionIdFromTmuxSessionName,
+  type TmuxAdapter,
   type TmuxAdapterErrorCode,
   tmuxSessionNameForSession
 } from "./index.js";
@@ -313,7 +315,19 @@ describeRealTmux("real tmux adapter start", () => {
       tmuxSession: "hostdeck_sess_real_start_01"
     });
     await expect(adapter.listTargets()).resolves.toHaveLength(1);
-    await expectAdapterError(() => adapter.readOutput({ sessionId: id }), "unsupported_operation");
+    const output = await waitForAdapterOutput(adapter, id, "fake codex ready");
+    expect(output[0]).toMatchObject({
+      sessionId: id,
+      cursor: 1,
+      text: "fake codex ready"
+    });
+    const lastCursor = output.at(-1)?.cursor;
+
+    if (lastCursor === undefined) {
+      throw new Error("Expected captured output cursor.");
+    }
+
+    await expect(adapter.readOutput({ sessionId: id, after: lastCursor })).resolves.toEqual([]);
   });
 
   it("sends literal input to exactly one real pane, exposes attach metadata, and stops explicitly", async () => {
@@ -365,6 +379,26 @@ describeRealTmux("real tmux adapter start", () => {
     await expect(adapter.listTargets()).resolves.toHaveLength(1);
   });
 
+  it("pipes live pane output to a file for ingestion", async () => {
+    const socketName = nextSocketName();
+    const cwd = tempDir();
+    const adapter = createRealTmuxAdapter({ socketName });
+    const pipe = createRealTmuxPipePaneController({ socketName });
+    const command = fakeCodexCommand("sleep 0.2\nprintf 'live one\\n'\nprintf 'live two\\n'\nsleep 60\n");
+    const pipeFile = join(tempDir(), "pipe.log");
+
+    const target = await adapter.startSession({
+      sessionId: sessionId("sess_real_pipe_01"),
+      sessionName: sessionName("pipe-live"),
+      cwd,
+      command: [command]
+    });
+
+    await pipe.armOutputPipe({ target, outputPath: pipeFile });
+    await waitForFileContaining(pipeFile, "live one\nlive two\n");
+    await pipe.disarmOutputPipe({ target });
+  });
+
   it("rejects missing and stale real targets for send and attach", async () => {
     const socketName = nextSocketName();
     const cwd = tempDir();
@@ -384,6 +418,7 @@ describeRealTmux("real tmux adapter start", () => {
 
     await expectAdapterError(() => adapter.attachMetadata({ sessionId: id }), "stale_target");
     await expectAdapterError(() => adapter.sendInput({ sessionId: id, text: "hello" }), "stale_target");
+    await expectAdapterError(() => adapter.readOutput({ sessionId: id }), "stale_target");
   });
 
   it("rejects duplicate real session ids and in-process duplicate names", async () => {
@@ -597,6 +632,32 @@ async function waitForFileText(path: string, expected: string): Promise<void> {
   }
 
   expect(readTextIfExists(path)).toBe(expected);
+}
+
+async function waitForFileContaining(path: string, expected: string): Promise<void> {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if (readTextIfExists(path).replace(/\r/gu, "").includes(expected)) {
+      return;
+    }
+
+    await delay(25);
+  }
+
+  expect(readTextIfExists(path).replace(/\r/gu, "")).toContain(expected);
+}
+
+async function waitForAdapterOutput(adapter: Pick<TmuxAdapter, "readOutput">, sessionId: SessionId, expectedText: string) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const output = await adapter.readOutput({ sessionId });
+
+    if (output.some((event) => event.text === expectedText)) {
+      return output;
+    }
+
+    await delay(25);
+  }
+
+  return adapter.readOutput({ sessionId });
 }
 
 function readTextIfExists(path: string): string {

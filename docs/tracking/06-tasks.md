@@ -69,9 +69,9 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 30 | `INT-V1-011` Real tmux target naming, lookup, and list/reconcile primitives | done | none | Real HostDeck-only tmux target naming, lookup, list, and reconcile primitives are implemented and validated with isolated real tmux tests. |
 | 31 | `INT-V1-012` Managed Codex session start with cwd validation and partial-failure cleanup | done | none | Real tmux managed start/list/get behavior is implemented with cwd/command preflight, duplicate checks, launch verification, and partial cleanup. |
 | 32 | `INT-V1-013` Send, stop, and attach metadata operations | done | none | Real send, stop, and attach metadata operations target exact HostDeck tmux panes and fail loudly for missing/stale targets. |
-| 33 | `INT-V1-014` Output reader, cursor assignment, storage append, and replay-boundary handoff | ready | none | Capture mechanism and retention storage exist; can proceed before or after managed start integration as a separate output path. |
+| 33 | `INT-V1-014` Output reader, cursor assignment, storage append, and replay-boundary handoff | done | none | Live pipe capture, bounded capture reads, storage append, replay-boundary mapping, and reader failure state are implemented. |
 | 34 | `INT-V1-015` Restart reconciliation between durable registry and live tmux targets | ready | none | Durable storage and real target discovery exist; reconciliation can now mark live, missing, and unmanaged HostDeck-looking targets truthfully. |
-| 35 | `INT-V1-016` Real Ubuntu tmux smoke path for managed sessions | todo | `INT-V1-014`, `INT-V1-015` | Full smoke waits until output and restart reconciliation are implemented. |
+| 35 | `INT-V1-016` Real Ubuntu tmux smoke path for managed sessions | todo | `INT-V1-015` | Full smoke waits until restart reconciliation is implemented. |
 
 ## Current Blocked Gates
 

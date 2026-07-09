@@ -31,8 +31,7 @@ export type TmuxAdapterErrorCode =
   | "start_failed"
   | "stale_target"
   | "target_not_running"
-  | "tmux_unavailable"
-  | "unsupported_operation";
+  | "tmux_unavailable";
 
 export class HostDeckTmuxAdapterError extends Error {
   constructor(
@@ -121,6 +120,21 @@ export interface RealTmuxAdapterOptions extends RealTmuxTargetDiscoveryOptions {
   readonly now?: () => Date;
   readonly path?: string;
   readonly startupVerifyDelayMs?: number;
+}
+
+export interface TmuxArmOutputPipeInput {
+  readonly target: TmuxTarget;
+  readonly outputPath: string;
+  readonly append?: boolean;
+}
+
+export interface TmuxDisarmOutputPipeInput {
+  readonly target: TmuxTarget;
+}
+
+export interface RealTmuxPipePaneController {
+  readonly armOutputPipe: (input: TmuxArmOutputPipeInput) => Promise<void>;
+  readonly disarmOutputPipe: (input: TmuxDisarmOutputPipeInput) => Promise<void>;
 }
 
 export interface RealTmuxDiscoveredTarget {
@@ -328,6 +342,7 @@ export function createRealTmuxAdapter(options: RealTmuxAdapterOptions = {}): Tmu
   const startupVerifyDelayMs = options.startupVerifyDelayMs ?? defaultStartupVerifyDelayMs;
   const discovery = createRealTmuxTargetDiscovery(options);
   const expectedTargets = new Map<string, ExpectedTmuxTarget>();
+  const capturedOutputs = new Map<string, TmuxOutputEvent[]>();
 
   function timestamp(): IsoTimestamp {
     return parseRequiredIsoTimestamp(now().toISOString());
@@ -423,6 +438,7 @@ export function createRealTmuxAdapter(options: RealTmuxAdapterOptions = {}): Tmu
         tmuxPane: target.tmuxPane,
         createdAt: target.createdAt
       });
+      capturedOutputs.set(sessionId, []);
 
       return target;
     },
@@ -455,6 +471,7 @@ export function createRealTmuxAdapter(options: RealTmuxAdapterOptions = {}): Tmu
 
       await runTmuxCommand(commandOptions, ["kill-session", "-t", target.tmuxSession], { errorCode: "stale_target" });
       expectedTargets.delete(target.sessionId);
+      capturedOutputs.delete(target.sessionId);
 
       return {
         ...target,
@@ -475,8 +492,50 @@ export function createRealTmuxAdapter(options: RealTmuxAdapterOptions = {}): Tmu
         command: [tmuxBinary, ...socketArgs, "attach-session", "-t", target.tmuxSession]
       };
     },
-    async readOutput() {
-      throw unsupportedRealOperation("readOutput", "INT-V1-014");
+    async readOutput(input) {
+      const target = await requireKnownLiveTarget(input.sessionId);
+      const after = input.after === undefined || input.after === null ? null : parseRequiredOutputCursor(input.after);
+      const limit = parseOutputLimit(input.limit ?? defaultOutputLimit);
+      const snapshot = await capturePaneText(commandOptions, target.tmuxPane);
+      const capturedLines = splitCapturedOutput(snapshot);
+      const events = capturedOutputs.get(target.sessionId) ?? [];
+      const newLines = newCapturedLines(
+        events.map((event) => event.text),
+        capturedLines
+      );
+      let previousCursor = events.at(-1)?.cursor ?? parseRequiredOutputCursor(0);
+
+      for (const line of newLines) {
+        previousCursor = parseRequiredOutputCursor(previousCursor + 1);
+        events.push({
+          sessionId: target.sessionId,
+          cursor: previousCursor,
+          capturedAt: timestamp(),
+          text: line
+        });
+      }
+
+      capturedOutputs.set(target.sessionId, events);
+
+      return events.filter((event) => after === null || event.cursor > after).slice(0, limit);
+    }
+  };
+}
+
+export function createRealTmuxPipePaneController(options: RealTmuxTargetDiscoveryOptions = {}): RealTmuxPipePaneController {
+  const tmuxBinary = options.tmuxBinary ?? "tmux";
+  const commandOptions = createTmuxCommandOptions(tmuxBinary, options.socketName);
+
+  return {
+    async armOutputPipe(input) {
+      const outputPath = parseOutputPipePath(input.outputPath);
+      const operator = input.append ?? true ? ">>" : ">";
+      await runTmuxCommand(commandOptions, ["pipe-pane", "-o", "-t", input.target.tmuxPane, `cat ${operator} ${shellQuote(outputPath)}`], {
+        errorCode: "stale_target"
+      });
+    },
+    async disarmOutputPipe(input) {
+      await runTmuxCommand(commandOptions, ["pipe-pane", "-t", input.target.tmuxPane], { errorCode: "stale_target" });
     }
   };
 }
@@ -747,8 +806,8 @@ async function cleanupTmuxSession(options: TmuxCommandOptions, tmuxSession: stri
   });
 }
 
-function unsupportedRealOperation(operation: string, ownerTask: string): never {
-  throw new HostDeckTmuxAdapterError("unsupported_operation", `Real tmux ${operation} is not implemented until ${ownerTask}.`);
+async function capturePaneText(options: TmuxCommandOptions, paneId: string): Promise<string> {
+  return runTmuxCommand(options, ["capture-pane", "-p", "-t", paneId, "-S", "-200"], { errorCode: "stale_target" });
 }
 
 function tmuxWindowNameForCommand(binary: string): string {
@@ -903,6 +962,52 @@ function parseTmuxInputText(text: string): string {
   }
 
   return text;
+}
+
+function parseOutputPipePath(path: string): string {
+  if (path.length === 0 || path.includes("\0") || !isAbsolute(path)) {
+    throw new HostDeckTmuxAdapterError("invalid_target", "Output pipe path must be an absolute path without NUL bytes.");
+  }
+
+  return path;
+}
+
+function splitCapturedOutput(snapshot: string): readonly string[] {
+  const lines = snapshot.split(/\r?\n/u);
+
+  while (lines.at(-1) === "") {
+    lines.pop();
+  }
+
+  return lines;
+}
+
+function newCapturedLines(previousLines: readonly string[], capturedLines: readonly string[]): readonly string[] {
+  if (previousLines.length === 0) {
+    return capturedLines;
+  }
+
+  const start = findSubsequenceStart(capturedLines, previousLines);
+
+  if (start === null) {
+    return capturedLines;
+  }
+
+  return capturedLines.slice(start + previousLines.length);
+}
+
+function findSubsequenceStart(haystack: readonly string[], needle: readonly string[]): number | null {
+  if (needle.length === 0) {
+    return 0;
+  }
+
+  for (let index = 0; index <= haystack.length - needle.length; index += 1) {
+    if (needle.every((line, offset) => haystack[index + offset] === line)) {
+      return index;
+    }
+  }
+
+  return null;
 }
 
 function normalizeCommand(command: readonly string[]): readonly [string, ...string[]] {
