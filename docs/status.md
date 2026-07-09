@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `DAT-V1-090` local state/auth/audit/config hardening
+- Active task: `INT-V1-010` tmux adapter interface and fake adapter
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
-- Release state: Foundation block complete; local state/auth/audit block is in hardening.
-- Last validation: `pnpm install --frozen-lockfile`, `pnpm --filter @hostdeck/storage typecheck`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit -- packages/storage/src/restart-persistence.test.ts packages/storage/src/session-repository.test.ts packages/storage/src/auth-repository.test.ts packages/storage/src/audit-repository.test.ts packages/storage/src/retention-repository.test.ts packages/storage/src/settings-repository.test.ts`, `pnpm test:unit -- packages/storage/src/restart-persistence.test.ts`, `pnpm test:contract`, and `git diff --check` passed for `DAT-V1-016`.
-- Next action: Start `DAT-V1-090` local state/auth/audit/config hardening.
+- Release state: Foundation and storage-owned local state/auth/audit work are complete; tmux fake adapter foundation is next.
+- Last validation: `pnpm install --frozen-lockfile`, `pnpm --filter @hostdeck/storage typecheck`, `pnpm test:unit -- packages/storage/src/storage-hardening.test.ts packages/storage/src/audit-repository.test.ts packages/storage/src/auth-repository.test.ts packages/storage/src/retention-repository.test.ts packages/storage/src/migration-runner.test.ts packages/contracts/src/storage.contract.test.ts`, `pnpm lint`, `pnpm typecheck`, `pnpm check:scaffold`, `pnpm -r --if-present typecheck`, `pnpm test`, `pnpm test:contract`, and `git diff --check` passed for `DAT-V1-090`.
+- Next action: Start `INT-V1-010` tmux adapter interface and fake adapter.
 - Blockers: `INT-V1-001` needs `tmux` in the environment; visual mockups before UI implementation.
-- Last commit: `DAT-V1-016` restart persistence commit.
-- Last push: `origin/main` after the `DAT-V1-016` commit.
+- Last commit: `DAT-V1-090` storage hardening commit.
+- Last push: `origin/main` after the `DAT-V1-090` commit.
 
 ## What Is Proven
 
@@ -44,11 +44,11 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `DAT-V1-015` added retention cleanup and replay-boundary storage metadata with output event/byte caps, audit event/age caps, monotonic cursor checks, and corrupt boundary rejection.
 - Implementation: `DAT-V1-017` added optional git branch metadata capture with real worktree persistence, non-git null behavior, missing-git tolerance, malformed output rejection, and invalid-cwd failure.
 - Implementation: `DAT-V1-016` added cross-repository restart persistence coverage for settings, sessions, metadata, auth/pairing, audit, output retention, migration no-op reopen, and durable/ephemeral storage separation.
+- Implementation: `DAT-V1-090` hardened storage-owned behavior for migration drift, raw secret validation, audit unavailable errors, retention boundary schema, newest-output retention, restart persistence, and local state privacy inspection.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
 
-- Storage module hardening.
 - Module hardening.
 - UI fidelity evidence.
 - Release/handoff validation.
@@ -81,7 +81,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | DAT-V1-015 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Retention repository and `artifacts/dat-v1-015-retention-repository.md`. |
 | DAT-V1-017 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Optional git branch metadata and `artifacts/dat-v1-017-branch-metadata.md`. |
 | DAT-V1-016 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Restart persistence and `artifacts/dat-v1-016-restart-persistence.md`. |
-| DAT-V1-090 | Hardening | ready | `docs/tracking/backlog/local-state-auth-audit.md` | Next ready leaf: harden local state, auth, audit, config, retention, and restart behavior. |
+| DAT-V1-090 | Hardening | done | `docs/tracking/backlog/local-state-auth-audit.md` | Storage hardening and `artifacts/dat-v1-090-storage-hardening.md`. |
+| INT-V1-010 | Implementation | ready | `docs/tracking/backlog/tmux-output.md` | Next ready leaf: define tmux adapter interface and fake adapter without requiring real tmux. |
 
 ## Decisions Needed
 

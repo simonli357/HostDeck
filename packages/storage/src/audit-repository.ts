@@ -1,7 +1,7 @@
 import { type AuditEventRecord, auditEventRecordSchema } from "@hostdeck/contracts";
 import type Database from "better-sqlite3";
 
-export type AuditRepositoryErrorCode = "audit_event_exists" | "audit_event_not_found" | "invalid_audit_event";
+export type AuditRepositoryErrorCode = "audit_event_exists" | "audit_event_not_found" | "audit_unavailable" | "invalid_audit_event";
 
 export class HostDeckAuditRepositoryError extends Error {
   constructor(
@@ -161,6 +161,15 @@ function mapAuditConstraint(error: unknown): HostDeckAuditRepositoryError {
 
   if (message.includes("audit_events.id")) {
     return new HostDeckAuditRepositoryError("audit_event_exists", "Audit event id already exists.", { cause: error });
+  }
+
+  if (
+    message.includes("database connection is not open") ||
+    message.includes("no such table: audit_events") ||
+    message.includes("readonly database") ||
+    message.includes("SQLITE_READONLY")
+  ) {
+    return new HostDeckAuditRepositoryError("audit_unavailable", "Audit storage is unavailable.", { cause: error });
   }
 
   return new HostDeckAuditRepositoryError("invalid_audit_event", "Audit event violates SQLite constraints.", { cause: error });

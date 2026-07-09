@@ -10,12 +10,18 @@ export type AuthRepositoryErrorCode =
   | "device_revoked"
   | "duplicate_secret"
   | "invalid_auth_device"
+  | "invalid_secret"
   | "invalid_pairing_code"
   | "pairing_code_exists"
   | "pairing_code_expired"
   | "pairing_code_not_found"
   | "pairing_code_used"
   | "read_only";
+
+export interface HashSecretOptions {
+  readonly label?: string;
+  readonly minLength?: number;
+}
 
 export class HostDeckAuthRepositoryError extends Error {
   constructor(
@@ -115,6 +121,10 @@ interface PairingCodeRow {
   readonly used_at: string | null;
 }
 
+const pairingCodeMinLength = 6;
+const deviceSecretMinLength = 24;
+const rawSecretMaxLength = 512;
+
 export function createAuthDeviceRepository(db: Database.Database): AuthDeviceRepository {
   return {
     get(deviceId) {
@@ -190,7 +200,7 @@ export function createPairingCodeRepository(db: Database.Database): PairingCodeR
     create(input) {
       const pairingCode = parsePairingCode({
         id: input.id,
-        code_hash: hashSecret(input.rawCode),
+        code_hash: hashPairingCode(input.rawCode),
         permission: input.permission,
         client_label: input.clientLabel ?? null,
         created_at: nowIso(input.createdAt),
@@ -259,8 +269,8 @@ export function createPairingCodeRepository(db: Database.Database): PairingCodeR
 function authDeviceFromInput(input: CreateAuthDeviceInput): AuthDeviceRecord {
   return parseAuthDevice({
     id: input.id,
-    token_hash: hashSecret(input.rawDeviceToken),
-    csrf_token_hash: hashSecret(input.rawCsrfToken),
+    token_hash: hashDeviceToken(input.rawDeviceToken),
+    csrf_token_hash: hashCsrfToken(input.rawCsrfToken),
     client_label: input.clientLabel ?? null,
     permission: input.permission,
     created_at: nowIso(input.createdAt),
@@ -303,7 +313,7 @@ function insertAuthDevice(db: Database.Database, device: AuthDeviceRecord): Auth
 }
 
 function requireUsableDeviceByToken(db: Database.Database, rawDeviceToken: string, now: Date): AuthDeviceRecord {
-  const row = db.prepare("SELECT * FROM auth_devices WHERE token_hash = ?").get(hashSecret(rawDeviceToken)) as AuthDeviceRow | undefined;
+  const row = db.prepare("SELECT * FROM auth_devices WHERE token_hash = ?").get(hashDeviceToken(rawDeviceToken)) as AuthDeviceRow | undefined;
 
   if (row === undefined) {
     throw new HostDeckAuthRepositoryError("device_not_found", "Auth device token is not recognized.");
@@ -323,7 +333,7 @@ function requireUsableDeviceByToken(db: Database.Database, rawDeviceToken: strin
 }
 
 function requireClaimablePairingCode(db: Database.Database, rawCode: string, now: Date): PairingCodeRecord {
-  const row = db.prepare("SELECT * FROM pairing_codes WHERE code_hash = ?").get(hashSecret(rawCode)) as PairingCodeRow | undefined;
+  const row = db.prepare("SELECT * FROM pairing_codes WHERE code_hash = ?").get(hashPairingCode(rawCode)) as PairingCodeRow | undefined;
 
   if (row === undefined) {
     throw new HostDeckAuthRepositoryError("pairing_code_not_found", "Pairing code is not recognized.");
@@ -449,16 +459,50 @@ function mapPairingConstraint(error: unknown): HostDeckAuthRepositoryError {
   return new HostDeckAuthRepositoryError("invalid_pairing_code", "Pairing code record violates SQLite constraints.", { cause: error });
 }
 
-export function hashSecret(secret: string): string {
+export function hashSecret(secret: string, options: HashSecretOptions = {}): string {
+  assertRawSecret(secret, options);
   return `sha256:${createHash("sha256").update(secret).digest("hex")}`;
 }
 
 function hashMatches(expectedHash: string, secret: string): boolean {
-  const actualHash = hashSecret(secret);
+  const actualHash = hashCsrfToken(secret);
   const expected = Buffer.from(expectedHash);
   const actual = Buffer.from(actualHash);
 
   return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
+function hashPairingCode(rawCode: string): string {
+  return hashSecret(rawCode, {
+    label: "Pairing code",
+    minLength: pairingCodeMinLength
+  });
+}
+
+function hashDeviceToken(rawDeviceToken: string): string {
+  return hashSecret(rawDeviceToken, {
+    label: "Device token",
+    minLength: deviceSecretMinLength
+  });
+}
+
+function hashCsrfToken(rawCsrfToken: string): string {
+  return hashSecret(rawCsrfToken, {
+    label: "CSRF token",
+    minLength: deviceSecretMinLength
+  });
+}
+
+function assertRawSecret(secret: string, options: HashSecretOptions): void {
+  const label = options.label ?? "Secret";
+  const minLength = options.minLength ?? pairingCodeMinLength;
+
+  if (typeof secret !== "string" || secret.length < minLength || secret.length > rawSecretMaxLength || /\s/u.test(secret)) {
+    throw new HostDeckAuthRepositoryError(
+      "invalid_secret",
+      `${label} must be ${minLength} to ${rawSecretMaxLength} non-whitespace characters.`
+    );
+  }
 }
 
 function nowIso(now: Date): string {

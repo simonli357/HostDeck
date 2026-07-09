@@ -203,8 +203,52 @@ export const hostDeckAuthDeviceCsrfHashMigration: StorageMigration = {
   `
 };
 
+export const hostDeckRetentionBoundaryScopeChecksMigration: StorageMigration = {
+  version: "202607080004_retention_boundary_scope_checks",
+  sql: `
+    CREATE TABLE retention_boundaries_next (
+      id TEXT PRIMARY KEY,
+      scope TEXT NOT NULL CHECK (scope IN ('output', 'audit')),
+      session_id TEXT REFERENCES sessions(id) ON DELETE CASCADE,
+      reason TEXT NOT NULL CHECK (reason IN ('event_limit', 'byte_limit', 'age_limit', 'manual_cleanup')),
+      truncated_before_cursor INTEGER CHECK (truncated_before_cursor IS NULL OR truncated_before_cursor >= 0),
+      truncated_before_at TEXT,
+      retained_record_count INTEGER NOT NULL CHECK (retained_record_count >= 0),
+      applied_at TEXT NOT NULL,
+      CHECK ((scope = 'output' AND session_id IS NOT NULL AND truncated_before_cursor IS NOT NULL) OR scope <> 'output'),
+      CHECK ((scope = 'audit' AND session_id IS NULL AND truncated_before_cursor IS NULL) OR scope <> 'audit')
+    );
+
+    INSERT INTO retention_boundaries_next (
+      id,
+      scope,
+      session_id,
+      reason,
+      truncated_before_cursor,
+      truncated_before_at,
+      retained_record_count,
+      applied_at
+    )
+    SELECT
+      id,
+      scope,
+      session_id,
+      reason,
+      truncated_before_cursor,
+      truncated_before_at,
+      retained_record_count,
+      applied_at
+    FROM retention_boundaries;
+
+    DROP TABLE retention_boundaries;
+    ALTER TABLE retention_boundaries_next RENAME TO retention_boundaries;
+    CREATE INDEX retention_boundaries_scope_applied_idx ON retention_boundaries(scope, applied_at);
+  `
+};
+
 export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckBaseSchemaMigration,
   hostDeckSessionMetadataFailedStatusMigration,
-  hostDeckAuthDeviceCsrfHashMigration
+  hostDeckAuthDeviceCsrfHashMigration,
+  hostDeckRetentionBoundaryScopeChecksMigration
 ] as const;

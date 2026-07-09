@@ -61,7 +61,7 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 22 | `DAT-V1-015` Retention cleanup and replay-boundary storage metadata | done | none | Retention repository now enforces output/audit caps and records replay/audit boundaries. |
 | 23 | `DAT-V1-017` Optional git branch metadata capture | done | none | Optional git branch capture now persists branch metadata when available and returns null when git/non-git state is unavailable. |
 | 24 | `DAT-V1-016` Storage restart-persistence tests | done | none | Cross-repository restart persistence now covers settings, session, metadata, auth, audit, output retention, and durable/ephemeral separation. |
-| 25 | `DAT-V1-090` Local state/auth/audit/config hardening | ready | none | Storage foundation tasks are complete; hardening should close the module before moving on. |
+| 25 | `DAT-V1-090` Local state/auth/audit/config hardening | done | none | Storage-owned hardening now covers migration drift, malformed raw secrets, audit unavailability, retention boundaries, newest-output retention, restart persistence, and local state inspection. |
 | 26 | `INT-V1-010` Tmux adapter interface and fake adapter | ready | none | Fake adapter work can proceed without real tmux and unblocks later API/session tasks. |
 | 27 | `IFC-V1-005` Pairing/token claim and security/network state API routes | ready | none | Auth repository and API contracts are now available for route implementation. |
 

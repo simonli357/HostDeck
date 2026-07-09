@@ -9,6 +9,7 @@ export {
   type AuthDeviceRepository,
   createAuthDeviceRepository,
   createPairingCodeRepository,
+  type HashSecretOptions,
   HostDeckAuthRepositoryError,
   hashSecret,
   type PairingClaim,
@@ -33,6 +34,7 @@ export {
 export {
   defaultMigrations,
   hostDeckBaseSchemaMigration,
+  hostDeckRetentionBoundaryScopeChecksMigration,
   hostDeckSessionMetadataFailedStatusMigration,
   type StorageMigration
 } from "./migrations.js";

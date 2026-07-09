@@ -218,7 +218,11 @@ function cleanupOutputSessionInTransaction(
   for (const row of rows) {
     const rowBytes = outputRowByteLength(row);
 
-    if (retainedRows.length + 1 > policy.output_event_limit || retainedBytes + rowBytes > policy.output_byte_limit) {
+    if (retainedRows.length + 1 > policy.output_event_limit) {
+      break;
+    }
+
+    if (retainedRows.length > 0 && retainedBytes + rowBytes > policy.output_byte_limit) {
       break;
     }
 

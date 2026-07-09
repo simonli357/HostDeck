@@ -25,7 +25,8 @@ describe("SQLite migration runner", () => {
       expect(result.applied).toEqual([
         "202607080001_base_schema",
         "202607080002_session_metadata_failed_status",
-        "202607080003_auth_device_csrf_hash"
+        "202607080003_auth_device_csrf_hash",
+        "202607080004_retention_boundary_scope_checks"
       ]);
       expect(tableNames(db)).toEqual([
         "audit_events",
@@ -38,7 +39,7 @@ describe("SQLite migration runner", () => {
         "sessions",
         "settings"
       ]);
-      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 3 });
+      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 4 });
     } finally {
       db.close();
     }

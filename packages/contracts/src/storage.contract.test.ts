@@ -160,6 +160,32 @@ describe("output cursor and retention schemas", () => {
         applied_at: timestamp
       })
     ).toThrow();
+
+    expect(() =>
+      retentionBoundaryRecordSchema.parse({
+        id: "retention_audit_session",
+        scope: "audit",
+        session_id: sessionId,
+        reason: "event_limit",
+        truncated_before_cursor: null,
+        truncated_before_at: null,
+        retained_record_count: 10,
+        applied_at: timestamp
+      })
+    ).toThrow();
+
+    expect(() =>
+      retentionBoundaryRecordSchema.parse({
+        id: "retention_audit_cursor",
+        scope: "audit",
+        session_id: null,
+        reason: "event_limit",
+        truncated_before_cursor: 20,
+        truncated_before_at: null,
+        retained_record_count: 10,
+        applied_at: timestamp
+      })
+    ).toThrow();
   });
 });
 

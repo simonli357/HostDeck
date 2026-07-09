@@ -56,16 +56,16 @@ Owns durable local truth for sessions, settings, trust state, lock/LAN state, au
 | --- | --- | --- | --- |
 | Architecture spikes | `DAT-V1-001` to `DAT-V1-003` | Done | `artifacts/dat-v1-001-sqlite-driver-spike.md`, `artifacts/dat-v1-002-token-transport-spike.md`, `artifacts/dat-v1-003-retention-caps-spike.md`, `docs/tracking/backlog/local-state-auth-audit.md` |
 | Storage foundation | `DAT-V1-010` to `DAT-V1-017` | Done | `artifacts/dat-v1-010-sqlite-migration-runner.md`, `artifacts/dat-v1-011-settings-repository.md`, `artifacts/dat-v1-012-session-repositories.md`, `artifacts/dat-v1-013-auth-repositories.md`, `artifacts/dat-v1-014-audit-repository.md`, `artifacts/dat-v1-015-retention-repository.md`, `artifacts/dat-v1-016-restart-persistence.md`, `artifacts/dat-v1-017-branch-metadata.md`, `docs/tracking/backlog/local-state-auth-audit.md` |
-| Storage hardening | `DAT-V1-090` | Ready | `docs/tracking/backlog/local-state-auth-audit.md` |
+| Storage hardening | `DAT-V1-090` | Done | `artifacts/dat-v1-090-storage-hardening.md`, `docs/tracking/backlog/local-state-auth-audit.md` |
 
 ## Done Criteria
 
 - SQLite driver and migration approach are selected and recorded.
 - Durable session, auth, settings, audit, and retention records exist behind repositories.
 - Raw tokens are never stored; revoked/expired tokens cannot write.
-- Audit preflight blocks remote writes when audit storage is unavailable.
+- Storage exposes typed audit-unavailable failures; API write preflight remains in `IFC-V1-004`.
 - Retention boundaries are explicit to output/API/UI consumers.
-- Restart persistence supports tmux reconciliation without silently recreating sessions.
+- Restart persistence supplies durable records for tmux reconciliation without silently recreating sessions; live tmux target reconciliation remains in `INT-V1-015`.
 - Block evidence is recorded in this file, owning tasks, or artifacts.
 - V1 completion matrix in `00-index.md` is updated.
 

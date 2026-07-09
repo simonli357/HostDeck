@@ -222,6 +222,20 @@ export const retentionBoundaryRecordSchema = z
         message: "Output retention boundaries must record a cursor boundary."
       });
     }
+
+    if (value.scope === "audit" && value.session_id !== null) {
+      context.addIssue({
+        code: "custom",
+        message: "Audit retention boundaries must be global."
+      });
+    }
+
+    if (value.scope === "audit" && value.truncated_before_cursor !== null) {
+      context.addIssue({
+        code: "custom",
+        message: "Audit retention boundaries must not record an output cursor."
+      });
+    }
   });
 
 export const authDeviceRecordSchema = z
