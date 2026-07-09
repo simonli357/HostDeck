@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   type AbsoluteCwd,
   type IsoTimestamp,
@@ -312,10 +313,77 @@ describeRealTmux("real tmux adapter start", () => {
       tmuxSession: "hostdeck_sess_real_start_01"
     });
     await expect(adapter.listTargets()).resolves.toHaveLength(1);
-    await expectAdapterError(() => adapter.sendInput({ sessionId: id, text: "hello" }), "unsupported_operation");
-    await expectAdapterError(() => adapter.stopSession({ sessionId: id }), "unsupported_operation");
-    await expectAdapterError(() => adapter.attachMetadata({ sessionId: id }), "unsupported_operation");
     await expectAdapterError(() => adapter.readOutput({ sessionId: id }), "unsupported_operation");
+  });
+
+  it("sends literal input to exactly one real pane, exposes attach metadata, and stops explicitly", async () => {
+    const socketName = nextSocketName();
+    const cwd = tempDir();
+    const adapter = createRealTmuxAdapter({ socketName });
+    const command = fakeCodexCommand('while IFS= read -r line; do printf "%s\\n" "$line" >> "$1"; done\n');
+    const firstOutput = join(tempDir(), "first.log");
+    const secondOutput = join(tempDir(), "second.log");
+    const first = sessionId("sess_real_send_01");
+    const second = sessionId("sess_real_send_02");
+
+    await adapter.startSession({
+      sessionId: first,
+      sessionName: sessionName("send-first"),
+      cwd,
+      command: [command, firstOutput]
+    });
+    const secondTarget = await adapter.startSession({
+      sessionId: second,
+      sessionName: sessionName("send-second"),
+      cwd,
+      command: [command, secondOutput]
+    });
+
+    await expect(adapter.attachMetadata({ sessionId: second })).resolves.toMatchObject({
+      sessionId: second,
+      tmuxSession: "hostdeck_sess_real_send_02",
+      tmuxPane: secondTarget.tmuxPane,
+      command: ["tmux", "-L", socketName, "attach-session", "-t", "hostdeck_sess_real_send_02"]
+    });
+    await expect(adapter.sendInput({ sessionId: second, text: "only second" })).resolves.toMatchObject({
+      sessionId: second,
+      tmuxPane: secondTarget.tmuxPane,
+      text: "only second",
+      enter: true
+    });
+    await waitForFileText(secondOutput, "only second\n");
+    expect(readTextIfExists(firstOutput)).toBe("");
+    await expectAdapterError(() => adapter.sendInput({ sessionId: second, text: "" }), "invalid_target");
+
+    await expect(adapter.stopSession({ sessionId: second })).resolves.toMatchObject({
+      sessionId: second,
+      lifecycleState: "stopped",
+      staleReason: null
+    });
+    await expect(adapter.getTarget(second)).resolves.toBeNull();
+    await expectAdapterError(() => adapter.sendInput({ sessionId: second, text: "after stop" }), "missing_target");
+    await expect(adapter.listTargets()).resolves.toHaveLength(1);
+  });
+
+  it("rejects missing and stale real targets for send and attach", async () => {
+    const socketName = nextSocketName();
+    const cwd = tempDir();
+    const adapter = createRealTmuxAdapter({ socketName });
+    const id = sessionId("sess_real_stale_01");
+
+    await expectAdapterError(() => adapter.attachMetadata({ sessionId: id }), "missing_target");
+    await expectAdapterError(() => adapter.sendInput({ sessionId: id, text: "hello" }), "missing_target");
+
+    await adapter.startSession({
+      sessionId: id,
+      sessionName: sessionName("stale-real"),
+      cwd,
+      command: [fakeCodexCommand()]
+    });
+    killTmuxServer(socketName);
+
+    await expectAdapterError(() => adapter.attachMetadata({ sessionId: id }), "stale_target");
+    await expectAdapterError(() => adapter.sendInput({ sessionId: id, text: "hello" }), "stale_target");
   });
 
   it("rejects duplicate real session ids and in-process duplicate names", async () => {
@@ -517,6 +585,22 @@ function fakeCodexCommand(body = "printf 'fake codex ready\\n'\nsleep 60\n"): st
   writeFileSync(file, `#!/bin/sh\n${body}`, { mode: 0o700 });
   chmodSync(file, 0o700);
   return file;
+}
+
+async function waitForFileText(path: string, expected: string): Promise<void> {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if (readTextIfExists(path) === expected) {
+      return;
+    }
+
+    await delay(25);
+  }
+
+  expect(readTextIfExists(path)).toBe(expected);
+}
+
+function readTextIfExists(path: string): string {
+  return existsSync(path) ? readFileSync(path, "utf8") : "";
 }
 
 function startTmuxSession(socketName: string, tmuxSession: string, cwd: AbsoluteCwd, windowName: string): void {

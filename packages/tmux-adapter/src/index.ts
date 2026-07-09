@@ -337,6 +337,30 @@ export function createRealTmuxAdapter(options: RealTmuxAdapterOptions = {}): Tmu
     return (await discovery.reconcileTargets([...expectedTargets.values()])).liveTargets;
   }
 
+  async function requireKnownLiveTarget(sessionId: SessionId | string): Promise<TmuxTarget> {
+    const parsedSessionId = parseRequiredSessionId(sessionId);
+    const expected = expectedTargets.get(parsedSessionId);
+
+    if (expected === undefined) {
+      throw new HostDeckTmuxAdapterError("missing_target", `Tmux target for ${parsedSessionId} does not exist.`);
+    }
+
+    const reconciled = await discovery.reconcileTargets([expected]);
+    const stale = reconciled.staleTargets[0];
+
+    if (stale !== undefined) {
+      throw new HostDeckTmuxAdapterError("stale_target", `Tmux target for ${parsedSessionId} is stale: ${stale.staleReason}.`);
+    }
+
+    const target = reconciled.liveTargets[0];
+
+    if (target === undefined) {
+      throw new HostDeckTmuxAdapterError("stale_target", `Tmux target for ${parsedSessionId} is stale.`);
+    }
+
+    return target;
+  }
+
   return {
     async startSession(input) {
       const sessionId = parseRequiredSessionId(input.sessionId);
@@ -406,14 +430,50 @@ export function createRealTmuxAdapter(options: RealTmuxAdapterOptions = {}): Tmu
     async getTarget(sessionId) {
       return (await listKnownLiveTargets()).find((target) => target.sessionId === parseRequiredSessionId(sessionId)) ?? null;
     },
-    async sendInput() {
-      throw unsupportedRealOperation("sendInput", "INT-V1-013");
+    async sendInput(input) {
+      const text = parseTmuxInputText(input.text);
+      const target = await requireKnownLiveTarget(input.sessionId);
+      const sentAt = timestamp();
+
+      await runTmuxCommand(commandOptions, ["send-keys", "-t", target.tmuxPane, "-l", "--", text], { errorCode: "stale_target" });
+
+      if (input.enter ?? true) {
+        await runTmuxCommand(commandOptions, ["send-keys", "-t", target.tmuxPane, "Enter"], { errorCode: "stale_target" });
+      }
+
+      return {
+        sessionId: target.sessionId,
+        tmuxPane: target.tmuxPane,
+        text,
+        enter: input.enter ?? true,
+        sentAt
+      };
     },
-    async stopSession() {
-      throw unsupportedRealOperation("stopSession", "INT-V1-013");
+    async stopSession(input) {
+      const target = await requireKnownLiveTarget(input.sessionId);
+      const stoppedAt = timestamp();
+
+      await runTmuxCommand(commandOptions, ["kill-session", "-t", target.tmuxSession], { errorCode: "stale_target" });
+      expectedTargets.delete(target.sessionId);
+
+      return {
+        ...target,
+        lifecycleState: "stopped",
+        staleReason: null,
+        updatedAt: stoppedAt
+      };
     },
-    async attachMetadata() {
-      throw unsupportedRealOperation("attachMetadata", "INT-V1-013");
+    async attachMetadata(input) {
+      const target = await requireKnownLiveTarget(input.sessionId);
+      const socketArgs = options.socketName === undefined ? [] : ["-L", options.socketName];
+
+      return {
+        sessionId: target.sessionId,
+        tmuxSession: target.tmuxSession,
+        tmuxWindow: target.tmuxWindow,
+        tmuxPane: target.tmuxPane,
+        command: [tmuxBinary, ...socketArgs, "attach-session", "-t", target.tmuxSession]
+      };
     },
     async readOutput() {
       throw unsupportedRealOperation("readOutput", "INT-V1-014");
@@ -499,15 +559,12 @@ export function createFakeTmuxAdapter(options: FakeTmuxAdapterOptions = {}): Fak
       return target === undefined ? null : cloneTarget(target);
     },
     async sendInput(input) {
-      if (input.text.length === 0) {
-        throw new HostDeckTmuxAdapterError("invalid_target", "Tmux input text must not be empty.");
-      }
-
+      const text = parseTmuxInputText(input.text);
       const target = requireUsableTarget(parseRequiredSessionId(input.sessionId));
       const sent: TmuxSentInput = {
         sessionId: target.sessionId,
         tmuxPane: target.tmuxPane,
-        text: input.text,
+        text,
         enter: input.enter ?? true,
         sentAt: timestamp()
       };
@@ -838,6 +895,14 @@ function parseOutputLimit(limit: number): number {
   }
 
   return limit;
+}
+
+function parseTmuxInputText(text: string): string {
+  if (text.length === 0 || text.includes("\0")) {
+    throw new HostDeckTmuxAdapterError("invalid_target", "Tmux input text must be non-empty and must not contain NUL bytes.");
+  }
+
+  return text;
 }
 
 function normalizeCommand(command: readonly string[]): readonly [string, ...string[]] {
