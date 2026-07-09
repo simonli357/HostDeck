@@ -882,7 +882,7 @@ function requireParsed<T>(result: ValidationResult<T>, message: string): T {
 }
 
 function isMissingTmuxServerError(stderr: string): boolean {
-  return stderr.includes("No such file or directory") || stderr.includes("no server running");
+  return stderr.includes("No such file or directory") || stderr.includes("no server running") || stderr.includes("server exited unexpectedly");
 }
 
 function isMissingTmuxTargetError(stderr: string): boolean {

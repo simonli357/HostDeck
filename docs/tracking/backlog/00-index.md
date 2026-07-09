@@ -27,7 +27,7 @@ Track meaningful ordering dependencies here. Group files own exact task cards.
 | `DAT-V1-003` retention spike | `DAT-V1-015`, `INT-V1-014`, `FE-V1-015` | Resolved by `DEC-016`; output/audit retention and replay-boundary behavior use visible boundaries and exported default caps. |
 | `INT-V1-001` tmux capture spike | `INT-V1-014`, `IFC-V1-003`, output smoke tasks | Stream/replay implementation waits for capture mechanism and cursor semantics. |
 | `DAT-V1-010` to `DAT-V1-017` local state foundation | `INT-V1-015`, `IFC-V1-004`, release privacy checks | Restart, auth, audit, settings, and optional branch metadata are durable before write paths harden. |
-| `INT-V1-010` to `INT-V1-016` tmux/output foundation | `IFC-V1-003`, `IFC-V1-004`, `FE-V1-012`, real smoke tasks | API/CLI and dashboard read/write real managed session state through adapters. |
+| `INT-V1-010` to `INT-V1-016` tmux/output foundation and smoke | `INT-V1-090`, `IFC-V1-003`, `IFC-V1-004`, `FE-V1-012` | API/CLI and dashboard can consume real managed session state; tmux hardening remains before release gates. |
 | `IFC-V1-001` to `IFC-V1-014` API/CLI foundation | `FE-V1-010` to `FE-V1-021`, command reference tasks | Web and delivery docs consume stable local API and CLI behavior. |
 | `FE-V1-001` UI state matrix | `FE-V1-002` visual direction spike | Mockups are generated from approved state coverage, not before it. |
 | `FE-V1-002` and `FE-V1-003` visual direction approval | `FE-V1-010` to `FE-V1-021` UI implementation/fidelity | UI implementation waits for generated options, human selection, and recorded decision. |

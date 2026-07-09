@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `INT-V1-016` real Ubuntu tmux smoke path for managed sessions
+- Active task: `INT-V1-090` tmux lifecycle/output hardening
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
-- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart primitives, pairing/security API route foundation, and validation command wiring are complete; real tmux smoke is next.
-- Last validation: `command -v codex && codex --version && command -v tmux && tmux -V`, `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm --filter @hostdeck/server typecheck`, `pnpm test:unit -- packages/server/src/restart-reconciler.test.ts`, `pnpm lint`, `pnpm -r --if-present typecheck`, `pnpm test`, `pnpm test:contract`, and `git diff --check` passed for `INT-V1-015`.
-- Next action: Start `INT-V1-016` real Ubuntu tmux smoke path for managed sessions.
-- Blockers: Clean release tmux setup still needs later smoke/docs; visual mockups before UI implementation.
-- Last commit: `INT-V1-015` restart reconciliation commit.
-- Last push: `origin/main` after the `INT-V1-015` commit.
+- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart/smoke path, pairing/security API route foundation, and validation command wiring are complete; tmux lifecycle/output hardening is next.
+- Last validation: `command -v codex && codex --version && command -v tmux && tmux -V && lsb_release -ds && date -Iseconds`, `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm --filter @hostdeck/server typecheck`, `pnpm lint`, `pnpm -r --if-present typecheck`, `pnpm test`, `pnpm test:contract`, `pnpm test:tmux`, and `git diff --check` passed for `INT-V1-016`.
+- Next action: Start `INT-V1-090` tmux lifecycle/output hardening.
+- Blockers: Clean release tmux setup still needs later install/run/service smoke docs; visual mockups before UI implementation.
+- Last commit: `INT-V1-016` real tmux smoke commit.
+- Last push: `origin/main` after the `INT-V1-016` commit.
 
 ## What Is Proven
 
@@ -51,6 +51,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `INT-V1-013` added real tmux pane-targeted send, explicit stop, socket-aware attach metadata, and missing/stale target failures.
 - Implementation: `INT-V1-014` added live pipe capture, bounded capture reads, storage output append, replay-boundary response mapping, and observable output-reader failures.
 - Implementation: `INT-V1-015` added storage-backed restart reconciliation for live, missing, stopped, and unmanaged HostDeck tmux targets.
+- Implementation: `INT-V1-016` added required real Ubuntu tmux smoke coverage for managed start, attach metadata, send targeting, stop, output read, SQLite output drain, restart reconciliation, output-reader restart hook, and stale target behavior.
 - Implementation: `IFC-V1-005` added storage-backed pairing/security/network route handlers, revoked pairing-code support, CSRF-backed dashboard lock, and explicit remote unlock/LAN mutation rejection.
 - Release support: `REL-V1-001` wired validation command placeholders to future owner tasks and recorded command smoke evidence without claiming unavailable layers are implemented.
 - Planning/spike: `INT-V1-001` chose tmux `pipe-pane` for live output ingestion plus bounded `capture-pane` startup/restart recovery.
@@ -100,7 +101,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | INT-V1-013 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Real tmux send/stop/attach and `artifacts/int-v1-013-real-tmux-operations.md`. |
 | INT-V1-014 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Output reader/replay handoff and `artifacts/int-v1-014-output-reader.md`. |
 | INT-V1-015 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Restart reconciliation and `artifacts/int-v1-015-restart-reconciliation.md`. |
-| INT-V1-016 | Implementation | ready | `docs/tracking/backlog/tmux-output.md` | Next ready leaf: real Ubuntu tmux smoke path for managed sessions. |
+| INT-V1-016 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Real Ubuntu tmux smoke and `artifacts/int-v1-016-real-tmux-smoke.md`. |
+| INT-V1-090 | Hardening | ready | `docs/tracking/backlog/tmux-output.md` | Next ready leaf: tmux lifecycle/output hardening. |
 
 ## Decisions Needed
 

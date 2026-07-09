@@ -71,13 +71,14 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 32 | `INT-V1-013` Send, stop, and attach metadata operations | done | none | Real send, stop, and attach metadata operations target exact HostDeck tmux panes and fail loudly for missing/stale targets. |
 | 33 | `INT-V1-014` Output reader, cursor assignment, storage append, and replay-boundary handoff | done | none | Live pipe capture, bounded capture reads, storage append, replay-boundary mapping, and reader failure state are implemented. |
 | 34 | `INT-V1-015` Restart reconciliation between durable registry and live tmux targets | done | none | Restart reconciliation updates live durable sessions, marks missing ones stale, ignores stopped records, and reports unmanaged HostDeck-looking targets without import. |
-| 35 | `INT-V1-016` Real Ubuntu tmux smoke path for managed sessions | ready | none | Real start, attach, send, stop, output, and restart primitives exist; full smoke can exercise them together. |
+| 35 | `INT-V1-016` Real Ubuntu tmux smoke path for managed sessions | done | none | Real smoke now exercises start, attach metadata, send targeting, stop, output read, SQLite output drain, restart reconciliation, output-reader restart hook, and stale target behavior. |
+| 36 | `INT-V1-090` Tmux lifecycle/output hardening | ready | none | Real smoke is complete; tmux negative cases and repeated lifecycle behavior can now be hardened before API/CLI consumers and release gates rely on them. |
 
 ## Current Blocked Gates
 
 | Gate | Owning leaf task(s) | Requires | Blocker |
 | --- | --- | --- | --- |
-| Clean release tmux setup | `REL-V1-006` | clean Ubuntu install/run path | Current work can use user-local `tmux 3.4`; clean release setup still needs documented install/run smoke evidence. |
+| Clean release tmux setup | `REL-V1-006` | clean Ubuntu install/run path | User-local tmux smoke now passes on Ubuntu 24.04.4 LTS with `tmux 3.4`; clean release setup still needs documented install/run/service smoke evidence. |
 | UI visual direction | `FE-V1-002`, `FE-V1-003` | human acceptance | Mockups require UI state coverage first, then human selection before UI implementation. |
 | Release readiness | `REL-V1-005` to `REL-V1-010` | validation artifacts and human acceptance | Release tasks wait for module hardening, docs, smoke evidence, and go/no-go review. |
 

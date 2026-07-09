@@ -46,15 +46,15 @@ Owns the real process adapter for HostDeck-managed Codex sessions and ordered ou
 | Unit | Lifecycle transition helpers, target naming, stale/write eligibility integration. | Planned `pnpm test:unit` output. |
 | Integration | Fake adapter start/list/send/stop, output ordering/replay, restart reconciliation. | Planned `pnpm test:integration` output. |
 | System / E2E | Daemon starts real managed tmux sessions and API/CLI can observe them. | Later API/CLI and release smoke artifacts. |
-| Manual / device | Ubuntu tmux smoke with at least two sessions, attach, send, stop, restart, stale behavior. | Tmux smoke artifact. |
+| Manual / device | Ubuntu tmux smoke with at least two sessions, attach, send, stop, restart, stale behavior. | `artifacts/int-v1-016-real-tmux-smoke.md`; clean release install/run/service smoke remains in `REL-V1-006`. |
 
 ## Backlog Links
 
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
 | Tmux capture spike and adapter foundation | `INT-V1-001`, `INT-V1-010` to `INT-V1-013` | Done for adapter foundation: fake adapter, output capture spike, target primitives, managed start, send, stop, and attach are complete | `artifacts/int-v1-001-tmux-capture-spike.md`, `artifacts/int-v1-010-fake-tmux-adapter.md`, `artifacts/int-v1-011-real-tmux-targets.md`, `artifacts/int-v1-012-real-tmux-start.md`, `artifacts/int-v1-013-real-tmux-operations.md`, `docs/tracking/backlog/tmux-output.md` |
-| Output and restart | `INT-V1-014` to `INT-V1-016` | In progress: `INT-V1-014` and `INT-V1-015` done; full smoke next | `artifacts/int-v1-014-output-reader.md`, `artifacts/int-v1-015-restart-reconciliation.md`, `docs/tracking/backlog/tmux-output.md` |
-| Tmux hardening | `INT-V1-090` | Planned | `docs/tracking/backlog/tmux-output.md` |
+| Output and restart | `INT-V1-014` to `INT-V1-016` | Done: output reader, restart reconciliation, and real tmux smoke are complete | `artifacts/int-v1-014-output-reader.md`, `artifacts/int-v1-015-restart-reconciliation.md`, `artifacts/int-v1-016-real-tmux-smoke.md`, `docs/tracking/backlog/tmux-output.md` |
+| Tmux hardening | `INT-V1-090` | Ready | `docs/tracking/backlog/tmux-output.md` |
 
 ## Done Criteria
 

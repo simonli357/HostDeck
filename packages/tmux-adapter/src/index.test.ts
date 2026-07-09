@@ -487,6 +487,23 @@ describeRealTmux("real tmux adapter start", () => {
     await expect(discovery.listTargets()).resolves.toEqual([]);
   });
 
+  it("lists no targets after the last managed session is externally killed", async () => {
+    const socketName = nextSocketName();
+    const cwd = tempDir();
+    const adapter = createRealTmuxAdapter({ socketName });
+    const discovery = createRealTmuxTargetDiscovery({ socketName });
+    const target = await adapter.startSession({
+      sessionId: sessionId("sess_real_killed_last_01"),
+      sessionName: sessionName("killed-last"),
+      cwd,
+      command: [fakeCodexCommand()]
+    });
+
+    execFileSync("tmux", ["-L", socketName, "kill-session", "-t", target.tmuxSession], { stdio: "ignore" });
+
+    await expect(discovery.listTargets()).resolves.toEqual([]);
+  });
+
   it("fails loudly when tmux is unavailable during real start", async () => {
     const cwd = tempDir();
     const command = fakeCodexCommand();
