@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `REL-V1-002` developer-guide setup/service docs
+- Active task: `REL-V1-003` command reference update
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
-- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart/smoke path/hardening, pairing/security API route foundation, validation command wiring, headless startup/readiness, headless host/session/output read route contracts, headless one-session stream route contracts, headless write pipeline route contracts, aggregate API route/stream contract tests, CLI shell/API client foundation, localhost/LAN network smoke, CLI session commands, CLI pairing/lock/LAN commands, foreground service smoke, CLI command matrix, write rejection/failure-path integration coverage, and API/CLI module hardening are complete; release docs/setup tasks are next.
-- Last validation: `pnpm exec vitest run packages/server/src/host-service.test.ts tests/service-mode-smoke.test.ts`, `git diff --check`, `pnpm test:integration`, `pnpm typecheck`, `pnpm lint`, `pnpm test:unit`, `pnpm test:contract`, `pnpm check:scaffold`, and `pnpm test:tmux` passed for `IFC-V1-090`.
-- Next action: Start `REL-V1-002` developer-guide setup/service docs.
+- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart/smoke path/hardening, pairing/security API route foundation, validation command wiring, headless startup/readiness, headless host/session/output read route contracts, headless one-session stream route contracts, headless write pipeline route contracts, aggregate API route/stream contract tests, CLI shell/API client foundation, localhost/LAN network smoke, CLI session commands, CLI pairing/lock/LAN commands, foreground service smoke, CLI command matrix, write rejection/failure-path integration coverage, API/CLI module hardening, and developer-guide setup/service docs are complete; command reference docs are next.
+- Last validation: `pnpm install --frozen-lockfile`, `pnpm exec vitest run tests/service-mode-smoke.test.ts`, `pnpm check:scaffold`, `git diff --check`, and `pnpm lint` passed for `REL-V1-002`.
+- Next action: Start `REL-V1-003` command reference update.
 - Blockers: Clean release tmux setup still needs later install/run/service smoke docs; visual mockups before UI implementation.
-- Last commit: `IFC-V1-090` API/CLI hardening commit.
-- Last push: `origin/main` after the `IFC-V1-090` commit.
+- Last commit: `REL-V1-002` developer guide setup/service docs commit.
+- Last push: `origin/main` after the `REL-V1-002` commit.
 
 ## What Is Proven
 
@@ -68,6 +68,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `IFC-V1-014` added the integration test command plus write rejection/failure-path matrix for malformed, untrusted, read-only, locked, stale, stopped, crashed, unknown, unsupported slash, multi-session, audit-unavailable, tmux dispatch failure, and daemon-unavailable cases.
 - Hardening: `IFC-V1-090` registered foreground HTTP route families for host/session/output/stream/write/pairing/security/network, preserved loopback local-admin CLI routing and browser cookie+CSRF boundaries, proved CLI start/list/send/stop through the real service path, seeded restarted tmux adapters with reconciled targets, and recorded API/CLI hardening evidence.
 - Release support: `REL-V1-001` wired validation command placeholders to future owner tasks and recorded command smoke evidence without claiming unavailable layers are implemented.
+- Release support: `REL-V1-002` updated the developer guide with validated runtime/package-manager/tool versions, setup command, state/config defaults, foreground service behavior, LAN/safety notes, common failures, evidence links, and packaged-binary/service-wrapper gaps.
 - Planning/spike: `INT-V1-001` chose tmux `pipe-pane` for live output ingestion plus bounded `capture-pane` startup/restart recovery.
 - No end-to-end HostDeck dashboard or real Codex product workflow is proven yet; the CLI-to-foreground-service path is proven with the fake tmux adapter.
 
@@ -130,7 +131,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | IFC-V1-013 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | CLI command contract matrix and `artifacts/ifc-v1-013-cli-command-contracts.md`. |
 | IFC-V1-014 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Write rejection/failure-path integration tests and `artifacts/ifc-v1-014-write-rejection-integration.md`. |
 | IFC-V1-090 | Hardening | done | `docs/tracking/backlog/api-cli-control-plane.md` | API/CLI hardening and `artifacts/ifc-v1-090-api-cli-hardening.md`. |
-| REL-V1-002 | Release docs | ready | `docs/tracking/backlog/hardening-release.md` | Unblocked developer-guide setup/service docs after service-mode smoke. |
+| REL-V1-002 | Release docs | done | `docs/tracking/backlog/hardening-release.md` | Developer guide setup/service docs and `artifacts/rel-v1-002-developer-guide.md`. |
 | REL-V1-003 | Release docs | ready | `docs/tracking/backlog/hardening-release.md` | Unblocked command reference task after CLI and service-mode smoke; packaged-binary gap remains to handle in the task. |
 
 ## Decisions Needed
