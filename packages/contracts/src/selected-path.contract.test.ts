@@ -5,7 +5,10 @@ import {
   managedSessionProjectionSchema,
   pendingApprovalSchema,
   runtimeCompatibilitySchema,
+  selectedAuditActorSchema,
   selectedAuditEventRecordSchema,
+  selectedAuditTrailSchema,
+  selectedControlStateSchema,
   selectedOperationDispatchSchema,
   selectedOperationIntentSchema,
   selectedOperationProgressSchema,
@@ -22,6 +25,18 @@ const target = {
   type: "managed_session",
   session_id: "sess_contract_selected",
   codex_thread_id: "thread-contract-selected"
+} as const;
+const approvalTarget = {
+  type: "approval",
+  session_id: target.session_id,
+  codex_thread_id: target.codex_thread_id,
+  request_id: "approval:contract:1"
+} as const;
+const turnTarget = {
+  type: "turn",
+  session_id: target.session_id,
+  codex_thread_id: target.codex_thread_id,
+  turn_id: "turn-contract-1"
 } as const;
 
 function capabilities(overrides: Readonly<Record<string, "available" | "unavailable" | "unknown">> = {}) {
@@ -40,6 +55,7 @@ describe("selected runtime compatibility", () => {
     const result = runtimeCompatibilitySchema.parse({
       source: "codex_app_server",
       state: "ready",
+      mutation_policy: "allowed",
       observed_version: "0.144.0",
       binding_id: "codex-app-server-0.144.0:sha256:contract",
       capabilities: capabilities({ compact: "unavailable" }),
@@ -50,12 +66,44 @@ describe("selected runtime compatibility", () => {
     expect(result.capabilities.find((capability) => capability.name === "compact")?.state).toBe("unavailable");
   });
 
+  it("allows required mutations when only an optional capability is unknown", () => {
+    const result = runtimeCompatibilitySchema.parse({
+      source: "codex_app_server",
+      state: "degraded",
+      mutation_policy: "allowed",
+      observed_version: "0.144.0",
+      binding_id: "codex-app-server-0.144.0:sha256:contract",
+      capabilities: capabilities({ usage: "unknown" }),
+      checked_at: timestamp,
+      reason: "Optional usage capability could not be confirmed."
+    });
+
+    expect(result.mutation_policy).toBe("allowed");
+    expect(result.capabilities.find((capability) => capability.name === "usage")?.state).toBe("unknown");
+  });
+
+  it("rejects contradictory runtime mutation policy", () => {
+    expect(() =>
+      runtimeCompatibilitySchema.parse({
+        source: "codex_app_server",
+        state: "ready",
+        mutation_policy: "blocked",
+        observed_version: "0.144.0",
+        binding_id: "codex-app-server-0.144.0:sha256:contract",
+        capabilities: capabilities(),
+        checked_at: timestamp,
+        reason: null
+      })
+    ).toThrow();
+  });
+
   it("rejects ready or degraded states missing a required operation", () => {
     for (const state of ["ready", "degraded"] as const) {
       expect(() =>
         runtimeCompatibilitySchema.parse({
           source: "codex_app_server",
           state,
+          mutation_policy: "allowed",
           observed_version: "0.144.0",
           binding_id: "codex-app-server-0.144.0:sha256:contract",
           capabilities: capabilities({ plan: "unavailable" }),
@@ -72,6 +120,7 @@ describe("selected runtime compatibility", () => {
       runtimeCompatibilitySchema.parse({
         source: "codex_app_server",
         state: "incompatible",
+        mutation_policy: "blocked",
         observed_version: "0.144.0",
         binding_id: "codex-app-server-0.144.0:sha256:contract",
         capabilities: capabilities({ compact: "unavailable" }),
@@ -92,8 +141,8 @@ describe("selected structured operation contracts", () => {
       { kind: "usage" },
       { kind: "compact", confirm: true },
       { kind: "skills" },
-      { kind: "approval_response", request_id: "approval:contract:1", decision: "approve", confirm: true },
-      { kind: "interrupt", turn_id: "turn-contract-1", confirm: true },
+      { kind: "approval_response", target: approvalTarget, decision: "approve", confirm: true },
+      { kind: "interrupt", target: turnTarget, confirm: true },
       { kind: "archive", confirm: true }
     ];
 
@@ -115,6 +164,15 @@ describe("selected structured operation contracts", () => {
         target,
         kind: "raw_input",
         text: "rm -rf /"
+      })
+    ).toThrow();
+    expect(() =>
+      selectedOperationIntentSchema.parse({
+        operation_id: "op_contract_wrong1",
+        target,
+        kind: "approval_response",
+        decision: "approve",
+        confirm: true
       })
     ).toThrow();
     expect(() =>
@@ -158,8 +216,7 @@ describe("selected structured operation contracts", () => {
 
     expect(() =>
       pendingApprovalSchema.parse({
-        target,
-        request_id: "approval:contract:1",
+        target: approvalTarget,
         action: "Run package install",
         scope: "/workspace",
         reason: null,
@@ -169,6 +226,34 @@ describe("selected structured operation contracts", () => {
         created_at: timestamp,
         expires_at: null,
         decision: "deny"
+      })
+    ).toThrow();
+  });
+
+  it("keeps control availability consistent with negotiated capability state", () => {
+    expect(
+      selectedControlStateSchema.parse({
+        control: "compact",
+        capability: "compact",
+        capability_state: "unavailable",
+        availability: "unsupported",
+        phase: "idle",
+        current_value: null,
+        disabled_reason: "Compact is unavailable in this runtime.",
+        error: null
+      }).availability
+    ).toBe("unsupported");
+
+    expect(() =>
+      selectedControlStateSchema.parse({
+        control: "compact",
+        capability: "compact",
+        capability_state: "available",
+        availability: "unsupported",
+        phase: "idle",
+        current_value: null,
+        disabled_reason: "Contradictory capability state.",
+        error: null
       })
     ).toThrow();
   });
@@ -219,6 +304,30 @@ describe("selected structured operation contracts", () => {
         state: "incomplete",
         updated_at: laterTimestamp,
         turn_id: null,
+        error: null
+      })
+    ).toThrow();
+
+    expect(() =>
+      selectedOperationDispatchSchema.parse({
+        operation_id: "op_contract_interrupt",
+        kind: "interrupt",
+        target,
+        state: "accepted",
+        accepted_at: timestamp,
+        audit_record_id: "audit:contract:interrupt"
+      })
+    ).toThrow();
+
+    expect(() =>
+      selectedOperationTerminalOutcomeSchema.parse({
+        operation_id: "op_contract_interrupt",
+        kind: "interrupt",
+        target: turnTarget,
+        state: "succeeded",
+        finished_at: laterTimestamp,
+        turn_id: "turn-contract-other",
+        result_summary: "Interrupted.",
         error: null
       })
     ).toThrow();
@@ -318,6 +427,24 @@ describe("selected projection and storage contracts", () => {
         truncated: true
       })
     ).toThrow();
+
+    expect(() =>
+      selectedSessionEventStreamSchema.parse({
+        session_id: session.id,
+        events: [{ ...event, cursor: Number.MAX_SAFE_INTEGER + 1 }],
+        next_cursor: Number.MAX_SAFE_INTEGER + 1,
+        truncated: false
+      })
+    ).toThrow();
+  });
+
+  it("rejects calendar-normalized timestamps at the selected contract boundary", () => {
+    expect(() =>
+      managedSessionProjectionSchema.parse({
+        ...session,
+        updated_at: "2026-02-29T16:00:00.000Z"
+      })
+    ).toThrow();
   });
 
   it("stores selected mappings separately from explicitly marked legacy records", () => {
@@ -411,5 +538,177 @@ describe("selected projection and storage contracts", () => {
         }
       }).target.type
     ).toBe("approval");
+
+    expect(
+      selectedAuditEventRecordSchema.parse({
+        ...baseAudit,
+        action: "interrupt",
+        target: turnTarget,
+        payload_summary: {},
+        error_code: null
+      }).target.type
+    ).toBe("turn");
+    expect(() =>
+      selectedAuditEventRecordSchema.parse({
+        ...baseAudit,
+        action: "interrupt",
+        target,
+        payload_summary: {},
+        error_code: null
+      })
+    ).toThrow();
+  });
+
+  it("keeps local CLI and remote dashboard audit authority distinct", () => {
+    expect(
+      selectedAuditActorSchema.parse({
+        type: "cli",
+        device_id: null,
+        permission: "local_admin",
+        origin: null
+      }).type
+    ).toBe("cli");
+    expect(() =>
+      selectedAuditActorSchema.parse({
+        type: "cli",
+        device_id: "device:unexpected",
+        permission: "local_admin",
+        origin: "https://hostdeck.local"
+      })
+    ).toThrow();
+    expect(() =>
+      selectedAuditActorSchema.parse({
+        type: "dashboard",
+        device_id: "device:contract:1",
+        permission: "local_admin",
+        origin: "https://hostdeck.local"
+      })
+    ).toThrow();
+  });
+
+  it("accepts only coherent accepted-to-terminal audit trails", () => {
+    const accepted = {
+      id: "audit:contract:accepted",
+      operation_id: "op_contract_trail1",
+      at: timestamp,
+      actor: {
+        type: "dashboard",
+        device_id: "device:contract:1",
+        permission: "write",
+        origin: "https://hostdeck.local"
+      },
+      action: "prompt",
+      target,
+      phase: "accepted",
+      outcome: "accepted",
+      payload_summary: { text_length: 8 },
+      error_code: null
+    } as const;
+    const terminal = {
+      ...accepted,
+      id: "audit:contract:terminal",
+      at: laterTimestamp,
+      phase: "terminal",
+      outcome: "succeeded"
+    } as const;
+
+    expect(
+      selectedAuditTrailSchema.parse({
+        operation_id: accepted.operation_id,
+        state: "terminal",
+        records: [accepted, terminal]
+      }).state
+    ).toBe("terminal");
+    expect(
+      selectedAuditTrailSchema.parse({
+        operation_id: accepted.operation_id,
+        state: "terminal",
+        records: [
+          accepted,
+          {
+            ...terminal,
+            outcome: "incomplete",
+            error_code: "runtime_unavailable"
+          }
+        ]
+      }).records[1]
+    ).toMatchObject({ outcome: "incomplete", error_code: "runtime_unavailable" });
+    expect(
+      selectedAuditTrailSchema.parse({
+        operation_id: accepted.operation_id,
+        state: "terminal",
+        records: [accepted, { ...terminal, at: timestamp }]
+      }).state
+    ).toBe("terminal");
+    expect(
+      selectedAuditTrailSchema.parse({
+        operation_id: accepted.operation_id,
+        state: "pending",
+        records: [accepted]
+      }).state
+    ).toBe("pending");
+
+    const rejected = {
+      ...accepted,
+      id: "audit:contract:rejected",
+      phase: "terminal",
+      outcome: "rejected",
+      error_code: "validation_error"
+    } as const;
+    expect(
+      selectedAuditTrailSchema.parse({
+        operation_id: accepted.operation_id,
+        state: "terminal",
+        records: [rejected]
+      }).records
+    ).toHaveLength(1);
+
+    expect(() =>
+      selectedAuditTrailSchema.parse({
+        operation_id: accepted.operation_id,
+        state: "terminal",
+        records: [accepted]
+      })
+    ).toThrow();
+
+    expect(() =>
+      selectedAuditTrailSchema.parse({
+        operation_id: accepted.operation_id,
+        state: "terminal",
+        records: [accepted, { ...terminal, operation_id: "op_contract_other1" }]
+      })
+    ).toThrow();
+
+    expect(() =>
+      selectedAuditTrailSchema.parse({
+        operation_id: accepted.operation_id,
+        state: "terminal",
+        records: [terminal, accepted]
+      })
+    ).toThrow();
+
+    expect(() =>
+      selectedAuditTrailSchema.parse({
+        operation_id: accepted.operation_id,
+        state: "terminal",
+        records: [accepted, rejected]
+      })
+    ).toThrow();
+
+    expect(() =>
+      selectedAuditTrailSchema.parse({
+        operation_id: accepted.operation_id,
+        state: "terminal",
+        records: [accepted, { ...terminal, id: accepted.id }]
+      })
+    ).toThrow();
+
+    expect(() =>
+      selectedAuditTrailSchema.parse({
+        operation_id: accepted.operation_id,
+        state: "terminal",
+        records: [accepted, { ...terminal, at: "2026-07-09T15:59:59.999Z" }]
+      })
+    ).toThrow();
   });
 });

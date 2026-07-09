@@ -15,7 +15,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FND-V1-016` Harden selected core invariants | in_progress | none | Closes strict timestamp, cursor, transition, target, capability, and audit-outcome defects before selected consumers spread them. |
+| 1 | `FND-V1-091` Re-run selected foundation module hardening | in_progress | none | Closes the selected foundation matrix with cross-package, drift, unknown, concurrency, and generated-boundary evidence. |
 | 2 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the other blocking architecture boundary before auth/LAN/UI implementation. |
 | 3 | `DAT-V1-018` Migrate selected mappings and projections | ready | none | Gives selected threads, compatibility, projections, events, and legacy records a transactional durable owner. |
 | 4 | `INT-V1-003` Implement Codex binding and compatibility gate | ready | none | Establishes reviewed generated bindings and blocks incompatible required operations before IPC work. |
@@ -26,7 +26,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
-| Strict selected foundation | `FND-V1-016` | Current invariant hardening completion | Foundation hardening and downstream audit/projection guarantees. |
+| Selected foundation matrix | `FND-V1-091` | Aggregate module hardening completion | Downstream foundation confidence and release matrix evidence. |
 | LAN security | `IFC-V1-015` | Real phone certificate-enrollment proof | Auth lifecycle, pairing UI, security/release review. |
 | Real Codex semantics | `INT-V1-006` | Contracts, adapter, mapping, and thread lifecycle | Production operation API, mobile state matrix, approvals. |
 | Mobile visual direction | Reopened `FE-V1-002`, `FE-V1-003` | Real state matrix, two replacement options, human selection | React screen implementation. |

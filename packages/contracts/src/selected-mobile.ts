@@ -79,7 +79,7 @@ export const selectedHostAccessSchema = z
       value.access === "paired_write" &&
       !value.locked &&
       value.transport !== "certificate_error" &&
-      value.runtime.state === "ready";
+      value.runtime.mutation_policy === "allowed";
     if (value.writes_enabled !== writable) {
       context.addIssue({
         code: "custom",
@@ -329,6 +329,16 @@ export const selectedSessionDetailViewModelSchema = z
     }
     assertExactControls(value.primary_controls, ["model", "goal", "plan"], "primary_controls", context);
     assertExactControls(value.utility_controls, ["usage", "compact", "skills"], "utility_controls", context);
+    for (const [index, control] of [...value.primary_controls, ...value.utility_controls].entries()) {
+      const negotiated = value.host_access.runtime.capabilities.find((capability) => capability.name === control.capability);
+      if (negotiated?.state !== control.capability_state) {
+        context.addIssue({
+          code: "custom",
+          message: "Session Detail control state must match the negotiated runtime capability state.",
+          path: [index < value.primary_controls.length ? "primary_controls" : "utility_controls", index % 3]
+        });
+      }
+    }
     const riskyActions = new Set(value.risky_controls.map((control) => control.action));
     if (riskyActions.size !== 2 || !riskyActions.has("interrupt") || !riskyActions.has("archive")) {
       context.addIssue({ code: "custom", message: "Session Detail must expose distinct interrupt and archive controls." });

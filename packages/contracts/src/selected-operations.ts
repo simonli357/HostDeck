@@ -1,6 +1,7 @@
 import {
   operationCapability,
   runtimeCapabilities,
+  runtimeCapabilityStates,
   type SelectedOperationKind, 
   selectedAuditOutcomes,
   selectedOperationKinds,
@@ -12,6 +13,7 @@ import {
   absoluteCwdSchema,
   isoTimestampSchema,
   outputCursorSchema,
+  positiveSafeIntegerSchema,
   sessionIdSchema,
   sessionNameSchema
 } from "./scalars.js";
@@ -44,14 +46,38 @@ export const managedSessionTargetSchema = z
   })
   .strict();
 
-const operationBaseShape = {
+export const approvalOperationTargetSchema = z
+  .object({
+    type: z.literal("approval"),
+    session_id: sessionIdSchema,
+    codex_thread_id: codexThreadIdSchema,
+    request_id: runtimeRequestIdSchema
+  })
+  .strict();
+
+export const turnOperationTargetSchema = z
+  .object({
+    type: z.literal("turn"),
+    session_id: sessionIdSchema,
+    codex_thread_id: codexThreadIdSchema,
+    turn_id: codexTurnIdSchema
+  })
+  .strict();
+
+export const selectedOperationTargetSchema = z.discriminatedUnion("type", [
+  managedSessionTargetSchema,
+  approvalOperationTargetSchema,
+  turnOperationTargetSchema
+]);
+
+const managedOperationBaseShape = {
   operation_id: clientOperationIdSchema,
   target: managedSessionTargetSchema
 };
 
 export const promptOperationIntentSchema = z
   .object({
-    ...operationBaseShape,
+    ...managedOperationBaseShape,
     kind: z.literal("prompt"),
     text: z.string().trim().min(1).max(operationLimits.promptLength)
   })
@@ -59,7 +85,7 @@ export const promptOperationIntentSchema = z
 
 export const modelOperationIntentSchema = z
   .object({
-    ...operationBaseShape,
+    ...managedOperationBaseShape,
     kind: z.literal("model"),
     model_id: z.string().min(1).max(operationLimits.modelIdLength),
     reasoning_effort: z.string().min(1).max(operationLimits.effortLength).nullable()
@@ -68,7 +94,7 @@ export const modelOperationIntentSchema = z
 
 export const goalOperationIntentSchema = z
   .object({
-    ...operationBaseShape,
+    ...managedOperationBaseShape,
     kind: z.literal("goal"),
     action: z.enum(["set", "pause", "resume", "complete", "clear"]),
     objective: z.string().trim().min(1).max(operationLimits.goalLength).nullable()
@@ -85,7 +111,7 @@ export const goalOperationIntentSchema = z
 
 export const planOperationIntentSchema = z
   .object({
-    ...operationBaseShape,
+    ...managedOperationBaseShape,
     kind: z.literal("plan"),
     action: z.enum(["enter", "exit"])
   })
@@ -93,14 +119,14 @@ export const planOperationIntentSchema = z
 
 export const usageOperationIntentSchema = z
   .object({
-    ...operationBaseShape,
+    ...managedOperationBaseShape,
     kind: z.literal("usage")
   })
   .strict();
 
 export const compactOperationIntentSchema = z
   .object({
-    ...operationBaseShape,
+    ...managedOperationBaseShape,
     kind: z.literal("compact"),
     confirm: z.literal(true)
   })
@@ -108,16 +134,16 @@ export const compactOperationIntentSchema = z
 
 export const skillsOperationIntentSchema = z
   .object({
-    ...operationBaseShape,
+    ...managedOperationBaseShape,
     kind: z.literal("skills")
   })
   .strict();
 
 export const approvalResponseOperationIntentSchema = z
   .object({
-    ...operationBaseShape,
+    operation_id: clientOperationIdSchema,
+    target: approvalOperationTargetSchema,
     kind: z.literal("approval_response"),
-    request_id: runtimeRequestIdSchema,
     decision: z.enum(["approve", "deny"]),
     confirm: z.literal(true)
   })
@@ -125,16 +151,16 @@ export const approvalResponseOperationIntentSchema = z
 
 export const interruptOperationIntentSchema = z
   .object({
-    ...operationBaseShape,
+    operation_id: clientOperationIdSchema,
+    target: turnOperationTargetSchema,
     kind: z.literal("interrupt"),
-    turn_id: codexTurnIdSchema,
     confirm: z.literal(true)
   })
   .strict();
 
 export const archiveOperationIntentSchema = z
   .object({
-    ...operationBaseShape,
+    ...managedOperationBaseShape,
     kind: z.literal("archive"),
     confirm: z.literal(true)
   })
@@ -155,8 +181,7 @@ export const selectedOperationIntentSchema = z.discriminatedUnion("kind", [
 
 export const pendingApprovalSchema = z
   .object({
-    target: managedSessionTargetSchema,
-    request_id: runtimeRequestIdSchema,
+    target: approvalOperationTargetSchema,
     action: z.string().min(1).max(operationLimits.approvalFieldLength),
     scope: z.string().min(1).max(operationLimits.approvalFieldLength),
     reason: z.string().max(operationLimits.approvalFieldLength).nullable(),
@@ -186,7 +211,7 @@ export const pendingApprovalSchema = z
 const operationReceiptBaseShape = {
   operation_id: clientOperationIdSchema,
   kind: z.enum(selectedOperationKinds),
-  target: managedSessionTargetSchema
+  target: selectedOperationTargetSchema
 };
 
 export const selectedOperationAcceptedSchema = z
@@ -196,7 +221,8 @@ export const selectedOperationAcceptedSchema = z
     accepted_at: isoTimestampSchema,
     audit_record_id: z.string().min(1).max(120)
   })
-  .strict();
+  .strict()
+  .superRefine(assertOperationTargetMatchesKind);
 
 export const selectedOperationRejectedSchema = z
   .object({
@@ -205,7 +231,8 @@ export const selectedOperationRejectedSchema = z
     rejected_at: isoTimestampSchema,
     error: apiErrorEnvelopeSchema
   })
-  .strict();
+  .strict()
+  .superRefine(assertOperationTargetMatchesKind);
 
 export const selectedOperationDispatchSchema = z.discriminatedUnion("state", [
   selectedOperationAcceptedSchema,
@@ -223,6 +250,8 @@ export const selectedOperationTerminalOutcomeSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    assertOperationTargetMatchesKind(value, context);
+    assertOperationTurnIdentity(value, context);
     if (value.state === "succeeded" && value.error !== null) {
       context.addIssue({ code: "custom", message: "Succeeded operations must not carry an error." });
     }
@@ -241,6 +270,8 @@ export const selectedOperationProgressSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    assertOperationTargetMatchesKind(value, context);
+    assertOperationTurnIdentity(value, context);
     if (["failed", "incomplete"].includes(value.state) && value.error === null) {
       context.addIssue({ code: "custom", message: "Failed or incomplete operation progress must preserve a bounded cause." });
     }
@@ -253,6 +284,7 @@ export const selectedControlStateSchema = z
   .object({
     control: z.enum(structuredControlKinds),
     capability: z.enum(runtimeCapabilities),
+    capability_state: z.enum(runtimeCapabilityStates),
     availability: z.enum(["available", "unsupported", "unknown", "blocked"]),
     phase: z.enum(["idle", "loading", "success", "failure", "conflict"]),
     current_value: z.string().max(operationLimits.summaryLength).nullable(),
@@ -263,6 +295,15 @@ export const selectedControlStateSchema = z
   .superRefine((value, context) => {
     if (value.capability !== operationCapability(value.control)) {
       context.addIssue({ code: "custom", message: "Control state capability does not match its structured control." });
+    }
+    if (["available", "blocked"].includes(value.availability) && value.capability_state !== "available") {
+      context.addIssue({ code: "custom", message: "Available or policy-blocked controls require an available capability." });
+    }
+    if (value.availability === "unsupported" && value.capability_state !== "unavailable") {
+      context.addIssue({ code: "custom", message: "Unsupported controls require an unavailable capability." });
+    }
+    if (value.availability === "unknown" && value.capability_state !== "unknown") {
+      context.addIssue({ code: "custom", message: "Unknown controls require an unknown capability state." });
     }
     if (value.availability === "available" && value.disabled_reason !== null) {
       context.addIssue({ code: "custom", message: "Available controls must not carry a disabled reason." });
@@ -419,11 +460,14 @@ export const selectedSessionDetailResponseSchema = z
 export const selectedEventQuerySchema = z
   .object({
     after: outputCursorSchema.optional(),
-    limit: z.number().int().positive().max(500).optional()
+    limit: positiveSafeIntegerSchema.max(500).optional()
   })
   .strict();
 
 export type ManagedSessionTarget = z.infer<typeof managedSessionTargetSchema>;
+export type ApprovalOperationTarget = z.infer<typeof approvalOperationTargetSchema>;
+export type TurnOperationTarget = z.infer<typeof turnOperationTargetSchema>;
+export type SelectedOperationTarget = z.infer<typeof selectedOperationTargetSchema>;
 export type SelectedOperationIntent = z.infer<typeof selectedOperationIntentSchema>;
 export type SelectedOperationDispatch = z.infer<typeof selectedOperationDispatchSchema>;
 export type SelectedOperationTerminalOutcome = z.infer<typeof selectedOperationTerminalOutcomeSchema>;
@@ -434,4 +478,31 @@ export type SelectedStartSessionRequest = z.infer<typeof selectedStartSessionReq
 
 export function selectedOperationKind(intent: SelectedOperationIntent): SelectedOperationKind {
   return intent.kind;
+}
+
+function assertOperationTargetMatchesKind(
+  value: { readonly kind: SelectedOperationKind; readonly target: SelectedOperationTarget },
+  context: z.RefinementCtx
+): void {
+  const expectedTarget = value.kind === "approval_response" ? "approval" : value.kind === "interrupt" ? "turn" : "managed_session";
+  if (value.target.type !== expectedTarget) {
+    context.addIssue({
+      code: "custom",
+      message: `${value.kind} operations require one ${expectedTarget} target.`,
+      path: ["target"]
+    });
+  }
+}
+
+function assertOperationTurnIdentity(
+  value: { readonly kind: SelectedOperationKind; readonly target: SelectedOperationTarget; readonly turn_id: z.infer<typeof codexTurnIdSchema> | null },
+  context: z.RefinementCtx
+): void {
+  if (value.kind === "interrupt" && value.target.type === "turn" && value.turn_id !== value.target.turn_id) {
+    context.addIssue({
+      code: "custom",
+      message: "Interrupt outcomes must preserve the exact targeted turn id.",
+      path: ["turn_id"]
+    });
+  }
 }

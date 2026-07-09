@@ -14,6 +14,7 @@ import {
   bindModeSchema,
   detailValueSchema,
   isoTimestampSchema,
+  nonNegativeSafeIntegerSchema,
   outputCursorSchema,
   sessionIdSchema,
   sessionNameSchema
@@ -24,7 +25,16 @@ const streamStatusSchema = z.enum(["connected", "reconnecting", "closed"]);
 const authTransportSchema = z.enum(["none", "http_only_cookie"]);
 const csrfTokenSchema = z.string().min(32).max(256).regex(/^[a-zA-Z0-9._~-]+$/u);
 
-export { absoluteCwdSchema, bindModeSchema, isoTimestampSchema, outputCursorSchema, sessionIdSchema, sessionNameSchema };
+export { positiveSafeIntegerSchema } from "./scalars.js";
+export {
+  absoluteCwdSchema,
+  bindModeSchema,
+  isoTimestampSchema,
+  nonNegativeSafeIntegerSchema,
+  outputCursorSchema,
+  sessionIdSchema,
+  sessionNameSchema
+};
 
 export const apiErrorEnvelopeSchema = z
   .object({
@@ -86,7 +96,7 @@ export const hostStatusResponseSchema = z
         })
         .strict()
     ),
-    stale_session_count: z.number().int().nonnegative(),
+    stale_session_count: nonNegativeSafeIntegerSchema,
     last_error: apiErrorEnvelopeSchema.nullable()
   })
   .strict()
@@ -123,7 +133,7 @@ export const apiSessionSchema = z
       .object({
         text: z.string().max(12_000),
         cursor: outputCursorSchema.nullable(),
-        line_count: z.number().int().nonnegative(),
+        line_count: nonNegativeSafeIntegerSchema,
         truncated: z.boolean()
       })
       .strict()

@@ -20,6 +20,7 @@ import {
   selectedSessionEventStreamSchema
 } from "@hostdeck/contracts";
 import {
+  isSelectedMutationOperation,
   mobileAttentionPriority,
   operationCapability,
   type RuntimeCapability,
@@ -179,8 +180,12 @@ const boundarySession = sessionFixture("sess_select_boundary", "boundary", {
 });
 
 const approvalRequest = pendingApprovalSchema.parse({
-  target: targetFor(approvalSession),
-  request_id: "approval:fixture:1",
+  target: {
+    type: "approval",
+    session_id: approvalSession.id,
+    codex_thread_id: approvalSession.codex_thread_id,
+    request_id: "approval:fixture:1"
+  },
   action: "Run pnpm install --frozen-lockfile",
   scope: "/home/simonli/Videos/apps/HostDeck",
   reason: "Install the lockfile-defined workspace dependencies.",
@@ -215,7 +220,7 @@ export const selectedStructuredRuntimeFixtures: readonly StructuredRuntimeFixtur
     [
       eventFor(approvalSession, 3, {
         type: "approval",
-        request_id: approvalRequest.request_id,
+        request_id: approvalRequest.target.request_id,
         state: "pending",
         action: approvalRequest.action,
         scope: approvalRequest.scope,
@@ -319,6 +324,7 @@ export const requiredSelectedMobileFixtureIds = [
   "mission_control_loading",
   "mission_control_empty",
   "mission_control_ready",
+  "mission_control_read_only",
   "mission_control_offline",
   "mission_control_incompatible",
   "mission_control_certificate_error",
@@ -328,6 +334,7 @@ export const requiredSelectedMobileFixtureIds = [
   "mission_control_fatal",
   "session_detail_loading",
   "session_detail_ready",
+  "session_detail_read_only",
   "session_detail_offline",
   "session_detail_incompatible",
   "session_detail_certificate_error",
@@ -354,6 +361,11 @@ export type SelectedMobileFixture =
     };
 
 const readyHostAccess = hostAccessFixture();
+const readOnlyHostAccess = hostAccessFixture({
+  access: "paired_read_only",
+  reads_enabled: true,
+  writes_enabled: false
+});
 const offlineHostAccess = hostAccessFixture({
   runtime: disconnectedRuntimeCompatibility,
   stream_state: "disconnected",
@@ -367,7 +379,7 @@ const incompatibleHostAccess = hostAccessFixture({
 });
 const degradedHostAccess = hostAccessFixture({
   runtime: degradedRuntimeCompatibility,
-  writes_enabled: false,
+  writes_enabled: true,
   last_error: errorFixture("capability_unavailable", "Some optional Codex capabilities are unavailable.", false)
 });
 const lockedHostAccess = hostAccessFixture({
@@ -414,6 +426,7 @@ export const selectedMobileStateFixtures: readonly SelectedMobileFixture[] = [
   missionFixture("mission_control_loading", "loading", readyHostAccess, [], null),
   missionFixture("mission_control_empty", "empty", readyHostAccess, [], null),
   missionFixture("mission_control_ready", "ready", readyHostAccess, missionRows, null),
+  missionFixture("mission_control_read_only", "ready", readOnlyHostAccess, missionRows, null),
   missionFixture("mission_control_offline", "offline", offlineHostAccess, missionRows, "Showing the last committed projection."),
   missionFixture(
     "mission_control_incompatible",
@@ -453,6 +466,7 @@ export const selectedMobileStateFixtures: readonly SelectedMobileFixture[] = [
   ),
   unavailableDetailFixture("session_detail_loading", "loading", readyHostAccess, null),
   detailFixture("session_detail_ready", "ready", readyHostAccess, fixtureById("approval"), null, true),
+  detailFixture("session_detail_read_only", "ready", readOnlyHostAccess, fixtureById("completed"), null, false),
   detailFixture(
     "session_detail_offline",
     "offline",
@@ -496,7 +510,7 @@ export const selectedMobileStateFixtures: readonly SelectedMobileFixture[] = [
     degradedHostAccess,
     fixtureById("running"),
     "Some optional Codex capabilities are unavailable.",
-    false
+    true
   ),
   unavailableDetailFixture(
     "session_detail_fatal",
@@ -535,6 +549,7 @@ function compatibilityFixture(options: {
   return runtimeCompatibilitySchema.parse({
     source: "codex_app_server",
     state: options.state,
+    mutation_policy: options.state === "ready" || options.state === "degraded" ? "allowed" : "blocked",
     observed_version: "0.144.0",
     binding_id: "codex-app-server-0.144.0:sha256:fixture",
     capabilities: runtimeCapabilitySetSchema.parse(
@@ -622,14 +637,6 @@ function runtimeFixture(
   };
 }
 
-function targetFor(session: ManagedSessionProjection) {
-  return {
-    type: "managed_session" as const,
-    session_id: session.id,
-    codex_thread_id: session.codex_thread_id
-  };
-}
-
 function fixtureById(id: StructuredRuntimeFixtureId): StructuredRuntimeFixture {
   return structuredRuntimeFixtureById(id);
 }
@@ -692,14 +699,32 @@ function missionFixture(
   };
 }
 
-function controlFixture(control: StructuredControlKind, enabled: boolean) {
+function controlFixture(
+  control: StructuredControlKind,
+  mutationsEnabled: boolean,
+  readsEnabled: boolean,
+  compatibility: RuntimeCompatibility
+) {
+  const capability = operationCapability(control);
+  const capabilityState = compatibility.capabilities.find((entry) => entry.name === capability)?.state;
+  if (capabilityState === undefined) throw new TypeError(`Missing ${capability} capability in fixture compatibility.`);
+  const enabled = isSelectedMutationOperation(control) ? mutationsEnabled : readsEnabled;
+  const availability = capabilityState === "unavailable" ? "unsupported" : capabilityState === "unknown" ? "unknown" : enabled ? "available" : "blocked";
   return selectedControlStateSchema.parse({
     control,
-    capability: operationCapability(control),
-    availability: enabled ? (control === "compact" ? "unsupported" : "available") : "blocked",
+    capability,
+    capability_state: capabilityState,
+    availability,
     phase: "idle",
     current_value: control === "model" ? "gpt-5.5-codex" : control === "goal" ? "Active goal" : null,
-    disabled_reason: enabled && control !== "compact" ? null : control === "compact" ? "Compact is unavailable in this runtime." : "Remote controls are unavailable.",
+    disabled_reason:
+      availability === "available"
+        ? null
+        : availability === "unsupported"
+          ? `${control} is unavailable in this runtime.`
+          : availability === "unknown"
+            ? `${control} capability could not be confirmed.`
+            : "Remote controls are unavailable.",
     error: null
   });
 }
@@ -714,6 +739,7 @@ function detailFixture(
   options: { readonly boundary?: boolean } = {}
 ): SelectedMobileFixture {
   const resumeAvailable = hostAccess.runtime.state === "ready" || hostAccess.runtime.state === "degraded";
+  const readsEnabled = hostAccess.reads_enabled && resumeAvailable;
   return {
     id,
     surface: "session_detail",
@@ -731,8 +757,12 @@ function detailFixture(
         disabled_reason: controlsEnabled ? null : "Remote controls are unavailable.",
         error: null
       },
-      primary_controls: ["model", "goal", "plan"].map((control) => controlFixture(control as StructuredControlKind, controlsEnabled)),
-      utility_controls: ["usage", "compact", "skills"].map((control) => controlFixture(control as StructuredControlKind, controlsEnabled)),
+      primary_controls: ["model", "goal", "plan"].map((control) =>
+        controlFixture(control as StructuredControlKind, controlsEnabled, readsEnabled, hostAccess.runtime)
+      ),
+      utility_controls: ["usage", "compact", "skills"].map((control) =>
+        controlFixture(control as StructuredControlKind, controlsEnabled, readsEnabled, hostAccess.runtime)
+      ),
       risky_controls: ["interrupt", "archive"].map((action) => ({
         action,
         enabled: controlsEnabled,
@@ -781,8 +811,12 @@ function unavailableDetailFixture(
         disabled_reason: "Session data is unavailable.",
         error: null
       },
-      primary_controls: ["model", "goal", "plan"].map((control) => controlFixture(control as StructuredControlKind, false)),
-      utility_controls: ["usage", "compact", "skills"].map((control) => controlFixture(control as StructuredControlKind, false)),
+      primary_controls: ["model", "goal", "plan"].map((control) =>
+        controlFixture(control as StructuredControlKind, false, false, hostAccess.runtime)
+      ),
+      utility_controls: ["usage", "compact", "skills"].map((control) =>
+        controlFixture(control as StructuredControlKind, false, false, hostAccess.runtime)
+      ),
       risky_controls: ["interrupt", "archive"].map((action) => ({
         action,
         enabled: false,

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  canTransitionManagedSession,
+  evaluateSelectedOperationEligibility,
   isSelectedMutationOperation,
   isSelectedOperationKind,
   mobileAttentionPriority,
@@ -11,6 +13,7 @@ import {
   parseRuntimeRequestId,
   requiredRuntimeCapabilities,
   runtimeCapabilities,
+  runtimeCapabilityRequirement,
   selectedAuditOutcomes,
   selectedOperationKinds
 } from "./selected-runtime.js";
@@ -71,6 +74,8 @@ describe("selected structured operations", () => {
     expect(requiredRuntimeCapabilities).not.toContain("compact");
     expect(requiredRuntimeCapabilities).not.toContain("skills");
     expect(runtimeCapabilities).toEqual(expect.arrayContaining([...requiredRuntimeCapabilities, "usage", "compact", "skills"]));
+    expect(runtimeCapabilityRequirement("plan")).toBe("required");
+    expect(runtimeCapabilityRequirement("compact")).toBe("optional");
   });
 
   it("orders phone attention according to the Mission Control contract", () => {
@@ -90,5 +95,72 @@ describe("selected structured operations", () => {
 
   it("keeps accepted and terminal audit outcomes distinct", () => {
     expect(selectedAuditOutcomes).toEqual(["accepted", "succeeded", "failed", "rejected", "incomplete"]);
+  });
+});
+
+describe("selected managed-session transitions", () => {
+  it("separates normal actions from reconciliation observations", () => {
+    expect(canTransitionManagedSession("starting", "active", "normal")).toBe(true);
+    expect(canTransitionManagedSession("active", "archived", "normal")).toBe(true);
+    expect(canTransitionManagedSession("active", "stale", "normal")).toBe(false);
+    expect(canTransitionManagedSession("active", "stale", "reconciliation")).toBe(true);
+    expect(canTransitionManagedSession("stale", "active", "reconciliation")).toBe(true);
+    expect(canTransitionManagedSession("archived", "active", "reconciliation")).toBe(false);
+  });
+
+  it("keeps repeated transitions deterministic in both modes", () => {
+    expect(canTransitionManagedSession("active", "active", "normal")).toBe(true);
+    expect(canTransitionManagedSession("stale", "stale", "reconciliation")).toBe(true);
+  });
+});
+
+describe("selected operation eligibility", () => {
+  const readyInput = {
+    targetResolution: "resolved",
+    sessionState: "active",
+    freshness: "current",
+    runtimeState: "ready",
+    runtimeMutationPolicy: "allowed",
+    capabilityState: "available"
+  } as const;
+
+  it("allows one resolved, current, compatible target with an available capability", () => {
+    expect(evaluateSelectedOperationEligibility("prompt", readyInput)).toEqual({ ok: true, capability: "turn_input" });
+  });
+
+  it.each([
+    [{ ...readyInput, targetResolution: "missing" as const }, "target_missing"],
+    [{ ...readyInput, targetResolution: "mismatch" as const }, "target_mismatch"],
+    [{ ...readyInput, sessionState: "starting" as const }, "session_starting"],
+    [{ ...readyInput, sessionState: "archived" as const }, "session_archived"],
+    [{ ...readyInput, sessionState: "stale" as const }, "session_stale"],
+    [{ ...readyInput, sessionState: "incompatible" as const }, "session_incompatible"],
+    [{ ...readyInput, sessionState: "unknown" as const }, "session_unknown"],
+    [{ ...readyInput, freshness: "disconnected" as const }, "projection_stale"],
+    [{ ...readyInput, runtimeMutationPolicy: "blocked" as const }, "runtime_mutations_blocked"],
+    [{ ...readyInput, runtimeState: "incompatible" as const }, "runtime_incompatible"],
+    [{ ...readyInput, runtimeState: "disconnected" as const }, "runtime_disconnected"],
+    [{ ...readyInput, capabilityState: "unavailable" as const }, "capability_unavailable"],
+    [{ ...readyInput, capabilityState: "unknown" as const }, "capability_unknown"]
+  ])("rejects an ineligible operation with the exact reason", (input, reason) => {
+    expect(evaluateSelectedOperationEligibility("goal", input)).toMatchObject({ ok: false, capability: "goal", reason });
+  });
+
+  it("allows proven operations when only optional runtime capability state is degraded", () => {
+    expect(evaluateSelectedOperationEligibility("prompt", { ...readyInput, runtimeState: "degraded" })).toEqual({
+      ok: true,
+      capability: "turn_input"
+    });
+  });
+
+  it("keeps read-only utilities available when only mutations are blocked", () => {
+    expect(evaluateSelectedOperationEligibility("usage", { ...readyInput, runtimeMutationPolicy: "blocked" })).toEqual({
+      ok: true,
+      capability: "usage"
+    });
+    expect(evaluateSelectedOperationEligibility("skills", { ...readyInput, runtimeMutationPolicy: "blocked" })).toEqual({
+      ok: true,
+      capability: "skills"
+    });
   });
 });

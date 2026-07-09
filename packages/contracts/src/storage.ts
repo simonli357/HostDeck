@@ -4,7 +4,9 @@ import {
   absoluteCwdSchema,
   bindModeSchema,
   isoTimestampSchema,
+  nonNegativeSafeIntegerSchema,
   outputCursorSchema,
+  positiveSafeIntegerSchema,
   sessionIdSchema,
   sessionNameSchema
 } from "./scalars.js";
@@ -101,7 +103,7 @@ export const defaultRetentionPolicy = {
 export const settingsRecordSchema = z
   .object({
     id: z.literal("hostdeck_settings"),
-    schema_version: z.number().int().positive(),
+    schema_version: positiveSafeIntegerSchema,
     state_dir: absoluteCwdSchema,
     bind_mode: bindModeSchema,
     bind_host: z.string().min(1).max(253),
@@ -176,7 +178,7 @@ export const outputEventRecordSchema = z
   .object({
     session_id: sessionIdSchema,
     cursor: outputCursorSchema,
-    order: z.number().int().nonnegative(),
+    order: nonNegativeSafeIntegerSchema,
     captured_at: isoTimestampSchema.nullable(),
     kind: outputEventKindSchema,
     payload: z.string().max(storageLimits.outputTextLength).nullable(),
@@ -207,7 +209,7 @@ export const retentionBoundaryRecordSchema = z
     reason: retentionReasonSchema,
     truncated_before_cursor: outputCursorSchema.nullable(),
     truncated_before_at: isoTimestampSchema.nullable(),
-    retained_record_count: z.number().int().nonnegative(),
+    retained_record_count: nonNegativeSafeIntegerSchema,
     applied_at: isoTimestampSchema
   })
   .strict()

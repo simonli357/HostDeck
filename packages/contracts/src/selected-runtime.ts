@@ -20,6 +20,7 @@ import {
   runtimeCapabilities,
   runtimeCapabilityStates,
   runtimeConnectionStates,
+  runtimeMutationPolicies,
   selectedRuntimeSource,
   structuredControlKinds,
   turnStates
@@ -120,6 +121,7 @@ export const runtimeCompatibilitySchema = z
   .object({
     source: z.literal(selectedRuntimeSource),
     state: z.enum(runtimeConnectionStates),
+    mutation_policy: z.enum(runtimeMutationPolicies),
     observed_version: codexVersionSchema.nullable(),
     binding_id: bindingIdentitySchema.nullable(),
     capabilities: runtimeCapabilitySetSchema,
@@ -153,6 +155,12 @@ export const runtimeCompatibilitySchema = z
 
     if (value.state === "ready" && value.reason !== null) {
       context.addIssue({ code: "custom", message: "Ready runtime compatibility must not carry a failure reason." });
+    }
+    if (value.state === "ready" && value.mutation_policy !== "allowed") {
+      context.addIssue({ code: "custom", message: "Ready runtime compatibility must allow selected mutations." });
+    }
+    if (["incompatible", "disconnected"].includes(value.state) && value.mutation_policy !== "blocked") {
+      context.addIssue({ code: "custom", message: "Incompatible or disconnected runtimes cannot allow mutations." });
     }
     if (value.state !== "ready" && value.reason === null) {
       context.addIssue({ code: "custom", message: "Non-ready runtime compatibility must include a reason." });

@@ -92,6 +92,7 @@ export type ValidationIssueCode =
   | "invalid_format"
   | "not_absolute"
   | "not_integer"
+  | "unsafe_integer"
   | "negative";
 
 export type ValidationResult<T> =
@@ -103,13 +104,23 @@ const sessionNamePattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/u;
 const isoTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
 const allowedLifecycleTransitions: Readonly<Record<LifecycleState, readonly LifecycleState[]>> = {
-  starting: ["running", "stopping", "stopped", "crashed", "stale", "unknown"],
-  running: ["stopping", "stopped", "crashed", "stale", "unknown"],
+  starting: ["running", "stopping", "stopped", "crashed"],
+  running: ["stopping", "stopped", "crashed"],
+  stopping: ["stopped", "crashed"],
+  stopped: [],
+  crashed: [],
+  stale: [],
+  unknown: []
+};
+
+const allowedLifecycleReconciliations: Readonly<Record<LifecycleState, readonly LifecycleState[]>> = {
+  starting: ["running", "stopped", "crashed", "stale", "unknown"],
+  running: ["stopped", "crashed", "stale", "unknown"],
   stopping: ["stopped", "crashed", "stale", "unknown"],
   stopped: [],
-  crashed: ["stale"],
-  stale: [],
-  unknown: ["starting", "running", "stale"]
+  crashed: ["stale", "unknown"],
+  stale: ["running", "stopped", "crashed", "unknown"],
+  unknown: ["starting", "running", "stopping", "stopped", "crashed", "stale"]
 };
 
 const attentionPriorityByLevel: Readonly<Record<AttentionLevel, number>> = {
@@ -191,7 +202,7 @@ export function parseIsoTimestamp(value: string): ValidationResult<IsoTimestamp>
 
   const parsedTime = Date.parse(value);
 
-  if (Number.isNaN(parsedTime)) {
+  if (Number.isNaN(parsedTime) || new Date(parsedTime).toISOString() !== value) {
     return invalid("invalid_format", "Timestamp must be a valid date.");
   }
 
@@ -207,6 +218,10 @@ export function parseOutputCursor(value: number): ValidationResult<OutputCursor>
     return invalid("negative", "Output cursor must be non-negative.");
   }
 
+  if (!Number.isSafeInteger(value)) {
+    return invalid("unsafe_integer", "Output cursor must be a safe integer.");
+  }
+
   return valid(value as OutputCursor);
 }
 
@@ -220,6 +235,14 @@ export function canTransitionLifecycle(from: LifecycleState, to: LifecycleState)
   }
 
   return allowedLifecycleTransitions[from].includes(to);
+}
+
+export function canReconcileLifecycle(from: LifecycleState, to: LifecycleState): boolean {
+  if (from === to) {
+    return true;
+  }
+
+  return allowedLifecycleReconciliations[from].includes(to);
 }
 
 export function attentionForStatus(status: SessionStatus): AttentionLevel {

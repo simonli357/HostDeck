@@ -140,6 +140,18 @@ describe("output cursor and retention schemas", () => {
       outputEventRecordSchema.parse({
         session_id: sessionId,
         cursor: 1,
+        order: Number.MAX_SAFE_INTEGER + 1,
+        captured_at: timestamp,
+        kind: "output",
+        payload: "unsafe order",
+        truncated_before: null
+      })
+    ).toThrow();
+
+    expect(() =>
+      outputEventRecordSchema.parse({
+        session_id: sessionId,
+        cursor: 1,
         order: 0,
         captured_at: timestamp,
         kind: "output",

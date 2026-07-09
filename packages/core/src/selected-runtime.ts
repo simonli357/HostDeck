@@ -35,6 +35,9 @@ export type ProjectionFreshness = (typeof projectionFreshnessStates)[number];
 export const runtimeConnectionStates = ["ready", "degraded", "incompatible", "disconnected"] as const;
 export type RuntimeConnectionState = (typeof runtimeConnectionStates)[number];
 
+export const runtimeMutationPolicies = ["allowed", "blocked"] as const;
+export type RuntimeMutationPolicy = (typeof runtimeMutationPolicies)[number];
+
 export const runtimeCapabilities = [
   "thread_lifecycle",
   "turn_input",
@@ -62,6 +65,7 @@ export const requiredRuntimeCapabilities = [
   "approvals",
   "multi_client"
 ] as const satisfies readonly RuntimeCapability[];
+export type RuntimeCapabilityRequirement = "required" | "optional";
 
 export const runtimeCapabilityStates = ["available", "unavailable", "unknown"] as const;
 export type RuntimeCapabilityState = (typeof runtimeCapabilityStates)[number];
@@ -127,6 +131,39 @@ export type ProjectionEventKind = (typeof projectionEventKinds)[number];
 export const projectionContentStates = ["complete", "redacted", "truncated", "redacted_and_truncated"] as const;
 export type ProjectionContentState = (typeof projectionContentStates)[number];
 
+export const managedSessionTransitionModes = ["normal", "reconciliation"] as const;
+export type ManagedSessionTransitionMode = (typeof managedSessionTransitionModes)[number];
+
+export const selectedOperationDenialReasons = [
+  "target_missing",
+  "target_mismatch",
+  "session_starting",
+  "session_archived",
+  "session_stale",
+  "session_incompatible",
+  "session_unknown",
+  "projection_stale",
+  "runtime_mutations_blocked",
+  "runtime_incompatible",
+  "runtime_disconnected",
+  "capability_unavailable",
+  "capability_unknown"
+] as const;
+export type SelectedOperationDenialReason = (typeof selectedOperationDenialReasons)[number];
+
+export interface SelectedOperationEligibilityInput {
+  readonly targetResolution: "resolved" | "missing" | "mismatch";
+  readonly sessionState: ManagedSessionState;
+  readonly freshness: ProjectionFreshness;
+  readonly runtimeState: RuntimeConnectionState;
+  readonly runtimeMutationPolicy: RuntimeMutationPolicy;
+  readonly capabilityState: RuntimeCapabilityState;
+}
+
+export type SelectedOperationEligibility =
+  | { readonly ok: true; readonly capability: RuntimeCapability }
+  | { readonly ok: false; readonly capability: RuntimeCapability; readonly reason: SelectedOperationDenialReason };
+
 const mobileAttentionPriorityByLevel = {
   needs_approval: 60,
   needs_input: 50,
@@ -140,6 +177,25 @@ const mobileAttentionPriorityByLevel = {
 const opaqueRuntimeIdPattern = /^\S{1,128}$/u;
 const clientOperationIdPattern = /^op_[a-z0-9][a-z0-9_-]{7,95}$/u;
 const mutationOperationSet = new Set<string>(selectedMutationOperationKinds);
+const requiredCapabilitySet = new Set<RuntimeCapability>(requiredRuntimeCapabilities);
+
+const normalManagedSessionTransitions: Readonly<Record<ManagedSessionState, readonly ManagedSessionState[]>> = {
+  starting: ["active"],
+  active: ["archived"],
+  archived: [],
+  stale: [],
+  incompatible: [],
+  unknown: []
+};
+
+const reconciliationManagedSessionTransitions: Readonly<Record<ManagedSessionState, readonly ManagedSessionState[]>> = {
+  starting: ["active", "archived", "stale", "incompatible", "unknown"],
+  active: ["archived", "stale", "incompatible", "unknown"],
+  archived: [],
+  stale: ["active", "archived", "incompatible", "unknown"],
+  incompatible: ["active", "archived", "stale", "unknown"],
+  unknown: ["active", "archived", "stale", "incompatible"]
+};
 
 export function parseCodexThreadId(value: string): ValidationResult<CodexThreadId> {
   return parseOpaqueRuntimeId(value, "Codex thread id", (id) => id as CodexThreadId);
@@ -206,6 +262,64 @@ export function operationCapability(kind: SelectedOperationKind): RuntimeCapabil
   }
 }
 
+export function runtimeCapabilityRequirement(capability: RuntimeCapability): RuntimeCapabilityRequirement {
+  return requiredCapabilitySet.has(capability) ? "required" : "optional";
+}
+
+export function canTransitionManagedSession(
+  from: ManagedSessionState,
+  to: ManagedSessionState,
+  mode: ManagedSessionTransitionMode
+): boolean {
+  if (from === to) return true;
+  const transitions = mode === "normal" ? normalManagedSessionTransitions : reconciliationManagedSessionTransitions;
+  return transitions[from].includes(to);
+}
+
+export function evaluateSelectedOperationEligibility(
+  kind: SelectedOperationKind,
+  input: SelectedOperationEligibilityInput
+): SelectedOperationEligibility {
+  const capability = operationCapability(kind);
+  if (input.targetResolution === "missing") return denied(capability, "target_missing");
+  if (input.targetResolution === "mismatch") return denied(capability, "target_mismatch");
+
+  switch (input.sessionState) {
+    case "starting":
+      return denied(capability, "session_starting");
+    case "archived":
+      return denied(capability, "session_archived");
+    case "stale":
+      return denied(capability, "session_stale");
+    case "incompatible":
+      return denied(capability, "session_incompatible");
+    case "unknown":
+      return denied(capability, "session_unknown");
+    case "active":
+      break;
+  }
+
+  if (input.freshness !== "current") return denied(capability, "projection_stale");
+
+  switch (input.runtimeState) {
+    case "incompatible":
+      return denied(capability, "runtime_incompatible");
+    case "disconnected":
+      return denied(capability, "runtime_disconnected");
+    case "degraded":
+    case "ready":
+      break;
+  }
+
+  if (input.runtimeMutationPolicy === "blocked" && isSelectedMutationOperation(kind)) {
+    return denied(capability, "runtime_mutations_blocked");
+  }
+
+  if (input.capabilityState === "unavailable") return denied(capability, "capability_unavailable");
+  if (input.capabilityState === "unknown") return denied(capability, "capability_unknown");
+  return { ok: true, capability };
+}
+
 export function mobileAttentionPriority(level: keyof typeof mobileAttentionPriorityByLevel): number {
   return mobileAttentionPriorityByLevel[level];
 }
@@ -231,6 +345,10 @@ function hasControlCharacter(value: string): boolean {
     const codePoint = character.codePointAt(0);
     return codePoint !== undefined && (codePoint <= 31 || codePoint === 127);
   });
+}
+
+function denied(capability: RuntimeCapability, reason: SelectedOperationDenialReason): SelectedOperationEligibility {
+  return { ok: false, capability, reason };
 }
 
 function valid<T>(value: T): ValidationResult<T> {

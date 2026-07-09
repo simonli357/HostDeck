@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   attentionForStatus,
   attentionPriority,
+  canReconcileLifecycle,
   canTransitionLifecycle,
   hasSessionNameCollision,
   isSessionId,
@@ -68,7 +69,12 @@ describe("session metadata validation", () => {
   it("validates timestamps and output cursors", () => {
     expect(parseIsoTimestamp("2026-07-08T18:00:00.000Z")).toMatchObject({ ok: true });
     expect(parseIsoTimestamp("2026-07-08")).toMatchObject({ ok: false, code: "invalid_format" });
+    expect(parseIsoTimestamp("2026-02-29T18:00:00.000Z")).toMatchObject({ ok: false, code: "invalid_format" });
+    expect(parseIsoTimestamp("2026-04-31T18:00:00.000Z")).toMatchObject({ ok: false, code: "invalid_format" });
+    expect(parseIsoTimestamp("2024-02-29T18:00:00.000Z")).toMatchObject({ ok: true });
     expect(parseOutputCursor(0)).toMatchObject({ ok: true });
+    expect(parseOutputCursor(Number.MAX_SAFE_INTEGER)).toMatchObject({ ok: true });
+    expect(parseOutputCursor(Number.MAX_SAFE_INTEGER + 1)).toMatchObject({ ok: false, code: "unsafe_integer" });
     expect(parseOutputCursor(1.5)).toMatchObject({ ok: false, code: "not_integer" });
     expect(parseOutputCursor(-1)).toMatchObject({ ok: false, code: "negative" });
   });
@@ -77,9 +83,12 @@ describe("session metadata validation", () => {
 describe("lifecycle and advisory status", () => {
   it("allows only explicit lifecycle transitions", () => {
     expect(canTransitionLifecycle("starting", "running")).toBe(true);
-    expect(canTransitionLifecycle("running", "stale")).toBe(true);
+    expect(canTransitionLifecycle("running", "stale")).toBe(false);
+    expect(canReconcileLifecycle("running", "stale")).toBe(true);
     expect(canTransitionLifecycle("stopped", "running")).toBe(false);
     expect(canTransitionLifecycle("stale", "running")).toBe(false);
+    expect(canReconcileLifecycle("stale", "running")).toBe(true);
+    expect(canReconcileLifecycle("stopped", "running")).toBe(false);
   });
 
   it("treats only running sessions as writable at the lifecycle level", () => {

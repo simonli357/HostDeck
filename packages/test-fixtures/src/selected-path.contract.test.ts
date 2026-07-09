@@ -108,6 +108,29 @@ describe("selected mobile fixture inventory", () => {
     expect(fixture.viewModel.approvals).toHaveLength(1);
   });
 
+  it("keeps required controls writable while an optional degraded capability stays unknown", () => {
+    const fixture = requireSurface(selectedMobileFixtureById("session_detail_degraded"), "session_detail");
+
+    expect(fixture.viewModel.host_access.writes_enabled).toBe(true);
+    expect(fixture.viewModel.prompt.enabled).toBe(true);
+    expect(fixture.viewModel.primary_controls.every((control) => control.availability === "available")).toBe(true);
+    expect(fixture.viewModel.utility_controls.find((control) => control.control === "usage")).toMatchObject({
+      capability_state: "unknown",
+      availability: "unknown"
+    });
+  });
+
+  it("keeps read utilities available without exposing mutations to a read-only phone", () => {
+    const fixture = requireSurface(selectedMobileFixtureById("session_detail_read_only"), "session_detail");
+
+    expect(fixture.viewModel.host_access).toMatchObject({ access: "paired_read_only", reads_enabled: true, writes_enabled: false });
+    expect(fixture.viewModel.prompt.enabled).toBe(false);
+    expect(fixture.viewModel.primary_controls.every((control) => control.availability !== "available")).toBe(true);
+    expect(fixture.viewModel.utility_controls.find((control) => control.control === "usage")?.availability).toBe("available");
+    expect(fixture.viewModel.utility_controls.find((control) => control.control === "skills")?.availability).toBe("available");
+    expect(fixture.viewModel.risky_controls.every((control) => !control.enabled)).toBe(true);
+  });
+
   it("does not expose session data or enabled controls in inaccessible states", () => {
     for (const id of [
       "session_detail_loading",

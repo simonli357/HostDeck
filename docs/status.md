@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `FND-V1-016` strict selected-core invariant hardening.
+- Active task: `FND-V1-091` selected foundation module hardening.
 - Other ready tasks: `IFC-V1-015`, `DAT-V1-018`, `INT-V1-003`, `DAT-V1-019`, and `IFC-V1-016`.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -28,7 +28,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Blockers
 
-- Complete `FND-V1-016` strict timestamp, cursor, transition, target, capability, and audit-trail hardening.
+- Complete `FND-V1-091` cross-package foundation hardening and block-matrix evidence.
 - Run `IFC-V1-015` when the real phone/LAN test setup is available.
 - Prove Codex compatibility/real vertical (`INT-V1-003` to `INT-V1-007`).
 - Prove phone HTTPS enrollment (`IFC-V1-015`).
@@ -38,9 +38,11 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 - `FND-V1-015`: scaffold, root/package typechecks, lint/exports, unit (193 passed, 1 skipped), contract (92), integration (15), web (14), planning, and diff checks passed.
 - Evidence: `artifacts/fnd-v1-015-selected-path-contracts.md`.
+- `FND-V1-016`: root/package typechecks, lint/exports, unit (211 passed, 1 skipped), contract (100), integration (15), web (14), planning, and diff checks passed.
+- Evidence: `artifacts/fnd-v1-016-selected-foundation-invariants.md`.
 
 ## Git
 
 - Last pushed baseline before this unit: `9dd5a9b` on `origin/main`.
-- `FND-V1-015` completion is committed and pushed with this handoff.
-- Next action: complete `FND-V1-016`, then advance the first ready dependency-aware selected-runtime task.
+- `FND-V1-015` is pushed as `f0da007`; the current `FND-V1-016` completion unit is pending commit/push.
+- Next action: complete `FND-V1-091`, then advance the first ready dependency-aware selected-runtime task.

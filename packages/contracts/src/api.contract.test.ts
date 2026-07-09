@@ -138,6 +138,20 @@ describe("session read and output schemas", () => {
         ]
       })
     ).toThrow();
+
+    expect(() =>
+      sessionListResponseSchema.parse({
+        sessions: [
+          {
+            ...sessionFixture,
+            recent_output: {
+              ...sessionFixture.recent_output,
+              line_count: Number.MAX_SAFE_INTEGER + 1
+            }
+          }
+        ]
+      })
+    ).toThrow();
   });
 
   it("validates bounded output responses", () => {
