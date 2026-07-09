@@ -3,6 +3,7 @@ import { usageFailure } from "./errors.js";
 export type ParsedCliCommand =
   | { readonly kind: "help" }
   | { readonly kind: "version" }
+  | { readonly kind: "serve" }
   | { readonly kind: "status"; readonly json: boolean }
   | { readonly kind: "start"; readonly name: string; readonly cwd: string; readonly json: boolean }
   | { readonly kind: "list"; readonly json: boolean }
@@ -173,6 +174,14 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
 
   if (command === "status") {
     return { command: { kind: "status", json: parseNoArgJsonOptions("status", rest, json) }, configFlags };
+  }
+
+  if (command === "serve") {
+    if (rest.length > 0) {
+      throw usageFailure("The serve command does not accept positional arguments.");
+    }
+
+    return { command: { kind: "serve" }, configFlags };
   }
 
   if (command === "start") {

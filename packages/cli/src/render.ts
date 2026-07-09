@@ -5,6 +5,7 @@ import type { LanCommandResult, LockCommandResult, PairingCommandResult } from "
 export function renderHelp(): string {
   return [
     "Usage:",
+    "  codexdeck serve [--state-dir PATH] [--database PATH] [--port PORT]",
     "  codexdeck status [--json] [--api-url URL | --host HOST --port PORT]",
     "  codexdeck start --name NAME --cwd PATH [--json]",
     "  codexdeck list [--json]",
@@ -73,6 +74,14 @@ export function renderWriteAccepted(response: WriteResponse): string {
   }
 
   return `${response.action} accepted for ${response.session_id}. Audit required: ${response.audit_required ? "yes" : "no"}\n`;
+}
+
+export function renderServeStarted(baseUrl: URL): string {
+  return `HostDeck daemon ready at ${baseUrl.toString().replace(/\/$/u, "")}\n`;
+}
+
+export function renderServeStopped(): string {
+  return "HostDeck daemon stopped.\n";
 }
 
 export function renderPairingCode(response: PairingCommandResult, json: boolean): string {

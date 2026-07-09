@@ -19,6 +19,7 @@ pnpm check:scaffold
 
 ```bash
 # Packaged codexdeck binary is pending REL-V1-003; these command forms are implemented in the CLI shell.
+codexdeck serve --state-dir ~/.local/state/hostdeck --port 3777
 codexdeck status
 codexdeck start --name demo --cwd /path/to/worktree
 codexdeck list

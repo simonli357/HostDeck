@@ -1,4 +1,5 @@
 import type { ApiErrorEnvelope, ApiSession } from "@hostdeck/contracts";
+import { type HostHttpService, type StartHostHttpServiceInput, startHostHttpService } from "@hostdeck/server";
 import { createHostDeckApiClient, type HostDeckApiClient, type HttpFetch } from "./api-client.js";
 import { type LoadCliConfigOptions, loadCliConfig } from "./config.js";
 import { apiFailure, toCliFailure, usageFailure } from "./errors.js";
@@ -12,6 +13,8 @@ import {
   renderLanCommand,
   renderLockCommand,
   renderPairingCode,
+  renderServeStarted,
+  renderServeStopped,
   renderSessionList,
   renderStartSession,
   renderStatus,
@@ -32,6 +35,9 @@ export interface CliRunOptions {
   readonly fetch?: HttpFetch;
   readonly client?: HostDeckApiClient;
   readonly localAdmin?: LocalAdmin;
+  readonly startService?: (input: StartHostHttpServiceInput) => Promise<HostHttpService>;
+  readonly waitForShutdown?: () => Promise<void>;
+  readonly writeStdout?: (chunk: string) => void;
   readonly version?: string;
 }
 
@@ -79,6 +85,25 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     const client = options.client ?? createHostDeckApiClient(clientOptions);
+
+    if (parsed.command.kind === "serve") {
+      const service = await (options.startService ?? startHostHttpService)({
+        version: options.version ?? defaultVersion,
+        stateDir: config.stateDir,
+        databasePath: config.databasePath,
+        bindPort: portFromBaseUrl(config.baseUrl)
+      });
+      let output = emitStdout(renderServeStarted(service.baseUrl), options.writeStdout);
+
+      try {
+        await (options.waitForShutdown ?? waitForTerminationSignal)();
+      } finally {
+        await service.close();
+      }
+
+      output += emitStdout(renderServeStopped(), options.writeStdout);
+      return success(output);
+    }
 
     if (parsed.command.kind === "status") {
       return success(renderStatus(await client.getStatus(), parsed.command.json));
@@ -216,7 +241,10 @@ function sessionLifecycleError(session: ApiSession, action: "attach" | "write"):
 }
 
 export async function main(args = process.argv.slice(2), options: CliRunOptions = {}): Promise<CliExitCode> {
-  const result = await runCli(args, options);
+  const result = await runCli(args, {
+    ...options,
+    writeStdout: options.writeStdout ?? ((chunk) => process.stdout.write(chunk))
+  });
 
   if (result.stdout.length > 0) {
     process.stdout.write(result.stdout);
@@ -236,6 +264,42 @@ function success(stdout: string): CliRunResult {
     stdout,
     stderr: ""
   };
+}
+
+function emitStdout(chunk: string, writeStdout: ((chunk: string) => void) | undefined): string {
+  if (writeStdout !== undefined) {
+    writeStdout(chunk);
+    return "";
+  }
+
+  return chunk;
+}
+
+function portFromBaseUrl(baseUrl: URL): number {
+  const port = baseUrl.port.length > 0 ? Number(baseUrl.port) : baseUrl.protocol === "https:" ? 443 : 80;
+
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw usageFailure(`Invalid serve port in ${baseUrl.toString()}.`, "port");
+  }
+
+  return port;
+}
+
+function waitForTerminationSignal(): Promise<void> {
+  return new Promise((resolveSignal) => {
+    function cleanup(): void {
+      process.off("SIGINT", onSignal);
+      process.off("SIGTERM", onSignal);
+    }
+
+    function onSignal(): void {
+      cleanup();
+      resolveSignal();
+    }
+
+    process.once("SIGINT", onSignal);
+    process.once("SIGTERM", onSignal);
+  });
 }
 
 function failure(error: ReturnType<typeof toCliFailure>): CliRunResult {

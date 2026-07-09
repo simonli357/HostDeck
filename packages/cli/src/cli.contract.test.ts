@@ -1,3 +1,4 @@
+import { hostStatusResponseSchema } from "@hostdeck/contracts";
 import { describe, expect, it } from "vitest";
 import type { HttpResponse } from "./api-client.js";
 import { cliExitCodes } from "./exit-codes.js";
@@ -68,6 +69,88 @@ const staleSession = {
 } as const;
 
 describe("CLI shell contract", () => {
+  it("starts and stops the foreground service through the serve command", async () => {
+    const calls: unknown[] = [];
+    const result = await runCli(["--port", "4888", "--state-dir", "/tmp/hostdeck-state", "--database", "/tmp/hostdeck.sqlite", "serve"], {
+      env: {},
+      startService: async (input) => {
+        calls.push(input);
+        return {
+          baseUrl: new URL("http://127.0.0.1:4888"),
+          startup: {} as never,
+          server: {} as never,
+          status: () => hostStatusResponseSchema.parse(statusResponse),
+          close: async () => {
+            calls.push({ method: "close" });
+          }
+        };
+      },
+      waitForShutdown: async () => {
+        calls.push({ method: "shutdown" });
+      }
+    });
+
+    expect(result).toMatchObject({
+      exitCode: cliExitCodes.ok,
+      stderr: ""
+    });
+    expect(result.stdout).toContain("HostDeck daemon ready at http://127.0.0.1:4888");
+    expect(result.stdout).toContain("HostDeck daemon stopped.");
+    expect(calls).toEqual([
+      {
+        version: "0.0.0",
+        stateDir: "/tmp/hostdeck-state",
+        databasePath: "/tmp/hostdeck.sqlite",
+        bindPort: 4888
+      },
+      { method: "shutdown" },
+      { method: "close" }
+    ]);
+  });
+
+  it("streams foreground service readiness before shutdown completes", async () => {
+    const output: string[] = [];
+    let resolveShutdown: (() => void) | undefined;
+    const resultPromise = runCli(["--port", "4888", "serve"], {
+      env: {},
+      startService: async () => ({
+        baseUrl: new URL("http://127.0.0.1:4888"),
+        startup: {} as never,
+        server: {} as never,
+        status: () => hostStatusResponseSchema.parse(statusResponse),
+        close: async () => {
+          output.push("closed");
+        }
+      }),
+      waitForShutdown: async () =>
+        new Promise<void>((resolve) => {
+          resolveShutdown = resolve;
+        }),
+      writeStdout: (chunk) => {
+        output.push(chunk);
+      }
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(output).toEqual(["HostDeck daemon ready at http://127.0.0.1:4888\n"]);
+    expect(resolveShutdown).toBeDefined();
+
+    resolveShutdown?.();
+    const result = await resultPromise;
+
+    expect(result).toMatchObject({
+      exitCode: cliExitCodes.ok,
+      stdout: "",
+      stderr: ""
+    });
+    expect(output).toEqual([
+      "HostDeck daemon ready at http://127.0.0.1:4888\n",
+      "closed",
+      "HostDeck daemon stopped.\n"
+    ]);
+  });
+
   it("parses status and renders daemon status output", async () => {
     const result = await runCli(["status"], {
       env: {},

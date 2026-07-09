@@ -23,7 +23,7 @@ This blueprint is not ready to approve unless these checks are true:
 | `@hostdeck/contracts` | Zod schemas and TypeScript contract types for API requests/responses, stream events, config, storage records, audit events, and UI fixtures. | `@hostdeck/core` public types where useful. | Contract tests reject malformed API/config/storage payloads with stable errors. | Planned |
 | `@hostdeck/storage` | SQLite migrations, config/state repositories, session registry, auth/pairing records, audit records, output cursor metadata, retention cleanup. | `core`, `contracts`, `better-sqlite3`. | Restart, migration, retention, audit sanitization, token revocation, and corrupted-state failures. | Base schema and migration runner done; repositories planned |
 | `@hostdeck/tmux-adapter` | tmux target naming, session start/stop/attach/send, output capture/pipe setup, stale target detection, fake adapter implementation. | `core`, `contracts`, `DEC-017` output capture decision. | Fake adapter tests plus real Ubuntu tmux smoke cover start/list/send/stop/stale/restart. | Fake adapter done; output capture spike resolved; real adapter planned |
-| `@hostdeck/server` | `codexdeck serve`, startup checks, reconciliation, application services, Fastify routes, stream fanout, write pipeline, dashboard serving. | `core`, `contracts`, `storage`, `tmux-adapter`. | Startup refuses bad config; route schemas and write ordering are integration-tested. | Planned |
+| `@hostdeck/server` | `codexdeck serve`, startup checks, reconciliation, application services, local HTTP route listener, stream fanout, write pipeline, dashboard serving. | `core`, `contracts`, `storage`, `tmux-adapter`. | Startup refuses bad config; route schemas and write ordering are integration-tested. | Host status HTTP listener done; remaining route registration planned |
 | `@hostdeck/cli` | `codexdeck` commands, local API client behavior, bootstrap/admin direct paths, CLI-only unlock, LAN enable/disable, user-facing errors. | `contracts`, server API contracts, storage admin helper. | Commands have stable exit codes, daemon-unavailable behavior, and command-reference coverage. | Planned |
 | `@hostdeck/web` | Mission Control, Session Detail, Pairing/Trust, Host Status/Safety, composer, slash commands, advanced raw fallback, responsive states. | `contracts`, UX spec, later approved mockups. | Component/state tests and screenshots prove trust, lock, stale, disconnected, unknown, and responsive states. | Planned |
 | `@hostdeck/test-fixtures` | Fake Codex command, Codex-like output fixtures, fake tmux/storage helpers, UI fixture sessions and host states. | `core`, `contracts`. | All required fixture categories from SFR-011 exist and are used by tests. | Planned |
@@ -100,7 +100,7 @@ All API errors use the contract envelope: `code`, `message`, optional `field`, o
 6. Reconcile registry with tmux targets.
 7. Mark missing/unrecoverable targets stale with reason.
 8. Start output readers for live sessions.
-9. Start Fastify API/dashboard.
+9. Start local HTTP API/dashboard listener.
 10. Report ready host status only after all required checks pass.
 
 ### Start Session

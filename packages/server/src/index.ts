@@ -18,6 +18,7 @@ import {
 } from "@hostdeck/storage";
 
 export * from "./api-route-contracts.js";
+export * from "./host-service.js";
 export * from "./output-reader.js";
 export * from "./read-routes.js";
 export * from "./restart-reconciler.js";
