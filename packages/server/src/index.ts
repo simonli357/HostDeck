@@ -21,6 +21,7 @@ export * from "./output-reader.js";
 export * from "./read-routes.js";
 export * from "./restart-reconciler.js";
 export * from "./startup.js";
+export * from "./stream-routes.js";
 
 export interface BrowserAuthInput {
   readonly rawDeviceToken?: string | null;

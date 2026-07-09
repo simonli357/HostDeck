@@ -34,7 +34,7 @@ export interface ReadRouteErrorBody {
   readonly error: ApiErrorEnvelope;
 }
 
-export type ReadRouteName = "host_status" | "session_list" | "session_detail" | "session_output";
+export type ReadRouteName = "host_status" | "session_list" | "session_detail" | "session_output" | "session_stream";
 
 export type ReadAuthorizationResult =
   | { readonly ok: true }

@@ -75,9 +75,10 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 36 | `INT-V1-090` Tmux lifecycle/output hardening | done | none | Tmux/output hardening now covers bounded output suffix continuity, restart reader-start failures, invalid replay, append failure state, repeated lifecycle cleanup, and real tmux smoke. |
 | 37 | `IFC-V1-001` `codexdeck serve` startup sequence and host readiness checks | done | none | Startup readiness now validates state dir, storage migrations, settings/bind policy, tmux discovery, registry reconciliation, and output-reader startup before returning ready status. |
 | 38 | `IFC-V1-002` Host status, sessions list/detail, and output-read route contracts | done | none | Headless read route handlers now validate host status, attention-sorted sessions, session detail, output replay, and typed read failures. |
-| 39 | `IFC-V1-003` One-session stream endpoint with reconnect and replay boundary behavior | ready | none | Read/output route contracts are complete; stream routing is the next route-family dependency before aggregate API contract coverage. |
-| 40 | `IFC-V1-006` CLI command shell, API client, config loading, error rendering, and exit-code families | ready | none | Startup is complete enough to build the daemon client shell and daemon-unavailable/error-rendering behavior. |
-| 41 | `IFC-V1-011` Localhost/LAN config and network smoke coverage | ready | none | Startup now validates localhost bind and invalid port settings; network smoke can extend this to bind/listener evidence. |
+| 39 | `IFC-V1-003` One-session stream endpoint with reconnect and replay boundary behavior | done | none | Headless stream route handlers now validate one-session auth, ordered replay, reconnect boundaries, live-source identity, and typed stream failures. |
+| 40 | `IFC-V1-004` Prompt, slash, stop, and raw-input write pipeline ordering | ready | none | Read/stream route contracts and real tmux send/stop primitives are complete; write routing is the next route-family dependency before aggregate API contract coverage. |
+| 41 | `IFC-V1-006` CLI command shell, API client, config loading, error rendering, and exit-code families | ready | none | Startup is complete enough to build the daemon client shell and daemon-unavailable/error-rendering behavior, but write routes should land first for route-family coherence. |
+| 42 | `IFC-V1-011` Localhost/LAN config and network smoke coverage | ready | none | Startup now validates localhost bind and invalid port settings; network smoke can extend this to bind/listener evidence. |
 
 ## Current Blocked Gates
 
