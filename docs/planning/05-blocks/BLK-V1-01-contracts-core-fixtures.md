@@ -36,10 +36,10 @@ Requirement refs: `FR-002`, `FR-006` to `FR-009`, `FR-012` to `FR-017`, `NFR-003
 | Work | Tasks | Status |
 | --- | --- | --- |
 | Historical workspace/core/contracts/fixtures | `FND-V1-001` to `FND-V1-013` | Done for superseded contract set; evidence retained. |
-| Planning integrity | `FND-V1-014` | Ready. |
-| App-server/mobile/security contract rebaseline | `FND-V1-015` | Ready after audit decision. |
-| Core invariant and reconciliation hardening | `FND-V1-016` | Blocked by `FND-V1-015`. |
-| Reopened module hardening | `FND-V1-091` | Blocked by new consumers and tests. |
+| Planning integrity | `FND-V1-014` | Done. |
+| App-server/mobile/security contract rebaseline | `FND-V1-015` | Done. |
+| Core invariant and reconciliation hardening | `FND-V1-016` | Done. |
+| Reopened module hardening | `FND-V1-091` | Done. |
 
 Owning backlog: `docs/tracking/backlog/foundation.md`.
 
@@ -48,7 +48,7 @@ Owning backlog: `docs/tracking/backlog/foundation.md`.
 | Layer | Evidence |
 | --- | --- |
 | L1 | Core and contract tests for every invariant and fixture category. |
-| L2 | Cross-package tests prove storage/adapter/server/web consume normalized contracts only. |
+| L2 | Cross-package fixtures/public exports consume normalized contracts, and an executable boundary guard prevents generated Codex protocol imports outside the adapter. Production consumer adoption is owned by Blocks 02 to 05. |
 | Manual | Fixture review confirms unknown, stale, unsupported, and incomplete never appear healthy/successful. |
 
 ## Done Criteria
@@ -59,3 +59,5 @@ Owning backlog: `docs/tracking/backlog/foundation.md`.
 - Required structured and UI fixture inventories are complete.
 - Timestamp, cursor, lifecycle, target, compatibility, and audit outcome defects identified by `REL-V1-011` have regression tests.
 - `FND-V1-091` links current evidence and the block matrix marks complete without qualification.
+
+Current hardening evidence: `artifacts/fnd-v1-091-selected-foundation-hardening.md`.

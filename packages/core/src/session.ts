@@ -101,7 +101,7 @@ export type ValidationResult<T> =
 
 const sessionIdPattern = /^sess_[a-z0-9][a-z0-9_-]{5,63}$/u;
 const sessionNamePattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/u;
-const isoTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
+const isoTimestampPattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{3})(Z|[+-]\d{2}:\d{2})$/u;
 
 const allowedLifecycleTransitions: Readonly<Record<LifecycleState, readonly LifecycleState[]>> = {
   starting: ["running", "stopping", "stopped", "crashed"],
@@ -196,17 +196,40 @@ export function parseAbsoluteCwd(value: string): ValidationResult<AbsoluteCwd> {
 }
 
 export function parseIsoTimestamp(value: string): ValidationResult<IsoTimestamp> {
-  if (!isoTimestampPattern.test(value)) {
-    return invalid("invalid_format", "Timestamp must be an ISO-8601 UTC string with milliseconds.");
+  const match = isoTimestampPattern.exec(value);
+  if (match === null) {
+    return invalid("invalid_format", "Timestamp must be an RFC 3339 string with milliseconds and a UTC or numeric offset.");
+  }
+
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number);
+  const offset = match[8];
+  if (
+    year === undefined ||
+    month === undefined ||
+    day === undefined ||
+    hour === undefined ||
+    minute === undefined ||
+    second === undefined ||
+    offset === undefined ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > daysInMonth(year, month) ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59 ||
+    !validTimestampOffset(offset)
+  ) {
+    return invalid("invalid_format", "Timestamp must be a valid calendar date and time.");
   }
 
   const parsedTime = Date.parse(value);
 
-  if (Number.isNaN(parsedTime) || new Date(parsedTime).toISOString() !== value) {
+  if (Number.isNaN(parsedTime)) {
     return invalid("invalid_format", "Timestamp must be a valid date.");
   }
 
-  return valid(value as IsoTimestamp);
+  return valid(new Date(parsedTime).toISOString() as IsoTimestamp);
 }
 
 export function parseOutputCursor(value: number): ValidationResult<OutputCursor> {
@@ -276,4 +299,20 @@ function valid<T>(value: T): ValidationResult<T> {
 
 function invalid(code: ValidationIssueCode, message: string): ValidationResult<never> {
   return { ok: false, code, message };
+}
+
+function daysInMonth(year: number, month: number): number {
+  const days = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return days[month - 1] ?? 0;
+}
+
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+function validTimestampOffset(offset: string): boolean {
+  if (offset === "Z") return true;
+  const hours = Number(offset.slice(1, 3));
+  const minutes = Number(offset.slice(4, 6));
+  return hours <= 23 && minutes <= 59;
 }

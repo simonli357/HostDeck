@@ -68,9 +68,15 @@ describe("session metadata validation", () => {
 
   it("validates timestamps and output cursors", () => {
     expect(parseIsoTimestamp("2026-07-08T18:00:00.000Z")).toMatchObject({ ok: true });
+    expect(parseIsoTimestamp("2026-07-08T20:00:00.000+02:00")).toMatchObject({
+      ok: true,
+      value: "2026-07-08T18:00:00.000Z"
+    });
     expect(parseIsoTimestamp("2026-07-08")).toMatchObject({ ok: false, code: "invalid_format" });
     expect(parseIsoTimestamp("2026-02-29T18:00:00.000Z")).toMatchObject({ ok: false, code: "invalid_format" });
     expect(parseIsoTimestamp("2026-04-31T18:00:00.000Z")).toMatchObject({ ok: false, code: "invalid_format" });
+    expect(parseIsoTimestamp("2026-04-31T18:00:00.000-05:00")).toMatchObject({ ok: false, code: "invalid_format" });
+    expect(parseIsoTimestamp("2026-07-08T18:00:00.000+24:00")).toMatchObject({ ok: false, code: "invalid_format" });
     expect(parseIsoTimestamp("2024-02-29T18:00:00.000Z")).toMatchObject({ ok: true });
     expect(parseOutputCursor(0)).toMatchObject({ ok: true });
     expect(parseOutputCursor(Number.MAX_SAFE_INTEGER)).toMatchObject({ ok: true });

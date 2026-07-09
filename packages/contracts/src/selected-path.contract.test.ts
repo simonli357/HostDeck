@@ -439,6 +439,13 @@ describe("selected projection and storage contracts", () => {
   });
 
   it("rejects calendar-normalized timestamps at the selected contract boundary", () => {
+    expect(
+      managedSessionProjectionSchema.parse({
+        ...session,
+        updated_at: "2026-07-09T18:01:00.000+02:00"
+      }).updated_at
+    ).toBe(laterTimestamp);
+
     expect(() =>
       managedSessionProjectionSchema.parse({
         ...session,
@@ -582,6 +589,46 @@ describe("selected projection and storage contracts", () => {
         device_id: "device:contract:1",
         permission: "local_admin",
         origin: "https://hostdeck.local"
+      })
+    ).toThrow();
+  });
+
+  it("requires exact device and host targets for non-session audit actions", () => {
+    const base = {
+      id: "audit:contract:host",
+      operation_id: "op_contract_host01",
+      at: timestamp,
+      actor: {
+        type: "cli",
+        device_id: null,
+        permission: "local_admin",
+        origin: null
+      },
+      phase: "accepted",
+      outcome: "accepted",
+      payload_summary: {},
+      error_code: null
+    } as const;
+
+    expect(
+      selectedAuditEventRecordSchema.parse({
+        ...base,
+        action: "device_revoke",
+        target: { type: "device", device_id: "device:contract:1" }
+      }).target.type
+    ).toBe("device");
+    expect(
+      selectedAuditEventRecordSchema.parse({
+        ...base,
+        action: "lock",
+        target: { type: "host", host_id: "local_host" }
+      }).target.type
+    ).toBe("host");
+    expect(() =>
+      selectedAuditEventRecordSchema.parse({
+        ...base,
+        action: "device_revoke",
+        target: { type: "host", host_id: "local_host" }
       })
     ).toThrow();
   });
