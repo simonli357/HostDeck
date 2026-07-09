@@ -1,15 +1,41 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   type AbsoluteCwd,
+  type IsoTimestamp,
   type OutputCursor,
   parseAbsoluteCwd,
+  parseIsoTimestamp,
   parseOutputCursor,
   parseSessionId,
   parseSessionName,
   type SessionId,
   type SessionName
 } from "@hostdeck/core";
-import { describe, expect, it } from "vitest";
-import { createFakeTmuxAdapter, HostDeckTmuxAdapterError, type TmuxAdapterErrorCode } from "./index.js";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  createFakeTmuxAdapter,
+  createRealTmuxTargetDiscovery,
+  HostDeckTmuxAdapterError,
+  parseSessionIdFromTmuxSessionName,
+  type TmuxAdapterErrorCode,
+  tmuxSessionNameForSession
+} from "./index.js";
+
+const tempDirs: string[] = [];
+const tmuxSockets: string[] = [];
+
+afterEach(() => {
+  for (const socketName of tmuxSockets.splice(0)) {
+    killTmuxServer(socketName);
+  }
+
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { force: true, recursive: true });
+  }
+});
 
 describe("fake tmux adapter", () => {
   it("starts, lists, and exposes deterministic attach metadata", async () => {
@@ -153,6 +179,108 @@ describe("fake tmux adapter", () => {
   });
 });
 
+describe("real tmux target naming", () => {
+  it("uses deterministic HostDeck-only session names", () => {
+    const id = sessionId("sess_real_tmux_01");
+
+    expect(tmuxSessionNameForSession(id)).toBe("hostdeck_sess_real_tmux_01");
+    expect(parseSessionIdFromTmuxSessionName("hostdeck_sess_real_tmux_01")).toBe(id);
+    expect(parseSessionIdFromTmuxSessionName("regular-user-session")).toBeNull();
+    expect(parseSessionIdFromTmuxSessionName("hostdeck_not_a_valid_session")).toBeNull();
+  });
+
+  it("fails loudly when the tmux binary is unavailable", async () => {
+    const discovery = createRealTmuxTargetDiscovery({ tmuxBinary: "/tmp/hostdeck-missing-tmux-binary" });
+
+    await expectAdapterError(() => discovery.listTargets(), "tmux_unavailable");
+  });
+});
+
+const describeRealTmux = hasTmuxBinary() ? describe : describe.skip;
+
+describeRealTmux("real tmux target discovery", () => {
+  it("lists only HostDeck targets and reconciles live, missing, and unmanaged targets", async () => {
+    const socketName = nextSocketName();
+    const cwd = tempDir();
+    const first = sessionId("sess_real_tmux_11");
+    const unmanaged = sessionId("sess_real_tmux_12");
+    const missing = sessionId("sess_real_tmux_13");
+    const discovery = createRealTmuxTargetDiscovery({ socketName });
+
+    startTmuxSession(socketName, tmuxSessionNameForSession(first), cwd, "codex");
+    startTmuxSession(socketName, tmuxSessionNameForSession(unmanaged), cwd, "codex");
+    startTmuxSession(socketName, "regular-user-session", cwd, "codex");
+    startTmuxSession(socketName, "hostdeck_not_a_valid_session", cwd, "codex");
+
+    const listed = await discovery.listTargets();
+    expect(listed.map((target) => target.sessionId)).toEqual([first, unmanaged]);
+    expect(listed.every((target) => target.currentPath === cwd)).toBe(true);
+
+    const found = await discovery.getTargetBySessionId(first);
+    expect(found).toMatchObject({
+      sessionId: first,
+      tmuxSession: "hostdeck_sess_real_tmux_11",
+      tmuxWindow: "codex"
+    });
+    await expect(discovery.getTargetBySessionId(missing)).resolves.toBeNull();
+
+    const reconciled = await discovery.reconcileTargets([
+      {
+        sessionId: first,
+        sessionName: sessionName("real-one"),
+        cwd,
+        tmuxWindow: "codex",
+        tmuxPane: found?.tmuxPane ?? null,
+        createdAt: isoTimestamp("2026-07-08T22:00:00.000Z")
+      },
+      {
+        sessionId: missing,
+        sessionName: sessionName("missing-one"),
+        cwd
+      }
+    ]);
+
+    expect(reconciled.liveTargets).toHaveLength(1);
+    expect(reconciled.liveTargets[0]).toMatchObject({
+      sessionId: first,
+      sessionName: sessionName("real-one"),
+      lifecycleState: "running",
+      staleReason: null,
+      tmuxSession: "hostdeck_sess_real_tmux_11"
+    });
+    expect(reconciled.staleTargets).toEqual([
+      {
+        sessionId: missing,
+        sessionName: sessionName("missing-one"),
+        cwd,
+        tmuxSession: "hostdeck_sess_real_tmux_13",
+        staleReason: "tmux target missing"
+      }
+    ]);
+    expect(reconciled.unmanagedTargets.map((target) => target.sessionId)).toEqual([unmanaged]);
+  });
+
+  it("marks mismatched stored tmux metadata stale instead of importing the target", async () => {
+    const socketName = nextSocketName();
+    const cwd = tempDir();
+    const id = sessionId("sess_real_tmux_21");
+    const discovery = createRealTmuxTargetDiscovery({ socketName });
+
+    startTmuxSession(socketName, tmuxSessionNameForSession(id), cwd, "codex");
+
+    await expect(discovery.reconcileTargets([{ sessionId: id, sessionName: sessionName("pane-mismatch"), cwd, tmuxPane: "%999" }])).resolves.toMatchObject({
+      liveTargets: [],
+      staleTargets: [
+        {
+          sessionId: id,
+          staleReason: "tmux pane metadata mismatch"
+        }
+      ],
+      unmanagedTargets: []
+    });
+  });
+});
+
 async function expectAdapterError(fn: () => Promise<unknown>, code: TmuxAdapterErrorCode): Promise<void> {
   await expect(fn()).rejects.toBeInstanceOf(HostDeckTmuxAdapterError);
 
@@ -207,6 +335,51 @@ function outputCursor(value: number): OutputCursor {
   return result.value;
 }
 
+function isoTimestamp(value: string): IsoTimestamp {
+  const result = parseIsoTimestamp(value);
+
+  if (!result.ok) {
+    throw new Error(result.message);
+  }
+
+  return result.value;
+}
+
 function fixedNow(): Date {
   return new Date("2026-07-08T22:00:00.000Z");
+}
+
+function hasTmuxBinary(): boolean {
+  try {
+    execFileSync("tmux", ["-V"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function nextSocketName(): string {
+  const socketName = `hostdeck-test-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+  tmuxSockets.push(socketName);
+  return socketName;
+}
+
+function tempDir(): AbsoluteCwd {
+  const dir = mkdtempSync(join(tmpdir(), "hostdeck-tmux-adapter-"));
+  tempDirs.push(dir);
+  return absoluteCwd(dir);
+}
+
+function startTmuxSession(socketName: string, tmuxSession: string, cwd: AbsoluteCwd, windowName: string): void {
+  execFileSync("tmux", ["-L", socketName, "new-session", "-d", "-s", tmuxSession, "-c", cwd, "-n", windowName, "sleep 60"], {
+    stdio: "pipe"
+  });
+}
+
+function killTmuxServer(socketName: string): void {
+  try {
+    execFileSync("tmux", ["-L", socketName, "kill-server"], { stdio: "ignore" });
+  } catch {
+    // The test may fail before the server is created.
+  }
 }

@@ -1,3 +1,5 @@
+import { type ExecFileException, execFile } from "node:child_process";
+import { promisify } from "node:util";
 import {
   type AbsoluteCwd,
   type IsoTimestamp,
@@ -8,7 +10,8 @@ import {
   parseOutputCursor,
   parseSessionId,
   type SessionId,
-  type SessionName
+  type SessionName,
+  type ValidationResult
 } from "@hostdeck/core";
 
 export type TmuxAdapterErrorCode =
@@ -20,7 +23,8 @@ export type TmuxAdapterErrorCode =
   | "invalid_target"
   | "missing_target"
   | "stale_target"
-  | "target_not_running";
+  | "target_not_running"
+  | "tmux_unavailable";
 
 export class HostDeckTmuxAdapterError extends Error {
   constructor(
@@ -100,6 +104,53 @@ export interface TmuxAdapter {
   readonly readOutput: (input: TmuxReadOutputInput) => Promise<readonly TmuxOutputEvent[]>;
 }
 
+export interface RealTmuxTargetDiscoveryOptions {
+  readonly tmuxBinary?: string;
+  readonly socketName?: string;
+}
+
+export interface RealTmuxDiscoveredTarget {
+  readonly sessionId: SessionId;
+  readonly tmuxSession: string;
+  readonly tmuxWindow: string;
+  readonly tmuxPane: string;
+  readonly currentPath: AbsoluteCwd;
+  readonly createdAt: IsoTimestamp;
+  readonly updatedAt: IsoTimestamp;
+}
+
+export interface ExpectedTmuxTarget {
+  readonly sessionId: SessionId;
+  readonly sessionName: SessionName;
+  readonly cwd: AbsoluteCwd;
+  readonly tmuxSession?: string | null;
+  readonly tmuxWindow?: string | null;
+  readonly tmuxPane?: string | null;
+  readonly createdAt?: IsoTimestamp | null;
+}
+
+export interface StaleTmuxTarget {
+  readonly sessionId: SessionId;
+  readonly sessionName: SessionName;
+  readonly cwd: AbsoluteCwd;
+  readonly tmuxSession: string;
+  readonly staleReason: string;
+}
+
+export interface RealTmuxReconcileResult {
+  readonly liveTargets: readonly TmuxTarget[];
+  readonly staleTargets: readonly StaleTmuxTarget[];
+  readonly unmanagedTargets: readonly RealTmuxDiscoveredTarget[];
+}
+
+export interface RealTmuxTargetDiscovery {
+  readonly tmuxSessionNameForSession: (sessionId: SessionId) => string;
+  readonly parseSessionIdFromTmuxSessionName: (tmuxSession: string) => SessionId | null;
+  readonly listTargets: () => Promise<readonly RealTmuxDiscoveredTarget[]>;
+  readonly getTargetBySessionId: (sessionId: SessionId) => Promise<RealTmuxDiscoveredTarget | null>;
+  readonly reconcileTargets: (expectedTargets: readonly ExpectedTmuxTarget[]) => Promise<RealTmuxReconcileResult>;
+}
+
 export interface FakeTmuxAdapterOptions {
   readonly now?: () => Date;
 }
@@ -133,6 +184,135 @@ interface MutableTmuxTarget {
 
 const defaultOutputLimit = 100;
 const maxOutputLimit = 1_000;
+const hostDeckTmuxSessionPrefix = "hostdeck_";
+const tmuxFieldSeparator = "\\037";
+const execFileAsync = promisify(execFile);
+
+export function tmuxSessionNameForSession(sessionId: SessionId): string {
+  return `${hostDeckTmuxSessionPrefix}${sessionId}`;
+}
+
+export function parseSessionIdFromTmuxSessionName(tmuxSession: string): SessionId | null {
+  if (!tmuxSession.startsWith(hostDeckTmuxSessionPrefix)) {
+    return null;
+  }
+
+  const result = parseSessionId(tmuxSession.slice(hostDeckTmuxSessionPrefix.length));
+  return result.ok ? result.value : null;
+}
+
+export function createRealTmuxTargetDiscovery(options: RealTmuxTargetDiscoveryOptions = {}): RealTmuxTargetDiscovery {
+  const tmuxBinary = options.tmuxBinary ?? "tmux";
+  const socketArgs = options.socketName === undefined ? [] : ["-L", options.socketName];
+
+  async function runTmux(args: readonly string[], input: { readonly allowMissingServer?: boolean } = {}): Promise<string> {
+    try {
+      const result = await execFileAsync(tmuxBinary, [...socketArgs, ...args], {
+        encoding: "utf8",
+        maxBuffer: 1_000_000
+      });
+
+      return result.stdout;
+    } catch (error) {
+      const execError = error as ExecFileException & { readonly stderr?: string };
+      const stderr = execError.stderr ?? "";
+
+      if (input.allowMissingServer === true && isMissingTmuxServerError(stderr)) {
+        return "";
+      }
+
+      if (execError.code === "ENOENT") {
+        throw new HostDeckTmuxAdapterError("tmux_unavailable", `tmux binary "${tmuxBinary}" is not available.`, { cause: error });
+      }
+
+      throw new HostDeckTmuxAdapterError("invalid_target", boundedTmuxError(stderr, execError.message), { cause: error });
+    }
+  }
+
+  async function listTargets(): Promise<readonly RealTmuxDiscoveredTarget[]> {
+    const stdout = await runTmux(
+      [
+        "list-panes",
+        "-a",
+        "-F",
+        [
+          "#{session_name}",
+          "#{window_name}",
+          "#{pane_id}",
+          "#{pane_current_path}",
+          "#{session_created}",
+          "#{session_activity}"
+        ].join(tmuxFieldSeparator)
+      ],
+      { allowMissingServer: true }
+    );
+
+    return stdout
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map(parseDiscoveredTarget)
+      .filter((target): target is RealTmuxDiscoveredTarget => target !== null)
+      .sort((left, right) => left.sessionId.localeCompare(right.sessionId));
+  }
+
+  return {
+    tmuxSessionNameForSession,
+    parseSessionIdFromTmuxSessionName,
+    listTargets,
+    async getTargetBySessionId(sessionId) {
+      const tmuxSession = tmuxSessionNameForSession(sessionId);
+      return (await listTargets()).find((target) => target.tmuxSession === tmuxSession) ?? null;
+    },
+    async reconcileTargets(expectedTargets) {
+      const discoveredTargets = await listTargets();
+      const discoveredBySession = new Map(discoveredTargets.map((target) => [target.sessionId, target]));
+      const expectedSessionIds = new Set(expectedTargets.map((target) => target.sessionId));
+      const liveTargets: TmuxTarget[] = [];
+      const staleTargets: StaleTmuxTarget[] = [];
+
+      for (const expected of expectedTargets) {
+        const expectedTmuxSession = expected.tmuxSession ?? tmuxSessionNameForSession(expected.sessionId);
+        const discovered = discoveredBySession.get(expected.sessionId);
+
+        if (discovered === undefined || discovered.tmuxSession !== expectedTmuxSession) {
+          staleTargets.push(staleTarget(expected, expectedTmuxSession, "tmux target missing"));
+          continue;
+        }
+
+        if (expected.tmuxWindow !== undefined && expected.tmuxWindow !== null && discovered.tmuxWindow !== expected.tmuxWindow) {
+          staleTargets.push(staleTarget(expected, expectedTmuxSession, "tmux window metadata mismatch"));
+          continue;
+        }
+
+        if (expected.tmuxPane !== undefined && expected.tmuxPane !== null && discovered.tmuxPane !== expected.tmuxPane) {
+          staleTargets.push(staleTarget(expected, expectedTmuxSession, "tmux pane metadata mismatch"));
+          continue;
+        }
+
+        liveTargets.push({
+          sessionId: expected.sessionId,
+          sessionName: expected.sessionName,
+          cwd: expected.cwd,
+          tmuxSession: discovered.tmuxSession,
+          tmuxWindow: discovered.tmuxWindow,
+          tmuxPane: discovered.tmuxPane,
+          lifecycleState: "running",
+          staleReason: null,
+          createdAt: expected.createdAt ?? discovered.createdAt,
+          updatedAt: discovered.updatedAt
+        });
+      }
+
+      const unmanagedTargets = discoveredTargets.filter((target) => !expectedSessionIds.has(target.sessionId));
+
+      return {
+        liveTargets,
+        staleTargets,
+        unmanagedTargets
+      };
+    }
+  };
+}
 
 export function createFakeTmuxAdapter(options: FakeTmuxAdapterOptions = {}): FakeTmuxAdapter {
   const now = options.now ?? (() => new Date());
@@ -306,6 +486,74 @@ export function createFakeTmuxAdapter(options: FakeTmuxAdapterOptions = {}): Fak
       return [...sentInputs];
     }
   };
+}
+
+function parseDiscoveredTarget(line: string): RealTmuxDiscoveredTarget | null {
+  const [tmuxSession, tmuxWindow, tmuxPane, currentPath, createdAtSeconds, updatedAtSeconds] = line.split(tmuxFieldSeparator);
+
+  if (
+    tmuxSession === undefined ||
+    tmuxWindow === undefined ||
+    tmuxPane === undefined ||
+    currentPath === undefined ||
+    createdAtSeconds === undefined ||
+    updatedAtSeconds === undefined
+  ) {
+    throw new HostDeckTmuxAdapterError("invalid_target", "tmux list-panes returned an incomplete target row.");
+  }
+
+  const sessionId = parseSessionIdFromTmuxSessionName(tmuxSession);
+
+  if (sessionId === null) {
+    return null;
+  }
+
+  return {
+    sessionId,
+    tmuxSession,
+    tmuxWindow,
+    tmuxPane,
+    currentPath: requireParsed(parseAbsoluteCwd(currentPath), "tmux pane cwd is invalid"),
+    createdAt: epochSecondsToIsoTimestamp(createdAtSeconds, "tmux session created timestamp is invalid"),
+    updatedAt: epochSecondsToIsoTimestamp(updatedAtSeconds, "tmux session activity timestamp is invalid")
+  };
+}
+
+function staleTarget(expected: ExpectedTmuxTarget, tmuxSession: string, staleReason: string): StaleTmuxTarget {
+  return {
+    sessionId: expected.sessionId,
+    sessionName: expected.sessionName,
+    cwd: expected.cwd,
+    tmuxSession,
+    staleReason
+  };
+}
+
+function epochSecondsToIsoTimestamp(value: string, message: string): IsoTimestamp {
+  const seconds = Number(value);
+
+  if (!Number.isInteger(seconds) || seconds < 0) {
+    throw new HostDeckTmuxAdapterError("invalid_target", message);
+  }
+
+  return requireParsed(parseIsoTimestamp(new Date(seconds * 1000).toISOString()), message);
+}
+
+function requireParsed<T>(result: ValidationResult<T>, message: string): T {
+  if (!result.ok) {
+    throw new HostDeckTmuxAdapterError("invalid_target", message);
+  }
+
+  return result.value;
+}
+
+function isMissingTmuxServerError(stderr: string): boolean {
+  return stderr.includes("No such file or directory") || stderr.includes("no server running");
+}
+
+function boundedTmuxError(stderr: string, fallback: string): string {
+  const message = stderr.trim() || fallback.trim() || "tmux command failed.";
+  return message.length <= 240 ? message : `${message.slice(0, 237)}...`;
 }
 
 function parseRequiredSessionId(sessionId: SessionId | string): SessionId {

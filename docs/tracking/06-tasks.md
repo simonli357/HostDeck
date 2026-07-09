@@ -66,7 +66,12 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 27 | `IFC-V1-005` Pairing/token claim and security/network state API routes | done | none | Security route handlers now cover pairing claim, trust/security state, network state, dashboard lock, remote unlock rejection, LAN mutation rejection, CSRF enforcement, and revoked/expired/used/invalid pairing-code rejection. |
 | 28 | `REL-V1-001` Wire aggregate validation command names and artifact locations | done | none | Validation command wiring now distinguishes implemented commands from planned placeholders, and unavailable commands fail loudly with future owner task IDs. |
 | 29 | `INT-V1-001` Prototype tmux output capture with fake Codex output | done | none | `DEC-017` selects live `pipe-pane` plus bounded `capture-pane` startup/restart recovery for V1 output ingestion. |
-| 30 | `INT-V1-011` Real tmux target naming, lookup, and list/reconcile primitives | ready | none | User-local `tmux 3.4` is now available and the fake adapter interface exists; stable real target identity should come before real start/send/output reader work. |
+| 30 | `INT-V1-011` Real tmux target naming, lookup, and list/reconcile primitives | done | none | Real HostDeck-only tmux target naming, lookup, list, and reconcile primitives are implemented and validated with isolated real tmux tests. |
+| 31 | `INT-V1-012` Managed Codex session start with cwd validation and partial-failure cleanup | ready | none | Real target identity exists; managed start is the next prerequisite before send/stop/attach and API session creation work. |
+| 32 | `INT-V1-013` Send, stop, and attach metadata operations | todo | `INT-V1-012` | Waits for managed session start so send/stop/attach can target real managed sessions. |
+| 33 | `INT-V1-014` Output reader, cursor assignment, storage append, and replay-boundary handoff | ready | none | Capture mechanism and retention storage exist; can proceed before or after managed start integration as a separate output path. |
+| 34 | `INT-V1-015` Restart reconciliation between durable registry and live tmux targets | ready | none | Durable storage and real target discovery exist; reconciliation can now mark live, missing, and unmanaged HostDeck-looking targets truthfully. |
+| 35 | `INT-V1-016` Real Ubuntu tmux smoke path for managed sessions | todo | `INT-V1-013`, `INT-V1-014`, `INT-V1-015` | Full smoke waits until start, send/stop/attach, output, and restart reconciliation are implemented. |
 
 ## Current Blocked Gates
 
