@@ -311,6 +311,9 @@ export const uiSessionDetailViewModelSchema = z
   });
 
 export type UiWriteControlState = z.infer<typeof uiWriteControlStateSchema>;
+export type UiScreenState = z.infer<typeof uiScreenStateSchema>;
+export type UiStreamState = z.infer<typeof uiStreamStateSchema>;
+export type UiDisabledWriteReason = z.infer<typeof uiDisabledWriteReasonSchema>;
 export type UiOutputBoundary = z.infer<typeof uiOutputBoundarySchema>;
 export type UiSessionCard = z.infer<typeof uiSessionCardSchema>;
 export type UiTrustStateViewModel = z.infer<typeof uiTrustStateViewModelSchema>;

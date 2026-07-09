@@ -35,7 +35,7 @@ The frozen install was validated for the current workspace on 2026-07-09. If a p
 | Integration tests | `pnpm test:integration` | Runs cross-module failure-ordering tests. |
 | Service smoke | `pnpm exec vitest run tests/service-mode-smoke.test.ts` | Proves foreground HTTP service status/restart and CLI start/list/send/stop through the service with fake tmux. |
 | Tmux smoke | `pnpm test:tmux` | Requires `tmux` and `codex` on `PATH`; runs required real managed-session smoke. |
-| Later web tests | `pnpm test:web` | Placeholder; fails loudly until `FE-V1-001` implements it. |
+| Web state tests | `pnpm test:web` | Runs FE-V1-001 dashboard view-model helper and fixture inventory tests. |
 | Later E2E tests | `pnpm test:e2e` | Placeholder; fails loudly until `REL-V1-007` implements it. |
 | Later build/package | `pnpm build` | Placeholder; fails loudly until `REL-V1-007` implements it. |
 | Later release smoke | `pnpm smoke:local` | Placeholder; fails loudly until `REL-V1-006` implements it. |
@@ -96,7 +96,7 @@ Long-running service wrapping is not implemented yet. Use foreground mode during
 | `missing_binary` during session start | External Codex CLI is not on `PATH`. | Session start fails before durable success is recorded. |
 | Invalid state directory or database path | Path is missing, unreadable, or migration fails. | Startup or local-admin command fails loudly with typed config/storage errors. |
 | Duplicate bind port | Another process already owns the configured port. | Startup fails before reporting ready. |
-| Placeholder scripts fail | Web, E2E, build, or release smoke is not implemented yet. | Script exits nonzero with the owning future task ID. |
+| Placeholder scripts fail | E2E, build, or release smoke is not implemented yet. | Script exits nonzero with the owning future task ID. |
 
 ## Evidence
 

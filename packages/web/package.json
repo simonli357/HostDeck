@@ -12,5 +12,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hostdeck/contracts": "workspace:*",
+    "@hostdeck/core": "workspace:*"
   }
 }

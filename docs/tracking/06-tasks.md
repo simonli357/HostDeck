@@ -88,14 +88,15 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 49 | `IFC-V1-090` Harden API/CLI startup, write path, service controls, LAN behavior, and failure surfaces | done | none | API/CLI hardening now registers the real foreground HTTP route families, enforces loopback local-admin plus browser cookie/CSRF boundaries, proves CLI start/list/send/stop through the service, and records evidence in `artifacts/ifc-v1-090-api-cli-hardening.md`. |
 | 50 | `REL-V1-002` Update developer guide setup after runtime/service facts are validated | done | none | Developer guide setup/service docs now reflect validated runtime/package manager/tool versions, state/config defaults, foreground service behavior, known release gaps, and `artifacts/rel-v1-002-developer-guide.md`. |
 | 51 | `REL-V1-003` Update command reference after CLI commands are runnable | done | none | Command reference now contains only verified runnable setup/validation commands plus explicit release gaps for unavailable CLI/web/E2E/build/local-smoke commands. Evidence: `artifacts/rel-v1-003-command-reference.md`. |
-| 52 | `FE-V1-001` Build UI state fixtures and view-model helpers for every required dashboard state | ready | none | Required fixture, UI contract, and read-route foundations are done; this state coverage must happen before image-generated visual direction/mockups. |
+| 52 | `FE-V1-001` Build UI state fixtures and view-model helpers for every required dashboard state | done | none | Dashboard view-model helpers, required state fixture inventory, and real `pnpm test:web` coverage are complete. Evidence: `artifacts/fe-v1-001-ui-state-fixtures.md`. |
+| 53 | `FE-V1-002` Generate two image-based visual direction/mockup sets from approved state coverage | ready | none | State coverage exists; next step is to use image generation for two visual directions before human selection and UI implementation. |
 
 ## Current Blocked Gates
 
 | Gate | Owning leaf task(s) | Requires | Blocker |
 | --- | --- | --- | --- |
 | Clean release tmux setup | `REL-V1-006` | clean Ubuntu install/run path | User-local tmux smoke now passes on Ubuntu 24.04.4 LTS with `tmux 3.4`; clean release setup still needs documented install/run/service smoke evidence. |
-| UI visual direction | `FE-V1-002`, `FE-V1-003` | human acceptance | Mockups require `FE-V1-001` state coverage first, then human selection before UI implementation. |
+| UI visual direction | `FE-V1-003` | human acceptance | Mockup generation is ready in `FE-V1-002`; UI implementation waits for human selection in `FE-V1-003`. |
 | Release readiness | `REL-V1-005` to `REL-V1-010` | validation artifacts and human acceptance | Release tasks wait for module hardening, docs, smoke evidence, and go/no-go review. |
 
 ## Status Vocabulary

@@ -10,10 +10,13 @@ import {
   codexOutputCategories,
   codexOutputFixtureByCategory,
   codexOutputFixtures,
+  dashboardFixtureById,
   fakeApiSessions,
+  fakeDashboardStateFixtures,
   fakeHostStates,
   fakeMissionControlViewModels,
-  fakeSessionDetailViewModels
+  fakeSessionDetailViewModels,
+  requiredDashboardStateFixtureIds
 } from "./index.js";
 
 const requiredCategories = [
@@ -63,6 +66,29 @@ describe("fake session and host fixtures", () => {
 });
 
 describe("fake UI fixtures", () => {
+  it("covers every required FE-V1-001 dashboard state fixture", () => {
+    expect(fakeDashboardStateFixtures.map((fixture) => fixture.id)).toEqual(requiredDashboardStateFixtureIds);
+  });
+
+  it("parses every FE-V1-001 dashboard state fixture through the shared UI contracts", () => {
+    for (const fixture of fakeDashboardStateFixtures) {
+      if (fixture.surface === "mission_control") {
+        expect(uiMissionControlViewModelSchema.parse(fixture.viewModel).screen, fixture.id).toBe("mission_control");
+      } else {
+        expect(uiSessionDetailViewModelSchema.parse(fixture.viewModel).screen, fixture.id).toBe("session_detail");
+      }
+    }
+  });
+
+  it("keeps unknown, stale, stopped, locked, and reconnecting states visibly non-writable", () => {
+    expect(sessionDetailFixture("session_detail_unknown").viewModel.prompt_control.disabled_reason).toBe("unknown");
+    expect(sessionDetailFixture("session_detail_stale").viewModel.prompt_control.disabled_reason).toBe("stale");
+    expect(sessionDetailFixture("session_detail_stopped").viewModel.prompt_control.disabled_reason).toBe("stopped");
+    expect(sessionDetailFixture("session_detail_stream_reconnecting").viewModel.prompt_control.disabled_reason).toBe("stream_disconnected");
+    expect(missionControlFixture("mission_control_locked").viewModel.trust.write_controls_enabled).toBe(false);
+    expect(missionControlFixture("mission_control_lan_disabled").viewModel.host_safety.network.lan_enabled).toBe(false);
+  });
+
   it("parses Mission Control fixtures through the shared UI contract", () => {
     for (const viewModel of Object.values(fakeMissionControlViewModels)) {
       expect(uiMissionControlViewModelSchema.parse(viewModel).screen).toBe("mission_control");
@@ -75,3 +101,23 @@ describe("fake UI fixtures", () => {
     }
   });
 });
+
+function sessionDetailFixture(id: Parameters<typeof dashboardFixtureById>[0]) {
+  const fixture = dashboardFixtureById(id);
+
+  if (fixture.surface !== "session_detail") {
+    throw new TypeError(`${id} is not a Session Detail fixture.`);
+  }
+
+  return fixture;
+}
+
+function missionControlFixture(id: Parameters<typeof dashboardFixtureById>[0]) {
+  const fixture = dashboardFixtureById(id);
+
+  if (fixture.surface !== "mission_control") {
+    throw new TypeError(`${id} is not a Mission Control fixture.`);
+  }
+
+  return fixture;
+}
