@@ -19,6 +19,7 @@ import {
 
 export * from "./output-reader.js";
 export * from "./restart-reconciler.js";
+export * from "./startup.js";
 
 export interface BrowserAuthInput {
   readonly rawDeviceToken?: string | null;

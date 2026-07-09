@@ -73,7 +73,10 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 34 | `INT-V1-015` Restart reconciliation between durable registry and live tmux targets | done | none | Restart reconciliation updates live durable sessions, marks missing ones stale, ignores stopped records, and reports unmanaged HostDeck-looking targets without import. |
 | 35 | `INT-V1-016` Real Ubuntu tmux smoke path for managed sessions | done | none | Real smoke now exercises start, attach metadata, send targeting, stop, output read, SQLite output drain, restart reconciliation, output-reader restart hook, and stale target behavior. |
 | 36 | `INT-V1-090` Tmux lifecycle/output hardening | done | none | Tmux/output hardening now covers bounded output suffix continuity, restart reader-start failures, invalid replay, append failure state, repeated lifecycle cleanup, and real tmux smoke. |
-| 37 | `IFC-V1-001` `codexdeck serve` startup sequence and host readiness checks | ready | none | Tmux reconciliation and hardening are complete enough for the host startup sequence to validate config, storage, tmux, settings, registry reconciliation, and readiness gates. |
+| 37 | `IFC-V1-001` `codexdeck serve` startup sequence and host readiness checks | done | none | Startup readiness now validates state dir, storage migrations, settings/bind policy, tmux discovery, registry reconciliation, and output-reader startup before returning ready status. |
+| 38 | `IFC-V1-002` Host status, sessions list/detail, and output-read route contracts | ready | none | Startup now exposes the headless readiness state routes need; route contracts should come before CLI and UI consumers. |
+| 39 | `IFC-V1-006` CLI command shell, API client, config loading, error rendering, and exit-code families | ready | none | Startup is complete enough to build the daemon client shell and daemon-unavailable/error-rendering behavior. |
+| 40 | `IFC-V1-011` Localhost/LAN config and network smoke coverage | ready | none | Startup now validates localhost bind and invalid port settings; network smoke can extend this to bind/listener evidence. |
 
 ## Current Blocked Gates
 

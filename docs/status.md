@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `IFC-V1-001` `codexdeck serve` startup sequence and host readiness checks
+- Active task: `IFC-V1-002` Host status, sessions list/detail, and output-read route contracts
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
-- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart/smoke path/hardening, pairing/security API route foundation, and validation command wiring are complete; `codexdeck serve` startup/readiness is next.
-- Last validation: `command -v codex && codex --version && command -v tmux && tmux -V && lsb_release -ds && date -Iseconds`, `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm --filter @hostdeck/tmux-adapter typecheck`, `pnpm --filter @hostdeck/server typecheck`, `pnpm test:unit -- packages/server/src/output-reader.test.ts packages/server/src/restart-reconciler.test.ts packages/tmux-adapter/src/index.test.ts`, `pnpm lint`, `pnpm -r --if-present typecheck`, `pnpm test`, `pnpm test:contract`, `pnpm test:tmux`, and `git diff --check` passed for `INT-V1-090`.
-- Next action: Start `IFC-V1-001` `codexdeck serve` startup sequence and host readiness checks.
+- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart/smoke path/hardening, pairing/security API route foundation, validation command wiring, and headless `codexdeck serve` startup/readiness are complete; host status/session/output route contracts are next.
+- Last validation: `command -v codex && codex --version && command -v tmux && tmux -V && lsb_release -ds && date -Iseconds`, `pnpm install --frozen-lockfile`, `pnpm --filter @hostdeck/server typecheck`, `pnpm test:unit -- packages/server/src/startup.test.ts`, `pnpm lint`, `pnpm check:scaffold`, `pnpm -r --if-present typecheck`, `pnpm test`, `pnpm test:contract`, `pnpm test:tmux`, and `git diff --check` passed for `IFC-V1-001`.
+- Next action: Start `IFC-V1-002` host status, sessions list/detail, and output-read route contracts.
 - Blockers: Clean release tmux setup still needs later install/run/service smoke docs; visual mockups before UI implementation.
-- Last commit: `INT-V1-090` tmux lifecycle/output hardening commit.
-- Last push: `origin/main` after the `INT-V1-090` commit.
+- Last commit: `IFC-V1-001` startup readiness commit.
+- Last push: `origin/main` after the `IFC-V1-001` commit.
 
 ## What Is Proven
 
@@ -54,9 +54,10 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `INT-V1-016` added required real Ubuntu tmux smoke coverage for managed start, attach metadata, send targeting, stop, output read, SQLite output drain, restart reconciliation, output-reader restart hook, and stale target behavior.
 - Hardening: `INT-V1-090` tightened tmux/output suffix continuity, repeated lifecycle cleanup, invalid replay, append/capture failure visibility, and restart output-reader failure reporting.
 - Implementation: `IFC-V1-005` added storage-backed pairing/security/network route handlers, revoked pairing-code support, CSRF-backed dashboard lock, and explicit remote unlock/LAN mutation rejection.
+- Implementation: `IFC-V1-001` added headless host startup/readiness with state directory access, SQLite migrations, settings/bind validation, tmux discovery, registry reconciliation, output-reader startup gating for live sessions, non-ready typed failure statuses, and startup negative tests.
 - Release support: `REL-V1-001` wired validation command placeholders to future owner tasks and recorded command smoke evidence without claiming unavailable layers are implemented.
 - Planning/spike: `INT-V1-001` chose tmux `pipe-pane` for live output ingestion plus bounded `capture-pane` startup/restart recovery.
-- No HostDeck product workflow behavior is proven yet.
+- No end-to-end HostDeck product workflow through API, CLI, or UI is proven yet.
 
 ## Open Gates
 
@@ -104,7 +105,10 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | INT-V1-015 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Restart reconciliation and `artifacts/int-v1-015-restart-reconciliation.md`. |
 | INT-V1-016 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Real Ubuntu tmux smoke and `artifacts/int-v1-016-real-tmux-smoke.md`. |
 | INT-V1-090 | Hardening | done | `docs/tracking/backlog/tmux-output.md` | Tmux/output hardening and `artifacts/int-v1-090-tmux-output-hardening.md`. |
-| IFC-V1-001 | Implementation | ready | `docs/tracking/backlog/api-cli-control-plane.md` | Next ready leaf: `codexdeck serve` startup sequence and host readiness checks. |
+| IFC-V1-001 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Startup readiness service and `artifacts/ifc-v1-001-startup-readiness.md`. |
+| IFC-V1-002 | Implementation | ready | `docs/tracking/backlog/api-cli-control-plane.md` | Next ready route leaf: host status, sessions list/detail, and output-read route contracts. |
+| IFC-V1-006 | Implementation | ready | `docs/tracking/backlog/api-cli-control-plane.md` | Unblocked CLI shell/API client leaf; queue keeps it after route contracts. |
+| IFC-V1-011 | Implementation | ready | `docs/tracking/backlog/api-cli-control-plane.md` | Unblocked localhost/LAN config and network smoke leaf; queue keeps it after route contracts and CLI shell. |
 
 ## Decisions Needed
 
