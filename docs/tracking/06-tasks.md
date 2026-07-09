@@ -83,9 +83,10 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 44 | `IFC-V1-007` CLI session commands: `start`, `list`, `send`, `attach`, `stop`, and status display | done | none | CLI session commands, session-start API contract/handler, local-admin CLI writes, exact target resolution, stale/non-running failures, and fake/real tmux smoke evidence are complete. Evidence: `artifacts/ifc-v1-007-cli-session-commands.md`. |
 | 45 | `IFC-V1-008` CLI pairing, lock, unlock, and LAN enable/disable commands | done | none | CLI local admin pairing, lock/unlock, and LAN enable/disable commands are implemented with audit/state inspection evidence. Evidence: `artifacts/ifc-v1-008-cli-admin-commands.md`. |
 | 46 | `IFC-V1-012` Foreground and long-running service-mode smoke behavior | done | none | Foreground service startup, status, stop/unavailable, and restart smoke is implemented and evidenced. Evidence: `artifacts/ifc-v1-012-service-mode-smoke.md`. |
-| 47 | `IFC-V1-013` Add CLI command contract tests | ready | none | Unblocked by `IFC-V1-008`; full V1 CLI command matrix coverage can now be added after service-mode smoke. |
-| 48 | `REL-V1-002` Update developer guide setup after runtime/service facts are validated | ready | none | Unblocked by `IFC-V1-012`; final setup/service docs can now be tightened from observed foreground service behavior. |
-| 49 | `REL-V1-003` Update command reference after CLI commands are runnable | ready | none | Unblocked by `IFC-V1-008` and `IFC-V1-012`; command reference still needs final runnable-path smoke or explicit packaged-binary gap. |
+| 47 | `IFC-V1-013` Add CLI command contract tests | done | none | Full V1 CLI command matrix coverage is implemented and evidenced. Evidence: `artifacts/ifc-v1-013-cli-command-contracts.md`. |
+| 48 | `IFC-V1-014` Add write rejection and failure-path integration tests | ready | none | Unblocked by `IFC-V1-013`; write rejection/failure-path coverage can now prove no hidden tmux sends on unsafe writes. |
+| 49 | `REL-V1-002` Update developer guide setup after runtime/service facts are validated | ready | none | Unblocked by `IFC-V1-012`; final setup/service docs can now be tightened from observed foreground service behavior. |
+| 50 | `REL-V1-003` Update command reference after CLI commands are runnable | ready | none | Unblocked by `IFC-V1-008` and `IFC-V1-012`; command reference still needs final runnable-path smoke or explicit packaged-binary gap. |
 
 ## Current Blocked Gates
 

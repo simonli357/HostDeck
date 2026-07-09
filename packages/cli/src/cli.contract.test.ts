@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { HttpResponse } from "./api-client.js";
 import { cliExitCodes } from "./exit-codes.js";
 import type { LocalAdmin } from "./local-admin.js";
+import { parseCliArgs } from "./parser.js";
 import { runCli } from "./shell.js";
 
 const statusResponse = {
@@ -69,6 +70,123 @@ const staleSession = {
 } as const;
 
 describe("CLI shell contract", () => {
+  it("parses every V1 CLI command and config flag family", () => {
+    const cases = [
+      {
+        label: "help",
+        args: ["help"],
+        expected: { command: { kind: "help" }, configFlags: {} }
+      },
+      {
+        label: "version",
+        args: ["version"],
+        expected: { command: { kind: "version" }, configFlags: {} }
+      },
+      {
+        label: "serve",
+        args: ["--state-dir", "state", "--database-path=db.sqlite", "--port=4888", "serve"],
+        expected: {
+          command: { kind: "serve" },
+          configFlags: { stateDir: "state", databasePath: "db.sqlite", port: "4888" }
+        }
+      },
+      {
+        label: "status",
+        args: ["--api-url=http://127.0.0.1:4888", "status", "--json"],
+        expected: {
+          command: { kind: "status", json: true },
+          configFlags: { apiUrl: "http://127.0.0.1:4888" }
+        }
+      },
+      {
+        label: "start",
+        args: ["start", "--name=contract-demo", "--cwd", "/tmp/hostdeck-demo", "--json"],
+        expected: {
+          command: { kind: "start", name: "contract-demo", cwd: "/tmp/hostdeck-demo", json: true },
+          configFlags: {}
+        }
+      },
+      {
+        label: "list",
+        args: ["--json", "list"],
+        expected: { command: { kind: "list", json: true }, configFlags: {} }
+      },
+      {
+        label: "send",
+        args: ["send", "contract-demo", "Continue", "carefully"],
+        expected: {
+          command: { kind: "send", session: "contract-demo", text: "Continue carefully" },
+          configFlags: {}
+        }
+      },
+      {
+        label: "attach",
+        args: ["attach", "contract-demo"],
+        expected: { command: { kind: "attach", session: "contract-demo" }, configFlags: {} }
+      },
+      {
+        label: "stop",
+        args: ["stop", "contract-demo"],
+        expected: { command: { kind: "stop", session: "contract-demo" }, configFlags: {} }
+      },
+      {
+        label: "pair",
+        args: ["pair", "--label=phone", "--ttl-minutes", "5", "--read-only", "--json"],
+        expected: {
+          command: { kind: "pair", label: "phone", permission: "read", ttlMinutes: 5, json: true },
+          configFlags: {}
+        }
+      },
+      {
+        label: "lock",
+        args: ["lock", "--reason=maintenance", "--json"],
+        expected: {
+          command: { kind: "lock", reason: "maintenance", json: true },
+          configFlags: {}
+        }
+      },
+      {
+        label: "unlock",
+        args: ["unlock", "--json"],
+        expected: { command: { kind: "unlock", json: true }, configFlags: {} }
+      },
+      {
+        label: "lan enable",
+        args: ["lan", "enable", "--bind-host", "0.0.0.0", "--json"],
+        expected: {
+          command: { kind: "lan", action: "enable", bindHost: "0.0.0.0", json: true },
+          configFlags: {}
+        }
+      },
+      {
+        label: "lan disable",
+        args: ["lan", "disable", "--json"],
+        expected: { command: { kind: "lan", action: "disable", json: true }, configFlags: {} }
+      }
+    ] as const;
+
+    for (const scenario of cases) {
+      expect(parseCliArgs(scenario.args), scenario.label).toEqual(scenario.expected);
+    }
+  });
+
+  it("renders help and version success output without loading daemon config", async () => {
+    const help = await runCli(["help"], { env: {} });
+    const version = await runCli(["version"], { env: {}, version: "1.2.3-contract" });
+
+    expect(help).toMatchObject({
+      exitCode: cliExitCodes.ok,
+      stderr: ""
+    });
+    expect(help.stdout).toContain("codexdeck serve");
+    expect(help.stdout).toContain("codexdeck lan disable");
+    expect(version).toMatchObject({
+      exitCode: cliExitCodes.ok,
+      stdout: "codexdeck 1.2.3-contract\n",
+      stderr: ""
+    });
+  });
+
   it("starts and stops the foreground service through the serve command", async () => {
     const calls: unknown[] = [];
     const result = await runCli(["--port", "4888", "--state-dir", "/tmp/hostdeck-state", "--database", "/tmp/hostdeck.sqlite", "serve"], {
@@ -372,6 +490,35 @@ describe("CLI shell contract", () => {
     expect(result.stderr).toContain("Run `codexdeck help` for usage.");
   });
 
+  it("returns usage exits for malformed arguments across every command family", async () => {
+    const cases = [
+      { label: "help", args: ["help", "extra"], message: "help command does not accept extra arguments" },
+      { label: "version", args: ["version", "extra"], message: "version command does not accept extra arguments" },
+      { label: "serve", args: ["serve", "extra"], message: "serve command does not accept positional arguments" },
+      { label: "status", args: ["status", "extra"], message: "status command does not accept positional arguments" },
+      { label: "start", args: ["start", "--name", "contract-demo"], message: "start command requires --cwd" },
+      { label: "list", args: ["list", "extra"], message: "list command does not accept positional arguments" },
+      { label: "send", args: ["send", "contract-demo"], message: "send command requires a session target and text" },
+      { label: "attach", args: ["attach"], message: "attach command requires exactly one session target" },
+      { label: "stop", args: ["stop", "one", "two"], message: "stop command requires exactly one session target" },
+      { label: "pair", args: ["pair", "--ttl-minutes", "0"], message: "--ttl-minutes must be between 1 and 1440" },
+      { label: "lock", args: ["lock", "extra"], message: "Unexpected lock argument" },
+      { label: "unlock", args: ["unlock", "extra"], message: "unlock command does not accept positional arguments" },
+      { label: "lan enable", args: ["lan", "enable", "extra"], message: "Unexpected lan argument" },
+      { label: "lan disable", args: ["lan", "disable", "--bind-host", "0.0.0.0"], message: "lan disable command does not accept --bind-host" }
+    ] as const;
+
+    for (const scenario of cases) {
+      const result = await runCli(scenario.args, { env: {} });
+
+      expect(result.exitCode, scenario.label).toBe(cliExitCodes.usage);
+      expect(result.stdout, scenario.label).toBe("");
+      expect(result.stderr, scenario.label).toContain("HostDeck CLI error (malformed_request)");
+      expect(result.stderr, scenario.label).toContain(scenario.message);
+      expect(result.stderr, scenario.label).toContain("Run `codexdeck help` for usage.");
+    }
+  });
+
   it("returns stable config exits for invalid config", async () => {
     const result = await runCli(["status"], {
       env: {
@@ -382,6 +529,23 @@ describe("CLI shell contract", () => {
     expect(result.exitCode).toBe(cliExitCodes.config);
     expect(result.stderr).toContain("HostDeck CLI error (invalid_config)");
     expect(result.stderr).toContain("HOSTDECK_PORT");
+  });
+
+  it("returns config exits for invalid serve config before starting the foreground service", async () => {
+    let started = false;
+    const result = await runCli(["--port", "0", "serve"], {
+      env: {},
+      startService: async () => {
+        started = true;
+        throw new Error("serve should not start with invalid config");
+      }
+    });
+
+    expect(result.exitCode).toBe(cliExitCodes.config);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("HostDeck CLI error (invalid_config)");
+    expect(result.stderr).toContain("--port");
+    expect(started).toBe(false);
   });
 
   it("returns stable daemon-unavailable exits with actionable text", async () => {
@@ -397,17 +561,37 @@ describe("CLI shell contract", () => {
     expect(result.stderr).toContain("codexdeck serve");
   });
 
+  it("returns daemon-unavailable exits for every daemon-backed command", async () => {
+    const cases = [
+      { label: "status", args: ["status"] },
+      { label: "start", args: ["start", "--name", "contract-demo", "--cwd", "/tmp/hostdeck-demo"] },
+      { label: "list", args: ["list"] },
+      { label: "send", args: ["send", "contract-demo", "hello"] },
+      { label: "attach", args: ["attach", "contract-demo"] },
+      { label: "stop", args: ["stop", "contract-demo"] }
+    ] as const;
+
+    for (const scenario of cases) {
+      const result = await runCli(scenario.args, {
+        env: {},
+        fetch: async () => {
+          throw new TypeError("connect ECONNREFUSED");
+        }
+      });
+
+      expect(result.exitCode, scenario.label).toBe(cliExitCodes.daemonUnavailable);
+      expect(result.stdout, scenario.label).toBe("");
+      expect(result.stderr, scenario.label).toContain("HostDeck CLI error (daemon_unavailable)");
+      expect(result.stderr, scenario.label).toContain("Start the daemon with `codexdeck serve`, then retry.");
+    }
+  });
+
   it("returns stable typed API error exits and preserves field context", async () => {
     const result = await runCli(["--api-url", "http://127.0.0.1:3777", "status"], {
       env: {},
       fetch: async () =>
         jsonResponse(403, {
-          error: {
-            code: "permission_denied",
-            message: "Read token is required.",
-            retryable: false,
-            field: "authorization"
-          }
+          error: permissionDeniedError()
         })
     });
 
@@ -416,7 +600,43 @@ describe("CLI shell contract", () => {
     expect(result.stderr).toContain("HTTP status: 403");
     expect(result.stderr).toContain("Field: authorization");
   });
+
+  it("returns typed API error exits for every daemon-backed command", async () => {
+    const cases = [
+      { label: "status", args: ["status"] },
+      { label: "start", args: ["start", "--name", "contract-demo", "--cwd", "/tmp/hostdeck-demo"] },
+      { label: "list", args: ["list"] },
+      { label: "send", args: ["send", "contract-demo", "hello"] },
+      { label: "attach", args: ["attach", "contract-demo"] },
+      { label: "stop", args: ["stop", "contract-demo"] }
+    ] as const;
+
+    for (const scenario of cases) {
+      const result = await runCli(scenario.args, {
+        env: {},
+        fetch: async () =>
+          jsonResponse(403, {
+            error: permissionDeniedError()
+          })
+      });
+
+      expect(result.exitCode, scenario.label).toBe(cliExitCodes.apiError);
+      expect(result.stdout, scenario.label).toBe("");
+      expect(result.stderr, scenario.label).toContain("HostDeck CLI error (permission_denied): Read token is required.");
+      expect(result.stderr, scenario.label).toContain("HTTP status: 403");
+      expect(result.stderr, scenario.label).toContain("Field: authorization");
+    }
+  });
 });
+
+function permissionDeniedError() {
+  return {
+    code: "permission_denied",
+    message: "Read token is required.",
+    retryable: false,
+    field: "authorization"
+  };
+}
 
 function jsonResponse(status: number, body: unknown): HttpResponse {
   return {

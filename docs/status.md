@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `IFC-V1-013` CLI command contract tests
+- Active task: `IFC-V1-014` write rejection and failure-path integration tests
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
-- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart/smoke path/hardening, pairing/security API route foundation, validation command wiring, headless startup/readiness, headless host/session/output read route contracts, headless one-session stream route contracts, headless write pipeline route contracts, aggregate API route/stream contract tests, CLI shell/API client foundation, localhost/LAN network smoke, CLI session commands, CLI pairing/lock/LAN commands, and foreground service smoke are complete; full CLI command matrix is next.
-- Last validation: `pnpm --filter @hostdeck/server typecheck`, `pnpm --filter @hostdeck/cli typecheck`, `pnpm test:unit -- packages/server/src/host-service.test.ts packages/cli/src/cli.contract.test.ts tests/service-mode-smoke.test.ts`, `pnpm install --frozen-lockfile`, `git diff --check`, `pnpm lint`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm test:unit`, `pnpm test:contract`, `pnpm check:scaffold`, `pnpm test`, `pnpm test:tmux`, and `HOSTDECK_REQUIRE_TMUX_SMOKE=1 pnpm exec vitest run tests/cli-tmux-smoke.test.ts` passed for `IFC-V1-012`.
-- Next action: Start `IFC-V1-013` CLI command contract tests.
+- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, real tmux target discovery/reconciliation, real managed tmux start/send/stop/attach/output/restart/smoke path/hardening, pairing/security API route foundation, validation command wiring, headless startup/readiness, headless host/session/output read route contracts, headless one-session stream route contracts, headless write pipeline route contracts, aggregate API route/stream contract tests, CLI shell/API client foundation, localhost/LAN network smoke, CLI session commands, CLI pairing/lock/LAN commands, foreground service smoke, and CLI command matrix are complete; write rejection and failure-path integration tests are next.
+- Last validation: `pnpm --filter @hostdeck/cli typecheck`, `pnpm exec vitest run --config vitest.contract.config.ts packages/cli/src/cli.contract.test.ts`, `git diff --check`, `pnpm test:contract`, `pnpm typecheck`, `pnpm lint`, and `pnpm test:unit` passed for `IFC-V1-013`.
+- Next action: Start `IFC-V1-014` write rejection and failure-path integration tests.
 - Blockers: Clean release tmux setup still needs later install/run/service smoke docs; visual mockups before UI implementation.
-- Last commit: `IFC-V1-012` service-mode smoke commit.
-- Last push: `origin/main` after the `IFC-V1-012` commit.
+- Last commit: `IFC-V1-013` CLI command contract matrix commit.
+- Last push: `origin/main` after the `IFC-V1-013` commit.
 
 ## What Is Proven
 
@@ -64,6 +64,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `IFC-V1-007` added CLI `start`, `list`, `send`, `attach`, and `stop`; a typed session-start API contract/handler; local-admin CLI writes; exact session target resolution; stale/non-running command failures; and fake plus real tmux smoke evidence.
 - Implementation: `IFC-V1-008` added CLI local-admin state/database config plus storage-backed `pair`, `lock`, `unlock`, `lan enable`, and `lan disable` commands with transactional audit writes, hash-only pairing storage inspection, and explicit LAN reversal/rebind output.
 - Implementation: `IFC-V1-012` added the foreground host HTTP service wrapper, CLI `serve` shell path, host-status HTTP listener, stop/unavailable/restart smoke, and CLI status smoke against the real service.
+- Implementation: `IFC-V1-013` added the CLI command contract matrix for parser coverage, success output, malformed-argument usage failures, invalid serve config, daemon-unavailable behavior, and typed API failures.
 - Release support: `REL-V1-001` wired validation command placeholders to future owner tasks and recorded command smoke evidence without claiming unavailable layers are implemented.
 - Planning/spike: `INT-V1-001` chose tmux `pipe-pane` for live output ingestion plus bounded `capture-pane` startup/restart recovery.
 - No end-to-end HostDeck product workflow through API, CLI, or UI is proven yet.
@@ -124,7 +125,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | IFC-V1-007 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | CLI session commands, start route, local-admin writes, target resolution, stale/non-running failures, and `artifacts/ifc-v1-007-cli-session-commands.md`. |
 | IFC-V1-008 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | CLI local-admin pairing, lock/unlock, LAN command implementation and `artifacts/ifc-v1-008-cli-admin-commands.md`. |
 | IFC-V1-012 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Foreground service smoke and `artifacts/ifc-v1-012-service-mode-smoke.md`. |
-| IFC-V1-013 | Implementation | ready | `docs/tracking/backlog/api-cli-control-plane.md` | Unblocked full CLI command contract matrix after CLI admin commands. |
+| IFC-V1-013 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | CLI command contract matrix and `artifacts/ifc-v1-013-cli-command-contracts.md`. |
+| IFC-V1-014 | Implementation | ready | `docs/tracking/backlog/api-cli-control-plane.md` | Unblocked write rejection and failure-path integration tests after CLI command contracts. |
 | REL-V1-002 | Release docs | ready | `docs/tracking/backlog/hardening-release.md` | Unblocked developer-guide setup/service docs after service-mode smoke. |
 | REL-V1-003 | Release docs | ready | `docs/tracking/backlog/hardening-release.md` | Unblocked command reference task after CLI and service-mode smoke; packaged-binary gap remains to handle in the task. |
 
