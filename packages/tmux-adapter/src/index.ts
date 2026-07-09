@@ -1,4 +1,8 @@
 import { type ExecFileException, execFile } from "node:child_process";
+import { constants as fsConstants } from "node:fs";
+import { access, stat } from "node:fs/promises";
+import { basename, isAbsolute, join, delimiter as pathDelimiter } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import {
   type AbsoluteCwd,
@@ -9,12 +13,14 @@ import {
   parseIsoTimestamp,
   parseOutputCursor,
   parseSessionId,
+  parseSessionName,
   type SessionId,
   type SessionName,
   type ValidationResult
 } from "@hostdeck/core";
 
 export type TmuxAdapterErrorCode =
+  | "command_unavailable"
   | "duplicate_session"
   | "duplicate_session_name"
   | "invalid_cwd"
@@ -22,9 +28,11 @@ export type TmuxAdapterErrorCode =
   | "invalid_start_command"
   | "invalid_target"
   | "missing_target"
+  | "start_failed"
   | "stale_target"
   | "target_not_running"
-  | "tmux_unavailable";
+  | "tmux_unavailable"
+  | "unsupported_operation";
 
 export class HostDeckTmuxAdapterError extends Error {
   constructor(
@@ -109,6 +117,12 @@ export interface RealTmuxTargetDiscoveryOptions {
   readonly socketName?: string;
 }
 
+export interface RealTmuxAdapterOptions extends RealTmuxTargetDiscoveryOptions {
+  readonly now?: () => Date;
+  readonly path?: string;
+  readonly startupVerifyDelayMs?: number;
+}
+
 export interface RealTmuxDiscoveredTarget {
   readonly sessionId: SessionId;
   readonly tmuxSession: string;
@@ -184,9 +198,25 @@ interface MutableTmuxTarget {
 
 const defaultOutputLimit = 100;
 const maxOutputLimit = 1_000;
+const defaultStartupVerifyDelayMs = 25;
 const hostDeckTmuxSessionPrefix = "hostdeck_";
 const tmuxFieldSeparator = "\\037";
 const execFileAsync = promisify(execFile);
+
+interface TmuxCommandOptions {
+  readonly tmuxBinary: string;
+  readonly socketName?: string;
+}
+
+interface TmuxCommandRunOptions {
+  readonly allowMissingServer?: boolean;
+  readonly allowMissingTarget?: boolean;
+  readonly errorCode?: TmuxAdapterErrorCode;
+}
+
+function createTmuxCommandOptions(tmuxBinary: string, socketName: string | undefined): TmuxCommandOptions {
+  return socketName === undefined ? { tmuxBinary } : { tmuxBinary, socketName };
+}
 
 export function tmuxSessionNameForSession(sessionId: SessionId): string {
   return `${hostDeckTmuxSessionPrefix}${sessionId}`;
@@ -203,34 +233,11 @@ export function parseSessionIdFromTmuxSessionName(tmuxSession: string): SessionI
 
 export function createRealTmuxTargetDiscovery(options: RealTmuxTargetDiscoveryOptions = {}): RealTmuxTargetDiscovery {
   const tmuxBinary = options.tmuxBinary ?? "tmux";
-  const socketArgs = options.socketName === undefined ? [] : ["-L", options.socketName];
-
-  async function runTmux(args: readonly string[], input: { readonly allowMissingServer?: boolean } = {}): Promise<string> {
-    try {
-      const result = await execFileAsync(tmuxBinary, [...socketArgs, ...args], {
-        encoding: "utf8",
-        maxBuffer: 1_000_000
-      });
-
-      return result.stdout;
-    } catch (error) {
-      const execError = error as ExecFileException & { readonly stderr?: string };
-      const stderr = execError.stderr ?? "";
-
-      if (input.allowMissingServer === true && isMissingTmuxServerError(stderr)) {
-        return "";
-      }
-
-      if (execError.code === "ENOENT") {
-        throw new HostDeckTmuxAdapterError("tmux_unavailable", `tmux binary "${tmuxBinary}" is not available.`, { cause: error });
-      }
-
-      throw new HostDeckTmuxAdapterError("invalid_target", boundedTmuxError(stderr, execError.message), { cause: error });
-    }
-  }
+  const commandOptions = createTmuxCommandOptions(tmuxBinary, options.socketName);
 
   async function listTargets(): Promise<readonly RealTmuxDiscoveredTarget[]> {
-    const stdout = await runTmux(
+    const stdout = await runTmuxCommand(
+      commandOptions,
       [
         "list-panes",
         "-a",
@@ -314,6 +321,106 @@ export function createRealTmuxTargetDiscovery(options: RealTmuxTargetDiscoveryOp
   };
 }
 
+export function createRealTmuxAdapter(options: RealTmuxAdapterOptions = {}): TmuxAdapter {
+  const now = options.now ?? (() => new Date());
+  const tmuxBinary = options.tmuxBinary ?? "tmux";
+  const commandOptions = createTmuxCommandOptions(tmuxBinary, options.socketName);
+  const startupVerifyDelayMs = options.startupVerifyDelayMs ?? defaultStartupVerifyDelayMs;
+  const discovery = createRealTmuxTargetDiscovery(options);
+  const expectedTargets = new Map<string, ExpectedTmuxTarget>();
+
+  function timestamp(): IsoTimestamp {
+    return parseRequiredIsoTimestamp(now().toISOString());
+  }
+
+  async function listKnownLiveTargets(): Promise<readonly TmuxTarget[]> {
+    return (await discovery.reconcileTargets([...expectedTargets.values()])).liveTargets;
+  }
+
+  return {
+    async startSession(input) {
+      const sessionId = parseRequiredSessionId(input.sessionId);
+      const sessionName = parseRequiredSessionName(input.sessionName);
+      const cwd = parseRequiredCwd(input.cwd);
+      const command = normalizeCommand(input.command);
+      const tmuxSession = tmuxSessionNameForSession(sessionId);
+      const tmuxWindow = tmuxWindowNameForCommand(command[0]);
+
+      await requireExistingDirectory(cwd);
+      await requireExecutable(command[0], options.path ?? process.env.PATH ?? "");
+
+      const liveTargets = await listKnownLiveTargets();
+
+      if (liveTargets.some((target) => target.sessionId === sessionId) || (await discovery.getTargetBySessionId(sessionId)) !== null) {
+        throw new HostDeckTmuxAdapterError("duplicate_session", `Tmux target for ${sessionId} already exists.`);
+      }
+
+      if (liveTargets.some((target) => target.sessionName === sessionName)) {
+        throw new HostDeckTmuxAdapterError("duplicate_session_name", `Tmux target name ${sessionName} already exists.`);
+      }
+
+      await runTmuxCommand(
+        commandOptions,
+        ["new-session", "-d", "-s", tmuxSession, "-c", cwd, "-n", tmuxWindow, command.map(shellQuote).join(" ")],
+        { errorCode: "start_failed" }
+      );
+
+      if (startupVerifyDelayMs > 0) {
+        await delay(startupVerifyDelayMs);
+      }
+
+      const discovered = await discovery.getTargetBySessionId(sessionId);
+
+      if (discovered === null || discovered.tmuxSession !== tmuxSession) {
+        await cleanupTmuxSession(commandOptions, tmuxSession);
+        throw new HostDeckTmuxAdapterError("start_failed", `Tmux target for ${sessionId} did not stay running after launch.`);
+      }
+
+      const createdAt = discovered.createdAt ?? timestamp();
+      const target: TmuxTarget = {
+        sessionId,
+        sessionName,
+        cwd,
+        tmuxSession: discovered.tmuxSession,
+        tmuxWindow: discovered.tmuxWindow,
+        tmuxPane: discovered.tmuxPane,
+        lifecycleState: "running",
+        staleReason: null,
+        createdAt,
+        updatedAt: discovered.updatedAt
+      };
+
+      expectedTargets.set(sessionId, {
+        sessionId,
+        sessionName,
+        cwd,
+        tmuxSession: target.tmuxSession,
+        tmuxWindow: target.tmuxWindow,
+        tmuxPane: target.tmuxPane,
+        createdAt: target.createdAt
+      });
+
+      return target;
+    },
+    listTargets: listKnownLiveTargets,
+    async getTarget(sessionId) {
+      return (await listKnownLiveTargets()).find((target) => target.sessionId === parseRequiredSessionId(sessionId)) ?? null;
+    },
+    async sendInput() {
+      throw unsupportedRealOperation("sendInput", "INT-V1-013");
+    },
+    async stopSession() {
+      throw unsupportedRealOperation("stopSession", "INT-V1-013");
+    },
+    async attachMetadata() {
+      throw unsupportedRealOperation("attachMetadata", "INT-V1-013");
+    },
+    async readOutput() {
+      throw unsupportedRealOperation("readOutput", "INT-V1-014");
+    }
+  };
+}
+
 export function createFakeTmuxAdapter(options: FakeTmuxAdapterOptions = {}): FakeTmuxAdapter {
   const now = options.now ?? (() => new Date());
   const targets = new Map<string, MutableTmuxTarget>();
@@ -370,7 +477,7 @@ export function createFakeTmuxAdapter(options: FakeTmuxAdapterOptions = {}): Fak
         sessionId,
         sessionName: input.sessionName,
         cwd,
-        tmuxSession: tmuxSessionName(sessionId),
+        tmuxSession: tmuxSessionNameForSession(sessionId),
         tmuxWindow: command[0],
         tmuxPane: `%${nextPaneNumber}`,
         lifecycleState: "running",
@@ -488,6 +595,117 @@ export function createFakeTmuxAdapter(options: FakeTmuxAdapterOptions = {}): Fak
   };
 }
 
+async function runTmuxCommand(options: TmuxCommandOptions, args: readonly string[], input: TmuxCommandRunOptions = {}): Promise<string> {
+  const socketArgs = options.socketName === undefined ? [] : ["-L", options.socketName];
+
+  try {
+    const result = await execFileAsync(options.tmuxBinary, [...socketArgs, ...args], {
+      encoding: "utf8",
+      maxBuffer: 1_000_000
+    });
+
+    return result.stdout;
+  } catch (error) {
+    const execError = error as ExecFileException & { readonly stderr?: string };
+    const stderr = execError.stderr ?? "";
+
+    if (input.allowMissingServer === true && isMissingTmuxServerError(stderr)) {
+      return "";
+    }
+
+    if (input.allowMissingTarget === true && isMissingTmuxTargetError(stderr)) {
+      return "";
+    }
+
+    if (execError.code === "ENOENT") {
+      throw new HostDeckTmuxAdapterError("tmux_unavailable", `tmux binary "${options.tmuxBinary}" is not available.`, { cause: error });
+    }
+
+    if (isDuplicateTmuxSessionError(stderr)) {
+      throw new HostDeckTmuxAdapterError("duplicate_session", boundedTmuxError(stderr, execError.message), { cause: error });
+    }
+
+    throw new HostDeckTmuxAdapterError(input.errorCode ?? "invalid_target", boundedTmuxError(stderr, execError.message), { cause: error });
+  }
+}
+
+async function requireExistingDirectory(cwd: AbsoluteCwd): Promise<void> {
+  try {
+    const stats = await stat(cwd);
+
+    if (!stats.isDirectory()) {
+      throw new HostDeckTmuxAdapterError("invalid_cwd", `Working directory ${cwd} is not a directory.`);
+    }
+  } catch (error) {
+    if (error instanceof HostDeckTmuxAdapterError) {
+      throw error;
+    }
+
+    throw new HostDeckTmuxAdapterError("invalid_cwd", `Working directory ${cwd} is not available.`, { cause: error });
+  }
+}
+
+async function requireExecutable(binary: string, pathValue: string): Promise<void> {
+  if (binary.includes("/")) {
+    if (!isAbsolute(binary)) {
+      throw new HostDeckTmuxAdapterError("invalid_start_command", "Start command binary must be absolute or resolvable on PATH.");
+    }
+
+    if (await isExecutableFile(binary)) {
+      return;
+    }
+
+    throw new HostDeckTmuxAdapterError("command_unavailable", `Start command binary "${binary}" is not available.`);
+  }
+
+  for (const dir of pathValue.split(pathDelimiter).filter((part) => part.length > 0)) {
+    if (await isExecutableFile(join(dir, binary))) {
+      return;
+    }
+  }
+
+  throw new HostDeckTmuxAdapterError("command_unavailable", `Start command binary "${binary}" is not available on PATH.`);
+}
+
+async function isExecutableFile(path: string): Promise<boolean> {
+  try {
+    const stats = await stat(path);
+
+    if (!stats.isFile()) {
+      return false;
+    }
+
+    await access(path, fsConstants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function cleanupTmuxSession(options: TmuxCommandOptions, tmuxSession: string): Promise<void> {
+  await runTmuxCommand(options, ["kill-session", "-t", tmuxSession], {
+    allowMissingServer: true,
+    allowMissingTarget: true,
+    errorCode: "start_failed"
+  });
+}
+
+function unsupportedRealOperation(operation: string, ownerTask: string): never {
+  throw new HostDeckTmuxAdapterError("unsupported_operation", `Real tmux ${operation} is not implemented until ${ownerTask}.`);
+}
+
+function tmuxWindowNameForCommand(binary: string): string {
+  return basename(binary) || "codex";
+}
+
+function shellQuote(value: string): string {
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/u.test(value)) {
+    return value;
+  }
+
+  return `'${value.replace(/'/gu, "'\\''")}'`;
+}
+
 function parseDiscoveredTarget(line: string): RealTmuxDiscoveredTarget | null {
   const [tmuxSession, tmuxWindow, tmuxPane, currentPath, createdAtSeconds, updatedAtSeconds] = line.split(tmuxFieldSeparator);
 
@@ -551,6 +769,14 @@ function isMissingTmuxServerError(stderr: string): boolean {
   return stderr.includes("No such file or directory") || stderr.includes("no server running");
 }
 
+function isMissingTmuxTargetError(stderr: string): boolean {
+  return stderr.includes("can't find session") || stderr.includes("can't find pane") || stderr.includes("can't find window");
+}
+
+function isDuplicateTmuxSessionError(stderr: string): boolean {
+  return stderr.includes("duplicate session");
+}
+
 function boundedTmuxError(stderr: string, fallback: string): string {
   const message = stderr.trim() || fallback.trim() || "tmux command failed.";
   return message.length <= 240 ? message : `${message.slice(0, 237)}...`;
@@ -558,6 +784,16 @@ function boundedTmuxError(stderr: string, fallback: string): string {
 
 function parseRequiredSessionId(sessionId: SessionId | string): SessionId {
   const result = parseSessionId(String(sessionId));
+
+  if (!result.ok) {
+    throw new HostDeckTmuxAdapterError("invalid_target", result.message);
+  }
+
+  return result.value;
+}
+
+function parseRequiredSessionName(sessionName: SessionName | string): SessionName {
+  const result = parseSessionName(String(sessionName));
 
   if (!result.ok) {
     throw new HostDeckTmuxAdapterError("invalid_target", result.message);
@@ -612,10 +848,6 @@ function normalizeCommand(command: readonly string[]): readonly [string, ...stri
   }
 
   return [binary, ...args];
-}
-
-function tmuxSessionName(sessionId: SessionId): string {
-  return `hostdeck-${sessionId.replace(/^sess_/u, "").replace(/_/gu, "-")}`;
 }
 
 function cloneTarget(target: MutableTmuxTarget): TmuxTarget {

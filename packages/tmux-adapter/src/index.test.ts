@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -17,6 +17,7 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createFakeTmuxAdapter,
+  createRealTmuxAdapter,
   createRealTmuxTargetDiscovery,
   HostDeckTmuxAdapterError,
   parseSessionIdFromTmuxSessionName,
@@ -55,7 +56,7 @@ describe("fake tmux adapter", () => {
     });
 
     expect(first).toMatchObject({
-      tmuxSession: "hostdeck-tmux-fake-01",
+      tmuxSession: "hostdeck_sess_tmux_fake_01",
       tmuxWindow: "codex",
       tmuxPane: "%1",
       lifecycleState: "running"
@@ -64,7 +65,7 @@ describe("fake tmux adapter", () => {
     expect((await adapter.listTargets()).map((target) => target.sessionId)).toEqual([sessionId("sess_tmux_fake_01"), sessionId("sess_tmux_fake_02")]);
 
     await expect(adapter.attachMetadata({ sessionId: first.sessionId })).resolves.toMatchObject({
-      command: ["tmux", "attach-session", "-t", "hostdeck-tmux-fake-01"],
+      command: ["tmux", "attach-session", "-t", "hostdeck_sess_tmux_fake_01"],
       tmuxPane: "%1"
     });
   });
@@ -281,6 +282,146 @@ describeRealTmux("real tmux target discovery", () => {
   });
 });
 
+describeRealTmux("real tmux adapter start", () => {
+  it("starts a managed fake Codex command and exposes live target metadata", async () => {
+    const socketName = nextSocketName();
+    const cwd = tempDir();
+    const id = sessionId("sess_real_start_01");
+    const adapter = createRealTmuxAdapter({ socketName });
+    const command = fakeCodexCommand();
+
+    const target = await adapter.startSession({
+      sessionId: id,
+      sessionName: sessionName("real-start"),
+      cwd,
+      command: [command, "--model", "fake-model"]
+    });
+
+    expect(target).toMatchObject({
+      sessionId: id,
+      sessionName: sessionName("real-start"),
+      cwd,
+      tmuxSession: "hostdeck_sess_real_start_01",
+      tmuxWindow: "codex",
+      lifecycleState: "running",
+      staleReason: null
+    });
+    expect(target.tmuxPane).toMatch(/^%\d+$/u);
+    await expect(adapter.getTarget(id)).resolves.toMatchObject({
+      sessionId: id,
+      tmuxSession: "hostdeck_sess_real_start_01"
+    });
+    await expect(adapter.listTargets()).resolves.toHaveLength(1);
+    await expectAdapterError(() => adapter.sendInput({ sessionId: id, text: "hello" }), "unsupported_operation");
+    await expectAdapterError(() => adapter.stopSession({ sessionId: id }), "unsupported_operation");
+    await expectAdapterError(() => adapter.attachMetadata({ sessionId: id }), "unsupported_operation");
+    await expectAdapterError(() => adapter.readOutput({ sessionId: id }), "unsupported_operation");
+  });
+
+  it("rejects duplicate real session ids and in-process duplicate names", async () => {
+    const socketName = nextSocketName();
+    const cwd = tempDir();
+    const adapter = createRealTmuxAdapter({ socketName });
+    const command = fakeCodexCommand();
+    const id = sessionId("sess_real_dupe_01");
+
+    await adapter.startSession({
+      sessionId: id,
+      sessionName: sessionName("duplicate-real"),
+      cwd,
+      command: [command]
+    });
+
+    await expectAdapterError(
+      () =>
+        adapter.startSession({
+          sessionId: id,
+          sessionName: sessionName("duplicate-other"),
+          cwd,
+          command: [command]
+        }),
+      "duplicate_session"
+    );
+    await expectAdapterError(
+      () =>
+        adapter.startSession({
+          sessionId: sessionId("sess_real_dupe_02"),
+          sessionName: sessionName("duplicate-real"),
+          cwd,
+          command: [command]
+        }),
+      "duplicate_session_name"
+    );
+  });
+
+  it("fails before tmux launch for invalid cwd and missing command binaries", async () => {
+    const socketName = nextSocketName();
+    const cwd = tempDir();
+    const adapter = createRealTmuxAdapter({ socketName });
+    const discovery = createRealTmuxTargetDiscovery({ socketName });
+    const command = fakeCodexCommand();
+
+    await expectAdapterError(
+      () =>
+        adapter.startSession({
+          sessionId: sessionId("sess_real_badcwd_01"),
+          sessionName: sessionName("bad-cwd"),
+          cwd: absoluteCwd(join(cwd, "missing")),
+          command: [command]
+        }),
+      "invalid_cwd"
+    );
+    await expectAdapterError(
+      () =>
+        adapter.startSession({
+          sessionId: sessionId("sess_real_missing_cmd_01"),
+          sessionName: sessionName("missing-command"),
+          cwd,
+          command: [join(cwd, "missing-codex")]
+        }),
+      "command_unavailable"
+    );
+    await expect(discovery.listTargets()).resolves.toEqual([]);
+  });
+
+  it("fails loudly when tmux is unavailable during real start", async () => {
+    const cwd = tempDir();
+    const command = fakeCodexCommand();
+    const adapter = createRealTmuxAdapter({ tmuxBinary: "/tmp/hostdeck-missing-tmux-binary" });
+
+    await expectAdapterError(
+      () =>
+        adapter.startSession({
+          sessionId: sessionId("sess_real_missing_tmux_01"),
+          sessionName: sessionName("missing-tmux"),
+          cwd,
+          command: [command]
+        }),
+      "tmux_unavailable"
+    );
+  });
+
+  it("cleans up when the launched command exits before verification", async () => {
+    const socketName = nextSocketName();
+    const cwd = tempDir();
+    const adapter = createRealTmuxAdapter({ socketName, startupVerifyDelayMs: 50 });
+    const discovery = createRealTmuxTargetDiscovery({ socketName });
+    const command = fakeCodexCommand("exit 42\n");
+
+    await expectAdapterError(
+      () =>
+        adapter.startSession({
+          sessionId: sessionId("sess_real_fail_01"),
+          sessionName: sessionName("launch-fails"),
+          cwd,
+          command: [command]
+        }),
+      "start_failed"
+    );
+    await expect(discovery.listTargets()).resolves.toEqual([]);
+  });
+});
+
 async function expectAdapterError(fn: () => Promise<unknown>, code: TmuxAdapterErrorCode): Promise<void> {
   await expect(fn()).rejects.toBeInstanceOf(HostDeckTmuxAdapterError);
 
@@ -368,6 +509,14 @@ function tempDir(): AbsoluteCwd {
   const dir = mkdtempSync(join(tmpdir(), "hostdeck-tmux-adapter-"));
   tempDirs.push(dir);
   return absoluteCwd(dir);
+}
+
+function fakeCodexCommand(body = "printf 'fake codex ready\\n'\nsleep 60\n"): string {
+  const dir = tempDir();
+  const file = join(dir, "codex");
+  writeFileSync(file, `#!/bin/sh\n${body}`, { mode: 0o700 });
+  chmodSync(file, 0o700);
+  return file;
 }
 
 function startTmuxSession(socketName: string, tmuxSession: string, cwd: AbsoluteCwd, windowName: string): void {
