@@ -18,6 +18,7 @@ import {
 } from "@hostdeck/storage";
 
 export * from "./output-reader.js";
+export * from "./restart-reconciler.js";
 
 export interface BrowserAuthInput {
   readonly rawDeviceToken?: string | null;

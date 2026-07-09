@@ -16,6 +16,7 @@
   "dependencies": {
     "@hostdeck/contracts": "workspace:*",
     "@hostdeck/core": "workspace:*",
-    "@hostdeck/storage": "workspace:*"
+    "@hostdeck/storage": "workspace:*",
+    "@hostdeck/tmux-adapter": "workspace:*"
   }
 }

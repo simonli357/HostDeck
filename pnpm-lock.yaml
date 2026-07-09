@@ -45,6 +45,9 @@ importers:
       '@hostdeck/storage':
         specifier: workspace:*
         version: link:../storage
+      '@hostdeck/tmux-adapter':
+        specifier: workspace:*
+        version: link:../tmux-adapter
 
   packages/storage:
     dependencies:
