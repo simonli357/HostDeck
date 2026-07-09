@@ -65,13 +65,14 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 26 | `INT-V1-010` Tmux adapter interface and fake adapter | done | none | Fake adapter interface now covers deterministic lifecycle, send, stop, attach, output, stale, and missing-target cases without real tmux/Codex. |
 | 27 | `IFC-V1-005` Pairing/token claim and security/network state API routes | done | none | Security route handlers now cover pairing claim, trust/security state, network state, dashboard lock, remote unlock rejection, LAN mutation rejection, CSRF enforcement, and revoked/expired/used/invalid pairing-code rejection. |
 | 28 | `REL-V1-001` Wire aggregate validation command names and artifact locations | done | none | Validation command wiring now distinguishes implemented commands from planned placeholders, and unavailable commands fail loudly with future owner task IDs. |
+| 29 | `INT-V1-001` Prototype tmux output capture with fake Codex output | done | none | `DEC-017` selects live `pipe-pane` plus bounded `capture-pane` startup/restart recovery for V1 output ingestion. |
+| 30 | `INT-V1-011` Real tmux target naming, lookup, and list/reconcile primitives | ready | none | User-local `tmux 3.4` is now available and the fake adapter interface exists; stable real target identity should come before real start/send/output reader work. |
 
 ## Current Blocked Gates
 
 | Gate | Owning leaf task(s) | Requires | Blocker |
 | --- | --- | --- | --- |
-| Real tmux work | `INT-V1-001`, `INT-V1-011` | Ubuntu host with `tmux` available | Current environment lacks `tmux`; `command -v tmux && tmux -V` exited 1 with no output on 2026-07-08. |
-| Main implementation queue | `IFC-V1-001`, `IFC-V1-002`, `IFC-V1-004`, `FE-V1-001`, downstream release tasks | real tmux/startup prerequisites or completed API dependencies | After `REL-V1-001`, no current queue leaf is ready without unblocking tmux/startup-dependent work or completing prerequisite API/session tasks. |
+| Clean release tmux setup | `REL-V1-006` | clean Ubuntu install/run path | Current work can use user-local `tmux 3.4`; clean release setup still needs documented install/run smoke evidence. |
 | UI visual direction | `FE-V1-002`, `FE-V1-003` | human acceptance | Mockups require UI state coverage first, then human selection before UI implementation. |
 | Release readiness | `REL-V1-005` to `REL-V1-010` | validation artifacts and human acceptance | Release tasks wait for module hardening, docs, smoke evidence, and go/no-go review. |
 

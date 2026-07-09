@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: None ready in the current queue after `REL-V1-001`
+- Active task: `INT-V1-011` real tmux target naming, lookup, and list/reconcile primitives
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
-- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, pairing/security API route foundation, and validation command wiring are complete; real tmux/startup-dependent implementation remains blocked.
-- Last validation: `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:contract`, planned placeholder command smoke, and `git diff --check` passed or failed as expected for `REL-V1-001`; full `IFC-V1-005` validation also passed in `artifacts/ifc-v1-005-security-routes.md`.
-- Next action: Unblock real tmux/startup-dependent work, or revisit the queue to promote a new leaf if scope changes.
-- Blockers: `INT-V1-001` and `INT-V1-011` need `tmux` in the environment; visual mockups before UI implementation.
-- Last commit: `REL-V1-001` validation wiring commit.
-- Last push: `origin/main` after the `REL-V1-001` commit.
+- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, tmux output-capture spike, pairing/security API route foundation, and validation command wiring are complete; real tmux target implementation is next.
+- Last validation: `command -v tmux && tmux -V`, tmux live/restart capture prototypes, missing-target probes, `pnpm test`, `pnpm test:contract`, `pnpm lint`, `pnpm typecheck`, and `git diff --check` passed for `INT-V1-001`.
+- Next action: Start `INT-V1-011` real tmux target naming, lookup, and list/reconcile primitives.
+- Blockers: Clean release tmux setup still needs later smoke/docs; visual mockups before UI implementation.
+- Last commit: `INT-V1-001` tmux capture spike commit.
+- Last push: `origin/main` after the `INT-V1-001` commit.
 
 ## What Is Proven
 
@@ -48,6 +48,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `INT-V1-010` added the typed tmux adapter interface and deterministic fake adapter with lifecycle, send, stop, attach, output, stale, and missing-target coverage.
 - Implementation: `IFC-V1-005` added storage-backed pairing/security/network route handlers, revoked pairing-code support, CSRF-backed dashboard lock, and explicit remote unlock/LAN mutation rejection.
 - Release support: `REL-V1-001` wired validation command placeholders to future owner tasks and recorded command smoke evidence without claiming unavailable layers are implemented.
+- Planning/spike: `INT-V1-001` chose tmux `pipe-pane` for live output ingestion plus bounded `capture-pane` startup/restart recovery.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
@@ -88,6 +89,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | INT-V1-010 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Fake tmux adapter and `artifacts/int-v1-010-fake-tmux-adapter.md`. |
 | IFC-V1-005 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Security routes and `artifacts/ifc-v1-005-security-routes.md`. |
 | REL-V1-001 | Release support | done | `docs/tracking/backlog/hardening-release.md` | Validation wiring and `artifacts/rel-v1-001-validation-wiring.md`. |
+| INT-V1-001 | Spike | done | `docs/tracking/backlog/tmux-output.md` | Tmux output capture spike and `artifacts/int-v1-001-tmux-capture-spike.md`. |
+| INT-V1-011 | Implementation | ready | `docs/tracking/backlog/tmux-output.md` | Next ready leaf: real tmux target naming, lookup, and list/reconcile primitives. |
 
 ## Decisions Needed
 

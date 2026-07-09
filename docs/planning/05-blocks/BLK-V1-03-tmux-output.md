@@ -19,7 +19,7 @@ Owns the real process adapter for HostDeck-managed Codex sessions and ordered ou
 | --- | --- | --- | --- | --- |
 | Tmux adapter interface | Abstract tmux start/list/attach/send/stop/output operations for fakes and real adapter. | Core contracts, storage session records. | Deterministic fake behavior and real adapter commands. | Unsupported operation, missing tmux, target mismatch, invalid session id. |
 | Real tmux adapter | Create named targets, launch Codex, send input, stop targets, expose attach metadata. | Codex executable path, cwd, session id/name, tmux binary. | Running tmux target and lifecycle results. | Missing binary, invalid cwd, launch failure, stale/missing target, partial start cleanup. |
-| Output reader | Capture ordered output events and feed storage/API stream. | Output capture mechanism from `SPK-ARCH-001`, retention policy from `DEC-016`. | Monotonic cursors, replay boundary markers, live fanout input. | Reader crash, retention boundary, invalid cursor, reordered output. |
+| Output reader | Capture ordered output events and feed storage/API stream. | `DEC-017` live `pipe-pane` plus bounded `capture-pane` recovery, retention policy from `DEC-016`. | Monotonic HostDeck cursors, replay boundary markers, live fanout input. | Reader crash, retention boundary, invalid cursor, reordered output, unprovable continuity. |
 | Restart reconciler | Compare registry records with live tmux targets at daemon startup. | Durable session registry and tmux target list. | Running or stale session state, restarted output readers. | Missing target, unknown HostDeck-looking target, unreconciled session, stale write attempt. |
 
 ## Contracts And Data
@@ -52,7 +52,7 @@ Owns the real process adapter for HostDeck-managed Codex sessions and ordered ou
 
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
-| Tmux capture spike and adapter foundation | `INT-V1-001`, `INT-V1-010` to `INT-V1-013` | In progress: `INT-V1-010` done; real tmux work blocked by `tmux` availability | `artifacts/int-v1-010-fake-tmux-adapter.md`, `docs/tracking/backlog/tmux-output.md` |
+| Tmux capture spike and adapter foundation | `INT-V1-001`, `INT-V1-010` to `INT-V1-013` | In progress: `INT-V1-001` and `INT-V1-010` done; real tmux target work next | `artifacts/int-v1-001-tmux-capture-spike.md`, `artifacts/int-v1-010-fake-tmux-adapter.md`, `docs/tracking/backlog/tmux-output.md` |
 | Output and restart | `INT-V1-014` to `INT-V1-016` | Planned | `docs/tracking/backlog/tmux-output.md` |
 | Tmux hardening | `INT-V1-090` | Planned | `docs/tracking/backlog/tmux-output.md` |
 
@@ -71,5 +71,5 @@ Owns the real process adapter for HostDeck-managed Codex sessions and ordered ou
 
 | ID | Question | Owner | Exit evidence |
 | --- | --- | --- | --- |
-| `SPK-ARCH-001` | Can tmux `pipe-pane` or an equivalent mechanism provide ordered, reconnectable per-session output for V1? | Architecture/tmux task | Prototype artifact with chosen capture mechanism, cursor behavior, and failure modes. |
+| `SPK-ARCH-001` | Can tmux `pipe-pane` or an equivalent mechanism provide ordered, reconnectable per-session output for V1? | Resolved by `DEC-017` / `INT-V1-001` | `artifacts/int-v1-001-tmux-capture-spike.md`. |
 | `SPK-ARCH-004` | What output and audit retention caps should V1 use? | Resolved by `DEC-016` / `DAT-V1-003` | `artifacts/dat-v1-003-retention-caps-spike.md`. |
