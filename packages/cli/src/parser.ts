@@ -3,7 +3,12 @@ import { usageFailure } from "./errors.js";
 export type ParsedCliCommand =
   | { readonly kind: "help" }
   | { readonly kind: "version" }
-  | { readonly kind: "status"; readonly json: boolean };
+  | { readonly kind: "status"; readonly json: boolean }
+  | { readonly kind: "start"; readonly name: string; readonly cwd: string; readonly json: boolean }
+  | { readonly kind: "list"; readonly json: boolean }
+  | { readonly kind: "send"; readonly session: string; readonly text: string }
+  | { readonly kind: "attach"; readonly session: string }
+  | { readonly kind: "stop"; readonly session: string };
 
 export interface ParsedCliArgs {
   readonly command: ParsedCliCommand;
@@ -91,7 +96,12 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
       continue;
     }
 
-    if (token.startsWith("-")) {
+    if (token === "--") {
+      positionals.push(...args.slice(index + 1));
+      break;
+    }
+
+    if (token.startsWith("-") && positionals.length === 0) {
       throw usageFailure(`Unknown option: ${token}`);
     }
 
@@ -128,7 +138,105 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
     return { command: { kind: "status", json }, configFlags };
   }
 
+  if (command === "start") {
+    const parsed = parseStartOptions(rest);
+
+    return { command: { kind: "start", name: parsed.name, cwd: parsed.cwd, json }, configFlags };
+  }
+
+  if (command === "list") {
+    if (rest.length > 0) {
+      throw usageFailure("The list command does not accept positional arguments.");
+    }
+
+    return { command: { kind: "list", json }, configFlags };
+  }
+
+  if (command === "send") {
+    if (rest.length < 2) {
+      throw usageFailure("The send command requires a session target and text.");
+    }
+
+    const [session, ...textParts] = rest;
+
+    return {
+      command: {
+        kind: "send",
+        session: session ?? "",
+        text: textParts.join(" ")
+      },
+      configFlags
+    };
+  }
+
+  if (command === "attach") {
+    return { command: { kind: "attach", session: singleSessionArgument("attach", rest) }, configFlags };
+  }
+
+  if (command === "stop") {
+    return { command: { kind: "stop", session: singleSessionArgument("stop", rest) }, configFlags };
+  }
+
   throw usageFailure(`Unknown command: ${command ?? ""}`);
+}
+
+function parseStartOptions(args: readonly string[]): { readonly name: string; readonly cwd: string } {
+  let name: string | undefined;
+  let cwd: string | undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+
+    if (token === undefined) {
+      continue;
+    }
+
+    if (token === "--name") {
+      name = readOptionValue(args, index, "--name");
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith("--name=")) {
+      name = readInlineOptionValue(token, "--name");
+      continue;
+    }
+
+    if (token === "--cwd") {
+      cwd = readOptionValue(args, index, "--cwd");
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith("--cwd=")) {
+      cwd = readInlineOptionValue(token, "--cwd");
+      continue;
+    }
+
+    if (token.startsWith("-")) {
+      throw usageFailure(`Unknown start option: ${token}`);
+    }
+
+    throw usageFailure(`Unexpected start argument: ${token}`);
+  }
+
+  if (name === undefined) {
+    throw usageFailure("The start command requires --name.");
+  }
+
+  if (cwd === undefined) {
+    throw usageFailure("The start command requires --cwd.");
+  }
+
+  return { name, cwd };
+}
+
+function singleSessionArgument(command: string, args: readonly string[]): string {
+  if (args.length !== 1) {
+    throw usageFailure(`The ${command} command requires exactly one session target.`);
+  }
+
+  return args[0] ?? "";
 }
 
 function readOptionValue(args: readonly string[], index: number, optionName: string): string {

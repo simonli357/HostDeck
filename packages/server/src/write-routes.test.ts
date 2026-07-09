@@ -136,6 +136,54 @@ describe("session write route handlers", () => {
     }
   });
 
+  it("accepts local-admin CLI writes without browser cookie or CSRF tokens", async () => {
+    const harness = createHarness();
+
+    try {
+      const prompt = await harness.createRunningSession("sess_write_cli_01", "cli-prompt-demo");
+      const stop = await harness.createRunningSession("sess_write_cli_02", "cli-stop-demo");
+
+      await expect(
+        harness.handlers.promptInput({
+          params: { session_id: prompt.id },
+          body: { text: "Continue from CLI." },
+          localAdmin: true
+        })
+      ).resolves.toMatchObject({
+        status: 202,
+        body: { accepted: true, session_id: prompt.id, action: "prompt", audit_required: true }
+      });
+
+      await expect(
+        harness.handlers.stopSession({
+          params: { session_id: stop.id },
+          body: { confirm: true },
+          localAdmin: true
+        })
+      ).resolves.toMatchObject({
+        status: 202,
+        body: { accepted: true, session_id: stop.id, action: "stop", audit_required: true }
+      });
+
+      expect(harness.tmux.sentInputs()).toMatchObject([{ sessionId: prompt.id, text: "Continue from CLI.", enter: true }]);
+      await expect(harness.tmux.getTarget(stop.id)).resolves.toBeNull();
+      expect(harness.audit.require("audit_001")).toMatchObject({
+        actor: { type: "cli", client_id: "local_admin", permission: "write" },
+        action: "prompt",
+        session_id: prompt.id,
+        result: "accepted"
+      });
+      expect(harness.audit.require("audit_002")).toMatchObject({
+        actor: { type: "cli", client_id: "local_admin", permission: "write" },
+        action: "stop",
+        session_id: stop.id,
+        result: "accepted"
+      });
+    } finally {
+      harness.close();
+    }
+  });
+
   it("rejects malformed requests, missing sessions, untrusted clients, read-only clients, locked hosts, unsupported slash, multi-session writes, and raw input without tmux send", async () => {
     const malformedHarness = createHarness();
 

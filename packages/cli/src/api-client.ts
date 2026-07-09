@@ -1,8 +1,25 @@
-import { apiRouteErrorBodySchema, type HostStatusResponse, hostStatusResponseSchema } from "@hostdeck/contracts";
+import {
+  apiRouteErrorBodySchema,
+  type HostStatusResponse,
+  hostStatusResponseSchema,
+  type SessionDetailResponse,
+  type SessionListResponse,
+  type StartSessionResponse,
+  sessionDetailResponseSchema,
+  sessionListResponseSchema,
+  startSessionResponseSchema,
+  type WriteResponse,
+  writeResponseSchema
+} from "@hostdeck/contracts";
 import { apiFailure, daemonUnavailableFailure, internalFailure } from "./errors.js";
 
 export interface HostDeckApiClient {
   readonly getStatus: () => Promise<HostStatusResponse>;
+  readonly startSession: (input: { readonly name: string; readonly cwd: string }) => Promise<StartSessionResponse>;
+  readonly listSessions: () => Promise<SessionListResponse>;
+  readonly getSession: (sessionId: string) => Promise<SessionDetailResponse>;
+  readonly sendPrompt: (sessionId: string, text: string) => Promise<WriteResponse>;
+  readonly stopSession: (sessionId: string) => Promise<WriteResponse>;
 }
 
 export interface HostDeckApiClientOptions {
@@ -40,7 +57,56 @@ export function createHostDeckApiClient(options: HostDeckApiClientOptions): Host
         method: "GET",
         path: "/api/host/status",
         responseSchema: hostStatusResponseSchema
-      })
+      }),
+    startSession: (input) =>
+      requestJson({
+        baseUrl: options.baseUrl,
+        fetch: httpFetch,
+        method: "POST",
+        path: "/api/sessions",
+        body: input,
+        responseSchema: startSessionResponseSchema
+      }),
+    listSessions: () =>
+      requestJson({
+        baseUrl: options.baseUrl,
+        fetch: httpFetch,
+        method: "GET",
+        path: "/api/sessions",
+        responseSchema: sessionListResponseSchema
+      }),
+    getSession: (sessionId) =>
+      requestJson({
+        baseUrl: options.baseUrl,
+        fetch: httpFetch,
+        method: "GET",
+        path: `/api/sessions/${encodeURIComponent(sessionId)}`,
+        responseSchema: sessionDetailResponseSchema
+      }),
+    sendPrompt: async (sessionId, text) => {
+      const response = await requestJson({
+        baseUrl: options.baseUrl,
+        fetch: httpFetch,
+        method: "POST",
+        path: `/api/sessions/${encodeURIComponent(sessionId)}/input`,
+        body: { text },
+        responseSchema: writeResponseSchema
+      });
+
+      return acceptedWriteOrThrow(response, 409);
+    },
+    stopSession: async (sessionId) => {
+      const response = await requestJson({
+        baseUrl: options.baseUrl,
+        fetch: httpFetch,
+        method: "POST",
+        path: `/api/sessions/${encodeURIComponent(sessionId)}/stop`,
+        body: { confirm: true },
+        responseSchema: writeResponseSchema
+      });
+
+      return acceptedWriteOrThrow(response, 409);
+    }
   };
 }
 
@@ -49,6 +115,7 @@ async function requestJson<T>(options: {
   readonly fetch: HttpFetch;
   readonly method: "GET" | "POST";
   readonly path: `/api/${string}`;
+  readonly body?: unknown;
   readonly responseSchema: RuntimeSchema<T>;
 }): Promise<T> {
   const url = new URL(options.path, options.baseUrl);
@@ -58,8 +125,10 @@ async function requestJson<T>(options: {
     response = await options.fetch(url.toString(), {
       method: options.method,
       headers: {
-        accept: "application/json"
-      }
+        accept: "application/json",
+        ...(options.body !== undefined ? { "content-type": "application/json" } : {})
+      },
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {})
     });
   } catch (error) {
     throw daemonUnavailableFailure(options.baseUrl, error);
@@ -71,6 +140,12 @@ async function requestJson<T>(options: {
     const parsedError = apiRouteErrorBodySchema.safeParse(payload);
 
     if (!parsedError.success) {
+      const parsedWriteRejection = writeResponseSchema.safeParse(payload);
+
+      if (parsedWriteRejection.success && !parsedWriteRejection.data.accepted) {
+        throw apiFailure(response.status, parsedWriteRejection.data.error);
+      }
+
       throw internalFailure(`HostDeck daemon returned an untyped HTTP ${response.status} error.`);
     }
 
@@ -84,6 +159,14 @@ async function requestJson<T>(options: {
   }
 
   return parsedResponse.data;
+}
+
+function acceptedWriteOrThrow(response: WriteResponse, status: number): WriteResponse {
+  if (!response.accepted) {
+    throw apiFailure(status, response.error);
+  }
+
+  return response;
 }
 
 async function readJsonPayload(response: HttpResponse): Promise<unknown> {

@@ -140,6 +140,13 @@ export const outputQuerySchema = z
   })
   .strict();
 
+export const startSessionRequestSchema = z
+  .object({
+    name: sessionNameSchema,
+    cwd: absoluteCwdSchema
+  })
+  .strict();
+
 export const sessionListResponseSchema = z
   .object({
     sessions: z.array(apiSessionSchema)
@@ -151,6 +158,8 @@ export const sessionDetailResponseSchema = z
     session: apiSessionSchema
   })
   .strict();
+
+export const startSessionResponseSchema = sessionDetailResponseSchema;
 
 export const outputDataEventSchema = z
   .object({
@@ -381,6 +390,8 @@ export type ApiErrorEnvelope = z.infer<typeof apiErrorEnvelopeSchema>;
 export type ApiRouteErrorBody = z.infer<typeof apiRouteErrorBodySchema>;
 export type ApiSession = z.infer<typeof apiSessionSchema>;
 export type HostStatusResponse = z.infer<typeof hostStatusResponseSchema>;
+export type StartSessionRequest = z.infer<typeof startSessionRequestSchema>;
+export type StartSessionResponse = z.infer<typeof startSessionResponseSchema>;
 export type SessionListResponse = z.infer<typeof sessionListResponseSchema>;
 export type SessionDetailResponse = z.infer<typeof sessionDetailResponseSchema>;
 export type SessionStreamEvent = z.infer<typeof sessionStreamEventSchema>;

@@ -1,10 +1,15 @@
-import type { HostStatusResponse } from "@hostdeck/contracts";
+import type { ApiSession, HostStatusResponse, SessionListResponse, StartSessionResponse, WriteResponse } from "@hostdeck/contracts";
 import type { CliFailure } from "./errors.js";
 
 export function renderHelp(): string {
   return [
     "Usage:",
     "  codexdeck status [--json] [--api-url URL | --host HOST --port PORT]",
+    "  codexdeck start --name NAME --cwd PATH [--json]",
+    "  codexdeck list [--json]",
+    "  codexdeck send SESSION TEXT...",
+    "  codexdeck attach SESSION",
+    "  codexdeck stop SESSION",
     "  codexdeck help",
     "  codexdeck version",
     "",
@@ -18,8 +23,59 @@ export function renderHelp(): string {
   ].join("\n");
 }
 
+export function renderStartSession(response: StartSessionResponse, json: boolean): string {
+  if (json) {
+    return `${JSON.stringify(response, null, 2)}\n`;
+  }
+
+  return [
+    `Started session: ${response.session.name}`,
+    `ID: ${response.session.id}`,
+    `CWD: ${response.session.cwd}`,
+    `Tmux: ${response.session.backend.tmux.session_name}`,
+    ""
+  ].join("\n");
+}
+
+export function renderSessionList(response: SessionListResponse, json: boolean): string {
+  if (json) {
+    return `${JSON.stringify(response, null, 2)}\n`;
+  }
+
+  if (response.sessions.length === 0) {
+    return "No HostDeck sessions.\n";
+  }
+
+  return `${response.sessions.map(renderSessionLine).join("\n")}\n`;
+}
+
+export function renderAttachCommand(session: ApiSession): string {
+  return [
+    `Attach session: ${session.name}`,
+    `ID: ${session.id}`,
+    `Lifecycle: ${session.lifecycle_state}`,
+    `Tmux command: tmux attach-session -t ${session.backend.tmux.session_name}`,
+    ""
+  ].join("\n");
+}
+
+export function renderWriteAccepted(response: WriteResponse): string {
+  if (!response.accepted) {
+    return `Rejected ${response.error.code}: ${response.error.message}\n`;
+  }
+
+  return `${response.action} accepted for ${response.session_id}. Audit required: ${response.audit_required ? "yes" : "no"}\n`;
+}
+
 export function renderVersion(version: string): string {
   return `codexdeck ${version}\n`;
+}
+
+function renderSessionLine(session: ApiSession): string {
+  const branch = session.branch === null ? "" : ` branch=${session.branch}`;
+  const stale = session.lifecycle_state === "stale" ? " stale" : "";
+
+  return `${session.id}  ${session.name}  lifecycle=${session.lifecycle_state}${stale} status=${session.status} attention=${session.attention}${branch} cwd=${session.cwd}`;
 }
 
 export function renderStatus(status: HostStatusResponse, json: boolean): string {

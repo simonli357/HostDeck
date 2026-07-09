@@ -194,7 +194,7 @@ function authorizeRead(input: CreateReadRouteHandlersInput, authorization: ReadA
   return input.authorizeRead?.(authorization) ?? { ok: true };
 }
 
-function apiSession(input: CreateReadRouteHandlersInput, sessionId: string): ApiSession {
+export function apiSession(input: Pick<CreateReadRouteHandlersInput, "metadata" | "sessions">, sessionId: string): ApiSession {
   const session = input.sessions.require(sessionId);
   const metadata = input.metadata.get(sessionId);
   const isStale = session.lifecycle_state === "stale";

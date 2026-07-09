@@ -38,7 +38,7 @@ Track meaningful ordering dependencies here. Group files own exact task cards.
 
 | Requirement group | Leaf task coverage |
 | --- | --- |
-| `FR-001` to `FR-004`, `FR-013`, `FR-014` session lifecycle/output/restart | `INT-V1-010` to `INT-V1-016`, `IFC-V1-002` to `IFC-V1-004`, `IFC-V1-014`, `INT-V1-090` |
+| `FR-001` to `FR-004`, `FR-013`, `FR-014` session lifecycle/output/restart | `INT-V1-010` to `INT-V1-016`, `IFC-V1-002` to `IFC-V1-004`, `IFC-V1-007`, `IFC-V1-014`, `INT-V1-090` |
 | `FR-005` output refresh/streaming | `INT-V1-014`, `IFC-V1-003`, `FE-V1-012`, `FE-V1-015`, `FE-V1-019` |
 | `FR-006` to `FR-008`, `FR-015` prompt/slash writes | `FND-V1-004`, `IFC-V1-004`, `IFC-V1-007`, `FE-V1-020`, `FE-V1-021` |
 | `FR-009`, `SFR-011` status and fixture heuristics | `FND-V1-007`, `FND-V1-008`, `FE-V1-001`, `FE-V1-015` |

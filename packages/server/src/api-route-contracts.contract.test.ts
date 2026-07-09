@@ -4,6 +4,7 @@ import { type ApiRouteAuthMode, type ApiRouteMethod, apiRouteContracts } from ".
 const expectedRouteIds = [
   "host_status",
   "session_list",
+  "session_start",
   "session_detail",
   "session_output",
   "session_stream",
@@ -23,7 +24,9 @@ const expectedRouteIds = [
 const validMethods = new Set<ApiRouteMethod>(["GET", "POST"]);
 const validAuthModes = new Set<ApiRouteAuthMode>([
   "local_read_policy",
+  "local_admin",
   "dashboard_write_cookie_csrf",
+  "dashboard_write_cookie_csrf_or_local_admin",
   "pairing_code",
   "optional_device_cookie",
   "none",
@@ -124,21 +127,25 @@ describe("API route contract manifest", () => {
       method: "GET",
       auth: "local_read_policy"
     });
+    expect(contracts.session_start).toMatchObject({
+      method: "POST",
+      auth: "local_admin"
+    });
     expect(contracts.prompt_input).toMatchObject({
       method: "POST",
-      auth: "dashboard_write_cookie_csrf"
+      auth: "dashboard_write_cookie_csrf_or_local_admin"
     });
     expect(contracts.slash_command).toMatchObject({
       method: "POST",
-      auth: "dashboard_write_cookie_csrf"
+      auth: "dashboard_write_cookie_csrf_or_local_admin"
     });
     expect(contracts.stop_session).toMatchObject({
       method: "POST",
-      auth: "dashboard_write_cookie_csrf"
+      auth: "dashboard_write_cookie_csrf_or_local_admin"
     });
     expect(contracts.raw_input).toMatchObject({
       method: "POST",
-      auth: "dashboard_write_cookie_csrf"
+      auth: "dashboard_write_cookie_csrf_or_local_admin"
     });
     expect(contracts.dashboard_unlock_rejected).toMatchObject({
       method: "POST",

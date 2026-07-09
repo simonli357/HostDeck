@@ -26,6 +26,7 @@ import { HostDeckTmuxAdapterError, type TmuxAdapter } from "@hostdeck/tmux-adapt
 export interface WriteAuthInput {
   readonly rawDeviceToken?: string | null;
   readonly rawCsrfToken?: string | null;
+  readonly localAdmin?: boolean;
 }
 
 export interface WriteRouteInput extends WriteAuthInput {
@@ -72,8 +73,8 @@ type ParsedRouteInput =
   | { readonly ok: false; readonly error: WriteRouteResult };
 
 type AuditActor = {
-  readonly type: "dashboard";
-  readonly client_id: string;
+  readonly type: "cli" | "dashboard";
+  readonly client_id: string | null;
   readonly permission: "write";
 };
 
@@ -110,7 +111,7 @@ async function handleWrite(
     return parsed.error;
   }
 
-  const auth = authorizeBrowserWrite(input.authDevices, routeInput, now);
+  const auth = authorizeWriteActor(input.authDevices, routeInput, now);
 
   if (!auth.ok) {
     return auth.error;
@@ -140,11 +141,7 @@ async function handleWrite(
     ...(parsed.request.action === "slash" ? { slashCommand: parsed.request.command } : {}),
     ...(parsed.request.action === "raw_input" ? { rawInputConfirmed: parsed.request.confirmed } : {})
   });
-  const actor: AuditActor = {
-    type: "dashboard",
-    client_id: auth.device.id,
-    permission: "write"
-  };
+  const actor = auth.actor;
 
   if (!eligibility.allowed) {
     const audit = appendWriteAudit(input.auditEvents, createAuditId, now, {
@@ -347,11 +344,22 @@ function parseTargetSessionIds(
   return { ok: true, value: parsedIds };
 }
 
-function authorizeBrowserWrite(
+function authorizeWriteActor(
   authDevices: AuthDeviceRepository,
   input: WriteAuthInput,
   now: () => Date
-): { readonly ok: true; readonly device: AuthDeviceRecord } | { readonly ok: false; readonly error: WriteRouteResult } {
+): { readonly ok: true; readonly actor: AuditActor; readonly device?: AuthDeviceRecord } | { readonly ok: false; readonly error: WriteRouteResult } {
+  if (input.localAdmin === true) {
+    return {
+      ok: true,
+      actor: {
+        type: "cli",
+        client_id: "local_admin",
+        permission: "write"
+      }
+    };
+  }
+
   if (input.rawDeviceToken === undefined || input.rawDeviceToken === null || input.rawCsrfToken === undefined || input.rawCsrfToken === null) {
     return {
       ok: false,
@@ -360,13 +368,20 @@ function authorizeBrowserWrite(
   }
 
   try {
+    const device = authDevices.authorizeBrowserWrite({
+      rawDeviceToken: input.rawDeviceToken,
+      rawCsrfToken: input.rawCsrfToken,
+      now: now()
+    });
+
     return {
       ok: true,
-      device: authDevices.authorizeBrowserWrite({
-        rawDeviceToken: input.rawDeviceToken,
-        rawCsrfToken: input.rawCsrfToken,
-        now: now()
-      })
+      device,
+      actor: {
+        type: "dashboard",
+        client_id: device.id,
+        permission: "write"
+      }
     };
   } catch (error) {
     return {

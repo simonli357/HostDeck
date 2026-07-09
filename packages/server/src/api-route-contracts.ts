@@ -16,6 +16,8 @@ import {
   sessionOutputResponseSchema,
   sessionStreamEventSchema,
   slashCommandRequestSchema,
+  startSessionRequestSchema,
+  startSessionResponseSchema,
   stopSessionRequestSchema,
   writeResponseSchema
 } from "@hostdeck/contracts";
@@ -25,7 +27,9 @@ export type ApiRouteMethod = "GET" | "POST";
 
 export type ApiRouteAuthMode =
   | "local_read_policy"
+  | "local_admin"
   | "dashboard_write_cookie_csrf"
+  | "dashboard_write_cookie_csrf_or_local_admin"
   | "pairing_code"
   | "optional_device_cookie"
   | "none"
@@ -166,6 +170,31 @@ export const apiRouteContracts: readonly ApiRouteContract[] = [
     typedErrors: [errorContract(403, "permission_denied"), errorContract(500, "storage_error")]
   },
   {
+    id: "session_start",
+    family: "sessions",
+    operation: "Start session",
+    handler: "control.startSession",
+    method: "POST",
+    path: "/api/sessions",
+    auth: "local_admin",
+    bodySchema: startSessionRequestSchema,
+    successResponseSchema: startSessionResponseSchema,
+    errorResponseSchema: apiRouteErrorBodySchema,
+    samples: {
+      body: { name: "route-contract-demo", cwd: "/home/simonli/HostDeck" },
+      successResponse: { session: apiSessionSample }
+    },
+    typedErrors: [
+      errorContract(400, "invalid_cwd", "cwd"),
+      errorContract(400, "validation_error", "name"),
+      errorContract(409, "duplicate_session_name", "name"),
+      errorContract(500, "missing_binary", "command"),
+      errorContract(502, "tmux_error"),
+      errorContract(500, "storage_error"),
+      errorContract(500, "internal_error")
+    ]
+  },
+  {
     id: "session_detail",
     family: "sessions",
     operation: "Session detail",
@@ -251,7 +280,7 @@ export const apiRouteContracts: readonly ApiRouteContract[] = [
     handler: "write.promptInput",
     method: "POST",
     path: "/api/sessions/:session_id/input",
-    auth: "dashboard_write_cookie_csrf",
+    auth: "dashboard_write_cookie_csrf_or_local_admin",
     paramsSchema: sessionIdParamsSchema,
     bodySchema: promptInputRequestSchema,
     successResponseSchema: writeResponseSchema,
@@ -270,7 +299,7 @@ export const apiRouteContracts: readonly ApiRouteContract[] = [
     handler: "write.slashCommand",
     method: "POST",
     path: "/api/sessions/:session_id/slash",
-    auth: "dashboard_write_cookie_csrf",
+    auth: "dashboard_write_cookie_csrf_or_local_admin",
     paramsSchema: sessionIdParamsSchema,
     bodySchema: slashCommandRequestSchema,
     successResponseSchema: writeResponseSchema,
@@ -289,7 +318,7 @@ export const apiRouteContracts: readonly ApiRouteContract[] = [
     handler: "write.stopSession",
     method: "POST",
     path: "/api/sessions/:session_id/stop",
-    auth: "dashboard_write_cookie_csrf",
+    auth: "dashboard_write_cookie_csrf_or_local_admin",
     paramsSchema: sessionIdParamsSchema,
     bodySchema: stopSessionRequestSchema,
     successResponseSchema: writeResponseSchema,
@@ -308,7 +337,7 @@ export const apiRouteContracts: readonly ApiRouteContract[] = [
     handler: "write.rawInput",
     method: "POST",
     path: "/api/sessions/:session_id/raw-input",
-    auth: "dashboard_write_cookie_csrf",
+    auth: "dashboard_write_cookie_csrf_or_local_admin",
     paramsSchema: sessionIdParamsSchema,
     bodySchema: rawInputRequestSchema,
     successResponseSchema: writeResponseSchema,

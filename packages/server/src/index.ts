@@ -21,6 +21,7 @@ export * from "./api-route-contracts.js";
 export * from "./output-reader.js";
 export * from "./read-routes.js";
 export * from "./restart-reconciler.js";
+export * from "./session-control-routes.js";
 export * from "./startup.js";
 export * from "./stream-routes.js";
 export * from "./write-routes.js";

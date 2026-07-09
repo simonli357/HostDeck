@@ -9,14 +9,14 @@ Date: 2026-07-09
 - Added `apiRouteErrorBodySchema` in `@hostdeck/contracts` so route-level failures validate the HTTP body shape `{ error }` around the shared bounded error envelope.
 - Added `packages/server/src/api-route-contracts.ts` as the aggregate V1 route contract manifest.
 - Exported the route contract manifest from `@hostdeck/server`.
-- Covered the current headless V1 route families: host status, session read/detail/output, one-session stream, prompt/slash/stop/raw writes, pairing claim/status, security state, dashboard lock, rejected dashboard unlock, network state, and rejected dashboard LAN mutation.
+- Covered the current headless V1 route families: host status, session start/read/detail/output, one-session stream, prompt/slash/stop/raw writes, pairing claim/status, security state, dashboard lock, rejected dashboard unlock, network state, and rejected dashboard LAN mutation.
 - Each route contract declares stable id, family, operation, handler name, method, `/api/...` path, auth mode, request schemas where needed, success response or stream event schema, route error body schema, sample payloads, and typed errors.
 - Pair routes use pair-specific response schemas while preserving the shared trust-state body shape.
 - Error contracts validate every declared typed error sample against the shared API route error body schema.
 
 ## Coverage
 
-- Stable route id order for 16 current V1 route contracts.
+- Stable route id order for 17 current V1 route contracts.
 - Duplicate route id and duplicate method/path detection.
 - Route families: `host`, `sessions`, `stream`, `writes`, `pairing`, `security`, and `network`.
 - Valid method set: `GET` and `POST`.
@@ -65,6 +65,11 @@ Results:
 - `pnpm test`: passed; 24 files and 150 tests.
 - `pnpm test:tmux`: passed; 1 real tmux smoke test.
 - `git diff --check`: passed.
+
+## 2026-07-09 Update
+
+- `IFC-V1-007` added the `session_start` route contract for `POST /api/sessions`, bringing the manifest to 17 current V1 route contracts.
+- Current validation for the updated manifest: `pnpm test:contract` passed with 6 files and 58 tests.
 
 ## Remaining Gaps
 

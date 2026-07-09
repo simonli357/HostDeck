@@ -16,6 +16,8 @@ import {
   sessionOutputResponseSchema,
   sessionStreamEventSchema,
   slashCommandRequestSchema,
+  startSessionRequestSchema,
+  startSessionResponseSchema,
   stopSessionRequestSchema,
   writeResponseSchema
 } from "./api.js";
@@ -103,6 +105,19 @@ describe("API error envelope schema", () => {
 });
 
 describe("session read and output schemas", () => {
+  it("validates start-session requests and responses", () => {
+    expect(startSessionRequestSchema.parse({ name: "contract-demo", cwd: "/home/simonli/HostDeck" })).toMatchObject({
+      name: "contract-demo",
+      cwd: "/home/simonli/HostDeck"
+    });
+    expect(startSessionResponseSchema.parse({ session: sessionFixture }).session.id).toBe(sessionId);
+  });
+
+  it("rejects malformed start-session names and working directories", () => {
+    expect(() => startSessionRequestSchema.parse({ name: "../bad", cwd: "/home/simonli/HostDeck" })).toThrow();
+    expect(() => startSessionRequestSchema.parse({ name: "contract-demo", cwd: "relative/path" })).toThrow();
+  });
+
   it("validates session list/detail shapes and output cursor queries", () => {
     expect(sessionIdParamsSchema.parse({ session_id: sessionId }).session_id).toBe(sessionId);
     expect(outputQuerySchema.parse({ after: 4 }).after).toBe(4);
