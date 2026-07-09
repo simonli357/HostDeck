@@ -9,8 +9,16 @@ export {
 export {
   defaultMigrations,
   hostDeckBaseSchemaMigration,
+  hostDeckSessionMetadataFailedStatusMigration,
   type StorageMigration
 } from "./migrations.js";
+export {
+  createSessionMetadataRepository,
+  createSessionRepository,
+  HostDeckSessionRepositoryError,
+  type SessionMetadataRepository,
+  type SessionRepository
+} from "./session-repository.js";
 export {
   type CreateDefaultSettingsInput,
   createDefaultSettings,

@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `DAT-V1-012` session registry and metadata repositories
+- Active task: `DAT-V1-013` auth devices and pairing-code repositories
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
 - Release state: Foundation block complete; data/auth/storage repositories are underway.
-- Last validation: `pnpm install --frozen-lockfile`, `pnpm --filter @hostdeck/storage typecheck`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit -- packages/storage/src/settings-repository.test.ts`, `pnpm test:unit`, `pnpm test:contract`, and `git diff --check` passed for `DAT-V1-011`.
-- Next action: Start `DAT-V1-012` session registry and metadata repositories.
+- Last validation: `pnpm install --frozen-lockfile`, `pnpm --filter @hostdeck/storage typecheck`, `pnpm check:scaffold`, `pnpm typecheck`, `pnpm -r --if-present typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:unit -- packages/storage/src/session-repository.test.ts packages/storage/src/migration-runner.test.ts`, `pnpm test:contract`, and `git diff --check` passed for `DAT-V1-012`.
+- Next action: Start `DAT-V1-013` auth devices and pairing-code repositories.
 - Blockers: `INT-V1-001` needs `tmux` in the environment; visual mockups before UI implementation.
-- Last commit: `DAT-V1-011` settings repository commit.
-- Last push: `origin/main` after the `DAT-V1-011` commit.
+- Last commit: `DAT-V1-012` session repository commit.
+- Last push: `origin/main` after the `DAT-V1-012` commit.
 
 ## What Is Proven
 
@@ -38,6 +38,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Planning/spike: `DAT-V1-003` chose output/audit retention defaults and replay/audit boundary semantics.
 - Implementation: `DAT-V1-010` added the SQLite migration runner, base schema, `better-sqlite3` dependency, and native build approval.
 - Implementation: `DAT-V1-011` added the SQLite-backed settings/config repository with safe localhost defaults, bind-host validation, lock/LAN persistence, and invalid-startup rejection.
+- Implementation: `DAT-V1-012` added SQLite-backed session registry and metadata repositories, duplicate-name/id handling, invalid cwd/stale/reload rejection, and a migration for the valid `failed` metadata status.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
@@ -69,7 +70,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | DAT-V1-003 | Spike | done | `docs/tracking/backlog/local-state-auth-audit.md` | Retention defaults/boundary decision and `artifacts/dat-v1-003-retention-caps-spike.md`. |
 | DAT-V1-010 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | SQLite migration runner/base schema and `artifacts/dat-v1-010-sqlite-migration-runner.md`. |
 | DAT-V1-011 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Settings/config repository and `artifacts/dat-v1-011-settings-repository.md`. |
-| DAT-V1-012 | Implementation | ready | `docs/tracking/backlog/local-state-auth-audit.md` | Next ready leaf: implement session registry and metadata repositories. |
+| DAT-V1-012 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Session registry/metadata repositories and `artifacts/dat-v1-012-session-repositories.md`. |
+| DAT-V1-013 | Implementation | ready | `docs/tracking/backlog/local-state-auth-audit.md` | Next ready leaf: implement auth devices and pairing-code repositories. |
 
 ## Decisions Needed
 

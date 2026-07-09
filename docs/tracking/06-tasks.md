@@ -55,11 +55,12 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 16 | `DAT-V1-003` Output and audit retention caps spike | done | none | `DEC-016` chose output/audit caps, cleanup timing, and replay/audit boundary semantics. |
 | 17 | `DAT-V1-010` SQLite migration runner and base schema | done | none | Base storage schema and migration runner are implemented with migration failure tests. |
 | 18 | `DAT-V1-011` Settings/config repository | done | none | Settings repository now persists safe defaults, lock/LAN state, state dir, port, retention values, and invalid-startup rejection. |
-| 19 | `DAT-V1-012` Session registry and metadata repositories | ready | none | Session persistence can now build on the base schema. |
+| 19 | `DAT-V1-012` Session registry and metadata repositories | done | none | Session and metadata repositories now persist registry state and validate failed/reload cases. |
 | 20 | `DAT-V1-013` Auth devices and pairing-code repositories | ready | none | Auth persistence can now build on the base schema and token transport decision. |
 | 21 | `DAT-V1-014` Durable audit repository and bounded payload summaries | ready | none | Audit persistence can now build on the base schema and audit contracts. |
 | 22 | `DAT-V1-015` Retention cleanup and replay-boundary storage metadata | ready | none | Retention cleanup can now build on the base schema and `DEC-016` caps. |
-| 23 | `INT-V1-010` Tmux adapter interface and fake adapter | ready | none | Fake adapter work can proceed without real tmux and unblocks later API/session tasks. |
+| 23 | `DAT-V1-017` Optional git branch metadata capture | ready | none | Branch capture can now build on session metadata persistence. |
+| 24 | `INT-V1-010` Tmux adapter interface and fake adapter | ready | none | Fake adapter work can proceed without real tmux and unblocks later API/session tasks. |
 
 ## Current Blocked Gates
 

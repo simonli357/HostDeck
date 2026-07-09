@@ -120,4 +120,44 @@ export const hostDeckBaseSchemaMigration: StorageMigration = {
   `
 };
 
-export const defaultMigrations: readonly StorageMigration[] = [hostDeckBaseSchemaMigration] as const;
+export const hostDeckSessionMetadataFailedStatusMigration: StorageMigration = {
+  version: "202607080002_session_metadata_failed_status",
+  sql: `
+    CREATE TABLE session_metadata_next (
+      session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+      branch TEXT,
+      last_activity_at TEXT,
+      status TEXT NOT NULL CHECK (status IN ('idle', 'running', 'waiting_for_user', 'waiting_for_approval', 'tests_failed', 'tests_passed', 'compacting', 'disconnected', 'failed', 'unknown')),
+      attention TEXT NOT NULL CHECK (attention IN ('none', 'watch', 'needs_input', 'needs_approval', 'failed', 'stuck', 'unknown')),
+      summary TEXT,
+      last_output_cursor INTEGER CHECK (last_output_cursor IS NULL OR last_output_cursor >= 0),
+      updated_at TEXT NOT NULL
+    );
+
+    INSERT INTO session_metadata_next (
+      session_id,
+      branch,
+      last_activity_at,
+      status,
+      attention,
+      summary,
+      last_output_cursor,
+      updated_at
+    )
+    SELECT
+      session_id,
+      branch,
+      last_activity_at,
+      status,
+      attention,
+      summary,
+      last_output_cursor,
+      updated_at
+    FROM session_metadata;
+
+    DROP TABLE session_metadata;
+    ALTER TABLE session_metadata_next RENAME TO session_metadata;
+  `
+};
+
+export const defaultMigrations: readonly StorageMigration[] = [hostDeckBaseSchemaMigration, hostDeckSessionMetadataFailedStatusMigration] as const;

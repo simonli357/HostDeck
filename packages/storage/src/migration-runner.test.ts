@@ -15,14 +15,14 @@ afterEach(() => {
 });
 
 describe("SQLite migration runner", () => {
-  it("creates the base schema on a fresh database", () => {
+  it("creates the current schema on a fresh database", () => {
     const path = tempDbPath();
     const { db, result } = openMigratedDatabase(path, {
       now: fixedNow
     });
 
     try {
-      expect(result.applied).toEqual(["202607080001_base_schema"]);
+      expect(result.applied).toEqual(["202607080001_base_schema", "202607080002_session_metadata_failed_status"]);
       expect(tableNames(db)).toEqual([
         "audit_events",
         "auth_devices",
@@ -34,7 +34,7 @@ describe("SQLite migration runner", () => {
         "sessions",
         "settings"
       ]);
-      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 1 });
+      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 2 });
     } finally {
       db.close();
     }
