@@ -310,6 +310,7 @@ export const auditEventRecordSchema = z
 
 export type SchemaMigrationRecord = z.infer<typeof schemaMigrationRecordSchema>;
 export type SettingsRecord = z.infer<typeof settingsRecordSchema>;
+export type RetentionPolicy = z.infer<typeof retentionPolicySchema>;
 export type StorageSessionRecord = z.infer<typeof storageSessionRecordSchema>;
 export type SessionMetadataRecord = z.infer<typeof sessionMetadataRecordSchema>;
 export type OutputEventRecord = z.infer<typeof outputEventRecordSchema>;

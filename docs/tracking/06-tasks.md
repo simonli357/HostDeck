@@ -58,7 +58,7 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 19 | `DAT-V1-012` Session registry and metadata repositories | done | none | Session and metadata repositories now persist registry state and validate failed/reload cases. |
 | 20 | `DAT-V1-013` Auth devices and pairing-code repositories | done | none | Auth persistence now stores only hashed pairing/device/CSRF secrets and rejects expired, used, revoked, read-only, and CSRF-mismatched writes. |
 | 21 | `DAT-V1-014` Durable audit repository and bounded payload summaries | done | none | Audit repository now persists bounded payload summaries and required V1 action types. |
-| 22 | `DAT-V1-015` Retention cleanup and replay-boundary storage metadata | ready | none | Retention cleanup can now build on the base schema and `DEC-016` caps. |
+| 22 | `DAT-V1-015` Retention cleanup and replay-boundary storage metadata | done | none | Retention repository now enforces output/audit caps and records replay/audit boundaries. |
 | 23 | `DAT-V1-017` Optional git branch metadata capture | ready | none | Branch capture can now build on session metadata persistence. |
 | 24 | `DAT-V1-016` Storage restart-persistence tests | ready | none | Settings, session, auth, and audit repositories now exist for cross-repository restart coverage. |
 | 25 | `INT-V1-010` Tmux adapter interface and fake adapter | ready | none | Fake adapter work can proceed without real tmux and unblocks later API/session tasks. |

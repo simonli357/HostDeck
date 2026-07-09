@@ -29,6 +29,17 @@ export {
   type StorageMigration
 } from "./migrations.js";
 export {
+  type AppendOutputEventInput,
+  type AppendOutputEventResult,
+  type CleanupRetentionInput,
+  createRetentionRepository,
+  type GetLatestBoundaryInput,
+  HostDeckRetentionRepositoryError,
+  type ListOutputReplayInput,
+  type OutputReplayResult,
+  type RetentionRepository
+} from "./retention-repository.js";
+export {
   createSessionMetadataRepository,
   createSessionRepository,
   HostDeckSessionRepositoryError,
