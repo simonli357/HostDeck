@@ -160,4 +160,51 @@ export const hostDeckSessionMetadataFailedStatusMigration: StorageMigration = {
   `
 };
 
-export const defaultMigrations: readonly StorageMigration[] = [hostDeckBaseSchemaMigration, hostDeckSessionMetadataFailedStatusMigration] as const;
+export const hostDeckAuthDeviceCsrfHashMigration: StorageMigration = {
+  version: "202607080003_auth_device_csrf_hash",
+  sql: `
+    CREATE TABLE auth_devices_next (
+      id TEXT PRIMARY KEY,
+      token_hash TEXT NOT NULL UNIQUE,
+      csrf_token_hash TEXT NOT NULL,
+      client_label TEXT,
+      permission TEXT NOT NULL CHECK (permission IN ('read', 'write')),
+      created_at TEXT NOT NULL,
+      last_used_at TEXT,
+      expires_at TEXT,
+      revoked_at TEXT
+    );
+
+    INSERT INTO auth_devices_next (
+      id,
+      token_hash,
+      csrf_token_hash,
+      client_label,
+      permission,
+      created_at,
+      last_used_at,
+      expires_at,
+      revoked_at
+    )
+    SELECT
+      id,
+      token_hash,
+      'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+      client_label,
+      permission,
+      created_at,
+      last_used_at,
+      expires_at,
+      revoked_at
+    FROM auth_devices;
+
+    DROP TABLE auth_devices;
+    ALTER TABLE auth_devices_next RENAME TO auth_devices;
+  `
+};
+
+export const defaultMigrations: readonly StorageMigration[] = [
+  hostDeckBaseSchemaMigration,
+  hostDeckSessionMetadataFailedStatusMigration,
+  hostDeckAuthDeviceCsrfHashMigration
+] as const;

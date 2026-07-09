@@ -1,4 +1,14 @@
 export {
+  type AuthDeviceAuthentication,
+  type AuthDeviceRepository,
+  createAuthDeviceRepository,
+  createPairingCodeRepository,
+  HostDeckAuthRepositoryError,
+  hashSecret,
+  type PairingClaim,
+  type PairingCodeRepository
+} from "./auth-repository.js";
+export {
   HostDeckMigrationError,
   type MigrationResult,
   type OpenMigratedDatabaseOptions,

@@ -228,6 +228,7 @@ export const authDeviceRecordSchema = z
   .object({
     id: recordIdSchema,
     token_hash: secretHashSchema,
+    csrf_token_hash: secretHashSchema,
     client_label: nullableLabelSchema,
     permission: permissionModeSchema,
     created_at: isoTimestampSchema,

@@ -169,6 +169,7 @@ describe("auth, pairing, and settings schemas", () => {
       authDeviceRecordSchema.parse({
         id: "client_phone",
         token_hash: hash,
+        csrf_token_hash: "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
         client_label: "phone",
         permission: "write",
         created_at: timestamp,
@@ -211,6 +212,7 @@ describe("auth, pairing, and settings schemas", () => {
       authDeviceRecordSchema.parse({
         id: "client_phone",
         token_hash: hash,
+        csrf_token_hash: "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
         raw_token: "secret",
         client_label: "phone",
         permission: "write",

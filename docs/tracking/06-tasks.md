@@ -56,11 +56,12 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 17 | `DAT-V1-010` SQLite migration runner and base schema | done | none | Base storage schema and migration runner are implemented with migration failure tests. |
 | 18 | `DAT-V1-011` Settings/config repository | done | none | Settings repository now persists safe defaults, lock/LAN state, state dir, port, retention values, and invalid-startup rejection. |
 | 19 | `DAT-V1-012` Session registry and metadata repositories | done | none | Session and metadata repositories now persist registry state and validate failed/reload cases. |
-| 20 | `DAT-V1-013` Auth devices and pairing-code repositories | ready | none | Auth persistence can now build on the base schema and token transport decision. |
+| 20 | `DAT-V1-013` Auth devices and pairing-code repositories | done | none | Auth persistence now stores only hashed pairing/device/CSRF secrets and rejects expired, used, revoked, read-only, and CSRF-mismatched writes. |
 | 21 | `DAT-V1-014` Durable audit repository and bounded payload summaries | ready | none | Audit persistence can now build on the base schema and audit contracts. |
 | 22 | `DAT-V1-015` Retention cleanup and replay-boundary storage metadata | ready | none | Retention cleanup can now build on the base schema and `DEC-016` caps. |
 | 23 | `DAT-V1-017` Optional git branch metadata capture | ready | none | Branch capture can now build on session metadata persistence. |
 | 24 | `INT-V1-010` Tmux adapter interface and fake adapter | ready | none | Fake adapter work can proceed without real tmux and unblocks later API/session tasks. |
+| 25 | `IFC-V1-005` Pairing/token claim and security/network state API routes | ready | none | Auth repository and API contracts are now available for route implementation. |
 
 ## Current Blocked Gates
 

@@ -101,7 +101,7 @@ API responses use shared contract schemas with a stable error envelope: `code`, 
 | --- | --- | --- |
 | Unpaired browser | Can load dashboard shell and read only what local policy allows; write controls disabled. | No token record. Permission-denied UI state is visible. |
 | Pair requested | CLI or local admin path creates a short-lived one-time pairing code. | Store hashed code, expiry, created time, permission mode, and audit `pair_requested`. |
-| Token claimed | Browser submits code and receives a host-only `HttpOnly` device-token cookie plus a non-secret CSRF token for same-origin write headers. | Store hashed token, client label if available, created/last-used time, permission mode, revoked flag, and audit `pair_claimed`. |
+| Token claimed | Browser submits code and receives a host-only `HttpOnly` device-token cookie plus a non-secret CSRF token for same-origin write headers. | Store hashed token, hashed CSRF token, client label if available, created/last-used time, permission mode, revoked flag, and audit `pair_claimed`. |
 | Trusted write | Prompt/slash/stop/raw requests require valid cookie token, matching CSRF header, write permission, unlocked host, allowed action, writable session, same-origin request, and successful audit preflight. | Audit action type, session id, client id, bounded payload summary, result. |
 | Lock | Dashboard or CLI can set locked state to block further writes. | Audit `lock`; lock should succeed even if noncritical services are degraded. |
 | Unlock | CLI-only local admin action in V1. | Audit `unlock`; remote browser cannot unlock. |
@@ -118,7 +118,7 @@ SQLite is the durable state owner for structured V1 records. Output bytes may be
 | `sessions` | Session id, name, cwd, backend, tmux target, lifecycle state, created time, last known state, stale/unavailable reason. | Durable across daemon restart; reconciled against tmux. |
 | `session_metadata` | Project/cwd display fields, git branch when available, last activity, status, attention, summary/recent-output cue. | Derived fields can be recomputed; stale values must be marked. |
 | `output_events` or output log index | Per-session cursor, order, capture time, truncation/replay boundary, storage pointer or bounded payload. | V1 keeps 10,000 output events or 10 MB output payload per session, whichever is lower; exact boundary semantics in `DEC-016`. |
-| `auth_devices` | Hashed device tokens, permission mode, created/last-used time, revoked/expired state. | Does not store raw tokens. |
+| `auth_devices` | Hashed device tokens, hashed CSRF tokens, permission mode, created/last-used time, revoked/expired state. | Does not store raw tokens or raw CSRF tokens. |
 | `pairing_codes` | Hashed short-lived pairing codes and expiry/use state. | One-time use; cleanup policy in blueprint. |
 | `settings` | Bind host/port, LAN enabled, locked state, state directory metadata, retention settings. | Mutated only by trusted service/admin paths. |
 | `audit_events` | Bounded records for prompt, slash, stop, raw input, pair, lock, unlock, token revoke, LAN enable/disable, startup failures where useful. | V1 keeps 5,000 audit events or 30 days globally, whichever is lower; payload summaries are bounded/sanitized. |
@@ -196,7 +196,7 @@ These are required before backlog decomposition if they remain unresolved after 
 
 - Data stored: Session registry, tmux targets, cwd/name/project metadata, optional git branch, recent output metadata/buffers, status/attention state, pairing/token metadata, lock/LAN settings, and audit events.
 - Sensitive data: Prompts, terminal output snippets, cwd paths, branch names, device tokens, pairing codes, and audit payload summaries.
-- Auth/secrets: Pairing creates a short-lived local code and a longer-lived device token stored as a hash/metadata record. Dashboard receives a host-only `HttpOnly` cookie and a same-origin CSRF token for writes; V1 rejects durable JavaScript-readable bearer token storage. Revoked/expired/locked states reject writes.
+- Auth/secrets: Pairing creates a short-lived local code and a longer-lived device token stored as hash/metadata records. Dashboard receives a host-only `HttpOnly` cookie and a same-origin CSRF token for writes; storage keeps only token and CSRF hashes. V1 rejects durable JavaScript-readable bearer token storage. Revoked/expired/locked states reject writes.
 - Failure policy: Missing binaries, invalid cwd, schema mismatch, stale session, unwritable session state, failed audit write, and malformed input return explicit errors. Unknown status is visible and advisory, not success.
 - Observability: Host status reports startup checks, bind mode, lock/LAN state, storage health, tmux health, stale session count, stream reader state, and last classified error. Detailed evidence belongs in artifacts during validation.
 - Privacy boundary: V1 has no hosted relay, cloud sync, push provider, or external telemetry. All session data remains local unless the user independently exposes LAN access.
