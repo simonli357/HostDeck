@@ -62,14 +62,14 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 23 | `DAT-V1-017` Optional git branch metadata capture | done | none | Optional git branch capture now persists branch metadata when available and returns null when git/non-git state is unavailable. |
 | 24 | `DAT-V1-016` Storage restart-persistence tests | done | none | Cross-repository restart persistence now covers settings, session, metadata, auth, audit, output retention, and durable/ephemeral separation. |
 | 25 | `DAT-V1-090` Local state/auth/audit/config hardening | done | none | Storage-owned hardening now covers migration drift, malformed raw secrets, audit unavailability, retention boundaries, newest-output retention, restart persistence, and local state inspection. |
-| 26 | `INT-V1-010` Tmux adapter interface and fake adapter | ready | none | Fake adapter work can proceed without real tmux and unblocks later API/session tasks. |
+| 26 | `INT-V1-010` Tmux adapter interface and fake adapter | done | none | Fake adapter interface now covers deterministic lifecycle, send, stop, attach, output, stale, and missing-target cases without real tmux/Codex. |
 | 27 | `IFC-V1-005` Pairing/token claim and security/network state API routes | ready | none | Auth repository and API contracts are now available for route implementation. |
 
 ## Current Blocked Gates
 
 | Gate | Owning leaf task(s) | Requires | Blocker |
 | --- | --- | --- | --- |
-| Tmux capture spike | `INT-V1-001` | Ubuntu host with `tmux` available | Current environment lacks `tmux`; `command -v tmux && tmux -V` exited 1 with no output on 2026-07-08. |
+| Real tmux work | `INT-V1-001`, `INT-V1-011` | Ubuntu host with `tmux` available | Current environment lacks `tmux`; `command -v tmux && tmux -V` exited 1 with no output on 2026-07-08. |
 | UI visual direction | `FE-V1-002`, `FE-V1-003` | human acceptance | Mockups require UI state coverage first, then human selection before UI implementation. |
 | Release readiness | `REL-V1-005` to `REL-V1-010` | validation artifacts and human acceptance | Release tasks wait for module hardening, docs, smoke evidence, and go/no-go review. |
 

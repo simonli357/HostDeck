@@ -52,7 +52,7 @@ Owns the real process adapter for HostDeck-managed Codex sessions and ordered ou
 
 | Epic | Leaf tasks | Status | Evidence |
 | --- | --- | --- | --- |
-| Tmux capture spike and adapter foundation | `INT-V1-001`, `INT-V1-010` to `INT-V1-013` | Planned | `docs/tracking/backlog/tmux-output.md` |
+| Tmux capture spike and adapter foundation | `INT-V1-001`, `INT-V1-010` to `INT-V1-013` | In progress: `INT-V1-010` done; real tmux work blocked by `tmux` availability | `artifacts/int-v1-010-fake-tmux-adapter.md`, `docs/tracking/backlog/tmux-output.md` |
 | Output and restart | `INT-V1-014` to `INT-V1-016` | Planned | `docs/tracking/backlog/tmux-output.md` |
 | Tmux hardening | `INT-V1-090` | Planned | `docs/tracking/backlog/tmux-output.md` |
 

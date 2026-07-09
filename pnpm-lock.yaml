@@ -58,7 +58,11 @@ importers:
         specifier: workspace:*
         version: link:../core
 
-  packages/tmux-adapter: {}
+  packages/tmux-adapter:
+    dependencies:
+      '@hostdeck/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/web: {}
 
