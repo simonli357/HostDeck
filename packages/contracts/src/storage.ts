@@ -260,7 +260,8 @@ export const pairingCodeRecordSchema = z
     client_label: nullableLabelSchema,
     created_at: isoTimestampSchema,
     expires_at: isoTimestampSchema,
-    used_at: isoTimestampSchema.nullable()
+    used_at: isoTimestampSchema.nullable(),
+    revoked_at: isoTimestampSchema.nullable()
   })
   .strict();
 

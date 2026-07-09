@@ -213,7 +213,8 @@ describe("auth, pairing, and settings schemas", () => {
         client_label: null,
         created_at: timestamp,
         expires_at: "2026-07-08T19:05:00.000Z",
-        used_at: null
+        used_at: null,
+        revoked_at: null
       }).id
     ).toBe("pair_01");
 
@@ -258,7 +259,8 @@ describe("auth, pairing, and settings schemas", () => {
         client_label: null,
         created_at: timestamp,
         expires_at: "2026-07-08T19:05:00.000Z",
-        used_at: null
+        used_at: null,
+        revoked_at: null
       })
     ).toThrow();
 

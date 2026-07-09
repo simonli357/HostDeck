@@ -246,9 +246,17 @@ export const hostDeckRetentionBoundaryScopeChecksMigration: StorageMigration = {
   `
 };
 
+export const hostDeckPairingCodeRevokedAtMigration: StorageMigration = {
+  version: "202607080005_pairing_code_revoked_at",
+  sql: `
+    ALTER TABLE pairing_codes ADD COLUMN revoked_at TEXT;
+  `
+};
+
 export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckBaseSchemaMigration,
   hostDeckSessionMetadataFailedStatusMigration,
   hostDeckAuthDeviceCsrfHashMigration,
-  hostDeckRetentionBoundaryScopeChecksMigration
+  hostDeckRetentionBoundaryScopeChecksMigration,
+  hostDeckPairingCodeRevokedAtMigration
 ] as const;

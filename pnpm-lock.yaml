@@ -34,7 +34,17 @@ importers:
 
   packages/core: {}
 
-  packages/server: {}
+  packages/server:
+    dependencies:
+      '@hostdeck/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@hostdeck/core':
+        specifier: workspace:*
+        version: link:../core
+      '@hostdeck/storage':
+        specifier: workspace:*
+        version: link:../storage
 
   packages/storage:
     dependencies:

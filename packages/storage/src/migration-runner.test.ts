@@ -26,7 +26,8 @@ describe("SQLite migration runner", () => {
         "202607080001_base_schema",
         "202607080002_session_metadata_failed_status",
         "202607080003_auth_device_csrf_hash",
-        "202607080004_retention_boundary_scope_checks"
+        "202607080004_retention_boundary_scope_checks",
+        "202607080005_pairing_code_revoked_at"
       ]);
       expect(tableNames(db)).toEqual([
         "audit_events",
@@ -39,7 +40,7 @@ describe("SQLite migration runner", () => {
         "sessions",
         "settings"
       ]);
-      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 4 });
+      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 5 });
     } finally {
       db.close();
     }

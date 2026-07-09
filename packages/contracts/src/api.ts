@@ -378,6 +378,7 @@ export type SessionStreamEvent = z.infer<typeof sessionStreamEventSchema>;
 export type SessionOutputResponse = z.infer<typeof sessionOutputResponseSchema>;
 export type WriteResponse = z.infer<typeof writeResponseSchema>;
 export type TrustState = z.infer<typeof trustStateSchema>;
+export type NetworkStateResponse = z.infer<typeof networkStateResponseSchema>;
 
 interface ApiErrorEnvelopeCandidate {
   code: (typeof errorCodes)[number];

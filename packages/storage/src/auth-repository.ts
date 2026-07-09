@@ -15,6 +15,7 @@ export type AuthRepositoryErrorCode =
   | "pairing_code_exists"
   | "pairing_code_expired"
   | "pairing_code_not_found"
+  | "pairing_code_revoked"
   | "pairing_code_used"
   | "read_only";
 
@@ -59,6 +60,7 @@ export interface ClaimPairingCodeInput {
   readonly rawDeviceToken: string;
   readonly rawCsrfToken: string;
   readonly now: Date;
+  readonly clientLabel?: string | null;
   readonly deviceExpiresAt?: Date | null;
 }
 
@@ -97,6 +99,7 @@ export interface PairingCodeRepository {
   readonly require: (pairingId: string) => PairingCodeRecord;
   readonly create: (input: CreatePairingCodeInput) => PairingCodeRecord;
   readonly claim: (input: ClaimPairingCodeInput) => PairingClaim;
+  readonly revoke: (pairingId: string, input: { readonly now: Date }) => PairingCodeRecord;
 }
 
 interface AuthDeviceRow {
@@ -119,6 +122,7 @@ interface PairingCodeRow {
   readonly created_at: string;
   readonly expires_at: string;
   readonly used_at: string | null;
+  readonly revoked_at: string | null;
 }
 
 const pairingCodeMinLength = 6;
@@ -205,7 +209,8 @@ export function createPairingCodeRepository(db: Database.Database): PairingCodeR
         client_label: input.clientLabel ?? null,
         created_at: nowIso(input.createdAt),
         expires_at: nowIso(input.expiresAt),
-        used_at: null
+        used_at: null,
+        revoked_at: null
       });
 
       try {
@@ -217,7 +222,8 @@ export function createPairingCodeRepository(db: Database.Database): PairingCodeR
             client_label,
             created_at,
             expires_at,
-            used_at
+            used_at,
+            revoked_at
           ) VALUES (
             @id,
             @code_hash,
@@ -225,7 +231,8 @@ export function createPairingCodeRepository(db: Database.Database): PairingCodeR
             @client_label,
             @created_at,
             @expires_at,
-            @used_at
+            @used_at,
+            @revoked_at
           )
         `).run(pairingCodeToRow(pairingCode));
       } catch (error) {
@@ -244,7 +251,7 @@ export function createPairingCodeRepository(db: Database.Database): PairingCodeR
             rawDeviceToken: input.rawDeviceToken,
             rawCsrfToken: input.rawCsrfToken,
             permission: pairingCode.permission,
-            clientLabel: pairingCode.client_label,
+            clientLabel: input.clientLabel ?? pairingCode.client_label,
             createdAt: input.now,
             expiresAt: input.deviceExpiresAt ?? null
           })
@@ -262,6 +269,16 @@ export function createPairingCodeRepository(db: Database.Database): PairingCodeR
       });
 
       return claimPairing();
+    },
+    revoke(pairingId, input) {
+      const current = this.require(pairingId);
+
+      if (current.revoked_at !== null) {
+        return current;
+      }
+
+      db.prepare("UPDATE pairing_codes SET revoked_at = ? WHERE id = ?").run(nowIso(input.now), pairingId);
+      return this.require(pairingId);
     }
   };
 }
@@ -341,6 +358,10 @@ function requireClaimablePairingCode(db: Database.Database, rawCode: string, now
 
   const pairingCode = parsePairingCodeRow(row);
 
+  if (pairingCode.revoked_at !== null) {
+    throw new HostDeckAuthRepositoryError("pairing_code_revoked", "Pairing code has been revoked.");
+  }
+
   if (pairingCode.used_at !== null) {
     throw new HostDeckAuthRepositoryError("pairing_code_used", "Pairing code has already been used.");
   }
@@ -385,7 +406,8 @@ function parsePairingCodeRow(row: PairingCodeRow): PairingCodeRecord {
     client_label: row.client_label,
     created_at: row.created_at,
     expires_at: row.expires_at,
-    used_at: row.used_at
+    used_at: row.used_at,
+    revoked_at: row.revoked_at
   });
 }
 
@@ -431,7 +453,8 @@ function pairingCodeToRow(pairingCode: PairingCodeRecord): PairingCodeRow {
     client_label: pairingCode.client_label,
     created_at: pairingCode.created_at,
     expires_at: pairingCode.expires_at,
-    used_at: pairingCode.used_at
+    used_at: pairingCode.used_at,
+    revoked_at: pairingCode.revoked_at
   };
 }
 

@@ -41,7 +41,8 @@ describe("auth devices and pairing-code repositories", () => {
       expect(pairingRow(open.db, "pair_phone")).toMatchObject({
         id: "pair_phone",
         code_hash: pairing.code_hash,
-        used_at: null
+        used_at: null,
+        revoked_at: null
       });
 
       const claim = pairingCodes.claim({
@@ -78,11 +79,32 @@ describe("auth devices and pairing-code repositories", () => {
     }
   });
 
-  it("rejects expired and already-used pairing codes", () => {
+  it("rejects revoked, expired, and already-used pairing codes", () => {
     const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
 
     try {
       const pairingCodes = createPairingCodeRepository(open.db);
+      pairingCodes.create({
+        id: "pair_revoked",
+        rawCode: "246810",
+        permission: "write",
+        createdAt: fixedNow(),
+        expiresAt: laterNow()
+      });
+      expect(pairingCodes.revoke("pair_revoked", { now: laterNow() }).revoked_at).toBe("2026-07-08T22:05:00.000Z");
+
+      expectAuthError(
+        () =>
+          pairingCodes.claim({
+            rawCode: "246810",
+            deviceId: "client_revoked_pair",
+            rawDeviceToken,
+            rawCsrfToken,
+            now: fixedNow()
+          }),
+        "pairing_code_revoked"
+      );
+
       pairingCodes.create({
         id: "pair_expired",
         rawCode: "654321",

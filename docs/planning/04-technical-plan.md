@@ -119,7 +119,7 @@ SQLite is the durable state owner for structured V1 records. Output bytes may be
 | `session_metadata` | Project/cwd display fields, git branch when available, last activity, status, attention, summary/recent-output cue. | Derived fields can be recomputed; stale values must be marked. |
 | `output_events` or output log index | Per-session cursor, order, capture time, truncation/replay boundary, storage pointer or bounded payload. | V1 keeps 10,000 output events or 10 MB output payload per session, whichever is lower; exact boundary semantics in `DEC-016`. |
 | `auth_devices` | Hashed device tokens, hashed CSRF tokens, permission mode, created/last-used time, revoked/expired state. | Does not store raw tokens or raw CSRF tokens. |
-| `pairing_codes` | Hashed short-lived pairing codes and expiry/use state. | One-time use; cleanup policy in blueprint. |
+| `pairing_codes` | Hashed short-lived pairing codes and expiry/use/revoked state. | One-time use; revoked codes fail claim; cleanup policy in blueprint. |
 | `settings` | Bind host/port, LAN enabled, locked state, state directory metadata, retention settings. | Mutated only by trusted service/admin paths. |
 | `audit_events` | Bounded records for prompt, slash, stop, raw input, pair, lock, unlock, token revoke, LAN enable/disable, startup failures where useful. | V1 keeps 5,000 audit events or 30 days globally, whichever is lower; payload summaries are bounded/sanitized. |
 

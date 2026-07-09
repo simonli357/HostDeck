@@ -5,15 +5,15 @@ Current handoff only. Keep detail in owner docs or artifacts.
 ## Snapshot
 
 - Phase: Implementation
-- Active task: `IFC-V1-005` pairing/token claim and security/network state API routes
+- Active task: `REL-V1-001` aggregate validation command names and artifact locations
 - End goal: Approved as planning target in `docs/planning/00-end-goal.md`.
 - UI direction: Pending later visual-direction/mockup pass after UX contract, state coverage, and detailed design are defined.
-- Release state: Foundation, storage-owned local state/auth/audit, and tmux fake adapter foundation are complete; pairing/security API route work is next.
-- Last validation: `pnpm install`, `pnpm --filter @hostdeck/tmux-adapter typecheck`, `pnpm test:unit -- packages/tmux-adapter/src/index.test.ts`, `pnpm lint`, `pnpm typecheck`, `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm -r --if-present typecheck`, `pnpm test`, `pnpm test:contract`, and `git diff --check` passed for `INT-V1-010`.
-- Next action: Start `IFC-V1-005` pairing/token claim and security/network state API routes.
+- Release state: Foundation, storage-owned local state/auth/audit, tmux fake adapter foundation, and pairing/security API route foundation are complete; real tmux/startup-dependent implementation remains blocked.
+- Last validation: `pnpm --filter @hostdeck/server typecheck`, `pnpm --filter @hostdeck/storage typecheck`, `pnpm --filter @hostdeck/contracts typecheck`, focused security/storage/contract unit tests, `pnpm lint`, `pnpm typecheck`, `pnpm install --frozen-lockfile`, `pnpm check:scaffold`, `pnpm -r --if-present typecheck`, `pnpm test`, `pnpm test:contract`, and `git diff --check` passed for `IFC-V1-005`.
+- Next action: Start `REL-V1-001` validation command/artifact wiring, unless `tmux` becomes available to unblock real tmux/API startup work.
 - Blockers: `INT-V1-001` and `INT-V1-011` need `tmux` in the environment; visual mockups before UI implementation.
-- Last commit: `INT-V1-010` fake tmux adapter commit.
-- Last push: `origin/main` after the `INT-V1-010` commit.
+- Last commit: `IFC-V1-005` security routes commit.
+- Last push: `origin/main` after the `IFC-V1-005` commit.
 
 ## What Is Proven
 
@@ -46,6 +46,7 @@ Current handoff only. Keep detail in owner docs or artifacts.
 - Implementation: `DAT-V1-016` added cross-repository restart persistence coverage for settings, sessions, metadata, auth/pairing, audit, output retention, migration no-op reopen, and durable/ephemeral storage separation.
 - Implementation: `DAT-V1-090` hardened storage-owned behavior for migration drift, raw secret validation, audit unavailable errors, retention boundary schema, newest-output retention, restart persistence, and local state privacy inspection.
 - Implementation: `INT-V1-010` added the typed tmux adapter interface and deterministic fake adapter with lifecycle, send, stop, attach, output, stale, and missing-target coverage.
+- Implementation: `IFC-V1-005` added storage-backed pairing/security/network route handlers, revoked pairing-code support, CSRF-backed dashboard lock, and explicit remote unlock/LAN mutation rejection.
 - No HostDeck product workflow behavior is proven yet.
 
 ## Open Gates
@@ -84,7 +85,8 @@ Current handoff only. Keep detail in owner docs or artifacts.
 | DAT-V1-016 | Implementation | done | `docs/tracking/backlog/local-state-auth-audit.md` | Restart persistence and `artifacts/dat-v1-016-restart-persistence.md`. |
 | DAT-V1-090 | Hardening | done | `docs/tracking/backlog/local-state-auth-audit.md` | Storage hardening and `artifacts/dat-v1-090-storage-hardening.md`. |
 | INT-V1-010 | Implementation | done | `docs/tracking/backlog/tmux-output.md` | Fake tmux adapter and `artifacts/int-v1-010-fake-tmux-adapter.md`. |
-| IFC-V1-005 | Implementation | ready | `docs/tracking/backlog/api-cli-control-plane.md` | Next ready leaf: pairing/token claim and security/network state API routes. |
+| IFC-V1-005 | Implementation | done | `docs/tracking/backlog/api-cli-control-plane.md` | Security routes and `artifacts/ifc-v1-005-security-routes.md`. |
+| REL-V1-001 | Release support | ready | `docs/tracking/backlog/hardening-release.md` | Next ready leaf: aggregate validation command names and artifact locations. |
 
 ## Decisions Needed
 

@@ -63,7 +63,8 @@ Create this queue after planning. Keep only unblocked or intentionally blocked n
 | 24 | `DAT-V1-016` Storage restart-persistence tests | done | none | Cross-repository restart persistence now covers settings, session, metadata, auth, audit, output retention, and durable/ephemeral separation. |
 | 25 | `DAT-V1-090` Local state/auth/audit/config hardening | done | none | Storage-owned hardening now covers migration drift, malformed raw secrets, audit unavailability, retention boundaries, newest-output retention, restart persistence, and local state inspection. |
 | 26 | `INT-V1-010` Tmux adapter interface and fake adapter | done | none | Fake adapter interface now covers deterministic lifecycle, send, stop, attach, output, stale, and missing-target cases without real tmux/Codex. |
-| 27 | `IFC-V1-005` Pairing/token claim and security/network state API routes | ready | none | Auth repository and API contracts are now available for route implementation. |
+| 27 | `IFC-V1-005` Pairing/token claim and security/network state API routes | done | none | Security route handlers now cover pairing claim, trust/security state, network state, dashboard lock, remote unlock rejection, LAN mutation rejection, CSRF enforcement, and revoked/expired/used/invalid pairing-code rejection. |
+| 28 | `REL-V1-001` Wire aggregate validation command names and artifact locations | ready | none | No main API/tmux/UI implementation leaf is unblocked while real tmux/startup dependencies remain blocked; this support leaf can tighten validation wiring without claiming unavailable product behavior. |
 
 ## Current Blocked Gates
 
