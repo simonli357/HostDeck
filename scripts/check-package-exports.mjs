@@ -4,6 +4,7 @@ import { join } from "node:path";
 const packages = [
   "core",
   "contracts",
+  "codex-adapter",
   "test-fixtures",
   "storage",
   "tmux-adapter",

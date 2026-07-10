@@ -15,7 +15,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-003` Implement Codex binding and compatibility gate | in_progress | none | Establishes reviewed generated bindings and blocks incompatible required operations before IPC work. |
+| 1 | `INT-V1-004` Implement Codex Unix IPC and request broker | in_progress | none | Establishes the bounded private transport and protocol lifecycle required by all real thread/control work. |
 | 2 | `DAT-V1-019` Enforce owner-only paths and daemon lease | ready | none | Establishes the state/runtime ownership boundary required by runtime supervision and packaging. |
 | 3 | `IFC-V1-016` Build the Fastify/SSE composition root | ready | none | Replaces the partial custom listener with the production typed server lifecycle used by later security and fanout work. |
 | 4 | `DAT-V1-020` Integrate production projection, retention, and audit outcomes | ready | none | Makes selected projection and audit durability part of production append/startup paths before interface fanout work. |
@@ -25,7 +25,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
-| Codex compatibility | `INT-V1-003` | Reviewed generated binding identity and required-capability gate | IPC transport, managed-thread lifecycle, and real structured controls. |
+| Codex IPC | `INT-V1-004` | Private Unix transport, initialize state machine, bounded broker, and message decoding | Managed-thread lifecycle and real structured controls. |
 | LAN security | `IFC-V1-015` | Real phone certificate-enrollment proof | Auth lifecycle, pairing UI, security/release review. |
 | Real Codex semantics | `INT-V1-006` | Contracts, adapter, mapping, and thread lifecycle | Production operation API, mobile state matrix, approvals. |
 | Mobile visual direction | Reopened `FE-V1-002`, `FE-V1-003` | Real state matrix, two replacement options, human selection | React screen implementation. |

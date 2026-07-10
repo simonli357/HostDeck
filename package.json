@@ -11,6 +11,8 @@
   "scripts": {
     "check:scaffold": "node scripts/check-scaffold.mjs",
     "check:planning": "node --test scripts/check-planning.test.mjs && node scripts/check-planning.mjs",
+    "check:codex-bindings": "node scripts/codex-bindings.mjs --check",
+    "generate:codex-bindings": "node scripts/codex-bindings.mjs --write",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "biome check . && node scripts/check-package-exports.mjs",
     "test": "pnpm test:unit",
@@ -18,6 +20,7 @@
     "test:contract": "vitest run --config vitest.contract.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:tmux": "HOSTDECK_REQUIRE_TMUX_SMOKE=1 vitest run packages/server/src/tmux-smoke.test.ts",
+    "smoke:codex-compatibility": "HOSTDECK_REQUIRE_CODEX_COMPATIBILITY_SMOKE=1 vitest run packages/codex-adapter/src/installed-codex.smoke.test.ts",
     "test:web": "vitest run packages/web/src/view-models.test.ts packages/test-fixtures/src/fixtures.test.ts",
     "test:e2e": "node scripts/not-implemented.mjs test:e2e REL-V1-007",
     "build": "node scripts/not-implemented.mjs build REL-V1-007",

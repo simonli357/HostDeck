@@ -19,11 +19,11 @@ This blueprint is implementation-ready only when:
 
 | Area | Current evidence | V1 maturity now | Missing production proof |
 | --- | --- | --- | --- |
-| Workspace/conventions | Pinned workspace, strict TypeScript, Biome, Vitest, package shells. | Reusable foundation. | Real build/package, planning checker, new adapter package. |
-| Core/contracts | Session/write/error/storage/UI schemas and fixture classifiers. | Implemented for superseded tmux-shaped model. | Thread/turn/event/approval/runtime-compatibility rebaseline and invariant hardening. |
-| Storage | Migrations, settings, sessions, metadata, auth, audit, retention repositories. | Strong package-local base. | App-server mapping migration, production cleanup invocation, CSRF rotation, permissions, daemon lease, audit outcomes. |
+| Workspace/conventions | Pinned workspace, strict TypeScript, Biome, Vitest, planning/scaffold/export/binding checks, nine package shells. | Reusable selected foundation. | Real build/package and clean-install proof. |
+| Core/contracts | Selected thread/turn/event/approval/runtime/security/mobile schemas, strict invariants, and fixtures. | Selected normalized foundation complete. | Production adoption remains in owning blocks. |
+| Storage | Historical repositories plus selected mapping/projection/event/compatibility/recovery migration. | Selected durable foundation implemented. | Production cleanup/audit invocation, CSRF lifecycle, permissions, daemon lease, module hardening. |
 | Tmux adapter | Real target/start/send/capture/reconcile tests with fake Codex producer. | Legacy integration evidence. | Not the selected V1 runtime. Disposition waits for structured vertical. |
-| Codex adapter | Local architecture spike only. | Not implemented. | Generated bindings, IPC client, broker, real session/turn/control/approval/restart proof. |
+| Codex adapter | Exact 0.144.0 experimental binding, deterministic drift check, normalized compatibility gate, real initialize/plan-catalog smoke. | Binding and compatibility foundation implemented. | Unix IPC, broker/decoder, real session/turn/control/approval, supervision, multi-client, and restart proof. |
 | API/CLI | Headless handlers, custom Node listener, source-level CLI shell/tests. | Partial foundation, not packaged production path. | Fastify/SSE/static build, selected adapter wiring, full auth, HTTPS, timeouts, service units, runnable `bin`. |
 | Web | View-model helpers/fixtures only. Existing mockups rejected. | Pre-implementation. | Mobile state rebaseline, two options, selection, React/Vite UI, screenshots/device evidence. |
 | Release | Baseline commands pass; developer/command docs record gaps. | No-go. | Clean package/service/phone/security/aggregate evidence. |

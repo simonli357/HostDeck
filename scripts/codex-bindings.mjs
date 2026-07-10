@@ -1,0 +1,187 @@
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { statSync } from "node:fs";
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, extname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const packageRoot = join(repositoryRoot, "packages", "codex-adapter");
+const generatedRoot = join(packageRoot, "src", "generated");
+const manifestPath = join(packageRoot, "binding-manifest.json");
+const manifestModulePath = join(packageRoot, "src", "binding-manifest.generated.ts");
+const codexBin = process.env.HOSTDECK_CODEX_BIN ?? "codex";
+const mode = process.argv[2] ?? "--check";
+
+if (!new Set(["--check", "--write"]).has(mode)) {
+  throw new Error("Usage: node scripts/codex-bindings.mjs [--check|--write]");
+}
+
+const manifest = await readManifest(manifestPath, mode === "--write");
+const version = readCodexVersion(codexBin);
+if (version !== manifest.codexVersion) {
+  throw new Error(`Installed Codex ${version} does not match reviewed binding version ${manifest.codexVersion}.`);
+}
+
+const temporaryRoot = await mkdtemp(join(tmpdir(), "hostdeck-codex-bindings-"));
+const temporaryGenerated = join(temporaryRoot, "generated");
+
+try {
+  await mkdir(temporaryGenerated);
+  generateBindings(codexBin, manifest.generationArgs, temporaryGenerated);
+  await normalizeGeneratedImports(temporaryGenerated);
+  const generatedIdentity = await treeIdentity(temporaryGenerated);
+  const bindingId = `codex-app-server-${manifest.codexVersion}-experimental:sha256:${generatedIdentity.sha256}`;
+
+  if (mode === "--write") {
+    await rm(generatedRoot, { force: true, recursive: true });
+    await cp(temporaryGenerated, generatedRoot, { recursive: true });
+    const nextManifest = {
+      ...manifest,
+      fileCount: generatedIdentity.fileCount,
+      treeSha256: generatedIdentity.sha256,
+      bindingId
+    };
+    await writeFile(manifestPath, `${JSON.stringify(nextManifest, null, 2)}\n`, "utf8");
+    await writeFile(manifestModulePath, manifestModuleSource(nextManifest), "utf8");
+    console.log(`Wrote Codex ${version} experimental binding: ${generatedIdentity.fileCount} files, ${generatedIdentity.sha256}.`);
+  } else {
+    if (
+      manifest.fileCount !== generatedIdentity.fileCount ||
+      manifest.treeSha256 !== generatedIdentity.sha256 ||
+      manifest.bindingId !== bindingId
+    ) {
+      throw new Error(
+        `Generated Codex binding drifted: expected ${manifest.fileCount}/${manifest.treeSha256}, got ${generatedIdentity.fileCount}/${generatedIdentity.sha256}.`
+      );
+    }
+    const committedIdentity = await treeIdentity(generatedRoot);
+    if (committedIdentity.fileCount !== manifest.fileCount || committedIdentity.sha256 !== manifest.treeSha256) {
+      throw new Error(
+        `Committed Codex binding is modified: expected ${manifest.fileCount}/${manifest.treeSha256}, got ${committedIdentity.fileCount}/${committedIdentity.sha256}.`
+      );
+    }
+    const committedManifestModule = await readFile(manifestModulePath, "utf8");
+    if (committedManifestModule !== manifestModuleSource(manifest)) {
+      throw new Error("Generated Codex binding manifest module does not match binding-manifest.json.");
+    }
+    console.log(`Codex ${version} experimental binding verified: ${manifest.fileCount} files, ${manifest.treeSha256}.`);
+  }
+} finally {
+  await rm(temporaryRoot, { force: true, recursive: true });
+}
+
+async function readManifest(path, allowPending) {
+  const value = JSON.parse(await readFile(path, "utf8"));
+  const expectedArgs = ["app-server", "generate-ts", "--experimental", "--out"];
+  const expectedKeys = [
+    "bindingId",
+    "codexVersion",
+    "experimentalApi",
+    "fileCount",
+    "generationArgs",
+    "schemaVersion",
+    "treeSha256"
+  ];
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(expectedKeys) ||
+    value.schemaVersion !== 1 ||
+    typeof value.codexVersion !== "string" ||
+    !/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/u.test(value.codexVersion) ||
+    value.experimentalApi !== true ||
+    JSON.stringify(value.generationArgs) !== JSON.stringify(expectedArgs)
+  ) {
+    throw new Error("Codex binding manifest configuration is invalid.");
+  }
+  if (
+    !allowPending &&
+    (!Number.isSafeInteger(value.fileCount) ||
+      value.fileCount < 1 ||
+      typeof value.treeSha256 !== "string" ||
+      !/^[a-f0-9]{64}$/u.test(value.treeSha256) ||
+      value.bindingId !== `codex-app-server-${value.codexVersion}-experimental:sha256:${value.treeSha256}`)
+  ) {
+    throw new Error("Codex binding manifest identity is invalid.");
+  }
+  return value;
+}
+
+function manifestModuleSource(manifest) {
+  return `// Generated by scripts/codex-bindings.mjs. Do not edit by hand.\nexport const generatedCodexBindingManifest = ${JSON.stringify(manifest, null, 2)} as const;\n`;
+}
+
+function readCodexVersion(executable) {
+  const result = spawnSync(executable, ["--version"], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    timeout: 10_000,
+    maxBuffer: 64 * 1024
+  });
+  if (result.error !== undefined) throw new Error(`Unable to execute ${executable} --version.`, { cause: result.error });
+  if (result.status !== 0) throw new Error(`${executable} --version failed: ${result.stderr.trim()}`);
+  const match = /^codex-cli (\S+)\n?$/u.exec(result.stdout);
+  if (match?.[1] === undefined) throw new Error(`${executable} --version returned an unsupported format.`);
+  return match[1];
+}
+
+function generateBindings(executable, generationArgs, out) {
+  const result = spawnSync(executable, [...generationArgs, out], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    timeout: 30_000,
+    maxBuffer: 1024 * 1024
+  });
+  if (result.error !== undefined) throw new Error("Unable to generate Codex app-server bindings.", { cause: result.error });
+  if (result.status !== 0) throw new Error(`Codex binding generation failed: ${result.stderr.trim()}`);
+}
+
+async function normalizeGeneratedImports(root) {
+  for (const file of await filesIn(root)) {
+    if (extname(file.absolute) !== ".ts") continue;
+    const source = await readFile(file.absolute, "utf8");
+    const normalized = source.replace(/(\bfrom\s+["'])(\.\.?\/[^"']+)(["'])/gu, (match, prefix, specifier, quote) => {
+      if (extname(specifier) !== "") return match;
+      const resolved = resolve(dirname(file.absolute), specifier);
+      const suffix = statSync(resolved, { throwIfNoEntry: false })?.isDirectory() ? "/index.js" : ".js";
+      return `${prefix}${specifier}${suffix}${quote}`;
+    });
+    if (normalized !== source) await writeFile(file.absolute, normalized, "utf8");
+  }
+}
+
+async function treeIdentity(root) {
+  const files = await filesIn(root);
+  if (files.length === 0) throw new Error(`Generated binding directory ${root} is empty.`);
+  const hash = createHash("sha256");
+  for (const file of files) {
+    const content = await readFile(file.absolute);
+    updateFrame(hash, Buffer.from(file.relative, "utf8"));
+    updateFrame(hash, content);
+  }
+  return { fileCount: files.length, sha256: hash.digest("hex") };
+}
+
+function updateFrame(hash, value) {
+  hash.update(`${value.byteLength}:`, "utf8");
+  hash.update(value);
+}
+
+async function filesIn(root) {
+  const files = [];
+  await visit(root);
+  return files.sort((left, right) => left.relative.localeCompare(right.relative));
+
+  async function visit(directory) {
+    const entries = await readdir(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      const absolute = join(directory, entry.name);
+      if (entry.isDirectory()) await visit(absolute);
+      else if (entry.isFile()) files.push({ absolute, relative: relative(root, absolute).split(sep).join("/") });
+      else throw new Error(`Generated binding contains unsupported filesystem entry ${absolute}.`);
+    }
+  }
+}

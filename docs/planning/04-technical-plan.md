@@ -8,6 +8,7 @@ Owns the active-version architecture, process and trust boundaries, selected dep
 - Release state: no-go. Existing packages prove reusable foundations, not the selected production vertical.
 - Legacy state: tmux/TUI adapter and capture evidence remain in the repo until `INT-V1-008` decides removal after the structured vertical passes.
 - Public boundary: the phone talks only to HostDeck. Codex app-server is private to the Ubuntu user and never binds LAN.
+- Compatibility baseline: exact `codex-cli 0.144.0`, reviewed experimental binding identity, and `DEC-021`; upgrades fail closed pending regeneration and review.
 
 ## Hard Requirements
 
@@ -110,14 +111,15 @@ HostDeck never edits Codex rollout files or app-server state databases directly.
 
 ### Compatibility Handshake
 
-1. Discover `codex` from configured absolute path or `PATH` and record `codex --version`.
-2. Reject versions outside the tested compatibility policy before mutation.
-3. Connect to the Unix socket and send `initialize` with a HostDeck client identity and only required capabilities.
-4. Validate `initialize` response and required method/event support against the generated binding identity.
-5. Persist observed version, schema identity, capabilities, and result.
-6. Expose `ready`, `degraded`, or `incompatible`; incompatible never degrades to terminal injection.
+1. Discover `codex` from configured absolute path or `PATH`; require exact `codex-cli 0.144.0` output.
+2. Regenerate the experimental TypeScript binding to a temporary directory and compare the reviewed whole-tree identity in build/validation paths.
+3. Connect to the Unix socket and send one `initialize` with HostDeck client identity and `experimentalApi: true`; `/plan` requires this pinned opt-in.
+4. Corroborate the app-server version from the returned `hostdeck/<version>` user agent and require Linux/Unix platform fields.
+5. Validate required product capability evidence against private generated methods, events, fields, approval responses, and the live `Plan`/`Default` collaboration catalog. The initialize response does not enumerate product methods.
+6. Persist observed version, generated binding identity, capability states, and check result.
+7. Expose `ready`, `degraded`, `incompatible`, or `disconnected`; incompatible never degrades to terminal injection.
 
-Generated bindings are version-specific artifacts. The build/check path regenerates to a temporary directory and fails on unreviewed drift. Generated types stay private to the adapter; normalized HostDeck schemas absorb additive changes and reject unknown required semantics.
+Generated bindings are version-specific artifacts. `pnpm check:codex-bindings` regenerates to a temporary directory, applies deterministic NodeNext import normalization, and fails on unreviewed path/content or manifest drift. Generated types stay private to the adapter; normalized HostDeck schemas absorb additive changes and reject unknown required semantics.
 
 ### Required Operations
 

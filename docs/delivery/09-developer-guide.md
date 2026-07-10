@@ -10,7 +10,8 @@ Owns setup context, environment policy, services, and operational notes.
 | Node.js | `22.22.2`, pinned in `.nvmrc` and `package.json` engines. |
 | Package manager | `pnpm 10.29.2`, pinned in `package.json`. |
 | Native build | `@hostdeck/storage` uses `better-sqlite3`; `pnpm-workspace.yaml` allows its build script through `onlyBuiltDependencies`. |
-| Required local tools for tmux/service work | `tmux` and the external Codex CLI must be on `PATH`. Current local validation used `tmux 3.4` and `codex-cli 0.143.0`. |
+| Required Codex for selected adapter work | Exact `codex-cli 0.144.0` must be on `PATH`; `HOSTDECK_CODEX_BIN` may name another executable for binding/smoke commands. The reviewed V1 binding uses experimental API for `/plan`. |
+| Historical tmux evidence | `tmux 3.4` remains required only for legacy smoke until `INT-V1-008`. |
 | Hosted services | None. HostDeck is local-first and stores state locally. |
 
 ## Setup
@@ -28,6 +29,9 @@ The frozen install was validated for the current workspace on 2026-07-09. If a p
 | --- | --- | --- |
 | Install | `pnpm install --frozen-lockfile` | Uses the committed `pnpm-lock.yaml`. |
 | Scaffold check | `pnpm check:scaffold` | Verifies root files, package directories, and root script names. |
+| Codex binding check | `pnpm check:codex-bindings` | Regenerates 0.144.0 experimental bindings in a temporary directory and rejects drift. |
+| Codex binding update | `pnpm generate:codex-bindings` | Replaces committed generated files and identity; use only during an explicit compatibility review. |
+| Codex compatibility smoke | `pnpm smoke:codex-compatibility` | Starts installed app-server over stdio, initializes experimental API, and verifies Plan/Default without a model call. |
 | Typecheck | `pnpm typecheck` | Strict TypeScript no-emit check across workspace source. |
 | Lint | `pnpm lint` | Biome plus package export convention checks. |
 | Unit tests | `pnpm test` or `pnpm test:unit` | Runs Vitest unit tests. |

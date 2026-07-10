@@ -4,6 +4,7 @@ import { join } from "node:path";
 const packages = [
   "core",
   "contracts",
+  "codex-adapter",
   "test-fixtures",
   "storage",
   "tmux-adapter",
@@ -23,6 +24,8 @@ const rootFiles = [
 const requiredScripts = [
   "check:scaffold",
   "check:planning",
+  "check:codex-bindings",
+  "generate:codex-bindings",
   "typecheck",
   "lint",
   "test",
@@ -30,6 +33,7 @@ const requiredScripts = [
   "test:contract",
   "test:integration",
   "test:tmux",
+  "smoke:codex-compatibility",
   "test:web",
   "test:e2e",
   "build",

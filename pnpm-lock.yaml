@@ -33,6 +33,15 @@ importers:
         specifier: workspace:*
         version: link:../storage
 
+  packages/codex-adapter:
+    dependencies:
+      '@hostdeck/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@hostdeck/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/contracts:
     dependencies:
       '@hostdeck/core':

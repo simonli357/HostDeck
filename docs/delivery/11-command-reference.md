@@ -14,6 +14,7 @@ pnpm install --frozen-lockfile
 ```bash
 pnpm check:scaffold
 pnpm check:planning
+pnpm check:codex-bindings
 ```
 
 ## Validate
@@ -27,7 +28,14 @@ pnpm test:contract
 pnpm test:integration
 pnpm test:web
 pnpm test:tmux
+pnpm smoke:codex-compatibility
 pnpm exec vitest run tests/service-mode-smoke.test.ts
+```
+
+## Regenerate Reviewed Codex Binding
+
+```bash
+pnpm generate:codex-bindings
 ```
 
 ## Explicit Gaps

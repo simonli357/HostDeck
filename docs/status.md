@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `INT-V1-003` Codex generated binding and compatibility gate.
+- Active task: `INT-V1-004` Codex Unix-socket transport and request broker.
 - Other ready tasks: `DAT-V1-019`, `IFC-V1-016`, `DAT-V1-020`, and `IFC-V1-015`.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -20,6 +20,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Legacy tmux, terminal-output, slash-injection, raw-input, storage, and desktop-led UI contracts remain exported only as explicitly deprecated migration surfaces pending `INT-V1-008`.
 - `BLK-V1-01` is complete for normalized contracts, core invariants, deterministic fixtures, planning integrity, and generated-protocol isolation; production consumers remain reopened in their owning blocks.
 - Selected mappings, projections, projected events, compatibility results, start recovery, and legacy dispositions now have additive migration and repository ownership with transactional/concurrency/restart/corruption evidence.
+- `@hostdeck/codex-adapter` owns an exact 0.144.0 experimental generated binding, deterministic schema-drift check, fail-closed required-capability policy, and a real no-model initialize/Plan catalog smoke.
 
 ## Not Proven
 
@@ -30,7 +31,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Blockers
 
-- Complete the reviewed Codex binding/version/capability gate in `INT-V1-003`.
+- Complete bounded private Unix IPC, handshake, broker, decoding, and reconnect skeleton in `INT-V1-004`.
 - Run `IFC-V1-015` when the real phone/LAN test setup is available.
 - Prove Codex compatibility/real vertical (`INT-V1-003` to `INT-V1-007`).
 - Prove phone HTTPS enrollment (`IFC-V1-015`).
@@ -46,9 +47,11 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/fnd-v1-091-selected-foundation-hardening.md`.
 - `DAT-V1-018`: root/package typechecks, lint/exports, unit (233 passed, 1 skipped), contract (104), integration (15), web (14), scaffold, 71 storage tests, historical migration checksums, and diff checks passed.
 - Evidence: `artifacts/dat-v1-018-selected-state-migration.md`.
+- `INT-V1-003`: frozen install, binding regeneration, root/all-package typechecks, unit (260 passed, 2 skipped), contract (104), integration (15), web (14), scaffold, package exports, and real installed compatibility smoke passed.
+- Evidence: `artifacts/int-v1-003-codex-binding-compatibility.md`.
 
 ## Git
 
 - `FND-V1-015` is pushed as `f0da007`; `FND-V1-016` as `b497f66`; `FND-V1-091` as `59c7252`.
-- Completed units through `DAT-V1-018` are pushed to `origin/main`.
-- Next action: execute `INT-V1-003`, beginning with generated-binding ownership, reproducibility, and installed-version compatibility inspection.
+- Completed units through `INT-V1-003` are pushed to `origin/main`.
+- Next action: execute `INT-V1-004`, beginning with `ws` reuse validation and a hostile transport/broker test matrix.
