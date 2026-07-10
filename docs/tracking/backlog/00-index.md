@@ -35,6 +35,8 @@ The `tmux-output.md` filename is retained temporarily so historical artifact lin
 | `DAT-V1-022`, `DAT-V1-023` | `DAT-V1-024`, then `DAT-V1-030` | Startup retention and orphan accepted-operation reconciliation have separate bounded owners. |
 | `DAT-V1-025` to `DAT-V1-029` | `IFC-V1-026` to `IFC-V1-033`, `IFC-V1-059` | Browser security routes consume completed device/pairing/revoke/audit storage. |
 | `INT-V1-006` exact semantic spike | `INT-V1-017` to `INT-V1-026` | Event/control/approval behavior must be observed for the pinned runtime before implementation. |
+| `INT-V1-019` pending model control | `INT-V1-020`, `INT-V1-021` | Goal activation needs the unapplied-setting guard; Plan composition needs the exact pending model contract. |
+| `INT-V1-019`, `INT-V1-021` | `INT-V1-018` | The normal prompt dispatcher must atomically compose and settle pending model/Plan settings. |
 | `INT-V1-017` to `INT-V1-026` | `INT-V1-027` | The real structured vertical assembles already-implemented exact operation ports. |
 | `INT-V1-027` real structured vertical | `INT-V1-007`, `IFC-V1-066`, selected operation routes, `FE-V1-004` | Runtime supervision, exact write dispatch, and mobile states require accepted real semantics. |
 | `DAT-V1-019`, `INT-V1-027` | `INT-V1-007` | Process/socket supervision needs secure ownership and an accepted adapter vertical. |

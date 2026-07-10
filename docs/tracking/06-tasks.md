@@ -15,27 +15,25 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-019` Implement pending next-turn model selection | in_progress | none | Implements the first human-designated primary control from the exact catalog and ordered event boundary. |
-| 2 | `INT-V1-020` Implement passive/agentic goal lifecycle | ready | none | Implements the second primary control without repeating the active-goal materialization bug. |
-| 3 | `INT-V1-021` Implement pending Plan/Default selection | ready | none | Implements the third primary control from observed collaboration/settings semantics. |
-| 4 | `INT-V1-018` Implement exact prompt and steer targeting | ready | none | Uses normalized turn identity to prove accepted prompt targeting and same-turn steer behavior. |
-| 5 | `INT-V1-025` Implement pending approval routing | ready | none | Uses normalized request/item identity to implement exactly-once approve/deny behavior. |
-| 6 | `DAT-V1-022` Invoke production projection retention | ready | none | Extends the proven append transaction with bounded pruning and visible replay boundaries. |
-| 7 | `DAT-V1-023` Implement accepted-to-terminal audit state machine | ready | none | Establishes truthful mutation outcomes before write/security integration. |
-| 8 | `IFC-V1-018` Implement commit-only projection fanout | ready | none | Carries only committed ordered projection truth into the later replay/live boundary. |
-| 9 | `INT-V1-022` Implement structured usage retrieval | ready | none | Implements observed account/runtime usage without inventing billing scope. |
-| 10 | `INT-V1-023` Implement accepted/incomplete compact lifecycle | ready | none | Prevents the utility from reporting context reduction from immediate acceptance. |
-| 11 | `INT-V1-024` Implement structured skills listing | ready | none | Implements the remaining observed read-only utility boundary. |
-| 12 | `IFC-V1-019` Freeze the selected API route manifest | ready | none | Converts the completed semantic matrix and normalized contracts into one unambiguous public route inventory. |
-| 13 | `IFC-V1-047` Enforce real HTTP resource limits | ready | none | Extends proven option inventory into raw-socket limit and cleanup behavior. |
-| 14 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the independent physical-device LAN trust gate when hardware setup is available. |
+| 1 | `INT-V1-020` Implement passive/agentic goal lifecycle | in_progress | none | Implements the second primary control with the pending-setting guard and without repeating the active-goal materialization bug. |
+| 2 | `INT-V1-021` Implement pending Plan/Default selection | ready | none | Implements the third primary control and its required composition with pending model state. |
+| 3 | `INT-V1-025` Implement pending approval routing | ready | none | Uses normalized request/item identity to implement exactly-once approve/deny behavior. |
+| 4 | `DAT-V1-022` Invoke production projection retention | ready | none | Extends the proven append transaction with bounded pruning and visible replay boundaries. |
+| 5 | `DAT-V1-023` Implement accepted-to-terminal audit state machine | ready | none | Establishes truthful mutation outcomes before write/security integration. |
+| 6 | `IFC-V1-018` Implement commit-only projection fanout | ready | none | Carries only committed ordered projection truth into the later replay/live boundary. |
+| 7 | `INT-V1-022` Implement structured usage retrieval | ready | none | Implements observed account/runtime usage without inventing billing scope. |
+| 8 | `INT-V1-023` Implement accepted/incomplete compact lifecycle | ready | none | Prevents the utility from reporting context reduction from immediate acceptance. |
+| 9 | `INT-V1-024` Implement structured skills listing | ready | none | Implements the remaining observed read-only utility boundary. |
+| 10 | `IFC-V1-019` Freeze the selected API route manifest | ready | none | Converts the completed semantic matrix and normalized contracts into one unambiguous public route inventory. |
+| 11 | `IFC-V1-047` Enforce real HTTP resource limits | ready | none | Extends proven option inventory into raw-socket limit and cleanup behavior. |
+| 12 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the independent physical-device LAN trust gate when hardware setup is available. |
 
 ## Intentional Blockers
 
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
 | LAN security | `IFC-V1-015` | Real phone certificate-enrollment proof | Auth lifecycle, pairing UI, security/release review. |
-| Real Codex operation implementation | `INT-V1-018` to `INT-V1-027` | Exact semantics and ordered normalization pass; production control ports and assembled real proof remain | Production operation API, stable mobile state matrix, approvals. |
+| Real Codex operation implementation | `INT-V1-018` to `INT-V1-027` | Exact semantics, ordered normalization, and model control pass; remaining control ports and assembled real proof remain | Production operation API, stable mobile state matrix, approvals. |
 | Mobile visual direction | Reopened `FE-V1-002`, `FE-V1-003` | Real state matrix, two replacement options, human selection | React screen implementation. |
 | Release | `REL-V1-010` | All module hardening, clean package/service/phone/security evidence, human acceptance | V1 release and V2 planning. |
 
