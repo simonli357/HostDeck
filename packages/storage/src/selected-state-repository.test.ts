@@ -255,7 +255,7 @@ describe("selected projected event repository", () => {
       expectRepositoryError(() => repository.listEvents(current.mapping.id, { after: 1 }), "invalid_replay");
       const record = messageEventRecord(current, 1, "event-message-001");
       expectedBytes = record.byte_length;
-      const result = repository.appendEvent(record, advancedProjection(current, record));
+      const result = repository.appendEvent(record, advancedProjection(current, record), selectedStateRevision(current));
 
       expect(result.projection).toMatchObject({
         retained_event_count: 1,
@@ -299,20 +299,23 @@ describe("selected projected event repository", () => {
       const firstRecord = messageEventRecord(initial, 1, "event-shared-001");
       const staleSecondRecord = messageEventRecord(concurrentView, 2, "event-stale-002");
       const staleProjection = advancedProjection(concurrentView, staleSecondRecord);
-      repository.appendEvent(firstRecord, advancedProjection(initial, firstRecord));
+      repository.appendEvent(firstRecord, advancedProjection(initial, firstRecord), selectedStateRevision(initial));
 
-      expectRepositoryError(() => concurrentRepository.appendEvent(staleSecondRecord, staleProjection), "projection_conflict");
+      expectRepositoryError(
+        () => concurrentRepository.appendEvent(staleSecondRecord, staleProjection, selectedStateRevision(concurrentView)),
+        "projection_conflict"
+      );
       expect(repository.listEvents(initial.mapping.id).events.map((event) => event.cursor)).toEqual([1]);
 
       const committed = repository.require(initial.mapping.id);
       const skippedCursor = messageEventRecord(committed, 3, "event-skipped-003");
       expectRepositoryError(
-        () => repository.appendEvent(skippedCursor, advancedProjection(committed, skippedCursor)),
+        () => repository.appendEvent(skippedCursor, advancedProjection(committed, skippedCursor), selectedStateRevision(committed)),
         "cursor_not_monotonic"
       );
       const duplicateUpstream = messageEventRecord(committed, 2, "event-shared-001");
       expectRepositoryError(
-        () => repository.appendEvent(duplicateUpstream, advancedProjection(committed, duplicateUpstream)),
+        () => repository.appendEvent(duplicateUpstream, advancedProjection(committed, duplicateUpstream), selectedStateRevision(committed)),
         "event_exists"
       );
       expect(repository.require(initial.mapping.id).projection).toMatchObject({
@@ -357,7 +360,11 @@ describe("selected projected event repository", () => {
       const repository = createSelectedStateRepository(open.db);
       const current = repository.create(stateCandidate());
       const record = replayBoundaryRecord(current, 1, 0);
-      repository.appendEvent(record, advancedProjection(current, record, { retentionBoundaryCursor: 0 }));
+      repository.appendEvent(
+        record,
+        advancedProjection(current, record, { retentionBoundaryCursor: 0 }),
+        selectedStateRevision(current)
+      );
 
       expect(repository.listEvents(current.mapping.id)).toMatchObject({
         truncated: true,
@@ -381,7 +388,11 @@ describe("selected projected event repository", () => {
       const repository = createSelectedStateRepository(open.db);
       const current = repository.create(stateCandidate());
       const record = replayBoundaryRecord(current, 1, null);
-      repository.appendEvent(record, advancedProjection(current, record, { retentionBoundaryCursor: null }));
+      repository.appendEvent(
+        record,
+        advancedProjection(current, record, { retentionBoundaryCursor: null }),
+        selectedStateRevision(current)
+      );
 
       expect(repository.listEvents(current.mapping.id)).toMatchObject({
         truncated: true,
@@ -401,7 +412,10 @@ describe("selected projected event repository", () => {
       const event = selectedProjectionEventSchema.parse({ ...candidate.event, captured_at: "2026-07-09T19:59:59.999Z" });
       const record = { event, byte_length: selectedProjectedEventByteLength(event) };
 
-      expectRepositoryError(() => repository.appendEvent(record, advancedProjection(current, record)), "invalid_event");
+      expectRepositoryError(
+        () => repository.appendEvent(record, advancedProjection(current, record), selectedStateRevision(current)),
+        "invalid_event"
+      );
       expect(repository.listEvents(current.mapping.id).events).toEqual([]);
     } finally {
       open.db.close();
@@ -414,7 +428,7 @@ describe("selected projected event repository", () => {
       const repository = createSelectedStateRepository(open.db);
       const current = repository.create(stateCandidate());
       const record = messageEventRecord(current, 1, "event-message-001");
-      repository.appendEvent(record, advancedProjection(current, record));
+      repository.appendEvent(record, advancedProjection(current, record), selectedStateRevision(current));
       open.db.prepare("UPDATE selected_projected_events SET normalized_type = 'turn' WHERE session_id = ? AND cursor = 1").run(current.mapping.id);
 
       expectRepositoryError(() => repository.listEvents(current.mapping.id), "invalid_event");
@@ -431,7 +445,7 @@ describe("selected projected event repository", () => {
       const repository = createSelectedStateRepository(open.db);
       const current = repository.create(stateCandidate());
       const record = messageEventRecord(current, 1, "event-message-001");
-      repository.appendEvent(record, advancedProjection(current, record));
+      repository.appendEvent(record, advancedProjection(current, record), selectedStateRevision(current));
       open.db
         .prepare("UPDATE selected_session_projections SET retained_event_count = 2 WHERE session_id = ?")
         .run(current.mapping.id);

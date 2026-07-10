@@ -47,6 +47,17 @@ export {
   type StorageMigration
 } from "./migrations.js";
 export {
+  type CommittedProjectionAppend,
+  createProductionProjectionAppendPort,
+  HostDeckProjectionPublicationError,
+  type ProductionProjectionAppendInput,
+  type ProductionProjectionAppendPort,
+  type ProductionProjectionAppendPortOptions,
+  type ProjectionAppendPublisher,
+  type UncommittedManagedSessionProjection,
+  type UncommittedSelectedProjectionEvent
+} from "./projection-append-port.js";
+export {
   type AppendOutputEventInput,
   type AppendOutputEventResult,
   type CleanupRetentionInput,

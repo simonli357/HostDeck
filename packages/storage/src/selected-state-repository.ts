@@ -35,6 +35,7 @@ export type SelectedStateRepositoryErrorCode =
   | "invalid_recovery"
   | "invalid_replay"
   | "projection_conflict"
+  | "projection_write_failed"
   | "recovery_conflict"
   | "session_exists"
   | "session_not_found";
@@ -69,6 +70,7 @@ export interface ListSelectedEventsInput {
 export interface AppendSelectedEventResult {
   readonly event: SelectedProjectedEventRecord;
   readonly projection: SelectedSessionProjectionRecord;
+  readonly revision: SelectedStateRevision;
 }
 
 export interface SelectedStateRepository {
@@ -78,7 +80,7 @@ export interface SelectedStateRepository {
   readonly list: () => readonly SelectedSessionState[];
   readonly create: (state: unknown) => SelectedSessionState;
   readonly replace: (state: unknown, expectedRevision: unknown) => SelectedSessionState;
-  readonly appendEvent: (event: unknown, nextProjection: unknown) => AppendSelectedEventResult;
+  readonly appendEvent: (event: unknown, nextProjection: unknown, expectedRevision: unknown) => AppendSelectedEventResult;
   readonly listEvents: (sessionId: string, input?: ListSelectedEventsInput) => SelectedSessionEventStream;
   readonly getLegacyDisposition: (sessionId: string) => LegacySessionDispositionRecord | null;
   readonly listLegacyDispositions: () => readonly LegacySessionDispositionRecord[];
@@ -212,9 +214,14 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
   }).immediate;
 
   const appendEventTransaction = db.transaction(
-    (event: SelectedProjectedEventRecord, nextProjection: SelectedSessionProjectionRecord): AppendSelectedEventResult => {
+    (
+      event: SelectedProjectedEventRecord,
+      nextProjection: SelectedSessionProjectionRecord,
+      expectedRevision: SelectedStateRevision
+    ): AppendSelectedEventResult => {
       const current = requireState(db, event.event.session_id);
       assertPersistedEventProjection(db, current.projection);
+      assertCurrentRevision(current, expectedRevision);
       assertProjectionIdentity(current.mapping, nextProjection);
       assertEventAdvance(current.projection, event, nextProjection);
 
@@ -231,7 +238,11 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
         throw mapEventConstraint(error);
       }
 
-      return { event, projection: nextProjection };
+      return {
+        event,
+        projection: nextProjection,
+        revision: selectedStateRevision({ mapping: current.mapping, projection: nextProjection })
+      };
     }
   ).immediate;
 
@@ -298,12 +309,12 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
       return createTransaction(parsed);
     },
     replace(state, expectedRevision) {
-      return replaceTransaction(parseState(state), parseRevision(expectedRevision));
+      return replaceTransaction(parseState(state), parseSelectedStateRevision(expectedRevision));
     },
-    appendEvent(event, nextProjection) {
+    appendEvent(event, nextProjection, expectedRevision) {
       const parsedEvent = parseProjectedEventRecord(event);
       assertEventByteLength(parsedEvent);
-      return appendEventTransaction(parsedEvent, parseProjection(nextProjection));
+      return appendEventTransaction(parsedEvent, parseProjection(nextProjection), parseSelectedStateRevision(expectedRevision));
     },
     listEvents(sessionId, input = {}) {
       const parsedSessionId = parseSessionId(sessionId);
@@ -486,7 +497,7 @@ function parseProjectedEventRecord(candidate: unknown): SelectedProjectedEventRe
   return result.data;
 }
 
-function parseRevision(candidate: unknown): SelectedStateRevision {
+export function parseSelectedStateRevision(candidate: unknown): SelectedStateRevision {
   if (candidate === null || typeof candidate !== "object") {
     throw new HostDeckSelectedStateRepositoryError("invalid_projection", "Selected state revision must be an object.");
   }
@@ -1083,7 +1094,11 @@ function mapEventConstraint(error: unknown): HostDeckSelectedStateRepositoryErro
   if (message.includes("selected_projected_events.session_id, selected_projected_events.codex_event_id")) {
     return new HostDeckSelectedStateRepositoryError("event_exists", "Selected Codex event id already exists.", { cause: error });
   }
-  return new HostDeckSelectedStateRepositoryError("invalid_event", "Selected projected event violates SQLite constraints.", { cause: error });
+  return new HostDeckSelectedStateRepositoryError(
+    "projection_write_failed",
+    "Selected projected event transaction failed and was rolled back.",
+    { cause: error }
+  );
 }
 
 function mapRecoveryConstraint(error: unknown): HostDeckSelectedStateRepositoryError {
