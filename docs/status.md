@@ -73,5 +73,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Completed coherent units through `DAT-V1-019` are pushed to `origin/main`; implementation commit `7f873c7`.
 - `FND-V1-017` planning decomposition is pushed as `481cb44`; closure/resume state is pushed as `3cfb1f2`.
 - `BUG-002` deterministic unit/real-tmux smoke separation is pushed as `bb66095`; `IFC-V1-016` exact stack/probe/docs closure is pushed as `4e87d30`.
-- `IFC-V1-020` resource/deadline implementation and docs are the current unit pending final validation, commit, and push.
+- `IFC-V1-020` resource/deadline implementation and docs are pushed as `620f4f0`.
 - Next action: implement `IFC-V1-022` typed app factory using the frozen policy, local Zod compilers, stable global errors, and explicit route-plugin inputs without listener/storage side effects.
