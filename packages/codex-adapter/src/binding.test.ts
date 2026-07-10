@@ -27,6 +27,15 @@ describe("Codex generated binding ownership", () => {
       expect(Object.isFrozen(entries)).toBe(true);
       expect(new Set(entries).size).toBe(entries.length);
     }
+    expect(codexBindingDescriptor.surface.server_notifications).toEqual(
+      expect.arrayContaining([
+        "item/agentMessage/delta",
+        "item/completed",
+        "item/started",
+        "serverRequest/resolved",
+        "thread/settings/updated"
+      ])
+    );
   });
 
   it("does not re-export raw generated protocol types from the package entry", () => {

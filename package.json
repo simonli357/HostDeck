@@ -23,6 +23,7 @@
     "smoke:codex-compatibility": "HOSTDECK_REQUIRE_CODEX_COMPATIBILITY_SMOKE=1 vitest run packages/codex-adapter/src/installed-codex.smoke.test.ts",
     "smoke:codex-ipc": "HOSTDECK_REQUIRE_CODEX_IPC_SMOKE=1 vitest run packages/codex-adapter/src/codex-ipc.smoke.test.ts",
     "smoke:codex-threads": "HOSTDECK_REQUIRE_CODEX_THREAD_SMOKE=1 vitest run packages/codex-adapter/src/codex-thread-lifecycle.smoke.test.ts",
+    "smoke:codex-semantics": "HOSTDECK_REQUIRE_CODEX_SEMANTICS_SMOKE=1 vitest run packages/codex-adapter/src/codex-operation-semantics.smoke.test.ts",
     "test:web": "vitest run packages/web/src/view-models.test.ts packages/test-fixtures/src/fixtures.test.ts",
     "test:e2e": "node scripts/not-implemented.mjs test:e2e REL-V1-007",
     "build": "node scripts/not-implemented.mjs build REL-V1-007",

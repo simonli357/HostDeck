@@ -151,7 +151,9 @@ describe("Codex request broker hostile inbound handling", () => {
     transport.receive('{"method":"item/fileChange/requestApproval","id":"approval-1","params":{}}');
     expect(requests).toEqual([{ id: "approval-1", method: "item/fileChange/requestApproval" }]);
     expect(broker.pending_server_request_count).toBe(1);
+    const frameCountBeforeResponse = transport.sent_frames.length;
     await broker.respondToServerRequest("approval-1", { decision: "decline" });
+    expect(transport.sent_frames).toHaveLength(frameCountBeforeResponse + 1);
     expect(JSON.parse(transport.sent_frames.at(-1) ?? "null")).toEqual({ id: "approval-1", result: { decision: "decline" } });
     expect(broker.pending_server_request_count).toBe(0);
     await expectBrokerError(Promise.resolve().then(() => broker.respondToServerRequest("approval-1", {})), "protocol_violation");

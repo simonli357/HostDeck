@@ -103,6 +103,7 @@ interface ParsedThreadClientOptions {
 
 interface ParsedThreadGoal {
   readonly objective: string;
+  readonly status: "active" | "blocked" | "budgetLimited" | "complete" | "paused" | "usageLimited";
 }
 
 const threadClientDefaults = {
@@ -219,6 +220,10 @@ class DefaultCodexThreadClient implements CodexThreadClient {
     }
     if (thread.name !== name) await this.setThreadName(threadId, name);
     if (storedBefore === undefined && goalBefore === null) await this.setThreadGoal(threadId, marker);
+    if (goalBefore?.status === "active") await this.pauseThreadGoal(threadId, marker);
+    if (goalBefore !== null && !["active", "paused"].includes(goalBefore.status)) {
+      throw invalidThreadPayload("Codex materialization target internal goal has an unsupported terminal status.");
+    }
     if (storedBefore === undefined || goalBefore !== null) await this.clearThreadGoal(threadId);
     if ((await this.readThreadGoal(threadId)) !== null) {
       throw invalidThreadPayload("Codex materialization target retained its internal goal.");
@@ -368,7 +373,7 @@ class DefaultCodexThreadClient implements CodexThreadClient {
   }
 
   private async setThreadGoal(threadId: CodexThreadId, objective: string): Promise<void> {
-    const params = { threadId, objective } satisfies ThreadGoalSetParams;
+    const params = { threadId, objective, status: "paused" } satisfies ThreadGoalSetParams;
     const result = requireRecord(
       await this.port.request({ method: "thread/goal/set", params, kind: "mutation", timeout_ms: this.options.mutation_timeout_ms }),
       "Codex thread/goal/set result must be an object."
@@ -376,6 +381,20 @@ class DefaultCodexThreadClient implements CodexThreadClient {
     assertExactKeys(result, ["goal"], "Codex thread/goal/set fields are invalid.");
     const goal = parseThreadGoal(result.goal, threadId);
     if (goal.objective !== objective) throw invalidThreadPayload("Codex thread/goal/set returned a different objective.");
+    if (goal.status !== "paused") throw invalidThreadPayload("Codex materialization goal did not remain paused.");
+  }
+
+  private async pauseThreadGoal(threadId: CodexThreadId, objective: string): Promise<void> {
+    const params = { threadId, status: "paused" } satisfies ThreadGoalSetParams;
+    const result = requireRecord(
+      await this.port.request({ method: "thread/goal/set", params, kind: "mutation", timeout_ms: this.options.mutation_timeout_ms }),
+      "Codex thread/goal/set pause result must be an object."
+    );
+    assertExactKeys(result, ["goal"], "Codex thread/goal/set pause fields are invalid.");
+    const goal = parseThreadGoal(result.goal, threadId);
+    if (goal.objective !== objective || goal.status !== "paused") {
+      throw invalidThreadPayload("Codex materialization goal pause changed identity or remained active.");
+    }
   }
 
   private async clearThreadGoal(threadId: CodexThreadId): Promise<void> {
@@ -584,7 +603,7 @@ function parseThreadGoal(candidate: unknown, expectedThreadId: CodexThreadId): P
   if ((value.updatedAt as number) < (value.createdAt as number)) {
     throw invalidThreadPayload("Codex thread goal updatedAt precedes createdAt.");
   }
-  return { objective };
+  return { objective, status: value.status as ParsedThreadGoal["status"] };
 }
 
 function parseNonnegativeNumber(candidate: unknown, field: string): number {

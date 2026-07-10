@@ -176,11 +176,13 @@ describe("normalized Codex thread client", () => {
         name = (request.params as { readonly name: string }).name;
         return {};
       }
-      if (request.method === "thread/goal/get") return { goal: goal === null ? null : rawGoal(goal) };
+      if (request.method === "thread/goal/get") return { goal: goal === null ? null : rawGoal(goal, "paused") };
       if (request.method === "thread/goal/set") {
-        goal = (request.params as { readonly objective: string }).objective;
+        const params = request.params as { readonly objective: string; readonly status: string };
+        expect(params.status).toBe("paused");
+        goal = params.objective;
         stored = true;
-        return { goal: rawGoal(goal) };
+        return { goal: rawGoal(goal, "paused") };
       }
       if (request.method === "thread/goal/clear") {
         goal = null;
@@ -222,6 +224,11 @@ describe("normalized Codex thread client", () => {
         };
       }
       if (request.method === "thread/goal/get") return { goal: goal === null ? null : rawGoal(goal) };
+      if (request.method === "thread/goal/set") {
+        const params = request.params as { readonly objective?: string; readonly status: string };
+        expect(params).toEqual({ threadId: "thread-a", status: "paused" });
+        return { goal: rawGoal(goal as string, "paused") };
+      }
       if (request.method === "thread/goal/clear") {
         goal = null;
         return { cleared: true };
@@ -237,7 +244,12 @@ describe("normalized Codex thread client", () => {
         name: "managed-one"
       })
     ).resolves.toMatchObject({ id: "thread-a", name: "managed-one", archived: false });
-    expect(port.requests.some((request) => request.method === "thread/goal/set")).toBe(false);
+    expect(
+      port.requests.some(
+        (request) => request.method === "thread/goal/set" && Object.hasOwn(request.params as object, "objective")
+      )
+    ).toBe(false);
+    expect(port.requests.some((request) => request.method === "thread/goal/set")).toBe(true);
   });
 
   it("rejects unstored threads without the exact marker and conflicting partial goals", async () => {
@@ -430,11 +442,11 @@ function rawThread(overrides: Record<string, unknown> = {}): Record<string, unkn
   };
 }
 
-function rawGoal(objective: string): Record<string, unknown> {
+function rawGoal(objective: string, status = "active"): Record<string, unknown> {
   return {
     threadId: "thread-a",
     objective,
-    status: "active",
+    status,
     tokenBudget: null,
     tokensUsed: 0,
     timeUsedSeconds: 0,

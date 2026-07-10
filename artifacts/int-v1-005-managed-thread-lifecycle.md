@@ -23,7 +23,7 @@ Verified against exact `codex-cli 0.144.0`:
 
 1. Generated `ThreadHistoryMode` advertises `paginated`, but `thread/start` rejects it with unsupported `paginated_threads`; V1 must use explicit `legacy` history for this binding.
 2. A zero-turn legacy `thread/start` is loaded in memory but absent from stored `thread/list`; exact TUI resume rejects it because no rollout exists.
-3. `thread/name/set` and `thread/metadata/update` do not materialize the rollout. `thread/goal/set` does; immediately clearing the internal marker leaves the final user goal empty.
+3. `thread/name/set` and `thread/metadata/update` do not materialize the rollout. `thread/goal/set` does, but the marker must be explicitly `paused`; the original default-active marker autonomously started turns even when immediately cleared (`BUG-007`).
 4. The loaded start response reports session source `vscode`, not `appServer`, for this app-server client.
 5. The operation `threadSource` exists while loaded but becomes `null` after legacy rollout persistence. It is valid for pre-id recovery only, not permanent ownership.
 6. Official app-server documentation exposes `thread/loaded/list` specifically for in-memory thread ids; the selected recovery path combines that bounded list with exact `thread/read` validation.
@@ -36,7 +36,7 @@ Decision: `DEC-022`. Detailed sequence: `docs/planning/04a-implementation-bluepr
   - Added strict normalized thread records and request/response validation.
   - Added bounded active/archived and loaded-thread pagination, cursor-cycle/duplicate detection, and exact-read caps.
   - Added operation-marker recovery across stored and loaded-only threads.
-  - Added idempotent legacy materialization: conflict check, name set, internal goal set/clear, stored/read/name/goal verification.
+  - Added idempotent legacy materialization: conflict check, name set, paused internal goal set/clear, prior-active-marker pause recovery, stored/read/name/goal verification.
   - Added shell-free immutable `codex resume --remote unix://... <thread-id>` command construction using the transport's socket validator.
   - Expanded required lifecycle capabilities with `thread/loaded/list` and `thread/name/set`.
 - `@hostdeck/server`
@@ -75,7 +75,7 @@ Decision: `DEC-022`. Detailed sequence: `docs/planning/04a-implementation-bluepr
 - `pnpm smoke:codex-ipc`
 - `pnpm smoke:codex-threads`
 
-The installed thread smoke passed start, loaded-only marker recovery, no-model materialization, stored list/read, exact authenticated TUI resume, archive, and cleanup on a private Unix socket.
+The corrected installed thread smoke passed start, loaded-only marker recovery, paused no-model materialization, stored list/read, exact authenticated TUI resume, archive, and cleanup on a private Unix socket. Before TUI attachment it now requires idle runtime state, empty stored turns, and no `turn/started`, `thread/tokenUsage/updated`, or agent-message delta.
 
 Final broad results: 367 unit tests passed with four opt-in smokes skipped, 104 contract tests passed, 15 integration tests passed, and 14 web tests passed. The three installed-Codex no-model smokes passed when run explicitly.
 
@@ -83,7 +83,11 @@ Final broad results: 367 unit tests passed with four opt-in smokes skipped, 104 
 
 - Real turn/event/model/goal/plan/usage/compact/skills/approval/interrupt behavior remains `INT-V1-006`.
 - Multi-client event integrity, app-server/HostDeck restart, and process supervision remain `INT-V1-007`.
-- The internal goal set/clear materialization is exact-version behavior and must be re-proved or removed during every Codex binding upgrade.
+- The paused internal goal set/clear materialization is exact-version behavior and must be re-proved or removed during every Codex binding upgrade. Active internal goals are prohibited.
 - This completes one leaf task, not `BLK-V1-03` or V1 release readiness.
 
 Official surface reference: <https://learn.chatgpt.com/docs/app-server>.
+
+## 2026-07-10 Correction
+
+`INT-V1-006` invalidated the original assumption that immediate clear made a default-active goal no-model. Redacted wire evidence showed autonomous turns, token events, and approval-capable work. The implementation and real smoke were corrected before downstream runtime work; see `artifacts/int-v1-006-codex-operation-semantics.md`, `BUG-007`, and revised `DEC-022`.

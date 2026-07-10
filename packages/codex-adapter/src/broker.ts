@@ -33,6 +33,10 @@ export interface CodexRequestBrokerOptions {
   readonly request_timeout_ms?: number;
   readonly max_server_requests?: number;
   readonly on_notification?: (message: Extract<DecodedCodexInboundMessage, { readonly kind: "notification" }>) => void;
+  readonly on_response_observed?: (
+    method: string,
+    message: Extract<DecodedCodexInboundMessage, { readonly kind: "response" }>
+  ) => void;
   readonly on_server_request_observed?: (message: Extract<DecodedCodexInboundMessage, { readonly kind: "server_request" }>) => void;
   readonly on_server_request?: (message: Extract<DecodedCodexInboundMessage, { readonly kind: "server_request" }>) => void;
   readonly on_protocol_issue?: (issue: CodexProtocolIssue) => void;
@@ -236,6 +240,12 @@ class DefaultCodexRequestBroker implements CodexRequestBroker {
     }
     if (pending.generation !== generation) {
       this.fatal(brokerError("protocol_violation", `Codex response ${message.id} crossed connection generations.`));
+      return;
+    }
+    try {
+      this.options.on_response_observed?.(pending.method, message);
+    } catch (error) {
+      this.fatal(asAdapterError(error, "protocol_violation", "Codex response observer failed."));
       return;
     }
     const current = this.takePending(message.id);

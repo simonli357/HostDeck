@@ -41,6 +41,72 @@ describe("Codex app-server connection handshake", () => {
     expect(notifications).toEqual(["thread/started"]);
   });
 
+  it("buffers ordered notifications emitted after initialize response and before initialized acknowledgement", async () => {
+    const notifications: string[] = [];
+    const transport = respondingTransport({
+      after_initialize_response(current) {
+        current.receive('{"method":"configWarning","params":{"summary":"bounded warning","details":null}}');
+        current.receive('{"method":"remoteControl/status/changed","params":{"status":"disabled"}}');
+      }
+    });
+    const connection = createCodexAppServerConnection({
+      transport,
+      observed_version: "0.144.0",
+      now: () => checkedAt,
+      handshake_timeout_ms: 1_000,
+      on_notification: (message) => notifications.push(message.method)
+    });
+
+    await connection.connect();
+    expect(connection.state).toBe("ready");
+    expect(notifications).toEqual(["configWarning", "remoteControl/status/changed"]);
+    expect(sentMethods(transport)).toEqual(["initialize", "initialized", "collaborationMode/list"]);
+  });
+
+  it("buffers a supported server request in the initialize response/ack window", async () => {
+    const requests: string[] = [];
+    const transport = respondingTransport({
+      after_initialize_response(current) {
+        current.receive(
+          '{"method":"item/fileChange/requestApproval","id":"approval-1","params":{"threadId":"thread-1"}}'
+        );
+      }
+    });
+    const connection = createCodexAppServerConnection({
+      transport,
+      observed_version: "0.144.0",
+      now: () => checkedAt,
+      handshake_timeout_ms: 1_000,
+      on_server_request: (message) => requests.push(`${message.id}:${message.method}`)
+    });
+
+    await connection.connect();
+    expect(requests).toEqual(["approval-1:item/fileChange/requestApproval"]);
+    expect(connection.pending_server_request_count).toBe(1);
+    await connection.respondToServerRequest("approval-1", { decision: "decline" });
+    expect(connection.pending_server_request_count).toBe(0);
+  });
+
+  it("fails closed when the initialize response/ack message queue is exceeded", async () => {
+    const transport = respondingTransport({
+      after_initialize_response(current) {
+        current.receive('{"method":"configWarning","params":{"summary":"one","details":null}}');
+        current.receive('{"method":"configWarning","params":{"summary":"two","details":null}}');
+      }
+    });
+    const connection = createCodexAppServerConnection({
+      transport,
+      observed_version: "0.144.0",
+      now: () => checkedAt,
+      handshake_timeout_ms: 1_000,
+      max_server_requests: 1
+    });
+
+    await expectAdapterError(connection.connect(), "transport_closed");
+    expect(connection.state).toBe("disconnected");
+    expect(transport.state).toBe("closed");
+  });
+
   it("rejects malformed initialize results and closes the transport", async () => {
     const transport = respondingTransport({ initialize_result: { userAgent: "hostdeck/0.144.0" } });
     const connection = createConnection(transport);
@@ -231,6 +297,7 @@ interface RespondingTransportOptions {
   readonly initialize_result?: unknown;
   readonly modes?: readonly string[];
   readonly before_initialize_response?: () => Promise<void>;
+  readonly after_initialize_response?: (transport: ScriptedCodexTransport) => void;
   readonly on_initialized_send?: (transport: ScriptedCodexTransport) => void;
 }
 
@@ -253,6 +320,7 @@ function respondingTransport(options: RespondingTransportOptions = {}): Scripted
               }
           })
         );
+        options.after_initialize_response?.(transport);
       } else if (message.method === "collaborationMode/list") {
         transport.receive(
           JSON.stringify({

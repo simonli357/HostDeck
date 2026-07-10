@@ -51,9 +51,11 @@ describe.skipIf(!requireSmoke)("installed Codex managed-thread lifecycle smoke",
         appServerStderr = boundedOutput(appServerStderr, chunk);
       });
 
+      const observedNotificationMethods: string[] = [];
       const connection = createCodexAppServerConnection({
         transport: createCodexUnixWebSocketTransport({ socket_path: socketPath }),
-        observed_version: version
+        observed_version: version,
+        on_notification: (message) => observedNotificationMethods.push(message.method)
       });
       let tui: TuiProbe | null = null;
       let lifecycleError: Error | null = null;
@@ -97,6 +99,18 @@ describe.skipIf(!requireSmoke)("installed Codex managed-thread lifecycle smoke",
           thread_source: null,
           archived: false
         });
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const materializedRead = await connection.request({
+          method: "thread/read",
+          params: { threadId: started.thread.id, includeTurns: true },
+          kind: "read"
+        });
+        expect(materializedRead).toMatchObject({
+          thread: { id: started.thread.id, status: { type: "idle" }, turns: [] }
+        });
+        expect(observedNotificationMethods).not.toContain("turn/started");
+        expect(observedNotificationMethods).not.toContain("thread/tokenUsage/updated");
+        expect(observedNotificationMethods).not.toContain("item/agentMessage/delta");
         const activeBeforeResume = await threads.list({ archived: false, limit: 100 });
         expect(activeBeforeResume.data.filter((thread) => thread.id === started.thread.id)).toHaveLength(1);
         await expect(threads.read(started.thread.id)).resolves.toMatchObject({

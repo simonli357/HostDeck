@@ -65,17 +65,24 @@ const selectedServerRequests = [
 ] as const satisfies readonly ServerRequestMethod[];
 
 const selectedServerNotifications = [
+  "account/rateLimits/updated",
+  "item/agentMessage/delta",
+  "item/completed",
   "thread/started",
   "thread/status/changed",
   "thread/archived",
   "thread/goal/updated",
   "thread/goal/cleared",
+  "thread/name/updated",
+  "thread/settings/updated",
   "thread/tokenUsage/updated",
   "thread/compacted",
   "turn/started",
   "turn/completed",
   "turn/plan/updated",
-  "item/plan/delta"
+  "item/plan/delta",
+  "item/started",
+  "serverRequest/resolved"
 ] as const satisfies readonly ServerNotificationMethod[];
 
 const selectedTurnStartFields = ["threadId", "input", "model", "collaborationMode"] as const satisfies readonly (keyof TurnStartParams)[];

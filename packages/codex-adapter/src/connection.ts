@@ -77,6 +77,8 @@ class DefaultCodexAppServerConnection implements CodexAppServerConnection {
   private readonly broker;
   private permanentlyClosed = false;
   private lastTransportClose: { readonly generation: number; readonly reason: string } | null = null;
+  private initializeResponseObserved = false;
+  private readonly handshakeInboundQueue: Array<CodexConnectionNotification | CodexConnectionServerRequest> = [];
 
   constructor(private readonly options: ParsedConnectionOptions) {
     this.currentCompatibility = this.assess({ state: "not_attempted" });
@@ -84,8 +86,9 @@ class DefaultCodexAppServerConnection implements CodexAppServerConnection {
       ...(options.max_in_flight === undefined ? {} : { max_in_flight: options.max_in_flight }),
       request_timeout_ms: options.handshake_timeout_ms,
       ...(options.max_server_requests === undefined ? {} : { max_server_requests: options.max_server_requests }),
+      on_response_observed: (method, message) => this.receiveResponseObserved(method, message),
       on_notification: (message) => this.receiveNotification(message),
-      on_server_request_observed: (message) => this.assertProtocolInitialized(`Codex requested ${message.method}`),
+      on_server_request_observed: (message) => this.assertInboundAllowed(`Codex requested ${message.method}`),
       on_server_request: (message) => this.receiveServerRequest(message),
       on_protocol_issue: (issue) => this.receiveProtocolIssue(issue)
     });
@@ -129,6 +132,8 @@ class DefaultCodexAppServerConnection implements CodexAppServerConnection {
 
     this.currentState = "connecting";
     this.protocolInitialized = false;
+    this.initializeResponseObserved = false;
+    this.handshakeInboundQueue.length = 0;
     this.lastTransportClose = null;
     const internalAbort = new AbortController();
     this.connectAbort = internalAbort;
@@ -154,13 +159,14 @@ class DefaultCodexAppServerConnection implements CodexAppServerConnection {
         })
       );
       throwIfAborted(connectSignal);
-      this.protocolInitialized = true;
       try {
         await this.broker.notify("initialized");
       } catch (error) {
         this.protocolInitialized = false;
         throw error;
       }
+      this.protocolInitialized = true;
+      this.flushHandshakeInboundQueue();
       throwIfAborted(connectSignal);
       const collaborationModes = parseCollaborationModes(
         await this.broker.request({
@@ -195,6 +201,8 @@ class DefaultCodexAppServerConnection implements CodexAppServerConnection {
         this.currentCompatibility = this.assess({ state: "failed", reason: normalized.message });
       }
       this.protocolInitialized = false;
+      this.initializeResponseObserved = false;
+      this.handshakeInboundQueue.length = 0;
       this.currentState = incompatible ? "incompatible" : "disconnected";
       throw normalized;
     } finally {
@@ -223,6 +231,8 @@ class DefaultCodexAppServerConnection implements CodexAppServerConnection {
       await this.options.transport.close("HostDeck explicitly recycled the Codex app-server connection.");
     }
     this.protocolInitialized = false;
+    this.initializeResponseObserved = false;
+    this.handshakeInboundQueue.length = 0;
     this.currentState = "disconnected";
     return this.connect(signal);
   }
@@ -254,23 +264,61 @@ class DefaultCodexAppServerConnection implements CodexAppServerConnection {
       this.broker.close();
       this.unsubscribeTransport();
       this.protocolInitialized = false;
+      this.initializeResponseObserved = false;
+      this.handshakeInboundQueue.length = 0;
       this.currentCompatibility = this.assess({ state: "failed", reason });
       this.currentState = "disconnected";
     }
   }
 
   private receiveNotification(message: CodexConnectionNotification): void {
-    this.assertProtocolInitialized(`Codex sent ${message.method}`);
+    if (!this.protocolInitialized) {
+      this.enqueueHandshakeInbound(message, `Codex sent ${message.method}`);
+      return;
+    }
     this.options.on_notification?.(message);
   }
 
   private receiveServerRequest(message: CodexConnectionServerRequest): void {
+    if (!this.protocolInitialized) {
+      this.enqueueHandshakeInbound(message, `Codex requested ${message.method}`);
+      return;
+    }
     this.options.on_server_request?.(message);
   }
 
-  private assertProtocolInitialized(subject: string): void {
-    if (!this.protocolInitialized) {
-      throw connectionError("protocol_violation", `${subject} before the initialized notification.`);
+  private receiveResponseObserved(
+    method: string,
+    message: Extract<DecodedCodexInboundMessage, { readonly kind: "response" }>
+  ): void {
+    if (method === "initialize" && message.error === null && this.currentState === "handshaking") {
+      this.initializeResponseObserved = true;
+    }
+  }
+
+  private assertInboundAllowed(subject: string): void {
+    if (this.protocolInitialized || (this.currentState === "handshaking" && this.initializeResponseObserved)) return;
+    throw connectionError("protocol_violation", `${subject} before the initialize response.`);
+  }
+
+  private enqueueHandshakeInbound(
+    message: CodexConnectionNotification | CodexConnectionServerRequest,
+    subject: string
+  ): void {
+    this.assertInboundAllowed(subject);
+    const limit = this.options.max_server_requests ?? defaultResourceBudget.protocol_max_pending_server_requests;
+    if (this.handshakeInboundQueue.length >= limit) {
+      throw connectionError("protocol_violation", "Codex exceeded the bounded initialize response/ack message queue.");
+    }
+    this.handshakeInboundQueue.push(message);
+  }
+
+  private flushHandshakeInboundQueue(): void {
+    const queued = this.handshakeInboundQueue.splice(0);
+    this.initializeResponseObserved = false;
+    for (const message of queued) {
+      if (message.kind === "notification") this.options.on_notification?.(message);
+      else this.options.on_server_request?.(message);
     }
   }
 
@@ -293,6 +341,8 @@ class DefaultCodexAppServerConnection implements CodexAppServerConnection {
     if (event.type !== "close") return;
     this.lastTransportClose = { generation: event.generation, reason: event.reason };
     this.protocolInitialized = false;
+    this.initializeResponseObserved = false;
+    this.handshakeInboundQueue.length = 0;
     if (this.currentState === "incompatible") return;
     this.currentCompatibility = this.assess({ state: "failed", reason: `transport closed: ${event.reason}` });
     if (this.currentState !== "connecting" && this.currentState !== "handshaking") this.currentState = "disconnected";
