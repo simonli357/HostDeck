@@ -63,7 +63,7 @@ Unavailable commands fail loudly with owning task id. No placeholder command may
 The release host records Codex version, HostDeck commit, commands, thread ids in redacted form, and cleanup result. Required sequence:
 
 1. Start dedicated app-server on private Unix socket and complete handshake.
-2. Start two managed threads in separate temporary repositories without alias collision.
+2. Start two managed threads in separate temporary repositories without alias collision. For the pinned legacy store, prove loaded-thread recovery before id persistence, id-first recovery persistence, no-model rollout materialization, final empty goals, and stored list/read identity before either start is reported successful.
 3. Start one bounded real turn and verify ordered item/status events through HostDeck projection and SSE.
 4. Send/steer exactly one selected thread and prove the second is unchanged.
 5. Exercise model listing/selection, goal set/get/clear, plan behavior, usage read, compact, and skills list according to supported capabilities.

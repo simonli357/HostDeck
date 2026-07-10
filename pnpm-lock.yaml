@@ -62,6 +62,9 @@ importers:
 
   packages/server:
     dependencies:
+      '@hostdeck/codex-adapter':
+        specifier: workspace:*
+        version: link:../codex-adapter
       '@hostdeck/contracts':
         specifier: workspace:*
         version: link:../contracts

@@ -56,7 +56,15 @@ interface CapabilityRule {
 
 const capabilityRules = {
   thread_lifecycle: {
-    client_methods: ["thread/start", "thread/resume", "thread/archive", "thread/list", "thread/read"],
+    client_methods: [
+      "thread/start",
+      "thread/resume",
+      "thread/archive",
+      "thread/list",
+      "thread/loaded/list",
+      "thread/read",
+      "thread/name/set"
+    ],
     server_notifications: ["thread/started", "thread/status/changed", "thread/archived"]
   },
   turn_input: { client_methods: ["turn/start"], turn_start_fields: ["threadId", "input"] },

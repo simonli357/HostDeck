@@ -15,18 +15,16 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-005` Implement managed Codex thread lifecycle and exact TUI resume | in_progress | none | Builds the first real thread/mapping vertical on the proven private adapter before turn/control work. |
-| 2 | `DAT-V1-019` Enforce owner-only paths and daemon lease | ready | none | Establishes the state/runtime ownership boundary required by runtime supervision and packaging. |
-| 3 | `IFC-V1-016` Build the Fastify/SSE composition root | ready | none | Replaces the partial custom listener with the production typed server lifecycle used by later security and fanout work. |
-| 4 | `DAT-V1-020` Integrate production projection, retention, and audit outcomes | ready | none | Makes selected projection and audit durability part of production append/startup paths before interface fanout work. |
-| 5 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the blocking LAN trust boundary when a real phone/LAN setup is available. |
+| 1 | `DAT-V1-019` Enforce owner-only paths and daemon lease | in_progress | none | Establishes the state/runtime ownership boundary required by runtime supervision and packaging. |
+| 2 | `IFC-V1-016` Build the Fastify/SSE composition root | ready | none | Replaces the partial custom listener with the production typed server lifecycle used by later security and fanout work. |
+| 3 | `DAT-V1-020` Integrate production projection, retention, and audit outcomes | ready | none | Makes selected projection and audit durability part of production append/startup paths before interface fanout work. |
+| 4 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the blocking LAN trust boundary when a real phone/LAN setup is available. |
 
 ## Intentional Blockers
 
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
 | LAN security | `IFC-V1-015` | Real phone certificate-enrollment proof | Auth lifecycle, pairing UI, security/release review. |
-| Managed Codex threads | `INT-V1-005` | Start/list/read/archive mapping, recovery saga, and exact laptop TUI resume | Real structured turns, controls, approvals, and selected API/CLI wiring. |
 | Real Codex semantics | `INT-V1-006` | Contracts, adapter, mapping, and thread lifecycle | Production operation API, mobile state matrix, approvals. |
 | Mobile visual direction | Reopened `FE-V1-002`, `FE-V1-003` | Real state matrix, two replacement options, human selection | React screen implementation. |
 | Release | `REL-V1-010` | All module hardening, clean package/service/phone/security evidence, human acceptance | V1 release and V2 planning. |

@@ -64,6 +64,10 @@ export function createCodexUnixWebSocketTransport(options: unknown): CodexTextTr
   return new CodexUnixWebSocketTransport(parseTransportOptions(options));
 }
 
+export function formatCodexUnixRemoteAddress(socketPath: string): string {
+  return `unix://${parseSocketPath(socketPath)}`;
+}
+
 class CodexUnixWebSocketTransport implements CodexTextTransport {
   private readonly listeners = new Set<CodexTransportListener>();
   private readonly closeWaiters = new Set<() => void>();
@@ -356,19 +360,7 @@ function parseTransportOptions(candidate: unknown): ParsedTransportOptions {
   const keys = Object.keys(value).sort();
   if (keys.some((key) => !allowed.includes(key))) throw invalidTransportConfig(`unknown option ${keys.find((key) => !allowed.includes(key))}`);
 
-  const socketPath = value.socket_path;
-  if (
-    typeof socketPath !== "string" ||
-    !isAbsolute(socketPath) ||
-    socketPath.length < 2 ||
-    Buffer.byteLength(socketPath, "utf8") > 107 ||
-    [":", "?", "#", "%"].some((character) => socketPath.includes(character)) ||
-    containsControlCharacter(socketPath)
-  ) {
-    throw invalidTransportConfig(
-      "socket_path must be an absolute Linux Unix-socket path of at most 107 UTF-8 bytes without URL delimiters, escapes, or control characters"
-    );
-  }
+  const socketPath = parseSocketPath(value.socket_path);
 
   const handshakeTimeout = parseBoundedInteger(value.handshake_timeout_ms, transportDefaults.handshake_timeout_ms, 50, 30_000, "handshake_timeout_ms");
   const closeTimeout = parseBoundedInteger(value.close_timeout_ms, transportDefaults.close_timeout_ms, 50, 10_000, "close_timeout_ms");
@@ -403,6 +395,22 @@ function parseTransportOptions(candidate: unknown): ParsedTransportOptions {
     max_frame_bytes: maxFrameBytes,
     max_buffered_bytes: maxBufferedBytes
   };
+}
+
+function parseSocketPath(candidate: unknown): string {
+  if (
+    typeof candidate !== "string" ||
+    !isAbsolute(candidate) ||
+    candidate.length < 2 ||
+    Buffer.byteLength(candidate, "utf8") > 107 ||
+    [":", "?", "#", "%"].some((character) => candidate.includes(character)) ||
+    containsControlCharacter(candidate)
+  ) {
+    throw invalidTransportConfig(
+      "socket_path must be an absolute Linux Unix-socket path of at most 107 UTF-8 bytes without URL delimiters, escapes, or control characters"
+    );
+  }
+  return candidate;
 }
 
 function containsControlCharacter(value: string): boolean {

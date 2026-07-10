@@ -109,11 +109,13 @@ The selected runtime requires a new migration, not in-place reinterpretation of 
 Session start uses a recoverable saga because Codex thread creation and SQLite cannot share a transaction:
 
 1. Validate request and reserve HostDeck id/alias as `starting` in SQLite.
-2. Call `thread/start` with a client operation id where supported.
-3. Persist returned thread id and initial projection transactionally.
-4. If Codex fails before a thread id, remove/mark failed reservation for safe retry.
-5. If Codex returns a thread id but persistence fails, retain an explicit recovery record outside the failed transaction or query by operation metadata; never create another thread automatically.
-6. A response-serialization failure after success does not retry start.
+2. Call `thread/start` in explicit legacy-history mode with a client operation marker. Codex 0.144.0 rejects advertised paginated history, and a zero-turn legacy thread is initially loaded but not stored.
+3. Persist the returned thread id in the recovery row before any operation that can materialize the rollout.
+4. Set the requested thread name, then use a version-scoped internal `thread/goal/set` plus `thread/goal/clear` transaction to materialize the zero-turn rollout without a model call. Verify stored list/read identity, final name, and an empty goal before exposing the mapping.
+5. Treat the durable HostDeck id/thread-id/cwd mapping as ownership after materialization. Codex 0.144.0 drops `threadSource` while writing the legacy rollout; do not require that marker during later read/archive/reconciliation.
+6. Before the thread id is known, reconcile an unknown start only by bounded `thread/loaded/list` pagination plus exact `thread/read` marker/cwd matching. Never redispatch an ambiguous reservation.
+7. After the thread id is known, resume any partial name/materialization/clear phase idempotently from that exact id. A missing thread or conflicting goal/name/source requires recovery; it does not create another thread.
+8. If Codex proves no thread was sent, mark the reservation failed for explicit cleanup and safe retry. A response-serialization failure after success does not retry start.
 
 ## Critical Sequences
 

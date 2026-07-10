@@ -11,7 +11,7 @@ Owns setup context, environment policy, services, and operational notes.
 | Package manager | `pnpm 10.29.2`, pinned in `package.json`. |
 | Native build | `@hostdeck/storage` uses `better-sqlite3`; `pnpm-workspace.yaml` allows its build script through `onlyBuiltDependencies`. |
 | Required Codex for selected adapter work | Exact `codex-cli 0.144.0` must be on `PATH`; `HOSTDECK_CODEX_BIN` may name another executable for binding/smoke commands. The reviewed V1 binding uses experimental API for `/plan`. |
-| Historical tmux evidence | `tmux 3.4` remains required only for legacy smoke until `INT-V1-008`. |
+| Tmux | `tmux 3.4` is required for historical smoke and as a test-only terminal emulator for the real exact-thread TUI smoke; it is not the selected production runtime. |
 | Hosted services | None. HostDeck is local-first and stores state locally. |
 
 ## Setup
@@ -33,6 +33,7 @@ The frozen install was validated for the current workspace on 2026-07-09. If a p
 | Codex binding update | `pnpm generate:codex-bindings` | Replaces committed generated files and identity; use only during an explicit compatibility review. |
 | Codex compatibility smoke | `pnpm smoke:codex-compatibility` | Starts installed app-server over stdio, initializes experimental API, and verifies Plan/Default without a model call. |
 | Codex Unix IPC smoke | `pnpm smoke:codex-ipc` | Starts installed app-server on a temporary private Unix socket and proves the production transport, broker, and compatibility handshake without a model call. |
+| Codex thread/TUI smoke | `pnpm smoke:codex-threads` | Requires authenticated Codex, Git, and tmux. Copies `auth.json` without parsing or logging it into a mode-`0600` private temporary home, proves loaded recovery/materialization/list/read/exact TUI resume/archive without a model turn, then removes the temporary tree. |
 | Typecheck | `pnpm typecheck` | Strict TypeScript no-emit check across workspace source. |
 | Lint | `pnpm lint` | Biome plus package export convention checks. |
 | Unit tests | `pnpm test` or `pnpm test:unit` | Runs Vitest unit tests. |
@@ -99,6 +100,7 @@ Long-running service wrapping is not implemented yet. Use foreground mode during
 | `daemon_unavailable` from normal CLI commands | Foreground service is not running or the configured URL is wrong. | CLI exits nonzero and tells the user to start `codexdeck serve`. |
 | `tmux_unavailable` / missing binary | `tmux` is not on `PATH` or cannot be queried. | Startup fails before ready status. |
 | `missing_binary` during session start | External Codex CLI is not on `PATH`. | Session start fails before durable success is recorded. |
+| Thread/TUI smoke stops at authentication | Installed Codex has no private regular `auth.json` or its login is stale. | Smoke fails before claiming exact TUI evidence and removes its temporary state. |
 | Invalid state directory or database path | Path is missing, unreadable, or migration fails. | Startup or local-admin command fails loudly with typed config/storage errors. |
 | Duplicate bind port | Another process already owns the configured port. | Startup fails before reporting ready. |
 | Placeholder scripts fail | E2E, build, or release smoke is not implemented yet. | Script exits nonzero with the owning future task ID. |

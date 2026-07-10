@@ -44,8 +44,8 @@ No fake-Codex or fake-tmux test can satisfy these gates.
 | Architecture reassessment | `INT-V1-002` | Done: `artifacts/int-v1-002-codex-integration-reassessment.md`. |
 | Version/schema/capability gate | `INT-V1-003` | Done: exact 0.144.0 experimental binding and real no-model compatibility smoke. |
 | Unix IPC client and request broker | `INT-V1-004` | Done: bounded transport/broker/handshake/reconnect and real private-socket smoke. |
-| Thread lifecycle and exact TUI resume | `INT-V1-005` | In progress. |
-| Real turn/event/control/approval vertical | `INT-V1-006` | Blocked by thread lifecycle. |
+| Thread lifecycle and exact TUI resume | `INT-V1-005` | Done: id-first recovery saga, 0.144.0 legacy materialization, durable mapping/reconciliation, exact archive, and real no-model TUI smoke. |
+| Real turn/event/control/approval vertical | `INT-V1-006` | Blocked by `DAT-V1-020`; thread lifecycle dependency is complete. |
 | Supervision, multi-client, reconnect, restart | `INT-V1-007` | Blocked by real vertical. |
 | Legacy tmux disposition | `INT-V1-008` | Blocked by `INT-V1-007`. |
 | Reopened runtime hardening | `INT-V1-091` | Blocked by `INT-V1-008`. |

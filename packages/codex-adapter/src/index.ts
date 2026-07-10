@@ -35,10 +35,34 @@ export {
 } from "./errors.js";
 export type { CodexRequestId } from "./protocol.js";
 export {
+  type CodexThreadActiveFlag,
+  type CodexThreadClient,
+  type CodexThreadClientOptions,
+  type CodexThreadListInput,
+  type CodexThreadMaterializeInput,
+  type CodexThreadPage,
+  type CodexThreadRecord,
+  type CodexThreadRequestPort,
+  type CodexThreadRuntimeStatus,
+  type CodexThreadSessionSource,
+  type CodexThreadStartInput,
+  type CodexThreadStartResult,
+  codexThreadOperationMarker,
+  createCodexThreadClient,
+  hasHostDeckOperationMarker,
+  isSupportedCodexThreadSource
+} from "./thread-client.js";
+export {
   type CodexTextTransport,
   type CodexTransportEvent,
   type CodexTransportListener,
   type CodexTransportState,
   type CodexUnixWebSocketTransportOptions,
-  createCodexUnixWebSocketTransport
+  createCodexUnixWebSocketTransport,
+  formatCodexUnixRemoteAddress
 } from "./transport.js";
+export {
+  buildCodexTuiResumeCommand,
+  type CodexTuiResumeCommand,
+  type CodexTuiResumeCommandInput
+} from "./tui-resume.js";
