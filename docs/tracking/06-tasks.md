@@ -15,11 +15,12 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-022` Implement the side-effect-free typed Fastify app factory | in_progress | none | Consumes the exact stack and frozen resource/deadline policy before SSE, static, trust, route-manifest, and listener work. |
+| 1 | `IFC-V1-023` Implement the bounded Fastify SSE transport adapter | in_progress | none | Consumes the completed app/surface contract and frozen SSE limits before replay, fanout, subscriber, and listener work. |
 | 2 | `INT-V1-006` Probe exact real Codex operation semantics | ready | none | Independent real-boundary spike; unblocks every structured operation port and the mobile state contract. |
 | 3 | `DAT-V1-020` Implement commit-before-publish projection append | ready | none | Independent data leaf; establishes durable event truth for normalization and fanout. |
 | 4 | `DAT-V1-023` Implement accepted-to-terminal audit state machine | ready | none | Independent data leaf; establishes truthful mutation outcomes before write/security integration. |
 | 5 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Independent physical-device spike; resolves the blocking LAN trust boundary when the setup is available. |
+| 6 | `IFC-V1-024` Implement the explicit static-dashboard boundary | ready | none | Newly unblocked by the app factory; can proceed independently after the active SSE transport leaf. |
 
 ## Intentional Blockers
 

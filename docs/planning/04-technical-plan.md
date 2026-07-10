@@ -189,6 +189,10 @@ Same-origin route families:
 
 Every route has schema validation, request/body limits, stable errors, explicit timeout, and a route-manifest test. CORS is disabled by default because the dashboard is same-origin.
 
+The selected base is `createHostDeckFastifyApp`: an unbound Fastify instance built only from one complete frozen resource policy, a required internal-error observer, and uniquely named explicit route registrations. Registrations declare `api`, `sse`, or `static`; API routes require at least one local-Zod response schema, while streaming/static exceptions remain named surfaces. Incoming request ids are ignored in favor of generated correlation ids. Root error handling plus `frameworkErrors` normalize pre-routing and route errors into the same bounded envelopes, including `route_not_found`, `method_not_allowed`, and `unsupported_media_type`.
+
+One admitted request remains counted until both its original handler lifecycle and response/abort lifecycle finish. Fastify handler timeout aborts the unchanged request signal but cannot forcibly stop ignored JavaScript work, so a timed-out noncooperative handler retains its slot until it actually settles. Handler instrumentation preserves sync and `FastifyReply` returns and attaches settlement only to actual Promises; it must not convert plugin handlers to async.
+
 ## Trust And Network Security
 
 ### Modes

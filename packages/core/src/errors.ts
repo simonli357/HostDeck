@@ -2,6 +2,9 @@ import type { SessionId } from "./session.js";
 
 export const errorCodes = [
   "malformed_request",
+  "route_not_found",
+  "method_not_allowed",
+  "unsupported_media_type",
   "request_too_large",
   "validation_error",
   "invalid_config",

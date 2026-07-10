@@ -645,6 +645,8 @@ function statusForErrorCode(code: ErrorCode): number {
       return 400;
     case "request_too_large":
       return 413;
+    case "unsupported_media_type":
+      return 415;
     case "permission_denied":
       return 403;
     case "read_only":
@@ -652,7 +654,10 @@ function statusForErrorCode(code: ErrorCode): number {
     case "host_locked":
       return 423;
     case "session_not_found":
+    case "route_not_found":
       return 404;
+    case "method_not_allowed":
+      return 405;
     case "stale_session":
     case "session_not_writable":
     case "operation_conflict":

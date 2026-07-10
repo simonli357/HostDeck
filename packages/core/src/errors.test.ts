@@ -32,6 +32,9 @@ describe("error codes", () => {
     expect(errorCodes).toContain("audit_unavailable");
     expect(errorCodes).toContain("request_too_large");
     expect(errorCodes).toContain("service_overloaded");
+    expect(errorCodes).toContain("route_not_found");
+    expect(errorCodes).toContain("method_not_allowed");
+    expect(errorCodes).toContain("unsupported_media_type");
     expect(isErrorCode("host_locked")).toBe(true);
     expect(isErrorCode("not-a-code")).toBe(false);
   });

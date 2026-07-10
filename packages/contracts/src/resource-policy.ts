@@ -201,7 +201,35 @@ export const resourceBudgetSchema = z
 
 export type ResourceBudget = z.output<typeof resourceBudgetSchema>;
 
-export const defaultResourceBudget: ResourceBudget = Object.freeze(resourceBudgetSchema.parse({}));
+export function resolveResourceBudget(input: unknown): ResourceBudget {
+  return Object.freeze(resourceBudgetSchema.parse(input));
+}
+
+export function assertResolvedResourceBudget(input: unknown): asserts input is ResourceBudget {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Resolved resource budget must be an object.");
+  }
+  const prototype: unknown = Object.getPrototypeOf(input);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError("Resolved resource budget must be a plain object.");
+  }
+  if (!Object.isFrozen(input)) {
+    throw new TypeError("Resolved resource budget must be frozen.");
+  }
+  const keys = Object.keys(input);
+  if (
+    keys.length !== resourceBudgetDefinitions.length ||
+    resourceBudgetDefinitions.some((definition) => !Object.hasOwn(input, definition.key))
+  ) {
+    throw new TypeError("Resolved resource budget must contain every selected resource key exactly once.");
+  }
+  const result = resourceBudgetSchema.safeParse(input);
+  if (!result.success) {
+    throw new TypeError("Resolved resource budget is invalid.", { cause: result.error });
+  }
+}
+
+export const defaultResourceBudget: ResourceBudget = resolveResourceBudget({});
 
 export const resourceBudgetDefinitionByKey = Object.freeze(
   Object.fromEntries(resourceBudgetDefinitions.map((definition) => [definition.key, definition]))

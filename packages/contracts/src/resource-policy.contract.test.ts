@@ -1,8 +1,10 @@
 import { isErrorCode } from "@hostdeck/core";
 import { describe, expect, it } from "vitest";
 import {
+  assertResolvedResourceBudget,
   defaultResourceBudget,
   type ResourceBudget,
+  resolveResourceBudget,
   resourceBreachActions,
   resourceBudgetDefinitionByKey,
   resourceBudgetDefinitions,
@@ -146,7 +148,7 @@ describe("selected V1 resource budget", () => {
   });
 
   it("accepts a coherent bounded override without filling from a larger hidden fallback", () => {
-    const parsed = resourceBudgetSchema.parse({
+    const parsed = resolveResourceBudget({
       http_body_max_bytes: 32_768,
       http_max_connections: 32,
       sse_max_subscribers: 16,
@@ -163,5 +165,24 @@ describe("selected V1 resource budget", () => {
     expect(parsed.protocol_max_buffered_bytes).toBe(1_048_576);
     expect(parsed.cli_request_body_max_bytes).toBe(32_768);
     expect(parsed.cli_response_max_bytes).toBe(524_288);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    expect(() => assertResolvedResourceBudget(parsed)).not.toThrow();
+  });
+
+  it("distinguishes a resolved policy from partial or mutable configuration input", () => {
+    expect(() => assertResolvedResourceBudget(Object.freeze({}))).toThrow(
+      "Resolved resource budget must contain every selected resource key exactly once."
+    );
+    expect(() => assertResolvedResourceBudget({ ...defaultResourceBudget })).toThrow(
+      "Resolved resource budget must be frozen."
+    );
+    expect(() =>
+      assertResolvedResourceBudget(
+        Object.freeze({
+          ...defaultResourceBudget,
+          http_body_max_bytes: 0
+        })
+      )
+    ).toThrow("Resolved resource budget is invalid.");
   });
 });
