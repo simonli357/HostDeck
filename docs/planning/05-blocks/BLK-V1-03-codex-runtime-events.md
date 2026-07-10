@@ -46,8 +46,8 @@ No fake-Codex or fake-tmux test can satisfy these gates.
 | Unix IPC client and request broker | `INT-V1-004` | Done: bounded transport/broker/handshake/reconnect and real private-socket smoke. |
 | Thread lifecycle and exact TUI resume | `INT-V1-005` | Done: id-first recovery saga, 0.144.0 legacy materialization, durable mapping/reconciliation, exact archive, and real no-model TUI smoke. |
 | Exact real turn/control/event semantic spike | `INT-V1-006` | Done: event-gated operation matrix, real approvals/control/TUI/reconnect, bounded compact incompleteness, and corrected handshake/materialization bugs. |
-| Event normalization and exact prompt targeting | `INT-V1-017`, `INT-V1-018` | Blocked by observed semantics; projection also needs `DAT-V1-020`. |
-| Model, goal, plan, usage, compact, and skills ports | `INT-V1-019` to `INT-V1-024` | Blocked by the semantic spike. |
+| Event normalization and exact prompt targeting | `INT-V1-017`, `INT-V1-018` | Normalization in progress; exact semantics and production append prerequisites are complete. |
+| Model, goal, plan, usage, compact, and skills ports | `INT-V1-019` to `INT-V1-024` | Ready from the exact semantic matrix. |
 | Approval and interrupt ports | `INT-V1-025`, `INT-V1-026` | Blocked by observed semantics and event identity. |
 | Assembled real structured vertical | `INT-V1-027` | Blocked by `INT-V1-017` to `INT-V1-026`. |
 | Runtime process/socket supervisor | `INT-V1-007` | Blocked by the assembled real vertical. |

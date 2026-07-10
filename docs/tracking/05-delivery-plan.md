@@ -7,7 +7,7 @@ Owns milestone, module maturity, production passes, and release truth.
 - Current pass: selected foundation data leaves and exact runtime/interface spikes.
 - Current milestone: M1 Selected foundation.
 - Release state: no-go; selected production path is not implemented.
-- Next exit: selected data append/audit leaves and exact Codex/Fastify semantic spikes are implemented or resolved with bounded evidence.
+- Next exit: selected data retention/audit leaves and exact Codex production event/control ports are implemented with bounded evidence.
 
 ## Milestones
 
@@ -25,7 +25,7 @@ Owns milestone, module maturity, production passes, and release truth.
 | Block | Current maturity | Reopened gap | Completion owner |
 | --- | --- | --- | --- |
 | `BLK-V1-01` Contracts/core/fixtures | Selected normalized contracts, invariants, fixtures, generated boundary, planning checker, and executable-leaf audit pass. | No foundation blocker; production consumers remain in their owning blocks. | `FND-V1-014` to `FND-V1-017`, `FND-V1-091` |
-| `BLK-V1-02` State/auth/audit | Selected mapping/projection migration and secure paths/daemon lease pass over a strong repository base. | Production append/retention/audit maintenance and CSRF/device/pairing/revoke lifecycle remain. | `DAT-V1-018` to `DAT-V1-030`, `DAT-V1-091` |
+| `BLK-V1-02` State/auth/audit | Selected mapping/projection migration, secure paths/daemon lease, and full-revision commit-before-publish production append pass over a strong repository base. | Production retention/audit maintenance and CSRF/device/pairing/revoke lifecycle remain. | `DAT-V1-018` to `DAT-V1-030`, `DAT-V1-091` |
 | `BLK-V1-03` Codex runtime/events | Exact binding, private IPC/handshake, corrected no-model thread lifecycle, and real event-gated operation/approval/TUI/reconnect semantic matrix pass; tmux mechanics are legacy. | Production normalization/control ports, bounded compact completion handling, supervision, restart acceptance, and legacy disposition remain. | `INT-V1-005` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
 | `BLK-V1-04` API/CLI/security/service | Historical headless/custom listener and source CLI base. | Fastify/SSE/HTTPS/security/fanout/health/routes/legacy disposition/bounds/build/services remain. | `IFC-V1-015` to `IFC-V1-069`, `IFC-V1-091` |
 | `BLK-V1-05` Mobile dashboard | View-model helpers only; old boards rejected. | Mobile state/visual gate and all product UI/device evidence remain. | `FE-V1-004`, reopened `FE-V1-002`, `FE-V1-003`, `FE-V1-010` to `FE-V1-040`, `FE-V1-090` |

@@ -84,7 +84,7 @@ An immediate `thread/compact/start` `{}` is not completion evidence. The real su
 | --- | --- |
 | Migration | Empty DB, current DB, prior tmux-shaped DB, interrupted migration, checksum/version drift, incompatible future schema. |
 | Session mapping | Start saga success; Codex failure; thread created/DB failure; duplicate alias/id/thread; missing/archived thread; pre-release legacy record. |
-| Projection | Ordered append, malformed event, transaction rollback, classifier failure, branch failure, restart freshness. |
+| Projection | Storage-owned cursor/counters, ordered append, malformed/caller-addressed event, stale full revision, metadata/event writer race, duplicate upstream id, corrupt counters/rows, forced transaction rollback with zero publication, post-commit publisher throw/reject with durable read-back and no automatic republish, restart freshness. |
 | Retention | Event-count cap, byte cap, audit-count cap, age cap, newest item larger than byte cap, cleanup on production append/startup, boundary persistence. |
 | Audit | Accepted/succeeded/failed/rejected/incomplete, crash between accepted/result, emergency lock under audit degradation, sanitization, retention. |
 | Auth | Pair create/consume/expire/revoke, device read/write permission, raw-secret absence, CSRF rotate/reload/revoke race, last-used update. |

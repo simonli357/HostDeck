@@ -5,8 +5,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `DAT-V1-020` commit-before-publish production projection append.
-- Other ready work includes primary controls `INT-V1-019` to `INT-V1-024`, `DAT-V1-023` audit state, `IFC-V1-019` route manifest, `IFC-V1-047` HTTP limits, and `IFC-V1-015` physical-device HTTPS.
+- Active task: `INT-V1-017` strict exact-Codex event normalization and ordered projection input.
+- Other ready work includes primary controls `INT-V1-019` to `INT-V1-024`, `DAT-V1-022` projection retention, `DAT-V1-023` audit state, `IFC-V1-019` route manifest, `IFC-V1-047` HTTP limits, and `IFC-V1-015` physical-device HTTPS.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
 - Release state: no-go. All capability blocks affected by the new runtime/security/mobile outcome are reopened.
@@ -27,6 +27,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-024` implements a frozen explicit static registration over canonical build/index/assets roots, bounded startup inventory, raw plus plugin path denial, current canonical-file rechecks, explicit shell routes, JSON-only fallback, and deterministic HTML/hashed-asset cache, MIME, and HEAD policy. Hostile startup, post-ready injection/replacement, and raw traversal probes pass. Evidence: `artifacts/ifc-v1-024-fastify-static-boundary.md`.
 - `IFC-V1-025` implements the selected Fastify lifecycle over an upfront runtime controller, one frozen policy, unbound app readiness, constructor/mutable Node limits, exact loopback-only HTTP bind, frozen readiness/draining snapshots, and bounded listener/SSE/app/startup cleanup. Runtime/route/ready/listen/close failures, real secure lease restart, active finite SSE, and same-port restart pass. Evidence: `artifacts/ifc-v1-025-fastify-host-lifecycle.md`.
 - `INT-V1-006` freezes exact 0.144.0 event-gated semantics across 612 redacted valid frames: Plan/Default, real approve/deny, model/goal/usage/skills, wait-for-start steer, TUI coexistence, reconnect, interrupt, stale/unsupported rejection, and accepted/incomplete compact. It also closed `BUG-006` initialize response/ack notification races and critical `BUG-007` agentic materialization by using a paused internal goal with zero-turn real proof. Evidence: `artifacts/int-v1-006-codex-operation-semantics.md`; `DEC-023`.
+- `DAT-V1-020` implements the production projection append port: storage-owned addressing/counters, full revision checks before preparation and inside the immediate transaction, atomic event/projection commit, frozen post-commit publication, and explicit committed/publication-unknown failure. Forced rollback, two metadata race windows, event concurrency, duplicate upstream identity, corruption, replay boundary, callback failure, and restart pass. Evidence: `artifacts/dat-v1-020-production-projection-append.md`.
 - Selected mappings, projections, projected events, compatibility results, start recovery, and legacy dispositions now have additive migration and repository ownership with transactional/concurrency/restart/corruption evidence.
 - `@hostdeck/codex-adapter` owns an exact 0.144.0 experimental generated binding, deterministic schema-drift check, fail-closed required-capability policy, and a real no-model initialize/Plan catalog smoke.
 - The adapter now also owns a bounded Unix-only WebSocket transport, strict wire decoder, correlated request/server-request broker, initialize/degradation state machine, deterministic raw-protocol fake, explicit no-auto-retry reconnect, and a real private-socket no-model smoke.
@@ -82,6 +83,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/ifc-v1-025-fastify-host-lifecycle.md`.
 - `INT-V1-006`: 612-frame redacted evidence contract, focused broker/connection/thread/binding/recorder tests, exact isolated IPC and corrected zero-turn/TUI thread smokes, root/all-package typechecks, lint/exports, scaffold, planning (196 tasks, 84 requirements, 622 dependencies, 11 queued), exact 0.144.0 binding check, unit (426 passed, 19 external tests skipped), contract (111), integration (16), web (14), production audit, evidence hashes, manual diff review, and diff checks pass; accepted compact remained incomplete until bounded interruption and is not reported as reduction.
 - Evidence: `artifacts/int-v1-006-codex-operation-semantics.md`.
+- `DAT-V1-020`: focused production append/repository (27), storage (95), root/all-package typechecks, lint/exports, scaffold, planning (196 tasks, 84 requirements, 622 dependencies, 12 queued), exact binding check, unit (438 passed, 19 external tests skipped), contract (111), integration (16), web (14), production audit, raw-row/manual diff review, and diff checks pass.
+- Evidence: `artifacts/dat-v1-020-production-projection-append.md`.
 
 ## Git
 
@@ -95,4 +98,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-024` static boundary implementation and docs are pushed as `a630eff`.
 - `IFC-V1-025` lifecycle implementation and docs are pushed as `8c2e6bd`.
 - `INT-V1-006` implementation/evidence is pushed as `ca31797`; the owner-doc closure advances the selected queue to `DAT-V1-020`.
-- Next action: implement and prove `DAT-V1-020` commit-before-publish production projection append.
+- `DAT-V1-020` implementation/evidence is pushed as `09a85df`; this owner-doc closure advances the active queue to `INT-V1-017`.
+- Next action: implement `INT-V1-017` strict event normalization through the production append port.

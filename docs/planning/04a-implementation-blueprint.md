@@ -108,6 +108,15 @@ The composition root calls `resolveResourceBudget` once before lease, storage, r
 | Trust service | Pairing/device repos, cookie/CSRF/origin/rate policy. | Read/write trust context. | Raw device token never enters JS-readable durable storage or database. |
 | Host health | Storage, runtime, projector, fanout, listener, cert/lease. | Bounded readiness/degradation snapshot. | Health updates after startup; it is not a frozen boot result. |
 
+### Production Projection Append Boundary
+
+- The projection service submits one target session id, an uncommitted normalized event with no session/cursor fields, a next session projection with no cursor, and the complete mapping/projection/cursor revision it read.
+- Storage assigns the next contiguous cursor and derives retained count, UTF-8 bytes, earliest cursor, and replay-boundary metadata. Production callers cannot provide or adjust those fields.
+- The immediate SQLite transaction re-reads and validates persisted rows, checks the complete optimistic revision, inserts the event, and updates the session projection. A metadata-only writer racing the append therefore conflicts instead of being overwritten.
+- The required publisher is invoked synchronously in commit order only after the transaction returns. It receives the committed event, projection, and revision; it is never invoked for validation, conflict, corruption, or rollback failures.
+- Publisher throw/rejection cannot undo durable truth. The append rejects with the committed result and `publication_unknown`; no automatic republish occurs because callback side effects may already have happened. Runtime health/fanout reconciliation owns recovery.
+- `DAT-V1-022` extends this same transaction with pruning and replay-boundary writes before publication; it does not add a second append path.
+
 ## Storage Migration
 
 The selected runtime requires a new migration, not in-place reinterpretation of tmux fields.
