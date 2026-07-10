@@ -4,6 +4,7 @@ export const errorCodes = [
   "malformed_request",
   "route_not_found",
   "method_not_allowed",
+  "not_acceptable",
   "unsupported_media_type",
   "request_too_large",
   "validation_error",

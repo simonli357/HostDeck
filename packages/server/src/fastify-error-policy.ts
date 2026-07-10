@@ -142,8 +142,7 @@ export function sendHostDeckError(
   if (!Number.isSafeInteger(status) || status < 400 || status > 599) {
     throw new TypeError("HostDeck error response status must be an integer from 400 through 599.");
   }
-  const envelope = createErrorEnvelope(input);
-  const body = errorBody(envelope, request.id);
+  const body = createHostDeckErrorBody(input, request.id);
   return reply
     .code(status)
     .header("x-request-id", request.id)
@@ -152,7 +151,11 @@ export function sendHostDeckError(
     .send(body);
 }
 
-function errorBody(envelope: ErrorEnvelope, requestId: string): ApiRouteErrorBody {
+export function createHostDeckErrorBody(
+  input: ErrorEnvelopeInput | ErrorEnvelope,
+  requestId: string
+): ApiRouteErrorBody {
+  const envelope = createErrorEnvelope(input);
   const currentDetails = envelope.details ?? {};
   const canAddRequestId =
     Object.hasOwn(currentDetails, "request_id") ||

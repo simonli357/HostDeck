@@ -193,6 +193,8 @@ The selected base is `createHostDeckFastifyApp`: an unbound Fastify instance bui
 
 One admitted request remains counted until both its original handler lifecycle and response/abort lifecycle finish. Fastify handler timeout aborts the unchanged request signal but cannot forcibly stop ignored JavaScript work, so a timed-out noncooperative handler retains its slot until it actually settles. Handler instrumentation preserves sync and `FastifyReply` returns and attaches settlement only to actual Promises; it must not convert plugin handlers to async.
 
+Selected event streams register through `createHostDeckSseTransportRegistration`. The pinned SSE plugin owns media-range negotiation, framing, headers, and heartbeat; HostDeck normalizes its 406 body, reconciles canonical query/header cursors, and passes the exact request signal to a required source. Every selected event is schema/session/order/wire-byte validated before a one-object-high-water `Readable.from` yields it. Direct plugin AsyncIterable sends are forbidden. Iterator return is cleanup-deadline bounded and observed. Because `@fastify/sse` 0.5.0 swallows Readable pipeline errors and leaves the committed raw response open, HostDeck captures the Readable error and explicitly ends that response.
+
 ## Trust And Network Security
 
 ### Modes

@@ -658,6 +658,8 @@ function statusForErrorCode(code: ErrorCode): number {
       return 404;
     case "method_not_allowed":
       return 405;
+    case "not_acceptable":
+      return 406;
     case "stale_session":
     case "session_not_writable":
     case "operation_conflict":

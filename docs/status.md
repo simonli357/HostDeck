@@ -5,8 +5,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `IFC-V1-023` bounded Fastify SSE transport adapter.
-- Other ready tasks: `INT-V1-006` real Codex semantic spike, `DAT-V1-020` production projection append, `DAT-V1-023` audit state machine, `IFC-V1-015` physical-device HTTPS spike, and `IFC-V1-024` static-dashboard boundary.
+- Active task: `IFC-V1-024` explicit static-dashboard boundary.
+- Other ready tasks: `INT-V1-006` real Codex semantic spike, `DAT-V1-020` production projection append, `DAT-V1-023` audit state machine, and `IFC-V1-015` physical-device HTTPS spike.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
 - Release state: no-go. All capability blocks affected by the new runtime/security/mobile outcome are reopened.
@@ -23,6 +23,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-016` selected exact Fastify 5.10.0, Zod 4.4.3, `@fastify/sse` 0.5.0, and `@fastify/static` 9.3.0 dependencies with local validation/error ownership, a mandatory Readable-backed SSE path, and explicit deny-by-policy static routing. Six executable boundary probes and production dependency review pass. Evidence: `artifacts/ifc-v1-016-fastify-stack-spike.md`.
 - `IFC-V1-020` defines one 59-field strict resource policy across HTTP, SSE, admission, protocol, lifecycle, and CLI boundaries; stable oversized/overload codes; exact Fastify and complete Codex option mappings; and timer-owning/external-signal monotonic deadline forms. Cross-limit and fake-clock matrices pass. Evidence: `artifacts/ifc-v1-020-resource-budget-deadline.md`.
 - `IFC-V1-022` implements an unbound typed Fastify factory over exact frozen policy and explicit API/SSE/static registrations. It owns local Zod request/response validation, generated request ids, content/URL/parameter/body/route ceilings, pre-routing plus route error normalization, same-signal deadline views, and handler-plus-response in-flight accounting. Real timeout and pinned SSE/static compatibility probes pass. Evidence: `artifacts/ifc-v1-022-fastify-app-factory.md`.
+- `IFC-V1-023` implements the explicit selected-event SSE registration with pinned Accept/heartbeat behavior, stable 406, conflict-safe query/header cursors, cursor ids, schema/session/order/wire-byte validation, exact request-signal propagation, one-object-high-water Readable use, observed source/plugin failures, and cleanup-deadline bounded iterator return. Real cooperative backpressure and noncooperative cleanup probes pass. Evidence: `artifacts/ifc-v1-023-fastify-sse-transport.md`.
 - Selected mappings, projections, projected events, compatibility results, start recovery, and legacy dispositions now have additive migration and repository ownership with transactional/concurrency/restart/corruption evidence.
 - `@hostdeck/codex-adapter` owns an exact 0.144.0 experimental generated binding, deterministic schema-drift check, fail-closed required-capability policy, and a real no-model initialize/Plan catalog smoke.
 - The adapter now also owns a bounded Unix-only WebSocket transport, strict wire decoder, correlated request/server-request broker, initialize/degradation state machine, deterministic raw-protocol fake, explicit no-auto-retry reconnect, and a real private-socket no-model smoke.
@@ -33,7 +34,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Not Proven
 
 - Real Codex turn/event/control/approval/restart behavior through HostDeck.
-- Production Fastify SSE/static route composition, real-listener/Node-limit enforcement, continuous projection/fanout, runtime health, retention invocation, or graceful shutdown; the unbound app factory and app-level limits are proven, not those downstream integrations.
+- Production static route composition, replay/live handoff and subscriber queues, real-listener/Node-limit enforcement, continuous projection/fanout, runtime health, retention invocation, or graceful shutdown; the unbound app factory and bounded SSE transport are proven, not those downstream integrations.
 - HTTPS LAN certificate enrollment, paired LAN reads, CSRF reload, rate limits, or device revocation.
 - Runnable packaged CLI, built dashboard, user services, clean Ubuntu install, real phone workflow, or release readiness.
 
@@ -69,6 +70,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/ifc-v1-020-resource-budget-deadline.md`.
 - `IFC-V1-022`: focused factory matrix (6), actual Fastify handler-timeout retention, pinned SSE/static compatibility, scaffold/planning/binding checks, root/all-package typechecks, lint/exports, unit (397 passed, 18 external tests skipped), contract (111), integration (16), web (14), production audit, and diff checks pass.
 - Evidence: `artifacts/ifc-v1-022-fastify-app-factory.md`.
+- `IFC-V1-023`: focused SSE matrix (7), real paused-client backpressure, exact disconnect signal, noncooperative iterator-return timeout, source-error raw-response termination, structural Readable-only guard, scaffold/planning/binding checks, root/all-package typechecks, lint/exports, unit (404 passed, 18 external tests skipped), contract (111), integration (16), web (14), production audit, and diff checks pass.
+- Evidence: `artifacts/ifc-v1-023-fastify-sse-transport.md`.
 
 ## Git
 
@@ -78,4 +81,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `BUG-002` deterministic unit/real-tmux smoke separation is pushed as `bb66095`; `IFC-V1-016` exact stack/probe/docs closure is pushed as `4e87d30`.
 - `IFC-V1-020` resource/deadline implementation and docs are pushed as `620f4f0`.
 - `IFC-V1-022` app-factory implementation and docs are pushed as `29005c6`.
-- Next action: implement `IFC-V1-023` as an explicit `sse` registration using only the selected Readable-backed plugin path and required injected event source.
+- `IFC-V1-023` SSE transport implementation and docs are the current unit pending aggregate validation, commit, and push.
+- Next action: implement `IFC-V1-024` canonical static roots, deny-by-policy assets, explicit browser routes, cache/MIME/HEAD behavior, and API fallback separation against a fixture build.
