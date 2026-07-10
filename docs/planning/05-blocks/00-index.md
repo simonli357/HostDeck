@@ -25,20 +25,20 @@ Owns the required V1 capability map and completion truth between global planning
 
 | Block | Historical evidence retained | New blocking evidence | Minimum level | Status |
 | --- | --- | --- | --- | --- |
-| `BLK-V1-01` | `FND-V1-001` to `FND-V1-013`, prior foundation artifacts. | `FND-V1-014` to `FND-V1-016`, `FND-V1-091`; selected fixtures/public exports and generated-import guard pass. | L1/L2 | Complete; normalized contract/core/fixture boundary hardened. |
-| `BLK-V1-02` | `DAT-V1-001` to `DAT-V1-017`, `DAT-V1-090`, prior storage artifacts. | `DAT-V1-018` to `DAT-V1-021`, `DAT-V1-091`; production invocation and permission/lease proof. | L1/L2/L3 inspection | Reopened by mapping/auth/audit/retention ownership changes. |
-| `BLK-V1-03` | Tmux artifacts `INT-V1-001`, `INT-V1-010` to `INT-V1-016`, `INT-V1-090`. | `INT-V1-002` to `INT-V1-008`, `INT-V1-091`; real Codex vertical and TUI/restart evidence. | L2/L3 | In progress; binding/compatibility gate done, IPC and real vertical absent. |
-| `BLK-V1-04` | `IFC-V1-001` to `IFC-V1-014`, `IFC-V1-090`, prior headless/custom-listener artifacts. | `IFC-V1-015` to `IFC-V1-021`, `IFC-V1-091`; production Fastify/HTTPS/SSE/package/service proof. | L2/L3/L4 | Reopened; current CLI is source-only and LAN is unsafe. |
-| `BLK-V1-05` | `FE-V1-001` fixture helpers and rejected `FE-V1-002` boards. | `FE-V1-004`, reopened `FE-V1-002`, human `FE-V1-003`, implementation `FE-V1-010` to `FE-V1-022`, `FE-V1-090`. | L1/L3/L4 | Reopened; no approved target or implemented UI. |
+| `BLK-V1-01` | `FND-V1-001` to `FND-V1-013`, prior foundation artifacts. | `FND-V1-014` to `FND-V1-017`, `FND-V1-091`; selected fixtures/public exports, generated-import guard, and executable leaf audit pass. | L1/L2 | Complete only after `FND-V1-017` closes the planning-granularity defect. |
+| `BLK-V1-02` | `DAT-V1-001` to `DAT-V1-017`, `DAT-V1-090`, prior storage artifacts. | `DAT-V1-018` to `DAT-V1-030`, `DAT-V1-091`; production append/retention/audit/auth and permission/lease proof. | L1/L2/L3 inspection | Reopened by mapping/auth/audit/retention ownership changes. |
+| `BLK-V1-03` | Tmux artifacts `INT-V1-001`, `INT-V1-010` to `INT-V1-016`, `INT-V1-090`. | `INT-V1-002` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091`; real Codex operations and TUI/restart evidence. | L2/L3 | In progress; compatibility, IPC, and managed-thread lifecycle pass, while real operation semantics and supervision remain. |
+| `BLK-V1-04` | `IFC-V1-001` to `IFC-V1-014`, `IFC-V1-090`, prior headless/custom-listener artifacts. | `IFC-V1-015` to `IFC-V1-069`, `IFC-V1-091`; production Fastify/HTTPS/SSE/security/routes/resources/package/service proof. | L2/L3/L4 | Reopened; the selected production interface, packaged CLI, and LAN boundary remain unproven. |
+| `BLK-V1-05` | `FE-V1-001` fixture helpers and rejected `FE-V1-002` boards. | `FE-V1-004`, reopened `FE-V1-002`, human `FE-V1-003`, implementation `FE-V1-010` to `FE-V1-040`, `FE-V1-090`. | L1/L3/L4 | Reopened; no approved target or implemented UI. |
 | `BLK-V1-06` | `REL-V1-001` to `REL-V1-003` and baseline audit commands. | `REL-V1-011`, all module gates, clean install/phone/security/aggregate/go-no-go tasks. | L4 | In progress; release no-go. |
 
 ## Cross-Block Gates
 
 | Gate | Requires | Enables |
 | --- | --- | --- |
-| Planning integrity | `REL-V1-011`, `FND-V1-014` | Reliable execution queue and traceability. |
+| Planning integrity | `REL-V1-011`, `FND-V1-014`, `FND-V1-017` | Reliable executable leaf queue and traceability. |
 | Structured contract gate | `FND-V1-015`, `FND-V1-016` | Adapter/storage/API implementation. |
-| Real Codex gate | `INT-V1-003` to `INT-V1-007` | Legacy decision, production interface, mobile state/mockups. |
+| Real Codex gate | `INT-V1-003` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032` | Legacy decision, production interface, mobile state/mockups. |
 | LAN security gate | `IFC-V1-015` | LAN/auth UI and release phone smoke. |
 | Visual gate | `FE-V1-004`, `FE-V1-002`, human `FE-V1-003` | React screen implementation. |
 | Module hardening | `FND-V1-091`, `DAT-V1-091`, `INT-V1-091`, `IFC-V1-091`, `FE-V1-090` | Aggregate release validation. |

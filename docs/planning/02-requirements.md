@@ -120,87 +120,87 @@ Owns stable requirements for the active version. A requirement is not complete u
 
 | Requirement | Block refs | Task refs | Evidence route |
 | --- | --- | --- | --- |
-| FR-001 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-04` | `FND-V1-015`, `INT-V1-003` to `INT-V1-006`, `IFC-V1-019` | Generated-schema, adapter, API/CLI, and real Codex start evidence. |
-| FR-002 | `BLK-V1-01` to `BLK-V1-05` | `FND-V1-015`, `DAT-V1-018`, `INT-V1-006`, `IFC-V1-019`, `FE-V1-011` | Projection/API/UI tests and phone screenshots. |
-| FR-003 | `BLK-V1-03`, `BLK-V1-04` | `INT-V1-005`, `IFC-V1-019` | Exact-thread remote TUI smoke. |
-| FR-004 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-006`, `IFC-V1-019`, `FE-V1-014` | Interrupt/archive protocol, audit, and UI tests. |
-| FR-005 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-004`, `INT-V1-006`, `IFC-V1-016`, `IFC-V1-018`, `FE-V1-012` | Real event stream, SSE, and browser evidence. |
-| FR-006 | `BLK-V1-01`, `BLK-V1-03` to `BLK-V1-05` | `FND-V1-015`, `INT-V1-006`, `IFC-V1-019`, `FE-V1-020` | Exact-thread prompt lifecycle tests. |
-| FR-007 | `BLK-V1-01`, `BLK-V1-03` to `BLK-V1-05` | `FND-V1-015`, `INT-V1-006`, `IFC-V1-019`, `FE-V1-021` | Model/goal/plan capability and UI tests. |
-| FR-008 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-006`, `IFC-V1-019`, `FE-V1-021` | Usage/compact/skills capability tests. |
-| FR-009 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-05` | `FND-V1-015`, `FND-V1-016`, `INT-V1-006`, `FE-V1-015` | Structured projection and unknown-state tests. |
-| FR-010 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-019`, `FE-V1-014` | Read-only diagnostic projection and route-absence tests. |
-| FR-011 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-019`, `IFC-V1-021`, `REL-V1-003`, `REL-V1-006` | Packaged CLI matrix and clean install smoke. |
-| FR-012 | `BLK-V1-01`, `BLK-V1-04` | `FND-V1-015`, `IFC-V1-016` to `IFC-V1-020`, `IFC-V1-091` | Route manifest, auth, failure, and hardening evidence. |
-| FR-013 | `BLK-V1-01` to `BLK-V1-04` | `FND-V1-015`, `DAT-V1-018`, `DAT-V1-020`, `INT-V1-006`, `IFC-V1-018` | Replay/live race, retention, and cursor tests. |
-| FR-014 | `BLK-V1-02` to `BLK-V1-04` | `DAT-V1-018`, `INT-V1-007`, `IFC-V1-018` | Host/app-server restart and reconciliation matrix. |
-| FR-015 | `BLK-V1-01`, `BLK-V1-04`, `BLK-V1-05` | `FND-V1-015`, `IFC-V1-019`, `FE-V1-020` to `FE-V1-022` | Target-identity contract tests. |
-| FR-016 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-006`, `IFC-V1-019`, `FE-V1-022` | Real approval and phone UI evidence. |
-| FR-017 | `BLK-V1-01`, `BLK-V1-03` | `FND-V1-015`, `INT-V1-003`, `INT-V1-091` | Schema/version compatibility matrix. |
-| FR-018 | `BLK-V1-03`, `BLK-V1-04`, `BLK-V1-06` | `INT-V1-007`, `IFC-V1-018`, `IFC-V1-021`, `REL-V1-006` | Process/listener ownership and service smoke. |
+| FR-001 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-04` | `FND-V1-015`, `INT-V1-003` to `INT-V1-006`, `INT-V1-027`, `IFC-V1-040` | Generated-schema, adapter, API/CLI, and real Codex start evidence. |
+| FR-002 | `BLK-V1-01` to `BLK-V1-05` | `FND-V1-015`, `DAT-V1-018`, `INT-V1-017`, `IFC-V1-068`, `FE-V1-011` | Projection/API/UI tests and phone screenshots. |
+| FR-003 | `BLK-V1-03`, `BLK-V1-04`, `BLK-V1-05` | `INT-V1-005`, `INT-V1-031`, `IFC-V1-060`, `FE-V1-038` | Exact-thread remote TUI and coexistence evidence. |
+| FR-004 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-026`, `IFC-V1-045`, `IFC-V1-061`, `FE-V1-036`, `FE-V1-037` | Interrupt/archive protocol, audit, and UI tests. |
+| FR-005 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-004`, `INT-V1-017`, `INT-V1-027`, `IFC-V1-023`, `IFC-V1-018`, `IFC-V1-034` to `IFC-V1-038`, `FE-V1-012`, `FE-V1-023` | Real event stream, SSE, and browser evidence. |
+| FR-006 | `BLK-V1-01`, `BLK-V1-03` to `BLK-V1-05` | `FND-V1-015`, `INT-V1-018`, `INT-V1-027`, `IFC-V1-041`, `FE-V1-020` | Exact-thread prompt lifecycle tests. |
+| FR-007 | `BLK-V1-01`, `BLK-V1-03` to `BLK-V1-05` | `FND-V1-015`, `INT-V1-019` to `INT-V1-021`, `IFC-V1-042`, `IFC-V1-062`, `IFC-V1-063`, `FE-V1-021`, `FE-V1-026`, `FE-V1-027` | Model/goal/plan capability and UI tests. |
+| FR-008 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-022` to `INT-V1-024`, `IFC-V1-043`, `IFC-V1-064`, `IFC-V1-065`, `FE-V1-028` to `FE-V1-030` | Usage/compact/skills capability tests. |
+| FR-009 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-05` | `FND-V1-015`, `FND-V1-016`, `INT-V1-017`, `IFC-V1-036`, `FE-V1-015` | Structured projection and unknown-state tests. |
+| FR-010 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-069`, `FE-V1-014` | Read-only diagnostic projection and route-absence tests. |
+| FR-011 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-040` to `IFC-V1-045`, `IFC-V1-051`, `IFC-V1-054`, `IFC-V1-058` to `IFC-V1-065`, `REL-V1-003`, `REL-V1-006` | Packaged CLI matrix and clean install smoke. |
+| FR-012 | `BLK-V1-01`, `BLK-V1-04` | `FND-V1-015`, `IFC-V1-019`, `IFC-V1-022`, `IFC-V1-023`, `IFC-V1-026` to `IFC-V1-046`, `IFC-V1-059` to `IFC-V1-069`, `IFC-V1-091` | Route manifest, auth, failure, and hardening evidence. |
+| FR-013 | `BLK-V1-01` to `BLK-V1-04` | `FND-V1-015`, `DAT-V1-020`, `DAT-V1-022`, `INT-V1-017`, `IFC-V1-023`, `IFC-V1-018`, `IFC-V1-034`, `IFC-V1-038`, `FE-V1-023` | Replay/live race, retention, and cursor tests. |
+| FR-014 | `BLK-V1-02` to `BLK-V1-04` | `DAT-V1-018`, `DAT-V1-024`, `DAT-V1-030`, `INT-V1-028` to `INT-V1-032`, `IFC-V1-036` to `IFC-V1-038` | Host/app-server restart and reconciliation matrix. |
+| FR-015 | `BLK-V1-01`, `BLK-V1-04`, `BLK-V1-05` | `FND-V1-015`, `IFC-V1-019`, `IFC-V1-040` to `IFC-V1-045`, `IFC-V1-059`, `IFC-V1-061` to `IFC-V1-064`, `IFC-V1-066`, `FE-V1-020` to `FE-V1-022`, `FE-V1-026` to `FE-V1-030`, `FE-V1-036`, `FE-V1-037` | Target-identity contract tests. |
+| FR-016 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-025`, `INT-V1-027`, `IFC-V1-044`, `FE-V1-022` | Real approval and phone UI evidence. |
+| FR-017 | `BLK-V1-01`, `BLK-V1-03` | `FND-V1-015`, `INT-V1-003`, `INT-V1-006`, `INT-V1-021`, `INT-V1-027`, `INT-V1-091` | Schema/version compatibility matrix. |
+| FR-018 | `BLK-V1-03`, `BLK-V1-04`, `BLK-V1-06` | `INT-V1-007`, `INT-V1-028` to `INT-V1-032`, `IFC-V1-025`, `IFC-V1-037`, `IFC-V1-055`, `IFC-V1-058`, `REL-V1-006` | Process/listener ownership and service smoke. |
 | NFR-001 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-015`, `REL-V1-005`, `REL-V1-006` | Network and privacy review. |
-| NFR-002 | `BLK-V1-03`, `BLK-V1-06` | `INT-V1-007`, `IFC-V1-018`, `REL-V1-006` | Disconnect/restart evidence. |
+| NFR-002 | `BLK-V1-03`, `BLK-V1-06` | `INT-V1-028` to `INT-V1-032`, `IFC-V1-034`, `IFC-V1-037`, `IFC-V1-038`, `REL-V1-006` | Disconnect/restart evidence. |
 | NFR-003 | `BLK-V1-01`, `BLK-V1-05` | `FND-V1-016`, `FE-V1-015`, `FE-V1-090` | Unknown/stale tests and screenshots. |
-| NFR-004 | `BLK-V1-05` | `FE-V1-002` to `FE-V1-004`, `FE-V1-016`, `FE-V1-017`, `FE-V1-090` | Reference viewport and real-device evidence. |
-| NFR-005 | `BLK-V1-01` to `BLK-V1-04` | `FND-V1-016`, `INT-V1-003`, `INT-V1-091`, `IFC-V1-091` | Negative startup/protocol/API tests. |
-| NFR-006 | `BLK-V1-01` to `BLK-V1-06` | `FND-V1-016`, `DAT-V1-020`, `INT-V1-091`, `IFC-V1-091`, `REL-V1-007` | Partial-failure and aggregate hardening evidence. |
-| NFR-007 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-06` | `FND-V1-015`, `INT-V1-006`, `REL-V1-007` | Fake plus bounded real-Codex suites. |
-| NFR-008 | `BLK-V1-02`, `BLK-V1-03` | `DAT-V1-018`, `DAT-V1-020`, `INT-V1-007` | Storage ownership and restart tests. |
-| NFR-009 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-021`, `REL-V1-006` | Normal-user install/service smoke. |
-| NFR-010 | `BLK-V1-02` to `BLK-V1-04` | `DAT-V1-019`, `INT-V1-007`, `IFC-V1-018`, `IFC-V1-020` | Ownership, lease, timeout, shutdown tests. |
-| NFR-011 | `BLK-V1-02` to `BLK-V1-04` | `DAT-V1-020`, `IFC-V1-018`, `IFC-V1-020` | Resource/overload matrix. |
-| NFR-012 | `BLK-V1-03`, `BLK-V1-06` | `INT-V1-003`, `INT-V1-091`, `REL-V1-006` | Codex compatibility artifact. |
+| NFR-004 | `BLK-V1-05` | `FE-V1-002` to `FE-V1-004`, `FE-V1-016`, `FE-V1-039`, `FE-V1-040`, `FE-V1-017`, `FE-V1-090` | Reference viewport and real-device evidence. |
+| NFR-005 | `BLK-V1-01` to `BLK-V1-04` | `FND-V1-016`, `INT-V1-003`, `INT-V1-091`, `IFC-V1-022`, `IFC-V1-019`, `IFC-V1-047`, `IFC-V1-091` | Negative startup/protocol/API tests. |
+| NFR-006 | `BLK-V1-01` to `BLK-V1-06` | `FND-V1-016`, `DAT-V1-020`, `DAT-V1-023`, `INT-V1-017` to `INT-V1-032`, `IFC-V1-049`, `IFC-V1-050`, `IFC-V1-066`, `INT-V1-091`, `IFC-V1-091`, `REL-V1-007` | Partial-failure and aggregate hardening evidence. |
+| NFR-007 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-06` | `FND-V1-015`, `INT-V1-006`, `INT-V1-027`, `REL-V1-007` | Fake plus bounded real-Codex suites. |
+| NFR-008 | `BLK-V1-02`, `BLK-V1-03` | `DAT-V1-018`, `DAT-V1-020`, `DAT-V1-022` to `DAT-V1-024`, `INT-V1-029`, `INT-V1-030` | Storage ownership and restart tests. |
+| NFR-009 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-021`, `IFC-V1-053` to `IFC-V1-058`, `REL-V1-006` | Normal-user install/service smoke. |
+| NFR-010 | `BLK-V1-02` to `BLK-V1-04` | `DAT-V1-019`, `DAT-V1-024`, `DAT-V1-030`, `INT-V1-007`, `INT-V1-028` to `INT-V1-032`, `IFC-V1-025`, `IFC-V1-035` to `IFC-V1-038`, `IFC-V1-020`, `IFC-V1-047` to `IFC-V1-052` | Ownership, lease, timeout, shutdown tests. |
+| NFR-011 | `BLK-V1-02` to `BLK-V1-04` | `DAT-V1-022`, `DAT-V1-024`, `DAT-V1-030`, `IFC-V1-022`, `IFC-V1-023`, `IFC-V1-035`, `IFC-V1-020`, `IFC-V1-047` to `IFC-V1-052` | Resource/overload matrix. |
+| NFR-012 | `BLK-V1-03`, `BLK-V1-06` | `INT-V1-003`, `INT-V1-006`, `INT-V1-021`, `INT-V1-028`, `INT-V1-091`, `REL-V1-006` | Codex compatibility artifact. |
 | NFR-013 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-019`, `IFC-V1-015`, `REL-V1-005` | Permission/certificate inspection. |
-| IR-001 | `BLK-V1-05` | `FE-V1-004`, `FE-V1-011` | Attention-order fixture, component test, and phone screenshot. |
-| IR-002 | `BLK-V1-01`, `BLK-V1-02`, `BLK-V1-05` | `FND-V1-015`, `DAT-V1-017`, `DAT-V1-018`, `FE-V1-011` | Session-row contract and long-content screenshots. |
-| IR-003 | `BLK-V1-05` | `FE-V1-004`, `FE-V1-012`, `FE-V1-020` to `FE-V1-022` | Session Detail component/API/screenshots. |
-| IR-004 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-019`, `FE-V1-014`, `FE-V1-022` | Risk grouping and confirmation tests. |
-| IR-005 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-021`, `IFC-V1-017`, `FE-V1-013` | Permission matrix and UI state evidence. |
-| IR-006 | `BLK-V1-05` | `FE-V1-004`, `FE-V1-015`, `FE-V1-019` | Complete state-matrix tests/screenshots. |
+| IR-001 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-068`, `FE-V1-004`, `FE-V1-011` | Attention-order fixture, API ordering, component test, and phone screenshot. |
+| IR-002 | `BLK-V1-01`, `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `FND-V1-015`, `DAT-V1-017`, `DAT-V1-018`, `IFC-V1-068`, `FE-V1-011` | Session-row contract and long-content screenshots. |
+| IR-003 | `BLK-V1-05` | `FE-V1-004`, `FE-V1-012`, `FE-V1-020` to `FE-V1-030`, `FE-V1-022` | Session Detail component/API/screenshots. |
+| IR-004 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-030`, `IFC-V1-044`, `IFC-V1-045`, `IFC-V1-059`, `IFC-V1-061`, `IFC-V1-064`, `IFC-V1-066`, `FE-V1-022`, `FE-V1-029`, `FE-V1-036`, `FE-V1-037` | Risk grouping and confirmation tests. |
+| IR-005 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-025`, `DAT-V1-026`, `DAT-V1-028`, `IFC-V1-026` to `IFC-V1-030`, `IFC-V1-033`, `IFC-V1-059`, `FE-V1-013`, `FE-V1-032`, `FE-V1-033` | Permission matrix and UI state evidence. |
+| IR-006 | `BLK-V1-05` | `FE-V1-004`, `FE-V1-015`, `FE-V1-019`, `FE-V1-023`, `FE-V1-025`, `FE-V1-034`, `FE-V1-035` | Complete state-matrix tests/screenshots. |
 | IR-007 | `BLK-V1-05`, `BLK-V1-06` | `FE-V1-018`, `REL-V1-004` | UX copy/non-goal review. |
-| IR-008 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-017`, `IFC-V1-018`, `FE-V1-013` | Host/access status contract and screenshots. |
-| IR-009 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-020`, `IFC-V1-018`, `FE-V1-012`, `FE-V1-015` | Boundary/redaction/staleness tests. |
+| IR-008 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-026` to `IFC-V1-036`, `IFC-V1-039`, `FE-V1-013`, `FE-V1-033` to `FE-V1-035` | Host/access status contract and screenshots. |
+| IR-009 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-022`, `IFC-V1-034`, `IFC-V1-069`, `FE-V1-012`, `FE-V1-014`, `FE-V1-015`, `FE-V1-023` | Boundary/redaction/staleness tests. |
 | IR-010 | `BLK-V1-05` | `FE-V1-002` to `FE-V1-004`, `FE-V1-010`, `FE-V1-011`, `FE-V1-016` | Reference-viewport mockup and implementation audit. |
-| IR-011 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-006`, `IFC-V1-019`, `FE-V1-022` | Approval semantics, concurrency, accessibility, screenshots. |
-| IR-012 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-006`, `IFC-V1-019`, `FE-V1-021` | Per-control capability/state tests. |
+| IR-011 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-025`, `IFC-V1-044`, `FE-V1-022` | Approval semantics, concurrency, accessibility, screenshots. |
+| IR-012 | `BLK-V1-03` to `BLK-V1-05` | `INT-V1-019` to `INT-V1-024`, `IFC-V1-042`, `IFC-V1-043`, `IFC-V1-062` to `IFC-V1-065`, `FE-V1-021`, `FE-V1-026` to `FE-V1-030` | Per-control capability/state tests. |
 | DR-001 | `BLK-V1-01`, `BLK-V1-02` | `FND-V1-015`, `DAT-V1-018` | Mapping identity and uniqueness tests. |
-| DR-002 | `BLK-V1-01`, `BLK-V1-02` | `FND-V1-015`, `DAT-V1-018` | Migration/serialization/projection tests. |
+| DR-002 | `BLK-V1-01`, `BLK-V1-02`, `BLK-V1-04` | `FND-V1-015`, `DAT-V1-018`, `IFC-V1-068` | Migration/serialization/projection/API tests. |
 | DR-003 | `BLK-V1-02`, `BLK-V1-05` | `DAT-V1-017`, `DAT-V1-018`, `FE-V1-011` | Git/non-git capture and session-row tests. |
-| DR-004 | `BLK-V1-02` | `DAT-V1-018`, `DAT-V1-020`, `DAT-V1-091` | Production retention and boundary tests. |
-| DR-005 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-020`, `IFC-V1-019` | Mutation audit accepted/result assertions. |
+| DR-004 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-018`, `DAT-V1-022`, `DAT-V1-024`, `DAT-V1-091`, `IFC-V1-069` | Production retention, boundary, and read-route tests. |
+| DR-005 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-023`, `IFC-V1-032`, `IFC-V1-040` to `IFC-V1-045`, `IFC-V1-059`, `IFC-V1-061` to `IFC-V1-064`, `IFC-V1-066` | Mutation audit accepted/result assertions. |
 | DR-006 | `BLK-V1-02`, `BLK-V1-06` | `DAT-V1-018`, `REL-V1-005` | Storage/privacy transcript-absence inspection. |
-| DR-007 | `BLK-V1-02`, `BLK-V1-03` | `DAT-V1-018`, `INT-V1-007` | Restart mapping and missing-thread tests. |
-| DR-008 | `BLK-V1-01`, `BLK-V1-02` | `FND-V1-015`, `DAT-V1-018`, `DAT-V1-020` | Event contract/order/redaction tests. |
-| DR-009 | `BLK-V1-02` | `DAT-V1-021` | Device/pairing/CSRF raw-storage and lifecycle tests. |
-| DR-010 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-020`, `DAT-V1-021`, `IFC-V1-019` | Audit type/outcome/retention/restart tests. |
+| DR-007 | `BLK-V1-02`, `BLK-V1-03` | `DAT-V1-018`, `INT-V1-029`, `INT-V1-030` | Restart mapping and missing-thread tests. |
+| DR-008 | `BLK-V1-01`, `BLK-V1-02`, `BLK-V1-04` | `FND-V1-015`, `DAT-V1-018`, `DAT-V1-020`, `DAT-V1-022`, `INT-V1-017`, `IFC-V1-069` | Event contract/order/redaction/read tests. |
+| DR-009 | `BLK-V1-02` | `DAT-V1-021`, `DAT-V1-025`, `DAT-V1-026`, `DAT-V1-028`, `DAT-V1-029` | Device/pairing/CSRF raw-storage and lifecycle tests. |
+| DR-010 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-023`, `DAT-V1-024`, `DAT-V1-027`, `DAT-V1-030`, `IFC-V1-032` | Audit type/outcome/retention/restart tests. |
 | DR-011 | `BLK-V1-02`, `BLK-V1-03` | `DAT-V1-018`, `INT-V1-003` | Compatibility persistence tests. |
-| PR-001 | `BLK-V1-03`, `BLK-V1-06` | `INT-V1-003`, `INT-V1-006`, `REL-V1-006` | Ubuntu real-Codex smoke. |
-| PR-002 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-015`, `IFC-V1-016`, `REL-V1-006` | Loopback/listener inventory tests. |
-| PR-003 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-015`, `IFC-V1-017`, `REL-V1-006` | HTTPS configuration and plaintext rejection. |
-| PR-004 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-016`, `IFC-V1-021`, `REL-V1-006` | Built same-origin dashboard smoke. |
-| PR-005 | `BLK-V1-05`, `BLK-V1-06` | `FE-V1-016`, `FE-V1-017`, `REL-V1-006` | Real phone/browser evidence. |
-| PR-006 | `BLK-V1-03`, `BLK-V1-04` | `INT-V1-005`, `IFC-V1-019` | Managed start/resume and import rejection. |
-| PR-007 | `BLK-V1-02` to `BLK-V1-04` | `DAT-V1-019`, `INT-V1-003`, `INT-V1-007`, `IFC-V1-015`, `IFC-V1-018` | Startup validation matrix. |
-| PR-008 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-021`, `REL-V1-006` | Foreground/user-service parity smoke. |
-| PR-009 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-06` | `DAT-V1-019`, `IFC-V1-015`, `IFC-V1-021`, `REL-V1-003` | Config defaults/override and command-reference tests. |
-| PR-010 | `BLK-V1-03`, `BLK-V1-04` | `INT-V1-004`, `INT-V1-007`, `IFC-V1-018` | Private socket and listener inspection. |
-| PR-011 | `BLK-V1-05`, `BLK-V1-06` | `FE-V1-016`, `REL-V1-007` | Browser matrix. |
-| PR-012 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-021`, `REL-V1-006` | Build/package/install/uninstall smoke. |
-| SFR-001 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-021`, `IFC-V1-017`, `IFC-V1-019`, `REL-V1-005` | Paired LAN read/write authorization tests. |
-| SFR-002 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-021`, `IFC-V1-017`, `FE-V1-013` | Permission/revocation/lock matrix. |
-| SFR-003 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-019`, `FE-V1-014`, `FE-V1-022` | Intent/confirmation/API/UI tests. |
-| SFR-004 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-021`, `IFC-V1-017`, `FE-V1-013` | Lock race and local unlock tests. |
-| SFR-005 | `BLK-V1-01`, `BLK-V1-02`, `BLK-V1-04` | `FND-V1-016`, `DAT-V1-020`, `IFC-V1-019`, `IFC-V1-091` | Failure cause/response/audit consistency tests. |
-| SFR-006 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-06` | `DAT-V1-020`, `DAT-V1-021`, `IFC-V1-017`, `REL-V1-005` | Sanitization/raw-storage/log inspection. |
-| SFR-007 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-021`, `IFC-V1-017` | Pair entropy/one-time/expiry/rate/revoke tests. |
-| SFR-008 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-015`, `IFC-V1-017`, `FE-V1-013` | LAN/certificate CLI, audit, and UI visibility tests. |
-| SFR-009 | `BLK-V1-04`, `BLK-V1-05` | `FND-V1-015`, `IFC-V1-019`, `FE-V1-014` | Route manifest and UI absence checks. |
-| SFR-010 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-04` | `FND-V1-016`, `INT-V1-006`, `IFC-V1-019` | Non-writable target rejection matrix. |
-| SFR-011 | `BLK-V1-01`, `BLK-V1-03` | `FND-V1-015`, `INT-V1-006` | Structured fixture inventory and real-event comparison. |
+| PR-001 | `BLK-V1-03`, `BLK-V1-06` | `INT-V1-003`, `INT-V1-006`, `INT-V1-027`, `INT-V1-032`, `REL-V1-006` | Ubuntu real-Codex smoke. |
+| PR-002 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-015`, `IFC-V1-017`, `IFC-V1-025`, `IFC-V1-058`, `REL-V1-006` | Loopback/listener inventory tests. |
+| PR-003 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-015`, `IFC-V1-017`, `IFC-V1-031`, `REL-V1-006` | HTTPS configuration and plaintext rejection. |
+| PR-004 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-022`, `IFC-V1-024`, `IFC-V1-025`, `IFC-V1-046`, `IFC-V1-053`, `IFC-V1-058`, `IFC-V1-067`, `REL-V1-006` | Built same-origin dashboard smoke. |
+| PR-005 | `BLK-V1-05`, `BLK-V1-06` | `FE-V1-016`, `FE-V1-040`, `FE-V1-017`, `FE-V1-090`, `REL-V1-006` | Real phone/browser evidence. |
+| PR-006 | `BLK-V1-03`, `BLK-V1-04`, `BLK-V1-05` | `INT-V1-005`, `INT-V1-031`, `IFC-V1-040`, `IFC-V1-060`, `IFC-V1-061`, `FE-V1-038` | Managed start/resume/archive and import rejection. |
+| PR-007 | `BLK-V1-02` to `BLK-V1-04` | `DAT-V1-019`, `DAT-V1-024`, `DAT-V1-030`, `INT-V1-003`, `INT-V1-007`, `INT-V1-028`, `INT-V1-029`, `IFC-V1-015`, `IFC-V1-025`, `IFC-V1-036` | Startup validation matrix. |
+| PR-008 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-055` to `IFC-V1-058`, `REL-V1-006` | Foreground/user-service parity smoke. |
+| PR-009 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-06` | `DAT-V1-019`, `IFC-V1-015`, `IFC-V1-020`, `IFC-V1-054`, `IFC-V1-056`, `REL-V1-003` | Config defaults/override and command-reference tests. |
+| PR-010 | `BLK-V1-03`, `BLK-V1-04` | `INT-V1-004`, `INT-V1-007`, `INT-V1-031`, `INT-V1-032`, `IFC-V1-025` | Private socket and listener inspection. |
+| PR-011 | `BLK-V1-05`, `BLK-V1-06` | `FE-V1-040`, `REL-V1-007` | Browser matrix. |
+| PR-012 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-021`, `IFC-V1-053` to `IFC-V1-058`, `REL-V1-006` | Build/package/install/uninstall smoke. |
+| SFR-001 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-025`, `DAT-V1-026`, `DAT-V1-028`, `DAT-V1-029`, `IFC-V1-017`, `IFC-V1-026`, `IFC-V1-028`, `IFC-V1-033`, `IFC-V1-059`, `REL-V1-005` | Paired LAN read/write authorization tests. |
+| SFR-002 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-028`, `DAT-V1-029`, `IFC-V1-026`, `IFC-V1-029`, `IFC-V1-030`, `IFC-V1-033`, `IFC-V1-059`, `FE-V1-013` | Permission/revocation/lock matrix. |
+| SFR-003 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-026`, `IFC-V1-027`, `IFC-V1-030`, `IFC-V1-044`, `IFC-V1-045`, `IFC-V1-059`, `IFC-V1-061`, `IFC-V1-064`, `IFC-V1-066`, `FE-V1-022`, `FE-V1-029`, `FE-V1-036`, `FE-V1-037` | Intent/confirmation/API/UI tests. |
+| SFR-004 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-023`, `DAT-V1-027`, `IFC-V1-030`, `FE-V1-033` | Lock race and local unlock tests. |
+| SFR-005 | `BLK-V1-01`, `BLK-V1-02`, `BLK-V1-04` | `FND-V1-016`, `DAT-V1-023`, `IFC-V1-049`, `IFC-V1-050`, `IFC-V1-066`, `IFC-V1-091` | Failure cause/response/audit consistency tests. |
+| SFR-006 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-06` | `DAT-V1-023`, `DAT-V1-027`, `IFC-V1-032`, `IFC-V1-059`, `REL-V1-005` | Sanitization/raw-storage/log inspection. |
+| SFR-007 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-026`, `DAT-V1-027`, `DAT-V1-028`, `IFC-V1-028`, `IFC-V1-032`, `IFC-V1-059` | Pair entropy/one-time/expiry/rate/revoke tests. |
+| SFR-008 | `BLK-V1-04`, `BLK-V1-05` | `IFC-V1-015`, `IFC-V1-031`, `FE-V1-034` | LAN/certificate CLI, audit, and UI visibility tests. |
+| SFR-009 | `BLK-V1-04`, `BLK-V1-05` | `FND-V1-015`, `IFC-V1-019`, `IFC-V1-046`, `IFC-V1-067`, `IFC-V1-069`, `FE-V1-014`, `FE-V1-038` | Route manifest and UI absence checks. |
+| SFR-010 | `BLK-V1-01`, `BLK-V1-03`, `BLK-V1-04` | `FND-V1-016`, `INT-V1-018`, `INT-V1-026`, `IFC-V1-041`, `IFC-V1-045`, `IFC-V1-061`, `IFC-V1-064`, `IFC-V1-066` | Non-writable target rejection matrix. |
+| SFR-011 | `BLK-V1-01`, `BLK-V1-03` | `FND-V1-015`, `INT-V1-006`, `INT-V1-017` | Structured fixture inventory and real-event comparison. |
 | SFR-012 | `BLK-V1-04` | `IFC-V1-015`, `IFC-V1-017` | Host/Origin/CORS/DNS-rebinding tests. |
-| SFR-013 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-021`, `IFC-V1-017`, `IFC-V1-020` | Pair/mutation rate, concurrency, device revoke tests. |
-| SFR-014 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-021`, `IFC-V1-017` | CSRF reload/rotation/revocation browser tests. |
-| SFR-015 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-019`, `IFC-V1-021` | Filesystem/socket/lease tests. |
-| SFR-016 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-020`, `DAT-V1-021`, `IFC-V1-019` | Audit outcome/crash matrix. |
-| SFR-017 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-016`, `IFC-V1-018`, `IFC-V1-020`, `REL-V1-005` | Slow-client, overload, disconnect, heartbeat, shutdown tests. |
-| SFR-018 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-015`, `IFC-V1-017`, `REL-V1-005` | Cookie attributes and plaintext credential rejection. |
+| SFR-013 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-025`, `DAT-V1-026`, `DAT-V1-028`, `IFC-V1-028`, `IFC-V1-029`, `IFC-V1-033`, `IFC-V1-048`, `IFC-V1-049`, `IFC-V1-059` | Pair/mutation rate, concurrency, device revoke tests. |
+| SFR-014 | `BLK-V1-02`, `BLK-V1-04`, `BLK-V1-05` | `DAT-V1-021`, `DAT-V1-028`, `IFC-V1-027`, `IFC-V1-059`, `FE-V1-024`, `FE-V1-031` | CSRF reload/rotation/revocation browser tests. |
+| SFR-015 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-019`, `IFC-V1-055`, `IFC-V1-057` | Filesystem/socket/lease tests. |
+| SFR-016 | `BLK-V1-02`, `BLK-V1-04` | `DAT-V1-023`, `DAT-V1-024`, `DAT-V1-027`, `DAT-V1-030`, `IFC-V1-032`, `IFC-V1-037`, `IFC-V1-040` to `IFC-V1-045`, `IFC-V1-049`, `IFC-V1-059`, `IFC-V1-061` to `IFC-V1-064`, `IFC-V1-066` | Audit outcome/crash matrix. |
+| SFR-017 | `BLK-V1-04`, `BLK-V1-06` | `IFC-V1-022`, `IFC-V1-023`, `IFC-V1-025`, `IFC-V1-035`, `IFC-V1-037`, `IFC-V1-047` to `IFC-V1-052`, `REL-V1-005` | Slow-client, overload, disconnect, heartbeat, shutdown tests. |
+| SFR-018 | `BLK-V1-04`, `BLK-V1-05`, `BLK-V1-06` | `IFC-V1-015`, `IFC-V1-017`, `IFC-V1-027`, `IFC-V1-028`, `IFC-V1-031`, `IFC-V1-033`, `FE-V1-034`, `REL-V1-005` | Cookie attributes and plaintext credential rejection. |

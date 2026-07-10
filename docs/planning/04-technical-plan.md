@@ -296,6 +296,7 @@ No stored tmux session is silently converted to a Codex thread. V1 pre-release d
 | `SPK-ARCH-005` / `INT-V1-002` | Should app-server replace tmux/TUI scraping? | Complete: `artifacts/int-v1-002-codex-integration-reassessment.md`, `DEC-018`. | Contract/runtime rebaseline. |
 | `SPK-ARCH-006` / `INT-V1-003` | What exact Codex version/schema/capability policy is supported? | Generated binding drift check and compatibility matrix. | Adapter/session/control implementation. |
 | `SPK-ARCH-007` / `INT-V1-006` | Do real turn, approval, plan, multi-client, reconnect, and restart semantics satisfy V1? | Real Codex vertical artifact with no fake producer. | Legacy disposition, UI mockups, runtime hardening. |
+| `SPK-ARCH-008` / `IFC-V1-016` | Which exact Fastify 5, Zod 4, official SSE, and static stack satisfies V1 validation, streaming, asset, and lifecycle contracts on Node 22? | Official-source/package review plus executable validation/error, SSE, static, and close probes; exact version/license decision. | `IFC-V1-020`, `IFC-V1-022` to `IFC-V1-025`. |
 | `SPK-SEC-001` / `IFC-V1-015` | Which local HTTPS certificate enrollment works on supported phone browsers? | Real phone install/connect/renew/reject evidence and dependency decision. | LAN implementation, pairing UI, release smoke. |
 
 ## External References
@@ -304,3 +305,7 @@ No stored tmux session is silently converted to a Codex thread. V1 pre-release d
 - Codex Remote limitations and SSH/app-server model: `https://developers.openai.com/codex/remote-connections`
 - Codex CLI options and maturity: `https://developers.openai.com/codex/cli/reference`
 - `ws` IPC client syntax: `https://github.com/websockets/ws/blob/master/doc/ws.md`
+- Fastify server lifecycle and limits: `https://fastify.dev/docs/latest/Reference/Server/`
+- Official Fastify SSE plugin: `https://github.com/fastify/sse`
+- Official Fastify static plugin: `https://github.com/fastify/fastify-static`
+- Fastify Zod type-provider candidate: `https://github.com/turkerdev/fastify-type-provider-zod`

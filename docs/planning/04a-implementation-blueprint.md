@@ -21,7 +21,7 @@ This blueprint is implementation-ready only when:
 | --- | --- | --- | --- |
 | Workspace/conventions | Pinned workspace, strict TypeScript, Biome, Vitest, planning/scaffold/export/binding checks, nine package shells. | Reusable selected foundation. | Real build/package and clean-install proof. |
 | Core/contracts | Selected thread/turn/event/approval/runtime/security/mobile schemas, strict invariants, and fixtures. | Selected normalized foundation complete. | Production adoption remains in owning blocks. |
-| Storage | Historical repositories plus selected mapping/projection/event/compatibility/recovery migration. | Selected durable foundation implemented. | Production cleanup/audit invocation, CSRF lifecycle, permissions, daemon lease, module hardening. |
+| Storage | Historical repositories plus selected mapping/projection/event/compatibility/recovery migration and phased owner-only path/daemon-lease startup. | Selected durable and filesystem-ownership foundation implemented. | Production cleanup/audit invocation, CSRF lifecycle, and reopened module hardening. |
 | Tmux adapter | Real target/start/send/capture/reconcile tests with fake Codex producer. | Legacy integration evidence. | Not the selected V1 runtime. Disposition waits for structured vertical. |
 | Codex adapter | Exact 0.144.0 experimental binding, structural method-catalog drift check, bounded Unix IPC/broker/handshake/reconnect, hostile fake-protocol matrix, and real private-socket no-model smoke. | Transport and compatibility foundation implemented. | Real session/turn/control/approval, supervision, multi-client, and restart proof. |
 | API/CLI | Headless handlers, custom Node listener, source-level CLI shell/tests. | Partial foundation, not packaged production path. | Fastify/SSE/static build, selected adapter wiring, full auth, HTTPS, timeouts, service units, runnable `bin`. |
@@ -202,18 +202,18 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 | Case | Required behavior | Test owner |
 | --- | --- | --- |
 | Invalid calendar timestamp or unsafe cursor | Contract rejection before persistence/dispatch. | `FND-V1-016` |
-| Two starts with same alias | One reservation succeeds; the other gets duplicate conflict. | `DAT-V1-018`, `INT-V1-006` |
-| Thread created, DB write fails | No automatic second thread; explicit recoverable/incomplete result. | `INT-V1-006` |
-| App-server disconnect after accepted mutation | Audit becomes incomplete/unknown unless a terminal event proves outcome. | `INT-V1-007` |
-| HostDeck restart while turn runs | Service-mode app-server continues; reconciliation restores projection or explicit boundary. | `INT-V1-007`, `IFC-V1-018` |
-| Approval double tap/two clients | Exactly one response wins; loser sees resolved conflict. | `INT-V1-006`, `IFC-V1-019` |
-| CSRF reload/revoke race | Rotated/revoked generation invalidates stale header; no bearer token exposure. | `DAT-V1-021`, `IFC-V1-017` |
-| Slow SSE subscriber | Subscriber closes at bounded queue without blocking projector/other clients. | `IFC-V1-018`, `IFC-V1-020` |
-| Retention during replay | Transactional boundary and high-water handoff remain ordered. | `DAT-V1-020`, `IFC-V1-018` |
+| Two starts with same alias | One reservation succeeds; the other gets duplicate conflict. | `DAT-V1-018`, `INT-V1-005` |
+| Thread created, DB write fails | No automatic second thread; explicit recoverable/incomplete result. | `INT-V1-005` |
+| App-server disconnect after accepted mutation | Audit becomes incomplete/unknown unless a terminal event proves outcome. | `DAT-V1-023`, `INT-V1-028`, `IFC-V1-050` |
+| HostDeck restart while turn runs | Service-mode app-server continues; reconciliation restores projection or explicit boundary. | `INT-V1-030`, `IFC-V1-036`, `IFC-V1-037` |
+| Approval double tap/two clients | Exactly one response wins; loser sees resolved conflict. | `INT-V1-025`, `IFC-V1-044`, `FE-V1-022` |
+| CSRF reload/revoke race | Rotated/revoked generation invalidates stale header; no bearer token exposure. | `DAT-V1-021`, `DAT-V1-028`, `IFC-V1-027`, `IFC-V1-059`, `FE-V1-024`, `FE-V1-031` |
+| Slow SSE subscriber | Subscriber closes at bounded queue without blocking projector/other clients. | `IFC-V1-035`, `IFC-V1-048` |
+| Retention during replay | Transactional boundary and high-water handoff remain ordered. | `DAT-V1-022`, `IFC-V1-034` |
 | Duplicate daemon | Second owner exits before opening DB/listener/runtime mutation. | `DAT-V1-019` |
 | LAN HTTP/mismatched Host/Origin | Startup/request rejected; no cookie or data. | `IFC-V1-015`, `IFC-V1-017` |
-| Unsupported `/plan` semantic | Control disabled/incompatible; no literal slash fallback. | `INT-V1-003`, `INT-V1-006`, `FE-V1-021` |
-| TUI plus HostDeck clients | Both address the same thread without subscription corruption. | `INT-V1-006` |
+| Unsupported `/plan` semantic | Control disabled/incompatible; no literal slash fallback. | `INT-V1-003`, `INT-V1-021`, `IFC-V1-063`, `FE-V1-027` |
+| TUI plus HostDeck clients | Both address the same thread without subscription corruption. | `INT-V1-031` |
 
 ## Required Capability Blocks
 
@@ -233,13 +233,13 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 | 1 | Audit and planning integrity | `REL-V1-011`, `FND-V1-014`; owner docs/backlog/checker agree. |
 | 2 | Normalized contract rebaseline | `FND-V1-015`, `FND-V1-016`, generated fixtures and strict invariants. |
 | 3 | Codex compatibility and IPC adapter | `INT-V1-003`, `INT-V1-004`; handshake/broker/fake tests. |
-| 4 | Mapping/projection/auth storage migration | `DAT-V1-018` to `DAT-V1-021`; secure/retained durable state. |
-| 5 | Real structured vertical | `INT-V1-005` to `INT-V1-007`; real thread, prompt, events, controls, approval, TUI, restart. |
-| 6 | Legacy disposition and integration hardening | `INT-V1-008`, `INT-V1-091`; one selected runtime remains. |
-| 7 | HTTPS and production host interface | `IFC-V1-015` to `IFC-V1-021`; Fastify/SSE/auth/fanout/build/service. |
+| 4 | Selected durable state | `DAT-V1-018` to `DAT-V1-030`; migration, paths/lease, append/retention, audit outcomes, CSRF/device/pairing/revoke storage and bounded startup reconciliation. |
+| 5 | Real structured semantics and operation ports | `INT-V1-005`, `INT-V1-006`, `INT-V1-017` to `INT-V1-027`; thread, prompt, events, controls, approval, interrupt. |
+| 6 | Runtime lifecycle, legacy disposition, and integration hardening | `INT-V1-007`, `INT-V1-028` to `INT-V1-032`, `INT-V1-008`, `INT-V1-091`; supervision, restart, TUI coexistence, one selected runtime. |
+| 7 | HTTPS and production host interface | `IFC-V1-015` to `IFC-V1-069`; stack/resource contract, typed Fastify/SSE/static lifecycle, security, fanout, leaf read/write routes/CLI, legacy-listener disposition, build, and service packaging. |
 | 8 | Interface hardening | `IFC-V1-091`; slow clients, failure matrix, real production path. |
 | 9 | Mobile state and visual gate | `FE-V1-004`, reopened `FE-V1-002`, human `FE-V1-003`. This precedes React screen implementation. |
-| 10 | Dashboard implementation | `FE-V1-010` to `FE-V1-022`, then responsive/fidelity/copy tasks. |
+| 10 | Dashboard implementation | `FE-V1-010` to `FE-V1-040`; typed clients, screens/actions/trust states, responsive, accessibility, browser, fidelity, and copy evidence. |
 | 11 | Module and release hardening | `FE-V1-090`, release/security/clean-install/aggregate tasks. |
 | 12 | Human acceptance | `REL-V1-010`; explicit go/no-go. |
 

@@ -39,11 +39,14 @@ Requirement refs: `FR-002`, `FR-005` to `FR-010`, `FR-016`, `NFR-004`, `IR-001` 
 | Mobile structured state/interaction rebaseline | `FE-V1-004` | Blocked by contracts and real event semantics. |
 | Replacement visual directions | Reopened `FE-V1-002` | Blocked by `FE-V1-004`. |
 | Human selection | `FE-V1-003` | Blocked by replacement options. |
-| App shell/API client/Mission Control/Session Detail | `FE-V1-010` to `FE-V1-012`, `FE-V1-019` | Blocked by selection and production API. |
-| Trust/diagnostics/status states | `FE-V1-013` to `FE-V1-015` | Blocked by production security/runtime contracts. |
-| Composer and structured controls | `FE-V1-020`, `FE-V1-021` | Blocked by selected adapter API. |
-| Inline approvals | `FE-V1-022` | Blocked by real approval vertical/API. |
-| Responsive/accessibility/fidelity/copy hardening | `FE-V1-016` to `FE-V1-018`, `FE-V1-090` | Blocked by implemented screens. |
+| Phone-first shell and typed HTTP/SSE/CSRF/state clients | `FE-V1-010`, `FE-V1-019`, `FE-V1-023` to `FE-V1-025` | Blocked by visual selection and the assembled production API. |
+| Mission Control and structured Session Detail | `FE-V1-011`, `FE-V1-012` | Blocked by approved state contracts and coordinated clients. |
+| Prompt, model, goal, plan, utilities, and inline approval | `FE-V1-020` to `FE-V1-022`, `FE-V1-026` to `FE-V1-030` | Each leaf consumes its exact structured API/runtime port. |
+| Host access, CSRF reload, devices, lock, LAN/certificate, and compatibility UI | `FE-V1-013`, `FE-V1-031` to `FE-V1-035` | Blocked by production security and mutable-health contracts. |
+| Event diagnostics, interrupt, archive, and TUI-resume affordances | `FE-V1-014`, `FE-V1-036` to `FE-V1-038` | Blocked by Session Detail and exact operation routes. |
+| Cross-screen failure and continuity matrix | `FE-V1-015` | Blocked by complete stream, health, and compatibility state. |
+| Responsive, accessibility, and browser matrices | `FE-V1-016`, `FE-V1-039`, `FE-V1-040` | Ordered after every required implemented state/action. |
+| Fidelity, copy/workflow review, and module hardening | `FE-V1-017`, `FE-V1-018`, `FE-V1-090` | Blocked by selected mockups, browser evidence, and complete screens. |
 
 Owning backlog: `docs/tracking/backlog/web-dashboard.md`.
 

@@ -5,8 +5,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: harden/decompose `IFC-V1-016` before Fastify composition-root implementation.
-- Other ready tasks: `DAT-V1-020` and `IFC-V1-015`.
+- Active task: `FND-V1-017` selected-path backlog granularity audit and decomposition (`BUG-001`).
+- Other ready task: `IFC-V1-015` physical-device HTTPS spike.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
 - Release state: no-go. All capability blocks affected by the new runtime/security/mobile outcome are reopened.
@@ -39,6 +39,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Prove the remaining real Codex turn/control/restart vertical (`INT-V1-006` to `INT-V1-007`).
 - Prove phone HTTPS enrollment (`IFC-V1-015`).
 - Regenerate/select mobile mockups only after real structured states are stable.
+- Do not start affected selected-path implementation rollups until `FND-V1-017` replaces them with handoff-sized leaves.
 
 ## Validation
 
@@ -63,4 +64,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 - `FND-V1-015` is pushed as `f0da007`; `FND-V1-016` as `b497f66`; `FND-V1-091` as `59c7252`.
 - Completed coherent units through `DAT-V1-019` are pushed to `origin/main`; implementation commit `7f873c7`.
-- Next action: split `IFC-V1-016` into strict dependency-aware leaves, then execute the first ready Fastify foundation leaf.
+- Next action: finish the cross-block unfinished-task inventory, decompose broad data/runtime/interface/frontend rows, and close `BUG-001`; then resume `IFC-V1-016` stack probes.

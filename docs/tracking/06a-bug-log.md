@@ -6,7 +6,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 
 | ID | Symptom | Severity | Route | Status | Owning task | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| BUG-001 |  |  | Small / Backlog / Spike / Release blocker | Open |  |  |
+| BUG-001 | Selected-path backlog rows pass graph checks while still bundling independent implementation outcomes. | High | Spike / planning bug | Open | `FND-V1-017` | Fastify rollup split exposed the same pattern in data, runtime, security, interface, and frontend rows. |
 
 ## Routing
 
@@ -33,3 +33,16 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Validation:
 - Closed by:
 ```
+
+### BUG-001 Selected Backlog Granularity
+
+- Symptom: unfinished selected-path rows such as `DAT-V1-020`, `INT-V1-006`, and `IFC-V1-017` to `IFC-V1-021` contain independent outcomes that cannot be handed off without architecture decisions during implementation.
+- Impact: dependency readiness and V1 completion can look stronger than the executable leaf backlog really is.
+- Route: planning bug; implementation leaves are gated while the remaining selected backlog is audited and decomposed.
+- Related requirements: all active V1 requirements through their existing owners; no product scope change.
+- Affected / owning task: `FND-V1-017`.
+- Blocks: affected broad selected-path execution rows, not completed historical evidence or physical-device spikes.
+- Root cause: `check:planning` validates graph/trace/status integrity but cannot determine semantic task breadth.
+- Fix: classify every unfinished row, split independent outcomes, update dependencies/traces/block maps/queue, and record intentional module-hardening/release/human-gate rollups explicitly.
+- Validation: planning check, manual junior-handoff audit, before/after inventory artifact, clean diff/commit/push.
+- Closed by: pending `FND-V1-017`.

@@ -28,9 +28,9 @@ Task and block evidence names its level. "Complete for package scope" cannot sat
 | `pnpm test:contract` | Contracts/interfaces | L1 normalized API/storage/UI/Codex-adapter contracts. | Pass. |
 | `pnpm test:integration` | Storage/runtime/server | L2 SQLite/process/IPC/Fastify/SSE/auth/concurrency. | Pass. |
 | `pnpm test:web` | Web | Component/state/API-client tests. | Pass. |
-| `pnpm test:codex` | `INT-V1-006` | Opt-in L3 real app-server thread/turn/control/approval/TUI/reconnect suite. | Pass on release host with recorded version; may be excluded from ordinary CI when credentials/model use are required. |
-| `pnpm test:e2e` | Interface/web | Packaged browser workflow against isolated fixture runtime. | Pass. |
-| `pnpm build` | `IFC-V1-021` | Production CLI/server/web artifacts. | Pass from clean checkout. |
+| `pnpm test:codex` | `INT-V1-027` | Opt-in L3 real app-server thread/turn/control/approval/TUI/reconnect suite assembled from the semantic and operation leaves. | Pass on release host with recorded version; may be excluded from ordinary CI when credentials/model use are required. |
+| `pnpm test:e2e` | `IFC-V1-046`, `FE-V1-040` | Packaged browser workflow against isolated fixture runtime and the supported browser matrix. | Pass. |
+| `pnpm build` | `IFC-V1-053`, `IFC-V1-054` | Production server/web assets and runnable CLI artifacts. | Pass from clean checkout. |
 | `pnpm smoke:local` | `REL-V1-006` | Installed user-service, real Codex, browser/phone workflow. | Pass with artifact. |
 
 Unavailable commands fail loudly with owning task id. No placeholder command may exit zero.
@@ -104,6 +104,8 @@ Permission/lease evidence also proves pure path validation before mutation, mini
 | TLS | Trusted configured certificate, unknown CA, expired/not-yet-valid, wrong SAN, weak/invalid key, key permission, renewal/reconfigure, no secret logging. |
 
 Security tests assert both response behavior and side effects: no dispatch, no leaked session data, no success audit, and no credential issuance where rejection is expected.
+
+Fastify evidence is layered: `IFC-V1-020` freezes resource units/defaults/maxima and monotonic deadline ownership before server implementation; `IFC-V1-022` owns global JSON validation/errors/limits by injection; `IFC-V1-023` owns SSE framing, cursor inputs, heartbeat, abort, and source cleanup; `IFC-V1-024` owns static traversal/cache/fallback; `IFC-V1-025` owns real listener/readiness/close ordering. `IFC-V1-034` owns replay/high-water/live continuity, `IFC-V1-035` owns bounded subscriber queues, `IFC-V1-036` and `IFC-V1-037` own mutable health and graceful shutdown, and `IFC-V1-047` to `IFC-V1-052` own the resource/deadline stress layers.
 
 ## UI State Matrix
 

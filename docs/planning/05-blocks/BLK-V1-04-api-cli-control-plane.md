@@ -45,13 +45,21 @@ Local-admin CLI calls use an explicit loopback/admin authority, not a magic miss
 | --- | --- | --- |
 | Historical headless routes/custom listener/source CLI | `IFC-V1-001` to `IFC-V1-014`, `IFC-V1-090` | Retained reusable evidence; production block reopened. |
 | HTTPS enrollment decision and phone proof | `IFC-V1-015` | Ready after planning rebaseline. |
-| Fastify API/SSE/static runtime | `IFC-V1-016` | In progress; strict leaf decomposition and dependency review precede implementation. |
-| Authorization, CSRF, Host/Origin, rate/device hardening | `IFC-V1-017` | Blocked by HTTPS decision and auth storage. |
-| Projection fanout, live health, graceful shutdown | `IFC-V1-018` | Blocked by Fastify and Codex event path. |
-| Selected adapter API/CLI operation integration | `IFC-V1-019` | Blocked by real Codex vertical. |
-| Timeouts, overload, backpressure, concurrency | `IFC-V1-020` | Blocked by runtime integration. |
-| Build, runnable CLI, static assets, user services | `IFC-V1-021` | Blocked by production runtime. |
-| Reopened interface hardening | `IFC-V1-091` | Blocked by all new interface tasks. |
+| Fastify stack/API contract spike | `IFC-V1-016` | Resumes after planning-integrity closure; exact dependencies and executable boundary probes precede implementation. |
+| Resource budgets and monotonic deadline contract | `IFC-V1-020` | Blocked by the selected stack; precedes server/SSE implementation. |
+| Typed app, SSE adapter, static boundary, and listener lifecycle | `IFC-V1-022` to `IFC-V1-025` | Ordered behind the stack spike. |
+| Transport/Host/Origin/CORS security foundation | `IFC-V1-017` | Blocked by HTTPS proof and the typed app factory. |
+| Cookie auth, security audit executor, CSRF, pair/device/revoke/lock/LAN routes, and security matrix | `IFC-V1-026` to `IFC-V1-033`, `IFC-V1-059` | Dependency-ordered behind route manifest, data storage, HTTPS, and security foundation. |
+| Commit-only fanout foundation | `IFC-V1-018` | Blocked by production append, event normalization, and SSE transport. |
+| Replay/live, subscriber bounds, mutable health, shutdown, and aggregate stream matrix | `IFC-V1-034` to `IFC-V1-038` | Dependency-ordered behind fanout, runtime lifecycle, and data maintenance. |
+| Exact route-manifest contract | `IFC-V1-019` | Blocked by observed semantics and typed app foundation; precedes route implementation. |
+| Reusable exact-target write gate | `IFC-V1-066` | Blocked by trust, CSRF, lock, audit, and the real structured vertical. |
+| Host/session/event reads, start/resume/archive, prompt, per-control, approval, interrupt, and selected API/CLI aggregate | `IFC-V1-039` to `IFC-V1-046`, `IFC-V1-060` to `IFC-V1-065`, `IFC-V1-068`, `IFC-V1-069` | Each route is dependency-ordered behind its exact owning runtime, repository, or read port. |
+| Legacy custom-listener and raw/tmux route disposition | `IFC-V1-067` | Blocked by selected API/CLI acceptance; precedes production packaging. |
+| HTTP/SSE/idempotency/deadline/CLI bounds and stress aggregate | `IFC-V1-047` to `IFC-V1-052` | Dependency-ordered behind resource policy and owning transports. |
+| Deterministic production-output foundation | `IFC-V1-021` | Blocked by accepted runtime, stream, resource, and static boundaries. |
+| Built assets, CLI binary, user units, lifecycle commands, uninstall, and clean parity | `IFC-V1-053` to `IFC-V1-058` | Dependency-ordered behind production outputs and frontend readiness. |
+| Reopened interface hardening | `IFC-V1-091` | Blocked by `IFC-V1-015` to `IFC-V1-069`. |
 
 Owning backlog: `docs/tracking/backlog/api-cli-control-plane.md`.
 

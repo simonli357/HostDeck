@@ -20,32 +20,53 @@ The `tmux-output.md` filename is retained temporarily so historical artifact lin
 | Predecessor | Enables | Reason |
 | --- | --- | --- |
 | `REL-V1-011` audit/rebaseline | Current selected-path execution | Owner docs, block truth, and no-go state must be corrected first. |
-| `FND-V1-014` planning checker | Every ready/completion claim | Graph/trace/queue drift becomes executable failure. |
+| `FND-V1-014` planning checker | `FND-V1-017` and every ready/completion claim | Graph/trace/queue drift becomes executable failure. |
 | `FND-V1-015` normalized contracts | `FND-V1-016`, `DAT-V1-018`, `INT-V1-003`, `IFC-V1-016` | Storage/adapter/API need stable HostDeck types. |
 | `FND-V1-016` invariant hardening | New module hardening and consumers | Fixes timestamp/cursor/transition/target/outcome defects before propagation. |
+| `FND-V1-017` leaf-granularity audit | `DAT-V1-020`, `DAT-V1-021`, `DAT-V1-023`, `INT-V1-006`, `INT-V1-007`, `IFC-V1-016` to `IFC-V1-021`, `FE-V1-013`, `FE-V1-019` | Selected execution resumes only after every former rollup has a handoff-sized owner and dependency/evidence route. |
 | `INT-V1-003` compatibility gate | `INT-V1-004` | IPC broker cannot accept an undefined protocol/version policy. |
 | `INT-V1-004` IPC adapter | `INT-V1-005` | Thread lifecycle consumes a tested transport/broker. |
-| `DAT-V1-018` mapping migration | `INT-V1-005`, `DAT-V1-020` | Real threads need durable recoverable mapping/projection. |
-| `INT-V1-005` thread/TUI lifecycle | `INT-V1-006` | Real turns/controls need stable thread identity and attach path. |
-| `INT-V1-006` real vertical | `INT-V1-007`, `IFC-V1-019`, `FE-V1-004` | Event/control/approval semantics must be observed, not invented downstream. |
-| `INT-V1-007` supervision/restart | `INT-V1-008`, `INT-V1-091`, `IFC-V1-018` | Selected runtime lifecycle must be proven before legacy removal/hardening. |
-| `INT-V1-008`, `INT-V1-091` | Selected integration completion | One production runtime remains with strict evidence. |
+| `DAT-V1-018` mapping migration | `INT-V1-005`, `DAT-V1-020` | Real threads and projected events need durable recoverable identity. |
+| `INT-V1-005` thread/TUI lifecycle | `INT-V1-006` | Semantic probes need stable managed-thread identity and exact attach behavior. |
+| `DAT-V1-020` production append | `DAT-V1-022`, `INT-V1-017`, `IFC-V1-018` | Normalization and live publication consume committed projection truth only. |
+| `DAT-V1-023` audit state machine | `DAT-V1-024`, `DAT-V1-027`, `DAT-V1-030`, `IFC-V1-032`, `IFC-V1-049`, `IFC-V1-066` | Every production mutation and recovery path needs accepted-to-terminal truth. |
 | `IFC-V1-015` HTTPS spike | `DAT-V1-021`, `IFC-V1-017`, `FE-V1-013`, `REL-V1-005` | Certificate/browser policy drives auth and release proof. |
-| `DAT-V1-019` secure paths/lease | `INT-V1-007`, `IFC-V1-021` | Production processes need safe ownership and duplicate prevention. |
-| `DAT-V1-020`, `DAT-V1-021` | `IFC-V1-017` to `IFC-V1-019` | Production interface needs complete retention/audit/auth storage semantics. |
-| `IFC-V1-016` Fastify/SSE | `IFC-V1-017`, `IFC-V1-018` | Security and fanout integrate into the selected server lifecycle. |
-| `IFC-V1-017` auth + `IFC-V1-018` fanout | `IFC-V1-019`, `IFC-V1-020` | Selected operations require protected bounded transport. |
-| `IFC-V1-019` selected runtime operations | `IFC-V1-020`, frontend API consumers | Exposes real controls/approvals rather than tmux handlers. |
-| `IFC-V1-020`, `IFC-V1-021`, `IFC-V1-091` | Production interface completion | Resource/package/service hardening. |
+| `DAT-V1-021` CSRF storage | `DAT-V1-025` to `DAT-V1-029` | Device list, last-used, pairing, revoke, and security audit storage extend one hash-only generation model. |
+| `DAT-V1-022`, `DAT-V1-023` | `DAT-V1-024`, then `DAT-V1-030` | Startup retention and orphan accepted-operation reconciliation have separate bounded owners. |
+| `DAT-V1-025` to `DAT-V1-029` | `IFC-V1-026` to `IFC-V1-033`, `IFC-V1-059` | Browser security routes consume completed device/pairing/revoke/audit storage. |
+| `INT-V1-006` exact semantic spike | `INT-V1-017` to `INT-V1-026` | Event/control/approval behavior must be observed for the pinned runtime before implementation. |
+| `INT-V1-017` to `INT-V1-026` | `INT-V1-027` | The real structured vertical assembles already-implemented exact operation ports. |
+| `INT-V1-027` real structured vertical | `INT-V1-007`, `IFC-V1-066`, selected operation routes, `FE-V1-004` | Runtime supervision, exact write dispatch, and mobile states require accepted real semantics. |
+| `DAT-V1-019`, `INT-V1-027` | `INT-V1-007` | Process/socket supervision needs secure ownership and an accepted adapter vertical. |
+| `INT-V1-007` supervisor | `INT-V1-028` to `INT-V1-031` | Reconnect, crash, HostDeck restart, and TUI coexistence consume explicit process ownership. |
+| `DAT-V1-030`, `INT-V1-028` to `INT-V1-031` | `INT-V1-032` | Aggregate lifecycle acceptance includes durable incomplete/boundary recovery. |
+| `INT-V1-032` lifecycle acceptance | `INT-V1-008`, `IFC-V1-036`, `IFC-V1-037` | Legacy disposition and mutable host lifecycle wait for accepted restart behavior. |
+| `INT-V1-008`, `INT-V1-091` | Selected integration completion | One production runtime remains with strict evidence. |
+| `IFC-V1-016` Fastify stack spike | `IFC-V1-020`, then `IFC-V1-022` to `IFC-V1-025` | Exact dependencies are selected first; resource units/defaults/deadline ownership freeze before server implementation. |
+| `IFC-V1-020` resource contract | App/SSE/lifecycle implementations and `IFC-V1-047` to `IFC-V1-052` | No transport or client invents its own larger limit, unit, timeout, or cancellation extension. |
+| `IFC-V1-022` typed app factory | `IFC-V1-017`, `IFC-V1-019`, `IFC-V1-023` to `IFC-V1-025`, `IFC-V1-032` | Security, route manifest, SSE, static, lifecycle, and audit ports share one validation/error policy. |
+| `INT-V1-006`, `IFC-V1-022` | `IFC-V1-019` route manifest | Route implementation waits for observed operation semantics and one typed app boundary. |
+| `IFC-V1-017`, `DAT-V1-025` to `DAT-V1-029`, `IFC-V1-019`, `IFC-V1-032` | `IFC-V1-026` to `IFC-V1-031`, `IFC-V1-059` | Cookie, CSRF, pair/device/revoke, lock, and LAN routes consume one trust, route, and audit model. |
+| `DAT-V1-023`, `INT-V1-027`, `IFC-V1-019`, `IFC-V1-026`, `IFC-V1-027`, `IFC-V1-030`, `IFC-V1-032` | `IFC-V1-066` exact write gate | Selected mutations share one ordered target/auth/lock/audit/dispatch boundary. |
+| `DAT-V1-020`, `INT-V1-017`, `IFC-V1-023`, `IFC-V1-020` | `IFC-V1-018`, then `IFC-V1-034` to `IFC-V1-038` | Fanout begins only with committed events, resource bounds, and a proven SSE transport; replay, queues, health, and shutdown remain separate leaves. |
+| `IFC-V1-019`, `IFC-V1-066`, exact runtime/repository/read ports | `IFC-V1-039` to `IFC-V1-045`, `IFC-V1-059` to `IFC-V1-065`, `IFC-V1-068`, `IFC-V1-069` | Each API/CLI operation or read family is an independently testable route leaf with one target and owner. |
+| Security leaves plus `IFC-V1-066`, and fanout/lifecycle leaves | `IFC-V1-033`, `IFC-V1-038`, then `IFC-V1-046` | Security and stream acceptance precede selected production composition. |
+| `IFC-V1-020` plus assembled HTTP/SSE/operation/CLI boundaries | `IFC-V1-047` to `IFC-V1-052` | Enforcement and aggregate stress prove the already-frozen resource/deadline contract. |
+| `IFC-V1-046` selected API/CLI acceptance | `IFC-V1-067` legacy-listener disposition | Destructive cleanup follows accepted selected behavior and has separate evidence. |
+| `DAT-V1-019`, `IFC-V1-024`, `IFC-V1-025`, `IFC-V1-038`, `IFC-V1-046`, `IFC-V1-052`, `IFC-V1-067` | `IFC-V1-021`, then `IFC-V1-053` to `IFC-V1-058` | Deterministic outputs, built assets, CLI, services, uninstall, and clean parity consume accepted selected-only runtime boundaries. |
+| `IFC-V1-058`, `IFC-V1-091` | Production interface completion | Clean packaged parity and module hardening close the block. |
 | `FE-V1-004` state rebaseline | Reopened `FE-V1-002` | New mockups must use real mobile/structured states. |
 | Reopened `FE-V1-002` | Human `FE-V1-003` | Two complete alternatives precede selection. |
-| Human `FE-V1-003` plus production API | `FE-V1-010` to `FE-V1-022` | UI implementation gate. |
-| UI implementation | `FE-V1-016` to `FE-V1-018`, `FE-V1-090` | Responsive/fidelity/copy/module hardening. |
+| Human `FE-V1-003` plus `IFC-V1-046` | `FE-V1-010`, `FE-V1-019`, then `FE-V1-023` to `FE-V1-025` | The shell and typed clients require selected targets and the assembled API. |
+| Coordinated typed clients | `FE-V1-011` to `FE-V1-015`, `FE-V1-020` to `FE-V1-038` | Screens and actions consume shared exact state instead of owning transport guesses. |
+| Complete UI states/actions | `FE-V1-016`, `FE-V1-039`, `FE-V1-040`, then `FE-V1-017`, `FE-V1-018`, `FE-V1-090` | Responsive, accessibility, browser, fidelity, copy, and module hardening follow implementation. |
 | All module hardening | `REL-V1-004` to `REL-V1-010` | Release proof uses selected production path. |
 
 ## Requirement Trace Ownership
 
 Exact requirement-to-task rows live in `docs/planning/02-requirements.md` and are checked by `pnpm check:planning`.
+
+The trace table is the canonical V1 completion chain. A task card may cite additional requirements as local design/test context; those contextual refs do not add an execution dependency unless the canonical trace or `Blocked by` graph names it.
 
 | Requirement set | Primary backlog owners |
 | --- | --- |
@@ -58,6 +79,8 @@ Exact requirement-to-task rows live in `docs/planning/02-requirements.md` and ar
 
 ## Ready-State Rules
 
+- `Blocked by` is the complete authoritative execution dependency set and is parsed by `pnpm check:planning`.
+- `Blocks` is a concise downstream-impact index, not an exhaustive reverse-edge mirror; it may name major gates/ranges but cannot determine readiness.
 - `ready`: every task id in `Blocked by` is `done`, external requirements are available, and scope/evidence need no new decision.
 - `todo`: defined but ordered behind unfinished task dependencies.
 - `blocked`: cannot progress because of a human decision, physical device/account/certificate, or external-state dependency not represented by a task.
