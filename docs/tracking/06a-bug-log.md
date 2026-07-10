@@ -10,6 +10,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-002 | `test:unit` opportunistically runs real tmux processes when local binaries exist, causing load-dependent failures in the deterministic unit gate. | Medium | Small bugfix | Closed | Validation harness | Real tmux suites are opt-in through `pnpm test:tmux`; default unit and explicit smoke commands pass. |
 | BUG-003 | A matched static wildcard reports a missing GET file as 405 because method discovery sees its automatic HEAD route. | Medium | Small bugfix | Closed | `IFC-V1-024` / app factory | Current-method route detection plus pinned static missing-file regression; `artifacts/ifc-v1-024-fastify-static-boundary.md`. |
 | BUG-004 | The deadline fixture intermittently rejects a valid 5-second monotonic duration because it requires integer timestamp subtraction. | Low | Small bugfix | Closed | Validation harness | Fractional monotonic duration schema plus close-to assertion; canonical 408-test unit gate passes. |
+| BUG-005 | A finite Readable SSE source completes on a real listener but the pinned plugin leaves the HTTP response and handler open. | High | Backlog bugfix | Closed | `IFC-V1-023` / `IFC-V1-025` | Readable-end raw-response termination plus real finite-response and active-shutdown regressions; `artifacts/ifc-v1-025-fastify-host-lifecycle.md`. |
 
 ## Routing
 
@@ -82,3 +83,14 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Fix: keep the duration positive, require it to be close to 5,000 ms, and retain exact same-signal plus bounded-positive remaining-time assertions.
 - Validation: repeated focused parallel factory/static run and canonical `pnpm test:unit` with 408 passed/18 explicit external skips.
 - Closed by: current `IFC-V1-024` validation unit.
+
+### BUG-005 Finite SSE Leaves Real Response Open
+
+- Symptom: a finite selected-event source reaches generator `finally`, but a real HTTP client never receives response end and Fastify listener shutdown times out; injection had appeared to settle.
+- Impact: finite streams retain the handler/request slot and can hang otherwise cooperative listener shutdown and restart.
+- Route: backlog bugfix discovered by the planned `IFC-V1-025` real-listener lifecycle matrix; expected finite-source behavior was already owned by `IFC-V1-023`.
+- Affected / owning task: transport fix in `IFC-V1-023`; real shutdown evidence in `IFC-V1-025`.
+- Root cause: `@fastify/sse` 0.5.0 does not end the raw response when the Readable source ends, and `await reply.sse.send(readable)` cannot reach post-send cleanup until that response closes.
+- Fix: attach one Readable `end` listener before send and explicitly end a still-writable raw response; retain plugin close after send and remove the listener during final cleanup. Listener shutdown reaps sockets that become idle after close initiation without force-closing active requests.
+- Validation: direct real HTTP finite-source response end, zero final in-flight accounting, active finite-SSE lifecycle close, exact cleanup order, and immediate same-port restart.
+- Closed by: `IFC-V1-025`; evidence in `artifacts/ifc-v1-025-fastify-host-lifecycle.md`.

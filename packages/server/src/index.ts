@@ -1,6 +1,7 @@
 export * from "./api-route-contracts.js";
 export * from "./fastify-app.js";
 export * from "./fastify-error-policy.js";
+export * from "./fastify-host-lifecycle.js";
 export * from "./fastify-resource-options.js";
 export * from "./fastify-sse-transport.js";
 export * from "./fastify-static-boundary.js";

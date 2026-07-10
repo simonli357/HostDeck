@@ -15,10 +15,10 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-025` Compose selected Fastify startup/listener lifecycle | in_progress | none | All factory, resource, SSE, static, and secure startup prerequisites are complete; this proves real ownership and cleanup before route/build composition. |
-| 2 | `INT-V1-006` Probe exact real Codex operation semantics | ready | none | Independent real-boundary spike; unblocks every structured operation port and the mobile state contract. |
-| 3 | `DAT-V1-020` Implement commit-before-publish projection append | ready | none | Independent data leaf; establishes durable event truth for normalization and fanout. |
-| 4 | `DAT-V1-023` Implement accepted-to-terminal audit state machine | ready | none | Independent data leaf; establishes truthful mutation outcomes before write/security integration. |
+| 1 | `INT-V1-006` Probe exact real Codex operation semantics | in_progress | none | Unblocks every structured operation port and the stable mobile state contract; use isolated exact 0.144.0 because the default installed 0.144.1 remains unreviewed. |
+| 2 | `DAT-V1-020` Implement commit-before-publish projection append | ready | none | Independent data leaf; establishes durable event truth for normalization and fanout. |
+| 3 | `DAT-V1-023` Implement accepted-to-terminal audit state machine | ready | none | Independent data leaf; establishes truthful mutation outcomes before write/security integration. |
+| 4 | `IFC-V1-047` Enforce real HTTP resource limits | ready | none | Newly unblocked by the completed lifecycle; extends proven option inventory into raw-socket limit and cleanup behavior. |
 | 5 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Independent physical-device spike; resolves the blocking LAN trust boundary when the setup is available. |
 
 ## Intentional Blockers

@@ -72,3 +72,7 @@ Internal observations use: `source_open_failed`, `source_iteration_failed`, `inv
 - `IFC-V1-035` enforces global/device/session subscriber admission and bounded per-subscriber queues.
 - `IFC-V1-025`, `IFC-V1-036`, and `IFC-V1-037` own real listener lifecycle, health, drain, and aggregate SSE shutdown.
 - `IFC-V1-047`, `IFC-V1-048`, and `IFC-V1-052` own HTTP/SSE stress, heap/counter/leak, and aggregate production evidence. This task proves transport mechanics, not those capabilities.
+
+## IFC-V1-025 Regression Amendment
+
+Real listener shutdown exposed `BUG-005`: unlike injection, a naturally completed finite Readable did not make `@fastify/sse` 0.5.0 end the raw HTTP response, so `send(readable)` and the request slot remained open. The transport now attaches a one-shot Readable `end` listener before send and ends a still-writable raw response; final cleanup removes it. A direct real HTTP finite-source test plus the active-SSE lifecycle/restart matrix pass. The focused transport matrix now contains 8 tests.

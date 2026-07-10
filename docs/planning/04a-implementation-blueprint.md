@@ -148,6 +148,8 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 12. Start Fastify HTTPS/HTTP listener, routes, SSE, and static assets.
 13. Report ready only when required dependencies are current. Every failure after lease acquisition closes mutable resources and releases the lease in reverse order.
 
+The selected listener implementation requires cleanup authority before runtime start: one exact runtime controller exposes `start`, `closeSse`, and `closeStartup`; `start` returns only typed context plus validated bind. Fastify registration/readiness completes while unbound, Node limits apply before listen, and the actual address must equal that bind. Current composition accepts loopback HTTP only; LAN remains blocked until the HTTPS/certificate owner supplies its contract. Close transitions to draining, initiates listener refusal, bounds SSE and newly idle connection settlement, closes Fastify, then storage/lease startup ownership. Failure or timeout at one step is aggregated but cannot skip later cleanup; complete mutation/projector/audit/runtime drain remains `IFC-V1-037`.
+
 ### Prompt Or Structured Control
 
 1. Fastify enforces header/request-receive/body/URL/parameter bounds, validates path/body/content type, and exposes one handler-owned `request.signal` plus monotonic deadline view.

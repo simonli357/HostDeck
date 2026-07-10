@@ -179,6 +179,7 @@ describe("bounded Fastify SSE transport", () => {
 
       expect(failures).toEqual([]);
       expect(internal).toEqual([]);
+      await waitUntil(() => hostDeckFastifyResourceSnapshot(app).in_flight_requests === 0);
       expect(hostDeckFastifyResourceSnapshot(app).in_flight_requests).toBe(0);
     } finally {
       await app.close();
@@ -212,6 +213,38 @@ describe("bounded Fastify SSE transport", () => {
       expect(response.body).toContain("id: 1");
       expect(response.body).toContain(": heartbeat");
       expect(response.body).toContain("id: 2");
+      await waitUntil(() => hostDeckFastifyResourceSnapshot(app).in_flight_requests === 0);
+      expect(hostDeckFastifyResourceSnapshot(app).in_flight_requests).toBe(0);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("ends a real HTTP response when a finite source completes naturally", async () => {
+    let finalized = false;
+    const app = createSseApp(
+      {
+        open() {
+          return finiteEvents([projectionEvent(1, "finite-real-response")], () => {
+            finalized = true;
+          });
+        }
+      },
+      [],
+      []
+    );
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+
+    try {
+      const response = await withTestTimeout(
+        readSseResponse(`${address}/api/sessions/${sessionId}/events`),
+        1_000,
+        "finite real SSE response"
+      );
+      expect(response.status).toBe(200);
+      expect(response.body).toContain("id: 1");
+      expect(response.body).toContain("finite-real-response");
+      expect(finalized).toBe(true);
       expect(hostDeckFastifyResourceSnapshot(app).in_flight_requests).toBe(0);
     } finally {
       await app.close();
@@ -543,6 +576,22 @@ async function openPausedResponse(url: string): Promise<{
     request.once("response", (response) => {
       response.pause();
       response.once("readable", () => resolve({ request, response }));
+    });
+  });
+}
+
+function readSseResponse(url: string): Promise<{ readonly body: string; readonly status: number }> {
+  return new Promise((resolve, reject) => {
+    const request = httpGet(url, { headers: { accept: "text/event-stream" } });
+    request.once("error", reject);
+    request.once("response", (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk: string) => {
+        body += chunk;
+      });
+      response.once("error", reject);
+      response.once("end", () => resolve({ body, status: response.statusCode ?? 0 }));
     });
   });
 }

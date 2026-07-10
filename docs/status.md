@@ -5,8 +5,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `IFC-V1-025` selected Fastify startup/listener lifecycle.
-- Other ready tasks: `INT-V1-006` real Codex semantic spike, `DAT-V1-020` production projection append, `DAT-V1-023` audit state machine, and `IFC-V1-015` physical-device HTTPS spike.
+- Active task: `INT-V1-006` exact real Codex operation semantic spike.
+- Other ready tasks: `DAT-V1-020` production projection append, `DAT-V1-023` audit state machine, `IFC-V1-047` real HTTP limit enforcement, and `IFC-V1-015` physical-device HTTPS spike.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
 - Release state: no-go. All capability blocks affected by the new runtime/security/mobile outcome are reopened.
@@ -25,6 +25,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-022` implements an unbound typed Fastify factory over exact frozen policy and explicit API/SSE/static registrations. It owns local Zod request/response validation, generated request ids, content/URL/parameter/body/route ceilings, pre-routing plus route error normalization, same-signal deadline views, and handler-plus-response in-flight accounting. Real timeout and pinned SSE/static compatibility probes pass. Evidence: `artifacts/ifc-v1-022-fastify-app-factory.md`.
 - `IFC-V1-023` implements the explicit selected-event SSE registration with pinned Accept/heartbeat behavior, stable 406, conflict-safe query/header cursors, cursor ids, schema/session/order/wire-byte validation, exact request-signal propagation, one-object-high-water Readable use, observed source/plugin failures, and cleanup-deadline bounded iterator return. Real cooperative backpressure and noncooperative cleanup probes pass. Evidence: `artifacts/ifc-v1-023-fastify-sse-transport.md`.
 - `IFC-V1-024` implements a frozen explicit static registration over canonical build/index/assets roots, bounded startup inventory, raw plus plugin path denial, current canonical-file rechecks, explicit shell routes, JSON-only fallback, and deterministic HTML/hashed-asset cache, MIME, and HEAD policy. Hostile startup, post-ready injection/replacement, and raw traversal probes pass. Evidence: `artifacts/ifc-v1-024-fastify-static-boundary.md`.
+- `IFC-V1-025` implements the selected Fastify lifecycle over an upfront runtime controller, one frozen policy, unbound app readiness, constructor/mutable Node limits, exact loopback-only HTTP bind, frozen readiness/draining snapshots, and bounded listener/SSE/app/startup cleanup. Runtime/route/ready/listen/close failures, real secure lease restart, active finite SSE, and same-port restart pass. Evidence: `artifacts/ifc-v1-025-fastify-host-lifecycle.md`.
 - Selected mappings, projections, projected events, compatibility results, start recovery, and legacy dispositions now have additive migration and repository ownership with transactional/concurrency/restart/corruption evidence.
 - `@hostdeck/codex-adapter` owns an exact 0.144.0 experimental generated binding, deterministic schema-drift check, fail-closed required-capability policy, and a real no-model initialize/Plan catalog smoke.
 - The adapter now also owns a bounded Unix-only WebSocket transport, strict wire decoder, correlated request/server-request broker, initialize/degradation state machine, deterministic raw-protocol fake, explicit no-auto-retry reconnect, and a real private-socket no-model smoke.
@@ -35,13 +36,14 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Not Proven
 
 - Real Codex turn/event/control/approval/restart behavior through HostDeck.
-- Production listener composition of the proven static/SSE registrations, replay/live handoff and subscriber queues, real-listener/Node-limit enforcement, continuous projection/fanout, runtime health, retention invocation, or graceful shutdown; the unbound app factory and individual adapters are proven, not those downstream integrations.
+- Production composition with selected Codex/projector/trust/route registrations, replay/live handoff and subscriber queues, full raw-socket Node-limit enforcement, continuous projection/fanout, mutable runtime health, retention invocation, or complete application drain; the generic listener lifecycle and individual adapters are proven, not those downstream integrations.
+- The default installed Codex is now 0.144.1 and is intentionally incompatible with the reviewed 0.144.0 binding until a separate compatibility review. Exact 0.144.0 remains available through an isolated package invocation for the active semantic spike.
 - HTTPS LAN certificate enrollment, paired LAN reads, CSRF reload, rate limits, or device revocation.
 - Runnable packaged CLI, built dashboard, user services, clean Ubuntu install, real phone workflow, or release readiness.
 
 ## Blockers
 
-- Prove the real Codex operation semantics and remaining turn/control/restart vertical (`INT-V1-006`, `INT-V1-017` to `INT-V1-032`).
+- Prove the real Codex operation semantics and remaining turn/control/restart vertical (`INT-V1-006`, `INT-V1-017` to `INT-V1-032`) against explicit exact 0.144.0; do not treat default 0.144.1 as reviewed.
 - Prove phone HTTPS enrollment (`IFC-V1-015`).
 - Regenerate/select mobile mockups only after real structured states are stable.
 
@@ -75,6 +77,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/ifc-v1-023-fastify-sse-transport.md`.
 - `IFC-V1-024`: focused strict-input/startup/send/cache/fallback matrix (4), test-owned raw traversal, post-ready inventory/replacement denial, pinned static missing-file 404, scaffold/planning/binding checks, root/all-package typechecks, lint/exports, unit (408 passed, 18 external tests skipped), contract (111), integration (16), web (14), production audit, manual diff review, and diff checks pass.
 - Evidence: `artifacts/ifc-v1-024-fastify-static-boundary.md`.
+- `IFC-V1-025`: focused lifecycle matrix (5), focused SSE matrix (8), real secure path/database/lease failure and restart, no-listen-before-ready, raw oversized-header refusal, active finite-SSE close, same-port restart, scaffold/planning checks, exact isolated 0.144.0 binding verification, root/all-package typechecks, lint/exports, unit (414 passed, 18 external tests skipped), contract (111), integration (16), web (14), production audit, manual diff review, and diff checks pass. The default binding command correctly rejects installed 0.144.1.
+- Evidence: `artifacts/ifc-v1-025-fastify-host-lifecycle.md`.
 
 ## Git
 
@@ -86,4 +90,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-022` app-factory implementation and docs are pushed as `29005c6`.
 - `IFC-V1-023` SSE transport implementation and docs are pushed as `8117f10`.
 - `IFC-V1-024` static boundary implementation and docs are pushed as `a630eff`.
-- Next action: implement `IFC-V1-025` composition ownership, no-early-listen readiness, validated binding, reverse-order idempotent cleanup, restart, and active finite-SSE shutdown evidence.
+- `IFC-V1-025` lifecycle implementation/docs are validated; push hash is pending this coherent unit.
+- Next action: execute `INT-V1-006` with an isolated exact 0.144.0 binary, two isolated managed threads, bounded model turns/cost/time, redacted protocol capture, complete cleanup, and observed-versus-inferred operation matrix.

@@ -97,6 +97,7 @@ export function createHostDeckFastifyApp(input: CreateHostDeckFastifyAppInput): 
   const resourceOptions = fastifyResourceOptionsFromBudget(input.resourceBudget);
   const app = Fastify({
     ...resourceOptions.factory,
+    http: { maxHeaderSize: resourceOptions.node.maxHeaderSize },
     frameworkErrors: (error, request, reply) =>
       handleHostDeckFastifyError(error, request, reply, input.observeInternalError),
     genReqId: () => `req_${randomUUID()}`,

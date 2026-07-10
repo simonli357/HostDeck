@@ -138,7 +138,11 @@ export function createHostDeckSseTransportRegistration(
           const captureReadableFailure = (error: Error) => {
             readableFailure = error;
           };
+          const finishFiniteResponse = () => {
+            if (!reply.raw.destroyed && !reply.raw.writableEnded) reply.raw.end();
+          };
           readable.once("error", captureReadableFailure);
+          readable.once("end", finishFiniteResponse);
           request.signal.addEventListener("abort", destroyReadable, { once: true });
           reply.sse.onClose(destroyReadable);
 
@@ -154,6 +158,8 @@ export function createHostDeckSseTransportRegistration(
                 observeSseFailure(parsed.observeError, request, error);
               }
               if (!reply.raw.destroyed && !reply.raw.writableEnded) reply.raw.end();
+            } else if (reply.sse.isConnected) {
+              reply.sse.close();
             }
           } catch (cause) {
             if (!request.signal.aborted && !(cause instanceof HostDeckSseAbortError)) {
@@ -175,6 +181,7 @@ export function createHostDeckSseTransportRegistration(
           } finally {
             request.signal.removeEventListener("abort", destroyReadable);
             readable.removeListener("error", captureReadableFailure);
+            readable.removeListener("end", finishFiniteResponse);
             readable.destroy();
           }
         }

@@ -47,7 +47,7 @@ Local-admin CLI calls use an explicit loopback/admin authority, not a magic miss
 | HTTPS enrollment decision and phone proof | `IFC-V1-015` | Ready after planning rebaseline. |
 | Fastify stack/API contract spike | `IFC-V1-016` | Complete; exact Fastify/Zod/SSE/static dependencies and constrained validation/stream/asset/lifecycle boundaries are proven. |
 | Resource budgets and monotonic deadline contract | `IFC-V1-020` | Complete; 59 strict resource definitions, Fastify/Codex mappings, public breach codes, and owner/view fake-clock evidence precede enforcement. |
-| Typed app, SSE adapter, static boundary, and listener lifecycle | `IFC-V1-022` to `IFC-V1-025` | Typed app and bounded SSE transport complete; static boundary in progress, followed by real-listener lifecycle. |
+| Typed app, SSE adapter, static boundary, and listener lifecycle | `IFC-V1-022` to `IFC-V1-025` | Complete; typed unbound app, bounded SSE with real finite completion, hardened static boundary, upfront runtime ownership, exact loopback listener, Node limit inventory, and bounded reverse cleanup pass. HTTPS, selected route composition, mutable health, and complete application drain remain downstream. |
 | Transport/Host/Origin/CORS security foundation | `IFC-V1-017` | Blocked by HTTPS proof and the typed app factory. |
 | Cookie auth, security audit executor, CSRF, pair/device/revoke/lock/LAN routes, and security matrix | `IFC-V1-026` to `IFC-V1-033`, `IFC-V1-059` | Dependency-ordered behind route manifest, data storage, HTTPS, and security foundation. |
 | Commit-only fanout foundation | `IFC-V1-018` | Blocked by production append, event normalization, and SSE transport. |
