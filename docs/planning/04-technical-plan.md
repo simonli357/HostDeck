@@ -40,8 +40,9 @@ The architecture is acceptable for V1 only when all of the following are true:
 | --- | --- | --- |
 | Runtime | Pinned Node.js 22.22.2 and strict TypeScript. | Matches the current workspace and Ubuntu evidence. Runtime changes require compatibility smoke. |
 | Workspace | `pnpm` monorepo. | Existing validated scaffold. |
-| Host API | Fastify 5-compatible stack with JSON schema/Zod boundary adapters. | Lifecycle hooks, body limits, request timeouts, testing, and controlled shutdown replace the current ad hoc listener. |
-| Browser stream | SSE through a maintained Fastify plugin. | One-way ordered events fit the product; mutations remain auditable HTTP requests. |
+| Host API | Exact `fastify` 5.10.0 and `zod` 4.4.3 with HostDeck-owned local type-provider/validator/serializer compilers. | Lifecycle hooks, limits, injection, stable errors, and controlled shutdown replace the current ad hoc listener without pulling Swagger/OpenAPI peers into V1. |
+| Browser stream | Exact `@fastify/sse` 0.5.0 with SSE-only routes and Readable-backed event sources. | Negotiation, headers, heartbeat, and `Last-Event-ID` are reused; HostDeck owns replay, bounds, abort, and source health. Direct async-iterable sends are forbidden because the pinned plugin does not settle a backpressured drain wait on socket close. |
+| Static dashboard | Exact `@fastify/static` 9.3.0 with a validated asset root, explicit browser routes, and deny-by-policy dotfile/path filtering. | Hashed asset caching and MIME/HEAD behavior are reused without allowing API-to-HTML fallback or implicit index exposure. |
 | Codex transport | Exact `ws` 8.21.0 IPC client using app-server's Unix-socket WebSocket endpoint. | The maintained MIT package documents `ws+unix:` IPC support; HostDeck adds its own frame, queue, heartbeat, timeout, and no-TCP-fallback policy. The socket remains user-private and supports both HostDeck and the normal TUI. |
 | CLI | Commander or an equivalently maintained parser plus a packaged `bin` entry. | Existing custom shell can be adapted only if it meets help, exit-code, and packaging criteria. |
 | UI | React plus Vite and Playwright. | Component contracts, mobile browser implementation, built static assets, and screenshot validation. |
@@ -296,7 +297,7 @@ No stored tmux session is silently converted to a Codex thread. V1 pre-release d
 | `SPK-ARCH-005` / `INT-V1-002` | Should app-server replace tmux/TUI scraping? | Complete: `artifacts/int-v1-002-codex-integration-reassessment.md`, `DEC-018`. | Contract/runtime rebaseline. |
 | `SPK-ARCH-006` / `INT-V1-003` | What exact Codex version/schema/capability policy is supported? | Generated binding drift check and compatibility matrix. | Adapter/session/control implementation. |
 | `SPK-ARCH-007` / `INT-V1-006` | Do real turn, approval, plan, multi-client, reconnect, and restart semantics satisfy V1? | Real Codex vertical artifact with no fake producer. | Legacy disposition, UI mockups, runtime hardening. |
-| `SPK-ARCH-008` / `IFC-V1-016` | Which exact Fastify 5, Zod 4, official SSE, and static stack satisfies V1 validation, streaming, asset, and lifecycle contracts on Node 22? | Official-source/package review plus executable validation/error, SSE, static, and close probes; exact version/license decision. | `IFC-V1-020`, `IFC-V1-022` to `IFC-V1-025`. |
+| `SPK-ARCH-008` / `IFC-V1-016` | Which exact Fastify 5, Zod 4, official SSE, and static stack satisfies V1 validation, streaming, asset, and lifecycle contracts on Node 22? | Complete: `artifacts/ifc-v1-016-fastify-stack-spike.md`; exact MIT dependencies, clean production audit, and six executable boundary probes. | `IFC-V1-020`, `IFC-V1-022` to `IFC-V1-025`. |
 | `SPK-SEC-001` / `IFC-V1-015` | Which local HTTPS certificate enrollment works on supported phone browsers? | Real phone install/connect/renew/reject evidence and dependency decision. | LAN implementation, pairing UI, release smoke. |
 
 ## External References
@@ -308,4 +309,4 @@ No stored tmux session is silently converted to a Codex thread. V1 pre-release d
 - Fastify server lifecycle and limits: `https://fastify.dev/docs/latest/Reference/Server/`
 - Official Fastify SSE plugin: `https://github.com/fastify/sse`
 - Official Fastify static plugin: `https://github.com/fastify/fastify-static`
-- Fastify Zod type-provider candidate: `https://github.com/turkerdev/fastify-type-provider-zod`
+- Rejected Fastify Zod type-provider candidate: `https://github.com/turkerdev/fastify-type-provider-zod`

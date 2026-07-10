@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `IFC-V1-016` exact Fastify/Zod/SSE/static production-stack spike.
+- Active task: `IFC-V1-020` resource-budget and monotonic-deadline contract.
 - Other ready tasks: `INT-V1-006` real Codex semantic spike, `DAT-V1-020` production projection append, `DAT-V1-023` audit state machine, and `IFC-V1-015` physical-device HTTPS spike.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -20,6 +20,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Legacy tmux, terminal-output, slash-injection, raw-input, storage, and desktop-led UI contracts remain exported only as explicitly deprecated migration surfaces pending `INT-V1-008`.
 - `BLK-V1-01` is complete for normalized contracts, core invariants, deterministic fixtures, planning integrity, and generated-protocol isolation; production consumers remain reopened in their owning blocks.
 - `FND-V1-017` closed `BUG-001`: every unfinished selected-path row was manually classified and decomposed into a 196-task/622-edge graph; resource policy now precedes implementation, operation/read routes have separate owners, and deliberate aggregate gates are explicit. Evidence: `artifacts/fnd-v1-017-selected-backlog-granularity.md`; commit `481cb44`.
+- `IFC-V1-016` selected exact Fastify 5.10.0, Zod 4.4.3, `@fastify/sse` 0.5.0, and `@fastify/static` 9.3.0 dependencies with local validation/error ownership, a mandatory Readable-backed SSE path, and explicit deny-by-policy static routing. Six executable boundary probes and production dependency review pass. Evidence: `artifacts/ifc-v1-016-fastify-stack-spike.md`.
 - Selected mappings, projections, projected events, compatibility results, start recovery, and legacy dispositions now have additive migration and repository ownership with transactional/concurrency/restart/corruption evidence.
 - `@hostdeck/codex-adapter` owns an exact 0.144.0 experimental generated binding, deterministic schema-drift check, fail-closed required-capability policy, and a real no-model initialize/Plan catalog smoke.
 - The adapter now also owns a bounded Unix-only WebSocket transport, strict wire decoder, correlated request/server-request broker, initialize/degradation state machine, deterministic raw-protocol fake, explicit no-auto-retry reconnect, and a real private-socket no-model smoke.
@@ -30,7 +31,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Not Proven
 
 - Real Codex turn/event/control/approval/restart behavior through HostDeck.
-- Production Fastify/SSE composition, continuous projection/fanout, runtime health, retention invocation, or graceful shutdown.
+- Production Fastify app/SSE/static composition, continuous projection/fanout, runtime health, retention invocation, or graceful shutdown; only the exact dependency and boundary contract is proven.
 - HTTPS LAN certificate enrollment, paired LAN reads, CSRF reload, rate limits, or device revocation.
 - Runnable packaged CLI, built dashboard, user services, clean Ubuntu install, real phone workflow, or release readiness.
 
@@ -60,10 +61,13 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/int-v1-005-managed-thread-lifecycle.md`.
 - `DAT-V1-019`: forced frozen offline install/native rebuild, scaffold/planning/binding checks, root/all-package typechecks, lint/exports, unit (386 passed, 4 skipped), contract (105), integration (16), web (14), storage (83), service smoke (2), production license/audit, hostile path/lease matrix, real modes, and child crash recovery passed.
 - Evidence: `artifacts/dat-v1-019-secure-paths-daemon-lease.md`.
+- `IFC-V1-016`: frozen install, scaffold/planning/binding checks, root/all-package typechecks, lint/exports, focused stack probes (6), deterministic unit (378 passed, 18 explicit external tests skipped), dedicated real tmux (21), contract (105), integration (16), web (14), production audit/license/tree review, and diff checks passed. Aggregate validation also found and closed `BUG-002` by separating opportunistic real-process tests from the unit gate.
+- Evidence: `artifacts/ifc-v1-016-fastify-stack-spike.md`.
 
 ## Git
 
 - `FND-V1-015` is pushed as `f0da007`; `FND-V1-016` as `b497f66`; `FND-V1-091` as `59c7252`.
 - Completed coherent units through `DAT-V1-019` are pushed to `origin/main`; implementation commit `7f873c7`.
-- `FND-V1-017` planning decomposition is pushed as `481cb44`; closure/resume state is the current docs unit.
-- Next action: complete `IFC-V1-016` official-source/package review and executable validation, SSE, static, and lifecycle probes; freeze exact versions and downstream contracts.
+- `FND-V1-017` planning decomposition is pushed as `481cb44`; closure/resume state is pushed as `3cfb1f2`.
+- `IFC-V1-016` dependency/probe/docs closure is the current unit pending commit and push.
+- Next action: define and test `IFC-V1-020` exact resource units, limits, defaults/maxima, stable overload errors, observability, and one non-extending monotonic deadline/AbortSignal ownership chain.

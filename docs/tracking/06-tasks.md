@@ -15,7 +15,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-016` Select and probe the exact Fastify production stack | in_progress | none | Freezes maintained versions, validation/error ownership, resource inputs, SSE/static boundaries, and lifecycle behavior before server implementation. |
+| 1 | `IFC-V1-020` Freeze resource budgets and monotonic deadline propagation | in_progress | none | Converts the selected stack into explicit bounded inputs before the app factory, SSE adapter, listener, and stress layers. |
 | 2 | `INT-V1-006` Probe exact real Codex operation semantics | ready | none | Independent real-boundary spike; unblocks every structured operation port and the mobile state contract. |
 | 3 | `DAT-V1-020` Implement commit-before-publish projection append | ready | none | Independent data leaf; establishes durable event truth for normalization and fanout. |
 | 4 | `DAT-V1-023` Implement accepted-to-terminal audit state machine | ready | none | Independent data leaf; establishes truthful mutation outcomes before write/security integration. |

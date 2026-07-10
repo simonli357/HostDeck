@@ -24,7 +24,7 @@ This blueprint is implementation-ready only when:
 | Storage | Historical repositories plus selected mapping/projection/event/compatibility/recovery migration and phased owner-only path/daemon-lease startup. | Selected durable and filesystem-ownership foundation implemented. | Production cleanup/audit invocation, CSRF lifecycle, and reopened module hardening. |
 | Tmux adapter | Real target/start/send/capture/reconcile tests with fake Codex producer. | Legacy integration evidence. | Not the selected V1 runtime. Disposition waits for structured vertical. |
 | Codex adapter | Exact 0.144.0 experimental binding, structural method-catalog drift check, bounded Unix IPC/broker/handshake/reconnect, hostile fake-protocol matrix, and real private-socket no-model smoke. | Transport and compatibility foundation implemented. | Real session/turn/control/approval, supervision, multi-client, and restart proof. |
-| API/CLI | Headless handlers, custom Node listener, source-level CLI shell/tests. | Partial foundation, not packaged production path. | Fastify/SSE/static build, selected adapter wiring, full auth, HTTPS, timeouts, service units, runnable `bin`. |
+| API/CLI | Headless handlers, custom Node listener, source-level CLI shell/tests, and the exact probed Fastify/Zod/SSE/static dependency contract. | Selected stack foundation, not a packaged production path. | Typed app/SSE/static implementation, selected adapter wiring, full auth, HTTPS, timeouts, service units, runnable `bin`. |
 | Web | View-model helpers/fixtures only. Existing mockups rejected. | Pre-implementation. | Mobile state rebaseline, two options, selection, React/Vite UI, screenshots/device evidence. |
 | Release | Baseline commands pass; developer/command docs record gaps. | No-go. | Clean package/service/phone/security/aggregate evidence. |
 
@@ -80,6 +80,17 @@ The adapter implementation contains:
 | Fake adapter | Deterministic operations/events/failures matching normalized interface. | Cannot bypass contract parsing in tests. |
 
 Raw generated app-server types never cross into storage, API, or UI packages.
+
+## Production Host Interface Contract
+
+| Component | Ownership | Failure rule |
+| --- | --- | --- |
+| Typed app factory | Fastify 5.10.0 instance, HostDeck-local Zod 4.4.3 type provider and compilers, global limits/content types/request ids/errors, explicit route plugins. | No listener/storage/process side effects; invalid config or schema registration fails composition; request failures are bounded 4xx and response/internal failures are redacted 5xx. |
+| SSE transport | `@fastify/sse` 0.5.0 negotiation/headers/heartbeat plus a required injected HostDeck event source converted through `Readable.from(..., { objectMode: true })`. | Never pass an AsyncIterable directly to the pinned plugin. One request abort signal reaches the source; source/serialization failure is observed before close; cleanup and handler settlement are bounded. |
+| Static boundary | `@fastify/static` 9.3.0 asset prefix plus validated canonical roots and explicit browser-shell routes. | `index: false` for assets; send-level dotfile denial and dot-segment filtering; API misses never fall through to HTML; missing root/index fails startup. |
+| Listener lifecycle | One composition owner for register/ready/listen/readiness/drain/close and reverse-order startup rollback. | No listen before readiness; close is idempotent and attempts every bounded cleanup even when an earlier close step fails. |
+
+The SSE plugin does not own durable replay, high-water/live handoff, subscriber queues, auth, or runtime health. Its direct async-iterable send path is outside the selected contract because `IFC-V1-016` proved that a socket close can leave a backpressured drain wait suspended. Any selected-stack version change reruns the spike probes before implementation or lockfile acceptance.
 
 ## Application Services
 
@@ -166,7 +177,8 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 4. Emit boundary if requested history was pruned, then ordered replay.
 5. Drain queued committed events above high-water and switch to live.
 6. Send heartbeat comments within idle timeout.
-7. On request abort, queue overflow, auth revocation, session archive, or shutdown, unregister immediately and close with bounded reason where possible.
+7. Convert the validated async source to a Node Readable at the SSE adapter boundary; never hand an AsyncIterable directly to the pinned plugin.
+8. On request abort, queue overflow, auth revocation, session archive, or shutdown, abort the source, unregister immediately, finalize the iterator, and close with bounded reason where possible.
 
 ### Runtime Reconnect
 

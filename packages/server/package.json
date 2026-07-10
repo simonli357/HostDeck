@@ -14,10 +14,14 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@fastify/sse": "0.5.0",
+    "@fastify/static": "9.3.0",
     "@hostdeck/codex-adapter": "workspace:*",
     "@hostdeck/contracts": "workspace:*",
     "@hostdeck/core": "workspace:*",
     "@hostdeck/storage": "workspace:*",
-    "@hostdeck/tmux-adapter": "workspace:*"
+    "@hostdeck/tmux-adapter": "workspace:*",
+    "fastify": "5.10.0",
+    "zod": "4.4.3"
   }
 }

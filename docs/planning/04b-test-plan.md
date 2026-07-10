@@ -99,13 +99,13 @@ Permission/lease evidence also proves pure path validation before mutation, mini
 | Pair/rate | Invalid/expired/used codes, per-source rate, global cap, concurrent claim, audit each outcome without secret. |
 | Authorization | Loopback policy, unpaired LAN read, read-only write, locked write, expired/revoked, wrong target, local-admin-only operation. |
 | Limits/timeouts | Oversized headers/body, slow body, request deadline, idle connection, max connections/subscribers, protocol deadline, CLI timeout. |
-| SSE | Initial replay, empty replay, `Last-Event-ID`, explicit cursor, invalid/future/pruned cursor, event during handoff, heartbeat, abort cleanup, queue overflow, auth revoke, shutdown. |
+| SSE | Initial replay, empty replay, `Last-Event-ID`, explicit cursor, invalid/future/pruned cursor, event during handoff, heartbeat, Readable-backed slow-client backpressure, abort/source/iterator cleanup, direct-AsyncIterable regression guard, queue overflow, auth revoke, shutdown. |
 | Lifecycle | Failed startup leaves no listener/lease/socket; readiness updates after runtime/storage/projector failure; shutdown completes with active SSE. |
 | TLS | Trusted configured certificate, unknown CA, expired/not-yet-valid, wrong SAN, weak/invalid key, key permission, renewal/reconfigure, no secret logging. |
 
 Security tests assert both response behavior and side effects: no dispatch, no leaked session data, no success audit, and no credential issuance where rejection is expected.
 
-Fastify evidence is layered: `IFC-V1-020` freezes resource units/defaults/maxima and monotonic deadline ownership before server implementation; `IFC-V1-022` owns global JSON validation/errors/limits by injection; `IFC-V1-023` owns SSE framing, cursor inputs, heartbeat, abort, and source cleanup; `IFC-V1-024` owns static traversal/cache/fallback; `IFC-V1-025` owns real listener/readiness/close ordering. `IFC-V1-034` owns replay/high-water/live continuity, `IFC-V1-035` owns bounded subscriber queues, `IFC-V1-036` and `IFC-V1-037` own mutable health and graceful shutdown, and `IFC-V1-047` to `IFC-V1-052` own the resource/deadline stress layers.
+Fastify evidence is layered: `IFC-V1-016` freezes exact dependencies and proves validation/error, injection/close, SSE negotiation/replay/heartbeat/real-disconnect, and static boundaries in `packages/server/src/fastify-stack.probe.test.ts`. `IFC-V1-020` freezes resource units/defaults/maxima and monotonic deadline ownership before server implementation; `IFC-V1-022` owns global JSON validation/errors/limits by injection; `IFC-V1-023` owns SSE framing, cursor inputs, heartbeat, Readable-only plugin use, abort propagation, source observation, and iterator cleanup; `IFC-V1-024` owns static traversal/dotfile/cache/fallback; `IFC-V1-025` owns real listener/readiness/close ordering. `IFC-V1-034` owns replay/high-water/live continuity, `IFC-V1-035` owns bounded subscriber queues, `IFC-V1-036` and `IFC-V1-037` own mutable health and graceful shutdown, and `IFC-V1-047` to `IFC-V1-052` own the resource/deadline stress layers.
 
 ## UI State Matrix
 
