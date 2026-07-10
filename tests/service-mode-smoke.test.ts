@@ -27,6 +27,7 @@ describe("service-mode CLI smoke", () => {
     const databasePath = join(stateDir, "hostdeck.sqlite");
     const service = await startHostHttpService({
       version: "0.0.0-service-cli-smoke",
+      ...localPaths(),
       stateDir,
       databasePath,
       bindPort: port,
@@ -51,6 +52,7 @@ describe("service-mode CLI smoke", () => {
 
     const restarted = await startHostHttpService({
       version: "0.0.0-service-cli-smoke",
+      ...localPaths(),
       stateDir,
       databasePath,
       bindPort: port,
@@ -74,6 +76,7 @@ describe("service-mode CLI smoke", () => {
     const fakeTmux = createFakeTmuxAdapter({ now: fixedNow });
     const service = await startHostHttpService({
       version: "0.0.0-service-cli-routes",
+      ...localPaths(),
       stateDir,
       databasePath: join(stateDir, "hostdeck.sqlite"),
       bindPort: port,
@@ -203,6 +206,14 @@ function tempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(dir);
   return dir;
+}
+
+function localPaths(): { readonly configDir: string; readonly runtimeDir: string } {
+  const runtimeParent = tempDir("hostdeck-mode-runtime-parent-");
+  return {
+    configDir: tempDir("hostdeck-mode-config-"),
+    runtimeDir: join(runtimeParent, "hostdeck")
+  };
 }
 
 function fixedNow(): Date {

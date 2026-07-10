@@ -46,6 +46,7 @@ The architecture is acceptable for V1 only when all of the following are true:
 | CLI | Commander or an equivalently maintained parser plus a packaged `bin` entry. | Existing custom shell can be adapted only if it meets help, exit-code, and packaging criteria. |
 | UI | React plus Vite and Playwright. | Component contracts, mobile browser implementation, built static assets, and screenshot validation. |
 | Storage | `better-sqlite3` with first-party migrations. | Existing `DEC-014` evidence remains valid. |
+| Daemon lease | Exact `fs-ext` 2.1.1 native binding to Linux `flock(2)`. | Node 22 has no first-party file-lock API; a kernel-held nonblocking descriptor lock releases on process death. Directory/mtime lockfile libraries were rejected because they require stale-owner heuristics instead of providing the selected OS-lock contract. |
 | Service mode | Unprivileged systemd user units on Ubuntu. | Separate app-server and HostDeck ownership, restart policy, logs, and no root requirement. |
 | LAN security | HTTPS-only explicit opt-in with a tested local-certificate enrollment path. | Required by `DEC-020`; exact certificate library/enrollment is selected by `IFC-V1-015` after real phone proof. |
 
@@ -228,24 +229,29 @@ Default paths:
 - State: `${XDG_STATE_HOME:-$HOME/.local/state}/hostdeck`, mode `0700`.
 - Runtime: `$XDG_RUNTIME_DIR/hostdeck`, mode `0700`; startup fails when no secure user runtime is available in service mode.
 - Config: `${XDG_CONFIG_HOME:-$HOME/.config}/hostdeck`, owner-only where it contains sensitive paths/settings.
+- Database: `hostdeck.sqlite` below the state directory, mode `0600`; overrides outside state reject.
+- Daemon lease: `hostdeck.lock` below the state directory, mode `0600`; it is stable and is not deleted for handoff.
 
 A nonblocking OS file lock in the state directory enforces one HostDeck daemon owner. SQLite remains the transactional data owner; the lock is not a substitute for transactions.
+
+The lease prevents cooperating HostDeck daemons from sharing one state directory and is released by the kernel on descriptor/process death. Owner-only permissions isolate other Ubuntu users, but they do not sandbox a malicious process already running as the same uid; release review must not overstate that boundary.
 
 ## Service Lifecycle
 
 ### Startup Order
 
-1. Parse CLI/bootstrap config and resolve canonical paths.
-2. Validate/create owner-only config, state, and runtime directories.
-3. Acquire daemon lease; fail on existing owner.
-4. Open SQLite, verify integrity/version, and run migrations transactionally.
-5. Load settings; validate loopback or LAN HTTPS/origin/certificate policy.
-6. Start or await the mode-owned app-server process/socket.
-7. Complete Codex compatibility handshake.
-8. Reconcile managed session mappings and mark uncertain active projections stale/interrupted.
-9. Subscribe/rebuild bounded projections without starting turns.
-10. Run bounded retention maintenance.
-11. Bind Fastify, register routes/SSE/static assets, and report ready only after required checks pass.
+1. Parse CLI/bootstrap config and purely resolve absolute, non-overlapping paths.
+2. Validate/create only the owner-only state directory and stable lease file.
+3. Acquire the nonblocking daemon lease; fail before other local mutation when an owner exists.
+4. Validate/create owner-only config/runtime/database-parent paths and hold a path-identity guard across SQLite open.
+5. Verify SQLite integrity/version and run migrations transactionally.
+6. Load settings; validate loopback or LAN HTTPS/origin/certificate policy.
+7. Start or await the mode-owned app-server process/socket.
+8. Complete Codex compatibility handshake.
+9. Reconcile managed session mappings and mark uncertain active projections stale/interrupted.
+10. Subscribe/rebuild bounded projections without starting turns.
+11. Run bounded retention maintenance.
+12. Bind Fastify, register routes/SSE/static assets, and report ready only after required checks pass.
 
 ### Shutdown Order
 

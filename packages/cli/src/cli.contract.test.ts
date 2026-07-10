@@ -191,8 +191,8 @@ describe("CLI shell contract", () => {
 
   it("starts and stops the foreground service through the serve command", async () => {
     const calls: unknown[] = [];
-    const result = await runCli(["--port", "4888", "--state-dir", "/tmp/hostdeck-state", "--database", "/tmp/hostdeck.sqlite", "serve"], {
-      env: {},
+    const result = await runCli(["--port", "4888", "--state-dir", "/tmp/hostdeck-state", "--database", "/tmp/hostdeck-state/hostdeck.sqlite", "serve"], {
+      env: { HOME: "/tmp/hostdeck-home", XDG_RUNTIME_DIR: "/tmp/hostdeck-runtime" },
       startService: async (input) => {
         calls.push(input);
         return {
@@ -219,8 +219,10 @@ describe("CLI shell contract", () => {
     expect(calls).toEqual([
       {
         version: "0.0.0",
+        configDir: "/tmp/hostdeck-home/.config/hostdeck",
         stateDir: "/tmp/hostdeck-state",
-        databasePath: "/tmp/hostdeck.sqlite",
+        runtimeDir: "/tmp/hostdeck-runtime/hostdeck",
+        databasePath: "/tmp/hostdeck-state/hostdeck.sqlite",
         bindPort: 4888
       },
       { method: "shutdown" },
@@ -228,11 +230,29 @@ describe("CLI shell contract", () => {
     ]);
   });
 
+  it("rejects service startup without a secure XDG runtime before invoking the service", async () => {
+    let starts = 0;
+    const result = await runCli(["serve"], {
+      env: { HOME: "/tmp/hostdeck-home" },
+      startService: async () => {
+        starts += 1;
+        throw new Error("Service startup must not run without XDG_RUNTIME_DIR.");
+      }
+    });
+
+    expect(result).toMatchObject({
+      exitCode: cliExitCodes.config,
+      stdout: ""
+    });
+    expect(result.stderr).toContain("XDG_RUNTIME_DIR is required");
+    expect(starts).toBe(0);
+  });
+
   it("streams foreground service readiness before shutdown completes", async () => {
     const output: string[] = [];
     let resolveShutdown: (() => void) | undefined;
     const resultPromise = runCli(["--port", "4888", "serve"], {
-      env: {},
+      env: { HOME: "/tmp/hostdeck-home", XDG_RUNTIME_DIR: "/tmp/hostdeck-runtime" },
       startService: async () => ({
         baseUrl: new URL("http://127.0.0.1:4888"),
         startup: {} as never,

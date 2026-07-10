@@ -46,6 +46,7 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | Deterministic fake Codex/session/host fixtures | `packages/test-fixtures/src/` | `packages/test-fixtures/src/fixtures.test.ts`, `pnpm test:unit` |
 | Codex binding/private IPC/thread lifecycle | `packages/codex-adapter/src/` | Adapter unit tests plus `pnpm smoke:codex-compatibility`, `pnpm smoke:codex-ipc`, and `pnpm smoke:codex-threads` |
 | Durable managed-thread saga | `packages/server/src/managed-thread-service.ts` | `packages/server/src/managed-thread-service.test.ts` |
+| Owner-only local paths and daemon lease | `packages/storage/src/secure-local-paths.ts`, `packages/storage/src/daemon-lease.ts`, `packages/server/src/startup.ts` | Storage/startup unit tests plus `tests/daemon-lease.integration.test.ts` |
 | Cross-package contract compatibility | `packages/test-fixtures/src/cross-package.contract.test.ts` | `pnpm test:contract` |
 | Remaining later validation layers | `scripts/not-implemented.mjs` placeholders | Web, E2E, build, and local smoke placeholders fail loudly with owning task IDs |
 

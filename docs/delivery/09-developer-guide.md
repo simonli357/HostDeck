@@ -9,7 +9,7 @@ Owns setup context, environment policy, services, and operational notes.
 | OS target | Ubuntu/Linux local development. V1 release smoke still needs a clean Ubuntu user install/run pass. |
 | Node.js | `22.22.2`, pinned in `.nvmrc` and `package.json` engines. |
 | Package manager | `pnpm 10.29.2`, pinned in `package.json`. |
-| Native build | `@hostdeck/storage` uses `better-sqlite3`; `pnpm-workspace.yaml` allows its build script through `onlyBuiltDependencies`. |
+| Native build | `@hostdeck/storage` uses `better-sqlite3` and exact `fs-ext` 2.1.1; `pnpm-workspace.yaml` allows both native build scripts through `onlyBuiltDependencies`. A normal Ubuntu C/C++/Python `node-gyp` toolchain may be required when cached binaries are unavailable. |
 | Required Codex for selected adapter work | Exact `codex-cli 0.144.0` must be on `PATH`; `HOSTDECK_CODEX_BIN` may name another executable for binding/smoke commands. The reviewed V1 binding uses experimental API for `/plan`. |
 | Tmux | `tmux 3.4` is required for historical smoke and as a test-only terminal emulator for the real exact-thread TUI smoke; it is not the selected production runtime. |
 | Hosted services | None. HostDeck is local-first and stores state locally. |
@@ -21,7 +21,7 @@ corepack enable
 pnpm install --frozen-lockfile
 ```
 
-The frozen install was validated for the current workspace on 2026-07-09. If a previous install skipped the approved native SQLite build, remove `node_modules/` and rerun the frozen install.
+The frozen offline install and native lease rebuild were validated for the current workspace on 2026-07-09. If a previous install skipped an approved native build, remove `node_modules/` and rerun the frozen install.
 
 ## Development Commands
 
@@ -58,6 +58,9 @@ Default local configuration:
 | API port | `3777` |
 | State directory | `${XDG_STATE_HOME}/hostdeck` when `XDG_STATE_HOME` is set, otherwise `~/.local/state/hostdeck` |
 | SQLite database | `hostdeck.sqlite` inside the state directory |
+| Runtime directory | `$XDG_RUNTIME_DIR/hostdeck`; `serve` rejects when `XDG_RUNTIME_DIR` is missing, relative, non-canonical, wrongly owned, or not mode `0700` |
+| Config directory | `${XDG_CONFIG_HOME}/hostdeck` when set, otherwise `~/.config/hostdeck` |
+| Daemon lease | `hostdeck.lock` inside the state directory; one nonblocking Linux owner per state directory |
 | Config file | Optional JSON file passed with `--config` |
 
 Supported config inputs:
@@ -75,7 +78,8 @@ Supported config inputs:
 `codexdeck serve` is the intended foreground daemon command once the runnable binary path exists. The service code currently:
 
 - opens the configured local SQLite database and runs migrations;
-- validates state directory usability, settings, network bind, tmux discovery, and restart reconciliation before reporting ready;
+- resolves absolute non-overlapping local paths, acquires the state lease before config/runtime/database mutation, and enforces `0700` directories plus `0600` database/lease files;
+- validates settings, network bind, tmux discovery, and restart reconciliation before reporting ready;
 - binds localhost by default on port `3777`;
 - exposes registered HTTP route families for host status, sessions, output replay/stream, writes, pairing, security, and network state;
 - keeps local-admin CLI writes limited to loopback non-browser requests;
@@ -102,6 +106,8 @@ Long-running service wrapping is not implemented yet. Use foreground mode during
 | `missing_binary` during session start | External Codex CLI is not on `PATH`. | Session start fails before durable success is recorded. |
 | Thread/TUI smoke stops at authentication | Installed Codex has no private regular `auth.json` or its login is stale. | Smoke fails before claiming exact TUI evidence and removes its temporary state. |
 | Invalid state directory or database path | Path is missing, unreadable, or migration fails. | Startup or local-admin command fails loudly with typed config/storage errors. |
+| `XDG_RUNTIME_DIR is required` | Service mode has no secure per-user runtime directory. | `serve` exits with the config error family before service startup. |
+| Another daemon owns the state directory | A HostDeck process already holds `hostdeck.lock`. | The second process exits before creating config/runtime paths, opening SQLite, or binding a listener. |
 | Duplicate bind port | Another process already owns the configured port. | Startup fails before reporting ready. |
 | Placeholder scripts fail | E2E, build, or release smoke is not implemented yet. | Script exits nonzero with the owning future task ID. |
 
@@ -110,5 +116,6 @@ Long-running service wrapping is not implemented yet. Use foreground mode during
 - Service/API hardening: `artifacts/ifc-v1-090-api-cli-hardening.md`.
 - Foreground service smoke: `artifacts/ifc-v1-012-service-mode-smoke.md`.
 - Network bind smoke: `artifacts/ifc-v1-011-network-smoke.md`.
+- Owner-only paths and daemon lease: `artifacts/dat-v1-019-secure-paths-daemon-lease.md`.
 - Real tmux smoke: `artifacts/int-v1-016-real-tmux-smoke.md`.
 - Release validation wiring: `artifacts/rel-v1-001-validation-wiring.md`.

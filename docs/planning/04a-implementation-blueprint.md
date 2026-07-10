@@ -121,16 +121,19 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 
 ### Startup
 
-1. Resolve paths/config and acquire owner-only daemon lease.
-2. Open/migrate storage and validate settings/certificates.
-3. Start or await mode-owned app-server and private socket.
-4. Complete compatibility handshake and start adapter reader.
-5. Load managed mappings and reconcile each against `thread/read`/list.
-6. Mark uncertain prior active states interrupted/stale; never infer running from persistence alone.
-7. Subscribe to managed thread events and rebuild bounded projections where supported.
-8. Run due retention and initialize live health.
-9. Start Fastify HTTPS/HTTP listener, routes, SSE, and static assets.
-10. Report ready only when required dependencies are current.
+1. Purely resolve and validate absolute, non-overlapping config/state/runtime paths plus an in-state database path. Derive the stable lease and app-server socket paths before filesystem mutation.
+2. Create/inspect only the owner-owned mode-`0700` state directory and stable mode-`0600` lease file with no-follow, owner/type/hard-link, and descriptor/path-identity checks.
+3. Acquire a nonblocking exclusive `flock(2)` lease. A held lease fails before config/runtime/database/listener/socket/app-server mutation; an unlocked stale file is reused, never unlinked for handoff.
+4. The lease owner creates/repairs the mode-`0700` config, runtime, and database-parent directories, then holds a validated database descriptor across SQLite open/migration and rechecks identity/mode before releasing the guard.
+5. Validate settings/certificates.
+6. Start or await mode-owned app-server and private socket.
+7. Complete compatibility handshake and start adapter reader.
+8. Load managed mappings and reconcile each against `thread/read`/list.
+9. Mark uncertain prior active states interrupted/stale; never infer running from persistence alone.
+10. Subscribe to managed thread events and rebuild bounded projections where supported.
+11. Run due retention and initialize live health.
+12. Start Fastify HTTPS/HTTP listener, routes, SSE, and static assets.
+13. Report ready only when required dependencies are current. Every failure after lease acquisition closes mutable resources and releases the lease in reverse order.
 
 ### Prompt Or Structured Control
 

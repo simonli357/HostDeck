@@ -1,7 +1,6 @@
-import { constants as fsConstants } from "node:fs";
-import { access, mkdir, stat } from "node:fs/promises";
+import { closeSync } from "node:fs";
 import { createServer } from "node:net";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import {
   type ApiErrorEnvelope,
   type HostStatusResponse,
@@ -9,12 +8,23 @@ import {
 } from "@hostdeck/contracts";
 import { createErrorEnvelope, type ErrorCode, parseIsoTimestamp } from "@hostdeck/core";
 import {
+  acquireHostDeckDaemonLease,
   createSessionRepository,
   createSettingsRepository,
+  type HostDeckDaemonLease,
+  HostDeckDaemonLeaseError,
+  HostDeckLocalPathError,
   HostDeckMigrationError,
   HostDeckSettingsError,
+  type OpenedSecureHostDeckRegularFile,
   type OpenMigratedDatabaseOptions,
   openMigratedDatabase,
+  openSecureHostDeckRegularFile,
+  type PreparedHostDeckLocalPaths,
+  prepareHostDeckDaemonLeasePath,
+  prepareHostDeckLocalPathsAfterLease,
+  type ResolvedHostDeckLocalPaths,
+  resolveHostDeckLocalPaths,
   type SessionRepository,
   type SettingsRepository
 } from "@hostdeck/storage";
@@ -31,6 +41,8 @@ import {
 } from "./restart-reconciler.js";
 
 export type HostStartupErrorCode =
+  | "daemon_lease_failed"
+  | "daemon_lease_held"
   | "invalid_state_dir"
   | "migration_failed"
   | "invalid_settings"
@@ -55,20 +67,32 @@ export class HostDeckStartupError extends Error {
 type OpenMigratedDatabaseResult = ReturnType<typeof openMigratedDatabase>;
 type OpenDatabase = (path: string, options: OpenMigratedDatabaseOptions) => OpenMigratedDatabaseResult;
 type NetworkBindCheck = (bind: HostStatusResponse["bind"]) => Promise<void> | void;
+type AcquireDaemonLease = typeof acquireHostDeckDaemonLease;
 type HealthCheck = HostStatusResponse["storage"];
 type StartupCheck = HostStatusResponse["startup_checks"][number];
-type StartupCheckName = "state_dir" | "storage_migrations" | "settings" | "network_bind" | "tmux" | "registry_reconciliation";
+type StartupCheckName =
+  | "state_dir"
+  | "daemon_lease"
+  | "local_paths"
+  | "database_file"
+  | "storage_migrations"
+  | "settings"
+  | "network_bind"
+  | "tmux"
+  | "registry_reconciliation";
 type StartupHealthState = HealthCheck["state"];
 
 export interface StartHostAgentInput {
   readonly version: string;
+  readonly configDir: string;
   readonly stateDir: string;
+  readonly runtimeDir: string;
   readonly databasePath?: string;
   readonly bindPort?: number;
   readonly tmuxBinary?: string;
   readonly tmuxSocketName?: string;
   readonly now?: () => Date;
-  readonly ensureStateDirectory?: (stateDir: string) => Promise<void> | void;
+  readonly acquireDaemonLease?: AcquireDaemonLease;
   readonly openDatabase?: OpenDatabase;
   readonly checkNetworkBind?: NetworkBindCheck;
   readonly discovery?: RealTmuxTargetDiscovery;
@@ -82,6 +106,7 @@ export interface HostStartupResult {
   readonly sessions: SessionRepository;
   readonly migrations: OpenMigratedDatabaseResult["result"];
   readonly reconciliation: RestartReconcileResult;
+  readonly paths: PreparedHostDeckLocalPaths;
   readonly close: () => void;
 }
 
@@ -91,8 +116,10 @@ const maxDetailsValueLength = 256;
 
 export async function startHostAgent(input: StartHostAgentInput): Promise<HostStartupResult> {
   const now = input.now ?? (() => new Date());
-  const stateDir = normalizedStateDir(input.stateDir);
-  const databasePath = resolve(input.databasePath ?? join(stateDir, databaseFileName));
+  const stateDir = input.stateDir;
+  const configDir = input.configDir;
+  const runtimeDir = input.runtimeDir;
+  const databasePath = input.databasePath ?? join(stateDir, databaseFileName);
   const openDatabase = input.openDatabase ?? openMigratedDatabase;
   const checkedAt = () => now().toISOString();
   const startupChecks: StartupCheck[] = [];
@@ -108,6 +135,10 @@ export async function startHostAgent(input: StartHostAgentInput): Promise<HostSt
   let tmux = health("unknown", "tmux has not been checked.", checkedAt());
   let stream = health("unknown", "Output stream readers have not been checked.", checkedAt());
   let opened: OpenMigratedDatabaseResult | null = null;
+  let databaseGuard: OpenedSecureHostDeckRegularFile | null = null;
+  let resolvedPaths: ResolvedHostDeckLocalPaths | null = null;
+  let preparedPaths: PreparedHostDeckLocalPaths | null = null;
+  let lease: HostDeckDaemonLease | null = null;
 
   function status(lastError: ApiErrorEnvelope | null, checks: readonly StartupCheck[] = startupChecks): HostStatusResponse {
     return hostStatusResponseSchema.parse({
@@ -133,8 +164,10 @@ export async function startHostAgent(input: StartHostAgentInput): Promise<HostSt
     readonly field?: string;
     readonly details?: Readonly<Record<string, unknown>>;
   }): never {
-    closeOpenedDatabase(opened);
+    const cleanupErrors = closeStartupResources(opened, databaseGuard, lease);
     opened = null;
+    databaseGuard = null;
+    lease = null;
 
     const apiError = apiErrorEnvelope({
       code: failure.errorCode,
@@ -144,34 +177,115 @@ export async function startHostAgent(input: StartHostAgentInput): Promise<HostSt
     });
     const failedChecks = [...startupChecks, startupCheck(failure.checkName, "error", apiError.message)];
 
-    throw new HostDeckStartupError(failure.startupCode, status(apiError, failedChecks), apiError.message, {
-      cause: failure.cause
-    });
+    const cause = cleanupErrors.length === 0 ? failure.cause : new AggregateError([failure.cause, ...cleanupErrors], "Startup and cleanup failed.");
+    throw new HostDeckStartupError(failure.startupCode, status(apiError, failedChecks), apiError.message, { cause });
   }
 
   try {
-    if (stateDir.length === 0) {
-      throw new Error("State directory is required.");
-    }
-
-    await (input.ensureStateDirectory ?? ensureUsableStateDirectory)(stateDir);
-    startupChecks.push(startupCheck("state_dir", "ok", "State directory is usable."));
+    resolvedPaths = resolveHostDeckLocalPaths({
+      config_dir: configDir,
+      state_dir: stateDir,
+      runtime_dir: runtimeDir,
+      database_path: databasePath
+    });
+    const repairs = prepareHostDeckDaemonLeasePath(resolvedPaths);
+    preparedPaths = Object.freeze({ ...resolvedPaths, repairs });
+    startupChecks.push(
+      startupCheck(
+        "state_dir",
+        "ok",
+        preparedPaths.repairs.length === 0
+          ? "Owner-only state and lease paths are current."
+          : `Owner-only state and lease paths repaired ${preparedPaths.repairs.length} mode entr${preparedPaths.repairs.length === 1 ? "y" : "ies"}.`
+      )
+    );
   } catch (error) {
+    const path = error instanceof HostDeckLocalPathError ? error.path : stateDir;
     fail({
       startupCode: "invalid_state_dir",
       errorCode: "invalid_config",
       checkName: "state_dir",
-      message: `HostDeck state directory is not usable: ${stateDir}.`,
+      message: "HostDeck owner-only local paths are not usable.",
       cause: error,
       field: "state_dir",
-      details: { state_dir: stateDir }
+      details: { state_dir: stateDir, path: path ?? "unknown" }
     });
   }
 
   try {
-    opened = openDatabase(databasePath, { now });
-    storage = health("ok", `SQLite migrations current at ${opened.result.currentVersion}.`, checkedAt());
-    startupChecks.push(startupCheck("storage_migrations", "ok", migrationMessage(opened.result)));
+    lease = (input.acquireDaemonLease ?? acquireHostDeckDaemonLease)({ lease_path: preparedPaths.lease_path, now });
+    if (lease.mode_repair !== null) preparedPaths = appendPathRepair(preparedPaths, lease.mode_repair);
+    startupChecks.push(
+      startupCheck(
+        "daemon_lease",
+        "ok",
+        lease.replaced_stale_metadata ? "Daemon lease acquired and stale metadata replaced." : "Daemon lease acquired."
+      )
+    );
+  } catch (error) {
+    const held = error instanceof HostDeckDaemonLeaseError && error.code === "lease_held";
+    fail({
+      startupCode: held ? "daemon_lease_held" : "daemon_lease_failed",
+      errorCode: held ? "operation_conflict" : "invalid_config",
+      checkName: "daemon_lease",
+      message: held ? "Another HostDeck daemon already owns this state directory." : "HostDeck daemon lease could not be acquired.",
+      cause: error,
+      field: "state_dir",
+      details: { lease_path: preparedPaths.lease_path }
+    });
+  }
+
+  try {
+    const postLeasePaths = prepareHostDeckLocalPathsAfterLease(resolvedPaths);
+    const repairedCount = postLeasePaths.repairs.length;
+    preparedPaths = Object.freeze({
+      ...postLeasePaths,
+      repairs: Object.freeze([...preparedPaths.repairs, ...postLeasePaths.repairs])
+    });
+    startupChecks.push(
+      startupCheck(
+        "local_paths",
+        "ok",
+        repairedCount === 0
+          ? "Owner-only config, runtime, and database-parent paths are current."
+          : `Owner-only config, runtime, and database-parent paths repaired ${repairedCount} mode entr${repairedCount === 1 ? "y" : "ies"}.`
+      )
+    );
+  } catch (error) {
+    const path = error instanceof HostDeckLocalPathError ? error.path : null;
+    fail({
+      startupCode: "invalid_state_dir",
+      errorCode: "invalid_config",
+      checkName: "local_paths",
+      message: "HostDeck owner-only config, runtime, or database-parent paths are not usable.",
+      cause: error,
+      field: "local_paths",
+      details: { path: path ?? "unknown" }
+    });
+  }
+
+  try {
+    databaseGuard = openSecureHostDeckRegularFile(preparedPaths.database_path, {
+      label: "database",
+      mode: 0o600,
+      create: true,
+      repair_mode: true
+    });
+    if (databaseGuard.repair !== null) preparedPaths = appendPathRepair(preparedPaths, databaseGuard.repair);
+  } catch (error) {
+    fail({
+      startupCode: "invalid_state_dir",
+      errorCode: "invalid_config",
+      checkName: "database_file",
+      message: "HostDeck database path is not secure.",
+      cause: error,
+      field: "database_path",
+      details: { database_path: preparedPaths.database_path }
+    });
+  }
+
+  try {
+    opened = openDatabase(preparedPaths.database_path, { now });
   } catch (error) {
     storage = health("error", migrationFailureMessage(error), checkedAt());
     fail({
@@ -180,9 +294,37 @@ export async function startHostAgent(input: StartHostAgentInput): Promise<HostSt
       checkName: "storage_migrations",
       message: migrationFailureMessage(error),
       cause: error,
-      details: migrationFailureDetails(databasePath, error)
+      details: migrationFailureDetails(preparedPaths.database_path, error)
     });
   }
+
+  try {
+    databaseGuard.verifyPath();
+    const repair = databaseGuard.repair;
+    closeSync(databaseGuard.descriptor);
+    databaseGuard = null;
+    startupChecks.push(
+      startupCheck(
+        "database_file",
+        "ok",
+        repair === null ? "Database file ownership and mode are secure." : "Database file mode was repaired to 0600."
+      )
+    );
+  } catch (error) {
+    storage = health("error", "HostDeck database path changed or became insecure during open.", checkedAt());
+    fail({
+      startupCode: "invalid_state_dir",
+      errorCode: "invalid_config",
+      checkName: "database_file",
+      message: "HostDeck database path changed or became insecure during open.",
+      cause: error,
+      field: "database_path",
+      details: { database_path: preparedPaths.database_path }
+    });
+  }
+
+  storage = health("ok", `SQLite migrations current at ${opened.result.currentVersion}.`, checkedAt());
+  startupChecks.push(startupCheck("storage_migrations", "ok", migrationMessage(opened.result)));
 
   const settings = createSettingsRepository(opened.db);
   const sessions = createSessionRepository(opened.db);
@@ -275,6 +417,9 @@ export async function startHostAgent(input: StartHostAgentInput): Promise<HostSt
       stale_session_count: staleSessionCount
     });
 
+    let closed = false;
+    const ownedLease = lease;
+    const ownedOpened = opened;
     return {
       status: readyStatus,
       db: opened.db,
@@ -282,8 +427,12 @@ export async function startHostAgent(input: StartHostAgentInput): Promise<HostSt
       sessions,
       migrations: opened.result,
       reconciliation,
+      paths: preparedPaths,
       close() {
-        opened?.db.close();
+        if (closed) return;
+        closed = true;
+        const cleanupErrors = closeStartupResources(ownedOpened, null, ownedLease);
+        if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, "HostDeck startup resources did not close cleanly.");
       }
     };
   } catch (error) {
@@ -316,17 +465,6 @@ export function isHostReady(status: HostStatusResponse): boolean {
     status.startup_checks.length > 0 &&
     status.startup_checks.every((check) => check.state === "ok")
   );
-}
-
-async function ensureUsableStateDirectory(stateDir: string): Promise<void> {
-  await mkdir(stateDir, { recursive: true });
-  const stats = await stat(stateDir);
-
-  if (!stats.isDirectory()) {
-    throw new Error(`${stateDir} is not a directory.`);
-  }
-
-  await access(stateDir, fsConstants.R_OK | fsConstants.W_OK | fsConstants.X_OK);
 }
 
 function missingOutputReader(target: TmuxTarget): never {
@@ -367,22 +505,19 @@ function checkNetworkBindAvailability(bind: HostStatusResponse["bind"]): Promise
   });
 }
 
-function normalizedStateDir(stateDir: string): string {
-  const trimmed = stateDir.trim();
-
-  if (trimmed.length === 0) {
-    return "";
-  }
-
-  return resolve(trimmed);
-}
-
 function health(state: StartupHealthState, message: string, checkedAt: string): HealthCheck {
   return {
     state,
     message: boundedMessage(message),
     checked_at: parseRequiredIsoTimestamp(checkedAt)
   };
+}
+
+function appendPathRepair(paths: PreparedHostDeckLocalPaths, repair: PreparedHostDeckLocalPaths["repairs"][number]): PreparedHostDeckLocalPaths {
+  return Object.freeze({
+    ...paths,
+    repairs: Object.freeze([...paths.repairs, Object.freeze(repair)])
+  });
 }
 
 function startupCheck(name: StartupCheckName, state: StartupHealthState, message: string): StartupCheck {
@@ -553,12 +688,28 @@ function boundedDetails(details: Readonly<Record<string, unknown>>): Readonly<Re
   return bounded;
 }
 
-function closeOpenedDatabase(opened: OpenMigratedDatabaseResult | null): void {
+function closeStartupResources(
+  opened: OpenMigratedDatabaseResult | null,
+  databaseGuard: OpenedSecureHostDeckRegularFile | null,
+  lease: HostDeckDaemonLease | null
+): unknown[] {
+  const errors: unknown[] = [];
   try {
     opened?.db.close();
-  } catch {
-    // Startup is already failing; close errors are not actionable at this layer.
+  } catch (error) {
+    errors.push(error);
   }
+  try {
+    if (databaseGuard !== null) closeSync(databaseGuard.descriptor);
+  } catch (error) {
+    errors.push(error);
+  }
+  try {
+    lease?.release();
+  } catch (error) {
+    errors.push(error);
+  }
+  return errors;
 }
 
 function parseRequiredIsoTimestamp(value: string) {

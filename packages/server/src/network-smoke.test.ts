@@ -23,6 +23,7 @@ describe("localhost and LAN network smoke", () => {
     const port = await getAvailablePort("127.0.0.1");
     const result = await startHostAgent({
       version: "0.0.0-network-smoke",
+      ...localPaths(),
       stateDir: tempDir("hostdeck-network-state-"),
       bindPort: port,
       discovery: emptyDiscovery(),
@@ -53,6 +54,7 @@ describe("localhost and LAN network smoke", () => {
     const databasePath = join(stateDir, "hostdeck.sqlite");
     const localhost = await startHostAgent({
       version: "0.0.0-network-smoke",
+      ...localPaths(),
       stateDir,
       databasePath,
       bindPort: port,
@@ -77,6 +79,7 @@ describe("localhost and LAN network smoke", () => {
 
     const lan = await startHostAgent({
       version: "0.0.0-network-smoke",
+      ...localPaths(),
       stateDir,
       databasePath,
       discovery: emptyDiscovery(),
@@ -100,6 +103,7 @@ describe("localhost and LAN network smoke", () => {
 
     const lanOff = await startHostAgent({
       version: "0.0.0-network-smoke",
+      ...localPaths(),
       stateDir,
       databasePath,
       discovery: emptyDiscovery(),
@@ -125,6 +129,7 @@ describe("localhost and LAN network smoke", () => {
     const invalidPortError = await expectStartupFailure(
       startHostAgent({
         version: "0.0.0-network-smoke",
+        ...localPaths(),
         stateDir: tempDir("hostdeck-network-state-"),
         bindPort: 0,
         discovery: emptyDiscovery(),
@@ -151,6 +156,7 @@ describe("localhost and LAN network smoke", () => {
       const duplicatePortError = await expectStartupFailure(
         startHostAgent({
           version: "0.0.0-network-smoke",
+          ...localPaths(),
           stateDir: tempDir("hostdeck-network-state-"),
           bindPort: port,
           discovery: emptyDiscovery(),
@@ -279,6 +285,14 @@ function tempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(dir);
   return dir;
+}
+
+function localPaths(): { readonly configDir: string; readonly runtimeDir: string } {
+  const runtimeParent = tempDir("hostdeck-network-runtime-parent-");
+  return {
+    configDir: tempDir("hostdeck-network-config-"),
+    runtimeDir: join(runtimeParent, "hostdeck")
+  };
 }
 
 function fixedNow(): Date {

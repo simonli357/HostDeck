@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { configFailure } from "./errors.js";
 
 export interface CliConfigFlags {
@@ -15,7 +15,9 @@ export interface CliConfigFlags {
 export interface CliConfig {
   readonly baseUrl: URL;
   readonly source: string;
+  readonly configDir: string;
   readonly stateDir: string;
+  readonly runtimeDir: string | null;
   readonly databasePath: string;
 }
 
@@ -65,12 +67,17 @@ export function loadCliConfig(options: LoadCliConfigOptions = {}): CliConfig {
     options.cwd,
     "database_path"
   );
+  assertDatabaseInsideState(databasePath, stateDir);
+  const configDir = defaultConfigDir(env);
+  const runtimeDir = defaultRuntimeDir(env);
 
   if (baseUrl !== undefined) {
     return {
       baseUrl: normalizeBaseUrl(parseBaseUrl(baseUrl, sourceOf(["--api-url", flagBaseUrl], ["HOSTDECK_API_BASE_URL", envBaseUrl], ["config api_url", fileBaseUrl]))),
       source: sourceOf(["--api-url", flagBaseUrl], ["HOSTDECK_API_BASE_URL", envBaseUrl], ["config api_url", fileBaseUrl]),
+      configDir,
       stateDir,
+      runtimeDir,
       databasePath
     };
   }
@@ -84,7 +91,9 @@ export function loadCliConfig(options: LoadCliConfigOptions = {}): CliConfig {
   return {
     baseUrl: new URL(`http://${host}:${port}`),
     source: flags.configPath === undefined ? "defaults/env/flags" : resolveConfigPath(flags.configPath, options.cwd),
+    configDir,
     stateDir,
+    runtimeDir,
     databasePath
   };
 }
@@ -212,13 +221,13 @@ function resolveStoragePath(path: string, cwd = process.cwd(), field: string): s
 }
 
 function defaultStateDir(env: Readonly<Record<string, string | undefined>>): string {
-  const xdgStateHome = readOptionalPath(env.XDG_STATE_HOME);
+  const xdgStateHome = readOptionalAbsolutePath(env.XDG_STATE_HOME, "XDG_STATE_HOME");
 
   if (xdgStateHome !== undefined) {
     return join(xdgStateHome, "hostdeck");
   }
 
-  const home = readOptionalPath(env.HOME) ?? readOptionalPath(homedir());
+  const home = readOptionalAbsolutePath(env.HOME, "HOME") ?? readOptionalAbsolutePath(homedir(), "home directory");
 
   if (home === undefined) {
     throw configFailure("HOSTDECK_STATE_DIR is required when no home directory is available.", "state_dir");
@@ -227,13 +236,35 @@ function defaultStateDir(env: Readonly<Record<string, string | undefined>>): str
   return join(home, ".local", "state", "hostdeck");
 }
 
-function readOptionalPath(value: unknown): string | undefined {
+function assertDatabaseInsideState(databasePath: string, stateDir: string): void {
+  const candidate = relative(stateDir, databasePath);
+  if (candidate.length === 0 || candidate === ".." || candidate.startsWith(`..${sep}`) || isAbsolute(candidate)) {
+    throw configFailure("database_path must be inside state_dir.", "database_path");
+  }
+}
+
+function defaultConfigDir(env: Readonly<Record<string, string | undefined>>): string {
+  const xdgConfigHome = readOptionalAbsolutePath(env.XDG_CONFIG_HOME, "XDG_CONFIG_HOME");
+  if (xdgConfigHome !== undefined) return join(xdgConfigHome, "hostdeck");
+  const home = readOptionalAbsolutePath(env.HOME, "HOME") ?? readOptionalAbsolutePath(homedir(), "home directory");
+  if (home === undefined) throw configFailure("HOME or XDG_CONFIG_HOME is required to resolve HostDeck config.", "config_dir");
+  return join(home, ".config", "hostdeck");
+}
+
+function defaultRuntimeDir(env: Readonly<Record<string, string | undefined>>): string | null {
+  const xdgRuntimeDir = readOptionalAbsolutePath(env.XDG_RUNTIME_DIR, "XDG_RUNTIME_DIR");
+  return xdgRuntimeDir === undefined ? null : join(xdgRuntimeDir, "hostdeck");
+}
+
+function readOptionalAbsolutePath(value: unknown, source: string): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
 
   const trimmed = value.trim();
-  return trimmed.length === 0 ? undefined : trimmed;
+  if (trimmed.length === 0) return undefined;
+  if (!isAbsolute(trimmed)) throw configFailure(`${source} must be an absolute path.`, source);
+  return resolve(trimmed);
 }
 
 function sourceOf(...candidates: readonly [string, unknown][]): string {

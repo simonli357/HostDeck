@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { StorageSessionRecord } from "@hostdeck/contracts";
@@ -29,6 +29,39 @@ afterEach(() => {
 });
 
 describe("host startup", () => {
+  it("repairs and reports real startup path modes before ready", async () => {
+    const stateDir = tempDir("hostdeck-startup-mode-state-");
+    const configDir = tempDir("hostdeck-startup-mode-config-");
+    const runtimeParent = tempDir("hostdeck-startup-mode-runtime-parent-");
+    const runtimeDir = join(runtimeParent, "hostdeck");
+    const databasePath = join(stateDir, "hostdeck.sqlite");
+    writeFileSync(databasePath, "", { mode: 0o644 });
+    chmodSync(stateDir, 0o755);
+    chmodSync(configDir, 0o750);
+    chmodSync(databasePath, 0o644);
+
+    const result = await startHostAgent({
+      version: "0.0.0-test",
+      configDir,
+      stateDir,
+      runtimeDir,
+      databasePath,
+      checkNetworkBind: noopNetworkBindCheck,
+      discovery: emptyDiscovery(),
+      now: fixedNow
+    });
+    result.close();
+
+    expect(new Set(result.paths.repairs.map((repair) => repair.path))).toEqual(
+      new Set([stateDir, configDir, databasePath])
+    );
+    expect(fileMode(stateDir)).toBe(0o700);
+    expect(fileMode(configDir)).toBe(0o700);
+    expect(fileMode(runtimeDir)).toBe(0o700);
+    expect(fileMode(databasePath)).toBe(0o600);
+    expect(fileMode(join(stateDir, "hostdeck.lock"))).toBe(0o600);
+  });
+
   it("reports ready only after storage, settings, tmux, reconciliation, and reader checks pass", async () => {
     const stateDir = tempDir("hostdeck-startup-state-");
     const databasePath = join(stateDir, "hostdeck.sqlite");
@@ -45,6 +78,7 @@ describe("host startup", () => {
       const readerStarts: string[] = [];
       const result = await startHostAgent({
         version: "0.0.0-test",
+        ...localPaths(),
         stateDir,
         databasePath,
         checkNetworkBind: noopNetworkBindCheck,
@@ -82,6 +116,9 @@ describe("host startup", () => {
         });
         expect(result.status.startup_checks.map((check) => [check.name, check.state])).toEqual([
           ["state_dir", "ok"],
+          ["daemon_lease", "ok"],
+          ["local_paths", "ok"],
+          ["database_file", "ok"],
           ["storage_migrations", "ok"],
           ["settings", "ok"],
           ["network_bind", "ok"],
@@ -108,10 +145,13 @@ describe("host startup", () => {
   });
 
   it("fails before ready when tmux is missing", async () => {
+    const stateDir = tempDir("hostdeck-startup-state-");
+    const paths = localPaths();
     const error = await expectStartupFailure(
       startHostAgent({
         version: "0.0.0-test",
-        stateDir: tempDir("hostdeck-startup-state-"),
+        ...paths,
+        stateDir,
         tmuxBinary: join(tempDir("hostdeck-missing-tmux-"), "missing-tmux"),
         checkNetworkBind: noopNetworkBindCheck,
         now: fixedNow
@@ -127,6 +167,135 @@ describe("host startup", () => {
       last_error: { code: "missing_binary", field: "tmux" }
     });
     expect(error.status.startup_checks.at(-1)).toMatchObject({ name: "tmux", state: "error" });
+
+    const recovered = await startHostAgent({
+      version: "0.0.0-test",
+      ...paths,
+      stateDir,
+      checkNetworkBind: noopNetworkBindCheck,
+      discovery: emptyDiscovery(),
+      now: fixedNow
+    });
+    recovered.close();
+  });
+
+  it("rejects a second daemon before database or bind mutation and releases on idempotent close", async () => {
+    const stateDir = tempDir("hostdeck-startup-lease-state-");
+    const paths = localPaths();
+    const first = await startHostAgent({
+      version: "0.0.0-test",
+      ...paths,
+      stateDir,
+      checkNetworkBind: noopNetworkBindCheck,
+      discovery: emptyDiscovery(),
+      now: fixedNow
+    });
+    let openCalls = 0;
+    let bindCalls = 0;
+    const secondRoot = tempDir("hostdeck-startup-second-owner-root-");
+    const secondRuntimeParent = tempDir("hostdeck-startup-second-owner-runtime-parent-");
+    const secondConfigDir = join(secondRoot, "config");
+    const secondRuntimeDir = join(secondRuntimeParent, "hostdeck");
+    try {
+      const error = await expectStartupFailure(
+        startHostAgent({
+          version: "0.0.0-test",
+          configDir: secondConfigDir,
+          runtimeDir: secondRuntimeDir,
+          stateDir,
+          openDatabase() {
+            openCalls += 1;
+            throw new Error("Database must not open for a second daemon.");
+          },
+          checkNetworkBind() {
+            bindCalls += 1;
+          },
+          discovery: emptyDiscovery(),
+          now: fixedNow
+        })
+      );
+      expect(error).toMatchObject({ code: "daemon_lease_held" });
+      expect(error.status.startup_checks.at(-1)).toMatchObject({ name: "daemon_lease", state: "error" });
+      expect(openCalls).toBe(0);
+      expect(bindCalls).toBe(0);
+      expect(() => lstatSync(secondConfigDir)).toThrow();
+      expect(() => lstatSync(secondRuntimeDir)).toThrow();
+    } finally {
+      first.close();
+      first.close();
+    }
+
+    const restarted = await startHostAgent({
+      version: "0.0.0-test",
+      ...paths,
+      stateDir,
+      checkNetworkBind: noopNetworkBindCheck,
+      discovery: emptyDiscovery(),
+      now: laterNow
+    });
+    restarted.close();
+  });
+
+  it("rejects relative programmatic paths before database startup", async () => {
+    let openCalls = 0;
+    const error = await expectStartupFailure(
+      startHostAgent({
+        version: "0.0.0-test",
+        ...localPaths(),
+        stateDir: "relative-state",
+        openDatabase() {
+          openCalls += 1;
+          throw new Error("Database must not open for relative paths.");
+        },
+        now: fixedNow
+      })
+    );
+
+    expect(error).toMatchObject({ code: "invalid_state_dir" });
+    expect(error.status.startup_checks).toEqual([
+      expect.objectContaining({ name: "state_dir", state: "error" })
+    ]);
+    expect(openCalls).toBe(0);
+  });
+
+  it("detects database path substitution across SQLite open and releases the lease", async () => {
+    const stateDir = tempDir("hostdeck-startup-substitution-state-");
+    const databasePath = join(stateDir, "hostdeck.sqlite");
+    const movedPath = join(stateDir, "hostdeck.sqlite.opened");
+    const paths = localPaths();
+    const error = await expectStartupFailure(
+      startHostAgent({
+        version: "0.0.0-test",
+        ...paths,
+        stateDir,
+        databasePath,
+        checkNetworkBind: noopNetworkBindCheck,
+        discovery: emptyDiscovery(),
+        now: fixedNow,
+        openDatabase(path, options) {
+          const opened = openMigratedDatabase(path, options);
+          renameSync(path, movedPath);
+          writeFileSync(path, "replacement", { mode: 0o600 });
+          return opened;
+        }
+      })
+    );
+
+    expect(error).toMatchObject({ code: "invalid_state_dir" });
+    expect(error.status.startup_checks.at(-1)).toMatchObject({ name: "database_file", state: "error" });
+
+    rmSync(databasePath);
+    renameSync(movedPath, databasePath);
+    const recovered = await startHostAgent({
+      version: "0.0.0-test",
+      ...paths,
+      stateDir,
+      databasePath,
+      checkNetworkBind: noopNetworkBindCheck,
+      discovery: emptyDiscovery(),
+      now: laterNow
+    });
+    recovered.close();
   });
 
   it("fails before storage when the state directory is invalid", async () => {
@@ -135,6 +304,7 @@ describe("host startup", () => {
     const error = await expectStartupFailure(
       startHostAgent({
         version: "0.0.0-test",
+        ...localPaths(),
         stateDir: filePath,
         now: fixedNow
       })
@@ -156,6 +326,7 @@ describe("host startup", () => {
     const error = await expectStartupFailure(
       startHostAgent({
         version: "0.0.0-test",
+        ...localPaths(),
         stateDir: tempDir("hostdeck-startup-state-"),
         bindPort: 0,
         checkNetworkBind: noopNetworkBindCheck,
@@ -178,6 +349,7 @@ describe("host startup", () => {
     const error = await expectStartupFailure(
       startHostAgent({
         version: "0.0.0-test",
+        ...localPaths(),
         stateDir: tempDir("hostdeck-startup-state-"),
         now: fixedNow,
         openDatabase() {
@@ -207,6 +379,7 @@ describe("host startup", () => {
       const error = await expectStartupFailure(
         startHostAgent({
           version: "0.0.0-test",
+          ...localPaths(),
           stateDir,
           databasePath,
           checkNetworkBind: noopNetworkBindCheck,
@@ -386,6 +559,18 @@ function tempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(dir);
   return dir;
+}
+
+function fileMode(path: string): number {
+  return lstatSync(path).mode & 0o7777;
+}
+
+function localPaths(): { readonly configDir: string; readonly runtimeDir: string } {
+  const runtimeParent = tempDir("hostdeck-startup-runtime-parent-");
+  return {
+    configDir: tempDir("hostdeck-startup-config-"),
+    runtimeDir: join(runtimeParent, "hostdeck")
+  };
 }
 
 function fixedNow(): Date {

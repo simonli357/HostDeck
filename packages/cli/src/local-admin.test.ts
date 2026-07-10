@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, linkSync, lstatSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAuditEventRepository, createPairingCodeRepository, createSettingsRepository, openMigratedDatabase } from "@hostdeck/storage";
@@ -138,6 +138,18 @@ describe("CLI local admin commands", () => {
     } finally {
       opened.db.close();
     }
+  });
+
+  it("repairs owner mode drift and rejects a hard-linked database before admin writes", () => {
+    const harness = createHarness();
+    harness.admin.setLock({ locked: true });
+    chmodSync(harness.databasePath, 0o644);
+
+    harness.admin.setLock({ locked: false });
+    expect(lstatSync(harness.databasePath).mode & 0o7777).toBe(0o600);
+
+    linkSync(harness.databasePath, join(harness.stateDir, "hostdeck-copy.sqlite"));
+    expect(() => harness.admin.setLock({ locked: true })).toThrow(/not secure/u);
   });
 });
 

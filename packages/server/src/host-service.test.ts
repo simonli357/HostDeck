@@ -28,6 +28,7 @@ describe("foreground host service smoke", () => {
     const databasePath = join(stateDir, "hostdeck.sqlite");
     const first = await startHostHttpService({
       version: "0.0.0-service-smoke",
+      ...localPaths(),
       stateDir,
       databasePath,
       bindPort: port,
@@ -64,6 +65,7 @@ describe("foreground host service smoke", () => {
 
     const restarted = await startHostHttpService({
       version: "0.0.0-service-smoke",
+      ...localPaths(),
       stateDir,
       databasePath,
       bindPort: port,
@@ -87,11 +89,46 @@ describe("foreground host service smoke", () => {
     }
   });
 
+  it("releases the daemon lease when the final HTTP listener bind fails", async () => {
+    const blocker = await listenOn("127.0.0.1", 0);
+    const address = blocker.address();
+    if (address === null || typeof address === "string") throw new Error("Expected an allocated TCP port.");
+    const stateDir = tempDir("hostdeck-service-bind-failure-state-");
+    const paths = localPaths();
+
+    try {
+      await expect(
+        startHostHttpService({
+          version: "0.0.0-service-bind-failure",
+          ...paths,
+          stateDir,
+          bindPort: address.port,
+          checkNetworkBind() {},
+          discovery: emptyDiscovery(),
+          now: fixedNow
+        })
+      ).rejects.toThrow();
+    } finally {
+      await closeServer(blocker);
+    }
+
+    const recovered = await startHostHttpService({
+      version: "0.0.0-service-bind-recovery",
+      ...paths,
+      stateDir,
+      bindPort: address.port,
+      discovery: emptyDiscovery(),
+      now: laterNow
+    });
+    await recovered.close();
+  });
+
   it("registers session, write, security, and network route families with typed failures", async () => {
     const port = await getAvailablePort("127.0.0.1");
     const stateDir = tempDir("hostdeck-service-routes-state-");
     const service = await startHostHttpService({
       version: "0.0.0-service-routes",
+      ...localPaths(),
       stateDir,
       bindPort: port,
       discovery: emptyDiscovery(),
@@ -267,6 +304,7 @@ describe("foreground host service smoke", () => {
     const port = await getAvailablePort("127.0.0.1");
     const service = await startHostHttpService({
       version: "0.0.0-service-errors",
+      ...localPaths(),
       stateDir: tempDir("hostdeck-service-errors-state-"),
       bindPort: port,
       discovery: emptyDiscovery(),
@@ -478,6 +516,14 @@ function tempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(dir);
   return dir;
+}
+
+function localPaths(): { readonly configDir: string; readonly runtimeDir: string } {
+  const runtimeParent = tempDir("hostdeck-service-runtime-parent-");
+  return {
+    configDir: tempDir("hostdeck-service-config-"),
+    runtimeDir: join(runtimeParent, "hostdeck")
+  };
 }
 
 function fixedNow(): Date {

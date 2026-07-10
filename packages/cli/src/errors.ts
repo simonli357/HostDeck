@@ -61,13 +61,14 @@ export function usageFailure(message: string, field = "args"): CliFailure {
   });
 }
 
-export function configFailure(message: string, field = "config"): CliFailure {
+export function configFailure(message: string, field = "config", cause?: unknown): CliFailure {
   return new CliFailure({
     kind: "invalid_config",
     code: "invalid_config",
     message,
     exitCode: cliExitCodes.config,
-    field
+    field,
+    ...(cause !== undefined ? { cause } : {})
   });
 }
 

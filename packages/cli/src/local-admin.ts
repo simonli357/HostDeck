@@ -1,13 +1,15 @@
 import { randomBytes, randomInt } from "node:crypto";
-import { accessSync, constants as fsConstants, mkdirSync, statSync } from "node:fs";
-import { dirname } from "node:path";
+import { closeSync } from "node:fs";
 import type { AuditEventRecord, PairingCodeRecord, SettingsRecord } from "@hostdeck/contracts";
 import {
   createAuditEventRepository,
   createPairingCodeRepository,
   createSettingsRepository,
   HostDeckAuthRepositoryError,
-  openMigratedDatabase
+  HostDeckLocalPathError,
+  openMigratedDatabase,
+  openSecureHostDeckRegularFile,
+  prepareHostDeckStatePaths
 } from "@hostdeck/storage";
 import { configFailure, internalFailure } from "./errors.js";
 
@@ -18,7 +20,7 @@ export interface CreateLocalAdminOptions {
   readonly makePairingCode?: () => string;
   readonly makePairingId?: () => string;
   readonly makeAuditEventId?: () => string;
-  readonly ensureStateDirectory?: (stateDir: string, databasePath: string) => void;
+  readonly prepareStatePaths?: typeof prepareHostDeckStatePaths;
 }
 
 export interface LocalAdmin {
@@ -220,8 +222,48 @@ export function createLocalAdmin(options: CreateLocalAdminOptions): LocalAdmin {
 }
 
 function withLocalAdminRepos<T>(options: CreateLocalAdminOptions, now: () => Date, work: (repos: LocalAdminRepos) => T): T {
-  (options.ensureStateDirectory ?? ensureUsableStatePaths)(options.stateDir, options.databasePath);
-  const opened = openMigratedDatabase(options.databasePath, { now });
+  let paths: ReturnType<typeof prepareHostDeckStatePaths>;
+  try {
+    paths = (options.prepareStatePaths ?? prepareHostDeckStatePaths)({
+      state_dir: options.stateDir,
+      database_path: options.databasePath
+    });
+  } catch (error) {
+    throw configFailure(`HostDeck state directory or database path is not secure: ${options.stateDir}.`, "state_dir", error);
+  }
+  let databaseGuard: ReturnType<typeof openSecureHostDeckRegularFile>;
+  try {
+    databaseGuard = openSecureHostDeckRegularFile(paths.database_path, {
+      label: "database",
+      mode: 0o600,
+      repair_mode: true
+    });
+  } catch (error) {
+    throw configFailure("HostDeck database path changed or became insecure before open.", "database_path", error);
+  }
+  let opened: ReturnType<typeof openMigratedDatabase> | null = null;
+  try {
+    opened = openMigratedDatabase(paths.database_path, { now });
+    databaseGuard.verifyPath();
+  } catch (error) {
+    const cleanupErrors = closeLocalAdminValidationResources(opened, databaseGuard.descriptor);
+    const cause = cleanupErrors.length === 0 ? error : new AggregateError([error, ...cleanupErrors], "Database open and validation cleanup failed.");
+    if (error instanceof HostDeckLocalPathError) {
+      throw configFailure("HostDeck database path changed or became insecure during open.", "database_path", cause);
+    }
+    if (cleanupErrors.length > 0) throw cause;
+    throw error;
+  }
+  try {
+    closeSync(databaseGuard.descriptor);
+  } catch (error) {
+    const cleanupErrors = closeLocalAdminValidationResources(opened, null);
+    throw configFailure(
+      "HostDeck database validation descriptor could not be closed.",
+      "database_path",
+      cleanupErrors.length === 0 ? error : new AggregateError([error, ...cleanupErrors], "Database validation close failed.")
+    );
+  }
 
   try {
     const repos = {
@@ -241,34 +283,22 @@ function withLocalAdminRepos<T>(options: CreateLocalAdminOptions, now: () => Dat
   }
 }
 
-function ensureUsableStatePaths(stateDir: string, databasePath: string): void {
+function closeLocalAdminValidationResources(
+  opened: ReturnType<typeof openMigratedDatabase> | null,
+  descriptor: number | null
+): unknown[] {
+  const errors: unknown[] = [];
   try {
-    mkdirSync(stateDir, { recursive: true });
-    const state = statSync(stateDir);
-
-    if (!state.isDirectory()) {
-      throw new Error("State path is not a directory.");
-    }
-
-    accessSync(stateDir, fsConstants.R_OK | fsConstants.W_OK | fsConstants.X_OK);
-    mkdirSync(dirname(databasePath), { recursive: true });
-
-    try {
-      const database = statSync(databasePath);
-
-      if (database.isDirectory()) {
-        throw new Error("Database path is a directory.");
-      }
-    } catch (error) {
-      if (!isMissingPathError(error)) {
-        throw error;
-      }
-    }
-
-    accessSync(dirname(databasePath), fsConstants.R_OK | fsConstants.W_OK | fsConstants.X_OK);
-  } catch (_error) {
-    throw configFailure(`HostDeck state directory or database path is not usable: ${stateDir}.`, "state_dir");
+    opened?.db.close();
+  } catch (error) {
+    errors.push(error);
   }
+  try {
+    if (descriptor !== null) closeSync(descriptor);
+  } catch (error) {
+    errors.push(error);
+  }
+  return errors;
 }
 
 function assertPairingTtl(ttlMinutes: number): void {
@@ -279,10 +309,6 @@ function assertPairingTtl(ttlMinutes: number): void {
 
 function isPairingCollision(error: unknown): boolean {
   return error instanceof HostDeckAuthRepositoryError && error.code === "pairing_code_exists";
-}
-
-function isMissingPathError(error: unknown): boolean {
-  return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT";
 }
 
 function makePairingCode(): string {

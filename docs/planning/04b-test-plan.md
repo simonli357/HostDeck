@@ -87,6 +87,8 @@ If a safe deterministic approval trigger cannot be created, the approval feature
 | Auth | Pair create/consume/expire/revoke, device read/write permission, raw-secret absence, CSRF rotate/reload/revoke race, last-used update. |
 | Permissions/lease | Fresh paths, over-permissive path/file/key/socket, symlink/path substitution, second daemon, stale lease recovery. |
 
+Permission/lease evidence also proves pure path validation before mutation, minimal state/lease bootstrap, acquisition before config/runtime/database/listener mutation, owner/type/hard-link rejection, descriptor/path-substitution detection, mode-repair reporting, idempotent release, release after each later startup failure, and child-process crash recovery against the real Linux lock implementation.
+
 ## HTTP, SSE, And Security Matrix
 
 | Dimension | Required cases |

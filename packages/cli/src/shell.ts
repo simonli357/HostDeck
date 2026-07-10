@@ -2,7 +2,7 @@ import type { ApiErrorEnvelope, ApiSession } from "@hostdeck/contracts";
 import { type HostHttpService, type StartHostHttpServiceInput, startHostHttpService } from "@hostdeck/server";
 import { createHostDeckApiClient, type HostDeckApiClient, type HttpFetch } from "./api-client.js";
 import { type LoadCliConfigOptions, loadCliConfig } from "./config.js";
-import { apiFailure, toCliFailure, usageFailure } from "./errors.js";
+import { apiFailure, configFailure, toCliFailure, usageFailure } from "./errors.js";
 import { type CliExitCode, cliExitCodes } from "./exit-codes.js";
 import { createLocalAdmin, type LocalAdmin } from "./local-admin.js";
 import { parseCliArgs } from "./parser.js";
@@ -87,9 +87,14 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     const client = options.client ?? createHostDeckApiClient(clientOptions);
 
     if (parsed.command.kind === "serve") {
+      if (config.runtimeDir === null) {
+        throw configFailure("XDG_RUNTIME_DIR is required to start the HostDeck service securely.", "runtime_dir");
+      }
       const service = await (options.startService ?? startHostHttpService)({
         version: options.version ?? defaultVersion,
+        configDir: config.configDir,
         stateDir: config.stateDir,
+        runtimeDir: config.runtimeDir,
         databasePath: config.databasePath,
         bindPort: portFromBaseUrl(config.baseUrl)
       });

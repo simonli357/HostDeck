@@ -24,6 +24,13 @@ export {
   HostDeckGitBranchMetadataError
 } from "./branch-metadata.js";
 export {
+  type AcquireHostDeckDaemonLeaseInput,
+  acquireHostDeckDaemonLease,
+  type HostDeckDaemonLease,
+  HostDeckDaemonLeaseError,
+  type HostDeckDaemonLeaseErrorCode
+} from "./daemon-lease.js";
+export {
   HostDeckMigrationError,
   type MigrationResult,
   type OpenMigratedDatabaseOptions,
@@ -56,6 +63,27 @@ export {
   type RuntimeCompatibilityRepository,
   type RuntimeCompatibilityRepositoryErrorCode
 } from "./runtime-compatibility-repository.js";
+export {
+  HostDeckLocalPathError,
+  type HostDeckLocalPathErrorCode,
+  type HostDeckPathModeRepair,
+  type OpenedSecureHostDeckRegularFile,
+  type OpenSecureHostDeckRegularFileOptions,
+  openSecureHostDeckRegularFile,
+  type PreparedHostDeckLocalPaths,
+  type PreparedHostDeckStatePaths,
+  type PrepareHostDeckLocalPathsInput,
+  prepareHostDeckDaemonLeasePath,
+  prepareHostDeckLocalPaths,
+  prepareHostDeckLocalPathsAfterLease,
+  prepareHostDeckStatePaths,
+  type ResolvedHostDeckLocalPaths,
+  resolveHostDeckLocalPaths,
+  type SecureHostDeckRegularFileOptions,
+  type SecureHostDeckSocketOptions,
+  secureHostDeckRegularFile,
+  secureHostDeckSocket
+} from "./secure-local-paths.js";
 export {
   type AppendSelectedEventResult,
   createSelectedStateRepository,

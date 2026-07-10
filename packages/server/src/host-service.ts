@@ -65,8 +65,8 @@ export async function startHostHttpService(input: StartHostHttpServiceInput): Pr
   try {
     routes = createServiceRouteHandlers(startup, status, input);
   } catch (error) {
-    startup.close();
-    throw error;
+    const cleanupErrors = await closeServiceResources(null, startup);
+    throwWithCleanup(error, cleanupErrors, "HostDeck route setup and cleanup failed.");
   }
 
   const server = createServer((request, response) => {
@@ -94,9 +94,8 @@ export async function startHostHttpService(input: StartHostHttpServiceInput): Pr
     });
     await once(server, "listening");
   } catch (error) {
-    startup.close();
-    await closeServer(server);
-    throw error;
+    const cleanupErrors = await closeServiceResources(server, startup);
+    throwWithCleanup(error, cleanupErrors, "HostDeck listener startup and cleanup failed.");
   }
 
   return {
@@ -105,13 +104,30 @@ export async function startHostHttpService(input: StartHostHttpServiceInput): Pr
     server,
     status,
     async close() {
-      try {
-        await closeServer(server);
-      } finally {
-        startup.close();
-      }
+      const cleanupErrors = await closeServiceResources(server, startup);
+      if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, "HostDeck service did not close cleanly.");
     }
   };
+}
+
+async function closeServiceResources(server: Server | null, startup: HostStartupResult): Promise<unknown[]> {
+  const errors: unknown[] = [];
+  try {
+    if (server !== null) await closeServer(server);
+  } catch (error) {
+    errors.push(error);
+  }
+  try {
+    startup.close();
+  } catch (error) {
+    errors.push(error);
+  }
+  return errors;
+}
+
+function throwWithCleanup(primary: unknown, cleanupErrors: readonly unknown[], message: string): never {
+  if (cleanupErrors.length === 0) throw primary;
+  throw new AggregateError([primary, ...cleanupErrors], message);
 }
 
 function createServiceRouteHandlers(
