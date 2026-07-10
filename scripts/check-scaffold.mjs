@@ -34,6 +34,7 @@ const requiredScripts = [
   "test:integration",
   "test:tmux",
   "smoke:codex-compatibility",
+  "smoke:codex-ipc",
   "test:web",
   "test:e2e",
   "build",

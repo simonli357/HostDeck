@@ -43,8 +43,8 @@ No fake-Codex or fake-tmux test can satisfy these gates.
 | Historical tmux/capture adapter and smoke | `INT-V1-001`, `INT-V1-010` to `INT-V1-016`, `INT-V1-090` | Retained legacy evidence; not block completion. |
 | Architecture reassessment | `INT-V1-002` | Done: `artifacts/int-v1-002-codex-integration-reassessment.md`. |
 | Version/schema/capability gate | `INT-V1-003` | Done: exact 0.144.0 experimental binding and real no-model compatibility smoke. |
-| Unix IPC client and request broker | `INT-V1-004` | In progress. |
-| Thread lifecycle and exact TUI resume | `INT-V1-005` | Blocked by adapter and data migration. |
+| Unix IPC client and request broker | `INT-V1-004` | Done: bounded transport/broker/handshake/reconnect and real private-socket smoke. |
+| Thread lifecycle and exact TUI resume | `INT-V1-005` | In progress. |
 | Real turn/event/control/approval vertical | `INT-V1-006` | Blocked by thread lifecycle. |
 | Supervision, multi-client, reconnect, restart | `INT-V1-007` | Blocked by real vertical. |
 | Legacy tmux disposition | `INT-V1-008` | Blocked by `INT-V1-007`. |

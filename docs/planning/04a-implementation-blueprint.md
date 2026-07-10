@@ -23,7 +23,7 @@ This blueprint is implementation-ready only when:
 | Core/contracts | Selected thread/turn/event/approval/runtime/security/mobile schemas, strict invariants, and fixtures. | Selected normalized foundation complete. | Production adoption remains in owning blocks. |
 | Storage | Historical repositories plus selected mapping/projection/event/compatibility/recovery migration. | Selected durable foundation implemented. | Production cleanup/audit invocation, CSRF lifecycle, permissions, daemon lease, module hardening. |
 | Tmux adapter | Real target/start/send/capture/reconcile tests with fake Codex producer. | Legacy integration evidence. | Not the selected V1 runtime. Disposition waits for structured vertical. |
-| Codex adapter | Exact 0.144.0 experimental binding, deterministic drift check, normalized compatibility gate, real initialize/plan-catalog smoke. | Binding and compatibility foundation implemented. | Unix IPC, broker/decoder, real session/turn/control/approval, supervision, multi-client, and restart proof. |
+| Codex adapter | Exact 0.144.0 experimental binding, structural method-catalog drift check, bounded Unix IPC/broker/handshake/reconnect, hostile fake-protocol matrix, and real private-socket no-model smoke. | Transport and compatibility foundation implemented. | Real session/turn/control/approval, supervision, multi-client, and restart proof. |
 | API/CLI | Headless handlers, custom Node listener, source-level CLI shell/tests. | Partial foundation, not packaged production path. | Fastify/SSE/static build, selected adapter wiring, full auth, HTTPS, timeouts, service units, runnable `bin`. |
 | Web | View-model helpers/fixtures only. Existing mockups rejected. | Pre-implementation. | Mobile state rebaseline, two options, selection, React/Vite UI, screenshots/device evidence. |
 | Release | Baseline commands pass; developer/command docs record gaps. | No-go. | Clean package/service/phone/security/aggregate evidence. |
@@ -50,6 +50,7 @@ Timestamps use strict RFC 3339/ISO 8601 parsing with round-trip calendar validat
 ```ts
 interface CodexRuntimeAdapter {
   connect(signal: AbortSignal): Promise<RuntimeCompatibility>;
+  reconnect(signal: AbortSignal): Promise<RuntimeCompatibility>;
   close(reason: string): Promise<void>;
   listThreads(input: ListThreadsInput): Promise<ThreadPage>;
   startThread(input: StartThreadInput): Promise<ThreadSnapshot>;
@@ -63,6 +64,8 @@ interface CodexRuntimeAdapter {
   subscribe(listener: CodexRuntimeListener): Unsubscribe;
 }
 ```
+
+An involuntary disconnect remains explicitly reconnectable. `close` is terminal and releases adapter subscriptions; neither path automatically retries a mutation.
 
 The adapter implementation contains:
 

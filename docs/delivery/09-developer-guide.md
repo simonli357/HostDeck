@@ -32,6 +32,7 @@ The frozen install was validated for the current workspace on 2026-07-09. If a p
 | Codex binding check | `pnpm check:codex-bindings` | Regenerates 0.144.0 experimental bindings in a temporary directory and rejects drift. |
 | Codex binding update | `pnpm generate:codex-bindings` | Replaces committed generated files and identity; use only during an explicit compatibility review. |
 | Codex compatibility smoke | `pnpm smoke:codex-compatibility` | Starts installed app-server over stdio, initializes experimental API, and verifies Plan/Default without a model call. |
+| Codex Unix IPC smoke | `pnpm smoke:codex-ipc` | Starts installed app-server on a temporary private Unix socket and proves the production transport, broker, and compatibility handshake without a model call. |
 | Typecheck | `pnpm typecheck` | Strict TypeScript no-emit check across workspace source. |
 | Lint | `pnpm lint` | Biome plus package export convention checks. |
 | Unit tests | `pnpm test` or `pnpm test:unit` | Runs Vitest unit tests. |

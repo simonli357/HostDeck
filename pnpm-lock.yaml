@@ -41,6 +41,13 @@ importers:
       '@hostdeck/core':
         specifier: workspace:*
         version: link:../core
+      ws:
+        specifier: 8.21.0
+        version: 8.21.0
+    devDependencies:
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
 
   packages/contracts:
     dependencies:
@@ -306,6 +313,9 @@ packages:
 
   '@types/node@26.1.1':
     resolution: {integrity: sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     resolution: {integrity: sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ==}
@@ -854,6 +864,18 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
+  ws@8.21.0:
+    resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
@@ -995,6 +1017,10 @@ snapshots:
   '@types/node@26.1.1':
     dependencies:
       undici-types: 8.3.0
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 26.1.1
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     optional: true
@@ -1437,5 +1463,7 @@ snapshots:
       stackback: 0.0.2
 
   wrappy@1.0.2: {}
+
+  ws@8.21.0: {}
 
   zod@4.4.3: {}

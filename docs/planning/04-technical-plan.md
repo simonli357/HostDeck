@@ -42,7 +42,7 @@ The architecture is acceptable for V1 only when all of the following are true:
 | Workspace | `pnpm` monorepo. | Existing validated scaffold. |
 | Host API | Fastify 5-compatible stack with JSON schema/Zod boundary adapters. | Lifecycle hooks, body limits, request timeouts, testing, and controlled shutdown replace the current ad hoc listener. |
 | Browser stream | SSE through a maintained Fastify plugin. | One-way ordered events fit the product; mutations remain auditable HTTP requests. |
-| Codex transport | `ws` IPC client using app-server's Unix-socket WebSocket endpoint. | `ws` documents `ws+unix:` IPC support; the socket remains user-private and supports both HostDeck and the normal TUI. |
+| Codex transport | Exact `ws` 8.21.0 IPC client using app-server's Unix-socket WebSocket endpoint. | The maintained MIT package documents `ws+unix:` IPC support; HostDeck adds its own frame, queue, heartbeat, timeout, and no-TCP-fallback policy. The socket remains user-private and supports both HostDeck and the normal TUI. |
 | CLI | Commander or an equivalently maintained parser plus a packaged `bin` entry. | Existing custom shell can be adapted only if it meets help, exit-code, and packaging criteria. |
 | UI | React plus Vite and Playwright. | Component contracts, mobile browser implementation, built static assets, and screenshot validation. |
 | Storage | `better-sqlite3` with first-party migrations. | Existing `DEC-014` evidence remains valid. |

@@ -26,7 +26,7 @@ Owns milestone, module maturity, production passes, and release truth.
 | --- | --- | --- | --- |
 | `BLK-V1-01` Contracts/core/fixtures | Strong historical tmux-shaped L1 base. | App-server/events/approval/mobile/security contracts, strict invariants, planning checker. | `FND-V1-014` to `FND-V1-016`, `FND-V1-091` |
 | `BLK-V1-02` State/auth/audit | Strong historical repository L1/L2 base. | Thread projection migration, production retention/audit, CSRF lifecycle, secure paths/lease. | `DAT-V1-018` to `DAT-V1-021`, `DAT-V1-091` |
-| `BLK-V1-03` Codex runtime/events | Exact generated binding and compatibility gate pass; tmux mechanics are legacy. | IPC/broker and real thread/turn/control/approval/TUI/restart path absent. | `INT-V1-004` to `INT-V1-008`, `INT-V1-091` |
+| `BLK-V1-03` Codex runtime/events | Exact generated binding plus bounded private IPC/broker/handshake/reconnect pass; tmux mechanics are legacy. | Real thread/turn/control/approval/TUI/supervision/restart path absent. | `INT-V1-005` to `INT-V1-008`, `INT-V1-091` |
 | `BLK-V1-04` API/CLI/security/service | Historical headless/custom listener and source CLI base. | Fastify/SSE/HTTPS/full auth/fanout/health/bounds/build/services absent. | `IFC-V1-015` to `IFC-V1-021`, `IFC-V1-091` |
 | `BLK-V1-05` Mobile dashboard | View-model helpers only; old boards rejected. | Mobile state/visual gate and all product UI/device evidence absent. | `FE-V1-004`, reopened `FE-V1-002`, `FE-V1-003`, `FE-V1-010` to `FE-V1-022`, `FE-V1-090` |
 | `BLK-V1-06` Release | Baseline commands and historical docs exist. | Selected-path clean install/security/device/aggregate/docs/go-no-go absent. | `REL-V1-004` to `REL-V1-011` |

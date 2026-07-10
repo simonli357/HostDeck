@@ -29,6 +29,7 @@ pnpm test:integration
 pnpm test:web
 pnpm test:tmux
 pnpm smoke:codex-compatibility
+pnpm smoke:codex-ipc
 pnpm exec vitest run tests/service-mode-smoke.test.ts
 ```
 

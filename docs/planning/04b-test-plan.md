@@ -19,6 +19,9 @@ Task and block evidence names its level. "Complete for package scope" cannot sat
 | --- | --- | --- | --- |
 | `pnpm check:scaffold` | Foundation | Workspace/package/export skeleton. | Pass. |
 | `pnpm check:planning` | `FND-V1-014` | Task/requirement/dependency/current-queue integrity. | Pass. |
+| `pnpm check:codex-bindings` | `INT-V1-003` | Regenerate the pinned experimental binding and reject identity or method-catalog drift. | Pass with the reviewed Codex version installed. |
+| `pnpm smoke:codex-compatibility` | `INT-V1-003` | Prove the pinned runtime initialize/platform/Plan catalog over stdio without a model call. | Pass on the supported development/release host. |
+| `pnpm smoke:codex-ipc` | `INT-V1-004` | Prove the production private Unix transport, broker, and handshake against the pinned runtime without a model call. | Pass on the supported development/release host. |
 | `pnpm typecheck` | Foundation | Strict workspace TypeScript. | Pass. |
 | `pnpm lint` | Foundation | Formatting/lint/package-export checks. | Pass. |
 | `pnpm test:unit` | All modules | L1 pure behavior. | Pass. |

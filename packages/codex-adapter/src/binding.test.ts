@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { codexBindingDescriptor, codexBindingManifest } from "./binding.js";
+import {
+  generatedClientNotificationMethods,
+  generatedClientRequestMethods,
+  generatedServerNotificationMethods,
+  generatedServerRequestMethods
+} from "./protocol-methods.generated.js";
 
 describe("Codex generated binding ownership", () => {
   it("exposes one immutable reviewed identity and selected protocol surface", () => {
@@ -26,6 +32,25 @@ describe("Codex generated binding ownership", () => {
   it("does not re-export raw generated protocol types from the package entry", () => {
     const packageEntry = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
     expect(packageEntry).not.toMatch(/generated/iu);
-    expect(packageEntry).not.toMatch(/ClientRequest|ServerRequest|ServerNotification|TurnStartParams/u);
+    expect(packageEntry).not.toMatch(/\b(?:ClientRequest|ServerRequest|ServerNotification|TurnStartParams)\b/u);
+  });
+
+  it("derives immutable complete method catalogs from each generated discriminated union", () => {
+    const catalogs = [
+      [generatedClientRequestMethods, 125],
+      [generatedClientNotificationMethods, 1],
+      [generatedServerNotificationMethods, 69],
+      [generatedServerRequestMethods, 11]
+    ] as const;
+    for (const [catalog, expectedCount] of catalogs) {
+      expect(catalog).toHaveLength(expectedCount);
+      expect(new Set(catalog).size).toBe(expectedCount);
+      expect(Object.isFrozen(catalog)).toBe(true);
+    }
+    expect(generatedClientRequestMethods).toEqual(expect.arrayContaining(["initialize", "collaborationMode/list", "turn/start"]));
+    expect(generatedClientNotificationMethods).toEqual(["initialized"]);
+    expect(generatedServerRequestMethods).toEqual(
+      expect.arrayContaining(["item/commandExecution/requestApproval", "item/fileChange/requestApproval"])
+    );
   });
 });

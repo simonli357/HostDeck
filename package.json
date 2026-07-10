@@ -21,6 +21,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:tmux": "HOSTDECK_REQUIRE_TMUX_SMOKE=1 vitest run packages/server/src/tmux-smoke.test.ts",
     "smoke:codex-compatibility": "HOSTDECK_REQUIRE_CODEX_COMPATIBILITY_SMOKE=1 vitest run packages/codex-adapter/src/installed-codex.smoke.test.ts",
+    "smoke:codex-ipc": "HOSTDECK_REQUIRE_CODEX_IPC_SMOKE=1 vitest run packages/codex-adapter/src/codex-ipc.smoke.test.ts",
     "test:web": "vitest run packages/web/src/view-models.test.ts packages/test-fixtures/src/fixtures.test.ts",
     "test:e2e": "node scripts/not-implemented.mjs test:e2e REL-V1-007",
     "build": "node scripts/not-implemented.mjs build REL-V1-007",
