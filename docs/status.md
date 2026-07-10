@@ -81,5 +81,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `BUG-002` deterministic unit/real-tmux smoke separation is pushed as `bb66095`; `IFC-V1-016` exact stack/probe/docs closure is pushed as `4e87d30`.
 - `IFC-V1-020` resource/deadline implementation and docs are pushed as `620f4f0`.
 - `IFC-V1-022` app-factory implementation and docs are pushed as `29005c6`.
-- `IFC-V1-023` SSE transport implementation and docs are the current unit pending aggregate validation, commit, and push.
+- `IFC-V1-023` SSE transport implementation and docs are pushed as `8117f10`.
 - Next action: implement `IFC-V1-024` canonical static roots, deny-by-policy assets, explicit browser routes, cache/MIME/HEAD behavior, and API fallback separation against a fixture build.
