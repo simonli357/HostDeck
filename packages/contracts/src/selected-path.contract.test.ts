@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   legacySessionDispositionRecordSchema,
   managedSessionProjectionSchema,
+  modelControlSnapshotSchema,
   pendingApprovalSchema,
   runtimeCompatibilitySchema,
   selectedAuditActorSchema,
@@ -135,7 +136,7 @@ describe("selected structured operation contracts", () => {
   it("parses every selected operation as a typed exact-target intent", () => {
     const inputs = [
       { kind: "prompt", text: "Continue with the next ready task." },
-      { kind: "model", model_id: "gpt-5.5-codex", reasoning_effort: "high" },
+      { kind: "model", model_id: "gpt-5.5-codex", reasoning_effort: "high", expected_pending_revision: null },
       { kind: "goal", action: "set", objective: "Complete the V1 foundation." },
       { kind: "plan", action: "enter" },
       { kind: "usage" },
@@ -256,6 +257,92 @@ describe("selected structured operation contracts", () => {
         error: null
       })
     ).toThrow();
+  });
+
+  it("keeps confirmed and pending model state distinct and catalog-bound", () => {
+    const models = [
+      {
+        id: "model-a",
+        runtime_model: "runtime-a",
+        label: "Model A",
+        description: null,
+        is_default: true,
+        input_modalities: ["text", "image"],
+        reasoning_efforts: [
+          { id: "low", description: "Fast", is_default: false },
+          { id: "high", description: "Thorough", is_default: true }
+        ]
+      },
+      {
+        id: "model-b",
+        runtime_model: "runtime-b",
+        label: "Model B",
+        description: null,
+        is_default: false,
+        input_modalities: ["text"],
+        reasoning_efforts: [{ id: "medium", description: null, is_default: true }]
+      }
+    ];
+    const snapshot = {
+      catalog_revision: "a".repeat(64),
+      catalog_observed_at: timestamp,
+      current: {
+        model_id: "model-a",
+        runtime_model: "runtime-a",
+        reasoning_effort: "high",
+        catalog_state: "available",
+        observed_at: timestamp
+      },
+      pending: {
+        revision: 1,
+        selection_operation_id: "op_contract_model1",
+        model_id: "model-b",
+        runtime_model: "runtime-b",
+        reasoning_effort: "medium",
+        catalog_state: "available",
+        phase: "pending",
+        selected_at: timestamp,
+        turn_id: null,
+        error: null
+      },
+      models
+    };
+
+    expect(modelControlSnapshotSchema.parse(snapshot)).toMatchObject({
+      current: { model_id: "model-a" },
+      pending: { model_id: "model-b", phase: "pending" }
+    });
+    expect(() =>
+      modelControlSnapshotSchema.parse({
+        ...snapshot,
+        current: { ...snapshot.current, runtime_model: "runtime-b" }
+      })
+    ).toThrow();
+    expect(() =>
+      modelControlSnapshotSchema.parse({
+        ...snapshot,
+        pending: { ...snapshot.pending, reasoning_effort: "high" }
+      })
+    ).toThrow();
+    expect(() =>
+      modelControlSnapshotSchema.parse({
+        ...snapshot,
+        pending: { ...snapshot.pending, catalog_state: "unknown" }
+      })
+    ).toThrow();
+    expect(
+      modelControlSnapshotSchema.parse({
+        ...snapshot,
+        pending: {
+          ...snapshot.pending,
+          model_id: "retired-model",
+          runtime_model: "retired-runtime",
+          catalog_state: "unknown",
+          phase: "conflict",
+          error: { code: "operation_conflict", message: "Catalog changed.", retryable: true }
+        }
+      }).pending
+    ).toMatchObject({ catalog_state: "unknown", phase: "conflict" });
   });
 
   it("keeps accepted dispatch separate from terminal success or uncertainty", () => {

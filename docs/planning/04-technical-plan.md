@@ -113,6 +113,7 @@ The TUI and HostDeck may connect to the same app-server. Multi-client correctnes
 | Fact | Owner | HostDeck persistence |
 | --- | --- | --- |
 | Full conversation, turns, items, active runtime status, goal, model, approvals | Codex/app-server | Stable thread id plus bounded projection only. |
+| Unapplied next-turn model/Plan intent | HostDeck process | Revisioned ephemeral control state only; restart drops the unapplied intent and re-reads confirmed Codex settings rather than replaying a stale mutation. |
 | Session alias and HostDeck-managed membership | HostDeck | `managed_sessions`. |
 | Attention, recent summary, last HostDeck cursor | HostDeck projection derived from Codex events | `session_projection`. Recomputable and marked stale when disconnected. |
 | Device trust, lock, LAN/certificate settings | HostDeck | Auth/settings repositories. |
@@ -144,9 +145,9 @@ Exact 0.144.0 may emit bounded notifications after the successful initialize res
 | Start/list/read/resume/archive | Thread methods | Store and target stable thread id. Arbitrary import is rejected. |
 | Prompt | `turn/start`; `turn/steer` only after matching `turn/started` | Response means accepted, not yet steerable. Exact thread/turn plus client message id; stale/early steer rejects. |
 | Interrupt | Turn interrupt | Never reported as archive or completion. |
-| Model | Model list plus `turn/start.model` | UI choices come from the runtime catalog and remain pending until the next turn; loaded `thread/resume.model` is not a selection control. |
+| Model | Model list plus `turn/start.model`/`effort` | UI choices come from the bounded live runtime catalog. Exact model/effort and pending revision remain separate from confirmed current state until matching settings or later read-back; loaded `thread/resume.model` is not a selection control. |
 | Goal | Thread goal methods | Paused edits are state; active/resume starts agentic work and must be projected/audited as such. Internal materialization goals stay paused. |
-| Plan | Plan/Default catalog mask plus `turn/start.collaborationMode` | Mode is pending next-turn state and verified by `thread/settings/updated` plus plan item events. No blind `/plan`. |
+| Plan | Plan/Default catalog mask plus `turn/start.collaborationMode` | Mode is pending next-turn state and verified by `thread/settings/updated` plus plan item events. When model and Plan are both pending, collaboration settings must carry the selected model/effort because collaboration mode overrides top-level fields. No blind `/plan`. |
 | Usage/compact/skills | Account usage, thread compact, skills list | Usage scope is explicit. Compact `{}` is accepted only; completion requires authoritative context-compaction item/turn evidence. |
 | Approval | Server request plus exact correlated response | Pending request id/scope/connection generation; HostDeck owns expiry, exactly-once resolution, and audit. |
 

@@ -15,7 +15,7 @@ import {
 
 describe("selected V1 resource budget", () => {
   it("defines one complete, immutable, observable registry", () => {
-    expect(resourceBudgetDefinitions).toHaveLength(60);
+    expect(resourceBudgetDefinitions).toHaveLength(64);
     expect(Object.isFrozen(resourceBudgetDefinitions)).toBe(true);
     expect(Object.isFrozen(defaultResourceBudget)).toBe(true);
     expect(Object.isFrozen(resourceBudgetDefinitionByKey)).toBe(true);
@@ -75,6 +75,10 @@ describe("selected V1 resource budget", () => {
       protocol_thread_page_size: 100,
       protocol_thread_max_pages: 100,
       protocol_thread_max_loaded_reads: 500,
+      protocol_model_page_size: 100,
+      protocol_model_max_pages: 10,
+      protocol_model_max_entries: 128,
+      control_model_max_pending_selections: 128,
       lifecycle_startup_timeout_ms: 60_000,
       lifecycle_shutdown_timeout_ms: 10_000,
       lifecycle_cleanup_step_timeout_ms: 2_000,
@@ -117,6 +121,7 @@ describe("selected V1 resource budget", () => {
       { sse_shutdown_timeout_ms: 10_000, lifecycle_shutdown_timeout_ms: 1_000 },
       { pair_claim_window_ms: 300_000, admission_state_ttl_ms: 60_000 },
       { mutation_window_ms: 300_000, admission_state_ttl_ms: 60_000 },
+      { protocol_model_page_size: 128, protocol_model_max_entries: 64 },
       { pair_claim_max_in_flight_per_source: 4, pair_claim_max_in_flight: 1 },
       { mutation_max_in_flight_per_device: 16, mutation_max_in_flight_global: 1 },
       { mutation_max_in_flight_per_target: 8, mutation_max_in_flight_global: 1 },

@@ -88,7 +88,8 @@ export const modelOperationIntentSchema = z
     ...managedOperationBaseShape,
     kind: z.literal("model"),
     model_id: z.string().min(1).max(operationLimits.modelIdLength),
-    reasoning_effort: z.string().min(1).max(operationLimits.effortLength).nullable()
+    reasoning_effort: z.string().min(1).max(operationLimits.effortLength).nullable(),
+    expected_pending_revision: positiveSafeIntegerSchema.nullable()
   })
   .strict();
 
@@ -319,19 +320,90 @@ export const selectedControlStateSchema = z
     }
   });
 
-export const modelCatalogEntrySchema = z
+export const modelReasoningEffortSchema = z
   .object({
     id: z.string().min(1).max(operationLimits.modelIdLength),
-    label: z.string().min(1).max(operationLimits.modelIdLength),
     description: z.string().max(operationLimits.summaryLength).nullable(),
-    reasoning_efforts: z.array(z.string().min(1).max(operationLimits.effortLength)).max(16)
+    is_default: z.boolean()
   })
   .strict();
 
+export const modelCatalogEntrySchema = z
+  .object({
+    id: z.string().min(1).max(operationLimits.modelIdLength),
+    runtime_model: z.string().min(1).max(operationLimits.modelIdLength),
+    label: z.string().min(1).max(operationLimits.modelIdLength),
+    description: z.string().max(operationLimits.summaryLength).nullable(),
+    is_default: z.boolean(),
+    input_modalities: z.array(z.enum(["text", "image"])).min(1).max(2),
+    reasoning_efforts: z.array(modelReasoningEffortSchema).min(1).max(16)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.input_modalities).size !== value.input_modalities.length) {
+      context.addIssue({ code: "custom", message: "Model input modalities must be unique." });
+    }
+    if (new Set(value.reasoning_efforts.map((effort) => effort.id)).size !== value.reasoning_efforts.length) {
+      context.addIssue({ code: "custom", message: "Model reasoning efforts must be unique." });
+    }
+    if (value.reasoning_efforts.filter((effort) => effort.is_default).length !== 1) {
+      context.addIssue({ code: "custom", message: "Each model must expose exactly one default reasoning effort." });
+    }
+  });
+
+export const currentModelSelectionSchema = z
+  .object({
+    model_id: z.string().min(1).max(operationLimits.modelIdLength).nullable(),
+    runtime_model: z.string().min(1).max(operationLimits.modelIdLength),
+    reasoning_effort: z.string().min(1).max(operationLimits.effortLength).nullable(),
+    catalog_state: z.enum(["available", "unknown"]),
+    observed_at: isoTimestampSchema
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.catalog_state === "available" && value.model_id === null) {
+      context.addIssue({ code: "custom", message: "Available current models require a catalog model id." });
+    }
+    if (value.catalog_state === "unknown" && value.model_id !== null) {
+      context.addIssue({ code: "custom", message: "Unknown current models cannot claim a catalog model id." });
+    }
+  });
+
+export const pendingModelSelectionSchema = z
+  .object({
+    revision: positiveSafeIntegerSchema,
+    selection_operation_id: clientOperationIdSchema,
+    model_id: z.string().min(1).max(operationLimits.modelIdLength),
+    runtime_model: z.string().min(1).max(operationLimits.modelIdLength),
+    reasoning_effort: z.string().min(1).max(operationLimits.effortLength),
+    catalog_state: z.enum(["available", "unknown"]),
+    phase: z.enum(["pending", "dispatching", "awaiting_confirmation", "unknown", "conflict"]),
+    selected_at: isoTimestampSchema,
+    turn_id: codexTurnIdSchema.nullable(),
+    error: apiErrorEnvelopeSchema.nullable()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (["pending", "dispatching"].includes(value.phase) && value.turn_id !== null) {
+      context.addIssue({ code: "custom", message: "Undispatched model selections cannot claim a turn id." });
+    }
+    if (value.phase === "awaiting_confirmation" && value.turn_id === null) {
+      context.addIssue({ code: "custom", message: "Accepted model selections require the exact turn id." });
+    }
+    if (["unknown", "conflict"].includes(value.phase) !== (value.error !== null)) {
+      context.addIssue({ code: "custom", message: "Only unknown or conflicting model selections require an error." });
+    }
+    if (value.catalog_state === "unknown" && !["unknown", "conflict"].includes(value.phase)) {
+      context.addIssue({ code: "custom", message: "Unavailable pending catalog entries must expose an unknown or conflict phase." });
+    }
+  });
+
 export const modelControlSnapshotSchema = z
   .object({
-    selected_model_id: z.string().min(1).max(operationLimits.modelIdLength).nullable(),
-    selected_reasoning_effort: z.string().min(1).max(operationLimits.effortLength).nullable(),
+    catalog_revision: z.string().regex(/^[a-f0-9]{64}$/u),
+    catalog_observed_at: isoTimestampSchema,
+    current: currentModelSelectionSchema,
+    pending: pendingModelSelectionSchema.nullable(),
     models: z.array(modelCatalogEntrySchema).max(128)
   })
   .strict()
@@ -340,19 +412,35 @@ export const modelControlSnapshotSchema = z
     if (modelIds.size !== value.models.length) {
       context.addIssue({ code: "custom", message: "Model catalogs cannot contain duplicate model ids." });
     }
-    const selected = value.models.find((model) => model.id === value.selected_model_id);
-    if (value.selected_model_id !== null && selected === undefined) {
-      context.addIssue({ code: "custom", message: "Selected model id must exist in the runtime model catalog." });
+    if (new Set(value.models.map((model) => model.runtime_model)).size !== value.models.length) {
+      context.addIssue({ code: "custom", message: "Model catalogs cannot contain duplicate runtime model names." });
     }
-    if (value.selected_model_id === null && value.selected_reasoning_effort !== null) {
-      context.addIssue({ code: "custom", message: "Reasoning effort cannot be selected without a model." });
+    if (value.models.filter((model) => model.is_default).length !== 1) {
+      context.addIssue({ code: "custom", message: "Model catalogs must expose exactly one default model." });
+    }
+    const current = value.models.find((model) => model.id === value.current.model_id);
+    if (value.current.catalog_state === "available" && current?.runtime_model !== value.current.runtime_model) {
+      context.addIssue({ code: "custom", message: "Current model identity must match the runtime catalog." });
     }
     if (
-      value.selected_reasoning_effort !== null &&
-      selected !== undefined &&
-      !selected.reasoning_efforts.includes(value.selected_reasoning_effort)
+      value.current.catalog_state === "available" &&
+      value.current.reasoning_effort !== null &&
+      current !== undefined &&
+      !current.reasoning_efforts.some((effort) => effort.id === value.current.reasoning_effort)
     ) {
-      context.addIssue({ code: "custom", message: "Selected reasoning effort must be offered by the selected model." });
+      context.addIssue({ code: "custom", message: "Current reasoning effort must be offered by its catalog model." });
+    }
+    if (value.pending !== null) {
+      const pending = value.models.find((model) => model.id === value.pending?.model_id);
+      if (value.pending.catalog_state === "available" && pending?.runtime_model !== value.pending.runtime_model) {
+        context.addIssue({ code: "custom", message: "Pending model identity must match the current runtime catalog." });
+      }
+      if (
+        value.pending.catalog_state === "available" &&
+        !pending?.reasoning_efforts.some((effort) => effort.id === value.pending?.reasoning_effort)
+      ) {
+        context.addIssue({ code: "custom", message: "Pending reasoning effort must be offered by its catalog model." });
+      }
     }
   });
 
@@ -473,6 +561,9 @@ export type SelectedOperationDispatch = z.infer<typeof selectedOperationDispatch
 export type SelectedOperationTerminalOutcome = z.infer<typeof selectedOperationTerminalOutcomeSchema>;
 export type SelectedOperationProgress = z.infer<typeof selectedOperationProgressSchema>;
 export type SelectedControlState = z.infer<typeof selectedControlStateSchema>;
+export type ModelCatalogEntry = z.infer<typeof modelCatalogEntrySchema>;
+export type ModelControlSnapshot = z.infer<typeof modelControlSnapshotSchema>;
+export type PendingModelSelection = z.infer<typeof pendingModelSelectionSchema>;
 export type PendingApproval = z.infer<typeof pendingApprovalSchema>;
 export type SelectedStartSessionRequest = z.infer<typeof selectedStartSessionRequestSchema>;
 

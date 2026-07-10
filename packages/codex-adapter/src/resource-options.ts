@@ -16,7 +16,10 @@ export const codexResourceBudgetKeys = [
   "protocol_max_pending_notifications",
   "protocol_thread_page_size",
   "protocol_thread_max_pages",
-  "protocol_thread_max_loaded_reads"
+  "protocol_thread_max_loaded_reads",
+  "protocol_model_page_size",
+  "protocol_model_max_pages",
+  "protocol_model_max_entries"
 ] as const;
 
 export interface CodexTransportResourceOptions {
@@ -47,11 +50,20 @@ export interface CodexEventPipelineResourceOptions {
   readonly max_pending_notifications: number;
 }
 
+export interface CodexModelResourceOptions {
+  readonly page_size: number;
+  readonly max_pages: number;
+  readonly max_entries: number;
+  readonly read_timeout_ms: number;
+  readonly start_timeout_ms: number;
+}
+
 export interface CodexResourceOptions {
   readonly transport: CodexTransportResourceOptions;
   readonly connection: CodexConnectionResourceOptions;
   readonly event_pipeline: CodexEventPipelineResourceOptions;
   readonly thread: CodexThreadResourceOptions;
+  readonly model: CodexModelResourceOptions;
 }
 
 export function codexResourceOptionsFromBudget(input: unknown): CodexResourceOptions {
@@ -79,6 +91,13 @@ export function codexResourceOptionsFromBudget(input: unknown): CodexResourceOpt
       max_loaded_reads: budget.protocol_thread_max_loaded_reads,
       read_timeout_ms: budget.protocol_read_timeout_ms,
       mutation_timeout_ms: budget.protocol_mutation_timeout_ms,
+      start_timeout_ms: budget.protocol_start_timeout_ms
+    }),
+    model: Object.freeze({
+      page_size: budget.protocol_model_page_size,
+      max_pages: budget.protocol_model_max_pages,
+      max_entries: budget.protocol_model_max_entries,
+      read_timeout_ms: budget.protocol_read_timeout_ms,
       start_timeout_ms: budget.protocol_start_timeout_ms
     })
   });

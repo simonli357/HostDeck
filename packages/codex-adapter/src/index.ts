@@ -54,10 +54,21 @@ export {
   type NormalizedCodexThreadStatus,
   type NormalizedCodexTokenUsage
 } from "./event-normalizer.js";
+export {
+  type CodexModelCatalog,
+  type CodexModelClient,
+  type CodexModelClientOptions,
+  type CodexModelRequestPort,
+  type CodexModelTurnAccepted,
+  type CodexModelTurnStartInput,
+  type CodexThreadModelState,
+  createCodexModelClient
+} from "./model-client.js";
 export type { CodexRequestId } from "./protocol.js";
 export {
   type CodexConnectionResourceOptions,
   type CodexEventPipelineResourceOptions,
+  type CodexModelResourceOptions,
   type CodexResourceOptions,
   type CodexThreadResourceOptions,
   type CodexTransportResourceOptions,

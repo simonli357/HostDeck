@@ -18,6 +18,7 @@ describe("Codex resource options", () => {
     expect(Object.isFrozen(options.connection)).toBe(true);
     expect(Object.isFrozen(options.event_pipeline)).toBe(true);
     expect(Object.isFrozen(options.thread)).toBe(true);
+    expect(Object.isFrozen(options.model)).toBe(true);
   });
 
   it("preserves a coherent lower policy exactly", () => {
@@ -33,7 +34,10 @@ describe("Codex resource options", () => {
       protocol_max_pending_notifications: 64,
       protocol_thread_page_size: 50,
       protocol_thread_max_pages: 20,
-      protocol_thread_max_loaded_reads: 100
+      protocol_thread_max_loaded_reads: 100,
+      protocol_model_page_size: 25,
+      protocol_model_max_pages: 4,
+      protocol_model_max_entries: 100
     });
 
     expect(options).toMatchObject({
@@ -54,6 +58,13 @@ describe("Codex resource options", () => {
         max_loaded_reads: 100,
         read_timeout_ms: 4_000,
         mutation_timeout_ms: 8_000,
+        start_timeout_ms: 20_000
+      },
+      model: {
+        page_size: 25,
+        max_pages: 4,
+        max_entries: 100,
+        read_timeout_ms: 4_000,
         start_timeout_ms: 20_000
       }
     });
@@ -87,6 +98,9 @@ function mappedProtocolValues(options: CodexResourceOptions) {
     protocol_max_pending_notifications: options.event_pipeline.max_pending_notifications,
     protocol_thread_page_size: options.thread.page_size,
     protocol_thread_max_pages: options.thread.max_pages,
-    protocol_thread_max_loaded_reads: options.thread.max_loaded_reads
+    protocol_thread_max_loaded_reads: options.thread.max_loaded_reads,
+    protocol_model_page_size: options.model.page_size,
+    protocol_model_max_pages: options.model.max_pages,
+    protocol_model_max_entries: options.model.max_entries
   } as const;
 }

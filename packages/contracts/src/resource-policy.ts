@@ -13,6 +13,7 @@ export const resourceBudgetOwners = [
   "host_service",
   "runtime_supervisor",
   "sse_transport",
+  "turn_control",
   "trust_service"
 ] as const;
 export type ResourceBudgetOwner = (typeof resourceBudgetOwners)[number];
@@ -128,6 +129,10 @@ export const resourceBudgetDefinitions = Object.freeze([
   defineResource("protocol_thread_page_size", "count", 1, 100, 500, "codex_broker", "service_overloaded", "abort_operation"),
   defineResource("protocol_thread_max_pages", "count", 1, 100, 100, "codex_broker", "service_overloaded", "abort_operation"),
   defineResource("protocol_thread_max_loaded_reads", "count", 1, 500, 5_000, "codex_broker", "service_overloaded", "abort_operation"),
+  defineResource("protocol_model_page_size", "count", 1, 100, 128, "codex_broker", "service_overloaded", "abort_operation"),
+  defineResource("protocol_model_max_pages", "count", 1, 10, 100, "codex_broker", "service_overloaded", "abort_operation"),
+  defineResource("protocol_model_max_entries", "count", 1, 128, 128, "codex_broker", "service_overloaded", "abort_operation"),
+  defineResource("control_model_max_pending_selections", "count", 1, 128, 4_096, "turn_control", "service_overloaded", "reject_operation"),
 
   defineResource("lifecycle_startup_timeout_ms", "milliseconds", 1_000, 60_000, 300_000, "runtime_supervisor", "operation_timeout", "abort_operation"),
   defineResource("lifecycle_shutdown_timeout_ms", "milliseconds", 1_000, 10_000, 60_000, "host_service", "operation_timeout", "terminate_resource"),
@@ -194,6 +199,7 @@ export const resourceBudgetSchema = z
     atMost("protocol_mutation_timeout_ms", "http_request_deadline_ms", "Protocol mutations must fit within the HTTP request deadline.");
     atMost("protocol_start_timeout_ms", "http_request_deadline_ms", "Protocol session start must fit within the HTTP request deadline.");
     atMost("protocol_max_in_flight_requests", "http_max_in_flight_requests", "Protocol in-flight requests cannot exceed HTTP request concurrency.");
+    atMost("protocol_model_page_size", "protocol_model_max_entries", "One model page must fit within the model catalog entry bound.");
     atMost("protocol_close_timeout_ms", "lifecycle_shutdown_timeout_ms", "Protocol close must fit within host shutdown.");
     atMost("lifecycle_cleanup_step_timeout_ms", "lifecycle_shutdown_timeout_ms", "One cleanup step must fit within host shutdown.");
     atMost("cli_connect_timeout_ms", "cli_request_timeout_ms", "CLI connect timeout must fit within its request timeout.");
