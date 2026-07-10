@@ -15,7 +15,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-021` Implement pending Plan/Default selection | in_progress | none | Implements the third primary control and its required composition with pending model state. |
+| 1 | `INT-V1-018` Implement exact prompt/turn targeting | in_progress | none | Consumes the completed model/Plan transaction boundary in the first assembled primary-control turn path. |
 | 2 | `INT-V1-025` Implement pending approval routing | ready | none | Uses normalized request/item identity to implement exactly-once approve/deny behavior. |
 | 3 | `DAT-V1-022` Invoke production projection retention | ready | none | Extends the proven append transaction with bounded pruning and visible replay boundaries. |
 | 4 | `DAT-V1-023` Implement accepted-to-terminal audit state machine | ready | none | Establishes truthful mutation outcomes before write/security integration. |
@@ -32,7 +32,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
 | LAN security | `IFC-V1-015` | Real phone certificate-enrollment proof | Auth lifecycle, pairing UI, security/release review. |
-| Real Codex operation implementation | `INT-V1-018` to `INT-V1-027` | Exact semantics, ordered normalization, model, and goal control pass; remaining control ports and assembled real proof remain | Production operation API, stable mobile state matrix, approvals. |
+| Real Codex operation implementation | `INT-V1-018` to `INT-V1-027` | Exact semantics, ordered normalization, model, goal, and Plan control pass; assembled prompt plus remaining control ports and real proof remain | Production operation API, stable mobile state matrix, approvals. |
 | Mobile visual direction | Reopened `FE-V1-002`, `FE-V1-003` | Real state matrix, two replacement options, human selection | React screen implementation. |
 | Release | `REL-V1-010` | All module hardening, clean package/service/phone/security evidence, human acceptance | V1 release and V2 planning. |
 
