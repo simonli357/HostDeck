@@ -643,6 +643,8 @@ function statusForErrorCode(code: ErrorCode): number {
     case "malformed_request":
     case "unsupported_slash":
       return 400;
+    case "request_too_large":
+      return 413;
     case "permission_denied":
       return 403;
     case "read_only":
@@ -663,6 +665,7 @@ function statusForErrorCode(code: ErrorCode): number {
     case "daemon_unavailable":
     case "runtime_unavailable":
     case "incompatible_runtime":
+    case "service_overloaded":
       return 503;
     case "tmux_error":
     case "protocol_error":

@@ -2,7 +2,9 @@ import {
   absoluteCwdSchema,
   clientOperationIdSchema,
   codexThreadIdSchema,
+  defaultResourceBudget,
   type RuntimeCompatibility,
+  resourceBudgetDefinitionByKey,
   sessionNameSchema
 } from "@hostdeck/contracts";
 import type { AbsoluteCwd, ClientOperationId, CodexThreadId, IsoTimestamp } from "@hostdeck/core";
@@ -74,6 +76,9 @@ export interface CodexThreadClientOptions {
   readonly page_size?: number;
   readonly max_pages?: number;
   readonly max_loaded_reads?: number;
+  readonly read_timeout_ms?: number;
+  readonly mutation_timeout_ms?: number;
+  readonly start_timeout_ms?: number;
 }
 
 export interface CodexThreadClient {
@@ -91,6 +96,9 @@ interface ParsedThreadClientOptions {
   readonly page_size: number;
   readonly max_pages: number;
   readonly max_loaded_reads: number;
+  readonly read_timeout_ms: number;
+  readonly mutation_timeout_ms: number;
+  readonly start_timeout_ms: number;
 }
 
 interface ParsedThreadGoal {
@@ -98,19 +106,12 @@ interface ParsedThreadGoal {
 }
 
 const threadClientDefaults = {
-  page_size: 100,
-  max_pages: 100,
-  max_loaded_reads: 500
-} as const;
-
-const requestTimeouts = {
-  archive: 15_000,
-  goal: 10_000,
-  list: 10_000,
-  loaded_list: 10_000,
-  name: 10_000,
-  read: 10_000,
-  start: 30_000
+  page_size: defaultResourceBudget.protocol_thread_page_size,
+  max_pages: defaultResourceBudget.protocol_thread_max_pages,
+  max_loaded_reads: defaultResourceBudget.protocol_thread_max_loaded_reads,
+  read_timeout_ms: defaultResourceBudget.protocol_read_timeout_ms,
+  mutation_timeout_ms: defaultResourceBudget.protocol_mutation_timeout_ms,
+  start_timeout_ms: defaultResourceBudget.protocol_start_timeout_ms
 } as const;
 
 export function createCodexThreadClient(port: CodexThreadRequestPort, options: CodexThreadClientOptions = {}): CodexThreadClient {
@@ -171,7 +172,7 @@ class DefaultCodexThreadClient implements CodexThreadClient {
       threadSource: marker
     } satisfies ThreadStartParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/start", params, kind: "mutation", timeout_ms: requestTimeouts.start }),
+      await this.port.request({ method: "thread/start", params, kind: "mutation", timeout_ms: this.options.start_timeout_ms }),
       "Codex thread/start result must be an object."
     );
     const rawThread = requireRecord(result.thread, "Codex thread/start thread must be an object.");
@@ -245,7 +246,7 @@ class DefaultCodexThreadClient implements CodexThreadClient {
       useStateDbOnly: false
     } satisfies ThreadListParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/list", params, kind: "read", timeout_ms: requestTimeouts.list }),
+      await this.port.request({ method: "thread/list", params, kind: "read", timeout_ms: this.options.read_timeout_ms }),
       "Codex thread/list result must be an object."
     );
     if (!Array.isArray(result.data) || result.data.length > limit) {
@@ -318,7 +319,7 @@ class DefaultCodexThreadClient implements CodexThreadClient {
           method: "thread/loaded/list",
           params,
           kind: "read",
-          timeout_ms: requestTimeouts.loaded_list
+          timeout_ms: this.options.read_timeout_ms
         }),
         "Codex thread/loaded/list result must be an object."
       );
@@ -350,7 +351,7 @@ class DefaultCodexThreadClient implements CodexThreadClient {
   private async setThreadName(threadId: CodexThreadId, name: string): Promise<void> {
     const params = { threadId, name } satisfies ThreadSetNameParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/name/set", params, kind: "mutation", timeout_ms: requestTimeouts.name }),
+      await this.port.request({ method: "thread/name/set", params, kind: "mutation", timeout_ms: this.options.mutation_timeout_ms }),
       "Codex thread/name/set result must be an object."
     );
     if (Object.keys(result).length !== 0) throw invalidThreadPayload("Codex thread/name/set returned unexpected fields.");
@@ -359,7 +360,7 @@ class DefaultCodexThreadClient implements CodexThreadClient {
   private async readThreadGoal(threadId: CodexThreadId): Promise<ParsedThreadGoal | null> {
     const params = { threadId } satisfies ThreadGoalGetParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/goal/get", params, kind: "read", timeout_ms: requestTimeouts.goal }),
+      await this.port.request({ method: "thread/goal/get", params, kind: "read", timeout_ms: this.options.read_timeout_ms }),
       "Codex thread/goal/get result must be an object."
     );
     assertExactKeys(result, ["goal"], "Codex thread/goal/get fields are invalid.");
@@ -369,7 +370,7 @@ class DefaultCodexThreadClient implements CodexThreadClient {
   private async setThreadGoal(threadId: CodexThreadId, objective: string): Promise<void> {
     const params = { threadId, objective } satisfies ThreadGoalSetParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/goal/set", params, kind: "mutation", timeout_ms: requestTimeouts.goal }),
+      await this.port.request({ method: "thread/goal/set", params, kind: "mutation", timeout_ms: this.options.mutation_timeout_ms }),
       "Codex thread/goal/set result must be an object."
     );
     assertExactKeys(result, ["goal"], "Codex thread/goal/set fields are invalid.");
@@ -380,7 +381,7 @@ class DefaultCodexThreadClient implements CodexThreadClient {
   private async clearThreadGoal(threadId: CodexThreadId): Promise<void> {
     const params = { threadId } satisfies ThreadGoalClearParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/goal/clear", params, kind: "mutation", timeout_ms: requestTimeouts.goal }),
+      await this.port.request({ method: "thread/goal/clear", params, kind: "mutation", timeout_ms: this.options.mutation_timeout_ms }),
       "Codex thread/goal/clear result must be an object."
     );
     assertExactKeys(result, ["cleared"], "Codex thread/goal/clear fields are invalid.");
@@ -392,7 +393,7 @@ class DefaultCodexThreadClient implements CodexThreadClient {
     const parsedThreadId = parseThreadId(threadId);
     const params = { threadId: parsedThreadId, includeTurns: false } satisfies ThreadReadParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/read", params, kind: "read", timeout_ms: requestTimeouts.read }),
+      await this.port.request({ method: "thread/read", params, kind: "read", timeout_ms: this.options.read_timeout_ms }),
       "Codex thread/read result must be an object."
     );
     const thread = parseThread(result.thread, null);
@@ -404,7 +405,7 @@ class DefaultCodexThreadClient implements CodexThreadClient {
     void this.runtime_version;
     const params = { threadId: parseThreadId(threadId) } satisfies ThreadArchiveParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/archive", params, kind: "mutation", timeout_ms: requestTimeouts.archive }),
+      await this.port.request({ method: "thread/archive", params, kind: "mutation", timeout_ms: this.options.mutation_timeout_ms }),
       "Codex thread/archive result must be an object."
     );
     if (Object.keys(result).length !== 0) throw invalidThreadPayload("Codex thread/archive returned unexpected fields.");
@@ -607,14 +608,47 @@ function assertExactKeys(value: Record<string, unknown>, expected: readonly stri
 
 function parseOptions(options: CodexThreadClientOptions): ParsedThreadClientOptions {
   return {
-    page_size: parseBoundedInteger(options.page_size, threadClientDefaults.page_size, 1, 500, "thread page size"),
-    max_pages: parseBoundedInteger(options.max_pages, threadClientDefaults.max_pages, 1, 100, "thread max pages"),
+    page_size: parseBoundedInteger(
+      options.page_size,
+      threadClientDefaults.page_size,
+      resourceBudgetDefinitionByKey.protocol_thread_page_size.minimum,
+      resourceBudgetDefinitionByKey.protocol_thread_page_size.maximum,
+      "thread page size"
+    ),
+    max_pages: parseBoundedInteger(
+      options.max_pages,
+      threadClientDefaults.max_pages,
+      resourceBudgetDefinitionByKey.protocol_thread_max_pages.minimum,
+      resourceBudgetDefinitionByKey.protocol_thread_max_pages.maximum,
+      "thread max pages"
+    ),
     max_loaded_reads: parseBoundedInteger(
       options.max_loaded_reads,
       threadClientDefaults.max_loaded_reads,
-      1,
-      5_000,
+      resourceBudgetDefinitionByKey.protocol_thread_max_loaded_reads.minimum,
+      resourceBudgetDefinitionByKey.protocol_thread_max_loaded_reads.maximum,
       "loaded-thread exact-read bound"
+    ),
+    read_timeout_ms: parseBoundedInteger(
+      options.read_timeout_ms,
+      threadClientDefaults.read_timeout_ms,
+      resourceBudgetDefinitionByKey.protocol_read_timeout_ms.minimum,
+      resourceBudgetDefinitionByKey.protocol_read_timeout_ms.maximum,
+      "thread read timeout"
+    ),
+    mutation_timeout_ms: parseBoundedInteger(
+      options.mutation_timeout_ms,
+      threadClientDefaults.mutation_timeout_ms,
+      resourceBudgetDefinitionByKey.protocol_mutation_timeout_ms.minimum,
+      resourceBudgetDefinitionByKey.protocol_mutation_timeout_ms.maximum,
+      "thread mutation timeout"
+    ),
+    start_timeout_ms: parseBoundedInteger(
+      options.start_timeout_ms,
+      threadClientDefaults.start_timeout_ms,
+      resourceBudgetDefinitionByKey.protocol_start_timeout_ms.minimum,
+      resourceBudgetDefinitionByKey.protocol_start_timeout_ms.maximum,
+      "thread start timeout"
     )
   };
 }

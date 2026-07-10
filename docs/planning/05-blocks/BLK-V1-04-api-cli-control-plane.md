@@ -16,8 +16,8 @@ Requirement refs: `FR-011`, `FR-012`, `FR-018`, `NFR-001`, `NFR-009` to `NFR-011
 
 | Part | Responsibility | Required bounds |
 | --- | --- | --- |
-| Fastify app | Schema routes, errors, hooks, HTTPS, static assets, readiness/liveness. | Headers/body/request/idle/connection limits and graceful close. |
-| SSE plugin/hub adapter | Cursor replay and live projection stream through the selected Readable-backed SSE transport. | Subscribers, queue bytes/events, heartbeat, abort/source cleanup, handler settlement, shutdown deadline; no direct plugin AsyncIterable path. |
+| Fastify app | Schema routes, errors, hooks, HTTPS, static assets, readiness/liveness, and the one parsed resource policy. | Separate header/receive/handler/body/URL/parameter/idle/connection/in-flight limits, one request signal/deadline, and graceful close. |
+| SSE plugin/hub adapter | Cursor replay and live projection stream through the selected Readable-backed SSE transport. | Global/device/session subscribers, queue/replay bytes/events, heartbeat, abort/source cleanup, handler settlement, shutdown deadline; no direct plugin AsyncIterable path. |
 | Trust hooks | Host/Origin, device cookie, CSRF generation, permission, lock, rate/concurrency. | No wildcard credentialed CORS or unauthenticated LAN read. |
 | Certificate manager | LAN certificate enrollment/inspection/renewal and origin allowlist input. | Owner-only keys, SAN/expiry validation, no plaintext fallback. |
 | Orchestrator/health | Selected Codex adapter, projector, storage, listener, shutdown. | Runtime health updates and one owner; no test-only live source. |
@@ -46,8 +46,8 @@ Local-admin CLI calls use an explicit loopback/admin authority, not a magic miss
 | Historical headless routes/custom listener/source CLI | `IFC-V1-001` to `IFC-V1-014`, `IFC-V1-090` | Retained reusable evidence; production block reopened. |
 | HTTPS enrollment decision and phone proof | `IFC-V1-015` | Ready after planning rebaseline. |
 | Fastify stack/API contract spike | `IFC-V1-016` | Complete; exact Fastify/Zod/SSE/static dependencies and constrained validation/stream/asset/lifecycle boundaries are proven. |
-| Resource budgets and monotonic deadline contract | `IFC-V1-020` | In progress; selected stack is frozen and this contract precedes server/SSE implementation. |
-| Typed app, SSE adapter, static boundary, and listener lifecycle | `IFC-V1-022` to `IFC-V1-025` | Ordered behind the stack spike. |
+| Resource budgets and monotonic deadline contract | `IFC-V1-020` | Complete; 59 strict resource definitions, Fastify/Codex mappings, public breach codes, and owner/view fake-clock evidence precede enforcement. |
+| Typed app, SSE adapter, static boundary, and listener lifecycle | `IFC-V1-022` to `IFC-V1-025` | Typed app factory in progress; later leaves remain dependency-ordered behind it. |
 | Transport/Host/Origin/CORS security foundation | `IFC-V1-017` | Blocked by HTTPS proof and the typed app factory. |
 | Cookie auth, security audit executor, CSRF, pair/device/revoke/lock/LAN routes, and security matrix | `IFC-V1-026` to `IFC-V1-033`, `IFC-V1-059` | Dependency-ordered behind route manifest, data storage, HTTPS, and security foundation. |
 | Commit-only fanout foundation | `IFC-V1-018` | Blocked by production append, event normalization, and SSE transport. |

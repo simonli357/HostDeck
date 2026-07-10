@@ -1,4 +1,5 @@
 export * from "./api-route-contracts.js";
+export * from "./fastify-resource-options.js";
 export * from "./host-service.js";
 export * from "./managed-thread-service.js";
 export * from "./output-reader.js";

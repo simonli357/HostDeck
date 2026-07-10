@@ -85,12 +85,14 @@ Raw generated app-server types never cross into storage, API, or UI packages.
 
 | Component | Ownership | Failure rule |
 | --- | --- | --- |
-| Typed app factory | Fastify 5.10.0 instance, HostDeck-local Zod 4.4.3 type provider and compilers, global limits/content types/request ids/errors, explicit route plugins. | No listener/storage/process side effects; invalid config or schema registration fails composition; request failures are bounded 4xx and response/internal failures are redacted 5xx. |
+| Typed app factory | Fastify 5.10.0 instance, HostDeck-local Zod 4.4.3 type provider and compilers, resolved `ResourceBudget`, global content types/request ids/errors, explicit route plugins. | No listener/storage/process side effects; invalid config or schema registration fails composition; receive timeout and handler deadline are distinct; request failures are bounded 4xx and response/internal failures are redacted 5xx. |
 | SSE transport | `@fastify/sse` 0.5.0 negotiation/headers/heartbeat plus a required injected HostDeck event source converted through `Readable.from(..., { objectMode: true })`. | Never pass an AsyncIterable directly to the pinned plugin. One request abort signal reaches the source; source/serialization failure is observed before close; cleanup and handler settlement are bounded. |
 | Static boundary | `@fastify/static` 9.3.0 asset prefix plus validated canonical roots and explicit browser-shell routes. | `index: false` for assets; send-level dotfile denial and dot-segment filtering; API misses never fall through to HTML; missing root/index fails startup. |
 | Listener lifecycle | One composition owner for register/ready/listen/readiness/drain/close and reverse-order startup rollback. | No listen before readiness; close is idempotent and attempts every bounded cleanup even when an earlier close step fails. |
 
 The SSE plugin does not own durable replay, high-water/live handoff, subscriber queues, auth, or runtime health. Its direct async-iterable send path is outside the selected contract because `IFC-V1-016` proved that a socket close can leave a backpressured drain wait suspended. Any selected-stack version change reruns the spike probes before implementation or lockfile acceptance.
+
+The composition root parses `resourceBudgetSchema` once before lease, storage, runtime, or listener mutation and injects the same frozen result. `fastifyResourceOptionsFromBudget` maps receive, handler, socket, body, router, and application caps without conflating them. Fastify `handlerTimeout` is the HTTP cancellation owner: every route gets one `OperationDeadline` view over the unchanged `request.signal`, and every application/protocol call receives that same view or its decreasing `timeoutMs(cap)`. The global error owner converts Fastify's native handler-timeout failure to the bounded `operation_timeout`/504 envelope. Startup/shutdown and future CLI process boundaries use the timer-owning deadline form. No downstream layer calls `AbortSignal.timeout`, creates a replacement request signal, resets elapsed time, or substitutes its own larger default.
 
 ## Application Services
 
@@ -148,14 +150,14 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 
 ### Prompt Or Structured Control
 
-1. Fastify validates path, body, content type, and size.
+1. Fastify enforces header/request-receive/body/URL/parameter bounds, validates path/body/content type, and exposes one handler-owned `request.signal` plus monotonic deadline view.
 2. Trust service validates configured Host, Origin, device cookie/permission, CSRF generation, expiry/revocation, and rate/concurrency limit.
 3. Dispatcher checks host lock.
 4. Load exact managed session and current runtime/projection state.
 5. Check runtime compatibility and operation capability.
 6. Validate operation-specific input and active-turn conflict behavior.
 7. Append bounded audit `accepted` in a transaction.
-8. Dispatch once with request deadline/idempotency metadata where supported.
+8. Dispatch once with the same AbortSignal and only the remaining request duration; idempotency metadata is included where supported.
 9. Append `succeeded`, `failed`, or `incomplete` outcome.
 10. Return accepted/terminal response consistent with the owning operation; later turn outcome arrives by event stream.
 

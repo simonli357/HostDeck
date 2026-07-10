@@ -1,6 +1,11 @@
 import { Buffer } from "node:buffer";
 import { isAbsolute } from "node:path";
-import { type RuntimeCompatibility, runtimeCompatibilitySchema } from "@hostdeck/contracts";
+import {
+  defaultResourceBudget,
+  type RuntimeCompatibility,
+  resourceBudgetDefinitionByKey,
+  runtimeCompatibilitySchema
+} from "@hostdeck/contracts";
 import { type CodexProtocolIssue, type CodexRequestInput, createCodexRequestBroker } from "./broker.js";
 import { assessCodexCompatibility, HostDeckCodexCompatibilityError } from "./compatibility.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
@@ -56,7 +61,7 @@ interface InitializeProbe {
 
 const defaults = {
   client_version: "0.0.0",
-  handshake_timeout_ms: 10_000
+  handshake_timeout_ms: defaultResourceBudget.protocol_handshake_timeout_ms
 } as const;
 
 export function createCodexAppServerConnection(options: CodexAppServerConnectionOptions): CodexAppServerConnection {
@@ -335,7 +340,7 @@ function parseConnectionOptions(options: CodexAppServerConnectionOptions): Parse
       options.handshake_timeout_ms,
       defaults.handshake_timeout_ms,
       50,
-      120_000,
+      resourceBudgetDefinitionByKey.protocol_handshake_timeout_ms.maximum,
       "handshake_timeout_ms"
     ),
     now: options.now ?? (() => new Date().toISOString())

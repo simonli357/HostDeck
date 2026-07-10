@@ -30,6 +30,8 @@ describe("error codes", () => {
     expect(errorCodes).toContain("approval_not_pending");
     expect(errorCodes).toContain("insecure_transport");
     expect(errorCodes).toContain("audit_unavailable");
+    expect(errorCodes).toContain("request_too_large");
+    expect(errorCodes).toContain("service_overloaded");
     expect(isErrorCode("host_locked")).toBe(true);
     expect(isErrorCode("not-a-code")).toBe(false);
   });

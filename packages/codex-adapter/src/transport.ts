@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import { isAbsolute } from "node:path";
+import { defaultResourceBudget, resourceBudgetDefinitionByKey } from "@hostdeck/contracts";
 import WebSocket, { type RawData } from "ws";
 import { boundedProtocolText, HostDeckCodexAdapterError } from "./errors.js";
 
@@ -52,12 +53,12 @@ interface ParsedTransportOptions {
 }
 
 const transportDefaults = {
-  handshake_timeout_ms: 5_000,
-  close_timeout_ms: 2_000,
-  heartbeat_interval_ms: 15_000,
-  heartbeat_timeout_ms: 5_000,
-  max_frame_bytes: 1_048_576,
-  max_buffered_bytes: 2_097_152
+  handshake_timeout_ms: defaultResourceBudget.protocol_connect_timeout_ms,
+  close_timeout_ms: defaultResourceBudget.protocol_close_timeout_ms,
+  heartbeat_interval_ms: defaultResourceBudget.protocol_heartbeat_interval_ms,
+  heartbeat_timeout_ms: defaultResourceBudget.protocol_heartbeat_timeout_ms,
+  max_frame_bytes: defaultResourceBudget.protocol_max_frame_bytes,
+  max_buffered_bytes: defaultResourceBudget.protocol_max_buffered_bytes
 } as const;
 
 export function createCodexUnixWebSocketTransport(options: unknown): CodexTextTransport {
@@ -362,28 +363,46 @@ function parseTransportOptions(candidate: unknown): ParsedTransportOptions {
 
   const socketPath = parseSocketPath(value.socket_path);
 
-  const handshakeTimeout = parseBoundedInteger(value.handshake_timeout_ms, transportDefaults.handshake_timeout_ms, 50, 30_000, "handshake_timeout_ms");
-  const closeTimeout = parseBoundedInteger(value.close_timeout_ms, transportDefaults.close_timeout_ms, 50, 10_000, "close_timeout_ms");
+  const handshakeTimeout = parseBoundedInteger(
+    value.handshake_timeout_ms,
+    transportDefaults.handshake_timeout_ms,
+    50,
+    resourceBudgetDefinitionByKey.protocol_connect_timeout_ms.maximum,
+    "handshake_timeout_ms"
+  );
+  const closeTimeout = parseBoundedInteger(
+    value.close_timeout_ms,
+    transportDefaults.close_timeout_ms,
+    50,
+    resourceBudgetDefinitionByKey.protocol_close_timeout_ms.maximum,
+    "close_timeout_ms"
+  );
   const heartbeatInterval = parseBoundedInteger(
     value.heartbeat_interval_ms,
     transportDefaults.heartbeat_interval_ms,
     50,
-    120_000,
+    resourceBudgetDefinitionByKey.protocol_heartbeat_interval_ms.maximum,
     "heartbeat_interval_ms"
   );
   const heartbeatTimeout = parseBoundedInteger(
     value.heartbeat_timeout_ms,
     transportDefaults.heartbeat_timeout_ms,
     50,
-    30_000,
+    resourceBudgetDefinitionByKey.protocol_heartbeat_timeout_ms.maximum,
     "heartbeat_timeout_ms"
   );
-  const maxFrameBytes = parseBoundedInteger(value.max_frame_bytes, transportDefaults.max_frame_bytes, 1_024, 8_388_608, "max_frame_bytes");
+  const maxFrameBytes = parseBoundedInteger(
+    value.max_frame_bytes,
+    transportDefaults.max_frame_bytes,
+    resourceBudgetDefinitionByKey.protocol_max_frame_bytes.minimum,
+    resourceBudgetDefinitionByKey.protocol_max_frame_bytes.maximum,
+    "max_frame_bytes"
+  );
   const maxBufferedBytes = parseBoundedInteger(
     value.max_buffered_bytes,
     transportDefaults.max_buffered_bytes,
-    maxFrameBytes,
-    16_777_216,
+    Math.max(maxFrameBytes, resourceBudgetDefinitionByKey.protocol_max_buffered_bytes.minimum),
+    resourceBudgetDefinitionByKey.protocol_max_buffered_bytes.maximum,
     "max_buffered_bytes"
   );
   return {

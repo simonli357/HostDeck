@@ -1,4 +1,5 @@
 export * from "./api.js";
+export * from "./resource-policy.js";
 export * from "./selected-mobile.js";
 export * from "./selected-operations.js";
 export * from "./selected-runtime.js";

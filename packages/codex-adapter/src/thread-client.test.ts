@@ -323,12 +323,50 @@ describe("normalized Codex thread client", () => {
   it("rejects invalid markers/options and disconnected compatibility before dispatch", async () => {
     expect(() => codexThreadOperationMarker("bad")).toThrow(HostDeckCodexAdapterError);
     expect(() => createCodexThreadClient(fakePort(() => null), { page_size: 0 })).toThrow(HostDeckCodexAdapterError);
+    expect(() => createCodexThreadClient(fakePort(() => null), { read_timeout_ms: 0 })).toThrow(
+      HostDeckCodexAdapterError
+    );
     const port = fakePort(() => null, disconnectedCompatibility());
     await expectAdapterError(
       createCodexThreadClient(port).start({ operation_id: "op_thread_start_0001", cwd: "/tmp/project-a" }),
       "handshake_failed"
     );
     expect(port.requests).toHaveLength(0);
+  });
+
+  it("passes configured read, mutation, and start deadlines without extension", async () => {
+    const port = fakePort((request) => {
+      if (request.method === "thread/start") {
+        return {
+          thread: rawThread({
+            id: "thread-timeout",
+            cwd: "/tmp/project-a",
+            source: "vscode",
+            threadSource: "hostdeck:op_thread_start_0001"
+          }),
+          cwd: "/tmp/project-a",
+          model: "gpt-5.5-codex"
+        };
+      }
+      if (request.method === "thread/read") return { thread: rawThread({ id: "thread-timeout" }) };
+      if (request.method === "thread/archive") return {};
+      throw new Error(`Unexpected method ${request.method}`);
+    });
+    const client = createCodexThreadClient(port, {
+      read_timeout_ms: 4_000,
+      mutation_timeout_ms: 8_000,
+      start_timeout_ms: 20_000
+    });
+
+    await client.start({ operation_id: "op_thread_start_0001", cwd: "/tmp/project-a" });
+    await client.read("thread-timeout");
+    await client.archive("thread-timeout");
+
+    expect(port.requests.map((request) => [request.method, request.timeout_ms])).toEqual([
+      ["thread/start", 20_000],
+      ["thread/read", 4_000],
+      ["thread/archive", 8_000]
+    ]);
   });
 
   it("recognizes only valid HostDeck markers on supported app-server session sources", () => {

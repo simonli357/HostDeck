@@ -1,3 +1,4 @@
+import { defaultResourceBudget, resourceBudgetDefinitionByKey } from "@hostdeck/contracts";
 import { boundedProtocolText, HostDeckCodexAdapterError } from "./errors.js";
 import {
   type CodexRequestId,
@@ -67,9 +68,9 @@ interface PendingServerRequest {
 }
 
 const brokerDefaults = {
-  max_in_flight: 32,
-  request_timeout_ms: 15_000,
-  max_server_requests: 16
+  max_in_flight: defaultResourceBudget.protocol_max_in_flight_requests,
+  request_timeout_ms: defaultResourceBudget.protocol_mutation_timeout_ms,
+  max_server_requests: defaultResourceBudget.protocol_max_pending_server_requests
 } as const;
 
 export function createCodexRequestBroker(transport: CodexTextTransport, options: CodexRequestBrokerOptions = {}): CodexRequestBroker {
@@ -444,14 +445,38 @@ class DefaultCodexRequestBroker implements CodexRequestBroker {
 function parseBrokerOptions(options: CodexRequestBrokerOptions) {
   return {
     ...options,
-    max_in_flight: boundedInteger(options.max_in_flight, brokerDefaults.max_in_flight, 1, 256, "max_in_flight"),
-    request_timeout_ms: boundedInteger(options.request_timeout_ms, brokerDefaults.request_timeout_ms, 50, 120_000, "request_timeout_ms"),
-    max_server_requests: boundedInteger(options.max_server_requests, brokerDefaults.max_server_requests, 1, 64, "max_server_requests")
+    max_in_flight: boundedInteger(
+      options.max_in_flight,
+      brokerDefaults.max_in_flight,
+      resourceBudgetDefinitionByKey.protocol_max_in_flight_requests.minimum,
+      resourceBudgetDefinitionByKey.protocol_max_in_flight_requests.maximum,
+      "max_in_flight"
+    ),
+    request_timeout_ms: boundedInteger(
+      options.request_timeout_ms,
+      brokerDefaults.request_timeout_ms,
+      50,
+      resourceBudgetDefinitionByKey.protocol_mutation_timeout_ms.maximum,
+      "request_timeout_ms"
+    ),
+    max_server_requests: boundedInteger(
+      options.max_server_requests,
+      brokerDefaults.max_server_requests,
+      resourceBudgetDefinitionByKey.protocol_max_pending_server_requests.minimum,
+      resourceBudgetDefinitionByKey.protocol_max_pending_server_requests.maximum,
+      "max_server_requests"
+    )
   };
 }
 
 function parseRequestTimeout(candidate: number | undefined, fallback: number): number {
-  return boundedInteger(candidate, fallback, 50, 120_000, "timeout_ms");
+  return boundedInteger(
+    candidate,
+    fallback,
+    50,
+    resourceBudgetDefinitionByKey.protocol_start_timeout_ms.maximum,
+    "timeout_ms"
+  );
 }
 
 function boundedInteger(candidate: number | undefined, fallback: number, min: number, max: number, label: string): number {

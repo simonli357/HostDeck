@@ -53,6 +53,18 @@ The architecture is acceptable for V1 only when all of the following are true:
 
 All dependencies are pinned in the lockfile, license-checked when added, and recorded in the owning task. No dependency is considered selected solely because it appears in this plan.
 
+## Resource Budget And Deadline Contract
+
+`@hostdeck/contracts` owns one strict flat `resourceBudgetSchema` with 59 integer limits: HTTP (13), SSE (11), admission/rate/concurrency (11), Codex protocol (15), lifecycle (3), and CLI (6). Every entry records a unit, minimum/default/maximum, owner, breach code/action, and `hostdeck.resource.<key>` observation name. Missing fields resolve only to reviewed defaults; unknown, zero, fractional, non-finite, contradictory, or above-maximum values fail before production startup side effects.
+
+- Fastify `requestTimeout` receives only the request and uses `http_request_receive_timeout_ms`; `handlerTimeout` owns the full route deadline and aborts the one `request.signal`. Header, idle socket, keep-alive, connection, request-per-socket, body, URL, parameter, and in-flight limits remain distinct.
+- HTTP application/protocol layers receive one `OperationDeadline` view over that exact Fastify signal and may use only decreasing remaining milliseconds. They do not create a replacement signal or extend a timeout.
+- Startup, shutdown, and future CLI boundaries without an existing framework signal use the timer-owning monotonic `OperationDeadline`; owner disposal clears timer/listener state. A peer process cannot share a monotonic timestamp, so CLI bounds its outer HTTP call while request disconnect propagates into the server-owned signal.
+- `codexResourceOptionsFromBudget` maps all 15 protocol values into transport, connection/broker, and thread-client inputs. Low-level adapters retain small test-only timing support, but production composition must pass the validated mapping and cannot fall back to a larger local value.
+- Public breach families are explicit: `request_too_large` (413), `rate_limited` (429), `service_overloaded` (503), and `operation_timeout` (504). Counters/health observations use the registry key; detailed logging remains bounded and redacted.
+
+Exact defaults, cross-field invariants, and downstream consumers are recorded in `artifacts/ifc-v1-020-resource-budget-deadline.md`.
+
 ## Package Boundaries
 
 | Package | Owns | Must not own |
@@ -307,6 +319,8 @@ No stored tmux session is silently converted to a Codex thread. V1 pre-release d
 - Codex CLI options and maturity: `https://developers.openai.com/codex/cli/reference`
 - `ws` IPC client syntax: `https://github.com/websockets/ws/blob/master/doc/ws.md`
 - Fastify server lifecycle and limits: `https://fastify.dev/docs/latest/Reference/Server/`
+- Node 22 HTTP limits/timeouts: `https://nodejs.org/download/release/v22.15.0/docs/api/http.html`
+- Node 22 AbortController/AbortSignal: `https://nodejs.org/download/release/v22.15.0/docs/api/globals.html`
 - Official Fastify SSE plugin: `https://github.com/fastify/sse`
 - Official Fastify static plugin: `https://github.com/fastify/fastify-static`
 - Rejected Fastify Zod type-provider candidate: `https://github.com/turkerdev/fastify-type-provider-zod`

@@ -35,6 +35,14 @@ export {
 } from "./errors.js";
 export type { CodexRequestId } from "./protocol.js";
 export {
+  type CodexConnectionResourceOptions,
+  type CodexResourceOptions,
+  type CodexThreadResourceOptions,
+  type CodexTransportResourceOptions,
+  codexResourceBudgetKeys,
+  codexResourceOptionsFromBudget
+} from "./resource-options.js";
+export {
   type CodexThreadActiveFlag,
   type CodexThreadClient,
   type CodexThreadClientOptions,

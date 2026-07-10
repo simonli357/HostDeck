@@ -2,6 +2,7 @@ import type { SessionId } from "./session.js";
 
 export const errorCodes = [
   "malformed_request",
+  "request_too_large",
   "validation_error",
   "invalid_config",
   "missing_binary",
@@ -27,6 +28,7 @@ export const errorCodes = [
   "capability_unavailable",
   "approval_not_pending",
   "rate_limited",
+  "service_overloaded",
   "invalid_origin",
   "insecure_transport",
   "internal_error",
