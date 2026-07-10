@@ -45,7 +45,7 @@ Local-admin CLI calls use an explicit loopback/admin authority, not a magic miss
 | --- | --- | --- |
 | Historical headless routes/custom listener/source CLI | `IFC-V1-001` to `IFC-V1-014`, `IFC-V1-090` | Retained reusable evidence; production block reopened. |
 | HTTPS enrollment decision and phone proof | `IFC-V1-015` | Ready after planning rebaseline. |
-| Fastify stack/API contract spike | `IFC-V1-016` | Resumes after planning-integrity closure; exact dependencies and executable boundary probes precede implementation. |
+| Fastify stack/API contract spike | `IFC-V1-016` | In progress; exact dependencies and executable boundary probes precede implementation. |
 | Resource budgets and monotonic deadline contract | `IFC-V1-020` | Blocked by the selected stack; precedes server/SSE implementation. |
 | Typed app, SSE adapter, static boundary, and listener lifecycle | `IFC-V1-022` to `IFC-V1-025` | Ordered behind the stack spike. |
 | Transport/Host/Origin/CORS security foundation | `IFC-V1-017` | Blocked by HTTPS proof and the typed app factory. |

@@ -38,9 +38,9 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | Historical migrations/settings/session/auth/audit/retention/branch/restart | `DAT-V1-001` to `DAT-V1-017`, `DAT-V1-090` | Done for prior schema; reusable evidence retained. |
 | App-server mapping and projection migration | `DAT-V1-018` | Done; selected migration/repository evidence recorded. |
 | Secure paths and daemon lease | `DAT-V1-019` | Done; phased owner paths, descriptor identity, real Linux lease/crash recovery, and cleanup evidence recorded. |
-| Transactional production projection append | `DAT-V1-020` | Ready after planning-integrity closure. |
+| Transactional production projection append | `DAT-V1-020` | Ready. |
 | Production projection retention and boundaries | `DAT-V1-022` | Blocked by the append transaction. |
-| Accepted-to-terminal audit state machine | `DAT-V1-023` | Ready after planning-integrity closure. |
+| Accepted-to-terminal audit state machine | `DAT-V1-023` | Ready. |
 | Bounded startup retention maintenance | `DAT-V1-024` | Blocked by production retention and audit state. |
 | Orphan accepted-operation reconciliation | `DAT-V1-030` | Blocked by the bounded startup runner and audit state machine. |
 | CSRF bootstrap and rotation storage | `DAT-V1-021` | Blocked by the physical HTTPS/browser policy proof. |

@@ -89,4 +89,4 @@ These rows verify or close a defined body of leaf work. They are not valid subst
 
 ## Result
 
-`BUG-001` is resolved when this artifact and synchronized owner docs are committed. The next independent ready work is the exact Fastify stack spike, real Codex semantic spike, production append transaction, audit state machine, and physical HTTPS phone proof; only one becomes active at a time.
+`BUG-001` is resolved by planning commit `481cb44`, pushed to `origin/main`. The next independent work is the exact Fastify stack spike, real Codex semantic spike, production append transaction, audit state machine, and physical HTTPS phone proof; only the Fastify spike is active.

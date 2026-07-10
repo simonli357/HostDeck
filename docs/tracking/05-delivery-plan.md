@@ -4,7 +4,7 @@ Owns milestone, module maturity, production passes, and release truth.
 
 ## Snapshot
 
-- Current pass: selected foundation hardening, executable-leaf correction, and exact runtime/interface spikes.
+- Current pass: selected foundation data leaves and exact runtime/interface spikes.
 - Current milestone: M1 Selected foundation.
 - Release state: no-go; selected production path is not implemented.
 - Next exit: selected data append/audit leaves and exact Codex/Fastify semantic spikes are implemented or resolved with bounded evidence.
@@ -24,7 +24,7 @@ Owns milestone, module maturity, production passes, and release truth.
 
 | Block | Current maturity | Reopened gap | Completion owner |
 | --- | --- | --- | --- |
-| `BLK-V1-01` Contracts/core/fixtures | Selected normalized contracts, invariants, fixtures, generated boundary, and planning checker pass. | Executable-leaf audit `FND-V1-017` must close before foundation truth is final. | `FND-V1-014` to `FND-V1-017`, `FND-V1-091` |
+| `BLK-V1-01` Contracts/core/fixtures | Selected normalized contracts, invariants, fixtures, generated boundary, planning checker, and executable-leaf audit pass. | No foundation blocker; production consumers remain in their owning blocks. | `FND-V1-014` to `FND-V1-017`, `FND-V1-091` |
 | `BLK-V1-02` State/auth/audit | Selected mapping/projection migration and secure paths/daemon lease pass over a strong repository base. | Production append/retention/audit maintenance and CSRF/device/pairing/revoke lifecycle remain. | `DAT-V1-018` to `DAT-V1-030`, `DAT-V1-091` |
 | `BLK-V1-03` Codex runtime/events | Exact generated binding, private IPC/broker/handshake, and managed-thread/TUI lifecycle pass; tmux mechanics are legacy. | Real turn/event/control/approval ports, supervision, reconnect/restart, multi-client acceptance, and legacy disposition remain. | `INT-V1-005` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
 | `BLK-V1-04` API/CLI/security/service | Historical headless/custom listener and source CLI base. | Fastify/SSE/HTTPS/security/fanout/health/routes/legacy disposition/bounds/build/services remain. | `IFC-V1-015` to `IFC-V1-069`, `IFC-V1-091` |
@@ -41,7 +41,7 @@ Owns milestone, module maturity, production passes, and release truth.
 
 | Gate | Status | Blocking owner |
 | --- | --- | --- |
-| Planning/trace/dependency integrity | In progress | `REL-V1-011`, `FND-V1-014`, `FND-V1-017` |
+| Planning/trace/dependency integrity | Complete | `REL-V1-011`, `FND-V1-014`, `FND-V1-017` |
 | Real Codex compatibility and vertical | Blocked | `INT-V1-003` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
 | HTTPS/auth/security boundary | Blocked | `IFC-V1-015`, `DAT-V1-021`, `DAT-V1-025` to `DAT-V1-029`, `IFC-V1-017`, `IFC-V1-026` to `IFC-V1-033`, `IFC-V1-059`, `IFC-V1-066`, `IFC-V1-091` |
 | Build/package/user services | Blocked | `IFC-V1-021`, `IFC-V1-053` to `IFC-V1-058` |

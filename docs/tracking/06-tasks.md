@@ -15,8 +15,11 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FND-V1-017` Audit and decompose selected-path rollups | in_progress | none | Fixes `BUG-001` so readiness means executable handoff-sized leaves, not graph-valid broad cards. |
-| 2 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Independent physical-device spike; resolves the blocking LAN trust boundary when the setup is available. |
+| 1 | `IFC-V1-016` Select and probe the exact Fastify production stack | in_progress | none | Freezes maintained versions, validation/error ownership, resource inputs, SSE/static boundaries, and lifecycle behavior before server implementation. |
+| 2 | `INT-V1-006` Probe exact real Codex operation semantics | ready | none | Independent real-boundary spike; unblocks every structured operation port and the mobile state contract. |
+| 3 | `DAT-V1-020` Implement commit-before-publish projection append | ready | none | Independent data leaf; establishes durable event truth for normalization and fanout. |
+| 4 | `DAT-V1-023` Implement accepted-to-terminal audit state machine | ready | none | Independent data leaf; establishes truthful mutation outcomes before write/security integration. |
+| 5 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Independent physical-device spike; resolves the blocking LAN trust boundary when the setup is available. |
 
 ## Intentional Blockers
 

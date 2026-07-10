@@ -5,8 +5,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `FND-V1-017` selected-path backlog granularity audit and decomposition (`BUG-001`).
-- Other ready task: `IFC-V1-015` physical-device HTTPS spike.
+- Active task: `IFC-V1-016` exact Fastify/Zod/SSE/static production-stack spike.
+- Other ready tasks: `INT-V1-006` real Codex semantic spike, `DAT-V1-020` production projection append, `DAT-V1-023` audit state machine, and `IFC-V1-015` physical-device HTTPS spike.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
 - Release state: no-go. All capability blocks affected by the new runtime/security/mobile outcome are reopened.
@@ -19,6 +19,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Selected app-server runtime, operation, storage, audit, and phone view-model contracts now replace legacy assumptions for new work; required structured/mobile fixture inventories pass public contract tests.
 - Legacy tmux, terminal-output, slash-injection, raw-input, storage, and desktop-led UI contracts remain exported only as explicitly deprecated migration surfaces pending `INT-V1-008`.
 - `BLK-V1-01` is complete for normalized contracts, core invariants, deterministic fixtures, planning integrity, and generated-protocol isolation; production consumers remain reopened in their owning blocks.
+- `FND-V1-017` closed `BUG-001`: every unfinished selected-path row was manually classified and decomposed into a 196-task/622-edge graph; resource policy now precedes implementation, operation/read routes have separate owners, and deliberate aggregate gates are explicit. Evidence: `artifacts/fnd-v1-017-selected-backlog-granularity.md`; commit `481cb44`.
 - Selected mappings, projections, projected events, compatibility results, start recovery, and legacy dispositions now have additive migration and repository ownership with transactional/concurrency/restart/corruption evidence.
 - `@hostdeck/codex-adapter` owns an exact 0.144.0 experimental generated binding, deterministic schema-drift check, fail-closed required-capability policy, and a real no-model initialize/Plan catalog smoke.
 - The adapter now also owns a bounded Unix-only WebSocket transport, strict wire decoder, correlated request/server-request broker, initialize/degradation state machine, deterministic raw-protocol fake, explicit no-auto-retry reconnect, and a real private-socket no-model smoke.
@@ -35,11 +36,9 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Blockers
 
-- Run `IFC-V1-015` when the real phone/LAN test setup is available.
-- Prove the remaining real Codex turn/control/restart vertical (`INT-V1-006` to `INT-V1-007`).
+- Prove the real Codex operation semantics and remaining turn/control/restart vertical (`INT-V1-006`, `INT-V1-017` to `INT-V1-032`).
 - Prove phone HTTPS enrollment (`IFC-V1-015`).
 - Regenerate/select mobile mockups only after real structured states are stable.
-- Do not start affected selected-path implementation rollups until `FND-V1-017` replaces them with handoff-sized leaves.
 
 ## Validation
 
@@ -49,6 +48,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/fnd-v1-016-selected-foundation-invariants.md`.
 - `FND-V1-091`: root/package typechecks, lint/exports, unit (211 passed, 1 skipped), contract (104), integration (15), web (14), planning, generated-import boundary, and diff checks passed.
 - Evidence: `artifacts/fnd-v1-091-selected-foundation-hardening.md`.
+- `FND-V1-017`: manual unfinished-row/handoff audit, owner-doc synchronization, scaffold, lint/exports, planning (196 tasks, 84 requirements, 622 edges), and diff checks passed.
+- Evidence: `artifacts/fnd-v1-017-selected-backlog-granularity.md`.
 - `DAT-V1-018`: root/package typechecks, lint/exports, unit (233 passed, 1 skipped), contract (104), integration (15), web (14), scaffold, 71 storage tests, historical migration checksums, and diff checks passed.
 - Evidence: `artifacts/dat-v1-018-selected-state-migration.md`.
 - `INT-V1-003`: frozen install, binding regeneration, root/all-package typechecks, unit (260 passed, 2 skipped), contract (104), integration (15), web (14), scaffold, package exports, and real installed compatibility smoke passed.
@@ -64,4 +65,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 - `FND-V1-015` is pushed as `f0da007`; `FND-V1-016` as `b497f66`; `FND-V1-091` as `59c7252`.
 - Completed coherent units through `DAT-V1-019` are pushed to `origin/main`; implementation commit `7f873c7`.
-- Next action: finish the cross-block unfinished-task inventory, decompose broad data/runtime/interface/frontend rows, and close `BUG-001`; then resume `IFC-V1-016` stack probes.
+- `FND-V1-017` planning decomposition is pushed as `481cb44`; closure/resume state is the current docs unit.
+- Next action: complete `IFC-V1-016` official-source/package review and executable validation, SSE, static, and lifecycle probes; freeze exact versions and downstream contracts.

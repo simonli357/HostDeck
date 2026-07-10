@@ -25,7 +25,7 @@ Owns the required V1 capability map and completion truth between global planning
 
 | Block | Historical evidence retained | New blocking evidence | Minimum level | Status |
 | --- | --- | --- | --- | --- |
-| `BLK-V1-01` | `FND-V1-001` to `FND-V1-013`, prior foundation artifacts. | `FND-V1-014` to `FND-V1-017`, `FND-V1-091`; selected fixtures/public exports, generated-import guard, and executable leaf audit pass. | L1/L2 | Complete only after `FND-V1-017` closes the planning-granularity defect. |
+| `BLK-V1-01` | `FND-V1-001` to `FND-V1-013`, prior foundation artifacts. | `FND-V1-014` to `FND-V1-017`, `FND-V1-091`; selected fixtures/public exports, generated-import guard, and executable leaf audit pass. | L1/L2 | Complete; normalized foundation and planning-granularity evidence are current. |
 | `BLK-V1-02` | `DAT-V1-001` to `DAT-V1-017`, `DAT-V1-090`, prior storage artifacts. | `DAT-V1-018` to `DAT-V1-030`, `DAT-V1-091`; production append/retention/audit/auth and permission/lease proof. | L1/L2/L3 inspection | Reopened by mapping/auth/audit/retention ownership changes. |
 | `BLK-V1-03` | Tmux artifacts `INT-V1-001`, `INT-V1-010` to `INT-V1-016`, `INT-V1-090`. | `INT-V1-002` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091`; real Codex operations and TUI/restart evidence. | L2/L3 | In progress; compatibility, IPC, and managed-thread lifecycle pass, while real operation semantics and supervision remain. |
 | `BLK-V1-04` | `IFC-V1-001` to `IFC-V1-014`, `IFC-V1-090`, prior headless/custom-listener artifacts. | `IFC-V1-015` to `IFC-V1-069`, `IFC-V1-091`; production Fastify/HTTPS/SSE/security/routes/resources/package/service proof. | L2/L3/L4 | Reopened; the selected production interface, packaged CLI, and LAN boundary remain unproven. |

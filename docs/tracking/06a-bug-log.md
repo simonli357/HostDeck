@@ -6,7 +6,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 
 | ID | Symptom | Severity | Route | Status | Owning task | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| BUG-001 | Selected-path backlog rows pass graph checks while still bundling independent implementation outcomes. | High | Spike / planning bug | Open | `FND-V1-017` | Fastify rollup split exposed the same pattern in data, runtime, security, interface, and frontend rows. |
+| BUG-001 | Selected-path backlog rows pass graph checks while still bundling independent implementation outcomes. | High | Spike / planning bug | Closed | `FND-V1-017` | `artifacts/fnd-v1-017-selected-backlog-granularity.md`; planning commit `481cb44`. |
 
 ## Routing
 
@@ -41,8 +41,8 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Route: planning bug; implementation leaves are gated while the remaining selected backlog is audited and decomposed.
 - Related requirements: all active V1 requirements through their existing owners; no product scope change.
 - Affected / owning task: `FND-V1-017`.
-- Blocks: affected broad selected-path execution rows, not completed historical evidence or physical-device spikes.
+- Blocks: resolved; affected execution now uses handoff-sized leaves, with deliberate spikes/acceptance/hardening gates classified explicitly.
 - Root cause: `check:planning` validates graph/trace/status integrity but cannot determine semantic task breadth.
 - Fix: classify every unfinished row, split independent outcomes, update dependencies/traces/block maps/queue, and record intentional module-hardening/release/human-gate rollups explicitly.
 - Validation: planning check, manual junior-handoff audit, before/after inventory artifact, clean diff/commit/push.
-- Closed by: pending `FND-V1-017`.
+- Closed by: `FND-V1-017`; planning commit `481cb44` pushed to `origin/main`.
