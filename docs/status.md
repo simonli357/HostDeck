@@ -85,5 +85,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-020` resource/deadline implementation and docs are pushed as `620f4f0`.
 - `IFC-V1-022` app-factory implementation and docs are pushed as `29005c6`.
 - `IFC-V1-023` SSE transport implementation and docs are pushed as `8117f10`.
-- `IFC-V1-024` static boundary implementation/docs are validated; push hash is pending this coherent unit.
+- `IFC-V1-024` static boundary implementation and docs are pushed as `a630eff`.
 - Next action: implement `IFC-V1-025` composition ownership, no-early-listen readiness, validated binding, reverse-order idempotent cleanup, restart, and active finite-SSE shutdown evidence.
