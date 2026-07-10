@@ -128,6 +128,20 @@ export const projectionEventKinds = [
 ] as const;
 export type ProjectionEventKind = (typeof projectionEventKinds)[number];
 
+export const projectionActivityKinds = [
+  "command",
+  "tool",
+  "file_change",
+  "reasoning",
+  "compaction",
+  "rate_limit",
+  "thread",
+  "settings",
+  "usage",
+  "approval"
+] as const;
+export type ProjectionActivityKind = (typeof projectionActivityKinds)[number];
+
 export const projectionContentStates = ["complete", "redacted", "truncated", "redacted_and_truncated"] as const;
 export type ProjectionContentState = (typeof projectionContentStates)[number];
 

@@ -117,6 +117,15 @@ The composition root calls `resolveResourceBudget` once before lease, storage, r
 - Publisher throw/rejection cannot undo durable truth. The append rejects with the committed result and `publication_unknown`; no automatic republish occurs because callback side effects may already have happened. Runtime health/fanout reconciliation owns recovery.
 - `DAT-V1-022` extends this same transaction with pruning and replay-boundary writes before publication; it does not add a second append path.
 
+### Exact Event Normalization Boundary
+
+- `@hostdeck/codex-adapter` owns strict 0.144.0 required-notification parsing and exports only a normalized discriminated union; generated app-server payload types remain private.
+- The production consumer first extracts a bounded selected-notification thread identity. A valid unmanaged TUI thread becomes a content-free identity/method observation before deep payload or lifecycle parsing; runtime-scoped events bypass thread routing. A managed classification that no longer matches durable mapping is fatal and requires reconciliation.
+- One stateful decoder assigns a monotonic connection-local sequence, rejects clock regression, and validates managed thread/turn/item lifecycle order. Stable turn/item/goal/request identities remain retained until bounded capacity exhaustion; capacity, duplicate, malformed, post-archive, and order failures latch the decoder stopped.
+- Generated-but-unselected notifications produce bounded content-free method/count diagnostics. Unknown methods fail compatibility. Deprecated `thread/compacted` is unselected and cannot prove compaction; authoritative context-compaction item and terminal turn events remain required.
+- `@hostdeck/server` admits raw notifications through the registry-owned `protocol_max_pending_notifications` gate, then serializes identity gating, managed normalization, durable mapping, one next-session reduction, `ProductionProjectionAppendPort`, and post-commit publication. A later frame is not normalized until earlier publication settles. Queue capacity or one normalization/projection/storage/publication failure stops the whole connection-generation pipeline until reconciliation.
+- `account/rateLimits/updated` remains runtime/account scoped because its payload has no thread id; temporal proximity cannot assign it to a session. `serverRequest/resolved` proves request resolution only and cannot infer approve/deny or command success.
+
 ## Storage Migration
 
 The selected runtime requires a new migration, not in-place reinterpretation of tmux fields.

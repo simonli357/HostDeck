@@ -21,7 +21,7 @@ Requirement refs: `FR-001`, `FR-003` to `FR-009`, `FR-013` to `FR-018`, `NFR-002
 | Thread service port | Start/list/read/archive and stable id mapping. | Duplicate alias, uncertain partial start, missing/archived thread. |
 | Turn/control port | Prompt/steer/interrupt/model/goal/plan/usage/compact/skills. | Unsupported capability, active-turn conflict, unknown outcome. |
 | Approval router | Pending server request registration and exact response. | Duplicate/expired/superseded/connection-generation mismatch. |
-| Event decoder | Normalize runtime notifications to HostDeck events and health. | Unknown required semantic, malformed payload, unmanaged thread. |
+| Event pipeline | Identity-gate unmanaged TUI notifications, normalize managed runtime events, and serialize durable projection/publication. | Unknown required semantic, malformed managed payload/order, mapping race, bounded-capacity exhaustion, storage/publication failure. |
 
 ## Required Real Proof
 

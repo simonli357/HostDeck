@@ -20,7 +20,8 @@
   "dependencies": {
     "@hostdeck/contracts": "workspace:*",
     "@hostdeck/core": "workspace:*",
-    "ws": "8.21.0"
+    "ws": "8.21.0",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/ws": "8.18.1"

@@ -13,6 +13,7 @@ export const codexResourceBudgetKeys = [
   "protocol_max_buffered_bytes",
   "protocol_max_in_flight_requests",
   "protocol_max_pending_server_requests",
+  "protocol_max_pending_notifications",
   "protocol_thread_page_size",
   "protocol_thread_max_pages",
   "protocol_thread_max_loaded_reads"
@@ -42,9 +43,14 @@ export interface CodexThreadResourceOptions {
   readonly start_timeout_ms: number;
 }
 
+export interface CodexEventPipelineResourceOptions {
+  readonly max_pending_notifications: number;
+}
+
 export interface CodexResourceOptions {
   readonly transport: CodexTransportResourceOptions;
   readonly connection: CodexConnectionResourceOptions;
+  readonly event_pipeline: CodexEventPipelineResourceOptions;
   readonly thread: CodexThreadResourceOptions;
 }
 
@@ -63,6 +69,9 @@ export function codexResourceOptionsFromBudget(input: unknown): CodexResourceOpt
       handshake_timeout_ms: budget.protocol_handshake_timeout_ms,
       max_in_flight: budget.protocol_max_in_flight_requests,
       max_server_requests: budget.protocol_max_pending_server_requests
+    }),
+    event_pipeline: Object.freeze({
+      max_pending_notifications: budget.protocol_max_pending_notifications
     }),
     thread: Object.freeze({
       page_size: budget.protocol_thread_page_size,

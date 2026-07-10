@@ -36,6 +36,8 @@ describe("Codex generated binding ownership", () => {
         "thread/settings/updated"
       ])
     );
+    expect(codexBindingDescriptor.surface.server_notifications).not.toContain("thread/compacted");
+    expect(codexBindingDescriptor.surface.policy_evidence).toContain("context_compaction_item_type");
   });
 
   it("does not re-export raw generated protocol types from the package entry", () => {

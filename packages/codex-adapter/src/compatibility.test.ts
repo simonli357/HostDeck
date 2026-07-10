@@ -183,6 +183,19 @@ describe("Codex generated binding compatibility", () => {
 
     expect(result).toMatchObject({ state: "ready", mutation_policy: "allowed" });
     expect(result.capabilities.find((capability) => capability.name === "usage")).toMatchObject({ state: "unavailable" });
+
+    const withoutCompactionItem = withoutEvidence("policy_evidence", "context_compaction_item_type");
+    const compactResult = assessCodexCompatibility({
+      observed_version: "0.144.0",
+      checked_at: checkedAt,
+      handshake: initializedProbe(),
+      binding: withoutCompactionItem
+    });
+    expect(compactResult).toMatchObject({ state: "ready", mutation_policy: "allowed" });
+    expect(compactResult.capabilities.find((capability) => capability.name === "compact")).toMatchObject({
+      state: "unavailable",
+      reason: expect.stringContaining("context_compaction_item_type")
+    });
   });
 
   it("is deterministic under repeated compatibility evaluation and does not mutate the binding", () => {

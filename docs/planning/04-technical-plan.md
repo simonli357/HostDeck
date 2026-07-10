@@ -160,11 +160,12 @@ Exact 0.144.0 may emit bounded notifications after the successful initialize res
 
 ## Event Projection And Fanout
 
-1. Validate and normalize an app-server event.
-2. Resolve it to one managed thread; unmanaged threads are not exposed automatically.
-3. In one storage transaction, append the bounded projection event, assign the next HostDeck cursor, update session projection/attention/activity, and run due retention cleanup.
-4. Publish the committed event to the per-session hub.
-5. Record runtime health when validation, storage, or publication fails.
+1. Admit the raw notification through the `protocol_max_pending_notifications` registry gate, classify the selected method, and extract only its bounded thread identity; runtime/account events remain unscoped.
+2. Resolve identity before deep parsing. Valid unmanaged TUI threads produce content-free observations and are not exposed as sessions; a managed classification/durable-mapping race requires reconciliation.
+3. Strictly normalize one managed event and validate connection-local clock, identity, capacity, and thread/turn/item order.
+4. In one storage transaction, append the bounded projection event, assign the next HostDeck cursor, update session projection/attention/activity, and run due retention cleanup.
+5. Publish the committed event to the per-session hub before normalizing the next raw frame.
+6. Stop the connection-generation pipeline and record runtime health when managed validation, projection, storage, or publication fails.
 
 Replay/live handoff uses a per-session high-water protocol:
 

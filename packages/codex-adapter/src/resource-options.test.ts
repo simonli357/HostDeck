@@ -16,6 +16,7 @@ describe("Codex resource options", () => {
     expect(Object.isFrozen(options)).toBe(true);
     expect(Object.isFrozen(options.transport)).toBe(true);
     expect(Object.isFrozen(options.connection)).toBe(true);
+    expect(Object.isFrozen(options.event_pipeline)).toBe(true);
     expect(Object.isFrozen(options.thread)).toBe(true);
   });
 
@@ -29,6 +30,7 @@ describe("Codex resource options", () => {
       protocol_max_buffered_bytes: 1_048_576,
       protocol_max_in_flight_requests: 8,
       protocol_max_pending_server_requests: 4,
+      protocol_max_pending_notifications: 64,
       protocol_thread_page_size: 50,
       protocol_thread_max_pages: 20,
       protocol_thread_max_loaded_reads: 100
@@ -42,6 +44,9 @@ describe("Codex resource options", () => {
       connection: {
         max_in_flight: 8,
         max_server_requests: 4
+      },
+      event_pipeline: {
+        max_pending_notifications: 64
       },
       thread: {
         page_size: 50,
@@ -79,6 +84,7 @@ function mappedProtocolValues(options: CodexResourceOptions) {
     protocol_max_buffered_bytes: options.transport.max_buffered_bytes,
     protocol_max_in_flight_requests: options.connection.max_in_flight,
     protocol_max_pending_server_requests: options.connection.max_server_requests,
+    protocol_max_pending_notifications: options.event_pipeline.max_pending_notifications,
     protocol_thread_page_size: options.thread.page_size,
     protocol_thread_max_pages: options.thread.max_pages,
     protocol_thread_max_loaded_reads: options.thread.max_loaded_reads

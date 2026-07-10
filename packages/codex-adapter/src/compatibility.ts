@@ -82,7 +82,11 @@ const capabilityRules = {
     policy_evidence: ["experimental_api", "plan_mode_catalog"]
   },
   usage: { client_methods: ["account/usage/read"], server_notifications: ["thread/tokenUsage/updated"] },
-  compact: { client_methods: ["thread/compact/start"], server_notifications: ["thread/compacted"] },
+  compact: {
+    client_methods: ["thread/compact/start"],
+    server_notifications: ["item/started", "turn/completed"],
+    policy_evidence: ["context_compaction_item_type"]
+  },
   skills: { client_methods: ["skills/list"] },
   approvals: {
     server_requests: ["item/commandExecution/requestApproval", "item/fileChange/requestApproval"],

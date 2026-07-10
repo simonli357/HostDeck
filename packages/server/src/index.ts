@@ -1,4 +1,6 @@
 export * from "./api-route-contracts.js";
+export * from "./codex-event-pipeline.js";
+export * from "./codex-projection-service.js";
 export * from "./fastify-app.js";
 export * from "./fastify-error-policy.js";
 export * from "./fastify-host-lifecycle.js";

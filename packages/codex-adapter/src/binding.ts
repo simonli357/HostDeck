@@ -5,6 +5,7 @@ import type { ServerNotification } from "./generated/ServerNotification.js";
 import type { ServerRequest } from "./generated/ServerRequest.js";
 import type { CommandExecutionRequestApprovalResponse } from "./generated/v2/CommandExecutionRequestApprovalResponse.js";
 import type { FileChangeRequestApprovalResponse } from "./generated/v2/FileChangeRequestApprovalResponse.js";
+import type { ThreadItem } from "./generated/v2/ThreadItem.js";
 import type { TurnStartParams } from "./generated/v2/TurnStartParams.js";
 
 export interface CodexBindingManifest {
@@ -76,7 +77,6 @@ const selectedServerNotifications = [
   "thread/name/updated",
   "thread/settings/updated",
   "thread/tokenUsage/updated",
-  "thread/compacted",
   "turn/started",
   "turn/completed",
   "turn/plan/updated",
@@ -92,6 +92,7 @@ const commandApprovalResponseEvidence = fieldEvidence<CommandExecutionRequestApp
   "decision"
 );
 const fileApprovalResponseEvidence = fieldEvidence<FileChangeRequestApprovalResponse>("file_approval_response_type", "decision");
+const contextCompactionItemEvidence = variantEvidence<ThreadItem["type"]>("context_compaction_item_type", "contextCompaction");
 
 export const codexBindingManifest: CodexBindingManifest = Object.freeze({
   ...generatedCodexBindingManifest,
@@ -113,6 +114,7 @@ export const codexBindingDescriptor: CodexBindingDescriptor = Object.freeze({
       experimentalApiEvidence,
       commandApprovalResponseEvidence,
       fileApprovalResponseEvidence,
+      contextCompactionItemEvidence,
       "multi_client_version_policy",
       "plan_mode_catalog"
     ])
@@ -121,5 +123,10 @@ export const codexBindingDescriptor: CodexBindingDescriptor = Object.freeze({
 
 function fieldEvidence<T extends object>(label: string, ...fields: readonly (keyof T)[]): string {
   if (fields.length === 0) throw new Error(`Generated field evidence ${label} must name at least one field.`);
+  return label;
+}
+
+function variantEvidence<Variant extends string>(label: string, variant: Variant): string {
+  if (variant.length === 0) throw new Error(`Generated variant evidence ${label} must name a variant.`);
   return label;
 }

@@ -15,7 +15,7 @@ import {
 
 describe("selected V1 resource budget", () => {
   it("defines one complete, immutable, observable registry", () => {
-    expect(resourceBudgetDefinitions).toHaveLength(59);
+    expect(resourceBudgetDefinitions).toHaveLength(60);
     expect(Object.isFrozen(resourceBudgetDefinitions)).toBe(true);
     expect(Object.isFrozen(defaultResourceBudget)).toBe(true);
     expect(Object.isFrozen(resourceBudgetDefinitionByKey)).toBe(true);
@@ -71,6 +71,7 @@ describe("selected V1 resource budget", () => {
       protocol_max_buffered_bytes: 2_097_152,
       protocol_max_in_flight_requests: 32,
       protocol_max_pending_server_requests: 16,
+      protocol_max_pending_notifications: 256,
       protocol_thread_page_size: 100,
       protocol_thread_max_pages: 100,
       protocol_thread_max_loaded_reads: 500,

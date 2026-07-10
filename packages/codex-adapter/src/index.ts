@@ -33,9 +33,31 @@ export {
   type CodexOperationOutcome,
   HostDeckCodexAdapterError
 } from "./errors.js";
+export {
+  type CodexEventNormalizationErrorCode,
+  type CodexEventNormalizer,
+  type CodexEventNormalizerOptions,
+  type CodexNotificationNormalizationResult,
+  type CodexOptionalNotificationDiagnostic,
+  type CodexUnmanagedThreadObservation,
+  createCodexEventNormalizer,
+  HostDeckCodexEventNormalizationError,
+  type NormalizedCodexActiveFlag,
+  type NormalizedCodexContentState,
+  type NormalizedCodexEvent,
+  type NormalizedCodexGoalStatus,
+  type NormalizedCodexItem,
+  type NormalizedCodexItemCategory,
+  type NormalizedCodexItemState,
+  type NormalizedCodexPlanStep,
+  type NormalizedCodexRateLimitWindow,
+  type NormalizedCodexThreadStatus,
+  type NormalizedCodexTokenUsage
+} from "./event-normalizer.js";
 export type { CodexRequestId } from "./protocol.js";
 export {
   type CodexConnectionResourceOptions,
+  type CodexEventPipelineResourceOptions,
   type CodexResourceOptions,
   type CodexThreadResourceOptions,
   type CodexTransportResourceOptions,

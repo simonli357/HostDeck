@@ -14,6 +14,7 @@ import {
   parseCodexThreadId,
   parseCodexTurnId,
   parseRuntimeRequestId,
+  projectionActivityKinds,
   projectionContentStates,
   projectionFreshnessStates,
   requiredRuntimeCapabilities,
@@ -277,7 +278,7 @@ export const activityProjectionEventSchema = z
   .object({
     ...eventBaseShape,
     type: z.literal("activity"),
-    activity: z.enum(["command", "tool", "file_change", "reasoning", "compaction", "rate_limit"]),
+    activity: z.enum(projectionActivityKinds),
     state: z.enum(["started", "updated", "completed", "failed"]),
     item_id: codexItemIdSchema.nullable(),
     title: z.string().min(1).max(selectedRuntimeLimits.eventLabelLength),

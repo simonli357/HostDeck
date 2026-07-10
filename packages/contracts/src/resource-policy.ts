@@ -7,6 +7,7 @@ export type ResourceBudgetUnit = (typeof resourceBudgetUnits)[number];
 export const resourceBudgetOwners = [
   "cli_client",
   "codex_broker",
+  "codex_event_pipeline",
   "codex_transport",
   "fastify_app",
   "host_service",
@@ -114,6 +115,16 @@ export const resourceBudgetDefinitions = Object.freeze([
   defineResource("protocol_max_buffered_bytes", "bytes", 1_024, 2_097_152, 16_777_216, "codex_transport", "service_overloaded", "reject_operation"),
   defineResource("protocol_max_in_flight_requests", "count", 1, 32, 256, "codex_broker", "service_overloaded", "reject_operation"),
   defineResource("protocol_max_pending_server_requests", "count", 1, 16, 64, "codex_broker", "service_overloaded", "reject_operation"),
+  defineResource(
+    "protocol_max_pending_notifications",
+    "count",
+    8,
+    256,
+    2_048,
+    "codex_event_pipeline",
+    "service_overloaded",
+    "terminate_resource"
+  ),
   defineResource("protocol_thread_page_size", "count", 1, 100, 500, "codex_broker", "service_overloaded", "abort_operation"),
   defineResource("protocol_thread_max_pages", "count", 1, 100, 100, "codex_broker", "service_overloaded", "abort_operation"),
   defineResource("protocol_thread_max_loaded_reads", "count", 1, 500, 5_000, "codex_broker", "service_overloaded", "abort_operation"),
