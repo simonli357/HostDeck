@@ -5,8 +5,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `DAT-V1-019` owner-only state/runtime paths and daemon lease.
-- Other ready tasks: `IFC-V1-016`, `DAT-V1-020`, and `IFC-V1-015`.
+- Active task: harden/decompose `IFC-V1-016` before Fastify composition-root implementation.
+- Other ready tasks: `DAT-V1-020` and `IFC-V1-015`.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
 - Release state: no-go. All capability blocks affected by the new runtime/security/mobile outcome are reopened.
@@ -24,12 +24,13 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - The adapter now also owns a bounded Unix-only WebSocket transport, strict wire decoder, correlated request/server-request broker, initialize/degradation state machine, deterministic raw-protocol fake, explicit no-auto-retry reconnect, and a real private-socket no-model smoke.
 - Managed thread startup now reserves before dispatch, recovers pre-id unknown outcomes through bounded loaded-thread reads, persists the returned id before exact-version legacy materialization, and never redispatches ambiguity. Durable mappings drive reconciliation/archive after Codex drops the transient marker.
 - The installed 0.144.0 no-model lifecycle passes stored list/read, exact authenticated TUI resume over the private Unix socket, archive, and cleanup. Evidence: `artifacts/int-v1-005-managed-thread-lifecycle.md`; `DEC-022`.
+- Local path startup now resolves without mutation, bootstraps only owner state/lease, acquires a real Linux descriptor lock, then creates owner-only config/runtime/database paths. Hostile ownership/type/link/substitution cases, later-failure cleanup, real modes, duplicate owners, and child-process crash recovery pass. Evidence: `artifacts/dat-v1-019-secure-paths-daemon-lease.md`.
 
 ## Not Proven
 
 - Real Codex turn/event/control/approval/restart behavior through HostDeck.
 - Production Fastify/SSE composition, continuous projection/fanout, runtime health, retention invocation, or graceful shutdown.
-- HTTPS LAN certificate enrollment, paired LAN reads, CSRF reload, rate limits, device revocation, owner-only state, or one-daemon lease.
+- HTTPS LAN certificate enrollment, paired LAN reads, CSRF reload, rate limits, or device revocation.
 - Runnable packaged CLI, built dashboard, user services, clean Ubuntu install, real phone workflow, or release readiness.
 
 ## Blockers
@@ -55,9 +56,11 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/int-v1-004-codex-unix-ipc-broker.md`.
 - `INT-V1-005`: frozen offline install, scaffold/planning/binding checks, typecheck, lint/exports, unit (367 passed, 4 skipped), contract (104), integration (15), web (14), focused lifecycle matrix, real compatibility/IPC, and authenticated no-model thread/TUI lifecycle smokes passed.
 - Evidence: `artifacts/int-v1-005-managed-thread-lifecycle.md`.
+- `DAT-V1-019`: forced frozen offline install/native rebuild, scaffold/planning/binding checks, root/all-package typechecks, lint/exports, unit (386 passed, 4 skipped), contract (105), integration (16), web (14), storage (83), service smoke (2), production license/audit, hostile path/lease matrix, real modes, and child crash recovery passed.
+- Evidence: `artifacts/dat-v1-019-secure-paths-daemon-lease.md`.
 
 ## Git
 
 - `FND-V1-015` is pushed as `f0da007`; `FND-V1-016` as `b497f66`; `FND-V1-091` as `59c7252`.
-- Completed coherent units through `INT-V1-005` are pushed to `origin/main`.
-- Next action: execute `DAT-V1-019`, beginning with its owner-only path and daemon-lease criteria.
+- Completed coherent units through `DAT-V1-019` are pushed to `origin/main`; implementation commit `7f873c7`.
+- Next action: split `IFC-V1-016` into strict dependency-aware leaves, then execute the first ready Fastify foundation leaf.

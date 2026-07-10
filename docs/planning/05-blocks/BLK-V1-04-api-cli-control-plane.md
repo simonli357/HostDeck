@@ -45,7 +45,7 @@ Local-admin CLI calls use an explicit loopback/admin authority, not a magic miss
 | --- | --- | --- |
 | Historical headless routes/custom listener/source CLI | `IFC-V1-001` to `IFC-V1-014`, `IFC-V1-090` | Retained reusable evidence; production block reopened. |
 | HTTPS enrollment decision and phone proof | `IFC-V1-015` | Ready after planning rebaseline. |
-| Fastify API/SSE/static runtime | `IFC-V1-016` | Blocked by normalized contracts. |
+| Fastify API/SSE/static runtime | `IFC-V1-016` | In progress; strict leaf decomposition and dependency review precede implementation. |
 | Authorization, CSRF, Host/Origin, rate/device hardening | `IFC-V1-017` | Blocked by HTTPS decision and auth storage. |
 | Projection fanout, live health, graceful shutdown | `IFC-V1-018` | Blocked by Fastify and Codex event path. |
 | Selected adapter API/CLI operation integration | `IFC-V1-019` | Blocked by real Codex vertical. |

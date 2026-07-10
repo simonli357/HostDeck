@@ -15,10 +15,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `DAT-V1-019` Enforce owner-only paths and daemon lease | in_progress | none | Establishes the state/runtime ownership boundary required by runtime supervision and packaging. |
-| 2 | `IFC-V1-016` Build the Fastify/SSE composition root | ready | none | Replaces the partial custom listener with the production typed server lifecycle used by later security and fanout work. |
-| 3 | `DAT-V1-020` Integrate production projection, retention, and audit outcomes | ready | none | Makes selected projection and audit durability part of production append/startup paths before interface fanout work. |
-| 4 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the blocking LAN trust boundary when a real phone/LAN setup is available. |
+| 1 | `IFC-V1-016` Decompose and begin the Fastify composition root | in_progress | none | The current card spans independent JSON, SSE, static, limit/error, and lifecycle outcomes and must become executable leaves first. |
+| 2 | `DAT-V1-020` Integrate production projection, retention, and audit outcomes | ready | none | Makes selected projection and audit durability part of production append/startup paths before interface fanout work. |
+| 3 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the blocking LAN trust boundary when a real phone/LAN setup is available. |
 
 ## Intentional Blockers
 
