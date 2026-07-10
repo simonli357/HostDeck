@@ -90,5 +90,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-022` app-factory implementation and docs are pushed as `29005c6`.
 - `IFC-V1-023` SSE transport implementation and docs are pushed as `8117f10`.
 - `IFC-V1-024` static boundary implementation and docs are pushed as `a630eff`.
-- `IFC-V1-025` lifecycle implementation/docs are validated; push hash is pending this coherent unit.
+- `IFC-V1-025` lifecycle implementation and docs are pushed as `8c2e6bd`.
 - Next action: execute `INT-V1-006` with an isolated exact 0.144.0 binary, two isolated managed threads, bounded model turns/cost/time, redacted protocol capture, complete cleanup, and observed-versus-inferred operation matrix.
