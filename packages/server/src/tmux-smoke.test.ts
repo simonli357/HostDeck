@@ -18,9 +18,10 @@ import { createRestartReconciler } from "./restart-reconciler.js";
 const tempDirs: string[] = [];
 const tmuxSockets: string[] = [];
 const smokeTools = detectSmokeTools();
-const describeSmoke = smokeTools.ok ? describe : describe.skip;
+const requireTmuxSmoke = process.env.HOSTDECK_REQUIRE_TMUX_SMOKE === "1";
+const describeSmoke = requireTmuxSmoke && smokeTools.ok ? describe : describe.skip;
 
-if (!smokeTools.ok && process.env.HOSTDECK_REQUIRE_TMUX_SMOKE === "1") {
+if (!smokeTools.ok && requireTmuxSmoke) {
   describe("real tmux smoke requirements", () => {
     it("has required tools", () => {
       throw new Error(smokeTools.message);

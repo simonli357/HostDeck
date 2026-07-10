@@ -200,7 +200,17 @@ describe("real tmux target naming", () => {
   });
 });
 
-const describeRealTmux = hasTmuxBinary() ? describe : describe.skip;
+const requireTmuxSmoke = process.env.HOSTDECK_REQUIRE_TMUX_SMOKE === "1";
+const tmuxAvailable = hasTmuxBinary();
+const describeRealTmux = requireTmuxSmoke && tmuxAvailable ? describe : describe.skip;
+
+if (requireTmuxSmoke && !tmuxAvailable) {
+  describe("real tmux requirements", () => {
+    it("has a tmux binary", () => {
+      throw new Error("tmux is not available on PATH.");
+    });
+  });
+}
 
 describeRealTmux("real tmux target discovery", () => {
   it("lists only HostDeck targets and reconciles live, missing, and unmanaged targets", async () => {
