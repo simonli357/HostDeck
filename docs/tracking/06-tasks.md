@@ -15,7 +15,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-024` Implement the explicit static-dashboard boundary | in_progress | none | Consumes the completed app factory and pinned static policy before real listener, build asset, and packaging work. |
+| 1 | `IFC-V1-025` Compose selected Fastify startup/listener lifecycle | in_progress | none | All factory, resource, SSE, static, and secure startup prerequisites are complete; this proves real ownership and cleanup before route/build composition. |
 | 2 | `INT-V1-006` Probe exact real Codex operation semantics | ready | none | Independent real-boundary spike; unblocks every structured operation port and the mobile state contract. |
 | 3 | `DAT-V1-020` Implement commit-before-publish projection append | ready | none | Independent data leaf; establishes durable event truth for normalization and fanout. |
 | 4 | `DAT-V1-023` Implement accepted-to-terminal audit state machine | ready | none | Independent data leaf; establishes truthful mutation outcomes before write/security integration. |

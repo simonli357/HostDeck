@@ -43,7 +43,7 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
               schema: {
                 response: {
                   200: z.strictObject({
-                    duration_ms: z.number().int().positive(),
+                    duration_ms: z.number().positive(),
                     same_signal: z.boolean(),
                     remaining_ms: z.number().positive()
                   })
@@ -112,8 +112,12 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
       expect(valid.headers["x-request-id"]).not.toBe("attacker-selected");
 
       const deadline = await app.inject({ method: "GET", url: "/deadline" });
-      expect(deadline.statusCode).toBe(200);
-      expect(deadline.json()).toMatchObject({ duration_ms: 5_000, same_signal: true });
+      expect(deadline.statusCode, deadline.body).toBe(200);
+      const deadlineBody = deadline.json<{ duration_ms: number; remaining_ms: number; same_signal: boolean }>();
+      expect(deadlineBody).toMatchObject({ same_signal: true });
+      expect(deadlineBody.duration_ms).toBeCloseTo(5_000, 6);
+      expect(deadlineBody.remaining_ms).toBeGreaterThan(0);
+      expect(deadlineBody.remaining_ms).toBeLessThanOrEqual(5_000);
 
       const invalid = await app.inject({
         method: "POST",
@@ -478,6 +482,7 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
       const asset = await app.inject({ method: "GET", url: "/assets/probe.txt" });
       expect(asset.statusCode).toBe(200);
       expect(asset.body).toBe("factory-compatible");
+      expectStableError(await app.inject({ method: "GET", url: "/assets/missing.txt" }), 404, "route_not_found");
 
       const events = await app.inject({
         method: "GET",

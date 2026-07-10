@@ -8,6 +8,8 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | --- | --- | --- | --- | --- | --- | --- |
 | BUG-001 | Selected-path backlog rows pass graph checks while still bundling independent implementation outcomes. | High | Spike / planning bug | Closed | `FND-V1-017` | `artifacts/fnd-v1-017-selected-backlog-granularity.md`; planning commit `481cb44`. |
 | BUG-002 | `test:unit` opportunistically runs real tmux processes when local binaries exist, causing load-dependent failures in the deterministic unit gate. | Medium | Small bugfix | Closed | Validation harness | Real tmux suites are opt-in through `pnpm test:tmux`; default unit and explicit smoke commands pass. |
+| BUG-003 | A matched static wildcard reports a missing GET file as 405 because method discovery sees its automatic HEAD route. | Medium | Small bugfix | Closed | `IFC-V1-024` / app factory | Current-method route detection plus pinned static missing-file regression; `artifacts/ifc-v1-024-fastify-static-boundary.md`. |
+| BUG-004 | The deadline fixture intermittently rejects a valid 5-second monotonic duration because it requires integer timestamp subtraction. | Low | Small bugfix | Closed | Validation harness | Fractional monotonic duration schema plus close-to assertion; canonical 408-test unit gate passes. |
 
 ## Routing
 
@@ -58,3 +60,25 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Fix: gate both real-tmux suites on `HOSTDECK_REQUIRE_TMUX_SMOKE=1`, make an explicitly requested missing tmux binary fail loudly, and expand `test:tmux` to run adapter plus server real-process coverage.
 - Validation: `pnpm test:unit`, `pnpm test:tmux`, lint, typecheck, and the normal aggregate checks.
 - Closed by: current `IFC-V1-016` validation unit.
+
+### BUG-003 Static Missing File Misclassified As Method Error
+
+- Symptom: `GET /assets/missing.*` enters the pinned static wildcard, calls the global not-found handler, and returns `method_not_allowed`/405 instead of `route_not_found`/404.
+- Impact: clients receive false method guidance and static not-found behavior violates the stable API/error contract.
+- Route: small bugfix; expected behavior is explicit in `IFC-V1-024` and no product or architecture choice changed.
+- Affected / owning task: `IFC-V1-024`; root cause was in the completed `IFC-V1-022` app-factory method resolver.
+- Root cause: `allowedMethodsForUrl` skipped the current GET method, then treated the matched wildcard's generated HEAD route as evidence that GET was unsupported. It did not distinguish a router miss from a matched handler deliberately calling not-found.
+- Fix: return no alternate-method result when `findRoute` confirms the current method already matches the URL; preserve normal 405 behavior when the current method has no route.
+- Validation: pinned static valid/missing GET regression, explicit browser POST 405, focused factory/static tests, and aggregate unit/contract/integration gates.
+- Closed by: `IFC-V1-024`; evidence in `artifacts/ifc-v1-024-fastify-static-boundary.md`.
+
+### BUG-004 Fractional Monotonic Duration Fixture
+
+- Symptom: under parallel test loading, the app-factory deadline fixture serializes a duration infinitesimally different from integer `5000` and response validation converts the otherwise valid probe into a 500.
+- Impact: the deterministic unit gate can fail based on floating-point representation of `performance.now()`, obscuring unrelated regressions.
+- Route: small bugfix; the monotonic deadline contract already permits numeric timestamps and integer timeout inputs.
+- Affected / owning task: validation harness; discovered during `IFC-V1-024` aggregate validation.
+- Root cause: the fixture required `expiresAtMs - startedAtMs` to satisfy `z.number().int()` and exact equality even though both timestamps are fractional monotonic values.
+- Fix: keep the duration positive, require it to be close to 5,000 ms, and retain exact same-signal plus bounded-positive remaining-time assertions.
+- Validation: repeated focused parallel factory/static run and canonical `pnpm test:unit` with 408 passed/18 explicit external skips.
+- Closed by: current `IFC-V1-024` validation unit.

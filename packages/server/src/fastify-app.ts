@@ -387,6 +387,11 @@ function allowedMethodsForUrl(
   requestMethod: string,
   url: string
 ): string[] {
+  try {
+    if (app.findRoute({ method: requestMethod.toUpperCase() as HTTPMethods, url }) !== null) return [];
+  } catch {
+    return [];
+  }
   const allowed: string[] = [];
   for (const method of registeredMethods) {
     if (method === requestMethod.toUpperCase()) continue;
