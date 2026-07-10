@@ -20,6 +20,7 @@ import {
 } from "./scalars.js";
 import {
   clientOperationIdSchema,
+  codexModelContractLimits,
   codexThreadIdSchema,
   codexTurnIdSchema,
   managedSessionProjectionSchema,
@@ -28,8 +29,8 @@ import {
 
 const operationLimits = {
   promptLength: 20_000,
-  modelIdLength: 160,
-  effortLength: 80,
+  modelIdLength: codexModelContractLimits.identityLength,
+  effortLength: codexModelContractLimits.reasoningEffortLength,
   goalLength: 512,
   summaryLength: 512,
   approvalFieldLength: 1_000,
@@ -118,7 +119,8 @@ export const planOperationIntentSchema = z
   .object({
     ...managedOperationBaseShape,
     kind: z.literal("plan"),
-    action: z.enum(["enter", "exit"])
+    action: z.enum(["enter", "exit"]),
+    expected_pending_revision: positiveSafeIntegerSchema.nullable()
   })
   .strict();
 
@@ -499,13 +501,129 @@ export const goalControlSnapshotSchema = z
   })
   .strict();
 
-export const planControlSnapshotSchema = z
+export const planModeSchema = z.enum(["default", "plan"]);
+
+export const planModeCatalogEntrySchema = z
   .object({
-    mode: z.enum(["default", "plan"]),
-    state: z.enum(["idle", "active", "complete", "failed", "unsupported"]),
-    summary: z.string().max(operationLimits.summaryLength).nullable()
+    name: z.string().min(1).max(80),
+    mode: planModeSchema,
+    preset_model: z.string().min(1).max(operationLimits.modelIdLength).nullable(),
+    preset_reasoning_effort: z.string().min(1).max(operationLimits.effortLength).nullable()
   })
   .strict();
+
+export const currentPlanModeSchema = z
+  .object({
+    state: z.enum(["confirmed", "unknown"]),
+    mode: planModeSchema.nullable(),
+    runtime_model: z.string().min(1).max(operationLimits.modelIdLength).nullable(),
+    reasoning_effort: z.string().min(1).max(operationLimits.effortLength).nullable(),
+    observed_at: isoTimestampSchema.nullable()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const confirmedFieldsPresent = value.mode !== null && value.runtime_model !== null && value.observed_at !== null;
+    if ((value.state === "confirmed") !== confirmedFieldsPresent) {
+      context.addIssue({ code: "custom", message: "Confirmed Plan mode requires one complete settings observation." });
+    }
+    if (
+      value.state === "unknown" &&
+      (value.mode !== null || value.runtime_model !== null || value.reasoning_effort !== null || value.observed_at !== null)
+    ) {
+      context.addIssue({ code: "custom", message: "Unknown Plan mode cannot claim partially observed settings." });
+    }
+  });
+
+export const resolvedPlanSettingsSchema = z
+  .object({
+    runtime_model: z.string().min(1).max(operationLimits.modelIdLength),
+    reasoning_effort: z.string().min(1).max(operationLimits.effortLength).nullable()
+  })
+  .strict();
+
+export const pendingPlanSelectionSchema = z
+  .object({
+    revision: positiveSafeIntegerSchema,
+    selection_operation_id: clientOperationIdSchema,
+    mode: planModeSchema,
+    catalog_state: z.enum(["available", "unknown"]),
+    phase: z.enum(["pending", "dispatching", "awaiting_confirmation", "unknown", "conflict"]),
+    selected_at: isoTimestampSchema,
+    turn_id: codexTurnIdSchema.nullable(),
+    resolved_settings: resolvedPlanSettingsSchema.nullable(),
+    error: apiErrorEnvelopeSchema.nullable()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (["pending", "dispatching"].includes(value.phase) && value.turn_id !== null) {
+      context.addIssue({ code: "custom", message: "Unaccepted Plan selections cannot claim a turn id." });
+    }
+    if (value.phase === "pending" && value.resolved_settings !== null) {
+      context.addIssue({ code: "custom", message: "Undispatched Plan selections cannot claim resolved turn settings." });
+    }
+    if (["dispatching", "awaiting_confirmation", "unknown"].includes(value.phase) && value.resolved_settings === null) {
+      context.addIssue({ code: "custom", message: "Dispatched Plan selections must preserve their resolved turn settings." });
+    }
+    if (value.phase === "awaiting_confirmation" && value.turn_id === null) {
+      context.addIssue({ code: "custom", message: "Accepted Plan selections require the exact turn id." });
+    }
+    if (["unknown", "conflict"].includes(value.phase) !== (value.error !== null)) {
+      context.addIssue({ code: "custom", message: "Only unknown or conflicting Plan selections require an error." });
+    }
+    if (value.catalog_state === "unknown" && !["unknown", "conflict"].includes(value.phase)) {
+      context.addIssue({ code: "custom", message: "Unavailable Plan catalog entries must expose an unknown or conflict phase." });
+    }
+  });
+
+export const planExecutionSnapshotSchema = z
+  .object({
+    turn_id: codexTurnIdSchema.nullable(),
+    state: z.enum(["idle", "awaiting_evidence", "active", "complete", "failed", "interrupted", "unknown"]),
+    evidence: z.enum(["none", "plan_update", "plan_item", "plan_delta"]),
+    summary: z.string().max(operationLimits.summaryLength).nullable(),
+    updated_at: isoTimestampSchema.nullable()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const idleShape = value.turn_id === null && value.evidence === "none" && value.summary === null && value.updated_at === null;
+    if ((value.state === "idle") !== idleShape) {
+      context.addIssue({ code: "custom", message: "Idle Plan execution cannot claim turn evidence." });
+    }
+    if (value.state !== "idle" && (value.turn_id === null || value.updated_at === null)) {
+      context.addIssue({ code: "custom", message: "Non-idle Plan execution requires an exact turn and observation time." });
+    }
+    if (value.state === "awaiting_evidence" && (value.evidence !== "none" || value.summary !== null)) {
+      context.addIssue({ code: "custom", message: "Awaiting Plan execution cannot claim unobserved plan evidence." });
+    }
+    if (["active", "complete"].includes(value.state) && value.evidence === "none") {
+      context.addIssue({ code: "custom", message: "Active or complete Plan execution requires plan-specific evidence." });
+    }
+  });
+
+export const planControlSnapshotSchema = z
+  .object({
+    catalog_revision: z.string().regex(/^[a-f0-9]{64}$/u),
+    catalog_observed_at: isoTimestampSchema,
+    current: currentPlanModeSchema,
+    pending: pendingPlanSelectionSchema.nullable(),
+    execution: planExecutionSnapshotSchema,
+    modes: z.array(planModeCatalogEntrySchema).min(2).max(8)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.modes.map((entry) => entry.name)).size !== value.modes.length) {
+      context.addIssue({ code: "custom", message: "Plan catalogs cannot contain duplicate names." });
+    }
+    if (new Set(value.modes.map((entry) => entry.mode)).size !== value.modes.length) {
+      context.addIssue({ code: "custom", message: "Plan catalogs cannot contain duplicate modes." });
+    }
+    if (!value.modes.some((entry) => entry.mode === "plan") || !value.modes.some((entry) => entry.mode === "default")) {
+      context.addIssue({ code: "custom", message: "Plan catalogs must expose both Plan and Default modes." });
+    }
+    if (value.pending !== null && !value.modes.some((entry) => entry.mode === value.pending?.mode)) {
+      context.addIssue({ code: "custom", message: "Pending Plan mode must exist in the current catalog." });
+    }
+  });
 
 export const usageSnapshotSchema = z
   .object({
@@ -620,6 +738,13 @@ export type PendingModelSelection = z.infer<typeof pendingModelSelectionSchema>;
 export type GoalControlSnapshot = z.infer<typeof goalControlSnapshotSchema>;
 export type GoalControlValue = z.infer<typeof goalControlValueSchema>;
 export type UncertainGoalMutation = z.infer<typeof uncertainGoalMutationSchema>;
+export type PlanMode = z.infer<typeof planModeSchema>;
+export type PlanModeCatalogEntry = z.infer<typeof planModeCatalogEntrySchema>;
+export type CurrentPlanMode = z.infer<typeof currentPlanModeSchema>;
+export type ResolvedPlanSettings = z.infer<typeof resolvedPlanSettingsSchema>;
+export type PendingPlanSelection = z.infer<typeof pendingPlanSelectionSchema>;
+export type PlanExecutionSnapshot = z.infer<typeof planExecutionSnapshotSchema>;
+export type PlanControlSnapshot = z.infer<typeof planControlSnapshotSchema>;
 export type PendingApproval = z.infer<typeof pendingApprovalSchema>;
 export type SelectedStartSessionRequest = z.infer<typeof selectedStartSessionRequestSchema>;
 

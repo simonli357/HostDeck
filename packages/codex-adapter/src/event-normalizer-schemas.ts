@@ -1,4 +1,10 @@
-import { absoluteCwdSchema, codexItemIdSchema, codexThreadIdSchema, codexTurnIdSchema } from "@hostdeck/contracts";
+import {
+  absoluteCwdSchema,
+  codexItemIdSchema,
+  codexModelContractLimits,
+  codexThreadIdSchema,
+  codexTurnIdSchema
+} from "@hostdeck/contracts";
 import { z } from "zod";
 import {
   boundedNonemptyStringSchema,
@@ -94,8 +100,8 @@ export const collaborationModeSchema = z
     mode: z.enum(["default", "plan"]),
     settings: z
       .object({
-        model: boundedStringSchema(120),
-        reasoning_effort: boundedStringSchema(64).nullable(),
+        model: boundedStringSchema(codexModelContractLimits.identityLength),
+        reasoning_effort: boundedStringSchema(codexModelContractLimits.reasoningEffortLength).nullable(),
         developer_instructions: boundedStringSchema(maximumTextLength).nullable()
       })
       .strict()
@@ -150,16 +156,24 @@ export const threadSettingsSchema = z
     approvalsReviewer: z.enum(["user", "auto_review", "guardian_subagent"]),
     sandboxPolicy: sandboxPolicySchema,
     activePermissionProfile: activePermissionProfileSchema.nullable(),
-    model: boundedNonemptyStringSchema(120),
+    model: boundedNonemptyStringSchema(codexModelContractLimits.identityLength),
     modelProvider: boundedNonemptyStringSchema(120),
     serviceTier: boundedStringSchema(120).nullable(),
-    effort: boundedStringSchema(64).nullable(),
+    effort: boundedStringSchema(codexModelContractLimits.reasoningEffortLength).nullable(),
     summary: z.enum(["auto", "concise", "detailed", "none"]).nullable(),
     collaborationMode: collaborationModeSchema,
     multiAgentMode: multiAgentModeSchema,
     personality: z.enum(["none", "friendly", "pragmatic"]).nullable()
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.collaborationMode.settings.model !== value.model) {
+      context.addIssue({ code: "custom", message: "Collaboration mode model contradicts the effective thread model." });
+    }
+    if (value.collaborationMode.settings.reasoning_effort !== value.effort) {
+      context.addIssue({ code: "custom", message: "Collaboration mode effort contradicts the effective thread effort." });
+    }
+  });
 
 export const goalSchema = z
   .object({

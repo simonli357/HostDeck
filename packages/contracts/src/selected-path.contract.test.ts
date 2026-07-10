@@ -6,6 +6,7 @@ import {
   managedSessionProjectionSchema,
   modelControlSnapshotSchema,
   pendingApprovalSchema,
+  planControlSnapshotSchema,
   runtimeCompatibilitySchema,
   selectedAuditActorSchema,
   selectedAuditEventRecordSchema,
@@ -139,7 +140,7 @@ describe("selected structured operation contracts", () => {
       { kind: "prompt", text: "Continue with the next ready task." },
       { kind: "model", model_id: "gpt-5.5-codex", reasoning_effort: "high", expected_pending_revision: null },
       { kind: "goal", action: "set", objective: "Complete the V1 foundation.", expected_goal_revision: null },
-      { kind: "plan", action: "enter" },
+      { kind: "plan", action: "enter", expected_pending_revision: null },
       { kind: "usage" },
       { kind: "compact", confirm: true },
       { kind: "skills" },
@@ -406,6 +407,71 @@ describe("selected structured operation contracts", () => {
           requested_status: "active",
           error: { code: "unknown_error", message: "Contradictory intent.", retryable: false }
         }
+      })
+    ).toThrow();
+  });
+
+  it("validates confirmed, pending, and event-backed Plan state without partial claims", () => {
+    const snapshot = {
+      catalog_revision: "c".repeat(64),
+      catalog_observed_at: timestamp,
+      current: {
+        state: "confirmed",
+        mode: "default",
+        runtime_model: "runtime-a",
+        reasoning_effort: null,
+        observed_at: timestamp
+      },
+      pending: {
+        revision: 1,
+        selection_operation_id: "op_contract_plan1",
+        mode: "plan",
+        catalog_state: "available",
+        phase: "awaiting_confirmation",
+        selected_at: timestamp,
+        turn_id: "turn-contract-plan",
+        resolved_settings: { runtime_model: "runtime-b", reasoning_effort: "low" },
+        error: null
+      },
+      execution: {
+        turn_id: "turn-contract-plan",
+        state: "active",
+        evidence: "plan_delta",
+        summary: "Inspect the contracts.",
+        updated_at: laterTimestamp
+      },
+      modes: [
+        { name: "Plan", mode: "plan", preset_model: null, preset_reasoning_effort: "medium" },
+        { name: "Default", mode: "default", preset_model: null, preset_reasoning_effort: null }
+      ]
+    };
+    expect(planControlSnapshotSchema.parse(snapshot)).toMatchObject({
+      current: { state: "confirmed", mode: "default" },
+      pending: { mode: "plan", phase: "awaiting_confirmation" },
+      execution: { state: "active", evidence: "plan_delta" }
+    });
+    expect(() =>
+      planControlSnapshotSchema.parse({
+        ...snapshot,
+        current: { ...snapshot.current, state: "unknown", mode: null }
+      })
+    ).toThrow();
+    expect(() =>
+      planControlSnapshotSchema.parse({
+        ...snapshot,
+        pending: { ...snapshot.pending, turn_id: null }
+      })
+    ).toThrow();
+    expect(() =>
+      planControlSnapshotSchema.parse({
+        ...snapshot,
+        execution: { ...snapshot.execution, evidence: "none" }
+      })
+    ).toThrow();
+    expect(() =>
+      planControlSnapshotSchema.parse({
+        ...snapshot,
+        modes: [snapshot.modes[0], { ...snapshot.modes[1], mode: "plan" }]
       })
     ).toThrow();
   });

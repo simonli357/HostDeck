@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   clientOperationIdSchema,
+  codexModelContractLimits,
   codexThreadIdSchema,
   codexTurnIdSchema,
   defaultResourceBudget,
@@ -225,11 +226,15 @@ class DefaultCodexModelClient implements CodexModelClient {
     parsePrintableString(result.modelProvider, "Codex model provider", 120);
     return Object.freeze({
       thread_id: parsedThreadId,
-      runtime_model: parsePrintableString(result.model, "Codex current model", 160),
+      runtime_model: parsePrintableString(result.model, "Codex current model", codexModelContractLimits.identityLength),
       reasoning_effort:
         result.reasoningEffort === null
           ? null
-          : parsePrintableString(result.reasoningEffort, "Codex current reasoning effort", 80)
+          : parsePrintableString(
+              result.reasoningEffort,
+              "Codex current reasoning effort",
+              codexModelContractLimits.reasoningEffortLength
+            )
     });
   }
 
@@ -238,8 +243,16 @@ class DefaultCodexModelClient implements CodexModelClient {
     const operationId = parseOperationId(input.operation_id);
     const threadId = parseInputThreadId(input.thread_id);
     const text = parsePromptText(input.text);
-    const runtimeModel = parsePrintableString(input.runtime_model, "Codex selected model", 160);
-    const effort = parsePrintableString(input.reasoning_effort, "Codex selected reasoning effort", 80);
+    const runtimeModel = parsePrintableString(
+      input.runtime_model,
+      "Codex selected model",
+      codexModelContractLimits.identityLength
+    );
+    const effort = parsePrintableString(
+      input.reasoning_effort,
+      "Codex selected reasoning effort",
+      codexModelContractLimits.reasoningEffortLength
+    );
     const params = {
       threadId,
       clientUserMessageId: operationId,
@@ -284,7 +297,7 @@ function parseRawModel(candidate: unknown): ParsedRawModel {
   if (typeof value.hidden !== "boolean" || typeof value.isDefault !== "boolean" || typeof value.supportsPersonality !== "boolean") {
     throw invalidPayload("Codex model catalog flags are invalid.");
   }
-  parseNullablePrintableString(value.upgrade, "Codex model upgrade", 160);
+  parseNullablePrintableString(value.upgrade, "Codex model upgrade", codexModelContractLimits.identityLength);
   validateUpgradeInfo(value.upgradeInfo);
   validateAvailabilityNux(value.availabilityNux);
   validateStringArray(value.additionalSpeedTiers, "Codex model additional speed tiers", 16, 120);
@@ -294,11 +307,19 @@ function parseRawModel(candidate: unknown): ParsedRawModel {
     throw invalidPayload("Codex model default service tier is absent from its service-tier catalog.");
   }
   const inputModalities = validateInputModalities(value.inputModalities);
-  const defaultEffort = parsePrintableString(value.defaultReasoningEffort, "Codex default reasoning effort", 80);
+  const defaultEffort = parsePrintableString(
+    value.defaultReasoningEffort,
+    "Codex default reasoning effort",
+    codexModelContractLimits.reasoningEffortLength
+  );
   const effortValues = requireArray(value.supportedReasoningEfforts, "Codex supported reasoning efforts", 1, 16).map((candidate) => {
     const effort = requireRecord(candidate, "Codex reasoning effort must be an object.");
     assertExactKeys(effort, ["description", "reasoningEffort"], "Codex reasoning effort fields are invalid.");
-    const id = parsePrintableString(effort.reasoningEffort, "Codex reasoning effort", 80);
+    const id = parsePrintableString(
+      effort.reasoningEffort,
+      "Codex reasoning effort",
+      codexModelContractLimits.reasoningEffortLength
+    );
     const description = parseOptionalDescription(effort.description, "Codex reasoning effort description");
     return { id, description, is_default: id === defaultEffort };
   });
@@ -309,9 +330,9 @@ function parseRawModel(candidate: unknown): ParsedRawModel {
     throw invalidPayload("Codex default reasoning effort is absent from the supported effort catalog.");
   }
   const entry = modelCatalogEntrySchema.safeParse({
-    id: parsePrintableString(value.id, "Codex model id", 160),
-    runtime_model: parsePrintableString(value.model, "Codex runtime model", 160),
-    label: parsePrintableString(value.displayName, "Codex model display name", 160),
+    id: parsePrintableString(value.id, "Codex model id", codexModelContractLimits.identityLength),
+    runtime_model: parsePrintableString(value.model, "Codex runtime model", codexModelContractLimits.identityLength),
+    label: parsePrintableString(value.displayName, "Codex model display name", codexModelContractLimits.identityLength),
     description: parseOptionalDescription(value.description, "Codex model description"),
     is_default: value.isDefault,
     input_modalities: inputModalities,
@@ -350,7 +371,7 @@ function validateUpgradeInfo(candidate: unknown): void {
   if (candidate === null) return;
   const value = requireRecord(candidate, "Codex model upgrade info must be an object.");
   assertExactKeys(value, ["migrationMarkdown", "model", "modelLink", "upgradeCopy"], "Codex model upgrade info fields are invalid.");
-  parsePrintableString(value.model, "Codex upgrade model", 160);
+  parsePrintableString(value.model, "Codex upgrade model", codexModelContractLimits.identityLength);
   parseNullableBoundedText(value.upgradeCopy, "Codex model upgrade copy", 4_000);
   parseNullablePrintableString(value.modelLink, "Codex model upgrade link", 2_048);
   parseNullableBoundedText(value.migrationMarkdown, "Codex model migration markdown", 16_000);

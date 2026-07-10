@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { codexModelContractLimits } from "@hostdeck/contracts";
 import { describe, expect, it } from "vitest";
 import { codexBindingDescriptor } from "./binding.js";
 import type { CodexConnectionNotification } from "./connection.js";
@@ -58,6 +59,42 @@ const observedParamFields = {
 } as const;
 
 describe("exact Codex event normalizer", () => {
+  it("uses the same model and effort bounds as catalog and control contracts", () => {
+    const normalizer = createCodexEventNormalizer({ now: () => capturedAt });
+    const model = "m".repeat(codexModelContractLimits.identityLength);
+    const effort = "e".repeat(codexModelContractLimits.reasoningEffortLength);
+    const settings = rawSettings(model, "plan");
+    expect(
+      normalizeEvent(
+        normalizer.normalize(
+          selected("thread/settings/updated", {
+            threadId: threadA,
+            threadSettings: {
+              ...settings,
+              effort,
+              collaborationMode: {
+                ...settings.collaborationMode,
+                settings: { ...settings.collaborationMode.settings, reasoning_effort: effort }
+              }
+            }
+          })
+        )
+      )
+    ).toMatchObject({ model, effort, collaboration_mode: "plan" });
+
+    const oversized = createCodexEventNormalizer({ now: () => capturedAt });
+    expectNormalizationError(
+      () =>
+        oversized.normalize(
+          selected("thread/settings/updated", {
+            threadId: threadA,
+            threadSettings: rawSettings(`${model}x`, "plan")
+          })
+        ),
+      "malformed_required_event"
+    );
+  });
+
   it("normalizes every required method through one ordered thread lifecycle", () => {
     const normalizer = createCodexEventNormalizer({ now: () => capturedAt });
     const events: NormalizedCodexEvent[] = [];
@@ -264,6 +301,43 @@ describe("exact Codex event normalizer", () => {
     expectNormalizationError(
       () => malformedStatus.normalize(selected("thread/status/changed", { threadId: threadA, status: { type: "idle" } })),
       "normalizer_stopped"
+    );
+
+    const contradictorySettings = createCodexEventNormalizer({ now: () => capturedAt });
+    const settings = rawSettings("gpt-5.6-sol", "plan");
+    expectNormalizationError(
+      () =>
+        contradictorySettings.normalize(
+          selected("thread/settings/updated", {
+            threadId: threadA,
+            threadSettings: {
+              ...settings,
+              collaborationMode: {
+                ...settings.collaborationMode,
+                settings: { ...settings.collaborationMode.settings, model: "different-model" }
+              }
+            }
+          })
+        ),
+      "malformed_required_event"
+    );
+
+    const contradictoryEffort = createCodexEventNormalizer({ now: () => capturedAt });
+    expectNormalizationError(
+      () =>
+        contradictoryEffort.normalize(
+          selected("thread/settings/updated", {
+            threadId: threadA,
+            threadSettings: {
+              ...settings,
+              collaborationMode: {
+                ...settings.collaborationMode,
+                settings: { ...settings.collaborationMode.settings, reasoning_effort: "low" }
+              }
+            }
+          })
+        ),
+      "malformed_required_event"
     );
 
     const malformedGoal = createCodexEventNormalizer({ now: () => capturedAt });

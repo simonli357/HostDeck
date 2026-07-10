@@ -72,11 +72,21 @@ export {
   type CodexThreadModelState,
   createCodexModelClient
 } from "./model-client.js";
+export {
+  type CodexPlanCatalog,
+  type CodexPlanClient,
+  type CodexPlanClientOptions,
+  type CodexPlanRequestPort,
+  type CodexPlanTurnAccepted,
+  type CodexPlanTurnStartInput,
+  createCodexPlanClient
+} from "./plan-client.js";
 export type { CodexRequestId } from "./protocol.js";
 export {
   type CodexConnectionResourceOptions,
   type CodexEventPipelineResourceOptions,
   type CodexModelResourceOptions,
+  type CodexPlanResourceOptions,
   type CodexResourceOptions,
   type CodexThreadResourceOptions,
   type CodexTransportResourceOptions,

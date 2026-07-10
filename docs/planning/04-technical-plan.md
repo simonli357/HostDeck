@@ -55,12 +55,12 @@ All dependencies are pinned in the lockfile, license-checked when added, and rec
 
 ## Resource Budget And Deadline Contract
 
-`@hostdeck/contracts` owns one strict flat `resourceBudgetSchema` with 59 integer limits: HTTP (13), SSE (11), admission/rate/concurrency (11), Codex protocol (15), lifecycle (3), and CLI (6). Every entry records a unit, minimum/default/maximum, owner, breach code/action, and `hostdeck.resource.<key>` observation name. Missing fields resolve only to reviewed defaults; unknown, zero, fractional, non-finite, contradictory, or above-maximum values fail before production startup side effects.
+`@hostdeck/contracts` owns one strict flat `resourceBudgetSchema` with 67 integer limits: HTTP (13), SSE (11), admission/rate/concurrency (11), Codex protocol/control (23), lifecycle (3), and CLI (6). Every entry records a unit, minimum/default/maximum, owner, breach code/action, and `hostdeck.resource.<key>` observation name. Missing fields resolve only to reviewed defaults; unknown, zero, fractional, non-finite, contradictory, or above-maximum values fail before production startup side effects.
 
 - Fastify `requestTimeout` receives only the request and uses `http_request_receive_timeout_ms`; `handlerTimeout` owns the full route deadline and aborts the one `request.signal`. Header, idle socket, keep-alive, connection, request-per-socket, body, URL, parameter, and in-flight limits remain distinct.
 - HTTP application/protocol layers receive one `OperationDeadline` view over that exact Fastify signal and may use only decreasing remaining milliseconds. They do not create a replacement signal or extend a timeout.
 - Startup, shutdown, and future CLI boundaries without an existing framework signal use the timer-owning monotonic `OperationDeadline`; owner disposal clears timer/listener state. A peer process cannot share a monotonic timestamp, so CLI bounds its outer HTTP call while request disconnect propagates into the server-owned signal.
-- `codexResourceOptionsFromBudget` maps all 15 protocol values into transport, connection/broker, and thread-client inputs. Low-level adapters retain small test-only timing support, but production composition must pass the validated mapping and cannot fall back to a larger local value.
+- `codexResourceOptionsFromBudget` maps all 20 protocol values into transport, connection/broker, event-pipeline, thread, model, and Plan-client inputs. Model, Plan, and uncertain-goal control capacities consume their three separate validated control limits. Low-level adapters retain small test-only timing support, but production composition must pass the validated mapping and cannot fall back to a larger local value.
 - Public breach families are explicit: `request_too_large` (413), `rate_limited` (429), `service_overloaded` (503), and `operation_timeout` (504). Counters/health observations use the registry key; detailed logging remains bounded and redacted.
 
 Exact defaults, cross-field invariants, and downstream consumers are recorded in `artifacts/ifc-v1-020-resource-budget-deadline.md`.
@@ -113,7 +113,7 @@ The TUI and HostDeck may connect to the same app-server. Multi-client correctnes
 | Fact | Owner | HostDeck persistence |
 | --- | --- | --- |
 | Full conversation, turns, items, active runtime status, goal, model, approvals | Codex/app-server | Stable thread id plus bounded projection only. |
-| Unapplied next-turn model/Plan intent | HostDeck process | Revisioned ephemeral control state only; restart drops the unapplied intent and re-reads confirmed Codex settings rather than replaying a stale mutation. |
+| Unapplied next-turn model/Plan intent | HostDeck process | Revisioned ephemeral control state only; restart drops unapplied intent and never replays it. Model has a read-back path; exact 0.144.0 has no read-only collaboration-mode endpoint, so Plan mode is `unknown` until committed settings state is rehydrated by restart reconciliation. |
 | Session alias and HostDeck-managed membership | HostDeck | `managed_sessions`. |
 | Attention, recent summary, last HostDeck cursor | HostDeck projection derived from Codex events | `session_projection`. Recomputable and marked stale when disconnected. |
 | Device trust, lock, LAN/certificate settings | HostDeck | Auth/settings repositories. |
@@ -147,7 +147,7 @@ Exact 0.144.0 may emit bounded notifications after the successful initialize res
 | Interrupt | Turn interrupt | Never reported as archive or completion. |
 | Model | Model list plus `turn/start.model`/`effort` | UI choices come from the bounded live runtime catalog. Exact model/effort and pending revision remain separate from confirmed current state until matching settings or later read-back; loaded `thread/resume.model` is not a selection control. |
 | Goal | Thread goal get/set/clear plus goal/turn events | Full goal state carries an optimistic revision. Set/edit is paused and passive; resume is agentic acceptance, requires an idle thread and no pending model/Plan setting, and never implies turn completion. Pause does not interrupt. Complete/clear require pause plus idle state. Internal materialization goals stay paused. |
-| Plan | Plan/Default catalog mask plus `turn/start.collaborationMode` | Mode is pending next-turn state and verified by `thread/settings/updated` plus plan item events. When model and Plan are both pending, collaboration settings must carry the selected model/effort because collaboration mode overrides top-level fields. No blind `/plan`. |
+| Plan | Plan/Default catalog mask plus `turn/start.collaborationMode` | Mode is revisioned pending next-turn state. One outer per-session claim composes an optional pending model revision into collaboration settings, with no ignored top-level model/effort. The same exact settings event settles both revisions; plan item/delta/update plus terminal-turn events prove execution state. Unknown post-restart mode stays explicit. No zero-turn update or blind `/plan`. |
 | Usage/compact/skills | Account usage, thread compact, skills list | Usage scope is explicit. Compact `{}` is accepted only; completion requires authoritative context-compaction item/turn evidence. |
 | Approval | Server request plus exact correlated response | Pending request id/scope/connection generation; HostDeck owns expiry, exactly-once resolution, and audit. |
 

@@ -35,11 +35,16 @@ import {
   sessionNameSchema
 } from "./scalars.js";
 
+export const codexModelContractLimits = Object.freeze({
+  identityLength: 160,
+  reasoningEffortLength: 80
+});
+
 const selectedRuntimeLimits = {
   versionLength: 64,
   bindingIdLength: 192,
   reasonLength: 240,
-  modelLength: 120,
+  modelLength: codexModelContractLimits.identityLength,
   branchLength: 240,
   summaryLength: 512,
   eventTypeLength: 160,

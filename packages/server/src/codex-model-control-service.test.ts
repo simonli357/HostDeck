@@ -197,6 +197,32 @@ describe("Codex pending model control", () => {
     expect((await indistinguishable.service.reconcile(targetA, indistinguishableRevision)).pending).toMatchObject({
       phase: "unknown"
     });
+
+    const malformedMutation = createHarness();
+    const malformedSelected = await malformedMutation.service.select(
+      modelIntent({ model_id: "model-b", reasoning_effort: "low" })
+    );
+    malformedMutation.models.startError = new HostDeckCodexAdapterError(
+      "invalid_protocol_message",
+      "The turn response was malformed.",
+      { outcome: "not_applicable", retry_safe: false }
+    );
+    await expectControlError(
+      malformedMutation.service.dispatchPendingTurn(pendingTurn(malformedSelected.pending?.revision ?? 0)),
+      "unknown_outcome"
+    );
+    expect((await malformedMutation.service.snapshot(targetA)).pending).toMatchObject({ phase: "unknown" });
+  });
+
+  it("treats malformed read payloads as protocol failures without claiming a mutation outcome", async () => {
+    const harness = createHarness();
+    harness.models.listError = new HostDeckCodexAdapterError(
+      "invalid_protocol_message",
+      "The model catalog was malformed.",
+      { outcome: "not_applicable", retry_safe: false }
+    );
+    await expectControlError(harness.service.snapshot(targetA), "runtime_protocol_error");
+    expect(harness.service.pending_count).toBe(0);
   });
 
   it("surfaces settings mismatch and catalog drift as replaceable conflicts", async () => {
@@ -247,6 +273,42 @@ describe("Codex pending model control", () => {
     deferred.resolve({ thread_id: targetA.codex_thread_id as CodexThreadId, turn_id: "turn-model-a" as never, state: "accepted" });
     await dispatch;
     await expectControlError(replacement, "operation_conflict");
+  });
+
+  it("does not resurrect a selection confirmed while turn/start is still resolving", async () => {
+    const matched = createHarness();
+    const selected = await matched.service.select(modelIntent({ model_id: "model-b", reasoning_effort: "low" }));
+    const deferred = deferredResult<CodexModelTurnAccepted>();
+    matched.models.startResult = deferred.promise;
+    const dispatch = matched.service.dispatchPendingTurn(pendingTurn(selected.pending?.revision ?? 0));
+    await Promise.resolve();
+    await Promise.resolve();
+    await matched.service.observeSettings(settingsEvent("runtime-b", "low"));
+    deferred.resolve({ thread_id: targetA.codex_thread_id as CodexThreadId, turn_id: "turn-model-a" as never, state: "accepted" });
+    await dispatch;
+    matched.models.current = { runtime_model: "runtime-b", reasoning_effort: "low" };
+    expect((await matched.service.snapshot(targetA)).pending).toBeNull();
+
+    const contradicted = createHarness();
+    const contradictedSelection = await contradicted.service.select(modelIntent({ model_id: "model-b", reasoning_effort: "low" }));
+    const contradictedDeferred = deferredResult<CodexModelTurnAccepted>();
+    contradicted.models.startResult = contradictedDeferred.promise;
+    const contradictedDispatch = contradicted.service.dispatchPendingTurn(
+      pendingTurn(contradictedSelection.pending?.revision ?? 0)
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    await contradicted.service.observeSettings(settingsEvent("runtime-a", "high"));
+    contradictedDeferred.resolve({
+      thread_id: targetA.codex_thread_id as CodexThreadId,
+      turn_id: "turn-model-a" as never,
+      state: "accepted"
+    });
+    await contradictedDispatch;
+    expect((await contradicted.service.snapshot(targetA)).pending).toMatchObject({
+      phase: "conflict",
+      error: { code: "operation_conflict" }
+    });
   });
 
   it("reserves global pending capacity across concurrent session reads", async () => {

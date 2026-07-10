@@ -7,6 +7,8 @@ import {
   type NormalizedCodexEvent
 } from "@hostdeck/codex-adapter";
 import {
+  apiErrorEnvelopeSchema,
+  codexTurnIdSchema,
   defaultResourceBudget,
   isoTimestampSchema,
   type ManagedSessionTarget,
@@ -23,7 +25,11 @@ import {
 } from "@hostdeck/contracts";
 import type { ErrorCode, IsoTimestamp } from "@hostdeck/core";
 import type { SelectedSessionState, SelectedStateRepository } from "@hostdeck/storage";
-import type { PendingTurnSetting, PendingTurnSettingsReader } from "./pending-turn-settings.js";
+import type {
+  PendingTurnDispatchSettlement,
+  PendingTurnSetting,
+  PendingTurnSettingsReader
+} from "./pending-turn-settings.js";
 
 type ModelOperationIntent = Extract<SelectedOperationIntent, { readonly kind: "model" }>;
 
@@ -61,6 +67,27 @@ export interface CodexPendingModelTurnAccepted extends CodexModelTurnAccepted {
   readonly pending_revision: number;
 }
 
+export interface CodexPreparedModelTurnSettings {
+  readonly session_id: ManagedSessionTarget["session_id"];
+  readonly codex_thread_id: ManagedSessionTarget["codex_thread_id"];
+  readonly pending_revision: number | null;
+  readonly runtime_model: string;
+  readonly reasoning_effort: string | null;
+}
+
+export interface CodexModelTurnSettingsParticipant {
+  readonly prepareTurnSettings: (
+    target: unknown,
+    expectedPendingRevision: unknown,
+    signal?: AbortSignal
+  ) => Promise<CodexPreparedModelTurnSettings>;
+  readonly settlePreparedTurn: (
+    preparation: CodexPreparedModelTurnSettings,
+    settlement: PendingTurnDispatchSettlement
+  ) => Promise<void>;
+  readonly observeSettings: (event: NormalizedCodexEvent) => Promise<void>;
+}
+
 export interface CodexModelControlStatePort {
   readonly get: SelectedStateRepository["get"];
   readonly getByThreadId: SelectedStateRepository["getByThreadId"];
@@ -73,7 +100,7 @@ export interface CodexModelControlServiceOptions {
   readonly now?: () => string;
 }
 
-export interface CodexModelControlService extends PendingTurnSettingsReader {
+export interface CodexModelControlService extends PendingTurnSettingsReader, CodexModelTurnSettingsParticipant {
   readonly snapshot: (target: unknown, signal?: AbortSignal) => Promise<ModelControlSnapshot>;
   readonly select: (intent: unknown, signal?: AbortSignal) => Promise<ModelControlSnapshot>;
   readonly dispatchPendingTurn: (input: unknown, signal?: AbortSignal) => Promise<CodexPendingModelTurnAccepted>;
@@ -90,6 +117,7 @@ interface InternalPendingSelection extends PendingModelSelection {
   readonly catalog_revision: string;
   readonly baseline_runtime_model: string;
   readonly baseline_reasoning_effort: string | null;
+  readonly dispatch_confirmation: "matched" | "conflict" | null;
 }
 
 interface ObservedModelState {
@@ -108,6 +136,10 @@ export function createCodexModelControlService(options: CodexModelControlService
   return Object.freeze({
     snapshot: (target: unknown, signal?: AbortSignal) => implementation.snapshot(target, signal),
     select: (intent: unknown, signal?: AbortSignal) => implementation.select(intent, signal),
+    prepareTurnSettings: (target: unknown, expectedPendingRevision: unknown, signal?: AbortSignal) =>
+      implementation.prepareTurnSettings(target, expectedPendingRevision, signal),
+    settlePreparedTurn: (preparation: CodexPreparedModelTurnSettings, settlement: PendingTurnDispatchSettlement) =>
+      implementation.settlePreparedTurn(preparation, settlement),
     dispatchPendingTurn: (input: unknown, signal?: AbortSignal) => implementation.dispatchPendingTurn(input, signal),
     observeSettings: (event: NormalizedCodexEvent) => implementation.observeSettings(event),
     reconcile: (target: unknown, expectedPendingRevision: unknown, signal?: AbortSignal) =>
@@ -121,6 +153,7 @@ export function createCodexModelControlService(options: CodexModelControlService
 
 class DefaultCodexModelControlService implements CodexModelControlService {
   private readonly pendingBySession = new Map<string, InternalPendingSelection>();
+  private readonly activePreparationsBySession = new Map<string, CodexPreparedModelTurnSettings>();
   private readonly tails = new Map<string, Promise<void>>();
   private readonly maxPendingSelections: number;
   private readonly now: () => string;
@@ -231,7 +264,8 @@ class DefaultCodexModelControlService implements CodexModelControlService {
           error: null,
           catalog_revision: observed.catalog.revision,
           baseline_runtime_model: observed.current.runtime_model,
-          baseline_reasoning_effort: observed.current.reasoning_effort
+          baseline_reasoning_effort: observed.current.reasoning_effort,
+          dispatch_confirmation: null
         };
         this.pendingBySession.set(intent.target.session_id, pending);
         return this.buildSnapshot(intent.target.session_id, observed);
@@ -241,13 +275,19 @@ class DefaultCodexModelControlService implements CodexModelControlService {
     });
   }
 
-  async dispatchPendingTurn(input: unknown, signal?: AbortSignal): Promise<CodexPendingModelTurnAccepted> {
-    const request = parsePendingTurn(input);
-    return this.serialized(request.target.session_id, async () => {
-      const state = this.requireTarget(request.target, true);
+  async prepareTurnSettings(
+    targetInput: unknown,
+    expectedPendingRevision: unknown,
+    signal?: AbortSignal
+  ): Promise<CodexPreparedModelTurnSettings> {
+    const target = parseTarget(targetInput);
+    const expectedRevision = expectedPendingRevision === null ? null : parseRevision(expectedPendingRevision);
+    return this.serialized(target.session_id, async () => {
+      const state = this.requireTarget(target, true);
       assertIdleTurn(state);
-      const pending = this.requirePending(request.target.session_id, request.expected_pending_revision);
-      if (pending.phase !== "pending") {
+      const pending = this.pendingBySession.get(target.session_id) ?? null;
+      assertExpectedRevision(expectedRevision, pending);
+      if (pending !== null && pending.phase !== "pending") {
         throw controlError(
           "operation_conflict",
           "operation_conflict",
@@ -257,14 +297,26 @@ class DefaultCodexModelControlService implements CodexModelControlService {
         );
       }
 
-      const catalog = await this.listCatalog(signal);
-      const currentEntry = catalog.models.find((model) => model.id === pending.model_id);
+      const observed = await this.observeRuntime(state, signal);
+      const currentTarget = this.requireTarget(target, true);
+      assertIdleTurn(currentTarget);
+      if (pending === null) {
+        return Object.freeze({
+          session_id: target.session_id,
+          codex_thread_id: target.codex_thread_id,
+          pending_revision: null,
+          runtime_model: observed.current.runtime_model,
+          reasoning_effort: observed.current.reasoning_effort
+        });
+      }
+
+      const currentEntry = observed.catalog.models.find((model) => model.id === pending.model_id);
       if (currentEntry === undefined || currentEntry.runtime_model !== pending.runtime_model) {
-        this.setConflict(request.target.session_id, pending, "The pending model is no longer present in the live Codex catalog.", false);
+        this.setConflict(target.session_id, pending, "The pending model is no longer present in the live Codex catalog.", false);
         throw controlError("model_unknown", "validation_error", "The pending model is no longer present in the live Codex catalog.", "not_sent", true);
       }
       if (!currentEntry.reasoning_efforts.some((effort) => effort.id === pending.reasoning_effort)) {
-        this.setConflict(request.target.session_id, pending, "The pending reasoning effort is no longer supported.", false);
+        this.setConflict(target.session_id, pending, "The pending reasoning effort is no longer supported.", false);
         throw controlError(
           "effort_unsupported",
           "capability_unavailable",
@@ -274,97 +326,158 @@ class DefaultCodexModelControlService implements CodexModelControlService {
         );
       }
 
-      let currentAtDispatch: CodexThreadModelState;
-      try {
-        currentAtDispatch = await this.options.models.readCurrent(state.mapping.codex_thread_id, signal);
-      } catch (error) {
-        throw mapAdapterError(error, "Codex current model could not be verified before turn dispatch.");
-      }
-      if (currentAtDispatch.thread_id !== state.mapping.codex_thread_id) {
+      const dispatchPending: InternalPendingSelection = {
+        ...pending,
+        catalog_revision: observed.catalog.revision,
+        baseline_runtime_model: observed.current.runtime_model,
+        baseline_reasoning_effort: observed.current.reasoning_effort,
+        catalog_state: "available",
+        phase: "dispatching",
+        turn_id: null,
+        error: null,
+        dispatch_confirmation: null
+      };
+      const preparation = Object.freeze({
+        session_id: target.session_id,
+        codex_thread_id: target.codex_thread_id,
+        pending_revision: pending.revision,
+        runtime_model: pending.runtime_model,
+        reasoning_effort: pending.reasoning_effort
+      });
+      this.pendingBySession.set(target.session_id, dispatchPending);
+      this.activePreparationsBySession.set(target.session_id, preparation);
+      return preparation;
+    });
+  }
+
+  async settlePreparedTurn(
+    preparation: CodexPreparedModelTurnSettings,
+    settlementInput: PendingTurnDispatchSettlement
+  ): Promise<void> {
+    const settlement = parseSettlement(settlementInput);
+    if (preparation.pending_revision === null) return;
+    await this.serialized(preparation.session_id, async () => {
+      const activePreparation = this.activePreparationsBySession.get(preparation.session_id);
+      const pending = this.pendingBySession.get(preparation.session_id);
+      if (
+        activePreparation !== preparation ||
+        pending === undefined ||
+        pending.revision !== preparation.pending_revision ||
+        pending.phase !== "dispatching"
+      ) {
         throw controlError(
-          "runtime_protocol_error",
-          "protocol_error",
-          "Codex pre-dispatch model read-back changed the selected thread identity.",
+          "operation_conflict",
+          "operation_conflict",
+          "The prepared model settings are stale or already settled.",
           "not_sent",
           false
         );
       }
+      this.activePreparationsBySession.delete(preparation.session_id);
+
+      if (pending.dispatch_confirmation === "matched") {
+        const baselineAlreadyMatched =
+          pending.baseline_runtime_model === pending.runtime_model &&
+          pending.baseline_reasoning_effort === pending.reasoning_effort;
+        if (settlement.state !== "unknown" || !baselineAlreadyMatched) {
+          this.pendingBySession.delete(preparation.session_id);
+          return;
+        }
+      }
+      if (pending.dispatch_confirmation === "conflict") {
+        this.setConflict(preparation.session_id, pending, "Codex settings contradicted the prepared model and effort.", true);
+        return;
+      }
+      if (settlement.state === "remote_rejected") {
+        this.pendingBySession.set(preparation.session_id, {
+          ...pending,
+          phase: "pending",
+          turn_id: null,
+          error: null,
+          dispatch_confirmation: null
+        });
+        return;
+      }
+      if (settlement.state === "unknown") {
+        this.pendingBySession.set(preparation.session_id, {
+          ...pending,
+          phase: "unknown",
+          turn_id: settlement.turn_id,
+          error: settlement.error,
+          dispatch_confirmation: null
+        });
+        return;
+      }
+      this.pendingBySession.set(preparation.session_id, {
+        ...pending,
+        phase: "awaiting_confirmation",
+        turn_id: settlement.turn_id,
+        error: null,
+        dispatch_confirmation: null
+      });
+    });
+  }
+
+  async dispatchPendingTurn(input: unknown, signal?: AbortSignal): Promise<CodexPendingModelTurnAccepted> {
+    const request = parsePendingTurn(input);
+    const preparation = await this.prepareTurnSettings(request.target, request.expected_pending_revision, signal);
+    if (preparation.pending_revision === null || preparation.reasoning_effort === null) {
+      throw controlError(
+        "operation_conflict",
+        "operation_conflict",
+        "The pending model selection disappeared before dispatch.",
+        "not_sent",
+        false
+      );
+    }
+
+    try {
       const currentTarget = this.requireTarget(request.target, true);
       assertIdleTurn(currentTarget);
-      const dispatchPending: InternalPendingSelection = {
-        ...pending,
-        catalog_revision: catalog.revision,
-        baseline_runtime_model: currentAtDispatch.runtime_model,
-        baseline_reasoning_effort: currentAtDispatch.reasoning_effort
-      };
+    } catch (error) {
+      await this.settlePreparedTurn(preparation, { state: "remote_rejected", turn_id: null });
+      throw error;
+    }
 
-      this.pendingBySession.set(request.target.session_id, {
-        ...dispatchPending,
-        catalog_state: "available",
-        phase: "dispatching",
-        turn_id: null,
-        error: null
+    let accepted: CodexModelTurnAccepted;
+    try {
+      accepted = await this.options.models.startTurn({
+        operation_id: request.operation_id,
+        thread_id: request.target.codex_thread_id,
+        text: request.text,
+        runtime_model: preparation.runtime_model,
+        reasoning_effort: preparation.reasoning_effort,
+        ...(signal === undefined ? {} : { signal })
       });
+    } catch (error) {
+      const mapped = mapAdapterError(error, "Codex model turn dispatch failed.", true);
+      await this.settlePreparedTurn(
+        preparation,
+        mapped.outcome === "unknown"
+          ? { state: "unknown", turn_id: null, error: errorEnvelope(mapped) }
+          : { state: "remote_rejected", turn_id: null }
+      );
+      throw mapped;
+    }
 
-      let accepted: CodexModelTurnAccepted;
-      try {
-        accepted = await this.options.models.startTurn({
-          operation_id: request.operation_id,
-          thread_id: request.target.codex_thread_id,
-          text: request.text,
-          runtime_model: pending.runtime_model,
-          reasoning_effort: pending.reasoning_effort,
-          ...(signal === undefined ? {} : { signal })
-        });
-      } catch (error) {
-        const mapped = mapAdapterError(error, "Codex model turn dispatch failed.");
-        if (mapped.outcome === "unknown") {
-          this.pendingBySession.set(request.target.session_id, {
-            ...dispatchPending,
-            catalog_state: "available",
-            phase: "unknown",
-            turn_id: null,
-            error: errorEnvelope(mapped)
-          });
-        } else {
-          this.pendingBySession.set(request.target.session_id, {
-            ...dispatchPending,
-            catalog_state: "available",
-            phase: "pending",
-            turn_id: null,
-            error: null
-          });
-        }
-        throw mapped;
-      }
-
-      if (accepted.thread_id !== request.target.codex_thread_id) {
-        const error = controlError(
-          "runtime_protocol_error",
-          "protocol_error",
-          "Codex accepted the model turn for a different thread.",
-          "unknown",
-          false
-        );
-        this.pendingBySession.set(request.target.session_id, {
-          ...dispatchPending,
-          catalog_state: "available",
-          phase: "unknown",
-          turn_id: accepted.turn_id,
-          error: errorEnvelope(error)
-        });
-        throw error;
-      }
-
-      this.pendingBySession.set(request.target.session_id, {
-        ...dispatchPending,
-        catalog_state: "available",
-        phase: "awaiting_confirmation",
+    if (accepted.thread_id !== request.target.codex_thread_id) {
+      const error = controlError(
+        "runtime_protocol_error",
+        "protocol_error",
+        "Codex accepted the model turn for a different thread.",
+        "unknown",
+        false
+      );
+      await this.settlePreparedTurn(preparation, {
+        state: "unknown",
         turn_id: accepted.turn_id,
-        error: null
+        error: errorEnvelope(error)
       });
-      return Object.freeze({ ...accepted, pending_revision: pending.revision });
-    });
+      throw error;
+    }
+
+    await this.settlePreparedTurn(preparation, { state: "accepted", turn_id: accepted.turn_id });
+    return Object.freeze({ ...accepted, pending_revision: preparation.pending_revision });
   }
 
   async observeSettings(event: NormalizedCodexEvent): Promise<void> {
@@ -376,11 +489,21 @@ class DefaultCodexModelControlService implements CodexModelControlService {
       if (pending === undefined) return;
       if (state.mapping.archived_at !== null || state.projection.session.session_state === "archived") {
         this.pendingBySession.delete(state.mapping.id);
+        this.activePreparationsBySession.delete(state.mapping.id);
         return;
       }
       if (pending.phase === "pending") return;
+      if (pending.phase === "dispatching") {
+        this.pendingBySession.set(state.mapping.id, {
+          ...pending,
+          dispatch_confirmation:
+            event.model === pending.runtime_model && event.effort === pending.reasoning_effort ? "matched" : "conflict"
+        });
+        return;
+      }
       if (event.model === pending.runtime_model && event.effort === pending.reasoning_effort) {
         this.pendingBySession.delete(state.mapping.id);
+        this.activePreparationsBySession.delete(state.mapping.id);
         return;
       }
       this.setConflict(state.mapping.id, pending, "Codex settings did not confirm the dispatched model and effort.", true);
@@ -455,6 +578,7 @@ class DefaultCodexModelControlService implements CodexModelControlService {
     const state = this.options.states.get(target.session_id);
     if (state === null) {
       this.pendingBySession.delete(target.session_id);
+      this.activePreparationsBySession.delete(target.session_id);
       throw controlError("target_not_found", "session_not_found", "The selected managed session does not exist.", "not_sent", false);
     }
     if (state.mapping.codex_thread_id !== target.codex_thread_id) {
@@ -462,6 +586,7 @@ class DefaultCodexModelControlService implements CodexModelControlService {
     }
     if (state.mapping.archived_at !== null || state.projection.session.session_state === "archived") {
       this.pendingBySession.delete(target.session_id);
+      this.activePreparationsBySession.delete(target.session_id);
       throw controlError("target_not_writable", "session_not_writable", "The selected managed session is archived.", "not_sent", false);
     }
     if (
@@ -511,6 +636,7 @@ class DefaultCodexModelControlService implements CodexModelControlService {
   private reconcileCatalogDrift(sessionId: string, catalog: CodexModelCatalog): void {
     const pending = this.pendingBySession.get(sessionId);
     if (pending === undefined) return;
+    if (pending.phase === "dispatching") return;
     const model = catalog.models.find((candidate) => candidate.id === pending.model_id);
     const stillAvailable =
       model?.runtime_model === pending.runtime_model &&
@@ -632,6 +758,34 @@ function parseRevision(candidate: unknown): number {
   return parsed.data;
 }
 
+function parseSettlement(candidate: unknown): PendingTurnDispatchSettlement {
+  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) {
+    throw controlError("invalid_request", "validation_error", "The model dispatch settlement is invalid.", "not_sent", false);
+  }
+  const value = candidate as Record<string, unknown>;
+  if (value.state === "remote_rejected" && value.turn_id === null && Object.keys(value).length === 2) {
+    return { state: "remote_rejected", turn_id: null };
+  }
+  const turnId = codexTurnIdSchema.safeParse(value.turn_id);
+  if (value.state === "accepted" && turnId.success && Object.keys(value).length === 2) {
+    return { state: "accepted", turn_id: turnId.data };
+  }
+  const error = apiErrorEnvelopeSchema.safeParse(value.error);
+  if (
+    value.state === "unknown" &&
+    (value.turn_id === null || turnId.success) &&
+    error.success &&
+    Object.keys(value).length === 3
+  ) {
+    return {
+      state: "unknown",
+      turn_id: value.turn_id === null ? null : turnId.data ?? null,
+      error: error.data
+    };
+  }
+  throw controlError("invalid_request", "validation_error", "The model dispatch settlement is invalid.", "not_sent", false);
+}
+
 function parseCapacity(candidate: number | undefined): number {
   const definition = resourceBudgetDefinitionByKey.control_model_max_pending_selections;
   const value = candidate ?? defaultResourceBudget.control_model_max_pending_selections;
@@ -690,7 +844,7 @@ function assertIdleTurn(state: SelectedSessionState): void {
   );
 }
 
-function mapAdapterError(error: unknown, fallback: string): HostDeckCodexModelControlError {
+function mapAdapterError(error: unknown, fallback: string, mutation = false): HostDeckCodexModelControlError {
   if (!(error instanceof HostDeckCodexAdapterError)) {
     return controlError("runtime_unavailable", "runtime_unavailable", fallback, "unknown", false, error);
   }
@@ -704,6 +858,9 @@ function mapAdapterError(error: unknown, fallback: string): HostDeckCodexModelCo
     return controlError("operation_conflict", "operation_conflict", error.message, "remote_rejected", error.retry_safe, error);
   }
   if (["invalid_protocol_message", "protocol_violation"].includes(error.code)) {
+    if (mutation && error.outcome !== "not_sent") {
+      return controlError("unknown_outcome", "unknown_error", error.message, "unknown", false, error);
+    }
     return controlError("runtime_protocol_error", "protocol_error", error.message, "not_sent", false, error);
   }
   if (error.code === "broker_overloaded") {
@@ -712,7 +869,7 @@ function mapAdapterError(error: unknown, fallback: string): HostDeckCodexModelCo
   return controlError("runtime_unavailable", "runtime_unavailable", error.message || fallback, "not_sent", error.retry_safe, error);
 }
 
-function errorEnvelope(error: HostDeckCodexModelControlError): PendingModelSelection["error"] {
+function errorEnvelope(error: HostDeckCodexModelControlError): NonNullable<PendingModelSelection["error"]> {
   return {
     code: error.api_code,
     message: error.message,

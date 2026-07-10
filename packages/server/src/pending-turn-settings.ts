@@ -1,4 +1,5 @@
 import type { ManagedSessionTarget, PendingModelSelection } from "@hostdeck/contracts";
+import type { CodexTurnId, ErrorCode } from "@hostdeck/core";
 
 export type PendingTurnSettingControl = "model" | "plan";
 
@@ -11,6 +12,15 @@ export interface PendingTurnSetting {
 export interface PendingTurnSettingsReader {
   readonly readPendingSettings: (target: ManagedSessionTarget) => readonly PendingTurnSetting[];
 }
+
+export type PendingTurnDispatchSettlement =
+  | { readonly state: "accepted"; readonly turn_id: CodexTurnId }
+  | { readonly state: "remote_rejected"; readonly turn_id: null }
+  | {
+      readonly state: "unknown";
+      readonly turn_id: CodexTurnId | null;
+      readonly error: { readonly code: ErrorCode; readonly message: string; readonly retryable: boolean };
+    };
 
 export function combinePendingTurnSettingsReaders(
   readers: readonly PendingTurnSettingsReader[]
