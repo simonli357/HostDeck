@@ -7,6 +7,7 @@ import {
   modelControlSnapshotSchema,
   pendingApprovalSchema,
   planControlSnapshotSchema,
+  promptTurnControlSnapshotSchema,
   runtimeCompatibilitySchema,
   selectedAuditActorSchema,
   selectedAuditEventRecordSchema,
@@ -473,6 +474,68 @@ describe("selected structured operation contracts", () => {
         ...snapshot,
         modes: [snapshot.modes[0], { ...snapshot.modes[1], mode: "plan" }]
       })
+    ).toThrow();
+  });
+
+  it("keeps accepted prompt turns distinct from event-proven steerability and ambiguity", () => {
+    const accepted = {
+      phase: "accepted",
+      last_action: "start",
+      operation_id: "op_contract_prompt1",
+      turn_id: "turn-contract-prompt",
+      model_revision: 2,
+      plan_revision: null,
+      requested_at: timestamp,
+      accepted_at: laterTimestamp,
+      started_at: null,
+      error: null
+    };
+    expect(promptTurnControlSnapshotSchema.parse(accepted).phase).toBe("accepted");
+    expect(
+      promptTurnControlSnapshotSchema.parse({
+        ...accepted,
+        phase: "steerable",
+        started_at: laterTimestamp
+      }).phase
+    ).toBe("steerable");
+    expect(
+      promptTurnControlSnapshotSchema.parse({
+        ...accepted,
+        phase: "steerable",
+        last_action: "steer",
+        requested_at: laterTimestamp,
+        accepted_at: timestamp,
+        started_at: timestamp
+      }).last_action
+    ).toBe("steer");
+    expect(
+      promptTurnControlSnapshotSchema.parse({
+        ...accepted,
+        phase: "unknown",
+        turn_id: null,
+        accepted_at: null,
+        error: { code: "unknown_error", message: "Start outcome is unknown.", retryable: false }
+      }).phase
+    ).toBe("unknown");
+    expect(() => promptTurnControlSnapshotSchema.parse({ ...accepted, phase: "steerable" })).toThrow();
+    expect(() =>
+      promptTurnControlSnapshotSchema.parse({
+        ...accepted,
+        phase: "starting",
+        turn_id: "turn-impossible"
+      })
+    ).toThrow();
+    expect(() => promptTurnControlSnapshotSchema.parse({ ...accepted, accepted_at: null })).toThrow();
+    expect(() => promptTurnControlSnapshotSchema.parse({ ...accepted, last_action: "steer" })).toThrow();
+    expect(() =>
+      promptTurnControlSnapshotSchema.parse({
+        ...accepted,
+        phase: "conflict",
+        error: { code: "operation_conflict", message: "Stale turn.", retryable: false }
+      })
+    ).toThrow();
+    expect(() =>
+      promptTurnControlSnapshotSchema.parse({ ...accepted, requested_at: laterTimestamp, accepted_at: timestamp })
     ).toThrow();
   });
 

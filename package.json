@@ -27,6 +27,7 @@
     "smoke:codex-model": "HOSTDECK_REQUIRE_CODEX_MODEL_SMOKE=1 vitest run packages/codex-adapter/src/codex-model-control.smoke.test.ts",
     "smoke:codex-goal": "HOSTDECK_REQUIRE_CODEX_GOAL_SMOKE=1 vitest run packages/codex-adapter/src/codex-goal-control.smoke.test.ts",
     "smoke:codex-plan": "HOSTDECK_REQUIRE_CODEX_PLAN_SMOKE=1 vitest run packages/codex-adapter/src/codex-plan-control.smoke.test.ts",
+    "smoke:codex-prompt": "HOSTDECK_REQUIRE_CODEX_PROMPT_SMOKE=1 vitest run packages/server/src/codex-prompt-control.smoke.test.ts",
     "test:web": "vitest run packages/web/src/view-models.test.ts packages/test-fixtures/src/fixtures.test.ts",
     "test:e2e": "node scripts/not-implemented.mjs test:e2e REL-V1-007",
     "build": "node scripts/not-implemented.mjs build REL-V1-007",

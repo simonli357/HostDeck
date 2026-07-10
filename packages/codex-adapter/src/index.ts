@@ -125,3 +125,14 @@ export {
   type CodexTuiResumeCommand,
   type CodexTuiResumeCommandInput
 } from "./tui-resume.js";
+export {
+  type CodexTurnAccepted,
+  type CodexTurnClient,
+  type CodexTurnClientOptions,
+  type CodexTurnRequestPort,
+  type CodexTurnStartInput,
+  type CodexTurnStartSettings,
+  type CodexTurnSteered,
+  type CodexTurnSteerInput,
+  createCodexTurnClient
+} from "./turn-client.js";

@@ -1,9 +1,7 @@
 import { createHash } from "node:crypto";
 import {
-  clientOperationIdSchema,
   codexModelContractLimits,
   codexThreadIdSchema,
-  codexTurnIdSchema,
   defaultResourceBudget,
   isoTimestampSchema,
   type ModelCatalogEntry,
@@ -11,12 +9,12 @@ import {
   type RuntimeCompatibility,
   resourceBudgetDefinitionByKey
 } from "@hostdeck/contracts";
-import type { ClientOperationId, CodexThreadId, CodexTurnId, IsoTimestamp } from "@hostdeck/core";
+import type { ClientOperationId, CodexThreadId, IsoTimestamp } from "@hostdeck/core";
 import type { CodexRequestInput } from "./broker.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
 import type { ModelListParams } from "./generated/v2/ModelListParams.js";
 import type { ThreadResumeParams } from "./generated/v2/ThreadResumeParams.js";
-import type { TurnStartParams } from "./generated/v2/TurnStartParams.js";
+import { type CodexTurnAccepted, type CodexTurnClient, createCodexTurnClient } from "./turn-client.js";
 
 export interface CodexModelCatalog {
   readonly revision: string;
@@ -39,11 +37,7 @@ export interface CodexModelTurnStartInput {
   readonly signal?: AbortSignal;
 }
 
-export interface CodexModelTurnAccepted {
-  readonly thread_id: CodexThreadId;
-  readonly turn_id: CodexTurnId;
-  readonly state: "accepted";
-}
+export interface CodexModelTurnAccepted extends CodexTurnAccepted {}
 
 export interface CodexModelRequestPort {
   readonly compatibility: RuntimeCompatibility;
@@ -129,10 +123,14 @@ export function createCodexModelClient(port: CodexModelRequestPort, options: Cod
 }
 
 class DefaultCodexModelClient implements CodexModelClient {
+  private readonly turns: CodexTurnClient;
+
   constructor(
     private readonly port: CodexModelRequestPort,
     private readonly options: ParsedCodexModelClientOptions
-  ) {}
+  ) {
+    this.turns = createCodexTurnClient(port, { start_timeout_ms: options.start_timeout_ms });
+  }
 
   get runtime_version(): string {
     const compatibility = this.port.compatibility;
@@ -240,54 +238,17 @@ class DefaultCodexModelClient implements CodexModelClient {
 
   async startTurn(input: CodexModelTurnStartInput): Promise<CodexModelTurnAccepted> {
     void this.runtime_version;
-    const operationId = parseOperationId(input.operation_id);
-    const threadId = parseInputThreadId(input.thread_id);
-    const text = parsePromptText(input.text);
-    const runtimeModel = parsePrintableString(
-      input.runtime_model,
-      "Codex selected model",
-      codexModelContractLimits.identityLength
-    );
-    const effort = parsePrintableString(
-      input.reasoning_effort,
-      "Codex selected reasoning effort",
-      codexModelContractLimits.reasoningEffortLength
-    );
-    const params = {
-      threadId,
-      clientUserMessageId: operationId,
-      input: [{ type: "text", text, text_elements: [] }],
-      model: runtimeModel,
-      effort
-    } satisfies TurnStartParams;
-    const result = requireRecord(
-      await this.port.request({
-        method: "turn/start",
-        params,
-        kind: "mutation",
-        timeout_ms: this.options.start_timeout_ms,
-        ...(input.signal === undefined ? {} : { signal: input.signal })
-      }),
-      "Codex turn/start result must be an object."
-    );
-    assertExactKeys(result, ["turn"], "Codex turn/start fields are invalid.");
-    const turn = requireRecord(result.turn, "Codex turn/start turn must be an object.");
-    assertExactKeys(
-      turn,
-      ["completedAt", "durationMs", "error", "id", "items", "itemsView", "startedAt", "status"],
-      "Codex turn/start turn fields are invalid."
-    );
-    const parsedTurnId = parseTurnId(turn.id);
-    if (turn.status !== "inProgress" || turn.error !== null || turn.completedAt !== null || turn.durationMs !== null) {
-      throw invalidPayload("Codex turn/start did not return the accepted in-progress turn shape.");
-    }
-    if (!Array.isArray(turn.items) || turn.items.length > 256 || !["notLoaded", "summary", "full"].includes(turn.itemsView as string)) {
-      throw invalidPayload("Codex turn/start returned an invalid bounded item view.");
-    }
-    if (turn.startedAt !== null && (!Number.isFinite(turn.startedAt) || (turn.startedAt as number) < 0)) {
-      throw invalidPayload("Codex turn/start returned an invalid start timestamp.");
-    }
-    return Object.freeze({ thread_id: threadId, turn_id: parsedTurnId, state: "accepted" });
+    return this.turns.startTurn({
+      operation_id: input.operation_id,
+      thread_id: input.thread_id,
+      text: input.text,
+      settings: {
+        kind: "model",
+        runtime_model: input.runtime_model,
+        reasoning_effort: input.reasoning_effort
+      },
+      ...(input.signal === undefined ? {} : { signal: input.signal })
+    });
   }
 }
 
@@ -475,29 +436,10 @@ function parsePayloadThreadId(candidate: unknown): CodexThreadId {
   return parsed.data;
 }
 
-function parseTurnId(candidate: unknown): CodexTurnId {
-  const parsed = codexTurnIdSchema.safeParse(candidate);
-  if (!parsed.success) throw invalidPayload("Codex model turn id is invalid.", parsed.error);
-  return parsed.data;
-}
-
-function parseOperationId(candidate: unknown): ClientOperationId {
-  const parsed = clientOperationIdSchema.safeParse(candidate);
-  if (!parsed.success) throw invalidInput("Codex model turn operation id is invalid.", parsed.error);
-  return parsed.data;
-}
-
 function parseTimestamp(candidate: unknown): IsoTimestamp {
   const parsed = isoTimestampSchema.safeParse(candidate);
   if (!parsed.success) throw invalidInput("Codex model clock returned an invalid timestamp.", parsed.error);
   return parsed.data;
-}
-
-function parsePromptText(candidate: unknown): string {
-  if (typeof candidate !== "string" || candidate.trim().length === 0 || candidate.length > 20_000) {
-    throw invalidInput("Codex model turn text must contain 1 to 20,000 characters.");
-  }
-  return parseBoundedText(candidate, "Codex model turn text", 20_000);
 }
 
 function parseOptionalDescription(candidate: unknown, label: string): string | null {

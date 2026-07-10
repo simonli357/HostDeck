@@ -1,9 +1,6 @@
 import { createHash } from "node:crypto";
 import {
-  clientOperationIdSchema,
   codexModelContractLimits,
-  codexThreadIdSchema,
-  codexTurnIdSchema,
   defaultResourceBudget,
   isoTimestampSchema,
   type PlanMode,
@@ -12,11 +9,11 @@ import {
   type RuntimeCompatibility,
   resourceBudgetDefinitionByKey
 } from "@hostdeck/contracts";
-import type { ClientOperationId, CodexThreadId, CodexTurnId, IsoTimestamp } from "@hostdeck/core";
+import type { ClientOperationId, CodexThreadId, IsoTimestamp } from "@hostdeck/core";
 import type { CodexRequestInput } from "./broker.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
 import type { CollaborationModeListParams } from "./generated/v2/CollaborationModeListParams.js";
-import type { TurnStartParams } from "./generated/v2/TurnStartParams.js";
+import { type CodexTurnAccepted, type CodexTurnClient, createCodexTurnClient } from "./turn-client.js";
 
 export interface CodexPlanCatalog {
   readonly revision: string;
@@ -34,11 +31,7 @@ export interface CodexPlanTurnStartInput {
   readonly signal?: AbortSignal;
 }
 
-export interface CodexPlanTurnAccepted {
-  readonly thread_id: CodexThreadId;
-  readonly turn_id: CodexTurnId;
-  readonly state: "accepted";
-}
+export interface CodexPlanTurnAccepted extends CodexTurnAccepted {}
 
 export interface CodexPlanRequestPort {
   readonly compatibility: RuntimeCompatibility;
@@ -72,10 +65,14 @@ export function createCodexPlanClient(port: CodexPlanRequestPort, options: Codex
 }
 
 class DefaultCodexPlanClient implements CodexPlanClient {
+  private readonly turns: CodexTurnClient;
+
   constructor(
     private readonly port: CodexPlanRequestPort,
     private readonly options: ParsedOptions
-  ) {}
+  ) {
+    this.turns = createCodexTurnClient(port, { start_timeout_ms: options.start_timeout_ms });
+  }
 
   get runtime_version(): string {
     const compatibility = this.port.compatibility;
@@ -123,64 +120,19 @@ class DefaultCodexPlanClient implements CodexPlanClient {
 
   async startTurn(input: CodexPlanTurnStartInput): Promise<CodexPlanTurnAccepted> {
     void this.runtime_version;
-    const operationId = parseOperationId(input.operation_id);
-    const threadId = parseInputThreadId(input.thread_id);
-    const text = parsePromptText(input.text);
     const mode = parseInputMode(input.mode);
-    const runtimeModel = parseInputPrintableString(
-      input.runtime_model,
-      "Codex Plan model",
-      codexModelContractLimits.identityLength
-    );
-    const effort =
-      input.reasoning_effort === null
-        ? null
-        : parseInputPrintableString(
-            input.reasoning_effort,
-            "Codex Plan reasoning effort",
-            codexModelContractLimits.reasoningEffortLength
-          );
-    const params = {
-      threadId,
-      clientUserMessageId: operationId,
-      input: [{ type: "text", text, text_elements: [] }],
-      collaborationMode: {
+    return this.turns.startTurn({
+      operation_id: input.operation_id,
+      thread_id: input.thread_id,
+      text: input.text,
+      settings: {
+        kind: "collaboration",
         mode: mode.mode,
-        settings: {
-          model: runtimeModel,
-          reasoning_effort: effort,
-          developer_instructions: null
-        }
-      }
-    } satisfies TurnStartParams;
-    const result = requireRecord(
-      await this.port.request({
-        method: "turn/start",
-        params,
-        kind: "mutation",
-        timeout_ms: this.options.start_timeout_ms,
-        ...(input.signal === undefined ? {} : { signal: input.signal })
-      }),
-      "Codex Plan turn/start result must be an object."
-    );
-    assertExactKeys(result, ["turn"], "Codex Plan turn/start fields are invalid.");
-    const turn = requireRecord(result.turn, "Codex Plan turn/start turn must be an object.");
-    assertExactKeys(
-      turn,
-      ["completedAt", "durationMs", "error", "id", "items", "itemsView", "startedAt", "status"],
-      "Codex Plan turn/start turn fields are invalid."
-    );
-    const turnId = parseTurnId(turn.id);
-    if (turn.status !== "inProgress" || turn.error !== null || turn.completedAt !== null || turn.durationMs !== null) {
-      throw invalidPayload("Codex Plan turn/start did not return the accepted in-progress turn shape.");
-    }
-    if (!Array.isArray(turn.items) || turn.items.length > 256 || !["notLoaded", "summary", "full"].includes(turn.itemsView as string)) {
-      throw invalidPayload("Codex Plan turn/start returned an invalid bounded item view.");
-    }
-    if (turn.startedAt !== null && (!Number.isFinite(turn.startedAt) || (turn.startedAt as number) < 0)) {
-      throw invalidPayload("Codex Plan turn/start returned an invalid start timestamp.");
-    }
-    return Object.freeze({ thread_id: threadId, turn_id: turnId, state: "accepted" });
+        runtime_model: input.runtime_model,
+        reasoning_effort: input.reasoning_effort
+      },
+      ...(input.signal === undefined ? {} : { signal: input.signal })
+    });
   }
 }
 
@@ -283,39 +235,10 @@ function parseBoundedInteger(candidate: number | undefined, fallback: number, mi
   return candidate;
 }
 
-function parseInputThreadId(candidate: unknown): CodexThreadId {
-  const parsed = codexThreadIdSchema.safeParse(candidate);
-  if (!parsed.success) throw invalidInput("Codex Plan target thread id is invalid.", parsed.error);
-  return parsed.data;
-}
-
-function parseTurnId(candidate: unknown): CodexTurnId {
-  const parsed = codexTurnIdSchema.safeParse(candidate);
-  if (!parsed.success) throw invalidPayload("Codex Plan turn id is invalid.", parsed.error);
-  return parsed.data;
-}
-
-function parseOperationId(candidate: unknown): ClientOperationId {
-  const parsed = clientOperationIdSchema.safeParse(candidate);
-  if (!parsed.success) throw invalidInput("Codex Plan turn operation id is invalid.", parsed.error);
-  return parsed.data;
-}
-
 function parseTimestamp(candidate: unknown): IsoTimestamp {
   const parsed = isoTimestampSchema.safeParse(candidate);
   if (!parsed.success) throw invalidInput("Codex Plan clock returned an invalid timestamp.", parsed.error);
   return parsed.data;
-}
-
-function parsePromptText(candidate: unknown): string {
-  if (typeof candidate !== "string" || candidate.trim().length === 0 || candidate.length > 20_000) {
-    throw invalidInput("Codex Plan turn text must contain 1 to 20,000 characters.");
-  }
-  return parseBoundedText(candidate, "Codex Plan turn text", 20_000, invalidInput);
-}
-
-function parseInputPrintableString(candidate: unknown, label: string, maxLength: number): string {
-  return parsePrintableString(candidate, label, maxLength, invalidInput);
 }
 
 function parsePayloadPrintableString(candidate: unknown, label: string, maxLength: number): string {
@@ -334,22 +257,6 @@ function parsePrintableString(
   for (let index = 0; index < candidate.length; index += 1) {
     const code = candidate.charCodeAt(index);
     if (code <= 31 || code === 127) throw errorFactory(`${label} contains a control character.`);
-  }
-  return candidate;
-}
-
-function parseBoundedText(
-  candidate: unknown,
-  label: string,
-  maxLength: number,
-  errorFactory: (message: string, cause?: unknown) => HostDeckCodexAdapterError
-): string {
-  if (typeof candidate !== "string" || candidate.length > maxLength) throw errorFactory(`${label} must be bounded text.`);
-  for (let index = 0; index < candidate.length; index += 1) {
-    const code = candidate.charCodeAt(index);
-    if ((code <= 31 && ![9, 10, 13].includes(code)) || code === 127) {
-      throw errorFactory(`${label} contains an unsupported control character.`);
-    }
   }
   return candidate;
 }

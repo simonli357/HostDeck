@@ -326,6 +326,93 @@ export const selectedControlStateSchema = z
     }
   });
 
+export const promptTurnControlSnapshotSchema = z
+  .object({
+    phase: z.enum(["idle", "starting", "accepted", "steerable", "steering", "unknown", "conflict"]),
+    last_action: z.enum(["start", "steer"]).nullable(),
+    operation_id: clientOperationIdSchema.nullable(),
+    turn_id: codexTurnIdSchema.nullable(),
+    model_revision: positiveSafeIntegerSchema.nullable(),
+    plan_revision: positiveSafeIntegerSchema.nullable(),
+    requested_at: isoTimestampSchema.nullable(),
+    accepted_at: isoTimestampSchema.nullable(),
+    started_at: isoTimestampSchema.nullable(),
+    error: apiErrorEnvelopeSchema.nullable()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const idleShape =
+      value.last_action === null &&
+      value.operation_id === null &&
+      value.turn_id === null &&
+      value.model_revision === null &&
+      value.plan_revision === null &&
+      value.requested_at === null &&
+      value.accepted_at === null &&
+      value.started_at === null &&
+      value.error === null;
+    if ((value.phase === "idle") !== idleShape) {
+      context.addIssue({ code: "custom", message: "Idle prompt control cannot claim a turn operation or outcome." });
+    }
+    if (
+      value.phase !== "idle" &&
+      (value.last_action === null || value.operation_id === null || value.requested_at === null)
+    ) {
+      context.addIssue({ code: "custom", message: "Non-idle prompt control requires one exact operation and request time." });
+    }
+    if (value.phase === "starting" && (value.last_action !== "start" || value.turn_id !== null || value.accepted_at !== null)) {
+      context.addIssue({ code: "custom", message: "Starting prompt control cannot claim an accepted turn." });
+    }
+    if ((value.turn_id === null) !== (value.accepted_at === null)) {
+      context.addIssue({ code: "custom", message: "Prompt acceptance time and exact turn identity must appear together." });
+    }
+    if (["accepted", "steerable", "steering"].includes(value.phase) && (value.turn_id === null || value.accepted_at === null)) {
+      context.addIssue({ code: "custom", message: "Accepted prompt control requires the exact accepted turn." });
+    }
+    if (["steerable", "steering"].includes(value.phase) && value.started_at === null) {
+      context.addIssue({ code: "custom", message: "Steerable prompt control requires matching turn-start evidence." });
+    }
+    if (value.phase === "accepted" && value.started_at !== null) {
+      context.addIssue({ code: "custom", message: "Accepted-only prompt control cannot claim turn-start evidence." });
+    }
+    if (value.started_at !== null && (value.turn_id === null || value.accepted_at === null)) {
+      context.addIssue({ code: "custom", message: "Prompt turn-start evidence requires prior exact acceptance." });
+    }
+    if (value.phase === "accepted" && value.last_action !== "start") {
+      context.addIssue({ code: "custom", message: "Accepted-only prompt state must come from turn start." });
+    }
+    if (value.phase === "steering" && value.last_action !== "steer") {
+      context.addIssue({ code: "custom", message: "Steering prompt state must come from turn steer." });
+    }
+    if (
+      value.phase === "conflict" &&
+      (value.last_action !== "steer" || value.turn_id === null || value.accepted_at === null || value.started_at === null)
+    ) {
+      context.addIssue({ code: "custom", message: "Prompt conflict must retain the exact event-proven steer target." });
+    }
+    if (
+      value.phase === "unknown" &&
+      value.last_action === "steer" &&
+      (value.turn_id === null || value.accepted_at === null || value.started_at === null)
+    ) {
+      context.addIssue({ code: "custom", message: "Unknown prompt steer must retain the exact event-proven target." });
+    }
+    if (
+      value.last_action === "start" &&
+      value.requested_at !== null &&
+      value.accepted_at !== null &&
+      value.accepted_at < value.requested_at
+    ) {
+      context.addIssue({ code: "custom", message: "Prompt acceptance cannot predate its request." });
+    }
+    if (value.accepted_at !== null && value.started_at !== null && value.started_at < value.accepted_at) {
+      context.addIssue({ code: "custom", message: "Prompt turn-start evidence cannot predate acceptance tracking." });
+    }
+    if (["unknown", "conflict"].includes(value.phase) !== (value.error !== null)) {
+      context.addIssue({ code: "custom", message: "Only unknown or conflicting prompt control requires an error." });
+    }
+  });
+
 export const modelReasoningEffortSchema = z
   .object({
     id: z.string().min(1).max(operationLimits.modelIdLength),
@@ -732,6 +819,7 @@ export type SelectedOperationDispatch = z.infer<typeof selectedOperationDispatch
 export type SelectedOperationTerminalOutcome = z.infer<typeof selectedOperationTerminalOutcomeSchema>;
 export type SelectedOperationProgress = z.infer<typeof selectedOperationProgressSchema>;
 export type SelectedControlState = z.infer<typeof selectedControlStateSchema>;
+export type PromptTurnControlSnapshot = z.infer<typeof promptTurnControlSnapshotSchema>;
 export type ModelCatalogEntry = z.infer<typeof modelCatalogEntrySchema>;
 export type ModelControlSnapshot = z.infer<typeof modelControlSnapshotSchema>;
 export type PendingModelSelection = z.infer<typeof pendingModelSelectionSchema>;
