@@ -77,5 +77,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `FND-V1-017` planning decomposition is pushed as `481cb44`; closure/resume state is pushed as `3cfb1f2`.
 - `BUG-002` deterministic unit/real-tmux smoke separation is pushed as `bb66095`; `IFC-V1-016` exact stack/probe/docs closure is pushed as `4e87d30`.
 - `IFC-V1-020` resource/deadline implementation and docs are pushed as `620f4f0`.
-- `IFC-V1-022` app-factory implementation and docs are the current unit pending final aggregate validation, commit, and push.
+- `IFC-V1-022` app-factory implementation and docs are pushed as `29005c6`.
 - Next action: implement `IFC-V1-023` as an explicit `sse` registration using only the selected Readable-backed plugin path and required injected event source.
