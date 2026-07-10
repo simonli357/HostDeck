@@ -69,5 +69,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `FND-V1-015` is pushed as `f0da007`; `FND-V1-016` as `b497f66`; `FND-V1-091` as `59c7252`.
 - Completed coherent units through `DAT-V1-019` are pushed to `origin/main`; implementation commit `7f873c7`.
 - `FND-V1-017` planning decomposition is pushed as `481cb44`; closure/resume state is pushed as `3cfb1f2`.
-- `IFC-V1-016` dependency/probe/docs closure is the current unit pending commit and push.
+- `BUG-002` deterministic unit/real-tmux smoke separation is pushed as `bb66095`; `IFC-V1-016` exact stack/probe/docs closure is pushed as `4e87d30`.
 - Next action: define and test `IFC-V1-020` exact resource units, limits, defaults/maxima, stable overload errors, observability, and one non-extending monotonic deadline/AbortSignal ownership chain.
