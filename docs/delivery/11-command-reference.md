@@ -34,6 +34,12 @@ pnpm smoke:codex-threads
 pnpm exec vitest run tests/service-mode-smoke.test.ts
 ```
 
+## Authenticated Exact-Codex Probe
+
+```bash
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-semantics
+```
+
 ## Regenerate Reviewed Codex Binding
 
 ```bash

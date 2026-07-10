@@ -135,18 +135,20 @@ HostDeck never edits Codex rollout files or app-server state databases directly.
 
 Generated bindings are version-specific artifacts. `pnpm check:codex-bindings` regenerates to a temporary directory, applies deterministic NodeNext import normalization, and fails on unreviewed path/content or manifest drift. Generated types stay private to the adapter; normalized HostDeck schemas absorb additive changes and reject unknown required semantics.
 
+Exact 0.144.0 may emit bounded notifications after the successful initialize response but before the client can send `initialized`. The connection queues only that correlated response/ack window in order under the pending server-message bound, flushes after acknowledgement, and still terminates for a message before the response or queue overflow.
+
 ### Required Operations
 
 | Product action | App-server operation class | HostDeck rule |
 | --- | --- | --- |
 | Start/list/read/resume/archive | Thread methods | Store and target stable thread id. Arbitrary import is rejected. |
-| Prompt | `turn/start` or `turn/steer` according to active-turn state | Exact thread, idempotency/client message id where supported, bounded timeout. |
+| Prompt | `turn/start`; `turn/steer` only after matching `turn/started` | Response means accepted, not yet steerable. Exact thread/turn plus client message id; stale/early steer rejects. |
 | Interrupt | Turn interrupt | Never reported as archive or completion. |
-| Model | Model list plus turn/thread model override | UI choices come from runtime catalog. |
-| Goal | Thread goal methods | Preserve objective/lifecycle semantics. |
-| Plan | Tested collaboration/plan operation for supported Codex version | No blind `/plan` text fallback. Unsupported blocks the control. |
-| Usage/compact/skills | Account usage, thread compact, skills list | Capability-gated structured surfaces. |
-| Approval | Server request plus exact correlated response | Pending request id, scope, expiry/resolution, audit. |
+| Model | Model list plus `turn/start.model` | UI choices come from the runtime catalog and remain pending until the next turn; loaded `thread/resume.model` is not a selection control. |
+| Goal | Thread goal methods | Paused edits are state; active/resume starts agentic work and must be projected/audited as such. Internal materialization goals stay paused. |
+| Plan | Plan/Default catalog mask plus `turn/start.collaborationMode` | Mode is pending next-turn state and verified by `thread/settings/updated` plus plan item events. No blind `/plan`. |
+| Usage/compact/skills | Account usage, thread compact, skills list | Usage scope is explicit. Compact `{}` is accepted only; completion requires authoritative context-compaction item/turn evidence. |
+| Approval | Server request plus exact correlated response | Pending request id/scope/connection generation; HostDeck owns expiry, exactly-once resolution, and audit. |
 
 ### Request Broker
 

@@ -15,18 +15,24 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-006` Probe exact real Codex operation semantics | in_progress | none | Unblocks every structured operation port and the stable mobile state contract; use isolated exact 0.144.0 because the default installed 0.144.1 remains unreviewed. |
-| 2 | `DAT-V1-020` Implement commit-before-publish projection append | ready | none | Independent data leaf; establishes durable event truth for normalization and fanout. |
-| 3 | `DAT-V1-023` Implement accepted-to-terminal audit state machine | ready | none | Independent data leaf; establishes truthful mutation outcomes before write/security integration. |
-| 4 | `IFC-V1-047` Enforce real HTTP resource limits | ready | none | Newly unblocked by the completed lifecycle; extends proven option inventory into raw-socket limit and cleanup behavior. |
-| 5 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Independent physical-device spike; resolves the blocking LAN trust boundary when the setup is available. |
+| 1 | `DAT-V1-020` Implement commit-before-publish projection append | in_progress | none | Establishes durable event truth required by newly unblocked `INT-V1-017` normalization and fanout. |
+| 2 | `INT-V1-019` Implement pending next-turn model selection | ready | none | Implements the first human-designated primary control from the exact catalog/turn boundary. |
+| 3 | `INT-V1-020` Implement passive/agentic goal lifecycle | ready | none | Implements the second primary control without repeating the active-goal materialization bug. |
+| 4 | `INT-V1-021` Implement pending Plan/Default selection | ready | none | Implements the third primary control from observed collaboration/settings semantics. |
+| 5 | `DAT-V1-023` Implement accepted-to-terminal audit state machine | ready | none | Establishes truthful mutation outcomes before write/security integration. |
+| 6 | `INT-V1-022` Implement structured usage retrieval | ready | none | Implements observed account/runtime usage without inventing billing scope. |
+| 7 | `INT-V1-023` Implement accepted/incomplete compact lifecycle | ready | none | Prevents the utility from reporting context reduction from immediate acceptance. |
+| 8 | `INT-V1-024` Implement structured skills listing | ready | none | Implements the remaining observed read-only utility boundary. |
+| 9 | `IFC-V1-019` Freeze the selected API route manifest | ready | none | Converts the completed semantic matrix and normalized contracts into one unambiguous public route inventory. |
+| 10 | `IFC-V1-047` Enforce real HTTP resource limits | ready | none | Extends proven option inventory into raw-socket limit and cleanup behavior. |
+| 11 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the independent physical-device LAN trust gate when hardware setup is available. |
 
 ## Intentional Blockers
 
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
 | LAN security | `IFC-V1-015` | Real phone certificate-enrollment proof | Auth lifecycle, pairing UI, security/release review. |
-| Real Codex semantics | `INT-V1-006` | Contracts, adapter, mapping, and thread lifecycle | Production operation API, mobile state matrix, approvals. |
+| Real Codex operation implementation | `INT-V1-017` to `INT-V1-027` | Exact semantic matrix is complete; production normalization/control ports remain | Production operation API, stable mobile state matrix, approvals. |
 | Mobile visual direction | Reopened `FE-V1-002`, `FE-V1-003` | Real state matrix, two replacement options, human selection | React screen implementation. |
 | Release | `REL-V1-010` | All module hardening, clean package/service/phone/security evidence, human acceptance | V1 release and V2 planning. |
 

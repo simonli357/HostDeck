@@ -50,6 +50,7 @@ Unavailable commands fail loudly with owning task id. No placeholder command may
 | Case | Required assertion |
 | --- | --- |
 | Supported version | Binding regeneration matches reviewed identity; handshake and required capabilities pass. |
+| Initialize response/ack race | Bounded generated notifications after the correlated initialize response queue in order and flush after `initialized`; pre-response messages and overflow terminate. |
 | Older/newer unsupported version | Startup is incompatible before session mutation; message names observed and supported policy. |
 | Additive optional notification | Count/ignore according to compatibility policy without changing status. |
 | Unknown required response/server request | Runtime degrades/incompatible; no fallback text injection. |
@@ -64,16 +65,18 @@ The release host records Codex version, HostDeck commit, commands, thread ids in
 
 1. Start dedicated app-server on private Unix socket and complete handshake.
 2. Start two managed threads in separate temporary repositories without alias collision. For the pinned legacy store, prove loaded-thread recovery before id persistence, id-first recovery persistence, no-model rollout materialization, final empty goals, and stored list/read identity before either start is reported successful.
-3. Start one bounded real turn and verify ordered item/status events through HostDeck projection and SSE.
-4. Send/steer exactly one selected thread and prove the second is unchanged.
-5. Exercise model listing/selection, goal set/get/clear, plan behavior, usage read, compact, and skills list according to supported capabilities.
+3. Start one bounded real turn, treat the response as accepted, wait for matching `turn/started`, and verify ordered item/status events through HostDeck projection and SSE.
+4. Steer only that event-proven active turn with `expectedTurnId`; prove no second `turn/started` and no change to the other thread. Early/stale steer rejects.
+5. Exercise model catalog plus next-turn model read-back, paused and agentic goal behavior, Plan/Default next-turn settings, usage read, accepted/incomplete compact, and skills list according to supported capabilities.
 6. Trigger a safe approval request in an isolated temporary repository; approve once, deny once, reject duplicate/expired response.
-7. Interrupt an active turn and verify interrupted is not completed/archived.
+7. Interrupt an event-proven active turn and verify `turn/completed: interrupted` is not normal completion or archive.
 8. Resume the exact thread in the normal TUI through the same Unix socket.
 9. Restart HostDeck only and prove app-server/thread work remains; restart app-server and prove honest interruption/boundary/reconciliation.
 10. Archive/clean temporary threads and remove temporary repositories/runtime state.
 
 If a safe deterministic approval trigger cannot be created, the approval feature remains blocked; a fake-only approval is not release evidence.
+
+An immediate `thread/compact/start` `{}` is not completion evidence. The real suite records context-compaction item start, waits a bounded interval for authoritative item/turn completion, and otherwise leaves the operation incomplete or explicitly interrupts it without claiming context reduction.
 
 ## Storage And Audit Matrix
 

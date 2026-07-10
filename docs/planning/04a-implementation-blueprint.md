@@ -124,7 +124,7 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 1. Validate request and reserve HostDeck id/alias as `starting` in SQLite.
 2. Call `thread/start` in explicit legacy-history mode with a client operation marker. Codex 0.144.0 rejects advertised paginated history, and a zero-turn legacy thread is initially loaded but not stored.
 3. Persist the returned thread id in the recovery row before any operation that can materialize the rollout.
-4. Set the requested thread name, then use a version-scoped internal `thread/goal/set` plus `thread/goal/clear` transaction to materialize the zero-turn rollout without a model call. Verify stored list/read identity, final name, and an empty goal before exposing the mapping.
+4. Set the requested thread name, then use a version-scoped internal **paused** `thread/goal/set` plus `thread/goal/clear` transaction to materialize the zero-turn rollout without a model call. A recovered prior active marker is paused before clear; any other marker state fails. Verify idle state, empty turns, no turn/token/message event, stored list/read identity, final name, and an empty goal before exposing the mapping.
 5. Treat the durable HostDeck id/thread-id/cwd mapping as ownership after materialization. Codex 0.144.0 drops `threadSource` while writing the legacy rollout; do not require that marker during later read/archive/reconciliation.
 6. Before the thread id is known, reconcile an unknown start only by bounded `thread/loaded/list` pagination plus exact `thread/read` marker/cwd matching. Never redispatch an ambiguous reservation.
 7. After the thread id is known, resume any partial name/materialization/clear phase idempotently from that exact id. A missing thread or conflicting goal/name/source requires recovery; it does not create another thread.
@@ -157,11 +157,20 @@ The selected listener implementation requires cleanup authority before runtime s
 3. Dispatcher checks host lock.
 4. Load exact managed session and current runtime/projection state.
 5. Check runtime compatibility and operation capability.
-6. Validate operation-specific input and active-turn conflict behavior.
+6. Validate operation-specific input and projected active-turn conflict behavior. `turn/start` response is accepted only; steer/interrupt eligibility begins at matching `turn/started`.
 7. Append bounded audit `accepted` in a transaction.
 8. Dispatch once with the same AbortSignal and only the remaining request duration; idempotency metadata is included where supported.
 9. Append `succeeded`, `failed`, or `incomplete` outcome.
 10. Return accepted/terminal response consistent with the owning operation; later turn outcome arrives by event stream.
+
+### Exact 0.144.0 Control Rules
+
+- Model selection validates a live catalog entry, stores HostDeck pending next-turn state, sends `turn/start.model`, then verifies `thread/settings/updated` or later resume state. Loaded `thread/resume.model` can return success while retaining the old model and is prohibited as the primary selector.
+- Plan/Default selection stores pending next-turn state and builds `turn/start.collaborationMode` from the exact catalog mask. `thread/settings/updated` verifies mode; plan items/deltas describe plan output. There is no zero-turn Plan toggle and no literal slash fallback.
+- A paused goal can be edited/read without work. Setting/resuming `active` is an agentic mutation that can autonomously start turns; pause does not imply interrupt. Materialization markers never use active status.
+- `turn/steer` waits for the matching `turn/started` event and sends `expectedTurnId`; an accepted `turn/start` response alone is not steerability proof. Stale or completed steer/interrupt is a remote rejection.
+- `thread/compact/start` returning `{}` means accepted. Completion requires the authoritative `contextCompaction` item and terminal turn; a bounded wait may remain incomplete and can be explicitly interrupted without claiming context reduction.
+- Account usage is runtime/account-scoped and monetary cost is unavailable. Per-thread token updates remain projection data, not a billing estimate.
 
 ### Approval
 
@@ -169,9 +178,9 @@ The selected listener implementation requires cleanup authority before runtime s
 2. Approval service registers one pending request with expiry/connection generation and projects it to the session.
 3. Browser receives the committed approval projection.
 4. Approve/deny passes the normal mutation gate and verifies request is still pending on the same connection generation.
-5. Audit `accepted`, send exactly one app-server response, then audit terminal outcome.
+5. Audit `accepted`, send exactly one app-server response, then wait for `serverRequest/resolved` and authoritative item completion before auditing terminal outcome.
 6. Duplicate, expired, disconnected, or superseded responses reject without sending.
-7. Reconnect expires prior connection-bound pending approvals unless app-server reissues them.
+7. App-server supplies `startedAtMs` but no expiry; HostDeck owns bounded expiry. Reconnect expires prior connection-bound pending approvals unless app-server reissues them.
 
 ### Replay To Live SSE
 

@@ -11,6 +11,8 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-003 | A matched static wildcard reports a missing GET file as 405 because method discovery sees its automatic HEAD route. | Medium | Small bugfix | Closed | `IFC-V1-024` / app factory | Current-method route detection plus pinned static missing-file regression; `artifacts/ifc-v1-024-fastify-static-boundary.md`. |
 | BUG-004 | The deadline fixture intermittently rejects a valid 5-second monotonic duration because it requires integer timestamp subtraction. | Low | Small bugfix | Closed | Validation harness | Fractional monotonic duration schema plus close-to assertion; canonical 408-test unit gate passes. |
 | BUG-005 | A finite Readable SSE source completes on a real listener but the pinned plugin leaves the HTTP response and handler open. | High | Backlog bugfix | Closed | `IFC-V1-023` / `IFC-V1-025` | Readable-end raw-response termination plus real finite-response and active-shutdown regressions; `artifacts/ifc-v1-025-fastify-host-lifecycle.md`. |
+| BUG-006 | Exact Codex emits notifications after the initialize response but before `initialized`; the connection treats them as pre-initialize violations and terminates. | High | Small bugfix | Closed | `INT-V1-004` / `INT-V1-006` | Bounded ordered response/ack queue, hostile-window tests, exact private-socket smokes, and semantic capture. |
+| BUG-007 | The goal-based legacy thread materialization path sets an active goal, which autonomously starts model turns despite its no-model contract. | Critical | Backlog bugfix | Closed | `INT-V1-005` / `INT-V1-006` | Paused internal goal, active-marker recovery, idle/zero-turn/token/history real smoke, corrected evidence, `DEC-022`. |
 
 ## Routing
 
@@ -94,3 +96,25 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Fix: attach one Readable `end` listener before send and explicitly end a still-writable raw response; retain plugin close after send and remove the listener during final cleanup. Listener shutdown reaps sockets that become idle after close initiation without force-closing active requests.
 - Validation: direct real HTTP finite-source response end, zero final in-flight accounting, active finite-SSE lifecycle close, exact cleanup order, and immediate same-port restart.
 - Closed by: `IFC-V1-025`; evidence in `artifacts/ifc-v1-025-fastify-host-lifecycle.md`.
+
+### BUG-006 Initialize Response/Acknowledgement Notification Race
+
+- Symptom: an isolated exact 0.144.0 app-server emits `configWarning` and `remoteControl/status/changed` after the successful initialize response but before HostDeck can send `initialized`; HostDeck reports three fatal protocol issues and closes the private socket.
+- Impact: valid authenticated startup can fail based on app-server configuration notifications, blocking all structured runtime operations despite a compatible version and schema.
+- Route: small bugfix; the real trace establishes expected ordering and no product or architecture choice changes.
+- Affected / owning task: connection handshake from completed `INT-V1-004`; discovered by the pre-model phase of `INT-V1-006`.
+- Root cause: the connection used one boolean for both "initialize response not observed" and "initialized acknowledgement not sent," so it could not distinguish a truly premature message from the legal response/ack race window.
+- Fix: broker reports the correlated initialize response synchronously; connection accepts only the resulting narrow handshaking window, queues server-originated messages in order under the existing pending-server-request bound, sends `initialized`, then flushes. Messages before the response and queue overflow still terminate.
+- Validation: deterministic notification/server-request ordering and overflow tests, retained pre-response rejection matrix, recorder tests, and exact isolated 0.144.0 no-model/live probe rerun.
+- Closed by: `INT-V1-006`; evidence in `artifacts/int-v1-006-codex-operation-semantics.md`.
+
+### BUG-007 Agentic Internal Goal Materialization
+
+- Symptom: each internal `thread/goal/set` used to materialize a zero-turn legacy thread returns `active`, then app-server emits `thread/status/changed: active`, `turn/started`, reasoning/message items, token usage, and potentially approval requests after the marker is cleared.
+- Impact: session creation can spend model usage, execute agent work, pollute event attribution/history, and invalidate the `INT-V1-005` no-model evidence and the semantic spike's cost bound.
+- Route: backlog bugfix against the completed lifecycle behavior; expected behavior remains an isolated, persisted, empty thread with no model work.
+- Affected / owning task: `INT-V1-005` materialization and `INT-V1-006` semantic evidence.
+- Root cause: `thread/goal/set` defaults a new objective to `active`; active goals are execution controls, not passive metadata. Immediate clear does not cancel the already scheduled turn.
+- Fix: create the version-scoped internal marker with explicit `status: paused`; if recovery finds a prior active marker, pause it before clear and reject unsupported terminal marker states.
+- Validation: unit request/status/recovery assertions plus exact isolated 0.144.0 lifecycle smoke requiring idle state, empty stored turns, no `turn/started`, no token-usage update, and no agent-message delta before TUI resume.
+- Closed by: corrected `INT-V1-005` lifecycle plus `INT-V1-006`; evidence in `artifacts/int-v1-005-managed-thread-lifecycle.md` and `artifacts/int-v1-006-codex-operation-semantics.md`.

@@ -56,8 +56,8 @@ Mission Control and Session Detail are the only full-page V1 product routes. Sup
 | UX-001 | Pair a phone. | The user reaches the HTTPS HostDeck origin, claims one time-bounded code, sees the device permission, and can reload without losing a valid CSRF posture. |
 | UX-002 | Scan sessions. | Mission Control puts approval, input, and failure attention before running/quiet work and identifies the session without opening every card. |
 | UX-003 | Read and prompt. | Tapping a card opens the same thread; the user sees recent structured conversation context, sends one prompt, and sees accepted plus resulting progress or a truthful error. |
-| UX-004 | Change model. | `/model` opens a model/effort selector sourced from the installed Codex runtime and applies only to the selected thread/next turn. |
-| UX-005 | Manage goal or plan. | `/goal` shows objective and lifecycle controls; `/plan` enters the tested Codex plan behavior. Unsupported runtime behavior is disabled with an update requirement. |
+| UX-004 | Change model. | `/model` opens a model/effort selector sourced from the installed Codex runtime and marks the choice pending for the selected thread's next turn until runtime settings confirm it. |
+| UX-005 | Manage goal or plan. | `/goal` distinguishes passive paused edits from agentic resume/active work; `/plan` selects Plan/Default for the next turn and waits for runtime settings. Unsupported behavior is disabled with an update requirement. |
 | UX-006 | Use utilities. | `/usage`, `/compact`, and `/skills` open structured, task-specific surfaces; they are not sent as blind terminal text. |
 | UX-007 | Handle approval. | An inline approval card shows the action and scope, then approve/deny targets exactly one pending request and produces an audit result. |
 | UX-008 | Interrupt or archive. | Risky actions require explicit confirmation and update the selected thread without implying that conversation history was deleted. |
@@ -82,7 +82,9 @@ Mission Control and Session Detail are the only full-page V1 product routes. Sup
 - The event/conversation feed is the main scroll region. User messages, agent messages, tool/command progress, approvals, failures, and boundaries have distinct semantic treatments.
 - A sticky bottom composer remains reachable above the mobile browser safe area and on-screen keyboard.
 - The primary control strip contains `/model`, `/goal`, and `/plan`. Utilities live in one overflow/sheet containing `/usage`, `/compact`, and `/skills`.
-- Controls display their actual state, for example selected model, active/paused goal, or active plan mode. They are not decorative command chips.
+- Controls distinguish confirmed runtime state from pending next-turn state. Model and Plan selection do not claim an immediate loaded-thread change.
+- Goal `Resume`/`Active` is presented as starting agentic work, not a passive toggle. `Pause` does not claim to interrupt an already active turn; interrupt remains separate.
+- Compact shows `Accepted`/`Compacting` until authoritative context-compaction completion. The immediate request response never produces `Compacted` by itself.
 - New events do not force-scroll when the user has scrolled away from the bottom; a new-activity affordance returns to live position.
 
 ### Inline Approval

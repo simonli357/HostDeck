@@ -45,7 +45,7 @@ No fake-Codex or fake-tmux test can satisfy these gates.
 | Version/schema/capability gate | `INT-V1-003` | Done: exact 0.144.0 experimental binding and real no-model compatibility smoke. |
 | Unix IPC client and request broker | `INT-V1-004` | Done: bounded transport/broker/handshake/reconnect and real private-socket smoke. |
 | Thread lifecycle and exact TUI resume | `INT-V1-005` | Done: id-first recovery saga, 0.144.0 legacy materialization, durable mapping/reconciliation, exact archive, and real no-model TUI smoke. |
-| Exact real turn/control/event semantic spike | `INT-V1-006` | Ready; bounded authenticated Codex use required. |
+| Exact real turn/control/event semantic spike | `INT-V1-006` | Done: event-gated operation matrix, real approvals/control/TUI/reconnect, bounded compact incompleteness, and corrected handshake/materialization bugs. |
 | Event normalization and exact prompt targeting | `INT-V1-017`, `INT-V1-018` | Blocked by observed semantics; projection also needs `DAT-V1-020`. |
 | Model, goal, plan, usage, compact, and skills ports | `INT-V1-019` to `INT-V1-024` | Blocked by the semantic spike. |
 | Approval and interrupt ports | `INT-V1-025`, `INT-V1-026` | Blocked by observed semantics and event identity. |
