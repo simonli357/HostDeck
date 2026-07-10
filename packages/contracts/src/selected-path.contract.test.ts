@@ -1,6 +1,7 @@
 import { requiredRuntimeCapabilities, runtimeCapabilities, selectedOperationKinds } from "@hostdeck/core";
 import { describe, expect, it } from "vitest";
 import {
+  goalControlSnapshotSchema,
   legacySessionDispositionRecordSchema,
   managedSessionProjectionSchema,
   modelControlSnapshotSchema,
@@ -137,7 +138,7 @@ describe("selected structured operation contracts", () => {
     const inputs = [
       { kind: "prompt", text: "Continue with the next ready task." },
       { kind: "model", model_id: "gpt-5.5-codex", reasoning_effort: "high", expected_pending_revision: null },
-      { kind: "goal", action: "set", objective: "Complete the V1 foundation." },
+      { kind: "goal", action: "set", objective: "Complete the V1 foundation.", expected_goal_revision: null },
       { kind: "plan", action: "enter" },
       { kind: "usage" },
       { kind: "compact", confirm: true },
@@ -211,7 +212,19 @@ describe("selected structured operation contracts", () => {
         target,
         kind: "goal",
         action: "set",
-        objective: null
+        objective: null,
+        expected_goal_revision: null
+      })
+    ).toThrow();
+
+    expect(() =>
+      selectedOperationIntentSchema.parse({
+        operation_id: "op_contract_goal2",
+        target,
+        kind: "goal",
+        action: "resume",
+        objective: null,
+        expected_goal_revision: null
       })
     ).toThrow();
 
@@ -343,6 +356,58 @@ describe("selected structured operation contracts", () => {
         }
       }).pending
     ).toMatchObject({ catalog_state: "unknown", phase: "conflict" });
+  });
+
+  it("validates full goal state and preserves uncertain mutation intent", () => {
+    const revision = "b".repeat(64);
+    const snapshot = {
+      goal: {
+        revision,
+        objective: "Complete the selected V1 work.",
+        status: "paused",
+        token_budget: 10_000,
+        tokens_used: 500,
+        time_used_seconds: 12.5,
+        created_at: timestamp,
+        updated_at: laterTimestamp
+      },
+      uncertain_mutation: null
+    };
+    expect(goalControlSnapshotSchema.parse(snapshot).goal).toMatchObject({ revision, status: "paused" });
+    expect(
+      goalControlSnapshotSchema.parse({
+        ...snapshot,
+        uncertain_mutation: {
+          action: "resume",
+          phase: "unknown",
+          requested_at: laterTimestamp,
+          baseline_revision: revision,
+          requested_objective: null,
+          requested_status: "active",
+          error: { code: "unknown_error", message: "Outcome is unknown.", retryable: false }
+        }
+      }).uncertain_mutation
+    ).toMatchObject({ action: "resume", requested_status: "active" });
+    expect(() =>
+      goalControlSnapshotSchema.parse({
+        ...snapshot,
+        goal: { ...snapshot.goal, updated_at: "2026-07-09T15:59:00.000Z" }
+      })
+    ).toThrow();
+    expect(() =>
+      goalControlSnapshotSchema.parse({
+        ...snapshot,
+        uncertain_mutation: {
+          action: "clear",
+          phase: "unknown",
+          requested_at: laterTimestamp,
+          baseline_revision: revision,
+          requested_objective: null,
+          requested_status: "active",
+          error: { code: "unknown_error", message: "Contradictory intent.", retryable: false }
+        }
+      })
+    ).toThrow();
   });
 
   it("keeps accepted dispatch separate from terminal success or uncertainty", () => {

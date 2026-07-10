@@ -12,6 +12,7 @@ import { apiErrorEnvelopeSchema } from "./api.js";
 import {
   absoluteCwdSchema,
   isoTimestampSchema,
+  nonNegativeSafeIntegerSchema,
   outputCursorSchema,
   positiveSafeIntegerSchema,
   sessionIdSchema,
@@ -21,7 +22,6 @@ import {
   clientOperationIdSchema,
   codexThreadIdSchema,
   codexTurnIdSchema,
-  goalCueSchema,
   managedSessionProjectionSchema,
   runtimeRequestIdSchema
 } from "./selected-runtime.js";
@@ -98,7 +98,8 @@ export const goalOperationIntentSchema = z
     ...managedOperationBaseShape,
     kind: z.literal("goal"),
     action: z.enum(["set", "pause", "resume", "complete", "clear"]),
-    objective: z.string().trim().min(1).max(operationLimits.goalLength).nullable()
+    objective: z.string().trim().min(1).max(operationLimits.goalLength).nullable(),
+    expected_goal_revision: z.string().regex(/^[a-f0-9]{64}$/u).nullable()
   })
   .strict()
   .superRefine((value, context) => {
@@ -107,6 +108,9 @@ export const goalOperationIntentSchema = z
     }
     if (value.action !== "set" && value.objective !== null) {
       context.addIssue({ code: "custom", message: "Only the set goal action may carry an objective." });
+    }
+    if (value.action !== "set" && value.expected_goal_revision === null) {
+      context.addIssue({ code: "custom", message: "Existing-goal actions require the observed goal revision." });
     }
   });
 
@@ -444,7 +448,56 @@ export const modelControlSnapshotSchema = z
     }
   });
 
-export const goalControlSnapshotSchema = goalCueSchema.nullable();
+export const goalRevisionSchema = z.string().regex(/^[a-f0-9]{64}$/u);
+
+export const goalControlValueSchema = z
+  .object({
+    revision: goalRevisionSchema,
+    objective: z.string().min(1).max(4_000),
+    status: z.enum(["active", "paused", "blocked", "usage_limited", "budget_limited", "complete"]),
+    token_budget: nonNegativeSafeIntegerSchema.nullable(),
+    tokens_used: nonNegativeSafeIntegerSchema,
+    time_used_seconds: z.number().finite().min(0),
+    created_at: isoTimestampSchema,
+    updated_at: isoTimestampSchema
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.updated_at < value.created_at) {
+      context.addIssue({ code: "custom", message: "Goal update time cannot precede creation time." });
+    }
+  });
+
+export const uncertainGoalMutationSchema = z
+  .object({
+    action: z.enum(["set", "pause", "resume", "complete", "clear"]),
+    phase: z.enum(["unknown", "conflict"]),
+    requested_at: isoTimestampSchema,
+    baseline_revision: goalRevisionSchema.nullable(),
+    requested_objective: z.string().min(1).max(operationLimits.goalLength).nullable(),
+    requested_status: z.enum(["active", "paused", "complete"]).nullable(),
+    error: apiErrorEnvelopeSchema
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.action === "set" && (value.requested_objective === null || value.requested_status !== "paused")) {
+      context.addIssue({ code: "custom", message: "Uncertain goal set must preserve its paused objective intent." });
+    }
+    if (value.action !== "set" && value.requested_objective !== null) {
+      context.addIssue({ code: "custom", message: "Only uncertain goal set may preserve an objective." });
+    }
+    const expectedStatus = value.action === "pause" ? "paused" : value.action === "resume" ? "active" : value.action === "complete" ? "complete" : null;
+    if (value.action !== "set" && value.requested_status !== expectedStatus) {
+      context.addIssue({ code: "custom", message: "Uncertain goal mutation status does not match its action." });
+    }
+  });
+
+export const goalControlSnapshotSchema = z
+  .object({
+    goal: goalControlValueSchema.nullable(),
+    uncertain_mutation: uncertainGoalMutationSchema.nullable()
+  })
+  .strict();
 
 export const planControlSnapshotSchema = z
   .object({
@@ -564,6 +617,9 @@ export type SelectedControlState = z.infer<typeof selectedControlStateSchema>;
 export type ModelCatalogEntry = z.infer<typeof modelCatalogEntrySchema>;
 export type ModelControlSnapshot = z.infer<typeof modelControlSnapshotSchema>;
 export type PendingModelSelection = z.infer<typeof pendingModelSelectionSchema>;
+export type GoalControlSnapshot = z.infer<typeof goalControlSnapshotSchema>;
+export type GoalControlValue = z.infer<typeof goalControlValueSchema>;
+export type UncertainGoalMutation = z.infer<typeof uncertainGoalMutationSchema>;
 export type PendingApproval = z.infer<typeof pendingApprovalSchema>;
 export type SelectedStartSessionRequest = z.infer<typeof selectedStartSessionRequestSchema>;
 

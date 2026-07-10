@@ -39,6 +39,7 @@ pnpm exec vitest run tests/service-mode-smoke.test.ts
 ```bash
 HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-semantics
 HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-model
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-goal
 ```
 
 ## Regenerate Reviewed Codex Binding

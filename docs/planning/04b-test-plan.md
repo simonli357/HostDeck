@@ -23,6 +23,7 @@ Task and block evidence names its level. "Complete for package scope" cannot sat
 | `pnpm smoke:codex-compatibility` | `INT-V1-003` | Prove the pinned runtime initialize/platform/Plan catalog over stdio without a model call. | Pass on the supported development/release host. |
 | `pnpm smoke:codex-ipc` | `INT-V1-004` | Prove the production private Unix transport, broker, and handshake against the pinned runtime without a model call. | Pass on the supported development/release host. |
 | `pnpm smoke:codex-model` | `INT-V1-019` | In an isolated authenticated runtime, select one visible non-current catalog model, send it through `turn/start`, confirm settings plus later resume read-back, archive, and clean up. | Pass against exact reviewed Codex 0.144.0; terminal prompt failure remains distinct from setting confirmation. |
+| `pnpm smoke:codex-goal` | `INT-V1-020` | In an isolated authenticated runtime, prove paused set causes no turn, active resume autonomously starts one bounded turn, explicit pause plus interrupt prevents continuation, then complete/clear/read-back and cleanup. | Pass against exact reviewed Codex 0.144.0 with at most one observed goal turn. |
 | `pnpm typecheck` | Foundation | Strict workspace TypeScript. | Pass. |
 | `pnpm lint` | Foundation | Formatting/lint/package-export checks. | Pass. |
 | `pnpm test:unit` | All modules | L1 pure behavior. | Pass. |

@@ -49,6 +49,9 @@ describe("Codex pending model control", () => {
     });
     expect(selected.current).toEqual(before.current);
     expect(harness.service.pending_count).toBe(1);
+    expect(harness.service.readPendingSettings(targetA as never)).toEqual([
+      { control: "model", revision: 1, phase: "pending" }
+    ]);
   });
 
   it("treats selecting the confirmed model and effort as a truthful no-op", async () => {
@@ -246,6 +249,22 @@ describe("Codex pending model control", () => {
     await expectControlError(replacement, "operation_conflict");
   });
 
+  it("reserves global pending capacity across concurrent session reads", async () => {
+    const harness = createHarness({ maxPendingSelections: 1, includeSecondState: true });
+    const deferred = deferredResult<CodexModelCatalog>();
+    harness.models.listResult = deferred.promise;
+    const first = harness.service.select(modelIntent({ model_id: "model-b", reasoning_effort: "low" }));
+    await Promise.resolve();
+    await Promise.resolve();
+    await expectControlError(
+      harness.service.select(modelIntent({ target: targetB, model_id: "model-b", reasoning_effort: "low" })),
+      "service_overloaded"
+    );
+    deferred.resolve(harness.models.catalog);
+    await first;
+    expect(harness.service.pending_count).toBe(1);
+  });
+
   it("releases pending capacity when the owning session is archived", async () => {
     const harness = createHarness();
     await harness.service.select(modelIntent({ model_id: "model-b", reasoning_effort: "low" }));
@@ -285,6 +304,7 @@ interface FakeModels extends CodexModelClient {
   listError: Error | null;
   startError: Error | null;
   startResult: Promise<CodexModelTurnAccepted> | null;
+  listResult: Promise<CodexModelCatalog> | null;
   readHook: (() => void) | null;
   readonly startCalls: Array<Record<string, unknown>>;
 }
@@ -316,10 +336,12 @@ function fakeModels(): FakeModels {
     listError: null,
     startError: null,
     startResult: null,
+    listResult: null,
     readHook: null,
     startCalls,
     async listCatalog() {
       if (this.listError !== null) throw this.listError;
+      if (this.listResult !== null) return this.listResult;
       return this.catalog;
     },
     async readCurrent(threadId) {

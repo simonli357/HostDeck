@@ -55,6 +55,14 @@ export {
   type NormalizedCodexTokenUsage
 } from "./event-normalizer.js";
 export {
+  type CodexGoalClient,
+  type CodexGoalClientOptions,
+  type CodexGoalMutationStatus,
+  type CodexGoalRequestPort,
+  type CodexThreadGoal,
+  createCodexGoalClient
+} from "./goal-client.js";
+export {
   type CodexModelCatalog,
   type CodexModelClient,
   type CodexModelClientOptions,

@@ -23,6 +23,7 @@ import {
 } from "@hostdeck/contracts";
 import type { ErrorCode, IsoTimestamp } from "@hostdeck/core";
 import type { SelectedSessionState, SelectedStateRepository } from "@hostdeck/storage";
+import type { PendingTurnSetting, PendingTurnSettingsReader } from "./pending-turn-settings.js";
 
 type ModelOperationIntent = Extract<SelectedOperationIntent, { readonly kind: "model" }>;
 
@@ -72,7 +73,7 @@ export interface CodexModelControlServiceOptions {
   readonly now?: () => string;
 }
 
-export interface CodexModelControlService {
+export interface CodexModelControlService extends PendingTurnSettingsReader {
   readonly snapshot: (target: unknown, signal?: AbortSignal) => Promise<ModelControlSnapshot>;
   readonly select: (intent: unknown, signal?: AbortSignal) => Promise<ModelControlSnapshot>;
   readonly dispatchPendingTurn: (input: unknown, signal?: AbortSignal) => Promise<CodexPendingModelTurnAccepted>;
@@ -111,6 +112,7 @@ export function createCodexModelControlService(options: CodexModelControlService
     observeSettings: (event: NormalizedCodexEvent) => implementation.observeSettings(event),
     reconcile: (target: unknown, expectedPendingRevision: unknown, signal?: AbortSignal) =>
       implementation.reconcile(target, expectedPendingRevision, signal),
+    readPendingSettings: (target: ManagedSessionTarget) => implementation.readPendingSettings(target),
     get pending_count() {
       return implementation.pending_count;
     }
@@ -123,6 +125,7 @@ class DefaultCodexModelControlService implements CodexModelControlService {
   private readonly maxPendingSelections: number;
   private readonly now: () => string;
   private nextRevision = 1;
+  private pendingReservations = 0;
 
   constructor(private readonly options: CodexModelControlServiceOptions) {
     if (
@@ -143,6 +146,23 @@ class DefaultCodexModelControlService implements CodexModelControlService {
 
   get pending_count(): number {
     return this.pendingBySession.size;
+  }
+
+  readPendingSettings(target: ManagedSessionTarget): readonly PendingTurnSetting[] {
+    const state = this.options.states.get(target.session_id);
+    if (
+      state === null ||
+      state.mapping.codex_thread_id !== target.codex_thread_id ||
+      state.mapping.archived_at !== null ||
+      state.projection.session.session_state === "archived"
+    ) {
+      return [];
+    }
+    const pending = this.pendingBySession.get(target.session_id);
+    if (pending === undefined) return [];
+    return Object.freeze([
+      Object.freeze({ control: "model" as const, revision: pending.revision, phase: pending.phase })
+    ]);
   }
 
   async snapshot(target: unknown, signal?: AbortSignal): Promise<ModelControlSnapshot> {
@@ -172,7 +192,8 @@ class DefaultCodexModelControlService implements CodexModelControlService {
           false
         );
       }
-      if (existing === null && this.pendingBySession.size >= this.maxPendingSelections) {
+      const reserved = existing === null;
+      if (reserved && this.pendingBySession.size + this.pendingReservations >= this.maxPendingSelections) {
         throw controlError(
           "service_overloaded",
           "service_overloaded",
@@ -181,37 +202,42 @@ class DefaultCodexModelControlService implements CodexModelControlService {
           true
         );
       }
+      if (reserved) this.pendingReservations += 1;
 
-      const observed = await this.observeRuntime(state, signal);
-      this.requireTarget(intent.target, true);
-      const selectedModel = observed.catalog.models.find((model) => model.id === intent.model_id);
-      if (selectedModel === undefined) {
-        throw controlError("model_unknown", "validation_error", "The requested model is absent from the live Codex catalog.", "not_sent", true);
-      }
-      const selectedEffort = resolveEffort(selectedModel, intent.reasoning_effort);
+      try {
+        const observed = await this.observeRuntime(state, signal);
+        this.requireTarget(intent.target, true);
+        const selectedModel = observed.catalog.models.find((model) => model.id === intent.model_id);
+        if (selectedModel === undefined) {
+          throw controlError("model_unknown", "validation_error", "The requested model is absent from the live Codex catalog.", "not_sent", true);
+        }
+        const selectedEffort = resolveEffort(selectedModel, intent.reasoning_effort);
 
-      if (observed.current.runtime_model === selectedModel.runtime_model && observed.current.reasoning_effort === selectedEffort) {
-        if (existing !== null) this.pendingBySession.delete(intent.target.session_id);
+        if (observed.current.runtime_model === selectedModel.runtime_model && observed.current.reasoning_effort === selectedEffort) {
+          if (existing !== null) this.pendingBySession.delete(intent.target.session_id);
+          return this.buildSnapshot(intent.target.session_id, observed);
+        }
+
+        const pending: InternalPendingSelection = {
+          revision: this.allocateRevision(),
+          selection_operation_id: intent.operation_id,
+          model_id: selectedModel.id,
+          runtime_model: selectedModel.runtime_model,
+          reasoning_effort: selectedEffort,
+          catalog_state: "available",
+          phase: "pending",
+          selected_at: this.timestamp(),
+          turn_id: null,
+          error: null,
+          catalog_revision: observed.catalog.revision,
+          baseline_runtime_model: observed.current.runtime_model,
+          baseline_reasoning_effort: observed.current.reasoning_effort
+        };
+        this.pendingBySession.set(intent.target.session_id, pending);
         return this.buildSnapshot(intent.target.session_id, observed);
+      } finally {
+        if (reserved) this.pendingReservations -= 1;
       }
-
-      const pending: InternalPendingSelection = {
-        revision: this.allocateRevision(),
-        selection_operation_id: intent.operation_id,
-        model_id: selectedModel.id,
-        runtime_model: selectedModel.runtime_model,
-        reasoning_effort: selectedEffort,
-        catalog_state: "available",
-        phase: "pending",
-        selected_at: this.timestamp(),
-        turn_id: null,
-        error: null,
-        catalog_revision: observed.catalog.revision,
-        baseline_runtime_model: observed.current.runtime_model,
-        baseline_reasoning_effort: observed.current.reasoning_effort
-      };
-      this.pendingBySession.set(intent.target.session_id, pending);
-      return this.buildSnapshot(intent.target.session_id, observed);
     });
   }
 

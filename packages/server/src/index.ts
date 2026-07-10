@@ -1,5 +1,6 @@
 export * from "./api-route-contracts.js";
 export * from "./codex-event-pipeline.js";
+export * from "./codex-goal-control-service.js";
 export * from "./codex-model-control-service.js";
 export * from "./codex-projection-service.js";
 export * from "./fastify-app.js";
@@ -12,6 +13,7 @@ export * from "./fastify-zod.js";
 export * from "./host-service.js";
 export * from "./managed-thread-service.js";
 export * from "./output-reader.js";
+export * from "./pending-turn-settings.js";
 export * from "./read-routes.js";
 export * from "./restart-reconciler.js";
 export * from "./security-routes.js";
