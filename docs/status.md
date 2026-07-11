@@ -60,7 +60,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Current command-backed app-server smokes can fail before a callback because app-server selects Bubblewrap while this host denies unprivileged user-namespace setup, even when the reviewed legacy-Landlock feature flag is enabled. Direct exact-version Landlock execution plus the no-tools interrupt and compact smokes pass. Resolve and reproduce the command-backed path in `INT-V1-027`/`INT-V1-091`; this does not invalidate the already-captured approval or interrupt evidence.
 - Production composition with selected Codex pipeline/trust/route registrations, authenticated SSE assembly around the proven fanout/high-water handoff, sustained subscriber queues, full raw-socket Node-limit enforcement, mutable runtime health, configured-policy ordering/wiring of the proven orphan and retention runners, or complete application drain; the generic listener lifecycle and individual headless adapters are proven, not those downstream integrations.
 - The default installed Codex is now 0.144.1 and is intentionally incompatible with the reviewed 0.144.0 binding until a separate compatibility review. Exact 0.144.0 remains available through an isolated package invocation for the remaining runtime work.
-- HTTPS LAN certificate enrollment, paired LAN reads, CSRF reload, rate limits, or device revocation.
+- The `IFC-V1-015` in-process CA/leaf candidate passes exact profile, Node/OpenSSL TLS, renewal/rotation, invalid-chain, plaintext, dependency, and secure-path tests. Physical phone root installation, warning-free browser connection, on-device renewal, trust removal, and recovery remain unproven. Partial evidence: `artifacts/ifc-v1-015-https-phone-enrollment.md`; host probe `794784a`.
+- Paired LAN reads, CSRF reload, rate limits, or device revocation.
 - Runnable packaged CLI, built dashboard, user services, clean Ubuntu install, real phone workflow, or release readiness.
 
 ## Blockers

@@ -49,7 +49,7 @@ The architecture is acceptable for V1 only when all of the following are true:
 | Storage | `better-sqlite3` with first-party migrations. | Existing `DEC-014` evidence remains valid. |
 | Daemon lease | Exact `fs-ext` 2.1.1 native binding to Linux `flock(2)`. | Node 22 has no first-party file-lock API; a kernel-held nonblocking descriptor lock releases on process death. Directory/mtime lockfile libraries were rejected because they require stale-owner heuristics instead of providing the selected OS-lock contract. |
 | Service mode | Unprivileged systemd user units on Ubuntu. | Separate app-server and HostDeck ownership, restart policy, logs, and no root requirement. |
-| LAN security | HTTPS-only explicit opt-in with a tested local-certificate enrollment path. | Required by `DEC-020`; exact certificate library/enrollment is selected by `IFC-V1-015` after real phone proof. |
+| LAN security | HTTPS-only explicit opt-in with a tested local-certificate enrollment path. | Required by `DEC-020`; `@peculiar/x509` 2.0.0 plus `reflect-metadata` 0.2.2 is the host-proven in-process candidate, but selection remains gated by `IFC-V1-015` real-phone proof. |
 
 All dependencies are pinned in the lockfile, license-checked when added, and recorded in the owning task. No dependency is considered selected solely because it appears in this plan.
 
@@ -236,6 +236,8 @@ Host allowlists are derived from configured origin/certificate names, not reflec
 - browser trust instructions and failure recovery;
 - no secret in logs, QR payloads, or command history;
 - explicit refusal to start LAN when certificate, host allowlist, or permissions are invalid.
+
+The host-side candidate profile uses one assigned RFC1918 IPv4 or IPv6 ULA as an exact IP SAN, RSA-2048/SHA-256, a 3,650-day path-length-zero root, a 397-day server-only leaf, five-minute issuance skew, and renewal at 30 days remaining. Leaf renewal retains the root; root rotation requires explicit device re-enrollment. `artifacts/ifc-v1-015-https-phone-enrollment.md` records the dependency and Node/OpenSSL evidence. These values are not final until the physical browser gate passes.
 
 ## Storage Model
 
