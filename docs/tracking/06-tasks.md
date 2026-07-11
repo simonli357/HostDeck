@@ -15,8 +15,8 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-024` Implement structured skills listing | in_progress | none | Implements the remaining observed read-only utility boundary. |
-| 2 | `IFC-V1-019` Freeze the selected API route manifest | ready | none | Converts the completed semantic matrix and normalized contracts into one unambiguous public route inventory. |
+| 1 | `IFC-V1-019` Freeze the selected API route manifest | in_progress | none | Converts the completed semantic matrix and normalized contracts into one unambiguous public route inventory. |
+| 2 | `INT-V1-027` Prove the assembled real structured vertical | ready | none | Assembles every proven runtime port and unlocks supervision, exact write dispatch, and stable mobile states. |
 | 3 | `IFC-V1-047` Enforce real HTTP resource limits | ready | none | Extends proven option inventory into raw-socket limit and cleanup behavior. |
 | 4 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the independent physical-device LAN trust gate when hardware setup is available. |
 
@@ -25,7 +25,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
 | LAN security | `IFC-V1-015` | Real phone certificate-enrollment proof | Auth lifecycle, pairing UI, security/release review. |
-| Real Codex operation implementation | `INT-V1-018` to `INT-V1-027` | Exact semantics, ordered normalization, prompt, model, goal, Plan, approval, and interrupt controls pass; remaining utility ports and assembled proof remain | Production operation API, stable mobile state matrix, approvals. |
+| Real Codex operation implementation | `INT-V1-027` | Every exact operation port passes; the assembled real two-thread callback vertical remains | Production operation API, stable mobile state matrix, approvals. |
 | Mobile visual direction | Reopened `FE-V1-002`, `FE-V1-003` | Real state matrix, two replacement options, human selection | React screen implementation. |
 | Release | `REL-V1-010` | All module hardening, clean package/service/phone/security evidence, human acceptance | V1 release and V2 planning. |
 
