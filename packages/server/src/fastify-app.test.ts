@@ -25,7 +25,7 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
     const observations: HostDeckInternalErrorObservation[] = [];
     const app = createTestApp(
       [
-        routePlugin("fixtures", (typedApp) => {
+        routePlugin("fixtures", (typedApp, context) => {
           typedApp.post(
             "/echo",
             {
@@ -39,7 +39,7 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
           typedApp.get(
             "/deadline",
             {
-              handlerTimeout: 5_000,
+              handlerTimeout: 20_000,
               schema: {
                 response: {
                   200: z.strictObject({
@@ -88,6 +88,16 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
             { schema: { response: { 200: z.strictObject({ ok: z.literal(true) }) } } },
             async () => ({ ok: true as const })
           );
+          typedApp.post(
+            "/body-boundary",
+            {
+              schema: {
+                body: z.string().max(context.resourceBudget.http_body_max_bytes),
+                response: { 200: z.strictObject({ bytes: z.number().int().positive() }) }
+              }
+            },
+            async (request) => ({ bytes: Buffer.byteLength(JSON.stringify(request.body), "utf8") })
+          );
         })
       ],
       defaultResourceBudget,
@@ -115,9 +125,9 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
       expect(deadline.statusCode, deadline.body).toBe(200);
       const deadlineBody = deadline.json<{ duration_ms: number; remaining_ms: number; same_signal: boolean }>();
       expect(deadlineBody).toMatchObject({ same_signal: true });
-      expect(deadlineBody.duration_ms).toBeCloseTo(5_000, 6);
+      expect(deadlineBody.duration_ms).toBeCloseTo(20_000, 6);
       expect(deadlineBody.remaining_ms).toBeGreaterThan(0);
-      expect(deadlineBody.remaining_ms).toBeLessThanOrEqual(5_000);
+      expect(deadlineBody.remaining_ms).toBeLessThanOrEqual(20_000);
 
       const invalid = await app.inject({
         method: "POST",
@@ -141,6 +151,25 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
         payload: "hello"
       });
       expectStableError(unsupported, 415, "unsupported_media_type");
+
+      const exactBody = JSON.stringify("x".repeat(defaultResourceBudget.http_body_max_bytes - 2));
+      expect(Buffer.byteLength(exactBody, "utf8")).toBe(defaultResourceBudget.http_body_max_bytes);
+      const exactBodyResponse = await app.inject({
+        method: "POST",
+        url: "/body-boundary",
+        headers: { "content-type": "application/json" },
+        payload: exactBody
+      });
+      expect(exactBodyResponse.statusCode, exactBodyResponse.body).toBe(200);
+      expect(exactBodyResponse.json()).toEqual({ bytes: defaultResourceBudget.http_body_max_bytes });
+
+      const overBody = await app.inject({
+        method: "POST",
+        url: "/body-boundary",
+        headers: { "content-type": "application/json" },
+        payload: JSON.stringify("x".repeat(defaultResourceBudget.http_body_max_bytes - 1))
+      });
+      expectStableError(overBody, 413, "request_too_large");
 
       const oversized = await app.inject({
         method: "POST",
@@ -181,9 +210,12 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
         thrown.headers["x-request-id"]
       ]);
       expect(hostDeckFastifyResourceSnapshot(app)).toEqual({
+        aborted_requests: 0,
         in_flight_requests: 0,
         max_in_flight_requests: 64,
-        rejected_overload_requests: 0
+        rejected_header_count_requests: 0,
+        rejected_overload_requests: 0,
+        timed_out_requests: 0
       });
     } finally {
       await app.close();
@@ -285,9 +317,12 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
       const rejected = await app.inject({ method: "GET", url: "/hold" });
       expectStableError(rejected, 503, "service_overloaded");
       expect(hostDeckFastifyResourceSnapshot(app)).toEqual({
+        aborted_requests: 0,
         in_flight_requests: 1,
         max_in_flight_requests: 1,
-        rejected_overload_requests: 1
+        rejected_header_count_requests: 0,
+        rejected_overload_requests: 1,
+        timed_out_requests: 0
       });
 
       release.resolve();
@@ -309,7 +344,7 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
   });
 
   it("normalizes the real Fastify handler timeout while retaining capacity until cooperative settlement", async () => {
-    const budget = oneSecondRequestBudget();
+    const budget = boundedRequestTimeoutBudget();
     const settle = deferred<void>();
     const aborted = deferred<void>();
     let deadline: OperationDeadline | undefined;
@@ -438,6 +473,20 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
     );
     await raisedDeadline.close();
 
+    const competingDeadline = createTestApp([
+      routePlugin("competing-deadline", (typedApp, context) => {
+        typedApp.get("/competing", {
+          handlerTimeout: context.resourceBudget.http_request_receive_timeout_ms,
+          schema: { response: { 200: z.strictObject({ unreachable: z.boolean() }) } },
+          handler: async () => ({ unreachable: true })
+        });
+      })
+    ]);
+    await expect(competingDeadline.ready()).rejects.toThrow(
+      'HostDeck route plugin "competing-deadline" failed registration.'
+    );
+    await competingDeadline.close();
+
     const stableError = new HostDeckHttpError({
       status: 409,
       code: "operation_conflict",
@@ -555,12 +604,12 @@ function singleRequestBudget(): ResourceBudget {
   });
 }
 
-function oneSecondRequestBudget(): ResourceBudget {
+function boundedRequestTimeoutBudget(): ResourceBudget {
   return resolveResourceBudget({
     cli_connect_timeout_ms: 500,
-    cli_request_timeout_ms: 1_000,
+    cli_request_timeout_ms: 2_000,
     http_headers_timeout_ms: 1_000,
-    http_request_deadline_ms: 1_000,
+    http_request_deadline_ms: 2_000,
     http_request_receive_timeout_ms: 1_000,
     protocol_mutation_timeout_ms: 1_000,
     protocol_read_timeout_ms: 1_000,

@@ -187,12 +187,21 @@ describe("selected Fastify host lifecycle", () => {
     expect(service.snapshot()).toEqual({
       bound: { host: "127.0.0.1", port, transport: "http" },
       configured: { host: "127.0.0.1", port, transport: "http" },
+      connections: {
+        active_connections: 0,
+        dropped_connections: 0,
+        dropped_requests: 0,
+        forced_shutdown_connections: 0
+      },
       listening: true,
       node_limits: {
+        connections_check_interval_ms: 1_000,
         connection_idle_timeout_ms: defaultResourceBudget.http_connection_idle_timeout_ms,
         headers_max_bytes: defaultResourceBudget.http_headers_max_bytes,
         headers_max_count: defaultResourceBudget.http_headers_max_count,
+        headers_parser_max_count: defaultResourceBudget.http_headers_max_count + 1,
         headers_timeout_ms: defaultResourceBudget.http_headers_timeout_ms,
+        keep_alive_timeout_buffer_ms: 0,
         keep_alive_timeout_ms: defaultResourceBudget.http_keep_alive_timeout_ms,
         max_connections: defaultResourceBudget.http_max_connections,
         max_requests_per_socket: defaultResourceBudget.http_max_requests_per_socket,
@@ -201,6 +210,7 @@ describe("selected Fastify host lifecycle", () => {
       phase: "ready"
     });
     expect(Object.isFrozen(service.snapshot())).toBe(true);
+    expect(Object.isFrozen(service.snapshot().connections)).toBe(true);
     expect(Object.isFrozen(service.snapshot().node_limits)).toBe(true);
 
     const response = await fetch(new URL("/api/lifecycle", service.baseUrl));
@@ -360,13 +370,17 @@ describe("selected Fastify host lifecycle", () => {
     expect(failedReady.code).toBe("app_ready_failed");
 
     const recovered = await startSecureLifecycle(paths, port, [probeRegistration([])]);
-    await expect(fetch(new URL("/api/lifecycle", recovered.baseUrl))).resolves.toMatchObject({
+    await expect(
+      fetch(new URL("/api/lifecycle", recovered.baseUrl), { headers: { connection: "close" } })
+    ).resolves.toMatchObject({
       status: 200
     });
     await recovered.close();
 
     const restarted = await startSecureLifecycle(paths, port, [probeRegistration([])], laterNow);
-    await expect(fetch(new URL("/api/lifecycle", restarted.baseUrl))).resolves.toMatchObject({
+    await expect(
+      fetch(new URL("/api/lifecycle", restarted.baseUrl), { headers: { connection: "close" } })
+    ).resolves.toMatchObject({
       status: 200
     });
     await restarted.close();

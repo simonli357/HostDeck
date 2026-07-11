@@ -120,6 +120,14 @@ describe("selected V1 resource budget", () => {
     const contradictoryPolicies: readonly Partial<ResourceBudget>[] = [
       { http_headers_timeout_ms: 30_000, http_request_receive_timeout_ms: 10_000 },
       { http_request_receive_timeout_ms: 60_000, http_request_deadline_ms: 10_000 },
+      {
+        http_headers_timeout_ms: 1_000,
+        http_request_receive_timeout_ms: 1_000,
+        http_request_deadline_ms: 1_000,
+        protocol_read_timeout_ms: 1_000,
+        protocol_mutation_timeout_ms: 1_000,
+        protocol_start_timeout_ms: 1_000
+      },
       { http_keep_alive_timeout_ms: 60_000, http_connection_idle_timeout_ms: 60_000 },
       { sse_heartbeat_interval_ms: 60_000, http_connection_idle_timeout_ms: 60_000 },
       { sse_max_subscribers: 64, http_max_connections: 64 },

@@ -182,7 +182,7 @@ export const resourceBudgetSchema = z
     };
 
     atMost("http_headers_timeout_ms", "http_request_receive_timeout_ms", "Header timeout must fit within the HTTP receive timeout.");
-    atMost("http_request_receive_timeout_ms", "http_request_deadline_ms", "HTTP receive timeout must fit within the route deadline.");
+    lessThan("http_request_receive_timeout_ms", "http_request_deadline_ms", "HTTP receive timeout must finish before the route deadline.");
     lessThan("http_keep_alive_timeout_ms", "http_connection_idle_timeout_ms", "Keep-alive timeout must be shorter than the connection idle timeout.");
     lessThan("sse_heartbeat_interval_ms", "http_connection_idle_timeout_ms", "SSE heartbeat must occur before the HTTP connection idle timeout.");
     lessThan("sse_max_subscribers", "http_max_connections", "SSE subscribers must leave at least one HTTP connection available.");

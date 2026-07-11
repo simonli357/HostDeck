@@ -17,10 +17,13 @@ describe("Fastify resource options", () => {
         routerOptions: { maxParamLength: 128 }
       },
       node: {
+        connectionsCheckingInterval: 1_000,
         headersTimeout: 10_000,
+        keepAliveTimeoutBuffer: 0,
+        maxAcceptedHeadersCount: 64,
         maxConnections: 64,
         maxHeaderSize: 16_384,
-        maxHeadersCount: 64
+        parserMaxHeadersCount: 65
       },
       application: {
         maxInFlightRequests: 64,

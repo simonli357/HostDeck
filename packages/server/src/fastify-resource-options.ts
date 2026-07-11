@@ -13,10 +13,13 @@ export interface FastifyFactoryResourceOptions {
 }
 
 export interface NodeHttpResourceOptions {
+  readonly connectionsCheckingInterval: number;
   readonly headersTimeout: number;
+  readonly keepAliveTimeoutBuffer: number;
+  readonly maxAcceptedHeadersCount: number;
   readonly maxConnections: number;
   readonly maxHeaderSize: number;
-  readonly maxHeadersCount: number;
+  readonly parserMaxHeadersCount: number;
 }
 
 export interface FastifyApplicationResourceOptions {
@@ -44,10 +47,17 @@ export function fastifyResourceOptionsFromBudget(input: unknown): FastifyResourc
       routerOptions: Object.freeze({ maxParamLength: budget.http_route_param_max_bytes })
     }),
     node: Object.freeze({
+      connectionsCheckingInterval: Math.min(
+        1_000,
+        budget.http_headers_timeout_ms,
+        budget.http_request_receive_timeout_ms
+      ),
       headersTimeout: budget.http_headers_timeout_ms,
+      keepAliveTimeoutBuffer: 0,
+      maxAcceptedHeadersCount: budget.http_headers_max_count,
       maxConnections: budget.http_max_connections,
       maxHeaderSize: budget.http_headers_max_bytes,
-      maxHeadersCount: budget.http_headers_max_count
+      parserMaxHeadersCount: budget.http_headers_max_count + 1
     }),
     application: Object.freeze({
       maxInFlightRequests: budget.http_max_in_flight_requests,

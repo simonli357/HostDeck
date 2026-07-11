@@ -1,4 +1,4 @@
-import type { AddressInfo } from "node:net";
+import type { AddressInfo, Socket } from "node:net";
 import {
   assertResolvedResourceBudget,
   type ResourceBudget
@@ -85,19 +85,30 @@ export interface StartHostDeckFastifyLifecycleInput<TContext> {
 }
 
 export interface HostDeckFastifyNodeLimitSnapshot {
+  readonly connections_check_interval_ms: number;
   readonly connection_idle_timeout_ms: number;
   readonly headers_max_bytes: number;
   readonly headers_max_count: number;
+  readonly headers_parser_max_count: number;
   readonly headers_timeout_ms: number;
+  readonly keep_alive_timeout_buffer_ms: number;
   readonly keep_alive_timeout_ms: number;
   readonly max_connections: number;
   readonly max_requests_per_socket: number;
   readonly request_receive_timeout_ms: number;
 }
 
+export interface HostDeckFastifyConnectionSnapshot {
+  readonly active_connections: number;
+  readonly dropped_connections: number;
+  readonly dropped_requests: number;
+  readonly forced_shutdown_connections: number;
+}
+
 export interface HostDeckFastifyLifecycleSnapshot {
   readonly bound: HostDeckFastifyListenerBind | null;
   readonly configured: HostDeckFastifyListenerBind;
+  readonly connections: HostDeckFastifyConnectionSnapshot;
   readonly listening: boolean;
   readonly node_limits: HostDeckFastifyNodeLimitSnapshot;
   readonly phase: HostDeckFastifyLifecyclePhase;
@@ -137,6 +148,14 @@ interface CleanupRuntimeOwner {
   readonly closeStartup: (deadline: OperationDeadline) => void | Promise<void>;
 }
 
+interface HttpConnectionRuntime {
+  readonly activeSockets: Set<Socket>;
+  readonly emptyWaiters: Set<() => void>;
+  droppedConnections: number;
+  droppedRequests: number;
+  forcedShutdownConnections: number;
+}
+
 type CleanupStep = "listener" | "sse" | "app" | "startup";
 
 class HostDeckFastifyCleanupError extends Error {
@@ -165,6 +184,7 @@ const inputKeys = [
 const runtimeOwnerKeys = ["closeSse", "closeStartup", "start"];
 const startedRuntimeKeys = ["bind", "context"];
 const bindKeys = ["host", "port", "transport"];
+const httpConnectionRuntimes = new WeakMap<HostDeckFastifyInstance, HttpConnectionRuntime>();
 
 export async function startHostDeckFastifyLifecycle<TContext>(
   input: StartHostDeckFastifyLifecycleInput<TContext>
@@ -201,6 +221,7 @@ export async function startHostDeckFastifyLifecycle<TContext>(
       resourceBudget: parsed.resourceBudget,
       routePlugins
     });
+    installHttpConnectionRuntime(app);
     applyNodeServerLimits(app, parsed.resourceBudget);
 
     stage = "ready";
@@ -348,15 +369,44 @@ function assertPlainExactObject(input: unknown, expectedKeys: readonly string[],
   }
 }
 
+function installHttpConnectionRuntime(app: HostDeckFastifyInstance): void {
+  if (httpConnectionRuntimes.has(app)) throw new Error("HostDeck HTTP connection runtime is already installed.");
+  const runtime: HttpConnectionRuntime = {
+    activeSockets: new Set<Socket>(),
+    droppedConnections: 0,
+    droppedRequests: 0,
+    emptyWaiters: new Set<() => void>(),
+    forcedShutdownConnections: 0
+  };
+  httpConnectionRuntimes.set(app, runtime);
+  app.server.on("connection", (socket) => {
+    runtime.activeSockets.add(socket);
+    socket.once("close", () => {
+      runtime.activeSockets.delete(socket);
+      if (runtime.activeSockets.size === 0) {
+        for (const waiter of [...runtime.emptyWaiters]) waiter();
+      }
+    });
+  });
+  app.server.on("drop", () => {
+    runtime.droppedConnections += 1;
+  });
+  app.server.on("dropRequest", () => {
+    runtime.droppedRequests += 1;
+  });
+}
+
 function applyNodeServerLimits(app: HostDeckFastifyInstance, budget: ResourceBudget): void {
   const limits = fastifyResourceOptionsFromBudget(budget).node;
   app.server.headersTimeout = limits.headersTimeout;
+  app.server.keepAliveTimeoutBuffer = limits.keepAliveTimeoutBuffer;
   app.server.maxConnections = limits.maxConnections;
-  app.server.maxHeadersCount = limits.maxHeadersCount;
+  app.server.maxHeadersCount = limits.parserMaxHeadersCount;
   if (
     app.server.headersTimeout !== limits.headersTimeout ||
+    app.server.keepAliveTimeoutBuffer !== limits.keepAliveTimeoutBuffer ||
     app.server.maxConnections !== limits.maxConnections ||
-    app.server.maxHeadersCount !== limits.maxHeadersCount ||
+    app.server.maxHeadersCount !== limits.parserMaxHeadersCount ||
     app.server.keepAliveTimeout !== budget.http_keep_alive_timeout_ms ||
     app.server.maxRequestsPerSocket !== budget.http_max_requests_per_socket ||
     app.server.requestTimeout !== budget.http_request_receive_timeout_ms ||
@@ -395,12 +445,16 @@ function createLifecycleSnapshot(
   return Object.freeze({
     bound,
     configured,
+    connections: connectionSnapshot(app),
     listening: app.server.listening,
     node_limits: Object.freeze({
+      connections_check_interval_ms: fastifyResourceOptionsFromBudget(budget).node.connectionsCheckingInterval,
       connection_idle_timeout_ms: app.server.timeout,
       headers_max_bytes: budget.http_headers_max_bytes,
-      headers_max_count: requireAppliedInteger(app.server.maxHeadersCount, "maxHeadersCount"),
+      headers_max_count: budget.http_headers_max_count,
+      headers_parser_max_count: requireAppliedInteger(app.server.maxHeadersCount, "maxHeadersCount"),
       headers_timeout_ms: app.server.headersTimeout,
+      keep_alive_timeout_buffer_ms: app.server.keepAliveTimeoutBuffer,
       keep_alive_timeout_ms: app.server.keepAliveTimeout,
       max_connections: app.server.maxConnections,
       max_requests_per_socket: requireAppliedInteger(
@@ -411,6 +465,22 @@ function createLifecycleSnapshot(
     }),
     phase
   });
+}
+
+function connectionSnapshot(app: HostDeckFastifyInstance): HostDeckFastifyConnectionSnapshot {
+  const runtime = requireHttpConnectionRuntime(app);
+  return Object.freeze({
+    active_connections: runtime.activeSockets.size,
+    dropped_connections: runtime.droppedConnections,
+    dropped_requests: runtime.droppedRequests,
+    forced_shutdown_connections: runtime.forcedShutdownConnections
+  });
+}
+
+function requireHttpConnectionRuntime(app: HostDeckFastifyInstance): HttpConnectionRuntime {
+  const runtime = httpConnectionRuntimes.get(app);
+  if (runtime === undefined) throw new Error("HostDeck HTTP connection runtime is unavailable.");
+  return runtime;
 }
 
 function toBoundAddress(
@@ -479,10 +549,10 @@ async function closeLifecycleResources(
       const listenerError = await runCleanupStep(
         "listener",
         (deadline) =>
-          waitForListenerClose(
+          waitForListenerCloseWithForce(
             listenerApp,
             listenerCompletion,
-            deadline.signal
+            deadline
           ),
         shutdownDeadline,
         budget.lifecycle_cleanup_step_timeout_ms
@@ -523,6 +593,75 @@ function beginListenerClose(app: HostDeckFastifyInstance): Promise<void> {
       }
       resolve();
     });
+  });
+}
+
+async function waitForListenerCloseWithForce(
+  app: HostDeckFastifyInstance,
+  completion: Promise<void>,
+  deadline: OperationDeadline
+): Promise<void> {
+  const remainingMs = Math.max(1, Math.floor(deadline.remainingMs()));
+  const forceReserveMs = Math.max(10, Math.min(100, Math.floor(remainingMs / 4)));
+  const graceDeadline = createOperationDeadline({
+    timeoutMs: Math.max(1, remainingMs - forceReserveMs),
+    parentSignal: deadline.signal
+  });
+  let gracefulCause: unknown = null;
+  let gracefulTimedOut = false;
+  try {
+    await waitForListenerClose(app, completion, graceDeadline.signal);
+    await waitForHttpConnectionsClosed(app, graceDeadline.signal);
+    return;
+  } catch (cause) {
+    gracefulCause = cause;
+    gracefulTimedOut =
+      graceDeadline.signal.aborted &&
+      !deadline.signal.aborted &&
+      graceDeadline.signal.reason instanceof OperationDeadlineExceededError;
+  } finally {
+    graceDeadline.dispose();
+  }
+
+  try {
+    forceCloseHttpConnections(app);
+  } catch (forceCause) {
+    throw new AggregateError([gracefulCause, forceCause], "HostDeck listener grace and forced close failed.");
+  }
+  if (deadline.signal.aborted) throw gracefulCause;
+  try {
+    await waitForListenerClose(app, completion, deadline.signal);
+    await waitForHttpConnectionsClosed(app, deadline.signal);
+  } catch (forceCause) {
+    throw new AggregateError([gracefulCause, forceCause], "HostDeck listener did not close after forced cleanup.");
+  }
+  if (!gracefulTimedOut) throw gracefulCause;
+}
+
+function forceCloseHttpConnections(app: HostDeckFastifyInstance): void {
+  const runtime = requireHttpConnectionRuntime(app);
+  runtime.forcedShutdownConnections += runtime.activeSockets.size;
+  app.server.closeAllConnections();
+}
+
+function waitForHttpConnectionsClosed(app: HostDeckFastifyInstance, signal: AbortSignal): Promise<void> {
+  const runtime = requireHttpConnectionRuntime(app);
+  if (runtime.activeSockets.size === 0) return Promise.resolve();
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      runtime.emptyWaiters.delete(onEmpty);
+      signal.removeEventListener("abort", onAbort);
+      callback();
+    };
+    const onEmpty = () => finish(resolve);
+    const onAbort = () => finish(() => reject(signal.reason));
+    runtime.emptyWaiters.add(onEmpty);
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (runtime.activeSockets.size === 0) onEmpty();
   });
 }
 

@@ -59,16 +59,22 @@ export interface CreateHostDeckFastifyAppInput {
 }
 
 export interface HostDeckFastifyResourceSnapshot {
+  readonly aborted_requests: number;
   readonly in_flight_requests: number;
   readonly max_in_flight_requests: number;
+  readonly rejected_header_count_requests: number;
   readonly rejected_overload_requests: number;
+  readonly timed_out_requests: number;
 }
 
 interface AppRuntimeState {
   readonly registeredMethods: Set<string>;
   readonly resourceBudget: ResourceBudget;
+  abortedRequests: number;
   inFlightRequests: number;
+  rejectedHeaderCountRequests: number;
   rejectedOverloadRequests: number;
+  timedOutRequests: number;
 }
 
 interface RequestRuntimeState {
@@ -97,7 +103,11 @@ export function createHostDeckFastifyApp(input: CreateHostDeckFastifyAppInput): 
   const resourceOptions = fastifyResourceOptionsFromBudget(input.resourceBudget);
   const app = Fastify({
     ...resourceOptions.factory,
-    http: { maxHeaderSize: resourceOptions.node.maxHeaderSize },
+    http: {
+      connectionsCheckingInterval: resourceOptions.node.connectionsCheckingInterval,
+      keepAliveTimeoutBuffer: resourceOptions.node.keepAliveTimeoutBuffer,
+      maxHeaderSize: resourceOptions.node.maxHeaderSize
+    },
     frameworkErrors: (error, request, reply) =>
       handleHostDeckFastifyError(error, request, reply, input.observeInternalError),
     genReqId: () => `req_${randomUUID()}`,
@@ -115,10 +125,13 @@ export function createHostDeckFastifyApp(input: CreateHostDeckFastifyAppInput): 
     trustProxy: false
   }).withTypeProvider<HostDeckZodTypeProvider>();
   const runtime: AppRuntimeState = {
+    abortedRequests: 0,
     inFlightRequests: 0,
     registeredMethods: new Set<string>(),
+    rejectedHeaderCountRequests: 0,
     rejectedOverloadRequests: 0,
-    resourceBudget: input.resourceBudget
+    resourceBudget: input.resourceBudget,
+    timedOutRequests: 0
   };
   appRuntimeStates.set(app, runtime);
 
@@ -158,9 +171,12 @@ export function hostDeckFastifyResourceSnapshot(app: FastifyInstance): HostDeckF
   const runtime = appRuntimeStates.get(app);
   if (runtime === undefined) throw new TypeError("Fastify instance is not owned by the HostDeck app factory.");
   return Object.freeze({
+    aborted_requests: runtime.abortedRequests,
     in_flight_requests: runtime.inFlightRequests,
     max_in_flight_requests: runtime.resourceBudget.http_max_in_flight_requests,
-    rejected_overload_requests: runtime.rejectedOverloadRequests
+    rejected_header_count_requests: runtime.rejectedHeaderCountRequests,
+    rejected_overload_requests: runtime.rejectedOverloadRequests,
+    timed_out_requests: runtime.timedOutRequests
   });
 }
 
@@ -171,7 +187,11 @@ function installRoutePolicy(app: HostDeckFastifyInstance, runtime: AppRuntimeSta
       throw new TypeError("HostDeck routes cannot replace the global Zod compilers.");
     }
     enforceRouteCeiling(routeOptions.bodyLimit, runtime.resourceBudget.http_body_max_bytes, "bodyLimit");
-    enforceRouteCeiling(routeOptions.handlerTimeout, runtime.resourceBudget.http_request_deadline_ms, "handlerTimeout");
+    enforceRouteHandlerTimeout(
+      routeOptions.handlerTimeout,
+      runtime.resourceBudget.http_request_receive_timeout_ms,
+      runtime.resourceBudget.http_request_deadline_ms
+    );
     for (const method of Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method]) {
       runtime.registeredMethods.add(method.toUpperCase());
     }
@@ -208,6 +228,15 @@ function installSurfaceRoutePolicy(app: HostDeckFastifyInstance, surface: HostDe
 function installRequestPolicy(app: HostDeckFastifyInstance, runtime: AppRuntimeState): void {
   app.addHook("onRequest", async (request, reply) => {
     reply.header("x-request-id", request.id);
+    if (rawHeaderCount(request.raw.rawHeaders) > runtime.resourceBudget.http_headers_max_count) {
+      runtime.rejectedHeaderCountRequests += 1;
+      reply.header("connection", "close");
+      return sendHostDeckError(reply, request, 431, {
+        code: "malformed_request",
+        message: "Request header count exceeds its configured limit.",
+        retryable: false
+      });
+    }
     const rawUrl = request.raw.url ?? request.url;
     if (Buffer.byteLength(rawUrl, "utf8") > runtime.resourceBudget.http_url_max_bytes) {
       return sendHostDeckError(reply, request, 414, {
@@ -269,10 +298,10 @@ function installRequestPolicy(app: HostDeckFastifyInstance, runtime: AppRuntimeS
     finishResponse(request);
   });
   app.addHook("onRequestAbort", async (request) => {
-    finishResponse(request);
+    finishTerminatedRequest(request, "abort");
   });
   app.addHook("onTimeout", async (request) => {
-    finishResponse(request);
+    finishTerminatedRequest(request, "timeout");
   });
 }
 
@@ -355,11 +384,36 @@ function enforceRouteCeiling(value: number | undefined, maximum: number, label: 
   }
 }
 
+function enforceRouteHandlerTimeout(value: number | undefined, receiveTimeout: number, maximum: number): void {
+  if (value === undefined) return;
+  enforceRouteCeiling(value, maximum, "handlerTimeout");
+  if (value <= receiveTimeout) {
+    throw new TypeError(`Fastify route handlerTimeout must be greater than the ${receiveTimeout}ms request receive timeout.`);
+  }
+}
+
 function hasOversizedRouteParameter(params: unknown, maximumBytes: number): boolean {
   if (params === null || typeof params !== "object" || Array.isArray(params)) return false;
   return Object.values(params).some(
     (value) => typeof value === "string" && Buffer.byteLength(value, "utf8") > maximumBytes
   );
+}
+
+function rawHeaderCount(rawHeaders: readonly string[]): number {
+  if (rawHeaders.length % 2 !== 0) throw new Error("Node HTTP raw headers have an invalid key/value shape.");
+  return rawHeaders.length / 2;
+}
+
+function finishTerminatedRequest(
+  request: import("fastify").FastifyRequest,
+  reason: "abort" | "timeout"
+): void {
+  const state = (request as RequestWithRuntimeState)[requestRuntimeState];
+  if (state !== undefined && !state.responseFinished) {
+    if (reason === "abort") state.owner.abortedRequests += 1;
+    else state.owner.timedOutRequests += 1;
+  }
+  finishResponse(request);
 }
 
 function finishResponse(request: import("fastify").FastifyRequest): void {

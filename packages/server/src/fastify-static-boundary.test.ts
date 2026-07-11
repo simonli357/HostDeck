@@ -193,9 +193,12 @@ describe("explicit Fastify static-dashboard boundary", () => {
       expect(wrongMethod.headers.allow).toBe("GET, HEAD");
       expect(observations).toEqual([]);
       expect(hostDeckFastifyResourceSnapshot(app)).toEqual({
+        aborted_requests: 0,
         in_flight_requests: 0,
         max_in_flight_requests: defaultResourceBudget.http_max_in_flight_requests,
-        rejected_overload_requests: 0
+        rejected_header_count_requests: 0,
+        rejected_overload_requests: 0,
+        timed_out_requests: 0
       });
     } finally {
       await app.close();
