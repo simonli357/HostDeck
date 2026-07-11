@@ -85,7 +85,7 @@ describe("selected usage contracts", () => {
     ).toBe(false);
   });
 
-  it("rejects contradictory token breakdowns and last-turn values", () => {
+  it("rejects internally contradictory breakdowns while keeping last and total independent", () => {
     expect(usageTokenBreakdownSchema.safeParse({ ...tokenBreakdown(10), input_tokens: 11 }).success).toBe(false);
     expect(usageTokenBreakdownSchema.safeParse({ ...tokenBreakdown(10), cached_input_tokens: 6, input_tokens: 5 }).success).toBe(
       false
@@ -95,7 +95,7 @@ describe("selected usage contracts", () => {
         ...(snapshotCandidate().thread as Record<string, unknown>),
         last: tokenBreakdown(21)
       }).success
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("rejects observations after measurement and every extra field", () => {

@@ -255,7 +255,8 @@ interface TrackedThread {
   last_goal_signature: string | null;
   goal_state: "cleared" | "present" | "unknown";
   last_token_signature: string | null;
-  last_token_total: number | null;
+  last_token_usage: NormalizedCodexTokenUsage | null;
+  token_reset_turn_id: CodexTurnId | null;
 }
 
 const defaults = {
@@ -459,22 +460,37 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
       case "thread/tokenUsage/updated": {
         const parsed = parseParams(threadTokenUsageParamsSchema, params, method);
         const state = this.thread(parsed.threadId, method);
-        this.requireKnownTurn(state, parsed.turnId, method);
+        this.requireActiveTurn(state, parsed.turnId, method);
         const signature = JSON.stringify(parsed.tokenUsage);
         if (signature === state.last_token_signature) {
           throw normalizationError("duplicate_event", "Codex repeated an identical token usage update.", method);
         }
-        if (state.last_token_total !== null && parsed.tokenUsage.total.totalTokens < state.last_token_total) {
-          throw normalizationError("event_out_of_order", "Cumulative token usage moved backward.", method);
+        const total = normalizeTokenUsage(parsed.tokenUsage.total);
+        const last = normalizeTokenUsage(parsed.tokenUsage.last);
+        const hasCompactionEvidence = [...state.items.values()].some(
+          (item) => item.turn_id === parsed.turnId && item.category === "compaction"
+        );
+        if (tokenUsageRegressed(total, state.last_token_usage)) {
+          if (!hasCompactionEvidence || state.token_reset_turn_id === parsed.turnId) {
+            throw normalizationError("event_out_of_order", "Cumulative token usage moved backward.", method);
+          }
+          state.token_reset_turn_id = parsed.turnId;
+        }
+        if (tokenUsageExceeds(last, total) && !hasCompactionEvidence) {
+          throw normalizationError(
+            "malformed_required_event",
+            "Last-turn usage exceeded total usage outside a context-compaction turn.",
+            method
+          );
         }
         state.last_token_signature = signature;
-        state.last_token_total = parsed.tokenUsage.total.totalTokens;
+        state.last_token_usage = total;
         return {
           ...threadBase(sequence, method, capturedAt, null, null, parsed.threadId),
           method,
           turn_id: parsed.turnId,
-          total: normalizeTokenUsage(parsed.tokenUsage.total),
-          last: normalizeTokenUsage(parsed.tokenUsage.last),
+          total,
+          last,
           model_context_window: parsed.tokenUsage.modelContextWindow
         };
       }
@@ -520,6 +536,7 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
         for (const item of activeItems) item.state = "terminal";
         tracked.state = "terminal";
         if (state.active_turn_id === parsed.turn.id) state.active_turn_id = null;
+        if (state.token_reset_turn_id === parsed.turn.id) state.token_reset_turn_id = null;
         return {
           ...threadBase(
             sequence,
@@ -660,7 +677,8 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
       last_goal_signature: null,
       goal_state: "unknown",
       last_token_signature: null,
-      last_token_total: null
+      last_token_usage: null,
+      token_reset_turn_id: null
     };
     this.threads.set(threadId, created);
     return created;
@@ -883,6 +901,25 @@ function normalizeTokenUsage(usage: z.output<typeof tokenUsageSchema>): Normaliz
     output_tokens: usage.outputTokens,
     reasoning_output_tokens: usage.reasoningOutputTokens
   };
+}
+
+const tokenUsageFields = [
+  "total_tokens",
+  "input_tokens",
+  "cached_input_tokens",
+  "output_tokens",
+  "reasoning_output_tokens"
+] as const;
+
+function tokenUsageRegressed(
+  current: NormalizedCodexTokenUsage,
+  previous: NormalizedCodexTokenUsage | null
+): boolean {
+  return previous !== null && tokenUsageFields.some((field) => current[field] < previous[field]);
+}
+
+function tokenUsageExceeds(left: NormalizedCodexTokenUsage, right: NormalizedCodexTokenUsage): boolean {
+  return tokenUsageFields.some((field) => left[field] > right[field]);
 }
 
 function normalizeRateWindow(

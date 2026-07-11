@@ -28,6 +28,7 @@
     "smoke:codex-goal": "HOSTDECK_REQUIRE_CODEX_GOAL_SMOKE=1 vitest run packages/codex-adapter/src/codex-goal-control.smoke.test.ts",
     "smoke:codex-plan": "HOSTDECK_REQUIRE_CODEX_PLAN_SMOKE=1 vitest run packages/codex-adapter/src/codex-plan-control.smoke.test.ts",
     "smoke:codex-usage": "HOSTDECK_REQUIRE_CODEX_USAGE_SMOKE=1 vitest run packages/codex-adapter/src/codex-usage-control.smoke.test.ts",
+    "smoke:codex-compact": "HOSTDECK_REQUIRE_CODEX_COMPACT_SMOKE=1 vitest run packages/server/src/codex-compact-control.smoke.test.ts",
     "smoke:codex-prompt": "HOSTDECK_REQUIRE_CODEX_PROMPT_SMOKE=1 vitest run packages/server/src/codex-prompt-control.smoke.test.ts",
     "smoke:codex-approval": "HOSTDECK_REQUIRE_CODEX_APPROVAL_SMOKE=1 vitest run packages/server/src/codex-approval-control.smoke.test.ts",
     "smoke:codex-interrupt": "HOSTDECK_REQUIRE_CODEX_INTERRUPT_SMOKE=1 vitest run packages/server/src/codex-interrupt-control.smoke.test.ts",

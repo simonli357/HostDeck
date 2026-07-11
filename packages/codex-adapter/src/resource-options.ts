@@ -71,6 +71,10 @@ export interface CodexUsageResourceOptions {
   readonly read_timeout_ms: number;
 }
 
+export interface CodexCompactResourceOptions {
+  readonly mutation_timeout_ms: number;
+}
+
 export interface CodexResourceOptions {
   readonly transport: CodexTransportResourceOptions;
   readonly connection: CodexConnectionResourceOptions;
@@ -79,6 +83,7 @@ export interface CodexResourceOptions {
   readonly model: CodexModelResourceOptions;
   readonly plan: CodexPlanResourceOptions;
   readonly usage: CodexUsageResourceOptions;
+  readonly compact: CodexCompactResourceOptions;
 }
 
 export function codexResourceOptionsFromBudget(input: unknown): CodexResourceOptions {
@@ -123,6 +128,9 @@ export function codexResourceOptionsFromBudget(input: unknown): CodexResourceOpt
     usage: Object.freeze({
       max_daily_buckets: budget.protocol_usage_max_daily_buckets,
       read_timeout_ms: budget.protocol_read_timeout_ms
+    }),
+    compact: Object.freeze({
+      mutation_timeout_ms: budget.protocol_mutation_timeout_ms
     })
   });
 }

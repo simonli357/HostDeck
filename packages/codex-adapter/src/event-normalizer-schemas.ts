@@ -207,12 +207,7 @@ export const threadTokenUsageSchema = z
     last: tokenUsageSchema,
     modelContextWindow: positiveSafeIntegerSchema.nullable()
   })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.last.totalTokens > value.total.totalTokens) {
-      context.addIssue({ code: "custom", message: "Last-turn usage exceeds cumulative usage." });
-    }
-  });
+  .strict();
 
 export const turnErrorSchema = z
   .object({

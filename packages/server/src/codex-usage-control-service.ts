@@ -24,6 +24,11 @@ import type { SelectedSessionState, SelectedStateRepository } from "@hostdeck/st
 type UsageOperationIntent = Extract<SelectedOperationIntent, { readonly kind: "usage" }>;
 type ThreadUsageEvent = Extract<NormalizedCodexEvent, { readonly method: "thread/tokenUsage/updated" }>;
 type RateLimitEvent = Extract<NormalizedCodexEvent, { readonly method: "account/rateLimits/updated" }>;
+type UsageCompactionItemEvent = Extract<
+  NormalizedCodexEvent,
+  { readonly method: "item/started" | "item/completed" }
+>;
+type UsageTurnCompletedEvent = Extract<NormalizedCodexEvent, { readonly method: "turn/completed" }>;
 
 export type CodexUsageControlErrorCode =
   | "capability_unsupported"
@@ -79,7 +84,23 @@ interface RateObservationRecord {
   readonly sequence: number;
 }
 
-const usageEventMethods = new Set(["thread/tokenUsage/updated", "account/rateLimits/updated", "thread/archived"]);
+interface CompactionObservationRecord {
+  readonly turn_id: string;
+  readonly item_id: string;
+  phase: "running" | "completed";
+  reset_consumed: boolean;
+  sequence: number;
+  observed_at: string;
+}
+
+const usageEventMethods = new Set([
+  "thread/tokenUsage/updated",
+  "account/rateLimits/updated",
+  "item/started",
+  "item/completed",
+  "turn/completed",
+  "thread/archived"
+]);
 const tokenFields = [
   "total_tokens",
   "input_tokens",
@@ -104,6 +125,7 @@ export function createCodexUsageControlService(options: CodexUsageControlService
 
 class DefaultCodexUsageControlService implements CodexUsageControlService {
   private readonly threadById = new Map<string, ThreadObservationRecord>();
+  private readonly compactionByThread = new Map<string, CompactionObservationRecord>();
   private rateLimit: RateObservationRecord | null = null;
   private currentGeneration: number | null = null;
 
@@ -114,7 +136,7 @@ class DefaultCodexUsageControlService implements CodexUsageControlService {
   }
 
   get tracked_thread_count(): number {
-    return this.threadById.size;
+    return new Set([...this.threadById.keys(), ...this.compactionByThread.keys()]).size;
   }
 
   async read(candidate: unknown, signal?: AbortSignal): Promise<UsageSnapshot> {
@@ -166,6 +188,12 @@ class DefaultCodexUsageControlService implements CodexUsageControlService {
 
   observe(event: NormalizedCodexEvent, generationInput: unknown): boolean {
     if (!usageEventMethods.has(event.method)) return false;
+    if (
+      (event.method === "item/started" || event.method === "item/completed") &&
+      event.item.category !== "compaction"
+    ) {
+      return false;
+    }
     const generation = parseGeneration(generationInput);
     const activeGeneration = this.readActiveGeneration();
     this.synchronizeGeneration(activeGeneration);
@@ -179,7 +207,9 @@ class DefaultCodexUsageControlService implements CodexUsageControlService {
     }
 
     if (event.method === "thread/archived") {
-      return this.threadById.delete(event.thread_id);
+      const deletedUsage = this.threadById.delete(event.thread_id);
+      const deletedCompaction = this.compactionByThread.delete(event.thread_id);
+      return deletedUsage || deletedCompaction;
     }
     if (event.method === "account/rateLimits/updated") {
       this.observeRateLimit(event);
@@ -187,6 +217,12 @@ class DefaultCodexUsageControlService implements CodexUsageControlService {
     }
     if (event.method === "thread/tokenUsage/updated") {
       return this.observeThread(event);
+    }
+    if (event.method === "item/started" || event.method === "item/completed") {
+      return this.observeCompactionItem(event);
+    }
+    if (event.method === "turn/completed") {
+      return this.observeCompactionTerminal(event);
     }
     return false;
   }
@@ -196,18 +232,32 @@ class DefaultCodexUsageControlService implements CodexUsageControlService {
     if (state === null) return false;
     if (state.mapping.archived_at !== null || state.projection.session.session_state === "archived") {
       this.threadById.delete(event.thread_id);
+      this.compactionByThread.delete(event.thread_id);
       return false;
     }
     const existing = this.threadById.get(event.thread_id);
-    if (existing === undefined && this.threadById.size >= this.options.max_tracked_threads) {
-      throw controlError(
-        "service_overloaded",
-        "service_overloaded",
-        "Codex usage observation capacity is exhausted.",
-        true
-      );
+    if (existing === undefined) this.ensureThreadCapacity(event.thread_id);
+    if (existing !== undefined) {
+      assertNewerThreadObservationOrder(existing, event);
+      if (tokenFields.some((field) => event.total[field] < existing.observation.total[field])) {
+        const compaction = this.compactionByThread.get(event.thread_id);
+        if (
+          compaction === undefined ||
+          compaction.turn_id !== event.turn_id ||
+          compaction.reset_consumed ||
+          event.sequence <= compaction.sequence ||
+          Date.parse(event.captured_at) < Date.parse(compaction.observed_at)
+        ) {
+          throw controlError(
+            "observation_conflict",
+            "protocol_error",
+            "Codex cumulative thread usage moved backward outside one ordered compact reset.",
+            false
+          );
+        }
+        compaction.reset_consumed = true;
+      }
     }
-    if (existing !== undefined) assertNewerThreadObservation(existing, event);
     const parsed = usageThreadObservationSchema.safeParse({
       state: "observed",
       scope: "thread",
@@ -231,6 +281,86 @@ class DefaultCodexUsageControlService implements CodexUsageControlService {
       Object.freeze({ observation: deepFreeze(parsed.data), sequence: event.sequence })
     );
     return true;
+  }
+
+  private observeCompactionItem(event: UsageCompactionItemEvent): boolean {
+    const state = this.readStateByThreadId(event.thread_id);
+    if (state === null) return false;
+    if (state.mapping.archived_at !== null || state.projection.session.session_state === "archived") {
+      this.threadById.delete(event.thread_id);
+      this.compactionByThread.delete(event.thread_id);
+      return false;
+    }
+    const existing = this.compactionByThread.get(event.thread_id);
+    if (event.method === "item/started") {
+      if (event.item.state !== "started" || existing !== undefined) {
+        throw controlError(
+          "observation_conflict",
+          "protocol_error",
+          "Codex compact usage reset marker started twice or with contradictory state.",
+          false
+        );
+      }
+      this.ensureThreadCapacity(event.thread_id);
+      this.compactionByThread.set(event.thread_id, {
+        turn_id: event.turn_id,
+        item_id: event.item.id,
+        phase: "running",
+        reset_consumed: false,
+        sequence: event.sequence,
+        observed_at: event.captured_at
+      });
+      return true;
+    }
+    if (
+      event.item.state !== "completed" ||
+      existing === undefined ||
+      existing.phase !== "running" ||
+      existing.turn_id !== event.turn_id ||
+      existing.item_id !== event.item.id ||
+      event.sequence <= existing.sequence ||
+      Date.parse(event.captured_at) < Date.parse(existing.observed_at)
+    ) {
+      throw controlError(
+        "observation_conflict",
+        "protocol_error",
+        "Codex compact usage reset marker completed without exact ordered start evidence.",
+        false
+      );
+    }
+    existing.phase = "completed";
+    existing.sequence = event.sequence;
+    existing.observed_at = event.captured_at;
+    return true;
+  }
+
+  private observeCompactionTerminal(event: UsageTurnCompletedEvent): boolean {
+    const existing = this.compactionByThread.get(event.thread_id);
+    if (existing === undefined || existing.turn_id !== event.turn_id) return false;
+    if (
+      event.sequence <= existing.sequence ||
+      Date.parse(event.captured_at) < Date.parse(existing.observed_at)
+    ) {
+      throw controlError(
+        "observation_conflict",
+        "protocol_error",
+        "Codex compact usage reset marker terminated out of order.",
+        false
+      );
+    }
+    this.compactionByThread.delete(event.thread_id);
+    return true;
+  }
+
+  private ensureThreadCapacity(threadId: string): void {
+    const tracked = new Set([...this.threadById.keys(), ...this.compactionByThread.keys()]);
+    if (tracked.has(threadId) || tracked.size < this.options.max_tracked_threads) return;
+    throw controlError(
+      "service_overloaded",
+      "service_overloaded",
+      "Codex usage observation capacity is exhausted.",
+      true
+    );
   }
 
   private observeRateLimit(event: RateLimitEvent): void {
@@ -288,6 +418,7 @@ class DefaultCodexUsageControlService implements CodexUsageControlService {
     if (this.currentGeneration === generation) return;
     this.currentGeneration = generation;
     this.threadById.clear();
+    this.compactionByThread.clear();
     this.rateLimit = null;
   }
 
@@ -331,6 +462,7 @@ class DefaultCodexUsageControlService implements CodexUsageControlService {
     }
     if (state.mapping.archived_at !== null || state.projection.session.session_state === "archived") {
       this.threadById.delete(target.codex_thread_id);
+      this.compactionByThread.delete(target.codex_thread_id);
       throw controlError("target_not_readable", "session_not_writable", "The selected managed session is archived.", false);
     }
     if (state.mapping.disposition !== "selected" || state.projection.session.freshness !== "current") {
@@ -406,7 +538,7 @@ function parseCapacity(candidate: unknown): number {
   return value as number;
 }
 
-function assertNewerThreadObservation(existing: ThreadObservationRecord, event: ThreadUsageEvent): void {
+function assertNewerThreadObservationOrder(existing: ThreadObservationRecord, event: ThreadUsageEvent): void {
   if (
     event.sequence <= existing.sequence ||
     Date.parse(event.captured_at) < Date.parse(existing.observation.observed_at)
@@ -417,16 +549,6 @@ function assertNewerThreadObservation(existing: ThreadObservationRecord, event: 
       "Codex thread usage observation moved backward or repeated.",
       false
     );
-  }
-  for (const field of tokenFields) {
-    if (event.total[field] < existing.observation.total[field]) {
-      throw controlError(
-        "observation_conflict",
-        "protocol_error",
-        "Codex cumulative thread usage moved backward.",
-        false
-      );
-    }
   }
 }
 

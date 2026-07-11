@@ -834,23 +834,6 @@ export const usageThreadObservationSchema = z.discriminatedUnion("state", [
       model_context_window: positiveSafeIntegerSchema.nullable()
     })
     .strict()
-    .superRefine((value, context) => {
-      for (const field of [
-        "total_tokens",
-        "input_tokens",
-        "cached_input_tokens",
-        "output_tokens",
-        "reasoning_output_tokens"
-      ] as const) {
-        if (value.last[field] > value.total[field]) {
-          context.addIssue({
-            code: "custom",
-            message: "Last-turn usage cannot exceed cumulative thread usage.",
-            path: ["last", field]
-          });
-        }
-      }
-    })
 ]);
 
 export const usageRateLimitWindowSchema = z
@@ -1021,13 +1004,33 @@ function assertOperationTargetMatchesKind(
 }
 
 function assertOperationTurnIdentity(
-  value: { readonly kind: SelectedOperationKind; readonly target: SelectedOperationTarget; readonly turn_id: z.infer<typeof codexTurnIdSchema> | null },
+  value: {
+    readonly kind: SelectedOperationKind;
+    readonly target: SelectedOperationTarget;
+    readonly state: string;
+    readonly turn_id: z.infer<typeof codexTurnIdSchema> | null;
+  },
   context: z.RefinementCtx
 ): void {
   if (value.kind === "interrupt" && value.target.type === "turn" && value.turn_id !== value.target.turn_id) {
     context.addIssue({
       code: "custom",
       message: "Interrupt outcomes must preserve the exact targeted turn id.",
+      path: ["turn_id"]
+    });
+  }
+  if (value.kind !== "compact") return;
+  if (value.state === "accepted" && value.turn_id !== null) {
+    context.addIssue({
+      code: "custom",
+      message: "Accepted-only compact progress cannot claim an event-proven turn id.",
+      path: ["turn_id"]
+    });
+  }
+  if (["running", "completed", "interrupted", "failed", "succeeded"].includes(value.state) && value.turn_id === null) {
+    context.addIssue({
+      code: "custom",
+      message: "Event-proven compact progress requires the exact compact turn id.",
       path: ["turn_id"]
     });
   }

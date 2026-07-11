@@ -20,6 +20,14 @@ export type {
   CodexRequestKind
 } from "./broker.js";
 export {
+  type CodexCompactAccepted,
+  type CodexCompactClient,
+  type CodexCompactClientOptions,
+  type CodexCompactInput,
+  type CodexCompactRequestPort,
+  createCodexCompactClient
+} from "./compact-client.js";
+export {
   type AssessCodexCompatibilityInput,
   assessCodexCompatibility,
   type CodexCompatibilityErrorCode,
@@ -91,6 +99,7 @@ export {
 } from "./plan-client.js";
 export type { CodexRequestId } from "./protocol.js";
 export {
+  type CodexCompactResourceOptions,
   type CodexConnectionResourceOptions,
   type CodexEventPipelineResourceOptions,
   type CodexModelResourceOptions,

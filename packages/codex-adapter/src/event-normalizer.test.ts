@@ -455,6 +455,94 @@ describe("exact Codex event normalizer", () => {
     );
   });
 
+  it("permits one token baseline reset only on an exact context-compaction turn", () => {
+    const ordinary = activeTurnNormalizer(threadA, turnA);
+    expectNormalizationError(
+      () =>
+        ordinary.normalize(
+          selected("thread/tokenUsage/updated", {
+            threadId: threadA,
+            turnId: turnA,
+            tokenUsage: rawTokenUsage(20, 21)
+          })
+        ),
+      "malformed_required_event"
+    );
+
+    const compactionTurn = "turn-compaction-reset-a";
+    const compactionItem = { type: "contextCompaction", id: "item-compaction-reset-a" };
+    const normalizer = activeTurnNormalizer(threadA, turnA);
+    normalizeEvent(
+      normalizer.normalize(
+        selected("thread/tokenUsage/updated", { threadId: threadA, turnId: turnA, tokenUsage: rawTokenUsage(100, 10) })
+      )
+    );
+    normalizeEvent(
+      normalizer.normalize(selected("turn/completed", { threadId: threadA, turn: rawTurn(turnA, "completed") }))
+    );
+    normalizeEvent(
+      normalizer.normalize(
+        selected("turn/started", { threadId: threadA, turn: rawTurn(compactionTurn, "inProgress") })
+      )
+    );
+    normalizeEvent(
+      normalizer.normalize(selected("item/started", itemParams(threadA, compactionTurn, compactionItem, "started")))
+    );
+    const reset = normalizeEvent(
+      normalizer.normalize(
+        selected("thread/tokenUsage/updated", {
+          threadId: threadA,
+          turnId: compactionTurn,
+          tokenUsage: rawTokenUsage(40, 80)
+        })
+      )
+    );
+    expect(reset).toMatchObject({
+      method: "thread/tokenUsage/updated",
+      turn_id: compactionTurn,
+      total: { total_tokens: 40 },
+      last: { total_tokens: 80 }
+    });
+    expectNormalizationError(
+      () =>
+        normalizer.normalize(
+          selected("thread/tokenUsage/updated", {
+            threadId: threadA,
+            turnId: compactionTurn,
+            tokenUsage: rawTokenUsage(39, 79)
+          })
+        ),
+      "event_out_of_order"
+    );
+
+    const terminal = activeTurnNormalizer(threadA, turnA);
+    normalizeEvent(
+      terminal.normalize(
+        selected("item/started", itemParams(threadA, turnA, compactionItem, "started"))
+      )
+    );
+    normalizeEvent(
+      terminal.normalize(
+        selected("thread/tokenUsage/updated", { threadId: threadA, turnId: turnA, tokenUsage: rawTokenUsage(40, 80) })
+      )
+    );
+    normalizeEvent(
+      terminal.normalize(
+        selected("item/completed", itemParams(threadA, turnA, compactionItem, "completed"))
+      )
+    );
+    normalizeEvent(
+      terminal.normalize(selected("turn/completed", { threadId: threadA, turn: rawTurn(turnA, "completed") }))
+    );
+    expectNormalizationError(
+      () =>
+        terminal.normalize(
+          selected("thread/tokenUsage/updated", { threadId: threadA, turnId: turnA, tokenUsage: rawTokenUsage(41, 10) })
+        ),
+      "event_out_of_order"
+    );
+  });
+
   it("fails stopped on clock regression and preserves terminal identity history at capacity", () => {
     const times = [capturedAt, "2026-07-10T17:59:59.999Z"];
     const regressingClock = createCodexEventNormalizer({ now: () => times.shift() ?? capturedAt });

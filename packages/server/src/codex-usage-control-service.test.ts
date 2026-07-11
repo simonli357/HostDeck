@@ -169,6 +169,89 @@ describe("Codex usage control service", () => {
     });
   });
 
+  it("accepts one exact compaction-scoped usage reset and restores monotonic enforcement", async () => {
+    const states = new MemoryUsageStates();
+    states.put(stateCandidate(sessionA, threadA));
+    const usage = new FakeUsageClient();
+    const service = createCodexUsageControlService({ states, usage });
+    const events = normalizedCompactionUsageSequence();
+
+    expect(service.observe(events.baseline, 3)).toBe(true);
+    expect(service.observe(events.itemStarted, 3)).toBe(true);
+    expect(service.observe(events.reset, 3)).toBe(true);
+    expect((await service.read(usageIntent(sessionA, threadA))).thread).toMatchObject({
+      state: "observed",
+      turn_id: events.reset.turn_id,
+      total: { total_tokens: 40 },
+      last: { total_tokens: 80 }
+    });
+
+    expectUsageError(
+      () =>
+        service.observe(
+          {
+            ...events.reset,
+            sequence: events.reset.sequence + 1,
+            captured_at: new Date(Date.parse(events.reset.captured_at) + 1).toISOString() as typeof events.reset.captured_at,
+            total: tokenUsage(39),
+            last: tokenUsage(79)
+          },
+          3
+        ),
+      "observation_conflict"
+    );
+
+    expect(service.observe(events.itemCompleted, 3)).toBe(true);
+    expect(service.observe(events.turnCompleted, 3)).toBe(true);
+    expectUsageError(
+      () =>
+        service.observe(
+          {
+            ...events.reset,
+            sequence: events.turnCompleted.sequence + 1,
+            captured_at: new Date(Date.parse(events.turnCompleted.captured_at) + 1).toISOString() as typeof events.reset.captured_at,
+            total: tokenUsage(38),
+            last: tokenUsage(10)
+          },
+          3
+        ),
+      "observation_conflict"
+    );
+  });
+
+  it("bounds compaction reset markers and clears them on generation change", () => {
+    const states = new MemoryUsageStates();
+    states.put(stateCandidate(sessionA, threadA));
+    states.put(stateCandidate(sessionB, threadB));
+    const usage = new FakeUsageClient();
+    const service = createCodexUsageControlService({ states, usage, max_tracked_threads: 1 });
+    const events = normalizedCompactionUsageSequence();
+
+    expect(service.observe(events.itemStarted, 3)).toBe(true);
+    expect(service.tracked_thread_count).toBe(1);
+    expectUsageError(
+      () =>
+        service.observe(
+          {
+            ...events.itemStarted,
+            sequence: events.itemStarted.sequence + 1,
+            thread_id: threadB as typeof events.itemStarted.thread_id,
+            turn_id: turnB as typeof events.itemStarted.turn_id,
+            item: {
+              ...events.itemStarted.item,
+              id: "item-compaction-usage-b" as typeof events.itemStarted.item.id
+            }
+          },
+          3
+        ),
+      "service_overloaded"
+    );
+
+    usage.currentGeneration = 4;
+    expectUsageError(() => service.observe(events.itemCompleted, 3), "runtime_unavailable");
+    expect(service.tracked_thread_count).toBe(0);
+  });
+
   it("rejects invalid or unreadable targets before the runtime call", async () => {
     const cases: Array<{ readonly state: SelectedSessionState | null; readonly targetThread: string; readonly code: CodexUsageControlErrorCode }> = [
       { state: null, targetThread: threadA, code: "target_not_found" },
@@ -396,6 +479,85 @@ function normalizedUsageSequence() {
   };
 }
 
+function normalizedCompactionUsageSequence() {
+  let milliseconds = Date.parse("2026-07-11T17:10:00.000Z");
+  const normalizer = createCodexEventNormalizer({
+    now: () => {
+      milliseconds += 1_000;
+      return new Date(milliseconds).toISOString();
+    }
+  });
+  const baselineTurn = "turn-usage-before-compact-a";
+  const compactTurn = "turn-usage-compact-a";
+  const compactItem = { type: "contextCompaction", id: "item-compaction-usage-a" };
+  normalize(normalizer.normalize(selected("turn/started", { threadId: threadA, turn: rawTurn(baselineTurn) })));
+  const baseline = requireMethod(
+    normalize(
+      normalizer.normalize(
+        selected("thread/tokenUsage/updated", {
+          threadId: threadA,
+          turnId: baselineTurn,
+          tokenUsage: rawTokenUsage(120, 20)
+        })
+      )
+    ),
+    "thread/tokenUsage/updated"
+  );
+  normalize(
+    normalizer.normalize(
+      selected("turn/completed", { threadId: threadA, turn: rawTurn(baselineTurn, "completed") })
+    )
+  );
+  normalize(normalizer.normalize(selected("turn/started", { threadId: threadA, turn: rawTurn(compactTurn) })));
+  const itemStarted = requireItemMethod(
+    normalize(
+      normalizer.normalize(
+        selected("item/started", {
+          threadId: threadA,
+          turnId: compactTurn,
+          item: compactItem,
+          startedAtMs: 1_752_170_402_000
+        })
+      )
+    ),
+    "item/started"
+  );
+  const reset = requireMethod(
+    normalize(
+      normalizer.normalize(
+        selected("thread/tokenUsage/updated", {
+          threadId: threadA,
+          turnId: compactTurn,
+          tokenUsage: rawTokenUsage(40, 80)
+        })
+      )
+    ),
+    "thread/tokenUsage/updated"
+  );
+  const itemCompleted = requireItemMethod(
+    normalize(
+      normalizer.normalize(
+        selected("item/completed", {
+          threadId: threadA,
+          turnId: compactTurn,
+          item: compactItem,
+          completedAtMs: 1_752_170_403_000
+        })
+      )
+    ),
+    "item/completed"
+  );
+  const turnCompleted = requireMethod(
+    normalize(
+      normalizer.normalize(
+        selected("turn/completed", { threadId: threadA, turn: rawTurn(compactTurn, "completed") })
+      )
+    ),
+    "turn/completed"
+  );
+  return { baseline, itemStarted, reset, itemCompleted, turnCompleted };
+}
+
 function selected(method: string, params: unknown): CodexConnectionNotification {
   return { kind: "notification", method, params, classification: "selected" };
 }
@@ -408,6 +570,14 @@ function normalize(result: ReturnType<ReturnType<typeof createCodexEventNormaliz
 function requireMethod<Method extends NormalizedCodexEvent["method"]>(event: NormalizedCodexEvent, method: Method) {
   if (event.method !== method) throw new TypeError(`Expected ${method}, received ${event.method}.`);
   return event as Extract<NormalizedCodexEvent, { readonly method: Method }>;
+}
+
+function requireItemMethod(
+  event: NormalizedCodexEvent,
+  method: "item/started" | "item/completed"
+): Extract<NormalizedCodexEvent, { readonly method: "item/started" | "item/completed" }> {
+  if (event.method !== method) throw new TypeError(`Expected ${method}, received ${event.method}.`);
+  return event as Extract<NormalizedCodexEvent, { readonly method: "item/started" | "item/completed" }>;
 }
 
 function rawTurn(turnId: string, status: "completed" | "inProgress" = "inProgress") {

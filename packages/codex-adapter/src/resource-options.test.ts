@@ -21,6 +21,8 @@ describe("Codex resource options", () => {
     expect(Object.isFrozen(options.model)).toBe(true);
     expect(Object.isFrozen(options.plan)).toBe(true);
     expect(Object.isFrozen(options.usage)).toBe(true);
+    expect(Object.isFrozen(options.compact)).toBe(true);
+    expect(options.compact.mutation_timeout_ms).toBe(defaultResourceBudget.protocol_mutation_timeout_ms);
   });
 
   it("preserves a coherent lower policy exactly", () => {
@@ -79,6 +81,9 @@ describe("Codex resource options", () => {
       usage: {
         max_daily_buckets: 200,
         read_timeout_ms: 4_000
+      },
+      compact: {
+        mutation_timeout_ms: 8_000
       }
     });
   });
