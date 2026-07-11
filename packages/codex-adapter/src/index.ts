@@ -105,12 +105,21 @@ export {
   type CodexModelResourceOptions,
   type CodexPlanResourceOptions,
   type CodexResourceOptions,
+  type CodexSkillsResourceOptions,
   type CodexThreadResourceOptions,
   type CodexTransportResourceOptions,
   type CodexUsageResourceOptions,
   codexResourceBudgetKeys,
   codexResourceOptionsFromBudget
 } from "./resource-options.js";
+export {
+  type CodexSkillsClient,
+  type CodexSkillsClientOptions,
+  type CodexSkillsListInput,
+  type CodexSkillsListing,
+  type CodexSkillsRequestPort,
+  createCodexSkillsClient
+} from "./skills-client.js";
 export {
   type CodexThreadActiveFlag,
   type CodexThreadClient,

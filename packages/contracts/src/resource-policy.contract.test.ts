@@ -15,7 +15,7 @@ import {
 
 describe("selected V1 resource budget", () => {
   it("defines one complete, immutable, observable registry", () => {
-    expect(resourceBudgetDefinitions).toHaveLength(73);
+    expect(resourceBudgetDefinitions).toHaveLength(76);
     expect(Object.isFrozen(resourceBudgetDefinitions)).toBe(true);
     expect(Object.isFrozen(defaultResourceBudget)).toBe(true);
     expect(Object.isFrozen(resourceBudgetDefinitionByKey)).toBe(true);
@@ -79,6 +79,9 @@ describe("selected V1 resource budget", () => {
       protocol_model_max_pages: 10,
       protocol_model_max_entries: 128,
       protocol_usage_max_daily_buckets: 2_000,
+      protocol_skills_max_entries_per_cwd: 256,
+      protocol_skills_max_errors_per_cwd: 64,
+      protocol_skills_max_dependencies_per_skill: 64,
       protocol_collaboration_max_entries: 8,
       control_prompt_max_tracked_turns: 128,
       control_interrupt_max_tracked_turns: 128,

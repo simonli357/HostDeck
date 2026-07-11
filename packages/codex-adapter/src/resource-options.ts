@@ -21,6 +21,9 @@ export const codexResourceBudgetKeys = [
   "protocol_model_max_pages",
   "protocol_model_max_entries",
   "protocol_usage_max_daily_buckets",
+  "protocol_skills_max_entries_per_cwd",
+  "protocol_skills_max_errors_per_cwd",
+  "protocol_skills_max_dependencies_per_skill",
   "protocol_collaboration_max_entries"
 ] as const;
 
@@ -75,6 +78,13 @@ export interface CodexCompactResourceOptions {
   readonly mutation_timeout_ms: number;
 }
 
+export interface CodexSkillsResourceOptions {
+  readonly max_entries_per_cwd: number;
+  readonly max_errors_per_cwd: number;
+  readonly max_dependencies_per_skill: number;
+  readonly read_timeout_ms: number;
+}
+
 export interface CodexResourceOptions {
   readonly transport: CodexTransportResourceOptions;
   readonly connection: CodexConnectionResourceOptions;
@@ -84,6 +94,7 @@ export interface CodexResourceOptions {
   readonly plan: CodexPlanResourceOptions;
   readonly usage: CodexUsageResourceOptions;
   readonly compact: CodexCompactResourceOptions;
+  readonly skills: CodexSkillsResourceOptions;
 }
 
 export function codexResourceOptionsFromBudget(input: unknown): CodexResourceOptions {
@@ -131,6 +142,12 @@ export function codexResourceOptionsFromBudget(input: unknown): CodexResourceOpt
     }),
     compact: Object.freeze({
       mutation_timeout_ms: budget.protocol_mutation_timeout_ms
+    }),
+    skills: Object.freeze({
+      max_entries_per_cwd: budget.protocol_skills_max_entries_per_cwd,
+      max_errors_per_cwd: budget.protocol_skills_max_errors_per_cwd,
+      max_dependencies_per_skill: budget.protocol_skills_max_dependencies_per_skill,
+      read_timeout_ms: budget.protocol_read_timeout_ms
     })
   });
 }

@@ -36,7 +36,7 @@ const operationLimits = {
   summaryLength: 512,
   approvalFieldLength: 1_000,
   skillNameLength: 160,
-  skillDescriptionLength: 512
+  skillDescriptionLength: 4_096
 } as const;
 
 export const managedSessionTargetSchema = z
@@ -897,18 +897,44 @@ export const skillSummarySchema = z
   .object({
     name: z.string().min(1).max(operationLimits.skillNameLength),
     description: z.string().max(operationLimits.skillDescriptionLength).nullable(),
+    scope: z.enum(["user", "repo", "system", "admin"]),
     enabled: z.boolean()
   })
   .strict();
 
+export const skillSnapshotStates = ["content", "empty", "partial", "error"] as const;
+
 export const skillsSnapshotSchema = z
   .object({
-    skills: z.array(skillSummarySchema).max(256)
+    target: managedSessionTargetSchema,
+    runtime_version: codexVersionSchema,
+    connection_generation: positiveSafeIntegerSchema,
+    observed_at: isoTimestampSchema,
+    state: z.enum(skillSnapshotStates),
+    skills: z.array(skillSummarySchema).max(1_024),
+    error_count: nonNegativeSafeIntegerSchema.max(256)
   })
   .strict()
   .superRefine((value, context) => {
     if (new Set(value.skills.map((skill) => skill.name)).size !== value.skills.length) {
       context.addIssue({ code: "custom", message: "Skill snapshots cannot contain duplicate skill names." });
+    }
+    for (let index = 1; index < value.skills.length; index += 1) {
+      if ((value.skills[index - 1]?.name ?? "") >= (value.skills[index]?.name ?? "")) {
+        context.addIssue({ code: "custom", message: "Skill snapshots must use strict deterministic name order." });
+        break;
+      }
+    }
+    const expectedState =
+      value.skills.length === 0
+        ? value.error_count === 0
+          ? "empty"
+          : "error"
+        : value.error_count === 0
+          ? "content"
+          : "partial";
+    if (value.state !== expectedState) {
+      context.addIssue({ code: "custom", message: "Skill snapshot state contradicts its content and error count." });
     }
   });
 
@@ -982,6 +1008,8 @@ export type UsageThreadObservation = z.infer<typeof usageThreadObservationSchema
 export type UsageRateLimitWindow = z.infer<typeof usageRateLimitWindowSchema>;
 export type UsageRateLimitObservation = z.infer<typeof usageRateLimitObservationSchema>;
 export type UsageSnapshot = z.infer<typeof usageSnapshotSchema>;
+export type SkillSummary = z.infer<typeof skillSummarySchema>;
+export type SkillsSnapshot = z.infer<typeof skillsSnapshotSchema>;
 export type PendingApproval = z.infer<typeof pendingApprovalSchema>;
 export type SelectedStartSessionRequest = z.infer<typeof selectedStartSessionRequestSchema>;
 

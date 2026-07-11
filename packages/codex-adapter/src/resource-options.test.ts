@@ -22,6 +22,7 @@ describe("Codex resource options", () => {
     expect(Object.isFrozen(options.plan)).toBe(true);
     expect(Object.isFrozen(options.usage)).toBe(true);
     expect(Object.isFrozen(options.compact)).toBe(true);
+    expect(Object.isFrozen(options.skills)).toBe(true);
     expect(options.compact.mutation_timeout_ms).toBe(defaultResourceBudget.protocol_mutation_timeout_ms);
   });
 
@@ -43,6 +44,9 @@ describe("Codex resource options", () => {
       protocol_model_max_pages: 4,
       protocol_model_max_entries: 100,
       protocol_usage_max_daily_buckets: 200,
+      protocol_skills_max_entries_per_cwd: 80,
+      protocol_skills_max_errors_per_cwd: 20,
+      protocol_skills_max_dependencies_per_skill: 12,
       protocol_collaboration_max_entries: 6
     });
 
@@ -84,6 +88,12 @@ describe("Codex resource options", () => {
       },
       compact: {
         mutation_timeout_ms: 8_000
+      },
+      skills: {
+        max_entries_per_cwd: 80,
+        max_errors_per_cwd: 20,
+        max_dependencies_per_skill: 12,
+        read_timeout_ms: 4_000
       }
     });
   });
@@ -121,6 +131,9 @@ function mappedProtocolValues(options: CodexResourceOptions) {
     protocol_model_max_pages: options.model.max_pages,
     protocol_model_max_entries: options.model.max_entries,
     protocol_usage_max_daily_buckets: options.usage.max_daily_buckets,
+    protocol_skills_max_entries_per_cwd: options.skills.max_entries_per_cwd,
+    protocol_skills_max_errors_per_cwd: options.skills.max_errors_per_cwd,
+    protocol_skills_max_dependencies_per_skill: options.skills.max_dependencies_per_skill,
     protocol_collaboration_max_entries: options.plan.max_entries
   } as const;
 }
