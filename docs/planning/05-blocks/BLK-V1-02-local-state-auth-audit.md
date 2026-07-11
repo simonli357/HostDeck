@@ -40,8 +40,8 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | Secure paths and daemon lease | `DAT-V1-019` | Done; phased owner paths, descriptor identity, real Linux lease/crash recovery, and cleanup evidence recorded. |
 | Transactional production projection append | `DAT-V1-020` | Done; full-revision immediate commit and post-commit publication evidence recorded. |
 | Production projection retention and boundaries | `DAT-V1-022` | Done; append-time count/byte pruning, durable boundaries, rollback, concurrency, publication, and restart evidence recorded. |
-| Accepted-to-terminal audit state machine | `DAT-V1-023` | In progress. |
-| Bounded startup retention maintenance | `DAT-V1-024` | Blocked by production retention and audit state. |
+| Accepted-to-terminal audit state machine | `DAT-V1-023` | Done; append-only migration/repository, exact trail transitions, real SQLite contention, rollback, corruption, and restart evidence recorded. |
+| Bounded startup retention maintenance | `DAT-V1-024` | Ready. |
 | Orphan accepted-operation reconciliation | `DAT-V1-030` | Blocked by the bounded startup runner and audit state machine. |
 | CSRF bootstrap and rotation storage | `DAT-V1-021` | Blocked by the physical HTTPS/browser policy proof. |
 | Device listing storage | `DAT-V1-025` | Blocked by CSRF-capable device storage. |
