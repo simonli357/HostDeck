@@ -702,6 +702,49 @@ describe("exact Codex event normalizer", () => {
     expect(normalizer.failure).toBeNull();
   });
 
+  it("coalesces exact repeated thread status, name, and settings snapshots", () => {
+    const normalizer = createCodexEventNormalizer({ now: () => capturedAt });
+    const status = { type: "active" as const, activeFlags: [] };
+    const settings = rawSettings("gpt-5.6-sol", "plan");
+
+    expect(
+      normalizeEvent(normalizer.normalize(selected("thread/status/changed", { threadId: threadA, status })))
+    ).toMatchObject({ sequence: 1, method: "thread/status/changed" });
+    expect(normalizer.normalize(selected("thread/status/changed", { threadId: threadA, status }))).toMatchObject({
+      kind: "redundant",
+      observation: { sequence: 2, method: "thread/status/changed", total_count: 1 }
+    });
+    expect(
+      normalizeEvent(
+        normalizer.normalize(selected("thread/name/updated", { threadId: threadA, threadName: "stable" }))
+      )
+    ).toMatchObject({ sequence: 3, method: "thread/name/updated" });
+    expect(
+      normalizer.normalize(selected("thread/name/updated", { threadId: threadA, threadName: "stable" }))
+    ).toMatchObject({
+      kind: "redundant",
+      observation: { sequence: 4, method: "thread/name/updated", total_count: 2 }
+    });
+    expect(
+      normalizeEvent(
+        normalizer.normalize(
+          selected("thread/settings/updated", { threadId: threadA, threadSettings: settings })
+        )
+      )
+    ).toMatchObject({ sequence: 5, method: "thread/settings/updated" });
+    expect(
+      normalizer.normalize(
+        selected("thread/settings/updated", { threadId: threadA, threadSettings: settings })
+      )
+    ).toMatchObject({
+      kind: "redundant",
+      observation: { sequence: 6, method: "thread/settings/updated", total_count: 3 }
+    });
+    expect(normalizer.redundant_observation_count).toBe(3);
+    expect(normalizer.last_sequence).toBe(6);
+    expect(normalizer.failure).toBeNull();
+  });
+
   it("filters unmanaged TUI threads to bounded identity-only observations before payload normalization", () => {
     const normalizer = createCodexEventNormalizer({
       now: () => capturedAt,

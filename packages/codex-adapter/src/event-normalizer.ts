@@ -200,7 +200,12 @@ export interface CodexUnmanagedThreadObservation {
 
 export interface CodexRedundantStateObservation {
   readonly sequence: number;
-  readonly method: "thread/goal/cleared" | "thread/goal/updated";
+  readonly method:
+    | "thread/goal/cleared"
+    | "thread/goal/updated"
+    | "thread/name/updated"
+    | "thread/settings/updated"
+    | "thread/status/changed";
   readonly thread_id: CodexThreadId;
   readonly classification: "redundant_state";
   readonly total_count: number;
@@ -264,6 +269,7 @@ interface TrackedThread {
   last_goal_updated_at: number | null;
   last_goal_signature: string | null;
   goal_state: "cleared" | "present" | "unknown";
+  last_settings_signature: string | null;
   last_token_signature: string | null;
   last_token_usage: NormalizedCodexTokenUsage | null;
   token_reset_turn_id: CodexTurnId | null;
@@ -387,7 +393,7 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
         const state = this.thread(parsed.threadId, method);
         const signature = JSON.stringify(parsed.status);
         if (signature === state.last_status_signature) {
-          throw normalizationError("duplicate_event", "Codex repeated identical thread status.", method);
+          return this.redundantState(sequence, method, parsed.threadId);
         }
         state.last_status_signature = signature;
         const status = normalizeThreadStatus(parsed.status, method);
@@ -402,7 +408,7 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
         const parsed = parseParams(threadNameParamsSchema, params, method);
         const state = this.thread(parsed.threadId, method);
         const name = parsed.threadName ?? null;
-        if (state.last_name === name) throw normalizationError("duplicate_event", "Codex repeated thread name state.", method);
+        if (state.last_name === name) return this.redundantState(sequence, method, parsed.threadId);
         state.last_name = name;
         return { ...threadBase(sequence, method, capturedAt, null, null, parsed.threadId), method, name };
       }
@@ -421,7 +427,12 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
       }
       case "thread/settings/updated": {
         const parsed = parseParams(threadSettingsParamsSchema, params, method);
-        this.thread(parsed.threadId, method);
+        const state = this.thread(parsed.threadId, method);
+        const signature = JSON.stringify(parsed.threadSettings);
+        if (signature === state.last_settings_signature) {
+          return this.redundantState(sequence, method, parsed.threadId);
+        }
+        state.last_settings_signature = signature;
         return {
           ...threadBase(sequence, method, capturedAt, null, null, parsed.threadId),
           method,
@@ -697,6 +708,7 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
       last_goal_updated_at: null,
       last_goal_signature: null,
       goal_state: "unknown",
+      last_settings_signature: null,
       last_token_signature: null,
       last_token_usage: null,
       token_reset_turn_id: null

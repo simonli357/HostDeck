@@ -24,6 +24,7 @@ import {
   parseCodexCliVersionOutput
 } from "@hostdeck/codex-adapter";
 import {
+  defaultResourceBudget,
   type ManagedSessionTarget,
   type ModelCatalogEntry,
   type RuntimeCompatibility,
@@ -147,15 +148,34 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
       const protocolIssues: CodexProtocolIssue[] = [];
       const backgroundErrors: Error[] = [];
       const callbackTasks = new Set<Promise<unknown>>();
+      const deferredNotifications: Array<{
+        readonly message: CodexConnectionNotification;
+        readonly generation: number;
+      }> = [];
       let callbackFailure: Error | null = null;
       let serverRequestFailure: Error | null = null;
       let expectedGeneration: number | null = null;
       let pipeline: CodexEventPipeline | null = null;
+      let callbackMode: "buffering" | "live" = "buffering";
       let approvals: CodexApprovalControlService | null = null;
       let tui: TuiProbe | null = null;
       const threadIds: CodexThreadId[] = [];
       const compactProgressEvidence: string[] = [];
       let openDatabase: ReturnType<typeof openMigratedDatabase> | null = null;
+
+      const consumeThroughPipeline = (message: CodexConnectionNotification, generation: number): void => {
+        if (pipeline === null) {
+          callbackFailure ??= new Error("Codex callback entered live mode before pipeline construction.");
+          return;
+        }
+        const operation = pipeline.consume(message, generation);
+        callbackTasks.add(operation);
+        void operation
+          .catch((error: unknown) => {
+            callbackFailure ??= asError(error);
+          })
+          .finally(() => callbackTasks.delete(operation));
+      };
 
       const connection = createCodexAppServerConnection({
         transport: createCodexUnixWebSocketTransport({ socket_path: appSocketPath }),
@@ -175,14 +195,15 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
             );
             return;
           }
-          if (pipeline === null) return;
-          const operation = pipeline.consume(message, generation);
-          callbackTasks.add(operation);
-          void operation
-            .catch((error: unknown) => {
-              callbackFailure ??= asError(error);
-            })
-            .finally(() => callbackTasks.delete(operation));
+          if (callbackMode === "buffering") {
+            if (deferredNotifications.length >= defaultResourceBudget.protocol_max_pending_notifications) {
+              callbackFailure ??= new Error("Codex pre-pipeline callback capacity was exhausted.");
+              return;
+            }
+            deferredNotifications.push({ message, generation });
+            return;
+          }
+          consumeThroughPipeline(message, generation);
         },
         on_server_request(message) {
           serverRequestMethods.push(message.method);
@@ -297,6 +318,20 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
             }
           }
         });
+        const deferredNotificationCount = deferredNotifications.length;
+        for (const deferred of deferredNotifications.splice(0)) {
+          if (deferred.generation !== expectedGeneration) {
+            callbackFailure ??= new Error("A buffered Codex notification belongs to another connection generation.");
+            break;
+          }
+          consumeThroughPipeline(deferred.message, deferred.generation);
+        }
+        callbackMode = "live";
+        await flushCallbacks(callbackTasks, () => callbackFailure, () => serverRequestFailure, pipeline);
+        expect(pipeline.last_sequence).toBeGreaterThanOrEqual(deferredNotificationCount);
+        expect(publicationCounts.get(targetA.session_id) ?? 0).toBeGreaterThan(0);
+        expect(publicationCounts.get(targetB.session_id) ?? 0).toBeGreaterThan(0);
+        prove(proof, "buffered mapping callbacks traversed one pipeline", "durable_projection");
 
         await proveUnsupportedSkillsPolicy(connection, root);
         prove(proof, "unsupported utility rejected without wire", "policy_simulation");
@@ -619,8 +654,20 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
         expect(repository.require(targetB.session_id).mapping.archived_at).toBeNull();
         prove(proof, "runtime archives read back after durable callbacks", "read_back");
       } catch (error) {
+        const stderrSummary = redactDiagnostic(appServerStderr, [
+          root,
+          runtimeDirectory,
+          codexHome,
+          projectA,
+          projectB,
+          databasePath,
+          markerPath,
+          appSocketPath,
+          tuiSocketPath,
+          ...threadIds
+        ]);
         smokeError = new Error(
-          `Real Codex structured vertical failed (threads=${threadIds.length}, requests=${requestRecords.length}, notifications=${summarizeCounts(notificationCounts)}, observers=${summarizeCounts(observerCounts)}, publications=${summarizeCounts(publicationCounts)}, server_requests=${serverRequestMethods.join("|") || "none"}, issues=${protocolIssues.map((issue) => issue.code).join("|") || "none"}, stderr=${appServerStderr || "empty"}).`,
+          `Real Codex structured vertical failed (threads=${threadIds.length}, requests=${requestRecords.length}, notifications=${summarizeCounts(notificationCounts)}, observers=${summarizeCounts(observerCounts)}, publication_sessions=${publicationCounts.size}, publications=${sumCounts(publicationCounts)}, server_requests=${serverRequestMethods.join("|") || "none"}, issues=${protocolIssues.map((issue) => issue.code).join("|") || "none"}, stderr=${stderrSummary || "empty"}).`,
           { cause: error }
         );
       }
@@ -936,6 +983,18 @@ function summarizeCounts(counts: ReadonlyMap<string, number>): string {
     .slice(-32)
     .map(([key, count]) => `${key}:${count}`)
     .join("|") || "none";
+}
+
+function sumCounts(counts: ReadonlyMap<string, number>): number {
+  return [...counts.values()].reduce((total, count) => total + count, 0);
+}
+
+function redactDiagnostic(value: string, sensitiveValues: readonly string[]): string {
+  let redacted = value;
+  for (const sensitive of sensitiveValues) {
+    if (sensitive.length > 0) redacted = redacted.replaceAll(sensitive, "[redacted]");
+  }
+  return redacted;
 }
 
 async function startAndInspectTui(
