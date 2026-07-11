@@ -34,9 +34,10 @@
     "smoke:codex-approval": "HOSTDECK_REQUIRE_CODEX_APPROVAL_SMOKE=1 vitest run packages/server/src/codex-approval-control.smoke.test.ts",
     "smoke:codex-interrupt": "HOSTDECK_REQUIRE_CODEX_INTERRUPT_SMOKE=1 vitest run packages/server/src/codex-interrupt-control.smoke.test.ts",
     "smoke:codex-vertical": "HOSTDECK_REQUIRE_CODEX_VERTICAL_SMOKE=1 vitest run packages/server/src/codex-structured-vertical.smoke.test.ts",
+    "test:codex": "pnpm smoke:codex-vertical",
     "test:web": "vitest run packages/web/src/view-models.test.ts packages/test-fixtures/src/fixtures.test.ts",
-    "test:e2e": "node scripts/not-implemented.mjs test:e2e REL-V1-007",
-    "build": "node scripts/not-implemented.mjs build REL-V1-007",
+    "test:e2e": "node scripts/not-implemented.mjs test:e2e IFC-V1-046 FE-V1-040",
+    "build": "node scripts/not-implemented.mjs build IFC-V1-021",
     "smoke:local": "node scripts/not-implemented.mjs smoke:local REL-V1-006"
   },
   "devDependencies": {

@@ -13,6 +13,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-005 | A finite Readable SSE source completes on a real listener but the pinned plugin leaves the HTTP response and handler open. | High | Backlog bugfix | Closed | `IFC-V1-023` / `IFC-V1-025` | Readable-end raw-response termination plus real finite-response and active-shutdown regressions; `artifacts/ifc-v1-025-fastify-host-lifecycle.md`. |
 | BUG-006 | Exact Codex emits notifications after the initialize response but before `initialized`; the connection treats them as pre-initialize violations and terminates. | High | Small bugfix | Closed | `INT-V1-004` / `INT-V1-006` | Bounded ordered response/ack queue, hostile-window tests, exact private-socket smokes, and semantic capture. |
 | BUG-007 | The goal-based legacy thread materialization path sets an active goal, which autonomously starts model turns despite its no-model contract. | Critical | Backlog bugfix | Closed | `INT-V1-005` / `INT-V1-006` | Paused internal goal, active-marker recovery, idle/zero-turn/token/history real smoke, corrected evidence, `DEC-022`. |
+| BUG-008 | Repository entry points and validation wiring drift from the selected HostDeck architecture and owning task graph. | Medium | Small bugfix | Closed | Documentation/validation harness | HostDeck README, canonical Codex aggregate alias, exact placeholder-owner checks, nine-package convention coverage, and synchronized delivery guides; `artifacts/repository-audit-2026-07-11.md`. |
 
 ## Routing
 
@@ -118,3 +119,14 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Fix: create the version-scoped internal marker with explicit `status: paused`; if recovery finds a prior active marker, pause it before clear and reject unsupported terminal marker states.
 - Validation: unit request/status/recovery assertions plus exact isolated 0.144.0 lifecycle smoke requiring idle state, empty stored turns, no `turn/started`, no token-usage update, and no agent-message delta before TUI resume.
 - Closed by: corrected `INT-V1-005` lifecycle plus `INT-V1-006`; evidence in `artifacts/int-v1-005-managed-thread-lifecycle.md` and `artifacts/int-v1-006-codex-operation-semantics.md`.
+
+### BUG-008 Repository Entry Point And Validation Drift
+
+- Symptom: the root README still describes a generic planning template; the test plan documents `pnpm test:codex` but no root script exists; build/E2E placeholders report aggregate `REL-V1-007` instead of their implementation owners; and the workspace-conventions unit test omits `codex-adapter`.
+- Impact: a developer can misunderstand the product and release state, documented validation cannot be invoked canonically, failed build output points to the wrong task, and one package escapes the redundant unit-level workspace convention check.
+- Route: small bugfix; selected product, command ownership, and package inventory are already explicit.
+- Affected / owning task: documentation and validation harness; no product requirement or execution dependency changed.
+- Root cause: repository entry points and duplicated script/package inventories were not synchronized after the app-server rebaseline and later package growth.
+- Fix: replace the README with current HostDeck/release/architecture truth; add the canonical `test:codex` alias; correct build/E2E placeholder owners and support multiple blocking tasks; make scaffold validation assert every documented exact-Codex command plus exact future-command ownership; include all nine packages in workspace convention tests; update delivery guides.
+- Validation: scaffold, planning, typecheck, lint/export checks, focused workspace convention test, placeholder failure, documentation diff, and production dependency audit.
+- Closed by: repository audit branch; evidence in `artifacts/repository-audit-2026-07-11.md`.

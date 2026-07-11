@@ -1,30 +1,55 @@
-# Mobile App Planning Template
+# HostDeck
 
-This repository is a lightweight docs-first template for planning, shipping, and maintaining a mobile app with an AI coding agent such as Codex CLI or Claude Code.
+HostDeck is a local-first, phone-first control plane for one Ubuntu user supervising multiple Codex threads. A private host service integrates with a version-gated Codex app-server, while a responsive dashboard presents structured session state, approvals, prompts, and primary model/goal/plan controls without exposing a shell to the phone.
 
-Use it for native mobile apps, cross-platform mobile apps, companion apps, and internal mobile tools that benefit from a structured planning phase before implementation.
+## Current State
 
-## Quick Start
+HostDeck is under active V1 development and is **not release ready**. The normalized contracts, selected Codex adapter, durable state foundations, and several Fastify/SSE boundaries are implemented, but the assembled runtime, HTTPS phone enrollment, production package/service path, approved mobile design, and release evidence are still incomplete.
 
-1. Write a rough idea in `docs/brainstorming/00-freeform-idea.md`. One paragraph is enough.
-2. Start `/plan` mode and ask your AI to refine the idea using `docs/status.md` and the stage read set in `docs/README.md`.
-3. Answer the AI's recommended questions and choose from its suggested options.
-4. Review the generated end-goal paragraph, roadmap, V1 planning docs, capability blocks, leaf-task backlog, and dependency queue before any product code is written.
-5. Expect implementation to run from ready leaf tasks in passes: foundation first, module-by-module production hardening next, and release hardening before shipping.
+- Start with [current status](docs/status.md) for the active task, blockers, and validation truth.
+- Use the [execution queue](docs/tracking/06-tasks.md) for the current dependency-aware next work.
+- Read the [end goal](docs/planning/00-end-goal.md) and [roadmap](docs/planning/00-roadmap.md) for product scope.
+- Do not treat package-level tests or the legacy tmux path as proof of a production-ready V1.
 
-## Repo Layout
+## Architecture
 
-- `AGENTS.md`: agent-specific rules for Codex-style agents
-- `CLAUDE.md`: agent-specific rules for Claude Code
-- `human.md`: human-only scratchpad that agents must ignore
-- `docs/README.md`: workflow, read sets, document owners, and docs-update budget
-- `docs/engineering-style.md`: reusable engineering quality standards
-- `docs/status.md`: one-page current state and handoff spine
-- `assets/`: generated UI concept options, selected visual direction, and product imagery
-- `docs/brainstorming/`: human-owned freeform rough idea intake
-- `docs/planning/`: end goal, roadmap, product, UX, technical, implementation, block specs, validation, and decision docs
-- `docs/tracking/`: milestone truth, production pass tracking, dependency-aware leaf-task backlog, bug intake, and feature intake
-- `docs/delivery/`: end-user, developer, and repo guides
-- `docs/examples/`: optional completed examples for formatting reference
+| Layer | Responsibility |
+| --- | --- |
+| `packages/core` | Framework-free domain state, deadlines, eligibility, attention, and errors. |
+| `packages/contracts` | Stable HostDeck API, runtime, storage, resource, and mobile schemas. |
+| `packages/codex-adapter` | Private generated Codex bindings, compatibility checks, Unix-socket transport, and structured operations. |
+| `packages/storage` | SQLite migrations, mappings, projections, retention, auth, audit, secure paths, and daemon lease. |
+| `packages/server` | Application services plus the selected Fastify API, SSE, static, and lifecycle boundaries. |
+| `packages/cli` | CLI parsing, local administration, API client, rendering, and exit contracts. |
+| `packages/web` | Pre-implementation mobile view-model foundations; React screens remain gated on visual selection. |
+| `packages/tmux-adapter` | Legacy evidence pending selected-runtime disposition; not the V1 production runtime. |
 
-See `docs/README.md` for the workflow, read sets, and owner-only update rules.
+The phone communicates only with HostDeck. Codex app-server remains on a user-private local transport and is never exposed directly to LAN. See the [technical plan](docs/planning/04-technical-plan.md) for the complete architecture and trust model.
+
+## Development
+
+The supported target is Ubuntu/Linux with exact Node.js `22.22.2`, pnpm `10.29.2`, and Codex CLI `0.144.0` where selected-adapter validation is required.
+
+```bash
+corepack enable
+pnpm install --frozen-lockfile
+pnpm check:scaffold
+pnpm check:planning
+pnpm typecheck
+pnpm lint
+pnpm test:unit
+pnpm test:contract
+pnpm test:integration
+```
+
+Native dependencies and real Codex smokes require the Linux prerequisites documented in the [developer guide](docs/delivery/09-developer-guide.md). Build, E2E, packaged CLI, service, and local release commands intentionally fail loudly until their owning tasks are implemented.
+
+## Repository Workflow
+
+Planning and implementation are dependency-driven. Work from ready leaf tasks, preserve the release no-go until production evidence exists, and keep documentation changes scoped to the owning files.
+
+- Workflow and document ownership: [docs map](docs/README.md)
+- Engineering standards: [engineering style](docs/engineering-style.md)
+- Validation strategy: [test plan](docs/planning/04b-test-plan.md)
+- Repository map: [repo guide](docs/delivery/10-repo-guide.md)
+- Copy-paste commands: [command reference](docs/delivery/11-command-reference.md)

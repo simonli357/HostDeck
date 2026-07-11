@@ -36,11 +36,30 @@ const requiredScripts = [
   "smoke:codex-compatibility",
   "smoke:codex-ipc",
   "smoke:codex-threads",
+  "smoke:codex-semantics",
+  "smoke:codex-model",
+  "smoke:codex-goal",
+  "smoke:codex-plan",
+  "smoke:codex-usage",
+  "smoke:codex-compact",
+  "smoke:codex-skills",
+  "smoke:codex-prompt",
+  "smoke:codex-approval",
+  "smoke:codex-interrupt",
+  "smoke:codex-vertical",
+  "test:codex",
   "test:web",
   "test:e2e",
   "build",
   "smoke:local"
 ];
+
+const requiredScriptCommands = {
+  "test:codex": "pnpm smoke:codex-vertical",
+  "test:e2e": "node scripts/not-implemented.mjs test:e2e IFC-V1-046 FE-V1-040",
+  build: "node scripts/not-implemented.mjs build IFC-V1-021",
+  "smoke:local": "node scripts/not-implemented.mjs smoke:local REL-V1-006"
+};
 
 function requireFile(path) {
   if (!existsSync(path)) {
@@ -62,6 +81,14 @@ const rootPackage = readJson("package.json");
 for (const script of requiredScripts) {
   if (typeof rootPackage.scripts?.[script] !== "string") {
     throw new Error(`Missing root script: ${script}`);
+  }
+}
+
+for (const [script, expectedCommand] of Object.entries(requiredScriptCommands)) {
+  const actualCommand = rootPackage.scripts?.[script];
+
+  if (actualCommand !== expectedCommand) {
+    throw new Error(`Root script ${script} must be ${JSON.stringify(expectedCommand)}, received ${JSON.stringify(actualCommand)}`);
   }
 }
 

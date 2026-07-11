@@ -46,6 +46,7 @@ This host currently has Bubblewrap 0.9.0 but lacks `apparmor-profiles`, `apparmo
 | Codex Unix IPC smoke | `pnpm smoke:codex-ipc` | Starts installed app-server on a temporary private Unix socket and proves the production transport, broker, and compatibility handshake without a model call. |
 | Codex thread/TUI smoke | `pnpm smoke:codex-threads` | Requires authenticated Codex, Git, and tmux. Copies `auth.json` without parsing or logging it into a mode-`0600` private temporary home, proves loaded recovery/materialization/list/read/exact TUI resume/archive without a model turn, then removes the temporary tree. |
 | Codex structured vertical smoke | `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-vertical` | Requires authenticated turns, Git, tmux, and a working strict Linux command sandbox. It fails on any model, callback, projection, approval, command, interrupt, compact, TUI, disclosure, or cleanup gap. |
+| Codex aggregate test alias | `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm test:codex` | Canonical test-plan alias for the same `INT-V1-027` structured vertical; it remains opt-in and blocked until the authenticated runtime and strict command sandbox are available. |
 | Typecheck | `pnpm typecheck` | Strict TypeScript no-emit check across workspace source. |
 | Lint | `pnpm lint` | Biome plus package export convention checks. |
 | Unit tests | `pnpm test` or `pnpm test:unit` | Runs Vitest unit tests. |
@@ -54,8 +55,8 @@ This host currently has Bubblewrap 0.9.0 but lacks `apparmor-profiles`, `apparmo
 | Service smoke | `pnpm exec vitest run tests/service-mode-smoke.test.ts` | Proves foreground HTTP service status/restart and CLI start/list/send/stop through the service with fake tmux. |
 | Tmux smoke | `pnpm test:tmux` | Requires `tmux` and `codex` on `PATH`; runs required real managed-session smoke. |
 | Web state tests | `pnpm test:web` | Runs FE-V1-001 dashboard view-model helper and fixture inventory tests. |
-| Later E2E tests | `pnpm test:e2e` | Placeholder; fails loudly until `REL-V1-007` implements it. |
-| Later build/package | `pnpm build` | Placeholder; fails loudly until `REL-V1-007` implements it. |
+| Later E2E tests | `pnpm test:e2e` | Placeholder; fails loudly until selected API acceptance `IFC-V1-046` and browser workflow `FE-V1-040` implement it. |
+| Later build/package | `pnpm build` | Placeholder; fails loudly until `IFC-V1-021` implements deterministic compiled package outputs. |
 | Later release smoke | `pnpm smoke:local` | Placeholder; fails loudly until `REL-V1-006` implements it. |
 
 ## CLI And Service State

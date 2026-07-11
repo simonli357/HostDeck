@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const packages = [
   "core",
   "contracts",
+  "codex-adapter",
   "test-fixtures",
   "storage",
   "tmux-adapter",
@@ -32,7 +33,7 @@ function readPackageManifest(packageName: string) {
 
 describe("workspace package conventions", () => {
   it("keeps every planned package present and private", () => {
-    expect(packages).toHaveLength(8);
+    expect(packages).toHaveLength(9);
 
     for (const packageName of packages) {
       const manifest = readPackageManifest(packageName);
