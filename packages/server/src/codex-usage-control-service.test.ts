@@ -173,6 +173,7 @@ describe("Codex usage control service", () => {
     const cases: Array<{ readonly state: SelectedSessionState | null; readonly targetThread: string; readonly code: CodexUsageControlErrorCode }> = [
       { state: null, targetThread: threadA, code: "target_not_found" },
       { state: stateCandidate(sessionA, threadA), targetThread: threadB, code: "target_mismatch" },
+      { state: stateCandidate(sessionA, threadA, { recovery: true }), targetThread: threadA, code: "target_stale" },
       { state: stateCandidate(sessionA, threadA, { archived: true }), targetThread: threadA, code: "target_not_readable" },
       { state: stateCandidate(sessionA, threadA, { stale: true }), targetThread: threadA, code: "target_stale" }
     ];
@@ -466,7 +467,12 @@ function rawRateLimits() {
 function stateCandidate(
   sessionId: string,
   threadId: string,
-  options: { readonly archived?: boolean; readonly runtimeVersion?: string; readonly stale?: boolean } = {}
+  options: {
+    readonly archived?: boolean;
+    readonly recovery?: boolean;
+    readonly runtimeVersion?: string;
+    readonly stale?: boolean;
+  } = {}
 ): SelectedSessionState {
   const archivedAt = options.archived ? createdAt : null;
   const runtimeVersion = options.runtimeVersion ?? "0.144.0";
@@ -479,7 +485,7 @@ function stateCandidate(
       cwd: `/tmp/${sessionId}`,
       runtime_source: "codex_app_server",
       runtime_version: runtimeVersion,
-      disposition: "selected",
+      disposition: options.recovery ? "recovery_required" : "selected",
       created_at: createdAt,
       updated_at: createdAt,
       archived_at: archivedAt
