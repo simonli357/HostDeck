@@ -15,8 +15,8 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-018` Implement commit-only projection fanout | in_progress | none | Carries only committed ordered projection truth into the later replay/live boundary. |
-| 2 | `DAT-V1-024` Run bounded startup retention maintenance | ready | none | Completes the now-unblocked selected output/audit maintenance path before restart composition. |
+| 1 | `DAT-V1-024` Run bounded startup retention maintenance | in_progress | none | Completes the selected output/audit maintenance path before restart composition. |
+| 2 | `IFC-V1-034` Implement replay-to-live high-water handoff | ready | none | Builds the now-unblocked no-gap handoff over committed fanout, durable replay, and the selected SSE adapter. |
 | 3 | `INT-V1-022` Implement structured usage retrieval | ready | none | Implements observed account/runtime usage without inventing billing scope. |
 | 4 | `INT-V1-023` Implement accepted/incomplete compact lifecycle | ready | none | Prevents the utility from reporting context reduction from immediate acceptance. |
 | 5 | `INT-V1-024` Implement structured skills listing | ready | none | Implements the remaining observed read-only utility boundary. |
