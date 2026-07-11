@@ -453,6 +453,14 @@ export const hostDeckSelectedAuditStateMigration: StorageMigration = {
   `
 };
 
+export const hostDeckSelectedRetentionIndexesMigration: StorageMigration = {
+  version: "202607100008_selected_retention_indexes",
+  sql: `
+    CREATE INDEX selected_audit_events_phase_at_operation_idx
+      ON selected_audit_events(phase, at, operation_id);
+  `
+};
+
 export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckBaseSchemaMigration,
   hostDeckSessionMetadataFailedStatusMigration,
@@ -460,5 +468,6 @@ export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckRetentionBoundaryScopeChecksMigration,
   hostDeckPairingCodeRevokedAtMigration,
   hostDeckSelectedRuntimeStateMigration,
-  hostDeckSelectedAuditStateMigration
+  hostDeckSelectedAuditStateMigration,
+  hostDeckSelectedRetentionIndexesMigration
 ] as const;

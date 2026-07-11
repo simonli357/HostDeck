@@ -1,6 +1,9 @@
 import { Buffer } from "node:buffer";
 import {
   clientOperationIdSchema,
+  isoTimestampSchema,
+  type RetentionPolicy,
+  retentionPolicySchema,
   type SelectedAuditEventRecord,
   type SelectedAuditTrail,
   selectedAuditEventRecordSchema,
@@ -37,6 +40,22 @@ export interface SelectedAuditRepository {
   readonly recordAccepted: (record: unknown) => SelectedAuditTrail;
   readonly recordRejected: (record: unknown) => SelectedAuditTrail;
   readonly recordTerminal: (record: unknown) => SelectedAuditTrail;
+}
+
+export interface SelectedAuditRetentionBatchInput {
+  readonly max_deleted_records: number;
+  readonly now: string;
+  readonly retention: RetentionPolicy;
+}
+
+export interface SelectedAuditRetentionBatchResult {
+  readonly deleted_operation_count: number;
+  readonly deleted_record_count: number;
+  readonly newest_trail_oversize: boolean;
+  readonly pending_blocks_policy: boolean;
+  readonly protected_pending_operation_count: number;
+  readonly remaining: boolean;
+  readonly retained_record_count: number;
 }
 
 interface SelectedAuditRow {
@@ -122,6 +141,417 @@ export function createSelectedAuditRepository(db: Database.Database): SelectedAu
       return runWrite(() => recordTerminalTransaction(parsed));
     }
   };
+}
+
+export function maintainSelectedAuditRetentionBatch(
+  db: Database.Database,
+  input: SelectedAuditRetentionBatchInput
+): SelectedAuditRetentionBatchResult {
+  const policy = parseAuditRetentionPolicy(input?.retention);
+  const now = parseAuditRetentionNow(input?.now);
+  const cutoff = parseAuditRetentionCutoff(now, policy.audit_retention_days);
+  const maxDeletedRecords = parseAuditRetentionBatchSize(input?.max_deleted_records);
+  const transaction = db.transaction((): SelectedAuditRetentionBatchResult => {
+    const current = readAuditRetentionState(db, policy, cutoff, maxDeletedRecords + 1);
+    const selected: SelectedAuditTrail[] = [];
+    let selectedRecords = 0;
+    let projectedRecords = current.retained_record_count;
+    for (const summary of current.candidates) {
+      const trail = requireRetentionTrail(db, summary);
+      const ageDue = Date.parse(summary.latest_at) < current.cutoff_time;
+      if (!ageDue && projectedRecords <= policy.audit_event_limit) break;
+      if (selectedRecords + trail.records.length > maxDeletedRecords) break;
+      selected.push(trail);
+      selectedRecords += trail.records.length;
+      projectedRecords -= trail.records.length;
+    }
+
+    let deletedRecords = 0;
+    for (const trail of selected) {
+      const deletion = db.prepare("DELETE FROM selected_audit_events WHERE operation_id = ?").run(trail.operation_id);
+      if (deletion.changes !== trail.records.length) {
+        throw new HostDeckSelectedAuditRepositoryError(
+          "audit_write_failed",
+          "Selected audit retention deleted an incomplete operation trail."
+        );
+      }
+      deletedRecords += deletion.changes;
+    }
+    const final = readAuditRetentionState(db, policy, cutoff, 1);
+    return Object.freeze({
+      deleted_operation_count: selected.length,
+      deleted_record_count: deletedRecords,
+      newest_trail_oversize: final.newest_trail_oversize,
+      pending_blocks_policy: final.pending_blocks_policy,
+      protected_pending_operation_count: final.protected_pending_operation_count,
+      remaining: final.candidates.length > 0,
+      retained_record_count: final.retained_record_count
+    });
+  }).immediate;
+
+  try {
+    return transaction();
+  } catch (error) {
+    if (error instanceof HostDeckSelectedAuditRepositoryError) throw error;
+    throw mapWriteFailure(error);
+  }
+}
+
+interface AuditOperationSummary {
+  readonly latest_at: string;
+  readonly operation_id: string;
+  readonly record_count: number;
+}
+
+interface AuditRetentionState {
+  readonly candidates: readonly AuditOperationSummary[];
+  readonly cutoff_time: number;
+  readonly newest_trail_oversize: boolean;
+  readonly pending_blocks_policy: boolean;
+  readonly protected_pending_operation_count: number;
+  readonly retained_record_count: number;
+}
+
+interface AuditRetentionCutoff {
+  readonly at: string;
+  readonly time: number;
+}
+
+interface AuditRetentionMetricsRow {
+  readonly pending_age_due_count: number;
+  readonly protected_pending_operation_count: number;
+  readonly retained_record_count: number;
+}
+
+interface AuditRetentionNewestRow {
+  readonly has_terminal: number;
+  readonly latest_at: string;
+  readonly operation_id: string;
+  readonly record_count: number;
+}
+
+interface AuditRetentionSummaryRow {
+  readonly latest_at: string;
+  readonly operation_id: string;
+  readonly record_count: number;
+}
+
+function readAuditRetentionState(
+  db: Database.Database,
+  policy: RetentionPolicy,
+  cutoff: AuditRetentionCutoff,
+  candidateLimit: number
+): AuditRetentionState {
+  let metricsRow: AuditRetentionMetricsRow | undefined;
+  let newestRow: AuditRetentionNewestRow | undefined;
+  try {
+    metricsRow = db
+      .prepare(
+        `
+          SELECT
+            COUNT(*) AS retained_record_count,
+            COALESCE(SUM(
+              CASE WHEN event.phase = 'accepted' AND NOT EXISTS (
+                SELECT 1
+                FROM selected_audit_events AS terminal
+                WHERE terminal.operation_id = event.operation_id AND terminal.phase = 'terminal'
+              ) THEN 1 ELSE 0 END
+            ), 0) AS protected_pending_operation_count,
+            COALESCE(SUM(
+              CASE WHEN event.phase = 'accepted' AND event.at < @cutoff AND NOT EXISTS (
+                SELECT 1
+                FROM selected_audit_events AS terminal
+                WHERE terminal.operation_id = event.operation_id AND terminal.phase = 'terminal'
+              ) THEN 1 ELSE 0 END
+            ), 0) AS pending_age_due_count
+          FROM selected_audit_events AS event
+        `
+      )
+      .get({ cutoff: cutoff.at }) as AuditRetentionMetricsRow | undefined;
+    newestRow = db
+      .prepare(
+        `
+          SELECT
+            event.operation_id,
+            event.at AS latest_at,
+            (SELECT COUNT(*) FROM selected_audit_events AS member WHERE member.operation_id = event.operation_id)
+              AS record_count,
+            EXISTS (
+              SELECT 1
+              FROM selected_audit_events AS terminal
+              WHERE terminal.operation_id = event.operation_id AND terminal.phase = 'terminal'
+            ) AS has_terminal
+          FROM selected_audit_events AS event
+          ORDER BY event.at DESC, event.operation_id DESC, event.id DESC
+          LIMIT 1
+        `
+      )
+      .get() as AuditRetentionNewestRow | undefined;
+  } catch (error) {
+    throw mapUnavailableRead(error);
+  }
+
+  const metrics = parseRetentionMetrics(metricsRow);
+  const newest = newestRow === undefined ? null : parseRetentionNewest(newestRow);
+  if ((metrics.retained_record_count === 0) !== (newest === null)) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_trail",
+      "Selected audit retention totals contradict the newest stored operation."
+    );
+  }
+  if (newest !== null) assertNewestRetentionTrail(db, newest);
+  const candidates = readAuditRetentionCandidates(db, {
+    candidate_limit: candidateLimit,
+    cutoff: cutoff.at,
+    include_count_candidates: metrics.retained_record_count > policy.audit_event_limit,
+    newest_operation_id: newest?.operation_id ?? null
+  });
+  const newestProtectedTerminalRecords =
+    newest?.has_terminal === 1 && Date.parse(newest.latest_at) >= cutoff.time ? newest.record_count : 0;
+  const pendingBlocksPolicy =
+    metrics.pending_age_due_count > 0 ||
+    (metrics.protected_pending_operation_count > 0 &&
+      metrics.protected_pending_operation_count + newestProtectedTerminalRecords > policy.audit_event_limit);
+  const newestTrailOversize =
+    candidates.length === 0 &&
+    metrics.protected_pending_operation_count === 0 &&
+    metrics.retained_record_count > policy.audit_event_limit &&
+    newest?.has_terminal === 1 &&
+    Date.parse(newest.latest_at) >= cutoff.time &&
+    newest.record_count > policy.audit_event_limit;
+  return {
+    candidates,
+    cutoff_time: cutoff.time,
+    newest_trail_oversize: newestTrailOversize,
+    pending_blocks_policy: pendingBlocksPolicy,
+    protected_pending_operation_count: metrics.protected_pending_operation_count,
+    retained_record_count: metrics.retained_record_count
+  };
+}
+
+function readAuditRetentionCandidates(
+  db: Database.Database,
+  input: {
+    readonly candidate_limit: number;
+    readonly cutoff: string;
+    readonly include_count_candidates: boolean;
+    readonly newest_operation_id: string | null;
+  }
+): readonly AuditOperationSummary[] {
+  let rows: AuditRetentionSummaryRow[];
+  try {
+    rows = db
+      .prepare(
+        `
+          SELECT
+            terminal.operation_id,
+            terminal.at AS latest_at,
+            (SELECT COUNT(*) FROM selected_audit_events AS member WHERE member.operation_id = terminal.operation_id)
+              AS record_count
+          FROM selected_audit_events AS terminal
+          WHERE terminal.phase = 'terminal' AND terminal.at < @cutoff
+          ORDER BY terminal.at ASC, terminal.operation_id ASC
+          LIMIT @candidate_limit
+        `
+      )
+      .all({ candidate_limit: input.candidate_limit, cutoff: input.cutoff }) as AuditRetentionSummaryRow[];
+
+    const remainingLimit = input.candidate_limit - rows.length;
+    if (input.include_count_candidates && remainingLimit > 0) {
+      const countRows = db
+        .prepare(
+          `
+            SELECT
+              terminal.operation_id,
+              terminal.at AS latest_at,
+              (SELECT COUNT(*) FROM selected_audit_events AS member WHERE member.operation_id = terminal.operation_id)
+                AS record_count
+            FROM selected_audit_events AS terminal
+            WHERE terminal.phase = 'terminal'
+              AND terminal.at >= @cutoff
+              AND (@newest_operation_id IS NULL OR terminal.operation_id <> @newest_operation_id)
+            ORDER BY terminal.at ASC, terminal.operation_id ASC
+            LIMIT @candidate_limit
+          `
+        )
+        .all({
+          candidate_limit: remainingLimit,
+          cutoff: input.cutoff,
+          newest_operation_id: input.newest_operation_id
+        }) as AuditRetentionSummaryRow[];
+      rows.push(...countRows);
+    }
+  } catch (error) {
+    throw mapUnavailableRead(error);
+  }
+  return rows.map(parseRetentionSummary);
+}
+
+function assertNewestRetentionTrail(db: Database.Database, summary: AuditRetentionNewestRow): void {
+  const trail = readTrail(db, summary.operation_id);
+  const latest = trail?.records.at(-1);
+  if (
+    trail === null ||
+    trail.records.length !== summary.record_count ||
+    (trail.state === "terminal" ? 1 : 0) !== summary.has_terminal ||
+    latest === undefined ||
+    latest.at !== summary.latest_at
+  ) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_trail",
+      "Selected audit newest-operation summary contradicts its stored trail."
+    );
+  }
+}
+
+function requireRetentionTrail(db: Database.Database, summary: AuditOperationSummary): SelectedAuditTrail {
+  const trail = readTrail(db, summary.operation_id);
+  const latest = trail?.records.at(-1);
+  if (
+    trail === null ||
+    trail.state !== "terminal" ||
+    trail.records.length !== summary.record_count ||
+    latest === undefined ||
+    latest.at !== summary.latest_at
+  ) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_trail",
+      "Selected audit retention candidate contradicts its stored operation trail."
+    );
+  }
+  return trail;
+}
+
+function parseRetentionMetrics(row: AuditRetentionMetricsRow | undefined): AuditRetentionMetricsRow {
+  if (
+    row === undefined ||
+    !isNonNegativeSafeInteger(row.retained_record_count) ||
+    !isNonNegativeSafeInteger(row.protected_pending_operation_count) ||
+    !isNonNegativeSafeInteger(row.pending_age_due_count) ||
+    row.protected_pending_operation_count > row.retained_record_count ||
+    row.pending_age_due_count > row.protected_pending_operation_count
+  ) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_trail",
+      "Selected audit retention metrics are invalid."
+    );
+  }
+  return row;
+}
+
+function parseRetentionNewest(row: AuditRetentionNewestRow): AuditRetentionNewestRow {
+  const operationId = parseStoredOperationId(row.operation_id);
+  const latestAt = parseStoredAuditTimestamp(row.latest_at);
+  if (!isPositiveTrailSize(row.record_count) || (row.has_terminal !== 0 && row.has_terminal !== 1)) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_trail",
+      "Selected audit newest-operation summary is invalid."
+    );
+  }
+  return { ...row, latest_at: latestAt, operation_id: operationId };
+}
+
+function parseRetentionSummary(row: AuditRetentionSummaryRow): AuditOperationSummary {
+  const operationId = parseStoredOperationId(row.operation_id);
+  const latestAt = parseStoredAuditTimestamp(row.latest_at);
+  if (!isPositiveTrailSize(row.record_count)) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_trail",
+      "Selected audit retention candidate size is invalid."
+    );
+  }
+  return { latest_at: latestAt, operation_id: operationId, record_count: row.record_count };
+}
+
+function parseStoredOperationId(candidate: unknown): string {
+  const result = clientOperationIdSchema.safeParse(candidate);
+  if (!result.success) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_trail",
+      "Stored selected audit operation id is invalid.",
+      { cause: result.error }
+    );
+  }
+  return result.data;
+}
+
+function parseStoredAuditTimestamp(candidate: unknown): string {
+  const result = isoTimestampSchema.safeParse(candidate);
+  if (!result.success) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_trail",
+      "Stored selected audit timestamp is invalid.",
+      { cause: result.error }
+    );
+  }
+  if (result.data !== candidate) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_trail",
+      "Stored selected audit timestamp is not canonical."
+    );
+  }
+  return result.data;
+}
+
+function isNonNegativeSafeInteger(candidate: unknown): candidate is number {
+  return Number.isSafeInteger(candidate) && (candidate as number) >= 0;
+}
+
+function isPositiveTrailSize(candidate: unknown): candidate is 1 | 2 {
+  return candidate === 1 || candidate === 2;
+}
+
+function parseAuditRetentionPolicy(candidate: unknown): RetentionPolicy {
+  const parsed = retentionPolicySchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw new HostDeckSelectedAuditRepositoryError("invalid_audit_record", "Selected audit retention policy is invalid.", {
+      cause: parsed.error
+    });
+  }
+  return parsed.data;
+}
+
+function parseAuditRetentionNow(candidate: unknown): string {
+  const parsed = isoTimestampSchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw new HostDeckSelectedAuditRepositoryError("invalid_audit_record", "Selected audit retention time is invalid.", {
+      cause: parsed.error
+    });
+  }
+  return parsed.data;
+}
+
+function parseAuditRetentionCutoff(now: string, retentionDays: number): AuditRetentionCutoff {
+  const time = Date.parse(now) - retentionDays * 24 * 60 * 60 * 1_000;
+  let at: string;
+  try {
+    at = new Date(time).toISOString();
+  } catch (error) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_record",
+      "Selected audit retention cutoff is outside the supported timestamp range.",
+      { cause: error }
+    );
+  }
+  const parsed = isoTimestampSchema.safeParse(at);
+  if (!parsed.success || parsed.data !== at) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_record",
+      "Selected audit retention cutoff is outside the supported timestamp range.",
+      parsed.success ? undefined : { cause: parsed.error }
+    );
+  }
+  return { at, time };
+}
+
+function parseAuditRetentionBatchSize(candidate: unknown): number {
+  if (!Number.isSafeInteger(candidate) || (candidate as number) < 2 || (candidate as number) > 2_000) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_record",
+      "Selected audit retention batch size must be between 2 and 2000 records."
+    );
+  }
+  return candidate as number;
 }
 
 function readTrail(db: Database.Database, operationId: string): SelectedAuditTrail | null {

@@ -76,6 +76,21 @@ export interface AppendSelectedEventResult {
   readonly revision: SelectedStateRevision;
 }
 
+export interface SelectedProjectionRetentionBatchInput {
+  readonly max_pruned_events: number;
+  readonly retention: RetentionPolicy;
+  readonly session_id: string;
+}
+
+export interface SelectedProjectionRetentionBatchResult {
+  readonly boundary_replaced: boolean;
+  readonly newest_event_oversize: boolean;
+  readonly projection: SelectedSessionProjectionRecord;
+  readonly pruned_event_count: number;
+  readonly remaining: boolean;
+  readonly session_id: string;
+}
+
 export interface SelectedStateRepository {
   readonly get: (sessionId: string) => SelectedSessionState | null;
   readonly require: (sessionId: string) => SelectedSessionState;
@@ -412,6 +427,128 @@ export function selectedProjectedEventByteLength(event: unknown): number {
   return Buffer.byteLength(JSON.stringify(parsed.data), "utf8");
 }
 
+export function maintainSelectedProjectionRetentionBatch(
+  db: Database.Database,
+  input: SelectedProjectionRetentionBatchInput
+): SelectedProjectionRetentionBatchResult {
+  const sessionId = parseSessionId(input?.session_id);
+  const policy = parseSelectedProjectionRetentionPolicy(input?.retention);
+  const maxPrunedEvents = parseRetentionBatchSize(input?.max_pruned_events);
+  const transaction = db.transaction((): SelectedProjectionRetentionBatchResult => {
+    const current = requireState(db, sessionId);
+    assertPersistedEventProjection(db, current.projection);
+    if (projectionMeetsRetention(current.projection, policy)) {
+      return Object.freeze({
+        boundary_replaced: false,
+        newest_event_oversize: false,
+        projection: current.projection,
+        pruned_event_count: 0,
+        remaining: false,
+        session_id: sessionId
+      });
+    }
+
+    const window = readSelectedRetentionWindow(db, sessionId, maxPrunedEvents + 2);
+    const priorBoundary = window[0]?.event.type === "replay_boundary" ? window[0] : null;
+    const realEvents = window.filter((record) => record.event.type !== "replay_boundary");
+    const removed: SelectedProjectedEventRecord[] = [];
+    let removedBytes = 0;
+    let boundary: ReturnType<typeof createRetentionBoundaryRecord> | null = null;
+    for (let index = 0; index < realEvents.length && removed.length < maxPrunedEvents; index += 1) {
+      const candidate = realEvents[index];
+      const oldestRemaining = realEvents[index + 1];
+      if (
+        candidate === undefined ||
+        oldestRemaining === undefined ||
+        candidate.event.cursor === current.projection.session.last_event_cursor
+      ) {
+        break;
+      }
+      removed.push(candidate);
+      removedBytes += candidate.byte_length;
+      boundary = createRetentionBoundaryRecord(sessionId, candidate.event.cursor, oldestRemaining.event.captured_at);
+      const projectedCount =
+        current.projection.retained_event_count - removed.length - (priorBoundary === null ? 0 : 1) + 1;
+      const projectedBytes =
+        current.projection.retained_event_bytes -
+        removedBytes -
+        (priorBoundary?.byte_length ?? 0) +
+        boundary.byte_length;
+      if (projectedCount <= policy.output_event_limit && projectedBytes <= policy.output_byte_limit) break;
+    }
+
+    if (boundary === null || removed.length === 0) {
+      return Object.freeze({
+        boundary_replaced: false,
+        newest_event_oversize: true,
+        projection: current.projection,
+        pruned_event_count: 0,
+        remaining: false,
+        session_id: sessionId
+      });
+    }
+
+    const deletion = db
+      .prepare("DELETE FROM selected_projected_events WHERE session_id = ? AND cursor <= ?")
+      .run(sessionId, boundary.event.cursor);
+    const expectedDeletedRows = removed.length + (priorBoundary === null ? 0 : 1);
+    if (deletion.changes !== expectedDeletedRows) {
+      throw new HostDeckSelectedStateRepositoryError(
+        "projection_write_failed",
+        "Selected retention batch deleted an unexpected number of rows."
+      );
+    }
+    insertEvent(db, boundary);
+
+    const aggregate = readSelectedProjectionAggregate(db, sessionId);
+    const projection = parseProjection({
+      ...current.projection,
+      retained_event_count: aggregate.event_count,
+      retained_event_bytes: aggregate.event_bytes,
+      earliest_retained_cursor: aggregate.earliest_cursor,
+      retention_boundary_cursor: boundary.event.after
+    });
+    if (updateProjection(db, projection) !== 1) {
+      throw new HostDeckSelectedStateRepositoryError("session_not_found", `Selected session ${sessionId} does not exist.`);
+    }
+    assertPersistedEventProjection(db, projection);
+    const overPolicy = !projectionMeetsRetention(projection, policy);
+    const remaining = overPolicy && projection.retained_event_count > 2;
+    return Object.freeze({
+      boundary_replaced: priorBoundary !== null,
+      newest_event_oversize: overPolicy && !remaining,
+      projection,
+      pruned_event_count: removed.length,
+      remaining,
+      session_id: sessionId
+    });
+  }).immediate;
+
+  try {
+    return transaction();
+  } catch (error) {
+    if (error instanceof HostDeckSelectedStateRepositoryError) throw error;
+    throw mapEventConstraint(error);
+  }
+}
+
+function projectionMeetsRetention(projection: SelectedSessionProjectionRecord, policy: RetentionPolicy): boolean {
+  return (
+    projection.retained_event_count <= policy.output_event_limit &&
+    projection.retained_event_bytes <= policy.output_byte_limit
+  );
+}
+
+function readSelectedRetentionWindow(
+  db: Database.Database,
+  sessionId: string,
+  limit: number
+): readonly SelectedProjectedEventRecord[] {
+  return (
+    db.prepare("SELECT * FROM selected_projected_events WHERE session_id = ? ORDER BY cursor ASC LIMIT ?").all(sessionId, limit) as EventRow[]
+  ).map(parseEventRow);
+}
+
 function parseSelectedProjectionRetentionPolicy(candidate: unknown): RetentionPolicy {
   const parsed = retentionPolicySchema.safeParse(candidate);
   if (!parsed.success || parsed.data.output_event_limit < 2) {
@@ -436,33 +573,11 @@ function applySelectedProjectionRetention(
     return nextProjection;
   }
 
-  const records = (
-    db
-      .prepare("SELECT * FROM selected_projected_events WHERE session_id = ? ORDER BY cursor DESC")
-      .all(nextProjection.session.id) as EventRow[]
-  ).map(parseEventRow);
-  const newestFirst = records.filter((record) => record.event.type !== "replay_boundary");
-  if (newestFirst.length <= 1) return nextProjection;
-
-  const retained: SelectedProjectedEventRecord[] = [newestFirst[0] as SelectedProjectedEventRecord];
-  let retainedBytes = retained[0]?.byte_length ?? 0;
-  const maxRetainedEvents = policy.output_event_limit - 1;
-
-  for (const candidate of newestFirst.slice(1)) {
-    if (retained.length >= maxRetainedEvents || candidate.event.cursor <= 1) break;
-    const boundary = createRetentionBoundaryRecord(nextProjection.session.id, candidate.event.cursor - 1, candidate.event.captured_at);
-    if (boundary.byte_length + retainedBytes + candidate.byte_length > policy.output_byte_limit) break;
-    retained.push(candidate);
-    retainedBytes += candidate.byte_length;
-  }
-
-  const oldestRetained = retained.at(-1);
-  if (oldestRetained === undefined || oldestRetained.event.cursor <= 1) return nextProjection;
-  const boundary = createRetentionBoundaryRecord(
-    nextProjection.session.id,
-    oldestRetained.event.cursor - 1,
-    oldestRetained.event.captured_at
-  );
+  const records = readSelectedProjectionRecords(db, nextProjection.session.id);
+  assertSelectedRetentionLayout(records, nextProjection);
+  const plan = planSelectedProjectionRetention(records, nextProjection, policy);
+  const boundary = plan.boundary;
+  if (boundary === null || plan.removable.length === 0) return nextProjection;
   if (
     nextProjection.retention_boundary_cursor !== null &&
     boundary.event.after !== null &&
@@ -481,11 +596,172 @@ function applySelectedProjectionRetention(
 
   return parseProjection({
     ...nextProjection,
-    retained_event_count: retained.length + 1,
-    retained_event_bytes: retainedBytes + boundary.byte_length,
+    retained_event_count: plan.retained.length + 1,
+    retained_event_bytes: plan.retained_bytes + boundary.byte_length,
     earliest_retained_cursor: boundary.event.cursor,
     retention_boundary_cursor: boundary.event.after
   });
+}
+
+interface SelectedProjectionRetentionPlan {
+  readonly boundary: ReturnType<typeof createRetentionBoundaryRecord> | null;
+  readonly newest_event_oversize: boolean;
+  readonly real_ascending: readonly SelectedProjectedEventRecord[];
+  readonly removable: readonly SelectedProjectedEventRecord[];
+  readonly retained: readonly SelectedProjectedEventRecord[];
+  readonly retained_bytes: number;
+}
+
+function planSelectedProjectionRetention(
+  records: readonly SelectedProjectedEventRecord[],
+  projection: SelectedSessionProjectionRecord,
+  policy: RetentionPolicy
+): SelectedProjectionRetentionPlan {
+  const realNewestFirst = records.filter((record) => record.event.type !== "replay_boundary");
+  const realAscending = [...realNewestFirst].reverse();
+  if (
+    projection.retained_event_count <= policy.output_event_limit &&
+    projection.retained_event_bytes <= policy.output_byte_limit
+  ) {
+    return {
+      boundary: null,
+      newest_event_oversize: false,
+      real_ascending: realAscending,
+      removable: [],
+      retained: realNewestFirst,
+      retained_bytes: realNewestFirst.reduce((sum, record) => sum + record.byte_length, 0)
+    };
+  }
+  const newest = realNewestFirst[0];
+  if (newest === undefined) {
+    throw new HostDeckSelectedStateRepositoryError("invalid_projection", "Selected retention has no real event to preserve.");
+  }
+  if (realNewestFirst.length === 1) {
+    return {
+      boundary: null,
+      newest_event_oversize: true,
+      real_ascending: realAscending,
+      removable: [],
+      retained: [newest],
+      retained_bytes: newest.byte_length
+    };
+  }
+
+  const retained: SelectedProjectedEventRecord[] = [newest];
+  let retainedBytes = newest.byte_length;
+  const maxRetainedEvents = policy.output_event_limit - 1;
+  for (const candidate of realNewestFirst.slice(1)) {
+    if (retained.length >= maxRetainedEvents || candidate.event.cursor <= 1) break;
+    const candidateBoundary = createRetentionBoundaryRecord(
+      projection.session.id,
+      candidate.event.cursor - 1,
+      candidate.event.captured_at
+    );
+    if (candidateBoundary.byte_length + retainedBytes + candidate.byte_length > policy.output_byte_limit) break;
+    retained.push(candidate);
+    retainedBytes += candidate.byte_length;
+  }
+  const oldestRetained = retained.at(-1);
+  if (oldestRetained === undefined || oldestRetained.event.cursor <= 1) {
+    return {
+      boundary: null,
+      newest_event_oversize: true,
+      real_ascending: realAscending,
+      removable: [],
+      retained,
+      retained_bytes: retainedBytes
+    };
+  }
+  const boundary = createRetentionBoundaryRecord(
+    projection.session.id,
+    oldestRetained.event.cursor - 1,
+    oldestRetained.event.captured_at
+  );
+  const removable = realAscending.filter((record) => record.event.cursor <= boundary.event.cursor);
+  return {
+    boundary,
+    newest_event_oversize: false,
+    real_ascending: realAscending,
+    removable,
+    retained,
+    retained_bytes: retainedBytes
+  };
+}
+
+function readSelectedProjectionRecords(db: Database.Database, sessionId: string): readonly SelectedProjectedEventRecord[] {
+  return (
+    db.prepare("SELECT * FROM selected_projected_events WHERE session_id = ? ORDER BY cursor DESC").all(sessionId) as EventRow[]
+  ).map(parseEventRow);
+}
+
+function readSelectedProjectionAggregate(db: Database.Database, sessionId: string): EventAggregateRow {
+  return db
+    .prepare(
+      `
+        SELECT
+          COUNT(*) AS event_count,
+          COALESCE(SUM(byte_length), 0) AS event_bytes,
+          MIN(cursor) AS earliest_cursor,
+          MAX(cursor) AS latest_cursor
+        FROM selected_projected_events
+        WHERE session_id = ?
+      `
+    )
+    .get(sessionId) as EventAggregateRow;
+}
+
+function assertSelectedRetentionLayout(
+  recordsNewestFirst: readonly SelectedProjectedEventRecord[],
+  projection: SelectedSessionProjectionRecord
+): void {
+  if (recordsNewestFirst.length === 0) {
+    if (projection.retained_event_count !== 0) {
+      throw new HostDeckSelectedStateRepositoryError("invalid_projection", "Selected retention projection has missing rows.");
+    }
+    return;
+  }
+  const ascending = [...recordsNewestFirst].reverse();
+  const boundaries = ascending.filter((record) => record.event.type === "replay_boundary");
+  if (boundaries.length > 1 || (boundaries.length === 1 && ascending[0] !== boundaries[0])) {
+    throw new HostDeckSelectedStateRepositoryError("invalid_event", "Selected retention rows contain a misplaced boundary.");
+  }
+  if (!ascending.some((record) => record.event.type !== "replay_boundary")) {
+    throw new HostDeckSelectedStateRepositoryError("invalid_event", "Selected retention cannot contain only a boundary.");
+  }
+  for (let index = 1; index < ascending.length; index += 1) {
+    if (ascending[index]?.event.cursor !== (ascending[index - 1]?.event.cursor ?? 0) + 1) {
+      throw new HostDeckSelectedStateRepositoryError("invalid_event", "Selected retained event cursors are not contiguous.");
+    }
+  }
+  const first = ascending[0] as SelectedProjectedEventRecord;
+  const last = ascending.at(-1) as SelectedProjectedEventRecord;
+  if (
+    first.event.cursor !== projection.earliest_retained_cursor ||
+    last.event.cursor !== projection.session.last_event_cursor
+  ) {
+    throw new HostDeckSelectedStateRepositoryError("invalid_projection", "Selected retention row range contradicts projection state.");
+  }
+  if (projection.retention_boundary_cursor === null) {
+    if (first.event.type === "replay_boundary" || first.event.cursor !== 1) {
+      throw new HostDeckSelectedStateRepositoryError("invalid_projection", "Selected retention boundary metadata is missing.");
+    }
+  } else if (
+    first.event.type !== "replay_boundary" ||
+    first.event.after !== projection.retention_boundary_cursor ||
+    first.event.cursor !== projection.retention_boundary_cursor + 1
+  ) {
+    throw new HostDeckSelectedStateRepositoryError("invalid_projection", "Selected retention boundary metadata contradicts its row.");
+  }
+}
+
+function parseRetentionBatchSize(candidate: unknown): number {
+  if (!Number.isSafeInteger(candidate) || (candidate as number) < 1 || (candidate as number) > 1_000) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_retention_policy",
+      "Selected retention batch size must be between 1 and 1000."
+    );
+  }
+  return candidate as number;
 }
 
 function createRetentionBoundaryRecord(

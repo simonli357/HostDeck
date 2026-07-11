@@ -43,6 +43,7 @@ export {
   hostDeckBaseSchemaMigration,
   hostDeckRetentionBoundaryScopeChecksMigration,
   hostDeckSelectedAuditStateMigration,
+  hostDeckSelectedRetentionIndexesMigration,
   hostDeckSelectedRuntimeStateMigration,
   hostDeckSessionMetadataFailedStatusMigration,
   type StorageMigration
@@ -99,14 +100,20 @@ export {
 export {
   createSelectedAuditRepository,
   HostDeckSelectedAuditRepositoryError,
+  maintainSelectedAuditRetentionBatch,
   type SelectedAuditRepository,
-  type SelectedAuditRepositoryErrorCode
+  type SelectedAuditRepositoryErrorCode,
+  type SelectedAuditRetentionBatchInput,
+  type SelectedAuditRetentionBatchResult
 } from "./selected-audit-repository.js";
 export {
   type AppendSelectedEventResult,
   createSelectedStateRepository,
   HostDeckSelectedStateRepositoryError,
   type ListSelectedEventsInput,
+  maintainSelectedProjectionRetentionBatch,
+  type SelectedProjectionRetentionBatchInput,
+  type SelectedProjectionRetentionBatchResult,
   type SelectedSessionState,
   type SelectedStateRepository,
   type SelectedStateRepositoryErrorCode,
@@ -128,3 +135,15 @@ export {
   HostDeckSettingsError,
   type SettingsRepository
 } from "./settings-repository.js";
+export {
+  HostDeckStartupRetentionMaintenanceError,
+  type RunStartupRetentionMaintenanceInput,
+  runStartupRetentionMaintenance,
+  type StartupRetentionAuditResult,
+  type StartupRetentionDegradedReason,
+  type StartupRetentionFailure,
+  type StartupRetentionFailureScope,
+  type StartupRetentionMaintenanceErrorCode,
+  type StartupRetentionMaintenanceResult,
+  type StartupRetentionOutputResult
+} from "./startup-retention-maintenance.js";

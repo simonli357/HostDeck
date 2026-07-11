@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 describe("SQLite migration runner", () => {
-  it("preserves the checksums of every migration published before selected audit state", () => {
+  it("preserves the checksums of every migration published before selected retention indexes", () => {
     expect(
       Object.fromEntries(
         defaultMigrations.slice(0, -1).map((migration) => [
@@ -30,7 +30,8 @@ describe("SQLite migration runner", () => {
       "202607080003_auth_device_csrf_hash": "0a4ad8c4692806e0bde02856f1d8a7b21ec2fe1426a8941e5b07ecb5d65f37d2",
       "202607080004_retention_boundary_scope_checks": "1a22e20b6c6679a2045469f0447c0b6e014ca72b95635a65c45cdbe6cafe8adf",
       "202607080005_pairing_code_revoked_at": "43a464010577c15677426c81a530328f2d76425d29eaa8d2d5446e737392aa70",
-      "202607090006_selected_runtime_state": "b82cd7abd76ab71ab73d7b361cd318dd862edd64749ce64942598c6f972e90fa"
+      "202607090006_selected_runtime_state": "b82cd7abd76ab71ab73d7b361cd318dd862edd64749ce64942598c6f972e90fa",
+      "202607100007_selected_audit_state": "965189761889f62c787c07f190b5c0aa76d90f17b00b4f97fcbe46121bfec9f2"
     });
   });
 
@@ -48,7 +49,8 @@ describe("SQLite migration runner", () => {
         "202607080004_retention_boundary_scope_checks",
         "202607080005_pairing_code_revoked_at",
         "202607090006_selected_runtime_state",
-        "202607100007_selected_audit_state"
+        "202607100007_selected_audit_state",
+        "202607100008_selected_retention_indexes"
       ]);
       expect(tableNames(db)).toEqual([
         "audit_events",
@@ -68,7 +70,12 @@ describe("SQLite migration runner", () => {
         "sessions",
         "settings"
       ]);
-      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 7 });
+      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 8 });
+      expect(
+        db
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
+          .get("selected_audit_events_phase_at_operation_idx")
+      ).toEqual({ name: "selected_audit_events_phase_at_operation_idx" });
     } finally {
       db.close();
     }
@@ -77,7 +84,7 @@ describe("SQLite migration runner", () => {
   it("adds selected audit state without rewriting historical audit rows", () => {
     const path = tempDbPath();
     const prior = openMigratedDatabase(path, {
-      migrations: defaultMigrations.slice(0, -1),
+      migrations: defaultMigrations.slice(0, -2),
       now: fixedNow
     });
     prior.db
@@ -94,7 +101,10 @@ describe("SQLite migration runner", () => {
 
     const migrated = openMigratedDatabase(path, { now: fixedNow });
     try {
-      expect(migrated.result.applied).toEqual(["202607100007_selected_audit_state"]);
+      expect(migrated.result.applied).toEqual([
+        "202607100007_selected_audit_state",
+        "202607100008_selected_retention_indexes"
+      ]);
       expect(migrated.db.prepare("SELECT id FROM audit_events WHERE id = 'audit_legacy_preserved'").get()).toEqual({
         id: "audit_legacy_preserved"
       });
@@ -104,10 +114,68 @@ describe("SQLite migration runner", () => {
     }
   });
 
+  it("adds selected retention indexes without rewriting existing selected audit rows", () => {
+    const path = tempDbPath();
+    const prior = openMigratedDatabase(path, {
+      migrations: defaultMigrations.slice(0, -1),
+      now: fixedNow
+    });
+    prior.db
+      .prepare(
+        `
+          INSERT INTO selected_audit_events (
+            id, operation_id, at, action, phase, outcome, error_code, record_json
+          ) VALUES (?, ?, ?, 'prompt', 'terminal', 'rejected', 'validation_error', ?)
+        `
+      )
+      .run(
+        "audit:index:preserved",
+        "op_index_preserved",
+        fixedNow().toISOString(),
+        JSON.stringify({
+          id: "audit:index:preserved",
+          operation_id: "op_index_preserved",
+          at: fixedNow().toISOString(),
+          actor: {
+            type: "dashboard",
+            device_id: "device:index:migration",
+            permission: "write",
+            origin: "https://hostdeck.local"
+          },
+          action: "prompt",
+          target: {
+            type: "managed_session",
+            session_id: "sess_index_migration",
+            codex_thread_id: "thread-index-migration"
+          },
+          phase: "terminal",
+          outcome: "rejected",
+          payload_summary: { reason: "migration_fixture" },
+          error_code: "validation_error"
+        })
+      );
+    prior.db.close();
+
+    const migrated = openMigratedDatabase(path, { now: fixedNow });
+    try {
+      expect(migrated.result.applied).toEqual(["202607100008_selected_retention_indexes"]);
+      expect(migrated.db.prepare("SELECT id FROM selected_audit_events WHERE operation_id = ?").get("op_index_preserved")).toEqual({
+        id: "audit:index:preserved"
+      });
+      expect(
+        migrated.db
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
+          .get("selected_audit_events_phase_at_operation_idx")
+      ).toEqual({ name: "selected_audit_events_phase_at_operation_idx" });
+    } finally {
+      migrated.db.close();
+    }
+  });
+
   it("marks prior tmux sessions as legacy without creating selected mappings", () => {
     const path = tempDbPath();
     const prior = openMigratedDatabase(path, {
-      migrations: defaultMigrations.slice(0, -2),
+      migrations: defaultMigrations.slice(0, -3),
       now: fixedNow
     });
 
@@ -135,7 +203,8 @@ describe("SQLite migration runner", () => {
     try {
       expect(migrated.result.applied).toEqual([
         "202607090006_selected_runtime_state",
-        "202607100007_selected_audit_state"
+        "202607100007_selected_audit_state",
+        "202607100008_selected_retention_indexes"
       ]);
       expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM selected_sessions").get()).toEqual({ count: 0 });
       expect(migrated.db.prepare("SELECT * FROM legacy_session_dispositions").get()).toMatchObject({
@@ -172,7 +241,7 @@ describe("SQLite migration runner", () => {
   it("rolls back selected-state migration when a prior legacy row cannot be classified safely", () => {
     const path = tempDbPath();
     const prior = openMigratedDatabase(path, {
-      migrations: defaultMigrations.slice(0, -2),
+      migrations: defaultMigrations.slice(0, -3),
       now: fixedNow
     });
     prior.db
