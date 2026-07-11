@@ -55,7 +55,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Not Proven
 
 - The selected manifest is immutable metadata, not registered routes: downstream leaves still must implement each named local-Zod request/response contract, handler, auth/audit behavior, and production Fastify composition without changing the frozen semantics silently.
-- Remaining Codex callback assembly, supervision, reconnect/restart behavior, and live HostDeck composition; exact external semantics, ordered normalization/projection, and every selected operation port are proven individually, but the connection callbacks are not assembled.
+- The selected Codex callback/fanout and exact aggregate harness are implemented and deterministically tested, but the one-lifecycle authenticated acceptance is not proven. Supervision, reconnect/restart behavior, and live HostDeck composition also remain downstream work. Partial evidence: `artifacts/int-v1-027-structured-vertical.md`.
 - Current command-backed app-server smokes can fail before a callback because app-server selects Bubblewrap while this host denies unprivileged user-namespace setup, even when the reviewed legacy-Landlock feature flag is enabled. Direct exact-version Landlock execution plus the no-tools interrupt and compact smokes pass. Resolve and reproduce the command-backed path in `INT-V1-027`/`INT-V1-091`; this does not invalidate the already-captured approval or interrupt evidence.
 - Production composition with selected Codex pipeline/trust/route registrations, authenticated SSE assembly around the proven fanout/high-water handoff, sustained subscriber queues, full raw-socket Node-limit enforcement, mutable runtime health, configured-policy ordering/wiring of the proven orphan and retention runners, or complete application drain; the generic listener lifecycle and individual headless adapters are proven, not those downstream integrations.
 - The default installed Codex is now 0.144.1 and is intentionally incompatible with the reviewed 0.144.0 binding until a separate compatibility review. Exact 0.144.0 remains available through an isolated package invocation for the remaining runtime work.
@@ -65,6 +65,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Blockers
 
 - Implement the assembled Codex control/restart vertical (`INT-V1-027` to `INT-V1-032`) against explicit 0.144.0; do not treat default 0.144.1 as reviewed.
+- The exact `INT-V1-027` account runtime currently rejects the first low-cost turn on its usage gate; retry after the reported 2026-07-11 13:00 local reset. This is external runtime state, not aggregate acceptance.
 - Restore repeatable command-backed app-server execution on the selected host path before aggregate runtime acceptance; `INT-V1-027` and `INT-V1-091` own the gate.
 - Prove phone HTTPS enrollment (`IFC-V1-015`).
 - Regenerate/select mobile mockups only after real structured states are stable.
@@ -139,6 +140,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/int-v1-025-approval-routing.md`.
 - `INT-V1-026`: focused turn-client/prompt-regression/interrupt-service matrix (41), selected contracts (28), repeated exact authenticated two-thread interrupt smoke, root/all-package typechecks, lint/exports, scaffold/planning/binding checks, unit (611 passed, 25 external tests skipped), contract (115), integration (16), web (14), frozen offline install, production audit, terminal/unarchived/isolation/cleanup inspection, and diff checks pass.
 - Evidence: `artifacts/int-v1-026-interrupt-control.md`.
+- `INT-V1-027` in progress: focused normalizer/pipeline/control-fanout matrix (29), unit (750 passed, 29 external skipped), contract (138), integration (16), web (14), root typecheck, lint/exports, scaffold/planning/exact-binding checks, frozen offline install, production audit, and diff checks pass. Four exact aggregate attempts closed three harness/assembly defects; the latest fails immediately and truthfully at the external account usage gate before command/TUI acceptance.
+- Partial evidence: `artifacts/int-v1-027-structured-vertical.md`; implementation `f8ebcfc`.
 
 ## Git
 
@@ -170,4 +173,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `INT-V1-022` owner-doc closure is pushed as `d52ba96`; `INT-V1-023` hardened criteria as `7de375e`; runtime-discovery correction as `5c625be`; implementation as `415f2bc`.
 - `INT-V1-023` owner-doc closure is pushed as `bb9618a`; `INT-V1-024` hardened criteria as `9ea02cd`; reviewed nullable wire shape as `c308272`; implementation as `06eccdd`.
 - `INT-V1-024` owner-doc closure is pushed as `4d02eba`; `IFC-V1-019` hardened criteria as `72e6c34`; implementation as `cd0d929`.
-- Next action: harden and run `INT-V1-027` as one bounded exact-0.144.0 aggregate over two managed threads, with proof-source labels, model-use limits, command-backed environment diagnosis, and complete cleanup.
+- `IFC-V1-019` owner-doc closure is pushed as `992fba0`; `INT-V1-027` hardened criteria as `1afc935`; callback/aggregate implementation as `f8ebcfc`.
+- Next action: rerun the unchanged exact `INT-V1-027` aggregate after authenticated turns reset, then repair the host Bubblewrap/user-namespace prerequisite if the command-backed step still fails. Keep the task open until all eight proof sources and cleanup pass in one lifecycle.
