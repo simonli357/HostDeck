@@ -20,6 +20,7 @@ describe("Codex resource options", () => {
     expect(Object.isFrozen(options.thread)).toBe(true);
     expect(Object.isFrozen(options.model)).toBe(true);
     expect(Object.isFrozen(options.plan)).toBe(true);
+    expect(Object.isFrozen(options.usage)).toBe(true);
   });
 
   it("preserves a coherent lower policy exactly", () => {
@@ -39,6 +40,7 @@ describe("Codex resource options", () => {
       protocol_model_page_size: 25,
       protocol_model_max_pages: 4,
       protocol_model_max_entries: 100,
+      protocol_usage_max_daily_buckets: 200,
       protocol_collaboration_max_entries: 6
     });
 
@@ -73,6 +75,10 @@ describe("Codex resource options", () => {
         max_entries: 6,
         read_timeout_ms: 4_000,
         start_timeout_ms: 20_000
+      },
+      usage: {
+        max_daily_buckets: 200,
+        read_timeout_ms: 4_000
       }
     });
   });
@@ -109,6 +115,7 @@ function mappedProtocolValues(options: CodexResourceOptions) {
     protocol_model_page_size: options.model.page_size,
     protocol_model_max_pages: options.model.max_pages,
     protocol_model_max_entries: options.model.max_entries,
+    protocol_usage_max_daily_buckets: options.usage.max_daily_buckets,
     protocol_collaboration_max_entries: options.plan.max_entries
   } as const;
 }

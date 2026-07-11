@@ -98,6 +98,7 @@ export {
   type CodexResourceOptions,
   type CodexThreadResourceOptions,
   type CodexTransportResourceOptions,
+  type CodexUsageResourceOptions,
   codexResourceBudgetKeys,
   codexResourceOptionsFromBudget
 } from "./resource-options.js";
@@ -146,3 +147,10 @@ export {
   type CodexTurnSteerInput,
   createCodexTurnClient
 } from "./turn-client.js";
+export {
+  type CodexAccountUsageRead,
+  type CodexUsageClient,
+  type CodexUsageClientOptions,
+  type CodexUsageRequestPort,
+  createCodexUsageClient
+} from "./usage-client.js";

@@ -20,6 +20,7 @@ export const codexResourceBudgetKeys = [
   "protocol_model_page_size",
   "protocol_model_max_pages",
   "protocol_model_max_entries",
+  "protocol_usage_max_daily_buckets",
   "protocol_collaboration_max_entries"
 ] as const;
 
@@ -65,6 +66,11 @@ export interface CodexPlanResourceOptions {
   readonly start_timeout_ms: number;
 }
 
+export interface CodexUsageResourceOptions {
+  readonly max_daily_buckets: number;
+  readonly read_timeout_ms: number;
+}
+
 export interface CodexResourceOptions {
   readonly transport: CodexTransportResourceOptions;
   readonly connection: CodexConnectionResourceOptions;
@@ -72,6 +78,7 @@ export interface CodexResourceOptions {
   readonly thread: CodexThreadResourceOptions;
   readonly model: CodexModelResourceOptions;
   readonly plan: CodexPlanResourceOptions;
+  readonly usage: CodexUsageResourceOptions;
 }
 
 export function codexResourceOptionsFromBudget(input: unknown): CodexResourceOptions {
@@ -112,6 +119,10 @@ export function codexResourceOptionsFromBudget(input: unknown): CodexResourceOpt
       max_entries: budget.protocol_collaboration_max_entries,
       read_timeout_ms: budget.protocol_read_timeout_ms,
       start_timeout_ms: budget.protocol_start_timeout_ms
+    }),
+    usage: Object.freeze({
+      max_daily_buckets: budget.protocol_usage_max_daily_buckets,
+      read_timeout_ms: budget.protocol_read_timeout_ms
     })
   });
 }

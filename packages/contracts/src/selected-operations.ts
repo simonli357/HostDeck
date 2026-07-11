@@ -23,6 +23,7 @@ import {
   codexModelContractLimits,
   codexThreadIdSchema,
   codexTurnIdSchema,
+  codexVersionSchema,
   managedSessionProjectionSchema,
   runtimeRequestIdSchema
 } from "./selected-runtime.js";
@@ -35,8 +36,7 @@ const operationLimits = {
   summaryLength: 512,
   approvalFieldLength: 1_000,
   skillNameLength: 160,
-  skillDescriptionLength: 512,
-  quotaLabelLength: 120
+  skillDescriptionLength: 512
 } as const;
 
 export const managedSessionTargetSchema = z
@@ -712,41 +712,199 @@ export const planControlSnapshotSchema = z
     }
   });
 
-export const usageSnapshotSchema = z
+export const usageContractLimits = Object.freeze({ dailyBuckets: 10_000 });
+
+export const usageCalendarDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/u)
+  .superRefine((value, context) => {
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+      context.addIssue({ code: "custom", message: "Usage bucket date must be a real calendar date." });
+    }
+  });
+
+export const usageTokenBreakdownSchema = z
   .object({
-    measured_at: isoTimestampSchema,
-    quotas: z
-      .array(
-        z
-          .object({
-            label: z.string().min(1).max(operationLimits.quotaLabelLength),
-            used_percent: z.number().min(0).max(100).nullable(),
-            resets_at: isoTimestampSchema.nullable(),
-            unlimited: z.boolean()
-          })
-          .strict()
-      )
-      .max(16)
+    total_tokens: nonNegativeSafeIntegerSchema,
+    input_tokens: nonNegativeSafeIntegerSchema,
+    cached_input_tokens: nonNegativeSafeIntegerSchema,
+    output_tokens: nonNegativeSafeIntegerSchema,
+    reasoning_output_tokens: nonNegativeSafeIntegerSchema
   })
   .strict()
   .superRefine((value, context) => {
-    const labels = new Set(value.quotas.map((quota) => quota.label));
-    if (labels.size !== value.quotas.length) {
-      context.addIssue({ code: "custom", message: "Usage snapshots cannot contain duplicate quota labels." });
-    }
-    for (const [index, quota] of value.quotas.entries()) {
-      if (quota.unlimited && (quota.used_percent !== null || quota.resets_at !== null)) {
+    for (const field of ["input_tokens", "cached_input_tokens", "output_tokens", "reasoning_output_tokens"] as const) {
+      if (value[field] > value.total_tokens) {
         context.addIssue({
           code: "custom",
-          message: "Unlimited usage quotas must not invent utilization or reset data.",
-          path: ["quotas", index]
+          message: "Usage token components cannot exceed total tokens.",
+          path: [field]
         });
       }
-      if (!quota.unlimited && quota.used_percent === null) {
+    }
+    if (value.cached_input_tokens > value.input_tokens) {
+      context.addIssue({
+        code: "custom",
+        message: "Cached input tokens cannot exceed input tokens.",
+        path: ["cached_input_tokens"]
+      });
+    }
+    if (value.reasoning_output_tokens > value.output_tokens) {
+      context.addIssue({
+        code: "custom",
+        message: "Reasoning output tokens cannot exceed output tokens.",
+        path: ["reasoning_output_tokens"]
+      });
+    }
+  });
+
+export const usageAccountSummarySchema = z
+  .object({
+    lifetime_tokens: nonNegativeSafeIntegerSchema.nullable(),
+    peak_daily_tokens: nonNegativeSafeIntegerSchema.nullable(),
+    longest_running_turn_seconds: nonNegativeSafeIntegerSchema.nullable(),
+    current_streak_days: nonNegativeSafeIntegerSchema.nullable(),
+    longest_streak_days: nonNegativeSafeIntegerSchema.nullable()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.current_streak_days !== null &&
+      value.longest_streak_days !== null &&
+      value.current_streak_days > value.longest_streak_days
+    ) {
+      context.addIssue({ code: "custom", message: "Current usage streak cannot exceed the longest streak." });
+    }
+    if (
+      value.peak_daily_tokens !== null &&
+      value.lifetime_tokens !== null &&
+      value.peak_daily_tokens > value.lifetime_tokens
+    ) {
+      context.addIssue({ code: "custom", message: "Peak daily usage cannot exceed lifetime usage." });
+    }
+  });
+
+export const usageDailyBucketSchema = z
+  .object({
+    start_date: usageCalendarDateSchema,
+    tokens: nonNegativeSafeIntegerSchema
+  })
+  .strict();
+
+export const usageAccountSnapshotSchema = z
+  .object({
+    scope: z.literal("account"),
+    summary: usageAccountSummarySchema,
+    daily_buckets: z.array(usageDailyBucketSchema).max(usageContractLimits.dailyBuckets).nullable()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.daily_buckets === null) return;
+    let priorDate: string | null = null;
+    for (const [index, bucket] of value.daily_buckets.entries()) {
+      if (priorDate !== null && bucket.start_date <= priorDate) {
         context.addIssue({
           code: "custom",
-          message: "Limited usage quotas must expose bounded utilization.",
-          path: ["quotas", index, "used_percent"]
+          message: "Usage daily buckets must have unique ascending dates.",
+          path: ["daily_buckets", index, "start_date"]
+        });
+      }
+      if (value.summary.peak_daily_tokens !== null && bucket.tokens > value.summary.peak_daily_tokens) {
+        context.addIssue({
+          code: "custom",
+          message: "A usage bucket cannot exceed the reported peak daily usage.",
+          path: ["daily_buckets", index, "tokens"]
+        });
+      }
+      priorDate = bucket.start_date;
+    }
+  });
+
+export const usageThreadObservationSchema = z.discriminatedUnion("state", [
+  z.object({ state: z.literal("not_observed"), scope: z.literal("thread") }).strict(),
+  z
+    .object({
+      state: z.literal("observed"),
+      scope: z.literal("thread"),
+      observed_at: isoTimestampSchema,
+      turn_id: codexTurnIdSchema,
+      total: usageTokenBreakdownSchema,
+      last: usageTokenBreakdownSchema,
+      model_context_window: positiveSafeIntegerSchema.nullable()
+    })
+    .strict()
+    .superRefine((value, context) => {
+      for (const field of [
+        "total_tokens",
+        "input_tokens",
+        "cached_input_tokens",
+        "output_tokens",
+        "reasoning_output_tokens"
+      ] as const) {
+        if (value.last[field] > value.total[field]) {
+          context.addIssue({
+            code: "custom",
+            message: "Last-turn usage cannot exceed cumulative thread usage.",
+            path: ["last", field]
+          });
+        }
+      }
+    })
+]);
+
+export const usageRateLimitWindowSchema = z
+  .object({
+    used_percent: z.number().finite().min(0).max(100),
+    window_duration_minutes: nonNegativeSafeIntegerSchema.nullable(),
+    resets_at: isoTimestampSchema.nullable()
+  })
+  .strict();
+
+export const usageRateLimitObservationSchema = z.discriminatedUnion("state", [
+  z.object({ state: z.literal("not_observed"), scope: z.literal("runtime") }).strict(),
+  z
+    .object({
+      state: z.literal("observed"),
+      scope: z.literal("runtime"),
+      observed_at: isoTimestampSchema,
+      primary: usageRateLimitWindowSchema.nullable(),
+      secondary: usageRateLimitWindowSchema.nullable(),
+      reached_type: z
+        .enum([
+          "rate_limit_reached",
+          "workspace_owner_credits_depleted",
+          "workspace_member_credits_depleted",
+          "workspace_owner_usage_limit_reached",
+          "workspace_member_usage_limit_reached"
+        ])
+        .nullable()
+    })
+    .strict()
+]);
+
+export const usageSnapshotSchema = z
+  .object({
+    target: managedSessionTargetSchema,
+    runtime_version: codexVersionSchema,
+    connection_generation: positiveSafeIntegerSchema,
+    measured_at: isoTimestampSchema,
+    account: usageAccountSnapshotSchema,
+    thread: usageThreadObservationSchema,
+    rate_limits: usageRateLimitObservationSchema
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const measuredAt = Date.parse(value.measured_at);
+    for (const [field, observedAt] of [
+      ["thread", value.thread.state === "observed" ? value.thread.observed_at : null],
+      ["rate_limits", value.rate_limits.state === "observed" ? value.rate_limits.observed_at : null]
+    ] as const) {
+      if (observedAt !== null && Date.parse(observedAt) > measuredAt) {
+        context.addIssue({
+          code: "custom",
+          message: "Usage observations cannot occur after the snapshot measurement.",
+          path: [field, "observed_at"]
         });
       }
     }
@@ -833,6 +991,14 @@ export type ResolvedPlanSettings = z.infer<typeof resolvedPlanSettingsSchema>;
 export type PendingPlanSelection = z.infer<typeof pendingPlanSelectionSchema>;
 export type PlanExecutionSnapshot = z.infer<typeof planExecutionSnapshotSchema>;
 export type PlanControlSnapshot = z.infer<typeof planControlSnapshotSchema>;
+export type UsageTokenBreakdown = z.infer<typeof usageTokenBreakdownSchema>;
+export type UsageAccountSummary = z.infer<typeof usageAccountSummarySchema>;
+export type UsageDailyBucket = z.infer<typeof usageDailyBucketSchema>;
+export type UsageAccountSnapshot = z.infer<typeof usageAccountSnapshotSchema>;
+export type UsageThreadObservation = z.infer<typeof usageThreadObservationSchema>;
+export type UsageRateLimitWindow = z.infer<typeof usageRateLimitWindowSchema>;
+export type UsageRateLimitObservation = z.infer<typeof usageRateLimitObservationSchema>;
+export type UsageSnapshot = z.infer<typeof usageSnapshotSchema>;
 export type PendingApproval = z.infer<typeof pendingApprovalSchema>;
 export type SelectedStartSessionRequest = z.infer<typeof selectedStartSessionRequestSchema>;
 
