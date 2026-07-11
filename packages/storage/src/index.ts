@@ -42,6 +42,7 @@ export {
   defaultMigrations,
   hostDeckBaseSchemaMigration,
   hostDeckRetentionBoundaryScopeChecksMigration,
+  hostDeckSelectedAuditStateMigration,
   hostDeckSelectedRuntimeStateMigration,
   hostDeckSessionMetadataFailedStatusMigration,
   type StorageMigration
@@ -95,6 +96,12 @@ export {
   secureHostDeckRegularFile,
   secureHostDeckSocket
 } from "./secure-local-paths.js";
+export {
+  createSelectedAuditRepository,
+  HostDeckSelectedAuditRepositoryError,
+  type SelectedAuditRepository,
+  type SelectedAuditRepositoryErrorCode
+} from "./selected-audit-repository.js";
 export {
   type AppendSelectedEventResult,
   createSelectedStateRepository,

@@ -971,6 +971,13 @@ describe("selected projection and storage contracts", () => {
     expect(
       selectedAuditTrailSchema.parse({
         operation_id: accepted.operation_id,
+        state: "terminal",
+        records: [accepted, { ...terminal, at: "2026-07-09T12:01:00.000-04:00" }]
+      }).state
+    ).toBe("terminal");
+    expect(
+      selectedAuditTrailSchema.parse({
+        operation_id: accepted.operation_id,
         state: "pending",
         records: [accepted]
       }).state
@@ -1036,6 +1043,13 @@ describe("selected projection and storage contracts", () => {
         operation_id: accepted.operation_id,
         state: "terminal",
         records: [accepted, { ...terminal, at: "2026-07-09T15:59:59.999Z" }]
+      })
+    ).toThrow();
+    expect(() =>
+      selectedAuditTrailSchema.parse({
+        operation_id: accepted.operation_id,
+        state: "terminal",
+        records: [accepted, { ...terminal, at: "2026-07-09T17:59:59.999+02:00" }]
       })
     ).toThrow();
   });

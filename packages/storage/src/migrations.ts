@@ -380,11 +380,85 @@ export const hostDeckSelectedRuntimeStateMigration: StorageMigration = {
   `
 };
 
+export const hostDeckSelectedAuditStateMigration: StorageMigration = {
+  version: "202607100007_selected_audit_state",
+  sql: `
+    CREATE TABLE selected_audit_events (
+      id TEXT PRIMARY KEY,
+      operation_id TEXT NOT NULL,
+      at TEXT NOT NULL,
+      action TEXT NOT NULL CHECK (action IN (
+        'prompt',
+        'model',
+        'goal',
+        'plan',
+        'usage',
+        'compact',
+        'skills',
+        'approval_response',
+        'interrupt',
+        'archive',
+        'pair_request',
+        'pair_claim',
+        'device_revoke',
+        'lock',
+        'unlock',
+        'lan_configure',
+        'lan_enable',
+        'lan_disable',
+        'certificate_rotate'
+      )),
+      phase TEXT NOT NULL CHECK (phase IN ('accepted', 'terminal')),
+      outcome TEXT NOT NULL CHECK (outcome IN ('accepted', 'succeeded', 'failed', 'rejected', 'incomplete')),
+      error_code TEXT,
+      record_json TEXT NOT NULL CHECK (
+        json_valid(record_json) AND
+        length(CAST(record_json AS BLOB)) BETWEEN 2 AND 65536
+      ),
+      UNIQUE (operation_id, phase),
+      CHECK (
+        (phase = 'accepted' AND outcome = 'accepted' AND error_code IS NULL) OR
+        (phase = 'terminal' AND outcome = 'succeeded' AND error_code IS NULL) OR
+        (phase = 'terminal' AND outcome IN ('failed', 'rejected', 'incomplete') AND error_code IS NOT NULL)
+      )
+    );
+
+    CREATE INDEX selected_audit_events_at_idx ON selected_audit_events(at, id);
+
+    CREATE TRIGGER selected_audit_events_start_requires_empty
+    BEFORE INSERT ON selected_audit_events
+    WHEN (NEW.phase = 'accepted' OR NEW.outcome = 'rejected')
+      AND EXISTS (SELECT 1 FROM selected_audit_events WHERE operation_id = NEW.operation_id)
+    BEGIN
+      SELECT RAISE(ABORT, 'selected audit operation already has a trail');
+    END;
+
+    CREATE TRIGGER selected_audit_events_terminal_requires_accepted
+    BEFORE INSERT ON selected_audit_events
+    WHEN NEW.phase = 'terminal'
+      AND NEW.outcome <> 'rejected'
+      AND NOT EXISTS (
+        SELECT 1 FROM selected_audit_events
+        WHERE operation_id = NEW.operation_id AND phase = 'accepted' AND outcome = 'accepted'
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'selected audit terminal requires accepted');
+    END;
+
+    CREATE TRIGGER selected_audit_events_no_update
+    BEFORE UPDATE ON selected_audit_events
+    BEGIN
+      SELECT RAISE(ABORT, 'selected audit events are append-only');
+    END;
+  `
+};
+
 export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckBaseSchemaMigration,
   hostDeckSessionMetadataFailedStatusMigration,
   hostDeckAuthDeviceCsrfHashMigration,
   hostDeckRetentionBoundaryScopeChecksMigration,
   hostDeckPairingCodeRevokedAtMigration,
-  hostDeckSelectedRuntimeStateMigration
+  hostDeckSelectedRuntimeStateMigration,
+  hostDeckSelectedAuditStateMigration
 ] as const;

@@ -298,7 +298,7 @@ export const selectedAuditTrailSchema = z
         message: "Dispatched terminal trails require accepted followed by succeeded, failed, or incomplete."
       });
     }
-    if (second.at < first.at) {
+    if (Date.parse(second.at) < Date.parse(first.at)) {
       context.addIssue({ code: "custom", message: "Terminal audit records must not precede accepted dispatch." });
     }
   });
