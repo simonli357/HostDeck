@@ -25,6 +25,7 @@ Task and block evidence names its level. "Complete for package scope" cannot sat
 | `pnpm smoke:codex-model` | `INT-V1-019` | In an isolated authenticated runtime, select one visible non-current catalog model, send it through `turn/start`, confirm settings plus later resume read-back, archive, and clean up. | Pass against exact reviewed Codex 0.144.0; terminal prompt failure remains distinct from setting confirmation. |
 | `pnpm smoke:codex-goal` | `INT-V1-020` | In an isolated authenticated runtime, prove paused set causes no turn, active resume autonomously starts one bounded turn, explicit pause plus interrupt prevents continuation, then complete/clear/read-back and cleanup. | Pass against exact reviewed Codex 0.144.0 with at most one observed goal turn. |
 | `pnpm smoke:codex-plan` | `INT-V1-021` | In an isolated authenticated runtime, compose one visible non-current model into a Plan turn, require matching settings plus plan-specific item/delta evidence, then exit through a later explicit Default turn; reject top-level settings, zero-turn update, slash fallback, excess turns, or incomplete cleanup. | Pass against exact reviewed Codex 0.144.0 with exactly two bounded turns. |
+| `pnpm smoke:codex-usage` | `INT-V1-022` | In an isolated authenticated no-model runtime, read exact account usage, validate bounded summary/daily shape and a same-generation runtime rate-limit observation, record only types/counts/scopes, then close and remove private runtime state. | Pass against exact reviewed Codex 0.144.0 without retaining token totals, account identity, paths, credentials, or claiming monetary/per-thread cost. |
 | `pnpm typecheck` | Foundation | Strict workspace TypeScript. | Pass. |
 | `pnpm lint` | Foundation | Formatting/lint/package-export checks. | Pass. |
 | `pnpm test:unit` | All modules | L1 pure behavior. | Pass. |
@@ -61,6 +62,7 @@ Unavailable commands fail loudly with owning task id. No placeholder command may
 | Request timeout/disconnect | Read may retry by policy; mutation becomes incomplete/unknown unless proven idempotent. |
 | Max in-flight/frame/queue | New work rejects with overload; process remains healthy. |
 | Multi-client | HostDeck and TUI connect to one runtime and address the same thread without corruption. |
+| Usage read/observations | Exact no-param account response keys, safe integer and calendar/bucket bounds, target before/after race, generation change, absent/current token and rate snapshots, monotonic token/context updates, malformed/oversize response, unsupported/disconnected runtime, abort/timeout, and two-thread isolation all remain read-only. |
 
 ## Real Codex Vertical
 
