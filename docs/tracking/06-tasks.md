@@ -17,15 +17,14 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 | --- | --- | --- | --- | --- |
 | 1 | `INT-V1-018` Implement exact prompt/turn targeting | in_progress | none | Consumes the completed model/Plan transaction boundary in the first assembled primary-control turn path. |
 | 2 | `INT-V1-025` Implement pending approval routing | ready | none | Uses normalized request/item identity to implement exactly-once approve/deny behavior. |
-| 3 | `DAT-V1-022` Invoke production projection retention | ready | none | Extends the proven append transaction with bounded pruning and visible replay boundaries. |
-| 4 | `DAT-V1-023` Implement accepted-to-terminal audit state machine | ready | none | Establishes truthful mutation outcomes before write/security integration. |
-| 5 | `IFC-V1-018` Implement commit-only projection fanout | ready | none | Carries only committed ordered projection truth into the later replay/live boundary. |
-| 6 | `INT-V1-022` Implement structured usage retrieval | ready | none | Implements observed account/runtime usage without inventing billing scope. |
-| 7 | `INT-V1-023` Implement accepted/incomplete compact lifecycle | ready | none | Prevents the utility from reporting context reduction from immediate acceptance. |
-| 8 | `INT-V1-024` Implement structured skills listing | ready | none | Implements the remaining observed read-only utility boundary. |
-| 9 | `IFC-V1-019` Freeze the selected API route manifest | ready | none | Converts the completed semantic matrix and normalized contracts into one unambiguous public route inventory. |
-| 10 | `IFC-V1-047` Enforce real HTTP resource limits | ready | none | Extends proven option inventory into raw-socket limit and cleanup behavior. |
-| 11 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the independent physical-device LAN trust gate when hardware setup is available. |
+| 3 | `DAT-V1-023` Implement accepted-to-terminal audit state machine | ready | none | Establishes truthful mutation outcomes before write/security integration. |
+| 4 | `IFC-V1-018` Implement commit-only projection fanout | ready | none | Carries only committed ordered projection truth into the later replay/live boundary. |
+| 5 | `INT-V1-022` Implement structured usage retrieval | ready | none | Implements observed account/runtime usage without inventing billing scope. |
+| 6 | `INT-V1-023` Implement accepted/incomplete compact lifecycle | ready | none | Prevents the utility from reporting context reduction from immediate acceptance. |
+| 7 | `INT-V1-024` Implement structured skills listing | ready | none | Implements the remaining observed read-only utility boundary. |
+| 8 | `IFC-V1-019` Freeze the selected API route manifest | ready | none | Converts the completed semantic matrix and normalized contracts into one unambiguous public route inventory. |
+| 9 | `IFC-V1-047` Enforce real HTTP resource limits | ready | none | Extends proven option inventory into raw-socket limit and cleanup behavior. |
+| 10 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the independent physical-device LAN trust gate when hardware setup is available. |
 
 ## Intentional Blockers
 

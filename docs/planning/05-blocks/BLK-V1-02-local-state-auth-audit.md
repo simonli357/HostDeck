@@ -39,7 +39,7 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | App-server mapping and projection migration | `DAT-V1-018` | Done; selected migration/repository evidence recorded. |
 | Secure paths and daemon lease | `DAT-V1-019` | Done; phased owner paths, descriptor identity, real Linux lease/crash recovery, and cleanup evidence recorded. |
 | Transactional production projection append | `DAT-V1-020` | Done; full-revision immediate commit and post-commit publication evidence recorded. |
-| Production projection retention and boundaries | `DAT-V1-022` | Ready. |
+| Production projection retention and boundaries | `DAT-V1-022` | Done; append-time count/byte pruning, durable boundaries, rollback, concurrency, publication, and restart evidence recorded. |
 | Accepted-to-terminal audit state machine | `DAT-V1-023` | Ready. |
 | Bounded startup retention maintenance | `DAT-V1-024` | Blocked by production retention and audit state. |
 | Orphan accepted-operation reconciliation | `DAT-V1-030` | Blocked by the bounded startup runner and audit state machine. |
