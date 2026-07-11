@@ -47,7 +47,7 @@ No fake-Codex or fake-tmux test can satisfy these gates.
 | Thread lifecycle and exact TUI resume | `INT-V1-005` | Done: id-first recovery saga, 0.144.0 legacy materialization, durable mapping/reconciliation, exact archive, and real no-model TUI smoke. |
 | Exact real turn/control/event semantic spike | `INT-V1-006` | Done: event-gated operation matrix, real approvals/control/TUI/reconnect, bounded compact incompleteness, and corrected handshake/materialization bugs. |
 | Event normalization and exact prompt targeting | `INT-V1-017`, `INT-V1-018` | Done; strict ordered projection plus exact composed start/event-gated steer pass deterministic and real two-thread evidence. |
-| Model, goal, plan, usage, compact, and skills ports | `INT-V1-019` to `INT-V1-024` | Model, goal, Plan, and generation-aware read-only usage are done; compact and skills remain. |
+| Model, goal, plan, usage, compact, and skills ports | `INT-V1-019` to `INT-V1-024` | Model, goal, Plan, generation-aware usage, and accepted-to-authoritative-terminal compact control are done; skills remain. |
 | Approval and interrupt ports | `INT-V1-025`, `INT-V1-026` | Done; strict approval decoding/routing and exact active-turn interrupt both pass deterministic matrices and bounded real 0.144.0 evidence without archive substitution. |
 | Assembled real structured vertical | `INT-V1-027` | Blocked by `INT-V1-017` to `INT-V1-026`. |
 | Runtime process/socket supervisor | `INT-V1-007` | Blocked by the assembled real vertical. |

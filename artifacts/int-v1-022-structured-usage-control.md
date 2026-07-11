@@ -7,7 +7,7 @@ Date: 2026-07-11
 - `createCodexUsageClient` requires the connected exact `usage` capability and one positive stable connection generation, sends one read-only `account/usage/read` with no params, and performs no automatic retry.
 - The adapter validates exact response/summary/bucket keys, nullable versus empty daily history, non-negative safe integers, real unique ascending calendar dates, internal summary consistency, one selected capture time, and a configured daily-bucket ceiling.
 - `createCodexUsageControlService` validates one exact current selected session/thread before and after the account read. It returns one frozen account/thread/runtime snapshot or an explicit target/runtime/protocol/capacity error; no partial snapshot escapes a race or failure.
-- Thread token/turn/context and runtime rate-limit observations are deep-frozen process-memory data from normalized events. They are isolated per thread, cumulative and ordered, bounded to 128 threads by default, evicted on archive, and cleared on connection-generation change.
+- Thread token/turn/context and runtime rate-limit observations are deep-frozen process-memory data from normalized events. They are isolated per thread, ordered, bounded to 128 threads by default, evicted on archive, and cleared on connection-generation change. Ordinary cumulative usage is monotonic; the exact compaction-scoped reset correction is recorded below.
 - Account totals remain account-scoped. They are never allocated to a thread, converted into money, or combined with a null rate window to claim an unlimited quota.
 - The exact no-model 0.144.0 smoke proves account usage read without `turn/started`, `thread/tokenUsage/updated`, or agent-message work. A no-model read does not itself trigger a rate notification; optional thread/rate fields therefore remain `not_observed` until same-generation runtime events arrive.
 
@@ -24,8 +24,8 @@ Implementation: `96d2ba5`. Recovery-target regression: `151c7f2`.
 | Calendar/order | Dates require exact `YYYY-MM-DD` round-trip calendar validity; duplicates, descending order, and impossible dates reject. |
 | Resource bounds | `protocol_usage_max_daily_buckets` defaults to 2,000 with a reviewed 10,000 ceiling; `control_usage_max_tracked_threads` defaults to 128 with a 4,096 ceiling. Both are part of the frozen selected policy and mapped explicitly. |
 | Target integrity | Missing, mismatched, recovery, archived, stale, runtime-version-changed, and archive-during-read targets reject. Initial target failures perform no runtime call. |
-| Observation ownership | Only normalized token/rate/archive events affect usage memory. Unknown/unmanaged token events store nothing; two threads never cross-read. |
-| Ordering/capacity | Repeated/backward sequence/time or any cumulative token component regression rejects. Capacity rejects a new thread without evicting accepted state. |
+| Observation ownership | Only normalized token/rate/compact-lifecycle/archive events affect usage memory. Unknown/unmanaged token events store nothing; two threads never cross-read. |
+| Ordering/capacity | Repeated/backward sequence/time and ordinary cumulative token regression reject. Exact 0.144.0 permits one reset only after the same turn's context-compaction item starts; repeated/pre-item/post-terminal regressions reject. Capacity rejects a new thread without evicting accepted state. |
 | Reconnect/archive | Active generation change clears every thread and rate observation before rejecting a stale callback. Archive deletes only the exact thread. Restart/read with no current observations is explicit `not_observed`. |
 | Failure mapping | Unsupported, malformed protocol, overload, timeout/unavailable, invalid generation, and selected-state failure map to stable bounded control errors without partial data. |
 | Read-only behavior | Repeated reads are deterministic, issue one account read each, and never start/steer/interrupt a turn, mutate selected state, write audit success, scan history/files, or parse terminal text. |
@@ -49,6 +49,12 @@ Implementation: `96d2ba5`. Recovery-target regression: `151c7f2`.
 - Scaffold: 9 packages and 18 root scripts.
 - Planning: 196 tasks, 84 requirements, 628 dependencies, and 5 queued tasks.
 - Frozen offline install, production audit with no known vulnerabilities, exact binding check, manual scope/generation/privacy review, and `git diff --check`: passed.
+
+## Subsequent Runtime Correction
+
+- `INT-V1-023` exact runtime evidence showed that a compaction token update may carry independent `last` usage above the post-compaction `total`, and may reset cumulative fields downward once.
+- Current contracts validate each breakdown independently. The normalizer and usage observer accept at most one reset on the same ordered turn after `item/started: contextCompaction`; ordinary, repeated, pre-item, post-terminal, and stale-generation regressions still fail.
+- This correction is implemented in `415f2bc` and evidenced by `artifacts/int-v1-023-structured-compact-control.md`; account scope, no-cost inference, generation clearing, and read-only account behavior are unchanged.
 
 ## Remaining Ownership
 
