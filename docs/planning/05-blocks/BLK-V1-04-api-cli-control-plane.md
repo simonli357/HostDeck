@@ -44,7 +44,7 @@ Local-admin CLI calls use an explicit loopback/admin authority, not a magic miss
 | Work | Tasks | Status |
 | --- | --- | --- |
 | Historical headless routes/custom listener/source CLI | `IFC-V1-001` to `IFC-V1-014`, `IFC-V1-090` | Retained reusable evidence; production block reopened. |
-| HTTPS enrollment decision and phone proof | `IFC-V1-015` | Ready after planning rebaseline. |
+| HTTPS enrollment decision and phone proof | `IFC-V1-015` | In progress after planning rebaseline. |
 | Fastify stack/API contract spike | `IFC-V1-016` | Complete; exact Fastify/Zod/SSE/static dependencies and constrained validation/stream/asset/lifecycle boundaries are proven. |
 | Resource budgets and monotonic deadline contract | `IFC-V1-020` | Complete; 59 strict resource definitions, Fastify/Codex mappings, public breach codes, and owner/view fake-clock evidence precede enforcement. |
 | Typed app, SSE adapter, static boundary, and listener lifecycle | `IFC-V1-022` to `IFC-V1-025` | Complete; typed unbound app, bounded SSE with real finite completion, hardened static boundary, upfront runtime ownership, exact loopback listener, Node limit inventory, and bounded reverse cleanup pass. HTTPS, selected route composition, mutable health, and complete application drain remain downstream. |
@@ -56,7 +56,7 @@ Local-admin CLI calls use an explicit loopback/admin authority, not a magic miss
 | Reusable exact-target write gate | `IFC-V1-066` | Blocked by trust, CSRF, lock, audit, and the real structured vertical. |
 | Host/session/event reads, start/resume/archive, prompt, per-control, approval, interrupt, and selected API/CLI aggregate | `IFC-V1-039` to `IFC-V1-046`, `IFC-V1-060` to `IFC-V1-065`, `IFC-V1-068`, `IFC-V1-069` | Each route is dependency-ordered behind its exact owning runtime, repository, or read port. |
 | Legacy custom-listener and raw/tmux route disposition | `IFC-V1-067` | Blocked by selected API/CLI acceptance; precedes production packaging. |
-| HTTP/SSE/idempotency/deadline/CLI bounds and stress aggregate | `IFC-V1-047` to `IFC-V1-052` | Dependency-ordered behind resource policy and owning transports. |
+| HTTP/SSE/idempotency/deadline/CLI bounds and stress aggregate | `IFC-V1-047` to `IFC-V1-052` | HTTP parser/application/socket/shutdown limits complete in `IFC-V1-047`; SSE, idempotency, propagated deadline, CLI, and aggregate leaves remain dependency-ordered. |
 | Deterministic production-output foundation | `IFC-V1-021` | Blocked by accepted runtime, stream, resource, and static boundaries. |
 | Built assets, CLI binary, user units, lifecycle commands, uninstall, and clean parity | `IFC-V1-053` to `IFC-V1-058` | Dependency-ordered behind production outputs and frontend readiness. |
 | Reopened interface hardening | `IFC-V1-091` | Blocked by `IFC-V1-015` to `IFC-V1-069`. |
