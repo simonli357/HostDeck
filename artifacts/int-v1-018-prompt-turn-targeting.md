@@ -1,5 +1,7 @@
 # INT-V1-018 Prompt/Turn Targeting
 
+Date: 2026-07-10
+
 ## Scope
 
 - Exact Codex 0.144.0 `turn/start` and event-gated `turn/steer` for one managed thread.
@@ -42,9 +44,15 @@ Initial focused tests and one real smoke passed before terminal-success inspecti
 - Root and all-package typechecks, lint/package exports, scaffold, planning, exact binding identity, frozen offline install, production audit, and diff checks pass.
 - Exact binding: Codex 0.144.0, 671 generated files, reviewed tree identity `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`.
 - Production dependencies: no known vulnerabilities from `pnpm audit --prod`.
+- Exact authenticated two-thread prompt smoke: 1 passed in 19.74 seconds, including 17.25 seconds of runtime assertions.
 
-## Remaining Gate
+## Real Boundary
 
-`HOSTDECK_CODEX_BIN=<exact-0.144.0> pnpm smoke:codex-prompt` reaches an accepted exact start and exact steer against two isolated managed threads, then currently receives an account-level usage-limit terminal from Codex. The stricter smoke correctly fails instead of reporting completion. Selecting a visible low-cost catalog model produced the same external result, so further model calls were stopped.
+`HOSTDECK_CODEX_BIN=<exact-0.144.0> pnpm smoke:codex-prompt` passed against the pinned authenticated runtime.
 
-`INT-V1-018` remains in progress until the authenticated runtime can produce one successful terminal run with the exact start/steer/isolation/archive assertions and cleanup. No implementation retry or fallback is enabled. Existing `INT-V1-006` evidence remains semantic proof of the external operation, not a substitute for this implementation smoke.
+- Created two isolated managed threads over the private Unix socket.
+- Started one exact turn with the composed model/Plan transaction and accepted response.
+- Waited for matching `turn/started`, then steered that exact `expectedTurnId` without creating a second turn.
+- Observed successful terminal truth with no structured error while the foreign thread remained unchanged.
+- Archived both threads and removed temporary state.
+- No retry, slash/text fallback, or acceptance-only success claim was used.

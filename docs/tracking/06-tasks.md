@@ -15,8 +15,8 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-018` Implement exact prompt/turn targeting | in_progress | none | Consumes the completed model/Plan transaction boundary in the first assembled primary-control turn path. |
-| 2 | `INT-V1-025` Implement pending approval routing | ready | none | Uses normalized request/item identity to implement exactly-once approve/deny behavior. |
+| 1 | `INT-V1-025` Implement pending approval routing | in_progress | none | Uses normalized request/item identity to implement exactly-once approve/deny behavior. |
+| 2 | `INT-V1-026` Implement exact active-turn interrupt | ready | none | Reuses the now-proven event-gated active turn identity without archive semantics. |
 | 3 | `DAT-V1-023` Implement accepted-to-terminal audit state machine | ready | none | Establishes truthful mutation outcomes before write/security integration. |
 | 4 | `IFC-V1-018` Implement commit-only projection fanout | ready | none | Carries only committed ordered projection truth into the later replay/live boundary. |
 | 5 | `INT-V1-022` Implement structured usage retrieval | ready | none | Implements observed account/runtime usage without inventing billing scope. |
@@ -31,7 +31,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
 | LAN security | `IFC-V1-015` | Real phone certificate-enrollment proof | Auth lifecycle, pairing UI, security/release review. |
-| Real Codex operation implementation | `INT-V1-018` to `INT-V1-027` | Exact semantics, ordered normalization, model, goal, and Plan control pass; assembled prompt plus remaining control ports and real proof remain | Production operation API, stable mobile state matrix, approvals. |
+| Real Codex operation implementation | `INT-V1-018` to `INT-V1-027` | Exact semantics, ordered normalization, prompt, model, goal, and Plan control pass; remaining utility/approval/interrupt ports and assembled proof remain | Production operation API, stable mobile state matrix, approvals. |
 | Mobile visual direction | Reopened `FE-V1-002`, `FE-V1-003` | Real state matrix, two replacement options, human selection | React screen implementation. |
 | Release | `REL-V1-010` | All module hardening, clean package/service/phone/security evidence, human acceptance | V1 release and V2 planning. |
 

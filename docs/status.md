@@ -5,8 +5,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `INT-V1-018`; implementation is pushed and remains open only for its authenticated successful-terminal rerun.
-- Other ready runtime work includes `INT-V1-022` to `INT-V1-025`. Independent ready work includes `DAT-V1-023` audit state, `IFC-V1-018` fanout, `IFC-V1-019` route manifest, `IFC-V1-047` HTTP limits, and `IFC-V1-015` physical-device HTTPS.
+- Active task: `INT-V1-025` exactly-once pending approval routing.
+- Other ready runtime work includes `INT-V1-022` to `INT-V1-024` and `INT-V1-026`. Independent ready work includes `DAT-V1-023` audit state, `IFC-V1-018` fanout, `IFC-V1-019` route manifest, `IFC-V1-047` HTTP limits, and `IFC-V1-015` physical-device HTTPS.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
 - Release state: no-go. All capability blocks affected by the new runtime/security/mobile outcome are reopened.
@@ -33,6 +33,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `INT-V1-019` implements a strict visible model catalog plus separate confirmed and revisioned pending state for one exact managed thread. It dispatches resolved model/effort only through `turn/start`, treats the response as accepted, confirms by settings or later resume read-back, rolls back known rejection, latches unknown without retry, and rejects stale revisions, catalog drift, active-turn/archive races, slash input, invented entries, and ineffective `thread/resume.model` selection. Evidence: `artifacts/int-v1-019-pending-model-control.md`; commit `18ee3f1`.
 - `INT-V1-020` implements full revisioned goal state, passive paused set/edit, pause without interrupt, idle-only complete/clear, and agentic accepted resume guarded by pending model/Plan settings. Known rejection, possible-send uncertainty, accepted-but-unverified read-back, stale events, contradiction, concurrent capacity, archive/turn races, active materialization regression, and no-op/no-slash behavior are explicit. Repeated exact smoke proves passive no-turn, one bounded autonomous turn, explicit pause/interrupt, complete, clear, archive, and cleanup. Evidence: `artifacts/int-v1-020-goal-control.md`; commit `4f61feb`.
 - `INT-V1-021` implements an exact bounded Plan/Default catalog, confirmed-or-unknown current mode, revisioned passive selection, and one outer per-session transaction that composes and settles optional pending model state. Collaboration settings carry model/effort exclusively; nested/effective settings must agree; early-event response ordering, rejection/timeout/disconnect, capacity/archive/isolation, Plan evidence, and later Default are explicit. Repeated exact smoke proves two bounded turns without settings update or slash fallback. Evidence: `artifacts/int-v1-021-plan-control.md`; commit `cebf6d5`.
+- `INT-V1-018` implements exact prompt start and event-gated steer over one outer model/Plan transaction. It rejects target/capability/revision/active-state drift, latches ambiguous sends without retry, tracks early/terminal event races, isolates sessions, and never substitutes a second start or slash path. The exact authenticated two-thread smoke now proves composed start, matching `expectedTurnId` steer, successful terminal truth, foreign-thread isolation, archive, and cleanup. Evidence: `artifacts/int-v1-018-prompt-turn-targeting.md`; implementation `c5b4a52`.
 - Selected mappings, projections, projected events, compatibility results, start recovery, and legacy dispositions now have additive migration and repository ownership with transactional/concurrency/restart/corruption evidence.
 - `@hostdeck/codex-adapter` owns an exact 0.144.0 experimental generated binding, deterministic schema-drift check, fail-closed required-capability policy, and a real no-model initialize/Plan catalog smoke.
 - The adapter now also owns a bounded Unix-only WebSocket transport, strict wire decoder, correlated request/server-request broker, initialize/degradation state machine, deterministic raw-protocol fake, explicit no-auto-retry reconnect, and a real private-socket no-model smoke.
@@ -42,7 +43,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Not Proven
 
-- Combined prompt/model/Plan dispatch, remaining production Codex utilities, approval routing, restart behavior, and live HostDeck composition; exact external semantics, ordered normalization/projection, pending model, passive/agentic goal, and composed Plan/Default control are proven as ports, but the connection callback is not assembled.
+- Remaining production Codex utilities, approval/interrupt routing, restart behavior, and live HostDeck composition; exact external semantics, ordered normalization/projection, prompt/model/goal/Plan controls, and their real boundaries are proven as ports, but the connection callback is not assembled.
 - Production composition with selected Codex pipeline/trust/route registrations, replay/live handoff and subscriber queues, full raw-socket Node-limit enforcement, continuous fanout, mutable runtime health, configured-policy wiring/startup retention, or complete application drain; the generic listener lifecycle and individual adapters are proven, not those downstream integrations.
 - The default installed Codex is now 0.144.1 and is intentionally incompatible with the reviewed 0.144.0 binding until a separate compatibility review. Exact 0.144.0 remains available through an isolated package invocation for the remaining runtime work.
 - HTTPS LAN certificate enrollment, paired LAN reads, CSRF reload, rate limits, or device revocation.
@@ -50,7 +51,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Blockers
 
-- Implement the remaining exact Codex control/restart vertical (`INT-V1-018` to `INT-V1-032`) against explicit 0.144.0; do not treat default 0.144.1 as reviewed.
+- Implement the remaining exact Codex control/restart vertical (`INT-V1-022` to `INT-V1-032`) against explicit 0.144.0; do not treat default 0.144.1 as reviewed.
 - Prove phone HTTPS enrollment (`IFC-V1-015`).
 - Regenerate/select mobile mockups only after real structured states are stable.
 
@@ -100,6 +101,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/int-v1-020-goal-control.md`.
 - `INT-V1-021`: focused Plan/model/event/resource (64), repeated exact authenticated Plan/Default smoke, root/all-package typechecks, lint/exports, scaffold, planning, exact binding check, unit (539 passed, 22 external tests skipped), contract (114), integration (16), web (14), frozen offline install, production audit, and diff checks pass.
 - Evidence: `artifacts/int-v1-021-plan-control.md`.
+- `INT-V1-018`: focused shared-turn/prompt/model/Plan matrix (42), exact authenticated two-thread prompt smoke (1), root/all-package typechecks, lint/exports, scaffold/planning/binding checks, unit (565 passed, 23 external tests skipped), contract (115), integration (16), web (14), frozen offline install, production audit, successful terminal/archive/cleanup inspection, and diff checks pass.
+- Evidence: `artifacts/int-v1-018-prompt-turn-targeting.md`.
 
 ## Git
 
@@ -118,6 +121,6 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `INT-V1-019` implementation/evidence is committed as `18ee3f1`; its closure advances the active queue to `INT-V1-020` and makes prompt dispatch depend on completed model/Plan composition.
 - `INT-V1-020` implementation/evidence is committed as `4f61feb`; its closure advances the active queue to `INT-V1-021` with a shared duplicate-owner-checked pending-setting reader.
 - `INT-V1-021` implementation/evidence is committed as `cebf6d5`; its closure advances the active queue to the now-unblocked combined prompt path `INT-V1-018`.
-- `INT-V1-018` implementation is pushed as `c5b4a52`; exact start/steer requests were accepted, and one authenticated successful-terminal rerun remains before closure.
-- `DAT-V1-022` implementation/evidence is pushed as `7edfb9b`; the owner-doc closure returns the active queue to the pending `INT-V1-018` rerun.
-- Next action: rerun the exact `INT-V1-018` two-thread prompt smoke and close it only after successful terminal evidence.
+- `INT-V1-018` implementation is pushed as `c5b4a52`; exact authenticated successful-terminal start/steer/isolation/archive evidence now passes.
+- `DAT-V1-022` implementation/evidence is pushed as `7edfb9b`; its owner-doc closure is pushed as `96c718d`.
+- Next action: implement `INT-V1-025` pending approval registration and exactly-once approve/deny routing.
