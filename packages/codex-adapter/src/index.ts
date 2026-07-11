@@ -55,6 +55,7 @@ export {
   type CodexEventNormalizerOptions,
   type CodexNotificationNormalizationResult,
   type CodexOptionalNotificationDiagnostic,
+  type CodexRedundantStateObservation,
   type CodexUnmanagedThreadObservation,
   createCodexEventNormalizer,
   HostDeckCodexEventNormalizationError,

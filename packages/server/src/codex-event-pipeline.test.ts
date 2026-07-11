@@ -70,6 +70,149 @@ describe("ordered Codex event pipeline", () => {
     }
   });
 
+  it("observes managed events with the captured generation only after durable publication", async () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      repository.create(stateCandidate("sess_pipeline_a", threadA));
+      const order: string[] = [];
+      const observed: Array<{ readonly method: string; readonly generation: number }> = [];
+      const pipeline = createCodexEventPipeline({
+        repository,
+        append_port: createProductionProjectionAppendPort({
+          repository,
+          publish(committed) {
+            expect(repository.listEvents("sess_pipeline_a").events.at(-1)).toEqual(committed.event.event);
+            order.push("publish");
+          }
+        }),
+        normalizer: { now: advancingClock() },
+        observe_event(event, generation) {
+          expect(repository.listEvents("sess_pipeline_a").events).toHaveLength(1);
+          order.push("observe");
+          observed.push({ method: event.method, generation });
+        }
+      });
+
+      await expect(
+        pipeline.consume(
+          {
+            kind: "notification",
+            method: "configWarning",
+            params: { summary: "not retained" },
+            classification: "generated_unhandled"
+          },
+          7
+        )
+      ).resolves.toMatchObject({ kind: "optional_diagnostic" });
+      await expect(
+        pipeline.consume(selected("turn/completed", { threadId: threadB, turn: { secret: "unmanaged" } }), 7)
+      ).resolves.toMatchObject({ kind: "unmanaged_observation" });
+      await expect(
+        pipeline.consume(selected("thread/status/changed", { threadId: threadA, status: { type: "idle" } }), 7)
+      ).resolves.toMatchObject({ kind: "committed", sequence: 3 });
+
+      expect(order).toEqual(["publish", "observe"]);
+      expect(observed).toEqual([{ method: "thread/status/changed", generation: 7 }]);
+      expect(pipeline.failure).toBeNull();
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("coalesces repeated goal snapshots before projection and control observation", async () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      repository.create(stateCandidate("sess_pipeline_a", threadA));
+      const observed: string[] = [];
+      const pipeline = createCodexEventPipeline({
+        repository,
+        append_port: createProductionProjectionAppendPort({ repository, publish() {} }),
+        normalizer: { now: advancingClock() },
+        observe_event(event) {
+          observed.push(event.method);
+        }
+      });
+      const cleared = selected("thread/goal/cleared", { threadId: threadA });
+
+      await expect(pipeline.consume(cleared, 3)).resolves.toMatchObject({ kind: "committed", sequence: 1 });
+      await expect(pipeline.consume(cleared, 3)).resolves.toEqual({
+        kind: "redundant_observation",
+        sequence: 2,
+        observation: {
+          sequence: 2,
+          method: "thread/goal/cleared",
+          thread_id: threadA,
+          classification: "redundant_state",
+          total_count: 1
+        }
+      });
+
+      expect(repository.listEvents("sess_pipeline_a").events).toHaveLength(1);
+      expect(observed).toEqual(["thread/goal/cleared"]);
+      expect(pipeline.last_sequence).toBe(2);
+      expect(pipeline.failure).toBeNull();
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("stops observably when post-commit control observation fails", async () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      repository.create(stateCandidate("sess_pipeline_a", threadA));
+      const pipeline = createCodexEventPipeline({
+        repository,
+        append_port: createProductionProjectionAppendPort({ repository, publish() {} }),
+        normalizer: { now: advancingClock() },
+        observe_event() {
+          throw new Error("control observer failed");
+        }
+      });
+
+      await expect(
+        pipeline.consume(selected("thread/status/changed", { threadId: threadA, status: { type: "idle" } }), 2)
+      ).rejects.toThrow("control observer failed");
+      expect(repository.listEvents("sess_pipeline_a").events).toHaveLength(1);
+      expect(pipeline.failure).toMatchObject({ message: "control observer failed" });
+      await expectPipelineError(
+        pipeline.consume(selected("thread/status/changed", { threadId: threadA, status: { type: "active", activeFlags: [] } }), 2),
+        "pipeline_stopped"
+      );
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("fails before normalization when control observation lacks an exact generation", async () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      repository.create(stateCandidate("sess_pipeline_a", threadA));
+      const pipeline = createCodexEventPipeline({
+        repository,
+        append_port: createProductionProjectionAppendPort({ repository, publish() {} }),
+        normalizer: { now: advancingClock() },
+        observe_event() {}
+      });
+
+      await expectPipelineError(
+        pipeline.consume(selected("thread/status/changed", { threadId: threadA, status: { type: "idle" } })),
+        "invalid_connection_generation"
+      );
+      expect(pipeline.last_sequence).toBe(0);
+      expect(repository.listEvents("sess_pipeline_a").events).toEqual([]);
+      await expectPipelineError(
+        pipeline.consume(selected("thread/status/changed", { threadId: threadA, status: { type: "idle" } }), 1),
+        "pipeline_stopped"
+      );
+    } finally {
+      open.db.close();
+    }
+  });
+
   it("filters malformed payloads from unmanaged TUI threads before deep parsing", async () => {
     const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
     try {

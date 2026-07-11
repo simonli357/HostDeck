@@ -660,7 +660,7 @@ describe("exact Codex event normalizer", () => {
     );
   });
 
-  it("accepts distinct same-second goal states but rejects an exact repeated goal", () => {
+  it("accepts distinct goal states and coalesces exact repeated goal snapshots", () => {
     const normalizer = createCodexEventNormalizer({ now: () => capturedAt });
     const paused = rawGoal(threadA, 1_752_170_401, "paused");
     const active = { ...paused, status: "active" as const, tokensUsed: 1 };
@@ -672,10 +672,34 @@ describe("exact Codex event normalizer", () => {
     );
 
     expect(first.codex_event_id).not.toBe(second.codex_event_id);
-    expectNormalizationError(
-      () => normalizer.normalize(selected("thread/goal/updated", { threadId: threadA, turnId: null, goal: active })),
-      "duplicate_event"
-    );
+    expect(
+      normalizer.normalize(selected("thread/goal/updated", { threadId: threadA, turnId: null, goal: active }))
+    ).toEqual({
+      kind: "redundant",
+      observation: {
+        sequence: 3,
+        method: "thread/goal/updated",
+        thread_id: threadA,
+        classification: "redundant_state",
+        total_count: 1
+      }
+    });
+    expect(normalizeEvent(normalizer.normalize(selected("thread/goal/cleared", { threadId: threadA })))).toMatchObject({
+      sequence: 4,
+      method: "thread/goal/cleared"
+    });
+    expect(normalizer.normalize(selected("thread/goal/cleared", { threadId: threadA }))).toEqual({
+      kind: "redundant",
+      observation: {
+        sequence: 5,
+        method: "thread/goal/cleared",
+        thread_id: threadA,
+        classification: "redundant_state",
+        total_count: 2
+      }
+    });
+    expect(normalizer.redundant_observation_count).toBe(2);
+    expect(normalizer.failure).toBeNull();
   });
 
   it("filters unmanaged TUI threads to bounded identity-only observations before payload normalization", () => {

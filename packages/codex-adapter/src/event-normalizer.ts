@@ -198,9 +198,18 @@ export interface CodexUnmanagedThreadObservation {
   readonly total_count: number;
 }
 
+export interface CodexRedundantStateObservation {
+  readonly sequence: number;
+  readonly method: "thread/goal/cleared" | "thread/goal/updated";
+  readonly thread_id: CodexThreadId;
+  readonly classification: "redundant_state";
+  readonly total_count: number;
+}
+
 export type CodexNotificationNormalizationResult =
   | { readonly kind: "event"; readonly event: NormalizedCodexEvent }
   | { readonly kind: "diagnostic"; readonly diagnostic: CodexOptionalNotificationDiagnostic }
+  | { readonly kind: "redundant"; readonly observation: CodexRedundantStateObservation }
   | { readonly kind: "unmanaged"; readonly observation: CodexUnmanagedThreadObservation };
 
 export interface CodexEventNormalizerOptions {
@@ -216,6 +225,7 @@ export interface CodexEventNormalizerOptions {
 export interface CodexEventNormalizer {
   readonly normalize: (notification: CodexConnectionNotification) => CodexNotificationNormalizationResult;
   readonly optional_diagnostic_count: number;
+  readonly redundant_observation_count: number;
   readonly unmanaged_observation_count: number;
   readonly tracked_thread_count: number;
   readonly last_sequence: number;
@@ -275,6 +285,7 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
   private readonly threads = new Map<CodexThreadId, TrackedThread>();
   private readonly optionalCounts = new Map<string, number>();
   private optionalTotal = 0;
+  private redundantTotal = 0;
   private unmanagedTotal = 0;
   private currentFailure: Error | null = null;
   private lastCapturedAt: IsoTimestamp | null = null;
@@ -283,6 +294,10 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
 
   get optional_diagnostic_count(): number {
     return this.optionalTotal;
+  }
+
+  get redundant_observation_count(): number {
+    return this.redundantTotal;
   }
 
   get unmanaged_observation_count(): number {
@@ -341,11 +356,17 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
         }
       };
     }
-    const event = this.normalizeSelected(notification.method, notification.params, sequence, capturedAt);
-    return { kind: "event", event };
+    const selected = this.normalizeSelected(notification.method, notification.params, sequence, capturedAt);
+    if ("classification" in selected) return { kind: "redundant", observation: selected };
+    return { kind: "event", event: selected };
   }
 
-  private normalizeSelected(method: string, params: unknown, sequence: number, capturedAt: IsoTimestamp): NormalizedCodexEvent {
+  private normalizeSelected(
+    method: string,
+    params: unknown,
+    sequence: number,
+    capturedAt: IsoTimestamp
+  ): NormalizedCodexEvent | CodexRedundantStateObservation {
     switch (method) {
       case "thread/started": {
         const parsed = parseParams(threadStartedParamsSchema, params, method);
@@ -416,8 +437,8 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
         }
         const state = this.thread(parsed.threadId, method);
         const signature = stableCodexEventId("goal-state", JSON.stringify({ turnId: parsed.turnId, goal: parsed.goal }));
-        if (signature === state.last_goal_signature) {
-          throw normalizationError("duplicate_event", "Codex repeated an identical goal update.", method);
+        if (signature === state.last_goal_signature && state.goal_state === "present") {
+          return this.redundantState(sequence, method, parsed.threadId);
         }
         if (state.last_goal_updated_at !== null && parsed.goal.updatedAt < state.last_goal_updated_at) {
           throw normalizationError(
@@ -453,7 +474,7 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
       case "thread/goal/cleared": {
         const parsed = parseParams(threadIdParamsSchema, params, method);
         const state = this.thread(parsed.threadId, method);
-        if (state.goal_state === "cleared") throw normalizationError("duplicate_event", "Codex repeated goal cleared state.", method);
+        if (state.goal_state === "cleared") return this.redundantState(sequence, method, parsed.threadId);
         state.goal_state = "cleared";
         return { ...threadBase(sequence, method, capturedAt, null, null, parsed.threadId), method };
       }
@@ -765,6 +786,21 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
       total_count: this.optionalTotal,
       tracked_method_count: this.optionalCounts.size,
       method_capacity_exhausted: false
+    };
+  }
+
+  private redundantState(
+    sequence: number,
+    method: CodexRedundantStateObservation["method"],
+    threadId: CodexThreadId
+  ): CodexRedundantStateObservation {
+    this.redundantTotal = Math.min(Number.MAX_SAFE_INTEGER, this.redundantTotal + 1);
+    return {
+      sequence,
+      method,
+      thread_id: threadId,
+      classification: "redundant_state",
+      total_count: this.redundantTotal
     };
   }
 

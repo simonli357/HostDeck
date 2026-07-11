@@ -341,13 +341,21 @@ async function waitForRegistration(
         notification.params.turn.id === turnId
       ) {
         throw new Error(
-          `Turn ${turnId} completed before approval registration (status=${String(notification.params.turn.status)}, error=${notification.params.turn.error === null ? "none" : "present"}).`
+          `Turn ${turnId} completed before approval registration (status=${String(notification.params.turn.status)}, error=${boundedJson(notification.params.turn.error)}).`
         );
       }
     }
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
   throw new Error(`Timed out waiting for approval registration for turn ${turnId}.`);
+}
+
+function boundedJson(value: unknown): string {
+  try {
+    return JSON.stringify(value).slice(0, 1_000);
+  } catch {
+    return "unserializable";
+  }
 }
 
 function errorSummary(error: unknown): string {

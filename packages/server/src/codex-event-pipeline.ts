@@ -2,15 +2,21 @@ import {
   type CodexConnectionNotification,
   type CodexEventNormalizerOptions,
   type CodexOptionalNotificationDiagnostic,
+  type CodexRedundantStateObservation,
   type CodexUnmanagedThreadObservation,
-  createCodexEventNormalizer
+  createCodexEventNormalizer,
+  type NormalizedCodexEvent
 } from "@hostdeck/codex-adapter";
 import { defaultResourceBudget } from "@hostdeck/contracts";
 import type { CodexThreadId } from "@hostdeck/core";
 import type { ProductionProjectionAppendPort, SelectedStateRepository } from "@hostdeck/storage";
 import { type CodexProjectionResult, type CodexProjectionService, createCodexProjectionService } from "./codex-projection-service.js";
 
-export type CodexEventPipelineErrorCode = "pipeline_capacity_exceeded" | "pipeline_stopped" | "thread_scope_changed";
+export type CodexEventPipelineErrorCode =
+  | "invalid_connection_generation"
+  | "pipeline_capacity_exceeded"
+  | "pipeline_stopped"
+  | "thread_scope_changed";
 
 export class HostDeckCodexEventPipelineError extends Error {
   constructor(
@@ -31,6 +37,11 @@ export type CodexEventPipelineResult =
       readonly diagnostic: CodexOptionalNotificationDiagnostic;
     }
   | {
+      readonly kind: "redundant_observation";
+      readonly sequence: number;
+      readonly observation: CodexRedundantStateObservation;
+    }
+  | {
       readonly kind: "unmanaged_observation";
       readonly sequence: number;
       readonly thread_id: CodexThreadId;
@@ -45,10 +56,14 @@ export interface CodexEventPipelineOptions {
   readonly normalizer?: Omit<CodexEventNormalizerOptions, "is_managed_thread">;
   readonly is_managed_thread?: (thread_id: CodexThreadId) => boolean;
   readonly max_pending_notifications?: number;
+  readonly observe_event?: (event: NormalizedCodexEvent, connection_generation: number) => void | Promise<void>;
 }
 
 export interface CodexEventPipeline {
-  readonly consume: (notification: CodexConnectionNotification) => Promise<CodexEventPipelineResult>;
+  readonly consume: (
+    notification: CodexConnectionNotification,
+    connection_generation?: number
+  ) => Promise<CodexEventPipelineResult>;
   readonly failure: Error | null;
   readonly last_sequence: number;
   readonly pending_count: number;
@@ -64,7 +79,8 @@ class DefaultCodexEventPipeline implements CodexEventPipeline {
   constructor(
     private readonly normalizer: ReturnType<typeof createCodexEventNormalizer>,
     private readonly projector: CodexProjectionService,
-    private readonly maxPendingNotifications: number
+    private readonly maxPendingNotifications: number,
+    private readonly observeEvent: CodexEventPipelineOptions["observe_event"]
   ) {}
 
   get failure(): Error | null {
@@ -79,8 +95,19 @@ class DefaultCodexEventPipeline implements CodexEventPipeline {
     return this.currentPendingCount;
   }
 
-  consume(notification: CodexConnectionNotification): Promise<CodexEventPipelineResult> {
+  consume(
+    notification: CodexConnectionNotification,
+    connectionGeneration?: number
+  ): Promise<CodexEventPipelineResult> {
     if (this.currentFailure !== null) return Promise.reject(this.stoppedError());
+    if (this.observeEvent !== undefined && !validGeneration(connectionGeneration)) {
+      const error = new HostDeckCodexEventPipelineError(
+        "invalid_connection_generation",
+        "Codex event observation requires the exact positive connection generation."
+      );
+      this.currentFailure = error;
+      return Promise.reject(error);
+    }
     if (this.currentPendingCount >= this.maxPendingNotifications) {
       const error = new HostDeckCodexEventPipelineError(
         "pipeline_capacity_exceeded",
@@ -94,7 +121,7 @@ class DefaultCodexEventPipeline implements CodexEventPipeline {
       if (this.currentFailure !== null) {
         throw this.stoppedError();
       }
-      return this.consumeOne(notification);
+      return this.consumeOne(notification, connectionGeneration);
     });
     const tracked = operation.finally(() => {
       this.currentPendingCount -= 1;
@@ -108,7 +135,10 @@ class DefaultCodexEventPipeline implements CodexEventPipeline {
     return tracked;
   }
 
-  private async consumeOne(notification: CodexConnectionNotification): Promise<CodexEventPipelineResult> {
+  private async consumeOne(
+    notification: CodexConnectionNotification,
+    connectionGeneration: number | undefined
+  ): Promise<CodexEventPipelineResult> {
     const normalized = this.normalizer.normalize(notification);
     if (normalized.kind === "diagnostic") {
       return {
@@ -117,14 +147,26 @@ class DefaultCodexEventPipeline implements CodexEventPipeline {
         diagnostic: normalized.diagnostic
       };
     }
+    if (normalized.kind === "redundant") {
+      return {
+        kind: "redundant_observation",
+        sequence: normalized.observation.sequence,
+        observation: normalized.observation
+      };
+    }
     if (normalized.kind === "unmanaged") return identityGateObservation(normalized.observation);
 
     const projected = await this.projector.project(normalized.event);
-    if (projected.kind !== "unmanaged_observation") return projected;
-    throw new HostDeckCodexEventPipelineError(
-      "thread_scope_changed",
-      "Codex thread mapping changed between identity classification and durable projection."
-    );
+    if (projected.kind === "unmanaged_observation") {
+      throw new HostDeckCodexEventPipelineError(
+        "thread_scope_changed",
+        "Codex thread mapping changed between identity classification and durable projection."
+      );
+    }
+    if (this.observeEvent !== undefined) {
+      await this.observeEvent(normalized.event, connectionGeneration as number);
+    }
+    return projected;
   }
 
   private stoppedError(): HostDeckCodexEventPipelineError {
@@ -143,6 +185,7 @@ export function createCodexEventPipeline(options: CodexEventPipelineOptions): Co
     typeof options.repository?.getByThreadId !== "function" ||
     typeof options.append_port?.append !== "function" ||
     (options.is_managed_thread !== undefined && typeof options.is_managed_thread !== "function") ||
+    (options.observe_event !== undefined && typeof options.observe_event !== "function") ||
     (options.max_pending_notifications !== undefined && !validCapacity(options.max_pending_notifications))
   ) {
     throw new TypeError("Codex event pipeline requires selected-state, production append, and valid thread-scope ports.");
@@ -162,10 +205,12 @@ export function createCodexEventPipeline(options: CodexEventPipelineOptions): Co
   const pipeline = new DefaultCodexEventPipeline(
     normalizer,
     projector,
-    options.max_pending_notifications ?? defaultMaxPendingNotifications
+    options.max_pending_notifications ?? defaultMaxPendingNotifications,
+    options.observe_event
   );
   return Object.freeze({
-    consume: (notification: CodexConnectionNotification) => pipeline.consume(notification),
+    consume: (notification: CodexConnectionNotification, connectionGeneration?: number) =>
+      pipeline.consume(notification, connectionGeneration),
     get failure() {
       return pipeline.failure;
     },
@@ -195,4 +240,8 @@ function asError(error: unknown): Error {
 
 function validCapacity(value: number): boolean {
   return Number.isSafeInteger(value) && value >= 1 && value <= 100_000;
+}
+
+function validGeneration(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 1;
 }
