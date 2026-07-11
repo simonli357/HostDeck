@@ -15,14 +15,13 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `DAT-V1-030` Reconcile orphaned accepted audit operations | in_progress | none | Completes crash-truth reconciliation before startup health and production audit composition. |
-| 2 | `IFC-V1-034` Implement replay-to-live high-water handoff | ready | none | Builds the now-unblocked no-gap handoff over committed fanout, durable replay, and the selected SSE adapter. |
-| 3 | `INT-V1-022` Implement structured usage retrieval | ready | none | Implements observed account/runtime usage without inventing billing scope. |
-| 4 | `INT-V1-023` Implement accepted/incomplete compact lifecycle | ready | none | Prevents the utility from reporting context reduction from immediate acceptance. |
-| 5 | `INT-V1-024` Implement structured skills listing | ready | none | Implements the remaining observed read-only utility boundary. |
-| 6 | `IFC-V1-019` Freeze the selected API route manifest | ready | none | Converts the completed semantic matrix and normalized contracts into one unambiguous public route inventory. |
-| 7 | `IFC-V1-047` Enforce real HTTP resource limits | ready | none | Extends proven option inventory into raw-socket limit and cleanup behavior. |
-| 8 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the independent physical-device LAN trust gate when hardware setup is available. |
+| 1 | `IFC-V1-034` Implement replay-to-live high-water handoff | in_progress | none | Builds the no-gap handoff over committed fanout, durable replay, and the selected SSE adapter. |
+| 2 | `INT-V1-022` Implement structured usage retrieval | ready | none | Implements observed account/runtime usage without inventing billing scope. |
+| 3 | `INT-V1-023` Implement accepted/incomplete compact lifecycle | ready | none | Prevents the utility from reporting context reduction from immediate acceptance. |
+| 4 | `INT-V1-024` Implement structured skills listing | ready | none | Implements the remaining observed read-only utility boundary. |
+| 5 | `IFC-V1-019` Freeze the selected API route manifest | ready | none | Converts the completed semantic matrix and normalized contracts into one unambiguous public route inventory. |
+| 6 | `IFC-V1-047` Enforce real HTTP resource limits | ready | none | Extends proven option inventory into raw-socket limit and cleanup behavior. |
+| 7 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the independent physical-device LAN trust gate when hardware setup is available. |
 
 ## Intentional Blockers
 
