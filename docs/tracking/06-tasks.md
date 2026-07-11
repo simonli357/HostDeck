@@ -15,9 +15,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-027` Prove the assembled real structured vertical | in_progress | none | Assembles every proven runtime port and unlocks supervision, exact write dispatch, and stable mobile states. |
-| 2 | `IFC-V1-047` Enforce real HTTP resource limits | ready | none | Extends proven option inventory into raw-socket limit and cleanup behavior. |
-| 3 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the independent physical-device LAN trust gate when hardware setup is available. |
+| 1 | `IFC-V1-047` Enforce real HTTP resource limits | in_progress | none | Extends proven option inventory into raw-socket limit and cleanup behavior while the runtime aggregate is externally blocked. |
+| 2 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | ready | none | Resolves the independent physical-device LAN trust gate when hardware setup is available. |
+| 3 | `INT-V1-027` Prove the assembled real structured vertical | blocked | Authenticated turn usage reset; host Bubblewrap AppArmor profile | Resume the unchanged aggregate when both external runtime conditions are available. |
 
 ## Intentional Blockers
 

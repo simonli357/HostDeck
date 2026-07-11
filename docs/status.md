@@ -5,8 +5,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `INT-V1-027` assembled real structured vertical across two managed threads.
-- Next queued work is `IFC-V1-047` HTTP limits and independently ready `IFC-V1-015` physical-device HTTPS.
+- Active task: `IFC-V1-047` real HTTP resource limits and close behavior.
+- Next queued work is independently ready `IFC-V1-015` physical-device HTTPS. `INT-V1-027` is blocked on the authenticated turn reset and host Bubblewrap AppArmor profile; its unchanged aggregate remains the next runtime action when both are available.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
 - Release state: no-go. All capability blocks affected by the new runtime/security/mobile outcome are reopened.
@@ -175,4 +175,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `INT-V1-024` owner-doc closure is pushed as `4d02eba`; `IFC-V1-019` hardened criteria as `72e6c34`; implementation as `cd0d929`.
 - `IFC-V1-019` owner-doc closure is pushed as `992fba0`; `INT-V1-027` hardened criteria as `1afc935`; callback/aggregate implementation as `f8ebcfc`.
 - `INT-V1-027` startup callback ordering, thread-state snapshot normalization, diagnostic redaction, and reverse-cleanup hardening are pushed as `d765855`.
-- Next action: rerun the unchanged exact `INT-V1-027` aggregate after authenticated turns reset, then repair the host Bubblewrap/user-namespace prerequisite if the command-backed step still fails. Keep the task open until all eight proof sources and cleanup pass in one lifecycle.
+- The exact-Codex sandbox prerequisite is documented and pushed as `f906d0f`.
+- Next action: harden and implement `IFC-V1-047` real-listener HTTP resource limits. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
