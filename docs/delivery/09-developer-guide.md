@@ -11,6 +11,7 @@ Owns setup context, environment policy, services, and operational notes.
 | Package manager | `pnpm 10.29.2`, pinned in `package.json`. |
 | Native build | `@hostdeck/storage` uses `better-sqlite3` and exact `fs-ext` 2.1.1; `pnpm-workspace.yaml` allows both native build scripts through `onlyBuiltDependencies`. A normal Ubuntu C/C++/Python `node-gyp` toolchain may be required when cached binaries are unavailable. |
 | Required Codex for selected adapter work | Exact `codex-cli 0.144.0` must be on `PATH`; `HOSTDECK_CODEX_BIN` may name another executable for binding/smoke commands. The reviewed V1 binding uses experimental API for `/plan`. |
+| Linux command sandbox | Command-backed exact-Codex smokes require Bubblewrap to create an unprivileged user namespace. Ubuntu 24.04 hosts with `kernel.apparmor_restrict_unprivileged_userns=1` require the packaged `bwrap-userns-restrict` AppArmor profile to be installed and loaded. Do not replace this prerequisite with a sandbox or approval downgrade. |
 | Tmux | `tmux 3.4` is required for historical smoke and as a test-only terminal emulator for the real exact-thread TUI smoke; it is not the selected production runtime. |
 | Hosted services | None. HostDeck is local-first and stores state locally. |
 
@@ -23,6 +24,16 @@ pnpm install --frozen-lockfile
 
 The frozen offline install and native lease rebuild were validated for the current workspace on 2026-07-09. If a previous install skipped an approved native build, remove `node_modules/` and rerun the frozen install.
 
+On Ubuntu 24.04, prepare the command sandbox before running command-backed Codex acceptance:
+
+```bash
+sudo apt-get install apparmor-profiles apparmor-utils bubblewrap
+sudo install -m 0644 /usr/share/apparmor/extra-profiles/bwrap-userns-restrict /etc/apparmor.d/bwrap-userns-restrict
+sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
+```
+
+This host currently has Bubblewrap 0.9.0 but lacks `apparmor-profiles`, `apparmor-utils`, and both copies of `bwrap-userns-restrict`; `INT-V1-027` command-backed acceptance remains blocked until the profile is installed and the unchanged strict smoke passes.
+
 ## Development Commands
 
 | Purpose | Command | Notes |
@@ -34,6 +45,7 @@ The frozen offline install and native lease rebuild were validated for the curre
 | Codex compatibility smoke | `pnpm smoke:codex-compatibility` | Starts installed app-server over stdio, initializes experimental API, and verifies Plan/Default without a model call. |
 | Codex Unix IPC smoke | `pnpm smoke:codex-ipc` | Starts installed app-server on a temporary private Unix socket and proves the production transport, broker, and compatibility handshake without a model call. |
 | Codex thread/TUI smoke | `pnpm smoke:codex-threads` | Requires authenticated Codex, Git, and tmux. Copies `auth.json` without parsing or logging it into a mode-`0600` private temporary home, proves loaded recovery/materialization/list/read/exact TUI resume/archive without a model turn, then removes the temporary tree. |
+| Codex structured vertical smoke | `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-vertical` | Requires authenticated turns, Git, tmux, and a working strict Linux command sandbox. It fails on any model, callback, projection, approval, command, interrupt, compact, TUI, disclosure, or cleanup gap. |
 | Typecheck | `pnpm typecheck` | Strict TypeScript no-emit check across workspace source. |
 | Lint | `pnpm lint` | Biome plus package export convention checks. |
 | Unit tests | `pnpm test` or `pnpm test:unit` | Runs Vitest unit tests. |
@@ -105,6 +117,7 @@ Long-running service wrapping is not implemented yet. Use foreground mode during
 | `tmux_unavailable` / missing binary | `tmux` is not on `PATH` or cannot be queried. | Startup fails before ready status. |
 | `missing_binary` during session start | External Codex CLI is not on `PATH`. | Session start fails before durable success is recorded. |
 | Thread/TUI smoke stops at authentication | Installed Codex has no private regular `auth.json` or its login is stale. | Smoke fails before claiming exact TUI evidence and removes its temporary state. |
+| Command-backed Codex turn fails before approval | Bubblewrap cannot create a user namespace, commonly because the Ubuntu AppArmor profile is absent. | Aggregate acceptance remains failed. Install/load the packaged profile; do not disable sandbox or lower approval policy. |
 | Invalid state directory or database path | Path is missing, unreadable, or migration fails. | Startup or local-admin command fails loudly with typed config/storage errors. |
 | `XDG_RUNTIME_DIR is required` | Service mode has no secure per-user runtime directory. | `serve` exits with the config error family before service startup. |
 | Another daemon owns the state directory | A HostDeck process already holds `hostdeck.lock`. | The second process exits before creating config/runtime paths, opening SQLite, or binding a listener. |
