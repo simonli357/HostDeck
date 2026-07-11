@@ -199,6 +199,7 @@ describe("selected Fastify host lifecycle", () => {
         connection_idle_timeout_ms: defaultResourceBudget.http_connection_idle_timeout_ms,
         headers_max_bytes: defaultResourceBudget.http_headers_max_bytes,
         headers_max_count: defaultResourceBudget.http_headers_max_count,
+        headers_parser_max_bytes: defaultResourceBudget.http_headers_max_bytes + 1,
         headers_parser_max_count: defaultResourceBudget.http_headers_max_count + 1,
         headers_timeout_ms: defaultResourceBudget.http_headers_timeout_ms,
         keep_alive_timeout_buffer_ms: 0,

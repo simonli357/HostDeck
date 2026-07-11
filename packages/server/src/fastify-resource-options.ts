@@ -16,9 +16,10 @@ export interface NodeHttpResourceOptions {
   readonly connectionsCheckingInterval: number;
   readonly headersTimeout: number;
   readonly keepAliveTimeoutBuffer: number;
+  readonly maxAcceptedHeaderBytes: number;
   readonly maxAcceptedHeadersCount: number;
   readonly maxConnections: number;
-  readonly maxHeaderSize: number;
+  readonly parserMaxHeaderSize: number;
   readonly parserMaxHeadersCount: number;
 }
 
@@ -54,9 +55,10 @@ export function fastifyResourceOptionsFromBudget(input: unknown): FastifyResourc
       ),
       headersTimeout: budget.http_headers_timeout_ms,
       keepAliveTimeoutBuffer: 0,
+      maxAcceptedHeaderBytes: budget.http_headers_max_bytes,
       maxAcceptedHeadersCount: budget.http_headers_max_count,
       maxConnections: budget.http_max_connections,
-      maxHeaderSize: budget.http_headers_max_bytes,
+      parserMaxHeaderSize: budget.http_headers_max_bytes + 1,
       parserMaxHeadersCount: budget.http_headers_max_count + 1
     }),
     application: Object.freeze({

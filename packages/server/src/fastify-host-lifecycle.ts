@@ -89,6 +89,7 @@ export interface HostDeckFastifyNodeLimitSnapshot {
   readonly connection_idle_timeout_ms: number;
   readonly headers_max_bytes: number;
   readonly headers_max_count: number;
+  readonly headers_parser_max_bytes: number;
   readonly headers_parser_max_count: number;
   readonly headers_timeout_ms: number;
   readonly keep_alive_timeout_buffer_ms: number;
@@ -406,6 +407,7 @@ function applyNodeServerLimits(app: HostDeckFastifyInstance, budget: ResourceBud
     app.server.headersTimeout !== limits.headersTimeout ||
     app.server.keepAliveTimeoutBuffer !== limits.keepAliveTimeoutBuffer ||
     app.server.maxConnections !== limits.maxConnections ||
+    requireAppliedMaxHeaderSize(app) !== limits.parserMaxHeaderSize ||
     app.server.maxHeadersCount !== limits.parserMaxHeadersCount ||
     app.server.keepAliveTimeout !== budget.http_keep_alive_timeout_ms ||
     app.server.maxRequestsPerSocket !== budget.http_max_requests_per_socket ||
@@ -452,6 +454,7 @@ function createLifecycleSnapshot(
       connection_idle_timeout_ms: app.server.timeout,
       headers_max_bytes: budget.http_headers_max_bytes,
       headers_max_count: budget.http_headers_max_count,
+      headers_parser_max_bytes: requireAppliedMaxHeaderSize(app),
       headers_parser_max_count: requireAppliedInteger(app.server.maxHeadersCount, "maxHeadersCount"),
       headers_timeout_ms: app.server.headersTimeout,
       keep_alive_timeout_buffer_ms: app.server.keepAliveTimeoutBuffer,
@@ -497,11 +500,16 @@ function baseUrlForBind(bind: HostDeckFastifyListenerBind): URL {
   return new URL(`${bind.transport}://${host}:${bind.port}/`);
 }
 
-function requireAppliedInteger(value: number | null, name: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 1) {
+function requireAppliedMaxHeaderSize(app: HostDeckFastifyInstance): number {
+  const server = app.server as typeof app.server & { readonly maxHeaderSize?: unknown };
+  return requireAppliedInteger(server.maxHeaderSize, "maxHeaderSize");
+}
+
+function requireAppliedInteger(value: unknown, name: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) {
     throw new Error(`HostDeck Node HTTP ${name} is not applied.`);
   }
-  return value as number;
+  return value;
 }
 
 async function closeLifecycleResources(

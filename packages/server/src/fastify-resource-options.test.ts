@@ -20,9 +20,10 @@ describe("Fastify resource options", () => {
         connectionsCheckingInterval: 1_000,
         headersTimeout: 10_000,
         keepAliveTimeoutBuffer: 0,
+        maxAcceptedHeaderBytes: 16_384,
         maxAcceptedHeadersCount: 64,
         maxConnections: 64,
-        maxHeaderSize: 16_384,
+        parserMaxHeaderSize: 16_385,
         parserMaxHeadersCount: 65
       },
       application: {

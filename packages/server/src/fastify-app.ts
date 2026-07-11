@@ -106,7 +106,7 @@ export function createHostDeckFastifyApp(input: CreateHostDeckFastifyAppInput): 
     http: {
       connectionsCheckingInterval: resourceOptions.node.connectionsCheckingInterval,
       keepAliveTimeoutBuffer: resourceOptions.node.keepAliveTimeoutBuffer,
-      maxHeaderSize: resourceOptions.node.maxHeaderSize
+      maxHeaderSize: resourceOptions.node.parserMaxHeaderSize
     },
     frameworkErrors: (error, request, reply) =>
       handleHostDeckFastifyError(error, request, reply, input.observeInternalError),

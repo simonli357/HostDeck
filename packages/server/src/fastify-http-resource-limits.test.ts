@@ -42,14 +42,26 @@ describe("real HostDeck HTTP resource limits", () => {
         rejected_header_count_requests: 1
       });
 
+      const exactBytes = await rawExchange(
+        probe.port,
+        requestWithNodeHeaderBytes(4_096),
+        2_000
+      );
+      expect(statusCodes(exactBytes.text)).toEqual([200]);
+      expect(probe.handlerCalls).toBe(2);
+
       const overBytes = await rawExchange(
         probe.port,
-        `GET /probe HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Large: ${"x".repeat(4_096)}\r\n\r\n`,
+        requestWithNodeHeaderBytes(4_097),
         2_000
       );
       expect(statusCodes(overBytes.text)).toEqual([431]);
       expect(Buffer.byteLength(overBytes.text, "utf8")).toBeLessThan(1_024);
-      expect(probe.handlerCalls).toBe(1);
+      expect(probe.handlerCalls).toBe(2);
+      expect(probe.service.snapshot().node_limits).toMatchObject({
+        headers_max_bytes: 4_096,
+        headers_parser_max_bytes: 4_097
+      });
       expect(probe.service.snapshot().connections.active_connections).toBe(0);
     } finally {
       await probe.service.close();
@@ -205,6 +217,8 @@ describe("real HostDeck HTTP resource limits", () => {
     });
     expect(first.handlerCalls).toBe(0);
     expect(events).toEqual(["close-sse", "close-startup"]);
+    expect(first.service.app.server.address()).toBeNull();
+    expect(first.service.app.server.listening).toBe(false);
 
     const restarted = await startProbe(budget, { port });
     try {
@@ -217,6 +231,9 @@ describe("real HostDeck HTTP resource limits", () => {
     } finally {
       await restarted.service.close();
     }
+    expect(restarted.service.snapshot().connections.active_connections).toBe(0);
+    expect(restarted.service.app.server.address()).toBeNull();
+    expect(restarted.service.app.server.listening).toBe(false);
   }, 6_000);
 });
 
@@ -370,6 +387,19 @@ function shutdownBudget(): ResourceBudget {
 function requestWithHeaderCount(count: number): string {
   const headers = ["Host: 127.0.0.1", "Connection: close"];
   while (headers.length < count) headers.push(`X-Probe-${headers.length}: value`);
+  return `GET /probe HTTP/1.1\r\n${headers.join("\r\n")}\r\n\r\n`;
+}
+
+function requestWithNodeHeaderBytes(bytes: number): string {
+  const host = "Host: 127.0.0.1";
+  const connection = "Connection: close";
+  const paddingPrefix = "X-Pad: ";
+  const fixedBytes = [host, connection, paddingPrefix].reduce(
+    (total, line) => total + Buffer.byteLength(line, "utf8"),
+    0
+  );
+  if (!Number.isSafeInteger(bytes) || bytes < fixedBytes) throw new TypeError("Invalid Node header byte fixture size.");
+  const headers = [host, connection, `${paddingPrefix}${"x".repeat(bytes - fixedBytes)}`];
   return `GET /probe HTTP/1.1\r\n${headers.join("\r\n")}\r\n\r\n`;
 }
 
