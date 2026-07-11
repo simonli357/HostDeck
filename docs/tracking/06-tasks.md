@@ -15,7 +15,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `DAT-V1-024` Run bounded startup retention maintenance | in_progress | none | Completes the selected output/audit maintenance path before restart composition. |
+| 1 | `DAT-V1-030` Reconcile orphaned accepted audit operations | in_progress | none | Completes crash-truth reconciliation before startup health and production audit composition. |
 | 2 | `IFC-V1-034` Implement replay-to-live high-water handoff | ready | none | Builds the now-unblocked no-gap handoff over committed fanout, durable replay, and the selected SSE adapter. |
 | 3 | `INT-V1-022` Implement structured usage retrieval | ready | none | Implements observed account/runtime usage without inventing billing scope. |
 | 4 | `INT-V1-023` Implement accepted/incomplete compact lifecycle | ready | none | Prevents the utility from reporting context reduction from immediate acceptance. |
