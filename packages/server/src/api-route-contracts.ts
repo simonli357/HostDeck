@@ -23,8 +23,10 @@ import {
 } from "@hostdeck/contracts";
 import type { ErrorCode } from "@hostdeck/core";
 
+/** @deprecated Historical tmux-shaped manifest retained until IFC-V1-067. */
 export type ApiRouteMethod = "GET" | "POST";
 
+/** @deprecated Historical tmux-shaped manifest retained until IFC-V1-067. */
 export type ApiRouteAuthMode =
   | "local_read_policy"
   | "local_admin"
@@ -35,6 +37,7 @@ export type ApiRouteAuthMode =
   | "none"
   | "admin_only_rejected";
 
+/** @deprecated Historical tmux-shaped manifest retained until IFC-V1-067. */
 export type ApiRouteFamily = "host" | "sessions" | "stream" | "writes" | "pairing" | "security" | "network";
 
 export interface RuntimeSchema {
@@ -47,6 +50,7 @@ export interface ApiRouteErrorContract {
   readonly sample: unknown;
 }
 
+/** @deprecated Historical tmux-shaped manifest retained until IFC-V1-067. */
 export interface ApiRouteContract {
   readonly id: string;
   readonly family: ApiRouteFamily;
@@ -138,6 +142,7 @@ const trustStateSample = {
   csrf_token: csrfToken
 } as const;
 
+/** @deprecated Historical 17-route tmux manifest. Use selectedApiRouteManifest. */
 export const apiRouteContracts: readonly ApiRouteContract[] = [
   {
     id: "host_status",
