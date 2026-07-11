@@ -50,7 +50,7 @@ Local-admin CLI calls use an explicit loopback/admin authority, not a magic miss
 | Typed app, SSE adapter, static boundary, and listener lifecycle | `IFC-V1-022` to `IFC-V1-025` | Complete; typed unbound app, bounded SSE with real finite completion, hardened static boundary, upfront runtime ownership, exact loopback listener, Node limit inventory, and bounded reverse cleanup pass. HTTPS, selected route composition, mutable health, and complete application drain remain downstream. |
 | Transport/Host/Origin/CORS security foundation | `IFC-V1-017` | Blocked by HTTPS proof and the typed app factory. |
 | Cookie auth, security audit executor, CSRF, pair/device/revoke/lock/LAN routes, and security matrix | `IFC-V1-026` to `IFC-V1-033`, `IFC-V1-059` | Dependency-ordered behind route manifest, data storage, HTTPS, and security foundation. |
-| Commit-only fanout foundation | `IFC-V1-018` | Blocked by production append, event normalization, and SSE transport. |
+| Commit-only fanout foundation | `IFC-V1-018` | In progress from proven production append, event normalization, and SSE transport boundaries. |
 | Replay/live, subscriber bounds, mutable health, shutdown, and aggregate stream matrix | `IFC-V1-034` to `IFC-V1-038` | Dependency-ordered behind fanout, runtime lifecycle, and data maintenance. |
 | Exact route-manifest contract | `IFC-V1-019` | Blocked by observed semantics and typed app foundation; precedes route implementation. |
 | Reusable exact-target write gate | `IFC-V1-066` | Blocked by trust, CSRF, lock, audit, and the real structured vertical. |

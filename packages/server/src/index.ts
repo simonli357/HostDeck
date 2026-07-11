@@ -18,6 +18,7 @@ export * from "./host-service.js";
 export * from "./managed-thread-service.js";
 export * from "./output-reader.js";
 export * from "./pending-turn-settings.js";
+export * from "./projection-fanout-hub.js";
 export * from "./read-routes.js";
 export * from "./restart-reconciler.js";
 export * from "./security-routes.js";
