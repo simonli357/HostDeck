@@ -1,7 +1,10 @@
 import {
+  defaultRetentionPolicy,
   type ManagedSessionProjection,
   managedSessionProjectionSchema,
   outputCursorSchema,
+  type RetentionPolicy,
+  retentionPolicySchema,
   type SelectedProjectionEvent,
   selectedProjectionEventSchema,
   sessionIdSchema
@@ -41,6 +44,7 @@ export interface ProductionProjectionAppendPort {
 export interface ProductionProjectionAppendPortOptions {
   readonly repository: SelectedStateRepository;
   readonly publish: ProjectionAppendPublisher;
+  readonly retention?: RetentionPolicy;
 }
 
 export class HostDeckProjectionPublicationError extends Error {
@@ -80,6 +84,7 @@ export function createProductionProjectionAppendPort(
   }
   const repository = options.repository;
   const publish = options.publish;
+  const retention = parseRetention(options.retention ?? defaultRetentionPolicy);
 
   return Object.freeze({
     async append(input: ProductionProjectionAppendInput) {
@@ -98,7 +103,7 @@ export function createProductionProjectionAppendPort(
         retention_boundary_cursor:
           event.type === "replay_boundary" ? event.after : current.projection.retention_boundary_cursor
       };
-      const committed = deepFreeze(repository.appendEvent(record, nextProjection, parsed.expected_revision));
+      const committed = deepFreeze(repository.appendEvent(record, nextProjection, parsed.expected_revision, retention));
 
       try {
         await publish(committed);
@@ -108,6 +113,16 @@ export function createProductionProjectionAppendPort(
       return committed;
     }
   });
+}
+
+function parseRetention(candidate: unknown): RetentionPolicy {
+  const parsed = retentionPolicySchema.safeParse(candidate);
+  if (!parsed.success || parsed.data.output_event_limit < 2) {
+    throw new TypeError("Production projection retention requires a valid policy with at least two output-event slots.", {
+      cause: parsed.success ? undefined : parsed.error
+    });
+  }
+  return Object.freeze({ ...parsed.data });
 }
 
 function assertExpectedRevision(

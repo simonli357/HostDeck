@@ -7,6 +7,8 @@ import {
   type LegacySessionDispositionRecord,
   legacySessionDispositionRecordSchema,
   outputCursorSchema,
+  type RetentionPolicy,
+  retentionPolicySchema,
   type SelectedProjectedEventRecord,
   type SelectedSessionEventStream,
   type SelectedSessionMappingRecord,
@@ -33,6 +35,7 @@ export type SelectedStateRepositoryErrorCode =
   | "invalid_mapping"
   | "invalid_projection"
   | "invalid_recovery"
+  | "invalid_retention_policy"
   | "invalid_replay"
   | "projection_conflict"
   | "projection_write_failed"
@@ -80,7 +83,12 @@ export interface SelectedStateRepository {
   readonly list: () => readonly SelectedSessionState[];
   readonly create: (state: unknown) => SelectedSessionState;
   readonly replace: (state: unknown, expectedRevision: unknown) => SelectedSessionState;
-  readonly appendEvent: (event: unknown, nextProjection: unknown, expectedRevision: unknown) => AppendSelectedEventResult;
+  readonly appendEvent: (
+    event: unknown,
+    nextProjection: unknown,
+    expectedRevision: unknown,
+    retention?: RetentionPolicy | null
+  ) => AppendSelectedEventResult;
   readonly listEvents: (sessionId: string, input?: ListSelectedEventsInput) => SelectedSessionEventStream;
   readonly getLegacyDisposition: (sessionId: string) => LegacySessionDispositionRecord | null;
   readonly listLegacyDispositions: () => readonly LegacySessionDispositionRecord[];
@@ -217,7 +225,8 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
     (
       event: SelectedProjectedEventRecord,
       nextProjection: SelectedSessionProjectionRecord,
-      expectedRevision: SelectedStateRevision
+      expectedRevision: SelectedStateRevision,
+      retention: RetentionPolicy | null
     ): AppendSelectedEventResult => {
       const current = requireState(db, event.event.session_id);
       assertPersistedEventProjection(db, current.projection);
@@ -225,9 +234,13 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
       assertProjectionIdentity(current.mapping, nextProjection);
       assertEventAdvance(current.projection, event, nextProjection);
 
+      let committedProjection = nextProjection;
       try {
         insertEvent(db, event);
-        if (updateProjection(db, nextProjection) !== 1) {
+        if (retention !== null) {
+          committedProjection = applySelectedProjectionRetention(db, nextProjection, retention);
+        }
+        if (updateProjection(db, committedProjection) !== 1) {
           throw new HostDeckSelectedStateRepositoryError(
             "session_not_found",
             `Selected session ${event.event.session_id} does not exist.`
@@ -240,8 +253,8 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
 
       return {
         event,
-        projection: nextProjection,
-        revision: selectedStateRevision({ mapping: current.mapping, projection: nextProjection })
+        projection: committedProjection,
+        revision: selectedStateRevision({ mapping: current.mapping, projection: committedProjection })
       };
     }
   ).immediate;
@@ -311,10 +324,15 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
     replace(state, expectedRevision) {
       return replaceTransaction(parseState(state), parseSelectedStateRevision(expectedRevision));
     },
-    appendEvent(event, nextProjection, expectedRevision) {
+    appendEvent(event, nextProjection, expectedRevision, retention = null) {
       const parsedEvent = parseProjectedEventRecord(event);
       assertEventByteLength(parsedEvent);
-      return appendEventTransaction(parsedEvent, parseProjection(nextProjection), parseSelectedStateRevision(expectedRevision));
+      return appendEventTransaction(
+        parsedEvent,
+        parseProjection(nextProjection),
+        parseSelectedStateRevision(expectedRevision),
+        retention === null ? null : parseSelectedProjectionRetentionPolicy(retention)
+      );
     },
     listEvents(sessionId, input = {}) {
       const parsedSessionId = parseSessionId(sessionId);
@@ -392,6 +410,107 @@ export function selectedProjectedEventByteLength(event: unknown): number {
     throw new HostDeckSelectedStateRepositoryError("invalid_event", "Selected projected event is invalid.", { cause: parsed.error });
   }
   return Buffer.byteLength(JSON.stringify(parsed.data), "utf8");
+}
+
+function parseSelectedProjectionRetentionPolicy(candidate: unknown): RetentionPolicy {
+  const parsed = retentionPolicySchema.safeParse(candidate);
+  if (!parsed.success || parsed.data.output_event_limit < 2) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_retention_policy",
+      "Selected projection retention requires a valid policy with at least two output-event slots.",
+      parsed.success ? undefined : { cause: parsed.error }
+    );
+  }
+  return parsed.data;
+}
+
+function applySelectedProjectionRetention(
+  db: Database.Database,
+  nextProjection: SelectedSessionProjectionRecord,
+  policy: RetentionPolicy
+): SelectedSessionProjectionRecord {
+  if (
+    nextProjection.retained_event_count <= policy.output_event_limit &&
+    nextProjection.retained_event_bytes <= policy.output_byte_limit
+  ) {
+    return nextProjection;
+  }
+
+  const records = (
+    db
+      .prepare("SELECT * FROM selected_projected_events WHERE session_id = ? ORDER BY cursor DESC")
+      .all(nextProjection.session.id) as EventRow[]
+  ).map(parseEventRow);
+  const newestFirst = records.filter((record) => record.event.type !== "replay_boundary");
+  if (newestFirst.length <= 1) return nextProjection;
+
+  const retained: SelectedProjectedEventRecord[] = [newestFirst[0] as SelectedProjectedEventRecord];
+  let retainedBytes = retained[0]?.byte_length ?? 0;
+  const maxRetainedEvents = policy.output_event_limit - 1;
+
+  for (const candidate of newestFirst.slice(1)) {
+    if (retained.length >= maxRetainedEvents || candidate.event.cursor <= 1) break;
+    const boundary = createRetentionBoundaryRecord(nextProjection.session.id, candidate.event.cursor - 1, candidate.event.captured_at);
+    if (boundary.byte_length + retainedBytes + candidate.byte_length > policy.output_byte_limit) break;
+    retained.push(candidate);
+    retainedBytes += candidate.byte_length;
+  }
+
+  const oldestRetained = retained.at(-1);
+  if (oldestRetained === undefined || oldestRetained.event.cursor <= 1) return nextProjection;
+  const boundary = createRetentionBoundaryRecord(
+    nextProjection.session.id,
+    oldestRetained.event.cursor - 1,
+    oldestRetained.event.captured_at
+  );
+  if (
+    nextProjection.retention_boundary_cursor !== null &&
+    boundary.event.after !== null &&
+    boundary.event.after < nextProjection.retention_boundary_cursor
+  ) {
+    throw new HostDeckSelectedStateRepositoryError("invalid_projection", "Selected retention boundary cannot move backward.");
+  }
+
+  const deletion = db
+    .prepare("DELETE FROM selected_projected_events WHERE session_id = ? AND cursor <= ?")
+    .run(nextProjection.session.id, boundary.event.cursor);
+  if (deletion.changes < 1) {
+    throw new HostDeckSelectedStateRepositoryError("projection_write_failed", "Selected retention removed no rows at its boundary cursor.");
+  }
+  insertEvent(db, boundary);
+
+  return parseProjection({
+    ...nextProjection,
+    retained_event_count: retained.length + 1,
+    retained_event_bytes: retainedBytes + boundary.byte_length,
+    earliest_retained_cursor: boundary.event.cursor,
+    retention_boundary_cursor: boundary.event.after
+  });
+}
+
+function createRetentionBoundaryRecord(
+  sessionId: string,
+  cursor: number,
+  capturedAt: string
+): SelectedProjectedEventRecord & { readonly event: Extract<SelectedProjectedEventRecord["event"], { type: "replay_boundary" }> } {
+  const event = selectedProjectionEventSchema.parse({
+    session_id: sessionId,
+    cursor,
+    captured_at: capturedAt,
+    upstream_at: null,
+    codex_event_id: null,
+    codex_event_type: null,
+    content_state: "complete",
+    content_notice: null,
+    type: "replay_boundary",
+    after: cursor - 1,
+    next_cursor: cursor,
+    reason: "retention"
+  });
+  if (event.type !== "replay_boundary") {
+    throw new HostDeckSelectedStateRepositoryError("invalid_event", "Selected retention did not produce a replay boundary.");
+  }
+  return { event, byte_length: selectedProjectedEventByteLength(event) };
 }
 
 export function selectedStateRevision(state: SelectedSessionState): SelectedStateRevision {
