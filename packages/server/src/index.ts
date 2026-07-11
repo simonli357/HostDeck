@@ -2,6 +2,7 @@ export * from "./api-route-contracts.js";
 export * from "./codex-approval-control-service.js";
 export * from "./codex-event-pipeline.js";
 export * from "./codex-goal-control-service.js";
+export * from "./codex-interrupt-control-service.js";
 export * from "./codex-model-control-service.js";
 export * from "./codex-plan-control-service.js";
 export * from "./codex-projection-service.js";

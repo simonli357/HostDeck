@@ -80,6 +80,44 @@ describe("Codex turn client", () => {
     ).rejects.toMatchObject({ code: "invalid_protocol_message", outcome: "not_applicable" });
   });
 
+  it("interrupts only the exact turn and accepts only the empty response", async () => {
+    const port = fakePort((request) => {
+      if (request.method !== "turn/interrupt") throw new Error("unexpected request");
+      return {};
+    });
+    const interrupted = await createCodexTurnClient(port).interruptTurn({
+      operation_id: "op_turn_interrupt_0001",
+      thread_id: "thread-turn-a",
+      turn_id: "turn-active-a"
+    });
+
+    expect(interrupted).toEqual({ thread_id: "thread-turn-a", turn_id: "turn-active-a", state: "accepted" });
+    expect(port.requests).toEqual([
+      {
+        method: "turn/interrupt",
+        params: { threadId: "thread-turn-a", turnId: "turn-active-a" },
+        kind: "mutation",
+        timeout_ms: 15_000
+      }
+    ]);
+
+    const malformed = createCodexTurnClient(fakePort(() => ({ accepted: true })));
+    await expect(
+      malformed.interruptTurn({
+        operation_id: "op_turn_interrupt_0002",
+        thread_id: "thread-turn-a",
+        turn_id: "turn-active-a"
+      })
+    ).rejects.toMatchObject({ code: "invalid_protocol_message", outcome: "not_applicable" });
+    await expect(
+      createCodexTurnClient(fakePort(() => new Date(0))).interruptTurn({
+        operation_id: "op_turn_interrupt_0003",
+        thread_id: "thread-turn-a",
+        turn_id: "turn-active-a"
+      })
+    ).rejects.toMatchObject({ code: "invalid_protocol_message", outcome: "not_applicable" });
+  });
+
   it("rejects malformed inputs, settings, and accepted responses", async () => {
     const client = createCodexTurnClient(fakePort(() => acceptedTurn("turn-a")));
     await expect(
@@ -130,12 +168,20 @@ describe("Codex turn client", () => {
         signal: {}
       } as never)
     ).rejects.toMatchObject({ outcome: "not_sent" });
+    await expect(
+      client.interruptTurn({
+        operation_id: "op_turn_invalid_shape_0003",
+        thread_id: "thread-turn-a",
+        turn_id: "turn-active-a",
+        confirm: true
+      } as never)
+    ).rejects.toMatchObject({ outcome: "not_sent" });
     expect(port.requests).toHaveLength(0);
   });
 
   it("fails closed for unavailable or disconnected turn capabilities", async () => {
     for (const capabilityState of ["unavailable", "unknown"] as const) {
-      for (const capability of ["turn_input", "turn_steer"] as const) {
+      for (const capability of ["turn_input", "turn_interrupt", "turn_steer"] as const) {
         const port = fakePort(() => acceptedTurn("turn-a"), compatibilityWithState(capability, capabilityState));
         const client = createCodexTurnClient(port);
         const operation =
@@ -146,12 +192,18 @@ describe("Codex turn client", () => {
                 text: "Prompt",
                 settings: { kind: "inherit" }
               })
-            : client.steerTurn({
+            : capability === "turn_steer"
+              ? client.steerTurn({
                 operation_id: "op_turn_capability_0002",
                 thread_id: "thread-turn-a",
                 expected_turn_id: "turn-active-a",
                 text: "Steer"
-              });
+                })
+              : client.interruptTurn({
+                  operation_id: "op_turn_capability_0003",
+                  thread_id: "thread-turn-a",
+                  turn_id: "turn-active-a"
+                });
         await expect(operation).rejects.toBeInstanceOf(HostDeckCodexAdapterError);
         expect(port.requests).toHaveLength(0);
       }
@@ -167,11 +219,23 @@ describe("Codex turn client", () => {
       })
     ).rejects.toMatchObject({ code: "handshake_failed", outcome: "not_sent" });
     expect(disconnected.requests).toHaveLength(0);
+
+    const mutationBlocked = { ...readyCompatibility(), state: "degraded", mutation_policy: "blocked" } as RuntimeCompatibility;
+    const blocked = fakePort(() => ({}), mutationBlocked);
+    await expect(
+      createCodexTurnClient(blocked).interruptTurn({
+        operation_id: "op_turn_mutation_blocked_0001",
+        thread_id: "thread-turn-a",
+        turn_id: "turn-active-a"
+      })
+    ).rejects.toMatchObject({ code: "handshake_failed", outcome: "not_sent" });
+    expect(blocked.requests).toHaveLength(0);
   });
 
   it("validates start and steer timeout options", () => {
     expect(() => createCodexTurnClient(fakePort(() => ({})), { start_timeout_ms: 1 })).toThrow();
     expect(() => createCodexTurnClient(fakePort(() => ({})), { steer_timeout_ms: 1 })).toThrow();
+    expect(() => createCodexTurnClient(fakePort(() => ({})), { interrupt_timeout_ms: 1 })).toThrow();
     expect(() => createCodexTurnClient(fakePort(() => ({})), { extra: true } as never)).toThrow();
     expect(() => createCodexTurnClient(fakePort(() => ({})), null as never)).toThrow();
     expect(() => createCodexTurnClient(null as never)).toThrow();
@@ -209,7 +273,7 @@ function readyCompatibility(): RuntimeCompatibility {
 }
 
 function compatibilityWithState(
-  name: "turn_input" | "turn_steer",
+  name: "turn_input" | "turn_interrupt" | "turn_steer",
   state: "unavailable" | "unknown"
 ): RuntimeCompatibility {
   const compatibility = readyCompatibility();

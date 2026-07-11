@@ -448,6 +448,13 @@ function fakeTurns(): FakeTurns {
     steerResult: null,
     startCalls,
     steerCalls,
+    async interruptTurn(input) {
+      return {
+        thread_id: input.thread_id as CodexThreadId,
+        turn_id: input.turn_id as never,
+        state: "accepted"
+      };
+    },
     async startTurn(input) {
       startCalls.push(input);
       if (this.startError !== null) throw this.startError;

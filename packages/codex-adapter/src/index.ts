@@ -137,6 +137,8 @@ export {
   type CodexTurnAccepted,
   type CodexTurnClient,
   type CodexTurnClientOptions,
+  type CodexTurnInterruptAccepted,
+  type CodexTurnInterruptInput,
   type CodexTurnRequestPort,
   type CodexTurnStartInput,
   type CodexTurnStartSettings,

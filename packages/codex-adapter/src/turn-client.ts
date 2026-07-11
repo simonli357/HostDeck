@@ -10,6 +10,7 @@ import {
 import type { ClientOperationId, CodexThreadId, CodexTurnId } from "@hostdeck/core";
 import type { CodexRequestInput } from "./broker.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
+import type { TurnInterruptParams } from "./generated/v2/TurnInterruptParams.js";
 import type { TurnStartParams } from "./generated/v2/TurnStartParams.js";
 import type { TurnSteerParams } from "./generated/v2/TurnSteerParams.js";
 
@@ -39,6 +40,13 @@ export interface CodexTurnSteerInput {
   readonly signal?: AbortSignal;
 }
 
+export interface CodexTurnInterruptInput {
+  readonly operation_id: ClientOperationId | string;
+  readonly thread_id: CodexThreadId | string;
+  readonly turn_id: CodexTurnId | string;
+  readonly signal?: AbortSignal;
+}
+
 export interface CodexTurnAccepted {
   readonly thread_id: CodexThreadId;
   readonly turn_id: CodexTurnId;
@@ -51,23 +59,32 @@ export interface CodexTurnSteered {
   readonly state: "accepted";
 }
 
+export interface CodexTurnInterruptAccepted {
+  readonly thread_id: CodexThreadId;
+  readonly turn_id: CodexTurnId;
+  readonly state: "accepted";
+}
+
 export interface CodexTurnRequestPort {
   readonly compatibility: RuntimeCompatibility;
   readonly request: (input: CodexRequestInput) => Promise<unknown>;
 }
 
 export interface CodexTurnClientOptions {
+  readonly interrupt_timeout_ms?: number;
   readonly start_timeout_ms?: number;
   readonly steer_timeout_ms?: number;
 }
 
 export interface CodexTurnClient {
   readonly runtime_version: string;
+  readonly interruptTurn: (input: CodexTurnInterruptInput) => Promise<CodexTurnInterruptAccepted>;
   readonly startTurn: (input: CodexTurnStartInput) => Promise<CodexTurnAccepted>;
   readonly steerTurn: (input: CodexTurnSteerInput) => Promise<CodexTurnSteered>;
 }
 
 interface ParsedOptions {
+  readonly interrupt_timeout_ms: number;
   readonly start_timeout_ms: number;
   readonly steer_timeout_ms: number;
 }
@@ -87,6 +104,28 @@ class DefaultCodexTurnClient implements CodexTurnClient {
 
   get runtime_version(): string {
     return requireRuntime(this.port.compatibility, "turn_input", "turn input");
+  }
+
+  async interruptTurn(input: CodexTurnInterruptInput): Promise<CodexTurnInterruptAccepted> {
+    requireRuntime(this.port.compatibility, "turn_interrupt", "turn interrupt");
+    const candidate = parseInputRecord(input, ["operation_id", "thread_id", "turn_id"], ["signal"], "turn-interrupt");
+    parseOperationId(candidate.operation_id);
+    const threadId = parseThreadId(candidate.thread_id, "turn-interrupt target");
+    const turnId = parseInputTurnId(candidate.turn_id, "interrupt target");
+    const signal = parseSignal(candidate.signal);
+    const params = { threadId, turnId } satisfies TurnInterruptParams;
+    const result = requireRecord(
+      await this.port.request({
+        method: "turn/interrupt",
+        params,
+        kind: "mutation",
+        timeout_ms: this.options.interrupt_timeout_ms,
+        ...(signal === undefined ? {} : { signal })
+      }),
+      "Codex turn/interrupt result must be an object."
+    );
+    assertExactKeys(result, [], "Codex turn/interrupt response must be the exact empty object.");
+    return Object.freeze({ thread_id: threadId, turn_id: turnId, state: "accepted" });
   }
 
   async startTurn(input: CodexTurnStartInput): Promise<CodexTurnAccepted> {
@@ -125,7 +164,7 @@ class DefaultCodexTurnClient implements CodexTurnClient {
     );
     const operationId = parseOperationId(candidate.operation_id);
     const threadId = parseThreadId(candidate.thread_id, "turn-steer target");
-    const expectedTurnId = parseInputTurnId(candidate.expected_turn_id);
+    const expectedTurnId = parseInputTurnId(candidate.expected_turn_id, "expected");
     const text = parsePromptText(candidate.text);
     const signal = parseSignal(candidate.signal);
     const params = {
@@ -225,7 +264,7 @@ function parseAcceptedTurn(result: Record<string, unknown>, threadId: CodexThrea
 
 function requireRuntime(
   compatibility: RuntimeCompatibility,
-  capabilityName: "turn_input" | "turn_steer",
+  capabilityName: "turn_input" | "turn_interrupt" | "turn_steer",
   label: string
 ): string {
   const capability = compatibility.capabilities.find((candidate) => candidate.name === capabilityName);
@@ -235,6 +274,7 @@ function requireRuntime(
   if (
     capability?.state !== "available" ||
     !["degraded", "ready"].includes(compatibility.state) ||
+    compatibility.mutation_policy !== "allowed" ||
     compatibility.observed_version === null ||
     compatibility.binding_id === null
   ) {
@@ -247,9 +287,18 @@ function parseOptions(options: CodexTurnClientOptions): ParsedOptions {
   if (options === null || typeof options !== "object" || Array.isArray(options)) {
     throw new TypeError("Codex turn client options must be an object.");
   }
-  const unsupported = Object.keys(options).filter((key) => !["start_timeout_ms", "steer_timeout_ms"].includes(key));
+  const unsupported = Object.keys(options).filter(
+    (key) => !["interrupt_timeout_ms", "start_timeout_ms", "steer_timeout_ms"].includes(key)
+  );
   if (unsupported.length > 0) throw invalidInput("Codex turn client options contain unsupported fields.");
   return {
+    interrupt_timeout_ms: parseBoundedInteger(
+      options.interrupt_timeout_ms,
+      defaultResourceBudget.protocol_mutation_timeout_ms,
+      resourceBudgetDefinitionByKey.protocol_mutation_timeout_ms.minimum,
+      resourceBudgetDefinitionByKey.protocol_mutation_timeout_ms.maximum,
+      "turn-interrupt timeout"
+    ),
     start_timeout_ms: parseBoundedInteger(
       options.start_timeout_ms,
       defaultResourceBudget.protocol_start_timeout_ms,
@@ -311,9 +360,9 @@ function parseThreadId(candidate: unknown, label: string): CodexThreadId {
   return parsed.data;
 }
 
-function parseInputTurnId(candidate: unknown): CodexTurnId {
+function parseInputTurnId(candidate: unknown, label: string): CodexTurnId {
   const parsed = codexTurnIdSchema.safeParse(candidate);
-  if (!parsed.success) throw invalidInput("Codex expected turn id is invalid.", parsed.error);
+  if (!parsed.success) throw invalidInput(`Codex ${label} turn id is invalid.`, parsed.error);
   return parsed.data;
 }
 
@@ -349,6 +398,8 @@ function parsePrintableString(candidate: unknown, label: string, maxLength: numb
 
 function requireRecord(candidate: unknown, message: string): Record<string, unknown> {
   if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) throw invalidPayload(message);
+  const prototype = Object.getPrototypeOf(candidate);
+  if (prototype !== Object.prototype && prototype !== null) throw invalidPayload(message);
   return candidate as Record<string, unknown>;
 }
 
