@@ -140,8 +140,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/int-v1-025-approval-routing.md`.
 - `INT-V1-026`: focused turn-client/prompt-regression/interrupt-service matrix (41), selected contracts (28), repeated exact authenticated two-thread interrupt smoke, root/all-package typechecks, lint/exports, scaffold/planning/binding checks, unit (611 passed, 25 external tests skipped), contract (115), integration (16), web (14), frozen offline install, production audit, terminal/unarchived/isolation/cleanup inspection, and diff checks pass.
 - Evidence: `artifacts/int-v1-026-interrupt-control.md`.
-- `INT-V1-027` in progress: focused normalizer/pipeline/control-fanout matrix (29), unit (750 passed, 29 external skipped), contract (138), integration (16), web (14), root typecheck, lint/exports, scaffold/planning/exact-binding checks, frozen offline install, production audit, and diff checks pass. Four exact aggregate attempts closed three harness/assembly defects; the latest fails immediately and truthfully at the external account usage gate before command/TUI acceptance.
-- Partial evidence: `artifacts/int-v1-027-structured-vertical.md`; implementation `f8ebcfc`.
+- `INT-V1-027` in progress: focused normalizer/pipeline/control-fanout matrix (30), unit (751 passed, 29 external skipped), contract (138), integration (16), web (14), root typecheck, lint/exports, scaffold/planning/exact-binding checks, frozen offline install, production audit, and diff checks pass. Six exact aggregate attempts closed five harness/assembly defects; the latest processes mapping-time callbacks for both sessions, then fails immediately at the external account usage gate with clean reverse cleanup.
+- Partial evidence: `artifacts/int-v1-027-structured-vertical.md`; implementation `f8ebcfc`; callback-admission hardening `d765855`.
 
 ## Git
 
@@ -174,4 +174,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `INT-V1-023` owner-doc closure is pushed as `bb9618a`; `INT-V1-024` hardened criteria as `9ea02cd`; reviewed nullable wire shape as `c308272`; implementation as `06eccdd`.
 - `INT-V1-024` owner-doc closure is pushed as `4d02eba`; `IFC-V1-019` hardened criteria as `72e6c34`; implementation as `cd0d929`.
 - `IFC-V1-019` owner-doc closure is pushed as `992fba0`; `INT-V1-027` hardened criteria as `1afc935`; callback/aggregate implementation as `f8ebcfc`.
+- `INT-V1-027` startup callback ordering, thread-state snapshot normalization, diagnostic redaction, and reverse-cleanup hardening are pushed as `d765855`.
 - Next action: rerun the unchanged exact `INT-V1-027` aggregate after authenticated turns reset, then repair the host Bubblewrap/user-namespace prerequisite if the command-backed step still fails. Keep the task open until all eight proof sources and cleanup pass in one lifecycle.
