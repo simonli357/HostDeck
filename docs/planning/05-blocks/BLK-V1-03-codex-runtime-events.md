@@ -48,7 +48,7 @@ No fake-Codex or fake-tmux test can satisfy these gates.
 | Exact real turn/control/event semantic spike | `INT-V1-006` | Done: event-gated operation matrix, real approvals/control/TUI/reconnect, bounded compact incompleteness, and corrected handshake/materialization bugs. |
 | Event normalization and exact prompt targeting | `INT-V1-017`, `INT-V1-018` | Done; strict ordered projection plus exact composed start/event-gated steer pass deterministic and real two-thread evidence. |
 | Model, goal, plan, usage, compact, and skills ports | `INT-V1-019` to `INT-V1-024` | Model, goal, and Plan are done; usage, compact, and skills are ready. |
-| Approval and interrupt ports | `INT-V1-025`, `INT-V1-026` | Approval is in progress; interrupt is ready from proven active-turn identity. |
+| Approval and interrupt ports | `INT-V1-025`, `INT-V1-026` | Approval is done with strict request/permission decoding and real deny/approve/expiry evidence; interrupt is in progress from proven active-turn identity. |
 | Assembled real structured vertical | `INT-V1-027` | Blocked by `INT-V1-017` to `INT-V1-026`. |
 | Runtime process/socket supervisor | `INT-V1-007` | Blocked by the assembled real vertical. |
 | Reconnect, crash, HostDeck restart, and TUI coexistence | `INT-V1-028` to `INT-V1-031` | Blocked by the supervisor, with explicit local-state prerequisites. |
