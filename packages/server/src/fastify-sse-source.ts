@@ -116,7 +116,7 @@ function parseSelectedEvent(value: unknown): SelectedProjectionEvent {
 function toBoundedSseMessage(event: SelectedProjectionEvent, maximumBytes: number): SSEMessage {
   const id = String(event.cursor);
   const data = serializeSseJson(event);
-  const wireBytes = Buffer.byteLength(`id: ${id}\nevent: ${event.type}\ndata: ${data}\n\n`, "utf8");
+  const wireBytes = serializedSseWireByteLength(event, data);
   if (wireBytes > maximumBytes) {
     throw new HostDeckSseTransportError(
       "event_too_large",
@@ -124,6 +124,15 @@ function toBoundedSseMessage(event: SelectedProjectionEvent, maximumBytes: numbe
     );
   }
   return { data: event, event: event.type, id };
+}
+
+export function selectedProjectionSseWireByteLength(candidate: unknown): number {
+  const event = parseSelectedEvent(candidate);
+  return serializedSseWireByteLength(event, serializeSseJson(event));
+}
+
+function serializedSseWireByteLength(event: SelectedProjectionEvent, data: string): number {
+  return Buffer.byteLength(`id: ${event.cursor}\nevent: ${event.type}\ndata: ${data}\n\n`, "utf8");
 }
 
 async function nextWithAbort(
