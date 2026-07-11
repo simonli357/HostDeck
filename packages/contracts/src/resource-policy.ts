@@ -137,6 +137,7 @@ export const resourceBudgetDefinitions = Object.freeze([
   defineResource("control_model_max_pending_selections", "count", 1, 128, 4_096, "turn_control", "service_overloaded", "reject_operation"),
   defineResource("control_plan_max_pending_selections", "count", 1, 128, 4_096, "turn_control", "service_overloaded", "reject_operation"),
   defineResource("control_goal_max_uncertain_mutations", "count", 1, 128, 4_096, "turn_control", "service_overloaded", "reject_operation"),
+  defineResource("control_approval_expiry_ms", "milliseconds", 1_000, 300_000, 1_800_000, "turn_control", "approval_not_pending", "reject_operation"),
 
   defineResource("lifecycle_startup_timeout_ms", "milliseconds", 1_000, 60_000, 300_000, "runtime_supervisor", "operation_timeout", "abort_operation"),
   defineResource("lifecycle_shutdown_timeout_ms", "milliseconds", 1_000, 10_000, 60_000, "host_service", "operation_timeout", "terminate_resource"),

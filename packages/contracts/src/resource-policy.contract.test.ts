@@ -15,7 +15,7 @@ import {
 
 describe("selected V1 resource budget", () => {
   it("defines one complete, immutable, observable registry", () => {
-    expect(resourceBudgetDefinitions).toHaveLength(68);
+    expect(resourceBudgetDefinitions).toHaveLength(69);
     expect(Object.isFrozen(resourceBudgetDefinitions)).toBe(true);
     expect(Object.isFrozen(defaultResourceBudget)).toBe(true);
     expect(Object.isFrozen(resourceBudgetDefinitionByKey)).toBe(true);
@@ -83,6 +83,7 @@ describe("selected V1 resource budget", () => {
       control_model_max_pending_selections: 128,
       control_plan_max_pending_selections: 128,
       control_goal_max_uncertain_mutations: 128,
+      control_approval_expiry_ms: 300_000,
       lifecycle_startup_timeout_ms: 60_000,
       lifecycle_shutdown_timeout_ms: 10_000,
       lifecycle_cleanup_step_timeout_ms: 2_000,

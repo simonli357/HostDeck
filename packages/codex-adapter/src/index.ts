@@ -1,4 +1,12 @@
 export {
+  type CodexApprovalClient,
+  type CodexApprovalMethod,
+  type CodexApprovalRequest,
+  type CodexApprovalRequestPort,
+  type CodexApprovalResponseInput,
+  createCodexApprovalClient
+} from "./approval-client.js";
+export {
   type CodexBindingDescriptor,
   type CodexBindingManifest,
   type CodexProtocolSurface,
