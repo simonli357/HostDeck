@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import {
   clientOperationIdSchema,
   isoTimestampSchema,
@@ -56,6 +57,20 @@ export interface SelectedAuditRetentionBatchResult {
   readonly protected_pending_operation_count: number;
   readonly remaining: boolean;
   readonly retained_record_count: number;
+}
+
+export interface SelectedAuditOrphanReconciliationBatchInput {
+  readonly eligible_before: string;
+  readonly max_reconciled_operations: number;
+  readonly reconciled_at: string;
+}
+
+export interface SelectedAuditOrphanReconciliationBatchResult {
+  readonly eligible_pending_operation_count: number;
+  readonly protected_recent_operation_count: number;
+  readonly reconciled_operation_count: number;
+  readonly remaining: boolean;
+  readonly total_pending_operation_count: number;
 }
 
 interface SelectedAuditRow {
@@ -141,6 +156,73 @@ export function createSelectedAuditRepository(db: Database.Database): SelectedAu
       return runWrite(() => recordTerminalTransaction(parsed));
     }
   };
+}
+
+export function reconcileSelectedAuditOrphansBatch(
+  db: Database.Database,
+  input: SelectedAuditOrphanReconciliationBatchInput
+): SelectedAuditOrphanReconciliationBatchResult {
+  assertExactOrphanBatchInput(input);
+  const eligibleBefore = parseAuditReconciliationTimestamp(input.eligible_before, "eligible_before");
+  const reconciledAt = parseAuditReconciliationTimestamp(input.reconciled_at, "reconciled_at");
+  if (Date.parse(reconciledAt) < Date.parse(eligibleBefore)) {
+    throw invalidRecord("Selected audit reconciliation time cannot precede its eligibility cutoff.");
+  }
+  const maxReconciledOperations = parseAuditReconciliationBatchSize(input.max_reconciled_operations);
+  const transaction = db.transaction((): SelectedAuditOrphanReconciliationBatchResult => {
+    const candidateOperationIds = readEligiblePendingOperationIds(
+      db,
+      eligibleBefore,
+      maxReconciledOperations + 1
+    );
+    const selectedOperationIds = candidateOperationIds.slice(0, maxReconciledOperations);
+    for (const operationId of selectedOperationIds) {
+      const trail = readTrail(db, operationId);
+      const accepted = trail?.records[0];
+      if (
+        trail === null ||
+        trail.state !== "pending" ||
+        accepted === undefined ||
+        accepted.phase !== "accepted" ||
+        Date.parse(accepted.at) >= Date.parse(eligibleBefore)
+      ) {
+        throw new HostDeckSelectedAuditRepositoryError(
+          "invalid_audit_trail",
+          "Selected audit orphan candidate contradicts its stored pending trail."
+        );
+      }
+      const terminal = parseRecord({
+        id: orphanTerminalRecordId(operationId),
+        operation_id: operationId,
+        at: reconciledAt,
+        actor: accepted.actor,
+        action: accepted.action,
+        target: accepted.target,
+        phase: "terminal",
+        outcome: "incomplete",
+        payload_summary: { reason: "host_restart_without_terminal" },
+        error_code: "runtime_unavailable"
+      });
+      parseTrail(operationId, [accepted, terminal], "audit_operation_conflict");
+      insertRecord(db, terminal);
+    }
+
+    const final = readPendingAuditMetrics(db, eligibleBefore);
+    return Object.freeze({
+      eligible_pending_operation_count: final.eligible_pending_operation_count,
+      protected_recent_operation_count: final.protected_recent_operation_count,
+      reconciled_operation_count: selectedOperationIds.length,
+      remaining: final.eligible_pending_operation_count > 0,
+      total_pending_operation_count: final.total_pending_operation_count
+    });
+  }).immediate;
+
+  try {
+    return transaction();
+  } catch (error) {
+    if (error instanceof HostDeckSelectedAuditRepositoryError) throw error;
+    throw mapWriteFailure(error);
+  }
 }
 
 export function maintainSelectedAuditRetentionBatch(
@@ -234,6 +316,12 @@ interface AuditRetentionSummaryRow {
   readonly latest_at: string;
   readonly operation_id: string;
   readonly record_count: number;
+}
+
+interface PendingAuditMetricsRow {
+  readonly eligible_pending_operation_count: number;
+  readonly protected_recent_operation_count: number;
+  readonly total_pending_operation_count: number;
 }
 
 function readAuditRetentionState(
@@ -499,6 +587,114 @@ function isNonNegativeSafeInteger(candidate: unknown): candidate is number {
 
 function isPositiveTrailSize(candidate: unknown): candidate is 1 | 2 {
   return candidate === 1 || candidate === 2;
+}
+
+function assertExactOrphanBatchInput(candidate: unknown): asserts candidate is SelectedAuditOrphanReconciliationBatchInput {
+  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) {
+    throw invalidRecord("Selected audit orphan reconciliation input must be an object.");
+  }
+  const keys = Object.keys(candidate).sort();
+  if (
+    keys.length !== 3 ||
+    keys[0] !== "eligible_before" ||
+    keys[1] !== "max_reconciled_operations" ||
+    keys[2] !== "reconciled_at"
+  ) {
+    throw invalidRecord("Selected audit orphan reconciliation input has unsupported or missing fields.");
+  }
+}
+
+function parseAuditReconciliationTimestamp(candidate: unknown, field: string): string {
+  const parsed = isoTimestampSchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_record",
+      `Selected audit reconciliation ${field} is invalid.`,
+      { cause: parsed.error }
+    );
+  }
+  return parsed.data;
+}
+
+function parseAuditReconciliationBatchSize(candidate: unknown): number {
+  if (!Number.isSafeInteger(candidate) || (candidate as number) < 1 || (candidate as number) > 1_000) {
+    throw invalidRecord("Selected audit orphan reconciliation batch size must be between 1 and 1000 operations.");
+  }
+  return candidate as number;
+}
+
+function readEligiblePendingOperationIds(
+  db: Database.Database,
+  eligibleBefore: string,
+  limit: number
+): readonly string[] {
+  let rows: Array<{ readonly operation_id: unknown }>;
+  try {
+    rows = db
+      .prepare(
+        `
+          SELECT accepted.operation_id
+          FROM selected_audit_events AS accepted
+          WHERE accepted.phase = 'accepted'
+            AND accepted.at < @eligible_before
+            AND NOT EXISTS (
+              SELECT 1
+              FROM selected_audit_events AS terminal
+              WHERE terminal.operation_id = accepted.operation_id AND terminal.phase = 'terminal'
+            )
+          ORDER BY accepted.at ASC, accepted.operation_id ASC
+          LIMIT @candidate_limit
+        `
+      )
+      .all({ candidate_limit: limit, eligible_before: eligibleBefore }) as Array<{ readonly operation_id: unknown }>;
+  } catch (error) {
+    throw mapUnavailableRead(error);
+  }
+  return rows.map((row) => parseStoredOperationId(row.operation_id));
+}
+
+function readPendingAuditMetrics(db: Database.Database, eligibleBefore: string): PendingAuditMetricsRow {
+  let row: PendingAuditMetricsRow | undefined;
+  try {
+    row = db
+      .prepare(
+        `
+          SELECT
+            COUNT(*) AS total_pending_operation_count,
+            COALESCE(SUM(CASE WHEN accepted.at < @eligible_before THEN 1 ELSE 0 END), 0)
+              AS eligible_pending_operation_count,
+            COALESCE(SUM(CASE WHEN accepted.at >= @eligible_before THEN 1 ELSE 0 END), 0)
+              AS protected_recent_operation_count
+          FROM selected_audit_events AS accepted
+          WHERE accepted.phase = 'accepted'
+            AND NOT EXISTS (
+              SELECT 1
+              FROM selected_audit_events AS terminal
+              WHERE terminal.operation_id = accepted.operation_id AND terminal.phase = 'terminal'
+            )
+        `
+      )
+      .get({ eligible_before: eligibleBefore }) as PendingAuditMetricsRow | undefined;
+  } catch (error) {
+    throw mapUnavailableRead(error);
+  }
+  if (
+    row === undefined ||
+    !isNonNegativeSafeInteger(row.total_pending_operation_count) ||
+    !isNonNegativeSafeInteger(row.eligible_pending_operation_count) ||
+    !isNonNegativeSafeInteger(row.protected_recent_operation_count) ||
+    row.eligible_pending_operation_count + row.protected_recent_operation_count !== row.total_pending_operation_count
+  ) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_trail",
+      "Selected audit pending-operation metrics are invalid."
+    );
+  }
+  return row;
+}
+
+function orphanTerminalRecordId(operationId: string): string {
+  return `audit:orphan:${createHash("sha256").update(operationId).digest("hex")}`;
 }
 
 function parseAuditRetentionPolicy(candidate: unknown): RetentionPolicy {

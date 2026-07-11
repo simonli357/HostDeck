@@ -9,6 +9,7 @@ import {
   HostDeckSelectedStateRepositoryError,
   maintainSelectedProjectionRetentionBatch
 } from "./selected-state-repository.js";
+import { createStartupMaintenanceClock } from "./startup-maintenance-clock.js";
 
 export type StartupRetentionDegradedReason =
   | "aborted"
@@ -141,11 +142,13 @@ export function runStartupRetentionMaintenance(
   input: RunStartupRetentionMaintenanceInput
 ): StartupRetentionMaintenanceResult {
   const parsed = parseStartupRetentionInput(input);
-  const startedAt = readInitialMonotonicTime(parsed.monotonic_now);
-  const deadline = startedAt + parsed.timeout_ms;
-  if (!Number.isFinite(deadline)) {
-    throw invalidConfig("Startup retention monotonic deadline is outside the finite clock range.");
-  }
+  const clock = createStartupMaintenanceClock({
+    clock: parsed.monotonic_now,
+    invalid_config: invalidConfig,
+    label: "Startup retention",
+    signal: parsed.signal,
+    timeout_ms: parsed.timeout_ms
+  });
   const reasons = new Set<StartupRetentionDegradedReason>();
   const output: OutputProgress = {
     actionableRemaining: null,
@@ -170,17 +173,16 @@ export function runStartupRetentionMaintenance(
     scanComplete: false
   };
   let failure: StartupRetentionFailure | null = null;
-  let lastMonotonicTime = startedAt;
   let stopped = false;
 
   while (!stopped && (!output.scanComplete || !audit.scanComplete)) {
     let progressed = false;
     if (!output.scanComplete) {
-      const guard = checkRunGuard(parsed, deadline, lastMonotonicTime);
-      lastMonotonicTime = guard.time;
+      const guard = clock.check();
       if (guard.reason !== null) {
         reasons.add(guard.reason);
-        failure = guard.failure;
+        failure =
+          guard.failure_code === null ? null : Object.freeze({ code: guard.failure_code, scope: "runner" });
         stopped = true;
       } else if (output.batchCount >= parsed.max_batches_per_scope) {
         reasons.add("output_batch_limit");
@@ -224,11 +226,11 @@ export function runStartupRetentionMaintenance(
     }
 
     if (!stopped && !audit.scanComplete) {
-      const guard = checkRunGuard(parsed, deadline, lastMonotonicTime);
-      lastMonotonicTime = guard.time;
+      const guard = clock.check();
       if (guard.reason !== null) {
         reasons.add(guard.reason);
-        failure = guard.failure;
+        failure =
+          guard.failure_code === null ? null : Object.freeze({ code: guard.failure_code, scope: "runner" });
         stopped = true;
       } else if (audit.batchCount >= parsed.max_batches_per_scope) {
         reasons.add("audit_batch_limit");
@@ -299,13 +301,12 @@ export function runStartupRetentionMaintenance(
   if (audit.newestTrailOversize === true) reasons.add("newest_audit_trail_oversize");
   if (audit.pendingBlocksPolicy === true) reasons.add("protected_audit_operations");
 
-  const finalClock = readFinalMonotonicTime(parsed.monotonic_now, lastMonotonicTime);
-  lastMonotonicTime = finalClock.time;
-  if (finalClock.failed) {
-    reasons.add("clock_failure");
-    failure ??= Object.freeze({ code: "invalid_monotonic_clock", scope: "runner" });
-  } else if (lastMonotonicTime >= deadline) {
-    reasons.add("timeout");
+  const finished = clock.finish();
+  if (finished.reason !== null) {
+    reasons.add(finished.reason);
+    if (finished.failure_code !== null) {
+      failure ??= Object.freeze({ code: finished.failure_code, scope: "runner" });
+    }
   }
   const ordered = Object.freeze(orderedReasons.filter((reason) => reasons.has(reason)));
   const frozenOutput = Object.freeze({
@@ -332,7 +333,7 @@ export function runStartupRetentionMaintenance(
   return Object.freeze({
     audit: frozenAudit,
     cutoff_at: parsed.now,
-    duration_ms: Math.max(0, lastMonotonicTime - startedAt),
+    duration_ms: finished.duration_ms,
     failure,
     output: frozenOutput,
     reasons: ordered,
@@ -419,59 +420,6 @@ function parseStartupRetentionInput(input: RunStartupRetentionMaintenanceInput):
     signal: input.signal ?? null,
     timeout_ms: timeoutMs
   };
-}
-
-function readInitialMonotonicTime(clock: () => number): number {
-  let value: number;
-  try {
-    value = clock();
-  } catch (error) {
-    throw invalidConfig("Startup retention monotonic clock failed before maintenance.", error);
-  }
-  if (!Number.isFinite(value) || value < 0) {
-    throw invalidConfig("Startup retention monotonic clock must return a finite non-negative number.");
-  }
-  return value;
-}
-
-function checkRunGuard(
-  input: ParsedStartupRetentionInput,
-  deadline: number,
-  priorTime: number
-): { readonly failure: StartupRetentionFailure | null; readonly reason: "aborted" | "clock_failure" | "timeout" | null; readonly time: number } {
-  if (input.signal?.aborted === true) return { failure: null, reason: "aborted", time: priorTime };
-  let time: number;
-  try {
-    time = input.monotonic_now();
-  } catch {
-    return {
-      failure: Object.freeze({ code: "invalid_monotonic_clock", scope: "runner" }),
-      reason: "clock_failure",
-      time: priorTime
-    };
-  }
-  if (!Number.isFinite(time) || time < priorTime) {
-    return {
-      failure: Object.freeze({ code: "invalid_monotonic_clock", scope: "runner" }),
-      reason: "clock_failure",
-      time: priorTime
-    };
-  }
-  if (time >= deadline) return { failure: null, reason: "timeout", time };
-  return { failure: null, reason: null, time };
-}
-
-function readFinalMonotonicTime(
-  clock: () => number,
-  priorTime: number
-): { readonly failed: boolean; readonly time: number } {
-  try {
-    const time = clock();
-    if (!Number.isFinite(time) || time < priorTime) return { failed: true, time: priorTime };
-    return { failed: false, time };
-  } catch {
-    return { failed: true, time: priorTime };
-  }
 }
 
 function findNextOutputSession(

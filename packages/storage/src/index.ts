@@ -101,6 +101,9 @@ export {
   createSelectedAuditRepository,
   HostDeckSelectedAuditRepositoryError,
   maintainSelectedAuditRetentionBatch,
+  reconcileSelectedAuditOrphansBatch,
+  type SelectedAuditOrphanReconciliationBatchInput,
+  type SelectedAuditOrphanReconciliationBatchResult,
   type SelectedAuditRepository,
   type SelectedAuditRepositoryErrorCode,
   type SelectedAuditRetentionBatchInput,
@@ -135,6 +138,15 @@ export {
   HostDeckSettingsError,
   type SettingsRepository
 } from "./settings-repository.js";
+export {
+  HostDeckStartupAuditOrphanReconciliationError,
+  type RunStartupAuditOrphanReconciliationInput,
+  runStartupAuditOrphanReconciliation,
+  type StartupAuditOrphanReconciliationErrorCode,
+  type StartupAuditOrphanReconciliationFailure,
+  type StartupAuditOrphanReconciliationReason,
+  type StartupAuditOrphanReconciliationResult
+} from "./startup-audit-orphan-reconciliation.js";
 export {
   HostDeckStartupRetentionMaintenanceError,
   type RunStartupRetentionMaintenanceInput,
