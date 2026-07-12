@@ -15,7 +15,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `DAT-V1-021` Implement atomic CSRF bootstrap storage | ready | none | Uses the now-frozen HTTPS/browser policy and unlocks the dependency-ordered device security repositories. |
+| 1 | `DAT-V1-021` Implement atomic CSRF bootstrap storage | in_progress | none | Uses the now-frozen HTTPS/browser policy and unlocks the dependency-ordered device security repositories. |
 | 2 | `IFC-V1-017` Implement transport, Host, Origin, and CORS trust gate | ready | none | Applies the physically proven HTTPS origin contract before authentication or route data. |
 | 3 | `INT-V1-027` Prove the assembled real structured vertical | blocked | Authenticated turn usage reset; host Bubblewrap AppArmor profile | Resume the unchanged aggregate when both external runtime conditions are available. |
 
