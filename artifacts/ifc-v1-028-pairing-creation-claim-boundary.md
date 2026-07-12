@@ -2,7 +2,7 @@
 
 Date: 2026-07-12
 
-Status: production-hardening criteria frozen; awaiting human approval. Implementation has not started.
+Status: complete. Implementation `4c1d5ca` is pushed to `origin/main`.
 
 ## Purpose
 
@@ -12,6 +12,15 @@ Implement the two selected pairing routes over the completed request-trust gate,
 - `POST /api/v1/access/pairing-claims` consumes that code from the same-origin HTTPS dashboard, creates one device, and installs its bearer in one secure browser cookie.
 
 This leaf owns the missing HTTP contracts, trusted peer-source derivation, claim-specific process-local concurrency admission, selected issue/claim orchestration, generic public failure mapping, cookie serialization, and direct route evidence. It does not implement the browser UI, CSRF bootstrap, device revocation, LAN lifecycle, aggregate write admission, production listener composition, packaging, or release acceptance.
+
+## Implementation Result
+
+- Added strict shared request/response schemas, selected pairing/device/source identifiers, the bounded persistent-device resource policy, truthful accepted-claim audit intent, and the 512-character canonical audit-origin ceiling.
+- Added trust-owned canonical peer hashing with IPv4-mapped collapse and no forwarded-header or raw-address authority.
+- Added one branded pairing policy and exact Fastify registrations for local-admin issue and same-origin HTTPS claim, including durable and process-local admission, fixed public failures, no-store behavior, and accepted-to-terminal audit ordering.
+- Added absolute 90-day-default device/cookie expiry, exact host-only Secure/HttpOnly/Strict cookie serialization, route-level late header publication, and header removal on every error or non-success path.
+- Recompute and verify the committed pairing-code, device-bearer, and initial-CSRF hashes before any raw secret can reach a successful response handoff. Well-shaped but mismatched adapter output fails closed after preserving truthful durable/audit state.
+- Added real migrated-SQLite, restart, TLS-wire, race, audit-failure, response-failure, CSRF-bootstrap, and main/WAL/SHM privacy evidence without claiming physical-phone or aggregate production composition acceptance.
 
 ## Audit Findings And Resolutions
 
@@ -58,7 +67,7 @@ Additional invariants:
 - A selected generated device id remains `client_` plus exactly 24 base64url characters and must be proven from the storage result before response preparation.
 - Optional labels normalize only by omission to `null`; strings are not silently trimmed or case-folded. Selected labels are 1 to 120 characters, already trimmed, and contain no control, format, line-separator, or paragraph-separator code point.
 - Canonical timestamps are UTC ISO strings. Pair-request expiry must equal creation plus the resolved `pairing_code_lifetime_ms` exactly and must preserve at least one full claim window when issuance begins.
-- Device expiry must equal claim time plus the resolved `paired_device_lifetime_ms` exactly. The resource contract accepts only 86,400,000 through 31,536,000,000 milliseconds, defaults to 7,776,000,000 milliseconds, and requires pairing-code lifetime not to exceed device lifetime.
+- Device expiry is claim time plus the resolved `paired_device_lifetime_ms`, floored once to whole-second HTTP-cookie precision. It is less than one second short of the configured lifetime and never later than that bound. The resource contract accepts only 86,400,000 through 31,536,000,000 milliseconds, defaults to 7,776,000,000 milliseconds, and requires pairing-code lifetime not to exceed device lifetime.
 - No response contains an audit record/id, source key, code hash, device-token/CSRF hash, device bearer, raw CSRF token, cookie text, database classification, retry timestamp, or native cause.
 
 ### Authority And Transport
@@ -106,7 +115,7 @@ Equivalent IPv6 forms and IPv4-mapped forms cannot gain extra source budgets. Di
 3. Execute `pair_request` with the caller operation id, CLI actor, host target, and accepted summary `{ schema_version: 1, permission, client_label_present, expires_at }`; emergency audit bypass is false.
 4. Only after accepted audit proof, snapshot the clock again. Regression returns a failed `operation_conflict`; less than one full claim window remaining returns a failed `operation_timeout`. Neither path reaches entropy or storage.
 5. Generate one exact pairing id and invoke selected `issue` exactly once with that id, permission, nullable label, and the original creation time. Do not retry id/code collision, generator failure, storage contention, or uncertain commit.
-6. Descriptor-first validate the exact frozen issued result and full selected record. It must match id, permission, label, creation, expiry, unused/unrevoked version-1 provenance, no owner, and one exact raw code.
+6. Descriptor-first validate the exact frozen issued result and full selected record. It must match id, permission, label, creation, expiry, unused/unrevoked version-1 provenance, no owner, one exact raw code, and the hash recomputed from that raw code.
 7. Return transition success summary `{ schema_version: 1, pairing_id }`; prepare and freeze the exact response without copying the code into audit/error/diagnostics.
 8. Return the response only after terminal succeeded audit is proven.
 
@@ -114,10 +123,10 @@ Equivalent IPv6 forms and IPv4-mapped forms cannot gain extra source budgets. Di
 
 1. Apply no-store policy, require same-origin HTTPS, validate the exact body, obtain the trust-owned source hash, and acquire claim admission.
 2. Execute `pair_claim` with the body operation id, pairing-client actor, host target, and accepted summary `{ schema_version: 1, client_label_present }`; emergency audit bypass is false.
-3. Only after accepted audit proof, snapshot one valid route clock, derive the exact policy-bounded device expiry with safe-integer arithmetic, and invoke selected `claim` exactly once with the exact raw code, source key, time, nullable label, and that `deviceExpiresAt`.
+3. Only after accepted audit proof, snapshot one valid route clock, derive the policy-bounded whole-second device expiry with safe-integer arithmetic, and invoke selected `claim` exactly once with the exact raw code, source key, time, nullable label, and that `deviceExpiresAt`.
 4. Every syntactically valid attempt that clears process admission and accepted-audit proof reaches the repository. Durable source/global counters, code lookup, lifecycle classification, credential generation, device insert, and one-winner code consumption retain the frozen `DAT-V1-026` transaction order.
 5. Map a known repository rejection to one explicit failed transition. Unknown throws or malformed/contradictory returned state become `incomplete/internal_error`; no caller cause or value is reflected.
-6. On success, descriptor-first validate the exact frozen claim, pairing owner/device coherence, label precedence, permission, timestamps, nullable expiry, generation-1 CSRF state, raw bearer syntax, and raw CSRF syntax.
+6. On success, descriptor-first validate the exact frozen claim, pairing owner/device coherence, label precedence, permission, timestamps, nullable expiry, generation-1 CSRF state, raw bearer syntax, and raw CSRF syntax. Recomputed hashes from the input code, returned bearer, and returned initial CSRF must match the committed pairing/device records.
 7. Return success summary `{ schema_version: 1, permission, device_created: true, device_id }`. Response preparation serializes one cookie from the raw bearer and freezes only the non-secret body plus serialized header handoff. The initial raw CSRF value is not copied.
 8. After terminal succeeded audit proof, validate the prepared handoff again, set exactly one `Set-Cookie` header, and return the body. No route code may reconstruct credentials, call storage again, or set a header on a failed/incomplete result.
 9. Release claim admission in all cases. A later socket/send failure does not undo state or audit and is never automatically retried.
@@ -177,15 +186,22 @@ Lifecycle denial bodies never distinguish unknown, expired, revoked, used, or le
 | Diagnostics | Frozen saturating snapshots expose only active/global counts and coarse issue/claim/admission/failure totals. They retain no operation/request/record/pair/device id, permission, label, origin, address/source key, retry time, code/token/CSRF/cookie, path, message, or cause. |
 | Ownership boundaries | No browser UI, QR/image asset, device-revoke behavior, lock/LAN mutation, aggregate operation idempotency, SSE authority recheck, production listener assembly, packaging, physical-phone claim acceptance, or release claim is implemented or marked complete. |
 
-## Validation Plan
+## Validation Evidence
 
-- Direct contract suites for pairing, security audit, route manifest, and package exports.
-- Direct headless source-key and process-local admission suites with hostile descriptors, canonical address equivalence, count saturation, deferred concurrency, abort, and cleanup.
-- Direct route suites over branded fakes for exact order, call count, frozen values, malformed returned contracts, every public mapping, audit phases, response preparation, header timing, and secret scrubbing.
-- Real migrated SQLite composition for issue, invalid/rate/capacity claim, one-winner claim, claim-versus-revoke, audit pending/terminal/reconciliation, bootstrap generation 2, restart, closed/read-only/corrupt behavior, and main/WAL/SHM privacy.
-- Injection plus real loopback TLS/raw-HTTP evidence for transport, Host/Origin, cookie attributes, cache policy, duplicate/existing cookies, no CORS, no plaintext cookie, disconnect, and wire-secret location.
-- Focused contracts/storage/server regression, then root/package typecheck, lint/exports, scaffold, unit, contract, integration, web, planning, exact Codex binding, frozen install, production audit/license inventory, and `git diff --check`.
-- Manual descriptor/order/privacy inspection of every retained reference to raw code, bearer, CSRF, peer/source, prepared cookie, audit summary, and route error. Physical Android/browser pairing remains the aggregate `IFC-V1-033` gate and is not claimed by this leaf.
+| Evidence | Result |
+| --- | --- |
+| Direct selected pairing route suite | 15 tests pass over real migrated SQLite, deterministic overlap, accepted/terminal audit failures, post-commit corruption, response-send failure, exact cookie replacement, CSRF generation-2 bootstrap, restart, expiry, and raw-file privacy. |
+| Focused server/storage regression | 71 tests pass across pairing routes, source trust, CSRF, security audit execution, and selected pairing storage. |
+| Full unit suite | 257 suites pass: 913 tests passed, 29 explicitly pending/skipped, 0 failed. |
+| Contract, integration, and web | 168 contract, 16 integration, and 14 web tests pass. |
+| Types, formatting, and exports | Root and all nine package typechecks pass; Biome checks 307 files; all nine package exports pass. |
+| Repository integrity | Scaffold validates 9 packages and 18 root scripts. Planning validates 196 tasks, 84 requirements, 633 dependencies, and the 7-item current queue. |
+| Reproducibility and dependency review | Frozen offline install passes. Production audit reports 0 vulnerabilities across 140 dependencies. Production licenses remain permissive: MIT 101, ISC 9, BSD-3-Clause 5, Apache-2.0 3, BlueOak 5, and four permissive/choice categories. No dependency was added by the route implementation. |
+| Exact Codex binding | An isolated `@openai/codex@0.144.0` check validates 671 files with SHA-256 `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. The machine's default 0.144.1 remains an explicit release-environment mismatch and was not silently accepted. |
+| Wire/runtime inspection | A generated in-memory test certificate drives a real loopback TLS listener. Exact Host/Origin, one canonical cookie, no non-success cookie, reopened authentication before expiry, rejection at expiry, and raw credential/peer absence in SQLite main/WAL/SHM bytes pass. |
+| Manual hardening review | Descriptor ownership, audit ordering, side-effect counts, admission release, cookie publication timing, generic lifecycle privacy, cryptographic returned-secret provenance, retained secret references, and downstream ownership were inspected. `git diff --check` passes. |
+
+Physical Android/browser pairing remains the aggregate `IFC-V1-033` gate and is not claimed by this leaf.
 
 ## Reuse And Dependency Decision
 
@@ -202,4 +218,4 @@ Do not use a generic rate-limit package: durable attempts and atomic ownership a
 - `FE-V1-013`, `FE-V1-024`, and `FE-V1-031` own pairing/access UI, page-memory CSRF state, and visual/browser fidelity.
 - `IFC-V1-054` owns the packaged selected `pair` CLI; this leaf supplies the selected local-admin API route it will consume.
 
-Implementation may begin only after the human approves these frozen criteria.
+No downstream UI, LAN, aggregate route composition, physical-phone, package, or release gate is closed by this task.
