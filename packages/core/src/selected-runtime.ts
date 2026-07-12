@@ -102,10 +102,10 @@ export type SelectedMutationOperationKind = (typeof selectedMutationOperationKin
 export const selectedAuditOutcomes = ["accepted", "succeeded", "failed", "rejected", "incomplete"] as const;
 export type SelectedAuditOutcome = (typeof selectedAuditOutcomes)[number];
 
-export const selectedAuditActions = [
-  ...selectedOperationKinds,
+export const selectedSecurityAuditActions = [
   "pair_request",
   "pair_claim",
+  "csrf_bootstrap",
   "device_revoke",
   "lock",
   "unlock",
@@ -113,6 +113,12 @@ export const selectedAuditActions = [
   "lan_enable",
   "lan_disable",
   "certificate_rotate"
+] as const;
+export type SelectedSecurityAuditAction = (typeof selectedSecurityAuditActions)[number];
+
+export const selectedAuditActions = [
+  ...selectedOperationKinds,
+  ...selectedSecurityAuditActions
 ] as const;
 export type SelectedAuditAction = (typeof selectedAuditActions)[number];
 

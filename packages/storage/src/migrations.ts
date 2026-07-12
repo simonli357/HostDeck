@@ -514,6 +514,130 @@ export const hostDeckAuthDeviceCsrfRotationMigration: StorageMigration = {
   `
 };
 
+export const hostDeckSecurityAuditCatalogMigration: StorageMigration = {
+  version: "202607110010_security_audit_catalog",
+  sql: `
+    CREATE TABLE selected_audit_events_next (
+      id TEXT PRIMARY KEY,
+      operation_id TEXT NOT NULL,
+      at TEXT NOT NULL,
+      action TEXT NOT NULL CHECK (action IN (
+        'prompt',
+        'model',
+        'goal',
+        'plan',
+        'usage',
+        'compact',
+        'skills',
+        'approval_response',
+        'interrupt',
+        'archive',
+        'pair_request',
+        'pair_claim',
+        'csrf_bootstrap',
+        'device_revoke',
+        'lock',
+        'unlock',
+        'lan_configure',
+        'lan_enable',
+        'lan_disable',
+        'certificate_rotate'
+      )),
+      security_schema_version INTEGER CHECK (
+        security_schema_version IS NULL OR
+        (typeof(security_schema_version) = 'integer' AND security_schema_version = 1)
+      ),
+      phase TEXT NOT NULL CHECK (phase IN ('accepted', 'terminal')),
+      outcome TEXT NOT NULL CHECK (outcome IN ('accepted', 'succeeded', 'failed', 'rejected', 'incomplete')),
+      error_code TEXT,
+      record_json TEXT NOT NULL CHECK (
+        json_valid(record_json) AND
+        length(CAST(record_json AS BLOB)) BETWEEN 2 AND 65536
+      ),
+      UNIQUE (operation_id, phase),
+      CHECK (
+        (phase = 'accepted' AND outcome = 'accepted' AND error_code IS NULL) OR
+        (phase = 'terminal' AND outcome = 'succeeded' AND error_code IS NULL) OR
+        (phase = 'terminal' AND outcome IN ('failed', 'rejected', 'incomplete') AND error_code IS NOT NULL)
+      ),
+      CHECK (
+        (security_schema_version IS NULL AND action <> 'csrf_bootstrap') OR
+        (
+          security_schema_version IS NOT NULL AND
+          security_schema_version = 1 AND action IN (
+            'pair_request',
+            'pair_claim',
+            'csrf_bootstrap',
+            'device_revoke',
+            'lock',
+            'unlock',
+            'lan_configure',
+            'lan_enable',
+            'lan_disable',
+            'certificate_rotate'
+          )
+        )
+      )
+    );
+
+    INSERT INTO selected_audit_events_next (
+      id,
+      operation_id,
+      at,
+      action,
+      security_schema_version,
+      phase,
+      outcome,
+      error_code,
+      record_json
+    )
+    SELECT
+      id,
+      operation_id,
+      at,
+      action,
+      NULL,
+      phase,
+      outcome,
+      error_code,
+      record_json
+    FROM selected_audit_events;
+
+    DROP TABLE selected_audit_events;
+    ALTER TABLE selected_audit_events_next RENAME TO selected_audit_events;
+
+    CREATE INDEX selected_audit_events_at_idx ON selected_audit_events(at, id);
+    CREATE INDEX selected_audit_events_phase_at_operation_idx
+      ON selected_audit_events(phase, at, operation_id);
+
+    CREATE TRIGGER selected_audit_events_start_requires_empty
+    BEFORE INSERT ON selected_audit_events
+    WHEN (NEW.phase = 'accepted' OR NEW.outcome = 'rejected')
+      AND EXISTS (SELECT 1 FROM selected_audit_events WHERE operation_id = NEW.operation_id)
+    BEGIN
+      SELECT RAISE(ABORT, 'selected audit operation already has a trail');
+    END;
+
+    CREATE TRIGGER selected_audit_events_terminal_requires_accepted
+    BEFORE INSERT ON selected_audit_events
+    WHEN NEW.phase = 'terminal'
+      AND NEW.outcome <> 'rejected'
+      AND NOT EXISTS (
+        SELECT 1 FROM selected_audit_events
+        WHERE operation_id = NEW.operation_id AND phase = 'accepted' AND outcome = 'accepted'
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'selected audit terminal requires accepted');
+    END;
+
+    CREATE TRIGGER selected_audit_events_no_update
+    BEFORE UPDATE ON selected_audit_events
+    BEGIN
+      SELECT RAISE(ABORT, 'selected audit events are append-only');
+    END;
+  `
+};
+
 export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckBaseSchemaMigration,
   hostDeckSessionMetadataFailedStatusMigration,
@@ -523,5 +647,6 @@ export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckSelectedRuntimeStateMigration,
   hostDeckSelectedAuditStateMigration,
   hostDeckSelectedRetentionIndexesMigration,
-  hostDeckAuthDeviceCsrfRotationMigration
+  hostDeckAuthDeviceCsrfRotationMigration,
+  hostDeckSecurityAuditCatalogMigration
 ] as const;

@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 describe("SQLite migration runner", () => {
-  it("preserves the checksums of every migration published before CSRF rotation state", () => {
+  it("preserves the checksums of every migration published before the security audit catalog", () => {
     expect(
       Object.fromEntries(
         defaultMigrations.slice(0, -1).map((migration) => [
@@ -32,7 +32,8 @@ describe("SQLite migration runner", () => {
       "202607080005_pairing_code_revoked_at": "43a464010577c15677426c81a530328f2d76425d29eaa8d2d5446e737392aa70",
       "202607090006_selected_runtime_state": "b82cd7abd76ab71ab73d7b361cd318dd862edd64749ce64942598c6f972e90fa",
       "202607100007_selected_audit_state": "965189761889f62c787c07f190b5c0aa76d90f17b00b4f97fcbe46121bfec9f2",
-      "202607100008_selected_retention_indexes": "e07bb8c5f498294775002c96052b1ae94282e2daf6b8afdd6dd49b08e9e9e8ae"
+      "202607100008_selected_retention_indexes": "e07bb8c5f498294775002c96052b1ae94282e2daf6b8afdd6dd49b08e9e9e8ae",
+      "202607110009_auth_device_csrf_rotation": "464b37ea4aafd1d094d7abf4297cc012403d482871d06554f21fdda7d170d5ce"
     });
   });
 
@@ -52,7 +53,8 @@ describe("SQLite migration runner", () => {
         "202607090006_selected_runtime_state",
         "202607100007_selected_audit_state",
         "202607100008_selected_retention_indexes",
-        "202607110009_auth_device_csrf_rotation"
+        "202607110009_auth_device_csrf_rotation",
+        "202607110010_security_audit_catalog"
       ]);
       expect(tableNames(db)).toEqual([
         "audit_events",
@@ -72,7 +74,7 @@ describe("SQLite migration runner", () => {
         "sessions",
         "settings"
       ]);
-      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 9 });
+      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 10 });
       expect(
         db
           .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
@@ -109,7 +111,8 @@ describe("SQLite migration runner", () => {
       expect(migrated.result.applied).toEqual([
         "202607100007_selected_audit_state",
         "202607100008_selected_retention_indexes",
-        "202607110009_auth_device_csrf_rotation"
+        "202607110009_auth_device_csrf_rotation",
+        "202607110010_security_audit_catalog"
       ]);
       expect(migrated.db.prepare("SELECT id FROM audit_events WHERE id = 'audit_legacy_preserved'").get()).toEqual({
         id: "audit_legacy_preserved"
@@ -166,7 +169,8 @@ describe("SQLite migration runner", () => {
     try {
       expect(migrated.result.applied).toEqual([
         "202607100008_selected_retention_indexes",
-        "202607110009_auth_device_csrf_rotation"
+        "202607110009_auth_device_csrf_rotation",
+        "202607110010_security_audit_catalog"
       ]);
       expect(migrated.db.prepare("SELECT id FROM selected_audit_events WHERE operation_id = ?").get("op_index_preserved")).toEqual({
         id: "audit:index:preserved"
@@ -227,7 +231,10 @@ describe("SQLite migration runner", () => {
 
     const migrated = openMigratedDatabase(path, { now: fixedNow });
     try {
-      expect(migrated.result.applied).toEqual(["202607110009_auth_device_csrf_rotation"]);
+      expect(migrated.result.applied).toEqual([
+        "202607110009_auth_device_csrf_rotation",
+        "202607110010_security_audit_catalog"
+      ]);
       expect(migrated.db.prepare("SELECT * FROM auth_devices WHERE id = ?").get("client_csrf_migration")).toEqual({
         id: "client_csrf_migration",
         token_hash: tokenHash,
@@ -271,6 +278,183 @@ describe("SQLite migration runner", () => {
     }
   });
 
+  it("adds CSRF bootstrap audit storage while preserving rows, indexes, triggers, and rollback", () => {
+    const path = tempDbPath();
+    const prior = openMigratedDatabase(path, {
+      migrations: migrationsThrough("202607110009_auth_device_csrf_rotation"),
+      now: fixedNow
+    });
+    const operationId = "op_security_migration_legacy";
+    const accepted = {
+      id: "audit:security:migration:accepted",
+      operation_id: operationId,
+      at: "2026-07-11T20:00:00.000Z",
+      actor: { type: "cli", device_id: null, permission: "local_admin", origin: null },
+      action: "pair_request",
+      target: { type: "host", host_id: "local_host" },
+      phase: "accepted",
+      outcome: "accepted",
+      payload_summary: { legacy_note: "preserve-byte-for-byte" },
+      error_code: null
+    } as const;
+    const terminal = {
+      ...accepted,
+      id: "audit:security:migration:terminal",
+      at: "2026-07-11T20:01:00.000Z",
+      phase: "terminal",
+      outcome: "succeeded",
+      payload_summary: { legacy_result: "preserved" }
+    } as const;
+    insertSelectedAuditRecord(prior.db, accepted);
+    insertSelectedAuditRecord(prior.db, terminal);
+    const rowsBefore = prior.db
+      .prepare(
+        "SELECT id, operation_id, at, action, phase, outcome, error_code, record_json " +
+          "FROM selected_audit_events ORDER BY phase"
+      )
+      .all();
+    prior.db.close();
+
+    const migrated = openMigratedDatabase(path, { now: fixedNow });
+    try {
+      expect(migrated.result.applied).toEqual(["202607110010_security_audit_catalog"]);
+      expect(
+        migrated.db
+          .prepare(
+            "SELECT id, operation_id, at, action, phase, outcome, error_code, record_json " +
+              "FROM selected_audit_events ORDER BY phase"
+          )
+          .all()
+      ).toEqual(rowsBefore);
+      expect(
+        migrated.db.prepare("SELECT DISTINCT security_schema_version FROM selected_audit_events").all()
+      ).toEqual([{ security_schema_version: null }]);
+      expect(
+        migrated.db
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'selected_audit_events_%' ORDER BY name")
+          .all()
+      ).toEqual([
+        { name: "selected_audit_events_at_idx" },
+        { name: "selected_audit_events_phase_at_operation_idx" }
+      ]);
+      expect(
+        migrated.db
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'selected_audit_events_%' ORDER BY name")
+          .all()
+      ).toEqual([
+        { name: "selected_audit_events_no_update" },
+        { name: "selected_audit_events_start_requires_empty" },
+        { name: "selected_audit_events_terminal_requires_accepted" }
+      ]);
+
+      const csrfAccepted = {
+        id: "audit:security:csrf:accepted",
+        operation_id: "op_security_csrf_migration",
+        at: "2026-07-11T20:02:00.000Z",
+        actor: {
+          type: "dashboard",
+          device_id: "client_security_migration",
+          permission: "read",
+          origin: "https://hostdeck.local"
+        },
+        action: "csrf_bootstrap",
+        target: { type: "device", device_id: "client_security_migration" },
+        phase: "accepted",
+        outcome: "accepted",
+        payload_summary: { schema_version: 1, csrf_generation_before: 1 },
+        error_code: null
+      } as const;
+      insertSelectedAuditRecord(migrated.db, csrfAccepted, 1);
+      expect(
+        migrated.db.prepare("SELECT action FROM selected_audit_events WHERE id = ?").get(csrfAccepted.id)
+      ).toEqual({ action: "csrf_bootstrap" });
+      expect(() =>
+        insertSelectedAuditRecord(migrated.db, {
+          ...csrfAccepted,
+          id: "audit:security:csrf:missing-version",
+          operation_id: "op_security_csrf_missing_version"
+        })
+      ).toThrow();
+      expect(() =>
+        migrated.db
+          .prepare(
+            "INSERT INTO selected_audit_events " +
+              "(id, operation_id, at, action, security_schema_version, phase, outcome, error_code, record_json) " +
+              "VALUES (?, ?, ?, 'prompt', 1, 'terminal', 'rejected', 'validation_error', '{}')"
+          )
+          .run("audit:security:wrong-version-action", "op_security_wrong_version_action", csrfAccepted.at)
+      ).toThrow();
+      expect(() =>
+        migrated.db
+          .prepare(
+            "INSERT INTO selected_audit_events " +
+              "(id, operation_id, at, action, security_schema_version, phase, outcome, error_code, record_json) " +
+              "VALUES (?, ?, ?, 'lock', 2, 'terminal', 'rejected', 'validation_error', '{}')"
+          )
+          .run("audit:security:unknown-version", "op_security_unknown_version", csrfAccepted.at)
+      ).toThrow();
+      expect(() =>
+        insertSelectedAuditRecord(
+          migrated.db,
+          { ...csrfAccepted, id: "audit:security:unknown", action: "unknown_action" },
+          1
+        )
+      ).toThrow();
+      expect(() =>
+        migrated.db.prepare("UPDATE selected_audit_events SET outcome = 'succeeded' WHERE id = ?").run(csrfAccepted.id)
+      ).toThrow("selected audit events are append-only");
+      expect(() =>
+        insertSelectedAuditRecord(
+          migrated.db,
+          {
+            ...csrfAccepted,
+            id: "audit:security:csrf:early-terminal",
+            operation_id: "op_security_csrf_early",
+            phase: "terminal",
+            outcome: "succeeded"
+          },
+          1
+        )
+      ).toThrow("selected audit terminal requires accepted");
+      const plan = migrated.db
+        .prepare(
+          "EXPLAIN QUERY PLAN SELECT operation_id FROM selected_audit_events WHERE phase = 'terminal' AND at < ? ORDER BY at, operation_id"
+        )
+        .all("2027-01-01T00:00:00.000Z") as Array<{ readonly detail: string }>;
+      expect(plan.some(({ detail }) => detail.includes("selected_audit_events_phase_at_operation_idx"))).toBe(true);
+    } finally {
+      migrated.db.close();
+    }
+
+    const rollbackPath = tempDbPath();
+    const rollback = openMigratedDatabase(rollbackPath, {
+      migrations: migrationsThrough("202607110009_auth_device_csrf_rotation"),
+      now: fixedNow
+    });
+    try {
+      insertSelectedAuditRecord(rollback.db, accepted);
+      const forcedFailure: StorageMigration = {
+        version: "202607110011_forced_security_audit_failure",
+        sql: "CREATE TABLE security_audit_failure_probe (id TEXT); SELECT * FROM missing_security_audit_table;"
+      };
+      expect(() =>
+        runMigrations(rollback.db, { migrations: [...defaultMigrations, forcedFailure], now: fixedNow })
+      ).toThrow(HostDeckMigrationError);
+      expect(rollback.db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 9 });
+      const tableSql = rollback.db
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'selected_audit_events'")
+        .get() as { readonly sql: string };
+      expect(tableSql.sql).not.toContain("csrf_bootstrap");
+      expect(tableSql.sql).not.toContain("security_schema_version");
+      expect(rollback.db.prepare("SELECT * FROM selected_audit_events").all()).toHaveLength(1);
+      expect(
+        rollback.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'security_audit_failure_probe'").get()
+      ).toBeUndefined();
+    } finally {
+      rollback.db.close();
+    }
+  });
+
   it("marks prior tmux sessions as legacy without creating selected mappings", () => {
     const path = tempDbPath();
     const prior = openMigratedDatabase(path, {
@@ -304,7 +488,8 @@ describe("SQLite migration runner", () => {
         "202607090006_selected_runtime_state",
         "202607100007_selected_audit_state",
         "202607100008_selected_retention_indexes",
-        "202607110009_auth_device_csrf_rotation"
+        "202607110009_auth_device_csrf_rotation",
+        "202607110010_security_audit_catalog"
       ]);
       expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM selected_sessions").get()).toEqual({ count: 0 });
       expect(migrated.db.prepare("SELECT * FROM legacy_session_dispositions").get()).toMatchObject({
@@ -470,6 +655,34 @@ function migrationsThrough(version: string): readonly StorageMigration[] {
   const index = defaultMigrations.findIndex((migration) => migration.version === version);
   if (index < 0) throw new Error(`Unknown migration boundary ${version}.`);
   return defaultMigrations.slice(0, index + 1);
+}
+
+function insertSelectedAuditRecord(
+  db: Database.Database,
+  record: Readonly<Record<string, unknown>>,
+  securitySchemaVersion?: 1
+): void {
+  if (securitySchemaVersion === undefined) {
+    db.prepare(
+      `
+        INSERT INTO selected_audit_events (
+          id, operation_id, at, action, phase, outcome, error_code, record_json
+        ) VALUES (
+          @id, @operation_id, @at, @action, @phase, @outcome, @error_code, @record_json
+        )
+      `
+    ).run({ ...record, record_json: JSON.stringify(record) });
+    return;
+  }
+  db.prepare(
+    `
+      INSERT INTO selected_audit_events (
+        id, operation_id, at, action, security_schema_version, phase, outcome, error_code, record_json
+      ) VALUES (
+        @id, @operation_id, @at, @action, @security_schema_version, @phase, @outcome, @error_code, @record_json
+      )
+    `
+  ).run({ ...record, record_json: JSON.stringify(record), security_schema_version: securitySchemaVersion });
 }
 
 function tempDbPath(): string {

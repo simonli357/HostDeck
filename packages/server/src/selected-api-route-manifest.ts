@@ -140,7 +140,7 @@ export const selectedApiSchemaIds = [
   "selected_api_error_v1"
 ] as const;
 
-const selectedApiAuditExtensions = ["session_start", "csrf_bootstrap"] as const;
+const selectedApiAuditExtensions = ["session_start"] as const;
 export const selectedApiAuditActions = Object.freeze([
   ...selectedAuditActions,
   ...selectedApiAuditExtensions
@@ -160,7 +160,7 @@ export type SelectedApiCredentialEffect = (typeof selectedApiCredentialEffects)[
 export type SelectedApiRouteOwnerTask = (typeof selectedApiRouteOwnerTasks)[number];
 export type SelectedApiSchemaId = (typeof selectedApiSchemaIds)[number];
 export type SelectedApiAuditAction = (typeof selectedApiAuditActions)[number];
-export type SelectedApiAuditCatalogOwnerTask = "DAT-V1-027" | "IFC-V1-040";
+export type SelectedApiAuditCatalogOwnerTask = "IFC-V1-040";
 
 export interface SelectedApiRequestContracts {
   readonly params: SelectedApiSchemaId | null;
@@ -639,7 +639,7 @@ export const selectedApiRouteManifest: readonly SelectedApiRouteManifestEntry[] 
     lock: "not_applicable",
     target: "authenticated_device",
     operation_kind: null,
-    audit: extensionAudit("security_executor", "csrf_bootstrap", "DAT-V1-027"),
+    audit: securityAudit("csrf_bootstrap"),
     credential_effect: "rotate_csrf",
     handler: "access.bootstrapCsrf",
     owner_task: "IFC-V1-027"

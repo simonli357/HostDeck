@@ -10,6 +10,10 @@ import {
   sessionNameSchema
 } from "./scalars.js";
 import {
+  isSelectedSecurityAuditAction,
+  selectedSecurityAuditPayloadContractSchema
+} from "./security-audit.js";
+import {
   approvalOperationTargetSchema,
   managedSessionTargetSchema,
   turnOperationTargetSchema
@@ -34,6 +38,21 @@ const selectedStorageLimits = {
 } as const;
 
 const selectedRecordIdSchema = z.string().min(1).max(selectedStorageLimits.idLength).regex(/^[a-zA-Z0-9_.:-]+$/u);
+
+export const selectedAuditOriginSchema = z
+  .string()
+  .min(1)
+  .max(253)
+  .superRefine((value, context) => {
+    try {
+      const parsed = new URL(value);
+      if (!["http:", "https:"].includes(parsed.protocol) || parsed.origin !== value) {
+        context.addIssue({ code: "custom", message: "Audit origin must be one canonical HTTP(S) origin." });
+      }
+    } catch {
+      context.addIssue({ code: "custom", message: "Audit origin must be one canonical HTTP(S) origin." });
+    }
+  });
 
 export const selectedSessionMappingRecordSchema = z
   .object({
@@ -132,10 +151,10 @@ export const selectedSessionStartRecoveryRecordSchema = z
 
 export const selectedAuditActorSchema = z
   .object({
-    type: z.enum(["system", "cli", "dashboard"]),
+    type: z.enum(["system", "cli", "dashboard", "pairing_client"]),
     device_id: selectedRecordIdSchema.nullable(),
     permission: z.enum(["local_admin", "read", "write"]).nullable(),
-    origin: z.string().min(1).max(253).nullable()
+    origin: selectedAuditOriginSchema.nullable()
   })
   .strict()
   .superRefine((value, context) => {
@@ -150,6 +169,12 @@ export const selectedAuditActorSchema = z
     }
     if (value.type === "cli" && (value.permission !== "local_admin" || value.device_id !== null || value.origin !== null)) {
       context.addIssue({ code: "custom", message: "CLI audit actors use local-admin authority without remote device or origin identity." });
+    }
+    if (value.type === "pairing_client" && (value.device_id !== null || value.permission !== null || value.origin === null)) {
+      context.addIssue({
+        code: "custom",
+        message: "Pairing-client audit actors require origin identity without a pre-existing device or permission claim."
+      });
     }
   });
 
@@ -207,17 +232,21 @@ export const selectedAuditEventRecordSchema = z
     if (value.action === "interrupt" && value.target.type !== "turn") {
       context.addIssue({ code: "custom", message: "Interrupts must audit one exact turn target." });
     }
-    if (value.action === "device_revoke" && value.target.type !== "device") {
-      context.addIssue({ code: "custom", message: "Device revocation must audit one exact device target." });
+    const deviceAction = value.action === "device_revoke" || value.action === "csrf_bootstrap";
+    if (deviceAction && value.target.type !== "device") {
+      context.addIssue({ code: "custom", message: "Device authority actions must audit one exact device target." });
     }
     if (
       !sessionActions.has(value.action) &&
       value.action !== "approval_response" &&
       value.action !== "interrupt" &&
-      value.action !== "device_revoke" &&
+      !deviceAction &&
       value.target.type !== "host"
     ) {
       context.addIssue({ code: "custom", message: "Host access and network actions must audit the local host target." });
+    }
+    if (value.actor.type === "pairing_client" && value.action !== "pair_claim") {
+      context.addIssue({ code: "custom", message: "Pairing-client audit actors are valid only for pair claims." });
     }
     if (value.phase === "accepted" && value.outcome !== "accepted") {
       context.addIssue({ code: "custom", message: "Accepted audit phases must use the accepted outcome." });
@@ -233,6 +262,59 @@ export const selectedAuditEventRecordSchema = z
       context.addIssue({ code: "custom", message: "Accepted or succeeded audit outcomes must not carry an error code." });
     }
   });
+
+export const selectedSecurityAuditEventRecordSchema = selectedAuditEventRecordSchema.superRefine((value, context) => {
+  if (!isSelectedSecurityAuditAction(value.action)) {
+    context.addIssue({ code: "custom", message: "Security audit records require one selected security action." });
+    return;
+  }
+
+  const payload = selectedSecurityAuditPayloadContractSchema.safeParse({
+    action: value.action,
+    phase: value.phase,
+    outcome: value.outcome,
+    payload_summary: value.payload_summary
+  });
+  if (!payload.success) {
+    context.addIssue({
+      code: "custom",
+      message: "Security audit record has an invalid versioned payload summary.",
+      path: ["payload_summary"]
+    });
+  }
+
+  const cli = value.actor.type === "cli";
+  const dashboard = value.actor.type === "dashboard";
+  const dashboardWriter = dashboard && value.actor.permission === "write";
+  switch (value.action) {
+    case "pair_request":
+      if (!cli) context.addIssue({ code: "custom", message: "Pair requests require a local-admin CLI audit actor." });
+      break;
+    case "pair_claim":
+      if (value.actor.type !== "pairing_client") {
+        context.addIssue({ code: "custom", message: "Pair claims require an unpaired pairing-client audit actor." });
+      }
+      break;
+    case "csrf_bootstrap":
+      if (!dashboard || value.target.type !== "device" || value.actor.device_id !== value.target.device_id) {
+        context.addIssue({ code: "custom", message: "CSRF bootstrap must target the same paired dashboard device." });
+      }
+      break;
+    case "device_revoke":
+    case "lock":
+      if (!cli && !dashboardWriter) {
+        context.addIssue({ code: "custom", message: "Device revoke and lock require local-admin or paired-writer authority." });
+      }
+      break;
+    case "unlock":
+    case "lan_configure":
+    case "lan_enable":
+    case "lan_disable":
+    case "certificate_rotate":
+      if (!cli) context.addIssue({ code: "custom", message: "This security action requires a local-admin CLI audit actor." });
+      break;
+  }
+});
 
 export const selectedAuditTrailSchema = z
   .object({
@@ -312,6 +394,7 @@ export type SelectedSessionStartRecoveryRecord = z.infer<typeof selectedSessionS
 export type SelectedAuditActor = z.infer<typeof selectedAuditActorSchema>;
 export type SelectedAuditTarget = z.infer<typeof selectedAuditTargetSchema>;
 export type SelectedAuditEventRecord = z.infer<typeof selectedAuditEventRecordSchema>;
+export type SelectedSecurityAuditEventRecord = z.infer<typeof selectedSecurityAuditEventRecordSchema>;
 export type SelectedAuditTrail = z.infer<typeof selectedAuditTrailSchema>;
 
 function sameAuditTarget(left: z.infer<typeof selectedAuditTargetSchema>, right: z.infer<typeof selectedAuditTargetSchema>): boolean {

@@ -2,20 +2,27 @@
 
 Date: 2026-07-11
 
-Status: hard success criteria frozen before implementation.
+Status: complete and validated.
+
+## Outcome
+
+- The durable selected catalog now has exactly 20 actions, including the exact ten-action security subset and catalog-backed `csrf_bootstrap` manifest ownership.
+- Migration 010 preserves every prior field and JSON byte, restores both indexes and all append-only/state triggers, and marks migrated rows with nullable legacy provenance. Every current security repository write stores `security_schema_version = 1`; non-security and migrated legacy rows remain unversioned.
+- Current security writes enforce truthful actors, exact targets, strict phase-specific version-1 summaries, and cause-free bounded errors. Pairing-client identity is valid only for `pair_claim`.
+- Legacy security rows remain readable even when their former generic summary contains a `schema_version` key. Versioned rows are revalidated strictly on every read, and corrupt security reads/writes do not expose native causes or variable identifiers.
+- No route orchestration, credential mutation, network mutation, emergency policy, dependency, setup, or command behavior was added.
 
 ## Scope
 
 Complete the selected append-only audit boundary for security and access actions. This leaf owns the durable action catalog, strict current-write record contracts, SQLite compatibility, and repository validation. It does not own route orchestration, emergency-lock fallback policy, pairing/revoke/network mutations, cookie issuance, CSRF responses, or public audit reads.
 
-## Current Gaps
+## Gaps Closed
 
-- The selected catalog has 19 actions but omits `csrf_bootstrap`; the route manifest carries it as a temporary `DAT-V1-027` extension.
-- Migration 007 has an action `CHECK` that rejects `csrf_bootstrap`, so the generic repository cannot persist that route's accepted or terminal truth.
-- Pair claims have no truthful actor shape before a device exists. Treating an unpaired remote claimant as `system`, `cli`, or an already paired dashboard device would be false attribution.
-- Security actions currently accept the generic free-form primitive summary. Sensitive-key detection does not stop a raw code, bearer, CSRF token, private key, or certificate from being placed under an innocuous key.
-- Action-specific actor, target, intent, and safe result metadata are not enforced on current writes.
-- Dedicated security evidence for migration preservation, restart, orphan reconciliation, retention, rollback, corruption, raw SQLite artifacts, and manifest catalog closure is absent.
+- Closed the missing `csrf_bootstrap` catalog and SQLite action support.
+- Added truthful pre-device pairing-client attribution without broadening it to other actions.
+- Replaced generic current security summaries with strict action/phase-specific contracts.
+- Added durable legacy/current provenance instead of inferring provenance from payload keys.
+- Added migration, repository, privacy, restart, orphan, retention, rollback, corruption, contention, and manifest evidence.
 
 ## Frozen Catalog And Authority
 
@@ -77,14 +84,20 @@ Accepted records require their safe intent fields. Succeeded records require the
 | Restart, orphan, and retention | Reopen preserves exact security trails. Eligible accepted-only security work receives one strict versioned `incomplete/runtime_unavailable` terminal. Count/age cleanup deletes only whole terminal trails, protects pending work, preserves the newest exception, and retains actor/target/outcome continuity for survivors. |
 | Ownership boundaries | This leaf does not execute security mutations, issue credentials, parse cookies, rotate/revoke state, choose emergency-lock behavior, or claim route completion. `IFC-V1-032` owns accepted-to-terminal orchestration and degraded emergency policy; data/interface leaves own each mutation. No hidden fallback is added. |
 
-## Validation Plan
+## Validation
 
-- Core/contract tests for exact action inventory, pairing-client actor, canonical origin, target authority, all versioned summary shapes, outcome requirements, and hostile secret/value matrices.
-- Migration tests for fresh and 009 upgrade, row JSON/column preservation, action constraint, indexes, triggers, failed rebuild rollback, and unchanged historical checksums.
-- Direct repository tests for every action and transition, action/actor/target/summary mismatch, generic legacy read versus strict current write, forced start/terminal/commit failure, real contention, corruption, restart, and main/WAL secret inspection.
-- Focused orphan/retention tests for strict security incomplete terminals, whole-trail deletion, pending protection, reopen, and continuity.
-- Manifest contract update proving `csrf_bootstrap` is selected and only `session_start` remains an owned extension.
-- Full storage/server/unit/contract/integration/web, typecheck/lint, scaffold/planning/exact-binding, frozen offline install, production audit, manual SQL/privacy/ownership review, and diff checks.
+- Storage: 20 files and 176 tests passed, including all ten actions across rejection, accepted/succeeded, failed, incomplete, migration, restart, orphan, retention, rollback, real contention, corruption, and raw-file privacy cases.
+- Server: 35 files and 305 tests passed; seven explicit external smoke files remained skipped by their existing gates.
+- Aggregate: 805 unit tests passed with 29 explicit external skips; 146 contract, 16 integration, and 14 web tests passed.
+- Typecheck, Biome/package exports, scaffold, planning graph, and exact Codex 0.144.0 binding checks passed. Planning reported 196 tasks, 84 requirements, 631 dependencies, and six queued tasks before closure.
+- Frozen offline install passed. Production audit reported zero known vulnerabilities across 140 production dependencies.
+- Migration 010 checksum is `1db9a127f80ba20f120cd8bbf9b65bc57fc2ca859d82e50a4f213f10d16ba0ab`; every published pre-010 checksum remains locked by test.
+- Manual SQL review confirmed explicit legacy/current provenance, exact action/version constraints including SQLite `NULL` behavior, row-copy fidelity, both indexes, all three triggers, and whole-migration rollback. Manual privacy/ownership review found no raw credential path or route/mutation ownership leak. Diff checks passed.
+- No live listener, Android, browser, or Codex runtime evidence is claimed because this leaf changes only headless contracts and SQLite storage.
+
+## Remaining Gaps
+
+None within this leaf. Security mutation execution and caller-supplied audit values remain with the downstream owners below.
 
 ## Remaining Ownership
 

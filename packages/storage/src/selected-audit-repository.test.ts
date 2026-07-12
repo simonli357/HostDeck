@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
-import { selectedAuditEventRecordSchema } from "@hostdeck/contracts";
+import { isSelectedSecurityAuditAction, selectedAuditEventRecordSchema } from "@hostdeck/contracts";
 import type Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 import { openMigratedDatabase } from "./migration-runner.js";
@@ -112,6 +112,7 @@ describe("selected audit repository", () => {
         ],
         ["pair_request", hostTarget()],
         ["pair_claim", hostTarget()],
+        ["csrf_bootstrap", { type: "device", device_id: "device:audit:phone" }],
         ["device_revoke", { type: "device", device_id: "device:audit:revoked" }],
         ["lock", hostTarget()],
         ["unlock", hostTarget()],
@@ -124,12 +125,29 @@ describe("selected audit repository", () => {
       for (const [index, [action, target]] of actionTargets.entries()) {
         const operationId = `op_audit_action_${String(index).padStart(2, "0")}`;
         const trail = repository.recordRejected(
-          terminalRecord(operationId, `audit:action:${index}`, "rejected", "validation_error", { action, target })
+          terminalRecord(operationId, `audit:action:${index}`, "rejected", "validation_error", {
+            action,
+            target,
+            ...(isSelectedSecurityAuditAction(action)
+              ? { actor: securityActor(action), payload_summary: { schema_version: 1 } }
+              : {})
+          })
         );
         expect(trail.records[0]).toMatchObject({ action, target });
       }
 
-      expect(open.db.prepare("SELECT COUNT(*) AS count FROM selected_audit_events").get()).toEqual({ count: 19 });
+      expect(open.db.prepare("SELECT COUNT(*) AS count FROM selected_audit_events").get()).toEqual({ count: 20 });
+      expect(
+        open.db
+          .prepare(
+            "SELECT security_schema_version, COUNT(*) AS count " +
+              "FROM selected_audit_events GROUP BY security_schema_version ORDER BY security_schema_version"
+          )
+          .all()
+      ).toEqual([
+        { security_schema_version: null, count: 10 },
+        { security_schema_version: 1, count: 10 }
+      ]);
     } finally {
       open.db.close();
     }
@@ -475,6 +493,20 @@ function auditTarget() {
 
 function hostTarget() {
   return { type: "host", host_id: "local_host" } as const;
+}
+
+function securityActor(action: Parameters<typeof isSelectedSecurityAuditAction>[0]) {
+  if (action === "pair_claim") {
+    return {
+      type: "pairing_client",
+      device_id: null,
+      permission: null,
+      origin: "https://hostdeck.local"
+    } as const;
+  }
+  if (action === "csrf_bootstrap") return { ...auditActor(), permission: "read" } as const;
+  if (action === "device_revoke" || action === "lock") return auditActor();
+  return { type: "cli", device_id: null, permission: "local_admin", origin: null } as const;
 }
 
 function insertRawRecord(

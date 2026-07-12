@@ -9,6 +9,7 @@ Date: 2026-07-11
 - The manifest covers liveness/readiness/status, sessions/events, every selected structured operation, approvals, access/device security, lock/unlock, and local-admin LAN operations.
 - The historical 17-route tmux manifest remains unchanged but is explicitly deprecated and has no method/path overlap with the selected inventory. It remains nonproduction until `IFC-V1-067` removes or isolates it.
 - Route payload ids are stable ownership slots, not fake implemented schemas. Each owning route leaf must bind its ids to actual local Zod request/response schemas before registration; `IFC-V1-046` proves the complete registry and production composition.
+- `DAT-V1-027` subsequently made `csrf_bootstrap` a selected durable audit action. `session_start` is now the only owned catalog extension.
 
 Criteria: `72e6c34`. Implementation: `cd0d929`.
 
@@ -66,7 +67,7 @@ For `local_admin_or_device_cookie` mutations, device-cookie execution additional
 | Structured operations | The manifest covers all ten selected operation kinds. Read-only usage/skills and control reads are not audited as mutations; prompt/model/goal/plan/compact/approval/interrupt/archive are. |
 | Exact mutation gate | Every selected mutation uses paired-write-or-local-admin auth, device CSRF, unlocked-host policy, exact target kind, selected write gate, and matching audit action. Session start uses an explicit new-session target. |
 | Security mutations | Pair create/claim, CSRF bootstrap, revoke, lock/unlock, and LAN operations use the security executor with explicit authority and target. Revoke and lock remain available as recovery/security actions while host writes are locked. |
-| Audit gaps owned | Existing selected actions stay catalog-backed. `session_start` is an owned `IFC-V1-040` extension and `csrf_bootstrap` is an owned `DAT-V1-027` extension; neither is silently treated as durable today. |
+| Audit gaps owned | Existing selected actions and `csrf_bootstrap` are catalog-backed. `session_start` remains the sole owned `IFC-V1-040` extension and is not silently treated as durable today. |
 | Credential effects | Pair claim alone sets the device cookie, CSRF bootstrap alone rotates CSRF, and revoke alone invalidates device authority. Every other route records `none`. |
 | Legacy exclusion | No selected path or metadata contains tmux, output, raw input, slash command, stop, delete, import, or bulk surface. The historical 17 routes remain disjoint and deprecated. |
 | Immutability | The manifest array, every entry, and every nested request/response/audit record are recursively frozen. |
@@ -85,7 +86,7 @@ For `local_admin_or_device_cookie` mutations, device-cookie execution additional
 ## Remaining Ownership
 
 - The owner task on each manifest row must implement and bind its named request/response contracts without changing method/path/security semantics silently.
-- `DAT-V1-027` and `IFC-V1-040` own the two explicit durable audit-catalog extensions.
+- `IFC-V1-040` owns the sole remaining explicit durable audit-catalog extension, `session_start`.
 - `IFC-V1-066` owns the shared selected mutation gate; `IFC-V1-032` owns the security mutation audit executor.
 - `IFC-V1-046` registers and proves all selected routes through the production Fastify composition.
 - `IFC-V1-067` removes or isolates the historical custom-listener/tmux route surface after selected acceptance.

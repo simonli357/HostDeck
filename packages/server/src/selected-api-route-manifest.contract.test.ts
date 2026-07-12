@@ -213,14 +213,14 @@ describe("selected API route manifest", () => {
       .map((route) => route.audit?.action)
       .sort();
 
-    expect(ownedExtensions).toEqual(["csrf_bootstrap", "session_start"]);
+    expect(ownedExtensions).toEqual(["session_start"]);
     expect(
       Object.fromEntries(
         selectedApiRouteManifest
           .filter((route) => route.audit?.catalog_state === "owned_extension")
           .map((route) => [route.audit?.action, route.audit?.catalog_owner_task])
       )
-    ).toEqual({ csrf_bootstrap: "DAT-V1-027", session_start: "IFC-V1-040" });
+    ).toEqual({ session_start: "IFC-V1-040" });
     for (const route of selectedApiRouteManifest) {
       if (route.audit === null) continue;
       expect(knownActions.has(route.audit.action)).toBe(true);
