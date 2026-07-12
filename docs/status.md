@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `DAT-V1-021` atomic CSRF bootstrap generation and rotation storage.
+- Active task: `IFC-V1-017` transport, Host, Origin, and CORS trust gate.
 - `IFC-V1-047` real HTTP resource limits are complete. `INT-V1-027` remains blocked on the authenticated turn reset and host Bubblewrap AppArmor profile; its unchanged aggregate remains the next runtime action when both are available.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -53,6 +53,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - The installed 0.144.0 no-model lifecycle passes stored list/read, exact authenticated TUI resume over the private Unix socket, archive, and cleanup. Evidence: `artifacts/int-v1-005-managed-thread-lifecycle.md`; `DEC-022`.
 - Local path startup now resolves without mutation, bootstraps only owner state/lease, acquires a real Linux descriptor lock, then creates owner-only config/runtime/database paths. Hostile ownership/type/link/substitution cases, later-failure cleanup, real modes, duplicate owners, and child-process crash recovery pass. Evidence: `artifacts/dat-v1-019-secure-paths-daemon-lease.md`.
 - `IFC-V1-015` selects `@peculiar/x509` 2.0.0 plus `reflect-metadata` 0.2.2 and freezes the exact-IP CA/leaf profile. A physical Android 16/Chrome 150 run proves USB-only public-root transfer, warning-free exact-IP trust, same-root renewal, isolated SAN/date/authority and plaintext refusal, trust removal/reinstall recovery, reviewed screenshots, and full phone/host cleanup. Evidence: `artifacts/ifc-v1-015-https-phone-enrollment.md`; physical matrix `48ce602`.
+- `DAT-V1-021` adds forward-only auth-device CSRF generation/rotation state and one immediate hash-only bootstrap transaction. Integer bounds, historical duplicate hashes, old/current token truth, invalid/corrupt/exhausted states, rollback, real writer contention, restart, indexed lookup, and raw-secret absence pass. Evidence: `artifacts/dat-v1-021-csrf-bootstrap-storage.md`; implementation `e10a6a3`.
 
 ## Not Proven
 
@@ -143,6 +144,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/int-v1-026-interrupt-control.md`.
 - `INT-V1-027` in progress: focused normalizer/pipeline/control-fanout matrix (30), unit (751 passed, 29 external skipped), contract (138), integration (16), web (14), root typecheck, lint/exports, scaffold/planning/exact-binding checks, frozen offline install, production audit, and diff checks pass. Six exact aggregate attempts closed five harness/assembly defects; the latest processes mapping-time callbacks for both sessions, then fails immediately at the external account usage gate with clean reverse cleanup.
 - Partial evidence: `artifacts/int-v1-027-structured-vertical.md`; implementation `f8ebcfc`; callback-admission hardening `d765855`.
+- `DAT-V1-021`: focused migration/auth/rotation (26), storage plus write-route (166), unit (771 passed, 29 external skipped), contract (139), integration (16), web (14), typecheck, lint/exports, scaffold/planning/binding, frozen offline install, production audit, indexed schema inspection, privacy review, and diff checks pass.
+- Evidence: `artifacts/dat-v1-021-csrf-bootstrap-storage.md`.
 
 ## Git
 
@@ -178,4 +181,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `INT-V1-027` startup callback ordering, thread-state snapshot normalization, diagnostic redaction, and reverse-cleanup hardening are pushed as `d765855`.
 - The exact-Codex sandbox prerequisite is documented and pushed as `f906d0f`.
 - `IFC-V1-015` physical evidence is pushed as `48ce602`; owner docs close the task and advance the queue to `DAT-V1-021` then `IFC-V1-017`.
-- Next action: implement `DAT-V1-021` atomic hash-only CSRF bootstrap generation/rotation storage, then continue the ready `IFC-V1-017` transport/Host/Origin/CORS gate. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
+- `DAT-V1-021` implementation and evidence are pushed as `e10a6a3`; owner docs close the task and make `DAT-V1-025` to `DAT-V1-029` ready.
+- Next action: harden and implement `IFC-V1-017` transport/Host/Origin/CORS trust gating, then execute the dependency-ordered device security repositories. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.

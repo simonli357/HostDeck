@@ -43,12 +43,12 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | Accepted-to-terminal audit state machine | `DAT-V1-023` | Done; append-only migration/repository, exact trail transitions, real SQLite contention, rollback, corruption, and restart evidence recorded. |
 | Bounded startup retention maintenance | `DAT-V1-024` | Done; fixed-policy output/audit batches, indexed candidate plans, deadline/failure truth, and restart evidence recorded. |
 | Orphan accepted-operation reconciliation | `DAT-V1-030` | Done; fixed-cutoff incomplete append, bounded runner, real terminal race, restart, and retention interoperability recorded. |
-| CSRF bootstrap and rotation storage | `DAT-V1-021` | In progress; strict migration, atomic rotation, concurrency, rollback, restart, and raw-secret criteria are frozen. |
-| Device listing storage | `DAT-V1-025` | Blocked by CSRF-capable device storage. |
-| Authentication last-used update storage | `DAT-V1-029` | Blocked by CSRF-capable device storage. |
-| Pair claim and rate/concurrency storage | `DAT-V1-026` | Blocked by CSRF-capable pairing storage. |
-| Atomic device revoke and CSRF invalidation | `DAT-V1-028` | Blocked by CSRF-capable device storage. |
-| Security-action audit storage completion | `DAT-V1-027` | Blocked by CSRF and audit state-machine leaves. |
+| CSRF bootstrap and rotation storage | `DAT-V1-021` | Complete; strict migration, atomic rotation, real contention, rollback, restart, indexed lookup, and raw-secret evidence pass. |
+| Device listing storage | `DAT-V1-025` | Ready after CSRF-capable device storage. |
+| Authentication last-used update storage | `DAT-V1-029` | Ready after CSRF-capable device storage. |
+| Pair claim and rate/concurrency storage | `DAT-V1-026` | Ready after CSRF-capable pairing storage. |
+| Atomic device revoke and CSRF invalidation | `DAT-V1-028` | Ready after CSRF-capable device storage. |
+| Security-action audit storage completion | `DAT-V1-027` | Ready after CSRF and audit state-machine leaves. |
 | Reopened module hardening | `DAT-V1-091` | Blocked by `DAT-V1-018` to `DAT-V1-030`. |
 
 Owning backlog: `docs/tracking/backlog/local-state-auth-audit.md`.

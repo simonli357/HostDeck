@@ -15,9 +15,13 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `DAT-V1-021` Implement atomic CSRF bootstrap storage | in_progress | none | Uses the now-frozen HTTPS/browser policy and unlocks the dependency-ordered device security repositories. |
-| 2 | `IFC-V1-017` Implement transport, Host, Origin, and CORS trust gate | ready | none | Applies the physically proven HTTPS origin contract before authentication or route data. |
-| 3 | `INT-V1-027` Prove the assembled real structured vertical | blocked | Authenticated turn usage reset; host Bubblewrap AppArmor profile | Resume the unchanged aggregate when both external runtime conditions are available. |
+| 1 | `IFC-V1-017` Implement transport, Host, Origin, and CORS trust gate | ready | none | Applies the physically proven HTTPS origin contract before authentication or route data. |
+| 2 | `DAT-V1-029` Implement monotonic authentication last-used storage | ready | none | Unlocks cookie authentication while preventing older observations from weakening durable authority metadata. |
+| 3 | `DAT-V1-027` Complete security-action audit storage | ready | none | Unlocks the shared security mutation audit executor and keeps secrets out of audit state. |
+| 4 | `DAT-V1-026` Implement pairing rate and claim concurrency storage | ready | none | Establishes bounded one-winner pairing state before the claim route. |
+| 5 | `DAT-V1-028` Implement atomic device revoke storage | ready | none | Invalidates bearer and CSRF authority together before the revoke route. |
+| 6 | `DAT-V1-025` Implement bounded non-secret device listing | ready | none | Supplies the safe device-read model after security-critical mutation storage. |
+| 7 | `INT-V1-027` Prove the assembled real structured vertical | blocked | Authenticated turn usage reset; host Bubblewrap AppArmor profile | Resume the unchanged aggregate when both external runtime conditions are available. |
 
 ## Intentional Blockers
 

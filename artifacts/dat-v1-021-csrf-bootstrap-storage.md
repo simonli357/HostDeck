@@ -2,7 +2,7 @@
 
 Date: 2026-07-11
 
-Status: implementation and validation complete; owner-doc closure pending.
+Status: complete.
 
 ## Scope
 
@@ -58,11 +58,11 @@ Extend the existing auth-device contract and SQLite repository with durable CSRF
 - Exact isolated Codex 0.144.0 binding passed for 671 files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`.
 - Frozen offline install passed; production dependency audit reported no known vulnerabilities.
 - Manual schema/API/privacy review passed: SQLite reports the integer/range/nonnull constraints, the CSRF query uses `auth_devices_csrf_token_hash_idx`, the index remains non-unique for historical placeholder hashes, repository durable reads contain no raw secret, and transaction/error paths return no raw token before commit.
-- `git diff --check` passed. Planning validation is recorded at owner-doc closure after dependency advancement.
+- `git diff --check` passed. Planning closure passed with 196 tasks, 84 requirements, 631 dependencies, and 7 queued entries after dependency advancement.
 
 ## Remaining Ownership
 
-- `DAT-V1-025`, `DAT-V1-026`, `DAT-V1-028`, and `DAT-V1-029` add listing, pairing/rate, atomic revoke, and monotonic last-used behavior.
+- `DAT-V1-025` to `DAT-V1-029` add listing, pairing/rate, security-action audit, atomic revoke, and monotonic last-used behavior.
 - `IFC-V1-026` authenticates the HttpOnly device cookie.
 - `IFC-V1-027` returns bootstrap output with no-store policy and requires the exact current generation/token on mutations.
 - `FE-V1-024`/`FE-V1-031` keep the raw token only in page memory and handle stale/revoked reload states.
