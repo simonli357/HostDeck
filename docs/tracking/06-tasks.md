@@ -15,10 +15,14 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-026` Implement HttpOnly cookie authentication context | in_progress | none | Consumes the completed trust and monotonic-auth contracts after the storage security leaves, before selected protected routes. |
-| 2 | `IFC-V1-032` Implement the security mutation audit executor | ready | none | Consumes the completed strict security audit storage before route-specific mutations. |
+| 1 | `IFC-V1-032` Implement the security mutation audit executor | in_progress | none | Consumes the completed strict security audit storage before route-specific mutations. |
+| 2 | `IFC-V1-029` Implement the bounded paired-device list route | ready | none | Composes the completed auth context, route manifest, and bounded non-secret device repository. |
 | 3 | `DAT-V1-091` Re-run selected local-state module hardening | ready | none | Audits the now-complete selected storage/auth module before release hardening. |
-| 4 | `INT-V1-027` Prove the assembled real structured vertical | blocked | Authenticated turn usage reset; host Bubblewrap AppArmor profile | Resume the unchanged aggregate when both external runtime conditions are available. |
+| 4 | `IFC-V1-069` Implement the bounded projected-event diagnostic read route | ready | none | Exposes the completed retained projection contract through one bounded authenticated read. |
+| 5 | `IFC-V1-060` Implement managed-thread resume metadata API and CLI | ready | none | Exposes the completed exact safe TUI resume contract without executing a phone shell. |
+| 6 | `IFC-V1-043` Implement the read-only usage API and CLI | ready | none | Exposes the completed exact usage capability through the authenticated selected manifest. |
+| 7 | `IFC-V1-065` Implement the read-only skills API and CLI | ready | none | Exposes the completed exact skills capability through the authenticated selected manifest. |
+| 8 | `INT-V1-027` Prove the assembled real structured vertical | blocked | Authenticated turn usage reset; host Bubblewrap AppArmor profile | Resume the unchanged aggregate when both external runtime conditions are available. |
 
 ## Intentional Blockers
 
