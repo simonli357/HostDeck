@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 import { openMigratedDatabase } from "./migration-runner.js";
 import { createDefaultSettings, createSettingsRepository, HostDeckSettingsError } from "./settings-repository.js";
@@ -76,6 +77,243 @@ describe("settings repository", () => {
       expect(localhost.lan_enabled).toBe(false);
     } finally {
       secondOpen.db.close();
+    }
+  });
+
+  it("transitions only host lock state and returns an exact frozen receipt", () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+
+    try {
+      const repo = createSettingsRepository(open.db);
+      const beforeSettings = repo.getOrCreateDefault({
+        stateDir: tempStateDir(),
+        bindPort: 4111,
+        now: fixedNow
+      });
+      const receipt = repo.transitionHostLock({
+        locked: true,
+        now: laterNow()
+      });
+
+      expect(receipt).toEqual({
+        before: {
+          locked: false,
+          settings_updated_at: beforeSettings.updated_at
+        },
+        after: {
+          locked: true,
+          settings_updated_at: laterNow().toISOString()
+        },
+        changed: true
+      });
+      expect(Object.isFrozen(receipt)).toBe(true);
+      expect(Object.isFrozen(receipt.before)).toBe(true);
+      expect(Object.isFrozen(receipt.after)).toBe(true);
+      expect(repo.require()).toEqual({
+        ...beforeSettings,
+        locked: true,
+        updated_at: laterNow().toISOString()
+      });
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("keeps idempotent lock state and chronology unchanged", () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+
+    try {
+      const repo = createSettingsRepository(open.db);
+      repo.getOrCreateDefault({ stateDir: tempStateDir(), now: fixedNow });
+      repo.transitionHostLock({ locked: true, now: laterNow() });
+
+      const receipt = repo.transitionHostLock({
+        locked: true,
+        now: fixedNow()
+      });
+      expect(receipt).toEqual({
+        before: {
+          locked: true,
+          settings_updated_at: laterNow().toISOString()
+        },
+        after: {
+          locked: true,
+          settings_updated_at: laterNow().toISOString()
+        },
+        changed: false
+      });
+      expect(repo.require().updated_at).toBe(laterNow().toISOString());
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("rejects malformed and regressing lock transitions before mutation", () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+
+    try {
+      const repo = createSettingsRepository(open.db);
+      repo.getOrCreateDefault({ stateDir: tempStateDir(), now: fixedNow });
+      const invalidCandidates: unknown[] = [
+        null,
+        {},
+        { locked: true },
+        { locked: true, now: laterNow(), extra: true },
+        { locked: "true", now: laterNow() },
+        { locked: true, now: new Date(Number.NaN) },
+        Object.assign(Object.create({ locked: true }), { now: laterNow() })
+      ];
+      const accessor = { locked: true } as Record<string, unknown>;
+      Object.defineProperty(accessor, "now", {
+        enumerable: true,
+        get: laterNow
+      });
+      invalidCandidates.push(accessor);
+
+      for (const candidate of invalidCandidates) {
+        expect(() => repo.transitionHostLock(candidate as never)).toThrowError(
+          expect.objectContaining({ code: "invalid_lock_transition" })
+        );
+      }
+      expect(repo.require().locked).toBe(false);
+
+      repo.transitionHostLock({ locked: true, now: laterNow() });
+      expect(() =>
+        repo.transitionHostLock({
+          locked: false,
+          now: new Date("2026-07-08T22:04:59.999Z")
+        })
+      ).toThrowError(
+        expect.objectContaining({ code: "settings_lock_time_conflict" })
+      );
+      expect(repo.require()).toMatchObject({
+        locked: true,
+        updated_at: laterNow().toISOString()
+      });
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("serializes two repositories without caching lock truth and survives restart", () => {
+    const path = tempDbPath();
+    const first = openMigratedDatabase(path, { now: fixedNow });
+    const firstRepo = createSettingsRepository(first.db);
+    firstRepo.getOrCreateDefault({ stateDir: tempStateDir(), now: fixedNow });
+    const second = openMigratedDatabase(path, { now: fixedNow });
+
+    try {
+      const secondRepo = createSettingsRepository(second.db);
+      expect(
+        firstRepo.transitionHostLock({ locked: true, now: laterNow() })
+          .after.locked
+      ).toBe(true);
+      expect(
+        secondRepo.transitionHostLock({
+          locked: false,
+          now: new Date("2026-07-08T22:06:00.000Z")
+        }).before.locked
+      ).toBe(true);
+      expect(
+        firstRepo.transitionHostLock({
+          locked: true,
+          now: new Date("2026-07-08T22:07:00.000Z")
+        }).before.locked
+      ).toBe(false);
+    } finally {
+      second.db.close();
+      first.db.close();
+    }
+
+    const reopened = openMigratedDatabase(path, { now: fixedNow });
+    try {
+      expect(createSettingsRepository(reopened.db).require()).toMatchObject({
+        locked: true,
+        updated_at: "2026-07-08T22:07:00.000Z"
+      });
+    } finally {
+      reopened.db.close();
+    }
+  });
+
+  it("fails closed for missing, corrupt, busy, read-only, and closed storage", () => {
+    const missingOpen = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      expect(() =>
+        createSettingsRepository(missingOpen.db).transitionHostLock({
+          locked: true,
+          now: laterNow()
+        })
+      ).toThrowError(expect.objectContaining({ code: "settings_missing" }));
+    } finally {
+      missingOpen.db.close();
+    }
+
+    const path = tempDbPath();
+    const first = openMigratedDatabase(path, { now: fixedNow });
+    const firstRepo = createSettingsRepository(first.db);
+    firstRepo.getOrCreateDefault({ stateDir: tempStateDir(), now: fixedNow });
+    const second = openMigratedDatabase(path, { now: fixedNow });
+    second.db.pragma("busy_timeout = 1");
+    try {
+      first.db.exec("BEGIN IMMEDIATE");
+      expect(() =>
+        createSettingsRepository(second.db).transitionHostLock({
+          locked: true,
+          now: laterNow()
+        })
+      ).toThrowError(
+        expect.objectContaining({ code: "settings_unavailable" })
+      );
+      first.db.exec("ROLLBACK");
+      expect(
+        createSettingsRepository(second.db).transitionHostLock({
+          locked: true,
+          now: laterNow()
+        }).changed
+      ).toBe(true);
+    } finally {
+      if (first.db.inTransaction) first.db.exec("ROLLBACK");
+      second.db.close();
+      first.db.close();
+    }
+
+    const readOnly = new Database(path, { readonly: true });
+    try {
+      expect(() =>
+        createSettingsRepository(readOnly).transitionHostLock({
+          locked: true,
+          now: laterNow()
+        })
+      ).toThrowError(
+        expect.objectContaining({ code: "settings_unavailable" })
+      );
+    } finally {
+      readOnly.close();
+    }
+
+    const closed = new Database(path);
+    const closedRepo = createSettingsRepository(closed);
+    closed.close();
+    expect(() =>
+      closedRepo.transitionHostLock({ locked: false, now: laterNow() })
+    ).toThrowError(expect.objectContaining({ code: "settings_unavailable" }));
+
+    const corrupt = new Database(path);
+    try {
+      corrupt.pragma("ignore_check_constraints = ON");
+      corrupt
+        .prepare("UPDATE settings SET bind_port = 0 WHERE id = 'hostdeck_settings'")
+        .run();
+      corrupt.pragma("ignore_check_constraints = OFF");
+      expect(() =>
+        createSettingsRepository(corrupt).transitionHostLock({
+          locked: false,
+          now: new Date("2026-07-08T22:08:00.000Z")
+        })
+      ).toThrowError(expect.objectContaining({ code: "invalid_settings" }));
+    } finally {
+      corrupt.close();
     }
   });
 
@@ -227,9 +465,7 @@ function tempDbPath(): string {
 }
 
 function tempStateDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "hostdeck-state-"));
-  tempDirs.push(dir);
-  return dir;
+  return `/tmp/hostdeck-state-${process.pid}-${tempDirs.length}`;
 }
 
 function fixedNow(): Date {
