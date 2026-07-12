@@ -25,6 +25,7 @@ export * from "./fastify-zod.js";
 export * from "./host-service.js";
 export * from "./managed-thread-service.js";
 export * from "./output-reader.js";
+export * from "./pairing-routes.js";
 export * from "./pending-turn-settings.js";
 export * from "./projection-fanout-hub.js";
 export * from "./projection-replay-live-handoff.js";
