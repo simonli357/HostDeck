@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `DAT-V1-028` atomic device-revoke storage implementation against frozen hard criteria.
+- Active task: `DAT-V1-025` bounded non-secret device-listing storage hardening-criteria audit.
 - `IFC-V1-047` real HTTP resource limits are complete. `INT-V1-027` remains blocked on the authenticated turn reset and host Bubblewrap AppArmor profile; its unchanged aggregate remains the next runtime action when both are available.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -58,6 +58,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `DAT-V1-029` makes bearer authentication and browser-write authorization immediate, authority-validating, and monotonic. Strict chronology, greater/equal/older behavior, generic rollback, real old/new/equal/revoke ordering, restart/index/privacy, and bounded route classification pass. Evidence: `artifacts/dat-v1-029-monotonic-authentication-last-used.md`; implementation `cb60c0a`.
 - `DAT-V1-027` completes the exact ten-action security audit catalog with truthful actor/target contracts, strict phase-specific summaries, explicit legacy/current provenance, catalog-backed CSRF bootstrap, and cause-free security failures. Migration preservation/rollback, all outcomes, real contention, corruption, restart, orphan, retention, and privacy evidence pass. Evidence: `artifacts/dat-v1-027-security-action-audit-storage.md`; implementation `100ed54`.
 - `DAT-V1-026` implements policy-lived 128-bit pairing issue, durable source/global fixed-window attempts, bounded stale-source cleanup, exact selected owner provenance, and atomic claim/revoke ordering. Strict input, legacy isolation, failure accounting, rollback, corruption, restart, worker contention, and main/WAL/SHM privacy evidence pass. Evidence: `artifacts/dat-v1-026-pairing-rate-claim-storage.md`; implementation `a28c837`.
+- `DAT-V1-028` implements strict auth-device expiry/use/rotation/revocation chronology and one immediate raw-state-CAS revoke with stable first-winner idempotency. Bearer, browser-write, and bootstrap authority reject after commit; real ordering, rollback, corruption, restart, index, minimal-result, and main/WAL/SHM privacy evidence pass. Evidence: `artifacts/dat-v1-028-atomic-device-revoke-storage.md`; implementation `0e5d5e7`.
 
 ## Not Proven
 
@@ -158,6 +159,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/dat-v1-027-security-action-audit-storage.md`.
 - `DAT-V1-026`: focused repository/migration (34), storage (197), server (305 passed, 7 external skipped), unit (826 passed, 29 external skipped), contract (149), integration (16), web (14), typecheck, lint/exports, scaffold/planning/binding, frozen offline install, zero-vulnerability production audit, SQL/privacy/ownership review, and diff checks pass.
 - Evidence: `artifacts/dat-v1-026-pairing-rate-claim-storage.md`.
+- `DAT-V1-028`: direct selected repository (11), focused auth/bootstrap/write-route (47), storage (208), server (305 passed, 7 external skipped), unit (837 passed, 29 external skipped), contract (152), integration (16), web (14), typecheck, lint/exports, scaffold/planning/binding, frozen offline install, zero-vulnerability production audit, transaction/privacy/ownership review, and diff checks pass.
+- Evidence: `artifacts/dat-v1-028-atomic-device-revoke-storage.md`.
 
 ## Git
 
@@ -198,4 +201,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `DAT-V1-029` implementation and evidence are pushed as `cb60c0a`; owner docs advance the queue to `DAT-V1-027` and make `IFC-V1-026` cookie authentication ready.
 - `DAT-V1-027` criteria are pushed as `0130b10`; implementation and evidence are pushed as `100ed54`. This closure makes `IFC-V1-032` ready and advances the storage queue to `DAT-V1-026`.
 - `DAT-V1-026` criteria are pushed as `e12a033`; implementation is pushed as `a28c837`. This closure advances the storage queue to `DAT-V1-028` while `IFC-V1-028` remains blocked on the security audit executor.
-- Next action: implement the frozen `DAT-V1-028` strict chronology, immediate idempotent revoke, auth/bootstrap ordering, rollback, restart, corruption, and privacy matrices. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
+- `DAT-V1-028` criteria are pushed as `be18c52`; implementation is pushed as `0e5d5e7`. This closure advances the storage queue to `DAT-V1-025` while selected revoke routes remain blocked on authentication, CSRF, audit execution, and route gates.
+- Next action: audit `DAT-V1-025` against production-hardening criteria before implementing bounded non-secret device listing. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.

@@ -15,11 +15,10 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `DAT-V1-028` Implement atomic device revoke storage | in_progress | none | Invalidates bearer and CSRF authority together before the revoke route. |
-| 2 | `DAT-V1-025` Implement bounded non-secret device listing | ready | none | Supplies the safe device-read model after security-critical mutation storage. |
-| 3 | `IFC-V1-026` Implement HttpOnly cookie authentication context | ready | none | Consumes the completed trust and monotonic-auth contracts after the storage security leaves, before selected protected routes. |
-| 4 | `IFC-V1-032` Implement the security mutation audit executor | ready | none | Consumes the completed strict security audit storage before route-specific mutations. |
-| 5 | `INT-V1-027` Prove the assembled real structured vertical | blocked | Authenticated turn usage reset; host Bubblewrap AppArmor profile | Resume the unchanged aggregate when both external runtime conditions are available. |
+| 1 | `DAT-V1-025` Implement bounded non-secret device listing | in_progress | none | Supplies the safe device-read model after security-critical mutation storage. |
+| 2 | `IFC-V1-026` Implement HttpOnly cookie authentication context | ready | none | Consumes the completed trust and monotonic-auth contracts after the storage security leaves, before selected protected routes. |
+| 3 | `IFC-V1-032` Implement the security mutation audit executor | ready | none | Consumes the completed strict security audit storage before route-specific mutations. |
+| 4 | `INT-V1-027` Prove the assembled real structured vertical | blocked | Authenticated turn usage reset; host Bubblewrap AppArmor profile | Resume the unchanged aggregate when both external runtime conditions are available. |
 
 ## Intentional Blockers
 

@@ -2,13 +2,13 @@
 
 Date: 2026-07-11
 
-Status: hard success criteria frozen before implementation.
+Status: complete. Implementation: `0e5d5e7`.
 
 ## Scope
 
 Harden the durable device-authority revocation transition. This leaf owns strict auth-device chronology, one selected SQLite revocation transaction, a minimal non-secret result, ordering against bearer authentication/browser-write authorization/CSRF bootstrap, and direct storage evidence. It does not own who may revoke, self/last-writer policy, confirmation UI, HTTP/CSRF/cookie handling, active SSE or in-flight request cancellation, security-audit orchestration, device listing, or session deletion.
 
-## Current Gaps
+## Pre-Implementation Gaps
 
 - `AuthDeviceRepository.revoke` performs read, unconditional update, and read as separate operations instead of one immediate transaction.
 - Revocation time is not constrained against creation, latest use, or CSRF rotation. An impossible or regressing timestamp can become durable and concurrent revokes can overwrite the first winner.
@@ -16,6 +16,14 @@ Harden the durable device-authority revocation transition. This leaf owns strict
 - The historical and selected revoke surfaces are not distinct; no strict plain-data input or fixed cause-free selected error boundary exists.
 - The auth-device contract does not reject expiry before creation or revocation before creation/latest use/latest CSRF rotation.
 - Update-count/commit rollback, read-only/closed/corrupt storage, restart, indexed lookup, raw main/WAL/SHM inspection, and real revoke/auth/bootstrap/revoke ordering are not directly proven for the selected transition.
+
+## Implementation Result
+
+- Added strict device-id and minimal revocation-result contracts plus complete expiry/rotation/use/revocation chronology on auth-device records.
+- Added `createDeviceRevocationRepository` with exact plain-data input, one immediate read/validate/full-raw-state-CAS/reread transaction, stable first-winner idempotency, fixed cause-free errors, and a frozen four-field non-secret result.
+- Preserved validated raw SQLite column values for the CAS so valid offset timestamps remain revocable while normalized chronology and results stay canonical.
+- Renamed the historical full-record method to `revokeLegacy` and made it immediate/non-regressing so deprecated fixtures cannot corrupt shared chronology; it remains unsuitable for selected route ownership.
+- Added post-update full-state equality, authority-gate denial, statement/update/deferred-commit rollback, corruption, read-only/closed, restart, index, main/WAL/SHM privacy, and real worker-held auth/bootstrap/revoke ordering evidence.
 
 ## Frozen Selected Contract
 
@@ -73,14 +81,20 @@ Malformed or contradictory persisted state is corruption. Selected revoke return
 | Secret and data absence | Raw bearer/CSRF values and secret-bearing sentinels remain absent from result, errors, rows, main/WAL/SHM bytes, logs, and artifacts. Revoke changes no pairing/session/projection/audit/settings row and deletes nothing. |
 | Ownership boundaries | No route authority, confirmation, self/last-device rule, cookie/header behavior, audit write, active request/SSE invalidation, list response, or UI behavior is implemented or claimed. |
 
-## Validation Plan
+## Validation
 
-- Contract tests for strict auth-device chronology and selected result shape.
-- Direct repository tests for first revoke, exact/equal/later/earlier repeat, expired devices, read/write devices, missing/invalid/corrupt inputs, changed-column isolation, update/commit rollback, closed/read-only storage, and restart.
-- Worker-backed two-connection tests for authentication, CSRF bootstrap, and revoke ordering in both directions plus concurrent revokes.
-- Existing authentication/browser-write/bootstrap tests prove the durable `revoked_at` authority gate remains shared and no current credential works after commit.
-- Raw table plus main/WAL/SHM scans for synthetic bearer, CSRF, id/error sentinels; query-plan and foreign-table count/diff inspection.
-- Full storage/server/unit/contract/integration/web, typecheck/lint, scaffold/planning/exact-binding, frozen offline install, production audit, manual transaction/privacy/ownership review, and diff checks.
+- Direct selected repository: 11 tests passed, covering first/equal/later/earlier/expired/zero-lifetime/offset revocation, exact input, missing/corrupt state, ignored/cross-field/aborted/deferred-commit rollback, closed/read-only storage, restart, primary-key plan, raw-file privacy, and real auth/bootstrap/revoke ordering.
+- Focused selected plus adjacent auth/bootstrap/write-route matrix: 47 tests passed. Storage passed 22 files and 208 tests; server passed 305 tests with seven gated external smokes skipped.
+- Aggregate: 837 unit tests passed with 29 explicit external skips; 152 contract, 16 integration, and 14 web tests passed.
+- Typecheck, Biome/package exports, scaffold, planning graph, and exact Codex 0.144.0 binding checks passed. Planning remained 196 tasks, 84 requirements, 632 dependencies, and four queued tasks after closure.
+- Frozen offline install passed. Production audit reported zero known vulnerabilities across 140 production dependencies.
+- Manual transaction review confirmed immediate serialization, raw-state CAS compatibility, complete post-state comparison, stable first timestamp, no hidden retry, and rollback through commit failure.
+- Manual privacy/ownership review confirmed the selected result/error boundary exposes no hash or raw credential, `revoked_at` gates all three authority operations, and revoke changes/deletes no pairing, session, projection, audit, setting, or other auth field. Diff checks passed.
+- No HTTP, SSE, browser, Android, UI, or Codex runtime evidence is claimed because those revoke effects remain downstream.
+
+## Remaining Gaps
+
+None within this leaf. Authorization/confirmation, self/last-device policy, cookie/CSRF response handling, audit orchestration, and active request/SSE rechecks remain with the downstream owners below.
 
 ## Reuse Assessment
 
