@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `DAT-V1-026` pairing rate and claim-concurrency storage hardening.
+- Active task: `DAT-V1-026` pairing rate and claim-concurrency storage implementation against frozen hard criteria.
 - `IFC-V1-047` real HTTP resource limits are complete. `INT-V1-027` remains blocked on the authenticated turn reset and host Bubblewrap AppArmor profile; its unchanged aggregate remains the next runtime action when both are available.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -194,4 +194,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-017` request-trust implementation and evidence are pushed as `8aef5e8`; owner docs advance the queue to `DAT-V1-029` while cookie authentication remains blocked on that repository.
 - `DAT-V1-029` implementation and evidence are pushed as `cb60c0a`; owner docs advance the queue to `DAT-V1-027` and make `IFC-V1-026` cookie authentication ready.
 - `DAT-V1-027` criteria are pushed as `0130b10`; implementation and evidence are pushed as `100ed54`. This closure makes `IFC-V1-032` ready and advances the storage queue to `DAT-V1-026`.
-- Next action: freeze and implement rigorous `DAT-V1-026` pairing-attempt, rate-window, one-winner claim, restart, and raw-secret criteria. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
+- Next action: implement the frozen `DAT-V1-026` resource, migration, high-entropy issue, durable source/global rate, one-winner claim/revoke, restart, and privacy matrices. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
