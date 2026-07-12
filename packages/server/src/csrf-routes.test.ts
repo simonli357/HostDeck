@@ -583,7 +583,12 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
       expectStableError(unknownQuery, 400, "validation_error", "query");
       expectStableError(malformedJson, 400, "malformed_request");
       expectStableError(unsupportedMedia, 415, "unsupported_media_type");
-      for (const response of [unknownBody, unknownQuery, malformedJson]) {
+      for (const response of [
+        unknownBody,
+        unknownQuery,
+        malformedJson,
+        unsupportedMedia
+      ]) {
         expect(response.headers["cache-control"]).toBe("no-store");
         expect(response.headers.pragma).toBe("no-cache");
       }

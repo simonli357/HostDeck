@@ -17,7 +17,10 @@ import {
 } from "@hostdeck/storage";
 import type { FastifyRequest } from "fastify";
 import { z } from "zod";
-import type { HostDeckRoutePluginRegistration } from "./fastify-app.js";
+import {
+  type HostDeckRoutePluginRegistration,
+  hostDeckNoStoreRouteConfig
+} from "./fastify-app.js";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import {
   type HostDeckRequestAuthenticationMechanism,
@@ -343,6 +346,7 @@ export function createHostDeckCsrfRouteRegistration(
       app.post(
         manifest.path,
         {
+          config: hostDeckNoStoreRouteConfig,
           async onRequest(request, reply) {
             reply.header("cache-control", "no-store");
             reply.header("pragma", "no-cache");

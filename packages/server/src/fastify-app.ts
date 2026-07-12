@@ -62,6 +62,10 @@ export interface HostDeckRoutePluginRegistration {
   ) => void | Promise<void>;
 }
 
+export const hostDeckNoStoreRouteConfig = Object.freeze({
+  hostDeckNoStore: true as const
+});
+
 export interface CreateHostDeckFastifyAppInput {
   readonly resourceBudget: ResourceBudget;
   readonly requestAuthenticationPolicy: HostDeckRequestAuthenticationPolicy;
@@ -243,6 +247,7 @@ function installSurfaceRoutePolicy(app: HostDeckFastifyInstance, surface: HostDe
 
 function installRequestPolicy(app: HostDeckFastifyInstance, runtime: AppRuntimeState): void {
   app.addHook("onRequest", async (request, reply) => {
+    applyPreAdmissionResponsePolicy(request, reply);
     reply.header("x-request-id", request.id);
     if (rawHeaderCount(request.raw.rawHeaders) > runtime.resourceBudget.http_headers_max_count) {
       runtime.rejectedHeaderCountRequests += 1;
@@ -319,6 +324,20 @@ function installRequestPolicy(app: HostDeckFastifyInstance, runtime: AppRuntimeS
   app.addHook("onTimeout", async (request) => {
     finishTerminatedRequest(request, "timeout");
   });
+}
+
+function applyPreAdmissionResponsePolicy(
+  request: import("fastify").FastifyRequest,
+  reply: import("fastify").FastifyReply
+): void {
+  const config: unknown = request.routeOptions.config;
+  if (config === null || typeof config !== "object") return;
+  const descriptor = Object.getOwnPropertyDescriptor(config, "hostDeckNoStore");
+  if (descriptor === undefined || !("value" in descriptor) || descriptor.value !== true) {
+    return;
+  }
+  reply.header("cache-control", "no-store");
+  reply.header("pragma", "no-cache");
 }
 
 function installNotFoundPolicy(app: HostDeckFastifyInstance, runtime: AppRuntimeState): void {
