@@ -26,7 +26,7 @@ Implement one headless application executor for the exact ten selected security 
 - The returned executor is frozen and exposes only `execute`, `reject`, and a frozen count-only `snapshot`.
 - `execute` accepts exact static operation identity, actor, action, target, accepted summary, an explicit emergency-lock boolean, one transition callback, and one response-preparation callback. `reject` accepts exact operation identity, actor, action, target, rejected summary, and selected error code.
 - All static fields and callback shapes validate before clock, id factory, repository, transition, or response-preparation work. Every record is validated with the strict current security-audit contract before repository invocation.
-- Repository return values are revalidated as exact trails and compared with the records supplied. A missing, forged, partial, contradictory, or nonterminal return is a failure even if the port did not throw.
+- Repository return values are revalidated as exact trails and compared with the records supplied. A missing, forged, partial, contradictory, or nonterminal return is a failure even if the port did not throw. Because an injected port may commit before returning corrupt data, such failures report audit state `unproven`, not a fabricated `none`, `pending`, or `terminal` state.
 
 ### Normal Accepted-To-Terminal Order
 
@@ -65,9 +65,9 @@ No callback runs when accepted persistence or proof fails. The executor does not
 
 ### Terminal Audit Failure And Crash Truth
 
-- Any terminal record construction, repository call, or returned-trail proof failure after acceptance produces a fixed `terminal_audit_failed` error with audit state `pending` and the known mutation outcome when available.
+- Terminal record construction or chronology failure before the repository call produces a fixed `terminal_audit_failed` error with audit state `pending`. A real repository availability/write rollback also remains provably pending. An arbitrary port throw, conflicting terminal, or returned-trail proof failure reports `unproven`; the known mutation outcome is preserved when available.
 - The executor returns no success response, retries neither audit nor mutation, and performs no compensating reverse mutation. Security state changes, especially lock/revoke, are not undone merely to make audit look successful.
-- The accepted row remains append-only and discoverable. `DAT-V1-030` may later append only `incomplete/runtime_unavailable`; this executor does not rewrite accepted truth or race a startup owner.
+- A provably pending accepted row remains append-only and discoverable. `DAT-V1-030` may later append only `incomplete/runtime_unavailable`; this executor does not rewrite accepted truth or race a startup owner. An unproven state requires read/reconciliation ownership before any later claim.
 - A process death after accepted persistence naturally leaves the same pending trail. Fixture evidence composes the executor barrier with real reopen/orphan reconciliation rather than claiming in-process exception handling proves a crash.
 
 ### Emergency Lock Degradation
@@ -81,7 +81,7 @@ No callback runs when accepted persistence or proof fails. The executor does not
 
 ### Errors, Diagnostics, And Privacy
 
-- Executor errors are frozen, bounded, cause-free, and expose only fixed code, selected API error code, stage, mutation outcome, audit state, and retry safety. Raw repository/native/callback messages and values are never copied.
+- Executor errors are frozen, bounded, cause-free, and expose only fixed code, selected API error code, stage, mutation outcome, audit state (`none`, `pending`, `terminal`, `deferred`, or `unproven`), and retry safety. Raw repository/native/callback messages and values are never copied.
 - Explicit mutation failure results contain only `failed` or `incomplete` plus one selected error code. Audit records/trails and response values are not returned as public execution metadata.
 - Saturating diagnostics retain only counts for accepted, rejected, succeeded, failed, incomplete, transition-contract failure, response-preparation failure, terminal-audit failure, and emergency-lock audit deferral.
 - No operation id, record id, actor, origin, target id, summary, response, code/token/CSRF value, cookie/header, key/certificate material, native error, path, or message is retained in diagnostics.
@@ -97,7 +97,7 @@ No callback runs when accepted persistence or proof fails. The executor does not
 | Rejection | Truthfully identified pre-dispatch rejection creates one standalone rejected trail and no callback. Invalid/unavailable/forged rejection persistence fails without claiming a record. |
 | Transition corruption | Throw, malformed descriptor, unknown key/outcome/error, wrong action summary, and sensitive/oversized/nested summary append fixed incomplete when possible, expose no cause, and never persist attacker material. |
 | Response handoff | Preparation runs only after success and at most once. Preparation failure records state success, returns no response, reports unknown non-retryable delivery, and never changes the audit outcome to failed. |
-| Terminal failure | Clock/id/repository/returned-trail failure after mutation leaves exactly the accepted row, suppresses response, reports pending audit with known mutation outcome, and does not retry or compensate. |
+| Terminal failure | Clock/id or proven transactional rollback after mutation leaves exactly the accepted row and reports pending. Arbitrary throw, conflicting terminal, or returned-trail failure reports unproven. Every case suppresses response, preserves known mutation outcome, and does not retry or compensate. |
 | Crash/restart | A barrier after real accepted commit proves pending durability; reopen plus the existing orphan reconciler appends one incomplete terminal while preserving the accepted bytes and actor/action/target identity. |
 | Emergency lock | Only explicit `lock` plus typed audit availability/write failure invokes one deferred-context transition. Success/failure/incomplete/throw cases remain observable; no normal response, response preparation, fabricated row, unlock, or non-lock bypass occurs. |
 | Concurrency | Two real executor calls with one operation id produce one accepted owner, one transition, one terminal, and one non-dispatch conflict without executor retry. Independent operation ids remain the mutation owner's concern. |
