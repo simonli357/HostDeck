@@ -15,7 +15,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-017` Implement transport, Host, Origin, and CORS trust gate | ready | none | Applies the physically proven HTTPS origin contract before authentication or route data. |
+| 1 | `IFC-V1-017` Implement transport, Host, Origin, and CORS trust gate | in_progress | none | Applies the physically proven HTTPS origin contract before authentication or route data. |
 | 2 | `DAT-V1-029` Implement monotonic authentication last-used storage | ready | none | Unlocks cookie authentication while preventing older observations from weakening durable authority metadata. |
 | 3 | `DAT-V1-027` Complete security-action audit storage | ready | none | Unlocks the shared security mutation audit executor and keeps secrets out of audit state. |
 | 4 | `DAT-V1-026` Implement pairing rate and claim concurrency storage | ready | none | Establishes bounded one-winner pairing state before the claim route. |
