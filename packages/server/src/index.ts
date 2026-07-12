@@ -11,6 +11,7 @@ export * from "./codex-projection-service.js";
 export * from "./codex-prompt-control-service.js";
 export * from "./codex-skills-control-service.js";
 export * from "./codex-usage-control-service.js";
+export * from "./device-list-routes.js";
 export * from "./fastify-app.js";
 export * from "./fastify-error-policy.js";
 export * from "./fastify-host-lifecycle.js";

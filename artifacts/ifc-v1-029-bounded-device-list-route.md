@@ -2,7 +2,7 @@
 
 Date: 2026-07-12
 
-Status: production-hardening criteria frozen; implementation pending.
+Status: complete. Implementation commit pending.
 
 ## Scope
 
@@ -18,6 +18,15 @@ It does not own pairing, CSRF rotation, device revoke, active-request invalidati
 - The route must distinguish public query failure, credential failure, storage corruption/unavailability, and an impossible route-to-repository contract mismatch without returning native causes or partial rows.
 - The route must prove that read-only and write-paired clients are admitted by the frozen manifest while safe loopback requests without a device credential and missing, invalid, expired, or revoked credentials cannot reach listing storage.
 - The selected storage projection is non-secret, but the HTTP mapping, error path, headers, raw listener, and malformed injected-port output have no privacy evidence.
+
+## Implementation Result
+
+- Added shared executable query, cursor, response-item, and response contracts. The dependency-free ASCII codec emits one `v1.` unpadded-base64url cursor and rejects bad version/alphabet/padding/length/trailing bits, invalid decoded ids, and noncanonical round trips.
+- Added one fixed frozen `selected-device-list` API registration. It asserts the complete manifest row, disables implicit HEAD, authenticates a device cookie before query validation/list access, applies no-store before route-local failures, and calls one snapshotted detached synchronous list port.
+- Added descriptor-first proof for the frozen returned page, array, and every item before Zod parsing. Full page/request coherence validates row count, nonterminal fullness, strict post-cursor order, continuation, and response preparation before any body is released.
+- Added fixed cause-free storage failures plus observed sanitized internal contract failures. Unknown/malformed/async/mutable/accessor/proxy/over-limit/incoherent port outcomes cannot select a response, invoke an accessor, leak a native cause, retry, fall back to `listLegacy`, or return a partial prefix.
+- Corrected the selected manifest from the unreachable `local_admin_or_device_cookie` union to `device_cookie` under `DEC-024`. Paired read and write devices remain admitted; safe no-Origin GETs remain unpaired as required by the completed authentication contract.
+- Added real migrated-SQLite traversal, authentication last-used, revoke-before-auth, corrupt-lookahead, query-only, reopen, and raw loopback listener evidence without adding a dependency or claiming downstream CLI/UI behavior.
 
 ## Frozen Route Contract
 
@@ -105,13 +114,19 @@ Success is one exact snake_case object:
 | Storage composition | Real migrated SQLite proves authentication-last-used composition, selected non-secret list mapping, corruption/no-partial behavior, reopen continuity, read-only listing, and revoke-before-auth denial without route-owned writes. |
 | Ownership boundaries | No pair/revoke/CSRF/lock/audit/SSE/aggregate composition, browser UI, Android, presentation ordering, or release claim is introduced. |
 
-## Validation Plan
+## Validation
 
-- Add direct contract/factory tests for exact hostile construction, canonical cursor/query boundaries, response invariants, fixed registration metadata, immutability, and descriptor-first returned-port handling.
-- Add Fastify injection tests over the real trust/authentication policy for the complete paired-permission/credential/error matrix, explicit safe-GET non-elevation, exact route/method/path behavior, no-store headers, call counts, and stable envelopes.
-- Add migrated SQLite route tests for default and multi-page traversal, deleted cursors, canonical timestamps, authentication last-used visibility, corrupt lookahead/no partial result, reopen/read-only behavior, and raw-secret absence.
-- Add one real loopback raw-HTTP exchange proving the selected route, protected cookie path, response/header privacy, and no implicit HEAD or alternate route.
-- Run focused contracts/storage/auth/route/manifest tests, the complete server/storage/package suites, root unit/contract/integration/web gates, typecheck, lint/exports, scaffold, planning, exact Codex binding, frozen install, production audit/license review, manual privacy/ownership review, and diff/staged-patch checks.
+- Direct route matrix: 8 tests passed for exact hostile construction, manifest/path/method binding, query mapping, paired read/write plus every rejected credential state, storage/internal failures, accessor-free hostile results, 250-device traversal, deleted/after-end/exact-terminal cursors, query-only/reopen, authentication/revoke/corruption composition, and real raw-listener privacy/non-elevation.
+- Selected list and manifest contracts: 14 tests passed, including all cursor lengths from 1 through 120 decoded id bytes, malformed/noncanonical forms, exact query defaults/bounds, strict non-secret response shape, and corrected device-cookie manifest policy.
+- Focused route/auth/list/revoke regressions passed 49 tests. Storage passed 217 tests. Server passed 336 tests with seven explicit external smokes skipped.
+- Aggregate unit passed 877 tests with 29 explicit external skips; contract 162, integration 16, and web 14 passed.
+- Root and package typechecks, Biome/package exports over 299 files and 9 packages, scaffold (9 packages/18 scripts), planning (196 tasks/84 requirements/633 dependencies/9 queued), and exact Codex 0.144.0 binding (671 files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`) passed.
+- Frozen offline install passed. Production audit reported no known vulnerabilities. Production license inventory remained MIT 101, ISC 9, BSD-3-Clause 5, BlueOak-1.0.0 5, Apache-2.0 3, 0BSD 1, `(BSD-2-Clause OR MIT OR Apache-2.0)` 1, and `(MIT OR WTFPL)` 1.
+- Manual contract/query/manifest/failure/privacy review confirmed one bounded list call, no native/candidate error reflection, no secret/CSRF/session/total-count fields, no implicit HEAD, and no route-owned write/audit/revoke/UI behavior. Diff and staged-patch checks pass.
+
+## Remaining Gaps
+
+None within this leaf. CSRF, pair/claim, revoke/active invalidation, access/lock state, aggregate security composition, local CLI device listing, dashboard presentation, Android/browser acceptance, and release evidence remain with their named downstream owners.
 
 ## Reuse Assessment
 
