@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `IFC-V1-017` transport, Host, Origin, and CORS trust gate.
+- Active task: `DAT-V1-029` monotonic authentication last-used storage.
 - `IFC-V1-047` real HTTP resource limits are complete. `INT-V1-027` remains blocked on the authenticated turn reset and host Bubblewrap AppArmor profile; its unchanged aggregate remains the next runtime action when both are available.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -54,13 +54,14 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Local path startup now resolves without mutation, bootstraps only owner state/lease, acquires a real Linux descriptor lock, then creates owner-only config/runtime/database paths. Hostile ownership/type/link/substitution cases, later-failure cleanup, real modes, duplicate owners, and child-process crash recovery pass. Evidence: `artifacts/dat-v1-019-secure-paths-daemon-lease.md`.
 - `IFC-V1-015` selects `@peculiar/x509` 2.0.0 plus `reflect-metadata` 0.2.2 and freezes the exact-IP CA/leaf profile. A physical Android 16/Chrome 150 run proves USB-only public-root transfer, warning-free exact-IP trust, same-root renewal, isolated SAN/date/authority and plaintext refusal, trust removal/reinstall recovery, reviewed screenshots, and full phone/host cleanup. Evidence: `artifacts/ifc-v1-015-https-phone-enrollment.md`; physical matrix `48ce602`.
 - `DAT-V1-021` adds forward-only auth-device CSRF generation/rotation state and one immediate hash-only bootstrap transaction. Integer bounds, historical duplicate hashes, old/current token truth, invalid/corrupt/exhausted states, rollback, real writer contention, restart, indexed lookup, and raw-secret absence pass. Evidence: `artifacts/dat-v1-021-csrf-bootstrap-storage.md`; implementation `e10a6a3`.
+- `IFC-V1-017` makes one branded immutable mode/transport/origin policy mandatory for every Fastify surface. Socket-derived transport, exact configured Host/Origin, proxy/ambiguous-target/preflight denial, bounded frozen context/counters, and native late-hook/raw CORS suppression pass headless, injection, and real loopback raw-socket matrices without claiming unfinished LAN/TLS composition. Evidence: `artifacts/ifc-v1-017-request-trust-gate.md`; implementation `8aef5e8`.
 
 ## Not Proven
 
 - The selected manifest is immutable metadata, not registered routes: downstream leaves still must implement each named local-Zod request/response contract, handler, auth/audit behavior, and production Fastify composition without changing the frozen semantics silently.
 - The selected Codex callback/fanout and exact aggregate harness are implemented and deterministically tested, but the one-lifecycle authenticated acceptance is not proven. Supervision, reconnect/restart behavior, and live HostDeck composition also remain downstream work. Partial evidence: `artifacts/int-v1-027-structured-vertical.md`.
 - Current command-backed app-server smokes can fail before a callback because app-server selects Bubblewrap while this host denies unprivileged user-namespace setup, even when the reviewed legacy-Landlock feature flag is enabled. Direct exact-version Landlock execution plus the no-tools interrupt and compact smokes pass. Resolve and reproduce the command-backed path in `INT-V1-027`/`INT-V1-091`; this does not invalidate the already-captured approval or interrupt evidence.
-- Production composition with selected Codex pipeline/trust/route registrations, authenticated SSE assembly around the proven fanout/high-water handoff, sustained subscriber queues, full raw-socket Node-limit enforcement, mutable runtime health, configured-policy ordering/wiring of the proven orphan and retention runners, or complete application drain; the generic listener lifecycle and individual headless adapters are proven, not those downstream integrations.
+- Production composition with selected Codex pipeline/authenticated route registrations, authenticated SSE assembly around the proven fanout/high-water handoff, sustained subscriber queues, full raw-socket Node-limit enforcement, mutable runtime health, configured-policy ordering/wiring of the proven orphan and retention runners, or complete application drain; the generic listener lifecycle and individual headless adapters are proven, not those downstream integrations.
 - The default installed Codex is now 0.144.1 and is intentionally incompatible with the reviewed 0.144.0 binding until a separate compatibility review. Exact 0.144.0 remains available through an isolated package invocation for the remaining runtime work.
 - Paired LAN reads, CSRF reload, rate limits, or device revocation.
 - Runnable packaged CLI, built dashboard, user services, clean Ubuntu install, real phone workflow, or release readiness.
@@ -146,6 +147,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Partial evidence: `artifacts/int-v1-027-structured-vertical.md`; implementation `f8ebcfc`; callback-admission hardening `d765855`.
 - `DAT-V1-021`: focused migration/auth/rotation (26), storage plus write-route (166), unit (771 passed, 29 external skipped), contract (139), integration (16), web (14), typecheck, lint/exports, scaffold/planning/binding, frozen offline install, production audit, indexed schema inspection, privacy review, and diff checks pass.
 - Evidence: `artifacts/dat-v1-021-csrf-bootstrap-storage.md`.
+- `IFC-V1-017`: direct trust gate (12), server (303 passed, 7 external skipped), unit (783 passed, 29 external skipped), contract (139), integration (16), web (14), typecheck, lint/exports, scaffold/planning/binding, frozen offline install, production audit, raw-listener/parser split, CORS dependency/order/privacy review, and diff checks pass.
+- Evidence: `artifacts/ifc-v1-017-request-trust-gate.md`.
 
 ## Git
 
@@ -182,4 +185,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - The exact-Codex sandbox prerequisite is documented and pushed as `f906d0f`.
 - `IFC-V1-015` physical evidence is pushed as `48ce602`; owner docs close the task and advance the queue to `DAT-V1-021` then `IFC-V1-017`.
 - `DAT-V1-021` implementation and evidence are pushed as `e10a6a3`; owner docs close the task and make `DAT-V1-025` to `DAT-V1-029` ready.
-- Next action: harden and implement `IFC-V1-017` transport/Host/Origin/CORS trust gating, then execute the dependency-ordered device security repositories. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
+- `IFC-V1-017` request-trust implementation and evidence are pushed as `8aef5e8`; owner docs advance the queue to `DAT-V1-029` while cookie authentication remains blocked on that repository.
+- Next action: harden and implement `DAT-V1-029` monotonic authentication last-used storage, then continue the dependency-ordered device security repositories. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.

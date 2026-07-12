@@ -2,7 +2,7 @@
 
 Date: 2026-07-11
 
-Status: implementation and validation complete; owner-doc closure pending.
+Status: complete.
 
 ## Scope
 
@@ -67,7 +67,7 @@ Each origin must be a canonical bare origin with no wildcard, credentials, path 
 - Unit: 87 files passed and 16 expected external files skipped; 783 tests passed and 29 skipped.
 - Contract: 14 files, 139 passed; integration: 2 files, 16 passed; web: 2 files, 14 passed.
 - Root typecheck passed. Lint/exports passed for 273 files and 9 packages. Scaffold passed for 9 packages and 18 root scripts.
-- Planning passed with 196 tasks, 84 requirements, 631 dependencies, and 7 queued entries.
+- Planning closure passed with 196 tasks, 84 requirements, 631 dependencies, and 6 queued entries after queue advancement.
 - Exact isolated Codex 0.144.0 binding passed for 671 files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`.
 - Frozen offline install passed; production dependency audit reported no known vulnerabilities.
 - Manual composition/privacy review passed: the root gate precedes route validation/handlers and body parsing, configured rather than raw authority enters context, response guards cover later child-hook/native mutation, no CORS package exists, no rejected input is reflected or retained, and `git diff --check` passes.
