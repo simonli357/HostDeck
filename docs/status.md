@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `IFC-V1-032` security mutation audit-executor implementation against frozen hard criteria.
+- Active task: `IFC-V1-029` bounded paired-device list route production-hardening criteria audit.
 - `IFC-V1-047` real HTTP resource limits are complete. `INT-V1-027` remains blocked on the authenticated turn reset and host Bubblewrap AppArmor profile; its unchanged aggregate remains the next runtime action when both are available.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -61,6 +61,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `DAT-V1-028` implements strict auth-device expiry/use/rotation/revocation chronology and one immediate raw-state-CAS revoke with stable first-winner idempotency. Bearer, browser-write, and bootstrap authority reject after commit; real ordering, rollback, corruption, restart, index, minimal-result, and main/WAL/SHM privacy evidence pass. Evidence: `artifacts/dat-v1-028-atomic-device-revoke-storage.md`; implementation `0e5d5e7`.
 - `DAT-V1-025` implements strict 1..100 immutable-id keyset listing through one primary-index statement, validates every fetched row including lookahead, and returns only frozen non-secret lifecycle metadata. Boundary/large traversal, hostile input, concurrent revoke, corruption, read-only/closed, restart, query-plan, and main/WAL/SHM privacy evidence pass. Evidence: `artifacts/dat-v1-025-bounded-device-list-storage.md`; implementation `133080f`.
 - `IFC-V1-026` implements mandatory post-trust device-cookie intake, explicit nonfallback local-admin provenance, lazy once-per-request monotonic bearer auth, exact frozen non-secret contexts, manifest/write enforcement helpers, and bounded diagnostics. Canonical/duplicate/malformed cookies, all credential states, real conflict/revoke/corruption/closed/restart storage, raw HTTP, and privacy evidence pass. Evidence: `artifacts/ifc-v1-026-device-cookie-authentication-context.md`; implementation `9b88d6d`.
+- `IFC-V1-032` implements one strict headless security mutation audit executor across all ten selected actions. Exact accepted/rejected/terminal proof, explicit failed/incomplete outcomes, corrupt/throw sanitization, response-delivery truth, pending/unproven/crash semantics, typed lock-only degradation, same-operation contention, restart reconciliation, and raw privacy evidence pass. Evidence: `artifacts/ifc-v1-032-security-mutation-audit-executor.md`; implementation `0a63dbc`.
 
 ## Not Proven
 
@@ -167,6 +168,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/dat-v1-025-bounded-device-list-storage.md`.
 - `IFC-V1-026`: direct selected authentication (10), secret/context contracts (4), focused auth/app/trust (28), adjacent lifecycle/SSE/static/resource/storage auth/pair/revoke (82), storage (217), server (315 passed, 7 external skipped), unit (856 passed, 29 external skipped), contract (159), integration (16), web (14), typecheck, lint/exports, scaffold/planning/binding, frozen offline install, zero-vulnerability production audit, dependency/license/hook/state/privacy review, raw-listener evidence, and diff checks pass.
 - Evidence: `artifacts/ifc-v1-026-device-cookie-authentication-context.md`.
+- `IFC-V1-032`: direct executor (13), focused executor/audit/orphan/retention (65), focused security/manifest contracts (15), storage (217), server (328 passed, 7 external skipped), unit (869 passed, 29 external skipped), contract (159), integration (16), web (14), typecheck, lint/exports, scaffold/planning/binding, frozen offline install, zero-vulnerability production audit, license/lifecycle/failure/privacy/ownership review, restart/raw-file evidence, and diff checks pass.
+- Evidence: `artifacts/ifc-v1-032-security-mutation-audit-executor.md`.
 
 ## Git
 
@@ -210,4 +213,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `DAT-V1-028` criteria are pushed as `be18c52`; implementation is pushed as `0e5d5e7`. This closure advances the storage queue to `DAT-V1-025` while selected revoke routes remain blocked on authentication, CSRF, audit execution, and route gates.
 - `DAT-V1-025` criteria are pushed as `c1430b9`; implementation is pushed as `133080f`. This closure completes the selected device-storage leaves and advances the queue to `IFC-V1-026` cookie authentication.
 - `IFC-V1-026` criteria are pushed as `d17cad2`; implementation is pushed as `9b88d6d`. This closure makes `IFC-V1-029` device listing plus `IFC-V1-069`, `IFC-V1-060`, `IFC-V1-043`, and `IFC-V1-065` read routes ready, and advances the queue to the security audit executor.
-- Next action: implement the frozen `IFC-V1-032` exact executor port, accepted/rejected/terminal ordering, response-preparation handoff, terminal-failure truth, emergency-lock degradation, concurrency, crash, and privacy matrices. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
+- `IFC-V1-032` criteria are pushed as `544b259` with the unproven-state correction as `8f2f372`; implementation is pushed as `0a63dbc`. This closure makes `IFC-V1-027` CSRF and `IFC-V1-028` pair/claim ready, and advances the queue to the paired-device list route.
+- Next action: audit `IFC-V1-029` against production-hardening criteria before implementing its exact authenticated bounded device-list route. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.

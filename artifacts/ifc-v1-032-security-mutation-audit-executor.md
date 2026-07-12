@@ -1,22 +1,32 @@
 # IFC-V1-032 Security Mutation Audit Executor
 
-Date: 2026-07-11
+Date: 2026-07-11. Completed: 2026-07-12.
 
-Status: hard success criteria frozen before implementation.
+Status: complete. Implementation: `0a63dbc`.
 
 ## Scope
 
 Implement one headless application executor for the exact ten selected security actions. The executor owns strict pre-dispatch rejection records, accepted-before-mutation ordering, one injected mutation attempt, one terminal outcome, response-preparation handoff, sanitized failure metadata, and the technical-plan emergency-lock exception when durable audit preflight is unavailable. It does not register routes, authenticate requests, verify CSRF, rate-limit, mutate pairing/device/lock/network state itself, issue credentials, send HTTP replies, run startup reconciliation, or implement UI behavior.
 
-## Current Gaps
+## Pre-Implementation Gaps
 
 - The selected audit repository strictly stores all ten security actions, but no application boundary composes accepted, one mutation attempt, and one terminal result.
 - Route owners would otherwise construct audit records independently, making actor/target continuity, callback count, failure precedence, record ids, timestamps, and secret handling inconsistent.
 - A repository call can succeed yet return a forged or corrupt trail through an injected port. Mutation must not start until the returned pending trail exactly proves the accepted record.
 - Mutation adapters can fail explicitly, return an unknown outcome, throw an arbitrary secret-bearing error, or return a malformed/secret-bearing summary after state may have changed.
 - A response can fail preparation after the mutation succeeds. Durable operation truth must remain succeeded while client delivery remains explicitly unknown and non-retryable.
-- A terminal write can fail after mutation. The accepted row must remain pending for startup reconciliation; the executor must not send success, retry the mutation, or roll state back.
+- A terminal write can fail after mutation. A proven rollback must leave accepted pending, while arbitrary port failure/forged return remains unproven; neither case may send success, retry the mutation, or roll state back.
 - The technical plan permits only emergency host lock to proceed after an audit availability failure. That exception currently has no exact trigger, callback context, result, or observable degradation contract.
+
+## Implementation Result
+
+- Added one frozen headless executor over an exact selected-audit repository, clock, and record-id port, with strict accessor-free operation/rejection inputs and detached `this: void` callbacks.
+- Added exact accepted/rejected/terminal record construction plus independent validation of every returned trail. Mutation starts only after durable accepted proof; arbitrary throws and forged returns remain `unproven` instead of inventing audit state.
+- Added all ten security-action transition contracts, explicit succeeded/failed/incomplete results, fixed secret-free incomplete conversion for thrown/malformed transitions, and count-only saturating diagnostics.
+- Added response preparation before terminal proof, truthful succeeded audit on preparation failure, terminal-failure precedence, response suppression after unproven/pending audit, and no retry or compensating reverse mutation.
+- Added the explicit lock-only degraded path for typed audit availability/write failures. The transition receives one frozen `deferred` context, no normal response is prepared, and the executor returns one fixed observable non-retryable error.
+- Added a bounded descriptor-first validator for input data and returned object/array trails so accessor-backed values are rejected without invocation; opaque successful response data is never traversed or copied into audit metadata.
+- Exported the executor from `@hostdeck/server` without adding a dependency, route registration, request policy, state adapter, or runtime lifecycle owner.
 
 ## Frozen Selected Contract
 
@@ -104,13 +114,22 @@ No callback runs when accepted persistence or proof fails. The executor does not
 | Privacy | Raw pairing/device/CSRF/key/certificate/cookie/header sentinels in summaries, transition errors, preparation errors, repository errors, and forged returns are absent from errors, non-success results, snapshots, rows, and main/WAL/SHM bytes. A response sentinel appears only in the explicitly prepared successful response after terminal proof. |
 | Ownership boundaries | No selected route, auth/CSRF/rate/lock/network adapter, HTTP status mapping, credential issue/revoke behavior, startup runner, readiness projection, Android/browser flow, or UI behavior is implemented or claimed. |
 
-## Validation Plan
+## Validation
 
-- Direct executor tests over real migrated SQLite for all ten actions, exact ordering, strict inputs, accepted/terminal proof, rejected/failed/incomplete paths, callback throw/corruption, response preparation, terminal failure, same-operation contention, and emergency lock degradation.
-- Real reopen plus orphan reconciliation composition for accepted-before-crash truth and append-only incomplete recovery.
-- Raw database main/WAL/SHM and public error/result/snapshot inspection with synthetic secret sentinels.
-- Adjacent selected audit contract/repository/security-action/orphan/retention and route-manifest regression suites.
-- Full server/storage/unit/contract/integration/web, typecheck/lint/exports, scaffold/planning/exact-binding, frozen offline install, production audit, manual lifecycle/failure/privacy/ownership review, and diff checks.
+- Direct executor matrix: 13 tests passed over real migrated SQLite, covering exact constructor/input/returned-trail admission, all ten actions, rejection, failed/incomplete outcomes, callback throw/corruption/accessors, response preparation, pending/unproven terminal failures, clock/id failures, typed-only emergency lock, same-operation contention, restart reconciliation, and raw-file privacy.
+- Focused executor/selected-audit/security-action/orphan/retention regression passed 65 tests. Focused security-contract and selected-route-manifest regression passed 15 contract tests.
+- Storage passed 217 tests. Server passed 328 tests with seven explicit external smokes skipped.
+- Aggregate passed 869 unit tests with 29 explicit external skips, 159 contract tests, 16 integration tests, and 14 web tests.
+- Root typecheck passed. Biome and package exports checked 297 files and nine packages. Scaffold passed nine packages and 18 root scripts. Planning passed at 196 tasks, 84 requirements, and 633 dependencies with eight queued entries before closure and nine after the validated transition.
+- Exact Codex 0.144.0 binding passed for 671 generated files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`.
+- Frozen offline install passed. Production audit reported no known vulnerabilities. Production licenses remained permissive: MIT 101, ISC 9, BSD-3-Clause 5, BlueOak-1.0.0 5, Apache-2.0 3, 0BSD 1, plus two permissive multi-license expressions.
+- Manual lifecycle/failure review confirmed static validation before clock/id/storage, accepted proof before one detached transition, success-only response preparation, one terminal attempt, terminal-failure precedence, no callback/repository retry, no reverse mutation, and explicit `none`/`pending`/`terminal`/`deferred`/`unproven` truth.
+- Manual privacy/ownership review confirmed raw summary/transition/preparation/repository sentinels remain absent from errors, non-success results, snapshots, rows, and main/WAL/SHM bytes. Successful opaque response material appears only in the prepared success result after terminal proof. Diff and staged-patch checks passed.
+- No selected route, auth/CSRF/rate/lock/network adapter, cookie/credential behavior, startup/readiness integration, live listener, Android/browser flow, or UI evidence is claimed.
+
+## Remaining Gaps
+
+None within this leaf. Concrete security transitions, request/response schemas, HTTP error mapping, deferred-lock persistence/readiness projection, route registration, and aggregate browser/LAN acceptance remain with the downstream owners below.
 
 ## Reuse Assessment
 
