@@ -248,7 +248,7 @@ describe("auth, pairing, and settings schemas", () => {
     ).toBe(3777);
   });
 
-  it("enforces exact bounded CSRF generation and rotation chronology", () => {
+  it("enforces exact bounded CSRF generation and auth-device chronology", () => {
     const device = {
       id: "client_csrf_rotation",
       token_hash: hash,
@@ -274,6 +274,35 @@ describe("auth, pairing, and settings schemas", () => {
       })
     ).toThrow();
     expect(() => authDeviceRecordSchema.parse({ ...device, csrf_rotated_at: "not-a-time" })).toThrow();
+
+    expect(
+      authDeviceRecordSchema.parse({
+        ...device,
+        last_used_at: timestamp
+      }).last_used_at
+    ).toBe(timestamp);
+    expect(() =>
+      authDeviceRecordSchema.parse({
+        ...device,
+        last_used_at: "2026-07-08T18:59:59.999Z"
+      })
+    ).toThrow();
+    for (const lastUsedAt of ["2026-07-08T20:00:00.000Z", "2026-07-08T20:00:00.001Z"]) {
+      expect(() =>
+        authDeviceRecordSchema.parse({
+          ...device,
+          expires_at: "2026-07-08T20:00:00.000Z",
+          last_used_at: lastUsedAt
+        })
+      ).toThrow();
+    }
+    expect(
+      authDeviceRecordSchema.parse({
+        ...device,
+        expires_at: "2026-07-08T20:00:00.000Z",
+        last_used_at: "2026-07-08T19:59:59.999Z"
+      }).last_used_at
+    ).toBe("2026-07-08T19:59:59.999Z");
 
     const { csrf_generation: _csrfGeneration, ...withoutGeneration } = device;
     expect(() => authDeviceRecordSchema.parse(withoutGeneration)).toThrow();

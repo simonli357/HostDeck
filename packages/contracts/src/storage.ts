@@ -259,11 +259,30 @@ export const authDeviceRecordSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    const createdAt = Date.parse(value.created_at);
     if (Date.parse(value.csrf_rotated_at) < Date.parse(value.created_at)) {
       context.addIssue({
         code: "custom",
         message: "CSRF rotation time cannot precede device creation.",
         path: ["csrf_rotated_at"]
+      });
+    }
+    if (value.last_used_at !== null && Date.parse(value.last_used_at) < createdAt) {
+      context.addIssue({
+        code: "custom",
+        message: "Auth device last-used time cannot precede device creation.",
+        path: ["last_used_at"]
+      });
+    }
+    if (
+      value.last_used_at !== null &&
+      value.expires_at !== null &&
+      Date.parse(value.last_used_at) >= Date.parse(value.expires_at)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Auth device last-used time must precede device expiry.",
+        path: ["last_used_at"]
       });
     }
   });

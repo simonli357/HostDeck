@@ -511,6 +511,58 @@ describe("session write route handlers", () => {
       tmuxFailure.close();
     }
   });
+
+  it("classifies monotonic authentication conflicts and failures before session access or dispatch", async () => {
+    const conflictHarness = createHarness();
+    try {
+      conflictHarness.createWriteDevice();
+      conflictHarness.authDevices.authenticateDeviceToken({ rawDeviceToken, now: laterNow() });
+
+      expect(
+        await conflictHarness.handlers.promptInput({
+          params: { session_id: "sess_write_auth_conflict_01" },
+          body: { text: "must not dispatch" },
+          rawDeviceToken,
+          rawCsrfToken
+        })
+      ).toMatchObject({
+        status: 409,
+        body: { accepted: false, error: { code: "operation_conflict" } }
+      });
+      expect(conflictHarness.audit.list()).toEqual([]);
+      expect(conflictHarness.tmux.sentInputs()).toEqual([]);
+    } finally {
+      conflictHarness.close();
+    }
+
+    const failureHarness = createHarness();
+    try {
+      failureHarness.createWriteDevice();
+      failureHarness.db.exec(`
+        CREATE TRIGGER fail_write_route_auth_touch
+        BEFORE UPDATE OF last_used_at ON auth_devices
+        BEGIN
+          SELECT RAISE(ABORT, 'forced write route auth failure');
+        END;
+      `);
+
+      const failed = await failureHarness.handlers.promptInput({
+        params: { session_id: "sess_write_auth_failure_01" },
+        body: { text: "must not dispatch" },
+        rawDeviceToken,
+        rawCsrfToken
+      });
+      expect(failed).toMatchObject({
+        status: 500,
+        body: { accepted: false, error: { code: "storage_error", message: "Auth device authentication failed." } }
+      });
+      expect(JSON.stringify(failed)).not.toMatch(/forced write route auth|device_token|csrf_token/iu);
+      expect(failureHarness.audit.list()).toEqual([]);
+      expect(failureHarness.tmux.sentInputs()).toEqual([]);
+    } finally {
+      failureHarness.close();
+    }
+  });
 });
 
 function createHarness(input: { readonly auditEvents?: AuditEventRepository } = {}) {
@@ -535,6 +587,7 @@ function createHarness(input: { readonly auditEvents?: AuditEventRepository } = 
   return {
     audit,
     authDevices,
+    db: open.db,
     handlers,
     sessions,
     settings,

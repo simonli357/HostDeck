@@ -304,6 +304,9 @@ function routeErrorForAuth(error: unknown): JsonRouteResult<ApiRouteErrorBody> {
     case "pairing_code_revoked":
     case "pairing_code_used":
       return routeError(401, "permission_denied", authError.message);
+    case "authentication_conflict":
+      return routeError(409, "operation_conflict", authError.message);
+    case "authentication_failed":
     case "device_exists":
     case "duplicate_secret":
     case "pairing_code_exists":

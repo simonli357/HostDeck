@@ -241,6 +241,58 @@ describe("security and pairing route handlers", () => {
     }
   });
 
+  it("classifies monotonic authentication conflicts and storage failures without locking", () => {
+    const conflictHarness = createHarness();
+    try {
+      conflictHarness.authDevices.create({
+        id: "client_write",
+        rawDeviceToken,
+        rawCsrfToken,
+        permission: "write",
+        createdAt: fixedNow()
+      });
+      conflictHarness.authDevices.authenticateDeviceToken({ rawDeviceToken, now: laterNow() });
+
+      expect(
+        conflictHarness.handlers.lockFromDashboard({ body: { lock: true }, rawDeviceToken, rawCsrfToken })
+      ).toMatchObject({
+        status: 409,
+        body: { error: { code: "operation_conflict" } }
+      });
+      expect(conflictHarness.settings.require().locked).toBe(false);
+    } finally {
+      conflictHarness.close();
+    }
+
+    const failureHarness = createHarness({ now: laterNow });
+    try {
+      failureHarness.authDevices.create({
+        id: "client_write",
+        rawDeviceToken,
+        rawCsrfToken,
+        permission: "write",
+        createdAt: fixedNow()
+      });
+      failureHarness.db.exec(`
+        CREATE TRIGGER fail_route_auth_touch
+        BEFORE UPDATE OF last_used_at ON auth_devices
+        BEGIN
+          SELECT RAISE(ABORT, 'forced route auth failure');
+        END;
+      `);
+
+      const failed = failureHarness.handlers.lockFromDashboard({ body: { lock: true }, rawDeviceToken, rawCsrfToken });
+      expect(failed).toMatchObject({
+        status: 500,
+        body: { error: { code: "storage_error", message: "Auth device authentication failed." } }
+      });
+      expect(JSON.stringify(failed)).not.toMatch(/forced route auth|device_token|csrf_token/iu);
+      expect(failureHarness.settings.require().locked).toBe(false);
+    } finally {
+      failureHarness.close();
+    }
+  });
+
   it("rejects dashboard unlock and LAN mutation while exposing network state", () => {
     const harness = createHarness();
 
@@ -299,6 +351,7 @@ function createHarness(input: { readonly now?: () => Date } = {}) {
 
   return {
     authDevices,
+    db: open.db,
     pairingCodes,
     settings,
     handlers,

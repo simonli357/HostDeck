@@ -3,6 +3,8 @@ import { type AuthDeviceRecord, authDeviceRecordSchema, type PairingCodeRecord, 
 import type Database from "better-sqlite3";
 
 export type AuthRepositoryErrorCode =
+  | "authentication_conflict"
+  | "authentication_failed"
   | "csrf_generation_exhausted"
   | "csrf_mismatch"
   | "csrf_rotation_conflict"
@@ -155,6 +157,8 @@ export function createAuthDeviceRepository(
   options: AuthDeviceRepositoryOptions = {}
 ): AuthDeviceRepository {
   const generateCsrfToken = options.generateCsrfToken ?? defaultCsrfTokenGenerator;
+  const authenticateDeviceToken = createDeviceAuthenticationTransaction(db);
+  const authorizeBrowserWrite = createBrowserWriteAuthorizationTransaction(db);
   const rotateCsrfBootstrap = createCsrfBootstrapTransaction(db, generateCsrfToken);
 
   return {
@@ -178,8 +182,7 @@ export function createAuthDeviceRepository(
       return insertAuthDevice(db, authDeviceFromInput(input));
     },
     authenticateDeviceToken(input) {
-      const device = requireUsableDeviceByToken(db, input.rawDeviceToken, input.now);
-      const touched = touchDevice(db, device.id, input.now);
+      const touched = runAuthenticationTransaction(() => authenticateDeviceToken(input));
 
       return {
         trusted: true,
@@ -199,17 +202,7 @@ export function createAuthDeviceRepository(
       }
     },
     authorizeBrowserWrite(input) {
-      const device = requireUsableDeviceByToken(db, input.rawDeviceToken, input.now);
-
-      if (device.permission === "read") {
-        throw new HostDeckAuthRepositoryError("read_only", "Read-only auth devices cannot write.");
-      }
-
-      if (!hashMatches(device.csrf_token_hash, input.rawCsrfToken)) {
-        throw new HostDeckAuthRepositoryError("csrf_mismatch", "Browser write rejected because the CSRF token does not match.");
-      }
-
-      return touchDevice(db, device.id, input.now);
+      return runAuthenticationTransaction(() => authorizeBrowserWrite(input));
     },
     revoke(deviceId, input) {
       const current = this.require(deviceId);
@@ -222,6 +215,105 @@ export function createAuthDeviceRepository(
       return this.require(deviceId);
     }
   };
+}
+
+function createDeviceAuthenticationTransaction(
+  db: Database.Database
+): (input: AuthenticateDeviceInput) => AuthDeviceRecord {
+  return db.transaction((input: AuthenticateDeviceInput): AuthDeviceRecord => {
+    const observedAt = nowIso(input.now);
+    const current = requireUsableDeviceByToken(db, input.rawDeviceToken, input.now);
+    return advanceLastUsedAt(db, current, observedAt);
+  }).immediate;
+}
+
+function createBrowserWriteAuthorizationTransaction(
+  db: Database.Database
+): (input: AuthorizeBrowserWriteInput) => AuthDeviceRecord {
+  return db.transaction((input: AuthorizeBrowserWriteInput): AuthDeviceRecord => {
+    const observedAt = nowIso(input.now);
+    const current = requireUsableDeviceByToken(db, input.rawDeviceToken, input.now);
+
+    if (current.permission === "read") {
+      throw new HostDeckAuthRepositoryError("read_only", "Read-only auth devices cannot write.");
+    }
+
+    if (!hashMatches(current.csrf_token_hash, input.rawCsrfToken)) {
+      throw new HostDeckAuthRepositoryError("csrf_mismatch", "Browser write rejected because the CSRF token does not match.");
+    }
+
+    return advanceLastUsedAt(db, current, observedAt);
+  }).immediate;
+}
+
+function advanceLastUsedAt(
+  db: Database.Database,
+  current: AuthDeviceRecord,
+  observedAt: string
+): AuthDeviceRecord {
+  const observedAtMs = Date.parse(observedAt);
+  if (observedAtMs < Date.parse(current.created_at)) {
+    throw new HostDeckAuthRepositoryError("invalid_time", "Authentication time cannot precede device creation.");
+  }
+
+  if (current.last_used_at !== null) {
+    const currentLastUsedAtMs = Date.parse(current.last_used_at);
+    if (observedAtMs < currentLastUsedAtMs) {
+      throw new HostDeckAuthRepositoryError(
+        "authentication_conflict",
+        "Authentication observation is older than current device state."
+      );
+    }
+    if (observedAtMs === currentLastUsedAtMs) return current;
+  }
+
+  const update = db
+    .prepare(
+      `
+        UPDATE auth_devices
+        SET last_used_at = ?
+        WHERE id = ?
+          AND token_hash = ?
+          AND csrf_token_hash = ?
+          AND csrf_generation = ?
+          AND permission = ?
+          AND expires_at IS ?
+          AND revoked_at IS ?
+          AND last_used_at IS ?
+      `
+    )
+    .run(
+      observedAt,
+      current.id,
+      current.token_hash,
+      current.csrf_token_hash,
+      current.csrf_generation,
+      current.permission,
+      current.expires_at,
+      current.revoked_at,
+      current.last_used_at
+    );
+  if (update.changes !== 1) {
+    throw new HostDeckAuthRepositoryError(
+      "authentication_conflict",
+      "Auth device authority changed before authentication committed."
+    );
+  }
+
+  const row = db.prepare("SELECT * FROM auth_devices WHERE id = ?").get(current.id) as AuthDeviceRow | undefined;
+  if (row === undefined) {
+    throw new HostDeckAuthRepositoryError("authentication_conflict", "Auth device disappeared before authentication committed.");
+  }
+  return parseAuthDeviceRow(row);
+}
+
+function runAuthenticationTransaction<T>(operation: () => T): T {
+  try {
+    return operation();
+  } catch (error) {
+    if (error instanceof HostDeckAuthRepositoryError) throw error;
+    throw new HostDeckAuthRepositoryError("authentication_failed", "Auth device authentication failed.");
+  }
 }
 
 function createCsrfBootstrapTransaction(
@@ -476,17 +568,6 @@ function requireClaimablePairingCode(db: Database.Database, rawCode: string, now
   }
 
   return pairingCode;
-}
-
-function touchDevice(db: Database.Database, deviceId: string, now: Date): AuthDeviceRecord {
-  db.prepare("UPDATE auth_devices SET last_used_at = ? WHERE id = ?").run(nowIso(now), deviceId);
-  const row = db.prepare("SELECT * FROM auth_devices WHERE id = ?").get(deviceId) as AuthDeviceRow | undefined;
-
-  if (row === undefined) {
-    throw new HostDeckAuthRepositoryError("device_not_found", `Auth device ${deviceId} does not exist.`);
-  }
-
-  return parseAuthDeviceRow(row);
 }
 
 function parseAuthDeviceRow(row: AuthDeviceRow): AuthDeviceRecord {

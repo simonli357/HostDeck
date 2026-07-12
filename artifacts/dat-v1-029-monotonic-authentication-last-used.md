@@ -2,7 +2,7 @@
 
 Date: 2026-07-11
 
-Status: hard success criteria frozen before implementation.
+Status: complete.
 
 ## Scope
 
@@ -47,6 +47,26 @@ Make auth-device bearer authentication and historical browser-write authorizatio
 - Real worker-held two-connection matrices for both old/new ordering and revoke-before-auth serialization.
 - Forced trigger rollback, equal-time no-write proof, reopen continuation, raw row/file inspection, and query-plan inspection.
 - Adjacent auth/CSRF/migration/restart/server regressions plus root typecheck/lint, unit/contract/integration/web, planning/scaffold/binding, frozen offline install, production audit, and manual transaction/privacy review.
+
+## Outcome
+
+- The strict auth-device contract now rejects non-null last-used values before creation or at/after expiry while preserving nullable historical state.
+- Bearer authentication and browser-write authorization each run token lookup, stored-row validation, usable-authority checks, monotonic comparison, guarded update, and committed-row read through one immediate transaction. Browser writes additionally validate write permission and the current CSRF hash inside that transaction.
+- Greater observations update only `last_used_at`; equal observations return the persisted row without issuing an update; older observations fail as `authentication_conflict`. Unknown begin/update/commit failures become generic cause-free `authentication_failed` errors.
+- Real two-connection tests prove older/newer ordering in both directions, equal-time idempotence, revoke-before-auth rejection, and auth-before-revoke final authority. Deferred commit failure rolls back both the touch and trigger side effect.
+- Reopen preserves the greatest timestamp, token lookup uses the existing unique index, and raw bearer/CSRF values remain absent from rows, database bytes, errors, and failure responses. HTTP adapters classify conflicts as `operation_conflict` and internal failures as `storage_error` without dispatch or state mutation.
+
+## Validation
+
+- Direct monotonic repository matrix: 1 file, 11 passed. Full storage package: 19 files, 167 passed.
+- Affected security/write route matrix: 2 files, 17 passed. Full server package: 35 files and 305 tests passed; 7 declared external smoke files/tests skipped.
+- Unit: 88 files passed and 16 declared external files skipped; 796 tests passed and 29 skipped.
+- Contract: 14 files, 139 passed; integration: 2 files, 16 passed; web: 2 files, 14 passed.
+- Root typecheck passed. Lint/exports passed for 274 files and 9 packages. Scaffold passed for 9 packages and 18 root scripts.
+- Planning passed at 196 tasks, 84 requirements, 631 dependencies, and 6 queued entries before owner-doc closure.
+- Exact isolated Codex 0.144.0 binding passed for 671 files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`.
+- Frozen offline install passed. Production audit reported zero known vulnerabilities across 140 production dependencies.
+- Manual transaction/privacy review and `git diff --check` passed: every success returns the row read under the committing write lock, authority failures precede touch, equal time performs no update, guarded updates change only last-used, unknown failures expose no native cause, and no raw secret enters durable/public output.
 
 ## Remaining Ownership
 
