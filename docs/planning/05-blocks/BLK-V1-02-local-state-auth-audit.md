@@ -47,7 +47,7 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | Device listing storage | `DAT-V1-025` | Ready after CSRF-capable device storage. |
 | Authentication last-used update storage | `DAT-V1-029` | Complete; strict chronology, immediate authority/touch, monotonic conflict/no-op behavior, update/commit rollback, real race/revoke ordering, restart, index, and privacy evidence pass. |
 | Pair claim and rate/concurrency storage | `DAT-V1-026` | Complete; policy-bound 128-bit issue, selected owner provenance, durable source/global windows, bounded cleanup, one-winner claim/revoke, rollback, corruption, restart, and raw-file privacy evidence pass. |
-| Atomic device revoke and CSRF invalidation | `DAT-V1-028` | In progress; hardening criteria audit is the active storage leaf. |
+| Atomic device revoke and CSRF invalidation | `DAT-V1-028` | In progress; strict chronology, immediate one-way transition, stable idempotency, authority-gate ordering, rollback, restart, corruption, and privacy criteria are frozen. |
 | Security-action audit storage completion | `DAT-V1-027` | Complete; exact catalog, durable legacy/current provenance, strict actor/target/summary contracts, migration preservation, secret rejection, restart/orphan/retention, and full workspace evidence pass. |
 | Reopened module hardening | `DAT-V1-091` | Blocked by `DAT-V1-018` to `DAT-V1-030`. |
 
