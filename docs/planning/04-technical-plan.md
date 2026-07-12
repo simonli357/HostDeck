@@ -218,7 +218,7 @@ App-server remains on a `0600` socket in a `0700` runtime directory. It is never
 
 1. Local CLI creates a high-entropy one-time pairing code with permission and short expiry.
 2. Claim is rate-limited and records accepted/failed outcome.
-3. Server sets a host-only Secure, HttpOnly, SameSite=Strict device cookie on HTTPS.
+3. Server sets a host-only Secure, HttpOnly, SameSite=Strict device cookie on HTTPS with an absolute expiry matching the policy-bounded stored device expiry. V1 permits 1 to 365 days and defaults to 90 days.
 4. A same-origin CSRF bootstrap endpoint validates the cookie and returns a rotated raw CSRF token held only in page memory; storage retains its hash/version.
 5. Every mutation validates Host, Origin, device permission/revocation/expiry, CSRF, host lock, target state, capability, rate/concurrency policy, and audit preflight before dispatch.
 6. Reload repeats CSRF bootstrap; logout/revoke rotates or invalidates server state.

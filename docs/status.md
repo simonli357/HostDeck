@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M2/M3 selected runtime and host-interface integration; M1 foundation is complete.
-- Active task: `IFC-V1-028` pairing-code creation and remote-claim criteria are frozen; implementation awaits the required human approval.
+- Active task: `IFC-V1-028` pairing-code creation and remote-claim implementation is active after autonomous criteria review and authorization.
 - `IFC-V1-047` real HTTP resource limits are complete. `INT-V1-027` remains blocked on the authenticated turn reset and host Bubblewrap AppArmor profile; its unchanged aggregate remains the next runtime action when both are available.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -226,4 +226,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-029` criteria are pushed as `b526903`; the truthful safe-GET auth correction is pushed as `2fd424b`; implementation and evidence are pushed as `892a17b`. This closure advances the queue to selected local-state module hardening.
 - `DAT-V1-091` criteria are pushed as `f1cd41f` with owner-path/privacy correction `8ce01e1`; aggregate implementation and evidence are pushed as `a11b5a8`. This completes `BLK-V1-02` and M1, and advances the queue to `IFC-V1-027`.
 - `IFC-V1-027` criteria are pushed as `bfa99f2`; contextual contracts/storage as `6f09dcd`; server boundary as `08cb24d`; pre-admission cache correction as `7d8803a`; raw bootstrap evidence as `61c113d`. This closure makes `IFC-V1-030` and `IFC-V1-031` ready and advances the queue to pair/claim.
-- Next action: obtain the required human approval for the frozen `IFC-V1-028` criteria, then implement the exact local-admin issue, same-origin HTTPS claim, source/admission, one-winner device/cookie, audit, race, restart, and raw-secret boundary. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
+- Next action: implement and harden the exact `IFC-V1-028` local-admin issue, same-origin HTTPS claim, source/admission, bounded device/cookie expiry, one-winner audit/race/restart, and raw-secret boundary, then continue the ready interface queue. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.

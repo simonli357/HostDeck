@@ -25,7 +25,7 @@ This leaf owns the missing HTTP contracts, trusted peer-source derivation, claim
 | Storage owns a canonical hashed source key but HTTP has no source derivation and forwarded values must never become rate identity. | Derive one domain-separated SHA-256 key from the exact socket peer admitted by the trust gate. Store only that key in private request state and SQLite. |
 | Durable attempt limits exist, while per-source/global in-flight limits are still unimplemented. | Add one claim-route-owned, process-local limiter using the resolved resource budget. It spans audit preflight, the claim transition, response preparation, and terminal audit, and releases on every path. |
 | Pair claim creates an initial CSRF secret, while the selected browser flow separately requires CSRF bootstrap. Returning both cookie and CSRF here would duplicate authority paths. | Claim returns only non-secret device metadata and `csrf_bootstrap_required: true`. The initial CSRF value is never sent or retained by the route; the browser next calls the completed bootstrap route, which rotates generation 1 and returns generation 2 to page memory. |
-| Cookie lifetime was not frozen for a device whose durable expiry is nullable. | V1 claim creates a non-expiring-until-revoked device (`expires_at: null`) and a session cookie with no `Expires` or `Max-Age`. A future persistent-cookie/device-expiry policy requires its own explicit contract and cannot be added as a fallback. |
+| A session cookie can disappear when mobile Chrome closes while leaving an indefinite orphan device. That is not a reliable phone deployment contract. | Add `paired_device_lifetime_ms` to the resolved resource policy: 1-day minimum, 90-day default, 365-day maximum. Claim stores the exact absolute device expiry and emits the same absolute cookie `Expires`; server-side expiry remains authoritative. |
 | A claim can commit before terminal audit or transport delivery fails. | Durable claim truth is never reversed or retried. No cookie/header/body is exposed before terminal audit proof. Later header/send failure remains an unknown, non-retryable delivery; recovery is a new pairing operation and later revocation of any orphan device. |
 
 ## Frozen Selected Contracts
@@ -50,7 +50,7 @@ All objects are strict. Missing, extra, inherited, accessor-backed, wrong-type, 
 | `pair_request_v1` | `operation_id`: selected `op_` client operation id; `permission`: `read` or `write`; optional `client_label`: selected bounded label. |
 | `pair_request_response_v1` | `pairing_id`, `code`, `permission`, nullable `client_label`, canonical `created_at`, canonical `expires_at`. |
 | `pair_claim_v1` | `operation_id`: selected `op_` client operation id; `code`: exactly 22 unpadded base64url characters; optional `client_label`: selected bounded label. |
-| `pair_claim_response_v1` | `device_id`, `permission`, nullable `client_label`, canonical `created_at`, `expires_at: null`, and `csrf_bootstrap_required: true`. |
+| `pair_claim_response_v1` | `device_id`, `permission`, nullable `client_label`, canonical `created_at`, canonical non-null `expires_at`, and `csrf_bootstrap_required: true`. |
 
 Additional invariants:
 
@@ -58,6 +58,7 @@ Additional invariants:
 - A selected generated device id remains `client_` plus exactly 24 base64url characters and must be proven from the storage result before response preparation.
 - Optional labels normalize only by omission to `null`; strings are not silently trimmed or case-folded. Selected labels are 1 to 120 characters, already trimmed, and contain no control, format, line-separator, or paragraph-separator code point.
 - Canonical timestamps are UTC ISO strings. Pair-request expiry must equal creation plus the resolved `pairing_code_lifetime_ms` exactly and must preserve at least one full claim window when issuance begins.
+- Device expiry must equal claim time plus the resolved `paired_device_lifetime_ms` exactly. The resource contract accepts only 86,400,000 through 31,536,000,000 milliseconds, defaults to 7,776,000,000 milliseconds, and requires pairing-code lifetime not to exceed device lifetime.
 - No response contains an audit record/id, source key, code hash, device-token/CSRF hash, device bearer, raw CSRF token, cookie text, database classification, retry timestamp, or native cause.
 
 ### Authority And Transport
@@ -113,7 +114,7 @@ Equivalent IPv6 forms and IPv4-mapped forms cannot gain extra source budgets. Di
 
 1. Apply no-store policy, require same-origin HTTPS, validate the exact body, obtain the trust-owned source hash, and acquire claim admission.
 2. Execute `pair_claim` with the body operation id, pairing-client actor, host target, and accepted summary `{ schema_version: 1, client_label_present }`; emergency audit bypass is false.
-3. Only after accepted audit proof, snapshot one valid route clock and invoke selected `claim` exactly once with the exact raw code, source key, time, nullable label, and `deviceExpiresAt: null`.
+3. Only after accepted audit proof, snapshot one valid route clock, derive the exact policy-bounded device expiry with safe-integer arithmetic, and invoke selected `claim` exactly once with the exact raw code, source key, time, nullable label, and that `deviceExpiresAt`.
 4. Every syntactically valid attempt that clears process admission and accepted-audit proof reaches the repository. Durable source/global counters, code lookup, lifecycle classification, credential generation, device insert, and one-winner code consumption retain the frozen `DAT-V1-026` transaction order.
 5. Map a known repository rejection to one explicit failed transition. Unknown throws or malformed/contradictory returned state become `incomplete/internal_error`; no caller cause or value is reflected.
 6. On success, descriptor-first validate the exact frozen claim, pairing owner/device coherence, label precedence, permission, timestamps, nullable expiry, generation-1 CSRF state, raw bearer syntax, and raw CSRF syntax.
@@ -125,8 +126,8 @@ Equivalent IPv6 forms and IPv4-mapped forms cannot gain extra source budgets. Di
 
 Use the existing direct `cookie@1.1.1` serializer, with the already selected `hostdeck_device` name and exact raw 43-character base64url bearer.
 
-- Include `Path=/`, `HttpOnly`, `Secure`, and `SameSite=Strict`.
-- Omit `Domain`, `Expires`, `Max-Age`, `Partitioned`, and any nonselected attribute. Omitted `Domain` is the host-only requirement; nullable device expiry makes this a session cookie.
+- Include `Path=/`, `HttpOnly`, `Secure`, `SameSite=Strict`, and `Expires` equal to the stored device expiry rendered as canonical IMF-fixdate.
+- Omit `Domain`, `Max-Age`, `Partitioned`, and any nonselected attribute. Omitted `Domain` is the host-only requirement. Absolute expiry avoids a relative-age extension between claim commit and delayed response delivery; the server rejects the bearer at or after stored expiry regardless of client clock behavior.
 - Emit exactly one canonical `Set-Cookie` value only after proven terminal success. Never append a second target cookie or use a caller-provided attribute/value.
 - Validate the serialized value before executor response preparation succeeds. CR/LF, delimiter, encoding, alternate token, malformed serializer output, extra attributes, and duplicate-header states fail closed.
 - A successful replacement overwrites the browser's prior same-name/path cookie. It does not revoke the prior durable device; explicit device revocation remains `IFC-V1-059`.
@@ -167,12 +168,12 @@ Lifecycle denial bodies never distinguish unknown, expired, revoked, used, or le
 | High-entropy issue | Accepted audit precedes id/code entropy and one selected issue call. Exact creation/expiry and full-window freshness, read/write/label propagation, frozen post-commit raw response, collision/generator/clock/storage/returned-contract failure, and no retry pass. |
 | Durable claim mapping | Every syntactically valid claim that clears process admission and accepted audit enters one selected transaction. Lifecycle denials share one public response; rate/capacity/time/internal classes map exactly; malformed syntax consumes no durable attempt; no outcome returns a cookie or device data unless claim succeeds. |
 | One-winner races | Same code across independent sources/connections creates one device/owner and one cookie-capable success; every loser has accepted plus terminal failure and no credential. Same-source overlap is rejected by process admission. Claim-versus-revoke and restart retain the storage-proven winner. |
-| Cookie fidelity | Injection and a real TLS listener prove exactly one host-only `hostdeck_device` cookie with Path, Secure, HttpOnly, and Strict attributes and no Domain/expiry/extra attribute. Plaintext and every non-success have no Set-Cookie. Existing-cookie replacement is deterministic. |
+| Cookie fidelity | Injection and a real TLS listener prove exactly one host-only `hostdeck_device` cookie with Path, Secure, HttpOnly, Strict, and exact absolute expiry attributes and no Domain/Max-Age/extra attribute. The response and stored device expiry agree. Plaintext and every non-success have no Set-Cookie. Existing-cookie replacement is deterministic. |
 | CSRF separation | Claim response has no raw CSRF and requires bootstrap. Initial generation-1 hash exists, the discarded raw initial value appears nowhere, and the completed bootstrap rotates to generation 2 for read/write devices using the newly issued cookie. Claim never calls bootstrap itself. |
 | Audit ordering and truth | Pair request/claim cover succeeded, known failed, incomplete, standalone pre-handler absence, accepted preflight failure, terminal failure, response preparation failure, crash-pending reconciliation, duplicate operation id, and unknown delivery. Actor/action/target/summary continuity is exact and no emergency bypass occurs. |
 | Failure privacy | Unique raw code, bearer, CSRF, raw/canonical peer, source hash, label, cookie/header, native error, and forged-port sentinels are searched across public errors, observer/log capture, snapshots, audit rows, ordinary rows, and SQLite main/WAL/SHM bytes. Only explicitly allowed locations contain each value: labels in pairing/device rows and selected bodies, source hashes in rate rows, raw codes in successful issue bodies, and bearers in successful cookie headers. |
 | Cache and wire behavior | Exact methods/paths/media/body/query, 404/405/415/malformed/oversized behavior, no-store/no-cache on success/error, no CORS headers, no secret URL, response schema serialization, request-id behavior, abort, and real raw HTTPS framing pass. |
-| Restart and unavailable state | Reopen preserves issued/spent code, owner device, attempt windows, and auth usability. Closed/read-only/corrupt storage and pending audit fail without partial response/cookie; source in-flight state is intentionally process-local and starts empty after restart. |
+| Restart and unavailable state | Reopen preserves issued/spent code, owner device, attempt windows, expiry, and auth usability before expiry; authentication rejects at/after expiry even if the browser still sends the cookie. Closed/read-only/corrupt storage and pending audit fail without partial response/cookie; source in-flight state is intentionally process-local and starts empty after restart. |
 | Diagnostics | Frozen saturating snapshots expose only active/global counts and coarse issue/claim/admission/failure totals. They retain no operation/request/record/pair/device id, permission, label, origin, address/source key, retry time, code/token/CSRF/cookie, path, message, or cause. |
 | Ownership boundaries | No browser UI, QR/image asset, device-revoke behavior, lock/LAN mutation, aggregate operation idempotency, SSE authority recheck, production listener assembly, packaging, physical-phone claim acceptance, or release claim is implemented or marked complete. |
 
