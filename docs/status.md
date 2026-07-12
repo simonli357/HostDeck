@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `DAT-V1-025` bounded non-secret device-listing storage hardening-criteria audit.
+- Active task: `DAT-V1-025` bounded non-secret device-listing storage implementation against frozen hard criteria.
 - `IFC-V1-047` real HTTP resource limits are complete. `INT-V1-027` remains blocked on the authenticated turn reset and host Bubblewrap AppArmor profile; its unchanged aggregate remains the next runtime action when both are available.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -202,4 +202,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `DAT-V1-027` criteria are pushed as `0130b10`; implementation and evidence are pushed as `100ed54`. This closure makes `IFC-V1-032` ready and advances the storage queue to `DAT-V1-026`.
 - `DAT-V1-026` criteria are pushed as `e12a033`; implementation is pushed as `a28c837`. This closure advances the storage queue to `DAT-V1-028` while `IFC-V1-028` remains blocked on the security audit executor.
 - `DAT-V1-028` criteria are pushed as `be18c52`; implementation is pushed as `0e5d5e7`. This closure advances the storage queue to `DAT-V1-025` while selected revoke routes remain blocked on authentication, CSRF, audit execution, and route gates.
-- Next action: audit `DAT-V1-025` against production-hardening criteria before implementing bounded non-secret device listing. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
+- Next action: implement the frozen `DAT-V1-025` strict 1..100 ID-keyset pagination, one-statement snapshot, non-secret frozen projection, concurrent-revoke, corruption, restart, and privacy matrices. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.

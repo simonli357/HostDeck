@@ -44,7 +44,7 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | Bounded startup retention maintenance | `DAT-V1-024` | Done; fixed-policy output/audit batches, indexed candidate plans, deadline/failure truth, and restart evidence recorded. |
 | Orphan accepted-operation reconciliation | `DAT-V1-030` | Done; fixed-cutoff incomplete append, bounded runner, real terminal race, restart, and retention interoperability recorded. |
 | CSRF bootstrap and rotation storage | `DAT-V1-021` | Complete; strict migration, atomic rotation, real contention, rollback, restart, indexed lookup, and raw-secret evidence pass. |
-| Device listing storage | `DAT-V1-025` | In progress; hardening criteria audit is the active storage leaf. |
+| Device listing storage | `DAT-V1-025` | In progress; strict 1..100 ID-keyset pagination, one-statement snapshot, non-secret frozen projection, corruption, concurrent-revoke, restart, and privacy criteria are frozen. |
 | Authentication last-used update storage | `DAT-V1-029` | Complete; strict chronology, immediate authority/touch, monotonic conflict/no-op behavior, update/commit rollback, real race/revoke ordering, restart, index, and privacy evidence pass. |
 | Pair claim and rate/concurrency storage | `DAT-V1-026` | Complete; policy-bound 128-bit issue, selected owner provenance, durable source/global windows, bounded cleanup, one-winner claim/revoke, rollback, corruption, restart, and raw-file privacy evidence pass. |
 | Atomic device revoke and CSRF invalidation | `DAT-V1-028` | Complete; strict chronology, immediate raw-state CAS, stable idempotency, bearer/write/bootstrap denial, real ordering, rollback, restart, corruption, index, and privacy evidence pass. |
