@@ -1279,6 +1279,58 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
       await app.close();
     }
 
+    const bootstrapPort = await getAvailablePort();
+    const bootstrapOrigin = `http://127.0.0.1:${bootstrapPort}`;
+    const bootstrapPolicy = createHostDeckCsrfPolicy({
+      csrf: {
+        authorizeBrowserWrite: () =>
+          frozenAuthentication("write", deviceId, 1, writeAuthorizedAt),
+        rotateBootstrap: (input) =>
+          frozenRotation(
+            input.deviceId,
+            input.expectedCsrfGeneration + 1,
+            rotatedCsrfToken,
+            input.now.toISOString()
+          )
+      },
+      now: () => new Date(rotatedAt)
+    });
+    const bootstrapApp = createCsrfApp(
+      bootstrapPolicy,
+      createFixtureAuditExecutor(),
+      {
+        authenticateDeviceToken: () =>
+          frozenAuthentication("write", deviceId, 1, authenticatedAt)
+      },
+      {
+        trustPolicy: createHostDeckRequestTrustPolicy({
+          allowedOrigins: [bootstrapOrigin],
+          mode: "loopback",
+          transport: "http"
+        })
+      }
+    );
+    await bootstrapApp.listen({
+      host: "127.0.0.1",
+      port: bootstrapPort,
+      listenTextResolver: () => ""
+    });
+    try {
+      const rawBootstrap = await rawExchange(
+        bootstrapPort,
+        rawBootstrapRequest(bootstrapPort, "op_csrf_raw_bootstrap")
+      );
+      const normalized = rawBootstrap.toLowerCase();
+      expect(statusCode(rawBootstrap)).toBe(200);
+      expect(normalized).toContain("cache-control: no-store");
+      expect(normalized).toContain("pragma: no-cache");
+      expect(normalized).not.toContain("set-cookie:");
+      expect(rawBootstrap).toContain(rotatedCsrfToken);
+      expect(rawBootstrap).not.toContain(rawDeviceToken);
+    } finally {
+      await bootstrapApp.close();
+    }
+
     const accessorHeaders = [...rawHeaderFixture()];
     Object.defineProperty(accessorHeaders, "2", {
       enumerable: true,
@@ -1684,6 +1736,20 @@ function rawWriteRequest(port: number, csrfHeaders: readonly string[]): string {
     "Connection: close",
     "",
     ""
+  ].join("\r\n");
+}
+
+function rawBootstrapRequest(port: number, operationId: string): string {
+  const body = JSON.stringify({ operation_id: operationId });
+  return [
+    "POST /api/v1/access/csrf HTTP/1.1",
+    `Host: 127.0.0.1:${port}`,
+    `Cookie: ${hostDeckDeviceCookieName}=${rawDeviceToken}`,
+    "Content-Type: application/json",
+    `Content-Length: ${Buffer.byteLength(body, "utf8")}`,
+    "Connection: close",
+    "",
+    body
   ].join("\r\n");
 }
 
