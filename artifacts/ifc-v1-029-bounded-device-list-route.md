@@ -2,7 +2,7 @@
 
 Date: 2026-07-12
 
-Status: complete. Implementation commit pending.
+Status: complete. Implementation: `892a17b`.
 
 ## Scope
 

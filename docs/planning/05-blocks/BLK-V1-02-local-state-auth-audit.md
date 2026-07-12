@@ -49,7 +49,7 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | Pair claim and rate/concurrency storage | `DAT-V1-026` | Complete; policy-bound 128-bit issue, selected owner provenance, durable source/global windows, bounded cleanup, one-winner claim/revoke, rollback, corruption, restart, and raw-file privacy evidence pass. |
 | Atomic device revoke and CSRF invalidation | `DAT-V1-028` | Complete; strict chronology, immediate raw-state CAS, stable idempotency, bearer/write/bootstrap denial, real ordering, rollback, restart, corruption, index, and privacy evidence pass. |
 | Security-action audit storage completion | `DAT-V1-027` | Complete; exact catalog, durable legacy/current provenance, strict actor/target/summary contracts, migration preservation, secret rejection, restart/orphan/retention, and full workspace evidence pass. |
-| Reopened module hardening | `DAT-V1-091` | Ready; every selected storage/auth leaf dependency is complete. |
+| Reopened module hardening | `DAT-V1-091` | Production-hardening criteria audit active; every selected storage/auth leaf dependency is complete. |
 
 Owning backlog: `docs/tracking/backlog/local-state-auth-audit.md`.
 
