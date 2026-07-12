@@ -15,11 +15,11 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `DAT-V1-027` Complete security-action audit storage | in_progress | none | Unlocks the shared security mutation audit executor and keeps secrets out of audit state. |
-| 2 | `DAT-V1-026` Implement pairing rate and claim concurrency storage | ready | none | Establishes bounded one-winner pairing state before the claim route. |
-| 3 | `DAT-V1-028` Implement atomic device revoke storage | ready | none | Invalidates bearer and CSRF authority together before the revoke route. |
-| 4 | `DAT-V1-025` Implement bounded non-secret device listing | ready | none | Supplies the safe device-read model after security-critical mutation storage. |
-| 5 | `IFC-V1-026` Implement HttpOnly cookie authentication context | ready | none | Consumes the completed trust and monotonic-auth contracts after the storage security leaves, before selected protected routes. |
+| 1 | `DAT-V1-026` Implement pairing rate and claim concurrency storage | in_progress | none | Establishes bounded one-winner pairing state before the claim route. |
+| 2 | `DAT-V1-028` Implement atomic device revoke storage | ready | none | Invalidates bearer and CSRF authority together before the revoke route. |
+| 3 | `DAT-V1-025` Implement bounded non-secret device listing | ready | none | Supplies the safe device-read model after security-critical mutation storage. |
+| 4 | `IFC-V1-026` Implement HttpOnly cookie authentication context | ready | none | Consumes the completed trust and monotonic-auth contracts after the storage security leaves, before selected protected routes. |
+| 5 | `IFC-V1-032` Implement the security mutation audit executor | ready | none | Consumes the completed strict security audit storage before route-specific mutations. |
 | 6 | `INT-V1-027` Prove the assembled real structured vertical | blocked | Authenticated turn usage reset; host Bubblewrap AppArmor profile | Resume the unchanged aggregate when both external runtime conditions are available. |
 
 ## Intentional Blockers

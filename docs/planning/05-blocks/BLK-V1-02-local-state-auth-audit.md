@@ -46,9 +46,9 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | CSRF bootstrap and rotation storage | `DAT-V1-021` | Complete; strict migration, atomic rotation, real contention, rollback, restart, indexed lookup, and raw-secret evidence pass. |
 | Device listing storage | `DAT-V1-025` | Ready after CSRF-capable device storage. |
 | Authentication last-used update storage | `DAT-V1-029` | Complete; strict chronology, immediate authority/touch, monotonic conflict/no-op behavior, update/commit rollback, real race/revoke ordering, restart, index, and privacy evidence pass. |
-| Pair claim and rate/concurrency storage | `DAT-V1-026` | Ready after CSRF-capable pairing storage. |
+| Pair claim and rate/concurrency storage | `DAT-V1-026` | In progress; hard success criteria and implementation evidence are the next action. |
 | Atomic device revoke and CSRF invalidation | `DAT-V1-028` | Ready after CSRF-capable device storage. |
-| Security-action audit storage completion | `DAT-V1-027` | In progress; ten-action catalog, migration preservation, truthful actor/target, strict versioned summary, secret rejection, restart/orphan/retention, and manifest-closure criteria are frozen. |
+| Security-action audit storage completion | `DAT-V1-027` | Complete; exact catalog, durable legacy/current provenance, strict actor/target/summary contracts, migration preservation, secret rejection, restart/orphan/retention, and full workspace evidence pass. |
 | Reopened module hardening | `DAT-V1-091` | Blocked by `DAT-V1-018` to `DAT-V1-030`. |
 
 Owning backlog: `docs/tracking/backlog/local-state-auth-audit.md`.
