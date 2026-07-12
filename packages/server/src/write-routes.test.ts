@@ -227,7 +227,7 @@ describe("session write route handlers", () => {
         rawDeviceToken: "device_token_for_expired_write_route_123456",
         rawCsrfToken: "csrf_token_for_expired_write_route_123456",
         permission: "write",
-        createdAt: fixedNow(),
+        createdAt: new Date("2026-07-09T06:00:00.000Z"),
         expiresAt: new Date("2026-07-09T07:00:00.000Z")
       });
       harness.authDevices.create({
@@ -237,7 +237,7 @@ describe("session write route handlers", () => {
         permission: "write",
         createdAt: fixedNow()
       });
-      harness.authDevices.revoke("client_revoked_route", { now: fixedNow() });
+      harness.authDevices.revokeLegacy("client_revoked_route", { now: fixedNow() });
       const session = await harness.createRunningSession("sess_write_route_05", "reject-demo");
 
       expect(

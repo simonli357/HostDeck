@@ -116,6 +116,11 @@ export {
   type SelectedAuditRetentionBatchResult
 } from "./selected-audit-repository.js";
 export {
+  createDeviceRevocationRepository,
+  type DeviceRevocationRepository,
+  type RevokeSelectedDeviceInput
+} from "./selected-device-revocation-repository.js";
+export {
   type ClaimSelectedPairingCodeInput,
   createPairingCodeRepository,
   type IssuedPairingCode,

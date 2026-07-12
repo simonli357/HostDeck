@@ -261,14 +261,18 @@ export const authDeviceRecordSchema = z
   .strict()
   .superRefine((value, context) => {
     const createdAt = Date.parse(value.created_at);
-    if (Date.parse(value.csrf_rotated_at) < Date.parse(value.created_at)) {
+    const csrfRotatedAt = Date.parse(value.csrf_rotated_at);
+    const expiresAt = value.expires_at === null ? null : Date.parse(value.expires_at);
+    const lastUsedAt = value.last_used_at === null ? null : Date.parse(value.last_used_at);
+    const revokedAt = value.revoked_at === null ? null : Date.parse(value.revoked_at);
+    if (csrfRotatedAt < createdAt) {
       context.addIssue({
         code: "custom",
         message: "CSRF rotation time cannot precede device creation.",
         path: ["csrf_rotated_at"]
       });
     }
-    if (value.last_used_at !== null && Date.parse(value.last_used_at) < createdAt) {
+    if (lastUsedAt !== null && lastUsedAt < createdAt) {
       context.addIssue({
         code: "custom",
         message: "Auth device last-used time cannot precede device creation.",
@@ -276,14 +280,49 @@ export const authDeviceRecordSchema = z
       });
     }
     if (
-      value.last_used_at !== null &&
-      value.expires_at !== null &&
-      Date.parse(value.last_used_at) >= Date.parse(value.expires_at)
+      lastUsedAt !== null &&
+      expiresAt !== null &&
+      lastUsedAt >= expiresAt
     ) {
       context.addIssue({
         code: "custom",
         message: "Auth device last-used time must precede device expiry.",
         path: ["last_used_at"]
+      });
+    }
+    if (expiresAt !== null && expiresAt < createdAt) {
+      context.addIssue({
+        code: "custom",
+        message: "Auth device expiry cannot precede device creation.",
+        path: ["expires_at"]
+      });
+    }
+    if (expiresAt !== null && csrfRotatedAt > expiresAt) {
+      context.addIssue({
+        code: "custom",
+        message: "CSRF rotation time cannot follow device expiry.",
+        path: ["csrf_rotated_at"]
+      });
+    }
+    if (revokedAt !== null && revokedAt < createdAt) {
+      context.addIssue({
+        code: "custom",
+        message: "Auth device revocation cannot precede device creation.",
+        path: ["revoked_at"]
+      });
+    }
+    if (revokedAt !== null && revokedAt < csrfRotatedAt) {
+      context.addIssue({
+        code: "custom",
+        message: "Auth device revocation cannot precede current CSRF rotation.",
+        path: ["revoked_at"]
+      });
+    }
+    if (revokedAt !== null && lastUsedAt !== null && revokedAt < lastUsedAt) {
+      context.addIssue({
+        code: "custom",
+        message: "Auth device revocation cannot precede last use.",
+        path: ["revoked_at"]
       });
     }
   });

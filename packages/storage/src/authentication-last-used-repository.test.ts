@@ -121,7 +121,7 @@ describe("monotonic auth-device last-used repository", () => {
         rawDeviceToken: "device_token_for_revoked_monotonic_123",
         rawCsrfToken: "csrf_token_for_revoked_monotonic_123"
       });
-      repository.revoke("client_revoked_auth", { now: firstUseAt() });
+      repository.revokeLegacy("client_revoked_auth", { now: firstUseAt() });
       const before = allDeviceRows(open.db);
 
       expectAuthError(
@@ -346,7 +346,7 @@ describe("monotonic auth-device last-used repository", () => {
       const worker = startAuthWriter(path, "touch", firstUseAt().toISOString());
       await worker.updated;
 
-      const revoked = repository.revoke("client_monotonic_auth", { now: laterUseAt() });
+      const revoked = repository.revokeLegacy("client_monotonic_auth", { now: laterUseAt() });
       await worker.completed;
       expect(revoked).toMatchObject({
         last_used_at: firstUseAt().toISOString(),

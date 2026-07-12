@@ -141,7 +141,7 @@ describe("CSRF bootstrap rotation repository", () => {
         rawCsrfToken: "csrf_initial_for_revoked_bootstrap_123",
         permission: "write"
       });
-      repository.revoke("client_revoked_csrf", { now: laterNow() });
+      repository.revokeLegacy("client_revoked_csrf", { now: laterNow() });
       expectAuthError(
         () =>
           repository.rotateCsrfBootstrap({

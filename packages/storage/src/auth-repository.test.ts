@@ -239,7 +239,7 @@ describe("auth devices and pairing-code repositories", () => {
         clientLabel: "revoked-phone",
         createdAt: fixedNow()
       });
-      devices.revoke("client_revoked", { now: laterNow() });
+      devices.revokeLegacy("client_revoked", { now: laterNow() });
 
       expectAuthError(
         () =>

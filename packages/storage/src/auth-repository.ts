@@ -12,9 +12,12 @@ export type AuthRepositoryErrorCode =
   | "device_exists"
   | "device_expired"
   | "device_not_found"
+  | "device_revoke_failed"
+  | "device_revoke_time_conflict"
   | "device_revoked"
   | "duplicate_secret"
   | "invalid_auth_device"
+  | "invalid_device_revoke"
   | "invalid_secret"
   | "invalid_time"
   | "invalid_pairing_code"
@@ -123,7 +126,8 @@ export interface AuthDeviceRepository {
   readonly authenticateDeviceToken: (input: AuthenticateDeviceInput) => AuthDeviceAuthentication;
   readonly rotateCsrfBootstrap: (input: RotateCsrfBootstrapInput) => CsrfBootstrapRotation;
   readonly authorizeBrowserWrite: (input: AuthorizeBrowserWriteInput) => AuthDeviceRecord;
-  readonly revoke: (deviceId: string, input: { readonly now: Date }) => AuthDeviceRecord;
+  /** @deprecated Historical non-selected revoke path. Use createDeviceRevocationRepository. */
+  readonly revokeLegacy: (deviceId: string, input: { readonly now: Date }) => AuthDeviceRecord;
 }
 
 export interface LegacyPairingCodeRepository {
@@ -177,6 +181,7 @@ export function createAuthDeviceRepository(
   const authenticateDeviceToken = createDeviceAuthenticationTransaction(db);
   const authorizeBrowserWrite = createBrowserWriteAuthorizationTransaction(db);
   const rotateCsrfBootstrap = createCsrfBootstrapTransaction(db, generateCsrfToken);
+  const revokeLegacy = createLegacyDeviceRevocationTransaction(db);
 
   return {
     get(deviceId) {
@@ -221,17 +226,49 @@ export function createAuthDeviceRepository(
     authorizeBrowserWrite(input) {
       return runAuthenticationTransaction(() => authorizeBrowserWrite(input));
     },
-    revoke(deviceId, input) {
-      const current = this.require(deviceId);
-
-      if (current.revoked_at !== null) {
-        return current;
-      }
-
-      db.prepare("UPDATE auth_devices SET revoked_at = ? WHERE id = ?").run(nowIso(input.now), deviceId);
-      return this.require(deviceId);
+    revokeLegacy(deviceId, input) {
+      return revokeLegacy(deviceId, input.now);
     }
   };
+}
+
+function createLegacyDeviceRevocationTransaction(
+  db: Database.Database
+): (deviceId: string, now: Date) => AuthDeviceRecord {
+  return db.transaction((deviceId: string, now: Date): AuthDeviceRecord => {
+    const row = db.prepare("SELECT * FROM auth_devices WHERE id = ?").get(deviceId) as AuthDeviceRow | undefined;
+    if (row === undefined) {
+      throw new HostDeckAuthRepositoryError("device_not_found", `Auth device ${deviceId} does not exist.`);
+    }
+    const current = parseAuthDeviceRow(row);
+    const revokedAt = nowIso(now);
+    if (current.revoked_at !== null) return current;
+    const minimum = Math.max(
+      Date.parse(current.created_at),
+      Date.parse(current.csrf_rotated_at),
+      current.last_used_at === null ? Number.NEGATIVE_INFINITY : Date.parse(current.last_used_at)
+    );
+    if (Date.parse(revokedAt) < minimum) {
+      throw new HostDeckAuthRepositoryError(
+        "device_revoke_time_conflict",
+        "Device revocation time regressed behind durable authority."
+      );
+    }
+    const update = db
+      .prepare("UPDATE auth_devices SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
+      .run(revokedAt, deviceId);
+    if (update.changes !== 1) {
+      throw new HostDeckAuthRepositoryError(
+        "device_revoke_failed",
+        "Device authority changed before legacy revocation committed."
+      );
+    }
+    const revoked = db.prepare("SELECT * FROM auth_devices WHERE id = ?").get(deviceId) as AuthDeviceRow | undefined;
+    if (revoked === undefined) {
+      throw new HostDeckAuthRepositoryError("device_revoke_failed", "Auth device disappeared during revocation.");
+    }
+    return parseAuthDeviceRow(revoked);
+  }).immediate;
 }
 
 function createDeviceAuthenticationTransaction(
