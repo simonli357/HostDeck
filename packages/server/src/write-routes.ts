@@ -539,6 +539,7 @@ function routeErrorForAuth(error: unknown): WriteRouteResult {
   switch (error.code) {
     case "invalid_secret":
     case "invalid_auth_device":
+    case "invalid_device_list":
     case "invalid_device_revoke":
       return routeError(400, "validation_error", error.message);
     case "read_only":
@@ -553,6 +554,7 @@ function routeErrorForAuth(error: unknown): WriteRouteResult {
       return routeError(409, "operation_conflict", error.message);
     case "authentication_failed":
     case "device_exists":
+    case "device_list_failed":
     case "device_revoke_failed":
     case "device_revoke_time_conflict":
     case "csrf_generation_exhausted":

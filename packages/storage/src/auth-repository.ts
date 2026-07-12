@@ -11,12 +11,14 @@ export type AuthRepositoryErrorCode =
   | "csrf_rotation_failed"
   | "device_exists"
   | "device_expired"
+  | "device_list_failed"
   | "device_not_found"
   | "device_revoke_failed"
   | "device_revoke_time_conflict"
   | "device_revoked"
   | "duplicate_secret"
   | "invalid_auth_device"
+  | "invalid_device_list"
   | "invalid_device_revoke"
   | "invalid_secret"
   | "invalid_time"
@@ -121,7 +123,8 @@ export interface LegacyPairingClaim {
 export interface AuthDeviceRepository {
   readonly get: (deviceId: string) => AuthDeviceRecord | null;
   readonly require: (deviceId: string) => AuthDeviceRecord;
-  readonly list: () => readonly AuthDeviceRecord[];
+  /** @deprecated Historical unbounded hash-bearing list. Use createDeviceListingRepository. */
+  readonly listLegacy: () => readonly AuthDeviceRecord[];
   readonly create: (input: CreateAuthDeviceInput) => AuthDeviceRecord;
   readonly authenticateDeviceToken: (input: AuthenticateDeviceInput) => AuthDeviceAuthentication;
   readonly rotateCsrfBootstrap: (input: RotateCsrfBootstrapInput) => CsrfBootstrapRotation;
@@ -197,7 +200,7 @@ export function createAuthDeviceRepository(
 
       return device;
     },
-    list() {
+    listLegacy() {
       return (db.prepare("SELECT * FROM auth_devices ORDER BY created_at ASC, id ASC").all() as AuthDeviceRow[]).map(parseAuthDeviceRow);
     },
     create(input) {
