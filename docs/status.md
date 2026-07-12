@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `DAT-V1-029` monotonic authentication last-used storage.
+- Active task: `DAT-V1-027` security-action audit storage completion.
 - `IFC-V1-047` real HTTP resource limits are complete. `INT-V1-027` remains blocked on the authenticated turn reset and host Bubblewrap AppArmor profile; its unchanged aggregate remains the next runtime action when both are available.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -55,6 +55,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-015` selects `@peculiar/x509` 2.0.0 plus `reflect-metadata` 0.2.2 and freezes the exact-IP CA/leaf profile. A physical Android 16/Chrome 150 run proves USB-only public-root transfer, warning-free exact-IP trust, same-root renewal, isolated SAN/date/authority and plaintext refusal, trust removal/reinstall recovery, reviewed screenshots, and full phone/host cleanup. Evidence: `artifacts/ifc-v1-015-https-phone-enrollment.md`; physical matrix `48ce602`.
 - `DAT-V1-021` adds forward-only auth-device CSRF generation/rotation state and one immediate hash-only bootstrap transaction. Integer bounds, historical duplicate hashes, old/current token truth, invalid/corrupt/exhausted states, rollback, real writer contention, restart, indexed lookup, and raw-secret absence pass. Evidence: `artifacts/dat-v1-021-csrf-bootstrap-storage.md`; implementation `e10a6a3`.
 - `IFC-V1-017` makes one branded immutable mode/transport/origin policy mandatory for every Fastify surface. Socket-derived transport, exact configured Host/Origin, proxy/ambiguous-target/preflight denial, bounded frozen context/counters, and native late-hook/raw CORS suppression pass headless, injection, and real loopback raw-socket matrices without claiming unfinished LAN/TLS composition. Evidence: `artifacts/ifc-v1-017-request-trust-gate.md`; implementation `8aef5e8`.
+- `DAT-V1-029` makes bearer authentication and browser-write authorization immediate, authority-validating, and monotonic. Strict chronology, greater/equal/older behavior, generic rollback, real old/new/equal/revoke ordering, restart/index/privacy, and bounded route classification pass. Evidence: `artifacts/dat-v1-029-monotonic-authentication-last-used.md`; implementation `cb60c0a`.
 
 ## Not Proven
 
@@ -149,6 +150,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/dat-v1-021-csrf-bootstrap-storage.md`.
 - `IFC-V1-017`: direct trust gate (12), server (303 passed, 7 external skipped), unit (783 passed, 29 external skipped), contract (139), integration (16), web (14), typecheck, lint/exports, scaffold/planning/binding, frozen offline install, production audit, raw-listener/parser split, CORS dependency/order/privacy review, and diff checks pass.
 - Evidence: `artifacts/ifc-v1-017-request-trust-gate.md`.
+- `DAT-V1-029`: direct monotonic repository (11), storage (167), affected security/write routes (17), server (305 passed, 7 external skipped), unit (796 passed, 29 external skipped), contract (139), integration (16), web (14), typecheck, lint/exports, scaffold/planning/binding, frozen offline install, production audit, transaction/privacy review, and diff checks pass.
+- Evidence: `artifacts/dat-v1-029-monotonic-authentication-last-used.md`.
 
 ## Git
 
@@ -186,4 +189,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-015` physical evidence is pushed as `48ce602`; owner docs close the task and advance the queue to `DAT-V1-021` then `IFC-V1-017`.
 - `DAT-V1-021` implementation and evidence are pushed as `e10a6a3`; owner docs close the task and make `DAT-V1-025` to `DAT-V1-029` ready.
 - `IFC-V1-017` request-trust implementation and evidence are pushed as `8aef5e8`; owner docs advance the queue to `DAT-V1-029` while cookie authentication remains blocked on that repository.
-- Next action: harden and implement `DAT-V1-029` monotonic authentication last-used storage, then continue the dependency-ordered device security repositories. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
+- `DAT-V1-029` implementation and evidence are pushed as `cb60c0a`; owner docs advance the queue to `DAT-V1-027` and make `IFC-V1-026` cookie authentication ready.
+- Next action: harden and implement `DAT-V1-027` security-action audit storage, then continue the dependency-ordered device security repositories. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.

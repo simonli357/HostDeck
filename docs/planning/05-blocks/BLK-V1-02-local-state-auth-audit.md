@@ -45,7 +45,7 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | Orphan accepted-operation reconciliation | `DAT-V1-030` | Done; fixed-cutoff incomplete append, bounded runner, real terminal race, restart, and retention interoperability recorded. |
 | CSRF bootstrap and rotation storage | `DAT-V1-021` | Complete; strict migration, atomic rotation, real contention, rollback, restart, indexed lookup, and raw-secret evidence pass. |
 | Device listing storage | `DAT-V1-025` | Ready after CSRF-capable device storage. |
-| Authentication last-used update storage | `DAT-V1-029` | In progress; strict chronology, atomic authority/touch, conflict, rollback, revoke/race, restart, and privacy criteria are frozen. |
+| Authentication last-used update storage | `DAT-V1-029` | Complete; strict chronology, immediate authority/touch, monotonic conflict/no-op behavior, update/commit rollback, real race/revoke ordering, restart, index, and privacy evidence pass. |
 | Pair claim and rate/concurrency storage | `DAT-V1-026` | Ready after CSRF-capable pairing storage. |
 | Atomic device revoke and CSRF invalidation | `DAT-V1-028` | Ready after CSRF-capable device storage. |
 | Security-action audit storage completion | `DAT-V1-027` | Ready after CSRF and audit state-machine leaves. |
