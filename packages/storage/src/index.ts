@@ -8,16 +8,20 @@ export {
   type AuthDeviceAuthentication,
   type AuthDeviceRepository,
   type AuthDeviceRepositoryOptions,
+  type AuthorizeSelectedBrowserWriteInput,
   type AuthRepositoryErrorCode,
   type CsrfBootstrapRotation,
   createAuthDeviceRepository,
   createLegacyPairingCodeRepository,
+  createSelectedCsrfAuthorizationRepository,
   type HashSecretOptions,
   HostDeckAuthRepositoryError,
   hashSecret,
   type LegacyPairingClaim,
   type LegacyPairingCodeRepository,
-  type RotateCsrfBootstrapInput
+  type RotateCsrfBootstrapInput,
+  type RotateSelectedCsrfBootstrapInput,
+  type SelectedCsrfAuthorizationRepository
 } from "./auth-repository.js";
 export {
   type CaptureGitBranchMetadataInput,

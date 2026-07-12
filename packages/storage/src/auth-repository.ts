@@ -1,5 +1,13 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { type AuthDeviceRecord, authDeviceRecordSchema, type PairingCodeRecord, pairingCodeRecordSchema } from "@hostdeck/contracts";
+import {
+  type AuthDeviceRecord,
+  authDeviceRecordSchema,
+  type PairingCodeRecord,
+  pairingCodeRecordSchema,
+  positiveSafeIntegerSchema,
+  selectedDeviceIdSchema,
+  selectedRawCsrfTokenSchema
+} from "@hostdeck/contracts";
 import type Database from "better-sqlite3";
 
 export type AuthRepositoryErrorCode =
@@ -18,6 +26,7 @@ export type AuthRepositoryErrorCode =
   | "device_revoked"
   | "duplicate_secret"
   | "invalid_auth_device"
+  | "invalid_csrf_authorization"
   | "invalid_device_list"
   | "invalid_device_revoke"
   | "invalid_secret"
@@ -105,6 +114,26 @@ export interface AuthDeviceRepositoryOptions {
   readonly generateCsrfToken?: () => string;
 }
 
+export interface RotateSelectedCsrfBootstrapInput {
+  readonly deviceId: string;
+  readonly expectedCsrfGeneration: number;
+  readonly now: Date;
+}
+
+export interface AuthorizeSelectedBrowserWriteInput
+  extends RotateSelectedCsrfBootstrapInput {
+  readonly rawCsrfToken: string;
+}
+
+export interface SelectedCsrfAuthorizationRepository {
+  readonly rotateBootstrap: (
+    input: RotateSelectedCsrfBootstrapInput
+  ) => CsrfBootstrapRotation;
+  readonly authorizeBrowserWrite: (
+    input: AuthorizeSelectedBrowserWriteInput
+  ) => AuthDeviceAuthentication;
+}
+
 export interface AuthorizeBrowserWriteInput extends AuthenticateDeviceInput {
   readonly rawCsrfToken: string;
 }
@@ -156,6 +185,17 @@ interface AuthDeviceRow {
   readonly last_used_at: string | null;
   readonly expires_at: string | null;
   readonly revoked_at: string | null;
+}
+
+interface PreparedSelectedCsrfAuthority {
+  readonly deviceId: string;
+  readonly expectedCsrfGeneration: number;
+  readonly now: string;
+  readonly nowMs: number;
+}
+
+interface PreparedSelectedBrowserWrite extends PreparedSelectedCsrfAuthority {
+  readonly rawCsrfToken: string;
 }
 
 interface PairingCodeRow {
@@ -233,6 +273,46 @@ export function createAuthDeviceRepository(
       return revokeLegacy(deviceId, input.now);
     }
   };
+}
+
+export function createSelectedCsrfAuthorizationRepository(
+  db: Database.Database,
+  options: AuthDeviceRepositoryOptions = {}
+): SelectedCsrfAuthorizationRepository {
+  const generateCsrfToken = readSelectedCsrfRepositoryOptions(options);
+  const rotate = createSelectedCsrfRotationTransaction(db, generateCsrfToken);
+  const authorize = createSelectedBrowserWriteTransaction(db);
+
+  return Object.freeze({
+    rotateBootstrap(input: RotateSelectedCsrfBootstrapInput) {
+      try {
+        return rotate(prepareSelectedCsrfAuthority(input));
+      } catch (error) {
+        if (error instanceof HostDeckAuthRepositoryError) throw error;
+        throw new HostDeckAuthRepositoryError(
+          "csrf_rotation_failed",
+          "Selected CSRF bootstrap rotation failed."
+        );
+      }
+    },
+    authorizeBrowserWrite(input: AuthorizeSelectedBrowserWriteInput) {
+      try {
+        const device = authorize(prepareSelectedBrowserWrite(input));
+        const frozenDevice = Object.freeze({ ...device });
+        return Object.freeze({
+          trusted: true,
+          readOnly: false,
+          device: frozenDevice
+        });
+      } catch (error) {
+        if (error instanceof HostDeckAuthRepositoryError) throw error;
+        throw new HostDeckAuthRepositoryError(
+          "authentication_failed",
+          "Selected browser-write authorization failed."
+        );
+      }
+    }
+  });
 }
 
 function createLegacyDeviceRevocationTransaction(
@@ -380,6 +460,60 @@ function createCsrfBootstrapTransaction(
   return db.transaction((input: RotateCsrfBootstrapInput): CsrfBootstrapRotation => {
     const rotatedAt = nowIso(input.now);
     const current = requireUsableDeviceByToken(db, input.rawDeviceToken, input.now);
+    return rotateCurrentCsrf(db, current, rotatedAt, generateCsrfToken);
+  }).immediate;
+}
+
+function createSelectedCsrfRotationTransaction(
+  db: Database.Database,
+  generateCsrfToken: () => string
+): (input: PreparedSelectedCsrfAuthority) => CsrfBootstrapRotation {
+  return db.transaction(
+    (input: PreparedSelectedCsrfAuthority): CsrfBootstrapRotation => {
+      const current = requireUsableDeviceById(db, input.deviceId, input.nowMs);
+      if (current.csrf_generation !== input.expectedCsrfGeneration) {
+        throw new HostDeckAuthRepositoryError(
+          "csrf_rotation_conflict",
+          "CSRF bootstrap authority changed before rotation."
+        );
+      }
+      return rotateCurrentCsrf(db, current, input.now, generateCsrfToken);
+    }
+  ).immediate;
+}
+
+function createSelectedBrowserWriteTransaction(
+  db: Database.Database
+): (input: PreparedSelectedBrowserWrite) => AuthDeviceRecord {
+  return db.transaction((input: PreparedSelectedBrowserWrite): AuthDeviceRecord => {
+    const current = requireUsableDeviceById(db, input.deviceId, input.nowMs);
+
+    if (current.permission === "read") {
+      throw new HostDeckAuthRepositoryError(
+        "read_only",
+        "Read-only auth devices cannot write."
+      );
+    }
+    if (
+      current.csrf_generation !== input.expectedCsrfGeneration ||
+      !hashMatches(current.csrf_token_hash, input.rawCsrfToken)
+    ) {
+      throw new HostDeckAuthRepositoryError(
+        "csrf_mismatch",
+        "Selected browser-write CSRF authority does not match."
+      );
+    }
+
+    return advanceLastUsedAt(db, current, input.now);
+  }).immediate;
+}
+
+function rotateCurrentCsrf(
+  db: Database.Database,
+  current: AuthDeviceRecord,
+  rotatedAt: string,
+  generateCsrfToken: () => string
+): CsrfBootstrapRotation {
 
     if (Date.parse(rotatedAt) < Date.parse(current.csrf_rotated_at)) {
       throw new HostDeckAuthRepositoryError(
@@ -429,7 +563,6 @@ function createCsrfBootstrapTransaction(
       csrfGeneration,
       rotatedAt
     });
-  }).immediate;
 }
 
 /** @deprecated Historical caller-supplied pairing path. Use createPairingCodeRepository from selected-pairing-repository. */
@@ -617,6 +750,36 @@ function requireUsableDeviceByToken(db: Database.Database, rawDeviceToken: strin
   return device;
 }
 
+function requireUsableDeviceById(
+  db: Database.Database,
+  deviceId: string,
+  nowMs: number
+): AuthDeviceRecord {
+  const row = db.prepare("SELECT * FROM auth_devices WHERE id = ?").get(deviceId) as
+    | AuthDeviceRow
+    | undefined;
+  if (row === undefined) {
+    throw new HostDeckAuthRepositoryError(
+      "device_not_found",
+      "Authenticated device does not exist."
+    );
+  }
+  const device = parseAuthDeviceRow(row);
+  if (device.revoked_at !== null) {
+    throw new HostDeckAuthRepositoryError(
+      "device_revoked",
+      "Authenticated device has been revoked."
+    );
+  }
+  if (device.expires_at !== null && Date.parse(device.expires_at) <= nowMs) {
+    throw new HostDeckAuthRepositoryError(
+      "device_expired",
+      "Authenticated device has expired."
+    );
+  }
+  return device;
+}
+
 function requireClaimablePairingCode(db: Database.Database, rawCode: string, now: Date): PairingCodeRecord {
   const row = db.prepare("SELECT * FROM pairing_codes WHERE code_hash = ?").get(hashPairingCode(rawCode)) as PairingCodeRow | undefined;
 
@@ -752,6 +915,135 @@ function mapPairingConstraint(error: unknown): HostDeckAuthRepositoryError {
   }
 
   return new HostDeckAuthRepositoryError("invalid_pairing_code", "Pairing code record violates SQLite constraints.", { cause: error });
+}
+
+function readSelectedCsrfRepositoryOptions(
+  options: unknown
+): () => string {
+  const values = readExactDataObject(
+    options,
+    ["generateCsrfToken"],
+    true
+  );
+  const generator = values.generateCsrfToken;
+  if (generator !== undefined && typeof generator !== "function") {
+    throw invalidSelectedCsrfInput();
+  }
+  const selectedGenerator =
+    (generator as (() => string) | undefined) ?? defaultCsrfTokenGenerator;
+  return () => {
+    const generated = generateCsrfTokenSafely(selectedGenerator);
+    const parsed = selectedRawCsrfTokenSchema.safeParse(generated);
+    if (!parsed.success) {
+      throw new HostDeckAuthRepositoryError(
+        "csrf_rotation_failed",
+        "Selected CSRF token generation failed."
+      );
+    }
+    return parsed.data;
+  };
+}
+
+function prepareSelectedCsrfAuthority(
+  input: unknown
+): PreparedSelectedCsrfAuthority {
+  const values = readExactDataObject(
+    input,
+    ["deviceId", "expectedCsrfGeneration", "now"],
+    false
+  );
+  return prepareSelectedCsrfAuthorityValues(values);
+}
+
+function prepareSelectedBrowserWrite(
+  input: unknown
+): PreparedSelectedBrowserWrite {
+  const values = readExactDataObject(
+    input,
+    ["deviceId", "expectedCsrfGeneration", "now", "rawCsrfToken"],
+    false
+  );
+  const authority = prepareSelectedCsrfAuthorityValues(values);
+  const rawCsrfToken = selectedRawCsrfTokenSchema.safeParse(values.rawCsrfToken);
+  if (!rawCsrfToken.success) throw invalidSelectedCsrfInput();
+  return Object.freeze({ ...authority, rawCsrfToken: rawCsrfToken.data });
+}
+
+function prepareSelectedCsrfAuthorityValues(
+  values: Readonly<Record<string, unknown>>
+): PreparedSelectedCsrfAuthority {
+  const deviceId = selectedDeviceIdSchema.safeParse(values.deviceId);
+  const generation = positiveSafeIntegerSchema.safeParse(
+    values.expectedCsrfGeneration
+  );
+  if (!deviceId.success || !generation.success || !(values.now instanceof Date)) {
+    throw invalidSelectedCsrfInput();
+  }
+  let nowMs: number;
+  try {
+    nowMs = Date.prototype.getTime.call(values.now);
+  } catch {
+    throw invalidSelectedCsrfInput();
+  }
+  if (!Number.isFinite(nowMs)) throw invalidSelectedCsrfInput();
+  return Object.freeze({
+    deviceId: deviceId.data,
+    expectedCsrfGeneration: generation.data,
+    now: new Date(nowMs).toISOString(),
+    nowMs
+  });
+}
+
+function readExactDataObject(
+  candidate: unknown,
+  expectedKeys: readonly string[],
+  optionalKeys: boolean
+): Readonly<Record<string, unknown>> {
+  try {
+    if (
+      candidate === null ||
+      typeof candidate !== "object" ||
+      Array.isArray(candidate) ||
+      Object.getPrototypeOf(candidate) !== Object.prototype
+    ) {
+      throw new TypeError();
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(candidate);
+    const keys = Reflect.ownKeys(descriptors);
+    if (
+      keys.some((key) => typeof key !== "string" || !expectedKeys.includes(key)) ||
+      (!optionalKeys && keys.length !== expectedKeys.length) ||
+      (optionalKeys && keys.length > expectedKeys.length)
+    ) {
+      throw new TypeError();
+    }
+    const values: Record<string, unknown> = Object.create(null) as Record<
+      string,
+      unknown
+    >;
+    for (const key of expectedKeys) {
+      const descriptor = descriptors[key];
+      if (descriptor === undefined) {
+        if (optionalKeys) {
+          values[key] = undefined;
+          continue;
+        }
+        throw new TypeError();
+      }
+      if (!descriptor.enumerable || !("value" in descriptor)) throw new TypeError();
+      values[key] = descriptor.value;
+    }
+    return Object.freeze(values);
+  } catch {
+    throw invalidSelectedCsrfInput();
+  }
+}
+
+function invalidSelectedCsrfInput(): HostDeckAuthRepositoryError {
+  return new HostDeckAuthRepositoryError(
+    "invalid_csrf_authorization",
+    "Selected CSRF authorization input is invalid."
+  );
 }
 
 function defaultCsrfTokenGenerator(): string {

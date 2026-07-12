@@ -1,4 +1,5 @@
 export * from "./api.js";
+export * from "./csrf.js";
 export * from "./device-listing.js";
 export * from "./device-revocation.js";
 export * from "./pairing.js";
