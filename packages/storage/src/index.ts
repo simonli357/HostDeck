@@ -164,8 +164,11 @@ export {
   type CreateDefaultSettingsInput,
   createDefaultSettings,
   createSettingsRepository,
+  type HostDeckLockState,
+  type HostDeckLockTransitionReceipt,
   HostDeckSettingsError,
-  type SettingsRepository
+  type SettingsRepository,
+  type TransitionHostDeckLockInput
 } from "./settings-repository.js";
 export {
   HostDeckStartupAuditOrphanReconciliationError,
