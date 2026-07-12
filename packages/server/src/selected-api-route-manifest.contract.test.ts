@@ -248,6 +248,11 @@ describe("selected API route manifest", () => {
     }
 
     expect(byId("health_liveness")).toMatchObject({ auth: "none", authority: "public" });
+    expect(byId("device_list")).toMatchObject({
+      method: "GET",
+      auth: "device_cookie",
+      authority: "device_admin"
+    });
     expect(byId("pair_claim")).toMatchObject({ auth: "pairing_code", authority: "pair_claim" });
     expect(byId("access_state")).toMatchObject({ auth: "optional_device_cookie", authority: "access_read" });
     expect(byId("network_state")).toMatchObject({ auth: "optional_device_cookie", authority: "access_read" });

@@ -211,7 +211,7 @@ const sessionWritePolicy = policy(
   "requires_unlocked_host"
 );
 const deviceAdminReadPolicy = policy(
-  "local_admin_or_device_cookie",
+  "device_cookie",
   "device_admin",
   "none",
   "not_applicable"

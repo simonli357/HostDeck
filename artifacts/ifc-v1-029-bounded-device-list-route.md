@@ -16,7 +16,7 @@ It does not own pairing, CSRF rotation, device revoke, active-request invalidati
 - No selected Fastify registration currently owns `GET /api/v1/access/devices`; historical handlers are not production registrations.
 - Storage accepts an internal device id keyset, while an HTTP client needs one canonical bounded limit and an opaque versioned continuation cursor.
 - The route must distinguish public query failure, credential failure, storage corruption/unavailability, and an impossible route-to-repository contract mismatch without returning native causes or partial rows.
-- The route must prove that read-only and write-paired clients are admitted by the frozen manifest while missing, invalid, expired, and revoked credentials cannot reach listing storage.
+- The route must prove that read-only and write-paired clients are admitted by the frozen manifest while safe loopback requests without a device credential and missing, invalid, expired, or revoked credentials cannot reach listing storage.
 - The selected storage projection is non-secret, but the HTTP mapping, error path, headers, raw listener, and malformed injected-port output have no privacy evidence.
 
 ## Frozen Route Contract
@@ -48,8 +48,9 @@ The validated query maps to exactly `{ limit, afterDeviceId }` for one detached 
 
 ### Authorization And Request Order
 
-- The route consumes manifest auth `local_admin_or_device_cookie` in route `onRequest`, after the mandatory root trust and cookie-intake hooks and before query validation or list-repository access.
-- Explicit loopback local-admin requests with no cookie header, paired read devices, and paired write devices are admitted. Read permission is sufficient because this is the frozen user-accessible read route.
+- The route consumes manifest auth `device_cookie` in route `onRequest`, after the mandatory root trust and cookie-intake hooks and before query validation or list-repository access.
+- Paired read devices and paired write devices are admitted. Read permission is sufficient because this is the frozen user-accessible read route.
+- Safe no-Origin GETs are deliberately `unpaired`, not local admin, under the completed authentication contract. Advertising `local_admin_or_device_cookie` here would create an unreachable local-admin arm, so this leaf corrects the selected manifest to `device_cookie`. The future local CLI list path remains `IFC-V1-054` ownership and must not elevate a safe GET.
 - Missing, malformed, duplicate, unknown, expired, or revoked credentials reject with the existing stable authentication policy. Any cookie header prevents ambient local-admin fallback.
 - The route adds no CSRF, write-permission, lock, audit, rate-limit, or target gate. Rejected trust/auth requests and invalid credentials make zero list-port calls.
 - A revoke committed before authentication is observed by authentication. A revoke after the request's accepted authentication snapshot may race with this bounded read; active invalidation and aggregate revoke ordering remain `IFC-V1-059`/`IFC-V1-033` ownership.
@@ -96,7 +97,7 @@ Success is one exact snake_case object:
 | --- | --- |
 | Exact registration | Fixed API registration asserts the complete selected manifest row, exposes only exact GET/path semantics, disables implicit HEAD, and binds both named Zod contracts. |
 | Canonical query | Omitted/default, 1, 100, malformed numeric text, duplicates, unknown fields, cursor version/alphabet/padding/length/round-trip, and deleted-cursor cases pass or reject exactly. |
-| Authorization | Local admin plus paired read/write succeed; unpaired, cookie-blocked local fallback, malformed, invalid, expired, revoked, conflict, and auth-storage failure states reject before listing with stable errors. |
+| Authorization | Paired read/write succeed; safe loopback no-cookie, same-origin unpaired, unrelated-cookie, malformed, invalid, expired, revoked, conflict, and auth-storage failure states reject before listing with stable errors. |
 | Bounded traversal | Empty, one, exact-limit, plus-one, terminal, after-end, deleted cursor, default page, and at least 250-row HTTP traversal are ordered, duplicate-free, complete, and at most 100 rows per call. |
 | Result coherence | Returned pages must be exact synchronous plain data, fully validated before mapping, bounded by the request, strictly after its cursor, and continuation-consistent. Hostile/malformed port results produce one observed internal failure and no partial body. |
 | Stable failures | Query, auth, storage corruption/unavailability, internal input mismatch, and serialization/preparation failures map to fixed status/code/field/retryability without native or candidate detail. No rejected request retries or calls the legacy list. |
@@ -107,7 +108,7 @@ Success is one exact snake_case object:
 ## Validation Plan
 
 - Add direct contract/factory tests for exact hostile construction, canonical cursor/query boundaries, response invariants, fixed registration metadata, immutability, and descriptor-first returned-port handling.
-- Add Fastify injection tests over the real trust/authentication policy for the complete permission/credential/error matrix, exact route/method/path behavior, no-store headers, call counts, and stable envelopes.
+- Add Fastify injection tests over the real trust/authentication policy for the complete paired-permission/credential/error matrix, explicit safe-GET non-elevation, exact route/method/path behavior, no-store headers, call counts, and stable envelopes.
 - Add migrated SQLite route tests for default and multi-page traversal, deleted cursors, canonical timestamps, authentication last-used visibility, corrupt lookahead/no partial result, reopen/read-only behavior, and raw-secret absence.
 - Add one real loopback raw-HTTP exchange proving the selected route, protected cookie path, response/header privacy, and no implicit HEAD or alternate route.
 - Run focused contracts/storage/auth/route/manifest tests, the complete server/storage/package suites, root unit/contract/integration/web gates, typecheck, lint/exports, scaffold, planning, exact Codex binding, frozen install, production audit/license review, manual privacy/ownership review, and diff/staged-patch checks.

@@ -45,7 +45,7 @@ Criteria: `72e6c34`. Implementation: `cd0d929`.
 | `pair_claim` | `POST /api/v1/access/pairing-claims` | pairing code / pair claim | `IFC-V1-028` |
 | `csrf_bootstrap` | `POST /api/v1/access/csrf` | device cookie / CSRF rotate | `IFC-V1-027` |
 | `access_state` | `GET /api/v1/access` | optional device cookie / access read | `IFC-V1-030` |
-| `device_list` | `GET /api/v1/access/devices` | local admin or device cookie / device admin | `IFC-V1-029` |
+| `device_list` | `GET /api/v1/access/devices` | device cookie / device admin | `IFC-V1-029` |
 | `device_revoke` | `POST /api/v1/access/devices/:device_id/revoke` | local admin or device cookie / device admin | `IFC-V1-059` |
 | `host_lock` | `POST /api/v1/access/lock` | local admin or device cookie / host lock | `IFC-V1-030` |
 | `host_unlock` | `POST /api/v1/access/unlock` | local admin / local admin | `IFC-V1-030` |
@@ -55,6 +55,8 @@ Criteria: `72e6c34`. Implementation: `cd0d929`.
 | `network_disable` | `POST /api/v1/network/disable` | local admin / local admin | `IFC-V1-031` |
 
 For `local_admin_or_device_cookie` mutations, device-cookie execution additionally requires write authority, current CSRF, an unlocked host, exact target validation, and the selected accepted-to-terminal write gate. The local-admin branch is an explicit authority, never missing authentication.
+
+`IFC-V1-029` corrected `device_list` to `device_cookie`: the selected authentication contract intentionally treats every safe no-Origin GET as unpaired, while explicit local-admin provenance exists only for unsafe loopback requests. Keeping the former union would advertise an unreachable local-admin arm. Local CLI device listing remains `IFC-V1-054` ownership and must use an explicit truthful local application path rather than elevate a safe GET.
 
 ## Hard Success Criteria
 
