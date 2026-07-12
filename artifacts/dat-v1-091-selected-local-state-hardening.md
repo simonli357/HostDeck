@@ -2,11 +2,22 @@
 
 Date: 2026-07-12
 
-Status: hard-success criteria frozen; execution pending.
+Status: complete and validated.
+
+Implementation evidence: `a11b5a8`.
 
 ## Purpose
 
 Re-run production hardening across the complete selected local-state, authentication, and audit module after every `DAT-V1-018` through `DAT-V1-030` leaf is complete. This gate must prove that the selected repositories share one real migrated SQLite database and preserve coherent truth across restart, failure, retention, authentication, and privacy boundaries. Passing isolated leaf tests is necessary but is not sufficient.
+
+## Outcome
+
+- One owner-only on-disk database now passes a complete selected mapping/recovery/projection/runtime-compatibility/pairing/auth/device/audit lifecycle through close, lease release, lease reacquisition, writable reopen, and current-schema read-only reopen.
+- The production append port retains exactly one replay boundary plus the newest two messages under the test policy and publishes every event only after its committed state is independently readable.
+- Selected pairing issuance and claim, CSRF rotation, stale-CSRF rejection, monotonic authentication, bounded non-secret listing, accepted-before-mutation device-revoke audit, authority invalidation, restart, and post-revoke denial remain coherent in one database.
+- Eligible accepted-only audit work becomes only `incomplete/runtime_unavailable` before startup retention runs. Cutoff-equal work remains pending; count retention then deletes four complete trails as seven whole rows and preserves the pending trail plus the newest two-row security trail.
+- Exact migration/schema, index/plan, SQLite health, file mode, cross-domain row count, raw-byte privacy, and semantic-corruption inspections pass. Deliberate runtime-compatibility contradiction fails through its owner and does not mutate any other selected domain.
+- No product code, migration, dependency, database tuning, command, or setup change was required. The selected leaf implementations already satisfy the frozen aggregate criteria.
 
 ## Selected Scope
 
@@ -73,16 +84,18 @@ The scenario may use deterministic entropy and clocks only through existing inje
 | Startup maintenance | Timeout, abort, corruption, contention, or storage failure reports bounded partial/degraded truth and never reports completion without a completed scan. |
 | Filesystem/lease | Unsafe type, mode, identity, link, ownership, or held lease fails before later mutation and cleans up acquired resources. |
 
-## Evidence Plan
+## Executed Evidence
 
-- Add a focused aggregate storage hardening test instead of duplicating all leaf matrices.
-- Re-run every storage test so the aggregate remains backed by migration, transaction, worker-race, retention, corruption, path, and lease leaf evidence.
-- Run root unit, contract, integration, web, typecheck, lint/export, scaffold, planning, exact-binding, frozen-install, production-audit, and diff checks required by the repository workflow.
-- Record direct test counts, exact manual SQL/filesystem/raw-byte observations, implementation commit, and remaining owners in this artifact after execution.
+- `packages/storage/src/selected-storage-hardening.test.ts` uses production constructors, real SQLite transactions, phased secure paths, and the kernel daemon lease. Deterministic clocks/entropy enter only through existing test ports; direct SQL is limited to independent inspection and the deliberate compatibility contradiction.
+- The aggregate proves all 11 published migration versions/checksums, 18 exact tables, 10 named indexes, five triggers, foreign keys enabled, `quick_check = ok`, no `foreign_key_check` rows, expected query-plan indexes, and no-op current writable/read-only reopens.
+- Manual migration-SQL inspection independently reproduced the same 18-table/10-index/five-trigger inventory, 11-row migration history, enabled foreign keys, clean quick check, and empty foreign-key check.
+- The aggregate raw-state inspection proves one selected session/projection/recovery/compatibility row set, three bounded projected events, one hash-only pairing/device/rate lifecycle, and three retained audit rows after maintenance. Historical selected-disposition state remains empty.
+- Main/WAL/SHM/journal files when present, known local paths, complete observed error/cause graphs, and durable rows contain none of the raw pairing, bearer, initial/rotated CSRF, private-material, or rejected full-transcript sentinels. The approved bounded newest projection text remains present by design.
+- Existing leaf matrices retain the real two-connection/worker contention, rollback, corruption, timeout/abort, hostile path, descriptor substitution, and child-crash evidence; the aggregate does not replace those races with sequential mocks.
 
 ## Reuse And Dependency Decision
 
-Use existing `better-sqlite3`, Node filesystem/crypto APIs, Vitest, selected repositories, secure path helpers, and daemon lease. No dependency or new abstraction is justified for this aggregate. Production changes are allowed only when an executable criterion exposes a root-cause gap; evidence-only assertions must stay in the aggregate test or artifact.
+Used existing `better-sqlite3`, Node filesystem/crypto APIs, Vitest, selected repositories, secure path helpers, and daemon lease. No dependency, abstraction, or product fallback was justified because no executable criterion exposed a production gap.
 
 ## Owner Mapping
 
@@ -90,7 +103,19 @@ Use existing `better-sqlite3`, Node filesystem/crypto APIs, Vitest, selected rep
 - Validation truth: `docs/planning/04b-test-plan.md` and the `04b:Storage And Audit Matrix` requirement group.
 - Capability completion: `docs/planning/05-blocks/BLK-V1-02-local-state-auth-audit.md`.
 - Task/dependency truth: `docs/tracking/backlog/local-state-auth-audit.md`, `docs/tracking/backlog/00-index.md`, and `docs/tracking/06-tasks.md`.
-- Handoff/release truth: `docs/status.md` and `docs/delivery/08-technical-delivery-plan.md` only when execution changes those facts.
+- Handoff/maturity truth: `docs/status.md` and `docs/tracking/05-delivery-plan.md` because this execution completes a module and the M1 exit.
+
+## Validation
+
+- Focused aggregate: 1 passed.
+- Storage: 24 files and 218 tests passed, retaining every real migration/transaction/race/path/privacy leaf matrix.
+- Unit: 878 passed; 29 explicit external tests skipped. Contract: 162 passed. Integration: 16 passed. Web: 14 passed.
+- Root and all nine package typechecks passed. Biome/package exports checked 300 files and nine packages.
+- Scaffold: nine packages and 18 root scripts. Planning closure: 196 tasks, 84 requirements, 633 dependencies, seven queued.
+- Exact Codex 0.144.0 binding: 671 files; SHA-256 `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`.
+- Frozen offline install passed. Production audit found no known vulnerabilities.
+- Production license inventory is unchanged: MIT 101, ISC 9, BSD-3-Clause 5, BlueOak-1.0.0 5, Apache-2.0 3, 0BSD 1, and two mixed-license entries with one package each.
+- Formatter, package export, manual SQL/filesystem/raw-byte review, and `git diff --check` passed.
 
 ## Remaining Ownership
 

@@ -1,5 +1,7 @@
 # BLK-V1-02 Local State, Auth, Audit, And Retention
 
+Status: complete for the selected storage-owned outcome. Runtime and interface composition remain in `BLK-V1-03` and `BLK-V1-04`.
+
 Owns HostDeck's durable state and local filesystem safety. Codex remains the owner of full thread history.
 
 ## Outcome
@@ -49,7 +51,7 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | Pair claim and rate/concurrency storage | `DAT-V1-026` | Complete; policy-bound 128-bit issue, selected owner provenance, durable source/global windows, bounded cleanup, one-winner claim/revoke, rollback, corruption, restart, and raw-file privacy evidence pass. |
 | Atomic device revoke and CSRF invalidation | `DAT-V1-028` | Complete; strict chronology, immediate raw-state CAS, stable idempotency, bearer/write/bootstrap denial, real ordering, rollback, restart, corruption, index, and privacy evidence pass. |
 | Security-action audit storage completion | `DAT-V1-027` | Complete; exact catalog, durable legacy/current provenance, strict actor/target/summary contracts, migration preservation, secret rejection, restart/orphan/retention, and full workspace evidence pass. |
-| Reopened module hardening | `DAT-V1-091` | Production-hardening criteria audit active; every selected storage/auth leaf dependency is complete. |
+| Selected module hardening | `DAT-V1-091` | Complete; one secure on-disk aggregate proves selected cross-repository migration, restart, retention, auth, audit, lease, corruption, query-plan, and privacy truth. Evidence: `artifacts/dat-v1-091-selected-local-state-hardening.md`. |
 
 Owning backlog: `docs/tracking/backlog/local-state-auth-audit.md`.
 
@@ -59,7 +61,7 @@ Owning backlog: `docs/tracking/backlog/local-state-auth-audit.md`.
 | --- | --- |
 | L1 | Schemas, repositories, migrations, audit state machine, permission policy. |
 | L2 | Real SQLite transactions, concurrent start/retention/revoke/lease races, restart and corruption cases. |
-| L3 inspection | Actual state/runtime tree modes, raw-secret absence, bounded data after real Codex/browser use. |
+| L3 inspection | Actual owner-only state/runtime modes, lease restart, exact SQLite inventory/health/query plans, bounded selected rows, raw-secret/full-transcript absence, and explicit downstream Codex/browser composition boundary. |
 
 ## Done Criteria
 

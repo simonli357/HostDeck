@@ -4,12 +4,12 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Snapshot
 
-- Phase: M1 selected foundation.
-- Active task: `DAT-V1-091` selected local-state/auth/audit module production-hardening criteria audit.
+- Phase: M2/M3 selected runtime and host-interface integration; M1 foundation is complete.
+- Active task: `IFC-V1-027` CSRF bootstrap rotation and browser-write verification production-hardening criteria audit.
 - `IFC-V1-047` real HTTP resource limits are complete. `INT-V1-027` remains blocked on the authenticated turn reset and host Bubblewrap AppArmor profile; its unchanged aggregate remains the next runtime action when both are available.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
-- Release state: no-go. All capability blocks affected by the new runtime/security/mobile outcome are reopened.
+- Release state: no-go. `BLK-V1-02` is complete; runtime, interface, mobile, and release blocks remain unfinished.
 
 ## Proven
 
@@ -19,6 +19,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Selected app-server runtime, operation, storage, audit, and phone view-model contracts now replace legacy assumptions for new work; required structured/mobile fixture inventories pass public contract tests.
 - Legacy tmux, terminal-output, slash-injection, raw-input, storage, and desktop-led UI contracts remain exported only as explicitly deprecated migration surfaces pending `INT-V1-008`.
 - `BLK-V1-01` is complete for normalized contracts, core invariants, deterministic fixtures, planning integrity, and generated-protocol isolation; production consumers remain reopened in their owning blocks.
+- `BLK-V1-02` is complete for its selected storage-owned outcome. `DAT-V1-091` proves one secure on-disk mapping/recovery/projection/runtime/pairing/auth/device/audit lifecycle across lease restart, read-only reopen, orphan-before-retention ordering, exact schema/query plans, semantic corruption isolation, and raw-byte privacy. Evidence: `artifacts/dat-v1-091-selected-local-state-hardening.md`; implementation `a11b5a8`.
 - `FND-V1-017` closed `BUG-001`: every unfinished selected-path row was manually classified and decomposed into a 196-task/622-edge graph; resource policy now precedes implementation, operation/read routes have separate owners, and deliberate aggregate gates are explicit. Evidence: `artifacts/fnd-v1-017-selected-backlog-granularity.md`; commit `481cb44`.
 - `IFC-V1-016` selected exact Fastify 5.10.0, Zod 4.4.3, `@fastify/sse` 0.5.0, and `@fastify/static` 9.3.0 dependencies with local validation/error ownership, a mandatory Readable-backed SSE path, and explicit deny-by-policy static routing. Six executable boundary probes and production dependency review pass. Evidence: `artifacts/ifc-v1-016-fastify-stack-spike.md`.
 - `IFC-V1-020` defines one strict resource policy across HTTP, SSE, admission, protocol, lifecycle, and CLI boundaries; subsequent event, control, projection, approval, interrupt, usage, compact, skills, and pairing work extends it to 78 fields. Stable oversized/overload codes, exact Fastify/Codex mappings, monotonic deadline forms, and bounded skills/error/dependency ceilings pass. Evidence remains in the owning task artifacts.
@@ -173,6 +174,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/ifc-v1-032-security-mutation-audit-executor.md`.
 - `IFC-V1-029`: direct route (8), focused route/auth/list/revoke (49), selected list/manifest contracts (14), storage (217), server (336 passed, 7 external skipped), unit (877 passed, 29 external skipped), contract (162), integration (16), web (14), all-package typechecks, lint/exports, scaffold/planning/binding, frozen offline install, zero-vulnerability production audit, license/cursor/manifest/failure/privacy/ownership review, real SQLite/raw-listener evidence, and diff checks pass.
 - Evidence: `artifacts/ifc-v1-029-bounded-device-list-route.md`.
+- `DAT-V1-091`: focused secure aggregate (1), storage (218), unit (878 passed, 29 external skipped), contract (162), integration (16), web (14), root/all-package typechecks, lint/exports, scaffold/planning/binding, frozen offline install, zero-vulnerability production audit, exact schema/query-plan/SQLite-health inspection, lease restart/read-only reopen, semantic-corruption isolation, and raw-byte privacy checks pass.
+- Evidence: `artifacts/dat-v1-091-selected-local-state-hardening.md`.
 
 ## Git
 
@@ -218,4 +221,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-026` criteria are pushed as `d17cad2`; implementation is pushed as `9b88d6d`. This closure makes `IFC-V1-029` device listing plus `IFC-V1-069`, `IFC-V1-060`, `IFC-V1-043`, and `IFC-V1-065` read routes ready, and advances the queue to the security audit executor.
 - `IFC-V1-032` criteria are pushed as `544b259` with the unproven-state correction as `8f2f372`; implementation is pushed as `0a63dbc`. This closure makes `IFC-V1-027` CSRF and `IFC-V1-028` pair/claim ready, and advances the queue to the paired-device list route.
 - `IFC-V1-029` criteria are pushed as `b526903`; the truthful safe-GET auth correction is pushed as `2fd424b`; implementation and evidence are pushed as `892a17b`. This closure advances the queue to selected local-state module hardening.
-- Next action: audit `DAT-V1-091` against production-hardening criteria before running the complete selected migration/path/lease/projection/retention/auth/pair/revoke/audit aggregate. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
+- `DAT-V1-091` criteria are pushed as `f1cd41f` with owner-path/privacy correction `8ce01e1`; aggregate implementation and evidence are pushed as `a11b5a8`. This completes `BLK-V1-02` and M1, and advances the queue to `IFC-V1-027`.
+- Next action: freeze and execute `IFC-V1-027` against exact cookie-auth, CSRF rotation/header, audit, cache, race, and raw-secret criteria. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
