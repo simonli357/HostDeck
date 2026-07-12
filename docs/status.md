@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `IFC-V1-029` bounded paired-device list route production-hardening criteria audit.
+- Active task: implement `IFC-V1-029` bounded paired-device list route against frozen production-hardening criteria.
 - `IFC-V1-047` real HTTP resource limits are complete. `INT-V1-027` remains blocked on the authenticated turn reset and host Bubblewrap AppArmor profile; its unchanged aggregate remains the next runtime action when both are available.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -214,4 +214,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `DAT-V1-025` criteria are pushed as `c1430b9`; implementation is pushed as `133080f`. This closure completes the selected device-storage leaves and advances the queue to `IFC-V1-026` cookie authentication.
 - `IFC-V1-026` criteria are pushed as `d17cad2`; implementation is pushed as `9b88d6d`. This closure makes `IFC-V1-029` device listing plus `IFC-V1-069`, `IFC-V1-060`, `IFC-V1-043`, and `IFC-V1-065` read routes ready, and advances the queue to the security audit executor.
 - `IFC-V1-032` criteria are pushed as `544b259` with the unproven-state correction as `8f2f372`; implementation is pushed as `0a63dbc`. This closure makes `IFC-V1-027` CSRF and `IFC-V1-028` pair/claim ready, and advances the queue to the paired-device list route.
-- Next action: audit `IFC-V1-029` against production-hardening criteria before implementing its exact authenticated bounded device-list route. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
+- Next action: implement and validate the frozen `IFC-V1-029` exact manifest binding, authenticated bounded query/cursor, non-secret no-store response, failure mapping, and real storage/listener matrices. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
