@@ -4,6 +4,13 @@ import {
   pairingClaimRateSourceRecordSchema,
   pairingClaimSourceKeySchema,
   pairingClientLabelSchema,
+  selectedPairClaimRequestSchema,
+  selectedPairClaimResponseSchema,
+  selectedPairingClientLabelSchema,
+  selectedPairingDeviceIdSchema,
+  selectedPairingIdSchema,
+  selectedPairRequestResponseSchema,
+  selectedPairRequestSchema,
   selectedRawPairingCodeSchema
 } from "./pairing.js";
 import { pairingCodeRecordSchema } from "./storage.js";
@@ -37,9 +44,87 @@ describe("selected pairing contracts", () => {
     ]) {
       expect(() => selectedRawPairingCodeSchema.parse(candidate)).toThrow();
     }
-    for (const candidate of ["", "x".repeat(121), undefined, 1]) {
+    for (const candidate of [
+      "",
+      " leading",
+      "trailing ",
+      "line\nbreak",
+      "format\u200bcharacter",
+      "x".repeat(121),
+      undefined,
+      1
+    ]) {
       expect(() => pairingClientLabelSchema.parse(candidate)).toThrow();
     }
+  });
+
+  it("owns exact selected issue and claim HTTP contracts", () => {
+    const operationId = "op_pairing_contract_01";
+    const rawCode = "abcdefghijklmnopqrstuv";
+    const pairingId = "pair_abcdefghijklmnopqrstuvwx";
+    const deviceId = "client_abcdefghijklmnopqrstuvwx";
+
+    expect(selectedPairingIdSchema.parse(pairingId)).toBe(pairingId);
+    expect(selectedPairingDeviceIdSchema.parse(deviceId)).toBe(deviceId);
+    expect(selectedPairingClientLabelSchema.parse("Simon's phone")).toBe("Simon's phone");
+    expect(
+      selectedPairRequestSchema.parse({
+        operation_id: operationId,
+        permission: "write",
+        client_label: "Simon's phone"
+      })
+    ).toEqual({
+      operation_id: operationId,
+      permission: "write",
+      client_label: "Simon's phone"
+    });
+    expect(
+      selectedPairClaimRequestSchema.parse({ operation_id: operationId, code: rawCode })
+    ).toEqual({ operation_id: operationId, code: rawCode });
+
+    const issueResponse = {
+      pairing_id: pairingId,
+      code: rawCode,
+      permission: "read",
+      client_label: null,
+      created_at: createdAt,
+      expires_at: expiresAt
+    } as const;
+    expect(selectedPairRequestResponseSchema.parse(issueResponse)).toEqual(issueResponse);
+
+    const claimResponse = {
+      device_id: deviceId,
+      permission: "write",
+      client_label: "Simon's phone",
+      created_at: createdAt,
+      expires_at: "2026-10-09T20:00:00.000Z",
+      csrf_bootstrap_required: true
+    } as const;
+    expect(selectedPairClaimResponseSchema.parse(claimResponse)).toEqual(claimResponse);
+
+    for (const candidate of [
+      { operation_id: "request-1", permission: "write" },
+      { operation_id: operationId, permission: "admin" },
+      { operation_id: operationId, permission: "read", extra: true }
+    ]) {
+      expect(() => selectedPairRequestSchema.parse(candidate)).toThrow();
+    }
+    for (const candidate of [
+      { operation_id: operationId, code: "too-short" },
+      { operation_id: operationId, code: rawCode, client_label: " phone" },
+      { operation_id: operationId, code: rawCode, extra: true }
+    ]) {
+      expect(() => selectedPairClaimRequestSchema.parse(candidate)).toThrow();
+    }
+    expect(() =>
+      selectedPairRequestResponseSchema.parse({ ...issueResponse, expires_at: createdAt })
+    ).toThrow();
+    expect(() =>
+      selectedPairClaimResponseSchema.parse({ ...claimResponse, expires_at: createdAt })
+    ).toThrow();
+    expect(() =>
+      selectedPairClaimResponseSchema.parse({ ...claimResponse, csrf_token: "secret" })
+    ).toThrow();
   });
 
   it("normalizes valid rate timestamps and rejects impossible or unbounded rate state", () => {

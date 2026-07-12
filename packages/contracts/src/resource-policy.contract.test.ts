@@ -15,7 +15,7 @@ import {
 
 describe("selected V1 resource budget", () => {
   it("defines one complete, immutable, observable registry", () => {
-    expect(resourceBudgetDefinitions).toHaveLength(78);
+    expect(resourceBudgetDefinitions).toHaveLength(79);
     expect(Object.isFrozen(resourceBudgetDefinitions)).toBe(true);
     expect(Object.isFrozen(defaultResourceBudget)).toBe(true);
     expect(Object.isFrozen(resourceBudgetDefinitionByKey)).toBe(true);
@@ -56,6 +56,7 @@ describe("selected V1 resource budget", () => {
       sse_queue_max_events: 256,
       sse_queue_max_bytes: 1_048_576,
       pairing_code_lifetime_ms: 300_000,
+      paired_device_lifetime_ms: 7_776_000_000,
       pair_claim_max_attempts_per_source: 10,
       pair_claim_max_attempts_global: 100,
       pair_claim_max_in_flight_per_source: 1,

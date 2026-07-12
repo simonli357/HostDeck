@@ -13,10 +13,12 @@ import {
   assertHostDeckRequestTrustPolicy,
   type CreateHostDeckRequestTrustPolicyInput,
   createHostDeckRequestTrustPolicy,
+  deriveHostDeckPairClaimSourceKey,
   evaluateHostDeckRequestTrust,
   HostDeckRequestTrustError,
   type HostDeckRequestTrustPolicy,
   type HostDeckRequestTrustProbe,
+  hostDeckPairClaimSourceKey,
   hostDeckRequestTrustContext,
   hostDeckRequestTrustSnapshot
 } from "./fastify-request-trust.js";
@@ -134,6 +136,21 @@ describe("Fastify request trust policy", () => {
       remoteAddress: "192.168.0.59",
       secure: true
     })).origin_kind).toBe("safe_no_origin");
+  });
+
+  it("derives one canonical domain-separated pair-claim source from admitted socket addresses", () => {
+    const ipv4 = deriveHostDeckPairClaimSourceKey("127.0.0.1");
+    expect(ipv4).toBe("sha256:d7cfc2cf0f158c30d50ca26c1e99a4cb15d692907d12fb69e2a18f93ea6e1adb");
+    expect(deriveHostDeckPairClaimSourceKey("::ffff:127.0.0.1")).toBe(ipv4);
+    expect(deriveHostDeckPairClaimSourceKey("0:0:0:0:0:0:0:1")).toBe(
+      deriveHostDeckPairClaimSourceKey("::1")
+    );
+    expect(deriveHostDeckPairClaimSourceKey("192.168.0.59")).not.toBe(ipv4);
+    expect(ipv4).toMatch(/^sha256:[a-f0-9]{64}$/u);
+
+    for (const candidate of [undefined, null, "", "not-an-ip", "127.0.0.1:80", "fe80::1%eth0", "0.0.0.0", "::"]) {
+      expectTrustError(() => deriveHostDeckPairClaimSourceKey(candidate), "invalid_origin");
+    }
   });
 
   it("rejects spoofed transport, non-loopback peers, and ambiguous request-target forms", () => {
@@ -287,11 +304,17 @@ describe("Fastify request trust gate", () => {
       })
     ).toThrow("must be created by createHostDeckRequestTrustPolicy");
     expect(() => hostDeckRequestTrustContext({} as FastifyRequest)).toThrow("unavailable before trust admission");
+    expect(() => hostDeckPairClaimSourceKey({} as FastifyRequest)).toThrow("unavailable before trust admission");
 
     const app = createTrustApp([
       routePlugin("context", (scope) => {
         scope.get("/context", { schema: { response: { 200: contextSchema } } }, async (request) => hostDeckRequestTrustContext(request));
         scope.post("/context", { schema: { response: { 200: contextSchema } } }, async (request) => hostDeckRequestTrustContext(request));
+        scope.get(
+          "/source",
+          { schema: { response: { 200: z.strictObject({ source_key: z.string() }) } } },
+          async (request) => ({ source_key: hostDeckPairClaimSourceKey(request) })
+        );
       })
     ]);
     await app.ready();
@@ -313,8 +336,13 @@ describe("Fastify request trust gate", () => {
         origin_kind: "local_non_browser",
         transport: "http"
       });
+      const source = await app.inject({ method: "GET", url: "/source" });
+      expect(source.statusCode, source.body).toBe(200);
+      expect(source.json()).toEqual({
+        source_key: "sha256:d7cfc2cf0f158c30d50ca26c1e99a4cb15d692907d12fb69e2a18f93ea6e1adb"
+      });
       expect(hostDeckRequestTrustSnapshot(app)).toEqual({
-        accepted_requests: 3,
+        accepted_requests: 4,
         rejected_forbidden_cors: 0,
         rejected_insecure_transport_requests: 0,
         rejected_invalid_origin_requests: 0

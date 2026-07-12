@@ -168,7 +168,7 @@ const summaryRequirements = {
     resultOnly: ["pairing_id"]
   },
   pair_claim: {
-    intent: ["permission", "client_label_present"],
+    intent: ["client_label_present"],
     success: ["permission", "device_created", "device_id"],
     resultOnly: ["device_created", "device_id"]
   },

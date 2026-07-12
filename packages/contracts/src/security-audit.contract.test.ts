@@ -39,6 +39,23 @@ describe("selected security audit contracts", () => {
     }
   });
 
+  it("records claim permission only after the pairing code proves it", () => {
+    const accepted = acceptedRecord("pair_claim", pairingActor(), hostTarget(), {
+      schema_version: 1,
+      client_label_present: true
+    });
+    expect(selectedSecurityAuditEventRecordSchema.parse(accepted)).toEqual(accepted);
+    expect(() =>
+      selectedSecurityAuditEventRecordSchema.parse(
+        terminalRecord("pair_claim", pairingActor(), hostTarget(), "succeeded", null, {
+          schema_version: 1,
+          device_created: true,
+          device_id: "client_security_created"
+        })
+      )
+    ).toThrow();
+  });
+
   it("admits read-only CSRF bootstrap for the same device but no other read-only security mutation", () => {
     expect(
       selectedSecurityAuditEventRecordSchema.parse(
@@ -60,6 +77,10 @@ describe("selected security audit contracts", () => {
   });
 
   it("requires truthful action-specific actors, canonical origins, and exact targets", () => {
+    const maximumHost = `${"a".repeat(63)}.${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(61)}`;
+    const maximumTrustOrigin = `https://${maximumHost}`;
+    expect(maximumTrustOrigin.length).toBeGreaterThan(253);
+    expect(selectedAuditOriginSchema.parse(maximumTrustOrigin)).toBe(maximumTrustOrigin);
     expect(
       selectedAuditActorSchema.parse({
         type: "pairing_client",
@@ -318,7 +339,7 @@ function pairRequestIntent() {
 }
 
 function pairClaimIntent() {
-  return { schema_version: 1, permission: "write", client_label_present: true } as const;
+  return { schema_version: 1, client_label_present: true } as const;
 }
 
 function cliActor() {

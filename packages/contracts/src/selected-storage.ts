@@ -42,7 +42,7 @@ const selectedRecordIdSchema = z.string().min(1).max(selectedStorageLimits.idLen
 export const selectedAuditOriginSchema = z
   .string()
   .min(1)
-  .max(253)
+  .max(512)
   .superRefine((value, context) => {
     try {
       const parsed = new URL(value);

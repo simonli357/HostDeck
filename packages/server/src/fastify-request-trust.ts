@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
-import { isIP } from "node:net";
+import { createHash } from "node:crypto";
+import { isIP, SocketAddress } from "node:net";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   createHostDeckErrorBody,
@@ -80,8 +81,13 @@ interface CorsResponseGuardState {
 }
 
 type RequestWithTrustContext = FastifyRequest & {
-  [requestTrustContext]?: HostDeckRequestTrustContext;
+  [requestTrustContext]?: AdmittedRequestTrust;
 };
+
+interface AdmittedRequestTrust {
+  readonly context: HostDeckRequestTrustContext;
+  readonly pairClaimSourceKey: string | null;
+}
 
 type ReplyWithCorsResponseGuard = FastifyReply & {
   [corsResponseGuard]?: CorsResponseGuardState;
@@ -211,14 +217,18 @@ export function installHostDeckRequestTrustGate(
     installRawCorsResponseGuard(request, reply, runtime, observeInternalError);
     try {
       const socket = request.raw.socket as typeof request.raw.socket & { readonly encrypted?: unknown };
+      const remoteAddress = socket.remoteAddress;
       const context = evaluateHostDeckRequestTrust(policy, {
         method: request.method,
         rawHeaders: request.raw.rawHeaders,
-        remoteAddress: socket.remoteAddress,
+        remoteAddress,
         requestTarget: request.raw.url ?? request.url,
         secure: socket.encrypted === true
       });
-      (request as RequestWithTrustContext)[requestTrustContext] = context;
+      (request as RequestWithTrustContext)[requestTrustContext] = Object.freeze({
+        context,
+        pairClaimSourceKey: tryDerivePairClaimSourceKey(remoteAddress)
+      });
       runtime.acceptedRequests = incrementCounter(runtime.acceptedRequests);
     } catch (error) {
       if (!(error instanceof HostDeckRequestTrustError)) throw error;
@@ -251,9 +261,31 @@ export function installHostDeckRequestTrustGate(
 }
 
 export function hostDeckRequestTrustContext(request: FastifyRequest): HostDeckRequestTrustContext {
-  const context = (request as RequestWithTrustContext)[requestTrustContext];
-  if (context === undefined) throw new Error("HostDeck request trust context is unavailable before trust admission.");
-  return context;
+  const admitted = (request as RequestWithTrustContext)[requestTrustContext];
+  if (admitted === undefined) throw new Error("HostDeck request trust context is unavailable before trust admission.");
+  return admitted.context;
+}
+
+export function hostDeckPairClaimSourceKey(request: FastifyRequest): string {
+  const admitted = (request as RequestWithTrustContext)[requestTrustContext];
+  if (admitted === undefined) throw new Error("HostDeck pair-claim source is unavailable before trust admission.");
+  if (admitted.pairClaimSourceKey === null) throw new HostDeckRequestTrustError("invalid_origin");
+  return admitted.pairClaimSourceKey;
+}
+
+export function deriveHostDeckPairClaimSourceKey(remoteAddress: unknown): string {
+  if (
+    typeof remoteAddress !== "string" ||
+    remoteAddress.length > 128 ||
+    !isBoundedVisibleAscii(remoteAddress, 128) ||
+    remoteAddress.includes("%")
+  ) {
+    throw new HostDeckRequestTrustError("invalid_origin");
+  }
+  const canonical = canonicalPairClaimPeer(remoteAddress);
+  if (canonical === null) throw new HostDeckRequestTrustError("invalid_origin");
+  const input = `hostdeck:pair-claim-source:v1\0${canonical.family}\0${canonical.address}`;
+  return `sha256:${createHash("sha256").update(input, "ascii").digest("hex")}`;
 }
 
 export function hostDeckRequestTrustSnapshot(app: FastifyInstance): HostDeckRequestTrustSnapshot {
@@ -597,6 +629,43 @@ function isLoopbackAddress(address: string | undefined): boolean {
   const mapped = address.toLowerCase().startsWith("::ffff:") ? address.slice(7) : address;
   if (isIP(mapped) !== 4) return false;
   return mapped.split(".")[0] === "127";
+}
+
+function tryDerivePairClaimSourceKey(remoteAddress: unknown): string | null {
+  try {
+    return deriveHostDeckPairClaimSourceKey(remoteAddress);
+  } catch {
+    return null;
+  }
+}
+
+function canonicalPairClaimPeer(
+  address: string
+): { readonly address: string; readonly family: "ipv4" | "ipv6" } | null {
+  const family = isIP(address);
+  try {
+    if (family === 4) {
+      const parsed = SocketAddress.parse(address);
+      if (parsed === undefined || parsed.family !== "ipv4" || parsed.address === "0.0.0.0") return null;
+      return { address: parsed.address, family: "ipv4" };
+    }
+    if (family !== 6) return null;
+    const parsed = SocketAddress.parse(`[${address}]`);
+    if (parsed === undefined || parsed.family !== "ipv6") return null;
+    const canonical = parsed.address.toLowerCase();
+    if (canonical === "::") return null;
+    if (canonical.startsWith("::ffff:")) {
+      const mapped = canonical.slice(7);
+      const mappedAddress = SocketAddress.parse(mapped);
+      if (mappedAddress === undefined || mappedAddress.family !== "ipv4" || mappedAddress.address === "0.0.0.0") {
+        return null;
+      }
+      return { address: mappedAddress.address, family: "ipv4" };
+    }
+    return { address: canonical, family: "ipv6" };
+  } catch {
+    return null;
+  }
 }
 
 function isLoopbackHostname(hostname: string): boolean {
