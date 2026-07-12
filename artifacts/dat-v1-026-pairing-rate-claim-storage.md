@@ -2,13 +2,13 @@
 
 Date: 2026-07-11
 
-Status: hard success criteria frozen before implementation.
+Status: complete. Implementation: `a28c837`.
 
 ## Scope
 
 Harden selected pairing-code issuance, durable per-source/global claim throttling, atomic one-winner claim ownership, and restart-safe cleanup. This leaf owns contracts, migration 011, SQLite transactions, credential generation at the storage boundary, and direct evidence. It does not own HTTP peer-source derivation, Host/Origin checks, in-flight request admission, cookies, response mapping, security audit orchestration, device revoke, or UI behavior.
 
-## Current Gaps
+## Pre-Implementation Gaps
 
 - The historical repository accepts caller-supplied six-character codes and arbitrary expiry, so it does not prove high-entropy or short-lived selected issuance.
 - Claim receives already-generated device/CSRF credentials before code validity is known and uses a deferred transaction with no durable rate state.
@@ -17,6 +17,14 @@ Harden selected pairing-code issuance, durable per-source/global claim throttlin
 - A spent pairing row records only `used_at`; after restart it cannot identify the device created by the winning claim.
 - Revoke is read/update/read outside one immediate transaction and is not proven against a concurrent claim.
 - Pairing chronology, real two-connection races, commit rollback, bounded stale-rate cleanup, corruption, restart, and raw main/WAL/SHM inspection are incomplete.
+
+## Implementation Result
+
+- Added the exact 78-field resource policy, canonical pairing/rate contracts, and forward-only migration 011 with selected SHA-256 provenance, unique device ownership, and bounded indexed source/global rate state.
+- Added selected CSPRNG issue, durable admission accounting, atomic claim, and immediate revoke transactions. Raw code, bearer, and CSRF values are returned only from frozen post-commit results.
+- Renamed every historical pairing mutation explicitly, rejected selected provenance on legacy claim/revoke, and left current historical route/CLI consumers on that deprecated surface until their selected owners replace them.
+- Added strict plain-data input snapshots, cause-free error normalization, canonical retry timestamps, selected owner revalidation, secret/metadata separation, pre-creation time rejection, and bounded cleanup under policy reduction.
+- Added contract, migration, direct repository, real worker-held SQLite ordering, rollback, restart, corruption, read-only, and main/WAL/SHM privacy matrices.
 
 ## Frozen Selected Contracts
 
@@ -87,14 +95,21 @@ Published migrations 001 through 010 remain byte-identical. Fresh and migration-
 | Corruption and unavailable storage | Invalid provenance/owner/chronology/count/timestamp/hash/foreign-key rows, closed/read-only storage, forced statement/update/commit failure, and malformed policy fail loudly without trusted or partial results. |
 | Ownership boundaries | No HTTP source derivation, in-flight limiter, Host/Origin/CORS, cookie, response, audit, device-revoke, or UI behavior is implemented or claimed. Legacy APIs remain explicit and cannot satisfy selected route ownership. |
 
-## Validation Plan
+## Validation
 
-- Contract tests for the two resource fields/invariants, source key, selected/legacy pairing rows, chronology, rate rows, and ephemeral result shapes.
-- Migration tests for fresh and 010 upgrade, byte-preserved prior rows, current constraints, owner foreign key/uniqueness, source/global tables/indexes, historical checksums, query plans, and whole-migration rollback.
-- Direct repository tests for issue, every admitted/rejected attempt outcome, exact source/global windows, source capacity/TTL, policy/time changes, entropy failures, collision/update/commit rollback, closed/read-only/corrupt storage, and restart.
-- Worker-backed real SQLite contention for same-code winners, different-source/global counters, and claim-versus-revoke ordering.
-- Main/WAL/SHM and serialized error inspection for every synthetic raw secret and peer-address sentinel.
-- Full storage/server/unit/contract/integration/web, typecheck/lint, scaffold/planning/exact-binding, frozen offline install, production audit, manual SQL/privacy/ownership review, and diff checks.
+- Focused selected repository plus migration: 34 tests passed, including exact/boundary/over windows, 64/128-key cleanup policy changes, failure accounting, safe saturation, deferred commit rollback, selected/legacy isolation, corruption, restart, raw-file privacy, and claim/revoke ordering under real worker-held SQLite writes.
+- Storage: 21 files and 197 tests passed. Server passed 305 tests with seven gated external smokes skipped.
+- Aggregate: 826 unit tests passed with 29 explicit external skips; 149 contract, 16 integration, and 14 web tests passed.
+- Typecheck, Biome/package exports, scaffold, planning graph, and exact Codex 0.144.0 binding checks passed. Planning reported 196 tasks, 84 requirements, 632 dependencies, and five queued tasks after closure.
+- Frozen offline install passed. Production audit reported zero known vulnerabilities across 140 production dependencies.
+- Migration 011 checksum is `6491026ff2fd23c5346273dbda5b3f5f6927d7c8b953b403ba512b5af83db927`; all 11 published migration checksums are locked by test.
+- Manual SQL review confirmed byte-preserved legacy copying, exact selected SHA-256/chronology/owner constraints, foreign-key and uniqueness enforcement, positive-safe counters, bounded indexed cleanup selection, singleton global state, and whole-migration rollback.
+- Manual privacy/ownership review found no raw credential or peer-address persistence/error path and no HTTP, in-flight, cookie, audit, device-revoke, or UI ownership leak. Diff checks passed.
+- No live listener, browser, Android, or Codex runtime evidence is claimed because this leaf changes only headless contracts and SQLite storage.
+
+## Remaining Gaps
+
+None within this leaf. Public source derivation, in-flight admission, cookie issuance, audit orchestration, revoke authority, and route/UI behavior remain with the downstream owners below.
 
 ## Reuse Assessment
 

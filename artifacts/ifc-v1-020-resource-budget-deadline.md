@@ -27,14 +27,14 @@ Define one strict V1 resource registry for the selected HTTP, SSE, admission, Co
 
 ## Selected Policy
 
-The executable source of truth is `packages/contracts/src/resource-policy.ts`. It exports an immutable 59-entry definition registry, exact-key Zod schema, reviewed default object, and key lookup. Every observation name is derived as `hostdeck.resource.<key>`; owner/action/code metadata is part of the public contract rather than comments.
+The executable source of truth is `packages/contracts/src/resource-policy.ts`. It now exports an immutable 78-entry definition registry, exact-key Zod schema, reviewed default object, and key lookup. `IFC-V1-020` introduced the original 59 entries; downstream owning leaves added bounded control, projection, approval, usage, skills, and pairing fields without creating a second policy owner. Every observation name is derived as `hostdeck.resource.<key>`; owner/action/code metadata is part of the public contract rather than comments.
 
 | Area | Entries | Reviewed default posture |
 | --- | ---: | --- |
 | HTTP | 13 | 64 KiB body; 16 KiB/64 headers; 2 KiB URL; 128-byte route parameter; 10 s headers, 15 s receive, 30 s route, 60 s idle, 5 s keep-alive; 64 connections/in-flight; 1,000 requests/socket. |
 | SSE | 11 | 15 s heartbeat; 32 global, 8/device, 4/session subscribers; 256-event/1 MiB queue; 64 KiB event; 2,000-event/8 MiB replay; 2 s disconnect and shutdown cleanup. |
-| Admission | 11 | 60 s pair/mutation windows; 10 pair attempts/source, 1/source and 4 global pair claims; 60 mutations/device, 2/device, 1/target and 16 global in flight; 1,024 tracked keys retained 10 minutes. |
-| Codex protocol | 15 | 5 s connect, 10 s handshake/read, 15 s mutation, 30 s start, 2 s close; 15 s/5 s heartbeat; 1 MiB frame/2 MiB buffer; 32 client and 16 server requests; 100 x 100 pages and 500 loaded exact reads. |
+| Admission | 13 | 60 s pair/mutation windows; 5 min pairing-code lifetime; 10 pair attempts/source and 100 global; 1/source and 4 global pair claims; 60 mutations/device, 2/device, 1/target and 16 global in flight; 1,024 tracked keys retained 10 minutes. |
+| Codex protocol/control | 32 | Transport, broker, event, pagination, model, collaboration, turn-control, approval, usage, compact, and skills bounds remain explicit and owner-mapped. |
 | Lifecycle | 3 | 60 s startup, 10 s shutdown, 2 s cleanup step. |
 | CLI | 6 | 5 s connect, 35 s request, 64 KiB request, 1 MiB response, 45 s stream idle, 4 in flight. |
 
