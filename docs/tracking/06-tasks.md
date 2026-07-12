@@ -15,7 +15,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `DAT-V1-027` Complete security-action audit storage | ready | none | Unlocks the shared security mutation audit executor and keeps secrets out of audit state. |
+| 1 | `DAT-V1-027` Complete security-action audit storage | in_progress | none | Unlocks the shared security mutation audit executor and keeps secrets out of audit state. |
 | 2 | `DAT-V1-026` Implement pairing rate and claim concurrency storage | ready | none | Establishes bounded one-winner pairing state before the claim route. |
 | 3 | `DAT-V1-028` Implement atomic device revoke storage | ready | none | Invalidates bearer and CSRF authority together before the revoke route. |
 | 4 | `DAT-V1-025` Implement bounded non-secret device listing | ready | none | Supplies the safe device-read model after security-critical mutation storage. |

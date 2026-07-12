@@ -190,4 +190,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `DAT-V1-021` implementation and evidence are pushed as `e10a6a3`; owner docs close the task and make `DAT-V1-025` to `DAT-V1-029` ready.
 - `IFC-V1-017` request-trust implementation and evidence are pushed as `8aef5e8`; owner docs advance the queue to `DAT-V1-029` while cookie authentication remains blocked on that repository.
 - `DAT-V1-029` implementation and evidence are pushed as `cb60c0a`; owner docs advance the queue to `DAT-V1-027` and make `IFC-V1-026` cookie authentication ready.
-- Next action: harden and implement `DAT-V1-027` security-action audit storage, then continue the dependency-ordered device security repositories. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
+- Next action: implement the frozen `DAT-V1-027` security-action audit catalog, migration, strict summaries, and lifecycle/privacy matrix, then continue the dependency-ordered device security repositories. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.

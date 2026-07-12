@@ -48,7 +48,7 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | Authentication last-used update storage | `DAT-V1-029` | Complete; strict chronology, immediate authority/touch, monotonic conflict/no-op behavior, update/commit rollback, real race/revoke ordering, restart, index, and privacy evidence pass. |
 | Pair claim and rate/concurrency storage | `DAT-V1-026` | Ready after CSRF-capable pairing storage. |
 | Atomic device revoke and CSRF invalidation | `DAT-V1-028` | Ready after CSRF-capable device storage. |
-| Security-action audit storage completion | `DAT-V1-027` | Ready after CSRF and audit state-machine leaves. |
+| Security-action audit storage completion | `DAT-V1-027` | In progress; ten-action catalog, migration preservation, truthful actor/target, strict versioned summary, secret rejection, restart/orphan/retention, and manifest-closure criteria are frozen. |
 | Reopened module hardening | `DAT-V1-091` | Blocked by `DAT-V1-018` to `DAT-V1-030`. |
 
 Owning backlog: `docs/tracking/backlog/local-state-auth-audit.md`.
