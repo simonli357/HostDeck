@@ -2,22 +2,31 @@
 
 Date: 2026-07-12
 
-Status: hard-success criteria frozen; execution pending.
+Status: complete.
 
 ## Purpose
 
 Implement the selected `POST /api/v1/access/csrf` bootstrap route and one reusable browser-write CSRF verifier over the completed request-authentication context, auth-device rotation state, route manifest, and security-mutation audit executor. A browser reload must recover writable posture from its HttpOnly device cookie without exposing the bearer token, while stale, foreign, revoked, expired, malformed, or read-only authority must not pass a selected mutation gate.
 
+## Implementation Result
+
+- Added strict exported bootstrap request/response, raw-token, header-name, and canonical generation contracts without a dependency or historical trust-state fallback.
+- Added one contextual selected CSRF repository over immediate transactions. Rotation and write authorization re-read exact device state by authenticated context id/generation, validate expiry/revocation/permission/hash/time, update atomically, return frozen bounded results, and retain no raw bearer or durable raw CSRF.
+- Added one branded CSRF policy, raw-header verifier, non-secret authorization receipt, saturating count-only diagnostics, and exact `selected-csrf-bootstrap` Fastify registration. The route locks the complete manifest row, rejects nonempty query/body drift, authenticates before route validation, and uses only the branded security executor.
+- Added creator branding to the security mutation audit executor so a frozen duck-typed object cannot fabricate accepted/terminal proof or a response. The route snapshots and invokes only a creator-owned executor.
+- Added route-owned pre-admission cache policy in the Fastify factory. Exact bootstrap-path media, authentication, query, body, audit, storage, and success responses receive `Cache-Control: no-store` plus `Pragma: no-cache`; success never emits `Set-Cookie`.
+- Added coherent generation/device/time proof against pre-call values, transient write-token scrubbing, one-winner stale-generation handling, fixed failed/incomplete mappings, and durable-rotation counting even when terminal audit prevents token delivery.
+
 ## Architecture Resolution
 
 `IFC-V1-026` intentionally clears the raw device bearer from private request state as soon as cookie authentication resolves. The completed storage rotation and historical browser-write methods accept the raw bearer. This task must not weaken the earlier privacy boundary by retaining, copying, decorating, returning, or re-exposing that bearer.
 
-Add a narrowly scoped authenticated-device CSRF repository capability instead:
+The selected implementation adds a narrowly scoped authenticated-device CSRF repository capability instead:
 
 - input comes only from a validated paired request context and contains selected device id, exact expected CSRF generation, operation time, and raw CSRF token only for write verification;
 - each immediate transaction re-reads the device by id and revalidates complete row shape, expiry, revocation, permission, expected generation, and token hash before mutation or trusted return;
 - bootstrap rotation generates a fresh selected 32-byte token, persists only its hash plus generation/time, and returns raw token only after commit;
-- browser-write verification advances `last_used_at` monotonically only after every authority and CSRF check passes;
+- browser-write verification advances its own `last_used_at` observation monotonically only after every authority and CSRF check passes; the earlier cookie-authentication touch remains owned by `IFC-V1-026`;
 - the older bearer-based repository methods remain for their existing contracts and tests, but selected Fastify code uses only the authenticated-device capability after cookie authentication.
 
 This is an application-boundary capability, not a general id-as-authentication API. No browser-controlled device id is accepted; the device id and generation come exclusively from the private validated request context.
@@ -82,7 +91,7 @@ Authentication or malformed-body rejection before a trusted actor and valid oper
 | --- | --- | --- |
 | Cookie/context rejection | 401/403 fixed permission state | No body operation, audit, entropy, rotation, or write authorization. |
 | Body/header syntax | 400 validation for body; fixed CSRF denial for device-write headers | No contextual repository call, audit, lock, target, or dispatch. |
-| Stale/wrong CSRF | 403 `permission_denied` | No `last_used_at` change and no downstream work. |
+| Stale/wrong CSRF | 403 `permission_denied` | No contextual-CSRF authorization touch beyond the prior cookie-authentication observation, and no downstream work. |
 | Concurrent newer authority | 409 `operation_conflict` or fixed revoked/CSRF denial by winner | Greatest committed generation/revoke/last-used state remains. |
 | Audit preflight | Typed audit/storage error with executor retry truth | No rotation. |
 | Known rotation failure | Typed failed result after terminal audit | No success response; no partial generation/hash update. |
@@ -90,13 +99,15 @@ Authentication or malformed-body rejection before a trusted actor and valid oper
 | Terminal audit failure | Typed error exposing mutation/audit state only | Rotation may be committed; no contradictory client success or auto-rotation. |
 | Response preparation/serialization | Typed internal failure after terminal success where proven | Durable rotation/audit remain; no token delivery claim or retry. |
 
-## Evidence Plan
+## Validation
 
-- Add selected CSRF request/response/header contracts and direct contract tests.
-- Add authenticated-device contextual CSRF repository methods with direct rollback, race, restart, query-plan, and raw-file tests.
-- Add one branded CSRF policy/header verifier and the fixed Fastify bootstrap registration with hostile constructor/port/executor/auth/header/audit/response matrices.
-- Run real SQLite plus real raw HTTP evidence for cache headers, duplicates, cookie/header privacy, rotation ordering, write verification, and revoke races.
-- Re-run affected auth/audit/device/manifest/server/storage suites and every workspace validation/supply-chain gate before closure.
+- Direct selected route matrix: 11 tests pass across hostile constructors, creator branding, detached/scrubbed ports, local-admin/read/write authority, exact headers, strict route/query/body/method/path behavior, cache policy, real SQLite bootstrap/write/restart/privacy, accepted/terminal audit failures, failed/incomplete outcomes, stale-generation races, fixed mappings, hostile raw arrays, duplicate raw headers, and real raw bootstrap HTTP.
+- Focused CSRF route plus security executor passed 24 tests; contextual storage passed 8 direct tests and CSRF contracts passed 4. Full storage passed 226 tests; full server passed 347 with 7 explicit external smokes skipped.
+- Aggregate unit passed 897 tests with 29 explicit external skips; contract 166, integration 16, and web 14 passed. One loaded aggregate attempt hit an unrelated 5-second startup-retention timeout; the isolated test passed in 600 ms and the complete rerun passed all 897 tests.
+- Root and all nine package typechecks passed. Biome/package exports passed over 305 files and 9 packages; scaffold passed 9 packages/18 scripts. Planning passed 196 tasks, 84 requirements, 633 dependencies, and 8 queued; exact Codex 0.144.0 binding passed 671 files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`.
+- Frozen offline install passed. Production audit reports zero vulnerabilities across 140 dependencies. Production licenses remain MIT 101, ISC 9, BSD-3-Clause 5, BlueOak-1.0.0 5, Apache-2.0 3, 0BSD 1, `(BSD-2-Clause OR MIT OR Apache-2.0)` 1, and `(MIT OR WTFPL)` 1.
+- Manual contract/order/failure/privacy review confirms no bearer retention, no raw secret in audit/receipt/observer/SQLite bytes, no forged audit executor, no query/path fallback, no auto-retry, exact durable pending truth after terminal-audit failure, and no ownership claim over unfinished pair/claim, lock, revoke, LAN, SSE, UI, or release work.
+- Criteria: `bfa99f2`. Contextual contracts/storage: `6f09dcd`. Server boundary: `08cb24d`. Pre-admission cache correction: `7d8803a`. Raw bootstrap evidence: `61c113d`.
 
 ## Reuse And Dependency Decision
 
