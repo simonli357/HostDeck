@@ -21,7 +21,7 @@ describe("real HostDeck HTTP resource limits", () => {
     try {
       const exact = await rawExchange(
         probe.port,
-        requestWithHeaderCount(16),
+        requestWithHeaderCount(16, probe.port),
         2_000
       );
       expect(statusCodes(exact.text)).toEqual([200]);
@@ -29,7 +29,7 @@ describe("real HostDeck HTTP resource limits", () => {
 
       const overCount = await rawExchange(
         probe.port,
-        requestWithHeaderCount(17),
+        requestWithHeaderCount(17, probe.port),
         2_000
       );
       expect(statusCodes(overCount.text)).toEqual([431]);
@@ -44,7 +44,7 @@ describe("real HostDeck HTTP resource limits", () => {
 
       const exactBytes = await rawExchange(
         probe.port,
-        requestWithNodeHeaderBytes(4_096),
+        requestWithNodeHeaderBytes(4_096, probe.port),
         2_000
       );
       expect(statusCodes(exactBytes.text)).toEqual([200]);
@@ -52,7 +52,7 @@ describe("real HostDeck HTTP resource limits", () => {
 
       const overBytes = await rawExchange(
         probe.port,
-        requestWithNodeHeaderBytes(4_097),
+        requestWithNodeHeaderBytes(4_097, probe.port),
         2_000
       );
       expect(statusCodes(overBytes.text)).toEqual([431]);
@@ -73,7 +73,7 @@ describe("real HostDeck HTTP resource limits", () => {
     try {
       const slowHeaders = await rawExchange(
         probe.port,
-        "GET /probe HTTP/1.1\r\nHost: 127.0.0.1",
+        `GET /probe HTTP/1.1\r\n${configuredHostHeader(probe.port)}`,
         3_500
       );
       expect(statusCodes(slowHeaders.text)).toEqual([408]);
@@ -83,7 +83,7 @@ describe("real HostDeck HTTP resource limits", () => {
 
       const slowBody = await rawExchange(
         probe.port,
-        "POST /upload HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{",
+        `POST /upload HTTP/1.1\r\n${configuredHostHeader(probe.port)}\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{`,
         3_500
       );
       expect(statusCodes(slowBody.text)).toEqual([408]);
@@ -105,7 +105,7 @@ describe("real HostDeck HTTP resource limits", () => {
     try {
       const pipelined = await rawExchange(
         probe.port,
-        "GET /probe HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /probe HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /probe HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+        `GET /probe HTTP/1.1\r\n${configuredHostHeader(probe.port)}\r\n\r\nGET /probe HTTP/1.1\r\n${configuredHostHeader(probe.port)}\r\n\r\nGET /probe HTTP/1.1\r\n${configuredHostHeader(probe.port)}\r\nConnection: close\r\n\r\n`,
         2_000
       );
       expect(statusCodes(pipelined.text)).toEqual([200, 200, 503]);
@@ -114,7 +114,7 @@ describe("real HostDeck HTTP resource limits", () => {
 
       const keepAlive = await rawExchange(
         probe.port,
-        "GET /probe HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
+        `GET /probe HTTP/1.1\r\n${configuredHostHeader(probe.port)}\r\n\r\n`,
         2_500
       );
       expect(statusCodes(keepAlive.text)).toEqual([200]);
@@ -142,7 +142,7 @@ describe("real HostDeck HTTP resource limits", () => {
       const upload = await connectSocket(probe.port);
       sockets.add(upload);
       upload.write(
-        "POST /upload HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{"
+        `POST /upload HTTP/1.1\r\n${configuredHostHeader(probe.port)}\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{`
       );
       await waitUntil(() => hostDeckFastifyResourceSnapshot(probe.service.app).in_flight_requests === 1);
       upload.destroy();
@@ -175,7 +175,7 @@ describe("real HostDeck HTTP resource limits", () => {
     try {
       const response = rawExchange(
         probe.port,
-        "GET /hang HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+        `GET /hang HTTP/1.1\r\n${configuredHostHeader(probe.port)}\r\nConnection: close\r\n\r\n`,
         3_000
       );
       await waitUntil(() => probe.handlerCalls === 1);
@@ -198,7 +198,7 @@ describe("real HostDeck HTTP resource limits", () => {
     const first = await startProbe(budget, { events, port });
     const upload = await connectSocket(port);
     upload.write(
-      "POST /upload HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{"
+      `POST /upload HTTP/1.1\r\n${configuredHostHeader(port)}\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{`
     );
     await waitUntil(() => hostDeckFastifyResourceSnapshot(first.service.app).in_flight_requests === 1);
 
@@ -224,7 +224,7 @@ describe("real HostDeck HTTP resource limits", () => {
     try {
       const response = await rawExchange(
         port,
-        "GET /probe HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+        `GET /probe HTTP/1.1\r\n${configuredHostHeader(port)}\r\nConnection: close\r\n\r\n`,
         2_000
       );
       expect(statusCodes(response.text)).toEqual([200]);
@@ -384,14 +384,14 @@ function shutdownBudget(): ResourceBudget {
   });
 }
 
-function requestWithHeaderCount(count: number): string {
-  const headers = ["Host: 127.0.0.1", "Connection: close"];
+function requestWithHeaderCount(count: number, port: number): string {
+  const headers = [configuredHostHeader(port), "Connection: close"];
   while (headers.length < count) headers.push(`X-Probe-${headers.length}: value`);
   return `GET /probe HTTP/1.1\r\n${headers.join("\r\n")}\r\n\r\n`;
 }
 
-function requestWithNodeHeaderBytes(bytes: number): string {
-  const host = "Host: 127.0.0.1";
+function requestWithNodeHeaderBytes(bytes: number, port: number): string {
+  const host = configuredHostHeader(port);
   const connection = "Connection: close";
   const paddingPrefix = "X-Pad: ";
   const fixedBytes = [host, connection, paddingPrefix].reduce(
@@ -401,6 +401,10 @@ function requestWithNodeHeaderBytes(bytes: number): string {
   if (!Number.isSafeInteger(bytes) || bytes < fixedBytes) throw new TypeError("Invalid Node header byte fixture size.");
   const headers = [host, connection, `${paddingPrefix}${"x".repeat(bytes - fixedBytes)}`];
   return `GET /probe HTTP/1.1\r\n${headers.join("\r\n")}\r\n\r\n`;
+}
+
+function configuredHostHeader(port: number): string {
+  return `Host: 127.0.0.1:${port}`;
 }
 
 interface RawTranscript {

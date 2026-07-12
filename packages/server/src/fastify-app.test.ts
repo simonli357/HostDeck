@@ -19,6 +19,13 @@ import {
   hostDeckRequestDeadline
 } from "./fastify-app.js";
 import { HostDeckHttpError, type HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
+
+const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
+  allowedOrigins: ["http://localhost"],
+  mode: "loopback",
+  transport: "http"
+});
 
 describe("side-effect-free HostDeck Fastify app factory", () => {
   it("applies local Zod validation, stable global errors, explicit plugins, and request ids", async () => {
@@ -387,6 +394,7 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
     expect(() =>
       createHostDeckFastifyApp({
         observeInternalError: undefined,
+        requestTrustPolicy: loopbackTrustPolicy,
         resourceBudget: defaultResourceBudget,
         routePlugins: []
       } as unknown as Parameters<typeof createHostDeckFastifyApp>[0])
@@ -557,6 +565,7 @@ function createTestApp(
 ) {
   return createHostDeckFastifyApp({
     observeInternalError: (observation) => observations.push(observation),
+    requestTrustPolicy: loopbackTrustPolicy,
     resourceBudget,
     routePlugins
   });

@@ -14,6 +14,7 @@ import {
   type HostDeckRoutePluginRegistration
 } from "./fastify-app.js";
 import type { HostDeckInternalErrorObserver } from "./fastify-error-policy.js";
+import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import { fastifyResourceOptionsFromBudget } from "./fastify-resource-options.js";
 
 export const hostDeckFastifyLifecyclePhases = [
@@ -219,6 +220,11 @@ export async function startHostDeckFastifyLifecycle<TContext>(
     stage = "app";
     app = createHostDeckFastifyApp({
       observeInternalError: parsed.observeInternalError,
+      requestTrustPolicy: createHostDeckRequestTrustPolicy({
+        allowedOrigins: [baseUrlForBind(owner.bind).origin],
+        mode: "loopback",
+        transport: owner.bind.transport
+      }),
       resourceBudget: parsed.resourceBudget,
       routePlugins
     });

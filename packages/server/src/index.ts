@@ -14,6 +14,7 @@ export * from "./codex-usage-control-service.js";
 export * from "./fastify-app.js";
 export * from "./fastify-error-policy.js";
 export * from "./fastify-host-lifecycle.js";
+export * from "./fastify-request-trust.js";
 export * from "./fastify-resource-options.js";
 export * from "./fastify-sse-transport.js";
 export * from "./fastify-static-boundary.js";

@@ -13,11 +13,18 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createHostDeckFastifyApp, hostDeckFastifyResourceSnapshot } from "./fastify-app.js";
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import {
   createHostDeckSseTransportRegistration,
   type HostDeckSseFailureObservation,
   type HostDeckSseSourceInput
 } from "./fastify-sse-transport.js";
+
+const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
+  allowedOrigins: ["http://localhost"],
+  mode: "loopback",
+  transport: "http"
+});
 
 const sessionId = "sess_sse_transport_01";
 
@@ -287,6 +294,7 @@ describe("bounded Fastify SSE transport", () => {
     };
     const app = createHostDeckFastifyApp({
       observeInternalError: () => undefined,
+      requestTrustPolicy: loopbackTrustPolicy,
       resourceBudget: budget,
       routePlugins: [
         createHostDeckSseTransportRegistration({
@@ -494,6 +502,7 @@ function createSseApp(
 ) {
   return createHostDeckFastifyApp({
     observeInternalError: (observation) => internal.push(observation),
+    requestTrustPolicy: loopbackTrustPolicy,
     resourceBudget,
     routePlugins: [
       createHostDeckSseTransportRegistration({
@@ -571,7 +580,7 @@ async function openPausedResponse(url: string): Promise<{
   response: IncomingMessage;
 }> {
   return new Promise((resolve, reject) => {
-    const request = httpGet(url, { headers: { accept: "text/event-stream" } });
+    const request = httpGet(url, { headers: { accept: "text/event-stream", host: "localhost" } });
     request.once("error", reject);
     request.once("response", (response) => {
       response.pause();
@@ -582,7 +591,7 @@ async function openPausedResponse(url: string): Promise<{
 
 function readSseResponse(url: string): Promise<{ readonly body: string; readonly status: number }> {
   return new Promise((resolve, reject) => {
-    const request = httpGet(url, { headers: { accept: "text/event-stream" } });
+    const request = httpGet(url, { headers: { accept: "text/event-stream", host: "localhost" } });
     request.once("error", reject);
     request.once("response", (response) => {
       let body = "";

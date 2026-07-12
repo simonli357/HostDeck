@@ -19,6 +19,11 @@ import {
   installHostDeckErrorPolicy,
   sendHostDeckError
 } from "./fastify-error-policy.js";
+import {
+  assertHostDeckRequestTrustPolicy,
+  type HostDeckRequestTrustPolicy,
+  installHostDeckRequestTrustGate
+} from "./fastify-request-trust.js";
 import { fastifyResourceOptionsFromBudget } from "./fastify-resource-options.js";
 import {
   assertHostDeckApiResponseSchemas,
@@ -54,6 +59,7 @@ export interface HostDeckRoutePluginRegistration {
 
 export interface CreateHostDeckFastifyAppInput {
   readonly resourceBudget: ResourceBudget;
+  readonly requestTrustPolicy: HostDeckRequestTrustPolicy;
   readonly routePlugins: readonly HostDeckRoutePluginRegistration[];
   readonly observeInternalError: HostDeckInternalErrorObserver;
 }
@@ -99,6 +105,7 @@ type RequestWithRuntimeState = import("fastify").FastifyRequest & {
 export function createHostDeckFastifyApp(input: CreateHostDeckFastifyAppInput): HostDeckFastifyInstance {
   assertFactoryInput(input);
   assertResolvedResourceBudget(input.resourceBudget);
+  assertHostDeckRequestTrustPolicy(input.requestTrustPolicy);
   const registrations = parseRoutePluginRegistrations(input.routePlugins);
   const resourceOptions = fastifyResourceOptionsFromBudget(input.resourceBudget);
   const app = Fastify({
@@ -140,6 +147,7 @@ export function createHostDeckFastifyApp(input: CreateHostDeckFastifyAppInput): 
   app.removeContentTypeParser("text/plain");
   installRoutePolicy(app, runtime);
   installRequestPolicy(app, runtime);
+  installHostDeckRequestTrustGate(app, input.requestTrustPolicy, input.observeInternalError);
   installNotFoundPolicy(app, runtime);
 
   for (const registration of registrations) {
@@ -338,7 +346,7 @@ function assertFactoryInput(input: unknown): asserts input is CreateHostDeckFast
     throw new TypeError("HostDeck Fastify app input must be an object.");
   }
   const keys = Object.keys(input).sort();
-  const expected = ["observeInternalError", "resourceBudget", "routePlugins"];
+  const expected = ["observeInternalError", "requestTrustPolicy", "resourceBudget", "routePlugins"];
   if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
     throw new TypeError("HostDeck Fastify app input fields are invalid.");
   }

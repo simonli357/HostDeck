@@ -15,11 +15,18 @@ import { defaultResourceBudget } from "@hostdeck/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { createHostDeckFastifyApp, hostDeckFastifyResourceSnapshot } from "./fastify-app.js";
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import {
   type CreateHostDeckStaticBoundaryRegistrationInput,
   createHostDeckStaticBoundaryRegistration,
   hostDeckStaticBoundaryLimits
 } from "./fastify-static-boundary.js";
+
+const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
+  allowedOrigins: ["http://localhost"],
+  mode: "loopback",
+  transport: "http"
+});
 
 const indexBody = "<!doctype html><html><body>HOSTDECK_STATIC_INDEX_SENTINEL</body></html>";
 const javascriptBody = "globalThis.__hostdeckStaticFixture = true;\n";
@@ -243,9 +250,10 @@ describe("explicit Fastify static-dashboard boundary", () => {
       ];
       for (const url of deniedTargets) {
         const response = await app.inject({ method: "GET", url });
-        expect([400, 404], `${url} returned ${response.statusCode}`).toContain(response.statusCode);
+        expect([400, 403, 404], `${url} returned ${response.statusCode}`).toContain(response.statusCode);
         expect(response.headers["content-type"], url).toContain("application/json");
         expect(response.body, url).not.toContain(indexBody);
+        if (response.statusCode === 403) expect(response.json()).toMatchObject({ error: { code: "invalid_origin" } });
         expect(response.body, url).not.toContain("STATIC_SECRET_SENTINEL");
         expect(response.body, url).not.toContain("LATE_STATIC_SENTINEL");
         expect(response.body, url).not.toContain("OUTSIDE_STATIC_SENTINEL");
@@ -361,6 +369,7 @@ function createStaticApp(
 ) {
   return createHostDeckFastifyApp({
     observeInternalError: (observation) => observations.push(observation),
+    requestTrustPolicy: loopbackTrustPolicy,
     resourceBudget: defaultResourceBudget,
     routePlugins: [registration]
   });
@@ -452,7 +461,7 @@ interface RawHttpResponse {
 async function rawHttpGet(port: number, path: string): Promise<RawHttpResponse> {
   return new Promise((resolve, reject) => {
     const request = httpRequest(
-      { host: "127.0.0.1", method: "GET", path, port },
+      { headers: { host: "localhost" }, host: "127.0.0.1", method: "GET", path, port },
       (response) => {
         const chunks: Buffer[] = [];
         response.on("data", (chunk: Buffer) => chunks.push(chunk));

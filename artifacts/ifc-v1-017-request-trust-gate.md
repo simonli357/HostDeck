@@ -2,7 +2,7 @@
 
 Date: 2026-07-11
 
-Status: hard success criteria frozen before implementation.
+Status: implementation and validation complete; owner-doc closure pending.
 
 ## Scope
 
@@ -50,6 +50,27 @@ Each origin must be a canonical bare origin with no wildcard, credentials, path 
 - Adjacent app/SSE/static/lifecycle/resource regressions to prove every route surface remains gated and resource accounting settles.
 - Real loopback HTTP/raw-socket matrix for parser-versus-hook boundaries and generated stable errors.
 - Root typecheck/lint, unit/contract/integration/web, planning/scaffold/binding, frozen offline install, production audit, structural dependency review, and manual hook/order/privacy inspection.
+
+## Outcome
+
+- `createHostDeckRequestTrustPolicy` accepts only one exact plain configuration, copies and freezes one to eight canonical origins, binds them to one mode/transport, rejects LAN HTTP and unsafe host/origin forms, and brands the result so the app factory cannot accept a forged lookalike.
+- The headless evaluator validates an exact bounded probe, derives transport only from `socket.encrypted`, rejects forwarding headers and non-origin request targets, requires one canonical configured Host, applies exact Origin/missing-Origin policy, and returns only one frozen configured trust context.
+- `createHostDeckFastifyApp` now requires the parsed policy and installs one root gate across API, SSE, static, and not-found surfaces while preserving `trustProxy: false`. The selected lifecycle derives its current exact loopback HTTP origin from the verified bind before readiness/listen.
+- Stable rejections use redacted `invalid_origin`/403 or `insecure_transport`/426 envelopes and generated request ids. Saturating snapshots retain only accepted, invalid-origin, insecure-transport, and forbidden-CORS counters.
+- Same-origin CORS remains disabled without a dependency. Preflight rejects. Handler, child `onSend`, `reply.header(s)`, raw `setHeader`/`appendHeader`/`setHeaders`, and raw `writeHead` attempts cannot emit `Access-Control-*` or `Timing-Allow-Origin`; each becomes one observed bounded internal-error response with the would-be success body replaced. Throwing/rejecting observers cannot alter or leak that response.
+- Real loopback raw sockets prove exact configured Host success, redacted foreign Origin/forwarding/absolute-form/network-path rejection, Node-level missing-Host refusal, hook-level duplicate-Host refusal, and no route dispatch. LAN HTTPS same-origin and plaintext refusal are proven headlessly because production LAN listener composition remains `IFC-V1-031`.
+
+## Validation
+
+- Direct request-trust policy/evaluator/hook/raw-listener matrix: 1 file, 12 passed.
+- Full server: 35 files and 303 tests passed; 7 explicit external smoke files/tests skipped.
+- Unit: 87 files passed and 16 expected external files skipped; 783 tests passed and 29 skipped.
+- Contract: 14 files, 139 passed; integration: 2 files, 16 passed; web: 2 files, 14 passed.
+- Root typecheck passed. Lint/exports passed for 273 files and 9 packages. Scaffold passed for 9 packages and 18 root scripts.
+- Planning passed with 196 tasks, 84 requirements, 631 dependencies, and 7 queued entries.
+- Exact isolated Codex 0.144.0 binding passed for 671 files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`.
+- Frozen offline install passed; production dependency audit reported no known vulnerabilities.
+- Manual composition/privacy review passed: the root gate precedes route validation/handlers and body parsing, configured rather than raw authority enters context, response guards cover later child-hook/native mutation, no CORS package exists, no rejected input is reflected or retained, and `git diff --check` passes.
 
 ## Remaining Ownership
 
