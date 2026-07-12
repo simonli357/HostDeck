@@ -2,13 +2,13 @@
 
 Date: 2026-07-11
 
-Status: hard success criteria frozen before implementation.
+Status: complete. Implementation: `133080f`.
 
 ## Scope
 
 Implement one bounded read-only storage projection for paired-device management. This leaf owns the non-secret item/page contracts, explicit keyset pagination, one-statement SQLite snapshot, corruption handling, and direct storage evidence. It does not own HTTP query/cursor encoding, request authentication/device-admin policy, UI ordering/presentation, revoke actions, audit, SSE authorization, or pairing.
 
-## Current Gaps
+## Pre-Implementation Gaps
 
 - `AuthDeviceRepository.list()` is unbounded and returns complete auth-device rows, including bearer and CSRF hashes plus CSRF generation/rotation state.
 - No selected list item/page/input contract, maximum page size, cursor rule, or frozen result exists.
@@ -16,6 +16,14 @@ Implement one bounded read-only storage projection for paired-device management.
 - Large datasets, exact/over limits, invalid cursors, empty/end pages, duplicate-free traversal, read-only/closed storage, corrupt rows, restart, and query-plan behavior are not proven.
 - Concurrent revoke has no explicit page-snapshot evidence, and current parse failures can retain native Zod/SQLite causes.
 - The historical hash-bearing `list` name is not explicit enough to prevent selected-route misuse.
+
+## Implementation Result
+
+- Added strict selected input, item, and page contracts with an exported 100-item maximum, selected device-id syntax, canonical lifecycle timestamps, ascending-id and continuation invariants, and exact non-secret fields.
+- Added `createDeviceListingRepository` with exact plain-data input capture, one `limit + 1` primary-key statement, validation of every fetched full auth row before slicing, and a frozen projected page.
+- Added fixed cause-free input, corruption, and storage-failure errors while preserving read-only operation and rejecting closed/unavailable storage without a partial result.
+- Renamed the historical unbounded full-record method to `listLegacy` with an explicit deprecation marker and classified selected listing errors without adding a route or authentication behavior.
+- Added direct boundary, 250-row traversal, hostile-input, corrupt-lookahead, read-only/closed, WAL restart/privacy, worker-held concurrent revoke, one-statement, and query-plan evidence.
 
 ## Frozen Selected Contract
 
@@ -66,13 +74,20 @@ The existing full-record method becomes `listLegacy` with an explicit deprecatio
 | Restart and privacy | Traversal and cursor behavior survive reopen. Raw bearer/CSRF values and error sentinels remain absent from result, errors, rows beyond existing hashes, and main/WAL/SHM bytes. Listing writes nothing. |
 | Ownership boundaries | No HTTP cursor/query encoding, auth/admin policy, revoke, audit, SSE recheck, pairing, total-count UI, presentation sort, or device-management UI behavior is implemented or claimed. |
 
-## Validation Plan
+## Validation
 
-- Contract tests for exact input/item/page schemas, page-size boundaries, timestamps, permissions, strict absence, and frozen repository outputs.
-- Direct repository tests for all pagination boundaries, 250+ rows, deleted cursor, non-created-time id order, corrupt returned/lookahead rows, no partial output, closed/read-only storage, restart, and raw-file privacy.
-- Worker-backed real SQLite revoke-before, uncommitted-during, and committed-after snapshot cases with duplicate-free continuation.
-- Query-plan inspection for primary-key `id > ?` traversal; statement instrumentation or structural inspection proving one bounded select and no count/offset query.
-- Full storage/server/unit/contract/integration/web, typecheck/lint, scaffold/planning/exact-binding, frozen offline install, production audit, manual pagination/privacy/ownership review, and diff checks.
+- Direct repository: 9 tests passed, covering every page boundary, deleted/missing cursors, non-chronological insertion/creation order, 250-device traversal, frozen exact output, hostile input, eight corrupt lookahead classes, read-only/closed storage, WAL reopen, raw-file privacy, worker-held revoke ordering, statement count, and indexed plan.
+- Selected listing contracts: 3 tests passed. Focused auth/pairing/revoke/listing/write-route regression passed 57 tests.
+- Storage passed 217 tests. Server passed 305 tests with seven explicit external smokes skipped.
+- Aggregate passed 846 unit tests with 29 explicit external skips, 155 contract tests, 16 integration tests, and 14 web tests.
+- Typecheck, Biome/package exports, scaffold, planning graph, and exact Codex 0.144.0 binding checks passed. Planning remains 196 tasks, 84 requirements, and 632 dependencies.
+- Frozen offline install passed. Production audit reported no known vulnerabilities. Diff and staged-patch checks passed.
+- Manual query/contract review confirmed a maximum of 101 fetched rows, one indexed statement and statement snapshot per call, full lookahead validation before release, ASCII selected-id ordering agreement, no count/offset/write, and no cross-call snapshot claim.
+- Manual privacy/ownership review confirmed that result/error boundaries contain no bearer/CSRF hash, generation/rotation metadata, raw credential, total count, SQLite detail, or unrelated state. No HTTP, browser, Android, UI, SSE, audit, or Codex runtime evidence is claimed.
+
+## Remaining Gaps
+
+None within this leaf. Authenticated HTTP cursor encoding/defaults, route policy, device presentation, revoke behavior, audit, and live authorization remain with the downstream owners below.
 
 ## Reuse Assessment
 

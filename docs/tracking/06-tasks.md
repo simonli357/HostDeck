@@ -15,9 +15,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `DAT-V1-025` Implement bounded non-secret device listing | in_progress | none | Supplies the safe device-read model after security-critical mutation storage. |
-| 2 | `IFC-V1-026` Implement HttpOnly cookie authentication context | ready | none | Consumes the completed trust and monotonic-auth contracts after the storage security leaves, before selected protected routes. |
-| 3 | `IFC-V1-032` Implement the security mutation audit executor | ready | none | Consumes the completed strict security audit storage before route-specific mutations. |
+| 1 | `IFC-V1-026` Implement HttpOnly cookie authentication context | in_progress | none | Consumes the completed trust and monotonic-auth contracts after the storage security leaves, before selected protected routes. |
+| 2 | `IFC-V1-032` Implement the security mutation audit executor | ready | none | Consumes the completed strict security audit storage before route-specific mutations. |
+| 3 | `DAT-V1-091` Re-run selected local-state module hardening | ready | none | Audits the now-complete selected storage/auth module before release hardening. |
 | 4 | `INT-V1-027` Prove the assembled real structured vertical | blocked | Authenticated turn usage reset; host Bubblewrap AppArmor profile | Resume the unchanged aggregate when both external runtime conditions are available. |
 
 ## Intentional Blockers
