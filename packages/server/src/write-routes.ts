@@ -561,6 +561,7 @@ function routeErrorForAuth(error: unknown): WriteRouteResult {
     case "csrf_rotation_conflict":
     case "csrf_rotation_failed":
     case "duplicate_secret":
+    case "invalid_csrf_authorization":
     case "invalid_time":
     case "invalid_pairing_code":
     case "invalid_pairing_policy":

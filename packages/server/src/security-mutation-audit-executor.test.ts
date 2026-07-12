@@ -16,6 +16,7 @@ import {
 } from "@hostdeck/storage";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  assertHostDeckSecurityMutationAuditExecutor,
   createSecurityMutationAuditExecutor,
   type ExecuteSecurityMutationInput,
   HostDeckSecurityMutationAuditExecutorError,
@@ -37,6 +38,19 @@ describe("selected security mutation audit executor", () => {
       expect(Object.keys(harness.executor).sort()).toEqual(["execute", "reject", "snapshot"]);
       expect(Object.isFrozen(harness.executor)).toBe(true);
       expect(Object.isFrozen(harness.executor.snapshot())).toBe(true);
+      expect(() =>
+        assertHostDeckSecurityMutationAuditExecutor(harness.executor)
+      ).not.toThrow();
+      for (const forged of [
+        null,
+        {},
+        Object.freeze({ ...harness.executor }),
+        new Proxy(harness.executor, {})
+      ]) {
+        expect(() => assertHostDeckSecurityMutationAuditExecutor(forged)).toThrow(
+          TypeError
+        );
+      }
 
       const valid = {
         repository: harness.repository,

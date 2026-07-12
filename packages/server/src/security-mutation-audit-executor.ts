@@ -163,6 +163,7 @@ const deferredAuditContext: SecurityMutationAuditContext = Object.freeze({
   audit_state: "deferred"
 });
 const fixedIncompleteSummary = Object.freeze({ schema_version: 1 as const });
+const acceptedExecutors = new WeakSet<object>();
 
 const executorErrorMessages: Record<SecurityMutationAuditExecutorErrorCode, string> = {
   audit_preflight_failed: "Security mutation audit preflight failed before dispatch.",
@@ -179,13 +180,30 @@ export function createSecurityMutationAuditExecutor(
   input: CreateSecurityMutationAuditExecutorInput
 ): SecurityMutationAuditExecutor {
   const implementation = new DefaultSecurityMutationAuditExecutor(parseExecutorOptions(input));
-  return Object.freeze({
+  const executor: SecurityMutationAuditExecutor = Object.freeze({
     execute: <TResponse, TPreparedResponse>(
       execution: ExecuteSecurityMutationInput<TResponse, TPreparedResponse>
     ) => implementation.execute(execution),
     reject: (rejection: RejectSecurityMutationInput) => implementation.reject(rejection),
     snapshot: () => implementation.snapshot()
   });
+  acceptedExecutors.add(executor);
+  return executor;
+}
+
+export function assertHostDeckSecurityMutationAuditExecutor(
+  candidate: unknown
+): asserts candidate is SecurityMutationAuditExecutor {
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    !acceptedExecutors.has(candidate) ||
+    !Object.isFrozen(candidate)
+  ) {
+    throw new TypeError(
+      "HostDeck security mutation audit executor must be created by createSecurityMutationAuditExecutor."
+    );
+  }
 }
 
 class DefaultSecurityMutationAuditExecutor {
