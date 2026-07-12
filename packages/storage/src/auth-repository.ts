@@ -1,9 +1,12 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { type AuthDeviceRecord, authDeviceRecordSchema, type PairingCodeRecord, pairingCodeRecordSchema } from "@hostdeck/contracts";
 import type Database from "better-sqlite3";
 
 export type AuthRepositoryErrorCode =
+  | "csrf_generation_exhausted"
   | "csrf_mismatch"
+  | "csrf_rotation_conflict"
+  | "csrf_rotation_failed"
   | "device_exists"
   | "device_expired"
   | "device_not_found"
@@ -11,6 +14,7 @@ export type AuthRepositoryErrorCode =
   | "duplicate_secret"
   | "invalid_auth_device"
   | "invalid_secret"
+  | "invalid_time"
   | "invalid_pairing_code"
   | "pairing_code_exists"
   | "pairing_code_expired"
@@ -69,6 +73,19 @@ export interface AuthenticateDeviceInput {
   readonly now: Date;
 }
 
+export type RotateCsrfBootstrapInput = AuthenticateDeviceInput;
+
+export interface CsrfBootstrapRotation {
+  readonly deviceId: string;
+  readonly rawCsrfToken: string;
+  readonly csrfGeneration: number;
+  readonly rotatedAt: string;
+}
+
+export interface AuthDeviceRepositoryOptions {
+  readonly generateCsrfToken?: () => string;
+}
+
 export interface AuthorizeBrowserWriteInput extends AuthenticateDeviceInput {
   readonly rawCsrfToken: string;
 }
@@ -90,6 +107,7 @@ export interface AuthDeviceRepository {
   readonly list: () => readonly AuthDeviceRecord[];
   readonly create: (input: CreateAuthDeviceInput) => AuthDeviceRecord;
   readonly authenticateDeviceToken: (input: AuthenticateDeviceInput) => AuthDeviceAuthentication;
+  readonly rotateCsrfBootstrap: (input: RotateCsrfBootstrapInput) => CsrfBootstrapRotation;
   readonly authorizeBrowserWrite: (input: AuthorizeBrowserWriteInput) => AuthDeviceRecord;
   readonly revoke: (deviceId: string, input: { readonly now: Date }) => AuthDeviceRecord;
 }
@@ -106,6 +124,8 @@ interface AuthDeviceRow {
   readonly id: string;
   readonly token_hash: string;
   readonly csrf_token_hash: string;
+  readonly csrf_generation: number;
+  readonly csrf_rotated_at: string;
   readonly client_label: string | null;
   readonly permission: AuthDeviceRecord["permission"];
   readonly created_at: string;
@@ -128,8 +148,15 @@ interface PairingCodeRow {
 const pairingCodeMinLength = 6;
 const deviceSecretMinLength = 24;
 const rawSecretMaxLength = 512;
+const csrfTokenBytes = 32;
 
-export function createAuthDeviceRepository(db: Database.Database): AuthDeviceRepository {
+export function createAuthDeviceRepository(
+  db: Database.Database,
+  options: AuthDeviceRepositoryOptions = {}
+): AuthDeviceRepository {
+  const generateCsrfToken = options.generateCsrfToken ?? defaultCsrfTokenGenerator;
+  const rotateCsrfBootstrap = createCsrfBootstrapTransaction(db, generateCsrfToken);
+
   return {
     get(deviceId) {
       const row = db.prepare("SELECT * FROM auth_devices WHERE id = ?").get(deviceId) as AuthDeviceRow | undefined;
@@ -160,6 +187,17 @@ export function createAuthDeviceRepository(db: Database.Database): AuthDeviceRep
         device: touched
       };
     },
+    rotateCsrfBootstrap(input) {
+      try {
+        return rotateCsrfBootstrap(input);
+      } catch (error) {
+        if (error instanceof HostDeckAuthRepositoryError) {
+          throw error;
+        }
+
+        throw new HostDeckAuthRepositoryError("csrf_rotation_failed", "CSRF bootstrap rotation failed.");
+      }
+    },
     authorizeBrowserWrite(input) {
       const device = requireUsableDeviceByToken(db, input.rawDeviceToken, input.now);
 
@@ -184,6 +222,65 @@ export function createAuthDeviceRepository(db: Database.Database): AuthDeviceRep
       return this.require(deviceId);
     }
   };
+}
+
+function createCsrfBootstrapTransaction(
+  db: Database.Database,
+  generateCsrfToken: () => string
+): (input: RotateCsrfBootstrapInput) => CsrfBootstrapRotation {
+  return db.transaction((input: RotateCsrfBootstrapInput): CsrfBootstrapRotation => {
+    const rotatedAt = nowIso(input.now);
+    const current = requireUsableDeviceByToken(db, input.rawDeviceToken, input.now);
+
+    if (Date.parse(rotatedAt) < Date.parse(current.csrf_rotated_at)) {
+      throw new HostDeckAuthRepositoryError(
+        "csrf_rotation_conflict",
+        "CSRF bootstrap rotation time cannot move backward."
+      );
+    }
+
+    if (current.csrf_generation >= Number.MAX_SAFE_INTEGER) {
+      throw new HostDeckAuthRepositoryError(
+        "csrf_generation_exhausted",
+        "CSRF bootstrap generation is exhausted."
+      );
+    }
+
+    const rawCsrfToken = generateCsrfTokenSafely(generateCsrfToken);
+    const csrfTokenHash = hashCsrfToken(rawCsrfToken);
+    const duplicate = db
+      .prepare("SELECT id FROM auth_devices WHERE csrf_token_hash = ? LIMIT 1")
+      .get(csrfTokenHash) as { readonly id: string } | undefined;
+
+    if (duplicate !== undefined) {
+      throw new HostDeckAuthRepositoryError("duplicate_secret", "Generated CSRF token already exists.");
+    }
+
+    const csrfGeneration = current.csrf_generation + 1;
+    const update = db
+      .prepare(
+        `
+          UPDATE auth_devices
+          SET csrf_token_hash = ?, csrf_generation = ?, csrf_rotated_at = ?
+          WHERE id = ? AND csrf_generation = ?
+        `
+      )
+      .run(csrfTokenHash, csrfGeneration, rotatedAt, current.id, current.csrf_generation);
+
+    if (update.changes !== 1) {
+      throw new HostDeckAuthRepositoryError(
+        "csrf_rotation_conflict",
+        "CSRF bootstrap state changed before rotation committed."
+      );
+    }
+
+    return Object.freeze({
+      deviceId: current.id,
+      rawCsrfToken,
+      csrfGeneration,
+      rotatedAt
+    });
+  }).immediate;
 }
 
 export function createPairingCodeRepository(db: Database.Database): PairingCodeRepository {
@@ -284,13 +381,17 @@ export function createPairingCodeRepository(db: Database.Database): PairingCodeR
 }
 
 function authDeviceFromInput(input: CreateAuthDeviceInput): AuthDeviceRecord {
+  const createdAt = nowIso(input.createdAt);
+
   return parseAuthDevice({
     id: input.id,
     token_hash: hashDeviceToken(input.rawDeviceToken),
     csrf_token_hash: hashCsrfToken(input.rawCsrfToken),
+    csrf_generation: 1,
+    csrf_rotated_at: createdAt,
     client_label: input.clientLabel ?? null,
     permission: input.permission,
-    created_at: nowIso(input.createdAt),
+    created_at: createdAt,
     last_used_at: null,
     expires_at: input.expiresAt === null || input.expiresAt === undefined ? null : nowIso(input.expiresAt),
     revoked_at: null
@@ -304,6 +405,8 @@ function insertAuthDevice(db: Database.Database, device: AuthDeviceRecord): Auth
         id,
         token_hash,
         csrf_token_hash,
+        csrf_generation,
+        csrf_rotated_at,
         client_label,
         permission,
         created_at,
@@ -314,6 +417,8 @@ function insertAuthDevice(db: Database.Database, device: AuthDeviceRecord): Auth
         @id,
         @token_hash,
         @csrf_token_hash,
+        @csrf_generation,
+        @csrf_rotated_at,
         @client_label,
         @permission,
         @created_at,
@@ -389,6 +494,8 @@ function parseAuthDeviceRow(row: AuthDeviceRow): AuthDeviceRecord {
     id: row.id,
     token_hash: row.token_hash,
     csrf_token_hash: row.csrf_token_hash,
+    csrf_generation: row.csrf_generation,
+    csrf_rotated_at: row.csrf_rotated_at,
     client_label: row.client_label,
     permission: row.permission,
     created_at: row.created_at,
@@ -436,6 +543,8 @@ function authDeviceToRow(device: AuthDeviceRecord): AuthDeviceRow {
     id: device.id,
     token_hash: device.token_hash,
     csrf_token_hash: device.csrf_token_hash,
+    csrf_generation: device.csrf_generation,
+    csrf_rotated_at: device.csrf_rotated_at,
     client_label: device.client_label,
     permission: device.permission,
     created_at: device.created_at,
@@ -480,6 +589,18 @@ function mapPairingConstraint(error: unknown): HostDeckAuthRepositoryError {
   }
 
   return new HostDeckAuthRepositoryError("invalid_pairing_code", "Pairing code record violates SQLite constraints.", { cause: error });
+}
+
+function defaultCsrfTokenGenerator(): string {
+  return randomBytes(csrfTokenBytes).toString("base64url");
+}
+
+function generateCsrfTokenSafely(generateCsrfToken: () => string): string {
+  try {
+    return generateCsrfToken();
+  } catch {
+    throw new HostDeckAuthRepositoryError("csrf_rotation_failed", "CSRF token generation failed.");
+  }
 }
 
 export function hashSecret(secret: string, options: HashSecretOptions = {}): string {
@@ -529,5 +650,9 @@ function assertRawSecret(secret: string, options: HashSecretOptions): void {
 }
 
 function nowIso(now: Date): string {
+  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
+    throw new HostDeckAuthRepositoryError("invalid_time", "Auth repository time must be a valid Date.");
+  }
+
   return now.toISOString();
 }

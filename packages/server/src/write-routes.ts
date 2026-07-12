@@ -549,7 +549,11 @@ function routeErrorForAuth(error: unknown): WriteRouteResult {
     case "device_revoked":
       return routeError(401, "permission_denied", error.message);
     case "device_exists":
+    case "csrf_generation_exhausted":
+    case "csrf_rotation_conflict":
+    case "csrf_rotation_failed":
     case "duplicate_secret":
+    case "invalid_time":
     case "invalid_pairing_code":
     case "pairing_code_exists":
     case "pairing_code_expired":

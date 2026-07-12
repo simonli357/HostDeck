@@ -56,6 +56,8 @@ describe("auth devices and pairing-code repositories", () => {
       expect(claim.pairingCode.used_at).toBe("2026-07-08T22:00:00.000Z");
       expect(claim.device).toMatchObject({
         id: "client_phone",
+        csrf_generation: 1,
+        csrf_rotated_at: "2026-07-08T22:00:00.000Z",
         client_label: "phone",
         permission: "write",
         revoked_at: null
@@ -70,6 +72,8 @@ describe("auth devices and pairing-code repositories", () => {
       expect(JSON.stringify(storedDevice)).not.toContain(rawCsrfToken);
       expect(storedDevice.token_hash).toBe(claim.device.token_hash);
       expect(storedDevice.csrf_token_hash).toBe(claim.device.csrf_token_hash);
+      expect(storedDevice.csrf_generation).toBe(1);
+      expect(storedDevice.csrf_rotated_at).toBe("2026-07-08T22:00:00.000Z");
 
       expect(devices.authorizeBrowserWrite({ rawDeviceToken, rawCsrfToken, now: laterNow() }).last_used_at).toBe(
         "2026-07-08T22:05:00.000Z"
@@ -290,6 +294,8 @@ describe("auth devices and pairing-code repositories", () => {
               id,
               token_hash,
               csrf_token_hash,
+              csrf_generation,
+              csrf_rotated_at,
               client_label,
               permission,
               created_at,
@@ -300,6 +306,8 @@ describe("auth devices and pairing-code repositories", () => {
               'client_bad',
               'raw-token',
               'raw-csrf',
+              1,
+              '2026-07-08T22:00:00.000Z',
               'bad',
               'write',
               '2026-07-08T22:00:00.000Z',

@@ -208,6 +208,8 @@ describe("auth, pairing, and settings schemas", () => {
         id: "client_phone",
         token_hash: hash,
         csrf_token_hash: "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        csrf_generation: 1,
+        csrf_rotated_at: timestamp,
         client_label: "phone",
         permission: "write",
         created_at: timestamp,
@@ -246,12 +248,45 @@ describe("auth, pairing, and settings schemas", () => {
     ).toBe(3777);
   });
 
+  it("enforces exact bounded CSRF generation and rotation chronology", () => {
+    const device = {
+      id: "client_csrf_rotation",
+      token_hash: hash,
+      csrf_token_hash: "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+      csrf_generation: 1,
+      csrf_rotated_at: timestamp,
+      client_label: "phone",
+      permission: "write",
+      created_at: timestamp,
+      last_used_at: null,
+      expires_at: null,
+      revoked_at: null
+    } as const;
+
+    for (const csrfGeneration of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() => authDeviceRecordSchema.parse({ ...device, csrf_generation: csrfGeneration })).toThrow();
+    }
+
+    expect(() =>
+      authDeviceRecordSchema.parse({
+        ...device,
+        csrf_rotated_at: "2026-07-08T17:59:59.999Z"
+      })
+    ).toThrow();
+    expect(() => authDeviceRecordSchema.parse({ ...device, csrf_rotated_at: "not-a-time" })).toThrow();
+
+    const { csrf_generation: _csrfGeneration, ...withoutGeneration } = device;
+    expect(() => authDeviceRecordSchema.parse(withoutGeneration)).toThrow();
+  });
+
   it("rejects raw secrets and invalid config values", () => {
     expect(() =>
       authDeviceRecordSchema.parse({
         id: "client_phone",
         token_hash: hash,
         csrf_token_hash: "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        csrf_generation: 1,
+        csrf_rotated_at: timestamp,
         raw_token: "secret",
         client_label: "phone",
         permission: "write",

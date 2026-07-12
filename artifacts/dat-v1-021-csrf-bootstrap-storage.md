@@ -2,7 +2,7 @@
 
 Date: 2026-07-11
 
-Status: hard success criteria frozen before implementation.
+Status: implementation and validation complete; owner-doc closure pending.
 
 ## Scope
 
@@ -39,6 +39,26 @@ Extend the existing auth-device contract and SQLite repository with durable CSRF
 - Migration tests for fresh schema, preserved checksums, row-preserving 008-to-009 upgrade, constraints, and index presence.
 - Focused auth repository tests for initial state, repeated rotation, old/current token behavior, read-only support, invalid states, entropy failures, duplicate/exhausted/regressing inputs, forced rollback, real two-connection serialization, reopen, and raw file inspection.
 - Adjacent restart/storage/server regression, root typecheck/lint, unit/contract/integration/web, planning/scaffold/binding, frozen install, audit, and manual SQL/API/privacy inspection.
+
+## Outcome
+
+- Migration 009 rebuilds `auth_devices` without changing prior migration bytes, preserves prior rows including historical duplicate CSRF hashes, backfills generation 1 and `created_at` rotation time, enforces integer safe-range storage, and adds the non-unique CSRF-hash lookup index.
+- The strict auth-device contract requires bounded generation and canonical non-regressing rotation time. Fresh create and pairing claim initialize the same generation-1 state.
+- `rotateCsrfBootstrap` authenticates a usable bearer inside one immediate transaction, generates 32 CSPRNG bytes by default, rejects duplicate/malformed/exhausted/regressing state, and atomically stores only the new hash/generation/time before returning one frozen ephemeral result.
+- Missing, revoked, expired, corrupt, and invalid-time states reject before entropy. Update failure rolls back, real writer contention serializes to one monotonic newest token, and restart continues at exactly the next generation.
+- Rotation does not touch `last_used_at`, pairing, revoke, HTTP, audit, or UI state. Exact generation-header enforcement remains owned by `IFC-V1-027`.
+
+## Validation
+
+- Focused migration/auth/rotation: 3 files, 26 passed; focused storage contract: 1 file, 9 passed.
+- Affected storage plus historical write route: 19 files, 166 passed.
+- Unit: 86 files passed and 16 expected external files skipped; 771 tests passed and 29 skipped.
+- Contract: 14 files, 139 passed; integration: 2 files, 16 passed; web: 2 files, 14 passed.
+- Root typecheck passed. Lint/exports passed for 271 files and 9 packages. Scaffold passed for 9 packages and 18 root scripts.
+- Exact isolated Codex 0.144.0 binding passed for 671 files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`.
+- Frozen offline install passed; production dependency audit reported no known vulnerabilities.
+- Manual schema/API/privacy review passed: SQLite reports the integer/range/nonnull constraints, the CSRF query uses `auth_devices_csrf_token_hash_idx`, the index remains non-unique for historical placeholder hashes, repository durable reads contain no raw secret, and transaction/error paths return no raw token before commit.
+- `git diff --check` passed. Planning validation is recorded at owner-doc closure after dependency advancement.
 
 ## Remaining Ownership
 

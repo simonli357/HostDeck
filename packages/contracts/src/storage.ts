@@ -248,6 +248,8 @@ export const authDeviceRecordSchema = z
     id: recordIdSchema,
     token_hash: secretHashSchema,
     csrf_token_hash: secretHashSchema,
+    csrf_generation: positiveSafeIntegerSchema,
+    csrf_rotated_at: isoTimestampSchema,
     client_label: nullableLabelSchema,
     permission: permissionModeSchema,
     created_at: isoTimestampSchema,
@@ -255,7 +257,16 @@ export const authDeviceRecordSchema = z
     expires_at: isoTimestampSchema.nullable(),
     revoked_at: isoTimestampSchema.nullable()
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (Date.parse(value.csrf_rotated_at) < Date.parse(value.created_at)) {
+      context.addIssue({
+        code: "custom",
+        message: "CSRF rotation time cannot precede device creation.",
+        path: ["csrf_rotated_at"]
+      });
+    }
+  });
 
 export const pairingCodeRecordSchema = z
   .object({

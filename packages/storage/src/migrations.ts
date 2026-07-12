@@ -461,6 +461,59 @@ export const hostDeckSelectedRetentionIndexesMigration: StorageMigration = {
   `
 };
 
+export const hostDeckAuthDeviceCsrfRotationMigration: StorageMigration = {
+  version: "202607110009_auth_device_csrf_rotation",
+  sql: `
+    CREATE TABLE auth_devices_next (
+      id TEXT PRIMARY KEY,
+      token_hash TEXT NOT NULL UNIQUE,
+      csrf_token_hash TEXT NOT NULL,
+      csrf_generation INTEGER NOT NULL CHECK (
+        typeof(csrf_generation) = 'integer'
+        AND csrf_generation BETWEEN 1 AND 9007199254740991
+      ),
+      csrf_rotated_at TEXT NOT NULL,
+      client_label TEXT,
+      permission TEXT NOT NULL CHECK (permission IN ('read', 'write')),
+      created_at TEXT NOT NULL,
+      last_used_at TEXT,
+      expires_at TEXT,
+      revoked_at TEXT
+    );
+
+    INSERT INTO auth_devices_next (
+      id,
+      token_hash,
+      csrf_token_hash,
+      csrf_generation,
+      csrf_rotated_at,
+      client_label,
+      permission,
+      created_at,
+      last_used_at,
+      expires_at,
+      revoked_at
+    )
+    SELECT
+      id,
+      token_hash,
+      csrf_token_hash,
+      1,
+      created_at,
+      client_label,
+      permission,
+      created_at,
+      last_used_at,
+      expires_at,
+      revoked_at
+    FROM auth_devices;
+
+    DROP TABLE auth_devices;
+    ALTER TABLE auth_devices_next RENAME TO auth_devices;
+    CREATE INDEX auth_devices_csrf_token_hash_idx ON auth_devices(csrf_token_hash);
+  `
+};
+
 export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckBaseSchemaMigration,
   hostDeckSessionMetadataFailedStatusMigration,
@@ -469,5 +522,6 @@ export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckPairingCodeRevokedAtMigration,
   hostDeckSelectedRuntimeStateMigration,
   hostDeckSelectedAuditStateMigration,
-  hostDeckSelectedRetentionIndexesMigration
+  hostDeckSelectedRetentionIndexesMigration,
+  hostDeckAuthDeviceCsrfRotationMigration
 ] as const;

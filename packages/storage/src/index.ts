@@ -7,13 +7,16 @@ export {
 export {
   type AuthDeviceAuthentication,
   type AuthDeviceRepository,
+  type AuthDeviceRepositoryOptions,
+  type CsrfBootstrapRotation,
   createAuthDeviceRepository,
   createPairingCodeRepository,
   type HashSecretOptions,
   HostDeckAuthRepositoryError,
   hashSecret,
   type PairingClaim,
-  type PairingCodeRepository
+  type PairingCodeRepository,
+  type RotateCsrfBootstrapInput
 } from "./auth-repository.js";
 export {
   type CaptureGitBranchMetadataInput,
@@ -40,6 +43,7 @@ export {
 } from "./migration-runner.js";
 export {
   defaultMigrations,
+  hostDeckAuthDeviceCsrfRotationMigration,
   hostDeckBaseSchemaMigration,
   hostDeckRetentionBoundaryScopeChecksMigration,
   hostDeckSelectedAuditStateMigration,
