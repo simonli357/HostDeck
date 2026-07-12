@@ -3,6 +3,7 @@ import { isoTimestampSchema, positiveSafeIntegerSchema } from "./scalars.js";
 
 export const pairingClaimSourceKeySchema = z.string().regex(/^sha256:[a-f0-9]{64}$/u);
 export const selectedRawPairingCodeSchema = z.string().regex(/^[A-Za-z0-9_-]{22}$/u);
+export const selectedRawDeviceSecretSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/u);
 export const pairingClientLabelSchema = z.string().min(1).max(120).nullable();
 
 export const pairingClaimRateSourceRecordSchema = z

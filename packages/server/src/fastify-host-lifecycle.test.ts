@@ -28,8 +28,10 @@ import {
 import { createHostDeckSseTransportRegistration } from "./fastify-sse-transport.js";
 import { createHostDeckStaticBoundaryRegistration } from "./fastify-static-boundary.js";
 import { type HostStartupResult, startHostAgent } from "./startup.js";
+import { testRequestAuthenticationPolicy } from "./test-request-authentication.js";
 
 const temporaryDirectories = new Set<string>();
+const createRequestAuthenticationPolicy = () => testRequestAuthenticationPolicy;
 
 afterEach(() => {
   for (const directory of temporaryDirectories) {
@@ -42,6 +44,7 @@ describe("selected Fastify host lifecycle", () => {
   it("rejects unresolved input and unsupported runtime ownership before listening", async () => {
     let startCalls = 0;
     const base = {
+      createRequestAuthenticationPolicy,
       createRoutePlugins: () => [],
       observeInternalError: () => undefined,
       resourceBudget: defaultResourceBudget,
@@ -56,10 +59,42 @@ describe("selected Fastify host lifecycle", () => {
     await expect(
       startHostDeckFastifyLifecycle({
         ...base,
+        createRequestAuthenticationPolicy: undefined as never
+      })
+    ).rejects.toThrow("createRequestAuthenticationPolicy must be a function");
+    await expect(
+      startHostDeckFastifyLifecycle({
+        ...base,
         resourceBudget: resourceBudgetSchema.parse({}) as ResourceBudget
       })
     ).rejects.toThrow("Resolved resource budget must be frozen");
     expect(startCalls).toBe(0);
+
+    const forgedPolicyCleanup: string[] = [];
+    let forgedPolicyRouteCalls = 0;
+    const forgedPolicyError = await expectLifecycleFailure(
+      startHostDeckFastifyLifecycle({
+        createRequestAuthenticationPolicy: () =>
+          Object.freeze({
+            authenticateDeviceToken:
+              testRequestAuthenticationPolicy.authenticateDeviceToken,
+            now: testRequestAuthenticationPolicy.now
+          }) as typeof testRequestAuthenticationPolicy,
+        createRoutePlugins() {
+          forgedPolicyRouteCalls += 1;
+          return [];
+        },
+        observeInternalError: () => undefined,
+        resourceBudget: defaultResourceBudget,
+        runtime: syntheticOwner(37_771, forgedPolicyCleanup)
+      })
+    );
+    expect(forgedPolicyError).toMatchObject({
+      code: "route_composition_failed",
+      stage: "routes"
+    });
+    expect(forgedPolicyRouteCalls).toBe(0);
+    expect(forgedPolicyCleanup).toEqual(["close-sse", "close-startup"]);
 
     const invalidCases: readonly [unknown, string][] = [
       [
@@ -97,6 +132,7 @@ describe("selected Fastify host lifecycle", () => {
       const cleanupEvents: string[] = [];
       const error = await expectLifecycleFailure(
         startHostDeckFastifyLifecycle({
+          createRequestAuthenticationPolicy,
           createRoutePlugins: () => [],
           observeInternalError: () => undefined,
           resourceBudget: defaultResourceBudget,
@@ -126,6 +162,7 @@ describe("selected Fastify host lifecycle", () => {
     const timeoutCleanup: string[] = [];
     const timeoutError = await expectLifecycleFailure(
       startHostDeckFastifyLifecycle({
+        createRequestAuthenticationPolicy,
         createRoutePlugins: () => [],
         observeInternalError: () => undefined,
         resourceBudget: startupTimeoutBudget,
@@ -159,6 +196,10 @@ describe("selected Fastify host lifecycle", () => {
     const staticBuild = staticBuildFixture();
     let service: Awaited<ReturnType<typeof startHostDeckFastifyLifecycle<{ value: string }>>>;
     service = await startHostDeckFastifyLifecycle({
+      createRequestAuthenticationPolicy(context) {
+        events.push(`auth:${context.value}`);
+        return testRequestAuthenticationPolicy;
+      },
       createRoutePlugins(context) {
         events.push(`routes:${context.value}`);
         return [
@@ -182,7 +223,13 @@ describe("selected Fastify host lifecycle", () => {
       })
     });
 
-    expect(events).toEqual(["runtime", "routes:selected", "plugin-register", "app-ready:false"]);
+    expect(events).toEqual([
+      "runtime",
+      "auth:selected",
+      "routes:selected",
+      "plugin-register",
+      "app-ready:false"
+    ]);
     expect(service.baseUrl.href).toBe(`http://127.0.0.1:${port}/`);
     expect(service.snapshot()).toEqual({
       bound: { host: "127.0.0.1", port, transport: "http" },
@@ -250,6 +297,7 @@ describe("selected Fastify host lifecycle", () => {
     const routePort = await getAvailablePort();
     const routeError = await expectLifecycleFailure(
       startHostDeckFastifyLifecycle({
+        createRequestAuthenticationPolicy,
         createRoutePlugins() {
           throw new Error("route-composition-secret");
         },
@@ -265,6 +313,7 @@ describe("selected Fastify host lifecycle", () => {
     const readyPort = await getAvailablePort();
     const readyError = await expectLifecycleFailure(
       startHostDeckFastifyLifecycle({
+        createRequestAuthenticationPolicy,
         createRoutePlugins: () => [failingRegistration(readyEvents)],
         observeInternalError: () => undefined,
         resourceBudget: defaultResourceBudget,
@@ -280,6 +329,7 @@ describe("selected Fastify host lifecycle", () => {
     try {
       const listenError = await expectLifecycleFailure(
         startHostDeckFastifyLifecycle({
+          createRequestAuthenticationPolicy,
           createRoutePlugins: () => [probeRegistration(listenEvents)],
           observeInternalError: () => undefined,
           resourceBudget: defaultResourceBudget,
@@ -301,6 +351,7 @@ describe("selected Fastify host lifecycle", () => {
     const closeEvents: string[] = [];
     const closePort = await getAvailablePort();
     const closeService = await startHostDeckFastifyLifecycle({
+      createRequestAuthenticationPolicy,
       createRoutePlugins: () => [throwingCloseRegistration(closeEvents)],
       observeInternalError: () => undefined,
       resourceBudget: defaultResourceBudget,
@@ -336,6 +387,7 @@ describe("selected Fastify host lifecycle", () => {
     });
     const timeoutPort = await getAvailablePort();
     const timeoutService = await startHostDeckFastifyLifecycle({
+      createRequestAuthenticationPolicy,
       createRoutePlugins: () => [probeRegistration(timeoutEvents)],
       observeInternalError: () => undefined,
       resourceBudget: timeoutBudget,
@@ -432,6 +484,7 @@ describe("selected Fastify host lifecycle", () => {
       }
     };
     service = await startHostDeckFastifyLifecycle({
+      createRequestAuthenticationPolicy,
       createRoutePlugins: () => [
         createHostDeckSseTransportRegistration({
           id: "lifecycle-sse",
@@ -476,6 +529,7 @@ describe("selected Fastify host lifecycle", () => {
     expect(service.snapshot()).toMatchObject({ listening: false, phase: "closed" });
 
     const restarted = await startHostDeckFastifyLifecycle({
+      createRequestAuthenticationPolicy,
       createRoutePlugins: () => [probeRegistration([])],
       observeInternalError: () => undefined,
       resourceBudget: defaultResourceBudget,
@@ -595,6 +649,7 @@ function startSecureLifecycle(
 ) {
   let startup: HostStartupResult | null = null;
   return startHostDeckFastifyLifecycle<HostStartupResult>({
+    createRequestAuthenticationPolicy,
     createRoutePlugins: () => routePlugins,
     observeInternalError: () => undefined,
     resourceBudget: defaultResourceBudget,

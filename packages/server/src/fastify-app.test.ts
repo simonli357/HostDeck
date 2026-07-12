@@ -20,6 +20,7 @@ import {
 } from "./fastify-app.js";
 import { HostDeckHttpError, type HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
+import { testRequestAuthenticationPolicy } from "./test-request-authentication.js";
 
 const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
   allowedOrigins: ["http://localhost"],
@@ -394,6 +395,7 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
     expect(() =>
       createHostDeckFastifyApp({
         observeInternalError: undefined,
+        requestAuthenticationPolicy: testRequestAuthenticationPolicy,
         requestTrustPolicy: loopbackTrustPolicy,
         resourceBudget: defaultResourceBudget,
         routePlugins: []
@@ -565,6 +567,7 @@ function createTestApp(
 ) {
   return createHostDeckFastifyApp({
     observeInternalError: (observation) => observations.push(observation),
+    requestAuthenticationPolicy: testRequestAuthenticationPolicy,
     requestTrustPolicy: loopbackTrustPolicy,
     resourceBudget,
     routePlugins

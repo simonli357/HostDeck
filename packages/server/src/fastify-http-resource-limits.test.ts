@@ -14,6 +14,7 @@ import {
   type HostDeckFastifyLifecycle,
   startHostDeckFastifyLifecycle
 } from "./fastify-host-lifecycle.js";
+import { testRequestAuthenticationPolicy } from "./test-request-authentication.js";
 
 describe("real HostDeck HTTP resource limits", () => {
   it("rejects excess header count through HostDeck and excess header bytes through Node before handlers", async () => {
@@ -253,6 +254,7 @@ async function startProbe(budget: ResourceBudget, options: ProbeOptions = {}): P
   const port = options.port ?? (await getAvailablePort());
   let handlerCalls = 0;
   const service = await startHostDeckFastifyLifecycle({
+    createRequestAuthenticationPolicy: () => testRequestAuthenticationPolicy,
     createRoutePlugins: () => [
       probeRoutes({
         incrementHandler() {

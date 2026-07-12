@@ -21,6 +21,7 @@ import {
   createHostDeckStaticBoundaryRegistration,
   hostDeckStaticBoundaryLimits
 } from "./fastify-static-boundary.js";
+import { testRequestAuthenticationPolicy } from "./test-request-authentication.js";
 
 const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
   allowedOrigins: ["http://localhost"],
@@ -369,6 +370,7 @@ function createStaticApp(
 ) {
   return createHostDeckFastifyApp({
     observeInternalError: (observation) => observations.push(observation),
+    requestAuthenticationPolicy: testRequestAuthenticationPolicy,
     requestTrustPolicy: loopbackTrustPolicy,
     resourceBudget: defaultResourceBudget,
     routePlugins: [registration]

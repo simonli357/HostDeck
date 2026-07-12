@@ -19,6 +19,7 @@ import {
   type HostDeckSseFailureObservation,
   type HostDeckSseSourceInput
 } from "./fastify-sse-transport.js";
+import { testRequestAuthenticationPolicy } from "./test-request-authentication.js";
 
 const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
   allowedOrigins: ["http://localhost"],
@@ -294,6 +295,7 @@ describe("bounded Fastify SSE transport", () => {
     };
     const app = createHostDeckFastifyApp({
       observeInternalError: () => undefined,
+      requestAuthenticationPolicy: testRequestAuthenticationPolicy,
       requestTrustPolicy: loopbackTrustPolicy,
       resourceBudget: budget,
       routePlugins: [
@@ -502,6 +504,7 @@ function createSseApp(
 ) {
   return createHostDeckFastifyApp({
     observeInternalError: (observation) => internal.push(observation),
+    requestAuthenticationPolicy: testRequestAuthenticationPolicy,
     requestTrustPolicy: loopbackTrustPolicy,
     resourceBudget,
     routePlugins: [

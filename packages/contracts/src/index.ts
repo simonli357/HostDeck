@@ -2,6 +2,7 @@ export * from "./api.js";
 export * from "./device-listing.js";
 export * from "./device-revocation.js";
 export * from "./pairing.js";
+export * from "./request-authentication.js";
 export * from "./resource-policy.js";
 export * from "./security-audit.js";
 export * from "./selected-mobile.js";

@@ -11,6 +11,7 @@ import {
   pairingClientLabelSchema,
   pairingCodeRecordSchema,
   type ResourceBudget,
+  selectedRawDeviceSecretSchema,
   selectedRawPairingCodeSchema
 } from "@hostdeck/contracts";
 import type Database from "better-sqlite3";
@@ -148,7 +149,6 @@ const selectedPairingCodeBytes = 16;
 const selectedDeviceSecretBytes = 32;
 const selectedDeviceIdBytes = 18;
 const selectedDeviceIdPattern = /^client_[A-Za-z0-9_-]{24}$/u;
-const selectedDeviceSecretPattern = /^[A-Za-z0-9_-]{43}$/u;
 const maxSafeInteger = 9_007_199_254_740_991;
 
 export function createPairingCodeRepository(
@@ -270,13 +270,13 @@ export function createPairingCodeRepository(
     );
     const rawDeviceToken = generateSelectedValue(
       generateDeviceToken,
-      (candidate) => selectedDeviceSecretPattern.test(candidate),
+      (candidate) => selectedRawDeviceSecretSchema.safeParse(candidate).success,
       "pairing_claim_failed",
       "Pair-claim device-token generation failed."
     );
     const rawCsrfToken = generateSelectedValue(
       generateCsrfToken,
-      (candidate) => selectedDeviceSecretPattern.test(candidate),
+      (candidate) => selectedRawDeviceSecretSchema.safeParse(candidate).success,
       "pairing_claim_failed",
       "Pair-claim CSRF generation failed."
     );

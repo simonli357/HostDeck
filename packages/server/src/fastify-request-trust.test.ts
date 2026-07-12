@@ -20,6 +20,7 @@ import {
   hostDeckRequestTrustContext,
   hostDeckRequestTrustSnapshot
 } from "./fastify-request-trust.js";
+import { testRequestAuthenticationPolicy } from "./test-request-authentication.js";
 
 const loopbackOrigin = "http://localhost";
 const loopbackPolicy = createHostDeckRequestTrustPolicy({
@@ -275,6 +276,7 @@ describe("Fastify request trust gate", () => {
     expect(() =>
       createHostDeckFastifyApp({
         observeInternalError: () => undefined,
+        requestAuthenticationPolicy: testRequestAuthenticationPolicy,
         requestTrustPolicy: Object.freeze({
           allowedOrigins: Object.freeze([loopbackOrigin]),
           mode: "loopback",
@@ -372,6 +374,7 @@ describe("Fastify request trust gate", () => {
     let handlerCalls = 0;
     const app = createHostDeckFastifyApp({
       observeInternalError: () => undefined,
+      requestAuthenticationPolicy: testRequestAuthenticationPolicy,
       requestTrustPolicy: createHostDeckRequestTrustPolicy({
         allowedOrigins: ["https://192.168.0.29:8443"],
         mode: "lan",
@@ -514,6 +517,7 @@ describe("Fastify request trust gate", () => {
     for (const observeInternalError of observers) {
       const app = createHostDeckFastifyApp({
         observeInternalError,
+        requestAuthenticationPolicy: testRequestAuthenticationPolicy,
         requestTrustPolicy: loopbackPolicy,
         resourceBudget: defaultResourceBudget,
         routePlugins: [
@@ -584,6 +588,7 @@ describe("Fastify request trust gate", () => {
     let handlerCalls = 0;
     const app = createHostDeckFastifyApp({
       observeInternalError: () => undefined,
+      requestAuthenticationPolicy: testRequestAuthenticationPolicy,
       requestTrustPolicy: createHostDeckRequestTrustPolicy({ allowedOrigins: [origin], mode: "loopback", transport: "http" }),
       resourceBudget: defaultResourceBudget,
       routePlugins: [
@@ -674,6 +679,7 @@ function createTrustApp(
 ) {
   return createHostDeckFastifyApp({
     observeInternalError: (observation) => observations.push(observation),
+    requestAuthenticationPolicy: testRequestAuthenticationPolicy,
     requestTrustPolicy: loopbackPolicy,
     resourceBudget: defaultResourceBudget,
     routePlugins

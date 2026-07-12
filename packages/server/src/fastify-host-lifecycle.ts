@@ -14,6 +14,10 @@ import {
   type HostDeckRoutePluginRegistration
 } from "./fastify-app.js";
 import type { HostDeckInternalErrorObserver } from "./fastify-error-policy.js";
+import {
+  assertHostDeckRequestAuthenticationPolicy,
+  type HostDeckRequestAuthenticationPolicy
+} from "./fastify-request-authentication.js";
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import { fastifyResourceOptionsFromBudget } from "./fastify-resource-options.js";
 
@@ -77,6 +81,9 @@ export interface HostDeckFastifyRuntimeStartInput {
 }
 
 export interface StartHostDeckFastifyLifecycleInput<TContext> {
+  readonly createRequestAuthenticationPolicy: (
+    context: TContext
+  ) => HostDeckRequestAuthenticationPolicy;
   readonly createRoutePlugins: (
     context: TContext
   ) => readonly HostDeckRoutePluginRegistration[];
@@ -178,6 +185,7 @@ class HostDeckFastifyCleanupError extends Error {
 }
 
 const inputKeys = [
+  "createRequestAuthenticationPolicy",
   "createRoutePlugins",
   "observeInternalError",
   "resourceBudget",
@@ -214,12 +222,17 @@ export async function startHostDeckFastifyLifecycle<TContext>(
 
     startupDeadline.throwIfAborted();
     stage = "routes";
+    const requestAuthenticationPolicy = parsed.createRequestAuthenticationPolicy(
+      owner.context
+    );
+    assertHostDeckRequestAuthenticationPolicy(requestAuthenticationPolicy);
     const routePlugins = parsed.createRoutePlugins(owner.context);
 
     startupDeadline.throwIfAborted();
     stage = "app";
     app = createHostDeckFastifyApp({
       observeInternalError: parsed.observeInternalError,
+      requestAuthenticationPolicy,
       requestTrustPolicy: createHostDeckRequestTrustPolicy({
         allowedOrigins: [baseUrlForBind(owner.bind).origin],
         mode: "loopback",
@@ -302,6 +315,11 @@ export async function startHostDeckFastifyLifecycle<TContext>(
 function parseLifecycleInput<TContext>(input: unknown): ParsedLifecycleInput<TContext> {
   assertPlainExactObject(input, inputKeys, "HostDeck Fastify lifecycle input");
   const value = input as Partial<StartHostDeckFastifyLifecycleInput<TContext>>;
+  if (typeof value.createRequestAuthenticationPolicy !== "function") {
+    throw new TypeError(
+      "HostDeck Fastify createRequestAuthenticationPolicy must be a function."
+    );
+  }
   if (typeof value.createRoutePlugins !== "function") {
     throw new TypeError("HostDeck Fastify createRoutePlugins must be a function.");
   }
@@ -310,6 +328,8 @@ function parseLifecycleInput<TContext>(input: unknown): ParsedLifecycleInput<TCo
   }
   const runtime = parseRuntimeOwner<TContext>(value.runtime);
   return Object.freeze({
+    createRequestAuthenticationPolicy:
+      value.createRequestAuthenticationPolicy.bind(value),
     createRoutePlugins: value.createRoutePlugins.bind(value),
     observeInternalError: value.observeInternalError,
     resourceBudget: value.resourceBudget as ResourceBudget,
