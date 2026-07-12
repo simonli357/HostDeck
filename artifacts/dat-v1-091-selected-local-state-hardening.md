@@ -53,7 +53,7 @@ The scenario may use deterministic entropy and clocks only through existing inje
 | Auth races remain real | Existing two-connection/worker evidence covers pairing claim, CSRF rotation, monotonic auth, revoke ordering, and audit terminal contention. The aggregate links exact cases and adds cross-repository state assertions; it must not replace real contention with sequential mocks. |
 | Failure isolation | Deliberate corruption in one selected domain causes its owning read or maintenance operation to fail loudly. No fallback skips the row, returns partial trusted truth, repairs it silently, or mutates unaffected selected domains. Failed multi-row work leaves pre-operation aggregates unchanged. |
 | Secure filesystem ownership | State/runtime directories and database/lease files have the selected owner-only modes and canonical identities. A second daemon lease fails while held and succeeds after clean release/restart. Existing hostile link, ownership, substitution, and child-crash evidence remains part of the gate. No claim is made against a malicious same-UID process. |
-| Raw-secret and transcript absence | Unique sentinels for pairing code, bearer token, CSRF token, private material, prompt text, and full transcript text are absent from selected rows, SQLite main/WAL/SHM bytes, path names, repository errors, and durable audit summaries after the full lifecycle. Hashes and approved bounded projections are not misreported as raw secrets. |
+| Raw-secret and transcript absence | Unique sentinels for pairing code, bearer token, CSRF token, private material, and an attempted unapproved full-transcript payload are absent from selected rows, SQLite main/WAL/SHM bytes, path names, repository errors, and durable audit summaries after the full lifecycle. Hashes and approved bounded projected message text are not misreported as raw secrets or a full transcript. |
 | Bounded access paths | Device pagination, selected event replay, retention candidates, orphan candidates, CSRF lookup, pairing-rate lookup, and audit phase lookup use their selected bounds and expected indexes. Aggregate inspection records plans without introducing an unbounded fallback scan in product code. |
 | Explicit corruption boundary | `openMigratedDatabase` must reject migration/schema-state corruption it owns. Repository-owned row corruption must reject when that repository reads or maintains the row. The gate must not claim that database open validates every page or every domain row. |
 | No hidden database policy change | Journal, synchronous, and busy-timeout policy remains unchanged unless a failing criterion demonstrates a selected requirement gap. The daemon lease and one owner handle remain the deployment assumption; leaf race tests intentionally use extra connections only as adversarial evidence. |
@@ -86,8 +86,8 @@ Use existing `better-sqlite3`, Node filesystem/crypto APIs, Vitest, selected rep
 
 ## Owner Mapping
 
-- Product/storage truth: `docs/planning/01-prd.md`, `docs/planning/03-requirements.md`, `docs/planning/04-technical-plan.md`, and `docs/planning/06-implementation-blueprint.md`.
-- Validation truth: `docs/planning/05-test-plan.md` and the `04b:Storage And Audit Matrix` requirement group.
+- Product/storage truth: `docs/planning/01-prd.md`, `docs/planning/02-requirements.md`, `docs/planning/04-technical-plan.md`, and `docs/planning/04a-implementation-blueprint.md`.
+- Validation truth: `docs/planning/04b-test-plan.md` and the `04b:Storage And Audit Matrix` requirement group.
 - Capability completion: `docs/planning/05-blocks/BLK-V1-02-local-state-auth-audit.md`.
 - Task/dependency truth: `docs/tracking/backlog/local-state-auth-audit.md`, `docs/tracking/backlog/00-index.md`, and `docs/tracking/06-tasks.md`.
 - Handoff/release truth: `docs/status.md` and `docs/delivery/08-technical-delivery-plan.md` only when execution changes those facts.
