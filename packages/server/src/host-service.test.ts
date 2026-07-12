@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createPairingCodeRepository } from "@hostdeck/storage";
+import { createLegacyPairingCodeRepository } from "@hostdeck/storage";
 import {
   createFakeTmuxAdapter,
   parseSessionIdFromTmuxSessionName,
@@ -209,7 +209,7 @@ describe("foreground host service smoke", () => {
         }
       });
 
-      createPairingCodeRepository(service.startup.db).create({
+      createLegacyPairingCodeRepository(service.startup.db).createLegacy({
         id: "pair_http_routes_01",
         rawCode: "123456",
         permission: "write",

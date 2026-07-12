@@ -8,7 +8,7 @@ import { type AuditRepositoryErrorCode, createAuditEventRepository, HostDeckAudi
 import {
   type AuthRepositoryErrorCode,
   createAuthDeviceRepository,
-  createPairingCodeRepository,
+  createLegacyPairingCodeRepository,
   HostDeckAuthRepositoryError
 } from "./auth-repository.js";
 import { HostDeckMigrationError, type MigrationErrorCode, openMigratedDatabase, runMigrations } from "./migration-runner.js";
@@ -124,12 +124,12 @@ describe("storage hardening", () => {
     const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
 
     try {
-      const pairingCodes = createPairingCodeRepository(open.db);
+      const pairingCodes = createLegacyPairingCodeRepository(open.db);
       const devices = createAuthDeviceRepository(open.db);
 
       expectAuthError(
         () =>
-          pairingCodes.create({
+          pairingCodes.createLegacy({
             id: "pair_short",
             rawCode: "12345",
             permission: "write",
@@ -196,7 +196,7 @@ describe("storage hardening", () => {
 
     try {
       createSessionRepository(open.db).create(sessionRecord());
-      createPairingCodeRepository(open.db).create({
+      createLegacyPairingCodeRepository(open.db).createLegacy({
         id: "pair_privacy",
         rawCode,
         permission: "write",
@@ -204,7 +204,7 @@ describe("storage hardening", () => {
         createdAt: fixedNow(),
         expiresAt: laterNow()
       });
-      createPairingCodeRepository(open.db).claim({
+      createLegacyPairingCodeRepository(open.db).claimLegacy({
         rawCode,
         deviceId: "client_privacy",
         rawDeviceToken,

@@ -638,6 +638,104 @@ export const hostDeckSecurityAuditCatalogMigration: StorageMigration = {
   `
 };
 
+export const hostDeckSelectedPairingClaimMigration: StorageMigration = {
+  version: "202607110011_selected_pairing_claim",
+  sql: `
+    CREATE TABLE pairing_codes_next (
+      id TEXT PRIMARY KEY,
+      code_hash TEXT NOT NULL UNIQUE,
+      permission TEXT NOT NULL CHECK (permission IN ('read', 'write')),
+      client_label TEXT,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      revoked_at TEXT,
+      claim_contract_version INTEGER CHECK (
+        claim_contract_version IS NULL OR
+        (typeof(claim_contract_version) = 'integer' AND claim_contract_version = 1)
+      ),
+      claimed_device_id TEXT UNIQUE REFERENCES auth_devices(id),
+      CHECK (
+        (claim_contract_version IS NULL AND claimed_device_id IS NULL) OR
+        (
+          claim_contract_version IS NOT NULL AND
+          claim_contract_version = 1 AND
+          length(code_hash) = 71 AND
+          substr(code_hash, 1, 7) = 'sha256:' AND
+          substr(code_hash, 8) NOT GLOB '*[^0-9a-f]*' AND
+          expires_at > created_at AND
+          (revoked_at IS NULL OR revoked_at >= created_at) AND
+          (
+            (used_at IS NULL AND claimed_device_id IS NULL) OR
+            (
+              used_at IS NOT NULL AND
+              claimed_device_id IS NOT NULL AND
+              used_at >= created_at AND
+              used_at < expires_at AND
+              revoked_at IS NULL
+            )
+          )
+        )
+      )
+    );
+
+    INSERT INTO pairing_codes_next (
+      id,
+      code_hash,
+      permission,
+      client_label,
+      created_at,
+      expires_at,
+      used_at,
+      revoked_at,
+      claim_contract_version,
+      claimed_device_id
+    )
+    SELECT
+      id,
+      code_hash,
+      permission,
+      client_label,
+      created_at,
+      expires_at,
+      used_at,
+      revoked_at,
+      NULL,
+      NULL
+    FROM pairing_codes;
+
+    DROP TABLE pairing_codes;
+    ALTER TABLE pairing_codes_next RENAME TO pairing_codes;
+
+    CREATE TABLE pairing_claim_rate_sources (
+      source_key TEXT PRIMARY KEY CHECK (
+        length(source_key) = 71 AND
+        substr(source_key, 1, 7) = 'sha256:' AND
+        substr(source_key, 8) NOT GLOB '*[^0-9a-f]*'
+      ),
+      window_started_at TEXT NOT NULL,
+      attempt_count INTEGER NOT NULL CHECK (
+        typeof(attempt_count) = 'integer' AND
+        attempt_count BETWEEN 1 AND 9007199254740991
+      ),
+      last_attempt_at TEXT NOT NULL CHECK (last_attempt_at >= window_started_at)
+    );
+
+    CREATE INDEX pairing_claim_rate_sources_last_attempt_idx
+      ON pairing_claim_rate_sources(last_attempt_at, source_key);
+
+    CREATE TABLE pairing_claim_rate_global (
+      id TEXT PRIMARY KEY CHECK (id = 'pair_claim_global'),
+      window_started_at TEXT NOT NULL,
+      attempt_count INTEGER NOT NULL CHECK (
+        typeof(attempt_count) = 'integer' AND
+        attempt_count BETWEEN 1 AND 9007199254740991
+      ),
+      last_attempt_at TEXT NOT NULL CHECK (last_attempt_at >= window_started_at)
+    );
+  `
+};
+
 export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckBaseSchemaMigration,
   hostDeckSessionMetadataFailedStatusMigration,
@@ -648,5 +746,6 @@ export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckSelectedAuditStateMigration,
   hostDeckSelectedRetentionIndexesMigration,
   hostDeckAuthDeviceCsrfRotationMigration,
-  hostDeckSecurityAuditCatalogMigration
+  hostDeckSecurityAuditCatalogMigration,
+  hostDeckSelectedPairingClaimMigration
 ] as const;

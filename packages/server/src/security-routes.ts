@@ -13,7 +13,7 @@ import { createErrorEnvelope, type ErrorCode } from "@hostdeck/core";
 import {
   type AuthDeviceRepository,
   HostDeckAuthRepositoryError,
-  type PairingCodeRepository,
+  type LegacyPairingCodeRepository,
   type SettingsRepository
 } from "@hostdeck/storage";
 
@@ -62,7 +62,7 @@ export interface ApiRouteErrorBody {
 
 export interface CreateSecurityRouteHandlersInput {
   readonly authDevices: AuthDeviceRepository;
-  readonly pairingCodes: PairingCodeRepository;
+  readonly pairingCodes: LegacyPairingCodeRepository;
   readonly settings: SettingsRepository;
   readonly now?: () => Date;
   readonly createDeviceId?: () => string;
@@ -90,7 +90,7 @@ export function createSecurityRouteHandlers(input: CreateSecurityRouteHandlersIn
       const rawCsrfToken = createCsrfToken();
 
       try {
-        const claim = input.pairingCodes.claim({
+        const claim = input.pairingCodes.claimLegacy({
           rawCode: request.data.code,
           deviceId: createDeviceId(),
           rawDeviceToken,

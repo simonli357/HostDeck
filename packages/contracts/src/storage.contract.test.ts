@@ -228,7 +228,9 @@ describe("auth, pairing, and settings schemas", () => {
         created_at: timestamp,
         expires_at: "2026-07-08T19:05:00.000Z",
         used_at: null,
-        revoked_at: null
+        revoked_at: null,
+        claim_contract_version: null,
+        claimed_device_id: null
       }).id
     ).toBe("pair_01");
 

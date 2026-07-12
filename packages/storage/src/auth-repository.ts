@@ -20,9 +20,18 @@ export type AuthRepositoryErrorCode =
   | "invalid_pairing_code"
   | "pairing_code_exists"
   | "pairing_code_expired"
+  | "pairing_code_legacy"
   | "pairing_code_not_found"
   | "pairing_code_revoked"
   | "pairing_code_used"
+  | "pairing_claim_capacity"
+  | "pairing_claim_failed"
+  | "pairing_claim_rate_limited"
+  | "pairing_claim_time_conflict"
+  | "pairing_issue_failed"
+  | "invalid_pairing_policy"
+  | "invalid_pairing_rate_state"
+  | "invalid_pairing_source"
   | "read_only";
 
 export interface HashSecretOptions {
@@ -34,11 +43,14 @@ export class HostDeckAuthRepositoryError extends Error {
   constructor(
     readonly code: AuthRepositoryErrorCode,
     message: string,
-    options?: ErrorOptions
+    options?: ErrorOptions & { readonly retryAt?: string }
   ) {
     super(message, options);
     this.name = "HostDeckAuthRepositoryError";
+    this.retryAt = options?.retryAt;
   }
+
+  readonly retryAt: string | undefined;
 }
 
 export interface CreateAuthDeviceInput {
@@ -98,7 +110,7 @@ export interface AuthDeviceAuthentication {
   readonly device: AuthDeviceRecord;
 }
 
-export interface PairingClaim {
+export interface LegacyPairingClaim {
   readonly pairingCode: PairingCodeRecord;
   readonly device: AuthDeviceRecord;
 }
@@ -114,12 +126,15 @@ export interface AuthDeviceRepository {
   readonly revoke: (deviceId: string, input: { readonly now: Date }) => AuthDeviceRecord;
 }
 
-export interface PairingCodeRepository {
+export interface LegacyPairingCodeRepository {
   readonly get: (pairingId: string) => PairingCodeRecord | null;
   readonly require: (pairingId: string) => PairingCodeRecord;
-  readonly create: (input: CreatePairingCodeInput) => PairingCodeRecord;
-  readonly claim: (input: ClaimPairingCodeInput) => PairingClaim;
-  readonly revoke: (pairingId: string, input: { readonly now: Date }) => PairingCodeRecord;
+  /** @deprecated Historical caller-supplied pairing path. */
+  readonly createLegacy: (input: CreatePairingCodeInput) => PairingCodeRecord;
+  /** @deprecated Historical caller-supplied pairing path. */
+  readonly claimLegacy: (input: ClaimPairingCodeInput) => LegacyPairingClaim;
+  /** @deprecated Historical caller-supplied pairing path. */
+  readonly revokeLegacy: (pairingId: string, input: { readonly now: Date }) => PairingCodeRecord;
 }
 
 interface AuthDeviceRow {
@@ -145,6 +160,8 @@ interface PairingCodeRow {
   readonly expires_at: string;
   readonly used_at: string | null;
   readonly revoked_at: string | null;
+  readonly claim_contract_version: 1 | null;
+  readonly claimed_device_id: string | null;
 }
 
 const pairingCodeMinLength = 6;
@@ -375,7 +392,8 @@ function createCsrfBootstrapTransaction(
   }).immediate;
 }
 
-export function createPairingCodeRepository(db: Database.Database): PairingCodeRepository {
+/** @deprecated Historical caller-supplied pairing path. Use createPairingCodeRepository from selected-pairing-repository. */
+export function createLegacyPairingCodeRepository(db: Database.Database): LegacyPairingCodeRepository {
   return {
     get(pairingId) {
       const row = db.prepare("SELECT * FROM pairing_codes WHERE id = ?").get(pairingId) as PairingCodeRow | undefined;
@@ -390,7 +408,7 @@ export function createPairingCodeRepository(db: Database.Database): PairingCodeR
 
       return pairingCode;
     },
-    create(input) {
+    createLegacy(input) {
       const pairingCode = parsePairingCode({
         id: input.id,
         code_hash: hashPairingCode(input.rawCode),
@@ -399,7 +417,9 @@ export function createPairingCodeRepository(db: Database.Database): PairingCodeR
         created_at: nowIso(input.createdAt),
         expires_at: nowIso(input.expiresAt),
         used_at: null,
-        revoked_at: null
+        revoked_at: null,
+        claim_contract_version: null,
+        claimed_device_id: null
       });
 
       try {
@@ -412,7 +432,9 @@ export function createPairingCodeRepository(db: Database.Database): PairingCodeR
             created_at,
             expires_at,
             used_at,
-            revoked_at
+            revoked_at,
+            claim_contract_version,
+            claimed_device_id
           ) VALUES (
             @id,
             @code_hash,
@@ -421,7 +443,9 @@ export function createPairingCodeRepository(db: Database.Database): PairingCodeR
             @created_at,
             @expires_at,
             @used_at,
-            @revoked_at
+            @revoked_at,
+            @claim_contract_version,
+            @claimed_device_id
           )
         `).run(pairingCodeToRow(pairingCode));
       } catch (error) {
@@ -430,7 +454,7 @@ export function createPairingCodeRepository(db: Database.Database): PairingCodeR
 
       return pairingCode;
     },
-    claim(input) {
+    claimLegacy(input) {
       const claimPairing = db.transaction(() => {
         const pairingCode = requireClaimablePairingCode(db, input.rawCode, input.now);
         const device = insertAuthDevice(
@@ -459,8 +483,15 @@ export function createPairingCodeRepository(db: Database.Database): PairingCodeR
 
       return claimPairing();
     },
-    revoke(pairingId, input) {
+    revokeLegacy(pairingId, input) {
       const current = this.require(pairingId);
+
+      if (current.claim_contract_version !== null) {
+        throw new HostDeckAuthRepositoryError(
+          "pairing_code_legacy",
+          "Selected pairing codes cannot use the legacy revoke path."
+        );
+      }
 
       if (current.revoked_at !== null) {
         return current;
@@ -555,6 +586,13 @@ function requireClaimablePairingCode(db: Database.Database, rawCode: string, now
 
   const pairingCode = parsePairingCodeRow(row);
 
+  if (pairingCode.claim_contract_version !== null) {
+    throw new HostDeckAuthRepositoryError(
+      "pairing_code_legacy",
+      "Selected pairing codes cannot use the legacy claim path."
+    );
+  }
+
   if (pairingCode.revoked_at !== null) {
     throw new HostDeckAuthRepositoryError("pairing_code_revoked", "Pairing code has been revoked.");
   }
@@ -595,7 +633,9 @@ function parsePairingCodeRow(row: PairingCodeRow): PairingCodeRecord {
     created_at: row.created_at,
     expires_at: row.expires_at,
     used_at: row.used_at,
-    revoked_at: row.revoked_at
+    revoked_at: row.revoked_at,
+    claim_contract_version: row.claim_contract_version,
+    claimed_device_id: row.claimed_device_id
   });
 }
 
@@ -644,7 +684,9 @@ function pairingCodeToRow(pairingCode: PairingCodeRecord): PairingCodeRow {
     created_at: pairingCode.created_at,
     expires_at: pairingCode.expires_at,
     used_at: pairingCode.used_at,
-    revoked_at: pairingCode.revoked_at
+    revoked_at: pairingCode.revoked_at,
+    claim_contract_version: pairingCode.claim_contract_version,
+    claimed_device_id: pairingCode.claimed_device_id
   };
 }
 

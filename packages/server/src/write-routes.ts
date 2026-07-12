@@ -558,11 +558,20 @@ function routeErrorForAuth(error: unknown): WriteRouteResult {
     case "duplicate_secret":
     case "invalid_time":
     case "invalid_pairing_code":
+    case "invalid_pairing_policy":
+    case "invalid_pairing_rate_state":
+    case "invalid_pairing_source":
     case "pairing_code_exists":
     case "pairing_code_expired":
+    case "pairing_code_legacy":
     case "pairing_code_not_found":
     case "pairing_code_revoked":
     case "pairing_code_used":
+    case "pairing_claim_capacity":
+    case "pairing_claim_failed":
+    case "pairing_claim_rate_limited":
+    case "pairing_claim_time_conflict":
+    case "pairing_issue_failed":
       return routeError(500, "storage_error", error.message);
   }
 }

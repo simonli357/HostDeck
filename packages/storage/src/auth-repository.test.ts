@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   type AuthRepositoryErrorCode,
   createAuthDeviceRepository,
-  createPairingCodeRepository,
+  createLegacyPairingCodeRepository,
   HostDeckAuthRepositoryError
 } from "./auth-repository.js";
 import { openMigratedDatabase } from "./migration-runner.js";
@@ -26,9 +26,9 @@ describe("auth devices and pairing-code repositories", () => {
     const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
 
     try {
-      const pairingCodes = createPairingCodeRepository(open.db);
+      const pairingCodes = createLegacyPairingCodeRepository(open.db);
       const devices = createAuthDeviceRepository(open.db);
-      const pairing = pairingCodes.create({
+      const pairing = pairingCodes.createLegacy({
         id: "pair_phone",
         rawCode,
         permission: "write",
@@ -45,7 +45,7 @@ describe("auth devices and pairing-code repositories", () => {
         revoked_at: null
       });
 
-      const claim = pairingCodes.claim({
+      const claim = pairingCodes.claimLegacy({
         rawCode,
         deviceId: "client_phone",
         rawDeviceToken,
@@ -87,19 +87,21 @@ describe("auth devices and pairing-code repositories", () => {
     const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
 
     try {
-      const pairingCodes = createPairingCodeRepository(open.db);
-      pairingCodes.create({
+      const pairingCodes = createLegacyPairingCodeRepository(open.db);
+      pairingCodes.createLegacy({
         id: "pair_revoked",
         rawCode: "246810",
         permission: "write",
         createdAt: fixedNow(),
         expiresAt: laterNow()
       });
-      expect(pairingCodes.revoke("pair_revoked", { now: laterNow() }).revoked_at).toBe("2026-07-08T22:05:00.000Z");
+      expect(pairingCodes.revokeLegacy("pair_revoked", { now: laterNow() }).revoked_at).toBe(
+        "2026-07-08T22:05:00.000Z"
+      );
 
       expectAuthError(
         () =>
-          pairingCodes.claim({
+          pairingCodes.claimLegacy({
             rawCode: "246810",
             deviceId: "client_revoked_pair",
             rawDeviceToken,
@@ -109,7 +111,7 @@ describe("auth devices and pairing-code repositories", () => {
         "pairing_code_revoked"
       );
 
-      pairingCodes.create({
+      pairingCodes.createLegacy({
         id: "pair_expired",
         rawCode: "654321",
         permission: "write",
@@ -119,7 +121,7 @@ describe("auth devices and pairing-code repositories", () => {
 
       expectAuthError(
         () =>
-          pairingCodes.claim({
+          pairingCodes.claimLegacy({
             rawCode: "654321",
             deviceId: "client_expired",
             rawDeviceToken,
@@ -129,14 +131,14 @@ describe("auth devices and pairing-code repositories", () => {
         "pairing_code_expired"
       );
 
-      pairingCodes.create({
+      pairingCodes.createLegacy({
         id: "pair_once",
         rawCode,
         permission: "write",
         createdAt: fixedNow(),
         expiresAt: laterNow()
       });
-      pairingCodes.claim({
+      pairingCodes.claimLegacy({
         rawCode,
         deviceId: "client_phone",
         rawDeviceToken,
@@ -146,7 +148,7 @@ describe("auth devices and pairing-code repositories", () => {
 
       expectAuthError(
         () =>
-          pairingCodes.claim({
+          pairingCodes.claimLegacy({
             rawCode,
             deviceId: "client_other",
             rawDeviceToken: "device_token_for_other_client_123456",

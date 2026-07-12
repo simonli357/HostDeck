@@ -1,7 +1,12 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createAuthDeviceRepository, createPairingCodeRepository, createSettingsRepository, openMigratedDatabase } from "@hostdeck/storage";
+import {
+  createAuthDeviceRepository,
+  createLegacyPairingCodeRepository,
+  createSettingsRepository,
+  openMigratedDatabase
+} from "@hostdeck/storage";
 import { afterEach, describe, expect, it } from "vitest";
 import { createSecurityRouteHandlers } from "./index.js";
 
@@ -21,7 +26,7 @@ describe("security and pairing route handlers", () => {
     const harness = createHarness();
 
     try {
-      harness.pairingCodes.create({
+      harness.pairingCodes.createLegacy({
         id: "pair_phone",
         rawCode,
         permission: "write",
@@ -69,15 +74,15 @@ describe("security and pairing route handlers", () => {
     const harness = createHarness({ now: laterNow });
 
     try {
-      harness.pairingCodes.create({
+      harness.pairingCodes.createLegacy({
         id: "pair_revoked",
         rawCode: "246810",
         permission: "write",
         createdAt: fixedNow(),
         expiresAt: laterNow()
       });
-      harness.pairingCodes.revoke("pair_revoked", { now: laterNow() });
-      harness.pairingCodes.create({
+      harness.pairingCodes.revokeLegacy("pair_revoked", { now: laterNow() });
+      harness.pairingCodes.createLegacy({
         id: "pair_expired",
         rawCode,
         permission: "write",
@@ -122,7 +127,7 @@ describe("security and pairing route handlers", () => {
 
     const usedHarness = createHarness();
     try {
-      usedHarness.pairingCodes.create({
+      usedHarness.pairingCodes.createLegacy({
         id: "pair_used",
         rawCode,
         permission: "write",
@@ -338,7 +343,7 @@ function createHarness(input: { readonly now?: () => Date } = {}) {
   const settings = createSettingsRepository(open.db);
   settings.getOrCreateDefault({ stateDir: tempStateDir(), now: fixedNow });
   const authDevices = createAuthDeviceRepository(open.db);
-  const pairingCodes = createPairingCodeRepository(open.db);
+    const pairingCodes = createLegacyPairingCodeRepository(open.db);
   const handlers = createSecurityRouteHandlers({
     authDevices,
     pairingCodes,

@@ -7,7 +7,7 @@ import { createErrorEnvelope, type ErrorCode } from "@hostdeck/core";
 import {
   createAuditEventRepository,
   createAuthDeviceRepository,
-  createPairingCodeRepository,
+  createLegacyPairingCodeRepository,
   createRetentionRepository,
   createSessionMetadataRepository
 } from "@hostdeck/storage";
@@ -138,7 +138,7 @@ function createServiceRouteHandlers(
   const metadata = createSessionMetadataRepository(startup.db);
   const retention = createRetentionRepository(startup.db);
   const authDevices = createAuthDeviceRepository(startup.db);
-  const pairingCodes = createPairingCodeRepository(startup.db);
+  const pairingCodes = createLegacyPairingCodeRepository(startup.db);
   const auditEvents = createAuditEventRepository(startup.db);
   const tmux =
     input.tmux ??

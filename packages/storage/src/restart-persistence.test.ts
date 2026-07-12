@@ -5,7 +5,7 @@ import { defaultRetentionPolicy } from "@hostdeck/contracts";
 import type Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 import { createAuditEventRepository } from "./audit-repository.js";
-import { createAuthDeviceRepository, createPairingCodeRepository } from "./auth-repository.js";
+import { createAuthDeviceRepository, createLegacyPairingCodeRepository } from "./auth-repository.js";
 import { openMigratedDatabase } from "./migration-runner.js";
 import { createRetentionRepository } from "./retention-repository.js";
 import { createSessionMetadataRepository, createSessionRepository } from "./session-repository.js";
@@ -68,7 +68,9 @@ describe("storage restart persistence", () => {
           now: laterNow()
         }).id
       ).toBe("client_restart");
-      expect(createPairingCodeRepository(secondOpen.db).require("pair_restart").used_at).toBe("2026-07-08T22:00:00.000Z");
+      expect(createLegacyPairingCodeRepository(secondOpen.db).require("pair_restart").used_at).toBe(
+        "2026-07-08T22:00:00.000Z"
+      );
 
       const audit = createAuditEventRepository(secondOpen.db);
       expect(audit.require("audit_restart_prompt").session_id).toBe(sessionId);
@@ -102,8 +104,8 @@ function seedDurableState(db: Database.Database, stateDir: string, cwd: string):
   createSessionRepository(db).create(sessionRecord(cwd));
   createSessionMetadataRepository(db).upsert(metadataRecord());
 
-  const pairingCodes = createPairingCodeRepository(db);
-  pairingCodes.create({
+  const pairingCodes = createLegacyPairingCodeRepository(db);
+  pairingCodes.createLegacy({
     id: "pair_restart",
     rawCode,
     permission: "write",
@@ -111,7 +113,7 @@ function seedDurableState(db: Database.Database, stateDir: string, cwd: string):
     createdAt: fixedNow(),
     expiresAt: laterNow()
   });
-  pairingCodes.claim({
+  pairingCodes.claimLegacy({
     rawCode,
     deviceId: "client_restart",
     rawDeviceToken,

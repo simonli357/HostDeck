@@ -16,10 +16,10 @@ afterEach(() => {
 });
 
 describe("SQLite migration runner", () => {
-  it("preserves the checksums of every migration published before the security audit catalog", () => {
+  it("preserves the checksums of every published migration", () => {
     expect(
       Object.fromEntries(
-        defaultMigrations.slice(0, -1).map((migration) => [
+        defaultMigrations.map((migration) => [
           migration.version,
           createHash("sha256").update(migration.sql).digest("hex")
         ])
@@ -33,7 +33,9 @@ describe("SQLite migration runner", () => {
       "202607090006_selected_runtime_state": "b82cd7abd76ab71ab73d7b361cd318dd862edd64749ce64942598c6f972e90fa",
       "202607100007_selected_audit_state": "965189761889f62c787c07f190b5c0aa76d90f17b00b4f97fcbe46121bfec9f2",
       "202607100008_selected_retention_indexes": "e07bb8c5f498294775002c96052b1ae94282e2daf6b8afdd6dd49b08e9e9e8ae",
-      "202607110009_auth_device_csrf_rotation": "464b37ea4aafd1d094d7abf4297cc012403d482871d06554f21fdda7d170d5ce"
+      "202607110009_auth_device_csrf_rotation": "464b37ea4aafd1d094d7abf4297cc012403d482871d06554f21fdda7d170d5ce",
+      "202607110010_security_audit_catalog": "1db9a127f80ba20f120cd8bbf9b65bc57fc2ca859d82e50a4f213f10d16ba0ab",
+      "202607110011_selected_pairing_claim": "6491026ff2fd23c5346273dbda5b3f5f6927d7c8b953b403ba512b5af83db927"
     });
   });
 
@@ -54,13 +56,16 @@ describe("SQLite migration runner", () => {
         "202607100007_selected_audit_state",
         "202607100008_selected_retention_indexes",
         "202607110009_auth_device_csrf_rotation",
-        "202607110010_security_audit_catalog"
+        "202607110010_security_audit_catalog",
+        "202607110011_selected_pairing_claim"
       ]);
       expect(tableNames(db)).toEqual([
         "audit_events",
         "auth_devices",
         "legacy_session_dispositions",
         "output_events",
+        "pairing_claim_rate_global",
+        "pairing_claim_rate_sources",
         "pairing_codes",
         "retention_boundaries",
         "schema_migrations",
@@ -74,7 +79,7 @@ describe("SQLite migration runner", () => {
         "sessions",
         "settings"
       ]);
-      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 10 });
+      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 11 });
       expect(
         db
           .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
@@ -112,7 +117,8 @@ describe("SQLite migration runner", () => {
         "202607100007_selected_audit_state",
         "202607100008_selected_retention_indexes",
         "202607110009_auth_device_csrf_rotation",
-        "202607110010_security_audit_catalog"
+        "202607110010_security_audit_catalog",
+        "202607110011_selected_pairing_claim"
       ]);
       expect(migrated.db.prepare("SELECT id FROM audit_events WHERE id = 'audit_legacy_preserved'").get()).toEqual({
         id: "audit_legacy_preserved"
@@ -170,7 +176,8 @@ describe("SQLite migration runner", () => {
       expect(migrated.result.applied).toEqual([
         "202607100008_selected_retention_indexes",
         "202607110009_auth_device_csrf_rotation",
-        "202607110010_security_audit_catalog"
+        "202607110010_security_audit_catalog",
+        "202607110011_selected_pairing_claim"
       ]);
       expect(migrated.db.prepare("SELECT id FROM selected_audit_events WHERE operation_id = ?").get("op_index_preserved")).toEqual({
         id: "audit:index:preserved"
@@ -233,7 +240,8 @@ describe("SQLite migration runner", () => {
     try {
       expect(migrated.result.applied).toEqual([
         "202607110009_auth_device_csrf_rotation",
-        "202607110010_security_audit_catalog"
+        "202607110010_security_audit_catalog",
+        "202607110011_selected_pairing_claim"
       ]);
       expect(migrated.db.prepare("SELECT * FROM auth_devices WHERE id = ?").get("client_csrf_migration")).toEqual({
         id: "client_csrf_migration",
@@ -317,7 +325,10 @@ describe("SQLite migration runner", () => {
 
     const migrated = openMigratedDatabase(path, { now: fixedNow });
     try {
-      expect(migrated.result.applied).toEqual(["202607110010_security_audit_catalog"]);
+      expect(migrated.result.applied).toEqual([
+        "202607110010_security_audit_catalog",
+        "202607110011_selected_pairing_claim"
+      ]);
       expect(
         migrated.db
           .prepare(
@@ -434,7 +445,7 @@ describe("SQLite migration runner", () => {
     try {
       insertSelectedAuditRecord(rollback.db, accepted);
       const forcedFailure: StorageMigration = {
-        version: "202607110011_forced_security_audit_failure",
+        version: "202607110012_forced_security_audit_failure",
         sql: "CREATE TABLE security_audit_failure_probe (id TEXT); SELECT * FROM missing_security_audit_table;"
       };
       expect(() =>
@@ -450,6 +461,252 @@ describe("SQLite migration runner", () => {
       expect(
         rollback.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'security_audit_failure_probe'").get()
       ).toBeUndefined();
+    } finally {
+      rollback.db.close();
+    }
+  });
+
+  it("adds selected pairing ownership and bounded rate state without inventing legacy owners", () => {
+    const path = tempDbPath();
+    const prior = openMigratedDatabase(path, {
+      migrations: migrationsThrough("202607110010_security_audit_catalog"),
+      now: fixedNow
+    });
+    const oldRows = [
+      {
+        id: "pair_migration_unused",
+        code_hash: `sha256:${"1".repeat(64)}`,
+        permission: "write",
+        client_label: "old-phone",
+        created_at: "2026-07-11T20:00:00.000Z",
+        expires_at: "2026-07-11T20:05:00.000Z",
+        used_at: null,
+        revoked_at: null
+      },
+      {
+        id: "pair_migration_used",
+        code_hash: `sha256:${"2".repeat(64)}`,
+        permission: "read",
+        client_label: null,
+        created_at: "2026-07-11T20:00:00.000Z",
+        expires_at: "2026-07-11T20:05:00.000Z",
+        used_at: "2026-07-11T20:01:00.000Z",
+        revoked_at: null
+      },
+      {
+        id: "pair_migration_revoked",
+        code_hash: `sha256:${"3".repeat(64)}`,
+        permission: "write",
+        client_label: null,
+        created_at: "2026-07-11T20:00:00.000Z",
+        expires_at: "2026-07-11T20:05:00.000Z",
+        used_at: null,
+        revoked_at: "2026-07-11T20:02:00.000Z"
+      }
+    ] as const;
+    for (const row of oldRows) {
+      prior.db
+        .prepare(
+          `
+            INSERT INTO pairing_codes (
+              id, code_hash, permission, client_label, created_at, expires_at, used_at, revoked_at
+            ) VALUES (
+              @id, @code_hash, @permission, @client_label, @created_at, @expires_at, @used_at, @revoked_at
+            )
+          `
+        )
+        .run(row);
+    }
+    const rowsBefore = prior.db
+      .prepare(
+        "SELECT id, code_hash, permission, client_label, created_at, expires_at, used_at, revoked_at " +
+          "FROM pairing_codes ORDER BY id"
+      )
+      .all();
+    prior.db.close();
+
+    const migrated = openMigratedDatabase(path, { now: fixedNow });
+    try {
+      expect(migrated.result.applied).toEqual(["202607110011_selected_pairing_claim"]);
+      expect(
+        migrated.db
+          .prepare(
+            "SELECT id, code_hash, permission, client_label, created_at, expires_at, used_at, revoked_at " +
+              "FROM pairing_codes ORDER BY id"
+          )
+          .all()
+      ).toEqual(rowsBefore);
+      expect(
+        migrated.db
+          .prepare("SELECT DISTINCT claim_contract_version, claimed_device_id FROM pairing_codes")
+          .all()
+      ).toEqual([{ claim_contract_version: null, claimed_device_id: null }]);
+      expect(
+        migrated.db
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'pairing_claim_rate_%' ORDER BY name")
+          .all()
+      ).toEqual([{ name: "pairing_claim_rate_global" }, { name: "pairing_claim_rate_sources" }]);
+      expect(
+        migrated.db
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'pairing_claim_rate_sources_last_attempt_idx'")
+          .get()
+      ).toEqual({ name: "pairing_claim_rate_sources_last_attempt_idx" });
+
+      insertMigrationAuthDevice(migrated.db, "client_pair_migration_owner");
+      const selected = {
+        id: "pair_migration_selected",
+        code_hash: `sha256:${"4".repeat(64)}`,
+        permission: "write",
+        client_label: "selected-phone",
+        created_at: "2026-07-11T20:00:00.000Z",
+        expires_at: "2026-07-11T20:05:00.000Z",
+        used_at: "2026-07-11T20:01:00.000Z",
+        revoked_at: null,
+        claim_contract_version: 1,
+        claimed_device_id: "client_pair_migration_owner"
+      } as const;
+      insertMigrationPairingCode(migrated.db, selected);
+      expect(() =>
+        insertMigrationPairingCode(migrated.db, {
+          ...selected,
+          id: "pair_migration_missing_owner",
+          code_hash: `sha256:${"5".repeat(64)}`,
+          claimed_device_id: null
+        })
+      ).toThrow();
+      expect(() =>
+        insertMigrationPairingCode(migrated.db, {
+          ...selected,
+          id: "pair_migration_foreign_owner",
+          code_hash: `sha256:${"6".repeat(64)}`,
+          claimed_device_id: "client_pair_migration_missing"
+        })
+      ).toThrow();
+      expect(() =>
+        insertMigrationPairingCode(migrated.db, {
+          ...selected,
+          id: "pair_migration_duplicate_owner",
+          code_hash: `sha256:${"7".repeat(64)}`
+        })
+      ).toThrow();
+      for (const candidate of [
+        {
+          ...selected,
+          id: "pair_migration_non_sha256",
+          code_hash: `legacy:${"a".repeat(64)}`,
+          used_at: null,
+          claimed_device_id: null
+        },
+        {
+          ...selected,
+          id: "pair_migration_early_revoke",
+          code_hash: `sha256:${"b".repeat(64)}`,
+          used_at: null,
+          revoked_at: "2026-07-11T19:59:59.999Z",
+          claimed_device_id: null
+        },
+        {
+          ...selected,
+          id: "pair_migration_equal_expiry",
+          code_hash: `sha256:${"c".repeat(64)}`,
+          expires_at: selected.created_at,
+          used_at: null,
+          claimed_device_id: null
+        },
+        {
+          ...selected,
+          id: "pair_migration_unknown_provenance",
+          code_hash: `sha256:${"d".repeat(64)}`,
+          used_at: null,
+          claim_contract_version: 2,
+          claimed_device_id: null
+        }
+      ]) {
+        expect(() => insertMigrationPairingCode(migrated.db, candidate)).toThrow();
+      }
+
+      const sourceKey = `sha256:${"a".repeat(64)}`;
+      migrated.db
+        .prepare(
+          "INSERT INTO pairing_claim_rate_sources " +
+            "(source_key, window_started_at, attempt_count, last_attempt_at) VALUES (?, ?, 1, ?)"
+        )
+        .run(sourceKey, "2026-07-11T20:00:00.000Z", "2026-07-11T20:01:00.000Z");
+      migrated.db
+        .prepare(
+          "INSERT INTO pairing_claim_rate_global " +
+            "(id, window_started_at, attempt_count, last_attempt_at) VALUES ('pair_claim_global', ?, 1, ?)"
+        )
+        .run("2026-07-11T20:00:00.000Z", "2026-07-11T20:01:00.000Z");
+      for (const invalidSource of ["sha256:short", `sha256:${"A".repeat(64)}`]) {
+        expect(() =>
+          migrated.db
+            .prepare(
+              "INSERT INTO pairing_claim_rate_sources " +
+                "(source_key, window_started_at, attempt_count, last_attempt_at) VALUES (?, ?, 1, ?)"
+            )
+            .run(invalidSource, "2026-07-11T20:00:00.000Z", "2026-07-11T20:01:00.000Z")
+        ).toThrow();
+      }
+      expect(() =>
+        migrated.db
+          .prepare("UPDATE pairing_claim_rate_sources SET attempt_count = 0 WHERE source_key = ?")
+          .run(sourceKey)
+      ).toThrow();
+      expect(() =>
+        migrated.db
+          .prepare("UPDATE pairing_claim_rate_global SET id = 'other' WHERE id = 'pair_claim_global'")
+          .run()
+      ).toThrow();
+      expect(() =>
+        migrated.db
+          .prepare("UPDATE pairing_claim_rate_sources SET last_attempt_at = ? WHERE source_key = ?")
+          .run("2026-07-11T19:59:59.999Z", sourceKey)
+      ).toThrow();
+      expect(() =>
+        migrated.db
+          .prepare("UPDATE pairing_claim_rate_global SET attempt_count = ? WHERE id = 'pair_claim_global'")
+          .run(Number.MAX_SAFE_INTEGER + 1)
+      ).toThrow();
+      const plan = migrated.db
+        .prepare(
+          "EXPLAIN QUERY PLAN SELECT source_key FROM pairing_claim_rate_sources " +
+            "WHERE last_attempt_at <= ? ORDER BY last_attempt_at, source_key LIMIT ?"
+        )
+        .all("2027-01-01T00:00:00.000Z", 64) as Array<{ readonly detail: string }>;
+      expect(plan.some(({ detail }) => detail.includes("pairing_claim_rate_sources_last_attempt_idx"))).toBe(true);
+    } finally {
+      migrated.db.close();
+    }
+
+    const rollbackPath = tempDbPath();
+    const rollback = openMigratedDatabase(rollbackPath, {
+      migrations: migrationsThrough("202607110010_security_audit_catalog"),
+      now: fixedNow
+    });
+    try {
+      rollback.db
+        .prepare(
+          "INSERT INTO pairing_codes " +
+            "(id, code_hash, permission, client_label, created_at, expires_at, used_at, revoked_at) " +
+            "VALUES ('pair_rollback_preserved', ?, 'write', NULL, ?, ?, NULL, NULL)"
+        )
+        .run(`sha256:${"8".repeat(64)}`, "2026-07-11T20:00:00.000Z", "2026-07-11T20:05:00.000Z");
+      const forcedFailure: StorageMigration = {
+        version: "202607110012_forced_pairing_claim_failure",
+        sql: "CREATE TABLE pairing_claim_failure_probe (id TEXT); SELECT * FROM missing_pairing_claim_table;"
+      };
+      expect(() =>
+        runMigrations(rollback.db, { migrations: [...defaultMigrations, forcedFailure], now: fixedNow })
+      ).toThrow(HostDeckMigrationError);
+      expect(rollback.db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 10 });
+      const tableSql = rollback.db
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'pairing_codes'")
+        .get() as { readonly sql: string };
+      expect(tableSql.sql).not.toContain("claim_contract_version");
+      expect(rollback.db.prepare("SELECT id FROM pairing_codes").all()).toEqual([{ id: "pair_rollback_preserved" }]);
+      expect(tableNames(rollback.db)).not.toContain("pairing_claim_rate_sources");
+      expect(tableNames(rollback.db)).not.toContain("pairing_claim_failure_probe");
     } finally {
       rollback.db.close();
     }
@@ -489,7 +746,8 @@ describe("SQLite migration runner", () => {
         "202607100007_selected_audit_state",
         "202607100008_selected_retention_indexes",
         "202607110009_auth_device_csrf_rotation",
-        "202607110010_security_audit_catalog"
+        "202607110010_security_audit_catalog",
+        "202607110011_selected_pairing_claim"
       ]);
       expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM selected_sessions").get()).toEqual({ count: 0 });
       expect(migrated.db.prepare("SELECT * FROM legacy_session_dispositions").get()).toMatchObject({
@@ -683,6 +941,37 @@ function insertSelectedAuditRecord(
       )
     `
   ).run({ ...record, record_json: JSON.stringify(record), security_schema_version: securitySchemaVersion });
+}
+
+function insertMigrationAuthDevice(db: Database.Database, id: string): void {
+  db.prepare(
+    `
+      INSERT INTO auth_devices (
+        id, token_hash, csrf_token_hash, csrf_generation, csrf_rotated_at,
+        client_label, permission, created_at, last_used_at, expires_at, revoked_at
+      ) VALUES (?, ?, ?, 1, ?, NULL, 'write', ?, NULL, NULL, NULL)
+    `
+  ).run(
+    id,
+    `sha256:${"9".repeat(64)}`,
+    `sha256:${"0".repeat(64)}`,
+    "2026-07-11T20:00:00.000Z",
+    "2026-07-11T20:00:00.000Z"
+  );
+}
+
+function insertMigrationPairingCode(db: Database.Database, row: Readonly<Record<string, unknown>>): void {
+  db.prepare(
+    `
+      INSERT INTO pairing_codes (
+        id, code_hash, permission, client_label, created_at, expires_at,
+        used_at, revoked_at, claim_contract_version, claimed_device_id
+      ) VALUES (
+        @id, @code_hash, @permission, @client_label, @created_at, @expires_at,
+        @used_at, @revoked_at, @claim_contract_version, @claimed_device_id
+      )
+    `
+  ).run(row);
 }
 
 function tempDbPath(): string {

@@ -93,7 +93,9 @@ export const resourceBudgetDefinitions = Object.freeze([
   defineResource("sse_shutdown_timeout_ms", "milliseconds", 50, 2_000, 10_000, "sse_transport", "operation_timeout", "abort_operation"),
 
   defineResource("pair_claim_window_ms", "milliseconds", 1_000, 60_000, 300_000, "trust_service", "rate_limited", "reject_request"),
+  defineResource("pairing_code_lifetime_ms", "milliseconds", 60_000, 300_000, 600_000, "trust_service", "rate_limited", "reject_request"),
   defineResource("pair_claim_max_attempts_per_source", "count", 1, 10, 100, "trust_service", "rate_limited", "reject_request"),
+  defineResource("pair_claim_max_attempts_global", "count", 1, 100, 1_000, "trust_service", "rate_limited", "reject_request"),
   defineResource("pair_claim_max_in_flight_per_source", "count", 1, 1, 4, "trust_service", "service_overloaded", "reject_request"),
   defineResource("pair_claim_max_in_flight", "count", 1, 4, 32, "trust_service", "service_overloaded", "reject_request"),
   defineResource("mutation_window_ms", "milliseconds", 1_000, 60_000, 300_000, "trust_service", "rate_limited", "reject_request"),
@@ -195,7 +197,13 @@ export const resourceBudgetSchema = z
     atMost("sse_disconnect_cleanup_timeout_ms", "lifecycle_shutdown_timeout_ms", "SSE disconnect cleanup must fit within shutdown.");
     atMost("sse_shutdown_timeout_ms", "lifecycle_shutdown_timeout_ms", "SSE shutdown must fit within host shutdown.");
 
-    atMost("pair_claim_window_ms", "admission_state_ttl_ms", "Pair-claim state must outlive its rate window.");
+    atMost("pair_claim_window_ms", "pairing_code_lifetime_ms", "Pairing codes must outlive one complete claim window.");
+    atMost("pairing_code_lifetime_ms", "admission_state_ttl_ms", "Pair-claim state must outlive a selected pairing code.");
+    atMost(
+      "pair_claim_max_attempts_per_source",
+      "pair_claim_max_attempts_global",
+      "Per-source pair attempts cannot exceed the global attempt ceiling."
+    );
     atMost("mutation_window_ms", "admission_state_ttl_ms", "Mutation admission state must outlive its rate window.");
     atMost("pair_claim_max_in_flight_per_source", "pair_claim_max_in_flight", "Per-source pair-claim concurrency cannot exceed global concurrency.");
     atMost("mutation_max_in_flight_per_device", "mutation_max_in_flight_global", "Per-device mutation concurrency cannot exceed global concurrency.");

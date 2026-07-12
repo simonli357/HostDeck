@@ -3,7 +3,7 @@ import { closeSync } from "node:fs";
 import type { AuditEventRecord, PairingCodeRecord, SettingsRecord } from "@hostdeck/contracts";
 import {
   createAuditEventRepository,
-  createPairingCodeRepository,
+  createLegacyPairingCodeRepository,
   createSettingsRepository,
   HostDeckAuthRepositoryError,
   HostDeckLocalPathError,
@@ -74,7 +74,7 @@ type OpenedDatabase = ReturnType<typeof openMigratedDatabase>["db"];
 
 interface LocalAdminRepos {
   readonly db: OpenedDatabase;
-  readonly pairingCodes: ReturnType<typeof createPairingCodeRepository>;
+  readonly pairingCodes: ReturnType<typeof createLegacyPairingCodeRepository>;
   readonly settings: ReturnType<typeof createSettingsRepository>;
   readonly auditEvents: ReturnType<typeof createAuditEventRepository>;
 }
@@ -103,7 +103,7 @@ export function createLocalAdmin(options: CreateLocalAdminOptions): LocalAdmin {
         try {
           return withLocalAdminRepos(options, now, (repos) => {
             const transaction = repos.db.transaction(() => {
-              const pairingCode = repos.pairingCodes.create({
+              const pairingCode = repos.pairingCodes.createLegacy({
                 id: pairingId,
                 rawCode,
                 permission: input.permission,
@@ -268,7 +268,7 @@ function withLocalAdminRepos<T>(options: CreateLocalAdminOptions, now: () => Dat
   try {
     const repos = {
       db: opened.db,
-      pairingCodes: createPairingCodeRepository(opened.db),
+      pairingCodes: createLegacyPairingCodeRepository(opened.db),
       settings: createSettingsRepository(opened.db),
       auditEvents: createAuditEventRepository(opened.db)
     };

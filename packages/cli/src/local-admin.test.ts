@@ -1,7 +1,12 @@
 import { chmodSync, linkSync, lstatSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createAuditEventRepository, createPairingCodeRepository, createSettingsRepository, openMigratedDatabase } from "@hostdeck/storage";
+import {
+  createAuditEventRepository,
+  createLegacyPairingCodeRepository,
+  createSettingsRepository,
+  openMigratedDatabase
+} from "@hostdeck/storage";
 import { afterEach, describe, expect, it } from "vitest";
 import { createLocalAdmin } from "./local-admin.js";
 
@@ -36,11 +41,11 @@ describe("CLI local admin commands", () => {
 
     const opened = openMigratedDatabase(harness.databasePath);
     try {
-      const pairing = createPairingCodeRepository(opened.db).require(result.pairing_id);
+      const pairing = createLegacyPairingCodeRepository(opened.db).require(result.pairing_id);
       expect(pairing.code_hash).not.toBe(result.code);
       expect(pairing.code_hash).toMatch(/^sha256:/u);
       expect(opened.db.prepare("SELECT id, token_hash FROM auth_devices").all()).toHaveLength(0);
-      expect(createPairingCodeRepository(opened.db).claim({
+      expect(createLegacyPairingCodeRepository(opened.db).claimLegacy({
         rawCode: result.code,
         deviceId: "client_phone",
         rawDeviceToken: "device_token_from_claim_test_123456",

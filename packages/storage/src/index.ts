@@ -8,14 +8,15 @@ export {
   type AuthDeviceAuthentication,
   type AuthDeviceRepository,
   type AuthDeviceRepositoryOptions,
+  type AuthRepositoryErrorCode,
   type CsrfBootstrapRotation,
   createAuthDeviceRepository,
-  createPairingCodeRepository,
+  createLegacyPairingCodeRepository,
   type HashSecretOptions,
   HostDeckAuthRepositoryError,
   hashSecret,
-  type PairingClaim,
-  type PairingCodeRepository,
+  type LegacyPairingClaim,
+  type LegacyPairingCodeRepository,
   type RotateCsrfBootstrapInput
 } from "./auth-repository.js";
 export {
@@ -47,6 +48,7 @@ export {
   hostDeckBaseSchemaMigration,
   hostDeckRetentionBoundaryScopeChecksMigration,
   hostDeckSelectedAuditStateMigration,
+  hostDeckSelectedPairingClaimMigration,
   hostDeckSelectedRetentionIndexesMigration,
   hostDeckSelectedRuntimeStateMigration,
   hostDeckSessionMetadataFailedStatusMigration,
@@ -113,6 +115,16 @@ export {
   type SelectedAuditRetentionBatchInput,
   type SelectedAuditRetentionBatchResult
 } from "./selected-audit-repository.js";
+export {
+  type ClaimSelectedPairingCodeInput,
+  createPairingCodeRepository,
+  type IssuedPairingCode,
+  type IssuePairingCodeInput,
+  type PairingClaimRateSnapshot,
+  type PairingCodeRepository,
+  type PairingCodeRepositoryOptions,
+  type SelectedPairingClaim
+} from "./selected-pairing-repository.js";
 export {
   type AppendSelectedEventResult,
   createSelectedStateRepository,

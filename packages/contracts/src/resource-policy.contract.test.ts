@@ -15,7 +15,7 @@ import {
 
 describe("selected V1 resource budget", () => {
   it("defines one complete, immutable, observable registry", () => {
-    expect(resourceBudgetDefinitions).toHaveLength(76);
+    expect(resourceBudgetDefinitions).toHaveLength(78);
     expect(Object.isFrozen(resourceBudgetDefinitions)).toBe(true);
     expect(Object.isFrozen(defaultResourceBudget)).toBe(true);
     expect(Object.isFrozen(resourceBudgetDefinitionByKey)).toBe(true);
@@ -55,7 +55,9 @@ describe("selected V1 resource budget", () => {
       sse_max_subscribers_per_device: 8,
       sse_queue_max_events: 256,
       sse_queue_max_bytes: 1_048_576,
+      pairing_code_lifetime_ms: 300_000,
       pair_claim_max_attempts_per_source: 10,
+      pair_claim_max_attempts_global: 100,
       pair_claim_max_in_flight_per_source: 1,
       mutation_max_in_flight_per_device: 2,
       mutation_max_in_flight_per_target: 1,
@@ -140,6 +142,9 @@ describe("selected V1 resource budget", () => {
       { sse_disconnect_cleanup_timeout_ms: 10_000, lifecycle_shutdown_timeout_ms: 1_000 },
       { sse_shutdown_timeout_ms: 10_000, lifecycle_shutdown_timeout_ms: 1_000 },
       { pair_claim_window_ms: 300_000, admission_state_ttl_ms: 60_000 },
+      { pair_claim_window_ms: 300_000, pairing_code_lifetime_ms: 60_000 },
+      { pairing_code_lifetime_ms: 600_000, admission_state_ttl_ms: 60_000 },
+      { pair_claim_max_attempts_per_source: 100, pair_claim_max_attempts_global: 1 },
       { mutation_window_ms: 300_000, admission_state_ttl_ms: 60_000 },
       { protocol_model_page_size: 128, protocol_model_max_entries: 64 },
       { pair_claim_max_in_flight_per_source: 4, pair_claim_max_in_flight: 1 },
