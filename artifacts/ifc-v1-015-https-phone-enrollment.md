@@ -50,6 +50,13 @@ Validation after the spike:
 - Contract: 14 files/138 tests; integration: 2 files/16 tests; web: 2 files/14 tests.
 - Root/server typechecks, lint/package exports (270 files, 9 packages), scaffold, planning, exact Codex binding, offline frozen install, production audit, license review, and diff checks pass.
 
+Closure rerun after the physical gate:
+
+- Focused certificate profile: 1 file/6 tests passed.
+- Unit: 85 files passed, 16 skipped; 762 tests passed, 29 explicit external tests skipped.
+- Contract: 14 files/138 tests; integration: 2 files/16 tests; web: 2 files/14 tests.
+- Root typecheck, lint/package exports (270 files, 9 packages), scaffold, planning (196 tasks, 84 requirements, 631 dependencies, 3 queued), exact Codex 0.144.0 binding, offline frozen install, production audit, image integrity, and manual contact-sheet inspection pass.
+
 ## Physical Android Evidence
 
 Device and network:

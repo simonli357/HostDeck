@@ -44,7 +44,7 @@ Local-admin CLI calls use an explicit loopback/admin authority, not a magic miss
 | Work | Tasks | Status |
 | --- | --- | --- |
 | Historical headless routes/custom listener/source CLI | `IFC-V1-001` to `IFC-V1-014`, `IFC-V1-090` | Retained reusable evidence; production block reopened. |
-| HTTPS enrollment decision and phone proof | `IFC-V1-015` | In progress after planning rebaseline. |
+| HTTPS enrollment decision and phone proof | `IFC-V1-015` | Complete; selected X.509 profile and dependency pass host validation plus Android 16/Chrome trust, renewal, rejection, removal, recovery, and cleanup. |
 | Fastify stack/API contract spike | `IFC-V1-016` | Complete; exact Fastify/Zod/SSE/static dependencies and constrained validation/stream/asset/lifecycle boundaries are proven. |
 | Resource budgets and monotonic deadline contract | `IFC-V1-020` | Complete; 59 strict resource definitions, Fastify/Codex mappings, public breach codes, and owner/view fake-clock evidence precede enforcement. |
 | Typed app, SSE adapter, static boundary, and listener lifecycle | `IFC-V1-022` to `IFC-V1-025` | Complete; typed unbound app, bounded SSE with real finite completion, hardened static boundary, upfront runtime ownership, exact loopback listener, Node limit inventory, and bounded reverse cleanup pass. HTTPS, selected route composition, mutable health, and complete application drain remain downstream. |

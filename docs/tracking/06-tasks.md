@@ -15,14 +15,14 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-015` Prove HTTPS certificate enrollment on a real phone | in_progress | none | Resolves the independent physical-device LAN trust gate while the runtime aggregate is externally blocked. |
-| 2 | `INT-V1-027` Prove the assembled real structured vertical | blocked | Authenticated turn usage reset; host Bubblewrap AppArmor profile | Resume the unchanged aggregate when both external runtime conditions are available. |
+| 1 | `DAT-V1-021` Implement atomic CSRF bootstrap storage | ready | none | Uses the now-frozen HTTPS/browser policy and unlocks the dependency-ordered device security repositories. |
+| 2 | `IFC-V1-017` Implement transport, Host, Origin, and CORS trust gate | ready | none | Applies the physically proven HTTPS origin contract before authentication or route data. |
+| 3 | `INT-V1-027` Prove the assembled real structured vertical | blocked | Authenticated turn usage reset; host Bubblewrap AppArmor profile | Resume the unchanged aggregate when both external runtime conditions are available. |
 
 ## Intentional Blockers
 
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
-| LAN security | `IFC-V1-015` | Real phone certificate-enrollment proof | Auth lifecycle, pairing UI, security/release review. |
 | Real Codex operation implementation | `INT-V1-027` | Every exact operation port passes; the assembled real two-thread callback vertical remains | Production operation API, stable mobile state matrix, approvals. |
 | Mobile visual direction | Reopened `FE-V1-002`, `FE-V1-003` | Real state matrix, two replacement options, human selection | React screen implementation. |
 | Release | `REL-V1-010` | All module hardening, clean package/service/phone/security evidence, human acceptance | V1 release and V2 planning. |

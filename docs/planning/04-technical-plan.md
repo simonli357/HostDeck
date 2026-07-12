@@ -227,7 +227,7 @@ Host allowlists are derived from configured origin/certificate names, not reflec
 
 ### LAN Certificates
 
-`IFC-V1-015` must select and prove one enrollment workflow on a real phone. It must produce:
+`IFC-V1-015` selected and physically proved one Android/Chrome enrollment workflow. Production certificate ownership must preserve:
 
 - owner-only CA/key and leaf-key storage;
 - SAN coverage for the configured host/IP;
@@ -237,7 +237,7 @@ Host allowlists are derived from configured origin/certificate names, not reflec
 - no secret in logs, QR payloads, or command history;
 - explicit refusal to start LAN when certificate, host allowlist, or permissions are invalid.
 
-The host-side candidate profile uses one assigned RFC1918 IPv4 or IPv6 ULA as an exact IP SAN, RSA-2048/SHA-256, a 3,650-day path-length-zero root, a 397-day server-only leaf, five-minute issuance skew, and renewal at 30 days remaining. Leaf renewal retains the root; root rotation requires explicit device re-enrollment. `artifacts/ifc-v1-015-https-phone-enrollment.md` records the dependency and Node/OpenSSL evidence. These values are not final until the physical browser gate passes.
+The selected profile uses one assigned RFC1918 IPv4 or IPv6 ULA as an exact IP SAN, RSA-2048/SHA-256, a 3,650-day path-length-zero root, a 397-day server-only leaf, five-minute issuance skew, and renewal at 30 days remaining. Leaf renewal retains the root; root rotation requires explicit device re-enrollment. `@peculiar/x509` 2.0.0 plus `reflect-metadata` 0.2.2 is the selected generation stack. `artifacts/ifc-v1-015-https-phone-enrollment.md` records host and physical Android 16/Chrome evidence for exact-IP trust, renewal, isolated SAN/date/authority rejection, plaintext refusal, trust removal/reinstall recovery, and cleanup. A second mobile OS/browser family remains a later browser/release gate.
 
 ## Storage Model
 
@@ -326,7 +326,7 @@ No stored tmux session is silently converted to a Codex thread. V1 pre-release d
 | `SPK-ARCH-006` / `INT-V1-003` | What exact Codex version/schema/capability policy is supported? | Generated binding drift check and compatibility matrix. | Adapter/session/control implementation. |
 | `SPK-ARCH-007` / `INT-V1-006` | Do real turn, approval, plan, multi-client, reconnect, and restart semantics satisfy V1? | Real Codex vertical artifact with no fake producer. | Legacy disposition, UI mockups, runtime hardening. |
 | `SPK-ARCH-008` / `IFC-V1-016` | Which exact Fastify 5, Zod 4, official SSE, and static stack satisfies V1 validation, streaming, asset, and lifecycle contracts on Node 22? | Complete: `artifacts/ifc-v1-016-fastify-stack-spike.md`; exact MIT dependencies, clean production audit, and six executable boundary probes. | `IFC-V1-020`, `IFC-V1-022` to `IFC-V1-025`. |
-| `SPK-SEC-001` / `IFC-V1-015` | Which local HTTPS certificate enrollment works on supported phone browsers? | Real phone install/connect/renew/reject evidence and dependency decision. | LAN implementation, pairing UI, release smoke. |
+| `SPK-SEC-001` / `IFC-V1-015` | Which local HTTPS certificate enrollment works on supported phone browsers? | Complete: `artifacts/ifc-v1-015-https-phone-enrollment.md`; selected dependency/profile plus real Android 16/Chrome install, renewal, rejection, removal, recovery, and cleanup evidence. | LAN implementation, pairing UI, release smoke. |
 
 ## External References
 
