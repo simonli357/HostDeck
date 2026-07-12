@@ -28,6 +28,7 @@ export * from "./projection-fanout-hub.js";
 export * from "./projection-replay-live-handoff.js";
 export * from "./read-routes.js";
 export * from "./restart-reconciler.js";
+export * from "./security-mutation-audit-executor.js";
 export * from "./security-routes.js";
 export * from "./selected-api-route-manifest.js";
 export * from "./session-control-routes.js";
