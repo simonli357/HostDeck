@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M1 selected foundation.
-- Active task: `IFC-V1-032` security mutation audit-executor hardening-criteria audit.
+- Active task: `IFC-V1-032` security mutation audit-executor implementation against frozen hard criteria.
 - `IFC-V1-047` real HTTP resource limits are complete. `INT-V1-027` remains blocked on the authenticated turn reset and host Bubblewrap AppArmor profile; its unchanged aggregate remains the next runtime action when both are available.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -210,4 +210,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `DAT-V1-028` criteria are pushed as `be18c52`; implementation is pushed as `0e5d5e7`. This closure advances the storage queue to `DAT-V1-025` while selected revoke routes remain blocked on authentication, CSRF, audit execution, and route gates.
 - `DAT-V1-025` criteria are pushed as `c1430b9`; implementation is pushed as `133080f`. This closure completes the selected device-storage leaves and advances the queue to `IFC-V1-026` cookie authentication.
 - `IFC-V1-026` criteria are pushed as `d17cad2`; implementation is pushed as `9b88d6d`. This closure makes `IFC-V1-029` device listing plus `IFC-V1-069`, `IFC-V1-060`, `IFC-V1-043`, and `IFC-V1-065` read routes ready, and advances the queue to the security audit executor.
-- Next action: audit `IFC-V1-032` against production-hardening criteria before implementing accepted-to-terminal security mutation audit orchestration. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
+- Next action: implement the frozen `IFC-V1-032` exact executor port, accepted/rejected/terminal ordering, response-preparation handoff, terminal-failure truth, emergency-lock degradation, concurrency, crash, and privacy matrices. Resume the unchanged `INT-V1-027` aggregate when authenticated turns and the required host profile are available.
