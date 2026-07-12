@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M2/M3 selected runtime and host-interface integration; M1 foundation is complete.
-- Active task: `IFC-V1-030` host lock/read gate and local-admin lock/unlock boundary is under production-hardening audit before implementation.
+- Active task: `IFC-V1-030` host lock/read gate and local-admin lock/unlock boundary is implemented on branch `ifc-v1-030-host-lock`; supported-Linux aggregate validation remains required before closure.
 - `IFC-V1-047` real HTTP resource limits are complete. `INT-V1-027` remains blocked on the authenticated turn reset and host Bubblewrap AppArmor profile; its unchanged aggregate remains the next runtime action when both are available.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -70,6 +70,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Not Proven
 
+- `IFC-V1-030` is not yet closed: exact contracts, atomic SQLite transition, branded policy/gate, route authority, audit-degradation, TLS-policy, and privacy evidence pass locally, but this Windows checkout cannot prove the supported-Linux aggregate. Linux-native ownership/mode, `fs-ext`, Unix-socket, tmux, and path-expectation suites fail for platform reasons; the installed Codex reports `0.144.0-alpha.4` rather than reviewed `0.144.0`. No production composition, UI, physical-phone, packaging, or release acceptance is claimed.
 - Most selected manifest rows remain immutable metadata rather than registered routes: downstream leaves still must implement each named local-Zod request/response contract, handler, auth/audit behavior, and production Fastify composition without changing the frozen semantics silently. Pairing, paired-device list, and CSRF bootstrap registrations are individually proven but not yet in the production composition root.
 - The selected Codex callback/fanout and exact aggregate harness are implemented and deterministically tested, but the one-lifecycle authenticated acceptance is not proven. Supervision, reconnect/restart behavior, and live HostDeck composition also remain downstream work. Partial evidence: `artifacts/int-v1-027-structured-vertical.md`.
 - Current command-backed app-server smokes can fail before a callback because app-server selects Bubblewrap while this host denies unprivileged user-namespace setup, even when the reviewed legacy-Landlock feature flag is enabled. Direct exact-version Landlock execution plus the no-tools interrupt and compact smokes pass. Resolve and reproduce the command-backed path in `INT-V1-027`/`INT-V1-091`; this does not invalidate the already-captured approval or interrupt evidence.
@@ -87,6 +88,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Validation
 
+- `IFC-V1-030` partial branch evidence: root typecheck and lint/exports pass; direct atomic storage plus route/gate suites pass (16), and the adjacent selected contract/auth/CSRF/audit matrix passes (70); frozen offline install, scaffold/planning (196 tasks, 84 requirements, 633 dependencies, 7 queued), and web (14) pass; production audit reports no known vulnerabilities and the production license inventory completes. Full unit, contract, integration, and exact binding commands were attempted and retain only the supported-Linux/path/version blockers recorded above; closure remains pending Linux validation. Implementation commits: `2fc4189`, `b5dcb99`, `75d22fd`.
 - `FND-V1-015`: scaffold, root/package typechecks, lint/exports, unit (193 passed, 1 skipped), contract (92), integration (15), web (14), planning, and diff checks passed.
 - Evidence: `artifacts/fnd-v1-015-selected-path-contracts.md`.
 - `FND-V1-016`: root/package typechecks, lint/exports, unit (211 passed, 1 skipped), contract (100), integration (15), web (14), planning, and diff checks passed.

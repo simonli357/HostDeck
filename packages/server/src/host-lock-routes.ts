@@ -27,7 +27,7 @@ import {
   resolveHostDeckRequestAuthentication
 } from "./fastify-request-authentication.js";
 import {
-  assertHostDeckSecurityMutationAuditExecutor, 
+  assertHostDeckSecurityMutationAuditExecutor,
   HostDeckSecurityMutationAuditExecutorError,
   type SecurityMutationAuditExecutor
 } from "./security-mutation-audit-executor.js";
