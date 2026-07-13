@@ -109,7 +109,7 @@ describe("selected Fastify host lifecycle", () => {
           bind: { host: "127.0.0.1", port: 37_771, transport: "https" },
           context: {}
         },
-        "unsupported before HTTPS selection"
+        "explicit private LAN address"
       ],
       [
         {

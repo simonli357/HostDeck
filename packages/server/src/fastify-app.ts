@@ -7,7 +7,10 @@ import {
 import { createOperationDeadlineView, type OperationDeadline } from "@hostdeck/core";
 import Fastify, {
   type FastifyBaseLogger,
+  type FastifyError,
   type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
   type HTTPMethods,
   type RawReplyDefaultExpression,
   type RawRequestDefaultExpression,
@@ -36,6 +39,10 @@ import {
   type HostDeckZodTypeProvider,
   installHostDeckZodCompilers
 } from "./fastify-zod.js";
+import {
+  assertHostDeckLanTlsInput,
+  type HostDeckLanTlsInput
+} from "./lan-certificate-policy.js";
 
 export type HostDeckFastifyInstance = FastifyInstance<
   RawServerDefault,
@@ -72,6 +79,7 @@ export interface CreateHostDeckFastifyAppInput {
   readonly requestTrustPolicy: HostDeckRequestTrustPolicy;
   readonly routePlugins: readonly HostDeckRoutePluginRegistration[];
   readonly observeInternalError: HostDeckInternalErrorObserver;
+  readonly tls?: HostDeckLanTlsInput;
 }
 
 export interface HostDeckFastifyResourceSnapshot {
@@ -119,14 +127,13 @@ export function createHostDeckFastifyApp(input: CreateHostDeckFastifyAppInput): 
   assertHostDeckRequestTrustPolicy(input.requestTrustPolicy);
   const registrations = parseRoutePluginRegistrations(input.routePlugins);
   const resourceOptions = fastifyResourceOptionsFromBudget(input.resourceBudget);
-  const app = Fastify({
+  const commonOptions = {
     ...resourceOptions.factory,
-    http: {
-      connectionsCheckingInterval: resourceOptions.node.connectionsCheckingInterval,
-      keepAliveTimeoutBuffer: resourceOptions.node.keepAliveTimeoutBuffer,
-      maxHeaderSize: resourceOptions.node.parserMaxHeaderSize
-    },
-    frameworkErrors: (error, request, reply) =>
+    frameworkErrors: (
+      error: FastifyError,
+      request: FastifyRequest,
+      reply: FastifyReply
+    ) =>
       handleHostDeckFastifyError(error, request, reply, input.observeInternalError),
     genReqId: () => `req_${randomUUID()}`,
     onConstructorPoisoning: "error",
@@ -141,7 +148,25 @@ export function createHostDeckFastifyApp(input: CreateHostDeckFastifyAppInput): 
       ignoreTrailingSlash: false
     },
     trustProxy: false
-  }).withTypeProvider<HostDeckZodTypeProvider>();
+  } as const;
+  const nodeOptions = {
+    connectionsCheckingInterval: resourceOptions.node.connectionsCheckingInterval,
+    keepAliveTimeoutBuffer: resourceOptions.node.keepAliveTimeoutBuffer,
+    maxHeaderSize: resourceOptions.node.parserMaxHeaderSize
+  } as const;
+  const rawApp =
+    input.tls === undefined
+      ? Fastify({ ...commonOptions, http: nodeOptions })
+      : Fastify({
+          ...commonOptions,
+          https: {
+            ...nodeOptions,
+            cert: input.tls.tls.certificate_chain_pem,
+            key: input.tls.tls.private_key_pem,
+            minVersion: "TLSv1.2"
+          }
+        });
+  const app = rawApp.withTypeProvider<HostDeckZodTypeProvider>() as HostDeckFastifyInstance;
   const runtime: AppRuntimeState = {
     abortedRequests: 0,
     inFlightRequests: 0,
@@ -380,10 +405,17 @@ function assertFactoryInput(input: unknown): asserts input is CreateHostDeckFast
     "resourceBudget",
     "routePlugins"
   ];
-  if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
+  const expectedWithTls = [...expected, "tls"].sort();
+  if (
+    (keys.length !== expected.length ||
+      keys.some((key, index) => key !== expected[index])) &&
+    (keys.length !== expectedWithTls.length ||
+      keys.some((key, index) => key !== expectedWithTls[index]))
+  ) {
     throw new TypeError("HostDeck Fastify app input fields are invalid.");
   }
   const candidate = input as Partial<CreateHostDeckFastifyAppInput>;
+  if (candidate.tls !== undefined) assertHostDeckLanTlsInput(candidate.tls);
   if (!Array.isArray(candidate.routePlugins)) throw new TypeError("HostDeck routePlugins must be an array.");
   if (typeof candidate.observeInternalError !== "function") {
     throw new TypeError("HostDeck observeInternalError must be a function.");

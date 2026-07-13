@@ -204,6 +204,7 @@ interface ParsedPolicyInput {
 }
 
 const acceptedPolicies = new WeakSet<object>();
+const acceptedTlsInputs = new WeakSet<object>();
 const maxCounter = Number.MAX_SAFE_INTEGER;
 
 export function createHostDeckLanCertificatePolicy(
@@ -325,13 +326,15 @@ export function createHostDeckLanCertificatePolicy(
       const inspection = inspectSet(set, identity.address, request.bind_port, now);
       requireUsableInspection(inspection);
       counters.tlsLoads = increment(counters.tlsLoads);
-      return Object.freeze({
+      const result = Object.freeze({
         inspection,
         tls: Object.freeze({
           certificate_chain_pem: `${set.leaf.certificatePem.trim()}\n${set.authority.certificatePem.trim()}\n`,
           private_key_pem: set.leaf.privateKeyPem
         })
       });
+      acceptedTlsInputs.add(result);
+      return result;
     },
     snapshot() {
       return Object.freeze({
@@ -361,6 +364,28 @@ export function assertHostDeckLanCertificatePolicy(
       "HostDeck LAN certificate policy must be created by createHostDeckLanCertificatePolicy."
     );
   }
+}
+
+export function assertHostDeckLanTlsInput(
+  candidate: unknown
+): asserts candidate is HostDeckLanTlsInput {
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    !acceptedTlsInputs.has(candidate) ||
+    !Object.isFrozen(candidate) ||
+    !Object.isFrozen((candidate as HostDeckLanTlsInput).inspection) ||
+    !Object.isFrozen((candidate as HostDeckLanTlsInput).tls)
+  ) {
+    throw new TypeError(
+      "HostDeck LAN TLS input must be created by the selected certificate policy."
+    );
+  }
+}
+
+export function isHostDeckPrivateLanAddress(input: string): boolean {
+  const parsed = parseSocketAddress(input);
+  return parsed !== null && isPrivateLanAddress(parsed);
 }
 
 function parsePolicyInput(input: unknown): ParsedPolicyInput {

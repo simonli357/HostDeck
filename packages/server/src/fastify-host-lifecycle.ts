@@ -20,6 +20,11 @@ import {
 } from "./fastify-request-authentication.js";
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import { fastifyResourceOptionsFromBudget } from "./fastify-resource-options.js";
+import {
+  assertHostDeckLanTlsInput,
+  type HostDeckLanTlsInput,
+  isHostDeckPrivateLanAddress
+} from "./lan-certificate-policy.js";
 
 export const hostDeckFastifyLifecyclePhases = [
   "ready",
@@ -57,14 +62,15 @@ export type HostDeckFastifyLifecycleStage =
   (typeof hostDeckFastifyLifecycleStages)[number];
 
 export interface HostDeckFastifyListenerBind {
-  readonly host: "127.0.0.1" | "::1";
+  readonly host: string;
   readonly port: number;
-  readonly transport: "http";
+  readonly transport: "http" | "https";
 }
 
 export interface HostDeckFastifyStartedRuntime<TContext> {
   readonly bind: HostDeckFastifyListenerBind;
   readonly context: TContext;
+  readonly tls?: HostDeckLanTlsInput;
 }
 
 export interface HostDeckFastifyRuntimeOwner<TContext> {
@@ -193,6 +199,7 @@ const inputKeys = [
 ];
 const runtimeOwnerKeys = ["closeSse", "closeStartup", "start"];
 const startedRuntimeKeys = ["bind", "context"];
+const startedHttpsRuntimeKeys = ["bind", "context", "tls"];
 const bindKeys = ["host", "port", "transport"];
 const httpConnectionRuntimes = new WeakMap<HostDeckFastifyInstance, HttpConnectionRuntime>();
 
@@ -235,11 +242,12 @@ export async function startHostDeckFastifyLifecycle<TContext>(
       requestAuthenticationPolicy,
       requestTrustPolicy: createHostDeckRequestTrustPolicy({
         allowedOrigins: [baseUrlForBind(owner.bind).origin],
-        mode: "loopback",
+        mode: owner.bind.transport === "https" ? "lan" : "loopback",
         transport: owner.bind.transport
       }),
       resourceBudget: parsed.resourceBudget,
-      routePlugins
+      routePlugins,
+      ...(owner.tls === undefined ? {} : { tls: owner.tls })
     });
     installHttpConnectionRuntime(app);
     applyNodeServerLimits(app, parsed.resourceBudget);
@@ -355,28 +363,58 @@ function parseRuntimeOwner<TContext>(input: unknown): ParsedRuntimeOwner<TContex
 }
 
 function parseStartedRuntime<TContext>(input: unknown): HostDeckFastifyStartedRuntime<TContext> {
-  assertPlainExactObject(input, startedRuntimeKeys, "HostDeck Fastify started runtime");
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("HostDeck Fastify started runtime must be an object.");
+  }
   const value = input as Partial<HostDeckFastifyStartedRuntime<TContext>>;
-  return Object.freeze({
-    bind: parseListenerBind(value.bind),
-    context: value.context as TContext
-  });
+  const bind = parseListenerBind(value.bind);
+  assertPlainExactObject(
+    input,
+    bind.transport === "https" ? startedHttpsRuntimeKeys : startedRuntimeKeys,
+    "HostDeck Fastify started runtime"
+  );
+  if (bind.transport === "https") {
+    assertHostDeckLanTlsInput(value.tls);
+    if (
+      value.tls.inspection.bind_host !== bind.host ||
+      value.tls.inspection.bind_port !== bind.port ||
+      value.tls.inspection.configured_origin !== baseUrlForBind(bind).origin ||
+      (value.tls.inspection.certificate_state !== "valid" &&
+        value.tls.inspection.certificate_state !== "renewal_due")
+    ) {
+      throw new TypeError("HostDeck Fastify TLS input differs from listener bind policy.");
+    }
+    return Object.freeze({ bind, context: value.context as TContext, tls: value.tls });
+  }
+  return Object.freeze({ bind, context: value.context as TContext });
 }
 
 function parseListenerBind(input: unknown): HostDeckFastifyListenerBind {
   assertPlainExactObject(input, bindKeys, "HostDeck Fastify listener bind");
   const value = input as Partial<HostDeckFastifyListenerBind>;
-  if (value.transport !== "http") {
-    throw new TypeError("HostDeck Fastify listener transport is unsupported before HTTPS selection.");
+  if (value.transport !== "http" && value.transport !== "https") {
+    throw new TypeError("HostDeck Fastify listener transport is unsupported.");
   }
-  if (value.host !== "127.0.0.1" && value.host !== "::1") {
-    throw new TypeError("HostDeck plaintext HTTP listener must use an explicit loopback address.");
+  const host = value.host;
+  if (typeof host !== "string") {
+    throw new TypeError("HostDeck Fastify listener host is invalid.");
+  }
+  if (
+    (value.transport === "http" && host !== "127.0.0.1" && host !== "::1") ||
+    (value.transport === "https" &&
+      !isHostDeckPrivateLanAddress(host))
+  ) {
+    throw new TypeError(
+      value.transport === "http"
+        ? "HostDeck plaintext HTTP listener must use an explicit loopback address."
+        : "HostDeck HTTPS listener must use an explicit private LAN address."
+    );
   }
   const port = value.port;
   if (typeof port !== "number" || !Number.isSafeInteger(port) || port < 1 || port > 65_535) {
     throw new TypeError("HostDeck Fastify listener port must be an integer from 1 through 65535.");
   }
-  return Object.freeze({ host: value.host, port, transport: "http" });
+  return Object.freeze({ host, port, transport: value.transport });
 }
 
 function assertPlainExactObject(input: unknown, expectedKeys: readonly string[], label: string): void {
@@ -514,10 +552,9 @@ function requireHttpConnectionRuntime(app: HostDeckFastifyInstance): HttpConnect
 
 function toBoundAddress(
   address: AddressInfo | string | null,
-  transport: "http"
+  transport: "http" | "https"
 ): HostDeckFastifyListenerBind | null {
   if (address === null || typeof address === "string") return null;
-  if (address.address !== "127.0.0.1" && address.address !== "::1") return null;
   return Object.freeze({ host: address.address, port: address.port, transport });
 }
 
