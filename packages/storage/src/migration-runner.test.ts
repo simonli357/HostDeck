@@ -35,7 +35,8 @@ describe("SQLite migration runner", () => {
       "202607100008_selected_retention_indexes": "e07bb8c5f498294775002c96052b1ae94282e2daf6b8afdd6dd49b08e9e9e8ae",
       "202607110009_auth_device_csrf_rotation": "464b37ea4aafd1d094d7abf4297cc012403d482871d06554f21fdda7d170d5ce",
       "202607110010_security_audit_catalog": "1db9a127f80ba20f120cd8bbf9b65bc57fc2ca859d82e50a4f213f10d16ba0ab",
-      "202607110011_selected_pairing_claim": "6491026ff2fd23c5346273dbda5b3f5f6927d7c8b953b403ba512b5af83db927"
+      "202607110011_selected_pairing_claim": "6491026ff2fd23c5346273dbda5b3f5f6927d7c8b953b403ba512b5af83db927",
+      "202607120012_selected_lan_configuration": "fe01df684e04d66f6efa859fd0845ba77b39ec1ce497065f942fa4bc9d84761e"
     });
   });
 
@@ -57,7 +58,8 @@ describe("SQLite migration runner", () => {
         "202607100008_selected_retention_indexes",
         "202607110009_auth_device_csrf_rotation",
         "202607110010_security_audit_catalog",
-        "202607110011_selected_pairing_claim"
+        "202607110011_selected_pairing_claim",
+        "202607120012_selected_lan_configuration"
       ]);
       expect(tableNames(db)).toEqual([
         "audit_events",
@@ -70,6 +72,7 @@ describe("SQLite migration runner", () => {
         "retention_boundaries",
         "schema_migrations",
         "selected_audit_events",
+        "selected_lan_configuration",
         "selected_projected_events",
         "selected_runtime_compatibility",
         "selected_session_projections",
@@ -79,7 +82,7 @@ describe("SQLite migration runner", () => {
         "sessions",
         "settings"
       ]);
-      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 11 });
+      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 12 });
       expect(
         db
           .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
@@ -118,7 +121,8 @@ describe("SQLite migration runner", () => {
         "202607100008_selected_retention_indexes",
         "202607110009_auth_device_csrf_rotation",
         "202607110010_security_audit_catalog",
-        "202607110011_selected_pairing_claim"
+        "202607110011_selected_pairing_claim",
+        "202607120012_selected_lan_configuration"
       ]);
       expect(migrated.db.prepare("SELECT id FROM audit_events WHERE id = 'audit_legacy_preserved'").get()).toEqual({
         id: "audit_legacy_preserved"
@@ -177,7 +181,8 @@ describe("SQLite migration runner", () => {
         "202607100008_selected_retention_indexes",
         "202607110009_auth_device_csrf_rotation",
         "202607110010_security_audit_catalog",
-        "202607110011_selected_pairing_claim"
+        "202607110011_selected_pairing_claim",
+        "202607120012_selected_lan_configuration"
       ]);
       expect(migrated.db.prepare("SELECT id FROM selected_audit_events WHERE operation_id = ?").get("op_index_preserved")).toEqual({
         id: "audit:index:preserved"
@@ -241,7 +246,8 @@ describe("SQLite migration runner", () => {
       expect(migrated.result.applied).toEqual([
         "202607110009_auth_device_csrf_rotation",
         "202607110010_security_audit_catalog",
-        "202607110011_selected_pairing_claim"
+        "202607110011_selected_pairing_claim",
+        "202607120012_selected_lan_configuration"
       ]);
       expect(migrated.db.prepare("SELECT * FROM auth_devices WHERE id = ?").get("client_csrf_migration")).toEqual({
         id: "client_csrf_migration",
@@ -327,7 +333,8 @@ describe("SQLite migration runner", () => {
     try {
       expect(migrated.result.applied).toEqual([
         "202607110010_security_audit_catalog",
-        "202607110011_selected_pairing_claim"
+        "202607110011_selected_pairing_claim",
+        "202607120012_selected_lan_configuration"
       ]);
       expect(
         migrated.db
@@ -527,7 +534,10 @@ describe("SQLite migration runner", () => {
 
     const migrated = openMigratedDatabase(path, { now: fixedNow });
     try {
-      expect(migrated.result.applied).toEqual(["202607110011_selected_pairing_claim"]);
+      expect(migrated.result.applied).toEqual([
+        "202607110011_selected_pairing_claim",
+        "202607120012_selected_lan_configuration"
+      ]);
       expect(
         migrated.db
           .prepare(
@@ -747,7 +757,8 @@ describe("SQLite migration runner", () => {
         "202607100008_selected_retention_indexes",
         "202607110009_auth_device_csrf_rotation",
         "202607110010_security_audit_catalog",
-        "202607110011_selected_pairing_claim"
+        "202607110011_selected_pairing_claim",
+        "202607120012_selected_lan_configuration"
       ]);
       expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM selected_sessions").get()).toEqual({ count: 0 });
       expect(migrated.db.prepare("SELECT * FROM legacy_session_dispositions").get()).toMatchObject({

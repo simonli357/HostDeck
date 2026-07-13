@@ -736,6 +736,38 @@ export const hostDeckSelectedPairingClaimMigration: StorageMigration = {
   `
 };
 
+export const hostDeckSelectedLanConfigurationMigration: StorageMigration = {
+  version: "202607120012_selected_lan_configuration",
+  sql: `
+    CREATE TABLE selected_lan_configuration (
+      id TEXT PRIMARY KEY CHECK (id = 'hostdeck_lan_configuration'),
+      schema_version INTEGER NOT NULL CHECK (
+        typeof(schema_version) = 'integer' AND schema_version = 1
+      ),
+      bind_host TEXT NOT NULL CHECK (length(bind_host) BETWEEN 2 AND 45),
+      address_family TEXT NOT NULL CHECK (address_family IN ('ipv4', 'ipv6')),
+      bind_port INTEGER NOT NULL CHECK (
+        typeof(bind_port) = 'integer' AND bind_port BETWEEN 1 AND 65535
+      ),
+      configured_origin TEXT NOT NULL CHECK (
+        length(configured_origin) BETWEEN 12 AND 512 AND
+        substr(configured_origin, 1, 8) = 'https://'
+      ),
+      root_fingerprint_sha256 TEXT NOT NULL CHECK (
+        length(root_fingerprint_sha256) = 64 AND
+        root_fingerprint_sha256 NOT GLOB '*[^0-9a-f]*'
+      ),
+      leaf_fingerprint_sha256 TEXT NOT NULL CHECK (
+        length(leaf_fingerprint_sha256) = 64 AND
+        leaf_fingerprint_sha256 NOT GLOB '*[^0-9a-f]*'
+      ),
+      leaf_valid_from TEXT NOT NULL,
+      leaf_expires_at TEXT NOT NULL CHECK (leaf_expires_at > leaf_valid_from),
+      updated_at TEXT NOT NULL
+    );
+  `
+};
+
 export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckBaseSchemaMigration,
   hostDeckSessionMetadataFailedStatusMigration,
@@ -747,5 +779,6 @@ export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckSelectedRetentionIndexesMigration,
   hostDeckAuthDeviceCsrfRotationMigration,
   hostDeckSecurityAuditCatalogMigration,
-  hostDeckSelectedPairingClaimMigration
+  hostDeckSelectedPairingClaimMigration,
+  hostDeckSelectedLanConfigurationMigration
 ] as const;
