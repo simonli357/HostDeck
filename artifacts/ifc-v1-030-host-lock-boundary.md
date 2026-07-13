@@ -2,7 +2,7 @@
 
 Date: 2026-07-12
 
-Status: production-hardening criteria frozen; autonomous implementation is authorized and active.
+Status: complete on supported Linux; downstream production composition, aggregate browser/device acceptance, and UI remain separately owned.
 
 ## Purpose
 
@@ -138,6 +138,29 @@ No public error contains settings fields beyond selected access state, operation
 | Race/restart | Opposing distinct operations serialize to one durable final order, same operation id transitions once, restart preserves state, and lock does not claim cancellation of already-dispatched work. |
 | Privacy/runtime | Injection plus real TLS/raw HTTP prove no CORS/cache/secret leakage. SQLite main/WAL/SHM and observer/error/snapshot inspection retain only expected settings/audit data. No timer/listener/request-private state survives completion. |
 | Ownership | No session/control dispatch, device revoke, LAN mutation, UI, production composition, physical-phone, package, or release acceptance is claimed. |
+
+## Implementation Result
+
+- Strict selected request/access-state contracts and invariant tests landed in `d74329c`.
+- The immediate lock-only settings transition landed in `1855c23`. It preserves unrelated settings and no-op chronology, rejects regressing time and invalid storage state, and returns one frozen before/after receipt.
+- Detached access, lock, unlock, and unlocked-host gate registrations landed in `d642be9`; authority/order/audit hardening landed in `d15c580`.
+- Fastify schema validation now precedes authentication and its durable last-used side effect. Paired-cookie lock requires admitted HTTPS before authentication; cookie-free loopback local-admin HTTP remains valid.
+- Each policy can be registered once, each registration can run once, and duplicate operation ids cannot transition settings twice.
+- Typed emergency audit unavailability may still persist the lock, but the non-success response is neutral and requires access-state refresh; it never claims a transition that was not proven.
+- Real TLS proves paired write authority, Host/Origin/cookie/CSRF handling, no-store/no-CORS framing, and plaintext paired-cookie refusal. Real migrated SQLite proves route persistence, restart truth, transition/audit ordering, response-failure truth, and main/WAL/SHM secret absence.
+- The unrelated lazy daemon-lease workaround from the reviewed colleague branch was excluded from `main`; daemon lease behavior remains the previously proven eager implementation.
+
+## Validation Evidence
+
+| Layer | Result |
+| --- | --- |
+| Direct implementation | Host-lock route plus settings transition: 24 tests; the route matrix contains 13 injection/real-TLS/SQLite/race/failure cases. |
+| Focused regressions | Host lock, authentication, CSRF, security audit executor, and settings: 58 unit tests; selected host-lock/auth/security/manifest contracts: 19 tests. |
+| Workspace | 100 unit files passed with 931 tests passed and 29 external tests skipped; contract 171, integration 16, and web 14 passed. |
+| Static/planning | Root and all nine package typechecks, lint plus nine package-export checks, scaffold (nine packages/18 scripts), planning after closure (196 tasks/84 requirements/633 dependencies/six queued), and diff checks passed. |
+| Supply chain | Frozen offline install, zero-vulnerability production audit over 140 production dependencies, and permissive-license inventory passed. No dependency or migration was added. |
+| Selected runtime binding | Isolated exact `@openai/codex` 0.144.0 binding check passed over 671 generated files with hash `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. The default 0.144.1 installation remains a separate explicit release mismatch. |
+| Manual review | Authority, validation/auth side-effect order, audit/state/response truth, gate fail-closed behavior, registration ownership, SQLite privacy, and scope exclusions were inspected on supported Linux. |
 
 ## Validation Plan
 
