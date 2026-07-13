@@ -1,24 +1,26 @@
 # BLK-V1-01 Contracts, Core, And Fixtures
 
+Status: reopened for the selected remote-ingress contract outcome.
+
 Owns the normalized HostDeck language consumed by storage, Codex adapter, API/CLI, and UI.
 
 ## Outcome
 
-- App-server generated types are isolated behind stable HostDeck thread, turn, event, approval, control, compatibility, trust, and audit contracts.
+- App-server and external-ingress details are isolated behind stable HostDeck thread, turn, event, approval, control, compatibility, remote-ingress, trust, and audit contracts.
 - Strict core invariants reject invalid timestamps, unsafe cursors, impossible transitions, ambiguous targets, unsupported capabilities, and contradictory outcomes.
-- Deterministic fixtures cover required structured runtime, security, replay, and mobile states.
+- Deterministic fixtures cover required structured runtime, Tailscale/profile/Serve, security, replay, and mobile states.
 - Planning validation makes task/requirement/dependency drift fail in the normal check path.
 
-Requirement refs: `FR-002`, `FR-006` to `FR-009`, `FR-012` to `FR-017`, `NFR-003`, `NFR-005` to `NFR-007`, `IR-001` to `IR-012`, `SFR-005`, `SFR-010`, `SFR-011`.
+Requirement refs: `FR-002`, `FR-006` to `FR-009`, `FR-011` to `FR-018`, `NFR-001` to `NFR-003`, `NFR-005` to `NFR-007`, `IR-001` to `IR-012`, `DR-010`, `PR-002`, `PR-003`, `PR-005`, `PR-007`, `PR-009`, `SFR-001`, `SFR-002`, `SFR-005`, `SFR-008`, `SFR-010` to `SFR-013`, `SFR-015`, `SFR-016`, `SFR-018`.
 
 ## Local Design
 
 | Part | Owns | Must prove |
 | --- | --- | --- |
 | Core | Stable ids, lifecycle/reconciliation transitions, status/attention, control intent, eligibility, audit outcome. | Normal, invalid, impossible, repeated, and concurrent decisions are deterministic. |
-| Contracts | API, persistence, projection, compatibility, trust, audit, and UI runtime schemas. | Malformed/unknown required shapes fail with bounded errors. |
+| Contracts | API, persistence, projection, compatibility, remote ingress, trust, audit, and UI runtime schemas. | Malformed/unknown required shapes fail with bounded errors. |
 | Codex normalization port | HostDeck-owned adapter input/output/event interfaces. | No generated app-server type leaks to consumers. |
-| Fixtures | Structured events, approvals, turns, controls, errors, trust/network, replay/boundary, mobile states. | Complete inventory from `SFR-011` and UX state matrix. |
+| Fixtures | Structured events, approvals, turns, controls, errors, Tailscale/profile/Serve, trust/network, replay/boundary, and mobile states. | Complete inventory from `SFR-011`, `SFR-015`, and the UX state matrix. |
 | Planning checker | Markdown task/requirement graph validation. | Duplicate/unknown refs, cycles, invalid ready state, and uncovered requirement fail. |
 
 ## Invariants
@@ -40,6 +42,8 @@ Requirement refs: `FR-002`, `FR-006` to `FR-009`, `FR-012` to `FR-017`, `NFR-003
 | App-server/mobile/security contract rebaseline | `FND-V1-015` | Done. |
 | Core invariant and reconciliation hardening | `FND-V1-016` | Done. |
 | Reopened module hardening | `FND-V1-091` | Done. |
+| Remote-ingress/access contract and fixture rebaseline | `FND-V1-018` | Blocked by the exact Tailscale spike. |
+| Focused remote contract hardening | `FND-V1-092` | Blocked by remote contract implementation/adoption. |
 
 Owning backlog: `docs/tracking/backlog/foundation.md`.
 
@@ -56,8 +60,8 @@ Owning backlog: `docs/tracking/backlog/foundation.md`.
 - `pnpm check:planning`, typecheck, lint, unit, and contract tests pass.
 - Every active requirement is traceable to defined tasks and no dependency cycle/invalid ready task exists.
 - Generated Codex bindings are private to the adapter boundary.
-- Required structured and UI fixture inventories are complete.
+- Required structured, remote-ingress, and UI fixture inventories are complete.
 - Timestamp, cursor, lifecycle, target, compatibility, and audit outcome defects identified by `REL-V1-011` have regression tests.
-- `FND-V1-091` links current evidence and the block matrix marks complete without qualification.
+- `FND-V1-092` links current remote-path evidence and the block matrix marks complete without qualification.
 
-Current hardening evidence: `artifacts/fnd-v1-091-selected-foundation-hardening.md`.
+Prior structured-foundation hardening evidence: `artifacts/fnd-v1-091-selected-foundation-hardening.md`. Current completion requires `FND-V1-092`.

@@ -1,14 +1,14 @@
 # BLK-V1-02 Local State, Auth, Audit, And Retention
 
-Status: complete for the selected storage-owned outcome. Runtime and interface composition remain in `BLK-V1-03` and `BLK-V1-04`.
+Status: reopened for selected remote-ingress configuration and audit durability.
 
 Owns HostDeck's durable state and local filesystem safety. Codex remains the owner of full thread history.
 
 ## Outcome
 
-- SQLite persists managed thread mappings, bounded event/session projections, runtime compatibility, settings, device/pairing/CSRF lifecycle, and truthful audit outcomes.
+- SQLite persists managed thread mappings, bounded event/session projections, runtime compatibility, remote-ingress settings/observations, device/pairing/CSRF lifecycle, and truthful audit outcomes.
 - Production append/startup paths enforce output and audit retention.
-- State, database, key, certificate, and runtime paths are owner-only and protected by one daemon lease.
+- State, database, and runtime paths are owner-only and protected by one daemon lease; no Tailscale node key or reusable credential enters HostDeck storage.
 - Restart and partial failure preserve recoverable truth without raw secrets or duplicate full Codex transcripts.
 
 Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-013`, `PR-009`, `SFR-006`, `SFR-007`, `SFR-014` to `SFR-016`.
@@ -22,8 +22,9 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | Compatibility | Observed Codex version/schema/capabilities/check result survive restart and gate mutation readiness. |
 | Auth | Only hashes and lifecycle metadata persist; CSRF generation rotates on bootstrap/reload and invalidates on revoke. |
 | Audit | `accepted` and terminal outcome are separate; crash can leave explicit `incomplete`; payload is bounded/sanitized. |
+| Remote ingress | Persist selected-profile comparison metadata, canonical external origin, exact HostDeck-owned Serve descriptor, enablement, and bounded observations; never persist Tailscale credentials. |
 | Retention | 10,000 events or 10 MB per session; 5,000 audit rows or 30 days until a new decision. Cleanup is observable and production-invoked. |
-| Filesystem | Pure path resolution, minimal state/lease bootstrap, canonical owner-only directories/files, no-follow plus descriptor/path-identity checks, secure socket/key/cert validators, and a nonblocking Linux daemon lock before other mutation. |
+| Filesystem | Pure path resolution, minimal state/lease bootstrap, canonical owner-only directories/files, no-follow plus descriptor/path-identity checks, secure socket and sensitive-file validators, and a nonblocking Linux daemon lock before other mutation. |
 
 ## Migration Rules
 
@@ -32,6 +33,7 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 - Preserve legacy columns until `INT-V1-008`; legacy records never appear live.
 - Thread creation plus DB persistence uses the recoverable saga in the blueprint.
 - Startup maintenance is bounded; large cleanup cannot hold readiness indefinitely without a visible degraded result.
+- Add remote-ingress settings and audit actions through forward-only migrations; historical LAN diagnostics remain historical and are not reinterpreted as remote proof.
 
 ## Task Map
 
@@ -52,6 +54,9 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | Atomic device revoke and CSRF invalidation | `DAT-V1-028` | Complete; strict chronology, immediate raw-state CAS, stable idempotency, bearer/write/bootstrap denial, real ordering, rollback, restart, corruption, index, and privacy evidence pass. |
 | Security-action audit storage completion | `DAT-V1-027` | Complete; exact catalog, durable legacy/current provenance, strict actor/target/summary contracts, migration preservation, secret rejection, restart/orphan/retention, and full workspace evidence pass. |
 | Selected module hardening | `DAT-V1-091` | Complete; one secure on-disk aggregate proves selected cross-repository migration, restart, retention, auth, audit, lease, corruption, query-plan, and privacy truth. Evidence: `artifacts/dat-v1-091-selected-local-state-hardening.md`. |
+| Remote-ingress configuration migration | `DAT-V1-031` | Blocked by the remote contract rebaseline. |
+| Remote-ingress audit migration and historical preservation | `DAT-V1-032` | Blocked by the remote contract rebaseline and current security-audit storage. |
+| Focused remote storage hardening | `DAT-V1-092` | Blocked by both remote migrations. |
 
 Owning backlog: `docs/tracking/backlog/local-state-auth-audit.md`.
 
@@ -71,4 +76,5 @@ Owning backlog: `docs/tracking/backlog/local-state-auth-audit.md`.
 - Pair/reload/revoke leaves no raw device/CSRF secret in durable storage.
 - Owner-only paths and one-daemon lease are proven against hostile permissions and concurrent startup.
 - Full Codex transcript is absent from HostDeck storage.
-- `DAT-V1-091` passes and the block matrix links current selected-path evidence.
+- Tailscale node keys, reusable credentials, and raw pairing fragments are absent from HostDeck storage and artifacts.
+- `DAT-V1-092` passes and the block matrix links current selected-path evidence.

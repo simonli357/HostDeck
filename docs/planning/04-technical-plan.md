@@ -4,10 +4,10 @@ Owns the active-version architecture, process and trust boundaries, selected dep
 
 ## Architecture Status
 
-- Direction: app-server-first rebaseline approved by `DEC-018`.
+- Direction: app-server-first runtime under `DEC-018` plus Tailscale-first remote ingress under `DEC-027`.
 - Release state: no-go. Existing packages prove reusable foundations, not the selected production vertical.
 - Legacy state: tmux/TUI adapter and capture evidence remain in the repo until `INT-V1-008` decides removal after the structured vertical passes.
-- Public boundary: the phone talks only to HostDeck. Codex app-server is private to the Ubuntu user and never binds LAN.
+- Remote boundary: the phone reaches HostDeck only through private Tailscale Serve HTTPS. HostDeck itself remains loopback-only; Codex app-server remains on a user-private Unix socket.
 - Compatibility baseline: exact `codex-cli 0.144.0`, reviewed experimental binding identity, and `DEC-021`; upgrades fail closed pending regeneration and review.
 
 ## Hard Requirements
@@ -18,7 +18,9 @@ The architecture is acceptable for V1 only when all of the following are true:
 - Codex is the source of truth for threads, turns, approvals, goals, model state, and full history; HostDeck stores a bounded projection, not a competing transcript.
 - Foreground and user-service modes have explicit process ownership and can restart HostDeck without killing the dedicated app-server process in service mode.
 - Browser replay plus live subscription has a tested no-gap handoff, bounded queues, disconnect cleanup, heartbeat, and shutdown behavior.
-- LAN carries no plaintext session data or credential. Reads and writes are paired and authorized.
+- A phone on an unrelated network reaches a trusted HTTPS origin without a public HostDeck listener, router change, or manually installed CA; remote reads and writes still require HostDeck pairing and authorization.
+- HostDeck observes one explicitly selected saved personal Tailscale profile, never switches profiles automatically, and cannot mutate unrelated company-profile or Serve configuration.
+- V1 is a single-user-host design: processes able to access the laptop loopback namespace are inside the existing local-admin trust boundary. Proxy metadata never turns that local trust into paired remote authority, and V1 does not claim protection from malicious code already running on the host.
 - App-server schema/version drift, state-directory conflicts, invalid permissions, failed retention, and impossible lifecycle transitions fail visibly.
 - Phone Mission Control and Session Detail can be built entirely from typed API contracts without parsing terminal text.
 
@@ -29,9 +31,9 @@ The architecture is acceptable for V1 only when all of the following are true:
 | Domain/core | HostDeck ids and aliases, normalized lifecycle/status/attention, write eligibility, event cursor, approval intent, audit action/outcome, bounded errors. | Pure TypeScript. No process, network, storage, Codex, or UI imports. |
 | Contracts | Zod schemas for HostDeck API, persistence, config, event projection, trust, runtime compatibility, and UI fixtures. | HostDeck-owned stable contract. It does not expose raw app-server unions directly. |
 | Codex adapter | App-server process discovery, initialize/capability handshake, generated protocol bindings, request correlation, Unix-socket WebSocket client, thread/turn/control/approval operations, notifications, reconnect. | Only package allowed to import generated Codex protocol types or `ws`. |
-| Application services | Session mapping, event projection, attention, write/control dispatch, approval routing, replay/fanout, runtime health, pairing, lock/LAN policy, audit orchestration. | Depends on ports for Codex, storage, clock, ids, certificates, and process supervision. |
+| Application services | Session mapping, event projection, attention, write/control dispatch, approval routing, replay/fanout, runtime health, pairing, lock/remote-ingress policy, audit orchestration. | Depends on ports for Codex, storage, clock, ids, Tailscale observation/configuration, and process supervision. |
 | Storage | SQLite migrations and repositories for mappings/projections, compatibility, auth, settings, audit, retention boundaries, and daemon lease metadata. | No Codex process or HTTP imports. Full Codex history is not copied. |
-| Host interface | Fastify same-origin HTTP/HTTPS API, SSE, static dashboard, CLI client/admin commands, lifecycle and service install commands. | Browser-facing trust boundary. App-server is not proxied raw. |
+| Host interface | Loopback Fastify HTTP API/SSE/static dashboard, exact Tailscale Serve proxy admission, CLI client/admin commands, lifecycle and service install commands. | Browser-facing application trust boundary behind private HTTPS. App-server is not proxied raw. |
 | UI | Phone-first React dashboard using HostDeck API contracts. | No storage, Codex protocol, terminal parsing, or direct app-server access. |
 
 ## Selected Stack
@@ -49,7 +51,8 @@ The architecture is acceptable for V1 only when all of the following are true:
 | Storage | `better-sqlite3` with first-party migrations. | Existing `DEC-014` evidence remains valid. |
 | Daemon lease | Exact `fs-ext` 2.1.1 native binding to Linux `flock(2)`. | Node 22 has no first-party file-lock API; a kernel-held nonblocking descriptor lock releases on process death. Directory/mtime lockfile libraries were rejected because they require stale-owner heuristics instead of providing the selected OS-lock contract. |
 | Service mode | Unprivileged systemd user units on Ubuntu. | Separate app-server and HostDeck ownership, restart policy, logs, and no root requirement. |
-| LAN security | HTTPS-only explicit opt-in with a tested local-certificate enrollment path. | Required by `DEC-020`; `@peculiar/x509` 2.0.0 plus `reflect-metadata` 0.2.2 is the host-proven in-process candidate, but selection remains gated by `IFC-V1-015` real-phone proof. |
+| Remote ingress | Supported system Tailscale client plus private Tailscale Serve HTTPS on one human-selected saved personal profile. | Cross-network NAT traversal, trusted `.ts.net` HTTPS, and optional proxy source metadata are delegated to Tailscale while HostDeck remains loopback-only. Exact supported version and Serve behavior are frozen by `IFC-V1-070`; current development evidence is Tailscale 1.98.8, not yet the release range. |
+| App authorization | Existing HostDeck one-time pairing, Secure/HttpOnly cookie, in-memory CSRF, lock, and device revoke. | Tailnet connectivity is necessary but not sufficient application authority. QR/link enrollment removes manual code and CA ceremony without granting all tailnet members access. |
 
 All dependencies are pinned in the lockfile, license-checked when added, and recorded in the owning task. No dependency is considered selected solely because it appears in this plan.
 
@@ -73,10 +76,10 @@ Exact defaults, cross-field invariants, and downstream consumers are recorded in
 | `@hostdeck/contracts` | HostDeck runtime schemas and exported types. | Route handlers, generated Codex protocol implementation, UI components. |
 | `@hostdeck/codex-adapter` | Generated Codex bindings, compatibility matrix, Unix-socket client, request broker, event decoder, fake adapter. | Browser auth, SQLite, Fastify, React. |
 | `@hostdeck/storage` | Migrations and repositories for HostDeck-owned durable state. | Full Codex transcript, process spawning, HTTP, React. |
-| `@hostdeck/server` | Application services, Fastify routes/SSE/static hosting, process/runtime health, auth/audit orchestration. | React internals or terminal parsing. |
+| `@hostdeck/server` | Application services, Fastify routes/SSE/static hosting, exact Tailscale adapter/ingress policy, process/runtime health, auth/audit orchestration. | React internals, terminal parsing, generic trusted-proxy mode, Tailscale key access, or profile switching. |
 | `@hostdeck/cli` | Packaged commands, local API client, local-admin bootstrap/security/service operations. | Hidden direct session mutation that bypasses application services. |
 | `@hostdeck/web` | Mission Control, Session Detail, sheets/dialogs, API/SSE clients, UI state. | Codex protocol, filesystem, storage, terminal input. |
-| `@hostdeck/test-fixtures` | Normalized Codex event fixtures, fake adapter, API/UI fixtures, test certificates where safe. | Production secrets or model-dependent fixtures. |
+| `@hostdeck/test-fixtures` | Normalized Codex event fixtures, fake adapters, API/UI fixtures, and redacted remote-ingress/profile states. | Production secrets, Tailscale node keys, company profile metadata, or model-dependent fixtures. |
 | `@hostdeck/tmux-adapter` | Legacy evidence only until `INT-V1-008`. | New selected-runtime behavior. |
 
 ## Process Topology
@@ -94,7 +97,7 @@ Exact defaults, cross-field invariants, and downstream consumers are recorded in
 | Unit | Ownership | Restart behavior |
 | --- | --- | --- |
 | `hostdeck-codex.service` | Dedicated app-server process and private Unix socket. | Restarts independently; an unexpected restart marks active projections interrupted/unknown until reconciliation. |
-| `hostdeck.service` | HostDeck storage, Codex client, API/SSE, built dashboard, certificates, and audit. | Depends on app-server readiness. A HostDeck-only restart leaves Codex running. |
+| `hostdeck.service` | HostDeck storage, Codex client, loopback API/SSE, built dashboard, remote-ingress observation, and audit. | Depends on app-server readiness, not on remote availability. A HostDeck-only restart leaves Codex running; `tailscaled` is external and never restarted by HostDeck. |
 
 The CLI installs/removes versioned user-unit files and verifies them. It does not edit arbitrary user units. `systemctl --user` failures are actionable, and foreground mode remains available.
 
@@ -116,7 +119,8 @@ The TUI and HostDeck may connect to the same app-server. Multi-client correctnes
 | Unapplied next-turn model/Plan intent | HostDeck process | Revisioned ephemeral control state only; restart drops unapplied intent and never replays it. Model has a read-back path; exact 0.144.0 has no read-only collaboration-mode endpoint, so Plan mode is `unknown` until committed settings state is rehydrated by restart reconciliation. |
 | Session alias and HostDeck-managed membership | HostDeck | `managed_sessions`. |
 | Attention, recent summary, last HostDeck cursor | HostDeck projection derived from Codex events | `session_projection`. Recomputable and marked stale when disconnected. |
-| Device trust, lock, LAN/certificate settings | HostDeck | Auth/settings repositories. |
+| Device trust, lock, selected remote origin/profile comparison identity and desired ingress mode | HostDeck | Auth/settings repositories. Raw Tailscale login, company profile details, and node keys are not retained. |
+| Active Tailscale profile/device state, Serve configuration, HTTPS certificate and network path | Tailscale | Observed through bounded adapter snapshots only; Tailscale remains authoritative. |
 | Remote mutation audit | HostDeck | Bounded audit repository. |
 | Live subscribers, pending protocol requests, pending SSE queues | HostDeck process | Ephemeral only. |
 
@@ -185,17 +189,17 @@ Same-origin route families:
 | Family | Operations | Authorization |
 | --- | --- | --- |
 | Health/runtime | Liveness, readiness, bounded host/runtime status. | Liveness reveals no sensitive state; detailed status is loopback local or paired. |
-| Sessions | Start, list, detail, projected events, stream, resume metadata, interrupt, archive. | LAN reads paired; mutations require write permission and unlocked host. |
+| Sessions | Start, list, detail, projected events, stream, resume metadata, interrupt, archive. | Remote reads require admitted Serve ingress plus pairing; mutations require write permission and unlocked host. |
 | Controls | Prompt, model, goal, plan, usage, compact, skills. | One thread, write permission where mutating, capability check, audit. |
 | Approvals | Read pending projected approval and approve/deny exact request. | Write permission, unlocked host, pending request, confirmation policy, audit. |
 | Access | Pair claim, CSRF bootstrap/rotate, security state, device list/revoke, lock. | Rate-limited; local-admin restrictions for unlock and broad device administration as specified. |
-| Network | Read network/certificate state. LAN configure/enable/disable remains local-admin CLI. | No remote mutation in V1. |
+| Remote ingress | Read bounded active-profile/Serve/origin/reachability state. `remote enable/status/disable` remains local-admin CLI. | The browser cannot switch profiles or mutate Tailscale. |
 
 Every route has schema validation, request/body limits, stable errors, explicit timeout, and a route-manifest test. CORS is disabled by default because the dashboard is same-origin.
 
 The selected base is `createHostDeckFastifyApp`: an unbound Fastify instance built only from one complete frozen resource policy, a required internal-error observer, and uniquely named explicit route registrations. Registrations declare `api`, `sse`, or `static`; API routes require at least one local-Zod response schema, while streaming/static exceptions remain named surfaces. Incoming request ids are ignored in favor of generated correlation ids. Root error handling plus `frameworkErrors` normalize pre-routing and route errors into the same bounded envelopes, including `route_not_found`, `method_not_allowed`, and `unsupported_media_type`.
 
-`startHostDeckFastifyLifecycle` is the selected listener owner. It receives a runtime controller with start/SSE-close/startup-close authority before the first side effect, applies constructor and mutable Node HTTP limits, completes Fastify readiness while unbound, then binds and verifies only the runtime-approved address. The lifecycle admits explicit loopback HTTP or a branded private TLS input for one assigned RFC1918/ULA address; plaintext LAN, wildcard, certificate/configuration mismatch, and secret-bearing public state fail closed. Close initiates listener refusal, bounds SSE/listener/Fastify/startup cleanup under the lifecycle policy, reaps newly idle sockets during the listener grace period, then force-closes any tracked HTTP sockets that outlive that grace and waits for their close events. It aggregates every failure and exposes frozen `ready`/`draining`/`closed`/`failed` snapshots. The historical custom listener remains outside this composition.
+`startHostDeckFastifyLifecycle` is the selected listener owner. It receives a runtime controller with start/SSE-close/startup-close authority before the first side effect, applies constructor and mutable Node HTTP limits, completes Fastify readiness while unbound, then binds and verifies only the runtime-approved loopback address. V1 production admits no HostDeck TLS, private-IP, wildcard, LAN, or public bind. Tailscale Serve terminates external HTTPS and proxies to this loopback listener through a separately validated ingress context. Close initiates listener refusal, bounds SSE/listener/Fastify/startup cleanup under the lifecycle policy, reaps newly idle sockets during the listener grace period, then force-closes any tracked HTTP sockets that outlive that grace and waits for their close events. It aggregates every failure and exposes frozen `ready`/`draining`/`closed`/`failed` snapshots. The historical custom listener and direct-LAN TLS path remain outside selected composition.
 
 One admitted request remains counted until both its original handler lifecycle and response/abort lifecycle finish. Fastify handler timeout aborts the unchanged request signal but cannot forcibly stop ignored JavaScript work, so a timed-out noncooperative handler retains its slot until it actually settles. Handler instrumentation preserves sync and `FastifyReply` returns and attaches settlement only to actual Promises; it must not convert plugin handlers to async.
 
@@ -207,37 +211,34 @@ The same pinned plugin also leaves a real raw response open after natural finite
 
 ### Modes
 
-| Mode | Listener | Access policy |
+| Mode | Listener/ingress | Access policy |
 | --- | --- | --- |
-| Default loopback | HTTP or HTTPS on configured loopback address only. | Local browser policy may allow bounded status/read; mutations still use paired or explicit local-admin authority. Exact cookie behavior is browser-tested. |
-| LAN | HTTPS on one explicit configured address/port. | All session/status reads require paired read or write permission. No plaintext fallback. |
+| Local | HostDeck HTTP on one configured loopback address only. | Local browser policy allows bounded local behavior; mutations still use paired or explicit local-admin authority as selected routes require. |
+| Remote ready | The same loopback listener behind one exact private Tailscale Serve HTTPS origin on the selected active personal profile. | Every remote data read requires a paired device; writes additionally require permission, current CSRF, unlocked host, exact target, and audit. |
+| Remote unavailable | Tailscale stopped/signed out, wrong profile, unsupported version, Serve missing/drifted, or external origin not proven. | Local Codex/HostDeck continue; remote readiness is false and HostDeck never auto-switches or silently repairs ambiguous external state. |
 
-App-server remains on a `0600` socket in a `0700` runtime directory. It is never reverse-proxied or bound to LAN.
+App-server remains on a `0600` socket in a `0700` runtime directory. It is never reverse-proxied or bound to LAN. Only the HostDeck loopback HTTP service is a Serve target.
 
 ### Browser Trust
 
-1. Local CLI creates a high-entropy one-time pairing code with permission and short expiry.
-2. Claim is rate-limited and records accepted/failed outcome.
+1. Local CLI creates a high-entropy one-time pairing code with permission and short expiry, then renders a bounded HTTPS URL/QR whose secret is carried in a URL fragment and removed from browser history before claim.
+2. Claim is admitted only through the exact configured external origin or explicit local-admin path, rate-limited by a trusted non-collapsed source identity, and records accepted/failed outcome.
 3. Server sets a host-only Secure, HttpOnly, SameSite=Strict device cookie on HTTPS with an absolute expiry matching the policy-bounded stored device expiry. V1 permits 1 to 365 days and defaults to 90 days.
 4. A same-origin CSRF bootstrap endpoint validates the cookie and returns a rotated raw CSRF token held only in page memory; storage retains its hash/version.
 5. Every mutation validates Host, Origin, device permission/revocation/expiry, CSRF, host lock, target state, capability, rate/concurrency policy, and audit preflight before dispatch.
 6. Reload repeats CSRF bootstrap; logout/revoke rotates or invalidates server state.
 
-Host allowlists are derived from configured origin/certificate names, not reflected request headers. Credentialed wildcard CORS is forbidden. Pair claim, auth failures, and mutations have bounded per-source/device rate limits.
+Host allowlists are derived from the persisted selected external origin plus loopback origin, never reflected request headers. The proxy adapter accepts only the exact reviewed Tailscale Serve header set on the dedicated loopback ingress contract and rejects unknown or contradictory forwarding/proxy context. Any process in the host loopback namespace can imitate headers, so V1 states that single-user host trust boundary explicitly: Serve-provided identity is only bounded source context and never proves paired remote authority or replaces HostDeck pairing. Existing local-admin request forms remain a separate local policy. Non-loopback callers cannot reach the listener. Credentialed wildcard CORS is forbidden. Pair claim, auth failures, and mutations have bounded per-trusted-source/device rate limits.
 
-### LAN Certificates
+### Tailscale Ingress Ownership
 
-`IFC-V1-015` selected and physically proved one Android/Chrome enrollment workflow. Production certificate ownership must preserve:
-
-- owner-only CA/key and leaf-key storage;
-- SAN coverage for the configured host/IP;
-- fingerprint and expiry inspection;
-- renewal/reconfiguration behavior;
-- browser trust instructions and failure recovery;
-- no secret in logs, QR payloads, or command history;
-- explicit refusal to start LAN when certificate, host allowlist, or permissions are invalid.
-
-The selected profile uses one assigned RFC1918 IPv4 or IPv6 ULA as an exact IP SAN, RSA-2048/SHA-256, a 3,650-day path-length-zero root, a 397-day server-only leaf, five-minute issuance skew, and renewal at 30 days remaining. Leaf renewal retains the root; root rotation requires explicit device re-enrollment. `@peculiar/x509` 2.0.0 plus `reflect-metadata` 0.2.2 is the selected generation stack. `artifacts/ifc-v1-015-https-phone-enrollment.md` records host and physical Android 16/Chrome evidence for exact-IP trust, renewal, isolated SAN/date/authority rejection, plaintext refusal, trust removal/reinstall recovery, and cleanup. A second mobile OS/browser family remains a later browser/release gate.
+- Tailscale owns node keys, tailnet membership, NAT traversal/relay, `.ts.net` DNS, external HTTPS certificates, and Serve listener state. HostDeck does not read key files or issue certificates.
+- The human selects and activates a saved personal profile before `remote enable`. HostDeck records only the exact external origin and a bounded comparison identity sufficient to detect the wrong profile; it never stores company login/profile details or invokes `tailscale switch`.
+- The adapter uses exact argv with no shell, bounded JSON/stdout/stderr, deadlines, version/capability checks, and sanitized failures. It may inspect the active profile and HostDeck-owned Serve entry; mutation occurs only for an ownership-proven entry under explicit local `remote enable` or `remote disable`.
+- Existing unrelated Serve configuration is preserved byte-for-byte or semantically equivalent. Ambiguous ownership, port/path collision, HTTPS consent requirements, unsupported version, or profile change fails before mutation.
+- Switching to another saved profile makes remote ingress unavailable but leaves local HostDeck/Codex running. On return, HostDeck only observes: an exact persisted mapping becomes ready, while a missing/drifted mapping stays unavailable until explicit local `remote enable`. HostDeck never repairs Serve automatically.
+- `remote disable` closes HostDeck's remote-admission generation before external cleanup. It removes only the exact owned mapping; ambiguous or failed cleanup remains a visible disabled-with-cleanup-conflict state and cannot leave HostDeck admitting remote requests or claim successful cleanup.
+- `IFC-V1-015` and direct-LAN certificate code remain historical security evidence only. They cannot satisfy remote V1 transport, setup, UI, or release gates.
 
 ## Storage Model
 
@@ -248,7 +249,7 @@ The selected profile uses one assigned RFC1918 IPv4 or IPv6 ULA as an exact IP S
 | `projected_events` | Session, cursor, Codex event identity/type where available, timestamp, bounded normalized payload, redaction/truncation/boundary metadata. |
 | `runtime_compatibility` | Codex version, binding/schema identity, negotiated capabilities, check timestamp/result/error. |
 | `auth_devices` / `pairing_codes` | Hashes and lifecycle metadata only, including CSRF generation/rotation state. |
-| `settings` | Lock, bind/origin/certificate metadata, retention/timeouts, state schema version. |
+| `settings` | Lock, loopback bind, desired remote mode, exact external origin, bounded selected-profile comparison identity, HostDeck-owned Serve descriptor, retention/timeouts, state schema version. |
 | `audit_events` | Actor/device, action, target, accepted/result/incomplete outcome, bounded summary/error. |
 
 Defaults remain 10,000 projected events or 10 MB per session and 5,000 audit events or 30 days globally until measurement changes `DEC-016`. Cleanup runs on production append plus bounded startup maintenance; it is never test-only.
@@ -274,13 +275,13 @@ The lease prevents cooperating HostDeck daemons from sharing one state directory
 3. Acquire the nonblocking daemon lease; fail before other local mutation when an owner exists.
 4. Validate/create owner-only config/runtime/database-parent paths and hold a path-identity guard across SQLite open.
 5. Verify SQLite integrity/version and run migrations transactionally.
-6. Load settings; validate loopback or LAN HTTPS/origin/certificate policy.
+6. Load settings; validate loopback listener policy and remote-ingress configuration shape without switching or mutating Tailscale.
 7. Start or await the mode-owned app-server process/socket.
 8. Complete Codex compatibility handshake.
 9. Reconcile managed session mappings and mark uncertain active projections stale/interrupted.
 10. Subscribe/rebuild bounded projections without starting turns.
 11. Run bounded retention maintenance.
-12. Bind Fastify, register routes/SSE/static assets, and report ready only after required checks pass.
+12. Bind Fastify on loopback, register routes/SSE/static assets, then observe active Tailscale profile/Serve state without mutation. Report local readiness independently and remote readiness only when the exact external ingress is proven; Serve changes require an explicit local command.
 
 ### Shutdown Order
 
@@ -303,7 +304,8 @@ The lease prevents cooperating HostDeck daemons from sharing one state directory
 | Storage append/retention failure | Stop publication of uncommitted event, mark storage/runtime degraded, block mutations requiring audit/durability. |
 | Audit preflight failure | Reject mutation except emergency lock; emergency result records deferred/incomplete audit state observably. |
 | Slow SSE client | Close that subscriber at queue limit; preserve global/runtime health. |
-| Certificate/origin/permission failure | Reject LAN startup or request explicitly. Never downgrade to plaintext. |
+| Unsupported/stopped Tailscale, wrong profile, or missing/drifted Serve entry | Keep local work available, mark remote ingress unavailable, reject remote-readiness claims, and never auto-switch or mutate an unowned profile/configuration. |
+| Proxy/origin/permission failure | Reject the request before data, credential, audit success, or dispatch. Never trust generic forwarding headers or downgrade to direct LAN/plaintext. |
 | Partial session start | Reconcile returned thread id if created; persist a recoverable failed mapping or archive the created empty thread according to tested compensation. |
 | Response serialization failure after mutation | Record unknown client delivery with operation id; do not repeat mutation automatically. |
 
@@ -313,7 +315,7 @@ The lease prevents cooperating HostDeck daemons from sharing one state directory
 2. Add normalized app-server contracts and adapter package without changing the public UI first.
 3. Migrate session storage from tmux target ownership to Codex thread mapping with an explicit schema migration.
 4. Run one real vertical: start thread, prompt, events, status, approval, control, interrupt, restart, TUI resume.
-5. Integrate Fastify/SSE/auth/HTTPS and prove the production path.
+5. Integrate Fastify/SSE/auth plus the Tailscale Serve adapter and prove the different-network production path.
 6. Only then remove or formally defer tmux runtime code and update dependencies/docs.
 
 No stored tmux session is silently converted to a Codex thread. V1 pre-release data can require an explicit reset/migration command if conversion cannot be proven.
@@ -326,7 +328,8 @@ No stored tmux session is silently converted to a Codex thread. V1 pre-release d
 | `SPK-ARCH-006` / `INT-V1-003` | What exact Codex version/schema/capability policy is supported? | Generated binding drift check and compatibility matrix. | Adapter/session/control implementation. |
 | `SPK-ARCH-007` / `INT-V1-006` | Do real turn, approval, plan, multi-client, reconnect, and restart semantics satisfy V1? | Real Codex vertical artifact with no fake producer. | Legacy disposition, UI mockups, runtime hardening. |
 | `SPK-ARCH-008` / `IFC-V1-016` | Which exact Fastify 5, Zod 4, official SSE, and static stack satisfies V1 validation, streaming, asset, and lifecycle contracts on Node 22? | Complete: `artifacts/ifc-v1-016-fastify-stack-spike.md`; exact MIT dependencies, clean production audit, and six executable boundary probes. | `IFC-V1-020`, `IFC-V1-022` to `IFC-V1-025`. |
-| `SPK-SEC-001` / `IFC-V1-015` | Which local HTTPS certificate enrollment works on supported phone browsers? | Complete: `artifacts/ifc-v1-015-https-phone-enrollment.md`; selected dependency/profile plus real Android 16/Chrome install, renewal, rejection, removal, recovery, and cleanup evidence. | LAN implementation, pairing UI, release smoke. |
+| `SPK-SEC-001` / `IFC-V1-015` | Which local HTTPS certificate enrollment works on supported phone browsers? | Historical complete evidence in `artifacts/ifc-v1-015-https-phone-enrollment.md`; superseded for selected V1 by `DEC-027`. | Optional direct-LAN work only. |
+| `SPK-NET-001` / `IFC-V1-070` | What exact supported Tailscale version/profile/Serve behavior, request metadata, non-root control, config coexistence, SSE behavior, and switch persistence can V1 depend on? | Redacted real-client/profile-switch/Serve/phone spike with exact commands, config diffs, header captures, failure cases, and no company-profile mutation. | Remote contracts, storage, adapter, ingress trust, CLI, UI states, and release matrix. |
 
 ## External References
 
@@ -340,3 +343,7 @@ No stored tmux session is silently converted to a Codex thread. V1 pre-release d
 - Official Fastify SSE plugin: `https://github.com/fastify/sse`
 - Official Fastify static plugin: `https://github.com/fastify/fastify-static`
 - Rejected Fastify Zod type-provider candidate: `https://github.com/turkerdev/fastify-type-provider-zod`
+- Tailscale Serve: `https://tailscale.com/docs/features/tailscale-serve`
+- Tailscale connection types: `https://tailscale.com/docs/reference/connection-types`
+- Tailscale fast user switching: `https://tailscale.com/docs/features/client/fast-user-switching`
+- Tailscale Serve CLI: `https://tailscale.com/docs/reference/tailscale-cli/serve`

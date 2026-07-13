@@ -9,7 +9,7 @@ This blueprint is implementation-ready only when:
 - every requirement in `02-requirements.md` resolves to defined leaf tasks and evidence;
 - generated Codex bindings are isolated behind a normalized adapter contract;
 - real turn, approval, structured controls, multi-client TUI, reconnect, and restart behavior are proven for the pinned Codex version;
-- LAN certificate enrollment is proven on a real phone;
+- the pinned Tailscale profile/Serve/header/SSE behavior and company-profile coexistence are proven by `IFC-V1-070`;
 - storage migration and legacy tmux disposition are explicit;
 - the production Fastify/SSE/auth path has one lifecycle owner and bounded resources;
 - replacement mobile mockups pass the screen/state gate and receive human selection before React screen work;
@@ -20,11 +20,11 @@ This blueprint is implementation-ready only when:
 | Area | Current evidence | V1 maturity now | Missing production proof |
 | --- | --- | --- | --- |
 | Workspace/conventions | Pinned workspace, strict TypeScript, Biome, Vitest, planning/scaffold/export/binding checks, nine package shells. | Reusable selected foundation. | Real build/package and clean-install proof. |
-| Core/contracts | Selected thread/turn/event/approval/runtime/security/mobile schemas, strict invariants, and fixtures. | Selected normalized foundation complete. | Production adoption remains in owning blocks. |
-| Storage | Historical repositories plus selected mapping/projection/event/compatibility/recovery migration and phased owner-only path/daemon-lease startup. | Selected durable and filesystem-ownership foundation implemented. | Production cleanup/audit invocation, CSRF lifecycle, and reopened module hardening. |
+| Core/contracts | Selected thread/turn/event/approval/runtime/security/mobile schemas, strict invariants, and fixtures. | Structured-runtime foundation implemented; remote-ingress contracts are reopened. | Tailscale ingress/access state contracts, fixtures, adoption, and focused hardening. |
+| Storage | Historical repositories plus selected mapping/projection/event/compatibility/recovery migration and phased owner-only path/daemon-lease startup. | Structured-runtime and filesystem-ownership foundation implemented; remote state is reopened. | Durable remote-ingress configuration/audit migration, production adoption, and focused hardening. |
 | Tmux adapter | Real target/start/send/capture/reconcile tests with fake Codex producer. | Legacy integration evidence. | Not the selected V1 runtime. Disposition waits for structured vertical. |
 | Codex adapter | Exact 0.144.0 experimental binding, structural method-catalog drift check, bounded Unix IPC/broker/handshake/reconnect, hostile fake-protocol matrix, and real private-socket no-model smoke. | Transport and compatibility foundation implemented. | Real session/turn/control/approval, supervision, multi-client, and restart proof. |
-| API/CLI | Headless handlers, custom Node listener, source-level CLI shell/tests, and the exact probed Fastify/Zod/SSE/static dependency contract. | Selected stack foundation, not a packaged production path. | Typed app/SSE/static implementation, selected adapter wiring, full auth, HTTPS, timeouts, service units, runnable `bin`. |
+| API/CLI | Headless handlers, custom Node listener, source-level CLI shell/tests, and the exact probed Fastify/Zod/SSE/static dependency contract. | Selected stack foundation, not a packaged production path. | Typed app/SSE/static implementation, loopback listener, Tailscale observer/Serve ownership, full app auth, timeouts, service units, runnable `bin`. |
 | Web | View-model helpers/fixtures only. Existing mockups rejected. | Pre-implementation. | Mobile state rebaseline, two options, selection, React/Vite UI, screenshots/device evidence. |
 | Release | Baseline commands pass; developer/command docs record gaps. | No-go. | Clean package/service/phone/security/aggregate evidence. |
 
@@ -42,7 +42,8 @@ Done task records remain historical evidence for their stated scope. They do not
 | `UsageSnapshot` | Exact managed target, runtime version/generation, measured time, bounded account token summary/daily buckets, optional same-generation thread token/context observation, and optional same-generation runtime quota observation. Missing observations are explicit and no monetary field is inferred. | contracts/codex adapter/server ephemeral control |
 | `PendingTurnSettings` | Exact session/thread, separate model and Plan catalog identities/revisions, baseline read-back, resolved collaboration settings, dispatch phase, accepted turn id, and bounded conflict/unknown cause. Claims are process-local and settle once from one turn outcome/settings boundary. | contracts/server ephemeral control |
 | `PendingApproval` | Session/thread, app-server request id, action/scope/reason, created/expiry, state, response policy. | contracts/server ephemeral projection |
-| `TrustContext` | Loopback/local-admin or paired device identity, read/write permission, expiry/revocation, CSRF generation, origin. | contracts/server |
+| `RemoteIngressState` | Tailscale availability, selected/active profile identity comparison, Serve ownership/configuration state, external origin, last observation, and bounded unavailable reason. No node key or reusable Tailscale credential. | contracts/server/storage |
+| `TrustContext` | Loopback/local-admin or paired device identity, ingress provenance, read/write permission, expiry/revocation, CSRF generation, external origin, and bounded remote source identity where verified. | contracts/server |
 | `AuditOutcome` | `accepted`, `succeeded`, `failed`, `rejected`, or `incomplete`; accepted is never treated as terminal success. | core/contracts/storage |
 
 Timestamps use strict RFC 3339/ISO 8601 parsing with round-trip calendar validation. Cursors and counts are non-negative safe integers. Lifecycle transitions use explicit normal and reconciliation transition tables.
@@ -90,7 +91,8 @@ Raw generated app-server types never cross into storage, API, or UI packages.
 | Typed app factory | `createHostDeckFastifyApp`, HostDeck-local Zod 4.4.3 type provider/compilers, resolved `ResourceBudget`, global content types/request ids/errors, and explicit `api`/`sse`/`static` registrations. | No listener/storage/process side effects; partial/mutable config, duplicate/invalid registrations, non-Zod API schemas, or raised route limits fail composition; pre-routing and route errors share bounded envelopes. |
 | SSE transport | `createHostDeckSseTransportRegistration`, `@fastify/sse` 0.5.0 negotiation/headers/heartbeat, required selected-event source, canonical query/`Last-Event-ID` cursor, and one-object-high-water Readable conversion. | Never pass an AsyncIterable directly. One composite signal preserves request abort/deadline and adds paired-authority revoke during source open and delivery; schema/session/order/wire-byte failures are observed; iterator return is deadline-bounded; swallowed plugin pipeline errors trigger explicit raw-response end. |
 | Static boundary | `@fastify/static` 9.3.0 asset prefix plus validated canonical roots and explicit browser-shell routes. | `index: false` for assets; send-level dotfile denial and dot-segment filtering; API misses never fall through to HTML; missing root/index fails startup. |
-| Listener lifecycle | One composition owner for register/ready/listen/readiness/drain/close and reverse-order startup rollback. | No listen before readiness; close is idempotent and attempts every bounded cleanup even when an earlier close step fails. |
+| Listener lifecycle | One composition owner for register/ready/listen/readiness/drain/close and reverse-order startup rollback; production binds explicit loopback HTTP only. | No wildcard, assigned-private-IP, or public bind; no listen before readiness; close is idempotent and attempts every bounded cleanup even when an earlier close step fails. |
+| Tailscale ingress adapter | Observe the pinned CLI/status/profile contract and apply/remove only the HostDeck-owned Serve mapping under explicit local enable/disable. | Tailscale is an external prerequisite. HostDeck never switches profiles, owns `tailscaled`, reads node keys, auto-repairs Serve, or mutates an unrecognized/company profile. |
 
 The SSE plugin does not own durable replay, high-water/live handoff, subscriber queues, auth, or runtime health. Its direct async-iterable send path is outside the selected contract because `IFC-V1-016` proved that a socket close can leave a backpressured drain wait suspended. The selected Readable path also has an explicit adapter guard: plugin pipeline errors are not rethrown and do not end the raw response, so HostDeck observes the Readable error and ends the committed response itself. Any selected-stack version change reruns both spike and adapter regression probes before implementation or lockfile acceptance.
 
@@ -108,7 +110,8 @@ The composition root calls `resolveResourceBudget` once before lease, storage, r
 | Projection service | Normalized runtime events, transaction, classifier. | Committed event plus updated session projection. | Publish only after durable commit and retention. |
 | Replay/fanout hub | Projection repo, per-session queues, abort signals. | Ordered replay/live SSE source. | No gap/duplicate at handoff; bounded slow-client queue. |
 | Trust service | Pairing/device repos, cookie/CSRF/origin/rate policy. | Read/write trust context. | Raw device token never enters JS-readable durable storage or database. |
-| Host health | Storage, runtime, projector, fanout, listener, cert/lease. | Bounded readiness/degradation snapshot. | Health updates after startup; it is not a frozen boot result. |
+| Remote ingress service | Tailscale observer, persisted selected profile/external origin/Serve descriptor, bounded command runner, audit. | Disabled, ready, or unavailable remote state. | Wrong/unknown profile is observation-only; local HostDeck remains available and no company profile is changed. |
+| Host health | Storage, runtime, projector, fanout, listener, remote ingress, lease. | Bounded local readiness plus separately bounded remote-access state. | Remote degradation cannot falsely mark local runtime/storage unhealthy. |
 
 ### Production Projection Append Boundary
 
@@ -137,7 +140,9 @@ The selected runtime requires a new migration, not in-place reinterpretation of 
 3. Preserve old tmux fields as nullable legacy columns until migration disposition is complete.
 4. Mark pre-release tmux records `legacy_unmigrated`; do not expose them as live app-server sessions.
 5. Provide a local reset/archive path for pre-release data if thread identity cannot be proven.
-6. Remove legacy columns only in a later reviewed migration after `INT-V1-008`.
+6. Add durable remote-ingress settings for the selected profile identity, canonical external origin, HostDeck-owned Serve descriptor, enablement state, and last known observation without storing Tailscale credentials.
+7. Replace selected LAN/certificate audit actions with exact remote-enable and remote-disable contracts. Reuse the existing pair-request action for QR/link issuance, keep status read-only, represent profile/ownership failures as truthful operation outcomes, and preserve historical LAN diagnostic rows unchanged.
+8. Remove legacy columns only in a later reviewed migration after `INT-V1-008`.
 
 Session start uses a recoverable saga because Codex thread creation and SQLite cannot share a transaction:
 
@@ -158,17 +163,18 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 2. Create/inspect only the owner-owned mode-`0700` state directory and stable mode-`0600` lease file with no-follow, owner/type/hard-link, and descriptor/path-identity checks.
 3. Acquire a nonblocking exclusive `flock(2)` lease. A held lease fails before config/runtime/database/listener/socket/app-server mutation; an unlocked stale file is reused, never unlinked for handoff.
 4. The lease owner creates/repairs the mode-`0700` config, runtime, and database-parent directories, then holds a validated database descriptor across SQLite open/migration and rechecks identity/mode before releasing the guard.
-5. Validate settings/certificates.
+5. Validate local settings and durable remote-ingress configuration without contacting or mutating Tailscale.
 6. Start or await mode-owned app-server and private socket.
 7. Complete compatibility handshake and start adapter reader.
 8. Load managed mappings and reconcile each against `thread/read`/list.
 9. Mark uncertain prior active states interrupted/stale; never infer running from persistence alone.
 10. Subscribe to managed thread events and rebuild bounded projections where supported.
 11. Run due retention and initialize live health.
-12. Start Fastify HTTPS/HTTP listener, routes, SSE, and static assets.
-13. Report ready only when required dependencies are current. Every failure after lease acquisition closes mutable resources and releases the lease in reverse order.
+12. Start the Fastify loopback HTTP listener, routes, SSE, and static assets.
+13. Mark local HostDeck ready, then observe the active Tailscale profile and exact HostDeck-owned Serve state without mutation. Only an explicit local `remote enable` or `remote disable` may invoke the ownership-safe manager.
+14. Report remote ready or a bounded remote-unavailable reason independently of local readiness. Every fatal local failure after lease acquisition closes mutable resources and releases the lease in reverse order.
 
-The selected listener implementation requires cleanup authority before runtime start: one exact runtime controller exposes `start`, `closeSse`, and `closeStartup`; `start` returns only typed context plus validated bind. Fastify registration/readiness completes while unbound, Node limits apply before listen, and the actual address must equal that bind. It accepts explicit loopback HTTP or branded assigned-private-IP HTTPS with lifecycle-private validated TLS material; plaintext LAN, wildcard, and certificate/configuration mismatch fail before listen. Close transitions to draining, initiates listener refusal, bounds SSE and newly idle connection settlement, closes Fastify, then storage/lease startup ownership. Failure or timeout at one step is aggregated but cannot skip later cleanup; complete mutation/projector/audit/runtime drain remains `IFC-V1-037`.
+The selected listener implementation requires cleanup authority before runtime start: one exact runtime controller exposes `start`, `closeSse`, and `closeStartup`; `start` returns only typed context plus a validated loopback bind. Fastify registration/readiness completes while unbound, Node limits apply before listen, and the actual address must equal that bind. Assigned-private-IP, wildcard, and public binds fail before listen. Tailscale Serve owns external HTTPS and proxies to this loopback listener; HostDeck owns neither TLS private keys nor a second network listener. Close transitions to draining, initiates listener refusal, bounds SSE and newly idle connection settlement, closes Fastify, then storage/lease startup ownership. Failure or timeout at one step is aggregated but cannot skip later cleanup; complete mutation/projector/audit/runtime drain remains `IFC-V1-037`.
 
 ### Prompt Or Structured Control
 
@@ -234,13 +240,24 @@ The selected listener implementation requires cleanup authority before runtime s
 6. Persist an explicit replay boundary when events during disconnect cannot be recovered.
 7. Resume subscriptions and mutation readiness only after reconciliation.
 
+### Tailscale Remote Enable/Profile Switch
+
+1. `IFC-V1-070` first proves the exact pinned Tailscale CLI/status/profile/Serve contract, identity-header overwrite behavior, external HTTPS origin, long-lived SSE behavior, non-root permissions, and saved-profile switching on the target laptop and phone.
+2. The local CLI requests remote enable while the human-selected dedicated HostDeck profile is active. One planned operation derives the canonical external origin and bounded profile comparison identity from spike-proven local observation; a conflicting prior selection requires explicit disable first. HostDeck records only stable comparison metadata and its own expected Serve descriptor, never a node key or reusable Tailscale credential.
+3. The remote ingress service verifies that the current profile is the selected profile and that the target Serve mapping is absent or exactly HostDeck-owned before applying a bounded change. Ambiguous or foreign configuration fails without mutation.
+4. Read-back must prove the expected HTTPS-to-loopback mapping before remote state becomes ready. App pairing, CSRF, exact Host/Origin, and route authorization remain required; tailnet membership alone grants no HostDeck permission.
+5. When the active profile changes, Tailscale stops, or Serve state drifts, HostDeck marks remote access unavailable, audits the transition, and leaves local runtime, storage, and loopback access running.
+6. HostDeck never switches profiles automatically and never repairs or disables Serve state on an unrecognized/company profile. Returning to the dedicated profile triggers observation only: exact persisted state becomes ready; missing or drifted state requires explicit local enable.
+7. Remote disable first invalidates HostDeck remote admission and persists disabled intent, then removes only the exactly matching HostDeck-owned Serve mapping and verifies removal. Ambiguous or failed cleanup remains visible and cannot reopen admission or be reported as successful cleanup.
+
 ### Browser Pair/Reload/Revoke
 
-1. Local CLI creates one-time hashed code with permission and expiry.
-2. HTTPS claim validates origin/host/rate, atomically consumes code, creates hashed device token, sets cookie, and audits outcome.
-3. Browser calls CSRF bootstrap; server rotates generation/hash and returns raw token to memory.
-4. Reload repeats bootstrap using HttpOnly cookie.
-5. Revoke invalidates device and CSRF state, audits outcome, and causes active SSE/mutations to fail on next authorization check.
+1. Local CLI creates one one-time code with permission and expiry, persists only its hash, and renders a remote HTTPS QR/link with the raw code in the URL fragment.
+2. The browser reads the fragment, immediately removes it with history replacement, and submits the code in a bounded claim body. Fragments never reach Serve, HostDeck request logs, or referrers.
+3. HTTPS claim validates exact external origin/host, admitted proxy provenance, source/rate limits, and code; it atomically consumes the code, creates a hashed device token, sets a Secure HttpOnly cookie, and audits outcome.
+4. Browser calls CSRF bootstrap; server rotates generation/hash and returns the raw token to memory.
+5. Reload repeats bootstrap using the HttpOnly cookie.
+6. Revoke invalidates device and CSRF state, audits outcome, and causes active SSE/mutations to fail on next authorization check.
 
 ### Graceful Shutdown
 
@@ -267,7 +284,9 @@ The selected listener implementation requires cleanup authority before runtime s
 | Slow SSE subscriber | Subscriber closes at bounded queue without blocking projector/other clients. | `IFC-V1-035`, `IFC-V1-048` |
 | Retention during replay | Transactional boundary and high-water handoff remain ordered. | `DAT-V1-022`, `IFC-V1-034` |
 | Duplicate daemon | Second owner exits before opening DB/listener/runtime mutation. | `DAT-V1-019` |
-| LAN HTTP/mismatched Host/Origin | Startup/request rejected; no cookie or data. | `IFC-V1-015`, `IFC-V1-017` |
+| Wrong/unknown active Tailscale profile | Remote state is unavailable; no profile switch, Serve mutation, pairing claim, or local-runtime interruption. | `IFC-V1-070`, `IFC-V1-071`, `IFC-V1-072`, `IFC-V1-079` |
+| Foreign or drifted Serve mapping | Reconciliation/disable fails with an ownership conflict and leaves foreign state untouched. | `IFC-V1-070`, `IFC-V1-072`, `IFC-V1-076`, `IFC-V1-079` |
+| Unknown/contradictory proxy context or mismatched external Host/Origin | Request is rejected before cookie/data access. Exact host-local loopback imitation remains inside the documented single-user-host boundary and cannot manufacture paired remote authority from Tailscale identity; explicit local-admin request forms remain separate. | `IFC-V1-073`, `IFC-V1-074`, `IFC-V1-079` |
 | Unsupported `/plan` semantic | Control disabled/incompatible; no literal slash fallback. | `INT-V1-003`, `INT-V1-021`, `IFC-V1-063`, `FE-V1-027` |
 | TUI plus HostDeck clients | Both address the same thread without subscription corruption. | `INT-V1-031` |
 
@@ -275,12 +294,12 @@ The selected listener implementation requires cleanup authority before runtime s
 
 | Block | Scope after rebaseline | Completion gate |
 | --- | --- | --- |
-| `BLK-V1-01` | Normalized contracts, events, approvals, compatibility, fixtures, planning validation. | Rebaseline tests and `FND-V1-091`; old tmux-shaped completion is insufficient. |
-| `BLK-V1-02` | App-server mapping/projection migration, auth/CSRF, audit outcomes, production retention, permissions/lease. | Integration/storage evidence and `DAT-V1-091`. |
+| `BLK-V1-01` | Normalized contracts, events, approvals, compatibility, remote-ingress/access state, fixtures, planning validation. | Remote rebaseline tests and `FND-V1-092`; earlier structured-runtime completion is insufficient. |
+| `BLK-V1-02` | App-server mapping/projection migration, auth/CSRF, audit outcomes, remote-ingress configuration/audit, production retention, permissions/lease. | Integration/storage evidence and `DAT-V1-092`. |
 | `BLK-V1-03` | Codex adapter, private runtime, real thread/turn/control/approval/event/restart/TUI path. | Real vertical plus `INT-V1-091`; no fake producer. |
-| `BLK-V1-04` | Fastify API/SSE/static, selected adapter orchestration, HTTPS/auth, CLI/build/service packaging, resource controls. | Packaged production path plus `IFC-V1-091`. |
-| `BLK-V1-05` | Mobile state rebaseline, replacement visual options/selection, phone-first dashboard, approvals, controls, fidelity/device evidence. | `FE-V1-090`. |
-| `BLK-V1-06` | Security/privacy, clean install/service/browser/phone, aggregate validation, completion matrix, go/no-go. | Release-readiness artifact and human acceptance. |
+| `BLK-V1-04` | Fastify API/SSE/static, loopback listener, Tailscale profile/Serve ingress, app authorization, CLI/build/service packaging, and resource controls. | Packaged remote path, cellular/profile-switch evidence, and `IFC-V1-091`. |
+| `BLK-V1-05` | Remote-access state rebaseline, replacement visual options/selection, phone-first dashboard, approvals, controls, fidelity/device evidence. | `FE-V1-090`. |
+| `BLK-V1-06` | Security/privacy, clean install/service/browser/remote phone, company-profile noninterference, aggregate validation, completion matrix, go/no-go. | Release-readiness artifact and human acceptance. |
 
 ## Delivery Order
 
@@ -292,12 +311,13 @@ The selected listener implementation requires cleanup authority before runtime s
 | 4 | Selected durable state | `DAT-V1-018` to `DAT-V1-030`; migration, paths/lease, append/retention, audit outcomes, CSRF/device/pairing/revoke storage and bounded startup reconciliation. |
 | 5 | Real structured semantics and operation ports | `INT-V1-005`, `INT-V1-006`, `INT-V1-017` to `INT-V1-027`; thread, prompt, events, controls, approval, interrupt. |
 | 6 | Runtime lifecycle, legacy disposition, and integration hardening | `INT-V1-007`, `INT-V1-028` to `INT-V1-032`, `INT-V1-008`, `INT-V1-091`; supervision, restart, TUI coexistence, one selected runtime. |
-| 7 | HTTPS and production host interface | `IFC-V1-015` to `IFC-V1-069`; stack/resource contract, typed Fastify/SSE/static lifecycle, security, fanout, leaf read/write routes/CLI, legacy-listener disposition, build, and service packaging. |
-| 8 | Interface hardening | `IFC-V1-091`; slow clients, failure matrix, real production path. |
-| 9 | Mobile state and visual gate | `FE-V1-004`, reopened `FE-V1-002`, human `FE-V1-003`. This precedes React screen implementation. |
-| 10 | Dashboard implementation | `FE-V1-010` to `FE-V1-040`; typed clients, screens/actions/trust states, responsive, accessibility, browser, fidelity, and copy evidence. |
-| 11 | Module and release hardening | `FE-V1-090`, release/security/clean-install/aggregate tasks. |
-| 12 | Human acceptance | `REL-V1-010`; explicit go/no-go. |
+| 7 | Remote-ingress proof and reopened foundations | `REL-V1-012`, `IFC-V1-070`, `FND-V1-018`, `DAT-V1-031`, and `DAT-V1-032`; exact profile/Serve contract, normalized state, fixtures, migration, and audit catalog. |
+| 8 | Production host and remote interface | Existing `IFC-V1-015` to `IFC-V1-069` evidence plus `IFC-V1-071` to `IFC-V1-078`; loopback Fastify/SSE/static lifecycle, profile-safe Serve ownership, proxy trust, QR pairing, routes/CLI, build, and service packaging. |
+| 9 | Interface hardening and physical remote proof | `IFC-V1-079`, `FND-V1-092`, `DAT-V1-092`, and `IFC-V1-091`; hostile/failure matrices, cellular phone path, profile switching, and company-profile noninterference. |
+| 10 | Mobile state and visual gate | `FE-V1-004`, reopened `FE-V1-002`, human `FE-V1-003`. This precedes React screen implementation. |
+| 11 | Dashboard implementation | `FE-V1-010` to `FE-V1-040`; typed clients, screens/actions/trust states, responsive, accessibility, browser, fidelity, and copy evidence. |
+| 12 | Module and release hardening | `FE-V1-090`, release/security/clean-install/aggregate tasks. |
+| 13 | Human acceptance | `REL-V1-010`; explicit go/no-go. |
 
 Tasks may overlap only when dependencies and shared contracts make the work independent. No UI screen implementation starts before order 9 is complete.
 
@@ -306,6 +326,7 @@ Tasks may overlap only when dependencies and shared contracts make the work inde
 - All app-server behavior is behind the new adapter and selected-runtime configuration during migration.
 - Before pre-release migration, current tmux tests remain runnable to prevent accidental loss of evidence.
 - If the real structured vertical fails a required semantic, V1 returns to planning. It does not silently ship both runtimes or resume TUI scraping.
+- If Tailscale ingress cannot meet the pinned remote/security/profile-isolation contract, V1 returns to planning. It does not fall back to a LAN listener, custom CA, public port forwarding, or silent company-profile mutation.
 - Database migrations are forward-only and tested on a copy; destructive pre-release reset requires explicit CLI confirmation and preserves an exportable diagnostic.
 - Dependency additions are committed separately from UI work and include license/version rationale in the owning task.
 - A completed block is reopened whenever its production outcome changes, even if historical package tests still pass.

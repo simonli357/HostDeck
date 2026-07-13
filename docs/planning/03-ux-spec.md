@@ -40,12 +40,12 @@ Mission Control and Session Detail are the only full-page V1 product routes. Sup
 | Surface | Required states |
 | --- | --- |
 | App shell | Booting, ready, offline, host unavailable, incompatible Codex version, update required. |
-| Mission Control | Empty, loading, mixed attention, all quiet, reconnecting, locked, read-only, LAN unavailable, degraded runtime, fatal host error. |
+| Mission Control | Empty, loading, mixed attention, all quiet, reconnecting, locked, read-only, remote unavailable, degraded runtime, fatal host error. |
 | Session card | Running, waiting for input, approval needed, idle, completed, interrupted, failed, unknown, stale projection, unread activity. |
 | Session Detail | Loading, ready, active turn, waiting for input, approval requested, interrupting, completed, failed, unknown, archived/not found, stream reconnecting. |
 | Composer | Empty, composing, sending, accepted, failed, disabled by trust, disabled by lock, disabled by runtime/session state. |
 | Structured controls | Loading, available, unsupported by installed Codex, submitting, succeeded, failed, conflict with active operation. |
-| Pairing/access | Unpaired, claim in progress, paired read-only, paired write, expired, revoked, locked, certificate/HTTPS error. |
+| Pairing/access | Unpaired, QR/link claim in progress, paired read-only, paired write, expired, revoked, locked, Tailscale disconnected, laptop profile mismatch in local host status, Serve unavailable, external HTTPS/origin error, and generic remote-origin unreachable/offline. A phone with Tailscale stopped or on another profile receives a browser/network failure before HostDeck can diagnose the cause. |
 | Event details | Complete event, truncated projection, replay boundary, redacted content, unsupported event type. |
 | Confirmation | Interrupt turn, archive thread, approval decision, lock writes, revoke device. |
 
@@ -53,7 +53,7 @@ Mission Control and Session Detail are the only full-page V1 product routes. Sup
 
 | ID | Flow | Success contract |
 | --- | --- | --- |
-| UX-001 | Pair a phone. | The user reaches the HTTPS HostDeck origin, claims one time-bounded code, sees the device permission, and can reload without losing a valid CSRF posture. |
+| UX-001 | Pair a phone. | The local CLI verifies the selected HostDeck Tailscale profile and private Serve origin, then shows a QR/link. The phone opens it from another network, claims one time-bounded code without retaining it in URL history, sees the device permission, and can reload without losing a valid CSRF posture. |
 | UX-002 | Scan sessions. | Mission Control puts approval, input, and failure attention before running/quiet work and identifies the session without opening every card. |
 | UX-003 | Read and prompt. | Tapping a card opens the same thread; the user sees recent structured conversation context, sends one prompt, and sees accepted plus resulting progress or a truthful error. |
 | UX-004 | Change model. | `/model` opens a model/effort selector sourced from the installed Codex runtime and marks the choice pending for the selected thread's next turn until runtime settings confirm it. |
@@ -64,6 +64,7 @@ Mission Control and Session Detail are the only full-page V1 product routes. Sup
 | UX-009 | Recover connectivity. | The UI keeps the last bounded projection, marks it stale, reconnects from a cursor, and shows a boundary if continuity cannot be proved. |
 | UX-010 | Resume on laptop. | The dashboard/CLI provides the exact local resume command for the selected thread; no phone shell is exposed. |
 | UX-011 | Lock or revoke. | Lock immediately disables all remote writes; a local admin path can revoke a paired device and restore or inspect access. |
+| UX-012 | Switch Tailscale profiles safely. | Local status distinguishes HostDeck profile active, company/other profile active, signed out, stopped, Serve drift, and recovery. The dashboard never offers profile switching; local Codex work continues while remote access is unavailable. |
 
 ## Screen Contracts
 
@@ -96,9 +97,11 @@ Mission Control and Session Detail are the only full-page V1 product routes. Sup
 
 ### Host And Access
 
-- Show connection origin, loopback/LAN mode, HTTPS/certificate state, paired device permission, lock state, Codex compatibility, stream health, and bounded last error.
-- Lock is available to a paired writer. Unlock and LAN/certificate mutation remain local-admin operations.
-- Device revocation is available through a user-accessible local-admin CLI path in V1 and is reflected here after refresh.
+- Show external origin, remote availability, paired device permission, lock state, Codex compatibility, stream health, and bounded last error.
+- On the local laptop surface, show whether Tailscale is stopped/signed out, the selected HostDeck profile is active, another profile is active, or the HostDeck Serve entry is missing/drifted. Do not expose raw login, tailnet, company profile, node-key, or unrelated Serve details.
+- On the remote phone surface, show only actionable connection/access state available after admission. Do not imply that a disconnected phone can switch or repair the laptop profile.
+- Lock is available to a paired writer. Unlock and `remote enable/disable` remain local-admin operations.
+- Device revocation is available through the paired writer and local-admin paths defined by the selected API/CLI and is reflected immediately.
 
 ### Event Details
 
@@ -112,7 +115,7 @@ Mission Control and Session Detail are the only full-page V1 product routes. Sup
 - Do not call an accepted prompt completed. Completion follows a terminal turn event.
 - Do not call a disconnected or unknown session healthy.
 - Literal labels `/model`, `/goal`, `/plan`, `/usage`, `/compact`, and `/skills` are retained because they match the user's Codex mental model, but each invokes a structured operation.
-- Error copy states what failed, whether retry is safe, and whether laptop action is required. It does not expose secrets or unbounded server details.
+- Error copy states what failed, whether retry is safe, and whether laptop action is required. When laptop status is actually available, `Wrong Tailscale profile` instructs local switching without naming the active company account; an unreachable phone origin remains a generic browser/Tailscale connection failure. Copy does not expose secrets or unbounded server details.
 
 ## Responsive Rules
 
@@ -139,7 +142,7 @@ Mission Control and Session Detail are the only full-page V1 product routes. Sup
 
 - The existing Option A and Option B boards are rejected as implementation targets because both are desktop-led, omit phone Mission Control, and show only write-disabled phone detail.
 - `FE-V1-002` is reopened after this UX rebaseline and the structured state-contract update.
-- Each replacement option must show, at minimum: phone Mission Control mixed-attention state; phone Session Detail active/writable state with composer and primary controls; inline approval; locked/read-only state; disconnected/replay-boundary state; and a desktop expansion of the same design.
+- Each replacement option must show, at minimum: phone Mission Control mixed-attention state; phone Session Detail active/writable state with composer and primary controls; inline approval; locked/read-only state; remote-disconnected/replay-boundary state; Host/access remote-ready and laptop-action-required state; and a desktop expansion of the same design.
 - The two options must differ in information hierarchy, density, navigation, and component treatment, not only color/theme.
 - Mockup notes must map every visible element to a design-system token/component and identify generated imagery that is reference-only.
 - Human selection in `FE-V1-003` remains required before React screen implementation.
@@ -148,5 +151,5 @@ Mission Control and Session Detail are the only full-page V1 product routes. Sup
 
 - Mockup review at every reference viewport before selection.
 - Implemented Playwright screenshots for required states at 360 x 800, 390 x 844, 412 x 915, 768 x 1024, and 1280 x 800.
-- Real-browser inspection with mobile keyboard open, long labels, slow/disconnected stream, approval arrival, lock transition, and expired pairing.
-- At least one actual Android or iOS browser pass over the selected HTTPS LAN setup before V1 release.
+- Real-browser inspection with mobile keyboard open, long labels, slow/disconnected stream, approval arrival, lock transition, expired pairing, wrong-profile recovery, and Tailscale reconnect.
+- At least one actual Android or iOS browser pass through private Tailscale Serve while the phone has no LAN route to the laptop, including personal-to-company-to-personal laptop profile switching with no company-profile mutation.

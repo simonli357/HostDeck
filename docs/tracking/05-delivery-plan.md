@@ -4,46 +4,47 @@ Owns milestone, module maturity, production passes, and release truth.
 
 ## Snapshot
 
-- Current pass: selected runtime and production host-interface integration after foundation completion.
-- Current milestone: M2 Real structured vertical and M3 Production host interface are in progress.
+- Current pass: selected runtime integration plus Tailscale-first remote-access foundation and production host interface.
+- Current milestone: reopened M1 remote contracts/state, M2 real structured vertical, and M3 remote host interface are in progress.
 - Release state: no-go; selected production path is not implemented.
-- Next exit: close the assembled runtime and selected host-interface module gates with real bounded evidence.
+- Next exit: `IFC-V1-070` freezes exact profile/Serve/proxy/SSE/phone behavior, then remote contracts/storage and the production ingress path can proceed without assumptions.
 
 ## Milestones
 
 | Milestone | Scope | Exit | Status |
 | --- | --- | --- | --- |
-| M0 Rebaseline | Audit prior direction/evidence; select app-server/mobile/HTTPS path; repair requirements, blueprint, blocks, tasks, queue, planning checker. | Owner docs agree, `pnpm check:planning` passes, selected-path leaf graph is executable. | Complete |
-| M1 Selected foundation | Normalized contracts/invariants; mapping/projection/auth/permissions/retention foundations; Codex compatibility and IPC adapter. | `FND-V1-091`, `DAT-V1-018` to `DAT-V1-030`, `DAT-V1-091`, and adapter handshake/broker pass. | Complete |
+| M0 Rebaseline | Audit prior direction/evidence; select app-server/mobile/Tailscale-remote path; repair requirements, blueprint, blocks, tasks, queue, and planning checker. | `REL-V1-011`, `REL-V1-012`; owner docs agree, `pnpm check:planning` passes, selected-path leaf graph is executable. | Complete |
+| M1 Selected foundation | Normalized runtime/remote-ingress contracts and invariants; mapping/projection/auth/remote-config/audit/permissions/retention foundations; Codex compatibility and IPC adapter. | Prior foundation evidence plus `FND-V1-018`, `FND-V1-092`, `DAT-V1-031`, `DAT-V1-032`, `DAT-V1-092`, and adapter handshake/broker pass. | Reopened |
 | M2 Real structured vertical | Real thread start/resume, prompt/events/status, controls, approval, interrupt, TUI multi-client, reconnect/restart; legacy disposition. | `INT-V1-091` with L3 real-Codex artifact. | In progress |
-| M3 Production host interface | HTTPS phone enrollment, Fastify/SSE/static, auth/rate/origin/CSRF, fanout/health/shutdown, selected API/CLI, bounds, build/user services. | `IFC-V1-091`, clean production-path smoke. | In progress |
-| M4 Mobile dashboard | Rebased state matrix, two mobile options, human selection, complete screens/controls/approval/trust states, responsive/accessibility/fidelity, phone proof. | `FE-V1-090` with screenshots and L4 device artifact. | Planned |
-| M5 Release hardening | Security/privacy, clean Ubuntu package/service/real-Codex/browser/phone, docs, aggregate validation, block matrix, go/no-go. | `REL-V1-010` human decision. | Planned |
+| M3 Production remote host interface | Loopback Fastify/SSE/static, Tailscale profile/Serve ingress, external-origin/proxy/app auth, QR pairing, fanout/health/shutdown, selected API/CLI, bounds, build/user services. | `IFC-V1-079`, `IFC-V1-091`, clean production-path smoke. | In progress |
+| M4 Mobile dashboard | Rebased remote/profile state matrix, two mobile options, human selection, complete screens/controls/approval/trust states, responsive/accessibility/fidelity, remote-phone proof. | `FE-V1-090` with screenshots and L4 device/profile artifact. | Planned |
+| M5 Release hardening | Security/privacy, clean Ubuntu/Tailscale package/service/real-Codex/browser/remote-phone, company-profile noninterference, docs, aggregate validation, block matrix, go/no-go. | `REL-V1-010` human decision. | Planned |
 
 ## Module Maturity
 
 | Block | Current maturity | Reopened gap | Completion owner |
 | --- | --- | --- | --- |
-| `BLK-V1-01` Contracts/core/fixtures | Selected normalized contracts, invariants, fixtures, generated boundary, planning checker, and executable-leaf audit pass. | No foundation blocker; production consumers remain in their owning blocks. | `FND-V1-014` to `FND-V1-017`, `FND-V1-091` |
-| `BLK-V1-02` State/auth/audit | Complete selected mapping/recovery/projection/runtime compatibility, append/startup retention, pairing/CSRF/device authority, append-only audit, secure paths/lease, and aggregate restart/privacy evidence. | None inside the storage-owned block; runtime startup and HTTP/browser composition remain with `BLK-V1-03` and `BLK-V1-04`. | `DAT-V1-018` to `DAT-V1-030`, `DAT-V1-091` |
-| `BLK-V1-03` Codex runtime/events | Exact binding, private IPC/handshake, corrected no-model thread lifecycle, ordered projection, prompt/model/goal/Plan controls, generation-aware structured usage, accepted-to-authoritative-terminal compact control, strict real deny/approve/expiry routing, and exact active-turn interrupt pass; tmux mechanics are legacy. | Skills, assembled callback/runtime composition, command-sandbox reproducibility, supervision, restart acceptance, and legacy disposition remain. | `INT-V1-005` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
-| `BLK-V1-04` API/CLI/security/service | Typed Fastify/SSE/static/lifecycle boundaries, bounded commit-only fanout, and retention-safe headless replay-to-live continuity pass over the historical headless/CLI base. | Sustained subscriber queues, authenticated SSE assembly, HTTPS/security, health/routes, legacy disposition, enforced bounds, build, and services remain. | `IFC-V1-015` to `IFC-V1-069`, `IFC-V1-091` |
-| `BLK-V1-05` Mobile dashboard | View-model helpers only; old boards rejected. | Mobile state/visual gate and all product UI/device evidence remain. | `FE-V1-004`, reopened `FE-V1-002`, `FE-V1-003`, `FE-V1-010` to `FE-V1-040`, `FE-V1-090` |
-| `BLK-V1-06` Release | Baseline commands and historical docs exist. | Selected-path clean install/security/device/aggregate/docs/go-no-go absent. | `REL-V1-004` to `REL-V1-011` |
+| `BLK-V1-01` Contracts/core/fixtures | Structured-runtime contracts, invariants, fixtures, generated boundary, planning checker, and executable-leaf audit pass. | Remote-ingress/access contracts, fixtures, adoption, and focused hardening remain. | `FND-V1-018`, `FND-V1-092` |
+| `BLK-V1-02` State/auth/audit | Mapping/recovery/projection/runtime compatibility, retention, pairing/CSRF/device authority, append-only audit, secure paths/lease, and aggregate restart/privacy evidence pass for prior selected state. | Remote-ingress config/profile/Serve descriptor and audit migration plus focused hardening remain. | `DAT-V1-031`, `DAT-V1-032`, `DAT-V1-092` |
+| `BLK-V1-03` Codex runtime/events | Exact binding, private IPC/handshake, corrected no-model thread lifecycle, ordered projection, all selected structured controls, strict real approval/interrupt routing, and the four-run two-thread assembled vertical pass; tmux mechanics are legacy. | Production supervision, restart/reconciliation acceptance, multi-client completion, legacy disposition, and module hardening remain. | `INT-V1-005` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
+| `BLK-V1-04` API/CLI/security/service | Typed loopback Fastify/SSE/static/lifecycle boundaries, app-auth primitives, bounded commit-only fanout, and retention-safe headless replay-to-live continuity pass. | Exact Tailscale spike, observer/Serve ownership/proxy trust/QR/lifecycle/physical acceptance, remaining routes/queues/bounds, legacy isolation, build, and services remain. | `IFC-V1-070` to `IFC-V1-079`, remaining interface leaves, `IFC-V1-091` |
+| `BLK-V1-05` Mobile dashboard | View-model helpers only; old boards rejected. | Remote state/visual gate and all product UI/device evidence remain. | `FE-V1-004`, reopened `FE-V1-002`, `FE-V1-003`, `FE-V1-010` to `FE-V1-040`, `FE-V1-090` |
+| `BLK-V1-06` Release | Baseline commands/historical docs and both rebaseline decisions exist. | Selected remote-path clean install/security/device/profile/aggregate/docs/go-no-go absent. | `REL-V1-004` to `REL-V1-010`, `REL-V1-012` |
 
 ## Delivery Passes
 
-1. Foundation: M0 through M3 establishes one runnable selected vertical with bounded failure behavior.
-2. Module hardening: `FND-V1-091`, `DAT-V1-091`, `INT-V1-091`, `IFC-V1-091`, and `FE-V1-090` close each module against strict matrices.
-3. Release hardening: M5 validates packaging, setup, security/privacy, docs/support, actual phone/browser/Codex workflows, and handoff.
+1. Foundation: M0 through M3 establishes one runnable selected remote vertical with bounded local and remote failure behavior.
+2. Module hardening: `FND-V1-092`, `DAT-V1-092`, `INT-V1-091`, `IFC-V1-091`, and `FE-V1-090` close each module against strict matrices.
+3. Release hardening: M5 validates packaging, Tailscale/profile setup, security/privacy, docs/support, actual remote-phone/browser/Codex workflows, company-profile noninterference, and handoff.
 
 ## Release Gates
 
 | Gate | Status | Blocking owner |
 | --- | --- | --- |
-| Planning/trace/dependency integrity | Complete | `REL-V1-011`, `FND-V1-014`, `FND-V1-017` |
+| Planning/trace/dependency integrity | Complete | `REL-V1-011`, `REL-V1-012`, `FND-V1-014`, `FND-V1-017` |
+| Remote contracts and durable state | Blocked | `IFC-V1-070`, `FND-V1-018`, `FND-V1-092`, `DAT-V1-031`, `DAT-V1-032`, `DAT-V1-092` |
 | Real Codex compatibility and vertical | Blocked | `INT-V1-003` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
-| HTTPS/auth/security boundary | Blocked | `IFC-V1-015`, `DAT-V1-021`, `DAT-V1-025` to `DAT-V1-029`, `IFC-V1-017`, `IFC-V1-026` to `IFC-V1-033`, `IFC-V1-059`, `IFC-V1-066`, `IFC-V1-091` |
+| Remote HTTPS/app-auth/security boundary | Blocked | `IFC-V1-070` to `IFC-V1-079`, reusable auth/storage leaves, `IFC-V1-059`, `IFC-V1-066`, `IFC-V1-091` |
 | Build/package/user services | Blocked | `IFC-V1-021`, `IFC-V1-053` to `IFC-V1-058` |
 | Mobile visual selection/UI/device | Blocked | `FE-V1-004`, `FE-V1-002`, human `FE-V1-003`, `FE-V1-010` to `FE-V1-040`, `FE-V1-090` |
 | Security/privacy | Blocked | `REL-V1-005` |

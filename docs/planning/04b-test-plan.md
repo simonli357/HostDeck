@@ -9,7 +9,7 @@ Owns V1 validation layers, commands, matrices, real-boundary policy, UI/device e
 | L1 Unit/contract | Pure invariants, schema rejection, deterministic projections, package APIs. | Process, database, network, browser, or Codex behavior. |
 | L2 Integration | Real SQLite, IPC transport, Fastify injection/listener, process orchestration, concurrency, retention. | Complete user workflow or real phone behavior. |
 | L3 System | Packaged HostDeck plus real Codex app-server/TUI/browser on Ubuntu. | Clean-machine setup or release support quality by itself. |
-| L4 Device/release | Clean install, user services, HTTPS phone access, supported browsers, security/privacy, handoff. | Future-version compatibility. |
+| L4 Device/release | Clean install, user services, Tailscale Serve HTTPS from a phone without a LAN route, saved-profile switching, supported browsers, security/privacy, handoff. | Future-version compatibility. |
 
 Task and block evidence names its level. "Complete for package scope" cannot satisfy a block whose outcome requires L3/L4.
 
@@ -35,7 +35,7 @@ Task and block evidence names its level. "Complete for package scope" cannot sat
 | `pnpm test:codex` | `INT-V1-027` | Opt-in L3 real app-server thread/turn/control/approval/TUI/reconnect suite assembled from the semantic and operation leaves. | Pass on release host with recorded version; may be excluded from ordinary CI when credentials/model use are required. |
 | `pnpm test:e2e` | `IFC-V1-046`, `FE-V1-040` | Packaged browser workflow against isolated fixture runtime and the supported browser matrix. | Pass. |
 | `pnpm build` | `IFC-V1-053`, `IFC-V1-054` | Production server/web assets and runnable CLI artifacts. | Pass from clean checkout. |
-| `pnpm smoke:local` | `REL-V1-006` | Installed user-service, real Codex, browser/phone workflow. | Pass with artifact. |
+| `pnpm smoke:local` | `REL-V1-006` | Installed user service, real Codex, local browser, and remote-phone workflow through the selected Tailscale profile. | Pass with artifact; the artifact also records manual device/profile evidence the command cannot automate. |
 
 Unavailable commands fail loudly with owning task id. No placeholder command may exit zero.
 
@@ -91,12 +91,12 @@ Skills contract/adapter/control tests require one exact selected-cwd `skills/lis
 
 | Area | Cases |
 | --- | --- |
-| Migration | Empty DB, current DB, prior tmux-shaped DB, interrupted migration, checksum/version drift, incompatible future schema. |
+| Migration | Empty DB, current DB, prior tmux-shaped DB, remote-ingress settings/audit upgrade, interrupted migration, checksum/version drift, incompatible future schema. |
 | Session mapping | Start saga success; Codex failure; thread created/DB failure; duplicate alias/id/thread; missing/archived thread; pre-release legacy record. |
 | Projection | Storage-owned cursor/counters, ordered append, malformed/caller-addressed event, stale full revision, metadata/event writer race, duplicate upstream id, corrupt counters/rows, forced transaction rollback with zero publication, post-commit publisher throw/reject with durable read-back and no automatic republish, restart freshness. |
 | Codex event normalization | Every selected exact method and observed item kind; strict ids/timestamps/statuses/bounds; clock, turn/item, archive, retained-identity, and pending-queue capacity invariants; two managed threads isolate; valid unmanaged TUI payloads become bounded identity-only observations before deep parsing; classification/mapping disagreement is fatal; generated optional flood stays bounded/content-free; unknown and deprecated compact cannot project; runtime rate limit remains unscoped; approval resolution carries no invented decision; raw normalization cannot run ahead of append/publication and stops after queue/managed malformed/order/storage/publication failure. |
 | Retention | Event-count cap, byte cap, audit-count cap, age cap, newest item larger than byte cap, cleanup on production append/startup, boundary persistence. |
-| Audit | Accepted/succeeded/failed/rejected/incomplete, crash between accepted/result, emergency lock under audit degradation, sanitization, retention. |
+| Audit | Accepted/succeeded/failed/rejected/incomplete, remote enable/disable with ownership/profile conflicts, read-only status with no mutation audit, crash between accepted/result, emergency lock under audit degradation, sanitization, retention. |
 | Auth | Pair create/consume/expire/revoke, device read/write permission, raw-secret absence, CSRF rotate/reload/revoke race, last-used update. |
 | Permissions/lease | Fresh paths, over-permissive path/file/key/socket, symlink/path substitution, second daemon, stale lease recovery. |
 
@@ -106,19 +106,22 @@ Permission/lease evidence also proves pure path validation before mutation, mini
 
 | Dimension | Required cases |
 | --- | --- |
-| Bind policy | Default loopback only; explicit LAN HTTPS; plaintext LAN rejected; app-server socket never TCP/LAN. |
-| Host/Origin | Valid configured origin; missing Origin on non-browser safe reads by policy; foreign Origin; reflected/mismatched Host; DNS-rebinding names; wildcard CORS absent. |
+| Bind/proxy policy | Production HostDeck listener is loopback HTTP only; wildcard/private-address/public binds reject; Tailscale Serve maps the selected HTTPS origin to exact loopback; app-server socket never uses TCP. |
+| Tailscale/profile | Not installed, daemon stopped, signed out, dedicated profile active, company/unknown profile active, profile switch during HTTP/SSE/mutation, direct and DERP paths where observable, Serve absent/exact/foreign/drifted, enable/disable/read-back, HostDeck restart, and no automatic profile switch. |
+| Host/Origin/proxy | Exact configured external origin; loopback local-admin origin; missing Origin on allowed non-browser safe reads; foreign Origin; reflected/mismatched Host; DNS rebinding names; forwarded-header absence/duplication/contradiction; only the spike-proven Serve overwrite/header contract is admitted; non-loopback direct access fails; exact host-local loopback imitation cannot manufacture paired remote authority and remains inside the documented single-user-host boundary; wildcard CORS absent. |
 | Cookies/CSRF | Secure/HttpOnly/host-only/SameSite, no raw bearer in JS storage, reload bootstrap, stale generation, cross-origin form/fetch, revoked device. |
-| Pair/rate | Invalid/expired/used codes, per-source rate, global cap, concurrent claim, audit each outcome without secret. |
-| Authorization | Loopback policy, unpaired LAN read, read-only write, locked write, expired/revoked, wrong target, local-admin-only operation. |
+| Pair/rate | QR/link fragment removal before claim, fragment absent from request/log/referrer/history, invalid/expired/used codes, verified remote-source rate key, unverified/spoofed source, global cap, concurrent claim, audit each outcome without secret. |
+| Authorization | Loopback local-admin policy, unpaired tailnet peer, paired read-only write, locked write, expired/revoked, wrong target, local-admin-only operation; Tailscale identity alone never grants app access. |
 | Limits/timeouts | Oversized headers/body, slow body, request deadline, idle connection, max connections/subscribers, protocol deadline, CLI timeout. |
 | SSE | Initial replay, empty replay, `Last-Event-ID`, explicit cursor, invalid/future/pruned cursor, event during handoff, heartbeat, Readable-backed slow-client backpressure, abort/source/iterator cleanup, direct-AsyncIterable regression guard, queue overflow, auth revoke, shutdown. |
 | Lifecycle | Failed startup leaves no listener/lease/socket; readiness updates after runtime/storage/projector failure; shutdown completes with active SSE. |
-| TLS | Trusted configured certificate, unknown CA, expired/not-yet-valid, wrong SAN, weak/invalid key, key permission, renewal/reconfigure, no secret logging. |
+| External HTTPS | Browser trusts the Tailscale Serve certificate without custom CA enrollment; canonical origin and Secure cookies work across the HTTP proxy hop; stopped/wrong-profile/Serve-certificate failure is explicit; HostDeck owns no TLS key or certificate renewal. |
 
 Security tests assert both response behavior and side effects: no dispatch, no leaked session data, no success audit, and no credential issuance where rejection is expected.
 
 Fastify evidence is layered: `IFC-V1-016` freezes exact dependencies and proves validation/error, injection/close, SSE negotiation/replay/heartbeat/real-disconnect, and static boundaries in `packages/server/src/fastify-stack.probe.test.ts`. `IFC-V1-020` freezes 59 exact resource definitions, cross-limit invariants, public breach families, Fastify/Codex option mappings, and monotonic owner/view semantics. Its contract matrix rejects every below-minimum/above-maximum/non-integer field and contradictory policy; fake-clock tests cover expiry, no extension, external-signal identity, parent abort, disposal, rollback, and timer cleanup. `IFC-V1-022` proves the unbound factory, exact frozen config, API/SSE/static registration surfaces, local Zod request/response ownership, pre-routing plus route error normalization, request-id policy, URL/parameter/body/in-flight bounds, same-signal deadlines, handler-plus-response completion accounting, real timeout retention, and pinned SSE/static compatibility by injection. `IFC-V1-023` proves exact SSE registration, pinned Accept behavior with stable 406, canonical query/header cursor reconciliation, cursor-bearing selected-event framing, heartbeat, full wire-byte bounds, strict session/order validation, Readable-only structure, composite request-plus-authority cancellation, observed source/plugin failure, bounded iterator return, real paused-client backpressure, noncooperative cleanup settlement, real finite-response end, and active/opening revoke. `IFC-V1-024` proves static traversal/dotfile/cache/fallback and current-file admission. `IFC-V1-025` proves upfront runtime cleanup authority, no-listen-before-ready, constructor/mutable Node limit inventory, exact loopback bind, startup and per-step deadlines, route/ready/listen failure cleanup, real secure lease restart, active finite-SSE close, idempotent aggregate shutdown, and same-port restart. `IFC-V1-034` owns replay/high-water/live continuity, `IFC-V1-035` owns bounded subscriber queues, `IFC-V1-036` and `IFC-V1-037` own mutable health and complete application drain, and `IFC-V1-047` to `IFC-V1-052` own enforcement and aggregate stress evidence.
+
+Remote-ingress evidence is separate from Fastify's local listener proof. `IFC-V1-070` freezes the exact supported Tailscale behavior before code; `IFC-V1-071` to `IFC-V1-078` own bounded observation, Serve ownership, proxy trust, source/rate composition, routes/CLI, fragment-safe pairing, and lifecycle composition; `IFC-V1-079` owns hostile plus physical cellular/profile-switch acceptance. Historical direct-LAN/custom-CA evidence cannot satisfy these tasks.
 
 ## UI State Matrix
 
@@ -126,13 +129,13 @@ Every row is tested at 390 x 844; marked stress states also run at 360 x 800 and
 
 | Screen | Required states |
 | --- | --- |
-| Mission Control | Loading, empty, mixed attention, all quiet, long names/paths, offline, locked, read-only, incompatible runtime, certificate error, degraded host. |
+| Mission Control | Loading, empty, mixed attention, all quiet, long names/paths, runtime offline, remote unavailable, locally observed laptop-profile mismatch, Serve conflict, locked, read-only, incompatible runtime, degraded local host. |
 | Session Detail | Active writable turn, waiting input, approval, completed, interrupted, failed, unknown, stale, archived/not found, reconnecting, replay boundary. |
 | Composer | Empty, keyboard open, sending, accepted/running, failed retryable/nonretryable, disabled by each trust/runtime state. |
 | Model/goal/plan | Current value, loading, changed, active/paused/complete goal, plan active, unsupported version, conflict, failure. |
 | Usage/compact/skills | Loading, content, empty, unsupported, compact running/completed/failed. |
 | Approval | Normal, broad/elevated confirmation, approve pending/success/fail, deny, duplicate tap, expired/resolved, connection generation changed. |
-| Host/access | Unpaired, pair claim, read-only, writer, reload/CSRF bootstrap, expired/revoked, locked, LAN/HTTPS state. |
+| Host/access | Remote disabled, Tailscale unavailable, local host status with laptop profile mismatch, Serve configuring/ready/conflict, unpaired, QR/link claim, read-only, writer, reload/CSRF bootstrap, expired/revoked, locked, profile switch while connected, and generic browser/network failure when the phone cannot reach the origin. |
 | Event details | Normal, redacted, truncated, unknown optional type, boundary. |
 
 ## UI Fidelity And Accessibility
@@ -142,7 +145,7 @@ Every row is tested at 390 x 844; marked stress states also run at 360 x 800 and
 - Playwright captures 360 x 800, 390 x 844, 412 x 915, 768 x 1024, and 1280 x 800 for required groups/states.
 - Screenshot review checks overlap, clipping, first-viewport usefulness, sticky composer/keyboard behavior, long content, safe areas, and desktop expansion.
 - Keyboard, focus restoration, dialog semantics, live-region restraint, 200 percent zoom, 320 px reflow, contrast, reduced motion, and touch targets are inspected.
-- At least one real Android or iOS browser proves HTTPS enrollment, pairing, reload, prompt, approval, lock, and disconnect recovery.
+- The target Android phone, with Wi-Fi disabled or without a route to the laptop LAN, proves Tailscale HTTPS with no custom CA, QR/link pairing, reload, prompt, approval, lock, SSE recovery, dedicated-to-company profile switching, and return to the dedicated profile.
 - Drift from approved mockups is fixed or explicitly approved and recorded; generated assets are stored in the repo.
 
 ## Release Matrix
@@ -152,10 +155,10 @@ Every row is tested at 390 x 844; marked stress states also run at 360 x 800 and
 | Clean checkout/install | Exact Node/pnpm/Codex/Ubuntu versions, frozen install, build, tests. |
 | Package/CLI | Runnable `codexdeck`, help/exit codes, no source-only invocation dependency. |
 | User services | Install, start, status, restart each unit, HostDeck-only restart, app-server crash, stop, uninstall, log inspection. |
-| Data/privacy | Path/file/socket/key permissions, no raw secrets/transcript copy, retention, no external telemetry/listener. |
-| Network | Listener inventory, loopback default, LAN HTTPS, host/origin/rate/cookie tests. |
-| Browser/device | Supported desktop browser and real phone workflow. |
-| Recovery | Reboot/login or documented service lifecycle, stale runtime files, incompatible Codex update, certificate renewal, DB backup/recovery policy. |
+| Data/privacy | Path/file/socket permissions, no raw HostDeck/Tailscale secrets or transcript copy, retention, no public HostDeck listener or HostDeck telemetry. |
+| Network | Loopback-only HostDeck listener inventory; dedicated saved Tailscale profile; Serve HTTPS; exact host/origin/proxy/rate/cookie tests; wrong/company profile is untouched. |
+| Browser/device | Supported desktop browser and real phone workflow over cellular or unrelated Wi-Fi, including profile switching and no custom CA. |
+| Recovery | Reboot/login or documented service lifecycle, stopped Tailscale, wrong/returned profile, removed/drifted Serve state, stale runtime files, incompatible Codex update, DB backup/recovery policy. |
 | Documentation | User/developer/command/repo docs contain only verified commands and behavior. |
 | Go/no-go | Block completion matrix links L1-L4 evidence and lists zero hidden blockers. |
 
@@ -169,17 +172,17 @@ Every row is tested at 390 x 844; marked stress states also run at 360 x 800 and
 | `DR-001` to `DR-011` | Migration/repository/transaction/retention/restart/raw-storage evidence. |
 | `PR-001` to `PR-012` | Ubuntu/Codex/browser/package/service/network compatibility evidence. |
 | `SFR-001` to `SFR-018` | Security matrix, side-effect assertions, privacy review, device proof. |
-| `BLK-V1-01` | Rebased contracts/fixtures/planning checker plus module hardening. |
-| `BLK-V1-02` | Migrated secure state, production retention/audit/auth/lease plus hardening. |
+| `BLK-V1-01` | Rebased runtime and remote-ingress contracts/fixtures/planning checker plus module hardening. |
+| `BLK-V1-02` | Migrated secure state, remote configuration/audit, production retention/auth/lease plus hardening. |
 | `BLK-V1-03` | Real structured Codex vertical, restart/TUI/multi-client, legacy disposition, hardening. |
-| `BLK-V1-04` | Fastify/SSE/HTTPS/auth/CLI/package/service production path plus hardening. |
-| `BLK-V1-05` | Mobile-first selected design, complete dashboard, screenshot/device/fidelity hardening. |
-| `BLK-V1-06` | L1-L4 aggregate, clean setup, docs, privacy/security, explicit go/no-go. |
+| `BLK-V1-04` | Fastify/SSE loopback host, Tailscale Serve HTTPS, app auth, CLI/package/service production path plus hardening. |
+| `BLK-V1-05` | Mobile-first selected design, complete remote-access states, screenshot/device/fidelity hardening. |
+| `BLK-V1-06` | L1-L4 aggregate, clean setup, remote-phone/profile noninterference, docs, privacy/security, explicit go/no-go. |
 
 ## Evidence Policy
 
 - Artifacts record command, environment/version, scope, result, failures, manual observations, and cleanup.
-- Secrets, full prompts/transcripts, private paths beyond what is necessary, cookies, pairing codes, certificates keys, and approval payloads are redacted.
+- Secrets, full prompts/transcripts, private paths beyond what is necessary, cookies, pairing codes, Tailscale account/node/profile identifiers, node keys, and approval payloads are redacted.
 - A skipped test is a gap unless its owning requirement explicitly permits it.
 - Flaky retries are recorded; a retry is not evidence that the first failure was harmless.
 - Human visual and acceptance decisions link exact assets/build/commit.
