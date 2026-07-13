@@ -1,10 +1,13 @@
 import { createHash } from "node:crypto";
 import {
   chmodSync,
+  existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
-  rmSync
+  rmSync,
+  writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -147,6 +150,22 @@ describe("selected LAN network route boundary", () => {
       storage_failures: 0,
       audit_failures: 0
     });
+    const privateSecrets = [
+      rawDeviceToken,
+      readFileSync(
+        join(harness.certificateDirectory, "hostdeck-local-ca-key.pem"),
+        "utf8"
+      ),
+      readFileSync(
+        join(harness.certificateDirectory, "hostdeck-lan-key.pem"),
+        "utf8"
+      )
+    ];
+    expect(configured.body).not.toMatch(/PRIVATE KEY|BEGIN CERTIFICATE/iu);
+    expect(JSON.stringify(harness.service.snapshot())).not.toMatch(
+      /192\.168|fingerprint|PRIVATE KEY/iu
+    );
+    assertSecretsAbsentFromSqlite(harness.databasePath, privateSecrets);
   });
 
   it("validates bodies before authentication side effects or durable work", async () => {
@@ -281,6 +300,38 @@ describe("selected LAN network route boundary", () => {
     ]);
   });
 
+  it("re-inspects certificate ownership after accepted audit and refuses a replacement race", async () => {
+    const harness = fixture();
+    const configured = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/network/configure",
+      payload: configureRequest("op_lan_race_configure_01", "issue_leaf")
+    });
+    expect(configured.statusCode).toBe(200);
+    harness.afterAccepted(() => {
+      writeFileSync(
+        join(harness.certificateDirectory, "hostdeck-lan-key.pem"),
+        readFileSync(
+          join(harness.certificateDirectory, "hostdeck-local-ca-key.pem")
+        ),
+        { mode: 0o600 }
+      );
+    });
+
+    const enabled = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/network/enable",
+      payload: mutationRequest("op_lan_certificate_race_01")
+    });
+    expect(enabled.statusCode).toBe(409);
+    expect(enabled.json()).toMatchObject({ error: { code: "invalid_config" } });
+    expect(harness.settings.require().lan_enabled).toBe(false);
+    expect(harness.auditRepository.require("op_lan_certificate_race_01").records).toMatchObject([
+      { phase: "accepted", outcome: "accepted" },
+      { phase: "terminal", outcome: "failed", error_code: "invalid_config" }
+    ]);
+  });
+
   it("preserves durable certificate/configuration truth when terminal audit or response send fails", async () => {
     const terminalFailure = fixture({ failTerminalAudit: true });
     const terminalResponse = await terminalFailure.app.inject({
@@ -344,41 +395,45 @@ function fixture(options: FixtureOptions = {}) {
   const certificateDirectory = join(directory, "certificates");
   const stateDirectory = join(directory, "state");
   const databasePath = join(directory, "hostdeck.sqlite");
-  for (const child of [certificateDirectory, stateDirectory]) {
-    const created = mkdtempSync(`${child}-`);
-    tempDirectories.push(created);
-    if (child === certificateDirectory) {
-      // Use the actual created path below.
-    }
-  }
-  const certDir = tempDirectories.at(-2) as string;
-  const stateDir = tempDirectories.at(-1) as string;
-  chmodSync(certDir, 0o700);
-  chmodSync(stateDir, 0o700);
+  mkdirSync(certificateDirectory, { mode: 0o700 });
+  mkdirSync(stateDirectory, { mode: 0o700 });
   const open = openMigratedDatabase(databasePath, {
     now: () => new Date(createdAt)
   });
   databases.push(open.db);
   const settings = createSettingsRepository(open.db);
-  settings.getOrCreateDefault({ stateDir, now: () => new Date(createdAt) });
+  settings.getOrCreateDefault({
+    stateDir: stateDirectory,
+    now: () => new Date(createdAt)
+  });
   const network = createHostDeckLanConfigurationRepository(open.db);
   const certificates = createHostDeckLanCertificatePolicy({
     assignedAddresses: () => ["192.168.0.29"],
-    certificateDirectory: certDir,
+    certificateDirectory,
     now: () => new Date(configuredAt)
   });
   const auditRepository = createSelectedAuditRepository(open.db);
-  const auditPort: SelectedAuditRepository = options.failTerminalAudit
-    ? {
-        ...auditRepository,
-        recordTerminal() {
+  let afterAccepted: (() => void) | null = null;
+  const auditPort: SelectedAuditRepository = {
+    ...auditRepository,
+    recordAccepted(record) {
+      const trail = auditRepository.recordAccepted(record);
+      const callback = afterAccepted;
+      afterAccepted = null;
+      callback?.();
+      return trail;
+    },
+    ...(options.failTerminalAudit
+      ? {
+          recordTerminal() {
           throw new HostDeckSelectedAuditRepositoryError(
             "audit_write_failed",
             "Terminal audit unavailable."
           );
+          }
         }
-      }
-    : auditRepository;
+      : {})
+  };
   let auditIndex = 0;
   const audit = createSecurityMutationAuditExecutor({
     repository: auditPort,
@@ -432,9 +487,13 @@ function fixture(options: FixtureOptions = {}) {
   }
   return {
     app,
+    afterAccepted(callback: () => void) {
+      afterAccepted = callback;
+    },
     auditRepository,
     authenticationCalls: () => authenticationCalls,
-    certificateDirectory: certDir,
+    certificateDirectory,
+    databasePath,
     certificates,
     network,
     registration,
@@ -509,6 +568,19 @@ function certificateHashes(directory: string): Record<string, string> {
       createHash("sha256").update(readFileSync(join(directory, file))).digest("hex")
     ])
   );
+}
+
+function assertSecretsAbsentFromSqlite(
+  databasePath: string,
+  secrets: readonly string[]
+): void {
+  for (const path of [databasePath, `${databasePath}-wal`, `${databasePath}-shm`]) {
+    if (!existsSync(path)) continue;
+    const bytes = readFileSync(path);
+    for (const secret of secrets) {
+      expect(bytes.includes(Buffer.from(secret, "utf8"))).toBe(false);
+    }
+  }
 }
 
 function tempDirectory(prefix: string): string {

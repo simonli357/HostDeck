@@ -70,7 +70,7 @@ const privateMaterial = "-----BEGIN PRIVATE KEY-----aggregate-private-material";
 const fullTranscript = "aggregate-full-transcript-must-never-become-hostdeck-durable-truth";
 const selectedDeviceId = `client_${"d".repeat(24)}`;
 const pairingSourceKey = `sha256:${"a".repeat(64)}`;
-const currentMigrationVersion = "202607110011_selected_pairing_claim";
+const currentMigrationVersion = "202607120012_selected_lan_configuration";
 
 afterEach(() => {
   for (const root of cleanup.splice(0).reverse()) {
@@ -921,6 +921,7 @@ function inspectSchemaAndHealth(db: Database.Database): void {
     "retention_boundaries",
     "schema_migrations",
     "selected_audit_events",
+    "selected_lan_configuration",
     "selected_projected_events",
     "selected_runtime_compatibility",
     "selected_session_projections",

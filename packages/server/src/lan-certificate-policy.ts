@@ -592,6 +592,12 @@ function loadCertificateSet(paths: CertificatePaths): CertificateSet {
     }
     assertRootExtensions(rootCertificate);
     assertLeafExtensions(leafCertificate);
+    assertExactCertificateProfile(
+      rootNode,
+      leafNode,
+      rootCertificate,
+      leafCertificate
+    );
     const authority: AuthorityMaterial = Object.freeze({
       certificate: rootCertificate,
       certificatePem: rootCertificatePem,
@@ -875,6 +881,42 @@ function assertLeafExtensions(certificate: X509Certificate): void {
     extended.usages[0] !== ExtendedKeyUsage.serverAuth ||
     jsonNames.length !== 1 ||
     jsonNames[0]?.type !== "ip"
+  ) {
+    throw new TypeError();
+  }
+}
+
+function assertExactCertificateProfile(
+  rootNode: NodeX509Certificate,
+  leafNode: NodeX509Certificate,
+  root: X509Certificate,
+  leaf: X509Certificate
+): void {
+  const rootSubjectKey = requireExtension(root, SubjectKeyIdentifierExtension);
+  const leafAuthorityKey = requireExtension(
+    leaf,
+    AuthorityKeyIdentifierExtension
+  );
+  const rootModulus = rootNode.publicKey.asymmetricKeyDetails?.modulusLength;
+  const leafModulus = leafNode.publicKey.asymmetricKeyDetails?.modulusLength;
+  if (
+    rootNode.subject !== "CN=HostDeck Local CA" ||
+    rootNode.issuer !== rootNode.subject ||
+    leafNode.subject !== "CN=HostDeck LAN" ||
+    leafNode.issuer !== rootNode.subject ||
+    !/^[0-7][0-9A-F]{31}$/u.test(rootNode.serialNumber) ||
+    !/^[0-7][0-9A-F]{31}$/u.test(leafNode.serialNumber) ||
+    rootNode.publicKey.asymmetricKeyType !== "rsa" ||
+    leafNode.publicKey.asymmetricKeyType !== "rsa" ||
+    rootModulus !== 2048 ||
+    leafModulus !== 2048 ||
+    rootNode.validToDate.getTime() - rootNode.validFromDate.getTime() !==
+      rootValidityMs ||
+    leafNode.validToDate.getTime() - leafNode.validFromDate.getTime() !==
+      leafValidityMs ||
+    leafAuthorityKey.keyId !== rootSubjectKey.keyId ||
+    JSON.stringify(leafNode.keyUsage) !==
+      JSON.stringify(["1.3.6.1.5.5.7.3.1"])
   ) {
     throw new TypeError();
   }

@@ -175,8 +175,18 @@ export function createHostDeckLanNetworkService(
               });
             }
             try {
+              const freshInspection = certificates.inspect({
+                bind_host: inspection.bind_host,
+                bind_port: inspection.bind_port
+              });
+              if (!descriptorsEqual(inspection, freshInspection)) {
+                throw new HostDeckLanCertificateError(
+                  "certificate_invalid",
+                  "LAN certificate changed before durable configuration."
+                );
+              }
               const receipt = network.configure({
-                ...certificateDescriptor(inspection),
+                ...certificateDescriptor(freshInspection),
                 now: readNow(now)
               });
               counters.configurations = increment(counters.configurations);
@@ -192,10 +202,24 @@ export function createHostDeckLanNetworkService(
                 })
               });
             } catch (error) {
-              counters.storageFailures = increment(counters.storageFailures);
+              if (error instanceof HostDeckLanCertificateError) {
+                counters.certificateFailures = increment(
+                  counters.certificateFailures
+                );
+              } else {
+                counters.storageFailures = increment(counters.storageFailures);
+              }
               return Object.freeze({
-                outcome: "incomplete" as const,
-                error_code: mapStorageError(error),
+                outcome:
+                  request.certificate_action === "issue_leaf"
+                    ? ("incomplete" as const)
+                    : error instanceof HostDeckLanCertificateError
+                      ? ("failed" as const)
+                      : storageFailureOutcome(error),
+                error_code:
+                  error instanceof HostDeckLanCertificateError
+                    ? mapCertificateError(error)
+                    : mapStorageError(error),
                 payload_summary: Object.freeze({ schema_version: 1 })
               });
             }
@@ -299,9 +323,23 @@ export function createHostDeckLanNetworkService(
           emergency_lock_on_audit_unavailable: false,
           transition: () => {
             try {
+              const freshInspection = certificates.inspect({
+                bind_host: inspection.bind_host,
+                bind_port: inspection.bind_port
+              });
+              if (
+                !descriptorsEqual(inspection, freshInspection) ||
+                (freshInspection.certificate_state !== "valid" &&
+                  freshInspection.certificate_state !== "renewal_due")
+              ) {
+                throw new HostDeckLanCertificateError(
+                  "certificate_not_valid",
+                  "LAN certificate changed before enablement."
+                );
+              }
               const receipt = network.transitionMode({
                 enabled: true,
-                expected_configuration: certificateDescriptor(inspection),
+                expected_configuration: certificateDescriptor(freshInspection),
                 now: readNow(now)
               });
               counters.enables = increment(counters.enables);
@@ -317,10 +355,22 @@ export function createHostDeckLanNetworkService(
                 })
               });
             } catch (error) {
-              counters.storageFailures = increment(counters.storageFailures);
+              if (error instanceof HostDeckLanCertificateError) {
+                counters.certificateFailures = increment(
+                  counters.certificateFailures
+                );
+              } else {
+                counters.storageFailures = increment(counters.storageFailures);
+              }
               return Object.freeze({
-                outcome: storageFailureOutcome(error),
-                error_code: mapStorageError(error),
+                outcome:
+                  error instanceof HostDeckLanCertificateError
+                    ? ("failed" as const)
+                    : storageFailureOutcome(error),
+                error_code:
+                  error instanceof HostDeckLanCertificateError
+                    ? mapCertificateError(error)
+                    : mapStorageError(error),
                 payload_summary: Object.freeze({ schema_version: 1 })
               });
             }
