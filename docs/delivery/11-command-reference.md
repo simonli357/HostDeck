@@ -34,6 +34,12 @@ pnpm smoke:codex-threads
 pnpm exec vitest run tests/service-mode-smoke.test.ts
 ```
 
+## Physical Android Security Acceptance
+
+```bash
+pnpm smoke:android-security
+```
+
 ## Authenticated Exact-Codex Probe
 
 ```bash
