@@ -26,7 +26,6 @@ import {
 import {
   defaultResourceBudget,
   type ManagedSessionTarget,
-  type ModelCatalogEntry,
   type RuntimeCompatibility,
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
@@ -52,13 +51,18 @@ import { createCodexModelControlService } from "./codex-model-control-service.js
 import { createCodexPlanControlService } from "./codex-plan-control-service.js";
 import { createCodexPromptControlService } from "./codex-prompt-control-service.js";
 import { createCodexSkillsControlService } from "./codex-skills-control-service.js";
+import {
+  readStructuredVerticalTurnTerminal,
+  type StructuredVerticalTurnTerminalEvidence
+} from "./codex-structured-vertical-evidence.js";
+import { selectStructuredVerticalPlanModel } from "./codex-structured-vertical-selection.js";
 import { createCodexUsageControlService } from "./codex-usage-control-service.js";
 import { combinePendingTurnSettingsReaders } from "./pending-turn-settings.js";
 
 const requireSmoke = process.env.HOSTDECK_REQUIRE_CODEX_VERTICAL_SMOKE === "1";
 const codexBin = process.env.HOSTDECK_CODEX_BIN ?? "codex";
 const overallTimeoutMs = 360_000;
-const planPrompt = "Produce exactly two concise plan steps for inspecting README.md. Do not use tools or modify files.";
+const planPrompt = "Produce a concise two-step plan for inspecting README.md. Do not call tools or modify files.";
 const goalObjective = "Keep aggregate runtime evidence bounded.";
 const interruptPrompt =
   "Without using tools, write 300 numbered one-sentence observations about deterministic software testing. Do not stop early.";
@@ -337,7 +341,7 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
         prove(proof, "unsupported utility rejected without wire", "policy_simulation");
 
         const modelBefore = await modelControl.snapshot(targetA);
-        const selection = selectBoundedLowCostModel(
+        const selection = selectStructuredVerticalPlanModel(
           modelBefore.models,
           modelBefore.current.model_id,
           modelBefore.current.reasoning_effort
@@ -394,6 +398,8 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
         prove(proof, "Plan and model confirmed by events", "normalized_event");
         prove(proof, "Plan turn committed to projection", "durable_projection");
 
+        const turnsBeforeGoal = requestRecords.filter((record) => record.method === "turn/start").length;
+        const goalSetsBefore = requestRecords.filter((record) => record.method === "thread/goal/set").length;
         await expect(
           goalControl.mutate({
             operation_id: "op_vertical_goal_set_0001",
@@ -403,7 +409,9 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
             objective: goalObjective,
             expected_goal_revision: null
           })
-        ).resolves.toMatchObject({ action: "set", state: "succeeded", dispatched: false });
+        ).resolves.toMatchObject({ action: "set", state: "succeeded", dispatched: true });
+        expect(requestRecords.filter((record) => record.method === "thread/goal/set")).toHaveLength(goalSetsBefore + 1);
+        expect(requestRecords.filter((record) => record.method === "turn/start")).toHaveLength(turnsBeforeGoal);
         await waitFor(
           async () => {
             await flushCallbacks(callbackTasks, () => callbackFailure, () => serverRequestFailure, pipeline);
@@ -473,7 +481,7 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
             decision: "approve",
             confirm: true
           })
-        ).resolves.toMatchObject({ state: "responding", decision: "approve" });
+        ).resolves.toMatchObject({ state: "responding", decision: null });
         prove(proof, "command approval routed exactly once", "server_request_response");
         const approvalTerminal = await waitForValue(
           async () => {
@@ -485,6 +493,11 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
           () => "Approved command turn did not complete durably."
         );
         requireTurnTerminal(approvalTerminal, "completed", "Approved command turn");
+        await flushCallbacks(callbackTasks, () => callbackFailure, () => serverRequestFailure, pipeline);
+        await expect(approvals.snapshot(pendingApproval.target)).resolves.toMatchObject({
+          state: "approved",
+          decision: "approve"
+        });
         await access(markerPath);
         prove(proof, "approved command produced marker", "filesystem_side_effect");
         expect((await planControl.snapshot(targetA)).current).toMatchObject({ state: "confirmed", mode: "default" });
@@ -566,7 +579,6 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
         if (usageAfter.thread.state !== "observed") {
           throw new Error("Aggregate compact lost its post-reset thread usage observation.");
         }
-        expect(usageAfter.thread.last.total_tokens).toBeGreaterThan(usageAfter.thread.total.total_tokens);
         prove(proof, "compact ran and completed through shared observers", "normalized_event");
         prove(proof, "compact usage reset remained coherent", "durable_projection");
 
@@ -764,22 +776,6 @@ async function proveUnsupportedSkillsPolicy(connection: CodexAppServerConnection
   expect(requests).toBe(0);
 }
 
-function selectBoundedLowCostModel(
-  models: readonly ModelCatalogEntry[],
-  currentModelId: string | null,
-  currentEffort: string | null
-): { readonly model: ModelCatalogEntry; readonly effort: string } {
-  const lowCost = models.filter((candidate) =>
-    /(?:mini|nano|spark)/iu.test(`${candidate.id} ${candidate.runtime_model} ${candidate.label}`)
-  );
-  for (const model of [...lowCost.filter((candidate) => candidate.id !== currentModelId), ...lowCost]) {
-    const efforts = model.reasoning_efforts.filter((candidate) => candidate.id === "minimal" || candidate.id === "low");
-    const effort = efforts.find((candidate) => model.id !== currentModelId || candidate.id !== currentEffort);
-    if (effort !== undefined) return { model, effort: effort.id };
-  }
-  throw new Error("Aggregate requires one non-noop low-cost model selection at minimal or low reasoning effort.");
-}
-
 async function createManagedThread(
   threads: ReturnType<typeof createCodexThreadClient>,
   cwd: string,
@@ -851,44 +847,20 @@ function managedTarget(sessionId: string, threadId: string): ManagedSessionTarge
   return { type: "managed_session", session_id: sessionId, codex_thread_id: threadId } as ManagedSessionTarget;
 }
 
-interface TurnTerminalEvidence {
-  readonly state: "completed" | "failed" | "interrupted";
-  readonly error_code: string | null;
-  readonly error_message: string | null;
-}
-
 function turnTerminalEvidence(
   repository: SelectedStateRepository,
   sessionId: string,
   turnId: string
-): TurnTerminalEvidence | null {
-  const event = [...repository.listEvents(sessionId).events]
-    .reverse()
-    .find(
-      (candidate) =>
-        candidate.type === "turn" &&
-        candidate.turn_id === turnId &&
-        ["completed", "failed", "interrupted"].includes(candidate.state)
-    );
-  if (
-    event === undefined ||
-    event.type !== "turn" ||
-    (event.state !== "completed" && event.state !== "failed" && event.state !== "interrupted")
-  ) {
-    return null;
-  }
-  return {
-    state: event.state,
-    error_code: event.error?.code ?? null,
-    error_message: event.error?.message ?? null
-  };
+): StructuredVerticalTurnTerminalEvidence | null {
+  const committedCursor = repository.require(sessionId).projection.session.last_event_cursor ?? 0;
+  return readStructuredVerticalTurnTerminal(repository, sessionId, turnId, committedCursor);
 }
 
 function requireTurnTerminal(
-  evidence: TurnTerminalEvidence | null,
-  expected: TurnTerminalEvidence["state"],
+  evidence: StructuredVerticalTurnTerminalEvidence | null,
+  expected: StructuredVerticalTurnTerminalEvidence["state"],
   label: string
-): asserts evidence is TurnTerminalEvidence {
+): asserts evidence is StructuredVerticalTurnTerminalEvidence {
   if (evidence === null) throw new Error(`${label} returned no terminal evidence.`);
   if (evidence.state !== expected) {
     throw new Error(

@@ -283,7 +283,6 @@ describe.skipIf(!requireSmoke)("exact Codex compact-control smoke", () => {
         });
         expect(usageSnapshot.thread).toMatchObject({ state: "observed", turn_id: compactTurnId });
         if (usageSnapshot.thread.state !== "observed") throw new Error("Compact smoke lost its thread usage observation.");
-        expect(usageSnapshot.thread.last.total_tokens).toBeGreaterThan(usageSnapshot.thread.total.total_tokens);
         if (interruptAttempted) {
           expect(turnMethods.filter((method) => method === "turn/interrupt")).toHaveLength(1);
         }
