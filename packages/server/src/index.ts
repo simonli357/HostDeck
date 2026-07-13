@@ -24,6 +24,7 @@ export * from "./fastify-static-boundary.js";
 export * from "./fastify-zod.js";
 export * from "./host-lock-routes.js";
 export * from "./host-service.js";
+export * from "./lan-certificate-policy.js";
 export * from "./managed-thread-service.js";
 export * from "./output-reader.js";
 export * from "./pairing-routes.js";
