@@ -15,7 +15,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-066` Implement the reusable exact-target write gate | ready | none | The accepted real structured vertical completes its final dependency; this gate directly unblocks paired-device revocation and the physical phone security matrix. |
+| 1 | `IFC-V1-066` Implement the reusable exact-target write gate | in_progress | none | The accepted real structured vertical completes its final dependency; this gate directly unblocks paired-device revocation and the physical phone security matrix. |
 | 2 | `IFC-V1-069` Implement the bounded projected-event diagnostic read route | ready | none | Exposes the completed retained projection contract through one bounded authenticated read. |
 | 3 | `IFC-V1-060` Implement managed-thread resume metadata API and CLI | ready | none | Exposes the completed exact safe TUI resume contract without executing a phone shell. |
 | 4 | `IFC-V1-043` Implement the read-only usage API and CLI | ready | none | Exposes the completed exact usage capability through the authenticated selected manifest. |
