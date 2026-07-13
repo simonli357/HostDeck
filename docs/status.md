@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M2/M3 selected runtime and host-interface integration; M1 foundation is complete.
-- Active task: harden and implement the now-ready `IFC-V1-066` reusable exact-target write gate on the user-prioritized path through device revocation to physical Android security acceptance.
+- Active task: implement and harden `IFC-V1-059` exact paired-device revoke and active-authority invalidation, the last implementation leaf before `IFC-V1-033` physical Android security acceptance.
 - Exact Codex 0.144.0 is the default user installation. Its reviewed binding and four complete `INT-V1-027` two-thread aggregate runs pass with real Plan, goal, usage, skills, approval sandbox, interrupt, compact, TUI, archive, and cleanup evidence.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -81,7 +81,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Blockers
 
-- No external blocker remains on the current path. Implement `IFC-V1-066`, then `IFC-V1-059`, before running the connected-device `IFC-V1-033` matrix.
+- No external blocker remains on the current path. Complete `IFC-V1-059`, then run the connected-device `IFC-V1-033` matrix.
 - Regenerate/select mobile mockups only after real structured states are stable.
 
 ## Validation
@@ -187,6 +187,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/ifc-v1-030-host-lock-boundary.md`; implementation `1855c23`, `d642be9`, `d15c580`.
 - `IFC-V1-031`: direct network routes (10), certificate policy (7), HTTPS lifecycle (1), unit (958 passed, 29 external skipped), contract (176), integration (16), web (14), root/all-package typechecks, lint/exports, scaffold/planning/exact-0.144.0 binding, frozen offline install, zero-vulnerability production audit, permissive license inventory, real SQLite/TLS/plaintext-refusal/restart/replacement-race/privacy evidence, and manual authority/order/restart/ownership review pass.
 - Evidence: `artifacts/ifc-v1-031-lan-configuration-boundary.md`; implementation `3c6df02`, `bc25473`, `7103508`, `cb790e6`, `f8d9aa8`, `9e6c0b7`.
+- `IFC-V1-066`: direct gate (17), adjacent Fastify/trust/auth/CSRF/lock/audit/storage (96), unit (982 passed, 29 external skipped), contract (176), integration (16), web (14), all-package typechecks, lint/exports, scaffold/planning/exact-binding checks, frozen offline install, zero-vulnerability production audit, real HTTP/HTTPS and SQLite concurrency evidence, and manual order/deadline/audit/privacy review pass.
+- Evidence: `artifacts/ifc-v1-066-exact-target-write-gate.md`; request-signal fix `b922b65`; implementation `0e41378`.
 
 ## Git
 
@@ -238,4 +240,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-028` contracts/source foundation are pushed as `f0b2d73`; bounded paired-device correction as `eacfc9c`; exact route implementation and evidence as `4c1d5ca`. This closure advances the interface queue to `IFC-V1-030`.
 - `IFC-V1-030` criteria are pushed as `1526e3b`; selected contracts as `d74329c`; atomic storage as `1855c23`; routes as `d642be9`; authority/order/audit hardening as `d15c580`. The unrelated reviewed daemon-lease workaround was excluded. This closure advances the interface queue to `IFC-V1-031`.
 - `IFC-V1-031` criteria `47cafb7`, contracts `3c6df02`, storage `bc25473`, certificate owner `7103508`, lifecycle `cb790e6`, routes `f8d9aa8`, and transition hardening `9e6c0b7` are pushed.
-- Next action: harden and implement `IFC-V1-066`, then close `IFC-V1-059` and execute `IFC-V1-033` against the attached ADB-authorized Android device.
+- Next action: implement and harden `IFC-V1-059`, then execute `IFC-V1-033` against the attached ADB-authorized Android device.
