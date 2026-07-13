@@ -14,6 +14,7 @@ import {
   HostDeckSettingsError,
   type TransitionHostDeckLockInput
 } from "@hostdeck/storage";
+import type { FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
   assertHostDeckCsrfPolicy,
@@ -26,6 +27,7 @@ import {
   requireHostDeckRequestAuthentication,
   resolveHostDeckRequestAuthentication
 } from "./fastify-request-authentication.js";
+import { hostDeckRequestTrustContext } from "./fastify-request-trust.js";
 import {
   assertHostDeckSecurityMutationAuditExecutor,
   HostDeckSecurityMutationAuditExecutorError,
@@ -85,6 +87,7 @@ type ReadSettings = HostDeckHostLockPort["read"];
 type TransitionLock = HostDeckHostLockPort["transition"];
 const acceptedPolicies = new WeakSet<object>();
 const policyCounters = new WeakMap<HostDeckHostLockPolicy, MutableCounters>();
+const registeredPolicies = new WeakSet<object>();
 const policyInputKeys = ["settings", "now"] as const;
 const policyPortKeys = ["read", "transition"] as const;
 const routeInputKeys = ["audit", "csrf", "lock"] as const;
@@ -174,19 +177,26 @@ export function createHostDeckHostLockRouteRegistration(input: CreateHostDeckHos
   const execute = audit.execute as ExecuteAudit;
   const csrf = values.csrf;
   const policy = values.lock;
+  if (registeredPolicies.has(policy)) {
+    throw new TypeError("HostDeck host-lock policy already owns a route registration.");
+  }
   const accessManifest = requireManifestEntry("access_state");
   const lockManifest = requireManifestEntry("host_lock");
   const unlockManifest = requireManifestEntry("host_unlock");
+  let registered = false;
   const registration: HostDeckRoutePluginRegistration = {
     id: hostDeckHostLockRouteRegistrationId,
     surface: "api" as const,
     register(app) {
+      if (registered) {
+        throw new TypeError("HostDeck host-lock routes are already registered.");
+      }
+      registered = true;
       app.get(accessManifest.path, {
         config: hostDeckNoStoreRouteConfig,
         exposeHeadRoute: false,
-        async onRequest(request, reply) {
+        async onRequest(_request, reply) {
           setNoStore(reply);
-          resolveHostDeckRequestAuthentication(request);
         },
         schema: { querystring: noQuerySchema, response: { 200: selectedAccessStateResponseSchema } }
       }, async (request) => {
@@ -196,12 +206,12 @@ export function createHostDeckHostLockRouteRegistration(input: CreateHostDeckHos
 
       app.post(lockManifest.path, {
         config: hostDeckNoStoreRouteConfig,
-        async onRequest(request, reply) {
+        async onRequest(_request, reply) {
           setNoStore(reply);
-          requireHostDeckRequestAuthentication(request, "local_admin_or_device_cookie");
         },
         schema: { body: selectedHostLockRequestSchema, querystring: noQuerySchema, response: { 200: selectedHostLockStateResponseSchema } }
       }, async (request) => {
+        requireHostLockCredentialTransport(request);
         const context = requireHostDeckRequestAuthentication(request, "local_admin_or_device_cookie");
         requireHostDeckRequestCsrfWriteAuthorization(request, "local_admin_or_device_cookie", csrf);
         const body = request.body as { readonly operation_id: string; readonly confirmed: true };
@@ -210,9 +220,8 @@ export function createHostDeckHostLockRouteRegistration(input: CreateHostDeckHos
 
       app.post(unlockManifest.path, {
         config: hostDeckNoStoreRouteConfig,
-        async onRequest(request, reply) {
+        async onRequest(_request, reply) {
           setNoStore(reply);
-          requireHostDeckRequestAuthentication(request, "local_admin");
         },
         schema: { body: selectedHostUnlockRequestSchema, querystring: noQuerySchema, response: { 200: selectedHostLockStateResponseSchema } }
       }, async (request) => {
@@ -222,6 +231,7 @@ export function createHostDeckHostLockRouteRegistration(input: CreateHostDeckHos
       });
     }
   };
+  registeredPolicies.add(policy);
   return Object.freeze(registration);
 }
 
@@ -417,12 +427,26 @@ function publicFailure(code: ErrorCode, retryable: boolean, locking: boolean): H
     ? "Host lock state conflicts with newer durable settings."
     : code === "audit_unavailable"
       ? locking
-        ? "The host was locked, but durable lock audit is unavailable. Refresh access state."
+        ? "Host lock audit is unavailable. Refresh access state before another action."
         : "Host unlock audit is unavailable."
       : code === "storage_error"
         ? "Host lock storage is unavailable."
         : "Host lock transition failed.";
   return new HostDeckHttpError({ code, message, retryable, status });
+}
+
+function requireHostLockCredentialTransport(request: FastifyRequest): void {
+  if (hostDeckRequestTrustContext(request).transport === "https") return;
+  const rawHeaders = request.raw.rawHeaders;
+  for (let index = 0; index < rawHeaders.length; index += 2) {
+    if (rawHeaders[index]?.toLowerCase() !== "cookie") continue;
+    throw new HostDeckHttpError({
+      code: "insecure_transport",
+      message: "Secure request transport is required for paired host lock.",
+      retryable: false,
+      status: 426
+    });
+  }
 }
 
 function requireManifestEntry(id: "access_state" | "host_lock" | "host_unlock"): SelectedApiRouteManifestEntry {
