@@ -15,17 +15,19 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-027` Prove the assembled real structured vertical | blocked | Host Bubblewrap AppArmor profile | Authenticated exact-0.144.0 Plan turns pass; the host profile is the remaining dependency on the path to the common write gate, revocation, and physical phone matrix. |
+| 1 | `IFC-V1-066` Implement the reusable exact-target write gate | ready | none | The accepted real structured vertical completes its final dependency; this gate directly unblocks paired-device revocation and the physical phone security matrix. |
 | 2 | `IFC-V1-069` Implement the bounded projected-event diagnostic read route | ready | none | Exposes the completed retained projection contract through one bounded authenticated read. |
 | 3 | `IFC-V1-060` Implement managed-thread resume metadata API and CLI | ready | none | Exposes the completed exact safe TUI resume contract without executing a phone shell. |
 | 4 | `IFC-V1-043` Implement the read-only usage API and CLI | ready | none | Exposes the completed exact usage capability through the authenticated selected manifest. |
 | 5 | `IFC-V1-065` Implement the read-only skills API and CLI | ready | none | Exposes the completed exact skills capability through the authenticated selected manifest. |
+| 6 | `INT-V1-007` Implement runtime process/socket supervision | ready | none | The accepted structured vertical now permits explicit foreground/service ownership work, but it is behind the requested physical-phone path. |
+| 7 | `FE-V1-004` Rebase the mobile structured-state matrix | ready | none | Accepted real states now permit the mobile-first design-contract rebaseline; screen implementation and mockups remain later gated work. |
 
 ## Intentional Blockers
 
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
-| Real Codex operation implementation | `INT-V1-027` | Every exact operation port passes; the assembled real two-thread callback vertical remains | Production operation API, stable mobile state matrix, approvals. |
+| Selected mutation boundary | `IFC-V1-066` | The common ordered target/auth/CSRF/lock/audit/dispatch gate remains | Paired-device revocation, selected mutation routes, and physical phone security acceptance. |
 | Mobile visual direction | Reopened `FE-V1-002`, `FE-V1-003` | Real state matrix, two replacement options, human selection | React screen implementation. |
 | Release | `REL-V1-010` | All module hardening, clean package/service/phone/security evidence, human acceptance | V1 release and V2 planning. |
 

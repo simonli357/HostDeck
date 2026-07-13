@@ -5,12 +5,12 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M2/M3 selected runtime and host-interface integration; M1 foundation is complete.
-- Active task: install the narrow host Bubblewrap AppArmor profile, then rerun the unchanged `INT-V1-027` real structured vertical on the user-prioritized path to physical Android security acceptance.
-- Exact Codex 0.144.0 is again the default user installation; its reviewed binding, installed compatibility, and an authenticated Plan-mode turn pass. `INT-V1-027` is blocked only on laptop authorization for the host profile.
+- Active task: harden and implement the now-ready `IFC-V1-066` reusable exact-target write gate on the user-prioritized path through device revocation to physical Android security acceptance.
+- Exact Codex 0.144.0 is the default user installation. Its reviewed binding and four complete `INT-V1-027` two-thread aggregate runs pass with real Plan, goal, usage, skills, approval sandbox, interrupt, compact, TUI, archive, and cleanup evidence.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
 - Release state: no-go. `BLK-V1-02` is complete; runtime, interface, mobile, and release blocks remain unfinished.
-- Release environment: the default installed Codex and selected HostDeck binding are both exactly 0.144.0. The attached Android device is currently physically absent from USB and must be reconnected before `IFC-V1-033` physical acceptance.
+- Release environment: the default installed Codex and selected HostDeck binding are both exactly 0.144.0. The Android device is attached, unlocked, ADB-authorized over USB-C, and reserved for later `IFC-V1-033` physical acceptance.
 
 ## Proven
 
@@ -48,6 +48,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `INT-V1-018` implements exact prompt start and event-gated steer over one outer model/Plan transaction. It rejects target/capability/revision/active-state drift, latches ambiguous sends without retry, tracks early/terminal event races, isolates sessions, and never substitutes a second start or slash path. The exact authenticated two-thread smoke now proves composed start, matching `expectedTurnId` steer, successful terminal truth, foreign-thread isolation, archive, and cleanup. Evidence: `artifacts/int-v1-018-prompt-turn-targeting.md`; implementation `c5b4a52`.
 - `INT-V1-025` implements strict generated-shape command/file approval decoding, canonical raw/public identity, complete bounded current permission scope, serialized one-time accept/decline, not-sent versus unknown outcomes, event-paired terminal proof, and HostDeck-owned expiry. Repeated exact 0.144.0 smoke proves deny, approve, duplicate rejection, one-second system expiry, truthful side-effect absence/presence, late-response rejection, archive, and cleanup. Evidence: `artifacts/int-v1-025-approval-routing.md`; implementation `f6a09e3`.
 - `INT-V1-026` implements strict exact-turn interrupt routing from current writable identity plus matching normalized `turn/started` truth, with bounded per-session serialization, explicit not-sent versus unknown outcomes, and no archive/delete substitution. Repeated exact 0.144.0 two-thread smoke proves pre-event rejection, one accepted interrupt, matching `turn/completed: interrupted` terminal truth, terminal retry rejection, idle/unarchived read-back, foreign-thread isolation, and cleanup. Evidence: `artifacts/int-v1-026-interrupt-control.md`; implementation `080f917`.
+- `INT-V1-027` proves the assembled exact-0.144.0 structured vertical through one serialized callback pipeline, two durable managed sessions, and no fake or per-capability substitution. Four complete aggregate runs cover model plus Plan, passive goal, usage, skills, real command approval and sandbox side effect, interrupt, compact, TUI coexistence, isolation, archive read-back, all eight proof-source classes, and reverse cleanup. Evidence: `artifacts/int-v1-027-structured-vertical.md`; implementation `f8ebcfc`, `d765855`, `fe83654`; redacted acceptance output `1045383`.
 - Selected mappings, projections, projected events, compatibility results, start recovery, and legacy dispositions now have additive migration and repository ownership with transactional/concurrency/restart/corruption evidence.
 - `@hostdeck/codex-adapter` owns an exact 0.144.0 experimental generated binding, deterministic schema-drift check, fail-closed required-capability policy, and a real no-model initialize/Plan catalog smoke.
 - The adapter now also owns a bounded Unix-only WebSocket transport, strict wire decoder, correlated request/server-request broker, initialize/degradation state machine, deterministic raw-protocol fake, explicit no-auto-retry reconnect, and a real private-socket no-model smoke.
@@ -73,22 +74,19 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Not Proven
 
 - Most selected manifest rows remain immutable metadata rather than registered routes: downstream leaves still must implement each named local-Zod request/response contract, handler, auth/audit behavior, and production Fastify composition without changing the frozen semantics silently. Pairing, paired-device list, CSRF bootstrap, and host-lock registrations are individually proven but not yet in the production composition root.
-- The selected Codex callback/fanout and exact aggregate harness are implemented and deterministically tested, but the one-lifecycle authenticated acceptance is not proven. Supervision, reconnect/restart behavior, and live HostDeck composition also remain downstream work. Partial evidence: `artifacts/int-v1-027-structured-vertical.md`.
-- Current command-backed app-server smokes can fail before a callback because app-server selects Bubblewrap while this host denies unprivileged user-namespace setup, even when the reviewed legacy-Landlock feature flag is enabled. Direct exact-version Landlock execution plus the no-tools interrupt and compact smokes pass. Resolve and reproduce the command-backed path in `INT-V1-027`/`INT-V1-091`; this does not invalidate the already-captured approval or interrupt evidence.
+- Codex process supervision, reconnect/restart reconciliation, live HostDeck production composition, and selected-runtime module hardening remain downstream work; `INT-V1-027` proves the assembled operation vertical but not those lifecycle or release gates.
 - Production composition with selected Codex pipeline/authenticated route registrations, authenticated SSE assembly around the proven fanout/high-water handoff, sustained subscriber queues, full raw-socket Node-limit enforcement, mutable runtime health, configured-policy ordering/wiring of the proven orphan and retention runners, or complete application drain; the generic listener lifecycle and individual headless adapters are proven, not those downstream integrations.
-- Pair/claim cookie issuance, paired LAN reads, physical-browser CSRF memory/reload ordering, rate limits, or device revocation.
+- Physical-browser CSRF memory/reload ordering, paired-device revocation, sustained rate limits, and the aggregate phone security matrix.
 - Runnable packaged CLI, built dashboard, user services, clean Ubuntu install, real phone workflow, or release readiness.
 
 ## Blockers
 
-- Implement the assembled Codex control/restart vertical (`INT-V1-027` to `INT-V1-032`) against explicit 0.144.0; do not treat default 0.144.1 as reviewed.
-- Authorize installation/loading of Ubuntu's packaged narrow `bwrap-userns-restrict` profile, then restore repeatable command-backed app-server execution on the selected host path before aggregate runtime acceptance; `INT-V1-027` and `INT-V1-091` own the gate.
-- Reconnect the Android device over USB-C before the later physical `IFC-V1-033` matrix; ADB restart cannot detect a device that is absent from `lsusb`.
+- No external blocker remains on the current path. Implement `IFC-V1-066`, then `IFC-V1-059`, before running the connected-device `IFC-V1-033` matrix.
 - Regenerate/select mobile mockups only after real structured states are stable.
 
 ## Validation
 
-- Runtime prerequisite recheck: default `codex-cli 0.144.0`, exact 671-file binding hash, installed compatibility smoke (1), and authenticated Plan-mode smoke (1) pass. Global AppArmor user-namespace restriction remains enabled; direct Bubblewrap is still denied until the packaged profile is authorized and loaded.
+- Runtime prerequisite and acceptance: default `codex-cli 0.144.0`, exact 671-file binding hash, matching packaged/loaded Bubblewrap AppArmor profile, global user-namespace restriction still enabled, and four exact assembled vertical runs pass.
 - `FND-V1-015`: scaffold, root/package typechecks, lint/exports, unit (193 passed, 1 skipped), contract (92), integration (15), web (14), planning, and diff checks passed.
 - Evidence: `artifacts/fnd-v1-015-selected-path-contracts.md`.
 - `FND-V1-016`: root/package typechecks, lint/exports, unit (211 passed, 1 skipped), contract (100), integration (15), web (14), planning, and diff checks passed.
@@ -157,8 +155,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/int-v1-025-approval-routing.md`.
 - `INT-V1-026`: focused turn-client/prompt-regression/interrupt-service matrix (41), selected contracts (28), repeated exact authenticated two-thread interrupt smoke, root/all-package typechecks, lint/exports, scaffold/planning/binding checks, unit (611 passed, 25 external tests skipped), contract (115), integration (16), web (14), frozen offline install, production audit, terminal/unarchived/isolation/cleanup inspection, and diff checks pass.
 - Evidence: `artifacts/int-v1-026-interrupt-control.md`.
-- `INT-V1-027` in progress: focused normalizer/pipeline/control-fanout matrix (30), unit (751 passed, 29 external skipped), contract (138), integration (16), web (14), root typecheck, lint/exports, scaffold/planning/exact-binding checks, frozen offline install, production audit, and diff checks pass. Six exact aggregate attempts closed five harness/assembly defects; the latest processes mapping-time callbacks for both sessions, then fails immediately at the external account usage gate with clean reverse cleanup.
-- Partial evidence: `artifacts/int-v1-027-structured-vertical.md`; implementation `f8ebcfc`; callback-admission hardening `d765855`.
+- `INT-V1-027`: focused affected control/pipeline matrix (103), helper regression subset (18), unit (964 passed, 29 external skipped), contract (176), integration (16), web (14), all-package typechecks, lint/exports, scaffold/planning/exact-binding checks, frozen offline install, zero-vulnerability production audit, diff checks, and four exact aggregate runs pass. The final redacted record reports 58 requests, 137 notifications, 117 durable publications across two sessions, exactly three turns and one compact, all eight proof sources, sandbox side effect, TUI, and cleanup.
+- Evidence: `artifacts/int-v1-027-structured-vertical.md`; implementation `f8ebcfc`, `d765855`, `fe83654`; redacted acceptance output `1045383`.
 - `DAT-V1-021`: focused migration/auth/rotation (26), storage plus write-route (166), unit (771 passed, 29 external skipped), contract (139), integration (16), web (14), typecheck, lint/exports, scaffold/planning/binding, frozen offline install, production audit, indexed schema inspection, privacy review, and diff checks pass.
 - Evidence: `artifacts/dat-v1-021-csrf-bootstrap-storage.md`.
 - `IFC-V1-017`: direct trust gate (12), server (303 passed, 7 external skipped), unit (783 passed, 29 external skipped), contract (139), integration (16), web (14), typecheck, lint/exports, scaffold/planning/binding, frozen offline install, production audit, raw-listener/parser split, CORS dependency/order/privacy review, and diff checks pass.
@@ -223,6 +221,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-019` owner-doc closure is pushed as `992fba0`; `INT-V1-027` hardened criteria as `1afc935`; callback/aggregate implementation as `f8ebcfc`.
 - `INT-V1-027` startup callback ordering, thread-state snapshot normalization, diagnostic redaction, and reverse-cleanup hardening are pushed as `d765855`.
 - The exact-Codex sandbox prerequisite is documented and pushed as `f906d0f`.
+- `INT-V1-027` catalog/goal/approval/usage/paginated-evidence hardening is pushed as `fe83654`; its redacted post-cleanup acceptance output is pushed as `1045383`.
 - `IFC-V1-015` physical evidence is pushed as `48ce602`; owner docs close the task and advance the queue to `DAT-V1-021` then `IFC-V1-017`.
 - `DAT-V1-021` implementation and evidence are pushed as `e10a6a3`; owner docs close the task and make `DAT-V1-025` to `DAT-V1-029` ready.
 - `IFC-V1-017` request-trust implementation and evidence are pushed as `8aef5e8`; owner docs advance the queue to `DAT-V1-029` while cookie authentication remains blocked on that repository.
@@ -238,5 +237,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-027` criteria are pushed as `bfa99f2`; contextual contracts/storage as `6f09dcd`; server boundary as `08cb24d`; pre-admission cache correction as `7d8803a`; raw bootstrap evidence as `61c113d`. This closure makes `IFC-V1-030` and `IFC-V1-031` ready and advances the queue to pair/claim.
 - `IFC-V1-028` contracts/source foundation are pushed as `f0b2d73`; bounded paired-device correction as `eacfc9c`; exact route implementation and evidence as `4c1d5ca`. This closure advances the interface queue to `IFC-V1-030`.
 - `IFC-V1-030` criteria are pushed as `1526e3b`; selected contracts as `d74329c`; atomic storage as `1855c23`; routes as `d642be9`; authority/order/audit hardening as `d15c580`. The unrelated reviewed daemon-lease workaround was excluded. This closure advances the interface queue to `IFC-V1-031`.
-- `IFC-V1-031` criteria `47cafb7`, contracts `3c6df02`, storage `bc25473`, certificate owner `7103508`, lifecycle `cb790e6`, routes `f8d9aa8`, and transition hardening `9e6c0b7` are pushed. This closure leaves `INT-V1-027` as the user-prioritized dependency on the path to `IFC-V1-066`, `IFC-V1-059`, and physical Android `IFC-V1-033`.
-- Next action: authorize and load the narrow host Bubblewrap AppArmor profile, prove direct user-namespace setup, and run the unchanged `INT-V1-027` aggregate. Reconnect the phone before physical `IFC-V1-033` acceptance.
+- `IFC-V1-031` criteria `47cafb7`, contracts `3c6df02`, storage `bc25473`, certificate owner `7103508`, lifecycle `cb790e6`, routes `f8d9aa8`, and transition hardening `9e6c0b7` are pushed.
+- Next action: harden and implement `IFC-V1-066`, then close `IFC-V1-059` and execute `IFC-V1-033` against the attached ADB-authorized Android device.

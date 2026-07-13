@@ -32,7 +32,7 @@ sudo install -m 0644 /usr/share/apparmor/extra-profiles/bwrap-userns-restrict /e
 sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
 ```
 
-This host currently has Bubblewrap 0.9.0 but lacks `apparmor-profiles`, `apparmor-utils`, and both copies of `bwrap-userns-restrict`; `INT-V1-027` command-backed acceptance remains blocked until the profile is installed and the unchanged strict smoke passes.
+This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The packaged and loaded `/etc/apparmor.d/bwrap-userns-restrict` copy matches the packaged source SHA-256 `11d39094f044f0cda0febb3ad517b830301da6b2ce929664af09ee9e4dd264f9`; strict `INT-V1-027` command-backed acceptance passes while the global user-namespace restriction remains enabled.
 
 ## Development Commands
 
