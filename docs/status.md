@@ -82,12 +82,13 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Blockers
 
-- No external blocker remains on the current path. Complete `IFC-V1-059`, then run the connected-device `IFC-V1-033` matrix.
+- Physical `IFC-V1-033` execution is blocked on USB enumeration: `adb devices -l` remains empty and `lsusb` shows no Android phone. The aggregate app, exact-IP HTTPS matrix, and opt-in `pnpm smoke:android-security` runner are ready.
 - Regenerate/select mobile mockups only after real structured states are stable.
 
 ## Validation
 
 - Runtime prerequisite and acceptance: default `codex-cli 0.144.0`, exact 671-file binding hash, matching packaged/loaded Bubblewrap AppArmor profile, global user-namespace restriction still enabled, and four exact assembled vertical runs pass.
+- `IFC-V1-033` automated aggregate: six exact-IP HTTPS/SQLite tests pass across trust, unpaired/read/write/expired/revoked authority, cookie metadata, CSRF rotation and device binding, pair lifecycle/rate/race, lock/local unlock, device list/revoke, active/opening SSE revoke, audits, plaintext refusal, privacy scans, and cleanup. The physical Android smoke is compiled and skipped unless explicitly requested; no physical row is claimed yet. Implementation: `b4426c8`.
 - `FND-V1-015`: scaffold, root/package typechecks, lint/exports, unit (193 passed, 1 skipped), contract (92), integration (15), web (14), planning, and diff checks passed.
 - Evidence: `artifacts/fnd-v1-015-selected-path-contracts.md`.
 - `FND-V1-016`: root/package typechecks, lint/exports, unit (211 passed, 1 skipped), contract (100), integration (15), web (14), planning, and diff checks passed.
@@ -243,5 +244,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-028` contracts/source foundation are pushed as `f0b2d73`; bounded paired-device correction as `eacfc9c`; exact route implementation and evidence as `4c1d5ca`. This closure advances the interface queue to `IFC-V1-030`.
 - `IFC-V1-030` criteria are pushed as `1526e3b`; selected contracts as `d74329c`; atomic storage as `1855c23`; routes as `d642be9`; authority/order/audit hardening as `d15c580`. The unrelated reviewed daemon-lease workaround was excluded. This closure advances the interface queue to `IFC-V1-031`.
 - `IFC-V1-031` criteria `47cafb7`, contracts `3c6df02`, storage `bc25473`, certificate owner `7103508`, lifecycle `cb790e6`, routes `f8d9aa8`, and transition hardening `9e6c0b7` are pushed.
-- `IFC-V1-059` exact revoke and active-authority implementation is committed as `276303d`; this owner-doc closure advances active work to `IFC-V1-033` physical Android acceptance.
-- Next action: reconnect and unlock the Android until it enumerates in `adb devices -l`, then execute `IFC-V1-033` injection and real HTTPS/browser matrix and inspect listener, cookie, database, and logs before closure.
+- `IFC-V1-059` exact revoke and active-authority implementation is committed as `276303d`; the frozen `IFC-V1-033` matrix is `e5b2414`, and its automated aggregate plus physical runner are pushed as `b4426c8`.
+- Next action: reconnect and unlock the Android until it enumerates in `adb devices -l`, then run `pnpm smoke:android-security`, review the redacted evidence, complete phone/host cleanup, and close only the physical rows that pass.

@@ -4,6 +4,8 @@ Date: 2026-07-13
 
 Status: in progress. This matrix is the frozen acceptance contract; blank physical results are release evidence gaps, not passes.
 
+Automated checkpoint: commit `b4426c8` adds the acceptance-only composition, six passing exact-IP HTTPS/SQLite aggregate tests, count-only cookie/privacy observers, and the explicit physical Android runner. Required phone rows remain pending because the phone is not enumerating in USB/ADB.
+
 ## Scope Boundary
 
 This task proves the selected browser trust and security policies together through an acceptance-only Fastify composition and one physical Android Chrome run. It does not prove the product dashboard, the selected production route aggregate, packaging, service installation, or V1 release readiness.
