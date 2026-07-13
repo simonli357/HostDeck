@@ -17,9 +17,12 @@ import {
   type HostDeckCsrfPolicy,
   requireHostDeckRequestCsrfWriteAuthorization
 } from "./csrf-routes.js";
+import type { HostDeckActiveDeviceAuthorityLease } from "./device-authority-lifecycle.js";
 import { hostDeckRequestDeadline } from "./fastify-app.js";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import {
+  assertHostDeckRequestAuthenticationCurrent,
+  requireHostDeckRequestActiveDeviceAuthority,
   requireHostDeckRequestAuthentication,
   requireHostDeckRequestWritePermission
 } from "./fastify-request-authentication.js";
@@ -92,6 +95,7 @@ export interface HostDeckSelectedWriteAuthorizationContext {
   readonly actor: SelectedAuditActor;
   readonly authentication: SelectedRequestAuthenticationContext;
   readonly authorization: HostDeckCsrfAuthorizationReceipt;
+  readonly deviceAuthority: HostDeckActiveDeviceAuthorityLease | null;
 }
 
 export interface HostDeckSelectedWriteTargetContext {
@@ -472,6 +476,25 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
           payload_summary: timeoutSummary
         });
       }
+      try {
+        assertHostDeckRequestAuthenticationCurrent(request, authority.authentication);
+      } catch (error) {
+        if (error instanceof HostDeckHttpError && error.code === "permission_denied") {
+          const revoked = parseSelectedWriteTransition<TResponse>(
+            mutation.action,
+            Object.freeze({
+              outcome: "failed" as const,
+              error_code: "permission_denied" as const,
+              payload_summary: Object.freeze({ schema_version: 1 as const })
+            })
+          );
+          if (revoked.outcome === "succeeded") throw new TypeError();
+          observation.transitionOutcome = revoked.outcome;
+          observation.transitionErrorCode = revoked.error_code;
+          return revoked;
+        }
+        throw error;
+      }
       increment(this.counters, "dispatches");
       let raw: unknown;
       try {
@@ -616,6 +639,10 @@ function authorizeRequest(
     "local_admin_or_device_cookie",
     csrf
   );
+  const deviceAuthority =
+    authentication.state === "paired_device"
+      ? requireHostDeckRequestActiveDeviceAuthority(request)
+      : null;
   const actor = auditActor(authentication);
   if (authorization.authority === "local_admin") {
     if (authentication.state !== "local_admin" || authorization.device_id !== null) {
@@ -631,7 +658,7 @@ function authorizeRequest(
   ) {
     throw new TypeError("Paired write authorization is contradictory.");
   }
-  return Object.freeze({ actor, authentication, authorization });
+  return Object.freeze({ actor, authentication, authorization, deviceAuthority });
 }
 
 function auditActor(context: SelectedRequestAuthenticationContext): SelectedAuditActor {

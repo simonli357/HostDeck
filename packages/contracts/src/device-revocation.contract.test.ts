@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   selectedDeviceIdSchema,
-  selectedDeviceRevocationResultSchema
+  selectedDeviceRevocationResultSchema,
+  selectedDeviceRevokeParamsSchema,
+  selectedDeviceRevokeRequestSchema,
+  selectedDeviceRevokeResponseSchema
 } from "./device-revocation.js";
 import { authDeviceRecordSchema } from "./storage.js";
 
@@ -10,6 +13,58 @@ const laterAt = "2026-07-11T20:01:00.000Z";
 const expiresAt = "2026-07-11T21:00:00.000Z";
 
 describe("selected device revocation contracts", () => {
+  it("accepts only exact confirmed route input and bounded non-secret success", () => {
+    expect(
+      selectedDeviceRevokeParamsSchema.parse({ device_id: "client_revoke_contract" })
+    ).toEqual({ device_id: "client_revoke_contract" });
+    expect(
+      selectedDeviceRevokeRequestSchema.parse({
+        operation_id: "op_device_revoke_contract_001",
+        confirmed: true
+      })
+    ).toEqual({
+      operation_id: "op_device_revoke_contract_001",
+      confirmed: true
+    });
+    expect(
+      selectedDeviceRevokeResponseSchema.parse({
+        operation_id: "op_device_revoke_contract_001",
+        device_id: "client_revoke_contract",
+        revoked_at: laterAt,
+        authority_invalidated: true,
+        self_revoked: false
+      })
+    ).toEqual({
+      operation_id: "op_device_revoke_contract_001",
+      device_id: "client_revoke_contract",
+      revoked_at: laterAt,
+      authority_invalidated: true,
+      self_revoked: false
+    });
+
+    for (const invalid of [
+      { operation_id: "op_device_revoke_contract_001", confirmed: false },
+      { operation_id: "op_device_revoke_contract_001" },
+      {
+        operation_id: "op_device_revoke_contract_001",
+        confirmed: true,
+        device_id: "client_revoke_contract"
+      }
+    ]) {
+      expect(selectedDeviceRevokeRequestSchema.safeParse(invalid).success).toBe(false);
+    }
+    expect(
+      selectedDeviceRevokeResponseSchema.safeParse({
+        operation_id: "op_device_revoke_contract_001",
+        device_id: "client_revoke_contract",
+        revoked_at: laterAt,
+        authority_invalidated: true,
+        self_revoked: false,
+        token_hash: "private"
+      }).success
+    ).toBe(false);
+  });
+
   it("accepts bounded storage ids and one exact minimal revocation result", () => {
     for (const deviceId of ["client_phone", "client.phone:01", "a", "x".repeat(120)]) {
       expect(selectedDeviceIdSchema.parse(deviceId)).toBe(deviceId);

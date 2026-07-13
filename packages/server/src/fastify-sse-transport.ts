@@ -5,6 +5,7 @@ import type { FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { HostDeckRoutePluginRegistration } from "./fastify-app.js";
 import { createHostDeckErrorBody, HostDeckHttpError } from "./fastify-error-policy.js";
+import { hostDeckRequestDeviceAuthoritySignal } from "./fastify-request-authentication.js";
 import {
   createHostDeckSseReadable,
   HostDeckSseAbortError,
@@ -95,6 +96,10 @@ export function createHostDeckSseTransportRegistration(
         },
         async (request, reply) => {
           const after = resolveRequestedCursor(request);
+          const streamSignal = AbortSignal.any([
+            request.signal,
+            hostDeckRequestDeviceAuthoritySignal(request)
+          ]);
           let iterable: AsyncIterable<unknown>;
           try {
             iterable = await awaitWithAbort(
@@ -103,14 +108,14 @@ export function createHostDeckSseTransportRegistration(
                   after,
                   params: request.params,
                   request,
-                  signal: request.signal
+                  signal: streamSignal
                 }))
               ),
-              request.signal
+              streamSignal
             );
             assertAsyncIterable(iterable);
           } catch (cause) {
-            if (request.signal.aborted || cause instanceof HostDeckSseAbortError) return;
+            if (streamSignal.aborted || cause instanceof HostDeckSseAbortError) return;
             const error = normalizeSseTransportError(
               cause,
               "source_open_failed",
@@ -131,9 +136,12 @@ export function createHostDeckSseTransportRegistration(
             expectedSessionId: optionalSessionId(request.params),
             iterable,
             onCleanupFailure: (error) => observeSseFailure(parsed.observeError, request, error),
-            signal: request.signal
+            signal: streamSignal
           });
-          const destroyReadable = () => readable.destroy();
+          const destroyReadable = () => {
+            readable.destroy(new HostDeckSseAbortError(streamSignal.reason));
+            if (reply.sse.isConnected) reply.sse.close();
+          };
           let readableFailure: Error | undefined;
           const captureReadableFailure = (error: Error) => {
             readableFailure = error;
@@ -143,13 +151,13 @@ export function createHostDeckSseTransportRegistration(
           };
           readable.once("error", captureReadableFailure);
           readable.once("end", finishFiniteResponse);
-          request.signal.addEventListener("abort", destroyReadable, { once: true });
+          streamSignal.addEventListener("abort", destroyReadable, { once: true });
           reply.sse.onClose(destroyReadable);
 
           try {
             await reply.sse.send(readable);
             if (readableFailure !== undefined) {
-              if (!request.signal.aborted && !(readableFailure instanceof HostDeckSseAbortError)) {
+              if (!streamSignal.aborted && !(readableFailure instanceof HostDeckSseAbortError)) {
                 const error = normalizeSseTransportError(
                   readableFailure,
                   "transport_send_failed",
@@ -162,7 +170,7 @@ export function createHostDeckSseTransportRegistration(
               reply.sse.close();
             }
           } catch (cause) {
-            if (!request.signal.aborted && !(cause instanceof HostDeckSseAbortError)) {
+            if (!streamSignal.aborted && !(cause instanceof HostDeckSseAbortError)) {
               const error = normalizeSseTransportError(
                 cause,
                 "transport_send_failed",
@@ -179,7 +187,7 @@ export function createHostDeckSseTransportRegistration(
             }
             if (reply.sse.isConnected) reply.sse.close();
           } finally {
-            request.signal.removeEventListener("abort", destroyReadable);
+            streamSignal.removeEventListener("abort", destroyReadable);
             readable.removeListener("error", captureReadableFailure);
             readable.removeListener("end", finishFiniteResponse);
             readable.destroy();

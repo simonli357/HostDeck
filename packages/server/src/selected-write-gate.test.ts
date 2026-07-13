@@ -676,6 +676,35 @@ describe("selected exact-target write gate", () => {
     }
   }, 30_000);
 
+  it("records a failed accepted operation when live device authority is revoked before dispatch", async () => {
+    const harness = await createSecurePromptHarness({ auditDelayMs: 250 });
+    try {
+      const responsePromise = securePromptRequest(harness.app, rawCsrfToken);
+      await waitFor(() => harness.events.includes("audit:accepted"));
+      expect(
+        harness.activeDeviceAuthority.invalidate("client_phone")
+      ).toMatchObject({ closedLeases: 1 });
+      const response = await responsePromise;
+      expect(response.statusCode, response.body).toBe(409);
+      expect(response.json()).toMatchObject({ error: { code: "permission_denied" } });
+      expect(harness.events).toEqual([
+        "parse",
+        "auth:device",
+        "csrf:authorize",
+        "lock:read",
+        "target:resolve",
+        "audit:accepted",
+        "audit:failed"
+      ]);
+      expect(harness.gate.snapshot()).toMatchObject({
+        dispatches: 0,
+        failed_results: 1
+      });
+    } finally {
+      await harness.app.close();
+    }
+  }, 30_000);
+
   it("keeps revoked, expired, stale, and incompatible states explicit before audit or dispatch", async () => {
     for (const authError of ["device_revoked", "device_expired"] as const) {
       const harness = createPromptHarness({ authError, paired: true });
@@ -1206,6 +1235,9 @@ interface PromptHarnessOptions {
 }
 
 interface PromptHarness {
+  readonly activeDeviceAuthority: ReturnType<
+    typeof createHostDeckRequestAuthenticationPolicy
+  >["activeDeviceAuthority"];
   readonly app: HostDeckFastifyInstance;
   readonly authenticationCalls: () => number;
   readonly csrfCalls: () => number;
@@ -1276,20 +1308,21 @@ function createPromptHarness(options: PromptHarnessOptions = {}): PromptHarness 
   const registration = promptRegistration(gate, events, options);
   const transport = options.secure ? "https" : "http";
   const origin = options.secure ? secureOrigin : localOrigin;
+  const requestAuthenticationPolicy = createHostDeckRequestAuthenticationPolicy({
+    authenticateDeviceToken: () => {
+      authenticationCalls += 1;
+      events.push("auth:device");
+      if (options.authError !== undefined) {
+        throw new HostDeckAuthRepositoryError(options.authError, "private-stage-cause");
+      }
+      if (options.paired || options.secure) return authentication;
+      throw new HostDeckAuthRepositoryError("device_not_found", "Device unavailable.");
+    },
+    now: () => new Date(authenticatedAt)
+  });
   const app = createHostDeckFastifyApp({
     observeInternalError: () => undefined,
-    requestAuthenticationPolicy: createHostDeckRequestAuthenticationPolicy({
-      authenticateDeviceToken: () => {
-        authenticationCalls += 1;
-        events.push("auth:device");
-        if (options.authError !== undefined) {
-          throw new HostDeckAuthRepositoryError(options.authError, "private-stage-cause");
-        }
-        if (options.paired || options.secure) return authentication;
-        throw new HostDeckAuthRepositoryError("device_not_found", "Device unavailable.");
-      },
-      now: () => new Date(authenticatedAt)
-    }),
+    requestAuthenticationPolicy,
     requestTrustPolicy: createHostDeckRequestTrustPolicy({
       allowedOrigins: [origin],
       mode: options.secure ? "lan" : "loopback",
@@ -1299,6 +1332,7 @@ function createPromptHarness(options: PromptHarnessOptions = {}): PromptHarness 
     routePlugins: [registration]
   });
   return {
+    activeDeviceAuthority: requestAuthenticationPolicy.activeDeviceAuthority,
     app,
     authenticationCalls: () => authenticationCalls,
     csrfCalls: () => csrfCalls,
@@ -1364,16 +1398,17 @@ async function createSecurePromptHarness(
     csrf,
     lock
   });
+  const requestAuthenticationPolicy = createHostDeckRequestAuthenticationPolicy({
+    authenticateDeviceToken: () => {
+      authenticationCalls += 1;
+      events.push("auth:device");
+      return authentication;
+    },
+    now: () => new Date(authenticatedAt)
+  });
   const app = createHostDeckFastifyApp({
     observeInternalError: () => undefined,
-    requestAuthenticationPolicy: createHostDeckRequestAuthenticationPolicy({
-      authenticateDeviceToken: () => {
-        authenticationCalls += 1;
-        events.push("auth:device");
-        return authentication;
-      },
-      now: () => new Date(authenticatedAt)
-    }),
+    requestAuthenticationPolicy,
     requestTrustPolicy: createHostDeckRequestTrustPolicy({
       allowedOrigins: [secureOrigin],
       mode: "lan",
@@ -1385,6 +1420,7 @@ async function createSecurePromptHarness(
   });
   await app.listen({ host: "127.0.0.1", port: 0, listenTextResolver: () => "" });
   return {
+    activeDeviceAuthority: requestAuthenticationPolicy.activeDeviceAuthority,
     app,
     authenticationCalls: () => authenticationCalls,
     csrfCalls: () => csrfCalls,

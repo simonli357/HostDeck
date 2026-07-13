@@ -67,7 +67,13 @@ describe("selected Fastify request authentication policy", () => {
       authenticateDeviceToken,
       now
     });
-    expect(policy).toEqual({ authenticateDeviceToken, now });
+    expect(policy).toMatchObject({ authenticateDeviceToken, now });
+    expect(Object.keys(policy).sort()).toEqual([
+      "activeDeviceAuthority",
+      "authenticateDeviceToken",
+      "now"
+    ]);
+    expect(Object.isFrozen(policy.activeDeviceAuthority)).toBe(true);
     expect(Object.isFrozen(policy)).toBe(true);
     expect(() => assertHostDeckRequestAuthenticationPolicy(policy)).not.toThrow();
     expect(() =>
@@ -100,7 +106,7 @@ describe("selected Fastify request authentication policy", () => {
         requestAuthenticationPolicy: Object.freeze({
           authenticateDeviceToken,
           now
-        }) as HostDeckRequestAuthenticationPolicy,
+        }) as unknown as HostDeckRequestAuthenticationPolicy,
         requestTrustPolicy: loopbackTrustPolicy,
         resourceBudget: defaultResourceBudget,
         routePlugins: []
@@ -668,7 +674,7 @@ describe("selected Fastify request authentication policy", () => {
     }
   });
 
-  it("observes revoke before lazy resolution and caches a paired snapshot resolved before later revoke", async () => {
+  it("observes revoke before lazy resolution and closes a paired snapshot after live invalidation", async () => {
     const open = openMigratedDatabase(tempDbPath(), { now: () => createdAt });
     try {
       const auth = createAuthDeviceRepository(open.db);
@@ -711,12 +717,13 @@ describe("selected Fastify request authentication policy", () => {
         createDevice(secondAuth, "client_auth_write", writeToken, "write");
         const secondRevoke = createDeviceRevocationRepository(secondOpen.db);
         const snapshots: SelectedRequestAuthenticationContext[] = [];
+        const cachedPolicy = createHostDeckRequestAuthenticationPolicy({
+          authenticateDeviceToken: (input) =>
+            secondAuth.authenticateDeviceToken(input),
+          now: () => firstUseAt
+        });
         const cachedApp = createAuthenticationApp(
-          createHostDeckRequestAuthenticationPolicy({
-            authenticateDeviceToken: (input) =>
-              secondAuth.authenticateDeviceToken(input),
-            now: () => firstUseAt
-          }),
+          cachedPolicy,
           {
             afterAuthentication(context) {
               snapshots.push(context);
@@ -724,6 +731,9 @@ describe("selected Fastify request authentication policy", () => {
                 deviceId: "client_auth_write",
                 now: revokeAt
               });
+              cachedPolicy.activeDeviceAuthority.invalidate(
+                "client_auth_write"
+              );
             },
             observations: snapshots
           }
@@ -732,13 +742,17 @@ describe("selected Fastify request authentication policy", () => {
         try {
           const response = await cachedApp.inject({
             method: "GET",
-            url: "/resolve-then-revoke",
+            url: "/resolve-return-after-revoke",
             headers: deviceCookie(writeToken)
           });
-          expect(response.statusCode, response.body).toBe(200);
-          expect(response.json()).toMatchObject({ state: "paired_device" });
-          expect(snapshots).toHaveLength(2);
-          expect(snapshots[0]).toBe(snapshots[1]);
+          expectAuthError(response, 401, "permission_denied", "revoked");
+          expect(response.body).not.toContain("paired_device");
+          expect(snapshots).toHaveLength(1);
+          expect(cachedPolicy.activeDeviceAuthority.snapshot()).toMatchObject({
+            active_leases: 0,
+            signaled_leases: 1,
+            tracked_revocations: 1
+          });
           expect(rawDeviceRow(secondOpen.db, "client_auth_write")).toMatchObject({
             last_used_at: firstUseAt.toISOString(),
             revoked_at: revokeAt.toISOString()
@@ -1032,6 +1046,20 @@ function authenticationRoutes(
           const after = resolveHostDeckRequestAuthentication(request);
           observations.push(after);
           return after;
+        }
+      );
+      scope.get(
+        "/resolve-return-after-revoke",
+        {
+          async preHandler(request) {
+            requireHostDeckRequestAuthentication(request, "device_cookie");
+          },
+          schema: { response: { 200: selectedRequestAuthenticationContextSchema } }
+        },
+        async (request) => {
+          const before = resolveHostDeckRequestAuthentication(request);
+          options.afterAuthentication?.(before);
+          return before;
         }
       );
     }

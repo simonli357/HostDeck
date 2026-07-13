@@ -95,7 +95,8 @@ describe("bounded Fastify SSE transport", () => {
       expect(query.body).toContain('"text":"two"');
       expect(opened[0]?.after).toBe(1);
       expect(opened[0]?.params).toEqual({ session_id: sessionId });
-      expect(opened[0]?.signal).toBe(opened[0]?.request.signal);
+      expect(opened[0]?.signal).not.toBe(opened[0]?.request.signal);
+      expect(opened[0]?.signal.aborted).toBe(false);
 
       const header = await app.inject({
         method: "GET",
@@ -367,11 +368,11 @@ describe("bounded Fastify SSE transport", () => {
     let produced = 0;
     let sourceFinalized = false;
     let sourceObservedAbort = false;
-    let sourceSignalMatches = false;
+    let sourceSignalIsComposite = false;
     const app = createSseApp(
       {
         open(input) {
-          sourceSignalMatches = input.signal === input.request.signal;
+          sourceSignalIsComposite = input.signal !== input.request.signal;
           input.signal.addEventListener("abort", () => disconnected.resolve(), { once: true });
           return (async function* () {
             try {
@@ -406,7 +407,7 @@ describe("bounded Fastify SSE transport", () => {
         "handler settlement"
       );
 
-      expect(sourceSignalMatches).toBe(true);
+      expect(sourceSignalIsComposite).toBe(true);
       expect(sourceObservedAbort).toBe(true);
       expect(produced).toBeGreaterThan(0);
       expect(produced).toBeLessThan(10_000);

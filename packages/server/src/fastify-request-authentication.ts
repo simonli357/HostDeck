@@ -8,6 +8,12 @@ import {
 import { HostDeckAuthRepositoryError } from "@hostdeck/storage";
 import { parseCookie } from "cookie";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import {
+  createHostDeckActiveDeviceAuthorityPolicy,
+  type HostDeckActiveDeviceAuthorityLease,
+  type HostDeckActiveDeviceAuthorityPolicy,
+  HostDeckDeviceAuthorityError
+} from "./device-authority-lifecycle.js";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import {
   type HostDeckRequestTrustContext,
@@ -37,6 +43,7 @@ export interface CreateHostDeckRequestAuthenticationPolicyInput {
 }
 
 export interface HostDeckRequestAuthenticationPolicy {
+  readonly activeDeviceAuthority: HostDeckActiveDeviceAuthorityPolicy;
   readonly authenticateDeviceToken: HostDeckDeviceAuthenticationPort;
   readonly now: () => Date;
 }
@@ -75,10 +82,15 @@ type AuthenticationResolution =
   | { readonly kind: "error"; readonly error: HostDeckHttpError };
 
 interface PendingAuthenticationState {
+  readonly activeDeviceAuthority: HostDeckActiveDeviceAuthorityPolicy;
+  readonly authorityController: AbortController;
   readonly observation: DeviceCookieObservation;
   readonly policy: HostDeckRequestAuthenticationPolicy;
   readonly runtime: AuthenticationRuntime;
   readonly trust: HostDeckRequestTrustContext;
+  activeLease: HostDeckActiveDeviceAuthorityLease | null;
+  activeLeaseAbortForwarder: (() => void) | null;
+  allowInvalidatedSuccess: boolean;
   resolution: AuthenticationResolution | null;
 }
 
@@ -103,6 +115,7 @@ export function createHostDeckRequestAuthenticationPolicy(
     throw new TypeError("HostDeck request authentication clock must be a function.");
   }
   const policy = Object.freeze({
+    activeDeviceAuthority: createHostDeckActiveDeviceAuthorityPolicy(),
     authenticateDeviceToken: values.authenticateDeviceToken as HostDeckDeviceAuthenticationPort,
     now: values.now as () => Date
   });
@@ -150,12 +163,29 @@ export function installHostDeckRequestAuthentication(
     const trust = hostDeckRequestTrustContext(request);
     const observation = parseDeviceCookie(request.raw.rawHeaders);
     pendingAuthenticationStates.set(request, {
+      activeDeviceAuthority: policy.activeDeviceAuthority,
+      activeLease: null,
+      activeLeaseAbortForwarder: null,
+      allowInvalidatedSuccess: false,
+      authorityController: new AbortController(),
       observation,
       policy,
       resolution: null,
       runtime,
       trust
     });
+  });
+  app.addHook("onSend", async (request, reply, payload) => {
+    const pending = pendingAuthenticationStates.get(request);
+    if (
+      reply.statusCode < 400 &&
+      pending?.resolution?.kind === "context" &&
+      pending.resolution.context.state === "paired_device" &&
+      !pending.allowInvalidatedSuccess
+    ) {
+      requireCurrentAuthority(pending);
+    }
+    return payload;
   });
   app.addHook("onResponse", async (request) => {
     clearPendingAuthentication(request);
@@ -176,6 +206,9 @@ export function resolveHostDeckRequestAuthentication(
   }
   if (pending.resolution !== null) {
     if (pending.resolution.kind === "error") throw pending.resolution.error;
+    if (pending.resolution.context.state === "paired_device") {
+      requireCurrentAuthority(pending);
+    }
     return pending.resolution.context;
   }
 
@@ -253,6 +286,78 @@ export function requireHostDeckRequestWritePermission(
   throw credentialRejection(context.state);
 }
 
+export function requireHostDeckRequestActiveDeviceAuthority(
+  request: FastifyRequest
+): HostDeckActiveDeviceAuthorityLease {
+  const pending = requirePendingAuthentication(request);
+  if (
+    pending.resolution?.kind !== "context" ||
+    pending.resolution.context.state !== "paired_device"
+  ) {
+    throw credentialRejection(
+      pending.resolution?.kind === "context"
+        ? pending.resolution.context.state
+        : "unpaired"
+    );
+  }
+  return requireCurrentAuthority(pending);
+}
+
+export function hostDeckRequestActiveDeviceAuthority(
+  request: FastifyRequest
+): HostDeckActiveDeviceAuthorityLease | null {
+  const pending = pendingAuthenticationStates.get(request);
+  if (
+    pending?.resolution?.kind !== "context" ||
+    pending.resolution.context.state !== "paired_device"
+  ) {
+    return null;
+  }
+  return requireCurrentAuthority(pending);
+}
+
+export function hostDeckRequestDeviceAuthoritySignal(
+  request: FastifyRequest
+): AbortSignal {
+  return requirePendingAuthentication(request).authorityController.signal;
+}
+
+export function assertHostDeckRequestAuthenticationCurrent(
+  request: FastifyRequest,
+  expected: SelectedRequestAuthenticationContext
+): void {
+  const pending = requirePendingAuthentication(request);
+  if (
+    pending.resolution?.kind !== "context" ||
+    pending.resolution.context !== expected
+  ) {
+    throw storageFailure("Request authentication context ownership is invalid.");
+  }
+  if (expected.state === "paired_device") requireCurrentAuthority(pending);
+}
+
+export function allowHostDeckSelfRevocationResponse(
+  request: FastifyRequest,
+  deviceId: string
+): void {
+  const pending = requirePendingAuthentication(request);
+  const context =
+    pending.resolution?.kind === "context" ? pending.resolution.context : null;
+  const lease = pending.activeLease;
+  if (
+    context?.state !== "paired_device" ||
+    context.device_id !== deviceId ||
+    lease === null ||
+    lease.deviceId !== deviceId ||
+    !lease.signal.aborted ||
+    !(lease.signal.reason instanceof HostDeckDeviceAuthorityError) ||
+    lease.signal.reason.code !== "device_revoked"
+  ) {
+    throw new TypeError("HostDeck self-revocation response authority is invalid.");
+  }
+  pending.allowInvalidatedSuccess = true;
+}
+
 export function hostDeckRequestAuthenticationSnapshot(
   app: FastifyInstance
 ): HostDeckRequestAuthenticationSnapshot {
@@ -317,7 +422,22 @@ function resolvePendingAuthentication(
   }
 
   const authenticated = parseDeviceAuthentication(rawResult);
-  return createContext(pending.trust, "paired_device", authenticated);
+  const context = createContext(pending.trust, "paired_device", authenticated);
+  try {
+    attachActiveLease(
+      pending,
+      pending.activeDeviceAuthority.acquire(authenticated.device.id)
+    );
+  } catch (error) {
+    if (
+      error instanceof HostDeckDeviceAuthorityError &&
+      error.code === "device_revoked"
+    ) {
+      return createContext(pending.trust, "revoked_device");
+    }
+    throw storageFailure("Device authority lease acquisition failed.");
+  }
+  return context;
 }
 
 function parseDeviceAuthentication(candidate: unknown): ParsedDeviceAuthentication {
@@ -420,7 +540,69 @@ function clearPendingAuthentication(request: FastifyRequest): void {
   if (pending?.observation.kind === "token") {
     pending.observation.rawDeviceToken = null;
   }
+  if (pending?.activeLease !== null && pending?.activeLease !== undefined) {
+    if (pending.activeLeaseAbortForwarder !== null) {
+      pending.activeLease.signal.removeEventListener(
+        "abort",
+        pending.activeLeaseAbortForwarder
+      );
+      pending.activeLeaseAbortForwarder = null;
+    }
+    pending.activeDeviceAuthority.release(pending.activeLease);
+    pending.activeLease = null;
+  }
   pendingAuthenticationStates.delete(request);
+}
+
+function attachActiveLease(
+  pending: PendingAuthenticationState,
+  lease: HostDeckActiveDeviceAuthorityLease
+): void {
+  if (pending.activeLease !== null || pending.activeLeaseAbortForwarder !== null) {
+    throw storageFailure("Request already owns a device-authority lease.");
+  }
+  const forwardInvalidation = () => {
+    if (!pending.authorityController.signal.aborted) {
+      pending.authorityController.abort(lease.signal.reason);
+    }
+  };
+  pending.activeLease = lease;
+  pending.activeLeaseAbortForwarder = forwardInvalidation;
+  lease.signal.addEventListener("abort", forwardInvalidation, { once: true });
+  if (lease.signal.aborted) forwardInvalidation();
+}
+
+function requirePendingAuthentication(
+  request: FastifyRequest
+): PendingAuthenticationState {
+  const pending = pendingAuthenticationStates.get(request);
+  if (pending === undefined) {
+    throw new Error(
+      "HostDeck request authentication is unavailable before trust and cookie admission."
+    );
+  }
+  return pending;
+}
+
+function requireCurrentAuthority(
+  pending: PendingAuthenticationState
+): HostDeckActiveDeviceAuthorityLease {
+  const lease = pending.activeLease;
+  if (lease === null) {
+    throw storageFailure("Paired request has no active device-authority lease.");
+  }
+  try {
+    pending.activeDeviceAuthority.assertActive(lease);
+    return lease;
+  } catch (error) {
+    if (
+      error instanceof HostDeckDeviceAuthorityError &&
+      error.code === "device_revoked"
+    ) {
+      throw credentialRejection("revoked_device");
+    }
+    throw storageFailure("Paired request device-authority lease is invalid.");
+  }
 }
 
 function recordContext(
