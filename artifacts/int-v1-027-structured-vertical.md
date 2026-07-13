@@ -2,7 +2,7 @@
 
 Date: 2026-07-11
 
-Status: in progress. This artifact does not claim aggregate runtime acceptance.
+Status: blocked on the selected host Bubblewrap AppArmor profile. This artifact does not claim aggregate runtime acceptance.
 
 ## Implemented
 
@@ -34,14 +34,15 @@ Implementation: `f8ebcfc`; callback-admission hardening: `d765855`.
 - Attempt 4 stopped in 4.8 seconds on the account runtime usage gate and proved immediate failed-terminal reporting.
 - Attempt 5 replayed mapping-time callbacks instead of dropping them, then exposed an unchanged cleanup status snapshot. The generalized redundant-state rule closed that false fatal path.
 - Attempt 6 stopped only on the known account gate in 6.1 seconds. It recorded 34 requests, 29 raw notifications, 15 durable publications across both sessions, 16 completed observer receipts, exactly one `turn/start`, no server request, and no protocol issue.
+- The default user installation was returned to exact 0.144.0. The 671-file binding hash, installed-runtime compatibility smoke, and a fresh authenticated Plan-mode turn pass; the former account usage gate is cleared without changing the aggregate.
 - Every attempt completed reverse cleanup without an aggregate cleanup error. No temporary path, thread/session/operation id, prompt, model value, usage value, or credential is retained here.
 
 ## Unproven Gates
 
-- The final eight-source proof ledger is incomplete because the current account gate stopped the first model-plus-Plan turn.
+- The final eight-source proof ledger remains incomplete because the unchanged aggregate has not been rerun after the authenticated-turn prerequisite cleared.
 - Command-backed approval and its filesystem side effect were not reached. App-server startup also reports that Bubblewrap cannot create the required user namespace on this host; the strict command path must pass without policy downgrade.
 - Interrupt, compact running/completed/reset, TUI coexistence, thread-B final isolation, successful archive read-back, final duration/cost counts, and complete proof-source coverage were not reached in one accepted lifecycle.
-- `INT-V1-027` remains `in_progress`; no dependent task may treat this artifact as completion evidence.
+- `INT-V1-027` remains blocked on the host profile; no dependent task may treat this artifact as completion evidence.
 
 ## Validation
 
@@ -52,6 +53,6 @@ Implementation: `f8ebcfc`; callback-admission hardening: `d765855`.
 
 ## Next Acceptance
 
-1. Re-run the unchanged exact command after authenticated turns are available.
-2. Restore command-backed Bubblewrap/user-namespace operation on the host and re-run without changing read-only/on-request policy.
+1. Install and load Ubuntu's packaged narrow `bwrap-userns-restrict` AppArmor profile without disabling the global user-namespace restriction.
+2. Re-run the unchanged exact command without changing read-only/on-request policy.
 3. Accept only one complete lifecycle with all eight proof sources, three turns, one compact, TUI coexistence, no disclosure, and complete cleanup.

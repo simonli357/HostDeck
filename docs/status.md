@@ -5,12 +5,12 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M2/M3 selected runtime and host-interface integration; M1 foundation is complete.
-- Active task: resolve the host Bubblewrap AppArmor and authenticated-turn prerequisites, then rerun the unchanged `INT-V1-027` real structured vertical on the user-prioritized path to physical Android security acceptance.
-- `IFC-V1-031` LAN configuration/read state, certificate ownership, local-admin desired-mode mutation, and selected private-IP HTTPS lifecycle are complete. `INT-V1-027` remains blocked until its external runtime prerequisites pass.
+- Active task: install the narrow host Bubblewrap AppArmor profile, then rerun the unchanged `INT-V1-027` real structured vertical on the user-prioritized path to physical Android security acceptance.
+- Exact Codex 0.144.0 is again the default user installation; its reviewed binding, installed compatibility, and an authenticated Plan-mode turn pass. `INT-V1-027` is blocked only on laptop authorization for the host profile.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
 - Release state: no-go. `BLK-V1-02` is complete; runtime, interface, mobile, and release blocks remain unfinished.
-- Release environment: the default installed Codex is 0.144.1, while the selected and revalidated HostDeck binding remains exactly 0.144.0. Deployment must pin 0.144.0 or complete an explicit compatibility upgrade; no silent binding regeneration is accepted.
+- Release environment: the default installed Codex and selected HostDeck binding are both exactly 0.144.0. The attached Android device is currently physically absent from USB and must be reconnected before `IFC-V1-033` physical acceptance.
 
 ## Proven
 
@@ -76,19 +76,19 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - The selected Codex callback/fanout and exact aggregate harness are implemented and deterministically tested, but the one-lifecycle authenticated acceptance is not proven. Supervision, reconnect/restart behavior, and live HostDeck composition also remain downstream work. Partial evidence: `artifacts/int-v1-027-structured-vertical.md`.
 - Current command-backed app-server smokes can fail before a callback because app-server selects Bubblewrap while this host denies unprivileged user-namespace setup, even when the reviewed legacy-Landlock feature flag is enabled. Direct exact-version Landlock execution plus the no-tools interrupt and compact smokes pass. Resolve and reproduce the command-backed path in `INT-V1-027`/`INT-V1-091`; this does not invalidate the already-captured approval or interrupt evidence.
 - Production composition with selected Codex pipeline/authenticated route registrations, authenticated SSE assembly around the proven fanout/high-water handoff, sustained subscriber queues, full raw-socket Node-limit enforcement, mutable runtime health, configured-policy ordering/wiring of the proven orphan and retention runners, or complete application drain; the generic listener lifecycle and individual headless adapters are proven, not those downstream integrations.
-- The default installed Codex is now 0.144.1 and is intentionally incompatible with the reviewed 0.144.0 binding until a separate compatibility review. Exact 0.144.0 remains available through an isolated package invocation for the remaining runtime work.
 - Pair/claim cookie issuance, paired LAN reads, physical-browser CSRF memory/reload ordering, rate limits, or device revocation.
 - Runnable packaged CLI, built dashboard, user services, clean Ubuntu install, real phone workflow, or release readiness.
 
 ## Blockers
 
 - Implement the assembled Codex control/restart vertical (`INT-V1-027` to `INT-V1-032`) against explicit 0.144.0; do not treat default 0.144.1 as reviewed.
-- The exact `INT-V1-027` account runtime currently rejects the first low-cost turn on its usage gate; retry after the reported 2026-07-11 13:00 local reset. This is external runtime state, not aggregate acceptance.
-- Restore repeatable command-backed app-server execution on the selected host path before aggregate runtime acceptance; `INT-V1-027` and `INT-V1-091` own the gate.
+- Authorize installation/loading of Ubuntu's packaged narrow `bwrap-userns-restrict` profile, then restore repeatable command-backed app-server execution on the selected host path before aggregate runtime acceptance; `INT-V1-027` and `INT-V1-091` own the gate.
+- Reconnect the Android device over USB-C before the later physical `IFC-V1-033` matrix; ADB restart cannot detect a device that is absent from `lsusb`.
 - Regenerate/select mobile mockups only after real structured states are stable.
 
 ## Validation
 
+- Runtime prerequisite recheck: default `codex-cli 0.144.0`, exact 671-file binding hash, installed compatibility smoke (1), and authenticated Plan-mode smoke (1) pass. Global AppArmor user-namespace restriction remains enabled; direct Bubblewrap is still denied until the packaged profile is authorized and loaded.
 - `FND-V1-015`: scaffold, root/package typechecks, lint/exports, unit (193 passed, 1 skipped), contract (92), integration (15), web (14), planning, and diff checks passed.
 - Evidence: `artifacts/fnd-v1-015-selected-path-contracts.md`.
 - `FND-V1-016`: root/package typechecks, lint/exports, unit (211 passed, 1 skipped), contract (100), integration (15), web (14), planning, and diff checks passed.
@@ -239,4 +239,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-028` contracts/source foundation are pushed as `f0b2d73`; bounded paired-device correction as `eacfc9c`; exact route implementation and evidence as `4c1d5ca`. This closure advances the interface queue to `IFC-V1-030`.
 - `IFC-V1-030` criteria are pushed as `1526e3b`; selected contracts as `d74329c`; atomic storage as `1855c23`; routes as `d642be9`; authority/order/audit hardening as `d15c580`. The unrelated reviewed daemon-lease workaround was excluded. This closure advances the interface queue to `IFC-V1-031`.
 - `IFC-V1-031` criteria `47cafb7`, contracts `3c6df02`, storage `bc25473`, certificate owner `7103508`, lifecycle `cb790e6`, routes `f8d9aa8`, and transition hardening `9e6c0b7` are pushed. This closure leaves `INT-V1-027` as the user-prioritized dependency on the path to `IFC-V1-066`, `IFC-V1-059`, and physical Android `IFC-V1-033`.
-- Next action: install the narrow host Bubblewrap AppArmor allowance, revalidate exact Codex 0.144.0 authenticated turns, and run the unchanged `INT-V1-027` aggregate. Before deployment, resolve the explicit Codex 0.144.1 installed-versus-selected-0.144.0 mismatch.
+- Next action: authorize and load the narrow host Bubblewrap AppArmor profile, prove direct user-namespace setup, and run the unchanged `INT-V1-027` aggregate. Reconnect the phone before physical `IFC-V1-033` acceptance.
