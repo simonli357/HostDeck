@@ -3,6 +3,7 @@ export * from "./csrf.js";
 export * from "./device-listing.js";
 export * from "./device-revocation.js";
 export * from "./host-lock.js";
+export * from "./lan-network.js";
 export * from "./pairing.js";
 export * from "./request-authentication.js";
 export * from "./resource-policy.js";
