@@ -247,5 +247,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-030` criteria are pushed as `1526e3b`; selected contracts as `d74329c`; atomic storage as `1855c23`; routes as `d642be9`; authority/order/audit hardening as `d15c580`. The unrelated reviewed daemon-lease workaround was excluded. This closure advances the interface queue to `IFC-V1-031`.
 - `IFC-V1-031` criteria `47cafb7`, contracts `3c6df02`, storage `bc25473`, certificate owner `7103508`, lifecycle `cb790e6`, routes `f8d9aa8`, and transition hardening `9e6c0b7` are pushed.
 - `IFC-V1-059` exact revoke and active-authority implementation is committed as `276303d`; the frozen `IFC-V1-033` matrix is `e5b2414`, and its automated aggregate plus physical runner are pushed as `b4426c8`.
-- The remote-access planning rebaseline is not yet committed or pushed; current validation and push state will be updated after checks.
+- `REL-V1-012` remote-access planning rebaseline is pushed as `2962b61`; planning/scaffold/lint/type/diff checks pass.
 - Next action: execute `IFC-V1-070` without product implementation: inventory/redact current Tailscale state, establish the dedicated saved HostDeck profile with the human when login/switch consent is required, and prove the exact Serve/proxy/SSE/phone/profile-switch contract while preserving company state.
