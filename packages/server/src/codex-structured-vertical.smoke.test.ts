@@ -729,6 +729,25 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
       }
       if (smokeError !== null) throw smokeError;
       if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, "Codex structured vertical cleanup failed.");
+      process.stdout.write(
+        `[structured-vertical-summary] ${JSON.stringify({
+          runtime_version: version,
+          duration_ms: Date.now() - startedAt,
+          request_count: requestRecords.length,
+          notification_count: sumCounts(notificationCounts),
+          observer_count: sumCounts(observerCounts),
+          durable_publication_count: sumCounts(publicationCounts),
+          durable_publication_sessions: publicationCounts.size,
+          turn_start_count: requestRecords.filter((request) => request.method === "turn/start").length,
+          compact_start_count: requestRecords.filter((request) => request.method === "thread/compact/start").length,
+          server_request_count: serverRequestMethods.length,
+          proof_count: proof.length,
+          proof_source_count: new Set(proof.map((entry) => entry.source)).size,
+          sandbox: "approved_side_effect_observed",
+          tui: "passed",
+          cleanup: "passed"
+        })}\n`
+      );
     },
     overallTimeoutMs
   );
