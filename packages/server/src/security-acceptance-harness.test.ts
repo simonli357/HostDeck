@@ -319,6 +319,21 @@ describe("IFC-V1-033 aggregate browser security acceptance", () => {
     expect(driver.headers["content-type"]).toContain("text/html");
     expect(driver.body).toContain("HostDeck Security Acceptance");
     assertNoCors(driver.headers);
+    const cacheBustedDriver = await browserJson(harness, {
+      method: "GET",
+      path: `${securityAcceptanceDriverPath}?run=return-1752422400000`
+    });
+    expect(cacheBustedDriver.status).toBe(200);
+    expect(cacheBustedDriver.body).toContain("window.__hostDeckAcceptance");
+    for (const invalidPath of [
+      `${securityAcceptanceDriverPath}?return=1752422400000`,
+      `${securityAcceptanceDriverPath}?run=unbounded`,
+      `${securityAcceptanceDriverPath}?run=return-1752422400000&extra=1`
+    ]) {
+      expect(
+        (await browserJson(harness, { method: "GET", path: invalidPath })).status
+      ).toBe(400);
+    }
 
     scanDatabaseForSecrets(harness, [
       reader.rawCookieValue,

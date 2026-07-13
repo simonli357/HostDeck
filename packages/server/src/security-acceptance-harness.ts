@@ -78,6 +78,14 @@ const sentinelWriteResponseSchema = z
   .object({ dispatch_count: z.number().int().positive() })
   .strict();
 const noQuerySchema = z.object({}).strict();
+const phoneDriverQuerySchema = z
+  .object({
+    run: z
+      .string()
+      .regex(/^(?:[0-9a-f]{12}|return|trust-removed)-[0-9]{13}$/u)
+      .optional()
+  })
+  .strict();
 
 export interface SecurityAcceptanceClock {
   readonly advance: (milliseconds: number) => void;
@@ -772,7 +780,10 @@ function createPhoneDriverRegistration(): HostDeckRoutePluginRegistration {
         {
           config: hostDeckNoStoreRouteConfig,
           exposeHeadRoute: false,
-          schema: { querystring: noQuerySchema, response: { 200: z.string() } }
+          schema: {
+            querystring: phoneDriverQuerySchema,
+            response: { 200: z.string() }
+          }
         },
         async (_request: FastifyRequest, reply: FastifyReply) => {
           reply

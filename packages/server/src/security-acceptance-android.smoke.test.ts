@@ -28,6 +28,38 @@ const openedDialogs: ChildProcess[] = [];
 const adbForwards: number[] = [];
 const cdpClients: CdpClient[] = [];
 
+describe("Android security acceptance ADB discovery", () => {
+  it.each([
+    [
+      "tab-separated output",
+      "List of devices attached\n8c98bb96\tdevice product:haotian\n"
+    ],
+    [
+      "space-aligned output",
+      "List of devices attached\n8c98bb96               device product:haotian\n"
+    ]
+  ])("accepts exactly one authorized device from %s", (_name, output) => {
+    expect(hasExactlyOneAuthorizedAdbDevice(output)).toBe(true);
+  });
+
+  it.each([
+    ["no device", "List of devices attached\n\n"],
+    [
+      "unauthorized device",
+      "List of devices attached\n8c98bb96 unauthorized usb:4-1\n"
+    ],
+    ["offline device", "List of devices attached\n8c98bb96 offline usb:4-1\n"],
+    [
+      "multiple devices",
+      "List of devices attached\n8c98bb96 device usb:4-1\nemulator-5554 device\n"
+    ],
+    ["missing header", "8c98bb96 device usb:4-1\n"],
+    ["malformed row", "List of devices attached\n8c98bb96\n"]
+  ])("rejects %s", (_name, output) => {
+    expect(hasExactlyOneAuthorizedAdbDevice(output)).toBe(false);
+  });
+});
+
 afterEach(async () => {
   for (const dialog of openedDialogs.splice(0).reverse()) dialog.kill("SIGTERM");
   for (const client of cdpClients.splice(0).reverse()) client.close();
@@ -80,6 +112,8 @@ describe.skipIf(!requireAndroidAcceptance)(
         });
         openedHarnesses.push(harness);
         const commit = git(["rev-parse", "HEAD"]).trim();
+        const driverUrl = `${harness.driverUrl}?run=${commit.slice(0, 12)}-${Date.now()}`;
+        await verifyPhysicalDriverPreflight(harness, driverUrl);
         const certificatePath = join(rootDirectory, publicCertificateName);
         writeFileSync(certificatePath, harness.enrollment.certificate_der, {
           mode: 0o600
@@ -100,14 +134,13 @@ describe.skipIf(!requireAndroidAcceptance)(
         await showBlockingDialog(
           "Install the CA certificate on the connected phone from Downloads/" +
             publicCertificateName +
-            ". Select CA certificate, confirm the Android warning, and close this dialog only after installation.\n\n" +
+            ". Android requires Settings > Security & privacy > More security & privacy > Encryption & credentials > Install a certificate > CA certificate. HyperOS may label the first step Fingerprints, face data & screen lock. Confirm the Android warning, and close this dialog only after installation.\n\n" +
             "Expected SHA-256 fingerprint:\n" +
             harness.enrollment.fingerprint_sha256 +
             "\n\nDo not screenshot this workflow.",
           "HostDeck phone trust"
         );
 
-        const driverUrl = `${harness.driverUrl}?run=${commit.slice(0, 12)}-${Date.now()}`;
         launchColdChrome(driverUrl);
         const forwardPort = createChromeForward();
         const target = await waitForChromeTarget(
@@ -217,7 +250,7 @@ describe.skipIf(!requireAndroidAcceptance)(
         if (foreignServerIndex >= 0) openedServers.splice(foreignServerIndex, 1);
 
         await cdp.send("Page.navigate", {
-          url: `${harness.driverUrl}?return=${Date.now()}`
+          url: `${harness.driverUrl}?run=return-${Date.now()}`
         });
         await waitForDriver(cdp);
         expect(await cdp.evaluate<number>("window.__hostDeckAcceptance.refresh()"))
@@ -325,7 +358,9 @@ describe.skipIf(!requireAndroidAcceptance)(
             harness.enrollment.fingerprint_sha256,
           "HostDeck phone cleanup"
         );
-        launchColdChrome(`${harness.driverUrl}?trust-removed=${Date.now()}`);
+        launchColdChrome(
+          `${harness.driverUrl}?run=trust-removed-${Date.now()}`
+        );
         await waitFor(
           async () => {
             const candidates = await readChromeTargets(forwardPort);
@@ -444,10 +479,7 @@ interface ChromeTarget {
 }
 
 function readAndroidMetadata(): AndroidMetadata {
-  const devices = adb(["devices", "-l"])
-    .split("\n")
-    .filter((line) => /\tdevice(?:\s|$)/u.test(line));
-  if (devices.length !== 1) {
+  if (!hasExactlyOneAuthorizedAdbDevice(adb(["devices", "-l"]))) {
     throw new Error("Physical acceptance requires exactly one authorized ADB device.");
   }
   const chromeDump = adb(["shell", "dumpsys", "package", "com.android.chrome"]);
@@ -466,6 +498,18 @@ function readAndroidMetadata(): AndroidMetadata {
     chrome_version: chromeVersion,
     model: adb(["shell", "getprop", "ro.product.model"]).trim()
   });
+}
+
+function hasExactlyOneAuthorizedAdbDevice(output: string): boolean {
+  const lines = output
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  return (
+    lines.length === 2 &&
+    lines[0] === "List of devices attached" &&
+    /^\S+\s+device(?:\s|$)/u.test(lines[1] ?? "")
+  );
 }
 
 function selectPhoneAndHostAddresses(): {
@@ -591,6 +635,71 @@ function localAdminExchange(
     );
     request.once("error", reject);
     request.end(body);
+  });
+}
+
+function verifyPhysicalDriverPreflight(
+  harness: SecurityAcceptanceHarness,
+  url: string
+): Promise<void> {
+  const candidate = new URL(url);
+  if (candidate.origin !== harness.origin) {
+    throw new Error("Physical driver preflight received a foreign origin.");
+  }
+  const ca = new X509Certificate(
+    Buffer.from(harness.enrollment.certificate_der)
+  ).toString();
+  return new Promise((resolve, reject) => {
+    const request = httpsRequest(
+      {
+        ca,
+        checkServerIdentity: (_hostname, certificate) =>
+          checkServerIdentity(harness.bindHost, certificate),
+        headers: {
+          accept: "text/html",
+          host: `${harness.bindHost}:${harness.bindPort}`
+        },
+        host: harness.bindHost,
+        localAddress: "127.0.0.1",
+        method: "GET",
+        path: `${candidate.pathname}${candidate.search}`,
+        port: harness.bindPort,
+        rejectUnauthorized: true,
+        servername: ""
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+        let bodyBytes = 0;
+        response.on("data", (chunk: Buffer) => {
+          bodyBytes += chunk.byteLength;
+          if (bodyBytes > 128 * 1024) {
+            response.destroy(
+              new Error("Physical driver preflight response exceeded its limit.")
+            );
+            return;
+          }
+          chunks.push(chunk);
+        });
+        response.once("end", () => {
+          const body = Buffer.concat(chunks).toString("utf8");
+          if (
+            response.statusCode !== 200 ||
+            !body.includes(`<title>${driverTitle}</title>`) ||
+            !body.includes("window.__hostDeckAcceptance")
+          ) {
+            reject(new Error("Physical driver HTTPS preflight failed."));
+            return;
+          }
+          resolve();
+        });
+        response.once("error", reject);
+      }
+    );
+    request.setTimeout(5000, () =>
+      request.destroy(new Error("Physical driver preflight timed out."))
+    );
+    request.once("error", reject);
+    request.end();
   });
 }
 
@@ -727,14 +836,56 @@ async function readChromeTargets(forwardPort: number): Promise<ChromeTarget[]> {
 }
 
 async function waitForDriver(cdp: CdpClient): Promise<void> {
-  await waitFor(
-    async () =>
-      (await cdp.evaluate<string>("document.title")) === driverTitle &&
-      (await cdp.evaluate<string>("typeof window.__hostDeckAcceptance")) ===
-        "object",
-    20_000,
-    "Trusted HostDeck phone driver did not load."
-  );
+  try {
+    await waitFor(
+      async () =>
+        (await cdp.evaluate<string>("document.title")) === driverTitle &&
+        (await cdp.evaluate<string>("typeof window.__hostDeckAcceptance")) ===
+          "object",
+      20_000,
+      "Trusted HostDeck phone driver did not load."
+    );
+  } catch {
+    throw new Error(
+      `Trusted HostDeck phone driver did not load (${await readDriverLoadDiagnostics(cdp)}).`
+    );
+  }
+}
+
+async function readDriverLoadDiagnostics(cdp: CdpClient): Promise<string> {
+  let title = "unavailable";
+  let securityState = "unavailable";
+  let certificateError = "none";
+  try {
+    title = diagnosticToken(await cdp.evaluate<string>("document.title"));
+  } catch {
+    // The current error page may not expose an execution context.
+  }
+  try {
+    const visibleState = (await cdp.send(
+      "Security.getVisibleSecurityState"
+    )) as {
+      readonly certificateSecurityState?: {
+        readonly certificateNetworkError?: unknown;
+      };
+      readonly securityState?: unknown;
+    };
+    securityState = diagnosticToken(visibleState.securityState);
+    const networkError =
+      visibleState.certificateSecurityState?.certificateNetworkError;
+    if (networkError !== undefined) {
+      certificateError = diagnosticToken(networkError);
+    }
+  } catch {
+    // The diagnostic remains explicitly unavailable on unsupported Chrome builds.
+  }
+  return `title=${title}, security=${securityState}, certificate=${certificateError}`;
+}
+
+function diagnosticToken(value: unknown): string {
+  return typeof value === "string" && /^[A-Za-z0-9_:. -]{1,96}$/u.test(value)
+    ? value
+    : "unavailable";
 }
 
 function driverSnapshot(cdp: CdpClient): Promise<DriverSnapshot> {
