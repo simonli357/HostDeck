@@ -1,4 +1,6 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { request as httpRequest } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fastifySSE } from "@fastify/sse";
@@ -391,6 +393,57 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
     }
   });
 
+  it("keeps managed request signals open after a real POST body completes", async () => {
+    const app = createTestApp([
+      routePlugin("post-signal", (typedApp) => {
+        typedApp.post(
+          "/post-signal",
+          {
+            schema: {
+              body: z.strictObject({ value: z.literal("accepted") }),
+              response: {
+                200: z.strictObject({
+                  deadline_signal_aborted: z.boolean(),
+                  request_signal_aborted: z.boolean(),
+                  same_signal: z.boolean()
+                })
+              }
+            }
+          },
+          async (request) => {
+            const deadline = hostDeckRequestDeadline(request);
+            await new Promise((resolve) => setImmediate(resolve));
+            return {
+              deadline_signal_aborted: deadline.signal.aborted,
+              request_signal_aborted: request.signal.aborted,
+              same_signal: deadline.signal === request.signal
+            };
+          }
+        );
+      })
+    ]);
+
+    try {
+      await app.listen({ host: "127.0.0.1", port: 0, listenTextResolver: () => "" });
+      const address = app.server.address() as AddressInfo;
+      const response = await rawHttpPost(address.port, "/post-signal", { value: "accepted" });
+
+      expect(response.statusCode, response.body).toBe(200);
+      expect(JSON.parse(response.body)).toEqual({
+        deadline_signal_aborted: false,
+        request_signal_aborted: false,
+        same_signal: true
+      });
+      expect(hostDeckFastifyResourceSnapshot(app)).toMatchObject({
+        aborted_requests: 0,
+        in_flight_requests: 0,
+        timed_out_requests: 0
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
   it("fails composition for unresolved config, duplicate plugins, non-Zod schemas, or raised route ceilings", async () => {
     expect(() =>
       createHostDeckFastifyApp({
@@ -648,4 +701,40 @@ async function waitUntil(predicate: () => boolean): Promise<void> {
     if (Date.now() >= expiresAt) throw new Error("Condition did not settle within one second.");
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
+}
+
+interface RawHttpResponse {
+  readonly body: string;
+  readonly statusCode: number;
+}
+
+function rawHttpPost(port: number, path: string, payload: unknown): Promise<RawHttpResponse> {
+  const body = JSON.stringify(payload);
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(
+      {
+        headers: {
+          "content-length": Buffer.byteLength(body),
+          "content-type": "application/json",
+          host: "localhost"
+        },
+        host: "127.0.0.1",
+        method: "POST",
+        path,
+        port
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on("data", (chunk: Buffer) => chunks.push(chunk));
+        response.on("end", () => {
+          resolve({
+            body: Buffer.concat(chunks).toString("utf8"),
+            statusCode: response.statusCode ?? 0
+          });
+        });
+      }
+    );
+    request.once("error", reject);
+    request.end(body);
+  });
 }

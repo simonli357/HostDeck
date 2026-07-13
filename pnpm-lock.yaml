@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  fastify@5.10.0:
+    hash: 2714166e819688e6a7c985e36f170ee52d6a47cd3739429fdb7de0ccd023ded2
+    path: patches/fastify@5.10.0.patch
+
 importers:
 
   .:
@@ -67,7 +72,7 @@ importers:
     dependencies:
       '@fastify/sse':
         specifier: 0.5.0
-        version: 0.5.0(fastify@5.10.0)
+        version: 0.5.0(fastify@5.10.0(patch_hash=2714166e819688e6a7c985e36f170ee52d6a47cd3739429fdb7de0ccd023ded2))
       '@fastify/static':
         specifier: 9.3.0
         version: 9.3.0
@@ -94,7 +99,7 @@ importers:
         version: 1.1.1
       fastify:
         specifier: 5.10.0
-        version: 5.10.0
+        version: 5.10.0(patch_hash=2714166e819688e6a7c985e36f170ee52d6a47cd3739429fdb7de0ccd023ded2)
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -1317,10 +1322,10 @@ snapshots:
       http-errors: 2.0.1
       mime: 3.0.0
 
-  '@fastify/sse@0.5.0(fastify@5.10.0)':
+  '@fastify/sse@0.5.0(fastify@5.10.0(patch_hash=2714166e819688e6a7c985e36f170ee52d6a47cd3739429fdb7de0ccd023ded2))':
     dependencies:
       '@fastify/error': 4.2.0
-      fastify: 5.10.0
+      fastify: 5.10.0(patch_hash=2714166e819688e6a7c985e36f170ee52d6a47cd3739429fdb7de0ccd023ded2)
       fastify-plugin: 6.0.0
 
   '@fastify/static@9.3.0':
@@ -1741,7 +1746,7 @@ snapshots:
 
   fastify-plugin@6.0.0: {}
 
-  fastify@5.10.0:
+  fastify@5.10.0(patch_hash=2714166e819688e6a7c985e36f170ee52d6a47cd3739429fdb7de0ccd023ded2):
     dependencies:
       '@fastify/ajv-compiler': 4.0.5
       '@fastify/error': 4.2.0
