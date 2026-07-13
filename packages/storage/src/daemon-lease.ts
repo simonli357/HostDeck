@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { closeSync, fstatSync, fsyncSync, ftruncateSync, writeSync } from "node:fs";
-import { createRequire } from "node:module";
+import { flockSync } from "fs-ext";
 import {
   type HostDeckPathModeRepair,
   openSecureHostDeckRegularFile
@@ -34,22 +34,6 @@ export interface HostDeckDaemonLease {
   readonly replaced_stale_metadata: boolean;
   readonly released: boolean;
   readonly release: () => void;
-}
-
-type FlockSync = typeof import("fs-ext")["flockSync"];
-let cachedFlockSync: FlockSync | undefined;
-
-function flockSync(descriptor: number, operation: "exnb" | "un"): void {
-  cachedFlockSync ??= requireFlockSync();
-  cachedFlockSync(descriptor, operation);
-}
-
-function requireFlockSync(): FlockSync {
-  const module = createRequire(import.meta.url)("fs-ext") as { readonly flockSync?: unknown };
-  if (typeof module.flockSync !== "function") {
-    throw new TypeError("HostDeck daemon lease filesystem locking is unavailable.");
-  }
-  return module.flockSync as FlockSync;
 }
 
 export function acquireHostDeckDaemonLease(input: AcquireHostDeckDaemonLeaseInput): HostDeckDaemonLease {
