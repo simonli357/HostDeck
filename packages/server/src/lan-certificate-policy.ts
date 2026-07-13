@@ -117,6 +117,13 @@ export interface HostDeckLanCertificateInspection
   readonly enrollment_available: true;
 }
 
+export interface HostDeckLanAddressAdmission {
+  readonly bind_host: string;
+  readonly address_family: "ipv4" | "ipv6";
+  readonly bind_port: number;
+  readonly configured_origin: string;
+}
+
 export interface HostDeckLanTlsMaterial {
   readonly certificate_chain_pem: string;
   readonly private_key_pem: string;
@@ -144,6 +151,9 @@ export interface HostDeckLanCertificatePolicySnapshot {
 }
 
 export interface HostDeckLanCertificatePolicy {
+  readonly admit: (
+    input: InspectHostDeckLanCertificateInput
+  ) => HostDeckLanAddressAdmission;
   readonly configure: (
     input: ConfigureHostDeckLanCertificateInput
   ) => Promise<HostDeckLanCertificateInspection>;
@@ -221,6 +231,19 @@ export function createHostDeckLanCertificatePolicy(
     tlsLoads: 0
   };
   const policy: HostDeckLanCertificatePolicy = {
+    admit(input) {
+      const request = parseInspectInput(input);
+      const identity = resolveLanCertificateIdentity(
+        request.bind_host,
+        parsed.assignedAddresses()
+      );
+      return Object.freeze({
+        bind_host: identity.address,
+        address_family: identity.family,
+        bind_port: request.bind_port,
+        configured_origin: lanOrigin(identity.address, request.bind_port)
+      });
+    },
     async configure(input) {
       const request = parseConfigureInput(input);
       const now = readNow(parsed.now);

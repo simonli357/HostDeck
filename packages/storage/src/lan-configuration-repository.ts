@@ -133,6 +133,7 @@ const descriptorKeys = [
 const configureKeys = [...descriptorKeys, "now"] as const;
 const enableKeys = ["enabled", "expected_configuration", "now"] as const;
 const disableKeys = ["enabled", "now"] as const;
+const acceptedRepositories = new WeakSet<object>();
 
 export function createHostDeckLanConfigurationRepository(
   db: Database.Database
@@ -283,7 +284,7 @@ export function createHostDeckLanConfigurationRepository(
     }
   ).immediate;
 
-  return Object.freeze({
+  const repository: HostDeckLanConfigurationRepository = Object.freeze({
     read() {
       try {
         return Object.freeze({
@@ -311,6 +312,23 @@ export function createHostDeckLanConfigurationRepository(
       }
     }
   });
+  acceptedRepositories.add(repository);
+  return repository;
+}
+
+export function assertHostDeckLanConfigurationRepository(
+  candidate: unknown
+): asserts candidate is HostDeckLanConfigurationRepository {
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    !acceptedRepositories.has(candidate) ||
+    !Object.isFrozen(candidate)
+  ) {
+    throw new TypeError(
+      "HostDeck LAN configuration repository must be created by createHostDeckLanConfigurationRepository."
+    );
+  }
 }
 
 interface PreparedConfigureInput {

@@ -39,6 +39,7 @@ export {
   type HostDeckDaemonLeaseErrorCode
 } from "./daemon-lease.js";
 export {
+  assertHostDeckLanConfigurationRepository,
   type ConfigureHostDeckLanInput,
   createHostDeckLanConfigurationRepository,
   type HostDeckLanCertificateDescriptor,
