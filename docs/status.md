@@ -5,12 +5,12 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M2/M3 selected runtime and host-interface integration; M1 foundation is complete.
-- Active task: implement and harden `IFC-V1-059` exact paired-device revoke and active-authority invalidation, the last implementation leaf before `IFC-V1-033` physical Android security acceptance.
-- Exact Codex 0.144.0 is the default user installation. Its reviewed binding and four complete `INT-V1-027` two-thread aggregate runs pass with real Plan, goal, usage, skills, approval sandbox, interrupt, compact, TUI, archive, and cleanup evidence.
+- Active task: execute `IFC-V1-033` aggregate browser trust and physical Android security acceptance; `IFC-V1-059` exact revoke and live-authority invalidation are complete. Physical execution is waiting for the Android device to enumerate over USB/ADB again.
+- The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.3; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard over a version-gated Codex app-server adapter on a private Unix socket; existing tmux runtime is legacy evidence pending `INT-V1-008`.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
 - Release state: no-go. `BLK-V1-02` is complete; runtime, interface, mobile, and release blocks remain unfinished.
-- Release environment: the default installed Codex and selected HostDeck binding are both exactly 0.144.0. The Android device is attached, unlocked, ADB-authorized over USB-C, and reserved for later `IFC-V1-033` physical acceptance.
+- Release environment: the selected HostDeck binding is exact 0.144.0; the default Codex binary has drifted to 0.144.3 and must not be used as exact-runtime evidence. The Android was previously ADB-authorized, but `adb devices -l` and `lsusb` currently show no phone after an ADB restart; USB reconnection and unlock are required for `IFC-V1-033`.
 
 ## Proven
 
@@ -70,6 +70,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-028` implements strict local-admin pairing-code issue and same-origin HTTPS claim over trust-owned source hashing, process-local plus durable admission, accepted-to-terminal audit, bounded persistent device authority, and late exact cookie publication. Returned code/bearer/CSRF hashes are recomputed against committed records; lifecycle denial, overlap, post-commit corruption, terminal/send failure, generation-2 bootstrap, TLS wire, restart/expiry, and SQLite privacy evidence pass. Evidence: `artifacts/ifc-v1-028-pairing-creation-claim-boundary.md`; implementation `4c1d5ca`.
 - `IFC-V1-030` implements strict access-state, host-lock, local-admin-only unlock, and reusable unlocked-host gate boundaries over an atomic lock-only settings transition. Validation precedes authentication side effects; paired locks require HTTPS and current CSRF; typed emergency audit degradation returns neutral non-success truth; duplicate registration/operation, terminal audit, response failure, restart, real TLS/SQLite, and raw secret-absence evidence pass. Evidence: `artifacts/ifc-v1-030-host-lock-boundary.md`; contracts `d74329c`, storage `1855c23`, routes `d642be9`, hardening `d15c580`.
 - `IFC-V1-031` implements strict active-versus-desired network contracts, migration 012 and atomic selected LAN configuration, exact private-IP certificate ownership, paired read/local-admin mutation routes, and a lifecycle that admits explicit loopback HTTP or branded assigned-private-IP HTTPS only. Replacement races, restart truth, real TLS/plaintext refusal, SQLite/certificate privacy, and same-port cleanup pass. Evidence: `artifacts/ifc-v1-031-lan-configuration-boundary.md`; implementation `3c6df02`, `bc25473`, `7103508`, `cb790e6`, `f8d9aa8`, `9e6c0b7`.
+- `IFC-V1-059` implements the exact audited paired-device revoke route, branded live-authority leases, pre-dispatch and pre-response authority checks, late-acquisition denial, active and opening-SSE abort, self/final-device policy, and exact deletion-cookie publication. Real HTTPS/SQLite/CSRF/audit/concurrency/privacy evidence and full workspace gates pass. Evidence: `artifacts/ifc-v1-059-paired-device-revoke.md`; implementation `276303d`.
 
 ## Not Proven
 
@@ -189,6 +190,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/ifc-v1-031-lan-configuration-boundary.md`; implementation `3c6df02`, `bc25473`, `7103508`, `cb790e6`, `f8d9aa8`, `9e6c0b7`.
 - `IFC-V1-066`: direct gate (17), adjacent Fastify/trust/auth/CSRF/lock/audit/storage (96), unit (982 passed, 29 external skipped), contract (176), integration (16), web (14), all-package typechecks, lint/exports, scaffold/planning/exact-binding checks, frozen offline install, zero-vulnerability production audit, real HTTP/HTTPS and SQLite concurrency evidence, and manual order/deadline/audit/privacy review pass.
 - Evidence: `artifacts/ifc-v1-066-exact-target-write-gate.md`; request-signal fix `b922b65`; implementation `0e41378`.
+- `IFC-V1-059`: direct route (9), focused authority/auth/SSE/write-gate/CSRF/storage (70), unit (995 passed, 29 external skipped), contract (177), integration (16), web (14), all-package typechecks, lint/exports, scaffold/planning, isolated exact-0.144.0 binding, frozen offline install, zero-vulnerability production audit, real HTTPS/SQLite/concurrency/privacy evidence, and manual authority/order/cookie/failure review pass.
+- Evidence: `artifacts/ifc-v1-059-paired-device-revoke.md`; implementation `276303d`.
 
 ## Git
 
@@ -240,4 +243,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-028` contracts/source foundation are pushed as `f0b2d73`; bounded paired-device correction as `eacfc9c`; exact route implementation and evidence as `4c1d5ca`. This closure advances the interface queue to `IFC-V1-030`.
 - `IFC-V1-030` criteria are pushed as `1526e3b`; selected contracts as `d74329c`; atomic storage as `1855c23`; routes as `d642be9`; authority/order/audit hardening as `d15c580`. The unrelated reviewed daemon-lease workaround was excluded. This closure advances the interface queue to `IFC-V1-031`.
 - `IFC-V1-031` criteria `47cafb7`, contracts `3c6df02`, storage `bc25473`, certificate owner `7103508`, lifecycle `cb790e6`, routes `f8d9aa8`, and transition hardening `9e6c0b7` are pushed.
-- Next action: implement and harden `IFC-V1-059`, then execute `IFC-V1-033` against the attached ADB-authorized Android device.
+- `IFC-V1-059` exact revoke and active-authority implementation is committed as `276303d`; this owner-doc closure advances active work to `IFC-V1-033` physical Android acceptance.
+- Next action: reconnect and unlock the Android until it enumerates in `adb devices -l`, then execute `IFC-V1-033` injection and real HTTPS/browser matrix and inspect listener, cookie, database, and logs before closure.

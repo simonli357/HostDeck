@@ -15,7 +15,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-059` Implement exact paired-device revoke and active-authority invalidation | in_progress | none | The completed exact write gate removes the final dependency; this route is the last implementation leaf before the physical phone security matrix. |
+| 1 | `IFC-V1-033` Run aggregate browser trust and physical Android security authorization matrix | in_progress | none | Exact trust, pairing, CSRF, lock, LAN, device-list, revoke, and write-gate boundaries are complete; execute their aggregate real-device acceptance now. |
 | 2 | `IFC-V1-069` Implement the bounded projected-event diagnostic read route | ready | none | Exposes the completed retained projection contract through one bounded authenticated read. |
 | 3 | `IFC-V1-060` Implement managed-thread resume metadata API and CLI | ready | none | Exposes the completed exact safe TUI resume contract without executing a phone shell. |
 | 4 | `IFC-V1-043` Implement the read-only usage API and CLI | ready | none | Exposes the completed exact usage capability through the authenticated selected manifest. |
@@ -32,12 +32,13 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 | 15 | `IFC-V1-049` Enforce operation idempotency and concurrency limits | ready | none | Hardens duplicate and concurrent selected writes before aggregate production composition. |
 | 16 | `INT-V1-007` Implement runtime process/socket supervision | ready | none | The accepted structured vertical now permits explicit foreground/service ownership work, but it is behind the requested physical-phone path. |
 | 17 | `FE-V1-004` Rebase the mobile structured-state matrix | ready | none | Accepted real states now permit the mobile-first design-contract rebaseline; screen implementation and mockups remain later gated work. |
+| 18 | `IFC-V1-035` Add bounded subscriber queues and revoke/disconnect/archive cleanup | ready | none | Exact active and opening-stream revoke is complete; bounded aggregate subscriber ownership is now unblocked behind the requested physical-phone path. |
 
 ## Intentional Blockers
 
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
-| Physical security matrix | `IFC-V1-059`, `IFC-V1-033` | Exact paired-device revoke and its aggregate real-browser/device evidence remain | Physical phone security acceptance and downstream production composition. |
+| Physical security matrix | `IFC-V1-033` | Aggregate injection plus real-browser/device evidence and inspection remain | Physical phone security acceptance and downstream production composition. |
 | Mobile visual direction | Reopened `FE-V1-002`, `FE-V1-003` | Real state matrix, two replacement options, human selection | React screen implementation. |
 | Release | `REL-V1-010` | All module hardening, clean package/service/phone/security evidence, human acceptance | V1 release and V2 planning. |
 
