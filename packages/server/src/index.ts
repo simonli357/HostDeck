@@ -38,6 +38,7 @@ export * from "./restart-reconciler.js";
 export * from "./security-mutation-audit-executor.js";
 export * from "./security-routes.js";
 export * from "./selected-api-route-manifest.js";
+export * from "./selected-write-gate.js";
 export * from "./session-control-routes.js";
 export * from "./startup.js";
 export * from "./stream-routes.js";
