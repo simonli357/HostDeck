@@ -2,7 +2,7 @@
 
 Date: 2026-07-12
 
-Status: production-hardening criteria frozen; autonomous implementation is authorized and active.
+Status: complete; hardened implementation and validation evidence pass.
 
 ## Purpose
 
@@ -150,6 +150,22 @@ Mutation responses use the same selected state plus `configuration_changed`, `de
 - Real owner-only certificate directory, exact TLS handshake, raw plaintext refusal, no-store/no-CORS framing, and listener cleanup/restart.
 - Focused server/storage/contracts regressions, then root/all-package typecheck, lint/exports, scaffold, unit, contract, integration, web, planning, exact Codex binding, frozen offline install, production audit/license inventory, and `git diff --check`.
 - Manual descriptor/authority/order/audit/restart/privacy/ownership review. Physical Android aggregate acceptance remains `IFC-V1-033`; UI certificate state remains `FE-V1-034`.
+
+## Implementation Result
+
+- Strict selected network contracts distinguish active listener state from durable desired state and reject extra, inherited, accessor-backed, malformed, unsupported, or contradictory values.
+- Migration 012 and the selected LAN repository own one durable pending configuration plus atomic configure/enable/disable chronology without rewriting unrelated settings. No-op, contention, restart, corruption, read-only, and regressing-time behavior fail closed.
+- The production certificate owner issues or reuses an exact RSA-2048/SHA-256 root and private-IP server leaf, preserves the root across renewal, validates the complete profile before use, publishes only owner-readable files, and exposes only bounded public enrollment material.
+- The lifecycle admits explicit loopback HTTP or branded assigned-private-IP HTTPS. It rejects plaintext LAN, wildcard, mismatched TLS/configuration, secret-bearing snapshots, and stale listener claims; close and same-port restart are proven on real sockets.
+- The four exact routes enforce validation, authority, accepted-to-terminal audit, certificate, storage, and response order. Paired/browser callers can read but cannot mutate; local-admin disable remains available through the headless service after LAN startup.
+- Hardened race coverage re-inspects assigned-address and certificate state immediately before durable mutation, including certificate replacement after accepted audit. Real SQLite main/WAL/SHM and certificate files were inspected for expected public metadata and private-key containment.
+
+## Validation Evidence
+
+- Direct selected network routes (10), certificate policy (7), and HTTPS lifecycle (1) pass with real SQLite, generated certificates, TLS handshakes, plaintext refusal, listener cleanup, and restart.
+- Full unit: 105 files passed, 16 skipped; 958 tests passed, 29 skipped. Contract: 22 files and 176 tests. Integration: 16 tests. Web: 14 tests.
+- Root and all-package typechecks, lint/exports, scaffold, planning integrity, exact Codex 0.144.0 binding, frozen offline install, zero-vulnerability production audit, permissive-license inventory, and manual authority/order/restart/privacy/ownership review pass.
+- Implementation commits: contracts `3c6df02`, storage `bc25473`, certificate owner `7103508`, lifecycle `cb790e6`, routes `f8d9aa8`, and transition hardening `9e6c0b7`. Frozen criteria: `47cafb7`.
 
 ## Downstream Ownership
 
