@@ -42,4 +42,5 @@ export * from "./session-control-routes.js";
 export * from "./startup.js";
 export * from "./stream-routes.js";
 export * from "./tailscale-observer.js";
+export * from "./tailscale-serve-manager.js";
 export * from "./write-routes.js";
