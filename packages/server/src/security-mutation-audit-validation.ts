@@ -1,23 +1,28 @@
 import { isDeepStrictEqual } from "node:util";
 import {
+  historicalSelectedNetworkAuditEventRecordSchema,
+  isHistoricalSelectedNetworkAuditAction,
   isSelectedSecurityAuditAction,
   type SelectedAuditActor,
   type SelectedAuditTarget,
   type SelectedSecurityAuditEventRecord,
+  type SelectedSecurityAuditV1EventRecord,
   selectedAuditTrailSchema,
-  selectedSecurityAuditEventRecordSchema
+  selectedSecurityAuditEventRecordSchema,
+  selectedSecurityAuditV1EventRecordSchema
 } from "@hostdeck/contracts";
-import type { ErrorCode, SelectedSecurityAuditAction } from "@hostdeck/core";
+import type { ErrorCode, PersistedSelectedSecurityAuditAction } from "@hostdeck/core";
 import type { SelectedAuditRepository } from "@hostdeck/storage";
 import type { ExecuteSecurityMutationInput } from "./security-mutation-audit-executor.js";
 
-export type AuditPayloadSummary = SelectedSecurityAuditEventRecord["payload_summary"];
+export type SecurityMutationAuditEventRecord = SelectedSecurityAuditEventRecord | SelectedSecurityAuditV1EventRecord;
+export type AuditPayloadSummary = SecurityMutationAuditEventRecord["payload_summary"];
 export type TerminalOutcome = "failed" | "incomplete" | "succeeded";
 
 export interface ParsedExecutionInput<TResponse, TPreparedResponse> {
-  readonly operation_id: SelectedSecurityAuditEventRecord["operation_id"];
+  readonly operation_id: SecurityMutationAuditEventRecord["operation_id"];
   readonly actor: SelectedAuditActor;
-  readonly action: SelectedSecurityAuditAction;
+  readonly action: PersistedSelectedSecurityAuditAction;
   readonly target: SelectedAuditTarget;
   readonly accepted_summary: AuditPayloadSummary;
   readonly emergency_lock_on_audit_unavailable: boolean;
@@ -117,8 +122,8 @@ export function parseExecutionInput<TResponse, TPreparedResponse>(
   if (values.emergency_lock_on_audit_unavailable && record.action !== "lock") {
     throw new TypeError("Only host lock may use emergency audit degradation.");
   }
-  if (!isSelectedSecurityAuditAction(record.action)) {
-    throw new TypeError("Security mutation execution requires one selected security action.");
+  if (!isSelectedSecurityAuditAction(record.action) && !isHistoricalSelectedNetworkAuditAction(record.action)) {
+    throw new TypeError("Security mutation execution requires one active or explicitly historical security action.");
   }
   return Object.freeze({
     operation_id: record.operation_id,
@@ -132,7 +137,7 @@ export function parseExecutionInput<TResponse, TPreparedResponse>(
   });
 }
 
-export function parseRejectionInput(input: unknown): SelectedSecurityAuditEventRecord {
+export function parseRejectionInput(input: unknown): SecurityMutationAuditEventRecord {
   const values = readExactDataObject(
     input,
     ["action", "actor", "error_code", "operation_id", "payload_summary", "target"],
@@ -155,7 +160,7 @@ export function parseRejectionInput(input: unknown): SelectedSecurityAuditEventR
 
 export function parseTransition<TResponse>(
   input: unknown,
-  accepted: SelectedSecurityAuditEventRecord
+  accepted: SecurityMutationAuditEventRecord
 ): ParsedTransition<TResponse> {
   const values = readDataObject(input, "Security mutation transition result");
   if (values.outcome === "succeeded") {
@@ -200,7 +205,7 @@ export function parseTransition<TResponse>(
 
 export function validationRecordFor<TResponse, TPreparedResponse>(
   input: ParsedExecutionInput<TResponse, TPreparedResponse>
-): SelectedSecurityAuditEventRecord {
+): SecurityMutationAuditEventRecord {
   return parseValidationRecord({
     operation_id: input.operation_id,
     actor: input.actor,
@@ -213,7 +218,7 @@ export function validationRecordFor<TResponse, TPreparedResponse>(
   });
 }
 
-export function recordIdentity(record: SelectedSecurityAuditEventRecord) {
+export function recordIdentity(record: SecurityMutationAuditEventRecord) {
   return {
     operation_id: record.operation_id,
     actor: record.actor,
@@ -222,14 +227,14 @@ export function recordIdentity(record: SelectedSecurityAuditEventRecord) {
   } as const;
 }
 
-export function proveAcceptedTrail(input: unknown, accepted: SelectedSecurityAuditEventRecord): void {
+export function proveAcceptedTrail(input: unknown, accepted: SecurityMutationAuditEventRecord): void {
   const trail = parseSecurityTrail(input);
   if (trail.state !== "pending" || trail.records.length !== 1 || !isDeepStrictEqual(trail.records[0], accepted)) {
     throw new TypeError("Selected audit port did not prove the accepted record.");
   }
 }
 
-export function proveRejectedTrail(input: unknown, rejected: SelectedSecurityAuditEventRecord): void {
+export function proveRejectedTrail(input: unknown, rejected: SecurityMutationAuditEventRecord): void {
   const trail = parseSecurityTrail(input);
   if (trail.state !== "terminal" || trail.records.length !== 1 || !isDeepStrictEqual(trail.records[0], rejected)) {
     throw new TypeError("Selected audit port did not prove the rejected record.");
@@ -238,8 +243,8 @@ export function proveRejectedTrail(input: unknown, rejected: SelectedSecurityAud
 
 export function proveTerminalTrail(
   input: unknown,
-  accepted: SelectedSecurityAuditEventRecord,
-  terminal: SelectedSecurityAuditEventRecord
+  accepted: SecurityMutationAuditEventRecord,
+  terminal: SecurityMutationAuditEventRecord
 ): void {
   const trail = parseSecurityTrail(input);
   if (
@@ -261,13 +266,19 @@ export function deepFreeze<T>(input: T): T {
 }
 
 function parseValidationRecord(
-  input: Omit<SelectedSecurityAuditEventRecord, "at" | "id"> | Readonly<Record<string, unknown>>
-): SelectedSecurityAuditEventRecord {
-  const result = selectedSecurityAuditEventRecordSchema.safeParse({
+  input: Omit<SecurityMutationAuditEventRecord, "at" | "id"> | Readonly<Record<string, unknown>>
+): SecurityMutationAuditEventRecord {
+  const candidate = {
     ...input,
     id: validationRecordId,
     at: validationTimestamp
-  });
+  };
+  const action = "action" in candidate ? candidate.action : undefined;
+  const result = isSelectedSecurityAuditAction(action)
+    ? selectedSecurityAuditEventRecordSchema.safeParse(candidate)
+    : isHistoricalSelectedNetworkAuditAction(action)
+      ? historicalSelectedNetworkAuditEventRecordSchema.safeParse(candidate)
+      : selectedSecurityAuditV1EventRecordSchema.safeParse(candidate);
   if (!result.success) throw new TypeError("Security audit data does not match its selected contract.");
   return deepFreeze(result.data);
 }
@@ -277,7 +288,11 @@ function parseSecurityTrail(input: unknown) {
   const base = selectedAuditTrailSchema.safeParse(input);
   if (!base.success) throw new TypeError("Selected audit port returned an invalid trail.");
   const records = base.data.records.map((record) => {
-    const parsed = selectedSecurityAuditEventRecordSchema.safeParse(record);
+    const parsed = isSelectedSecurityAuditAction(record.action)
+      ? selectedSecurityAuditEventRecordSchema.safeParse(record)
+      : isHistoricalSelectedNetworkAuditAction(record.action)
+        ? historicalSelectedNetworkAuditEventRecordSchema.safeParse(record)
+        : selectedSecurityAuditV1EventRecordSchema.safeParse(record);
     if (!parsed.success) throw new TypeError("Selected audit port returned a non-security record.");
     return parsed.data;
   });

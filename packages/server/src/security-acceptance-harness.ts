@@ -12,6 +12,7 @@ import {
   createAuthDeviceRepository,
   createDeviceListingRepository,
   createDeviceRevocationRepository,
+  createHistoricalSelectedNetworkAuditRepository,
   createHostDeckLanConfigurationRepository,
   createPairingCodeRepository,
   createSelectedAuditRepository,
@@ -187,6 +188,11 @@ export async function createSecurityAcceptanceHarness(
     now: () => clock.now().toISOString(),
     create_record_id: () => `audit:security-acceptance:${++auditIndex}`
   });
+  const historicalNetworkAuditExecutor = createSecurityMutationAuditExecutor({
+    repository: createHistoricalSelectedNetworkAuditRepository(opened.db),
+    now: () => clock.now().toISOString(),
+    create_record_id: () => `audit:security-acceptance:historical-network:${++auditIndex}`
+  });
   const certificates = createHostDeckLanCertificatePolicy({
     assignedAddresses: () => [input.bindHost],
     certificateDirectory,
@@ -194,7 +200,7 @@ export async function createSecurityAcceptanceHarness(
   });
   const network = createHostDeckLanConfigurationRepository(opened.db);
   const networkService = createHostDeckLanNetworkService({
-    audit: auditExecutor,
+    audit: historicalNetworkAuditExecutor,
     certificates,
     network,
     now: clock.now

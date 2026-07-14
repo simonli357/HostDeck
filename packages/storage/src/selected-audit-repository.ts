@@ -2,15 +2,21 @@ import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import {
   clientOperationIdSchema,
+  historicalSelectedNetworkAuditEventRecordSchema,
   isoTimestampSchema,
+  isPersistedSelectedSecurityAuditAction,
   isSelectedSecurityAuditAction,
+  isSelectedSecurityAuditV1Action,
+  type PersistedSelectedAuditEventRecord,
+  persistedSelectedAuditEventRecordSchema,
   type RetentionPolicy,
+  remoteIngressAuditSummarySchema,
   retentionPolicySchema,
-  type SelectedAuditEventRecord,
   type SelectedAuditTrail,
   selectedAuditEventRecordSchema,
   selectedAuditTrailSchema,
-  selectedSecurityAuditEventRecordSchema
+  selectedSecurityAuditEventRecordSchema,
+  selectedSecurityAuditV1EventRecordSchema
 } from "@hostdeck/contracts";
 import type Database from "better-sqlite3";
 
@@ -79,18 +85,30 @@ interface SelectedAuditRow {
   readonly id: string;
   readonly operation_id: string;
   readonly at: string;
-  readonly action: SelectedAuditEventRecord["action"];
+  readonly action: PersistedSelectedAuditEventRecord["action"];
   readonly security_schema_version: unknown;
-  readonly phase: SelectedAuditEventRecord["phase"];
-  readonly outcome: SelectedAuditEventRecord["outcome"];
-  readonly error_code: SelectedAuditEventRecord["error_code"];
+  readonly phase: PersistedSelectedAuditEventRecord["phase"];
+  readonly outcome: PersistedSelectedAuditEventRecord["outcome"];
+  readonly error_code: PersistedSelectedAuditEventRecord["error_code"];
   readonly record_json: string;
 }
 
 const maxRecordBytes = 65_536;
 
+type AuditWriteCatalog = "historical_network_v1" | "selected_v2";
+type SecuritySchemaVersion = 1 | 2 | null;
+type WritableAuditRecord = PersistedSelectedAuditEventRecord;
+
 export function createSelectedAuditRepository(db: Database.Database): SelectedAuditRepository {
-  const recordStartTransaction = db.transaction((record: SelectedAuditEventRecord): SelectedAuditTrail => {
+  return createAuditRepository(db, "selected_v2");
+}
+
+export function createHistoricalSelectedNetworkAuditRepository(db: Database.Database): SelectedAuditRepository {
+  return createAuditRepository(db, "historical_network_v1");
+}
+
+function createAuditRepository(db: Database.Database, catalog: AuditWriteCatalog): SelectedAuditRepository {
+  const recordStartTransaction = db.transaction((record: WritableAuditRecord): SelectedAuditTrail => {
     if (readTrail(db, record.operation_id) !== null) {
       throw new HostDeckSelectedAuditRepositoryError(
         "audit_operation_exists",
@@ -98,11 +116,11 @@ export function createSelectedAuditRepository(db: Database.Database): SelectedAu
       );
     }
 
-    insertRecord(db, record);
+    insertRecord(db, record, writeSecuritySchemaVersion(record, catalog));
     return parseTrail(record.operation_id, [record], "invalid_audit_record");
   }).immediate;
 
-  const recordTerminalTransaction = db.transaction((record: SelectedAuditEventRecord): SelectedAuditTrail => {
+  const recordTerminalTransaction = db.transaction((record: WritableAuditRecord): SelectedAuditTrail => {
     const current = readTrail(db, record.operation_id);
     if (current === null) {
       throw new HostDeckSelectedAuditRepositoryError(
@@ -118,7 +136,7 @@ export function createSelectedAuditRepository(db: Database.Database): SelectedAu
     }
 
     const next = parseTrail(record.operation_id, [...current.records, record], "audit_operation_conflict");
-    insertRecord(db, record);
+    insertRecord(db, record, writeSecuritySchemaVersion(record, catalog));
     return next;
   }).immediate;
 
@@ -138,25 +156,25 @@ export function createSelectedAuditRepository(db: Database.Database): SelectedAu
       return trail;
     },
     recordAccepted(record) {
-      const parsed = parseRecord(record);
+      const parsed = parseRecord(record, catalog);
       if (parsed.phase !== "accepted" || parsed.outcome !== "accepted") {
         throw invalidRecord("recordAccepted requires one accepted-phase record.");
       }
-      return runWrite(() => recordStartTransaction(parsed), isSelectedSecurityAuditAction(parsed.action));
+      return runWrite(() => recordStartTransaction(parsed), isPersistedSelectedSecurityAuditAction(parsed.action));
     },
     recordRejected(record) {
-      const parsed = parseRecord(record);
+      const parsed = parseRecord(record, catalog);
       if (parsed.phase !== "terminal" || parsed.outcome !== "rejected") {
         throw invalidRecord("recordRejected requires one pre-dispatch rejected record.");
       }
-      return runWrite(() => recordStartTransaction(parsed), isSelectedSecurityAuditAction(parsed.action));
+      return runWrite(() => recordStartTransaction(parsed), isPersistedSelectedSecurityAuditAction(parsed.action));
     },
     recordTerminal(record) {
-      const parsed = parseRecord(record);
+      const parsed = parseRecord(record, catalog);
       if (parsed.phase !== "terminal" || !["succeeded", "failed", "incomplete"].includes(parsed.outcome)) {
         throw invalidRecord("recordTerminal requires a succeeded, failed, or incomplete terminal record.");
       }
-      return runWrite(() => recordTerminalTransaction(parsed), isSelectedSecurityAuditAction(parsed.action));
+      return runWrite(() => recordTerminalTransaction(parsed), isPersistedSelectedSecurityAuditAction(parsed.action));
     }
   };
 }
@@ -182,7 +200,7 @@ export function reconcileSelectedAuditOrphansBatch(
     const selectedOperations = candidateOperations.slice(0, maxReconciledOperations);
     for (const candidate of selectedOperations) {
       const { operationId } = candidate;
-      if (candidate.securityAction) reconcilesSecurityAction = true;
+      if (candidate.securitySchemaVersion !== null || candidate.securityAction) reconcilesSecurityAction = true;
       const trail = readTrail(db, operationId);
       const accepted = trail?.records[0];
       if (
@@ -197,7 +215,7 @@ export function reconcileSelectedAuditOrphansBatch(
           "Selected audit orphan candidate contradicts its stored pending trail."
         );
       }
-      const terminal = parseRecord({
+      const terminal = parseReconciliationRecord({
         id: orphanTerminalRecordId(operationId),
         operation_id: operationId,
         at: reconciledAt,
@@ -206,13 +224,11 @@ export function reconcileSelectedAuditOrphansBatch(
         target: accepted.target,
         phase: "terminal",
         outcome: "incomplete",
-        payload_summary: isSelectedSecurityAuditAction(accepted.action)
-          ? { schema_version: 1, reconciliation_reason: "host_restart_without_terminal" }
-          : { reason: "host_restart_without_terminal" },
+        payload_summary: reconciliationPayloadSummary(accepted, candidate),
         error_code: "runtime_unavailable"
-      });
+      }, candidate);
       parseTrail(operationId, [accepted, terminal], "audit_operation_conflict");
-      insertRecord(db, terminal);
+      insertRecord(db, terminal, reconciliationSecuritySchemaVersion(candidate));
     }
 
     const final = readPendingAuditMetrics(db, eligibleBefore);
@@ -636,6 +652,7 @@ function parseAuditReconciliationBatchSize(candidate: unknown): number {
 interface PendingAuditCandidate {
   readonly operationId: string;
   readonly securityAction: boolean;
+  readonly securitySchemaVersion: SecuritySchemaVersion;
 }
 
 function readEligiblePendingOperations(
@@ -643,12 +660,16 @@ function readEligiblePendingOperations(
   eligibleBefore: string,
   limit: number
 ): readonly PendingAuditCandidate[] {
-  let rows: Array<{ readonly action: unknown; readonly operation_id: unknown }>;
+  let rows: Array<{
+    readonly action: unknown;
+    readonly operation_id: unknown;
+    readonly security_schema_version: unknown;
+  }>;
   try {
     rows = db
       .prepare(
         `
-          SELECT accepted.operation_id, accepted.action
+          SELECT accepted.operation_id, accepted.action, accepted.security_schema_version
           FROM selected_audit_events AS accepted
           WHERE accepted.phase = 'accepted'
             AND accepted.at < @eligible_before
@@ -664,13 +685,15 @@ function readEligiblePendingOperations(
       .all({ candidate_limit: limit, eligible_before: eligibleBefore }) as Array<{
       readonly action: unknown;
       readonly operation_id: unknown;
+      readonly security_schema_version: unknown;
     }>;
   } catch (error) {
     throw mapUnavailableRead(error);
   }
   return rows.map((row) => ({
     operationId: parseStoredOperationId(row.operation_id),
-    securityAction: isSelectedSecurityAuditAction(row.action)
+    securityAction: isPersistedSelectedSecurityAuditAction(row.action),
+    securitySchemaVersion: parseStoredSecuritySchemaVersion(row.security_schema_version)
   }));
 }
 
@@ -789,7 +812,7 @@ function readTrail(db: Database.Database, operationId: string): SelectedAuditTra
   }
 
   if (rows.length === 0) return null;
-  const securityTrail = rows.some((row) => isSelectedSecurityAuditAction(row.action));
+  const securityTrail = rows.some((row) => isPersistedSelectedSecurityAuditAction(row.action));
   try {
     const records = rows.map(parseStoredRecord);
     return parseTrail(operationId, records, "invalid_audit_trail");
@@ -803,7 +826,7 @@ function readTrail(db: Database.Database, operationId: string): SelectedAuditTra
 
 function parseTrail(
   operationId: string,
-  records: readonly SelectedAuditEventRecord[],
+  records: readonly PersistedSelectedAuditEventRecord[],
   errorCode: "audit_operation_conflict" | "invalid_audit_record" | "invalid_audit_trail"
 ): SelectedAuditTrail {
   const state = records.length === 1 && records[0]?.phase === "accepted" ? "pending" : "terminal";
@@ -815,12 +838,15 @@ function parseTrail(
   return result.data;
 }
 
-function parseRecord(candidate: unknown): SelectedAuditEventRecord {
+function parseRecord(candidate: unknown, catalog: AuditWriteCatalog): WritableAuditRecord {
   const securityAction = candidateAction(candidate);
-  const securityRecord = isSelectedSecurityAuditAction(securityAction);
-  const result = securityRecord
-    ? selectedSecurityAuditEventRecordSchema.safeParse(candidate)
-    : selectedAuditEventRecordSchema.safeParse(candidate);
+  const securityRecord = isPersistedSelectedSecurityAuditAction(securityAction);
+  const result =
+    catalog === "historical_network_v1"
+      ? historicalSelectedNetworkAuditEventRecordSchema.safeParse(candidate)
+      : isSelectedSecurityAuditAction(securityAction)
+        ? selectedSecurityAuditEventRecordSchema.safeParse(candidate)
+        : selectedAuditEventRecordSchema.safeParse(candidate);
   if (!result.success) {
     throw new HostDeckSelectedAuditRepositoryError(
       "invalid_audit_record",
@@ -832,7 +858,7 @@ function parseRecord(candidate: unknown): SelectedAuditEventRecord {
   return result.data;
 }
 
-function parseStoredRecord(row: SelectedAuditRow): SelectedAuditEventRecord {
+function parseStoredRecord(row: SelectedAuditRow): PersistedSelectedAuditEventRecord {
   assertRecordSize(row.record_json, "invalid_audit_trail");
   let candidate: unknown;
   try {
@@ -844,15 +870,15 @@ function parseStoredRecord(row: SelectedAuditRow): SelectedAuditEventRecord {
   }
 
   const securitySchemaVersion = parseStoredSecuritySchemaVersion(row.security_schema_version);
-  let record: SelectedAuditEventRecord;
+  let record: PersistedSelectedAuditEventRecord;
   if (securitySchemaVersion === 1) {
-    if (!isSelectedSecurityAuditAction(row.action)) {
+    if (!isSelectedSecurityAuditV1Action(row.action)) {
       throw new HostDeckSelectedAuditRepositoryError(
         "invalid_audit_trail",
         "Stored security audit contract version contradicts its action."
       );
     }
-    const securityRecord = selectedSecurityAuditEventRecordSchema.safeParse(candidate);
+    const securityRecord = selectedSecurityAuditV1EventRecordSchema.safeParse(candidate);
     if (!securityRecord.success) {
       throw new HostDeckSelectedAuditRepositoryError(
         "invalid_audit_trail",
@@ -860,14 +886,29 @@ function parseStoredRecord(row: SelectedAuditRow): SelectedAuditEventRecord {
       );
     }
     record = securityRecord.data;
-  } else {
-    if (row.action === "csrf_bootstrap") {
+  } else if (securitySchemaVersion === 2) {
+    if (!isSelectedSecurityAuditAction(row.action)) {
       throw new HostDeckSelectedAuditRepositoryError(
         "invalid_audit_trail",
-        "Stored CSRF bootstrap audit record is missing its contract version."
+        "Stored selected security audit contract version contradicts its action."
       );
     }
-    const result = selectedAuditEventRecordSchema.safeParse(candidate);
+    const securityRecord = selectedSecurityAuditEventRecordSchema.safeParse(candidate);
+    if (!securityRecord.success) {
+      throw new HostDeckSelectedAuditRepositoryError(
+        "invalid_audit_trail",
+        "Stored selected version-2 security audit record is invalid."
+      );
+    }
+    record = securityRecord.data;
+  } else {
+    if (["csrf_bootstrap", "remote_enable", "remote_disable"].includes(row.action)) {
+      throw new HostDeckSelectedAuditRepositoryError(
+        "invalid_audit_trail",
+        "Stored selected security audit record is missing its contract version."
+      );
+    }
+    const result = persistedSelectedAuditEventRecordSchema.safeParse(candidate);
     if (!result.success) {
       throw new HostDeckSelectedAuditRepositoryError("invalid_audit_trail", "Stored selected audit record is invalid.", {
         cause: result.error
@@ -897,17 +938,91 @@ function candidateAction(candidate: unknown): unknown {
   return (candidate as { readonly action?: unknown }).action;
 }
 
-function parseStoredSecuritySchemaVersion(candidate: unknown): 1 | null {
+function writeSecuritySchemaVersion(
+  record: PersistedSelectedAuditEventRecord,
+  catalog: AuditWriteCatalog
+): SecuritySchemaVersion {
+  if (catalog === "historical_network_v1") return 1;
+  return isSelectedSecurityAuditAction(record.action) ? 2 : null;
+}
+
+function reconciliationSecuritySchemaVersion(candidate: PendingAuditCandidate): SecuritySchemaVersion {
+  if (candidate.securitySchemaVersion !== null) return candidate.securitySchemaVersion;
+  return candidate.securityAction ? 1 : null;
+}
+
+function reconciliationPayloadSummary(
+  accepted: PersistedSelectedAuditEventRecord,
+  candidate: PendingAuditCandidate
+): Readonly<Record<string, unknown>> {
+  if (!candidate.securityAction) return Object.freeze({ reason: "host_restart_without_terminal" });
+  if (
+    reconciliationSecuritySchemaVersion(candidate) === 2 &&
+    (accepted.action === "remote_enable" || accepted.action === "remote_disable")
+  ) {
+    const summary = remoteIngressAuditSummarySchema.safeParse(accepted.payload_summary);
+    if (!summary.success || summary.data.phase !== "accepted" || summary.data.outcome !== "accepted") {
+      throw new HostDeckSelectedAuditRepositoryError(
+        "invalid_audit_trail",
+        "Stored remote audit orphan has an invalid accepted summary."
+      );
+    }
+    return Object.freeze({
+      schema_version: 1,
+      action: summary.data.action,
+      requested_intent: summary.data.requested_intent,
+      profile_state: summary.data.profile_state,
+      serve_state: summary.data.serve_state,
+      phase: "terminal",
+      outcome: "incomplete",
+      admission: "closed",
+      intent_persisted: "unknown",
+      serve_result: "unknown",
+      reason: "observation_failed",
+      reconciliation_reason: "host_restart_without_terminal"
+    });
+  }
+  return Object.freeze({ schema_version: 1, reconciliation_reason: "host_restart_without_terminal" });
+}
+
+function parseReconciliationRecord(
+  candidate: unknown,
+  pending: PendingAuditCandidate
+): PersistedSelectedAuditEventRecord {
+  const version = reconciliationSecuritySchemaVersion(pending);
+  const result =
+    version === 2
+      ? selectedSecurityAuditEventRecordSchema.safeParse(candidate)
+      : version === 1
+        ? selectedSecurityAuditV1EventRecordSchema.safeParse(candidate)
+        : selectedAuditEventRecordSchema.safeParse(candidate);
+  if (!result.success) {
+    throw new HostDeckSelectedAuditRepositoryError(
+      "invalid_audit_trail",
+      pending.securityAction
+        ? "Selected security audit reconciliation record is invalid."
+        : "Selected audit reconciliation record is invalid."
+    );
+  }
+  return result.data;
+}
+
+function parseStoredSecuritySchemaVersion(candidate: unknown): SecuritySchemaVersion {
   if (candidate === null) return null;
   if (candidate === 1) return 1;
+  if (candidate === 2) return 2;
   throw new HostDeckSelectedAuditRepositoryError(
     "invalid_audit_trail",
     "Stored security audit contract version is invalid."
   );
 }
 
-function insertRecord(db: Database.Database, record: SelectedAuditEventRecord): void {
-  const row = recordToRow(record);
+function insertRecord(
+  db: Database.Database,
+  record: PersistedSelectedAuditEventRecord,
+  securitySchemaVersion: SecuritySchemaVersion
+): void {
+  const row = recordToRow(record, securitySchemaVersion);
   try {
     db.prepare(
       `
@@ -935,11 +1050,14 @@ function insertRecord(db: Database.Database, record: SelectedAuditEventRecord): 
       `
     ).run(row);
   } catch (error) {
-    throw mapWriteFailure(error, record, isSelectedSecurityAuditAction(record.action));
+    throw mapWriteFailure(error, record, isPersistedSelectedSecurityAuditAction(record.action));
   }
 }
 
-function recordToRow(record: SelectedAuditEventRecord): SelectedAuditRow {
+function recordToRow(
+  record: PersistedSelectedAuditEventRecord,
+  securitySchemaVersion: SecuritySchemaVersion
+): SelectedAuditRow {
   const recordJson = JSON.stringify(record);
   assertRecordSize(recordJson, "invalid_audit_record");
   return {
@@ -947,7 +1065,7 @@ function recordToRow(record: SelectedAuditEventRecord): SelectedAuditRow {
     operation_id: record.operation_id,
     at: record.at,
     action: record.action,
-    security_schema_version: isSelectedSecurityAuditAction(record.action) ? 1 : null,
+    security_schema_version: securitySchemaVersion,
     phase: record.phase,
     outcome: record.outcome,
     error_code: record.error_code,
@@ -1014,7 +1132,7 @@ function mapUnavailableRead(error: unknown): HostDeckSelectedAuditRepositoryErro
 
 function mapWriteFailure(
   error: unknown,
-  record?: SelectedAuditEventRecord,
+  record?: PersistedSelectedAuditEventRecord,
   redactCause = false
 ): HostDeckSelectedAuditRepositoryError {
   const message = error instanceof Error ? error.message : String(error);

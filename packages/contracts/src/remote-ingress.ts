@@ -459,9 +459,10 @@ const remoteIngressTerminalAuditSchema = z
     phase: z.literal("terminal"),
     outcome: z.enum(selectedAuditOutcomes).exclude(["accepted"]),
     admission: z.enum(remoteIngressAdmissionStates),
-    intent_persisted: z.boolean(),
+    intent_persisted: z.union([z.boolean(), z.literal("unknown")]),
     serve_result: z.enum(["not_attempted", "unchanged", "applied", "removed", "unknown"]),
-    reason: z.enum(remoteIngressUnavailableReasons).nullable()
+    reason: z.enum(remoteIngressUnavailableReasons).nullable(),
+    reconciliation_reason: z.literal("host_restart_without_terminal").optional()
   })
   .strict();
 
@@ -474,12 +475,12 @@ const remoteIngressAuditSummaryDataSchema = z
     }
     if (value.phase === "accepted") {
       if (
-        value.action === "remote_enable" &&
-        (value.profile_state !== "dedicated" || (value.serve_state !== "absent" && value.serve_state !== "exact"))
+        value.profile_state !== "dedicated" ||
+        (value.serve_state !== "absent" && value.serve_state !== "exact")
       ) {
         context.addIssue({
           code: "custom",
-          message: "Accepted remote enable requires the dedicated profile and absent or already-exact Serve state."
+          message: "Accepted remote mutation requires the dedicated profile and absent or already-exact owned Serve state."
         });
       }
       return;
@@ -500,17 +501,40 @@ const remoteIngressAuditSummaryDataSchema = z
     if (value.serve_result === "unknown" && value.outcome !== "incomplete") {
       addIssue(context, "serve_result", "Unknown Serve outcome requires an incomplete terminal audit result.");
     }
+    if (value.intent_persisted === "unknown" && value.outcome !== "incomplete") {
+      addIssue(context, "intent_persisted", "Unknown intent persistence requires an incomplete terminal audit result.");
+    }
+    if (
+      value.reconciliation_reason !== undefined &&
+      (value.outcome !== "incomplete" ||
+        value.intent_persisted !== "unknown" ||
+        value.serve_result !== "unknown" ||
+        value.reason !== "observation_failed")
+    ) {
+      addIssue(
+        context,
+        "reconciliation_reason",
+        "Restart reconciliation requires an incomplete result with unknown persistence and Serve outcome."
+      );
+    }
     if (
       value.outcome === "rejected" &&
-      (value.admission !== "closed" || value.intent_persisted || value.serve_result !== "not_attempted")
+      (value.admission !== "closed" || value.intent_persisted !== false || value.serve_result !== "not_attempted")
     ) {
       context.addIssue({ code: "custom", message: "Rejected remote operation must be closed, unpersisted, and not attempted." });
     }
-    if (value.reason === "cleanup_incomplete" && value.outcome !== "incomplete") {
-      addIssue(context, "reason", "Cleanup failure requires an incomplete remote-disable result.");
+    if (
+      value.reason === "cleanup_incomplete" &&
+      (value.outcome !== "incomplete" || value.intent_persisted !== true || value.serve_result !== "unknown")
+    ) {
+      addIssue(
+        context,
+        "reason",
+        "Cleanup failure requires persisted disabled intent and an incomplete unknown Serve result."
+      );
     }
     if (value.outcome === "succeeded") {
-      if (value.reason !== null || !value.intent_persisted) {
+      if (value.reason !== null || value.intent_persisted !== true) {
         context.addIssue({ code: "custom", message: "Successful remote audit terminal requires persisted intent and no error reason." });
       }
       if (value.action === "remote_enable" && (value.admission !== "open" || !["applied", "unchanged"].includes(value.serve_result))) {

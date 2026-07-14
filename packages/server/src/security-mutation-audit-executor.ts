@@ -1,10 +1,12 @@
 import {
+  historicalSelectedNetworkAuditEventRecordSchema,
+  isHistoricalSelectedNetworkAuditAction,
+  remoteIngressAuditSummarySchema,
   type SelectedAuditActor,
   type SelectedAuditTarget,
-  type SelectedSecurityAuditEventRecord,
   selectedSecurityAuditEventRecordSchema
 } from "@hostdeck/contracts";
-import type { ErrorCode, SelectedSecurityAuditAction } from "@hostdeck/core";
+import type { ErrorCode, PersistedSelectedSecurityAuditAction } from "@hostdeck/core";
 import {
   HostDeckSelectedAuditRepositoryError,
   type SelectedAuditRepository
@@ -22,6 +24,7 @@ import {
   proveRejectedTrail,
   proveTerminalTrail,
   recordIdentity,
+  type SecurityMutationAuditEventRecord,
   type TerminalOutcome,
   validationRecordFor
 } from "./security-mutation-audit-validation.js";
@@ -86,7 +89,7 @@ export type SecurityMutationTransition<TResponse> =
 export interface ExecuteSecurityMutationInput<TResponse, TPreparedResponse> {
   readonly operation_id: string;
   readonly actor: SelectedAuditActor;
-  readonly action: SelectedSecurityAuditAction;
+  readonly action: PersistedSelectedSecurityAuditAction;
   readonly target: SelectedAuditTarget;
   readonly accepted_summary: unknown;
   readonly emergency_lock_on_audit_unavailable: boolean;
@@ -103,7 +106,7 @@ export interface ExecuteSecurityMutationInput<TResponse, TPreparedResponse> {
 export interface RejectSecurityMutationInput {
   readonly operation_id: string;
   readonly actor: SelectedAuditActor;
-  readonly action: SelectedSecurityAuditAction;
+  readonly action: PersistedSelectedSecurityAuditAction;
   readonly target: SelectedAuditTarget;
   readonly payload_summary: unknown;
   readonly error_code: ErrorCode;
@@ -236,14 +239,14 @@ class DefaultSecurityMutationAuditExecutor {
   }
 
   reject(input: RejectSecurityMutationInput): SecurityMutationRejectionResult {
-    let parsed: SelectedSecurityAuditEventRecord;
+    let parsed: SecurityMutationAuditEventRecord;
     try {
       parsed = parseRejectionInput(input);
     } catch {
       throw executorError("invalid_input", "validation_error", "input", "not_started", "none", true);
     }
 
-    let record: SelectedSecurityAuditEventRecord;
+    let record: SecurityMutationAuditEventRecord;
     try {
       record = this.createRecord({
         ...recordIdentity(parsed),
@@ -288,7 +291,7 @@ class DefaultSecurityMutationAuditExecutor {
       throw executorError("invalid_input", "validation_error", "input", "not_started", "none", true);
     }
 
-    let accepted: SelectedSecurityAuditEventRecord;
+    let accepted: SecurityMutationAuditEventRecord;
     try {
       accepted = this.createRecord({
         operation_id: parsed.operation_id,
@@ -402,7 +405,7 @@ class DefaultSecurityMutationAuditExecutor {
 
   private async finishUnknownTransition<TResponse, TPreparedResponse>(
     _input: ParsedExecutionInput<TResponse, TPreparedResponse>,
-    accepted: SelectedSecurityAuditEventRecord,
+    accepted: SecurityMutationAuditEventRecord,
     code: "transition_failed" | "transition_result_invalid"
   ): Promise<never> {
     increment(this.counters, "transitionContractFailures");
@@ -410,7 +413,7 @@ class DefaultSecurityMutationAuditExecutor {
       accepted,
       {
         outcome: "incomplete",
-        payload_summary: fixedIncompleteSummary,
+        payload_summary: incompleteSummaryForUnknownTransition(accepted),
         error_code: "internal_error"
       },
       "incomplete"
@@ -419,11 +422,11 @@ class DefaultSecurityMutationAuditExecutor {
   }
 
   private recordTerminal(
-    accepted: SelectedSecurityAuditEventRecord,
+    accepted: SecurityMutationAuditEventRecord,
     transition: Pick<ParsedTransition<unknown>, "error_code" | "outcome" | "payload_summary">,
     mutationOutcome: TerminalOutcome
   ): void {
-    let terminal: SelectedSecurityAuditEventRecord;
+    let terminal: SecurityMutationAuditEventRecord;
     try {
       terminal = this.createRecord({
         ...recordIdentity(accepted),
@@ -472,16 +475,39 @@ class DefaultSecurityMutationAuditExecutor {
   }
 
   private createRecord(
-    input: Omit<SelectedSecurityAuditEventRecord, "at" | "id">
-  ): SelectedSecurityAuditEventRecord {
-    const result = selectedSecurityAuditEventRecordSchema.safeParse({
+    input: Omit<SecurityMutationAuditEventRecord, "at" | "id">
+  ): SecurityMutationAuditEventRecord {
+    const candidate = {
       ...input,
       id: this.options.createRecordId(),
       at: this.options.now()
-    });
+    };
+    const result = isHistoricalSelectedNetworkAuditAction(candidate.action)
+      ? historicalSelectedNetworkAuditEventRecordSchema.safeParse(candidate)
+      : selectedSecurityAuditEventRecordSchema.safeParse(candidate);
     if (!result.success) throw new TypeError("Security audit record construction failed.");
     return deepFreeze(result.data);
   }
+}
+
+function incompleteSummaryForUnknownTransition(
+  accepted: SecurityMutationAuditEventRecord
+): SecurityMutationAuditEventRecord["payload_summary"] {
+  if (accepted.action !== "remote_enable" && accepted.action !== "remote_disable") return fixedIncompleteSummary;
+  const summary = remoteIngressAuditSummarySchema.parse(accepted.payload_summary);
+  return Object.freeze({
+    schema_version: 1,
+    action: summary.action,
+    requested_intent: summary.requested_intent,
+    profile_state: summary.profile_state,
+    serve_state: summary.serve_state,
+    phase: "terminal",
+    outcome: "incomplete",
+    admission: "closed",
+    intent_persisted: "unknown",
+    serve_result: "unknown",
+    reason: "observation_failed"
+  });
 }
 
 function acceptedAuditError(

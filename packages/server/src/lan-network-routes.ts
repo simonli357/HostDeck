@@ -222,10 +222,10 @@ function requireManifestEntry(id: NetworkManifestId): SelectedApiRouteManifestEn
     !Object.isFrozen(entry.audit) ||
     entry.audit.executor !== "security_executor" ||
     entry.audit.action !== target.action ||
-    entry.audit.catalog_state !== "selected" ||
-    entry.audit.catalog_owner_task !== null
+    entry.audit.catalog_state !== "historical" ||
+    entry.audit.catalog_owner_task !== "IFC-V1-075"
   ) {
-    throw new TypeError("Selected LAN network mutation manifest entry is invalid.");
+    throw new TypeError("Historical LAN network mutation manifest entry is invalid.");
   }
   return entry;
 }

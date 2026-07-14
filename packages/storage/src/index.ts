@@ -66,6 +66,7 @@ export {
   defaultMigrations,
   hostDeckAuthDeviceCsrfRotationMigration,
   hostDeckBaseSchemaMigration,
+  hostDeckRemoteAuditCatalogMigration,
   hostDeckRemoteIngressStateMigration,
   hostDeckRetentionBoundaryScopeChecksMigration,
   hostDeckSelectedAuditStateMigration,
@@ -136,6 +137,7 @@ export {
   secureHostDeckSocket
 } from "./secure-local-paths.js";
 export {
+  createHistoricalSelectedNetworkAuditRepository,
   createSelectedAuditRepository,
   HostDeckSelectedAuditRepositoryError,
   maintainSelectedAuditRetentionBatch,

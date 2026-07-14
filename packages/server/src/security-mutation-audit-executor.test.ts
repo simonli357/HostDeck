@@ -97,7 +97,7 @@ describe("selected security mutation audit executor", () => {
     }
   });
 
-  it("executes all ten selected security actions only after accepted commit and terminal proof", async () => {
+  it("executes all eight selected security actions only after accepted commit and terminal proof", async () => {
     const events: string[] = [];
     const harness = openHarness((repository) => observingRepository(repository, events));
     try {
@@ -134,16 +134,51 @@ describe("selected security mutation audit executor", () => {
       }
 
       expect(harness.executor.snapshot()).toEqual({
-        accepted_operations: 10,
+        accepted_operations: 8,
         emergency_lock_audit_deferrals: 0,
         failed_operations: 0,
         incomplete_operations: 0,
         rejected_operations: 0,
         response_preparation_failures: 0,
-        succeeded_operations: 10,
+        succeeded_operations: 8,
         terminal_audit_failures: 0,
         transition_contract_failures: 0
       });
+    } finally {
+      harness.close();
+    }
+  });
+
+  it("refuses historical LAN dispatch through the selected repository before transition work", async () => {
+    const harness = openHarness();
+    let transitionCalls = 0;
+    try {
+      const error = await captureExecutorError(
+        harness.executor.execute({
+          operation_id: "op_security_historical_selected_block",
+          actor: cliActor(),
+          action: "lan_enable",
+          target: hostTarget(),
+          accepted_summary: { schema_version: 1, requested_lan_enabled: true },
+          emergency_lock_on_audit_unavailable: false,
+          transition: () => {
+            transitionCalls += 1;
+            return {
+              outcome: "succeeded",
+              payload_summary: { schema_version: 1, lan_enabled: true },
+              response: "unexpected"
+            };
+          },
+          prepare_response: (value) => value
+        })
+      );
+      expect(error).toMatchObject({
+        code: "audit_preflight_failed",
+        stage: "accepted_audit",
+        mutation_outcome: "not_started"
+      });
+      expect(transitionCalls).toBe(0);
+      expect(harness.repository.get("op_security_historical_selected_block")).toBeNull();
     } finally {
       harness.close();
     }
@@ -186,13 +221,25 @@ describe("selected security mutation audit executor", () => {
       expect(failed).toEqual({ outcome: "failed", error_code: "storage_error" });
       expect(Object.isFrozen(failed)).toBe(true);
 
-      const rotate = securityCases()[9] as SecurityCase;
+      const remoteDisable = securityCases()[7] as SecurityCase;
       const incomplete = await harness.executor.execute(
-        executionInput(rotate, 21, {
+        executionInput(remoteDisable, 21, {
           transition: () => ({
             outcome: "incomplete",
             error_code: "runtime_unavailable",
-            payload_summary: { schema_version: 1 }
+            payload_summary: {
+              schema_version: 1,
+              action: "remote_disable",
+              requested_intent: "disabled",
+              profile_state: "dedicated",
+              serve_state: "exact",
+              phase: "terminal",
+              outcome: "incomplete",
+              admission: "closed",
+              intent_persisted: "unknown",
+              serve_result: "unknown",
+              reason: "observation_failed"
+            }
           }),
           prepare_response: () => {
             prepareCalls += 1;
@@ -1121,41 +1168,57 @@ function securityCases(): readonly SecurityCase[] {
       success: { schema_version: 1, locked: false }
     },
     {
-      action: "lan_configure",
+      action: "remote_enable",
       actor: cliActor(),
       target: hostTarget(),
       intent: {
         schema_version: 1,
-        bind_address_family: "ipv4",
-        bind_port: 3777,
-        certificate_change_requested: true
+        action: "remote_enable",
+        requested_intent: "enabled",
+        profile_state: "dedicated",
+        serve_state: "absent",
+        phase: "accepted",
+        outcome: "accepted"
       },
-      success: { schema_version: 1, configuration_changed: true }
-    },
-    {
-      action: "lan_enable",
-      actor: cliActor(),
-      target: hostTarget(),
-      intent: { schema_version: 1, requested_lan_enabled: true },
-      success: { schema_version: 1, lan_enabled: true }
-    },
-    {
-      action: "lan_disable",
-      actor: cliActor(),
-      target: hostTarget(),
-      intent: { schema_version: 1, requested_lan_enabled: false },
-      success: { schema_version: 1, lan_enabled: false }
-    },
-    {
-      action: "certificate_rotate",
-      actor: cliActor(),
-      target: hostTarget(),
-      intent: { schema_version: 1, rotation_requested: true },
       success: {
         schema_version: 1,
-        certificate_changed: true,
-        certificate_fingerprint_sha256: "a".repeat(64),
-        certificate_expires_at: "2027-07-11T21:00:00.000Z"
+        action: "remote_enable",
+        requested_intent: "enabled",
+        profile_state: "dedicated",
+        serve_state: "exact",
+        phase: "terminal",
+        outcome: "succeeded",
+        admission: "open",
+        intent_persisted: true,
+        serve_result: "applied",
+        reason: null
+      }
+    },
+    {
+      action: "remote_disable",
+      actor: cliActor(),
+      target: hostTarget(),
+      intent: {
+        schema_version: 1,
+        action: "remote_disable",
+        requested_intent: "disabled",
+        profile_state: "dedicated",
+        serve_state: "exact",
+        phase: "accepted",
+        outcome: "accepted"
+      },
+      success: {
+        schema_version: 1,
+        action: "remote_disable",
+        requested_intent: "disabled",
+        profile_state: "dedicated",
+        serve_state: "absent",
+        phase: "terminal",
+        outcome: "succeeded",
+        admission: "closed",
+        intent_persisted: true,
+        serve_result: "removed",
+        reason: null
       }
     }
   ];

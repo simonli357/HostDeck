@@ -1,9 +1,16 @@
 import {
+  type HistoricalSelectedNetworkAuditAction,
+  historicalSelectedNetworkAuditActions,
+  type PersistedSelectedSecurityAuditAction,
+  persistedSelectedSecurityAuditActions,
   type SelectedSecurityAuditAction,
+  type SelectedSecurityAuditV1Action,
   selectedAuditOutcomes,
-  selectedSecurityAuditActions
+  selectedSecurityAuditActions,
+  selectedSecurityAuditV1Actions
 } from "@hostdeck/core";
 import { z } from "zod";
+import { remoteIngressAuditSummarySchema } from "./remote-ingress.js";
 import { isoTimestampSchema, positiveSafeIntegerSchema } from "./scalars.js";
 
 const securityAuditIdSchema = z.string().min(1).max(120).regex(/^[a-zA-Z0-9_.:-]+$/u);
@@ -105,7 +112,7 @@ const certificateRotateSummarySchema = z
   })
   .strict();
 
-export const selectedSecurityAuditPayloadEnvelopeSchema = z.discriminatedUnion("action", [
+export const selectedSecurityAuditV1PayloadEnvelopeSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("pair_request"), payload_summary: pairRequestSummarySchema }).strict(),
   z.object({ action: z.literal("pair_claim"), payload_summary: pairClaimSummarySchema }).strict(),
   z.object({ action: z.literal("csrf_bootstrap"), payload_summary: csrfBootstrapSummarySchema }).strict(),
@@ -116,6 +123,17 @@ export const selectedSecurityAuditPayloadEnvelopeSchema = z.discriminatedUnion("
   z.object({ action: z.literal("lan_enable"), payload_summary: lanEnableSummarySchema }).strict(),
   z.object({ action: z.literal("lan_disable"), payload_summary: lanDisableSummarySchema }).strict(),
   z.object({ action: z.literal("certificate_rotate"), payload_summary: certificateRotateSummarySchema }).strict()
+]);
+
+export const selectedSecurityAuditPayloadEnvelopeSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("pair_request"), payload_summary: pairRequestSummarySchema }).strict(),
+  z.object({ action: z.literal("pair_claim"), payload_summary: pairClaimSummarySchema }).strict(),
+  z.object({ action: z.literal("csrf_bootstrap"), payload_summary: csrfBootstrapSummarySchema }).strict(),
+  z.object({ action: z.literal("device_revoke"), payload_summary: deviceRevokeSummarySchema }).strict(),
+  z.object({ action: z.literal("lock"), payload_summary: lockSummarySchema }).strict(),
+  z.object({ action: z.literal("unlock"), payload_summary: unlockSummarySchema }).strict(),
+  z.object({ action: z.literal("remote_enable"), payload_summary: remoteIngressAuditSummarySchema }).strict(),
+  z.object({ action: z.literal("remote_disable"), payload_summary: remoteIngressAuditSummarySchema }).strict()
 ]);
 
 export const selectedSecurityAuditPayloadContractSchema = z
@@ -140,20 +158,74 @@ export const selectedSecurityAuditPayloadContractSchema = z
       return;
     }
 
+    if (value.action === "remote_enable" || value.action === "remote_disable") {
+      const summary = remoteIngressAuditSummarySchema.safeParse(value.payload_summary);
+      if (
+        !summary.success ||
+        summary.data.action !== value.action ||
+        summary.data.phase !== value.phase ||
+        summary.data.outcome !== value.outcome
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Remote audit summary action, phase, and outcome must match its durable record.",
+          path: ["payload_summary"]
+        });
+      }
+      return;
+    }
+
     const summary = envelope.data.payload_summary as Readonly<Record<string, unknown>>;
     const requirements = summaryRequirements[value.action];
-    if (value.phase === "accepted") requireFields(summary, requirements.intent, context);
-    if (value.outcome === "succeeded") requireFields(summary, requirements.success, context);
+    validateSummaryRequirements(value.phase, value.outcome, summary, requirements, context);
+  });
+
+export const selectedSecurityAuditV1PayloadContractSchema = z
+  .object({
+    action: z.enum(selectedSecurityAuditV1Actions),
+    phase: z.enum(["accepted", "terminal"]),
+    outcome: z.enum(selectedAuditOutcomes),
+    payload_summary: z.unknown()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const envelope = selectedSecurityAuditV1PayloadEnvelopeSchema.safeParse({
+      action: value.action,
+      payload_summary: value.payload_summary
+    });
+    if (!envelope.success) {
+      context.addIssue({
+        code: "custom",
+        message: "Version-1 security audit payload summary does not match its action contract.",
+        path: ["payload_summary"]
+      });
+      return;
+    }
+
+    const summary = envelope.data.payload_summary as Readonly<Record<string, unknown>>;
+    const requirements = summaryRequirements[value.action];
+    validateSummaryRequirements(value.phase, value.outcome, summary, requirements, context);
+  });
+
+function validateSummaryRequirements(
+  phase: "accepted" | "terminal",
+  outcome: (typeof selectedAuditOutcomes)[number],
+  summary: Readonly<Record<string, unknown>>,
+  requirements: SummaryRequirements,
+  context: z.RefinementCtx
+): void {
+    if (phase === "accepted") requireFields(summary, requirements.intent, context);
+    if (outcome === "succeeded") requireFields(summary, requirements.success, context);
     else forbidFields(summary, requirements.resultOnly, context);
 
-    if (summary.reconciliation_reason !== undefined && value.outcome !== "incomplete") {
+    if (summary.reconciliation_reason !== undefined && outcome !== "incomplete") {
       context.addIssue({
         code: "custom",
         message: "Only incomplete security audit records may carry a reconciliation reason.",
         path: ["payload_summary", "reconciliation_reason"]
       });
     }
-  });
+}
 
 interface SummaryRequirements {
   readonly intent: readonly string[];
@@ -212,12 +284,31 @@ const summaryRequirements = {
     success: ["certificate_changed", "certificate_fingerprint_sha256", "certificate_expires_at"],
     resultOnly: ["certificate_changed", "certificate_fingerprint_sha256", "certificate_expires_at"]
   }
-} as const satisfies Record<SelectedSecurityAuditAction, SummaryRequirements>;
+} as const satisfies Record<SelectedSecurityAuditV1Action, SummaryRequirements>;
 
 const securityActionSet = new Set<string>(selectedSecurityAuditActions);
+const securityV1ActionSet = new Set<string>(selectedSecurityAuditV1Actions);
+const persistedSecurityActionSet = new Set<string>(persistedSelectedSecurityAuditActions);
+const historicalNetworkActionSet = new Set<string>(historicalSelectedNetworkAuditActions);
 
 export function isSelectedSecurityAuditAction(candidate: unknown): candidate is SelectedSecurityAuditAction {
   return typeof candidate === "string" && securityActionSet.has(candidate);
+}
+
+export function isSelectedSecurityAuditV1Action(candidate: unknown): candidate is SelectedSecurityAuditV1Action {
+  return typeof candidate === "string" && securityV1ActionSet.has(candidate);
+}
+
+export function isPersistedSelectedSecurityAuditAction(
+  candidate: unknown
+): candidate is PersistedSelectedSecurityAuditAction {
+  return typeof candidate === "string" && persistedSecurityActionSet.has(candidate);
+}
+
+export function isHistoricalSelectedNetworkAuditAction(
+  candidate: unknown
+): candidate is HistoricalSelectedNetworkAuditAction {
+  return typeof candidate === "string" && historicalNetworkActionSet.has(candidate);
 }
 
 function requireFields(

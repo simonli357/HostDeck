@@ -37,7 +37,8 @@ describe("SQLite migration runner", () => {
       "202607110010_security_audit_catalog": "1db9a127f80ba20f120cd8bbf9b65bc57fc2ca859d82e50a4f213f10d16ba0ab",
       "202607110011_selected_pairing_claim": "6491026ff2fd23c5346273dbda5b3f5f6927d7c8b953b403ba512b5af83db927",
       "202607120012_selected_lan_configuration": "fe01df684e04d66f6efa859fd0845ba77b39ec1ce497065f942fa4bc9d84761e",
-      "202607130013_remote_ingress_state": "342f963fc3fd349353ee2487346ec4862b2ec16e5b0275b49de3a577fc95258d"
+      "202607130013_remote_ingress_state": "342f963fc3fd349353ee2487346ec4862b2ec16e5b0275b49de3a577fc95258d",
+      "202607130014_remote_audit_catalog": "c8c94dda5c2cf3a2af5a85e8ce58f53feadbfcccfcc84f3a57715415d78eaf65"
     });
   });
 
@@ -61,7 +62,8 @@ describe("SQLite migration runner", () => {
         "202607110010_security_audit_catalog",
         "202607110011_selected_pairing_claim",
         "202607120012_selected_lan_configuration",
-        "202607130013_remote_ingress_state"
+        "202607130013_remote_ingress_state",
+        "202607130014_remote_audit_catalog"
       ]);
       expect(tableNames(db)).toEqual([
         "audit_events",
@@ -85,7 +87,7 @@ describe("SQLite migration runner", () => {
         "sessions",
         "settings"
       ]);
-      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 13 });
+      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 14 });
       expect(
         db
           .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
@@ -126,7 +128,8 @@ describe("SQLite migration runner", () => {
         "202607110010_security_audit_catalog",
         "202607110011_selected_pairing_claim",
         "202607120012_selected_lan_configuration",
-        "202607130013_remote_ingress_state"
+        "202607130013_remote_ingress_state",
+        "202607130014_remote_audit_catalog"
       ]);
       expect(migrated.db.prepare("SELECT id FROM audit_events WHERE id = 'audit_legacy_preserved'").get()).toEqual({
         id: "audit_legacy_preserved"
@@ -187,7 +190,8 @@ describe("SQLite migration runner", () => {
         "202607110010_security_audit_catalog",
         "202607110011_selected_pairing_claim",
         "202607120012_selected_lan_configuration",
-        "202607130013_remote_ingress_state"
+        "202607130013_remote_ingress_state",
+        "202607130014_remote_audit_catalog"
       ]);
       expect(migrated.db.prepare("SELECT id FROM selected_audit_events WHERE operation_id = ?").get("op_index_preserved")).toEqual({
         id: "audit:index:preserved"
@@ -253,7 +257,8 @@ describe("SQLite migration runner", () => {
         "202607110010_security_audit_catalog",
         "202607110011_selected_pairing_claim",
         "202607120012_selected_lan_configuration",
-        "202607130013_remote_ingress_state"
+        "202607130013_remote_ingress_state",
+        "202607130014_remote_audit_catalog"
       ]);
       expect(migrated.db.prepare("SELECT * FROM auth_devices WHERE id = ?").get("client_csrf_migration")).toEqual({
         id: "client_csrf_migration",
@@ -341,7 +346,8 @@ describe("SQLite migration runner", () => {
         "202607110010_security_audit_catalog",
         "202607110011_selected_pairing_claim",
         "202607120012_selected_lan_configuration",
-        "202607130013_remote_ingress_state"
+        "202607130013_remote_ingress_state",
+        "202607130014_remote_audit_catalog"
       ]);
       expect(
         migrated.db
@@ -414,7 +420,7 @@ describe("SQLite migration runner", () => {
           .prepare(
             "INSERT INTO selected_audit_events " +
               "(id, operation_id, at, action, security_schema_version, phase, outcome, error_code, record_json) " +
-              "VALUES (?, ?, ?, 'lock', 2, 'terminal', 'rejected', 'validation_error', '{}')"
+              "VALUES (?, ?, ?, 'lock', 3, 'terminal', 'rejected', 'validation_error', '{}')"
           )
           .run("audit:security:unknown-version", "op_security_unknown_version", csrfAccepted.at)
       ).toThrow();
@@ -544,7 +550,8 @@ describe("SQLite migration runner", () => {
       expect(migrated.result.applied).toEqual([
         "202607110011_selected_pairing_claim",
         "202607120012_selected_lan_configuration",
-        "202607130013_remote_ingress_state"
+        "202607130013_remote_ingress_state",
+        "202607130014_remote_audit_catalog"
       ]);
       expect(
         migrated.db
@@ -767,7 +774,8 @@ describe("SQLite migration runner", () => {
         "202607110010_security_audit_catalog",
         "202607110011_selected_pairing_claim",
         "202607120012_selected_lan_configuration",
-        "202607130013_remote_ingress_state"
+        "202607130013_remote_ingress_state",
+        "202607130014_remote_audit_catalog"
       ]);
       expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM selected_sessions").get()).toEqual({ count: 0 });
       expect(migrated.db.prepare("SELECT * FROM legacy_session_dispositions").get()).toMatchObject({

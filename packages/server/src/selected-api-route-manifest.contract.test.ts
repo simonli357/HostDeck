@@ -212,8 +212,13 @@ describe("selected API route manifest", () => {
       .filter((route) => route.audit?.catalog_state === "owned_extension")
       .map((route) => route.audit?.action)
       .sort();
+    const historicalActions = selectedApiRouteManifest
+      .filter((route) => route.audit?.catalog_state === "historical")
+      .map((route) => route.audit?.action)
+      .sort();
 
     expect(ownedExtensions).toEqual(["session_start"]);
+    expect(historicalActions).toEqual(["lan_configure", "lan_disable", "lan_enable"]);
     expect(
       Object.fromEntries(
         selectedApiRouteManifest
@@ -221,6 +226,13 @@ describe("selected API route manifest", () => {
           .map((route) => [route.audit?.action, route.audit?.catalog_owner_task])
       )
     ).toEqual({ session_start: "IFC-V1-040" });
+    expect(
+      Object.fromEntries(
+        selectedApiRouteManifest
+          .filter((route) => route.audit?.catalog_state === "historical")
+          .map((route) => [route.audit?.action, route.audit?.catalog_owner_task])
+      )
+    ).toEqual({ lan_configure: "IFC-V1-075", lan_disable: "IFC-V1-075", lan_enable: "IFC-V1-075" });
     for (const route of selectedApiRouteManifest) {
       if (route.audit === null) continue;
       expect(knownActions.has(route.audit.action)).toBe(true);

@@ -323,8 +323,8 @@ export const remoteIngressAuditFixtures: readonly RemoteIngressAuditSummary[] = 
     schema_version: 1,
     action: "remote_disable",
     requested_intent: "disabled",
-    profile_state: "other",
-    serve_state: null,
+    profile_state: "dedicated",
+    serve_state: "exact",
     phase: "accepted",
     outcome: "accepted"
   }),

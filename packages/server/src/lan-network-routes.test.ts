@@ -16,8 +16,8 @@ import {
   type SelectedRequestAuthenticationContext
 } from "@hostdeck/contracts";
 import {
+  createHistoricalSelectedNetworkAuditRepository,
   createHostDeckLanConfigurationRepository,
-  createSelectedAuditRepository,
   createSettingsRepository,
   HostDeckSelectedAuditRepositoryError,
   openMigratedDatabase,
@@ -412,7 +412,7 @@ function fixture(options: FixtureOptions = {}) {
     certificateDirectory,
     now: () => new Date(configuredAt)
   });
-  const auditRepository = createSelectedAuditRepository(open.db);
+  const auditRepository = createHistoricalSelectedNetworkAuditRepository(open.db);
   let afterAccepted: (() => void) | null = null;
   const auditPort: SelectedAuditRepository = {
     ...auditRepository,

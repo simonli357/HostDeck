@@ -1,4 +1,11 @@
-import { errorCodes, selectedAuditActions, selectedAuditOutcomes, selectedOperationKinds, selectedRuntimeSource } from "@hostdeck/core";
+import {
+  errorCodes,
+  persistedSelectedAuditActions,
+  selectedAuditActions,
+  selectedAuditOutcomes,
+  selectedOperationKinds,
+  selectedRuntimeSource
+} from "@hostdeck/core";
 import { z } from "zod";
 import {
   absoluteCwdSchema,
@@ -10,8 +17,11 @@ import {
   sessionNameSchema
 } from "./scalars.js";
 import {
+  isHistoricalSelectedNetworkAuditAction,
   isSelectedSecurityAuditAction,
-  selectedSecurityAuditPayloadContractSchema
+  isSelectedSecurityAuditV1Action,
+  selectedSecurityAuditPayloadContractSchema,
+  selectedSecurityAuditV1PayloadContractSchema
 } from "./security-audit.js";
 import {
   approvalOperationTargetSchema,
@@ -204,64 +214,8 @@ export const selectedAuditTargetSchema = z.discriminatedUnion("type", [
   selectedHostAuditTargetSchema
 ]);
 
-export const selectedAuditEventRecordSchema = z
-  .object({
-    id: selectedRecordIdSchema,
-    operation_id: clientOperationIdSchema,
-    at: isoTimestampSchema,
-    actor: selectedAuditActorSchema,
-    action: z.enum(selectedAuditActions),
-    target: selectedAuditTargetSchema,
-    phase: z.enum(["accepted", "terminal"]),
-    outcome: z.enum(selectedAuditOutcomes),
-    payload_summary: auditPayloadSummarySchema,
-    error_code: z.enum(errorCodes).nullable()
-  })
-  .strict()
-  .superRefine((value, context) => {
-    const sessionActions = new Set<string>(
-      selectedOperationKinds.filter((action) => action !== "approval_response" && action !== "interrupt")
-    );
-
-    if (sessionActions.has(value.action) && value.target.type !== "managed_session") {
-      context.addIssue({ code: "custom", message: "Session operations must audit one managed-session target." });
-    }
-    if (value.action === "approval_response" && value.target.type !== "approval") {
-      context.addIssue({ code: "custom", message: "Approval responses must audit one exact approval request target." });
-    }
-    if (value.action === "interrupt" && value.target.type !== "turn") {
-      context.addIssue({ code: "custom", message: "Interrupts must audit one exact turn target." });
-    }
-    const deviceAction = value.action === "device_revoke" || value.action === "csrf_bootstrap";
-    if (deviceAction && value.target.type !== "device") {
-      context.addIssue({ code: "custom", message: "Device authority actions must audit one exact device target." });
-    }
-    if (
-      !sessionActions.has(value.action) &&
-      value.action !== "approval_response" &&
-      value.action !== "interrupt" &&
-      !deviceAction &&
-      value.target.type !== "host"
-    ) {
-      context.addIssue({ code: "custom", message: "Host access and network actions must audit the local host target." });
-    }
-    if (value.actor.type === "pairing_client" && value.action !== "pair_claim") {
-      context.addIssue({ code: "custom", message: "Pairing-client audit actors are valid only for pair claims." });
-    }
-    if (value.phase === "accepted" && value.outcome !== "accepted") {
-      context.addIssue({ code: "custom", message: "Accepted audit phases must use the accepted outcome." });
-    }
-    if (value.phase === "terminal" && value.outcome === "accepted") {
-      context.addIssue({ code: "custom", message: "Terminal audit phases cannot use the non-terminal accepted outcome." });
-    }
-    const failed = ["failed", "rejected", "incomplete"].includes(value.outcome);
-    if (failed && value.error_code === null) {
-      context.addIssue({ code: "custom", message: "Failed, rejected, or incomplete audit outcomes must preserve an error code." });
-    }
-    if (!failed && value.error_code !== null) {
-      context.addIssue({ code: "custom", message: "Accepted or succeeded audit outcomes must not carry an error code." });
-    }
-  });
+export const selectedAuditEventRecordSchema = createAuditEventRecordSchema(selectedAuditActions);
+export const persistedSelectedAuditEventRecordSchema = createAuditEventRecordSchema(persistedSelectedAuditActions);
 
 export const selectedSecurityAuditEventRecordSchema = selectedAuditEventRecordSchema.superRefine((value, context) => {
   if (!isSelectedSecurityAuditAction(value.action)) {
@@ -307,20 +261,81 @@ export const selectedSecurityAuditEventRecordSchema = selectedAuditEventRecordSc
       }
       break;
     case "unlock":
-    case "lan_configure":
-    case "lan_enable":
-    case "lan_disable":
-    case "certificate_rotate":
+    case "remote_enable":
+    case "remote_disable":
       if (!cli) context.addIssue({ code: "custom", message: "This security action requires a local-admin CLI audit actor." });
       break;
   }
 });
 
+export const selectedSecurityAuditV1EventRecordSchema = persistedSelectedAuditEventRecordSchema.superRefine(
+  (value, context) => {
+    if (!isSelectedSecurityAuditV1Action(value.action)) {
+      context.addIssue({ code: "custom", message: "Version-1 security records require a frozen version-1 action." });
+      return;
+    }
+
+    const payload = selectedSecurityAuditV1PayloadContractSchema.safeParse({
+      action: value.action,
+      phase: value.phase,
+      outcome: value.outcome,
+      payload_summary: value.payload_summary
+    });
+    if (!payload.success) {
+      context.addIssue({
+        code: "custom",
+        message: "Version-1 security audit record has an invalid payload summary.",
+        path: ["payload_summary"]
+      });
+    }
+
+    const cli = value.actor.type === "cli";
+    const dashboard = value.actor.type === "dashboard";
+    const dashboardWriter = dashboard && value.actor.permission === "write";
+    switch (value.action) {
+      case "pair_request":
+        if (!cli) context.addIssue({ code: "custom", message: "Pair requests require a local-admin CLI audit actor." });
+        break;
+      case "pair_claim":
+        if (value.actor.type !== "pairing_client") {
+          context.addIssue({ code: "custom", message: "Pair claims require an unpaired pairing-client audit actor." });
+        }
+        break;
+      case "csrf_bootstrap":
+        if (!dashboard || value.target.type !== "device" || value.actor.device_id !== value.target.device_id) {
+          context.addIssue({ code: "custom", message: "CSRF bootstrap must target the same paired dashboard device." });
+        }
+        break;
+      case "device_revoke":
+      case "lock":
+        if (!cli && !dashboardWriter) {
+          context.addIssue({ code: "custom", message: "Device revoke and lock require local-admin or paired-writer authority." });
+        }
+        break;
+      case "unlock":
+      case "lan_configure":
+      case "lan_enable":
+      case "lan_disable":
+      case "certificate_rotate":
+        if (!cli) context.addIssue({ code: "custom", message: "This security action requires a local-admin CLI audit actor." });
+        break;
+    }
+  }
+);
+
+export const historicalSelectedNetworkAuditEventRecordSchema = selectedSecurityAuditV1EventRecordSchema.superRefine(
+  (value, context) => {
+    if (!isHistoricalSelectedNetworkAuditAction(value.action)) {
+      context.addIssue({ code: "custom", message: "Historical network audit writes require a retired LAN action." });
+    }
+  }
+);
+
 export const selectedAuditTrailSchema = z
   .object({
     operation_id: clientOperationIdSchema,
     state: z.enum(["pending", "terminal"]),
-    records: z.array(selectedAuditEventRecordSchema).min(1).max(2)
+    records: z.array(persistedSelectedAuditEventRecordSchema).min(1).max(2)
   })
   .strict()
   .superRefine((value, context) => {
@@ -385,6 +400,67 @@ export const selectedAuditTrailSchema = z
     }
   });
 
+function createAuditEventRecordSchema<const Actions extends readonly [string, ...string[]]>(actions: Actions) {
+  return z
+    .object({
+      id: selectedRecordIdSchema,
+      operation_id: clientOperationIdSchema,
+      at: isoTimestampSchema,
+      actor: selectedAuditActorSchema,
+      action: z.enum(actions),
+      target: selectedAuditTargetSchema,
+      phase: z.enum(["accepted", "terminal"]),
+      outcome: z.enum(selectedAuditOutcomes),
+      payload_summary: auditPayloadSummarySchema,
+      error_code: z.enum(errorCodes).nullable()
+    })
+    .strict()
+    .superRefine((value, context) => {
+      const sessionActions = new Set<string>(
+        selectedOperationKinds.filter((action) => action !== "approval_response" && action !== "interrupt")
+      );
+
+      if (sessionActions.has(value.action) && value.target.type !== "managed_session") {
+        context.addIssue({ code: "custom", message: "Session operations must audit one managed-session target." });
+      }
+      if (value.action === "approval_response" && value.target.type !== "approval") {
+        context.addIssue({ code: "custom", message: "Approval responses must audit one exact approval request target." });
+      }
+      if (value.action === "interrupt" && value.target.type !== "turn") {
+        context.addIssue({ code: "custom", message: "Interrupts must audit one exact turn target." });
+      }
+      const deviceAction = value.action === "device_revoke" || value.action === "csrf_bootstrap";
+      if (deviceAction && value.target.type !== "device") {
+        context.addIssue({ code: "custom", message: "Device authority actions must audit one exact device target." });
+      }
+      if (
+        !sessionActions.has(value.action) &&
+        value.action !== "approval_response" &&
+        value.action !== "interrupt" &&
+        !deviceAction &&
+        value.target.type !== "host"
+      ) {
+        context.addIssue({ code: "custom", message: "Host access and network actions must audit the local host target." });
+      }
+      if (value.actor.type === "pairing_client" && value.action !== "pair_claim") {
+        context.addIssue({ code: "custom", message: "Pairing-client audit actors are valid only for pair claims." });
+      }
+      if (value.phase === "accepted" && value.outcome !== "accepted") {
+        context.addIssue({ code: "custom", message: "Accepted audit phases must use the accepted outcome." });
+      }
+      if (value.phase === "terminal" && value.outcome === "accepted") {
+        context.addIssue({ code: "custom", message: "Terminal audit phases cannot use the non-terminal accepted outcome." });
+      }
+      const failed = ["failed", "rejected", "incomplete"].includes(value.outcome);
+      if (failed && value.error_code === null) {
+        context.addIssue({ code: "custom", message: "Failed, rejected, or incomplete audit outcomes must preserve an error code." });
+      }
+      if (!failed && value.error_code !== null) {
+        context.addIssue({ code: "custom", message: "Accepted or succeeded audit outcomes must not carry an error code." });
+      }
+    });
+}
+
 export type SelectedSessionMappingRecord = z.infer<typeof selectedSessionMappingRecordSchema>;
 export type LegacySessionDispositionRecord = z.infer<typeof legacySessionDispositionRecordSchema>;
 export type SelectedSessionProjectionRecord = z.infer<typeof selectedSessionProjectionRecordSchema>;
@@ -394,7 +470,10 @@ export type SelectedSessionStartRecoveryRecord = z.infer<typeof selectedSessionS
 export type SelectedAuditActor = z.infer<typeof selectedAuditActorSchema>;
 export type SelectedAuditTarget = z.infer<typeof selectedAuditTargetSchema>;
 export type SelectedAuditEventRecord = z.infer<typeof selectedAuditEventRecordSchema>;
+export type PersistedSelectedAuditEventRecord = z.infer<typeof persistedSelectedAuditEventRecordSchema>;
 export type SelectedSecurityAuditEventRecord = z.infer<typeof selectedSecurityAuditEventRecordSchema>;
+export type SelectedSecurityAuditV1EventRecord = z.infer<typeof selectedSecurityAuditV1EventRecordSchema>;
+export type HistoricalSelectedNetworkAuditEventRecord = z.infer<typeof historicalSelectedNetworkAuditEventRecordSchema>;
 export type SelectedAuditTrail = z.infer<typeof selectedAuditTrailSchema>;
 
 function sameAuditTarget(left: z.infer<typeof selectedAuditTargetSchema>, right: z.infer<typeof selectedAuditTargetSchema>): boolean {

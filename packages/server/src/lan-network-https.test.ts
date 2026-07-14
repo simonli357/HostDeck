@@ -13,8 +13,8 @@ import {
   selectedLanEnableRequestSchema
 } from "@hostdeck/contracts";
 import {
+  createHistoricalSelectedNetworkAuditRepository,
   createHostDeckLanConfigurationRepository,
-  createSelectedAuditRepository,
   createSettingsRepository,
   openMigratedDatabase
 } from "@hostdeck/storage";
@@ -64,7 +64,7 @@ describe("selected LAN network real HTTPS restart", () => {
       certificateDirectory,
       now: fixedNow
     });
-    const auditRepository = createSelectedAuditRepository(open.db);
+    const auditRepository = createHistoricalSelectedNetworkAuditRepository(open.db);
     let auditIndex = 0;
     const audit = createSecurityMutationAuditExecutor({
       repository: auditRepository,

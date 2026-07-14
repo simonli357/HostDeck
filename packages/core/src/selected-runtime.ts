@@ -102,25 +102,55 @@ export type SelectedMutationOperationKind = (typeof selectedMutationOperationKin
 export const selectedAuditOutcomes = ["accepted", "succeeded", "failed", "rejected", "incomplete"] as const;
 export type SelectedAuditOutcome = (typeof selectedAuditOutcomes)[number];
 
-export const selectedSecurityAuditActions = [
+export const sharedSelectedSecurityAuditActions = [
   "pair_request",
   "pair_claim",
   "csrf_bootstrap",
   "device_revoke",
   "lock",
-  "unlock",
+  "unlock"
+] as const;
+
+export const historicalSelectedNetworkAuditActions = [
   "lan_configure",
   "lan_enable",
   "lan_disable",
   "certificate_rotate"
 ] as const;
+
+export const selectedRemoteAuditActions = ["remote_enable", "remote_disable"] as const;
+
+export const selectedSecurityAuditActions = [
+  ...sharedSelectedSecurityAuditActions,
+  ...selectedRemoteAuditActions
+] as const;
 export type SelectedSecurityAuditAction = (typeof selectedSecurityAuditActions)[number];
+
+export const selectedSecurityAuditV1Actions = [
+  ...sharedSelectedSecurityAuditActions,
+  ...historicalSelectedNetworkAuditActions
+] as const;
+export type SelectedSecurityAuditV1Action = (typeof selectedSecurityAuditV1Actions)[number];
+export type HistoricalSelectedNetworkAuditAction = (typeof historicalSelectedNetworkAuditActions)[number];
+
+export const persistedSelectedSecurityAuditActions = [
+  ...sharedSelectedSecurityAuditActions,
+  ...historicalSelectedNetworkAuditActions,
+  ...selectedRemoteAuditActions
+] as const;
+export type PersistedSelectedSecurityAuditAction = (typeof persistedSelectedSecurityAuditActions)[number];
 
 export const selectedAuditActions = [
   ...selectedOperationKinds,
   ...selectedSecurityAuditActions
 ] as const;
 export type SelectedAuditAction = (typeof selectedAuditActions)[number];
+
+export const persistedSelectedAuditActions = [
+  ...selectedOperationKinds,
+  ...persistedSelectedSecurityAuditActions
+] as const;
+export type PersistedSelectedAuditAction = (typeof persistedSelectedAuditActions)[number];
 
 export const projectionEventKinds = [
   "message",

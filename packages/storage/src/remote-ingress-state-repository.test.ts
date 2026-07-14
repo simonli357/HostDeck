@@ -35,7 +35,7 @@ afterEach(() => {
 describe("remote ingress state migration", () => {
   it("upgrades the prior schema without rewriting historical state", () => {
     const path = tempDbPath();
-    const priorMigrations = defaultMigrations.slice(0, -1);
+    const priorMigrations = defaultMigrations.slice(0, -2);
     const prior = openMigratedDatabase(path, {
       migrations: priorMigrations,
       now: fixedNow
@@ -64,7 +64,8 @@ describe("remote ingress state migration", () => {
     const migrated = openMigratedDatabase(path, { now: fixedNow });
     try {
       expect(migrated.result.applied).toEqual([
-        "202607130013_remote_ingress_state"
+        "202607130013_remote_ingress_state",
+        "202607130014_remote_audit_catalog"
       ]);
       expect(
         migrated.db.prepare("SELECT * FROM selected_lan_configuration").get()
@@ -92,7 +93,7 @@ describe("remote ingress state migration", () => {
 
   it("rolls back an interrupted upgrade and rejects a code downgrade", () => {
     const path = tempDbPath();
-    const priorMigrations = defaultMigrations.slice(0, -1);
+    const priorMigrations = defaultMigrations.slice(0, -2);
     const prior = openMigratedDatabase(path, {
       migrations: priorMigrations,
       now: fixedNow

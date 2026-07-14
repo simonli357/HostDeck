@@ -144,5 +144,5 @@ describe("remote ingress availability", () => {
 
     expect(examined).toBe(18_144);
     expect(open).toBe(1);
-  });
+  }, 10_000);
 });

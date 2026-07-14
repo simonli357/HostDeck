@@ -8,6 +8,7 @@ import type Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 import { openMigratedDatabase } from "./migration-runner.js";
 import {
+  createHistoricalSelectedNetworkAuditRepository,
   createSelectedAuditRepository,
   HostDeckSelectedAuditRepositoryError,
   maintainSelectedAuditRetentionBatch,
@@ -26,7 +27,7 @@ afterEach(() => {
 });
 
 describe("selected security action audit repository", () => {
-  it("persists and reopens exact accepted-to-succeeded trails for all ten security actions", () => {
+  it("persists and reopens exact accepted-to-succeeded trails for all eight selected security actions", () => {
     const path = tempDbPath();
     const first = openMigratedDatabase(path, { now: fixedNow });
     const operationIds: string[] = [];
@@ -43,14 +44,14 @@ describe("selected security action audit repository", () => {
         expect(terminal.records[0]).toMatchObject({ actor: definition.actor, action: definition.action, target: definition.target });
         expect(terminal.records[1]).toMatchObject({ actor: definition.actor, action: definition.action, target: definition.target });
       }
-      expect(first.db.prepare("SELECT COUNT(*) AS count FROM selected_audit_events").get()).toEqual({ count: 20 });
+      expect(first.db.prepare("SELECT COUNT(*) AS count FROM selected_audit_events").get()).toEqual({ count: 16 });
       const storedJson = first.db.prepare("SELECT record_json FROM selected_audit_events").all() as Array<{
         readonly record_json: string;
       }>;
       expect(storedJson.every(({ record_json }) => record_json.includes('"schema_version":1'))).toBe(true);
       expect(
         first.db.prepare("SELECT DISTINCT security_schema_version FROM selected_audit_events").all()
-      ).toEqual([{ security_schema_version: 1 }]);
+      ).toEqual([{ security_schema_version: 2 }]);
     } finally {
       first.db.close();
     }
@@ -81,7 +82,7 @@ describe("selected security action audit repository", () => {
         repository.recordAccepted(acceptedRecord(definition, failedIndex));
         expect(
           repository.recordTerminal(
-            terminalRecord(definition, failedIndex, "failed", "storage_error", { schema_version: 1 })
+            terminalRecord(definition, failedIndex, "failed", "storage_error", failureSummary(definition, "failed"))
           ).records[1]
         ).toMatchObject({ outcome: "failed", error_code: "storage_error" });
 
@@ -90,7 +91,7 @@ describe("selected security action audit repository", () => {
         expect(
           repository.recordTerminal(
             terminalRecord(definition, incompleteIndex, "incomplete", "runtime_unavailable", {
-              schema_version: 1,
+              ...failureSummary(definition, "incomplete"),
               reconciliation_reason: "host_restart_without_terminal"
             })
           ).records[1]
@@ -110,14 +111,22 @@ describe("selected security action audit repository", () => {
       "csrf-private-123456789",
       "-----BEGIN PRIVATE KEY-----private-key-material",
       "-----BEGIN CERTIFICATE-----certificate-material",
-      "hostdeck_device=private-cookie-material"
+      "hostdeck_device=private-cookie-material",
+      "tskey-auth-private-remote-credential",
+      "private-account@example.test",
+      "private-profile-and-node-identity",
+      "tailscale-cli-output-with-private-state",
+      "https://foreign-node.private-tailnet.ts.net"
     ];
     try {
       const repository = createSelectedAuditRepository(open.db);
       const pairRequest = securityCases()[0];
       const csrf = securityCases()[2];
       const lock = securityCases()[4];
-      if (pairRequest === undefined || csrf === undefined || lock === undefined) throw new Error("Missing security case fixture.");
+      const remoteEnable = securityCases()[6];
+      if (pairRequest === undefined || csrf === undefined || lock === undefined || remoteEnable === undefined) {
+        throw new Error("Missing security case fixture.");
+      }
 
       const invalid = [
         { ...acceptedRecord(pairRequest, 30), actor: dashboardActor("write") },
@@ -131,6 +140,18 @@ describe("selected security action audit repository", () => {
         ...rawSecrets.map((secret, index) => ({
           ...acceptedRecord(pairRequest, 40 + index),
           payload_summary: { ...pairRequest.intent, value: secret }
+        })),
+        ...[
+          { account_login: rawSecrets[7] },
+          { profile_identity: rawSecrets[8] },
+          { node_identity: rawSecrets[8] },
+          { cli_output: rawSecrets[9] },
+          { foreign_serve_payload: rawSecrets[10] },
+          { tailscale_key: rawSecrets[6] },
+          { pairing_fragment: rawSecrets[0] }
+        ].map((unsafe, index) => ({
+          ...acceptedRecord(remoteEnable, 60 + index),
+          payload_summary: { ...remoteEnable.intent, ...unsafe }
         }))
       ];
 
@@ -211,6 +232,47 @@ describe("selected security action audit repository", () => {
     }
   });
 
+  it("reads historical LAN trails while preventing the selected repository from emitting them", () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const selected = createSelectedAuditRepository(open.db);
+      const historical = createHistoricalSelectedNetworkAuditRepository(open.db);
+      for (const [offset, definition] of historicalCases().entries()) {
+        const index = 100 + offset;
+        const rejected = expectAuditError(
+          () => selected.recordAccepted(acceptedRecord(definition, index)),
+          "invalid_audit_record"
+        );
+        expect(rejected.cause).toBeUndefined();
+
+        historical.recordAccepted(acceptedRecord(definition, index));
+        historical.recordTerminal(succeededRecord(definition, index));
+        expect(selected.require(operationIdFor(index)).records).toMatchObject([
+          { action: definition.action, outcome: "accepted" },
+          { action: definition.action, outcome: "succeeded" }
+        ]);
+      }
+      expect(
+        open.db
+          .prepare(
+            "SELECT action, security_schema_version FROM selected_audit_events " +
+              "WHERE action LIKE 'lan_%' OR action = 'certificate_rotate' ORDER BY action, phase"
+          )
+          .all()
+      ).toHaveLength(8);
+      expect(
+        open.db
+          .prepare(
+            "SELECT DISTINCT security_schema_version FROM selected_audit_events " +
+              "WHERE action LIKE 'lan_%' OR action = 'certificate_rotate'"
+          )
+          .all()
+      ).toEqual([{ security_schema_version: 1 }]);
+    } finally {
+      open.db.close();
+    }
+  });
+
   it("rolls back forced start, terminal, and deferred commit failures with bounded cause-free errors", () => {
     const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
     try {
@@ -285,9 +347,9 @@ describe("selected security action audit repository", () => {
     const open = openMigratedDatabase(path, { now: fixedNow });
     try {
       open.db.pragma("busy_timeout = 2000");
-      const lock = securityCases()[4];
-      if (lock === undefined) throw new Error("Missing lock security case.");
-      const winner = acceptedRecord(lock, 80);
+      const remoteEnable = securityCases()[6];
+      if (remoteEnable === undefined) throw new Error("Missing remote-enable security case.");
+      const winner = acceptedRecord(remoteEnable, 80);
       const worker = startRawSecurityInsert(path, winner);
       await worker.inserted;
 
@@ -308,9 +370,13 @@ describe("selected security action audit repository", () => {
     const orphanPath = tempDbPath();
     const orphanFirst = openMigratedDatabase(orphanPath, { now: fixedNow });
     const lock = securityCases()[4];
-    if (lock === undefined) throw new Error("Missing lock security case.");
+    const remoteEnable = securityCases()[6];
+    const remoteDisable = securityCases()[7];
+    if (lock === undefined || remoteEnable === undefined || remoteDisable === undefined) {
+      throw new Error("Missing security case fixture.");
+    }
     try {
-      createSelectedAuditRepository(orphanFirst.db).recordAccepted(acceptedRecord(lock, 90));
+      createSelectedAuditRepository(orphanFirst.db).recordAccepted(acceptedRecord(remoteEnable, 90));
     } finally {
       orphanFirst.db.close();
     }
@@ -326,12 +392,22 @@ describe("selected security action audit repository", () => {
       ).toBe(1);
       const trail = createSelectedAuditRepository(orphanReopened.db).require(operationIdFor(90));
       expect(trail.records[1]).toMatchObject({
-        actor: lock.actor,
-        action: "lock",
-        target: lock.target,
+        actor: remoteEnable.actor,
+        action: "remote_enable",
+        target: remoteEnable.target,
         outcome: "incomplete",
         error_code: "runtime_unavailable",
-        payload_summary: { schema_version: 1, reconciliation_reason: "host_restart_without_terminal" }
+        payload_summary: {
+          schema_version: 1,
+          action: "remote_enable",
+          phase: "terminal",
+          outcome: "incomplete",
+          admission: "closed",
+          intent_persisted: "unknown",
+          serve_result: "unknown",
+          reason: "observation_failed",
+          reconciliation_reason: "host_restart_without_terminal"
+        }
       });
     } finally {
       orphanReopened.db.close();
@@ -341,11 +417,10 @@ describe("selected security action audit repository", () => {
     const retentionOpen = openMigratedDatabase(retentionPath, { now: fixedNow });
     try {
       const repository = createSelectedAuditRepository(retentionOpen.db);
-      const pairRequest = securityCases()[0];
       const csrf = securityCases()[2];
-      if (pairRequest === undefined || csrf === undefined) throw new Error("Missing retention security cases.");
-      repository.recordAccepted(acceptedRecord(pairRequest, 91, "2026-05-01T20:00:00.000Z"));
-      repository.recordTerminal(succeededRecord(pairRequest, 91, "2026-05-01T20:01:00.000Z"));
+      if (csrf === undefined) throw new Error("Missing retention security case.");
+      repository.recordAccepted(acceptedRecord(remoteDisable, 91, "2026-05-01T20:00:00.000Z"));
+      repository.recordTerminal(succeededRecord(remoteDisable, 91, "2026-05-01T20:01:00.000Z"));
       repository.recordAccepted(acceptedRecord(lock, 92, "2026-07-10T20:00:00.000Z"));
       repository.recordTerminal(succeededRecord(lock, 92, "2026-07-10T20:01:00.000Z"));
       repository.recordAccepted(acceptedRecord(csrf, 93, "2026-07-10T20:02:00.000Z"));
@@ -440,6 +515,27 @@ function securityCases(): readonly SecurityCase[] {
       success: { schema_version: 1, locked: false }
     },
     {
+      action: "remote_enable",
+      actor: cliActor(),
+      target: hostTarget(),
+      intent: remoteAcceptedSummary("remote_enable"),
+      success: remoteSuccessSummary("remote_enable")
+    },
+    {
+      action: "remote_disable",
+      actor: cliActor(),
+      target: hostTarget(),
+      intent: remoteAcceptedSummary("remote_disable"),
+      success: {
+        ...remoteSuccessSummary("remote_disable")
+      }
+    }
+  ];
+}
+
+function historicalCases(): readonly SecurityCase[] {
+  return [
+    {
       action: "lan_configure",
       actor: cliActor(),
       target: hostTarget(),
@@ -500,7 +596,70 @@ function succeededRecord(definition: SecurityCase, index: number, at = terminalA
 }
 
 function rejectedRecord(definition: SecurityCase, index: number) {
-  return terminalRecord(definition, 10 + index, "rejected", "validation_error", { schema_version: 1 });
+  return terminalRecord(definition, 10 + index, "rejected", "validation_error", rejectionSummary(definition));
+}
+
+function failureSummary(
+  definition: SecurityCase,
+  outcome: "failed" | "incomplete"
+): Readonly<Record<string, unknown>> {
+  if (definition.action !== "remote_enable" && definition.action !== "remote_disable") {
+    return { schema_version: 1 };
+  }
+  return {
+    ...remoteAcceptedSummary(definition.action),
+    phase: "terminal",
+    outcome,
+    admission: "closed",
+    intent_persisted: outcome === "incomplete" ? "unknown" : false,
+    serve_result: outcome === "incomplete" ? "unknown" : "not_attempted",
+    reason: outcome === "incomplete" ? "observation_failed" : "command_failed"
+  };
+}
+
+function rejectionSummary(definition: SecurityCase): Readonly<Record<string, unknown>> {
+  if (definition.action !== "remote_enable" && definition.action !== "remote_disable") {
+    return { schema_version: 1 };
+  }
+  return {
+    ...remoteAcceptedSummary(definition.action),
+    profile_state: "other",
+    serve_state: null,
+    phase: "terminal",
+    outcome: "rejected",
+    admission: "closed",
+    intent_persisted: false,
+    serve_result: "not_attempted",
+    reason: "profile_other"
+  };
+}
+
+function remoteAcceptedSummary(action: "remote_disable" | "remote_enable") {
+  return {
+    schema_version: 1,
+    action,
+    requested_intent: action === "remote_enable" ? "enabled" : "disabled",
+    profile_state: "dedicated",
+    serve_state: action === "remote_enable" ? "absent" : "exact",
+    phase: "accepted",
+    outcome: "accepted"
+  } as const;
+}
+
+function remoteSuccessSummary(action: "remote_disable" | "remote_enable") {
+  return {
+    schema_version: 1,
+    action,
+    requested_intent: action === "remote_enable" ? "enabled" : "disabled",
+    profile_state: "dedicated",
+    serve_state: action === "remote_enable" ? "exact" : "absent",
+    phase: "terminal",
+    outcome: "succeeded",
+    admission: action === "remote_enable" ? "open" : "closed",
+    intent_persisted: true,
+    serve_result: action === "remote_enable" ? "applied" : "removed",
+    reason: null
+  } as const;
 }
 
 function terminalRecord(
@@ -581,7 +740,7 @@ function expectAuditError(
 function insertRawRecord(
   db: Database.Database,
   record: Readonly<Record<string, unknown>>,
-  securitySchemaVersion: 1 | null = 1
+  securitySchemaVersion: 1 | 2 | null = 2
 ): void {
   db.prepare(
     `
@@ -620,7 +779,7 @@ function startRawSecurityInsert(
       db.prepare(
         "INSERT INTO selected_audit_events " +
         "(id, operation_id, at, action, security_schema_version, phase, outcome, error_code, record_json) " +
-        "VALUES (@id, @operation_id, @at, @action, 1, @phase, @outcome, @error_code, @record_json)"
+        "VALUES (@id, @operation_id, @at, @action, 2, @phase, @outcome, @error_code, @record_json)"
       ).run(workerData.row);
       parentPort.postMessage("inserted");
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);

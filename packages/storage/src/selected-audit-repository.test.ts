@@ -116,10 +116,8 @@ describe("selected audit repository", () => {
         ["device_revoke", { type: "device", device_id: "device:audit:revoked" }],
         ["lock", hostTarget()],
         ["unlock", hostTarget()],
-        ["lan_configure", hostTarget()],
-        ["lan_enable", hostTarget()],
-        ["lan_disable", hostTarget()],
-        ["certificate_rotate", hostTarget()]
+        ["remote_enable", hostTarget()],
+        ["remote_disable", hostTarget()]
       ] as const;
 
       for (const [index, [action, target]] of actionTargets.entries()) {
@@ -129,14 +127,14 @@ describe("selected audit repository", () => {
             action,
             target,
             ...(isSelectedSecurityAuditAction(action)
-              ? { actor: securityActor(action), payload_summary: { schema_version: 1 } }
+              ? { actor: securityActor(action), payload_summary: rejectedSecuritySummary(action) }
               : {})
           })
         );
         expect(trail.records[0]).toMatchObject({ action, target });
       }
 
-      expect(open.db.prepare("SELECT COUNT(*) AS count FROM selected_audit_events").get()).toEqual({ count: 20 });
+      expect(open.db.prepare("SELECT COUNT(*) AS count FROM selected_audit_events").get()).toEqual({ count: 18 });
       expect(
         open.db
           .prepare(
@@ -146,7 +144,7 @@ describe("selected audit repository", () => {
           .all()
       ).toEqual([
         { security_schema_version: null, count: 10 },
-        { security_schema_version: 1, count: 10 }
+        { security_schema_version: 2, count: 8 }
       ]);
     } finally {
       open.db.close();
@@ -507,6 +505,23 @@ function securityActor(action: Parameters<typeof isSelectedSecurityAuditAction>[
   if (action === "csrf_bootstrap") return { ...auditActor(), permission: "read" } as const;
   if (action === "device_revoke" || action === "lock") return auditActor();
   return { type: "cli", device_id: null, permission: "local_admin", origin: null } as const;
+}
+
+function rejectedSecuritySummary(action: string): Readonly<Record<string, unknown>> {
+  if (action !== "remote_enable" && action !== "remote_disable") return { schema_version: 1 };
+  return {
+    schema_version: 1,
+    action,
+    requested_intent: action === "remote_enable" ? "enabled" : "disabled",
+    profile_state: "other",
+    serve_state: null,
+    phase: "terminal",
+    outcome: "rejected",
+    admission: "closed",
+    intent_persisted: false,
+    serve_result: "not_attempted",
+    reason: "profile_other"
+  };
 }
 
 function insertRawRecord(

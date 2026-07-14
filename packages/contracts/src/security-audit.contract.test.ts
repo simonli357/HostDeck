@@ -1,20 +1,37 @@
-import { selectedAuditActions, selectedSecurityAuditActions } from "@hostdeck/core";
+import {
+  historicalSelectedNetworkAuditActions,
+  persistedSelectedAuditActions,
+  selectedAuditActions,
+  selectedSecurityAuditActions,
+  selectedSecurityAuditV1Actions
+} from "@hostdeck/core";
 import { describe, expect, it } from "vitest";
 import {
   selectedAuditActorSchema,
   selectedAuditEventRecordSchema,
   selectedAuditOriginSchema,
-  selectedSecurityAuditEventRecordSchema
+  selectedSecurityAuditEventRecordSchema,
+  selectedSecurityAuditV1EventRecordSchema
 } from "./selected-storage.js";
 
 const acceptedAt = "2026-07-11T20:00:00.000Z";
 const terminalAt = "2026-07-11T20:01:00.000Z";
 
 describe("selected security audit contracts", () => {
-  it("freezes one duplicate-free 20-action catalog with the exact 10-action security subset", () => {
-    expect(selectedAuditActions).toHaveLength(20);
-    expect(new Set(selectedAuditActions).size).toBe(20);
+  it("freezes an 18-action selected catalog and a separate preserved version-1 catalog", () => {
+    expect(selectedAuditActions).toHaveLength(18);
+    expect(new Set(selectedAuditActions).size).toBe(18);
     expect(selectedSecurityAuditActions).toEqual([
+      "pair_request",
+      "pair_claim",
+      "csrf_bootstrap",
+      "device_revoke",
+      "lock",
+      "unlock",
+      "remote_enable",
+      "remote_disable"
+    ]);
+    expect(selectedSecurityAuditV1Actions).toEqual([
       "pair_request",
       "pair_claim",
       "csrf_bootstrap",
@@ -26,8 +43,16 @@ describe("selected security audit contracts", () => {
       "lan_disable",
       "certificate_rotate"
     ]);
-    expect(new Set(selectedSecurityAuditActions).size).toBe(10);
+    expect(historicalSelectedNetworkAuditActions).toEqual([
+      "lan_configure",
+      "lan_enable",
+      "lan_disable",
+      "certificate_rotate"
+    ]);
+    expect(new Set(selectedSecurityAuditActions).size).toBe(8);
+    expect(new Set(persistedSelectedAuditActions).size).toBe(22);
     for (const action of selectedSecurityAuditActions) expect(selectedAuditActions).toContain(action);
+    for (const action of historicalSelectedNetworkAuditActions) expect(selectedAuditActions).not.toContain(action);
   });
 
   it("accepts exact versioned intent and success summaries for every security action", () => {
@@ -118,14 +143,8 @@ describe("selected security audit contracts", () => {
       acceptedRecord("device_revoke", cliActor(), hostTarget(), { schema_version: 1, previously_revoked: false }),
       acceptedRecord("lock", systemActor(), hostTarget(), { schema_version: 1, requested_locked: true }),
       acceptedRecord("unlock", dashboardActor("write"), hostTarget(), { schema_version: 1, requested_locked: false }),
-      acceptedRecord("lan_enable", dashboardActor("write"), hostTarget(), {
-        schema_version: 1,
-        requested_lan_enabled: true
-      }),
-      acceptedRecord("certificate_rotate", cliActor(), deviceTarget("client_security_phone"), {
-        schema_version: 1,
-        rotation_requested: true
-      })
+      acceptedRecord("remote_enable", dashboardActor("write"), hostTarget(), remoteAccepted("remote_enable")),
+      acceptedRecord("remote_disable", cliActor(), deviceTarget("client_security_phone"), remoteAccepted("remote_disable"))
     ];
     for (const candidate of invalid) expect(() => selectedSecurityAuditEventRecordSchema.parse(candidate)).toThrow();
   });
@@ -193,21 +212,17 @@ describe("selected security audit contracts", () => {
         csrf_generation_before: Number.MAX_SAFE_INTEGER + 1
       }),
       acceptedRecord("lock", cliActor(), hostTarget(), { schema_version: 1, requested_locked: false }),
-      acceptedRecord("lan_configure", cliActor(), hostTarget(), {
-        schema_version: 1,
-        bind_address_family: "ipv4",
-        bind_port: 0,
-        certificate_change_requested: true
+      acceptedRecord("remote_enable", cliActor(), hostTarget(), {
+        ...remoteAccepted("remote_enable"),
+        serve_state: "foreign"
       }),
       terminalRecord("pair_request", cliActor(), hostTarget(), "succeeded", null, {
         schema_version: 1,
         pairing_id: "pair id with spaces"
       }),
-      terminalRecord("certificate_rotate", cliActor(), hostTarget(), "succeeded", null, {
-        schema_version: 1,
-        certificate_changed: true,
-        certificate_fingerprint_sha256: "A".repeat(64),
-        certificate_expires_at: terminalAt
+      terminalRecord("remote_disable", cliActor(), hostTarget(), "succeeded", null, {
+        ...remoteSucceeded("remote_disable"),
+        admission: "open"
       })
     ];
     for (const candidate of malformed) {
@@ -221,10 +236,22 @@ describe("selected security audit contracts", () => {
     expect(() => selectedSecurityAuditEventRecordSchema.parse(legacy)).toThrow();
 
     for (const action of selectedSecurityAuditActions) {
-      const rejected = terminalRecord(action, actorFor(action), targetFor(action), "rejected", "validation_error", {
-        schema_version: 1
-      });
+      const rejected = terminalRecord(
+        action,
+        actorFor(action),
+        targetFor(action),
+        "rejected",
+        "validation_error",
+        rejectedSummary(action)
+      );
       expect(selectedSecurityAuditEventRecordSchema.parse(rejected).outcome).toBe("rejected");
+    }
+  });
+
+  it("keeps frozen version-1 LAN and certificate records readable but outside the selected write schema", () => {
+    for (const candidate of historicalAcceptedRecords()) {
+      expect(selectedSecurityAuditV1EventRecordSchema.parse(candidate)).toEqual(candidate);
+      expect(selectedSecurityAuditEventRecordSchema.safeParse(candidate).success).toBe(false);
     }
   });
 });
@@ -243,15 +270,8 @@ function acceptedRecords(): readonly Readonly<Record<string, unknown>>[] {
     }),
     acceptedRecord("lock", dashboardActor("write"), hostTarget(), { schema_version: 1, requested_locked: true }),
     acceptedRecord("unlock", cliActor(), hostTarget(), { schema_version: 1, requested_locked: false }),
-    acceptedRecord("lan_configure", cliActor(), hostTarget(), {
-      schema_version: 1,
-      bind_address_family: "ipv4",
-      bind_port: 3777,
-      certificate_change_requested: true
-    }),
-    acceptedRecord("lan_enable", cliActor(), hostTarget(), { schema_version: 1, requested_lan_enabled: true }),
-    acceptedRecord("lan_disable", cliActor(), hostTarget(), { schema_version: 1, requested_lan_enabled: false }),
-    acceptedRecord("certificate_rotate", cliActor(), hostTarget(), { schema_version: 1, rotation_requested: true })
+    acceptedRecord("remote_enable", cliActor(), hostTarget(), remoteAccepted("remote_enable")),
+    acceptedRecord("remote_disable", cliActor(), hostTarget(), remoteAccepted("remote_disable"))
   ];
 }
 
@@ -281,19 +301,68 @@ function succeededRecords(): readonly Readonly<Record<string, unknown>>[] {
       locked: true
     }),
     terminalRecord("unlock", cliActor(), hostTarget(), "succeeded", null, { schema_version: 1, locked: false }),
-    terminalRecord("lan_configure", cliActor(), hostTarget(), "succeeded", null, {
-      schema_version: 1,
-      configuration_changed: true
-    }),
-    terminalRecord("lan_enable", cliActor(), hostTarget(), "succeeded", null, { schema_version: 1, lan_enabled: true }),
-    terminalRecord("lan_disable", cliActor(), hostTarget(), "succeeded", null, { schema_version: 1, lan_enabled: false }),
-    terminalRecord("certificate_rotate", cliActor(), hostTarget(), "succeeded", null, {
-      schema_version: 1,
-      certificate_changed: true,
-      certificate_fingerprint_sha256: "a".repeat(64),
-      certificate_expires_at: "2027-07-11T20:00:00.000Z"
-    })
+    terminalRecord("remote_enable", cliActor(), hostTarget(), "succeeded", null, remoteSucceeded("remote_enable")),
+    terminalRecord("remote_disable", cliActor(), hostTarget(), "succeeded", null, remoteSucceeded("remote_disable"))
   ];
+}
+
+function historicalAcceptedRecords(): readonly Readonly<Record<string, unknown>>[] {
+  return [
+    acceptedRecord("lan_configure", cliActor(), hostTarget(), {
+      schema_version: 1,
+      bind_address_family: "ipv4",
+      bind_port: 3777,
+      certificate_change_requested: true
+    }),
+    acceptedRecord("lan_enable", cliActor(), hostTarget(), { schema_version: 1, requested_lan_enabled: true }),
+    acceptedRecord("lan_disable", cliActor(), hostTarget(), { schema_version: 1, requested_lan_enabled: false }),
+    acceptedRecord("certificate_rotate", cliActor(), hostTarget(), { schema_version: 1, rotation_requested: true })
+  ];
+}
+
+function remoteAccepted(action: "remote_disable" | "remote_enable") {
+  return {
+    schema_version: 1,
+    action,
+    requested_intent: action === "remote_enable" ? "enabled" : "disabled",
+    profile_state: "dedicated",
+    serve_state: action === "remote_enable" ? "absent" : "exact",
+    phase: "accepted",
+    outcome: "accepted"
+  } as const;
+}
+
+function remoteSucceeded(action: "remote_disable" | "remote_enable") {
+  return {
+    schema_version: 1,
+    action,
+    requested_intent: action === "remote_enable" ? "enabled" : "disabled",
+    profile_state: "dedicated",
+    serve_state: action === "remote_enable" ? "exact" : "absent",
+    phase: "terminal",
+    outcome: "succeeded",
+    admission: action === "remote_enable" ? "open" : "closed",
+    intent_persisted: true,
+    serve_result: action === "remote_enable" ? "applied" : "removed",
+    reason: null
+  } as const;
+}
+
+function rejectedSummary(action: (typeof selectedSecurityAuditActions)[number]) {
+  if (action !== "remote_enable" && action !== "remote_disable") return { schema_version: 1 } as const;
+  return {
+    schema_version: 1,
+    action,
+    requested_intent: action === "remote_enable" ? "enabled" : "disabled",
+    profile_state: "other",
+    serve_state: null,
+    phase: "terminal",
+    outcome: "rejected",
+    admission: "closed",
+    intent_persisted: false,
+    serve_result: "not_attempted",
+    reason: "profile_other"
+  } as const;
 }
 
 function acceptedRecord(action: string, actor: unknown, target: unknown, payload_summary: unknown) {

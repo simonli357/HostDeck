@@ -1,4 +1,6 @@
 import {
+  type HistoricalSelectedNetworkAuditAction,
+  historicalSelectedNetworkAuditActions,
   type SelectedAuditAction,
   type SelectedOperationKind,
   selectedAuditActions
@@ -49,7 +51,7 @@ export const selectedApiTargetKinds = [
   "device"
 ] as const;
 export const selectedApiAuditExecutors = ["selected_write_gate", "security_executor"] as const;
-export const selectedApiAuditCatalogStates = ["selected", "owned_extension"] as const;
+export const selectedApiAuditCatalogStates = ["selected", "owned_extension", "historical"] as const;
 export const selectedApiCredentialEffects = [
   "none",
   "set_device_cookie",
@@ -143,6 +145,7 @@ export const selectedApiSchemaIds = [
 const selectedApiAuditExtensions = ["session_start"] as const;
 export const selectedApiAuditActions = Object.freeze([
   ...selectedAuditActions,
+  ...historicalSelectedNetworkAuditActions,
   ...selectedApiAuditExtensions
 ]);
 
@@ -160,7 +163,7 @@ export type SelectedApiCredentialEffect = (typeof selectedApiCredentialEffects)[
 export type SelectedApiRouteOwnerTask = (typeof selectedApiRouteOwnerTasks)[number];
 export type SelectedApiSchemaId = (typeof selectedApiSchemaIds)[number];
 export type SelectedApiAuditAction = (typeof selectedApiAuditActions)[number];
-export type SelectedApiAuditCatalogOwnerTask = "IFC-V1-040";
+export type SelectedApiAuditCatalogOwnerTask = "IFC-V1-040" | "IFC-V1-075";
 
 export interface SelectedApiRequestContracts {
   readonly params: SelectedApiSchemaId | null;
@@ -749,7 +752,7 @@ export const selectedApiRouteManifest: readonly SelectedApiRouteManifestEntry[] 
     ...localAdminPolicy,
     target: "host",
     operation_kind: null,
-    audit: securityAudit("lan_configure"),
+    audit: historicalSecurityAudit("lan_configure"),
     handler: "network.configure",
     owner_task: "IFC-V1-031"
   }),
@@ -764,7 +767,7 @@ export const selectedApiRouteManifest: readonly SelectedApiRouteManifestEntry[] 
     ...localAdminPolicy,
     target: "host",
     operation_kind: null,
-    audit: securityAudit("lan_enable"),
+    audit: historicalSecurityAudit("lan_enable"),
     handler: "network.enable",
     owner_task: "IFC-V1-031"
   }),
@@ -779,7 +782,7 @@ export const selectedApiRouteManifest: readonly SelectedApiRouteManifestEntry[] 
     ...localAdminPolicy,
     target: "host",
     operation_kind: null,
-    audit: securityAudit("lan_disable"),
+    audit: historicalSecurityAudit("lan_disable"),
     handler: "network.disable",
     owner_task: "IFC-V1-031"
   })
@@ -819,6 +822,15 @@ function selectedWriteAudit(action: SelectedAuditAction): SelectedApiAuditContra
 
 function securityAudit(action: SelectedAuditAction): SelectedApiAuditContract {
   return { executor: "security_executor", action, catalog_state: "selected", catalog_owner_task: null };
+}
+
+function historicalSecurityAudit(action: HistoricalSelectedNetworkAuditAction): SelectedApiAuditContract {
+  return {
+    executor: "security_executor",
+    action,
+    catalog_state: "historical",
+    catalog_owner_task: "IFC-V1-075"
+  };
 }
 
 function extensionAudit(
