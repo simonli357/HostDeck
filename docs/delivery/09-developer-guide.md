@@ -13,6 +13,7 @@ Owns setup context, environment policy, services, and operational notes.
 | Required Codex for selected adapter work | Exact `codex-cli 0.144.0` must be on `PATH`; `HOSTDECK_CODEX_BIN` may name another executable for binding/smoke commands. The reviewed V1 binding uses experimental API for `/plan`. |
 | Linux command sandbox | Command-backed exact-Codex smokes require Bubblewrap to create an unprivileged user namespace. Ubuntu 24.04 hosts with `kernel.apparmor_restrict_unprivileged_userns=1` require the packaged `bwrap-userns-restrict` AppArmor profile to be installed and loaded. Do not replace this prerequisite with a sandbox or approval downgrade. |
 | Tmux | `tmux 3.4` is required for historical smoke and as a test-only terminal emulator for the real exact-thread TUI smoke; it is not the selected production runtime. |
+| Browser validation | Playwright 1.61.1 with its Chromium 1228 bundle is required for the fragment/history pairing suite. |
 | Hosted services | None. HostDeck is local-first and stores state locally. |
 
 ## Setup
@@ -20,6 +21,7 @@ Owns setup context, environment policy, services, and operational notes.
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
 ```
 
 The frozen offline install and native lease rebuild were validated for the current workspace on 2026-07-09. If a previous install skipped an approved native build, remove `node_modules/` and rerun the frozen install.
@@ -53,7 +55,8 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | Integration tests | `pnpm test:integration` | Runs cross-module failure-ordering tests. |
 | Service smoke | `pnpm exec vitest run tests/service-mode-smoke.test.ts` | Proves foreground HTTP service status/restart and CLI start/list/send/stop through the service with fake tmux. |
 | Tmux smoke | `pnpm test:tmux` | Requires `tmux` and `codex` on `PATH`; runs required real managed-session smoke. |
-| Web state tests | `pnpm test:web` | Runs historical FE-V1-001 view-model checks plus the selected FE-V1-004 mobile state/interaction export and first-viewport fixture checks. |
+| Web state tests | `pnpm test:web` | Runs view-model, selected mobile fixture, and headless pairing-bootstrap checks. |
+| Pairing browser tests | `pnpm test:browser:pairing` | Runs the real Chromium history/referrer/reload/two-tab/failure boundary; requires the Playwright Chromium bundle. |
 | Later E2E tests | `pnpm test:e2e` | Placeholder; fails loudly until `REL-V1-007` implements it. |
 | Later build/package | `pnpm build` | Placeholder; fails loudly until `REL-V1-007` implements it. |
 | Later release smoke | `pnpm smoke:local` | Placeholder; fails loudly until `REL-V1-006` implements it. |

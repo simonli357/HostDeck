@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-077` Implement fragment-safe remote pairing URL/QR creation and browser claim composition | ready | none | Uses the proven ready remote origin and app authorization to make physical-phone pairing possible without leaking the one-time code. |
+| 1 | `IFC-V1-077` Implement fragment-safe remote pairing URL/QR creation and browser claim composition | in_progress | none | Automated URL/QR/browser/server composition is complete; restore USB data enumeration and record the required real-phone scan/claim without leaking the one-time code. |
 | 2 | `IFC-V1-069` Implement the bounded projected-event diagnostic read route | ready | none | Exposes the completed retained projection contract through one bounded authenticated read. |
 | 3 | `IFC-V1-060` Implement managed-thread resume metadata API and CLI | ready | none | Exposes the completed exact safe TUI resume contract without executing a phone shell. |
 | 4 | `IFC-V1-043` Implement the read-only usage API and CLI | ready | none | Exposes the completed exact usage capability through the authenticated selected manifest. |

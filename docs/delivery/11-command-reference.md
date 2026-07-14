@@ -7,6 +7,7 @@ Copy-paste commands only. Put explanation in `docs/delivery/09-developer-guide.m
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
 ```
 
 ## Run
@@ -27,6 +28,7 @@ pnpm test:unit
 pnpm test:contract
 pnpm test:integration
 pnpm test:web
+pnpm test:browser:pairing
 pnpm test:tmux
 pnpm exec vitest run packages/cli/src/remote-control-client.test.ts packages/cli/src/remote-cli.test.ts
 pnpm smoke:remote-control
