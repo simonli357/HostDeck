@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-073` Implement external-origin and Serve proxy trust boundary | in_progress | none | Applies the frozen Host/Origin/header/provenance contract now that exact observation and ownership-safe Serve mutation are complete. |
+| 1 | `IFC-V1-074` Compose admitted remote source with pairing and application authorization | in_progress | none | Applies the completed proxy provenance to source limits, paired-device authority, CSRF, lock, and revoke without granting authority from tailnet identity. |
 | 2 | `IFC-V1-076` Implement remote enable/status/disable application service, API read, and local CLI | ready | none | Composes the completed observer, manager, durable intent/audit, and selected route ownership into truthful explicit controls. |
 | 3 | `FE-V1-004` Rebase mobile information architecture and state matrix | ready | none | Maps phone-first journeys to the accepted remote/access contracts before replacement visual directions are generated. |
 | 4 | `IFC-V1-069` Implement the bounded projected-event diagnostic read route | ready | none | Exposes the completed retained projection contract through one bounded authenticated read. |
