@@ -1,6 +1,6 @@
 # BLK-V1-01 Contracts, Core, And Fixtures
 
-Status: reopened for the selected remote-ingress contract outcome.
+Status: complete.
 
 Owns the normalized HostDeck language consumed by storage, Codex adapter, API/CLI, and UI.
 
@@ -43,7 +43,7 @@ Requirement refs: `FR-002`, `FR-006` to `FR-009`, `FR-011` to `FR-018`, `NFR-001
 | Core invariant and reconciliation hardening | `FND-V1-016` | Done. |
 | Reopened module hardening | `FND-V1-091` | Done. |
 | Remote-ingress/access contract and fixture rebaseline | `FND-V1-018` | Done; `artifacts/fnd-v1-018-remote-ingress-contracts.md`. |
-| Focused remote contract hardening | `FND-V1-092` | In progress. |
+| Focused remote contract hardening | `FND-V1-092` | Done; `artifacts/fnd-v1-092-remote-ingress-hardening.md`. |
 
 Owning backlog: `docs/tracking/backlog/foundation.md`.
 
@@ -64,4 +64,4 @@ Owning backlog: `docs/tracking/backlog/foundation.md`.
 - Timestamp, cursor, lifecycle, target, compatibility, and audit outcome defects identified by `REL-V1-011` have regression tests.
 - `FND-V1-092` links current remote-path evidence and the block matrix marks complete without qualification.
 
-Prior structured-foundation hardening evidence: `artifacts/fnd-v1-091-selected-foundation-hardening.md`. Current completion requires `FND-V1-092`.
+Prior structured-foundation hardening evidence: `artifacts/fnd-v1-091-selected-foundation-hardening.md`. Remote-ingress completion evidence: `artifacts/fnd-v1-092-remote-ingress-hardening.md`.
