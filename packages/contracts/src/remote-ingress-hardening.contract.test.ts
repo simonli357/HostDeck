@@ -210,10 +210,10 @@ describe("remote proxy hardening", () => {
       host_mismatch: "exact",
       origin_mismatch: "exact",
       source_invalid: "invalid",
-      standard_identity_invalid: "exact",
-      untrusted_tailscale_lookalike: "exact",
+      standard_identity_invalid: "absent",
+      untrusted_tailscale_lookalike: "absent",
       remote_generation_stale: "exact",
-      unknown_proxy_context: "exact"
+      unknown_proxy_context: "invalid"
     } as const;
 
     for (const reason of remoteProxyTrustRejectionReasons) {
@@ -222,17 +222,84 @@ describe("remote proxy hardening", () => {
         reason
       });
     }
+    for (const forwarding of ["absent", "invalid"] as const) {
+      expect(remoteProxyTrustDecisionSchema.parse(rejectedProxy("missing_forwarding_header", forwarding))).toMatchObject({
+        headers: { forwarding }
+      });
+    }
+    for (const reason of [
+      "standard_identity_invalid",
+      "untrusted_tailscale_lookalike",
+      "unknown_proxy_context"
+    ] as const) {
+      for (const forwarding of ["absent", "exact", "invalid"] as const) {
+        expect(remoteProxyTrustDecisionSchema.parse(rejectedProxy(reason, forwarding))).toMatchObject({
+          headers: { forwarding },
+          reason
+        });
+      }
+    }
     for (const [reason, wrongForwarding] of [
       ["host_mismatch", "invalid"],
       ["origin_mismatch", "absent"],
       ["source_invalid", "exact"],
-      ["standard_identity_invalid", "invalid"],
-      ["untrusted_tailscale_lookalike", "absent"],
+      ["missing_forwarding_header", "exact"],
+      ["duplicate_forwarding_header", "exact"],
+      ["invalid_forwarded_proto", "exact"],
       ["remote_generation_stale", "invalid"],
-      ["unknown_proxy_context", "absent"]
     ] as const) {
       expect(remoteProxyTrustDecisionSchema.safeParse(rejectedProxy(reason, wrongForwarding)).success, reason).toBe(false);
     }
+  });
+
+  it("preserves truthful assessments when hostile proxy signals are combined", () => {
+    const lookalikeAndInvalidIdentity = {
+      ...rejectedProxy("untrusted_tailscale_lookalike", "absent"),
+      headers: {
+        forwarding: "absent",
+        standard_identity: "invalid",
+        untrusted_lookalike_present: true
+      }
+    } as const;
+    const unknownAndInvalidIdentity = {
+      ...rejectedProxy("unknown_proxy_context", "invalid"),
+      headers: {
+        forwarding: "invalid",
+        standard_identity: "invalid",
+        untrusted_lookalike_present: false
+      }
+    } as const;
+    const identityAndMissingForwarding = {
+      ...rejectedProxy("standard_identity_invalid", "absent"),
+      headers: {
+        forwarding: "absent",
+        standard_identity: "invalid",
+        untrusted_lookalike_present: false
+      }
+    } as const;
+
+    expect(remoteProxyTrustDecisionSchema.parse(lookalikeAndInvalidIdentity)).toEqual(lookalikeAndInvalidIdentity);
+    expect(remoteProxyTrustDecisionSchema.parse(unknownAndInvalidIdentity)).toEqual(unknownAndInvalidIdentity);
+    expect(remoteProxyTrustDecisionSchema.parse(identityAndMissingForwarding)).toEqual(identityAndMissingForwarding);
+
+    expect(
+      remoteProxyTrustDecisionSchema.safeParse({
+        ...lookalikeAndInvalidIdentity,
+        reason: "standard_identity_invalid"
+      }).success
+    ).toBe(false);
+    expect(
+      remoteProxyTrustDecisionSchema.safeParse({
+        ...identityAndMissingForwarding,
+        reason: "missing_forwarding_header"
+      }).success
+    ).toBe(false);
+    expect(
+      remoteProxyTrustDecisionSchema.safeParse({
+        ...identityAndMissingForwarding,
+        headers: { ...identityAndMissingForwarding.headers, standard_identity: "absent" }
+      }).success
+    ).toBe(false);
   });
 
   it("enforces safe remote-generation bounds while retaining only a source hash", () => {

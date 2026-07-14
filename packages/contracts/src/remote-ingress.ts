@@ -417,19 +417,19 @@ export const remoteProxyTrustRejectionReasons = [
   "unknown_proxy_context"
 ] as const;
 
-const remoteProxyRequiredForwardingByReason: Partial<
-  Record<(typeof remoteProxyTrustRejectionReasons)[number], "absent" | "exact" | "invalid">
+const remoteProxyAllowedForwardingByReason: Partial<
+  Record<
+    (typeof remoteProxyTrustRejectionReasons)[number],
+    readonly ("absent" | "exact" | "invalid")[]
+  >
 > = {
-  missing_forwarding_header: "absent",
-  duplicate_forwarding_header: "invalid",
-  invalid_forwarded_proto: "invalid",
-  host_mismatch: "exact",
-  origin_mismatch: "exact",
-  source_invalid: "invalid",
-  standard_identity_invalid: "exact",
-  untrusted_tailscale_lookalike: "exact",
-  remote_generation_stale: "exact",
-  unknown_proxy_context: "exact"
+  missing_forwarding_header: ["absent", "invalid"],
+  duplicate_forwarding_header: ["invalid"],
+  invalid_forwarded_proto: ["invalid"],
+  host_mismatch: ["exact"],
+  origin_mismatch: ["exact"],
+  source_invalid: ["invalid"],
+  remote_generation_stale: ["exact"]
 };
 
 const localRequestProvenanceSchema = z
@@ -486,16 +486,21 @@ const remoteProxyTrustDecisionDataSchema = z
       if (value.provenance !== null || value.reason === null) {
         context.addIssue({ code: "custom", message: "Rejected proxy context cannot produce trusted provenance." });
       }
-      if (
-        value.headers.untrusted_lookalike_present !== (value.reason === "untrusted_tailscale_lookalike")
-      ) {
+      const lookalikeReason = value.reason === "untrusted_tailscale_lookalike";
+      if (value.headers.untrusted_lookalike_present !== lookalikeReason) {
         addIssue(context, "reason", "Untrusted Tailscale lookalikes require their exact rejection reason.");
       }
-      if ((value.headers.standard_identity === "invalid") !== (value.reason === "standard_identity_invalid")) {
+      const identityReason = value.reason === "standard_identity_invalid";
+      const unknownReservedContext = value.reason === "unknown_proxy_context";
+      if (
+        !value.headers.untrusted_lookalike_present &&
+        !unknownReservedContext &&
+        ((value.headers.standard_identity === "invalid") !== identityReason)
+      ) {
         addIssue(context, "reason", "Invalid standard identity headers require their exact rejection reason.");
       }
-      const requiredForwarding = value.reason === null ? undefined : remoteProxyRequiredForwardingByReason[value.reason];
-      if (requiredForwarding !== undefined && value.headers.forwarding !== requiredForwarding) {
+      const allowedForwarding = value.reason === null ? undefined : remoteProxyAllowedForwardingByReason[value.reason];
+      if (allowedForwarding !== undefined && !allowedForwarding.includes(value.headers.forwarding)) {
         addIssue(context, "headers", "Proxy rejection reason must match the normalized forwarding-header assessment.");
       }
       return;

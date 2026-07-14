@@ -14,6 +14,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-006 | Exact Codex emits notifications after the initialize response but before `initialized`; the connection treats them as pre-initialize violations and terminates. | High | Small bugfix | Closed | `INT-V1-004` / `INT-V1-006` | Bounded ordered response/ack queue, hostile-window tests, exact private-socket smokes, and semantic capture. |
 | BUG-007 | The goal-based legacy thread materialization path sets an active goal, which autonomously starts model turns despite its no-model contract. | Critical | Backlog bugfix | Closed | `INT-V1-005` / `INT-V1-006` | Paused internal goal, active-marker recovery, idle/zero-turn/token/history real smoke, corrected evidence, `DEC-022`. |
 | BUG-008 | Private Serve is classified as public because the observer treats a nonempty `funnel status --json` result as a distinct Funnel projection. | High | Backlog bugfix | Closed | `IFC-V1-071` / `IFC-V1-072` | Exact 1.98.8 source/live semantics, duplicate-read equality regression, corrected active observer smoke, and private enable/read-back/path-off smoke. |
+| BUG-009 | Proxy-decision invariants reject truthful combined hostile-header assessments unless lower-priority forwarding and identity evidence is falsely normalized. | High | Backlog bugfix | Closed | `FND-V1-018` / `IFC-V1-073` | Precedence-aware schema plus combined lookalike/unknown/identity/forwarding contract regressions. |
 
 ## Routing
 
@@ -132,3 +133,16 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Fix: require the two parsed ServeConfig reads to be deeply equal, fail disagreement as `schema_invalid`, and classify public state only when `AllowFunnel` is present. Preserve the second bounded read as a race/consistency check.
 - Validation: 23 focused observer regressions, corrected real active-profile observer smoke, exact-source review, normalized live equality/cleanup inspection, and real manager private enable/exact read-back/HTTPS proxy/path-off/repeat smoke with final empty state.
 - Closed by: `IFC-V1-071` corrective implementation and `IFC-V1-072` live validation; evidence in `artifacts/ifc-v1-070-tailscale-remote-ingress-spike.md` and `artifacts/ifc-v1-071-tailscale-observer.md`.
+
+### BUG-009 Combined Proxy Rejections Require False Assessments
+
+- Symptom: a request carrying an untrusted `X-Tailscale-*` lookalike plus missing forwarding or malformed standard identity could not produce a schema-valid rejection while retaining those actual assessments.
+- Impact: the proxy evaluator would have to invent `forwarding: exact`, hide a simultaneous identity defect, or fail contract parsing on hostile input. That makes diagnostics misleading and can turn an intended fail-closed path into an internal error.
+- Route: backlog bugfix against completed `FND-V1-018`, resolved before the dependent `IFC-V1-073` evaluator implementation.
+- Related requirements: `NFR-005`, `SFR-002`, `SFR-012`.
+- Affected / owning task: normalized proxy-decision contract in `FND-V1-018`; executable precedence and regression evidence in `IFC-V1-073`.
+- Blocks: resolved before the `IFC-V1-073` evaluator consumes the contract.
+- Root cause: schema refinements equated each lookalike or identity assessment with one exclusive reason and required exact forwarding for lookalike, identity, and unknown-context reasons. Hostile signals are independent and can coexist; only the highest-priority reason is singular.
+- Fix: require lookalike precedence, permit unknown reserved context to precede malformed standard identity, constrain forwarding only for reasons that logically determine its assessment, and allow missing forwarding to be wholly absent or partial/invalid.
+- Validation: all rejection reasons retain coherent representative evidence; strict reason-specific forwarding contradictions reject; combined lookalike plus malformed identity, unknown reserved plus malformed identity, and malformed identity plus missing forwarding preserve truthful assessments; incorrect lower-priority reasons reject.
+- Closed by: `IFC-V1-073` contract correction and focused contract suite.
