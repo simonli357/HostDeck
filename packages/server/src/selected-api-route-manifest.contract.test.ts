@@ -1,6 +1,12 @@
-import { selectedAuditActions, selectedOperationKinds } from "@hostdeck/core";
+import {
+  historicalSelectedNetworkAuditActions,
+  selectedAuditActions,
+  selectedOperationKinds
+} from "@hostdeck/core";
 import { describe, expect, it } from "vitest";
 import { apiRouteContracts } from "./api-route-contracts.js";
+import * as serverPackage from "./index.js";
+import { historicalLanRouteInventory } from "./lan-network-routes.js";
 import {
   selectedApiAuditActions,
   selectedApiAuthMechanisms,
@@ -46,10 +52,9 @@ const expectedRouteIds = [
   "device_revoke",
   "host_lock",
   "host_unlock",
-  "network_state",
-  "network_configure",
-  "network_enable",
-  "network_disable"
+  "remote_status",
+  "remote_enable",
+  "remote_disable"
 ] as const;
 
 const expectedMutationActions = [
@@ -60,25 +65,24 @@ const expectedMutationActions = [
   "device_revoke",
   "goal",
   "interrupt",
-  "lan_configure",
-  "lan_disable",
-  "lan_enable",
   "lock",
   "model",
   "pair_claim",
   "pair_request",
   "plan",
   "prompt",
+  "remote_disable",
+  "remote_enable",
   "session_start",
   "unlock"
 ] as const;
 
 describe("selected API route manifest", () => {
-  it("freezes exactly the reviewed 36-route V1 inventory", () => {
+  it("freezes exactly the rebaselined 35-route V1 inventory", () => {
     expect(selectedApiRouteManifest.map((route) => route.id)).toEqual(expectedRouteIds);
-    expect(selectedApiRouteManifest).toHaveLength(36);
-    expect(new Set(selectedApiRouteManifest.map((route) => route.id)).size).toBe(36);
-    expect(new Set(selectedApiRouteManifest.map((route) => `${route.method} ${route.path}`)).size).toBe(36);
+    expect(selectedApiRouteManifest).toHaveLength(35);
+    expect(new Set(selectedApiRouteManifest.map((route) => route.id)).size).toBe(35);
+    expect(new Set(selectedApiRouteManifest.map((route) => `${route.method} ${route.path}`)).size).toBe(35);
     expect(new Set(selectedApiRouteManifest.map((route) => route.family))).toEqual(
       new Set(selectedApiRouteFamilies)
     );
@@ -206,19 +210,13 @@ describe("selected API route manifest", () => {
   });
 
   it("makes audit-catalog extensions explicit and leaves no unknown action", () => {
-    const knownActions = new Set(selectedApiAuditActions);
+    const knownActions = new Set<string>(selectedApiAuditActions);
     const selectedActions = new Set(selectedAuditActions);
     const ownedExtensions = selectedApiRouteManifest
       .filter((route) => route.audit?.catalog_state === "owned_extension")
       .map((route) => route.audit?.action)
       .sort();
-    const historicalActions = selectedApiRouteManifest
-      .filter((route) => route.audit?.catalog_state === "historical")
-      .map((route) => route.audit?.action)
-      .sort();
-
     expect(ownedExtensions).toEqual(["session_start"]);
-    expect(historicalActions).toEqual(["lan_configure", "lan_disable", "lan_enable"]);
     expect(
       Object.fromEntries(
         selectedApiRouteManifest
@@ -226,13 +224,14 @@ describe("selected API route manifest", () => {
           .map((route) => [route.audit?.action, route.audit?.catalog_owner_task])
       )
     ).toEqual({ session_start: "IFC-V1-040" });
-    expect(
-      Object.fromEntries(
-        selectedApiRouteManifest
-          .filter((route) => route.audit?.catalog_state === "historical")
-          .map((route) => [route.audit?.action, route.audit?.catalog_owner_task])
-      )
-    ).toEqual({ lan_configure: "IFC-V1-075", lan_disable: "IFC-V1-075", lan_enable: "IFC-V1-075" });
+    for (const action of historicalSelectedNetworkAuditActions) {
+      expect(knownActions.has(action)).toBe(false);
+      expect(
+        selectedApiRouteManifest.some(
+          (route) => route.audit !== null && String(route.audit.action) === action
+        )
+      ).toBe(false);
+    }
     for (const route of selectedApiRouteManifest) {
       if (route.audit === null) continue;
       expect(knownActions.has(route.audit.action)).toBe(true);
@@ -267,9 +266,12 @@ describe("selected API route manifest", () => {
     });
     expect(byId("pair_claim")).toMatchObject({ auth: "pairing_code", authority: "pair_claim" });
     expect(byId("access_state")).toMatchObject({ auth: "optional_device_cookie", authority: "access_read" });
-    expect(byId("network_state")).toMatchObject({ auth: "optional_device_cookie", authority: "access_read" });
+    expect(byId("remote_status")).toMatchObject({
+      auth: "device_cookie",
+      authority: "access_read"
+    });
     expect(byId("host_unlock")).toMatchObject({ auth: "local_admin", lock: "lock_transition" });
-    for (const id of ["pair_request", "network_configure", "network_enable", "network_disable"] as const) {
+    for (const id of ["pair_request", "remote_enable", "remote_disable"] as const) {
       expect(byId(id)).toMatchObject({ auth: "local_admin", authority: "local_admin" });
     }
 
@@ -287,6 +289,126 @@ describe("selected API route manifest", () => {
       csrf_bootstrap: "rotate_csrf",
       device_revoke: "invalidate_device"
     });
+  });
+
+  it("pins remote status and local-admin mutation ownership without a transport or identity fallback", () => {
+    const remoteRoutes = selectedApiRouteManifest.filter((route) => route.family === "remote");
+    expect(remoteRoutes).toEqual([
+      expect.objectContaining({
+        id: "remote_status",
+        method: "GET",
+        path: "/api/v1/remote/status",
+        transport: "json",
+        request: { params: null, query: null, body: null },
+        response: {
+          success: "remote_ingress_public_state_v1",
+          error: "selected_api_error_v1"
+        },
+        auth: "device_cookie",
+        authority: "access_read",
+        csrf: "none",
+        lock: "not_applicable",
+        target: "host",
+        audit: null,
+        handler: "remote.readStatus",
+        owner_task: "IFC-V1-076"
+      }),
+      expect.objectContaining({
+        id: "remote_enable",
+        method: "POST",
+        path: "/api/v1/remote/enable",
+        request: { params: null, query: null, body: "remote_enable_request_v1" },
+        response: {
+          success: "remote_ingress_public_state_v1",
+          error: "selected_api_error_v1"
+        },
+        auth: "local_admin",
+        authority: "local_admin",
+        csrf: "none",
+        lock: "not_applicable",
+        audit: {
+          executor: "security_executor",
+          action: "remote_enable",
+          catalog_state: "selected",
+          catalog_owner_task: null
+        },
+        handler: "remote.enable",
+        owner_task: "IFC-V1-076"
+      }),
+      expect.objectContaining({
+        id: "remote_disable",
+        method: "POST",
+        path: "/api/v1/remote/disable",
+        request: { params: null, query: null, body: "remote_disable_request_v1" },
+        response: {
+          success: "remote_ingress_public_state_v1",
+          error: "selected_api_error_v1"
+        },
+        auth: "local_admin",
+        authority: "local_admin",
+        csrf: "none",
+        lock: "not_applicable",
+        audit: {
+          executor: "security_executor",
+          action: "remote_disable",
+          catalog_state: "selected",
+          catalog_owner_task: null
+        },
+        handler: "remote.disable",
+        owner_task: "IFC-V1-076"
+      })
+    ]);
+
+    const remoteContract = JSON.stringify(remoteRoutes);
+    expect(remoteContract).not.toMatch(
+      /pairing_code|tailscale|tailnet_identity|profile|node_key|auth_key|raw_|secret|token/iu
+    );
+    expect(remoteRoutes.every((route) => route.transport === "json")).toBe(true);
+    expect(remoteRoutes.filter((route) => route.method === "POST").every((route) => route.audit !== null)).toBe(true);
+    expect(byId("pair_request")).toMatchObject({
+      path: "/api/v1/access/pairing-codes",
+      audit: { action: "pair_request" },
+      handler: "access.createPairingCode",
+      owner_task: "IFC-V1-028"
+    });
+  });
+
+  it("contains no selected LAN or custom-certificate route, schema, action, or owner", () => {
+    const serialized = JSON.stringify({
+      actions: selectedApiAuditActions,
+      routes: selectedApiRouteManifest,
+      schemas: selectedApiSchemaIds
+    });
+    expect(serialized).not.toMatch(/"lan_|\/network(?:\/|")|certificate/iu);
+    expect(selectedApiRouteOwnerTasks).not.toContain("IFC-V1-031");
+  });
+
+  it("isolates the frozen LAN route inventory outside the selected manifest and package exports", () => {
+    expect(historicalLanRouteInventory).toEqual([
+      { id: "network_state", method: "GET", path: "/api/v1/network" },
+      { id: "network_configure", method: "POST", path: "/api/v1/network/configure" },
+      { id: "network_enable", method: "POST", path: "/api/v1/network/enable" },
+      { id: "network_disable", method: "POST", path: "/api/v1/network/disable" }
+    ]);
+    expectRecursivelyFrozen(historicalLanRouteInventory);
+
+    const selectedRoutes = new Set(
+      selectedApiRouteManifest.map((route) => `${route.method} ${route.path}`)
+    );
+    expect(
+      historicalLanRouteInventory.every(
+        (route) => !selectedRoutes.has(`${route.method} ${route.path}`)
+      )
+    ).toBe(true);
+    for (const exportName of [
+      "createHostDeckLanCertificatePolicy",
+      "createHostDeckLanNetworkRouteRegistration",
+      "createHostDeckLanNetworkService",
+      "historicalLanRouteInventory",
+      "hostDeckLanNetworkRouteRegistrationId"
+    ]) {
+      expect(Reflect.has(serverPackage, exportName), exportName).toBe(false);
+    }
   });
 
   it("excludes the historical terminal surface and keeps it explicitly separate", () => {

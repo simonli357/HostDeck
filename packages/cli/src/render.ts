@@ -1,6 +1,6 @@
 import type { ApiSession, HostStatusResponse, SessionListResponse, StartSessionResponse, WriteResponse } from "@hostdeck/contracts";
 import type { CliFailure } from "./errors.js";
-import type { LanCommandResult, LockCommandResult, PairingCommandResult } from "./local-admin.js";
+import type { LockCommandResult, PairingCommandResult } from "./local-admin.js";
 
 export function renderHelp(): string {
   return [
@@ -15,8 +15,6 @@ export function renderHelp(): string {
     "  codexdeck pair [--label LABEL] [--ttl-minutes MINUTES] [--read-only] [--json]",
     "  codexdeck lock [--reason TEXT] [--json]",
     "  codexdeck unlock [--json]",
-    "  codexdeck lan enable [--bind-host HOST] [--json]",
-    "  codexdeck lan disable [--json]",
     "  codexdeck help",
     "  codexdeck version",
     "",
@@ -114,24 +112,6 @@ export function renderLockCommand(response: LockCommandResult, json: boolean): s
   ].join("\n");
 }
 
-export function renderLanCommand(response: LanCommandResult, json: boolean): string {
-  if (json) {
-    return `${JSON.stringify(response, null, 2)}\n`;
-  }
-
-  const action = response.lan_enabled ? "enabled" : "disabled";
-  const reverse = response.lan_enabled ? "Run `codexdeck lan disable` to return to localhost-only mode." : "Run `codexdeck lan enable` to allow LAN binding again.";
-
-  return [
-    `LAN access ${action}.`,
-    `Bind setting: ${response.bind_mode} (${response.bind_host}:${response.bind_port})`,
-    reverse,
-    "Restart or rebind the daemon for listener changes to take effect.",
-    `Audit event: ${response.audit_event_id}`,
-    ""
-  ].join("\n");
-}
-
 export function renderVersion(version: string): string {
   return `codexdeck ${version}\n`;
 }
@@ -154,7 +134,6 @@ export function renderStatus(status: HostStatusResponse, json: boolean): string 
     `HostDeck daemon: ${readiness}`,
     `Version: ${status.version}`,
     `Bind: ${status.bind.mode} (${status.bind.host}:${status.bind.port})`,
-    `LAN: ${status.lan_enabled ? "enabled" : "disabled"}`,
     `Lock: ${status.locked ? "locked" : "unlocked"}`,
     `Storage: ${status.storage.state}`,
     `Tmux: ${status.tmux.state}`,

@@ -1,6 +1,4 @@
 import {
-  type HistoricalSelectedNetworkAuditAction,
-  historicalSelectedNetworkAuditActions,
   type SelectedAuditAction,
   type SelectedOperationKind,
   selectedAuditActions
@@ -14,7 +12,7 @@ export const selectedApiRouteFamilies = [
   "controls",
   "approvals",
   "access",
-  "network"
+  "remote"
 ] as const;
 export const selectedApiTransports = ["json", "sse"] as const;
 export const selectedApiAuthMechanisms = [
@@ -51,7 +49,7 @@ export const selectedApiTargetKinds = [
   "device"
 ] as const;
 export const selectedApiAuditExecutors = ["selected_write_gate", "security_executor"] as const;
-export const selectedApiAuditCatalogStates = ["selected", "owned_extension", "historical"] as const;
+export const selectedApiAuditCatalogStates = ["selected", "owned_extension"] as const;
 export const selectedApiCredentialEffects = [
   "none",
   "set_device_cookie",
@@ -63,7 +61,6 @@ export const selectedApiRouteOwnerTasks = [
   "IFC-V1-028",
   "IFC-V1-029",
   "IFC-V1-030",
-  "IFC-V1-031",
   "IFC-V1-035",
   "IFC-V1-039",
   "IFC-V1-040",
@@ -80,7 +77,8 @@ export const selectedApiRouteOwnerTasks = [
   "IFC-V1-064",
   "IFC-V1-065",
   "IFC-V1-068",
-  "IFC-V1-069"
+  "IFC-V1-069",
+  "IFC-V1-076"
 ] as const;
 
 export const selectedApiSchemaIds = [
@@ -107,9 +105,8 @@ export const selectedApiSchemaIds = [
   "device_revoke_request_v1",
   "lock_request_v1",
   "unlock_request_v1",
-  "lan_configure_request_v1",
-  "lan_enable_request_v1",
-  "lan_disable_request_v1",
+  "remote_enable_request_v1",
+  "remote_disable_request_v1",
   "liveness_response_v1",
   "readiness_response_v1",
   "host_status_response_v1",
@@ -137,15 +134,13 @@ export const selectedApiSchemaIds = [
   "device_list_response_v1",
   "device_revoke_response_v1",
   "host_lock_state_response_v1",
-  "network_state_response_v1",
-  "lan_mutation_response_v1",
+  "remote_ingress_public_state_v1",
   "selected_api_error_v1"
 ] as const;
 
 const selectedApiAuditExtensions = ["session_start"] as const;
 export const selectedApiAuditActions = Object.freeze([
   ...selectedAuditActions,
-  ...historicalSelectedNetworkAuditActions,
   ...selectedApiAuditExtensions
 ]);
 
@@ -163,7 +158,7 @@ export type SelectedApiCredentialEffect = (typeof selectedApiCredentialEffects)[
 export type SelectedApiRouteOwnerTask = (typeof selectedApiRouteOwnerTasks)[number];
 export type SelectedApiSchemaId = (typeof selectedApiSchemaIds)[number];
 export type SelectedApiAuditAction = (typeof selectedApiAuditActions)[number];
-export type SelectedApiAuditCatalogOwnerTask = "IFC-V1-040" | "IFC-V1-075";
+export type SelectedApiAuditCatalogOwnerTask = "IFC-V1-040";
 
 export interface SelectedApiRequestContracts {
   readonly params: SelectedApiSchemaId | null;
@@ -205,6 +200,7 @@ export interface SelectedApiRouteManifestEntry {
 
 const publicPolicy = policy("none", "public", "none", "not_applicable");
 const accessReadPolicy = policy("optional_device_cookie", "access_read", "none", "not_applicable");
+const pairedAccessReadPolicy = policy("device_cookie", "access_read", "none", "not_applicable");
 const hostReadPolicy = policy("loopback_or_device_cookie", "host_read", "none", "not_applicable");
 const sessionReadPolicy = policy("loopback_or_device_cookie", "session_read", "none", "not_applicable");
 const sessionWritePolicy = policy(
@@ -727,64 +723,49 @@ export const selectedApiRouteManifest: readonly SelectedApiRouteManifestEntry[] 
     owner_task: "IFC-V1-030"
   }),
   route({
-    id: "network_state",
-    family: "network",
+    id: "remote_status",
+    family: "remote",
     method: "GET",
-    path: "/api/v1/network",
+    path: "/api/v1/remote/status",
     transport: "json",
     request: request(null, null, null),
-    response: response("network_state_response_v1"),
-    ...accessReadPolicy,
+    response: response("remote_ingress_public_state_v1"),
+    ...pairedAccessReadPolicy,
     target: "host",
     operation_kind: null,
     audit: null,
-    handler: "network.readState",
-    owner_task: "IFC-V1-031"
+    handler: "remote.readStatus",
+    owner_task: "IFC-V1-076"
   }),
   route({
-    id: "network_configure",
-    family: "network",
+    id: "remote_enable",
+    family: "remote",
     method: "POST",
-    path: "/api/v1/network/configure",
+    path: "/api/v1/remote/enable",
     transport: "json",
-    request: request(null, null, "lan_configure_request_v1"),
-    response: response("lan_mutation_response_v1"),
+    request: request(null, null, "remote_enable_request_v1"),
+    response: response("remote_ingress_public_state_v1"),
     ...localAdminPolicy,
     target: "host",
     operation_kind: null,
-    audit: historicalSecurityAudit("lan_configure"),
-    handler: "network.configure",
-    owner_task: "IFC-V1-031"
+    audit: securityAudit("remote_enable"),
+    handler: "remote.enable",
+    owner_task: "IFC-V1-076"
   }),
   route({
-    id: "network_enable",
-    family: "network",
+    id: "remote_disable",
+    family: "remote",
     method: "POST",
-    path: "/api/v1/network/enable",
+    path: "/api/v1/remote/disable",
     transport: "json",
-    request: request(null, null, "lan_enable_request_v1"),
-    response: response("lan_mutation_response_v1"),
+    request: request(null, null, "remote_disable_request_v1"),
+    response: response("remote_ingress_public_state_v1"),
     ...localAdminPolicy,
     target: "host",
     operation_kind: null,
-    audit: historicalSecurityAudit("lan_enable"),
-    handler: "network.enable",
-    owner_task: "IFC-V1-031"
-  }),
-  route({
-    id: "network_disable",
-    family: "network",
-    method: "POST",
-    path: "/api/v1/network/disable",
-    transport: "json",
-    request: request(null, null, "lan_disable_request_v1"),
-    response: response("lan_mutation_response_v1"),
-    ...localAdminPolicy,
-    target: "host",
-    operation_kind: null,
-    audit: historicalSecurityAudit("lan_disable"),
-    handler: "network.disable",
-    owner_task: "IFC-V1-031"
+    audit: securityAudit("remote_disable"),
+    handler: "remote.disable",
+    owner_task: "IFC-V1-076"
   })
 ]);
 
@@ -822,15 +803,6 @@ function selectedWriteAudit(action: SelectedAuditAction): SelectedApiAuditContra
 
 function securityAudit(action: SelectedAuditAction): SelectedApiAuditContract {
   return { executor: "security_executor", action, catalog_state: "selected", catalog_owner_task: null };
-}
-
-function historicalSecurityAudit(action: HistoricalSelectedNetworkAuditAction): SelectedApiAuditContract {
-  return {
-    executor: "security_executor",
-    action,
-    catalog_state: "historical",
-    catalog_owner_task: "IFC-V1-075"
-  };
 }
 
 function extensionAudit(

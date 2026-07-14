@@ -23,12 +23,20 @@ import {
   assertHostDeckLanNetworkService,
   type HostDeckLanNetworkService
 } from "./lan-network-service.js";
-import {
-  type SelectedApiRouteManifestEntry,
-  selectedApiRouteManifest
-} from "./selected-api-route-manifest.js";
 
-export const hostDeckLanNetworkRouteRegistrationId = "selected-lan-network";
+/** @deprecated Historical direct-LAN evidence. Not exported by @hostdeck/server. */
+export const hostDeckLanNetworkRouteRegistrationId = "historical-lan-network";
+
+export const historicalLanRouteInventory = Object.freeze([
+  Object.freeze({ id: "network_state", method: "GET", path: "/api/v1/network" }),
+  Object.freeze({
+    id: "network_configure",
+    method: "POST",
+    path: "/api/v1/network/configure"
+  }),
+  Object.freeze({ id: "network_enable", method: "POST", path: "/api/v1/network/enable" }),
+  Object.freeze({ id: "network_disable", method: "POST", path: "/api/v1/network/disable" })
+] as const);
 
 export interface CreateHostDeckLanNetworkRouteRegistrationInput {
   readonly service: HostDeckLanNetworkService;
@@ -38,6 +46,7 @@ const inputKeys = ["service"] as const;
 const noQuerySchema = z.object({}).strict();
 const registeredServices = new WeakSet<object>();
 
+/** @deprecated Historical direct-LAN evidence. Not reachable from the package export surface. */
 export function createHostDeckLanNetworkRouteRegistration(
   input: CreateHostDeckLanNetworkRouteRegistrationInput
 ): HostDeckRoutePluginRegistration {
@@ -47,10 +56,10 @@ export function createHostDeckLanNetworkRouteRegistration(
   if (registeredServices.has(service)) {
     throw new TypeError("HostDeck LAN network service already owns a route registration.");
   }
-  const stateManifest = requireManifestEntry("network_state");
-  const configureManifest = requireManifestEntry("network_configure");
-  const enableManifest = requireManifestEntry("network_enable");
-  const disableManifest = requireManifestEntry("network_disable");
+  const stateManifest = requireHistoricalLanRoute("network_state");
+  const configureManifest = requireHistoricalLanRoute("network_configure");
+  const enableManifest = requireHistoricalLanRoute("network_enable");
+  const disableManifest = requireHistoricalLanRoute("network_disable");
   let registered = false;
   const registration: HostDeckRoutePluginRegistration = Object.freeze({
     id: hostDeckLanNetworkRouteRegistrationId,
@@ -142,90 +151,38 @@ export function createHostDeckLanNetworkRouteRegistration(
   return registration;
 }
 
-type NetworkManifestId =
-  | "network_state"
-  | "network_configure"
-  | "network_enable"
-  | "network_disable";
+type HistoricalLanRouteId = (typeof historicalLanRouteInventory)[number]["id"];
 
-function requireManifestEntry(id: NetworkManifestId): SelectedApiRouteManifestEntry {
-  const matches = selectedApiRouteManifest.filter((entry) => entry.id === id);
+function requireHistoricalLanRoute(
+  id: HistoricalLanRouteId
+): (typeof historicalLanRouteInventory)[number] {
+  const matches = historicalLanRouteInventory.filter((entry) => entry.id === id);
   const entry = matches[0];
   if (
     matches.length !== 1 ||
     entry === undefined ||
-    !Object.isFrozen(entry) ||
-    !Object.isFrozen(entry.request) ||
-    !Object.isFrozen(entry.response) ||
-    entry.owner_task !== "IFC-V1-031" ||
-    entry.family !== "network" ||
-    entry.transport !== "json" ||
-    entry.response.error !== "selected_api_error_v1" ||
-    entry.operation_kind !== null ||
-    entry.credential_effect !== "none" ||
-    entry.target !== "host" ||
-    entry.request.params !== null ||
-    entry.request.query !== null
+    !Object.isFrozen(entry)
   ) {
-    throw new TypeError("Selected LAN network manifest entry is invalid.");
+    throw new TypeError("Historical LAN route inventory is invalid.");
   }
-  if (id === "network_state") {
-    if (
-      entry.method !== "GET" ||
-      entry.path !== "/api/v1/network" ||
-      entry.request.body !== null ||
-      entry.response.success !== "network_state_response_v1" ||
-      entry.auth !== "optional_device_cookie" ||
-      entry.authority !== "access_read" ||
-      entry.csrf !== "none" ||
-      entry.lock !== "not_applicable" ||
-      entry.audit !== null ||
-      entry.handler !== "network.readState"
-    ) {
-      throw new TypeError("Selected LAN network read manifest entry is invalid.");
-    }
-    return entry;
-  }
-
   const expected = {
+    network_state: { method: "GET", path: "/api/v1/network" },
     network_configure: {
+      method: "POST",
       path: "/api/v1/network/configure",
-      body: "lan_configure_request_v1",
-      action: "lan_configure",
-      handler: "network.configure"
     },
     network_enable: {
+      method: "POST",
       path: "/api/v1/network/enable",
-      body: "lan_enable_request_v1",
-      action: "lan_enable",
-      handler: "network.enable"
     },
     network_disable: {
+      method: "POST",
       path: "/api/v1/network/disable",
-      body: "lan_disable_request_v1",
-      action: "lan_disable",
-      handler: "network.disable"
     }
   } as const;
   const target = expected[id];
-  if (
-    entry.method !== "POST" ||
-    entry.path !== target.path ||
-    entry.request.body !== target.body ||
-    entry.response.success !== "lan_mutation_response_v1" ||
-    entry.auth !== "local_admin" ||
-    entry.authority !== "local_admin" ||
-    entry.csrf !== "none" ||
-    entry.lock !== "not_applicable" ||
-    entry.handler !== target.handler ||
-    entry.audit === null ||
-    !Object.isFrozen(entry.audit) ||
-    entry.audit.executor !== "security_executor" ||
-    entry.audit.action !== target.action ||
-    entry.audit.catalog_state !== "historical" ||
-    entry.audit.catalog_owner_task !== "IFC-V1-075"
-  ) {
-    throw new TypeError("Historical LAN network mutation manifest entry is invalid.");
+  if (entry.method !== target.method || entry.path !== target.path) {
+    throw new TypeError("Historical LAN route inventory entry is invalid.");
   }
   return entry;
 }

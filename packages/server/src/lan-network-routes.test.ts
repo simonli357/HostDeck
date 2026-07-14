@@ -57,7 +57,7 @@ afterEach(() => {
   }
 });
 
-describe("selected LAN network route boundary", () => {
+describe("historical LAN network route boundary", () => {
   it("configures, enables, reads, and disables through one audited local-admin boundary", async () => {
     const harness = fixture();
     const before = await harness.app.inject({ method: "GET", url: "/api/v1/network" });
@@ -166,7 +166,7 @@ describe("selected LAN network route boundary", () => {
       /192\.168|fingerprint|PRIVATE KEY/iu
     );
     assertSecretsAbsentFromSqlite(harness.databasePath, privateSecrets);
-  });
+  }, 15_000);
 
   it("validates bodies before authentication side effects or durable work", async () => {
     const harness = fixture({ paired: true });

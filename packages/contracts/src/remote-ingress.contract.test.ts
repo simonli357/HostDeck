@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   hostDeckLoopbackOriginSchema,
   projectRemoteIngressPublicState,
+  remoteDisableRequestSchema,
+  remoteEnableRequestSchema,
   remoteExternalOriginSchema,
   remoteIngressAuditSummarySchema,
   remoteIngressStateSchema,
@@ -59,6 +61,34 @@ describe("remote origin and Serve contracts", () => {
     expect(remoteServeDescriptorSchema.safeParse({ ...descriptor, path: "/hostdeck" }).success).toBe(false);
     expect(remoteServeDescriptorSchema.safeParse({ ...descriptor, https_port: 8443 }).success).toBe(false);
     expect(remoteServeDescriptorSchema.safeParse({ ...descriptor, allow_funnel: true }).success).toBe(false);
+  });
+});
+
+describe("remote route mutation contracts", () => {
+  it("accepts only one confirmed operation id and no caller-supplied remote identity", () => {
+    const enable = {
+      operation_id: "op_remote_enable_contract_001",
+      confirmed: true
+    } as const;
+    const disable = {
+      operation_id: "op_remote_disable_contract_001",
+      confirmed: true
+    } as const;
+
+    expect(remoteEnableRequestSchema.parse(enable)).toEqual(enable);
+    expect(remoteDisableRequestSchema.parse(disable)).toEqual(disable);
+    for (const candidate of [
+      { ...enable, confirmed: false },
+      { ...enable, operation_id: "remote-enable" },
+      { ...enable, profile: "company" },
+      { ...enable, tailscale_identity: "private@example.test" },
+      { ...enable, node_key: "secret" },
+      { ...enable, pairing_code: "secret" },
+      { ...enable, external_origin: origin },
+      { ...enable, repair: true }
+    ]) {
+      expect(remoteEnableRequestSchema.safeParse(candidate).success).toBe(false);
+    }
   });
 });
 

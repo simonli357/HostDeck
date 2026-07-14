@@ -102,49 +102,6 @@ describe("CLI local admin commands", () => {
     }
   });
 
-  it("persists reversible LAN enable and disable changes with visible bind state", () => {
-    const harness = createHarness();
-
-    expect(harness.admin.setLanEnabled({ enabled: true, bindHost: "0.0.0.0" })).toMatchObject({
-      lan_enabled: true,
-      bind_mode: "lan",
-      bind_host: "0.0.0.0",
-      bind_port: 3777,
-      audit_event_id: "audit_001"
-    });
-    expect(harness.admin.setLanEnabled({ enabled: false })).toMatchObject({
-      lan_enabled: false,
-      bind_mode: "localhost",
-      bind_host: "127.0.0.1",
-      bind_port: 3777,
-      audit_event_id: "audit_002"
-    });
-
-    const opened = openMigratedDatabase(harness.databasePath);
-    try {
-      const settings = createSettingsRepository(opened.db).require();
-      expect(settings.lan_enabled).toBe(false);
-      expect(settings.bind_host).toBe("127.0.0.1");
-
-      const events = createAuditEventRepository(opened.db).list();
-      expect(events.map((event) => event.action)).toEqual(["lan_disable", "lan_enable"]);
-      expect(events[0]?.payload_summary).toMatchObject({
-        lan_enabled: false,
-        bind_mode: "localhost",
-        bind_host: "127.0.0.1",
-        restart_required: true
-      });
-      expect(events[1]?.payload_summary).toMatchObject({
-        lan_enabled: true,
-        bind_mode: "lan",
-        bind_host: "0.0.0.0",
-        restart_required: true
-      });
-    } finally {
-      opened.db.close();
-    }
-  });
-
   it("repairs owner mode drift and rejects a hard-linked database before admin writes", () => {
     const harness = createHarness();
     harness.admin.setLock({ locked: true });

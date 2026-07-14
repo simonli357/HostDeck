@@ -15,6 +15,7 @@ import {
 import { z } from "zod";
 import { exactDataObject } from "./exact-data-object.js";
 import { isoTimestampSchema, nonNegativeSafeIntegerSchema } from "./scalars.js";
+import { clientOperationIdSchema } from "./selected-runtime.js";
 
 const remoteLimits = {
   dnsNameLength: 134,
@@ -280,6 +281,18 @@ const remoteIngressPublicStateDataSchema = z
   });
 
 export const remoteIngressPublicStateSchema = exactDataObject(remoteIngressPublicStateDataSchema);
+
+const remoteMutationRequestShape = {
+  operation_id: clientOperationIdSchema,
+  confirmed: z.literal(true)
+} as const;
+
+export const remoteEnableRequestSchema = exactDataObject(
+  z.object(remoteMutationRequestShape).strict()
+);
+export const remoteDisableRequestSchema = exactDataObject(
+  z.object(remoteMutationRequestShape).strict()
+);
 
 export function projectRemoteIngressPublicState(
   state: RemoteIngressState
@@ -561,6 +574,8 @@ export type RemoteProfileObservation = z.infer<typeof remoteProfileObservationSc
 export type RemoteServeDescriptor = z.infer<typeof remoteServeDescriptorSchema>;
 export type RemoteIngressState = z.infer<typeof remoteIngressStateSchema>;
 export type RemoteIngressPublicState = z.infer<typeof remoteIngressPublicStateSchema>;
+export type RemoteEnableRequest = z.infer<typeof remoteEnableRequestSchema>;
+export type RemoteDisableRequest = z.infer<typeof remoteDisableRequestSchema>;
 export type RequestIngressProvenance = z.infer<typeof requestIngressProvenanceSchema>;
 export type RemoteProxyTrustDecision = z.infer<typeof remoteProxyTrustDecisionSchema>;
 export type RemotePairingLinkIntent = z.infer<typeof remotePairingLinkIntentSchema>;

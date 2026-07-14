@@ -18,8 +18,7 @@ export type ParsedCliCommand =
       readonly json: boolean;
     }
   | { readonly kind: "lock"; readonly reason?: string; readonly json: boolean }
-  | { readonly kind: "unlock"; readonly json: boolean }
-  | { readonly kind: "lan"; readonly action: "enable" | "disable"; readonly bindHost?: string; readonly json: boolean };
+  | { readonly kind: "unlock"; readonly json: boolean };
 
 export interface ParsedCliArgs {
   readonly command: ParsedCliCommand;
@@ -251,20 +250,6 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
     return { command: { kind: "unlock", json: parseNoArgJsonOptions("unlock", rest, json) }, configFlags };
   }
 
-  if (command === "lan") {
-    const parsed = parseLanOptions(rest, json);
-
-    return {
-      command: {
-        kind: "lan",
-        action: parsed.action,
-        ...(parsed.bindHost !== undefined ? { bindHost: parsed.bindHost } : {}),
-        json: parsed.json
-      },
-      configFlags
-    };
-  }
-
   throw usageFailure(`Unknown command: ${command ?? ""}`);
 }
 
@@ -450,61 +435,6 @@ function parseLockOptions(args: readonly string[], globalJson: boolean): { reado
 
   return {
     ...(reason !== undefined ? { reason } : {}),
-    json
-  };
-}
-
-function parseLanOptions(args: readonly string[], globalJson: boolean): {
-  readonly action: "enable" | "disable";
-  readonly bindHost?: string;
-  readonly json: boolean;
-} {
-  const [action, ...rest] = args;
-
-  if (action !== "enable" && action !== "disable") {
-    throw usageFailure("The lan command requires enable or disable.");
-  }
-
-  let bindHost: string | undefined;
-  let json = globalJson;
-
-  for (let index = 0; index < rest.length; index += 1) {
-    const token = rest[index];
-
-    if (token === undefined) {
-      continue;
-    }
-
-    if (token === "--json") {
-      json = true;
-      continue;
-    }
-
-    if (token === "--bind-host") {
-      bindHost = readOptionValue(rest, index, "--bind-host");
-      index += 1;
-      continue;
-    }
-
-    if (token.startsWith("--bind-host=")) {
-      bindHost = readInlineOptionValue(token, "--bind-host");
-      continue;
-    }
-
-    if (token.startsWith("-")) {
-      throw usageFailure(`Unknown lan option: ${token}`);
-    }
-
-    throw usageFailure(`Unexpected lan argument: ${token}`);
-  }
-
-  if (action === "disable" && bindHost !== undefined) {
-    throw usageFailure("The lan disable command does not accept --bind-host.", "--bind-host");
-  }
-
-  return {
-    action,
-    ...(bindHost !== undefined ? { bindHost } : {}),
     json
   };
 }

@@ -149,19 +149,6 @@ describe("CLI shell contract", () => {
         label: "unlock",
         args: ["unlock", "--json"],
         expected: { command: { kind: "unlock", json: true }, configFlags: {} }
-      },
-      {
-        label: "lan enable",
-        args: ["lan", "enable", "--bind-host", "0.0.0.0", "--json"],
-        expected: {
-          command: { kind: "lan", action: "enable", bindHost: "0.0.0.0", json: true },
-          configFlags: {}
-        }
-      },
-      {
-        label: "lan disable",
-        args: ["lan", "disable", "--json"],
-        expected: { command: { kind: "lan", action: "disable", json: true }, configFlags: {} }
       }
     ] as const;
 
@@ -180,7 +167,7 @@ describe("CLI shell contract", () => {
     });
     expect(help.stdout).toContain("codexdeck [--state-dir PATH] [--database PATH] [--port PORT] serve");
     expect(help.stdout).toContain("codexdeck [--api-url URL | --host HOST --port PORT] status [--json]");
-    expect(help.stdout).toContain("codexdeck lan disable");
+    expect(help.stdout).not.toMatch(/codexdeck lan(?:\s|$)/iu);
     expect(help.stdout).toContain("Global connection and state options must appear before the command.");
     expect(version).toMatchObject({
       exitCode: cliExitCodes.ok,
@@ -425,7 +412,7 @@ describe("CLI shell contract", () => {
     expect(calls).toEqual([{ method: "pair", permission: "read", ttlMinutes: 5, label: "phone" }]);
   });
 
-  it("locks, unlocks, and mutates LAN through local admin commands", async () => {
+  it("locks and unlocks through local admin commands", async () => {
     const calls: unknown[] = [];
 
     const lock = await runCli(["lock", "--reason", "maintenance"], {
@@ -436,28 +423,12 @@ describe("CLI shell contract", () => {
       env: {},
       localAdmin: fakeLocalAdmin(calls)
     });
-    const lanEnable = await runCli(["lan", "enable", "--bind-host", "0.0.0.0"], {
-      env: {},
-      localAdmin: fakeLocalAdmin(calls)
-    });
-    const lanDisable = await runCli(["lan", "disable"], {
-      env: {},
-      localAdmin: fakeLocalAdmin(calls)
-    });
-
     expect(lock.exitCode).toBe(cliExitCodes.ok);
     expect(lock.stdout).toContain("HostDeck is now locked.");
     expect(JSON.parse(unlock.stdout)).toMatchObject({ locked: false, audit_event_id: "audit_unlock" });
-    expect(lanEnable.stdout).toContain("LAN access enabled.");
-    expect(lanEnable.stdout).toContain("Run `codexdeck lan disable` to return to localhost-only mode.");
-    expect(lanEnable.stdout).toContain("Restart or rebind the daemon for listener changes to take effect.");
-    expect(lanDisable.stdout).toContain("LAN access disabled.");
-    expect(lanDisable.stdout).toContain("Bind setting: localhost (127.0.0.1:3777)");
     expect(calls).toEqual([
       { method: "lock", locked: true, reason: "maintenance" },
-      { method: "lock", locked: false },
-      { method: "lan", enabled: true, bindHost: "0.0.0.0" },
-      { method: "lan", enabled: false }
+      { method: "lock", locked: false }
     ]);
   });
 
@@ -526,8 +497,7 @@ describe("CLI shell contract", () => {
       { label: "pair", args: ["pair", "--ttl-minutes", "0"], message: "--ttl-minutes must be between 1 and 1440" },
       { label: "lock", args: ["lock", "extra"], message: "Unexpected lock argument" },
       { label: "unlock", args: ["unlock", "extra"], message: "unlock command does not accept positional arguments" },
-      { label: "lan enable", args: ["lan", "enable", "extra"], message: "Unexpected lan argument" },
-      { label: "lan disable", args: ["lan", "disable", "--bind-host", "0.0.0.0"], message: "lan disable command does not accept --bind-host" }
+      { label: "removed lan command", args: ["lan", "enable"], message: "Unknown command: lan" }
     ] as const;
 
     for (const scenario of cases) {
@@ -689,17 +659,6 @@ function fakeLocalAdmin(calls: unknown[]): LocalAdmin {
         locked: input.locked,
         updated_at: "2026-07-09T08:00:00.000Z",
         audit_event_id: input.locked ? "audit_lock" : "audit_unlock"
-      };
-    },
-    setLanEnabled(input) {
-      calls.push({ method: "lan", ...input });
-      return {
-        lan_enabled: input.enabled,
-        bind_mode: input.enabled ? "lan" : "localhost",
-        bind_host: input.enabled ? (input.bindHost ?? "0.0.0.0") : "127.0.0.1",
-        bind_port: 3777,
-        updated_at: "2026-07-09T08:00:00.000Z",
-        audit_event_id: input.enabled ? "audit_lan_enable" : "audit_lan_disable"
       };
     }
   };

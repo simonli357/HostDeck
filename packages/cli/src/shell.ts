@@ -10,7 +10,6 @@ import {
   renderAttachCommand,
   renderFailure,
   renderHelp,
-  renderLanCommand,
   renderLockCommand,
   renderPairingCode,
   renderServeStarted,
@@ -167,18 +166,6 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
 
     if (parsed.command.kind === "unlock") {
       return success(renderLockCommand(localAdmin.setLock({ locked: false }), parsed.command.json));
-    }
-
-    if (parsed.command.kind === "lan") {
-      return success(
-        renderLanCommand(
-          localAdmin.setLanEnabled({
-            enabled: parsed.command.action === "enable",
-            ...(parsed.command.bindHost !== undefined ? { bindHost: parsed.command.bindHost } : {})
-          }),
-          parsed.command.json
-        )
-      );
     }
 
     return failure(toCliFailure(new Error("Unsupported HostDeck CLI command.")));

@@ -1,6 +1,6 @@
 import { randomBytes, randomInt } from "node:crypto";
 import { closeSync } from "node:fs";
-import type { AuditEventRecord, PairingCodeRecord, SettingsRecord } from "@hostdeck/contracts";
+import type { AuditEventRecord, PairingCodeRecord } from "@hostdeck/contracts";
 import {
   createAuditEventRepository,
   createLegacyPairingCodeRepository,
@@ -26,7 +26,6 @@ export interface CreateLocalAdminOptions {
 export interface LocalAdmin {
   readonly createPairingCode: (input: CreatePairingCommandInput) => PairingCommandResult;
   readonly setLock: (input: SetLockCommandInput) => LockCommandResult;
-  readonly setLanEnabled: (input: SetLanCommandInput) => LanCommandResult;
 }
 
 export interface CreatePairingCommandInput {
@@ -38,11 +37,6 @@ export interface CreatePairingCommandInput {
 export interface SetLockCommandInput {
   readonly locked: boolean;
   readonly reason?: string;
-}
-
-export interface SetLanCommandInput {
-  readonly enabled: boolean;
-  readonly bindHost?: string;
 }
 
 export interface PairingCommandResult {
@@ -57,15 +51,6 @@ export interface PairingCommandResult {
 
 export interface LockCommandResult {
   readonly locked: boolean;
-  readonly updated_at: string;
-  readonly audit_event_id: string;
-}
-
-export interface LanCommandResult {
-  readonly lan_enabled: boolean;
-  readonly bind_mode: SettingsRecord["bind_mode"];
-  readonly bind_host: string;
-  readonly bind_port: number;
   readonly updated_at: string;
   readonly audit_event_id: string;
 }
@@ -172,44 +157,6 @@ export function createLocalAdmin(options: CreateLocalAdminOptions): LocalAdmin {
 
           return {
             locked: settings.locked,
-            updated_at: settings.updated_at,
-            audit_event_id: auditEvent.id
-          };
-        });
-
-        return transaction();
-      });
-    },
-    setLanEnabled(input) {
-      const at = now();
-      return withLocalAdminRepos(options, now, (repos) => {
-        const transaction = repos.db.transaction(() => {
-          const settings = repos.settings.setLanEnabled(input.enabled, {
-            ...(input.bindHost !== undefined ? { bindHost: input.bindHost } : {}),
-            now: () => at
-          });
-          const auditEvent = repos.auditEvents.append({
-            id: (options.makeAuditEventId ?? makeAuditEventId)(),
-            at: at.toISOString(),
-            actor: localAdminActor,
-            action: input.enabled ? "lan_enable" : "lan_disable",
-            session_id: null,
-            payload_summary: {
-              lan_enabled: settings.lan_enabled,
-              bind_mode: settings.bind_mode,
-              bind_host: settings.bind_host,
-              bind_port: settings.bind_port,
-              restart_required: true
-            },
-            result: "succeeded",
-            error_code: null
-          });
-
-          return {
-            lan_enabled: settings.lan_enabled,
-            bind_mode: settings.bind_mode,
-            bind_host: settings.bind_host,
-            bind_port: settings.bind_port,
             updated_at: settings.updated_at,
             audit_event_id: auditEvent.id
           };

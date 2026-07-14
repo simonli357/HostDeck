@@ -41,7 +41,7 @@ afterEach(() => {
   }
 });
 
-describe("selected LAN network real HTTPS restart", () => {
+describe("historical LAN network real HTTPS restart", () => {
   it("moves loopback -> paired LAN HTTPS -> local-admin disable -> loopback without remote mutation", async () => {
     const host = requirePrivateIpv4();
     const port = await reservePort(host);
