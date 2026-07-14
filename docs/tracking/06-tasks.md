@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-071` Implement bounded read-only Tailscale observer adapter | in_progress | none | Converts exact 1.98.8 raw reads into the normalized contract without mutation or identity leakage. |
+| 1 | `IFC-V1-072` Implement ownership-safe Tailscale Serve enable/disable manager | in_progress | none | Adds the explicit local-admin mutation boundary now that exact observation, durable state, and remote audit contracts are complete. |
 | 2 | `IFC-V1-073` Implement external-origin and Serve proxy trust boundary | ready | none | Applies the frozen Host/Origin/header/provenance contract before app authorization. |
 | 3 | `FE-V1-004` Rebase mobile information architecture and state matrix | ready | none | Maps phone-first journeys to the accepted remote/access contracts before replacement visual directions are generated. |
 | 4 | `IFC-V1-069` Implement the bounded projected-event diagnostic read route | ready | none | Exposes the completed retained projection contract through one bounded authenticated read. |
