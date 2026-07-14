@@ -21,7 +21,8 @@ import {
   evaluateHostDeckRequestTrust,
   HostDeckRequestTrustError,
   type HostDeckRequestTrustPolicy,
-  type HostDeckRequestTrustProbe
+  type HostDeckRequestTrustProbe,
+  hostDeckLocalAdminRequestHeaderName
 } from "./fastify-request-trust.js";
 
 export interface TailscaleServeRemoteAdmissionSnapshot {
@@ -101,6 +102,7 @@ interface NormalizedProbe extends TailscaleServeProxyTrustProbe {
 interface HeaderScan {
   readonly byName: ReadonlyMap<string, readonly string[]>;
   readonly hasProxySignal: boolean;
+  readonly localAdminSignal: boolean;
   readonly preflight: boolean;
   readonly standardIdentity: "absent" | "present" | "invalid";
   readonly unknownReservedContext: boolean;
@@ -362,7 +364,12 @@ function evaluateRemote(
 
   let reason: TailscaleServeProxyTrustRejectionReason | null = null;
   if (scan.untrustedLookalikePresent) reason = "untrusted_tailscale_lookalike";
-  else if (scan.unknownReservedContext || scan.preflight || probe.method.toUpperCase() === "OPTIONS") {
+  else if (
+    scan.unknownReservedContext ||
+    scan.localAdminSignal ||
+    scan.preflight ||
+    probe.method.toUpperCase() === "OPTIONS"
+  ) {
     reason = "unknown_proxy_context";
   } else if (scan.standardIdentity === "invalid") reason = "standard_identity_invalid";
   else if (!isIpv4LoopbackPeer(probe.remoteAddress)) reason = "direct_non_loopback";
@@ -494,6 +501,7 @@ function normalizeProbe(
 function scanHeaders(rawHeaders: readonly string[]): HeaderScan {
   const mutable = new Map<string, string[]>();
   let hasProxySignal = false;
+  let localAdminSignal = false;
   let preflight = false;
   let unknownReservedContext = false;
   let untrustedLookalikePresent = false;
@@ -508,6 +516,10 @@ function scanHeaders(rawHeaders: readonly string[]): HeaderScan {
     if (name.startsWith(tailscaleUntrustedHeaderPrefix)) {
       hasProxySignal = true;
       untrustedLookalikePresent = true;
+      continue;
+    }
+    if (name === hostDeckLocalAdminRequestHeaderName) {
+      localAdminSignal = true;
       continue;
     }
     if ((tailscaleForwardingHeaderNames as readonly string[]).includes(name)) {
@@ -547,6 +559,7 @@ function scanHeaders(rawHeaders: readonly string[]): HeaderScan {
   return {
     byName,
     hasProxySignal,
+    localAdminSignal,
     preflight,
     standardIdentity: assessStandardIdentity(byName),
     unknownReservedContext,

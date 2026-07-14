@@ -200,7 +200,12 @@ export interface SelectedApiRouteManifestEntry {
 
 const publicPolicy = policy("none", "public", "none", "not_applicable");
 const accessReadPolicy = policy("optional_device_cookie", "access_read", "none", "not_applicable");
-const pairedAccessReadPolicy = policy("device_cookie", "access_read", "none", "not_applicable");
+const localAdminOrPairedAccessReadPolicy = policy(
+  "local_admin_or_device_cookie",
+  "access_read",
+  "none",
+  "not_applicable"
+);
 const hostReadPolicy = policy("loopback_or_device_cookie", "host_read", "none", "not_applicable");
 const sessionReadPolicy = policy("loopback_or_device_cookie", "session_read", "none", "not_applicable");
 const sessionWritePolicy = policy(
@@ -730,7 +735,7 @@ export const selectedApiRouteManifest: readonly SelectedApiRouteManifestEntry[] 
     transport: "json",
     request: request(null, null, null),
     response: response("remote_ingress_public_state_v1"),
-    ...pairedAccessReadPolicy,
+    ...localAdminOrPairedAccessReadPolicy,
     target: "host",
     operation_kind: null,
     audit: null,

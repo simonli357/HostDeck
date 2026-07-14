@@ -18,6 +18,8 @@ import {
   HostDeckRequestTrustError,
   type HostDeckRequestTrustPolicy,
   type HostDeckRequestTrustProbe,
+  hostDeckLocalAdminRequestHeaderName,
+  hostDeckLocalAdminRequestHeaderValue,
   hostDeckPairClaimSourceKey,
   hostDeckRequestTrustContext,
   hostDeckRequestTrustSnapshot
@@ -112,6 +114,19 @@ describe("Fastify request trust policy", () => {
     ]);
 
     expect(evaluateHostDeckRequestTrust(loopbackPolicy, probe()).origin_kind).toBe("safe_no_origin");
+    expect(
+      evaluateHostDeckRequestTrust(
+        loopbackPolicy,
+        probe({
+          rawHeaders: [
+            "Host",
+            "localhost",
+            hostDeckLocalAdminRequestHeaderName,
+            hostDeckLocalAdminRequestHeaderValue
+          ]
+        })
+      ).origin_kind
+    ).toBe("local_non_browser");
     expect(evaluateHostDeckRequestTrust(loopbackPolicy, probe({ method: "POST" })).origin_kind).toBe("local_non_browser");
     expect(evaluateHostDeckRequestTrust(loopbackPolicy, probe({ rawHeaders: ["Host", "localhost:80"] })).authority).toBe("localhost");
 
@@ -136,6 +151,53 @@ describe("Fastify request trust policy", () => {
       remoteAddress: "192.168.0.59",
       secure: true
     })).origin_kind).toBe("safe_no_origin");
+  });
+
+  it("admits only the exact direct-loopback local-admin GET signal", () => {
+    const signaledHeaders = [
+      "Host",
+      "localhost",
+      hostDeckLocalAdminRequestHeaderName,
+      hostDeckLocalAdminRequestHeaderValue
+    ];
+    const invalid = [
+      probe({ rawHeaders: ["Host", "localhost", hostDeckLocalAdminRequestHeaderName, "wrong"] }),
+      probe({ rawHeaders: [...signaledHeaders, hostDeckLocalAdminRequestHeaderName, hostDeckLocalAdminRequestHeaderValue] }),
+      probe({ rawHeaders: [...signaledHeaders, "Origin", loopbackOrigin] }),
+      probe({ rawHeaders: [...signaledHeaders, "Cookie", "other=value"] }),
+      probe({ rawHeaders: [...signaledHeaders, "Sec-Fetch-Site", "same-origin"] }),
+      probe({ method: "POST", rawHeaders: signaledHeaders }),
+      probe({ remoteAddress: "192.168.0.59", rawHeaders: signaledHeaders })
+    ];
+    for (const candidate of invalid) {
+      expectTrustError(
+        () => evaluateHostDeckRequestTrust(loopbackPolicy, candidate),
+        "invalid_origin"
+      );
+    }
+
+    const lanPolicy = createHostDeckRequestTrustPolicy({
+      allowedOrigins: ["https://192.168.0.29:8443"],
+      mode: "lan",
+      transport: "https"
+    });
+    expectTrustError(
+      () =>
+        evaluateHostDeckRequestTrust(
+          lanPolicy,
+          probe({
+            rawHeaders: [
+              "Host",
+              "192.168.0.29:8443",
+              hostDeckLocalAdminRequestHeaderName,
+              hostDeckLocalAdminRequestHeaderValue
+            ],
+            remoteAddress: "192.168.0.59",
+            secure: true
+          })
+        ),
+      "invalid_origin"
+    );
   });
 
   it("derives one canonical domain-separated pair-claim source from admitted socket addresses", () => {

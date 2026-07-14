@@ -35,6 +35,7 @@ export * from "./projection-fanout-hub.js";
 export * from "./projection-replay-live-handoff.js";
 export * from "./read-routes.js";
 export * from "./remote-ingress-control-service.js";
+export * from "./remote-ingress-routes.js";
 export * from "./restart-reconciler.js";
 export * from "./security-mutation-audit-executor.js";
 export * from "./security-routes.js";

@@ -2,6 +2,10 @@ import { type AddressInfo, createConnection } from "node:net";
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import {
+  hostDeckLocalAdminRequestHeaderName,
+  hostDeckLocalAdminRequestHeaderValue
+} from "./fastify-request-trust.js";
+import {
   assertTailscaleServeProxyTrustPolicy,
   type CreateTailscaleServeProxyTrustPolicyInput,
   createTailscaleServeProxyTrustPolicy,
@@ -137,6 +141,36 @@ describe("Tailscale Serve proxy trust evaluator", () => {
       expect(Object.isFrozen(decision.headers)).toBe(true);
     }
     expect(reader).not.toHaveBeenCalled();
+  });
+
+  it("keeps the explicit local-admin read signal local to the direct loopback form", () => {
+    const reader = vi.fn(() => openAdmission());
+    const policy = policyWith(reader);
+    const signal = [
+      hostDeckLocalAdminRequestHeaderName,
+      hostDeckLocalAdminRequestHeaderValue
+    ];
+
+    expect(
+      evaluateTailscaleServeProxyTrust(
+        policy,
+        localProbe({ rawHeaders: ["Host", localAuthority, ...signal] })
+      )
+    ).toMatchObject({
+      decision: "admitted",
+      provenance: { kind: "local_loopback" }
+    });
+    expect(reader).not.toHaveBeenCalled();
+
+    expectDecision(
+      evaluateTailscaleServeProxyTrust(
+        policy,
+        remoteProbe({ rawHeaders: [...remoteHeaders(), ...signal] })
+      ),
+      "unknown_proxy_context",
+      "exact"
+    );
+    expect(reader).toHaveBeenCalledTimes(2);
   });
 
   it("admits exact remote shape with optional identity and no application authority", () => {

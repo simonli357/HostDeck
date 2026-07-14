@@ -13,6 +13,9 @@ export type HostDeckRequestTransport = (typeof hostDeckRequestTransports)[number
 export const hostDeckRequestOriginKinds = ["same_origin", "safe_no_origin", "local_non_browser"] as const;
 export type HostDeckRequestOriginKind = (typeof hostDeckRequestOriginKinds)[number];
 
+export const hostDeckLocalAdminRequestHeaderName = "x-hostdeck-local-admin";
+export const hostDeckLocalAdminRequestHeaderValue = "cli-v1";
+
 export interface CreateHostDeckRequestTrustPolicyInput {
   readonly allowedOrigins: readonly string[];
   readonly mode: HostDeckRequestTrustMode;
@@ -156,12 +159,32 @@ export function evaluateHostDeckRequestTrust(
   if (configuredOrigin === undefined) throw new HostDeckRequestTrustError("invalid_origin");
 
   const originValues = rawHeaderValues(probe.rawHeaders, "origin");
+  const localAdminValues = rawHeaderValues(
+    probe.rawHeaders,
+    hostDeckLocalAdminRequestHeaderName
+  );
   const corsPreflight = hasHeaderPrefix(probe.rawHeaders, "access-control-request-");
   if (corsPreflight) throw new HostDeckRequestTrustError("forbidden_cors");
   if (originValues.length > 1) throw new HostDeckRequestTrustError("invalid_origin");
+  if (localAdminValues.length > 0) {
+    if (
+      localAdminValues.length !== 1 ||
+      localAdminValues[0] !== hostDeckLocalAdminRequestHeaderValue ||
+      policy.mode !== "loopback" ||
+      !loopbackPeer ||
+      probe.method.toUpperCase() !== "GET" ||
+      originValues.length !== 0 ||
+      rawHeaderValues(probe.rawHeaders, "cookie").length !== 0 ||
+      hasHeaderPrefix(probe.rawHeaders, "sec-fetch-")
+    ) {
+      throw new HostDeckRequestTrustError("invalid_origin");
+    }
+  }
 
   let originKind: HostDeckRequestOriginKind;
-  if (originValues.length === 1) {
+  if (localAdminValues.length === 1) {
+    originKind = "local_non_browser";
+  } else if (originValues.length === 1) {
     if (parseRequestOrigin(originValues[0]) !== configuredOrigin) {
       throw new HostDeckRequestTrustError("invalid_origin");
     }

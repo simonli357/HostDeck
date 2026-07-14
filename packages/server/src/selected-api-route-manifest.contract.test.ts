@@ -267,7 +267,7 @@ describe("selected API route manifest", () => {
     expect(byId("pair_claim")).toMatchObject({ auth: "pairing_code", authority: "pair_claim" });
     expect(byId("access_state")).toMatchObject({ auth: "optional_device_cookie", authority: "access_read" });
     expect(byId("remote_status")).toMatchObject({
-      auth: "device_cookie",
+      auth: "local_admin_or_device_cookie",
       authority: "access_read"
     });
     expect(byId("host_unlock")).toMatchObject({ auth: "local_admin", lock: "lock_transition" });
@@ -304,7 +304,7 @@ describe("selected API route manifest", () => {
           success: "remote_ingress_public_state_v1",
           error: "selected_api_error_v1"
         },
-        auth: "device_cookie",
+        auth: "local_admin_or_device_cookie",
         authority: "access_read",
         csrf: "none",
         lock: "not_applicable",
