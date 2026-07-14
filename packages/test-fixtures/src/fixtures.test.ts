@@ -16,6 +16,10 @@ import {
   fakeHostStates,
   fakeMissionControlViewModels,
   fakeSessionDetailViewModels,
+  mobileInteractionIds,
+  mobileInteractionTraces,
+  mobileStateTraceIds,
+  mobileStateTraces,
   requiredDashboardStateFixtureIds
 } from "./index.js";
 
@@ -99,6 +103,28 @@ describe("fake UI fixtures", () => {
     for (const viewModel of Object.values(fakeSessionDetailViewModels)) {
       expect(uiSessionDetailViewModelSchema.parse(viewModel).screen).toBe("session_detail");
     }
+  });
+});
+
+describe("FE-V1-004 mobile design fixtures", () => {
+  it("exports the complete state and interaction inventories to web consumers", () => {
+    expect(mobileStateTraces.map((trace) => trace.id)).toEqual(mobileStateTraceIds);
+    expect(mobileInteractionTraces.map((trace) => trace.id)).toEqual(mobileInteractionIds);
+  });
+
+  it("keeps the first phone viewport useful and pre-load failures outside the HostDeck render tree", () => {
+    const mission = mobileStateTraces.find((trace) => trace.id === "mission_mixed_attention");
+    const detail = mobileStateTraces.find((trace) => trace.id === "detail_active_writable");
+    const preload = mobileStateTraces.find((trace) => trace.id === "preload_remote_origin_unreachable");
+
+    expect(mission?.firstViewport).toEqual(["host_access_strip", "page_title", "session_rows_two"]);
+    expect(detail?.firstViewport).toContain("sticky_composer");
+    expect(detail?.firstViewport).toContain("primary_controls");
+    expect(preload).toMatchObject({
+      renderBoundary: "browser_preload",
+      diagnosisSource: "browser_network_only",
+      dataDisclosure: "none"
+    });
   });
 });
 

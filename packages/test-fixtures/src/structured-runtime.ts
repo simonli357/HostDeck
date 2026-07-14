@@ -30,6 +30,7 @@ import {
   type StructuredControlKind
 } from "@hostdeck/core";
 import {
+  type RemoteIngressFixtureId,
   readyRemoteIngressPublicState,
   remoteFixtureOrigin,
   remoteFixtureSourceKey,
@@ -84,7 +85,8 @@ export const requiredStructuredRuntimeFixtureIds = [
   "incompatible",
   "unknown_optional",
   "disconnect",
-  "replay_boundary"
+  "replay_boundary",
+  "long_content"
 ] as const;
 
 export type StructuredRuntimeFixtureId = (typeof requiredStructuredRuntimeFixtureIds)[number];
@@ -184,6 +186,20 @@ const boundarySession = sessionFixture("sess_select_boundary", "boundary", {
   attention: "none",
   recent_summary: "Earlier projected events were pruned by retention.",
   last_event_cursor: 12
+});
+
+const longContentSession = sessionFixture("sess_select_long_content", `long-${"n".repeat(59)}`, {
+  turn_state: "in_progress",
+  attention: "watch",
+  cwd: `/home/simonli/work/repository-${"r".repeat(149)}`,
+  branch: `feature/${"b".repeat(232)}`,
+  model: `model-${"m".repeat(154)}`,
+  goal: {
+    objective: `Goal ${"g".repeat(507)}`,
+    state: "active"
+  },
+  recent_summary: `Summary ${"s".repeat(504)}`,
+  last_event_cursor: 13
 });
 
 const approvalRequest = pendingApprovalSchema.parse({
@@ -324,6 +340,15 @@ export const selectedStructuredRuntimeFixtures: readonly StructuredRuntimeFixtur
       next_cursor: 12,
       reason: "retention"
     })
+  ]),
+  runtimeFixture(longContentSession, "long_content", [
+    eventFor(longContentSession, 13, {
+      type: "message",
+      role: "agent",
+      phase: "completed",
+      item_id: "item-long-content-1",
+      text: `Long bounded event ${"e".repeat(11_981)}`
+    })
   ])
 ];
 
@@ -331,17 +356,30 @@ export const requiredSelectedMobileFixtureIds = [
   "mission_control_loading",
   "mission_control_empty",
   "mission_control_ready",
+  "mission_control_all_quiet",
   "mission_control_read_only",
   "mission_control_offline",
   "mission_control_incompatible",
   "mission_control_remote_unreachable",
   "mission_control_remote_unavailable",
   "mission_control_permission_denied",
+  "mission_control_unpaired",
+  "mission_control_expired",
+  "mission_control_revoked",
+  "mission_control_remote_disabled",
+  "mission_control_tailscale_unavailable",
+  "mission_control_profile_mismatch",
+  "mission_control_serve_conflict",
+  "mission_control_long_content",
   "mission_control_degraded",
   "mission_control_locked",
   "mission_control_fatal",
   "session_detail_loading",
   "session_detail_ready",
+  "session_detail_running",
+  "session_detail_needs_input",
+  "session_detail_approval",
+  "session_detail_completed",
   "session_detail_read_only",
   "session_detail_offline",
   "session_detail_incompatible",
@@ -352,7 +390,15 @@ export const requiredSelectedMobileFixtureIds = [
   "session_detail_stale",
   "session_detail_degraded",
   "session_detail_fatal",
-  "session_detail_boundary"
+  "session_detail_boundary",
+  "session_detail_locked",
+  "session_detail_stream_reconnecting",
+  "session_detail_compacting",
+  "session_detail_rate_limit",
+  "session_detail_interrupted",
+  "session_detail_failed",
+  "session_detail_unknown",
+  "session_detail_long_content"
 ] as const;
 
 export type SelectedMobileFixtureId = (typeof requiredSelectedMobileFixtureIds)[number];
@@ -444,6 +490,45 @@ const permissionDeniedHostAccess = hostAccessFixture({
   writes_enabled: false,
   last_error: errorFixture("permission_denied", "Pair this phone before reading session data.", false)
 });
+const unpairedHostAccess = permissionDeniedHostAccess;
+const expiredHostAccess = hostAccessFixture({
+  access: "expired",
+  device_id: null,
+  device_label: null,
+  runtime: null,
+  reads_enabled: false,
+  writes_enabled: false,
+  last_error: errorFixture("permission_denied", "This paired device expired. Pair it again from the laptop.", false)
+});
+const revokedHostAccess = hostAccessFixture({
+  access: "revoked",
+  device_id: null,
+  device_label: null,
+  runtime: null,
+  reads_enabled: false,
+  writes_enabled: false,
+  last_error: errorFixture("permission_denied", "This paired device was revoked. Pair it again from the laptop.", false)
+});
+const remoteDisabledHostAccess = unavailableRemoteHostAccess(
+  "disabled",
+  "Remote access is disabled. Enable it locally on the laptop."
+);
+const tailscaleUnavailableHostAccess = unavailableRemoteHostAccess(
+  "profile_stopped",
+  "Tailscale is stopped on the laptop."
+);
+const profileMismatchHostAccess = unavailableRemoteHostAccess(
+  "profile_other",
+  "Switch to the saved HostDeck profile on the laptop."
+);
+const serveConflictHostAccess = unavailableRemoteHostAccess(
+  "serve_colliding",
+  "The HostDeck Serve path conflicts with another local mapping."
+);
+const streamReconnectingHostAccess = hostAccessFixture({
+  stream_state: "reconnecting",
+  last_error: errorFixture("runtime_unavailable", "Reconnecting to the selected session stream.", true)
+});
 const fatalHostAccess = hostAccessFixture({
   runtime: disconnectedRuntimeCompatibility,
   stream_state: "error",
@@ -459,11 +544,23 @@ const missionRows = [
   mobileRow(runningSession, "running"),
   mobileRow(completedSession, "quiet")
 ];
+const longContentMissionRows = [
+  mobileRow(approvalSession, "needs_approval"),
+  mobileRow(longContentSession, "running"),
+  mobileRow(completedSession, "quiet")
+];
 
 export const selectedMobileStateFixtures: readonly SelectedMobileFixture[] = [
   missionFixture("mission_control_loading", "loading", loadingHostAccess, [], null),
   missionFixture("mission_control_empty", "empty", readyHostAccess, [], null),
   missionFixture("mission_control_ready", "ready", readyHostAccess, missionRows, null),
+  missionFixture(
+    "mission_control_all_quiet",
+    "ready",
+    readyHostAccess,
+    [mobileRow(completedSession, "quiet"), mobileRow(boundarySession, "quiet")],
+    null
+  ),
   missionFixture("mission_control_read_only", "ready", readOnlyHostAccess, missionRows, null),
   missionFixture("mission_control_offline", "offline", offlineHostAccess, missionRows, "Showing the last committed projection."),
   missionFixture(
@@ -495,6 +592,56 @@ export const selectedMobileStateFixtures: readonly SelectedMobileFixture[] = [
     "Pair this phone before reading session data."
   ),
   missionFixture(
+    "mission_control_unpaired",
+    "permission_denied",
+    unpairedHostAccess,
+    [],
+    "Pair this phone before reading session data."
+  ),
+  missionFixture(
+    "mission_control_expired",
+    "permission_denied",
+    expiredHostAccess,
+    [],
+    "This paired device expired. Pair it again from the laptop."
+  ),
+  missionFixture(
+    "mission_control_revoked",
+    "permission_denied",
+    revokedHostAccess,
+    [],
+    "This paired device was revoked. Pair it again from the laptop."
+  ),
+  missionFixture(
+    "mission_control_remote_disabled",
+    "remote_unavailable",
+    remoteDisabledHostAccess,
+    [],
+    "Remote access is disabled. Enable it locally on the laptop."
+  ),
+  missionFixture(
+    "mission_control_tailscale_unavailable",
+    "remote_unavailable",
+    tailscaleUnavailableHostAccess,
+    [],
+    "Tailscale is stopped on the laptop."
+  ),
+  missionFixture(
+    "mission_control_profile_mismatch",
+    "remote_unavailable",
+    profileMismatchHostAccess,
+    [],
+    "Switch to the saved HostDeck profile on the laptop."
+  ),
+  missionFixture(
+    "mission_control_serve_conflict",
+    "remote_unavailable",
+    serveConflictHostAccess,
+    [],
+    "The HostDeck Serve path conflicts with another local mapping."
+  ),
+  missionFixture("mission_control_long_content", "ready", readyHostAccess, longContentMissionRows, null),
+  missionFixture(
     "mission_control_degraded",
     "degraded",
     degradedHostAccess,
@@ -511,6 +658,10 @@ export const selectedMobileStateFixtures: readonly SelectedMobileFixture[] = [
   ),
   unavailableDetailFixture("session_detail_loading", "loading", loadingHostAccess, null),
   detailFixture("session_detail_ready", "ready", readyHostAccess, fixtureById("approval"), null, true),
+  detailFixture("session_detail_running", "ready", readyHostAccess, fixtureById("running"), null, true),
+  detailFixture("session_detail_needs_input", "ready", readyHostAccess, fixtureById("needs_input"), null, true),
+  detailFixture("session_detail_approval", "ready", readyHostAccess, fixtureById("approval"), null, true),
+  detailFixture("session_detail_completed", "ready", readyHostAccess, fixtureById("completed"), null, true),
   detailFixture("session_detail_read_only", "ready", readOnlyHostAccess, fixtureById("completed"), null, false),
   detailFixture(
     "session_detail_offline",
@@ -577,7 +728,29 @@ export const selectedMobileStateFixtures: readonly SelectedMobileFixture[] = [
     null,
     true,
     { boundary: true }
-  )
+  ),
+  detailFixture(
+    "session_detail_locked",
+    "degraded",
+    lockedHostAccess,
+    fixtureById("completed"),
+    "Remote writes are locked.",
+    false
+  ),
+  detailFixture(
+    "session_detail_stream_reconnecting",
+    "degraded",
+    streamReconnectingHostAccess,
+    fixtureById("disconnect"),
+    "Reconnecting to the selected session stream.",
+    false
+  ),
+  detailFixture("session_detail_compacting", "ready", readyHostAccess, fixtureById("compacting"), null, true),
+  detailFixture("session_detail_rate_limit", "ready", readyHostAccess, fixtureById("rate_limit"), null, true),
+  detailFixture("session_detail_interrupted", "ready", readyHostAccess, fixtureById("interrupted"), null, true),
+  detailFixture("session_detail_failed", "ready", readyHostAccess, fixtureById("failed"), null, true),
+  detailFixture("session_detail_unknown", "ready", readyHostAccess, fixtureById("unknown_optional"), null, false),
+  detailFixture("session_detail_long_content", "ready", readyHostAccess, fixtureById("long_content"), null, true)
 ];
 
 export function structuredRuntimeFixtureById(id: StructuredRuntimeFixtureId): StructuredRuntimeFixture {
@@ -718,6 +891,22 @@ function hostAccessFixture(overrides: Readonly<Record<string, unknown>> = {}): S
     remote_network_mutation_available: false,
     last_error: null,
     ...overrides
+  });
+}
+
+function unavailableRemoteHostAccess(id: RemoteIngressFixtureId, message: string): SelectedHostAccess {
+  return hostAccessFixture({
+    client_connection: "reconnecting",
+    ingress_provenance: null,
+    remote_ingress: projectRemoteIngressPublicState(remoteIngressFixtureById(id).state),
+    access: "unknown",
+    device_id: null,
+    device_label: null,
+    runtime: null,
+    stream_state: "reconnecting",
+    reads_enabled: false,
+    writes_enabled: false,
+    last_error: errorFixture("daemon_unavailable", message, true)
   });
 }
 

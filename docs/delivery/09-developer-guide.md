@@ -53,7 +53,7 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | Integration tests | `pnpm test:integration` | Runs cross-module failure-ordering tests. |
 | Service smoke | `pnpm exec vitest run tests/service-mode-smoke.test.ts` | Proves foreground HTTP service status/restart and CLI start/list/send/stop through the service with fake tmux. |
 | Tmux smoke | `pnpm test:tmux` | Requires `tmux` and `codex` on `PATH`; runs required real managed-session smoke. |
-| Web state tests | `pnpm test:web` | Runs FE-V1-001 dashboard view-model helper and fixture inventory tests. |
+| Web state tests | `pnpm test:web` | Runs historical FE-V1-001 view-model checks plus the selected FE-V1-004 mobile state/interaction export and first-viewport fixture checks. |
 | Later E2E tests | `pnpm test:e2e` | Placeholder; fails loudly until `REL-V1-007` implements it. |
 | Later build/package | `pnpm build` | Placeholder; fails loudly until `REL-V1-007` implements it. |
 | Later release smoke | `pnpm smoke:local` | Placeholder; fails loudly until `REL-V1-006` implements it. |
