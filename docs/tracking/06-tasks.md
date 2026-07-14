@@ -16,8 +16,8 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-072` Implement ownership-safe Tailscale Serve enable/disable manager | in_progress | none | Adds the explicit local-admin mutation boundary now that exact observation, durable state, and remote audit contracts are complete. |
-| 2 | `IFC-V1-073` Implement external-origin and Serve proxy trust boundary | ready | none | Applies the frozen Host/Origin/header/provenance contract before app authorization. |
+| 1 | `IFC-V1-073` Implement external-origin and Serve proxy trust boundary | in_progress | none | Applies the frozen Host/Origin/header/provenance contract now that exact observation and ownership-safe Serve mutation are complete. |
+| 2 | `IFC-V1-076` Implement remote enable/status/disable application service, API read, and local CLI | ready | none | Composes the completed observer, manager, durable intent/audit, and selected route ownership into truthful explicit controls. |
 | 3 | `FE-V1-004` Rebase mobile information architecture and state matrix | ready | none | Maps phone-first journeys to the accepted remote/access contracts before replacement visual directions are generated. |
 | 4 | `IFC-V1-069` Implement the bounded projected-event diagnostic read route | ready | none | Exposes the completed retained projection contract through one bounded authenticated read. |
 | 5 | `IFC-V1-060` Implement managed-thread resume metadata API and CLI | ready | none | Exposes the completed exact safe TUI resume contract without executing a phone shell. |
