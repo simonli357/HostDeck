@@ -249,7 +249,8 @@ Host allowlists are derived from the persisted selected external origin plus loo
 | `projected_events` | Session, cursor, Codex event identity/type where available, timestamp, bounded normalized payload, redaction/truncation/boundary metadata. |
 | `runtime_compatibility` | Codex version, binding/schema identity, negotiated capabilities, check timestamp/result/error. |
 | `auth_devices` / `pairing_codes` | Hashes and lifecycle metadata only, including CSRF generation/rotation state. |
-| `settings` | Lock, loopback bind, desired remote mode, exact external origin, bounded selected-profile comparison identity, HostDeck-owned Serve descriptor, retention/timeouts, state schema version. |
+| `settings` | Lock, historical bind policy, retention/timeouts, state directory, and state schema version. |
+| `selected_remote_ingress_state` | One generation-controlled row with desired remote intent, exact external origin, bounded selected-profile comparison identity, HostDeck-owned Serve descriptor, and last normalized observation/reason; no Tailscale credential or raw output. |
 | `audit_events` | Actor/device, action, target, accepted/result/incomplete outcome, bounded summary/error. |
 
 Defaults remain 10,000 projected events or 10 MB per session and 5,000 audit events or 30 days globally until measurement changes `DEC-016`. Cleanup runs on production append plus bounded startup maintenance; it is never test-only.

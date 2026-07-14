@@ -1,6 +1,6 @@
 # BLK-V1-02 Local State, Auth, Audit, And Retention
 
-Status: reopened for selected remote-ingress configuration and audit durability.
+Status: reopened for selected remote-ingress audit durability and focused storage hardening.
 
 Owns HostDeck's durable state and local filesystem safety. Codex remains the owner of full thread history.
 
@@ -54,9 +54,9 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | Atomic device revoke and CSRF invalidation | `DAT-V1-028` | Complete; strict chronology, immediate raw-state CAS, stable idempotency, bearer/write/bootstrap denial, real ordering, rollback, restart, corruption, index, and privacy evidence pass. |
 | Security-action audit storage completion | `DAT-V1-027` | Complete; exact catalog, durable legacy/current provenance, strict actor/target/summary contracts, migration preservation, secret rejection, restart/orphan/retention, and full workspace evidence pass. |
 | Selected module hardening | `DAT-V1-091` | Complete; one secure on-disk aggregate proves selected cross-repository migration, restart, retention, auth, audit, lease, corruption, query-plan, and privacy truth. Evidence: `artifacts/dat-v1-091-selected-local-state-hardening.md`. |
-| Remote-ingress configuration migration | `DAT-V1-031` | Blocked by the remote contract rebaseline. |
-| Remote-ingress audit migration and historical preservation | `DAT-V1-032` | Blocked by the remote contract rebaseline and current security-audit storage. |
-| Focused remote storage hardening | `DAT-V1-092` | Blocked by both remote migrations. |
+| Remote-ingress configuration migration | `DAT-V1-031` | Complete; `artifacts/dat-v1-031-remote-ingress-state-storage.md`. |
+| Remote-ingress audit migration and historical preservation | `DAT-V1-032` | In progress. |
+| Focused remote storage hardening | `DAT-V1-092` | Blocked by the remote audit migration. |
 
 Owning backlog: `docs/tracking/backlog/local-state-auth-audit.md`.
 
