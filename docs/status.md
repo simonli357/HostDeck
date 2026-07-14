@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M2/M3 selected runtime and remote host-interface integration after the approved cross-network V1 rebaseline.
-- Active task: none. `IFC-V1-070` completes the exact Tailscale profile/Serve/proxy/SSE/phone spike; the next ready task is `FND-V1-018`, normalized remote-ingress contracts and redacted fixtures.
+- Active task: `FND-V1-092`, focused production hardening of the implemented remote-ingress/access contracts and fixtures.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.3; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: prior Option A/B boards are rejected as desktop-led; `FE-V1-002` is reopened and `FE-V1-003` remains blocked until two complete mobile-first replacements exist.
@@ -19,9 +19,10 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Local Codex 0.144.0 app-server smoke proved generated TypeScript bindings, initialize, model/thread listing, persisted goal set/get/delete, and normal TUI attachment over loopback and Unix-socket transports without a model call.
 - Selected app-server runtime, operation, storage, audit, and phone view-model contracts now replace legacy assumptions for new work; required structured/mobile fixture inventories pass public contract tests.
 - Legacy tmux, terminal-output, slash-injection, raw-input, storage, and desktop-led UI contracts remain exported only as explicitly deprecated migration surfaces pending `INT-V1-008`.
-- Prior `BLK-V1-01` structured-runtime contracts, core invariants, deterministic fixtures, planning integrity, and generated-protocol isolation remain proven. The block is reopened only for `FND-V1-018`/`FND-V1-092` remote-ingress contracts and hardening.
+- Prior `BLK-V1-01` structured-runtime contracts, core invariants, deterministic fixtures, planning integrity, and generated-protocol isolation remain proven. The remote-ingress contracts are implemented by `FND-V1-018`; the block remains reopened only for `FND-V1-092` hardening.
 - Prior `BLK-V1-02` secure on-disk mapping/recovery/projection/runtime/pairing/auth/device/audit lifecycle remains proven by `DAT-V1-091`. The block is reopened only for `DAT-V1-031`, `DAT-V1-032`, and `DAT-V1-092` remote configuration/audit durability and hardening.
 - `IFC-V1-070` freezes exact Tailscale 1.98.8 absent/stopped/signed-out/profile/Serve/permission/consent behavior, path-scoped ownership-safe removal, private HTTPS and proxy metadata, standard versus surviving `X-Tailscale-*` lookalikes, 65-second cellular SSE plus reconnect, physical profile-away/recovery, direct/DERP paths, live isolated logout, other-profile noninterference, and cleanup. Evidence: `artifacts/ifc-v1-070-tailscale-remote-ingress-spike.md`.
+- `FND-V1-018` implements a pure fail-closed remote availability classifier; strict canonical origin, privacy-safe profile, Serve ownership, proxy provenance, pairing intent, health, and audit contracts; 6 profile/25 ingress/14 proxy/4 audit fixtures; and a phone-state rebaseline with no selected LAN/certificate path. Tailscale identity remains non-authorizing and unreachable phone state invents no laptop diagnosis. Evidence: `artifacts/fnd-v1-018-remote-ingress-contracts.md`; implementation `aa5583a`.
 - `FND-V1-017` closed `BUG-001`: every unfinished selected-path row was manually classified and decomposed into a 196-task/622-edge graph; resource policy now precedes implementation, operation/read routes have separate owners, and deliberate aggregate gates are explicit. Evidence: `artifacts/fnd-v1-017-selected-backlog-granularity.md`; commit `481cb44`.
 - `IFC-V1-016` selected exact Fastify 5.10.0, Zod 4.4.3, `@fastify/sse` 0.5.0, and `@fastify/static` 9.3.0 dependencies with local validation/error ownership, a mandatory Readable-backed SSE path, and explicit deny-by-policy static routing. Six executable boundary probes and production dependency review pass. Evidence: `artifacts/ifc-v1-016-fastify-stack-spike.md`.
 - `IFC-V1-020` defines one strict resource policy across HTTP, SSE, admission, protocol, lifecycle, and CLI boundaries; subsequent event, control, projection, approval, interrupt, usage, compact, skills, and pairing work extends it to 79 fields. Stable oversized/overload codes, exact Fastify/Codex mappings, monotonic deadline forms, and bounded skills/error/dependency ceilings pass. Evidence remains in the owning task artifacts.
@@ -78,14 +79,14 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Most selected manifest rows remain immutable metadata rather than registered routes, and `IFC-V1-075` must replace direct-LAN controls with remote status plus local CLI ownership before production composition. Pairing, paired-device list, CSRF bootstrap, and host-lock registrations are individually proven but not yet adapted to or assembled behind the remote ingress boundary.
 - Codex process supervision, reconnect/restart reconciliation, live HostDeck production composition, and selected-runtime module hardening remain downstream work; `INT-V1-027` proves the assembled operation vertical but not those lifecycle or release gates.
 - Production composition with selected Codex pipeline/authenticated route registrations, authenticated SSE assembly around the proven fanout/high-water handoff, sustained subscriber queues, full raw-socket Node-limit enforcement, mutable runtime health, configured-policy ordering/wiring of the proven orphan and retention runners, or complete application drain; the generic listener lifecycle and individual headless adapters are proven, not those downstream integrations.
-- Normalized remote-ingress contracts/fixtures, the read-only Tailscale observer, ownership-safe Serve manager, exact proxy/source trust, remote route/CLI composition, and production HostDeck phone workflow remain unimplemented; the spike proves the external boundary, not those product layers.
+- Remote-ingress contract hardening, the read-only Tailscale observer, ownership-safe Serve manager, exact proxy/source trust, remote route/CLI composition, and production HostDeck phone workflow remain unimplemented; `FND-V1-018` proves the normalized contract/fixture layer only.
 - Physical-browser fragment/CSRF memory/reload ordering, paired-device revocation, sustained trusted-source rate limits, and the selected aggregate remote phone security matrix.
 - Runnable packaged CLI, built dashboard, user services, clean Ubuntu/Tailscale setup, real remote-phone workflow, or release readiness.
 
 ## Blockers
 
-- No blocker prevents starting `FND-V1-018`; its exact source contract and redacted physical evidence are complete.
-- Regenerate/select mobile mockups only after `FND-V1-018` makes the remote states exact and `FE-V1-002` produces two complete mobile-first replacements.
+- No blocker prevents completing `FND-V1-092`; its implemented contract layer and redacted evidence are available.
+- Regenerate/select mobile mockups only after `FE-V1-004` completes the phone-first state/interaction matrix and `FE-V1-002` produces two complete mobile-first replacements.
 
 ## Validation
 
@@ -101,6 +102,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Evidence: `artifacts/fnd-v1-091-selected-foundation-hardening.md`.
 - `FND-V1-017`: manual unfinished-row/handoff audit, owner-doc synchronization, scaffold, lint/exports, planning (196 tasks, 84 requirements, 622 edges), and diff checks passed.
 - Evidence: `artifacts/fnd-v1-017-selected-backlog-granularity.md`.
+- `FND-V1-018`: scaffold (9 packages/18 scripts), root/all-package typechecks, lint/exports, unit (1,038 passed, 30 skipped with two bounded workers), contract (204), integration (16), web (14), focused remote/mobile (70), planning (212 tasks, 84 requirements, 649 dependencies, 22 queued), import/privacy guards, and diff checks passed.
+- Evidence: `artifacts/fnd-v1-018-remote-ingress-contracts.md`; implementation `aa5583a`.
 - `DAT-V1-018`: root/package typechecks, lint/exports, unit (233 passed, 1 skipped), contract (104), integration (15), web (14), scaffold, 71 storage tests, historical migration checksums, and diff checks passed.
 - Evidence: `artifacts/dat-v1-018-selected-state-migration.md`.
 - `INT-V1-003`: frozen install, binding regeneration, root/all-package typechecks, unit (260 passed, 2 skipped), contract (104), integration (15), web (14), scaffold, package exports, and real installed compatibility smoke passed.
@@ -251,4 +254,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-059` exact revoke and active-authority implementation is committed as `276303d`; the frozen `IFC-V1-033` matrix is `e5b2414`, and its automated aggregate plus physical runner are pushed as `b4426c8`.
 - `REL-V1-012` remote-access planning rebaseline is pushed as `2962b61`; planning/scaffold/lint/type/diff checks pass.
 - `IFC-V1-070` exact Tailscale 1.98.8 spike, redacted physical evidence, frozen downstream criteria, block maturity, and queue closure are pushed as `3f01b77`.
-- Next action: execute `FND-V1-018`: derive strict normalized remote-ingress/profile/Serve/proxy/mobile contracts and redacted deterministic fixtures from the frozen 1.98.8 spike before any Tailscale product command or UI implementation.
+- Next action: execute `FND-V1-092`: run the hostile, boundary, stale, spoofing, privacy, schema-drift, and cross-package hardening matrix before storage, observer, trust, or UI consumers build on the remote contracts.

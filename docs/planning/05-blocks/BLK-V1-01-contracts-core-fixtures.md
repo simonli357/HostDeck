@@ -42,8 +42,8 @@ Requirement refs: `FR-002`, `FR-006` to `FR-009`, `FR-011` to `FR-018`, `NFR-001
 | App-server/mobile/security contract rebaseline | `FND-V1-015` | Done. |
 | Core invariant and reconciliation hardening | `FND-V1-016` | Done. |
 | Reopened module hardening | `FND-V1-091` | Done. |
-| Remote-ingress/access contract and fixture rebaseline | `FND-V1-018` | Blocked by the exact Tailscale spike. |
-| Focused remote contract hardening | `FND-V1-092` | Blocked by remote contract implementation/adoption. |
+| Remote-ingress/access contract and fixture rebaseline | `FND-V1-018` | Done; `artifacts/fnd-v1-018-remote-ingress-contracts.md`. |
+| Focused remote contract hardening | `FND-V1-092` | In progress. |
 
 Owning backlog: `docs/tracking/backlog/foundation.md`.
 
