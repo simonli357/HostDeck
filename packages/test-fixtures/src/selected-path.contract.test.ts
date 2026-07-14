@@ -1,16 +1,18 @@
 import {
   managedSessionProjectionSchema,
   runtimeCompatibilitySchema,
+  selectedHostAccessSchema,
   selectedMissionControlViewModelSchema,
   selectedSessionDetailViewModelSchema,
   selectedSessionEventStreamSchema
 } from "@hostdeck/contracts";
 import { describe, expect, it } from "vitest";
+import { remoteFixtureOrigin } from "./remote-ingress.js";
 import {
   readyRuntimeCompatibility,
   requiredSelectedMobileFixtureIds,
   requiredStructuredRuntimeFixtureIds,
-  type SelectedMobileFixture, 
+  type SelectedMobileFixture,
   selectedMobileFixtureById,
   selectedMobileStateFixtures,
   selectedStructuredRuntimeFixtures,
@@ -131,10 +133,80 @@ describe("selected mobile fixture inventory", () => {
     expect(fixture.viewModel.risky_controls.every((control) => !control.enabled)).toBe(true);
   });
 
+  it("uses admitted private Serve HTTPS for current phone state without deriving app authority from Tailscale identity", () => {
+    const fixture = requireSurface(selectedMobileFixtureById("mission_control_ready"), "mission_control");
+    expect(fixture.viewModel.host_access).toMatchObject({
+      origin: remoteFixtureOrigin,
+      client_connection: "online",
+      ingress_provenance: {
+        kind: "admitted_remote",
+        transport: "tailscale_serve_https",
+        app_authorization: "not_evaluated"
+      },
+      remote_ingress: { availability: "ready", external_origin: remoteFixtureOrigin }
+    });
+
+    const hostAccess = fixture.viewModel.host_access;
+    expect(
+      selectedHostAccessSchema.parse({
+        ...hostAccess,
+        ingress_provenance: { ...hostAccess.ingress_provenance, tailnet_identity_present: true },
+        access: "unpaired",
+        device_id: null,
+        device_label: null,
+        runtime: null,
+        reads_enabled: false,
+        writes_enabled: false
+      })
+    ).toMatchObject({ access: "unpaired", reads_enabled: false, writes_enabled: false });
+  });
+
+  it("separates generic phone reachability from laptop-observed remote unavailability", () => {
+    const unreachable = requireSurface(
+      selectedMobileFixtureById("mission_control_remote_unreachable"),
+      "mission_control"
+    );
+    expect(unreachable.viewModel.host_access).toMatchObject({
+      client_connection: "unreachable",
+      ingress_provenance: null,
+      remote_ingress: null,
+      runtime: null,
+      access: "unknown",
+      reads_enabled: false,
+      writes_enabled: false
+    });
+
+    const unavailable = requireSurface(
+      selectedMobileFixtureById("mission_control_remote_unavailable"),
+      "mission_control"
+    );
+    expect(unavailable.viewModel.host_access).toMatchObject({
+      client_connection: "reconnecting",
+      ingress_provenance: null,
+      remote_ingress: { availability: "unavailable", reason: "profile_other", laptop_action_required: true },
+      access: "unknown",
+      reads_enabled: false,
+      writes_enabled: false
+    });
+  });
+
+  it("rejects current remote authority with unavailable ingress or disconnected provenance", () => {
+    const ready = requireSurface(selectedMobileFixtureById("mission_control_ready"), "mission_control").viewModel.host_access;
+    const unavailable = requireSurface(
+      selectedMobileFixtureById("mission_control_remote_unavailable"),
+      "mission_control"
+    ).viewModel.host_access.remote_ingress;
+
+    expect(selectedHostAccessSchema.safeParse({ ...ready, remote_ingress: unavailable }).success).toBe(false);
+    expect(selectedHostAccessSchema.safeParse({ ...ready, client_connection: "unreachable" }).success).toBe(false);
+    expect(selectedHostAccessSchema.safeParse({ ...ready, app_authorization: "paired" }).success).toBe(false);
+  });
+
   it("does not expose session data or enabled controls in inaccessible states", () => {
     for (const id of [
       "session_detail_loading",
-      "session_detail_certificate_error",
+      "session_detail_remote_unreachable",
+      "session_detail_remote_unavailable",
       "session_detail_permission_denied",
       "session_detail_not_found",
       "session_detail_fatal"
@@ -186,6 +258,13 @@ describe("selected mobile fixture inventory", () => {
     expect(keys).not.toContain("advanced_raw_visible");
     expect(keys).not.toContain("slash_controls");
     expect(keys).not.toContain("terminal_input");
+    expect(keys).not.toContain("connection_mode");
+    expect(keys).not.toContain("certificate_state");
+    expect(keys).not.toContain("root_fingerprint_sha256");
+
+    const values = collectStrings(selectedMobileStateFixtures);
+    expect(values).not.toContain("certificate_error");
+    expect(values).not.toContain("lan");
   });
 });
 
@@ -211,4 +290,18 @@ function collectKeys(value: unknown, keys: string[] = []): readonly string[] {
     collectKeys(child, keys);
   }
   return keys;
+}
+
+function collectStrings(value: unknown, strings: string[] = []): readonly string[] {
+  if (typeof value === "string") {
+    strings.push(value);
+    return strings;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStrings(item, strings);
+    return strings;
+  }
+  if (value === null || typeof value !== "object") return strings;
+  for (const child of Object.values(value)) collectStrings(child, strings);
+  return strings;
 }

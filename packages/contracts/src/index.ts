@@ -5,6 +5,7 @@ export * from "./device-revocation.js";
 export * from "./host-lock.js";
 export * from "./lan-network.js";
 export * from "./pairing.js";
+export * from "./remote-ingress.js";
 export * from "./request-authentication.js";
 export * from "./resource-policy.js";
 export * from "./security-audit.js";

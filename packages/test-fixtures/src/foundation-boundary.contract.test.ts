@@ -8,6 +8,7 @@ import { selectedStructuredRuntimeFixtures, structuredRuntimeFixtureById } from 
 const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const packagesRoot = resolve(repositoryRoot, "packages");
 const generatedProtocolImport = /(?:^|\/)(?:generated|protocol-generated)(?:\/|$)|codex.*app-server.*(?:generated|protocol)/iu;
+const rawTailscaleImport = /tailscale.*(?:generated|protocol|raw)|(?:generated|protocol|raw).*tailscale/iu;
 
 describe("selected foundation package boundary", () => {
   it("keeps generated Codex protocol imports adapter-private", () => {
@@ -19,6 +20,22 @@ describe("selected foundation package boundary", () => {
 
       for (const specifier of moduleSpecifiers(readFileSync(file, "utf8"))) {
         if (generatedProtocolImport.test(specifier)) violations.push(`${repositoryPath}: ${specifier}`);
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it("keeps raw Tailscale CLI shapes outside normalized foundation consumers", () => {
+    const violations: string[] = [];
+    const normalizedConsumers = ["packages/contracts/", "packages/core/", "packages/test-fixtures/", "packages/web/"];
+
+    for (const file of typescriptFiles(packagesRoot)) {
+      const repositoryPath = relative(repositoryRoot, file);
+      if (!normalizedConsumers.some((prefix) => repositoryPath.startsWith(prefix))) continue;
+
+      for (const specifier of moduleSpecifiers(readFileSync(file, "utf8"))) {
+        if (rawTailscaleImport.test(specifier)) violations.push(`${repositoryPath}: ${specifier}`);
       }
     }
 

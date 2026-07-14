@@ -11,6 +11,7 @@ import type {
 import {
   managedSessionProjectionSchema,
   pendingApprovalSchema,
+  projectRemoteIngressPublicState,
   runtimeCapabilitySetSchema,
   runtimeCompatibilitySchema,
   selectedControlStateSchema,
@@ -28,6 +29,12 @@ import {
   runtimeCapabilities,
   type StructuredControlKind
 } from "@hostdeck/core";
+import {
+  readyRemoteIngressPublicState,
+  remoteFixtureOrigin,
+  remoteFixtureSourceKey,
+  remoteIngressFixtureById
+} from "./remote-ingress.js";
 
 export const selectedFixtureTimestamp = "2026-07-09T16:00:00.000Z";
 const laterFixtureTimestamp = "2026-07-09T16:01:00.000Z";
@@ -327,7 +334,8 @@ export const requiredSelectedMobileFixtureIds = [
   "mission_control_read_only",
   "mission_control_offline",
   "mission_control_incompatible",
-  "mission_control_certificate_error",
+  "mission_control_remote_unreachable",
+  "mission_control_remote_unavailable",
   "mission_control_permission_denied",
   "mission_control_degraded",
   "mission_control_locked",
@@ -337,7 +345,8 @@ export const requiredSelectedMobileFixtureIds = [
   "session_detail_read_only",
   "session_detail_offline",
   "session_detail_incompatible",
-  "session_detail_certificate_error",
+  "session_detail_remote_unreachable",
+  "session_detail_remote_unavailable",
   "session_detail_permission_denied",
   "session_detail_not_found",
   "session_detail_stale",
@@ -387,21 +396,50 @@ const lockedHostAccess = hostAccessFixture({
   writes_enabled: false,
   last_error: errorFixture("host_locked", "Remote writes are locked.", false)
 });
-const certificateErrorHostAccess = hostAccessFixture({
-  origin: "https://hostdeck.local:3777",
-  connection_mode: "lan",
-  transport: "certificate_error",
+const loadingHostAccess = hostAccessFixture({
+  client_connection: "loading",
+  ingress_provenance: null,
+  remote_ingress: null,
+  access: "unknown",
+  device_id: null,
+  device_label: null,
+  runtime: null,
+  stream_state: "connecting",
   reads_enabled: false,
   writes_enabled: false,
-  last_error: errorFixture("insecure_transport", "The configured HostDeck certificate is not trusted.", false)
+  last_error: null
+});
+const remoteUnreachableHostAccess = hostAccessFixture({
+  client_connection: "unreachable",
+  ingress_provenance: null,
+  remote_ingress: null,
+  access: "unknown",
+  device_id: null,
+  device_label: null,
+  runtime: null,
+  stream_state: "disconnected",
+  reads_enabled: false,
+  writes_enabled: false,
+  last_error: errorFixture("daemon_unavailable", "The private HostDeck origin is unreachable.", true)
+});
+const remoteUnavailableHostAccess = hostAccessFixture({
+  client_connection: "reconnecting",
+  ingress_provenance: null,
+  remote_ingress: projectRemoteIngressPublicState(remoteIngressFixtureById("profile_other").state),
+  access: "unknown",
+  device_id: null,
+  device_label: null,
+  runtime: null,
+  stream_state: "reconnecting",
+  reads_enabled: false,
+  writes_enabled: false,
+  last_error: errorFixture("daemon_unavailable", "Remote access requires action on the laptop.", true)
 });
 const permissionDeniedHostAccess = hostAccessFixture({
-  origin: "https://hostdeck.local:3777",
-  connection_mode: "lan",
-  transport: "https",
   access: "unpaired",
   device_id: null,
   device_label: null,
+  runtime: null,
   reads_enabled: false,
   writes_enabled: false,
   last_error: errorFixture("permission_denied", "Pair this phone before reading session data.", false)
@@ -423,7 +461,7 @@ const missionRows = [
 ];
 
 export const selectedMobileStateFixtures: readonly SelectedMobileFixture[] = [
-  missionFixture("mission_control_loading", "loading", readyHostAccess, [], null),
+  missionFixture("mission_control_loading", "loading", loadingHostAccess, [], null),
   missionFixture("mission_control_empty", "empty", readyHostAccess, [], null),
   missionFixture("mission_control_ready", "ready", readyHostAccess, missionRows, null),
   missionFixture("mission_control_read_only", "ready", readOnlyHostAccess, missionRows, null),
@@ -436,11 +474,18 @@ export const selectedMobileStateFixtures: readonly SelectedMobileFixture[] = [
     "Update Codex before using remote controls."
   ),
   missionFixture(
-    "mission_control_certificate_error",
-    "certificate_error",
-    certificateErrorHostAccess,
+    "mission_control_remote_unreachable",
+    "remote_unreachable",
+    remoteUnreachableHostAccess,
     [],
-    "The configured HostDeck certificate is not trusted."
+    "The private HostDeck origin is unreachable."
+  ),
+  missionFixture(
+    "mission_control_remote_unavailable",
+    "remote_unavailable",
+    remoteUnavailableHostAccess,
+    [],
+    "Remote access requires action on the laptop."
   ),
   missionFixture(
     "mission_control_permission_denied",
@@ -464,7 +509,7 @@ export const selectedMobileStateFixtures: readonly SelectedMobileFixture[] = [
     [],
     "HostDeck cannot read its selected session projection."
   ),
-  unavailableDetailFixture("session_detail_loading", "loading", readyHostAccess, null),
+  unavailableDetailFixture("session_detail_loading", "loading", loadingHostAccess, null),
   detailFixture("session_detail_ready", "ready", readyHostAccess, fixtureById("approval"), null, true),
   detailFixture("session_detail_read_only", "ready", readOnlyHostAccess, fixtureById("completed"), null, false),
   detailFixture(
@@ -484,10 +529,16 @@ export const selectedMobileStateFixtures: readonly SelectedMobileFixture[] = [
     false
   ),
   unavailableDetailFixture(
-    "session_detail_certificate_error",
-    "certificate_error",
-    certificateErrorHostAccess,
-    "The configured HostDeck certificate is not trusted."
+    "session_detail_remote_unreachable",
+    "remote_unreachable",
+    remoteUnreachableHostAccess,
+    "The private HostDeck origin is unreachable."
+  ),
+  unavailableDetailFixture(
+    "session_detail_remote_unavailable",
+    "remote_unavailable",
+    remoteUnavailableHostAccess,
+    "Remote access requires action on the laptop."
   ),
   unavailableDetailFixture(
     "session_detail_permission_denied",
@@ -643,9 +694,18 @@ function fixtureById(id: StructuredRuntimeFixtureId): StructuredRuntimeFixture {
 
 function hostAccessFixture(overrides: Readonly<Record<string, unknown>> = {}): SelectedHostAccess {
   return selectedHostAccessSchema.parse({
-    origin: "http://127.0.0.1:3777",
-    connection_mode: "loopback",
-    transport: "http",
+    origin: remoteFixtureOrigin,
+    client_connection: "online",
+    ingress_provenance: {
+      kind: "admitted_remote",
+      transport: "tailscale_serve_https",
+      origin: remoteFixtureOrigin,
+      remote_generation: 7,
+      source_key: remoteFixtureSourceKey,
+      tailnet_identity_present: false,
+      app_authorization: "not_evaluated"
+    },
+    remote_ingress: readyRemoteIngressPublicState,
     access: "paired_write",
     device_id: "fixture-phone-001",
     device_label: "Pixel fixture",
@@ -703,11 +763,10 @@ function controlFixture(
   control: StructuredControlKind,
   mutationsEnabled: boolean,
   readsEnabled: boolean,
-  compatibility: RuntimeCompatibility
+  compatibility: RuntimeCompatibility | null
 ) {
   const capability = operationCapability(control);
-  const capabilityState = compatibility.capabilities.find((entry) => entry.name === capability)?.state;
-  if (capabilityState === undefined) throw new TypeError(`Missing ${capability} capability in fixture compatibility.`);
+  const capabilityState = compatibility?.capabilities.find((entry) => entry.name === capability)?.state ?? "unknown";
   const enabled = isSelectedMutationOperation(control) ? mutationsEnabled : readsEnabled;
   const availability = capabilityState === "unavailable" ? "unsupported" : capabilityState === "unknown" ? "unknown" : enabled ? "available" : "blocked";
   return selectedControlStateSchema.parse({
@@ -716,7 +775,8 @@ function controlFixture(
     capability_state: capabilityState,
     availability,
     phase: "idle",
-    current_value: control === "model" ? "gpt-5.5-codex" : control === "goal" ? "Active goal" : null,
+    current_value:
+      compatibility === null ? null : control === "model" ? "gpt-5.5-codex" : control === "goal" ? "Active goal" : null,
     disabled_reason:
       availability === "available"
         ? null
@@ -738,7 +798,7 @@ function detailFixture(
   controlsEnabled: boolean,
   options: { readonly boundary?: boolean } = {}
 ): SelectedMobileFixture {
-  const resumeAvailable = hostAccess.runtime.state === "ready" || hostAccess.runtime.state === "degraded";
+  const resumeAvailable = hostAccess.runtime?.state === "ready" || hostAccess.runtime?.state === "degraded";
   const readsEnabled = hostAccess.reads_enabled && resumeAvailable;
   return {
     id,
