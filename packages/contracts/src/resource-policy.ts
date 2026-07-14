@@ -11,6 +11,7 @@ export const resourceBudgetOwners = [
   "codex_transport",
   "fastify_app",
   "host_service",
+  "remote_ingress",
   "runtime_supervisor",
   "sse_transport",
   "turn_control",
@@ -153,6 +154,12 @@ export const resourceBudgetDefinitions = Object.freeze([
   defineResource("lifecycle_shutdown_timeout_ms", "milliseconds", 1_000, 10_000, 60_000, "host_service", "operation_timeout", "terminate_resource"),
   defineResource("lifecycle_cleanup_step_timeout_ms", "milliseconds", 50, 2_000, 10_000, "host_service", "operation_timeout", "continue_cleanup"),
 
+  defineResource("remote_observer_command_timeout_ms", "milliseconds", 100, 3_000, 30_000, "remote_ingress", "operation_timeout", "abort_operation"),
+  defineResource("remote_observer_cycle_timeout_ms", "milliseconds", 1_000, 15_000, 120_000, "remote_ingress", "operation_timeout", "abort_operation"),
+  defineResource("remote_observer_output_max_bytes", "bytes", 4_096, 1_048_576, 8_388_608, "remote_ingress", "service_overloaded", "abort_operation"),
+  defineResource("remote_observer_poll_interval_ms", "milliseconds", 1_000, 10_000, 300_000, "remote_ingress", "service_overloaded", "abort_operation"),
+  defineResource("remote_observer_max_profiles", "count", 1, 16, 128, "remote_ingress", "service_overloaded", "abort_operation"),
+
   defineResource("cli_connect_timeout_ms", "milliseconds", 500, 5_000, 30_000, "cli_client", "daemon_unavailable", "abort_operation"),
   defineResource("cli_request_timeout_ms", "milliseconds", 1_000, 35_000, 180_000, "cli_client", "operation_timeout", "abort_operation"),
   defineResource("cli_request_body_max_bytes", "bytes", 1_024, 65_536, 1_048_576, "cli_client", "request_too_large", "reject_operation"),
@@ -227,6 +234,11 @@ export const resourceBudgetSchema = z
     atMost("cli_connect_timeout_ms", "cli_request_timeout_ms", "CLI connect timeout must fit within its request timeout.");
     atLeast("cli_request_timeout_ms", "http_request_deadline_ms", "CLI timeout cannot expire before the server request deadline.");
     atMost("cli_request_body_max_bytes", "http_body_max_bytes", "CLI request body must fit within the server body limit.");
+    atMost(
+      "remote_observer_command_timeout_ms",
+      "remote_observer_cycle_timeout_ms",
+      "A remote observer command timeout must fit within its complete observation cycle."
+    );
     lessThan("sse_heartbeat_interval_ms", "cli_stream_idle_timeout_ms", "CLI stream idle timeout must allow an SSE heartbeat.");
 
     if (value.protocol_connect_timeout_ms + value.protocol_handshake_timeout_ms > value.lifecycle_startup_timeout_ms) {

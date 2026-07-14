@@ -6,6 +6,7 @@ import {
   remoteEnableRequestSchema,
   remoteExternalOriginSchema,
   remoteIngressAuditSummarySchema,
+  remoteIngressObservationSnapshotSchema,
   remoteIngressStateSchema,
   remotePairingLinkIntentSchema,
   remoteProfileObservationSchema,
@@ -120,6 +121,65 @@ describe("remote profile comparison", () => {
       { ...profile("dedicated", "match", expectedProfile, expectedProfile), account: "private@example.test" }
     ];
     for (const candidate of candidates) expect(remoteProfileObservationSchema.safeParse(candidate).success).toBe(false);
+  });
+});
+
+describe("remote ingress observation snapshot", () => {
+  it("accepts only coherent identity-free observer evidence", () => {
+    const dedicated = profile("dedicated", "match", expectedProfile, expectedProfile);
+    expect(
+      remoteIngressObservationSnapshotSchema.parse({
+        schema_version: 1,
+        client: "available",
+        profile: dedicated,
+        serve: "exact",
+        external_origin: origin,
+        failure: null,
+        observed_at: timestamp
+      })
+    ).toMatchObject({ client: "available", serve: "exact" });
+
+    const invalid = [
+      {
+        schema_version: 1,
+        client: "not_installed",
+        profile: dedicated,
+        serve: null,
+        external_origin: null,
+        failure: null,
+        observed_at: timestamp
+      },
+      {
+        schema_version: 1,
+        client: "available",
+        profile: dedicated,
+        serve: "exact",
+        external_origin: null,
+        failure: null,
+        observed_at: timestamp
+      },
+      {
+        schema_version: 1,
+        client: "error",
+        profile: profile("unknown", "unknown", expectedProfile, null),
+        serve: null,
+        external_origin: null,
+        failure: "profile_changed",
+        observed_at: timestamp
+      },
+      {
+        schema_version: 1,
+        client: "available",
+        profile: profile("other", "different", expectedProfile, otherProfile),
+        serve: "foreign",
+        external_origin: null,
+        failure: null,
+        observed_at: timestamp
+      }
+    ];
+    for (const value of invalid) {
+      expect(remoteIngressObservationSnapshotSchema.safeParse(value).success).toBe(false);
+    }
   });
 });
 

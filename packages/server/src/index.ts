@@ -41,4 +41,5 @@ export * from "./selected-write-gate.js";
 export * from "./session-control-routes.js";
 export * from "./startup.js";
 export * from "./stream-routes.js";
+export * from "./tailscale-observer.js";
 export * from "./write-routes.js";

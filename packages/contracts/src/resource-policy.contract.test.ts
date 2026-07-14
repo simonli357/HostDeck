@@ -15,7 +15,7 @@ import {
 
 describe("selected V1 resource budget", () => {
   it("defines one complete, immutable, observable registry", () => {
-    expect(resourceBudgetDefinitions).toHaveLength(79);
+    expect(resourceBudgetDefinitions).toHaveLength(84);
     expect(Object.isFrozen(resourceBudgetDefinitions)).toBe(true);
     expect(Object.isFrozen(defaultResourceBudget)).toBe(true);
     expect(Object.isFrozen(resourceBudgetDefinitionByKey)).toBe(true);
@@ -97,6 +97,11 @@ describe("selected V1 resource budget", () => {
       lifecycle_startup_timeout_ms: 60_000,
       lifecycle_shutdown_timeout_ms: 10_000,
       lifecycle_cleanup_step_timeout_ms: 2_000,
+      remote_observer_command_timeout_ms: 3_000,
+      remote_observer_cycle_timeout_ms: 15_000,
+      remote_observer_output_max_bytes: 1_048_576,
+      remote_observer_poll_interval_ms: 10_000,
+      remote_observer_max_profiles: 16,
       cli_connect_timeout_ms: 5_000,
       cli_request_timeout_ms: 35_000,
       cli_request_body_max_bytes: 65_536,
@@ -123,6 +128,7 @@ describe("selected V1 resource budget", () => {
     const contradictoryPolicies: readonly Partial<ResourceBudget>[] = [
       { http_headers_timeout_ms: 30_000, http_request_receive_timeout_ms: 10_000 },
       { http_request_receive_timeout_ms: 60_000, http_request_deadline_ms: 10_000 },
+      { remote_observer_command_timeout_ms: 30_000, remote_observer_cycle_timeout_ms: 15_000 },
       {
         http_headers_timeout_ms: 1_000,
         http_request_receive_timeout_ms: 1_000,

@@ -150,6 +150,91 @@ const remoteServeDescriptorDataSchema = z
 
 export const remoteServeDescriptorSchema = exactDataObject(remoteServeDescriptorDataSchema);
 
+export const remoteIngressObserverFailureReasons = [
+  "command_failed",
+  "command_timeout",
+  "output_oversized",
+  "schema_invalid",
+  "profile_changed"
+] as const;
+
+const remoteIngressObservationSnapshotDataSchema = z
+  .object({
+    schema_version: z.literal(1),
+    client: z.enum(tailscaleClientStates),
+    profile: remoteProfileObservationSchema,
+    serve: z.enum(remoteServeStates).nullable(),
+    external_origin: remoteExternalOriginSchema.nullable(),
+    failure: z.enum(remoteIngressObserverFailureReasons).nullable(),
+    observed_at: isoTimestampSchema
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const selectedProfile =
+      value.profile.state === "dedicated" ||
+      (value.profile.state === "stopped" && value.profile.comparison.relation === "match");
+
+    if (!selectedProfile && (value.serve !== null || value.external_origin !== null)) {
+      context.addIssue({
+        code: "custom",
+        message: "Only the selected profile may expose normalized Serve or external-origin observations."
+      });
+    }
+    if (selectedProfile && value.serve === null) {
+      addIssue(context, "serve", "A selected-profile observation requires one explicit Serve classification.");
+    }
+    if (value.serve === "exact" && value.external_origin === null) {
+      addIssue(context, "external_origin", "Exact Serve observation requires one canonical external origin.");
+    }
+
+    switch (value.client) {
+      case "not_installed":
+        if (
+          value.profile.state !== "absent" ||
+          value.serve !== null ||
+          value.external_origin !== null ||
+          value.failure !== null
+        ) {
+          addIssue(context, "client", "An absent client cannot expose observer evidence or a separate command failure.");
+        }
+        break;
+      case "unsupported":
+        if (
+          value.profile.state !== "unknown" ||
+          value.serve !== null ||
+          value.external_origin !== null ||
+          value.failure !== null
+        ) {
+          addIssue(context, "client", "An unsupported client requires one identity-free unknown observation.");
+        }
+        break;
+      case "error":
+        if (
+          value.profile.state !== "unknown" ||
+          value.serve !== null ||
+          value.external_origin !== null ||
+          value.failure === null ||
+          value.failure === "profile_changed"
+        ) {
+          addIssue(context, "client", "A failed client read requires one bounded command/schema failure only.");
+        }
+        break;
+      case "available":
+        if (value.failure === "profile_changed") {
+          if (value.profile.state !== "unknown" || value.serve !== null || value.external_origin !== null) {
+            addIssue(context, "failure", "Profile-change ambiguity cannot retain an active profile or Serve observation.");
+          }
+        } else if (value.failure !== null) {
+          addIssue(context, "failure", "Available client observations may retain only explicit profile-change ambiguity.");
+        }
+        break;
+    }
+  });
+
+export const remoteIngressObservationSnapshotSchema = exactDataObject(
+  remoteIngressObservationSnapshotDataSchema
+);
+
 const remoteIngressStateDataSchema = z
   .object({
     schema_version: z.literal(1),
@@ -572,6 +657,7 @@ export const remoteIngressAuditSummarySchema = exactDataObject(remoteIngressAudi
 export type RemoteProfileComparison = z.infer<typeof remoteProfileComparisonSchema>;
 export type RemoteProfileObservation = z.infer<typeof remoteProfileObservationSchema>;
 export type RemoteServeDescriptor = z.infer<typeof remoteServeDescriptorSchema>;
+export type RemoteIngressObservationSnapshot = z.infer<typeof remoteIngressObservationSnapshotSchema>;
 export type RemoteIngressState = z.infer<typeof remoteIngressStateSchema>;
 export type RemoteIngressPublicState = z.infer<typeof remoteIngressPublicStateSchema>;
 export type RemoteEnableRequest = z.infer<typeof remoteEnableRequestSchema>;
