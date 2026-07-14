@@ -4,24 +4,32 @@
 
 - Built-in `image_gen`.
 - Use case: `ui-mockup`.
-- Project-bound asset copied from `/home/simonli/.codex/generated_images/019f4288-e681-74a2-9f8c-de3f9547d0c2/ig_0078bd30b6424f0a016a4f998c74f0819498da5bcdad431b35.png`.
+- Direction: Signal Ledger.
+- Project-bound final assets are stored beside this file.
 
-## Prompt Summary
+## Shared Final Prompt Contract
 
-Generate a high-fidelity HostDeck UI concept board for `Option A: Dense Operations Console`.
+- Render a production-realistic phone-first HostDeck operational app, not marketing, terminal, SSH, IDE, or desktop dashboard.
+- Use bright neutral flat surfaces, hairline dividers, narrow semantic rails, stable system type, 8px spacing, 4-6px radii, and 44px targets.
+- Keep Mission Control and Session Detail as the only full-page routes.
+- Keep `/model`, `/goal`, and `/plan` primary and structured.
+- Separate browser-preload failure from HostDeck-renderable local/remote/access states.
+- Never show LAN, certificates, tmux, raw fallback, remote profile switching, Serve mutation, remote unlock, identity, credentials, or secrets.
 
-Required board panels:
+## Final Prompt Set
 
-- Desktop Mission Control with attention-sorted session rows.
-- Phone Session Detail with recent output, prompt composer, and slash command controls.
-- Host safety and pairing/trust status strip.
-- Advanced raw fallback shown as secondary and confirmation-gated.
+| Asset | Final prompt intent |
+| --- | --- |
+| `mobile-mission-control-mixed.png` | Single 390 x 844-proportion flat attention ledger with host strip and four ordered session rows. |
+| `mobile-session-detail-active.png` | Single writable structured feed with semantic bands, equal `/model` `/goal` `/plan`, target-aware sticky composer. |
+| `mobile-approval-boundary-states.png` | Three phone states: retained-history boundary, exact pending approval, elevated one-time confirmation. |
+| `pairing-journey.png` | Four-step laptop-local QR to phone review/claim/paired journey with no raw code or session disclosure. |
+| `access-recovery-states.png` | Six owner-labelled states separating phone, browser-preload, and laptop-local recovery. |
+| `primary-controls.png` | Three bottom sheets with current-versus-next-turn model/plan semantics and explicit goal execution risk. |
+| `responsive-continuum.png` | Five widths retaining one hierarchy; tablet bounded inspector and desktop list/detail split only. |
 
-Key constraints:
+## Iteration Notes
 
-- Power-user operational dashboard, not marketing.
-- Local-first single-user HostDeck control plane, not SSH, not a terminal emulator, not a code editor.
-- Include states for needs input, needs approval, failed, unknown, stale, idle, locked, LAN disabled, trusted/read-only, tmux/storage/stream health, output boundary, and disabled writes.
-- Do not show remote host mutation controls. Lock, LAN, pairing, and trust changes remain host-side/CLI-guided V1 behavior.
-- Use a dense charcoal/off-white palette with amber, red, green, cyan, and violet accents.
-- Avoid decorative blobs, hero sections, stock photography, and terminal-first composition.
+- The first responsive output was rejected because it introduced team/owner data, audit navigation, editor access, and desktop-only tabs.
+- The final responsive asset was regenerated to contain only selected access facts and the same Mission Control/Session Detail hierarchy.
+- Generated text remains subordinate to typed contracts; no raster-only action is approved by these prompts.

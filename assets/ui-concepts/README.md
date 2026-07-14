@@ -1,50 +1,66 @@
 # UI Concepts
 
-Owns generated visual direction options, selected direction notes, mockup references, and asset inventory.
+Owns generated visual-direction options, implementation-target candidates, token/component mappings, and asset inventories.
 
 ## Gate
 
-- Generate exactly two options: `option-a/` and `option-b/`.
-- Each option needs mockups, `theme.md`, `design-system.md`, `asset-inventory.md`, and module notes when relevant.
-- Store project-bound generated assets in the repo.
-- Record the selected option in `docs/planning/07-decisions.md`.
-- UI implementation needs approved screen-group references and screenshot/fidelity evidence.
+- Exactly two current candidates exist: `option-a/` and `option-b/`.
+- Both candidates are mobile-first and consume the executable `FE-V1-004` state/interaction contract.
+- The human must select exact assets in `FE-V1-003` before React screen implementation.
+- Generated images are visual references. Typed contracts own behavior, authority, state, and final copy.
 
-## Structure
+## Current Candidates
 
-| Path | Purpose |
-| --- | --- |
-| `option-a/` | First visual direction |
-| `option-b/` | Second visual direction |
-| `approved/` | Selection notes and implementation references |
-| `design-system-template.md` | Concise design-system checklist |
-
-## Option Checklist
-
-| Item | Option A | Option B |
-| --- | --- | --- |
-| Theme | `option-a/theme.md` | `option-b/theme.md` |
-| Core mockups | `option-a/dense-operations-console-board.png` | `option-b/calm-control-room-board.png` |
-| States/responsive coverage | Desktop Mission Control, phone Session Detail, host safety/trust, raw fallback | Desktop Mission Control, phone Session Detail, host safety/trust, raw fallback |
-| Assets | `option-a/asset-inventory.md` | `option-b/asset-inventory.md` |
-| Design-system mapping | `option-a/design-system.md` | `option-b/design-system.md` |
-
-## FE-V1-002 Options
-
-| Option | Direction | Mockup board | Notes |
+| Option | Direction | Structural idea | Start inspection with |
 | --- | --- | --- | --- |
-| A | Dense operations console | `option-a/dense-operations-console-board.png` | Higher density, dark operator shell, strongest scan hierarchy. |
-| B | Calm control room | `option-b/calm-control-room-board.png` | Lighter, quieter, phone-readable control-room framing. |
+| A | Signal Ledger | Bright, compact, flat attention ledger with semantic feed bands. | `option-a/mobile-mission-control-mixed.png`, `option-a/mobile-session-detail-active.png` |
+| B | Focus Rail | Dark grouped action queue with continuous session/event/state rails. | `option-b/mobile-mission-control-mixed.png`, `option-b/mobile-session-detail-active.png` |
+
+Each option also includes:
+
+- inline approval, elevated confirmation, and replay-boundary targets;
+- local QR/link creation plus phone review/claim/paired states;
+- locked/read-only, browser-preload failure, remote-disabled, Tailscale-unavailable, wrong-profile, and Serve-conflict states;
+- structured `/model`, `/goal`, and `/plan` sheets;
+- one responsive continuum covering 360, 390, 412, 768, and 1280 CSS-pixel reference widths.
+
+See each option's `asset-inventory.md` and `design-system.md` for exact paths and component mapping.
+
+## Rejected Legacy Boards
+
+| Asset | Status | Reason |
+| --- | --- | --- |
+| `option-a/dense-operations-console-board.png` | Rejected | Desktop-led; obsolete LAN/tmux/raw-fallback concepts; no phone Mission Control; write-disabled phone detail only. |
+| `option-b/calm-control-room-board.png` | Rejected | Desktop-led; obsolete LAN/tmux/raw-fallback concepts; no phone Mission Control; write-disabled phone detail only. |
+
+Legacy boards remain only as decision history. They are not implementation targets and must not be mixed with current assets.
+
+## Inspection Order
+
+1. Compare the two phone Mission Control screens for scanning hierarchy and density.
+2. Compare active Session Detail for conversation structure and repeated prompt ergonomics.
+3. Inspect approval/boundary boards for risk hierarchy and continuity truth.
+4. Inspect `/model`, `/goal`, and `/plan` sheets for the primary control workflow.
+5. Inspect pairing and access/recovery boards for ownership and disclosure boundaries.
+6. Inspect responsive continua to verify that tablet/desktop add context without adding routes or required actions.
 
 ## Behavior Integrity
 
-- These boards are visual-direction candidates, not an approved behavior spec.
-- Host lock, LAN mode, pairing, and trust changes remain host-side/CLI-controlled in V1 unless a later decision changes the contract.
-- Text such as "from host CLI" is guidance, not a remote dashboard action.
-- UI implementation must preserve the existing contract that remote unlock and LAN mutation are rejected.
+- Mission Control and Session Detail are the only full-page product routes.
+- `/model`, `/goal`, and `/plan` are structured controls, not literal prompt text.
+- A browser failure before document load contains no HostDeck diagnosis.
+- Unlock, remote enable/disable, Tailscale profile switching, and Serve repair remain laptop-local.
+- Tailscale transport readiness never implies HostDeck read/write authority.
+- QR artwork is illustrative and nonfunctional; implementation must render the fragment-safe link created by the selected pairing contract.
+- Image text is not a schema. `packages/test-fixtures/src/mobile-design-contract.ts` and `artifacts/fe-v1-004-mobile-state-interaction-contract.md` remain authoritative.
 
 ## Fidelity Evidence
 
-| Screen/module | Reference | Implementation screenshot | Status |
+| Screen group | Current candidates | Implementation screenshot | Status |
 | --- | --- | --- | --- |
-|  |  |  |  |
+| Mission Control | Both option `mobile-mission-control-mixed.png` assets |  | Awaiting selection/implementation |
+| Session Detail | Both option `mobile-session-detail-active.png` assets |  | Awaiting selection/implementation |
+| Approval and boundary | Both option `mobile-approval-boundary-states.png` assets |  | Awaiting selection/implementation |
+| Pairing and access | Both option pairing/access assets |  | Awaiting selection/implementation |
+| Primary controls | Both option `primary-controls.png` assets |  | Awaiting selection/implementation |
+| Responsive expansion | Both option `responsive-continuum.png` assets |  | Awaiting selection/implementation |

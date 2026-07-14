@@ -1,21 +1,29 @@
 # Option B Theme
 
-Name: Calm Control Room
+Name: Focus Rail
 
 ## Mood
 
-- Quiet, readable, safe, and composed.
-- Prioritizes trust, safety rails, and phone ergonomics over maximum density.
-- Best fit when the product should feel less intimidating while still operational.
+- Focused, high-contrast, deliberate, and mobile-native.
+- Reads like an action queue and event timeline rather than a recolored ledger.
+- Uses continuous rails and nodes to preserve status/continuity while the user scrolls.
+
+## Structural Direction
+
+- Mission Control groups work into `ACT NOW`, `IN PROGRESS`, and `QUIET` sections instead of filtering one uniform list.
+- Session Detail uses one continuous semantic event timeline with role/state nodes.
+- Supporting controls use dark sheets with current/next-turn or objective/execution rails.
+- Tablet may add one bounded inspector; desktop may place the grouped queue beside the same timeline detail.
 
 ## Product Fit
 
-- Presents HostDeck as a local-first control room for supervising Codex work.
-- Keeps locked, LAN-disabled, stale, unknown, and disabled-write states visible without the darker alarm-heavy feel of Option A.
-- Gives the phone Session Detail more breathing room for repeated prompt/slash workflows.
+- Best when the user wants an immediate action queue and clear continuity through long session histories.
+- Risk, boundary, and pending states stay attached to the same rail as the work they affect.
+- High contrast supports quick use in varied mobile lighting while retaining explicit text labels.
 
 ## Must Avoid
 
-- Drifting into a spacious SaaS landing-page aesthetic.
-- Hiding high-priority sessions behind calm styling.
-- Using beige/cream or one-note blue/slate palettes.
+- Becoming a terminal aesthetic or using monospace as the primary voice.
+- Dark-blue/slate monotony, decorative glow, or status conveyed by color alone.
+- Oversized queue items that hide the second actionable session from the first phone viewport.
+- Adding editor, file, terminal, LAN, certificate, profile-switch, Serve-mutation, or remote-unlock surfaces.
