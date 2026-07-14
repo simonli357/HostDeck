@@ -146,6 +146,7 @@ describe("remote ingress state", () => {
 
   it("projects only bounded actionable state for phone consumers", () => {
     expect(projectRemoteIngressPublicState(remoteIngressStateSchema.parse(state()))).toEqual({
+      generation: 7,
       availability: "ready",
       reason: null,
       external_origin: origin,
@@ -314,7 +315,7 @@ function profile(state: string, relation: string, expected: string | null, activ
 function state(overrides: Readonly<Record<string, unknown>> = {}) {
   return {
     schema_version: 1,
-    revision: 7,
+    generation: 7,
     intent: "enabled",
     availability: "ready",
     admission: "open",

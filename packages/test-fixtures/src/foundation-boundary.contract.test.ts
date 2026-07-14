@@ -8,7 +8,7 @@ import { selectedStructuredRuntimeFixtures, structuredRuntimeFixtureById } from 
 const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const packagesRoot = resolve(repositoryRoot, "packages");
 const generatedProtocolImport = /(?:^|\/)(?:generated|protocol-generated)(?:\/|$)|codex.*app-server.*(?:generated|protocol)/iu;
-const rawTailscaleImport = /tailscale.*(?:generated|protocol|raw)|(?:generated|protocol|raw).*tailscale/iu;
+const tailscaleSpecificImport = /tailscale/iu;
 
 describe("selected foundation package boundary", () => {
   it("keeps generated Codex protocol imports adapter-private", () => {
@@ -35,11 +35,20 @@ describe("selected foundation package boundary", () => {
       if (!normalizedConsumers.some((prefix) => repositoryPath.startsWith(prefix))) continue;
 
       for (const specifier of moduleSpecifiers(readFileSync(file, "utf8"))) {
-        if (rawTailscaleImport.test(specifier)) violations.push(`${repositoryPath}: ${specifier}`);
+        if (tailscaleSpecificImport.test(specifier)) violations.push(`${repositoryPath}: ${specifier}`);
       }
     }
 
     expect(violations).toEqual([]);
+  });
+
+  it("recognizes Tailscale adapter, CLI, generated, and relative-module import drift", () => {
+    for (const specifier of ["@hostdeck/tailscale-adapter", "tailscale", "./generated-tailscale-status.js", "../../server/src/tailscale-observer.js"]) {
+      expect(tailscaleSpecificImport.test(specifier), specifier).toBe(true);
+    }
+    for (const specifier of ["@hostdeck/contracts", "./remote-ingress.js", "@hostdeck/core"]) {
+      expect(tailscaleSpecificImport.test(specifier), specifier).toBe(false);
+    }
   });
 
   it("parses selected fixtures repeatedly and concurrently without mutation", async () => {

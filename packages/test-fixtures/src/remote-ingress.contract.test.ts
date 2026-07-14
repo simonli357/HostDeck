@@ -8,7 +8,13 @@ import {
 } from "@hostdeck/contracts";
 import { describe, expect, it } from "vitest";
 import {
+  readyRemoteIngressPublicState,
+  readyRemoteIngressState,
   remoteFixtureOrigin,
+  remoteFixtureOtherProfileKey,
+  remoteFixtureProfileKey,
+  remoteFixtureServeDescriptor,
+  remoteFixtureSourceKey,
   remoteIngressAuditFixtures,
   remoteIngressFixtures,
   remotePairingLinkFixture,
@@ -82,6 +88,19 @@ describe("remote ingress fixture inventory", () => {
     }
   });
 
+  it("covers both audit actions, every terminal outcome, and idempotent Serve results", () => {
+    expect(new Set(remoteIngressAuditFixtures.map((fixture) => fixture.action))).toEqual(new Set(["remote_enable", "remote_disable"]));
+    expect(new Set(remoteIngressAuditFixtures.filter((fixture) => fixture.phase === "terminal").map((fixture) => fixture.outcome))).toEqual(
+      new Set(["succeeded", "failed", "rejected", "incomplete"])
+    );
+    expect(
+      remoteIngressAuditFixtures.some((fixture) => fixture.phase === "accepted" && fixture.action === "remote_enable" && fixture.serve_state === "exact")
+    ).toBe(true);
+    expect(
+      new Set(remoteIngressAuditFixtures.flatMap((fixture) => (fixture.phase === "terminal" && fixture.outcome === "succeeded" ? [fixture.serve_result] : [])))
+    ).toEqual(new Set(["applied", "unchanged", "removed"]));
+  });
+
   it("keeps admitted ingress separate from application authorization", () => {
     const admitted = remoteProxyFixtures.filter((fixture) => fixture.decision.decision === "admitted");
     expect(admitted).toHaveLength(3);
@@ -124,9 +143,34 @@ describe("remote ingress fixture inventory", () => {
     ]) {
       expect(keys).not.toContain(forbidden);
     }
+    for (const key of keys) {
+      expect(key).not.toMatch(
+        /^(?:account|auth_key|auth_url|cookie|credential|csrf_token|device_token|email|login|node_id|node_key|oauth|pairing_code|password|raw_output|refresh_token|secret|tailnet_id)$/iu
+      );
+    }
     expect(strings).toContain(remoteFixtureOrigin);
     expect(strings.some((value) => value.includes("@"))).toBe(false);
     expect(strings.some((value) => /^100\.(?:\d{1,3}\.){2}\d{1,3}$/u.test(value))).toBe(false);
+    const comparisonKeys = strings.filter((value) => value.startsWith("sha256:"));
+    expect(new Set(comparisonKeys)).toEqual(new Set([remoteFixtureProfileKey, remoteFixtureOtherProfileKey, remoteFixtureSourceKey]));
+  });
+
+  it("deep-freezes every exported remote fixture graph", () => {
+    for (const value of [
+      remoteFixtureServeDescriptor,
+      requiredRemoteProfileFixtureIds,
+      requiredRemoteIngressFixtureIds,
+      requiredRemoteProxyFixtureIds,
+      remoteProfileFixtures,
+      remoteIngressFixtures,
+      remoteProxyFixtures,
+      remotePairingLinkFixture,
+      remoteIngressAuditFixtures,
+      readyRemoteIngressState,
+      readyRemoteIngressPublicState
+    ]) {
+      expect(isDeepFrozen(value)).toBe(true);
+    }
   });
 
   it("parses repeatedly without mutating shared fixture state", async () => {
@@ -165,4 +209,10 @@ function collectStrings(value: unknown, strings: string[] = []): readonly string
   if (value === null || typeof value !== "object") return strings;
   for (const child of Object.values(value)) collectStrings(child, strings);
   return strings;
+}
+
+function isDeepFrozen(value: unknown): boolean {
+  if (value === null || typeof value !== "object") return true;
+  if (!Object.isFrozen(value)) return false;
+  return Object.values(value).every((child) => isDeepFrozen(child));
 }

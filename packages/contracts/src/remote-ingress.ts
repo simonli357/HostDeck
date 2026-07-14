@@ -13,10 +13,12 @@ import {
   tailscaleClientStates
 } from "@hostdeck/core";
 import { z } from "zod";
+import { exactDataObject } from "./exact-data-object.js";
 import { isoTimestampSchema, nonNegativeSafeIntegerSchema } from "./scalars.js";
 
 const remoteLimits = {
-  originLength: 512
+  dnsNameLength: 134,
+  originLength: 142
 } as const;
 
 export const remoteComparisonKeySchema = z.string().regex(/^sha256:[a-f0-9]{64}$/u);
@@ -61,7 +63,7 @@ export const hostDeckLoopbackOriginSchema = z
     }
   });
 
-export const remoteProfileComparisonSchema = z
+const remoteProfileComparisonDataSchema = z
   .object({
     relation: z.enum(remoteProfileRelations),
     expected_profile_key: remoteComparisonKeySchema.nullable(),
@@ -106,7 +108,9 @@ export const remoteProfileComparisonSchema = z
     }
   });
 
-export const remoteProfileObservationSchema = z
+export const remoteProfileComparisonSchema = exactDataObject(remoteProfileComparisonDataSchema);
+
+const remoteProfileObservationDataSchema = z
   .object({
     state: z.enum(remoteProfileStates),
     comparison: remoteProfileComparisonSchema
@@ -131,7 +135,9 @@ export const remoteProfileObservationSchema = z
     }
   });
 
-export const remoteServeDescriptorSchema = z
+export const remoteProfileObservationSchema = exactDataObject(remoteProfileObservationDataSchema);
+
+const remoteServeDescriptorDataSchema = z
   .object({
     external_origin: remoteExternalOriginSchema,
     https_port: z.literal(443),
@@ -141,10 +147,12 @@ export const remoteServeDescriptorSchema = z
   })
   .strict();
 
-export const remoteIngressStateSchema = z
+export const remoteServeDescriptorSchema = exactDataObject(remoteServeDescriptorDataSchema);
+
+const remoteIngressStateDataSchema = z
   .object({
     schema_version: z.literal(1),
-    revision: nonNegativeSafeIntegerSchema,
+    generation: nonNegativeSafeIntegerSchema,
     intent: z.enum(remoteIngressIntentStates),
     availability: z.enum(remoteIngressAvailabilityStates),
     admission: z.enum(remoteIngressAdmissionStates),
@@ -184,6 +192,17 @@ export const remoteIngressStateSchema = z
     if ((value.client === "unsupported" || value.client === "error") && value.profile.state !== "unknown") {
       addIssue(context, "profile", "Unsupported or failed client observation requires unknown normalized profile state.");
     }
+    if ((value.client === "unsupported" || value.client === "error") && value.serve !== null) {
+      addIssue(context, "serve", "Unsupported or failed client observation cannot expose a trusted Serve classification.");
+    }
+    const serveBelongsToSelectedProfile =
+      value.profile.state === "dedicated" || (value.profile.state === "stopped" && value.profile.comparison.relation === "match");
+    if (value.serve !== null && !serveBelongsToSelectedProfile) {
+      addIssue(context, "serve", "Serve classification is valid only for the selected dedicated profile.");
+    }
+    if ((value.client === "not_installed" || value.client === "unsupported") && value.operation_failure !== null) {
+      addIssue(context, "operation_failure", "Absent and unsupported client states are already the complete bounded failure.");
+    }
     if (value.operation_failure === "cleanup_incomplete" && value.intent !== "disabled") {
       addIssue(context, "operation_failure", "Cleanup failure is valid only after remote admission has been disabled.");
     }
@@ -195,10 +214,11 @@ export const remoteIngressStateSchema = z
     }
     if (
       value.operation_failure !== null &&
-      !["cleanup_incomplete", "profile_changed", "schema_invalid", "output_oversized"].includes(value.operation_failure) &&
+      !["cleanup_incomplete", "profile_changed"].includes(value.operation_failure) &&
+      value.observation !== "failed" &&
       value.profile.state !== "dedicated"
     ) {
-      addIssue(context, "operation_failure", "Profile-scoped operation failure requires the dedicated profile.");
+      addIssue(context, "operation_failure", "Current profile-scoped operation failure requires the dedicated profile.");
     }
 
     const decision = evaluateRemoteIngressAvailability({
@@ -221,10 +241,13 @@ export const remoteIngressStateSchema = z
     }
   });
 
+export const remoteIngressStateSchema = exactDataObject(remoteIngressStateDataSchema);
+
 export const remoteIngressPublicReasonSchema = z.union([z.literal("remote_disabled"), z.enum(remoteIngressUnavailableReasons)]);
 
-export const remoteIngressPublicStateSchema = z
+const remoteIngressPublicStateDataSchema = z
   .object({
+    generation: nonNegativeSafeIntegerSchema,
     availability: z.enum(remoteIngressAvailabilityStates),
     reason: remoteIngressPublicReasonSchema.nullable(),
     external_origin: remoteExternalOriginSchema.nullable(),
@@ -256,15 +279,19 @@ export const remoteIngressPublicStateSchema = z
     }
   });
 
+export const remoteIngressPublicStateSchema = exactDataObject(remoteIngressPublicStateDataSchema);
+
 export function projectRemoteIngressPublicState(
   state: RemoteIngressState
 ): RemoteIngressPublicState {
+  const parsedState = remoteIngressStateSchema.parse(state);
   return remoteIngressPublicStateSchema.parse({
-    availability: state.availability,
-    reason: state.availability === "disabled" ? (state.reason ?? "remote_disabled") : state.reason,
-    external_origin: state.external_origin,
-    laptop_action_required: state.availability !== "ready",
-    observed_at: state.observed_at
+    generation: parsedState.generation,
+    availability: parsedState.availability,
+    reason: parsedState.availability === "disabled" ? (parsedState.reason ?? "remote_disabled") : parsedState.reason,
+    external_origin: parsedState.external_origin,
+    laptop_action_required: parsedState.availability !== "ready",
+    observed_at: parsedState.observed_at
   });
 }
 
@@ -292,6 +319,21 @@ export const remoteProxyTrustRejectionReasons = [
   "unknown_proxy_context"
 ] as const;
 
+const remoteProxyRequiredForwardingByReason: Partial<
+  Record<(typeof remoteProxyTrustRejectionReasons)[number], "absent" | "exact" | "invalid">
+> = {
+  missing_forwarding_header: "absent",
+  duplicate_forwarding_header: "invalid",
+  invalid_forwarded_proto: "invalid",
+  host_mismatch: "exact",
+  origin_mismatch: "exact",
+  source_invalid: "invalid",
+  standard_identity_invalid: "exact",
+  untrusted_tailscale_lookalike: "exact",
+  remote_generation_stale: "exact",
+  unknown_proxy_context: "exact"
+};
+
 const localRequestProvenanceSchema = z
   .object({
     kind: z.literal("local_loopback"),
@@ -316,12 +358,14 @@ const remoteRequestProvenanceSchema = z
   })
   .strict();
 
-export const requestIngressProvenanceSchema = z.discriminatedUnion("kind", [
+const requestIngressProvenanceDataSchema = z.discriminatedUnion("kind", [
   localRequestProvenanceSchema,
   remoteRequestProvenanceSchema
 ]);
 
-export const remoteProxyHeaderAssessmentSchema = z
+export const requestIngressProvenanceSchema = exactDataObject(requestIngressProvenanceDataSchema);
+
+const remoteProxyHeaderAssessmentDataSchema = z
   .object({
     forwarding: z.enum(["absent", "exact", "invalid"]),
     standard_identity: z.enum(["absent", "present", "invalid"]),
@@ -329,7 +373,9 @@ export const remoteProxyHeaderAssessmentSchema = z
   })
   .strict();
 
-export const remoteProxyTrustDecisionSchema = z
+export const remoteProxyHeaderAssessmentSchema = exactDataObject(remoteProxyHeaderAssessmentDataSchema);
+
+const remoteProxyTrustDecisionDataSchema = z
   .object({
     decision: z.enum(["admitted", "rejected"]),
     provenance: requestIngressProvenanceSchema.nullable(),
@@ -350,14 +396,9 @@ export const remoteProxyTrustDecisionSchema = z
       if ((value.headers.standard_identity === "invalid") !== (value.reason === "standard_identity_invalid")) {
         addIssue(context, "reason", "Invalid standard identity headers require their exact rejection reason.");
       }
-      if (value.reason === "missing_forwarding_header" && value.headers.forwarding !== "absent") {
-        addIssue(context, "headers", "Missing-forwarding rejection requires absent forwarding metadata.");
-      }
-      if (
-        (value.reason === "duplicate_forwarding_header" || value.reason === "invalid_forwarded_proto") &&
-        value.headers.forwarding !== "invalid"
-      ) {
-        addIssue(context, "headers", "Invalid-forwarding rejection requires invalid forwarding metadata.");
+      const requiredForwarding = value.reason === null ? undefined : remoteProxyRequiredForwardingByReason[value.reason];
+      if (requiredForwarding !== undefined && value.headers.forwarding !== requiredForwarding) {
+        addIssue(context, "headers", "Proxy rejection reason must match the normalized forwarding-header assessment.");
       }
       return;
     }
@@ -379,7 +420,9 @@ export const remoteProxyTrustDecisionSchema = z
     }
   });
 
-export const remotePairingLinkIntentSchema = z
+export const remoteProxyTrustDecisionSchema = exactDataObject(remoteProxyTrustDecisionDataSchema);
+
+const remotePairingLinkIntentDataSchema = z
   .object({
     external_origin: remoteExternalOriginSchema,
     claim_path: z.literal("/pair"),
@@ -389,6 +432,8 @@ export const remotePairingLinkIntentSchema = z
     referrer_contains_code: z.literal(false)
   })
   .strict();
+
+export const remotePairingLinkIntentSchema = exactDataObject(remotePairingLinkIntentDataSchema);
 
 export const remoteIngressAuditActions = ["remote_enable", "remote_disable"] as const;
 
@@ -420,7 +465,7 @@ const remoteIngressTerminalAuditSchema = z
   })
   .strict();
 
-export const remoteIngressAuditSummarySchema = z
+const remoteIngressAuditSummaryDataSchema = z
   .discriminatedUnion("phase", [remoteIngressAcceptedAuditSchema, remoteIngressTerminalAuditSchema])
   .superRefine((value, context) => {
     const expectedIntent = value.action === "remote_enable" ? "enabled" : "disabled";
@@ -428,10 +473,13 @@ export const remoteIngressAuditSummarySchema = z
       addIssue(context, "requested_intent", "Remote audit action must match its requested intent.");
     }
     if (value.phase === "accepted") {
-      if (value.action === "remote_enable" && (value.profile_state !== "dedicated" || value.serve_state !== "absent")) {
+      if (
+        value.action === "remote_enable" &&
+        (value.profile_state !== "dedicated" || (value.serve_state !== "absent" && value.serve_state !== "exact"))
+      ) {
         context.addIssue({
           code: "custom",
-          message: "Accepted remote enable requires the dedicated profile and absent Serve state."
+          message: "Accepted remote enable requires the dedicated profile and absent or already-exact Serve state."
         });
       }
       return;
@@ -446,6 +494,21 @@ export const remoteIngressAuditSummarySchema = z
     if (value.action === "remote_enable" && value.reason === "cleanup_incomplete") {
       addIssue(context, "reason", "Serve cleanup failure belongs only to remote disable.");
     }
+    if (value.action === "remote_disable" && value.serve_result === "applied") {
+      addIssue(context, "serve_result", "Remote disable cannot report an applied Serve mapping.");
+    }
+    if (value.serve_result === "unknown" && value.outcome !== "incomplete") {
+      addIssue(context, "serve_result", "Unknown Serve outcome requires an incomplete terminal audit result.");
+    }
+    if (
+      value.outcome === "rejected" &&
+      (value.admission !== "closed" || value.intent_persisted || value.serve_result !== "not_attempted")
+    ) {
+      context.addIssue({ code: "custom", message: "Rejected remote operation must be closed, unpersisted, and not attempted." });
+    }
+    if (value.reason === "cleanup_incomplete" && value.outcome !== "incomplete") {
+      addIssue(context, "reason", "Cleanup failure requires an incomplete remote-disable result.");
+    }
     if (value.outcome === "succeeded") {
       if (value.reason !== null || !value.intent_persisted) {
         context.addIssue({ code: "custom", message: "Successful remote audit terminal requires persisted intent and no error reason." });
@@ -459,10 +522,15 @@ export const remoteIngressAuditSummarySchema = z
       if (value.action === "remote_disable" && !["removed", "unchanged"].includes(value.serve_result)) {
         addIssue(context, "serve_result", "Successful remote disable requires removed or already-absent Serve state.");
       }
+      if (value.action === "remote_disable" && (value.profile_state !== "dedicated" || value.serve_state !== "absent")) {
+        context.addIssue({ code: "custom", message: "Successful remote disable requires dedicated-profile absent Serve read-back." });
+      }
     } else if (value.reason === null) {
       addIssue(context, "reason", "Failed, rejected, or incomplete remote audit terminal requires one bounded reason.");
     }
   });
+
+export const remoteIngressAuditSummarySchema = exactDataObject(remoteIngressAuditSummaryDataSchema);
 
 export type RemoteProfileComparison = z.infer<typeof remoteProfileComparisonSchema>;
 export type RemoteProfileObservation = z.infer<typeof remoteProfileObservationSchema>;
@@ -485,7 +553,8 @@ function parseUrl(value: string): URL | null {
 function isTailscaleDnsName(hostname: string): boolean {
   const labels = hostname.split(".");
   return (
-    labels.length >= 4 &&
+    hostname.length <= remoteLimits.dnsNameLength &&
+    labels.length === 4 &&
     labels.at(-2) === "ts" &&
     labels.at(-1) === "net" &&
     labels.slice(0, -2).every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(label))

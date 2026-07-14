@@ -1,6 +1,7 @@
 import { mobileAttentionPriority, type StructuredControlKind } from "@hostdeck/core";
 import { z } from "zod";
 import { apiErrorEnvelopeSchema } from "./api.js";
+import { exactDataObject } from "./exact-data-object.js";
 import {
   hostDeckLoopbackOriginSchema,
   remoteExternalOriginSchema,
@@ -41,7 +42,7 @@ export const selectedMobileScreenStateSchema = z.enum([
 export const selectedMobileStreamStateSchema = z.enum(["connecting", "connected", "reconnecting", "disconnected", "error"]);
 export const selectedMobileClientConnectionStateSchema = z.enum(["loading", "online", "reconnecting", "unreachable"]);
 
-export const selectedHostAccessSchema = z
+const selectedHostAccessDataSchema = z
   .object({
     origin: z.union([hostDeckLoopbackOriginSchema, remoteExternalOriginSchema]),
     client_connection: selectedMobileClientConnectionStateSchema,
@@ -77,16 +78,26 @@ export const selectedHostAccessSchema = z
     if (!online && value.ingress_provenance !== null) {
       context.addIssue({ code: "custom", message: "Disconnected clients cannot retain admitted request provenance." });
     }
+    if (value.client_connection === "unreachable" && value.remote_ingress !== null) {
+      context.addIssue({ code: "custom", message: "Unreachable clients cannot invent current laptop remote-ingress state." });
+    }
     if (value.ingress_provenance !== null && value.ingress_provenance.origin !== value.origin) {
       context.addIssue({ code: "custom", message: "Host access origin must match admitted request provenance." });
     }
     if (value.ingress_provenance?.kind === "admitted_remote") {
       if (
         value.remote_ingress?.availability !== "ready" ||
-        value.remote_ingress.external_origin !== value.origin
+        value.remote_ingress.external_origin !== value.origin ||
+        value.remote_ingress.generation !== value.ingress_provenance.remote_generation
       ) {
-        context.addIssue({ code: "custom", message: "Admitted remote access requires the same ready external origin." });
+        context.addIssue({ code: "custom", message: "Admitted remote access requires the same ready external origin and generation." });
       }
+    }
+    if (value.ingress_provenance?.kind === "local_loopback" && value.access !== "loopback_local") {
+      context.addIssue({ code: "custom", message: "Loopback provenance requires explicit local authority." });
+    }
+    if (value.ingress_provenance?.kind === "admitted_remote" && value.access === "loopback_local") {
+      context.addIssue({ code: "custom", message: "Remote ingress can never acquire loopback-local authority." });
     }
     if (!online && value.access !== "unknown") {
       context.addIssue({ code: "custom", message: "Disconnected client access authority must remain unknown." });
@@ -111,6 +122,9 @@ export const selectedHostAccessSchema = z
     }
     if (value.access === "paired_read_only" && (value.device_id === null || value.device_label === null)) {
       context.addIssue({ code: "custom", message: "Paired readers must expose their bounded device identity." });
+    }
+    if ((value.device_id === null) !== (value.device_label === null)) {
+      context.addIssue({ code: "custom", message: "Paired-device id and label must be present or absent together." });
     }
     const readable = online && ["loopback_local", "paired_read_only", "paired_write"].includes(value.access);
     if (value.reads_enabled !== readable) {
@@ -137,7 +151,18 @@ export const selectedHostAccessSchema = z
     if (["reconnecting", "unreachable"].includes(value.client_connection) && value.last_error === null) {
       context.addIssue({ code: "custom", message: "Disconnected client states require one bounded connection error." });
     }
+    if (value.client_connection !== "online" && value.stream_state === "connected") {
+      context.addIssue({ code: "custom", message: "A disconnected host client cannot retain a connected event stream." });
+    }
+    if (
+      value.client_connection === "loading" &&
+      (value.stream_state !== "connecting" || value.remote_ingress !== null || value.last_error !== null)
+    ) {
+      context.addIssue({ code: "custom", message: "Loading host access requires unresolved ingress, a connecting stream, and no error." });
+    }
   });
+
+export const selectedHostAccessSchema = exactDataObject(selectedHostAccessDataSchema);
 
 export const selectedSessionDisplayStateSchema = z.enum([
   "needs_approval",
@@ -217,15 +242,23 @@ export const selectedMissionControlViewModelSchema = z
     }
     if (
       value.state === "remote_unavailable" &&
-      (value.host_access.client_connection === "online" || value.host_access.remote_ingress?.availability === "ready")
+      (value.host_access.client_connection !== "reconnecting" ||
+        value.host_access.remote_ingress === null ||
+        value.host_access.remote_ingress.availability === "ready")
     ) {
       context.addIssue({ code: "custom", message: "Remote-unavailable Mission Control requires non-ready laptop ingress truth." });
     }
-    if (value.state === "permission_denied" && value.host_access.runtime !== null) {
-      context.addIssue({ code: "custom", message: "Permission-denied Mission Control cannot expose runtime compatibility." });
+    if (
+      value.state === "permission_denied" &&
+      (value.host_access.client_connection !== "online" ||
+        value.host_access.reads_enabled ||
+        value.host_access.runtime !== null ||
+        !["unpaired", "expired", "revoked", "permission_denied"].includes(value.host_access.access))
+    ) {
+      context.addIssue({ code: "custom", message: "Permission-denied Mission Control requires resolved non-readable app authority." });
     }
-    if (["ready", "empty"].includes(value.state) && !value.host_access.reads_enabled) {
-      context.addIssue({ code: "custom", message: "Readable Mission Control states require current application read authority." });
+    if (["ready", "empty", "offline", "incompatible", "degraded"].includes(value.state) && !value.host_access.reads_enabled) {
+      context.addIssue({ code: "custom", message: "Data-bearing Mission Control states require current application read authority." });
     }
     for (let index = 1; index < value.sessions.length; index += 1) {
       const previous = value.sessions[index - 1];
@@ -351,20 +384,43 @@ export const selectedSessionDetailViewModelSchema = z
     if (stateRequiresData && (value.session === null || value.events === null)) {
       context.addIssue({ code: "custom", message: "Loaded Session Detail states require a session and bounded event projection." });
     }
+    if (stateRequiresData && !value.host_access.reads_enabled) {
+      context.addIssue({ code: "custom", message: "Loaded Session Detail states require current application read authority." });
+    }
     if (!stateRequiresData && (value.session !== null || value.events !== null || value.approvals.length > 0)) {
       context.addIssue({ code: "custom", message: "Inaccessible Session Detail states must not expose session data." });
     }
-    if (value.state === "remote_unreachable" && value.host_access.remote_ingress !== null) {
-      context.addIssue({ code: "custom", message: "Unreachable phone origin cannot invent current laptop remote state." });
+    if (value.state === "loading" && value.host_access.client_connection !== "loading") {
+      context.addIssue({ code: "custom", message: "Loading Session Detail requires unresolved client connection state." });
+    }
+    if (
+      value.state === "remote_unreachable" &&
+      (value.host_access.client_connection !== "unreachable" || value.host_access.remote_ingress !== null)
+    ) {
+      context.addIssue({ code: "custom", message: "Remote-unreachable Session Detail requires an unreachable origin without laptop state." });
     }
     if (
       value.state === "remote_unavailable" &&
-      (value.host_access.client_connection === "online" || value.host_access.remote_ingress?.availability === "ready")
+      (value.host_access.client_connection !== "reconnecting" ||
+        value.host_access.remote_ingress === null ||
+        value.host_access.remote_ingress.availability === "ready")
     ) {
       context.addIssue({ code: "custom", message: "Remote-unavailable Session Detail requires non-ready laptop ingress truth." });
     }
-    if (value.state === "permission_denied" && value.host_access.runtime !== null) {
-      context.addIssue({ code: "custom", message: "Permission-denied Session Detail cannot expose runtime compatibility." });
+    if (
+      value.state === "permission_denied" &&
+      (value.host_access.client_connection !== "online" ||
+        value.host_access.reads_enabled ||
+        value.host_access.runtime !== null ||
+        !["unpaired", "expired", "revoked", "permission_denied"].includes(value.host_access.access))
+    ) {
+      context.addIssue({ code: "custom", message: "Permission-denied Session Detail requires resolved non-readable app authority." });
+    }
+    if (value.state === "not_found" && !value.host_access.reads_enabled) {
+      context.addIssue({ code: "custom", message: "Not-found Session Detail requires read authority before disclosing absence." });
+    }
+    if (value.stream_state !== value.host_access.stream_state) {
+      context.addIssue({ code: "custom", message: "Session Detail stream state must match the host-access stream observation." });
     }
     if (
       !stateRequiresData &&

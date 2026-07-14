@@ -20,22 +20,22 @@ export const remoteFixtureProfileKey = `sha256:${"1".repeat(64)}`;
 export const remoteFixtureOtherProfileKey = `sha256:${"2".repeat(64)}`;
 export const remoteFixtureSourceKey = `sha256:${"3".repeat(64)}`;
 
-export const remoteFixtureServeDescriptor = {
+export const remoteFixtureServeDescriptor = deepFreeze({
   external_origin: remoteFixtureOrigin,
   https_port: 443,
   path: "/",
   proxy_origin: "http://127.0.0.1:3777",
   visibility: "private"
-} as const;
+} as const);
 
-export const requiredRemoteProfileFixtureIds = [
+export const requiredRemoteProfileFixtureIds = Object.freeze([
   "profile_absent",
   "profile_stopped",
   "profile_signed_out",
   "profile_dedicated",
   "profile_other",
   "profile_unknown"
-] as const;
+] as const);
 export type RemoteProfileFixtureId = (typeof requiredRemoteProfileFixtureIds)[number];
 
 export interface RemoteProfileFixture {
@@ -43,16 +43,16 @@ export interface RemoteProfileFixture {
   readonly profile: RemoteProfileObservation;
 }
 
-export const remoteProfileFixtures: readonly RemoteProfileFixture[] = [
+export const remoteProfileFixtures: readonly RemoteProfileFixture[] = deepFreeze([
   profileFixture("profile_absent", "absent", "missing", remoteFixtureProfileKey, null),
   profileFixture("profile_stopped", "stopped", "match", remoteFixtureProfileKey, remoteFixtureProfileKey),
   profileFixture("profile_signed_out", "signed_out", "unknown", remoteFixtureProfileKey, null),
   profileFixture("profile_dedicated", "dedicated", "match", remoteFixtureProfileKey, remoteFixtureProfileKey),
   profileFixture("profile_other", "other", "different", remoteFixtureProfileKey, remoteFixtureOtherProfileKey),
   profileFixture("profile_unknown", "unknown", "unknown", remoteFixtureProfileKey, null)
-];
+]);
 
-export const requiredRemoteIngressFixtureIds = [
+export const requiredRemoteIngressFixtureIds = Object.freeze([
   "disabled",
   "disabled_cleanup_incomplete",
   "ready",
@@ -78,7 +78,7 @@ export const requiredRemoteIngressFixtureIds = [
   "output_oversized",
   "schema_invalid",
   "profile_changed"
-] as const;
+] as const);
 export type RemoteIngressFixtureId = (typeof requiredRemoteIngressFixtureIds)[number];
 
 export interface RemoteIngressFixture {
@@ -86,9 +86,9 @@ export interface RemoteIngressFixture {
   readonly state: RemoteIngressState;
 }
 
-const readyState = remoteState();
+const readyState = deepFreeze(remoteState());
 
-export const remoteIngressFixtures: readonly RemoteIngressFixture[] = [
+export const remoteIngressFixtures: readonly RemoteIngressFixture[] = deepFreeze([
   ingressFixture("disabled", { intent: "disabled", availability: "disabled", admission: "closed" }),
   ingressFixture("disabled_cleanup_incomplete", {
     intent: "disabled",
@@ -157,9 +157,9 @@ export const remoteIngressFixtures: readonly RemoteIngressFixture[] = [
   failureIngressFixture("output_oversized"),
   failureIngressFixture("schema_invalid"),
   failureIngressFixture("profile_changed")
-];
+]);
 
-export const requiredRemoteProxyFixtureIds = [
+export const requiredRemoteProxyFixtureIds = Object.freeze([
   "local_admitted",
   "remote_admitted",
   "remote_admitted_with_identity",
@@ -174,7 +174,7 @@ export const requiredRemoteProxyFixtureIds = [
   "reject_generation",
   "reject_non_loopback",
   "reject_unknown"
-] as const;
+] as const);
 export type RemoteProxyFixtureId = (typeof requiredRemoteProxyFixtureIds)[number];
 
 export interface RemoteProxyFixture {
@@ -182,7 +182,7 @@ export interface RemoteProxyFixture {
   readonly decision: RemoteProxyTrustDecision;
 }
 
-export const remoteProxyFixtures: readonly RemoteProxyFixture[] = [
+export const remoteProxyFixtures: readonly RemoteProxyFixture[] = deepFreeze([
   proxyFixture("local_admitted", {
     decision: "admitted",
     provenance: {
@@ -222,18 +222,29 @@ export const remoteProxyFixtures: readonly RemoteProxyFixture[] = [
   rejectedProxyFixture("reject_generation", "remote_generation_stale"),
   rejectedProxyFixture("reject_non_loopback", "direct_non_loopback"),
   rejectedProxyFixture("reject_unknown", "unknown_proxy_context")
-];
+]);
 
-export const remotePairingLinkFixture: RemotePairingLinkIntent = remotePairingLinkIntentSchema.parse({
-  external_origin: remoteFixtureOrigin,
-  claim_path: "/pair",
-  code_placement: "url_fragment",
-  fragment_key: "code",
-  strip_fragment_before_request: true,
-  referrer_contains_code: false
-});
+export const remotePairingLinkFixture: RemotePairingLinkIntent = deepFreeze(
+  remotePairingLinkIntentSchema.parse({
+    external_origin: remoteFixtureOrigin,
+    claim_path: "/pair",
+    code_placement: "url_fragment",
+    fragment_key: "code",
+    strip_fragment_before_request: true,
+    referrer_contains_code: false
+  })
+);
 
-export const remoteIngressAuditFixtures: readonly RemoteIngressAuditSummary[] = [
+export const remoteIngressAuditFixtures: readonly RemoteIngressAuditSummary[] = deepFreeze([
+  remoteAudit({
+    schema_version: 1,
+    action: "remote_enable",
+    requested_intent: "enabled",
+    profile_state: "dedicated",
+    serve_state: "exact",
+    phase: "accepted",
+    outcome: "accepted"
+  }),
   remoteAudit({
     schema_version: 1,
     action: "remote_enable",
@@ -258,12 +269,90 @@ export const remoteIngressAuditFixtures: readonly RemoteIngressAuditSummary[] = 
   }),
   remoteAudit({
     schema_version: 1,
+    action: "remote_enable",
+    requested_intent: "enabled",
+    profile_state: "dedicated",
+    serve_state: "exact",
+    phase: "terminal",
+    outcome: "succeeded",
+    admission: "open",
+    intent_persisted: true,
+    serve_result: "unchanged",
+    reason: null
+  }),
+  remoteAudit({
+    schema_version: 1,
+    action: "remote_enable",
+    requested_intent: "enabled",
+    profile_state: "dedicated",
+    serve_state: "absent",
+    phase: "terminal",
+    outcome: "failed",
+    admission: "closed",
+    intent_persisted: true,
+    serve_result: "not_attempted",
+    reason: "command_failed"
+  }),
+  remoteAudit({
+    schema_version: 1,
+    action: "remote_enable",
+    requested_intent: "enabled",
+    profile_state: "other",
+    serve_state: null,
+    phase: "terminal",
+    outcome: "rejected",
+    admission: "closed",
+    intent_persisted: false,
+    serve_result: "not_attempted",
+    reason: "profile_other"
+  }),
+  remoteAudit({
+    schema_version: 1,
+    action: "remote_enable",
+    requested_intent: "enabled",
+    profile_state: "dedicated",
+    serve_state: null,
+    phase: "terminal",
+    outcome: "incomplete",
+    admission: "closed",
+    intent_persisted: true,
+    serve_result: "unknown",
+    reason: "command_timeout"
+  }),
+  remoteAudit({
+    schema_version: 1,
     action: "remote_disable",
     requested_intent: "disabled",
     profile_state: "other",
     serve_state: null,
     phase: "accepted",
     outcome: "accepted"
+  }),
+  remoteAudit({
+    schema_version: 1,
+    action: "remote_disable",
+    requested_intent: "disabled",
+    profile_state: "dedicated",
+    serve_state: "absent",
+    phase: "terminal",
+    outcome: "succeeded",
+    admission: "closed",
+    intent_persisted: true,
+    serve_result: "removed",
+    reason: null
+  }),
+  remoteAudit({
+    schema_version: 1,
+    action: "remote_disable",
+    requested_intent: "disabled",
+    profile_state: "dedicated",
+    serve_state: "absent",
+    phase: "terminal",
+    outcome: "succeeded",
+    admission: "closed",
+    intent_persisted: true,
+    serve_result: "unchanged",
+    reason: null
   }),
   remoteAudit({
     schema_version: 1,
@@ -278,10 +367,10 @@ export const remoteIngressAuditFixtures: readonly RemoteIngressAuditSummary[] = 
     serve_result: "unknown",
     reason: "cleanup_incomplete"
   })
-];
+]);
 
 export const readyRemoteIngressState = readyState;
-export const readyRemoteIngressPublicState = projectRemoteIngressPublicState(readyState);
+export const readyRemoteIngressPublicState = deepFreeze(projectRemoteIngressPublicState(readyState));
 
 export function remoteIngressFixtureById(id: RemoteIngressFixtureId): RemoteIngressFixture {
   const fixture = remoteIngressFixtures.find((candidate) => candidate.id === id);
@@ -318,7 +407,7 @@ function profileById(id: RemoteProfileFixtureId): RemoteProfileObservation {
 function remoteState(overrides: Readonly<Record<string, unknown>> = {}): RemoteIngressState {
   return remoteIngressStateSchema.parse({
     schema_version: 1,
-    revision: 7,
+    generation: 7,
     intent: "enabled",
     availability: "ready",
     admission: "open",
@@ -406,15 +495,26 @@ function admittedRemoteProxyFixture(id: RemoteProxyFixtureId, identityPresent: b
 function rejectedProxyFixture(
   id: RemoteProxyFixtureId,
   reason: NonNullable<RemoteProxyTrustDecision["reason"]>,
-  headers: RemoteProxyTrustDecision["headers"] = {
-    forwarding: "invalid",
-    standard_identity: "absent",
-    untrusted_lookalike_present: false
-  }
+  headers: RemoteProxyTrustDecision["headers"] = rejectedProxyHeaders(reason)
 ): RemoteProxyFixture {
   return proxyFixture(id, { decision: "rejected", provenance: null, headers, reason });
 }
 
+function rejectedProxyHeaders(reason: NonNullable<RemoteProxyTrustDecision["reason"]>): RemoteProxyTrustDecision["headers"] {
+  const invalidForwarding = ["duplicate_forwarding_header", "invalid_forwarded_proto", "source_invalid"].includes(reason);
+  return {
+    forwarding: reason === "direct_non_loopback" || reason === "missing_forwarding_header" ? "absent" : invalidForwarding ? "invalid" : "exact",
+    standard_identity: reason === "standard_identity_invalid" ? "invalid" : "absent",
+    untrusted_lookalike_present: reason === "untrusted_tailscale_lookalike"
+  };
+}
+
 function remoteAudit(value: RemoteIngressAuditSummary): RemoteIngressAuditSummary {
   return remoteIngressAuditSummarySchema.parse(value);
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
 }

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateRemoteIngressAvailability,
+  remoteIngressIntentStates,
+  remoteIngressObservationStates,
   remoteIngressOperationFailureReasons,
   remoteIngressUnavailableReasons,
   remoteProfileStates,
-  remoteServeStates
+  remoteServeStates,
+  tailscaleClientStates
 } from "./remote-ingress.js";
 
 const readyInput = {
@@ -90,5 +93,56 @@ describe("remote ingress availability", () => {
     expect(remoteProfileStates).toEqual(["absent", "stopped", "signed_out", "dedicated", "other", "unknown"]);
     expect(remoteServeStates).toEqual(["absent", "exact", "foreign", "colliding", "drifted", "public"]);
     expect(new Set(remoteIngressUnavailableReasons).size).toBe(remoteIngressUnavailableReasons.length);
+  });
+
+  it("keeps the complete finite input product fail-closed except for the one exact ready tuple", () => {
+    const serves = [...remoteServeStates, null] as const;
+    const failures = [...remoteIngressOperationFailureReasons, null] as const;
+    let examined = 0;
+    let open = 0;
+
+    for (const intent of remoteIngressIntentStates) {
+      for (const observation of remoteIngressObservationStates) {
+        for (const client of tailscaleClientStates) {
+          for (const profile of remoteProfileStates) {
+            for (const serve of serves) {
+              for (const externalOriginValid of [false, true]) {
+                for (const operationFailure of failures) {
+                  const decision = evaluateRemoteIngressAvailability({
+                    intent,
+                    observation,
+                    client,
+                    profile,
+                    serve,
+                    externalOriginValid,
+                    operationFailure
+                  });
+                  const exactReadyTuple =
+                    intent === "enabled" &&
+                    observation === "current" &&
+                    client === "available" &&
+                    profile === "dedicated" &&
+                    serve === "exact" &&
+                    externalOriginValid &&
+                    operationFailure === null;
+
+                  examined += 1;
+                  if (decision.admission === "open") open += 1;
+                  expect(decision.admission === "open").toBe(exactReadyTuple);
+                  expect(decision.availability === "ready").toBe(exactReadyTuple);
+                  if (decision.availability === "unavailable") {
+                    expect(decision.reason).not.toBeNull();
+                    expect(remoteIngressUnavailableReasons).toContain(decision.reason);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    expect(examined).toBe(18_144);
+    expect(open).toBe(1);
   });
 });
