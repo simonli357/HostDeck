@@ -23,6 +23,7 @@ import {
 } from "./fastify-app.js";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import {
+  assertHostDeckRequestAuthenticationCurrent,
   type HostDeckRequestAuthenticationMechanism,
   requireHostDeckRequestAuthentication,
   requireHostDeckRequestWritePermission
@@ -364,7 +365,13 @@ export function createHostDeckCsrfRouteRegistration(
             "device_cookie"
           );
           const body = request.body as { readonly operation_id: string };
-          return executeBootstrap(execute, policy, context, body.operation_id);
+          return executeBootstrap(
+            execute,
+            policy,
+            request,
+            context,
+            body.operation_id
+          );
         }
       );
     }
@@ -375,6 +382,7 @@ export function createHostDeckCsrfRouteRegistration(
 async function executeBootstrap(
   execute: ExecuteAudit,
   policy: HostDeckCsrfPolicy,
+  request: FastifyRequest,
   context: SelectedRequestAuthenticationContext,
   operationId: string
 ): Promise<SelectedCsrfBootstrapResponse> {
@@ -399,11 +407,35 @@ async function executeBootstrap(
           csrf_generation_before: pairedContext.csrf_generation
         },
         emergency_lock_on_audit_unavailable: false,
-        transition: () => rotateBootstrap(policy, pairedContext),
-        prepare_response: prepareBootstrapResponse
+        transition: () => {
+          try {
+            assertHostDeckRequestAuthenticationCurrent(request, context);
+          } catch (error) {
+            if (
+              error instanceof HostDeckHttpError &&
+              error.code === "permission_denied"
+            ) {
+              counters.authorityRejections = increment(
+                counters.authorityRejections
+              );
+              return Object.freeze({
+                outcome: "failed" as const,
+                error_code: "permission_denied" as const,
+                payload_summary: Object.freeze({ schema_version: 1 as const })
+              });
+            }
+            throw error;
+          }
+          return rotateBootstrap(policy, pairedContext);
+        },
+        prepare_response: (candidate) => {
+          assertHostDeckRequestAuthenticationCurrent(request, context);
+          return prepareBootstrapResponse(candidate);
+        }
       }
     ]);
   } catch (error) {
+    rethrowStaleIngressFailure(request, context);
     if (error instanceof HostDeckSecurityMutationAuditExecutorError) {
       counters.auditFailures = increment(counters.auditFailures);
       throw mapExecutorFailure(error);
@@ -442,6 +474,22 @@ async function executeBootstrap(
   }
   counters.auditFailures = increment(counters.auditFailures);
   throw csrfContractFailure();
+}
+
+function rethrowStaleIngressFailure(
+  request: FastifyRequest,
+  context: SelectedRequestAuthenticationContext
+): void {
+  try {
+    assertHostDeckRequestAuthenticationCurrent(request, context);
+  } catch (error) {
+    if (
+      error instanceof HostDeckHttpError &&
+      (error.code === "invalid_origin" || error.code === "permission_denied")
+    ) {
+      throw error;
+    }
+  }
 }
 
 function rotateBootstrap(

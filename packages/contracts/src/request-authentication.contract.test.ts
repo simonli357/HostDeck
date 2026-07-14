@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import { selectedRawDeviceSecretSchema } from "./pairing.js";
 import {
   selectedRequestAuthenticationContextSchema,
+  selectedRequestAuthenticationIngressContextSchema,
   selectedRequestAuthenticationStates
 } from "./request-authentication.js";
 
 const origin = "https://192.168.0.29:8443";
+const remoteOrigin = "https://hostdeck-fixture.fixture-tailnet.ts.net";
+const sourceKey = `sha256:${"a".repeat(64)}`;
 
 describe("selected request authentication contracts", () => {
   it("requires one exact 43-character unpadded base64url device secret", () => {
@@ -74,6 +77,75 @@ describe("selected request authentication contracts", () => {
         last_used_at: "2026-07-11T20:01:00.000Z",
         expires_at: "2026-07-11T21:00:00.000Z"
       });
+    }
+  });
+
+  it("keeps selected remote ingress strict and private from public authentication", () => {
+    const localIngress = {
+      configured_origin: "http://127.0.0.1:3777",
+      network_mode: "loopback",
+      origin_kind: "local_non_browser",
+      transport: "http",
+      source_key: null,
+      remote_generation: null
+    } as const;
+    const remoteIngress = {
+      configured_origin: remoteOrigin,
+      network_mode: "remote",
+      origin_kind: "same_origin",
+      transport: "https",
+      source_key: sourceKey,
+      remote_generation: 7
+    } as const;
+    expect(selectedRequestAuthenticationIngressContextSchema.parse(localIngress)).toEqual(
+      localIngress
+    );
+    expect(selectedRequestAuthenticationIngressContextSchema.parse(remoteIngress)).toEqual(
+      remoteIngress
+    );
+    expect(
+      selectedRequestAuthenticationIngressContextSchema.parse({
+        ...remoteIngress,
+        origin_kind: "safe_no_origin"
+      })
+    ).toMatchObject({ network_mode: "remote", remote_generation: 7 });
+
+    for (const candidate of [
+      { ...remoteIngress, transport: "http" },
+      { ...remoteIngress, configured_origin: remoteOrigin.replace("https:", "http:") },
+      { ...remoteIngress, configured_origin: "https://example.test" },
+      { ...remoteIngress, origin_kind: "local_non_browser" },
+      { ...remoteIngress, source_key: null },
+      { ...remoteIngress, remote_generation: null },
+      { ...remoteIngress, remote_generation: -1 },
+      { ...localIngress, remote_generation: 1 },
+      { ...remoteIngress, tailnet_identity_present: true }
+    ]) {
+      expect(
+        selectedRequestAuthenticationIngressContextSchema.safeParse(candidate).success
+      ).toBe(false);
+    }
+
+    const remoteAuthentication = {
+      ...emptyContext("unpaired"),
+      configured_origin: remoteOrigin,
+      network_mode: "remote",
+      origin_kind: "safe_no_origin"
+    } as const;
+    expect(selectedRequestAuthenticationContextSchema.parse(remoteAuthentication)).toEqual(
+      remoteAuthentication
+    );
+    for (const candidate of [
+      { ...remoteAuthentication, transport: "http" },
+      { ...remoteAuthentication, origin_kind: "local_non_browser" },
+      { ...remoteAuthentication, state: "local_admin", permission: "local_admin" },
+      { ...remoteAuthentication, source_key: sourceKey },
+      { ...remoteAuthentication, remote_generation: 7 },
+      { ...remoteAuthentication, tailnet_identity_present: false }
+    ]) {
+      expect(selectedRequestAuthenticationContextSchema.safeParse(candidate).success).toBe(
+        false
+      );
     }
   });
 

@@ -35,14 +35,11 @@ import {
 } from "./fastify-app.js";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import {
+  assertHostDeckRequestAuthenticationIngressCurrent,
   hostDeckDeviceCookieName,
+  hostDeckRequestAuthenticationIngressContext,
   requireHostDeckRequestAuthentication
 } from "./fastify-request-authentication.js";
-import {
-  HostDeckRequestTrustError,
-  hostDeckPairClaimSourceKey,
-  hostDeckRequestTrustContext
-} from "./fastify-request-trust.js";
 import {
   assertHostDeckSecurityMutationAuditExecutor,
   HostDeckSecurityMutationAuditExecutorError,
@@ -343,6 +340,7 @@ export function createHostDeckPairingRouteRegistration(
             const setCookie = pendingPairClaimCookies.get(request);
             pendingPairClaimCookies.delete(request);
             if (setCookie !== undefined && reply.statusCode >= 200 && reply.statusCode < 300) {
+              assertHostDeckRequestAuthenticationIngressCurrent(request);
               reply.header("set-cookie", setCookie);
             } else {
               reply.removeHeader("set-cookie");
@@ -359,8 +357,8 @@ export function createHostDeckPairingRouteRegistration(
           }
         },
         async (request) => {
-          const trust = requirePairClaimTrust(request);
-          const sourceKey = requirePairClaimSource(request);
+          const ingress = requirePairClaimTrust(request);
+          const sourceKey = ingress.source_key;
           const lease = acquirePairClaim(policy, sourceKey);
           try {
             const prepared = await executePairClaim(
@@ -368,8 +366,9 @@ export function createHostDeckPairingRouteRegistration(
               policy,
               context.resourceBudget,
               request.body as SelectedPairClaimRequest,
-              trust.configured_origin,
-              sourceKey
+              ingress.configured_origin,
+              sourceKey,
+              request
             );
             pendingPairClaimCookies.set(request, prepared.setCookie);
             return prepared.body;
@@ -530,7 +529,8 @@ async function executePairClaim(
   budget: ResourceBudget,
   request: SelectedPairClaimRequest,
   origin: string,
-  sourceKey: string
+  sourceKey: string,
+  fastifyRequest: FastifyRequest
 ): Promise<PreparedPairClaimResponse> {
   const runtime = requireRuntime(policy);
   let rawResult: unknown;
@@ -551,11 +551,18 @@ async function executePairClaim(
           client_label_present: request.client_label !== undefined
         },
         emergency_lock_on_audit_unavailable: false,
-        transition: () => claimPairingCode(policy, budget, request, sourceKey),
-        prepare_response: preparePairClaimResponse
+        transition: () => {
+          assertHostDeckRequestAuthenticationIngressCurrent(fastifyRequest);
+          return claimPairingCode(policy, budget, request, sourceKey);
+        },
+        prepare_response: (candidate) => {
+          assertHostDeckRequestAuthenticationIngressCurrent(fastifyRequest);
+          return preparePairClaimResponse(candidate);
+        }
       }
     ]);
   } catch (error) {
+    assertHostDeckRequestAuthenticationIngressCurrent(fastifyRequest);
     if (error instanceof HostDeckSecurityMutationAuditExecutorError) {
       runtime.counters.auditFailures = increment(runtime.counters.auditFailures);
       throw publicPairingFailure(error.api_code, error.retry_safe);
@@ -933,9 +940,11 @@ function acquirePairClaim(
   });
 }
 
-function requirePairClaimTrust(request: FastifyRequest) {
-  const trust = hostDeckRequestTrustContext(request);
-  if (trust.transport !== "https") {
+function requirePairClaimTrust(
+  request: FastifyRequest
+): Readonly<{ readonly configured_origin: string; readonly source_key: string }> {
+  const ingress = hostDeckRequestAuthenticationIngressContext(request);
+  if (ingress.transport !== "https") {
     throw new HostDeckHttpError({
       code: "insecure_transport",
       message: "Secure request transport is required for pairing claim.",
@@ -943,20 +952,16 @@ function requirePairClaimTrust(request: FastifyRequest) {
       status: 426
     });
   }
-  if (trust.origin_kind !== "same_origin") throw invalidPairClaimOrigin();
-  requirePairClaimSource(request);
-  return trust;
-}
-
-function requirePairClaimSource(request: FastifyRequest): string {
-  try {
-    const sourceKey = hostDeckPairClaimSourceKey(request);
-    if (!pairingClaimSourceKeySchema.safeParse(sourceKey).success) throw new TypeError();
-    return sourceKey;
-  } catch (error) {
-    if (error instanceof HostDeckRequestTrustError) throw invalidPairClaimOrigin();
+  if (
+    ingress.origin_kind !== "same_origin" ||
+    !pairingClaimSourceKeySchema.safeParse(ingress.source_key).success
+  ) {
     throw invalidPairClaimOrigin();
   }
+  return Object.freeze({
+    configured_origin: ingress.configured_origin,
+    source_key: ingress.source_key as string
+  });
 }
 
 function requirePairRequestManifestEntry(): SelectedApiRouteManifestEntry {

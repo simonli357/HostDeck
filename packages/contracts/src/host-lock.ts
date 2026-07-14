@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { selectedDeviceIdSchema } from "./device-revocation.js";
+import { remoteExternalOriginSchema } from "./remote-ingress.js";
 import {
   type SelectedRequestAuthenticationState,
-  selectedRequestAuthenticationStates
+  selectedRequestAuthenticationStates,
+  selectedRequestNetworkModes
 } from "./request-authentication.js";
 import { isoTimestampSchema } from "./scalars.js";
 import { clientOperationIdSchema } from "./selected-runtime.js";
@@ -28,7 +30,7 @@ function createHostAccessStateResponseSchema() {
       permission: z.enum(["local_admin", "read", "write"]).nullable(),
       device_expires_at: isoTimestampSchema.nullable(),
       configured_origin: z.string().url().max(512),
-      network_mode: z.enum(["loopback", "lan"]),
+      network_mode: z.enum(selectedRequestNetworkModes),
       transport: z.enum(["http", "https"]),
       locked: z.boolean(),
       can_read_sessions: z.boolean(),
@@ -60,6 +62,30 @@ function createHostAccessStateResponseSchema() {
           code: "custom",
           message: "LAN access state requires HTTPS.",
           path: ["transport"]
+        });
+      }
+      if (value.network_mode === "remote" && value.transport !== "https") {
+        context.addIssue({
+          code: "custom",
+          message: "Remote access state requires HTTPS.",
+          path: ["transport"]
+        });
+      }
+      if (
+        value.network_mode === "remote" &&
+        !remoteExternalOriginSchema.safeParse(value.configured_origin).success
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Remote access state requires one canonical private Tailscale origin.",
+          path: ["configured_origin"]
+        });
+      }
+      if (value.network_mode === "remote" && value.authentication_state === "local_admin") {
+        context.addIssue({
+          code: "custom",
+          message: "Remote access state cannot grant local-admin authority.",
+          path: ["authentication_state"]
         });
       }
 

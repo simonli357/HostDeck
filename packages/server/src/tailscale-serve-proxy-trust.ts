@@ -63,6 +63,22 @@ export interface TailscaleServeProxyTrustSnapshot {
   readonly accepted_remote_requests: number;
   readonly cors_response_violations: number;
   readonly rejected_requests: Readonly<Record<TailscaleServeProxyTrustRejectionReason, number>>;
+  readonly stale_remote_context_rejections: number;
+}
+
+export interface TailscaleServeRequestTrustContext {
+  readonly origin_kind: "same_origin" | "safe_no_origin" | "local_non_browser";
+  readonly provenance: RequestIngressProvenance;
+}
+
+export class TailscaleServeRequestIngressError extends Error {
+  readonly code = "remote_generation_stale" as const;
+
+  constructor() {
+    super("Tailscale Serve request ingress is no longer current.");
+    this.name = "TailscaleServeRequestIngressError";
+    Object.freeze(this);
+  }
 }
 
 interface ProxyTrustPolicyRuntime {
@@ -75,6 +91,7 @@ interface ProxyTrustGateRuntime {
   acceptedRemoteRequests: number;
   corsResponseViolations: number;
   readonly rejectedRequests: Record<TailscaleServeProxyTrustRejectionReason, number>;
+  staleRemoteContextRejections: number;
 }
 
 interface NormalizedProbe extends TailscaleServeProxyTrustProbe {
@@ -103,9 +120,11 @@ interface ForwardingAssessment {
   readonly sourceAddress: string | null;
 }
 
-type RequestWithServeProvenance = FastifyRequest & {
-  [requestIngressProvenance]?: RequestIngressProvenance;
-};
+interface AdmittedServeRequest {
+  readonly policy: TailscaleServeProxyTrustPolicy;
+  readonly runtime: ProxyTrustGateRuntime;
+  readonly trust: TailscaleServeRequestTrustContext;
+}
 
 const policyInputKeys = ["limits", "localOrigin", "readRemoteAdmission"] as const;
 const policyLimitKeys = ["http_headers_max_bytes", "http_headers_max_count", "http_url_max_bytes"] as const;
@@ -116,7 +135,8 @@ const headerNamePattern = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/u;
 const acceptedPolicies = new WeakSet<object>();
 const policyRuntimes = new WeakMap<TailscaleServeProxyTrustPolicy, ProxyTrustPolicyRuntime>();
 const gateRuntimes = new WeakMap<FastifyInstance, ProxyTrustGateRuntime>();
-const requestIngressProvenance = Symbol("hostdeckTailscaleServeRequestIngressProvenance");
+const admittedServeRequests = new WeakMap<FastifyRequest, AdmittedServeRequest>();
+const invalidatedServeRequests = new WeakSet<FastifyRequest>();
 
 export function createTailscaleServeProxyTrustPolicy(
   input: CreateTailscaleServeProxyTrustPolicyInput
@@ -206,7 +226,8 @@ export function installTailscaleServeProxyTrustGate(
     acceptedLocalRequests: 0,
     acceptedRemoteRequests: 0,
     corsResponseViolations: 0,
-    rejectedRequests: createRejectionCounters()
+    rejectedRequests: createRejectionCounters(),
+    staleRemoteContextRejections: 0
   };
   installHostDeckCorsResponseGuard(app, observeInternalError, () => {
     runtime.corsResponseViolations = incrementCounter(runtime.corsResponseViolations);
@@ -223,7 +244,17 @@ export function installTailscaleServeProxyTrustGate(
     });
     if (decision.decision === "admitted") {
       const provenance = requireProvenance(decision);
-      (request as RequestWithServeProvenance)[requestIngressProvenance] = provenance;
+      admittedServeRequests.set(
+        request,
+        Object.freeze({
+          policy,
+          runtime,
+          trust: Object.freeze({
+            origin_kind: admittedOriginKind(request.method, request.raw.rawHeaders),
+            provenance
+          })
+        })
+      );
       if (provenance.kind === "local_loopback") {
         runtime.acceptedLocalRequests = incrementCounter(runtime.acceptedLocalRequests);
       } else {
@@ -241,15 +272,47 @@ export function installTailscaleServeProxyTrustGate(
       retryable: false
     });
   });
+  app.addHook("onResponse", async (request) => {
+    admittedServeRequests.delete(request);
+  });
+  app.addHook("onRequestAbort", async (request) => {
+    admittedServeRequests.delete(request);
+  });
   gateRuntimes.set(app, runtime);
 }
 
 export function tailscaleServeRequestIngressProvenance(request: FastifyRequest): RequestIngressProvenance {
-  const provenance = (request as RequestWithServeProvenance)[requestIngressProvenance];
-  if (provenance === undefined) {
-    throw new Error("Tailscale Serve request ingress provenance is unavailable before trust admission.");
+  return requireAdmittedServeRequest(request).trust.provenance;
+}
+
+export function tailscaleServeRequestTrustContext(
+  request: FastifyRequest
+): TailscaleServeRequestTrustContext {
+  return requireAdmittedServeRequest(request).trust;
+}
+
+export function assertTailscaleServeRequestIngressCurrent(request: FastifyRequest): void {
+  const admitted = requireAdmittedServeRequest(request);
+  const provenance = admitted.trust.provenance;
+  if (provenance.kind === "local_loopback") return;
+
+  const policyRuntime = requirePolicyRuntime(admitted.policy);
+  const before = readAdmission(policyRuntime.readRemoteAdmission);
+  const after = readAdmission(policyRuntime.readRemoteAdmission);
+  if (
+    sameOpenAdmission(before, after) &&
+    before.external_origin === provenance.origin &&
+    before.generation === provenance.remote_generation
+  ) {
+    return;
   }
-  return provenance;
+  if (!invalidatedServeRequests.has(request)) {
+    invalidatedServeRequests.add(request);
+    admitted.runtime.staleRemoteContextRejections = incrementCounter(
+      admitted.runtime.staleRemoteContextRejections
+    );
+  }
+  throw new TailscaleServeRequestIngressError();
 }
 
 export function tailscaleServeProxyTrustSnapshot(app: FastifyInstance): TailscaleServeProxyTrustSnapshot {
@@ -259,7 +322,8 @@ export function tailscaleServeProxyTrustSnapshot(app: FastifyInstance): Tailscal
     accepted_local_requests: runtime.acceptedLocalRequests,
     accepted_remote_requests: runtime.acceptedRemoteRequests,
     cors_response_violations: runtime.corsResponseViolations,
-    rejected_requests: Object.freeze({ ...runtime.rejectedRequests })
+    rejected_requests: Object.freeze({ ...runtime.rejectedRequests }),
+    stale_remote_context_rejections: runtime.staleRemoteContextRejections
   });
 }
 
@@ -628,6 +692,24 @@ function requirePolicyRuntime(policy: TailscaleServeProxyTrustPolicy): ProxyTrus
   const runtime = policyRuntimes.get(policy);
   if (runtime === undefined) throw new Error("Tailscale Serve proxy trust policy runtime is unavailable.");
   return runtime;
+}
+
+function requireAdmittedServeRequest(request: FastifyRequest): AdmittedServeRequest {
+  const admitted = admittedServeRequests.get(request);
+  if (admitted === undefined) {
+    throw new Error("Tailscale Serve request ingress provenance is unavailable before trust admission.");
+  }
+  return admitted;
+}
+
+function admittedOriginKind(
+  method: string,
+  rawHeaders: readonly string[]
+): TailscaleServeRequestTrustContext["origin_kind"] {
+  for (let index = 0; index < rawHeaders.length; index += 2) {
+    if (rawHeaders[index]?.toLowerCase() === "origin") return "same_origin";
+  }
+  return isSafeMethod(method) ? "safe_no_origin" : "local_non_browser";
 }
 
 function requireProvenance(decision: RemoteProxyTrustDecision): RequestIngressProvenance {

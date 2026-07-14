@@ -43,6 +43,11 @@ import {
   assertHostDeckLanTlsInput,
   type HostDeckLanTlsInput
 } from "./lan-certificate-policy.js";
+import {
+  assertTailscaleServeProxyTrustPolicy,
+  type TailscaleServeProxyTrustPolicy
+} from "./tailscale-serve-proxy-trust.js";
+import { installTailscaleServeRequestAuthorization } from "./tailscale-serve-request-authorization.js";
 
 export type HostDeckFastifyInstance = FastifyInstance<
   RawServerDefault,
@@ -80,6 +85,14 @@ export interface CreateHostDeckFastifyAppInput {
   readonly routePlugins: readonly HostDeckRoutePluginRegistration[];
   readonly observeInternalError: HostDeckInternalErrorObserver;
   readonly tls?: HostDeckLanTlsInput;
+}
+
+export interface CreateHostDeckTailscaleServeFastifyAppInput {
+  readonly resourceBudget: ResourceBudget;
+  readonly requestAuthenticationPolicy: HostDeckRequestAuthenticationPolicy;
+  readonly routePlugins: readonly HostDeckRoutePluginRegistration[];
+  readonly observeInternalError: HostDeckInternalErrorObserver;
+  readonly tailscaleServeProxyTrustPolicy: TailscaleServeProxyTrustPolicy;
 }
 
 export interface HostDeckFastifyResourceSnapshot {
@@ -125,6 +138,37 @@ export function createHostDeckFastifyApp(input: CreateHostDeckFastifyAppInput): 
   assertResolvedResourceBudget(input.resourceBudget);
   assertHostDeckRequestAuthenticationPolicy(input.requestAuthenticationPolicy);
   assertHostDeckRequestTrustPolicy(input.requestTrustPolicy);
+  return createHostDeckFastifyAppWithRequestBoundary(input, (app) => {
+    installHostDeckRequestTrustGate(
+      app,
+      input.requestTrustPolicy,
+      input.observeInternalError
+    );
+    installHostDeckRequestAuthentication(app, input.requestAuthenticationPolicy);
+  });
+}
+
+export function createHostDeckTailscaleServeFastifyApp(
+  input: CreateHostDeckTailscaleServeFastifyAppInput
+): HostDeckFastifyInstance {
+  assertTailscaleServeFactoryInput(input);
+  assertResolvedResourceBudget(input.resourceBudget);
+  assertHostDeckRequestAuthenticationPolicy(input.requestAuthenticationPolicy);
+  assertTailscaleServeProxyTrustPolicy(input.tailscaleServeProxyTrustPolicy);
+  return createHostDeckFastifyAppWithRequestBoundary(input, (app) => {
+    installTailscaleServeRequestAuthorization(
+      app,
+      input.tailscaleServeProxyTrustPolicy,
+      input.requestAuthenticationPolicy,
+      input.observeInternalError
+    );
+  });
+}
+
+function createHostDeckFastifyAppWithRequestBoundary(
+  input: Omit<CreateHostDeckFastifyAppInput, "requestTrustPolicy">,
+  installRequestBoundary: (app: HostDeckFastifyInstance) => void
+): HostDeckFastifyInstance {
   const registrations = parseRoutePluginRegistrations(input.routePlugins);
   const resourceOptions = fastifyResourceOptionsFromBudget(input.resourceBudget);
   const commonOptions = {
@@ -183,8 +227,7 @@ export function createHostDeckFastifyApp(input: CreateHostDeckFastifyAppInput): 
   app.removeContentTypeParser("text/plain");
   installRoutePolicy(app, runtime);
   installRequestPolicy(app, runtime);
-  installHostDeckRequestTrustGate(app, input.requestTrustPolicy, input.observeInternalError);
-  installHostDeckRequestAuthentication(app, input.requestAuthenticationPolicy);
+  installRequestBoundary(app);
   installNotFoundPolicy(app, runtime);
 
   for (const registration of registrations) {
@@ -417,6 +460,53 @@ function assertFactoryInput(input: unknown): asserts input is CreateHostDeckFast
   const candidate = input as Partial<CreateHostDeckFastifyAppInput>;
   if (candidate.tls !== undefined) assertHostDeckLanTlsInput(candidate.tls);
   if (!Array.isArray(candidate.routePlugins)) throw new TypeError("HostDeck routePlugins must be an array.");
+  if (typeof candidate.observeInternalError !== "function") {
+    throw new TypeError("HostDeck observeInternalError must be a function.");
+  }
+}
+
+function assertTailscaleServeFactoryInput(
+  input: unknown
+): asserts input is CreateHostDeckTailscaleServeFastifyAppInput {
+  const expected = [
+    "observeInternalError",
+    "requestAuthenticationPolicy",
+    "resourceBudget",
+    "routePlugins",
+    "tailscaleServeProxyTrustPolicy"
+  ] as const;
+  if (
+    input === null ||
+    typeof input !== "object" ||
+    Array.isArray(input) ||
+    Object.getPrototypeOf(input) !== Object.prototype
+  ) {
+    throw new TypeError("HostDeck Tailscale Serve Fastify app input must be an object.");
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(input);
+  const keys = Reflect.ownKeys(descriptors);
+  if (keys.length !== expected.length) {
+    throw new TypeError("HostDeck Tailscale Serve Fastify app input fields are invalid.");
+  }
+  for (const key of keys) {
+    if (typeof key !== "string" || !(expected as readonly string[]).includes(key)) {
+      throw new TypeError("HostDeck Tailscale Serve Fastify app input fields are invalid.");
+    }
+  }
+  for (const key of expected) {
+    const descriptor = descriptors[key];
+    if (
+      descriptor === undefined ||
+      !descriptor.enumerable ||
+      !("value" in descriptor)
+    ) {
+      throw new TypeError("HostDeck Tailscale Serve Fastify app input fields are invalid.");
+    }
+  }
+  const candidate = input as Partial<CreateHostDeckTailscaleServeFastifyAppInput>;
+  if (!Array.isArray(candidate.routePlugins)) {
+    throw new TypeError("HostDeck routePlugins must be an array.");
+  }
   if (typeof candidate.observeInternalError !== "function") {
     throw new TypeError("HostDeck observeInternalError must be a function.");
   }

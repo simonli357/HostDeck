@@ -1,9 +1,11 @@
 import {
   authDeviceRecordSchema,
   type SelectedRequestAuthenticationContext,
+  type SelectedRequestAuthenticationIngressContext,
   type SelectedRequestAuthenticationState,
   selectedRawDeviceSecretSchema,
-  selectedRequestAuthenticationContextSchema
+  selectedRequestAuthenticationContextSchema,
+  selectedRequestAuthenticationIngressContextSchema
 } from "@hostdeck/contracts";
 import { HostDeckAuthRepositoryError } from "@hostdeck/storage";
 import { parseCookie } from "cookie";
@@ -16,7 +18,8 @@ import {
 } from "./device-authority-lifecycle.js";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import {
-  type HostDeckRequestTrustContext,
+  HostDeckRequestTrustError,
+  hostDeckPairClaimSourceKey,
   hostDeckRequestTrustContext
 } from "./fastify-request-trust.js";
 import type { SelectedApiAuthMechanism } from "./selected-api-route-manifest.js";
@@ -48,11 +51,22 @@ export interface HostDeckRequestAuthenticationPolicy {
   readonly now: () => Date;
 }
 
+export interface CreateHostDeckRequestAuthenticationIngressPolicyInput {
+  readonly assertCurrent: (request: FastifyRequest) => void;
+  readonly resolve: (request: FastifyRequest) => unknown;
+}
+
+export interface HostDeckRequestAuthenticationIngressPolicy {
+  readonly assertCurrent: (request: FastifyRequest) => void;
+  readonly resolve: (request: FastifyRequest) => unknown;
+}
+
 export interface HostDeckRequestAuthenticationSnapshot {
   readonly authentication_conflicts: number;
   readonly authentication_storage_failures: number;
   readonly expired_device_contexts: number;
   readonly invalid_device_contexts: number;
+  readonly ingress_rejections: number;
   readonly local_admin_contexts: number;
   readonly read_device_contexts: number;
   readonly revoked_device_contexts: number;
@@ -65,6 +79,7 @@ interface AuthenticationRuntime {
   authenticationStorageFailures: number;
   expiredDeviceContexts: number;
   invalidDeviceContexts: number;
+  ingressRejections: number;
   localAdminContexts: number;
   readDeviceContexts: number;
   revokedDeviceContexts: number;
@@ -84,13 +99,15 @@ type AuthenticationResolution =
 interface PendingAuthenticationState {
   readonly activeDeviceAuthority: HostDeckActiveDeviceAuthorityPolicy;
   readonly authorityController: AbortController;
+  readonly ingress: SelectedRequestAuthenticationIngressContext;
+  readonly ingressPolicy: HostDeckRequestAuthenticationIngressPolicy;
   readonly observation: DeviceCookieObservation;
   readonly policy: HostDeckRequestAuthenticationPolicy;
   readonly runtime: AuthenticationRuntime;
-  readonly trust: HostDeckRequestTrustContext;
   activeLease: HostDeckActiveDeviceAuthorityLease | null;
   activeLeaseAbortForwarder: (() => void) | null;
   allowInvalidatedSuccess: boolean;
+  ingressRejected: boolean;
   resolution: AuthenticationResolution | null;
 }
 
@@ -100,9 +117,34 @@ interface ParsedDeviceAuthentication {
 }
 
 const policyKeys = ["authenticateDeviceToken", "now"] as const;
+const ingressPolicyKeys = ["assertCurrent", "resolve"] as const;
 const acceptedPolicies = new WeakSet<object>();
+const acceptedIngressPolicies = new WeakSet<object>();
 const authenticationRuntimes = new WeakMap<FastifyInstance, AuthenticationRuntime>();
 const pendingAuthenticationStates = new WeakMap<FastifyRequest, PendingAuthenticationState>();
+const legacyRequestAuthenticationIngressPolicy =
+  createHostDeckRequestAuthenticationIngressPolicy({
+    assertCurrent() {
+      // Historical direct trust is immutable for the lifetime of one request.
+    },
+    resolve(request) {
+      const trust = hostDeckRequestTrustContext(request);
+      let sourceKey: string | null = null;
+      try {
+        sourceKey = hostDeckPairClaimSourceKey(request);
+      } catch (error) {
+        if (!(error instanceof HostDeckRequestTrustError)) throw error;
+      }
+      return {
+        configured_origin: trust.configured_origin,
+        network_mode: trust.network_mode,
+        origin_kind: trust.origin_kind,
+        transport: trust.transport,
+        source_key: sourceKey,
+        remote_generation: null
+      };
+    }
+  });
 
 export function createHostDeckRequestAuthenticationPolicy(
   input: CreateHostDeckRequestAuthenticationPolicyInput
@@ -138,11 +180,43 @@ export function assertHostDeckRequestAuthenticationPolicy(
   }
 }
 
+export function createHostDeckRequestAuthenticationIngressPolicy(
+  input: CreateHostDeckRequestAuthenticationIngressPolicyInput
+): HostDeckRequestAuthenticationIngressPolicy {
+  const values = readExactIngressPolicyInput(input);
+  if (typeof values.assertCurrent !== "function" || typeof values.resolve !== "function") {
+    throw new TypeError("HostDeck request authentication ingress callbacks must be functions.");
+  }
+  const policy = Object.freeze({
+    assertCurrent: values.assertCurrent as (request: FastifyRequest) => void,
+    resolve: values.resolve as (request: FastifyRequest) => unknown
+  });
+  acceptedIngressPolicies.add(policy);
+  return policy;
+}
+
+export function assertHostDeckRequestAuthenticationIngressPolicy(
+  policy: unknown
+): asserts policy is HostDeckRequestAuthenticationIngressPolicy {
+  if (
+    policy === null ||
+    typeof policy !== "object" ||
+    !acceptedIngressPolicies.has(policy) ||
+    !Object.isFrozen(policy)
+  ) {
+    throw new TypeError(
+      "HostDeck request authentication ingress policy must be created by createHostDeckRequestAuthenticationIngressPolicy."
+    );
+  }
+}
+
 export function installHostDeckRequestAuthentication(
   app: FastifyInstance,
-  policy: HostDeckRequestAuthenticationPolicy
+  policy: HostDeckRequestAuthenticationPolicy,
+  ingressPolicy: HostDeckRequestAuthenticationIngressPolicy = legacyRequestAuthenticationIngressPolicy
 ): void {
   assertHostDeckRequestAuthenticationPolicy(policy);
+  assertHostDeckRequestAuthenticationIngressPolicy(ingressPolicy);
   if (authenticationRuntimes.has(app)) {
     throw new TypeError("HostDeck request authentication is already installed.");
   }
@@ -150,6 +224,7 @@ export function installHostDeckRequestAuthentication(
     authenticationConflicts: 0,
     authenticationStorageFailures: 0,
     expiredDeviceContexts: 0,
+    ingressRejections: 0,
     invalidDeviceContexts: 0,
     localAdminContexts: 0,
     readDeviceContexts: 0,
@@ -160,32 +235,48 @@ export function installHostDeckRequestAuthentication(
   authenticationRuntimes.set(app, runtime);
 
   app.addHook("onRequest", async (request) => {
-    const trust = hostDeckRequestTrustContext(request);
+    const ingress = resolveAuthenticationIngress(ingressPolicy, request);
     const observation = parseDeviceCookie(request.raw.rawHeaders);
-    pendingAuthenticationStates.set(request, {
+    const pending: PendingAuthenticationState = {
       activeDeviceAuthority: policy.activeDeviceAuthority,
       activeLease: null,
       activeLeaseAbortForwarder: null,
       allowInvalidatedSuccess: false,
       authorityController: new AbortController(),
+      ingress,
+      ingressPolicy,
+      ingressRejected: false,
       observation,
       policy,
       resolution: null,
-      runtime,
-      trust
-    });
+      runtime
+    };
+    pendingAuthenticationStates.set(request, pending);
+    assertAuthenticationIngressCurrent(request, pending);
   });
   app.addHook("onSend", async (request, reply, payload) => {
     const pending = pendingAuthenticationStates.get(request);
-    if (
-      reply.statusCode < 400 &&
-      pending?.resolution?.kind === "context" &&
-      pending.resolution.context.state === "paired_device" &&
-      !pending.allowInvalidatedSuccess
-    ) {
-      requireCurrentAuthority(pending);
+    if (reply.statusCode < 400 && pending !== undefined) {
+      try {
+        assertAuthenticationIngressCurrent(request, pending);
+        if (
+          pending.resolution?.kind === "context" &&
+          pending.resolution.context.state === "paired_device" &&
+          !pending.allowInvalidatedSuccess
+        ) {
+          requireCurrentAuthority(pending);
+        }
+      } catch (error) {
+        reply.header("connection", "close");
+        throw error;
+      }
     }
     return payload;
+  });
+  app.addHook("onError", async (request, reply) => {
+    if (pendingAuthenticationStates.get(request)?.ingressRejected === true) {
+      reply.header("connection", "close");
+    }
   });
   app.addHook("onResponse", async (request) => {
     clearPendingAuthentication(request);
@@ -205,6 +296,7 @@ export function resolveHostDeckRequestAuthentication(
     );
   }
   if (pending.resolution !== null) {
+    assertAuthenticationIngressCurrent(request, pending);
     if (pending.resolution.kind === "error") throw pending.resolution.error;
     if (pending.resolution.context.state === "paired_device") {
       requireCurrentAuthority(pending);
@@ -213,7 +305,7 @@ export function resolveHostDeckRequestAuthentication(
   }
 
   try {
-    const context = resolvePendingAuthentication(pending);
+    const context = resolvePendingAuthentication(request, pending);
     pending.resolution = { context, kind: "context" };
     recordContext(pending.runtime, context);
     return context;
@@ -290,6 +382,7 @@ export function requireHostDeckRequestActiveDeviceAuthority(
   request: FastifyRequest
 ): HostDeckActiveDeviceAuthorityLease {
   const pending = requirePendingAuthentication(request);
+  assertAuthenticationIngressCurrent(request, pending);
   if (
     pending.resolution?.kind !== "context" ||
     pending.resolution.context.state !== "paired_device"
@@ -307,6 +400,7 @@ export function hostDeckRequestActiveDeviceAuthority(
   request: FastifyRequest
 ): HostDeckActiveDeviceAuthorityLease | null {
   const pending = pendingAuthenticationStates.get(request);
+  if (pending !== undefined) assertAuthenticationIngressCurrent(request, pending);
   if (
     pending?.resolution?.kind !== "context" ||
     pending.resolution.context.state !== "paired_device"
@@ -319,7 +413,24 @@ export function hostDeckRequestActiveDeviceAuthority(
 export function hostDeckRequestDeviceAuthoritySignal(
   request: FastifyRequest
 ): AbortSignal {
-  return requirePendingAuthentication(request).authorityController.signal;
+  const pending = requirePendingAuthentication(request);
+  assertAuthenticationIngressCurrent(request, pending);
+  return pending.authorityController.signal;
+}
+
+export function hostDeckRequestAuthenticationIngressContext(
+  request: FastifyRequest
+): SelectedRequestAuthenticationIngressContext {
+  const pending = requirePendingAuthentication(request);
+  assertAuthenticationIngressCurrent(request, pending);
+  return pending.ingress;
+}
+
+export function assertHostDeckRequestAuthenticationIngressCurrent(
+  request: FastifyRequest
+): void {
+  const pending = requirePendingAuthentication(request);
+  assertAuthenticationIngressCurrent(request, pending);
 }
 
 export function assertHostDeckRequestAuthenticationCurrent(
@@ -327,6 +438,7 @@ export function assertHostDeckRequestAuthenticationCurrent(
   expected: SelectedRequestAuthenticationContext
 ): void {
   const pending = requirePendingAuthentication(request);
+  assertAuthenticationIngressCurrent(request, pending);
   if (
     pending.resolution?.kind !== "context" ||
     pending.resolution.context !== expected
@@ -341,6 +453,7 @@ export function allowHostDeckSelfRevocationResponse(
   deviceId: string
 ): void {
   const pending = requirePendingAuthentication(request);
+  assertAuthenticationIngressCurrent(request, pending);
   const context =
     pending.resolution?.kind === "context" ? pending.resolution.context : null;
   const lease = pending.activeLease;
@@ -370,6 +483,7 @@ export function hostDeckRequestAuthenticationSnapshot(
     authentication_storage_failures: runtime.authenticationStorageFailures,
     expired_device_contexts: runtime.expiredDeviceContexts,
     invalid_device_contexts: runtime.invalidDeviceContexts,
+    ingress_rejections: runtime.ingressRejections,
     local_admin_contexts: runtime.localAdminContexts,
     read_device_contexts: runtime.readDeviceContexts,
     revoked_device_contexts: runtime.revokedDeviceContexts,
@@ -379,16 +493,18 @@ export function hostDeckRequestAuthenticationSnapshot(
 }
 
 function resolvePendingAuthentication(
+  request: FastifyRequest,
   pending: PendingAuthenticationState
 ): SelectedRequestAuthenticationContext {
+  assertAuthenticationIngressCurrent(request, pending);
   if (pending.observation.kind === "invalid") {
-    return createContext(pending.trust, "invalid_device");
+    return createContext(pending.ingress, "invalid_device");
   }
   if (pending.observation.kind === "absent") {
     return createContext(
-      pending.trust,
+      pending.ingress,
       !pending.observation.cookieHeaderPresent &&
-        pending.trust.origin_kind === "local_non_browser"
+        pending.ingress.origin_kind === "local_non_browser"
         ? "local_admin"
         : "unpaired"
     );
@@ -405,24 +521,26 @@ function resolvePendingAuthentication(
       rawDeviceToken
     });
   } catch (error) {
+    assertAuthenticationIngressCurrent(request, pending);
     if (error instanceof HostDeckAuthRepositoryError) {
       switch (error.code) {
         case "invalid_secret":
         case "device_not_found":
-          return createContext(pending.trust, "invalid_device");
+          return createContext(pending.ingress, "invalid_device");
         case "device_expired":
-          return createContext(pending.trust, "expired_device");
+          return createContext(pending.ingress, "expired_device");
         case "device_revoked":
-          return createContext(pending.trust, "revoked_device");
+          return createContext(pending.ingress, "revoked_device");
         case "authentication_conflict":
           throw conflictFailure();
       }
     }
     throw storageFailure("Device authentication storage failed.");
   }
+  assertAuthenticationIngressCurrent(request, pending);
 
   const authenticated = parseDeviceAuthentication(rawResult);
-  const context = createContext(pending.trust, "paired_device", authenticated);
+  const context = createContext(pending.ingress, "paired_device", authenticated);
   try {
     attachActiveLease(
       pending,
@@ -433,10 +551,11 @@ function resolvePendingAuthentication(
       error instanceof HostDeckDeviceAuthorityError &&
       error.code === "device_revoked"
     ) {
-      return createContext(pending.trust, "revoked_device");
+      return createContext(pending.ingress, "revoked_device");
     }
     throw storageFailure("Device authority lease acquisition failed.");
   }
+  assertAuthenticationIngressCurrent(request, pending);
   return context;
 }
 
@@ -460,26 +579,26 @@ function parseDeviceAuthentication(candidate: unknown): ParsedDeviceAuthenticati
 }
 
 function createContext(
-  trust: HostDeckRequestTrustContext,
+  ingress: SelectedRequestAuthenticationIngressContext,
   state: Exclude<SelectedRequestAuthenticationState, "paired_device">,
   authenticated?: undefined
 ): SelectedRequestAuthenticationContext;
 function createContext(
-  trust: HostDeckRequestTrustContext,
+  ingress: SelectedRequestAuthenticationIngressContext,
   state: "paired_device",
   authenticated: ParsedDeviceAuthentication
 ): SelectedRequestAuthenticationContext;
 function createContext(
-  trust: HostDeckRequestTrustContext,
+  ingress: SelectedRequestAuthenticationIngressContext,
   state: SelectedRequestAuthenticationState,
   authenticated?: ParsedDeviceAuthentication
 ): SelectedRequestAuthenticationContext {
   const parsed = selectedRequestAuthenticationContextSchema.safeParse({
     state,
-    configured_origin: trust.configured_origin,
-    network_mode: trust.network_mode,
-    origin_kind: trust.origin_kind,
-    transport: trust.transport,
+    configured_origin: ingress.configured_origin,
+    network_mode: ingress.network_mode,
+    origin_kind: ingress.origin_kind,
+    transport: ingress.transport,
     device_id: authenticated?.device.id ?? null,
     permission:
       state === "local_admin"
@@ -491,6 +610,44 @@ function createContext(
   });
   if (!parsed.success) throw storageFailure("Device authentication context is invalid.");
   return Object.freeze({ ...parsed.data });
+}
+
+function resolveAuthenticationIngress(
+  policy: HostDeckRequestAuthenticationIngressPolicy,
+  request: FastifyRequest
+): SelectedRequestAuthenticationIngressContext {
+  let candidate: unknown;
+  try {
+    candidate = Reflect.apply(policy.resolve, undefined, [request]);
+  } catch (cause) {
+    throw new TypeError("HostDeck request authentication ingress resolution failed.", {
+      cause
+    });
+  }
+  const parsed = selectedRequestAuthenticationIngressContextSchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw new TypeError("HostDeck request authentication ingress context is invalid.");
+  }
+  return Object.freeze({ ...parsed.data });
+}
+
+function assertAuthenticationIngressCurrent(
+  request: FastifyRequest,
+  pending: PendingAuthenticationState
+): void {
+  if (pending.ingressRejected) throw ingressFailure();
+  try {
+    const result = Reflect.apply(pending.ingressPolicy.assertCurrent, undefined, [request]);
+    if (result !== undefined) throw new TypeError();
+  } catch {
+    if (!pending.ingressRejected) {
+      pending.ingressRejected = true;
+      pending.runtime.ingressRejections = incrementCounter(
+        pending.runtime.ingressRejections
+      );
+    }
+    throw ingressFailure();
+  }
 }
 
 function parseDeviceCookie(rawHeaders: readonly string[]): DeviceCookieObservation {
@@ -638,6 +795,9 @@ function sanitizeAuthenticationFailure(
   error: unknown,
   runtime: AuthenticationRuntime
 ): HostDeckHttpError {
+  if (error instanceof HostDeckHttpError && error.code === "invalid_origin") {
+    return error;
+  }
   if (error instanceof HostDeckHttpError && error.code === "operation_conflict") {
     runtime.authenticationConflicts = incrementCounter(runtime.authenticationConflicts);
     return error;
@@ -674,6 +834,15 @@ function conflictFailure(): HostDeckHttpError {
     message: "Device authentication observation conflicts with newer state.",
     retryable: false,
     status: 409
+  });
+}
+
+function ingressFailure(): HostDeckHttpError {
+  return new HostDeckHttpError({
+    code: "invalid_origin",
+    message: "Request origin is not permitted.",
+    retryable: false,
+    status: 403
   });
 }
 
@@ -728,6 +897,53 @@ function readExactPolicyInput(
     return values as Readonly<Record<(typeof policyKeys)[number], unknown>>;
   } catch {
     throw new TypeError("HostDeck request authentication policy input is invalid.");
+  }
+}
+
+function readExactIngressPolicyInput(
+  input: unknown
+): Readonly<Record<(typeof ingressPolicyKeys)[number], unknown>> {
+  try {
+    if (
+      input === null ||
+      typeof input !== "object" ||
+      Array.isArray(input) ||
+      Object.getPrototypeOf(input) !== Object.prototype
+    ) {
+      throw new TypeError();
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    const keys = Reflect.ownKeys(descriptors);
+    if (
+      keys.length !== ingressPolicyKeys.length ||
+      keys.some(
+        (key) =>
+          typeof key !== "string" ||
+          !(ingressPolicyKeys as readonly string[]).includes(key)
+      )
+    ) {
+      throw new TypeError();
+    }
+    const values: Record<string, unknown> = Object.create(null) as Record<
+      string,
+      unknown
+    >;
+    for (const key of ingressPolicyKeys) {
+      const descriptor = descriptors[key];
+      if (
+        descriptor === undefined ||
+        !descriptor.enumerable ||
+        !("value" in descriptor)
+      ) {
+        throw new TypeError();
+      }
+      values[key] = descriptor.value;
+    }
+    return values as Readonly<
+      Record<(typeof ingressPolicyKeys)[number], unknown>
+    >;
+  } catch {
+    throw new TypeError("HostDeck request authentication ingress policy input is invalid.");
   }
 }
 

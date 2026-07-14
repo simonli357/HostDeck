@@ -32,6 +32,7 @@ import {
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import {
   allowHostDeckSelfRevocationResponse,
+  assertHostDeckRequestAuthenticationIngressCurrent,
   hostDeckDeviceCookieName
 } from "./fastify-request-authentication.js";
 import {
@@ -200,6 +201,7 @@ export function createHostDeckDeviceRevokeRouteRegistration(
               reply.statusCode >= 200 &&
               reply.statusCode < 300
             ) {
+              assertHostDeckRequestAuthenticationIngressCurrent(request);
               reply.header("set-cookie", deleteCookie);
               counters.cookieDeletions = increment(counters.cookieDeletions);
             } else {

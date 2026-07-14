@@ -24,10 +24,11 @@ import {
 import { type HostDeckRoutePluginRegistration, hostDeckNoStoreRouteConfig } from "./fastify-app.js";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import {
+  assertHostDeckRequestAuthenticationCurrent,
+  hostDeckRequestAuthenticationIngressContext,
   requireHostDeckRequestAuthentication,
   resolveHostDeckRequestAuthentication
 } from "./fastify-request-authentication.js";
-import { hostDeckRequestTrustContext } from "./fastify-request-trust.js";
 import {
   assertHostDeckSecurityMutationAuditExecutor, 
   HostDeckSecurityMutationAuditExecutorError,
@@ -215,7 +216,14 @@ export function createHostDeckHostLockRouteRegistration(input: CreateHostDeckHos
         const context = requireHostDeckRequestAuthentication(request, "local_admin_or_device_cookie");
         requireHostDeckRequestCsrfWriteAuthorization(request, "local_admin_or_device_cookie", csrf);
         const body = request.body as { readonly operation_id: string; readonly confirmed: true };
-        return executeTransition(execute, policy, context, body.operation_id, true);
+        return executeTransition(
+          execute,
+          policy,
+          request,
+          context,
+          body.operation_id,
+          true
+        );
       });
 
       app.post(unlockManifest.path, {
@@ -227,7 +235,14 @@ export function createHostDeckHostLockRouteRegistration(input: CreateHostDeckHos
       }, async (request) => {
         const context = requireHostDeckRequestAuthentication(request, "local_admin");
         const body = request.body as { readonly operation_id: string; readonly confirmed: true };
-        return executeTransition(execute, policy, context, body.operation_id, false);
+        return executeTransition(
+          execute,
+          policy,
+          request,
+          context,
+          body.operation_id,
+          false
+        );
       });
     }
   };
@@ -238,6 +253,7 @@ export function createHostDeckHostLockRouteRegistration(input: CreateHostDeckHos
 async function executeTransition(
   execute: ExecuteAudit,
   policy: HostDeckHostLockPolicy,
+  request: FastifyRequest,
   context: SelectedRequestAuthenticationContext,
   operationId: string,
   locked: boolean
@@ -252,10 +268,35 @@ async function executeTransition(
       target: { type: "host", host_id: "local_host" },
       accepted_summary: { schema_version: 1, requested_locked: locked },
       emergency_lock_on_audit_unavailable: locked,
-      transition: () => transition(policy, locked),
-      prepare_response: (state: unknown) => accessResponse(context, parseLockState(state), selectedHostLockStateResponseSchema)
+      transition: () => {
+        try {
+          assertHostDeckRequestAuthenticationCurrent(request, context);
+        } catch (error) {
+          if (
+            error instanceof HostDeckHttpError &&
+            error.code === "permission_denied"
+          ) {
+            return Object.freeze({
+              outcome: "failed" as const,
+              error_code: "permission_denied" as const,
+              payload_summary: Object.freeze({ schema_version: 1 as const })
+            });
+          }
+          throw error;
+        }
+        return transition(policy, locked);
+      },
+      prepare_response: (state: unknown) => {
+        assertHostDeckRequestAuthenticationCurrent(request, context);
+        return accessResponse(
+          context,
+          parseLockState(state),
+          selectedHostLockStateResponseSchema
+        );
+      }
     }]);
   } catch (error) {
+    rethrowStaleIngressFailure(request, context);
     counters.auditFailures = increment(counters.auditFailures);
     if (error instanceof HostDeckSecurityMutationAuditExecutorError) {
       throw publicFailure(error.api_code, error.retry_safe, locked);
@@ -275,6 +316,22 @@ async function executeTransition(
   }
   counters.auditFailures = increment(counters.auditFailures);
   throw contractFailure();
+}
+
+function rethrowStaleIngressFailure(
+  request: FastifyRequest,
+  context: SelectedRequestAuthenticationContext
+): void {
+  try {
+    assertHostDeckRequestAuthenticationCurrent(request, context);
+  } catch (error) {
+    if (
+      error instanceof HostDeckHttpError &&
+      (error.code === "invalid_origin" || error.code === "permission_denied")
+    ) {
+      throw error;
+    }
+  }
 }
 
 function transition(policy: HostDeckHostLockPolicy, locked: boolean) {
@@ -436,7 +493,7 @@ function publicFailure(code: ErrorCode, retryable: boolean, locking: boolean): H
 }
 
 function requireHostLockCredentialTransport(request: FastifyRequest): void {
-  if (hostDeckRequestTrustContext(request).transport === "https") return;
+  if (hostDeckRequestAuthenticationIngressContext(request).transport === "https") return;
   const rawHeaders = request.raw.rawHeaders;
   for (let index = 0; index < rawHeaders.length; index += 2) {
     if (rawHeaders[index]?.toLowerCase() !== "cookie") continue;

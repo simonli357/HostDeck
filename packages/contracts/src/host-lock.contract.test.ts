@@ -72,6 +72,11 @@ describe("selected host lock contracts", () => {
       can_write_sessions: false,
       can_lock: false
     } as const;
+    const remoteWriter = {
+      ...pairedWriter,
+      configured_origin: "https://hostdeck-fixture.fixture-tailnet.ts.net",
+      network_mode: "remote"
+    } as const;
     const unpairedLoopback = {
       ...localAdminState,
       authentication_state: "unpaired",
@@ -85,14 +90,26 @@ describe("selected host lock contracts", () => {
       authentication_state: "invalid_device",
       can_read_sessions: false
     } as const;
+    const unpairedRemote = {
+      ...remoteWriter,
+      authentication_state: "unpaired",
+      device_id: null,
+      permission: null,
+      device_expires_at: null,
+      can_read_sessions: false,
+      can_write_sessions: false,
+      can_lock: false
+    } as const;
 
     for (const state of [
       localAdminState,
       pairedWriter,
       lockedWriter,
       readOnly,
+      remoteWriter,
       unpairedLoopback,
-      invalidLoopback
+      invalidLoopback,
+      unpairedRemote
     ]) {
       expect(selectedAccessStateResponseSchema.parse(state)).toEqual(state);
       expect(selectedHostLockStateResponseSchema.parse(state)).toEqual(state);
@@ -119,6 +136,27 @@ describe("selected host lock contracts", () => {
         configured_origin: "https://example.test",
         network_mode: "lan",
         transport: "http"
+      },
+      {
+        ...localAdminState,
+        configured_origin: "https://hostdeck-fixture.fixture-tailnet.ts.net",
+        network_mode: "remote",
+        transport: "https"
+      },
+      {
+        ...localAdminState,
+        authentication_state: "unpaired",
+        permission: null,
+        configured_origin: "http://127.0.0.1:3777",
+        network_mode: "remote"
+      },
+      {
+        ...localAdminState,
+        authentication_state: "unpaired",
+        permission: null,
+        configured_origin: "https://example.test",
+        network_mode: "remote",
+        transport: "https"
       },
       { ...localAdminState, configured_origin: "http://127.0.0.1:3777/" },
       { ...localAdminState, csrf_generation: 2 },

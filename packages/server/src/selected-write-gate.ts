@@ -26,7 +26,6 @@ import {
   requireHostDeckRequestAuthentication,
   requireHostDeckRequestWritePermission
 } from "./fastify-request-authentication.js";
-import { hostDeckRequestTrustContext } from "./fastify-request-trust.js";
 import {
   assertHostDeckHostLockPolicy,
   type HostDeckDurableLockState,
@@ -561,6 +560,7 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
         })
       ]);
     } catch (error) {
+      rethrowStaleIngressFailure(request, authority.authentication);
       increment(this.counters, "auditFailures");
       if (error instanceof HostDeckSecurityMutationAuditExecutorError) {
         throw auditExecutorFailure(error);
@@ -612,6 +612,19 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
   }
 }
 
+function rethrowStaleIngressFailure(
+  request: FastifyRequest,
+  authentication: SelectedRequestAuthenticationContext
+): void {
+  try {
+    assertHostDeckRequestAuthenticationCurrent(request, authentication);
+  } catch (error) {
+    if (error instanceof HostDeckHttpError && error.code === "invalid_origin") {
+      throw error;
+    }
+  }
+}
+
 function authorizeRequest(
   request: FastifyRequest,
   manifest: SelectedApiRouteManifestEntry,
@@ -620,13 +633,12 @@ function authorizeRequest(
   if (manifest.auth !== "local_admin_or_device_cookie") {
     throw new TypeError("Selected-write manifest authentication is invalid.");
   }
-  const trust = hostDeckRequestTrustContext(request);
   const authentication = requireHostDeckRequestAuthentication(
     request,
     "local_admin_or_device_cookie"
   );
   requireHostDeckRequestWritePermission(authentication);
-  if (authentication.state === "paired_device" && trust.transport !== "https") {
+  if (authentication.state === "paired_device" && authentication.transport !== "https") {
     throw new HostDeckHttpError({
       code: "insecure_transport",
       message: "Secure request transport is required for paired mutations.",

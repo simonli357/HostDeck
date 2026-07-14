@@ -171,6 +171,7 @@ describe("selected Fastify request authentication policy", () => {
         authentication_conflicts: 0,
         authentication_storage_failures: 0,
         expired_device_contexts: 0,
+        ingress_rejections: 0,
         invalid_device_contexts: 0,
         local_admin_contexts: 0,
         read_device_contexts: 0,
