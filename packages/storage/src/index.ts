@@ -66,6 +66,7 @@ export {
   defaultMigrations,
   hostDeckAuthDeviceCsrfRotationMigration,
   hostDeckBaseSchemaMigration,
+  hostDeckRemoteIngressStateMigration,
   hostDeckRetentionBoundaryScopeChecksMigration,
   hostDeckSelectedAuditStateMigration,
   hostDeckSelectedLanConfigurationMigration,
@@ -86,6 +87,16 @@ export {
   type UncommittedManagedSessionProjection,
   type UncommittedSelectedProjectionEvent
 } from "./projection-append-port.js";
+export {
+  assertRemoteIngressStateRepository,
+  type CompareAndSetRemoteIngressStateInput,
+  createRemoteIngressStateRepository,
+  HostDeckRemoteIngressStateRepositoryError,
+  hostDeckRemoteIngressStateId,
+  type RemoteIngressStateRepository,
+  type RemoteIngressStateRepositoryErrorCode,
+  type RemoteIngressStateWriteReceipt
+} from "./remote-ingress-state-repository.js";
 export {
   type AppendOutputEventInput,
   type AppendOutputEventResult,

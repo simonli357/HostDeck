@@ -745,6 +745,7 @@ describe("selected pairing route", () => {
 
   it("reopens claimed authority while raw credentials and peer identity stay out of SQLite bytes", async () => {
     const harness = await createHarness();
+    const peerAddress = "127.0.0.42";
     const issue = await harness.app.inject({
       method: "POST",
       url: "/api/v1/access/pairing-codes",
@@ -759,7 +760,8 @@ describe("selected pairing route", () => {
     const claim = await injectClaim(
       harness.app,
       "op_pair_restart_claim",
-      issued.code
+      issued.code,
+      peerAddress
     );
     expect(claim.statusCode, claim.body).toBe(200);
     const cookie = requireSingleHeader(claim.headers["set-cookie"]);
@@ -768,7 +770,7 @@ describe("selected pairing route", () => {
       rawDeviceToken,
       rawCsrfToken,
       cookie,
-      "127.0.0.1"
+      peerAddress
     ]);
 
     harness.db.close();
@@ -812,7 +814,7 @@ describe("selected pairing route", () => {
       rawDeviceToken,
       rawCsrfToken,
       cookie,
-      "127.0.0.1"
+      peerAddress
     ]);
   });
 });

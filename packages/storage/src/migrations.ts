@@ -768,6 +768,144 @@ export const hostDeckSelectedLanConfigurationMigration: StorageMigration = {
   `
 };
 
+export const hostDeckRemoteIngressStateMigration: StorageMigration = {
+  version: "202607130013_remote_ingress_state",
+  sql: `
+    CREATE TABLE selected_remote_ingress_state (
+      id TEXT PRIMARY KEY CHECK (id = 'hostdeck_remote_ingress'),
+      schema_version INTEGER NOT NULL CHECK (
+        typeof(schema_version) = 'integer' AND schema_version = 1
+      ),
+      generation INTEGER NOT NULL CHECK (
+        typeof(generation) = 'integer' AND
+        generation BETWEEN 1 AND 9007199254740991
+      ),
+      intent TEXT NOT NULL CHECK (intent IN ('disabled', 'enabled')),
+      availability TEXT NOT NULL CHECK (availability IN ('disabled', 'ready', 'unavailable')),
+      admission TEXT NOT NULL CHECK (admission IN ('closed', 'open')),
+      observation TEXT NOT NULL CHECK (observation IN ('current', 'stale', 'failed')),
+      client TEXT NOT NULL CHECK (client IN ('available', 'not_installed', 'unsupported', 'error')),
+      profile_state TEXT NOT NULL CHECK (profile_state IN (
+        'absent', 'stopped', 'signed_out', 'dedicated', 'other', 'unknown'
+      )),
+      profile_relation TEXT NOT NULL CHECK (profile_relation IN (
+        'unconfigured', 'missing', 'match', 'different', 'unknown'
+      )),
+      expected_profile_key TEXT CHECK (
+        expected_profile_key IS NULL OR (
+          typeof(expected_profile_key) = 'text' AND
+          length(expected_profile_key) = 71 AND
+          substr(expected_profile_key, 1, 7) = 'sha256:' AND
+          substr(expected_profile_key, 8) NOT GLOB '*[^0-9a-f]*'
+        )
+      ),
+      active_profile_key TEXT CHECK (
+        active_profile_key IS NULL OR (
+          typeof(active_profile_key) = 'text' AND
+          length(active_profile_key) = 71 AND
+          substr(active_profile_key, 1, 7) = 'sha256:' AND
+          substr(active_profile_key, 8) NOT GLOB '*[^0-9a-f]*'
+        )
+      ),
+      serve_state TEXT CHECK (serve_state IS NULL OR serve_state IN (
+        'absent', 'exact', 'foreign', 'colliding', 'drifted', 'public'
+      )),
+      expected_external_origin TEXT CHECK (
+        expected_external_origin IS NULL OR (
+          typeof(expected_external_origin) = 'text' AND
+          length(expected_external_origin) BETWEEN 1 AND 142 AND
+          substr(expected_external_origin, 1, 8) = 'https://'
+        )
+      ),
+      expected_https_port INTEGER CHECK (
+        expected_https_port IS NULL OR (
+          typeof(expected_https_port) = 'integer' AND expected_https_port = 443
+        )
+      ),
+      expected_path TEXT CHECK (expected_path IS NULL OR expected_path = '/'),
+      expected_proxy_origin TEXT CHECK (
+        expected_proxy_origin IS NULL OR (
+          typeof(expected_proxy_origin) = 'text' AND
+          length(expected_proxy_origin) BETWEEN 1 AND 142 AND
+          substr(expected_proxy_origin, 1, 17) = 'http://127.0.0.1:'
+        )
+      ),
+      expected_visibility TEXT CHECK (expected_visibility IS NULL OR expected_visibility = 'private'),
+      external_origin TEXT CHECK (
+        external_origin IS NULL OR (
+          typeof(external_origin) = 'text' AND
+          length(external_origin) BETWEEN 1 AND 142 AND
+          substr(external_origin, 1, 8) = 'https://'
+        )
+      ),
+      operation_failure TEXT CHECK (operation_failure IS NULL OR operation_failure IN (
+        'consent_required', 'permission_denied', 'command_failed', 'command_timeout',
+        'output_oversized', 'schema_invalid', 'profile_changed', 'cleanup_incomplete'
+      )),
+      unavailable_reason TEXT CHECK (unavailable_reason IS NULL OR unavailable_reason IN (
+        'client_not_installed', 'client_unsupported', 'client_error', 'client_stopped',
+        'client_signed_out', 'profile_absent', 'profile_other', 'profile_unknown',
+        'serve_absent', 'serve_foreign', 'serve_colliding', 'serve_drifted', 'serve_public',
+        'external_origin_invalid', 'observation_stale', 'observation_failed',
+        'consent_required', 'permission_denied', 'command_failed', 'command_timeout',
+        'output_oversized', 'schema_invalid', 'profile_changed', 'cleanup_incomplete'
+      )),
+      observed_at TEXT CHECK (
+        observed_at IS NULL OR (typeof(observed_at) = 'text' AND length(observed_at) = 24)
+      ),
+      updated_at TEXT NOT NULL CHECK (
+        typeof(updated_at) = 'text' AND length(updated_at) = 24
+      ),
+      CHECK (
+        (profile_relation = 'unconfigured' AND expected_profile_key IS NULL AND active_profile_key IS NULL) OR
+        (profile_relation = 'missing' AND expected_profile_key IS NOT NULL AND active_profile_key IS NULL) OR
+        (profile_relation = 'match' AND expected_profile_key IS NOT NULL AND active_profile_key = expected_profile_key) OR
+        (profile_relation = 'different' AND expected_profile_key IS NOT NULL AND active_profile_key IS NOT NULL AND active_profile_key <> expected_profile_key) OR
+        (profile_relation = 'unknown' AND active_profile_key IS NULL)
+      ),
+      CHECK (
+        (profile_state = 'absent' AND profile_relation IN ('unconfigured', 'missing')) OR
+        (profile_state = 'stopped' AND profile_relation IN ('match', 'different', 'unknown')) OR
+        (profile_state IN ('signed_out', 'unknown') AND profile_relation = 'unknown') OR
+        (profile_state = 'dedicated' AND profile_relation = 'match') OR
+        (profile_state = 'other' AND profile_relation = 'different')
+      ),
+      CHECK (
+        (
+          expected_external_origin IS NULL AND expected_https_port IS NULL AND
+          expected_path IS NULL AND expected_proxy_origin IS NULL AND
+          expected_visibility IS NULL AND external_origin IS NULL
+        ) OR
+        (
+          expected_external_origin IS NOT NULL AND expected_https_port = 443 AND
+          expected_path = '/' AND expected_proxy_origin IS NOT NULL AND
+          expected_visibility = 'private' AND external_origin = expected_external_origin
+        )
+      )
+    );
+
+    CREATE TRIGGER selected_remote_ingress_initial_generation
+    BEFORE INSERT ON selected_remote_ingress_state
+    WHEN NEW.generation <> 1
+    BEGIN
+      SELECT RAISE(ABORT, 'remote ingress initial generation must be one');
+    END;
+
+    CREATE TRIGGER selected_remote_ingress_generation_step
+    BEFORE UPDATE ON selected_remote_ingress_state
+    WHEN NEW.generation <> OLD.generation + 1
+    BEGIN
+      SELECT RAISE(ABORT, 'remote ingress generation must advance exactly once');
+    END;
+
+    CREATE TRIGGER selected_remote_ingress_no_delete
+    BEFORE DELETE ON selected_remote_ingress_state
+    BEGIN
+      SELECT RAISE(ABORT, 'remote ingress state is disabled, not deleted');
+    END;
+  `
+};
+
 export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckBaseSchemaMigration,
   hostDeckSessionMetadataFailedStatusMigration,
@@ -780,5 +918,6 @@ export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckAuthDeviceCsrfRotationMigration,
   hostDeckSecurityAuditCatalogMigration,
   hostDeckSelectedPairingClaimMigration,
-  hostDeckSelectedLanConfigurationMigration
+  hostDeckSelectedLanConfigurationMigration,
+  hostDeckRemoteIngressStateMigration
 ] as const;
