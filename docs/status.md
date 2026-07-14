@@ -288,5 +288,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-076` proof migration, service, routes, CLI, and real vertical are pushed as `d87dd86`, `88b9811`, `d3675c8`, `e6f86c9`, and `5258c8c`; full workspace and repeated exact-cleanup evidence pass.
 - `FE-V1-004` executable design contract, concrete fixtures, tests, and evidence are committed as `282e2f1`; owner-doc closure advances the visual queue to `FE-V1-002`.
 - `FE-V1-002` replacement mobile visual sets, mappings, review corrections, and evidence are committed as `262bbdb`; `FE-V1-003` now waits only for human selection.
-- `IFC-V1-077` automated implementation is committed as `1a22576`; owner docs preserve the physical-phone gap instead of closing the task early.
+- `IFC-V1-077` automated implementation is pushed as `1a22576`; automated evidence and in-progress owner docs are pushed as `e1fda86`, preserving the physical-phone gap instead of closing the task early.
 - Next action: restore Android USB data enumeration and run the redacted real-phone QR scan/claim for `IFC-V1-077`. React implementation independently waits for the `FE-V1-003` recorded visual selection.
