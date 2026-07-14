@@ -1,6 +1,6 @@
 # BLK-V1-02 Local State, Auth, Audit, And Retention
 
-Status: reopened only for focused remote-storage hardening.
+Status: complete.
 
 Owns HostDeck's durable state and local filesystem safety. Codex remains the owner of full thread history.
 
@@ -56,7 +56,7 @@ Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-01
 | Selected module hardening | `DAT-V1-091` | Complete; one secure on-disk aggregate proves selected cross-repository migration, restart, retention, auth, audit, lease, corruption, query-plan, and privacy truth. Evidence: `artifacts/dat-v1-091-selected-local-state-hardening.md`. |
 | Remote-ingress configuration migration | `DAT-V1-031` | Complete; `artifacts/dat-v1-031-remote-ingress-state-storage.md`. |
 | Remote-ingress audit migration and historical preservation | `DAT-V1-032` | Complete; `artifacts/dat-v1-032-remote-audit-catalog.md`. |
-| Focused remote storage hardening | `DAT-V1-092` | In progress. |
+| Focused remote storage hardening | `DAT-V1-092` | Complete; `artifacts/dat-v1-092-remote-storage-hardening.md`. |
 
 Owning backlog: `docs/tracking/backlog/local-state-auth-audit.md`.
 
