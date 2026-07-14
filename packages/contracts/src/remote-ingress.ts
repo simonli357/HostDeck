@@ -329,6 +329,19 @@ const remoteIngressStateDataSchema = z
 
 export const remoteIngressStateSchema = exactDataObject(remoteIngressStateDataSchema);
 
+const remoteIngressAdmissionProofDataSchema = z
+  .object({
+    schema_version: z.literal(1),
+    operation_id: clientOperationIdSchema,
+    generation: nonNegativeSafeIntegerSchema.min(1),
+    proven_at: isoTimestampSchema
+  })
+  .strict();
+
+export const remoteIngressAdmissionProofSchema = exactDataObject(
+  remoteIngressAdmissionProofDataSchema
+);
+
 export const remoteIngressPublicReasonSchema = z.union([z.literal("remote_disabled"), z.enum(remoteIngressUnavailableReasons)]);
 
 const remoteIngressPublicStateDataSchema = z
@@ -578,12 +591,13 @@ const remoteIngressAuditSummaryDataSchema = z
     }
     if (value.phase === "accepted") {
       if (
-        value.profile_state !== "dedicated" ||
-        (value.serve_state !== "absent" && value.serve_state !== "exact")
+        value.action === "remote_enable" &&
+        (value.profile_state !== "dedicated" ||
+          (value.serve_state !== "absent" && value.serve_state !== "exact"))
       ) {
         context.addIssue({
           code: "custom",
-          message: "Accepted remote mutation requires the dedicated profile and absent or already-exact owned Serve state."
+          message: "Accepted remote enable requires the dedicated profile and absent or already-exact owned Serve state."
         });
       }
       return;
@@ -649,8 +663,17 @@ const remoteIngressAuditSummaryDataSchema = z
       if (value.action === "remote_disable" && !["removed", "unchanged"].includes(value.serve_result)) {
         addIssue(context, "serve_result", "Successful remote disable requires removed or already-absent Serve state.");
       }
-      if (value.action === "remote_disable" && (value.profile_state !== "dedicated" || value.serve_state !== "absent")) {
-        context.addIssue({ code: "custom", message: "Successful remote disable requires dedicated-profile absent Serve read-back." });
+      if (
+        value.action === "remote_disable" &&
+        !(
+          (value.profile_state === "dedicated" && value.serve_state === "absent") ||
+          (value.profile_state === "absent" && value.serve_state === null && value.serve_result === "unchanged")
+        )
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Successful remote disable requires verified absent Serve read-back or an unconfigured no-op."
+        });
       }
     } else if (value.reason === null) {
       addIssue(context, "reason", "Failed, rejected, or incomplete remote audit terminal requires one bounded reason.");
@@ -664,6 +687,7 @@ export type RemoteProfileObservation = z.infer<typeof remoteProfileObservationSc
 export type RemoteServeDescriptor = z.infer<typeof remoteServeDescriptorSchema>;
 export type RemoteIngressObservationSnapshot = z.infer<typeof remoteIngressObservationSnapshotSchema>;
 export type RemoteIngressState = z.infer<typeof remoteIngressStateSchema>;
+export type RemoteIngressAdmissionProof = z.infer<typeof remoteIngressAdmissionProofSchema>;
 export type RemoteIngressPublicState = z.infer<typeof remoteIngressPublicStateSchema>;
 export type RemoteEnableRequest = z.infer<typeof remoteEnableRequestSchema>;
 export type RemoteDisableRequest = z.infer<typeof remoteDisableRequestSchema>;

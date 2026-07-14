@@ -1048,6 +1048,38 @@ export const hostDeckRemoteAuditCatalogMigration: StorageMigration = {
   `
 };
 
+export const hostDeckRemoteAdmissionProofMigration: StorageMigration = {
+  version: "202607130015_remote_admission_proof",
+  sql: `
+    CREATE TABLE selected_remote_ingress_admission_proof (
+      id TEXT PRIMARY KEY CHECK (id = 'hostdeck_remote_ingress_admission'),
+      schema_version INTEGER NOT NULL CHECK (
+        typeof(schema_version) = 'integer' AND schema_version = 1
+      ),
+      operation_id TEXT NOT NULL CHECK (
+        typeof(operation_id) = 'text' AND
+        length(operation_id) BETWEEN 4 AND 99 AND
+        substr(operation_id, 1, 3) = 'op_'
+      ),
+      state_generation INTEGER NOT NULL CHECK (
+        typeof(state_generation) = 'integer' AND
+        state_generation BETWEEN 1 AND 9007199254740991
+      ),
+      proven_at TEXT NOT NULL CHECK (
+        typeof(proven_at) = 'text' AND length(proven_at) = 24
+      )
+    );
+
+    CREATE TRIGGER selected_remote_ingress_admission_proof_invalidate
+    AFTER INSERT ON selected_audit_events
+    WHEN NEW.phase = 'accepted' AND NEW.action IN ('remote_enable', 'remote_disable')
+    BEGIN
+      DELETE FROM selected_remote_ingress_admission_proof
+      WHERE id = 'hostdeck_remote_ingress_admission';
+    END;
+  `
+};
+
 export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckBaseSchemaMigration,
   hostDeckSessionMetadataFailedStatusMigration,
@@ -1062,5 +1094,6 @@ export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckSelectedPairingClaimMigration,
   hostDeckSelectedLanConfigurationMigration,
   hostDeckRemoteIngressStateMigration,
-  hostDeckRemoteAuditCatalogMigration
+  hostDeckRemoteAuditCatalogMigration,
+  hostDeckRemoteAdmissionProofMigration
 ] as const;

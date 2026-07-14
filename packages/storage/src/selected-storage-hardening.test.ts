@@ -70,7 +70,7 @@ const privateMaterial = "-----BEGIN PRIVATE KEY-----aggregate-private-material";
 const fullTranscript = "aggregate-full-transcript-must-never-become-hostdeck-durable-truth";
 const selectedDeviceId = `client_${"d".repeat(24)}`;
 const pairingSourceKey = `sha256:${"a".repeat(64)}`;
-const currentMigrationVersion = "202607130014_remote_audit_catalog";
+const currentMigrationVersion = "202607130015_remote_admission_proof";
 
 afterEach(() => {
   for (const root of cleanup.splice(0).reverse()) {
@@ -923,6 +923,7 @@ function inspectSchemaAndHealth(db: Database.Database): void {
     "selected_audit_events",
     "selected_lan_configuration",
     "selected_projected_events",
+    "selected_remote_ingress_admission_proof",
     "selected_remote_ingress_state",
     "selected_runtime_compatibility",
     "selected_session_projections",
@@ -950,6 +951,7 @@ function inspectSchemaAndHealth(db: Database.Database): void {
     "selected_audit_events_no_update",
     "selected_audit_events_start_requires_empty",
     "selected_audit_events_terminal_requires_accepted",
+    "selected_remote_ingress_admission_proof_invalidate",
     "selected_remote_ingress_generation_step",
     "selected_remote_ingress_initial_generation",
     "selected_remote_ingress_no_delete"

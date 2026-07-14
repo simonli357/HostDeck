@@ -5,6 +5,7 @@ import {
   remoteDisableRequestSchema,
   remoteEnableRequestSchema,
   remoteExternalOriginSchema,
+  remoteIngressAdmissionProofSchema,
   remoteIngressAuditSummarySchema,
   remoteIngressObservationSnapshotSchema,
   remoteIngressStateSchema,
@@ -268,6 +269,27 @@ describe("remote ingress state", () => {
   });
 });
 
+describe("remote admission proof", () => {
+  it("binds one successful operation to one positive generation and canonical proof time", () => {
+    const proof = {
+      schema_version: 1,
+      operation_id: "op_remote_proof_contract_001",
+      generation: 7,
+      proven_at: timestamp
+    } as const;
+    expect(remoteIngressAdmissionProofSchema.parse(proof)).toEqual(proof);
+    for (const candidate of [
+      { ...proof, schema_version: 2 },
+      { ...proof, operation_id: "request-1" },
+      { ...proof, generation: 0 },
+      { ...proof, proven_at: "not-a-time" },
+      { ...proof, profile_key: expectedProfile }
+    ]) {
+      expect(remoteIngressAdmissionProofSchema.safeParse(candidate).success).toBe(false);
+    }
+  });
+});
+
 describe("remote proxy provenance", () => {
   it("freezes exact standard names and keeps lookalikes separate", () => {
     expect(tailscaleForwardingHeaderNames).toEqual(["x-forwarded-for", "x-forwarded-host", "x-forwarded-proto"]);
@@ -383,6 +405,32 @@ describe("remote pairing and audit summaries", () => {
         reason: "cleanup_incomplete"
       })
     ).toMatchObject({ admission: "closed", reason: "cleanup_incomplete" });
+    expect(
+      remoteIngressAuditSummarySchema.parse({
+        schema_version: 1,
+        action: "remote_disable",
+        requested_intent: "disabled",
+        profile_state: "other",
+        serve_state: null,
+        phase: "accepted",
+        outcome: "accepted"
+      })
+    ).toMatchObject({ action: "remote_disable", profile_state: "other" });
+    expect(
+      remoteIngressAuditSummarySchema.parse({
+        schema_version: 1,
+        action: "remote_disable",
+        requested_intent: "disabled",
+        profile_state: "absent",
+        serve_state: null,
+        phase: "terminal",
+        outcome: "succeeded",
+        admission: "closed",
+        intent_persisted: true,
+        serve_result: "unchanged",
+        reason: null
+      })
+    ).toMatchObject({ outcome: "succeeded", serve_result: "unchanged" });
 
     const invalid = [
       acceptedAudit({ action: "remote_enable", requested_intent: "disabled" }),

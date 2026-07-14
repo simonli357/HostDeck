@@ -327,15 +327,15 @@ describe("remote audit hardening", () => {
     });
     expect(remoteIngressAuditSummarySchema.safeParse(acceptedAudit({ serve_state: "foreign" })).success).toBe(false);
     expect(
-      remoteIngressAuditSummarySchema.safeParse(
+      remoteIngressAuditSummarySchema.parse(
         acceptedAudit({
           action: "remote_disable",
           requested_intent: "disabled",
           profile_state: "other",
           serve_state: null
         })
-      ).success
-    ).toBe(false);
+      )
+    ).toMatchObject({ action: "remote_disable", profile_state: "other" });
 
     const successfulDisable = terminalAudit({
       action: "remote_disable",
@@ -353,6 +353,14 @@ describe("remote audit hardening", () => {
     });
     expect(remoteIngressAuditSummarySchema.safeParse({ ...successfulDisable, profile_state: "other" }).success).toBe(false);
     expect(remoteIngressAuditSummarySchema.safeParse({ ...successfulDisable, serve_state: "exact" }).success).toBe(false);
+    expect(
+      remoteIngressAuditSummarySchema.parse({
+        ...successfulDisable,
+        profile_state: "absent",
+        serve_state: null,
+        serve_result: "unchanged"
+      })
+    ).toMatchObject({ profile_state: "absent", serve_result: "unchanged" });
 
     const rejected = terminalAudit({
       outcome: "rejected",

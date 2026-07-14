@@ -115,9 +115,10 @@ describe("remote state and audit aggregate hardening", () => {
         expect(current.result).toEqual({
           applied: [
             "202607130013_remote_ingress_state",
-            "202607130014_remote_audit_catalog"
+            "202607130014_remote_audit_catalog",
+            "202607130015_remote_admission_proof"
           ],
-          currentVersion: "202607130014_remote_audit_catalog"
+          currentVersion: "202607130015_remote_admission_proof"
         });
         expect(rawAuditRows(current.db)).toEqual(historicalBefore);
         expect(
@@ -365,7 +366,7 @@ describe("remote state and audit aggregate hardening", () => {
       try {
         expect(restarted.result).toEqual({
           applied: [],
-          currentVersion: "202607130014_remote_audit_catalog"
+          currentVersion: "202607130015_remote_admission_proof"
         });
         const state = createRemoteIngressStateRepository(restarted.db);
         const audit = createSelectedAuditRepository(restarted.db);
@@ -559,7 +560,7 @@ describe("remote state and audit aggregate hardening", () => {
     try {
       expect(fresh.result.applied).toHaveLength(defaultMigrations.length);
       expect(fresh.result.currentVersion).toBe(
-        "202607130014_remote_audit_catalog"
+        "202607130015_remote_admission_proof"
       );
       inspectSchemaAndHealth(fresh.db);
     } finally {
@@ -574,7 +575,7 @@ describe("remote state and audit aggregate hardening", () => {
     statePrior.db.close();
     const stateFailureDb = new Database(stateFailurePath);
     try {
-      const stateMigration = defaultMigrations.at(-2);
+      const stateMigration = defaultMigrations.at(-3);
       if (stateMigration === undefined) throw new Error("Missing remote state migration.");
       const interruptedState = {
         ...stateMigration,
@@ -602,7 +603,7 @@ describe("remote state and audit aggregate hardening", () => {
 
     const auditFailurePath = tempDbPath("audit-failure");
     const auditPrior = openMigratedDatabase(auditFailurePath, {
-      migrations: defaultMigrations.slice(0, -1),
+      migrations: defaultMigrations.slice(0, -2),
       now: fixedNow
     });
     let auditTableBefore: string;
@@ -616,7 +617,7 @@ describe("remote state and audit aggregate hardening", () => {
     }
     const auditFailureDb = new Database(auditFailurePath);
     try {
-      const auditMigration = defaultMigrations.at(-1);
+      const auditMigration = defaultMigrations.at(-2);
       if (auditMigration === undefined) throw new Error("Missing remote audit migration.");
       const interruptedAudit = {
         ...auditMigration,
@@ -624,13 +625,13 @@ describe("remote state and audit aggregate hardening", () => {
       } satisfies StorageMigration;
       expect(() =>
         runMigrations(auditFailureDb, {
-          migrations: [...defaultMigrations.slice(0, -1), interruptedAudit],
+          migrations: [...defaultMigrations.slice(0, -2), interruptedAudit],
           now: fixedNow
         })
       ).toThrow(HostDeckMigrationError);
       expect(selectedAuditTableSql(auditFailureDb)).toBe(auditTableBefore);
       expect(rawAuditRows(auditFailureDb)).toEqual(auditRowsBefore);
-      expect(migrationCount(auditFailureDb)).toBe(defaultMigrations.length - 1);
+      expect(migrationCount(auditFailureDb)).toBe(defaultMigrations.length - 2);
     } finally {
       auditFailureDb.close();
     }
@@ -973,9 +974,9 @@ function hostTarget() {
 }
 
 function migrationsBeforeRemoteStorage(): readonly StorageMigration[] {
-  const migrations = defaultMigrations.slice(0, -2);
+  const migrations = defaultMigrations.slice(0, -3);
   if (migrations.at(-1)?.version !== "202607120012_selected_lan_configuration") {
-    throw new Error("Remote storage migrations are not the final two migrations.");
+    throw new Error("Remote storage migrations are not the final three migrations.");
   }
   return migrations;
 }
@@ -997,6 +998,7 @@ function inspectSchemaAndHealth(db: Database.Database): void {
     "selected_audit_events",
     "selected_lan_configuration",
     "selected_projected_events",
+    "selected_remote_ingress_admission_proof",
     "selected_remote_ingress_state",
     "selected_runtime_compatibility",
     "selected_session_projections",
@@ -1024,6 +1026,7 @@ function inspectSchemaAndHealth(db: Database.Database): void {
     "selected_audit_events_no_update",
     "selected_audit_events_start_requires_empty",
     "selected_audit_events_terminal_requires_accepted",
+    "selected_remote_ingress_admission_proof_invalidate",
     "selected_remote_ingress_generation_step",
     "selected_remote_ingress_initial_generation",
     "selected_remote_ingress_no_delete"

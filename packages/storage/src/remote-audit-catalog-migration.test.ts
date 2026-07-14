@@ -45,7 +45,10 @@ describe("remote audit catalog migration", () => {
       const before = rawRows(open.db);
 
       const result = runMigrations(open.db, { migrations: defaultMigrations, now: fixedNow });
-      expect(result.applied).toEqual(["202607130014_remote_audit_catalog"]);
+      expect(result.applied).toEqual([
+        "202607130014_remote_audit_catalog",
+        "202607130015_remote_admission_proof"
+      ]);
       expect(rawRows(open.db)).toEqual(before);
       expect(createSelectedAuditRepository(open.db).require(versioned.operation_id).records).toHaveLength(2);
       expect(createSelectedAuditRepository(open.db).require(generic.operation_id).records[0]?.payload_summary).toEqual(
@@ -130,7 +133,7 @@ describe("remote audit catalog migration", () => {
 });
 
 function migrationsBeforeRemoteAudit(): readonly StorageMigration[] {
-  const migrations = defaultMigrations.slice(0, -1);
+  const migrations = defaultMigrations.slice(0, -2);
   if (migrations.at(-1)?.version !== "202607130013_remote_ingress_state") {
     throw new Error("Remote audit migration is not the next forward-only migration.");
   }
