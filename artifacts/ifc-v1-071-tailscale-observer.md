@@ -7,7 +7,7 @@
 - Every process uses `/` as cwd, an exact four-variable environment, bounded aggregate stdout/stderr bytes, a per-command timeout within one complete-cycle deadline, and the observer lifecycle `AbortSignal`.
 - Strict parsing requires the exact client/daemon version, exactly one selected saved profile, status/profile agreement, and stable identity across bracket reads. Output contains only normalized state, a domain-separated SHA-256 comparison key, canonical origin, Serve class, bounded failure, and timestamp.
 - `BackendState` is authoritative for stopped and signed-out states. The exact observed stopped shape permits nullable retained status fields while keeping the selected profile list authoritative.
-- Selected-profile Serve is classified as absent, exact, foreign, colliding, drifted, or public. Any Funnel configuration or `AllowFunnel` field is public. A different selected profile is reported without reading its Serve or Funnel state.
+- Selected-profile Serve is classified as absent, exact, foreign, colliding, drifted, or public. On exact 1.98.8, both Serve and Funnel JSON status forms return the same complete ServeConfig; the observer requires equality across those bounded reads and treats any `AllowFunnel` field as public. A different selected profile is reported without reading its Serve state.
 - Concurrent identical observations coalesce; a distinct concurrent observation rejects. Broken clocks/configuration fail loudly. Unsupported versions, process/schema failures, timeout, oversize, and profile changes are explicit and retain no raw output or error cause.
 
 ## Ownership And Safety
@@ -22,6 +22,7 @@
 - The first live version probe exposed an incorrect empty argument vector. The frozen command is now exactly `version`, covered by fake and live tests.
 - The other saved profile exposed the exact stopped 1.98.8 shape with nullable current-tailnet, user, peer, certificate-domain, and IP fields. Parsing is now state-aware and rejects partial or contradictory retained identity.
 - Final audit added a post-run cancellation check and stopped translating impossible internal clock failures into ordinary command failures.
+- `BUG-008`: the initial fixtures incorrectly modeled `funnel status --json` as a distinct empty projection while private Serve was configured. Exact source and live reads proved both status commands return the same ServeConfig. The observer now requires parsed equality, classifies public state only from `AllowFunnel`, fails disagreement as `schema_invalid`, and has a focused regression plus real private enable/read-back/remove smoke.
 
 ## Validation
 

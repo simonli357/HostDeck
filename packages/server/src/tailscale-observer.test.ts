@@ -128,7 +128,8 @@ describe("bounded Tailscale observer", () => {
 
   it("classifies one configured exact private Serve mapping", async () => {
     const harness = createHarness({
-      serve_status: () => exactServeStatus
+      serve_status: () => exactServeStatus,
+      funnel_status: () => exactServeStatus
     });
     await expect(
       harness.observer.observeConfigured({
@@ -248,8 +249,8 @@ describe("bounded Tailscale observer", () => {
   });
 
   it.each([
-    ["absent", {}, {}],
-    ["exact", exactServeStatus, {}],
+    ["absent", {}],
+    ["exact", exactServeStatus],
     [
       "colliding",
       {
@@ -262,8 +263,7 @@ describe("bounded Tailscale observer", () => {
             }
           }
         }
-      },
-      {}
+      }
     ],
     [
       "drifted",
@@ -274,15 +274,14 @@ describe("bounded Tailscale observer", () => {
             Handlers: { "/": { Proxy: "http://127.0.0.1:3778" } }
           }
         }
-      },
-      {}
+      }
     ],
-    ["foreign", { TCP: { "22": { TCPForward: "127.0.0.1:22" } } }, {}],
-    ["public", exactServeStatus, { Web: { "public.example.invalid:443": {} } }]
-  ] as const)("classifies %s Serve state", async (expectedState, serveStatus, funnelStatus) => {
+    ["foreign", { TCP: { "22": { TCPForward: "127.0.0.1:22" } } }],
+    ["public", { ...exactServeStatus, AllowFunnel: { "hostdeck.example.ts.net:443": true } }]
+  ] as const)("classifies %s Serve state", async (expectedState, serveStatus) => {
     const harness = createHarness({
       serve_status: () => serveStatus,
-      funnel_status: () => funnelStatus
+      funnel_status: () => serveStatus
     });
     await expect(
       harness.observer.observeConfigured({
@@ -293,8 +292,10 @@ describe("bounded Tailscale observer", () => {
   });
 
   it("treats any AllowFunnel field as public instead of trusting its raw value", async () => {
+    const publicStatus = { ...exactServeStatus, AllowFunnel: false };
     const harness = createHarness({
-      serve_status: () => ({ ...exactServeStatus, AllowFunnel: false })
+      serve_status: () => publicStatus,
+      funnel_status: () => publicStatus
     });
     await expect(
       harness.observer.observeConfigured({
@@ -302,6 +303,24 @@ describe("bounded Tailscale observer", () => {
         expected_serve: expectedServe
       })
     ).resolves.toMatchObject({ serve: "public" });
+  });
+
+  it("fails closed when the two exact 1.98.8 ServeConfig reads disagree", async () => {
+    const harness = createHarness({
+      serve_status: () => exactServeStatus,
+      funnel_status: () => ({})
+    });
+    await expect(
+      harness.observer.observeConfigured({
+        expected_profile_key: primaryProfileKey,
+        expected_serve: expectedServe
+      })
+    ).resolves.toMatchObject({
+      client: "error",
+      serve: null,
+      external_origin: null,
+      failure: "schema_invalid"
+    });
   });
 
   it("maps absent, unsupported, command, timeout, oversize, and schema failures without causes or raw output", async () => {

@@ -384,9 +384,12 @@ async function runObservationCycle(
     if (serve === null || funnel === null) {
       return failureSnapshot("schema_invalid", expectation, context.now);
     }
+    if (!isDeepStrictEqual(serve, funnel)) {
+      return failureSnapshot("schema_invalid", expectation, context.now);
+    }
 
     const externalOrigin = deriveExternalOrigin(statusAfter, serve, expectation.expected_serve);
-    const serveState = classifyServe(serve, funnel, expectation.expected_serve, externalOrigin);
+    const serveState = classifyServe(serve, expectation.expected_serve, externalOrigin);
     return snapshot({
       schema_version: 1,
       client: "available",
@@ -684,11 +687,10 @@ function deriveExternalOrigin(
 
 function classifyServe(
   serve: RawServeStatus,
-  funnel: RawServeStatus,
   expected: RemoteServeDescriptor | null,
   externalOrigin: string | null
 ): RemoteIngressObservationSnapshot["serve"] {
-  if (hasPublicConfiguration(serve, funnel)) return "public";
+  if (Object.hasOwn(serve, "AllowFunnel")) return "public";
   if (!hasServeConfiguration(serve)) return "absent";
   if (expected === null) return "foreign";
 
@@ -713,10 +715,6 @@ function classifyServe(
   }
   if (tcp443 !== null || authority !== null) return "drifted";
   return "foreign";
-}
-
-function hasPublicConfiguration(serve: RawServeStatus, funnel: RawServeStatus): boolean {
-  return Object.hasOwn(serve, "AllowFunnel") || Object.keys(funnel).length > 0;
 }
 
 function hasServeConfiguration(serve: RawServeStatus): boolean {

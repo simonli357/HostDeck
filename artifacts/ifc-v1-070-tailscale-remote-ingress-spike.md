@@ -96,6 +96,8 @@ The observer implementation may wrap only bounded, absolute-path equivalents of 
 
 The raw status/profile payload contains private identity, DNS, address, key, and account material. Product logs, errors, audits, API output, and durable fixtures must never retain it. The parser must project only the strict normalized fields owned by `FND-V1-018` and reject unknown required shapes or contradictory selections.
 
+Post-implementation live validation found that exact 1.98.8 routes both `serve status --json` and `funnel status --json` through the same ServeConfig status implementation. Private Serve therefore makes both JSON reads nonempty and semantically identical; `AllowFunnel` is the public-exposure field. The observer retains both commands as bounded consistency reads, requires their parsed snapshots to agree, and fails closed on disagreement. This correction is tracked as `BUG-008`.
+
 ### State And Exit Matrix
 
 | State | Command evidence | Frozen interpretation |
@@ -171,13 +173,13 @@ tailscale serve --https=443 --set-path=/ off
 | Exact | One HTTPS 443 listener and one root proxy to the expected loopback target. | Ready only when durable intent/profile generation also match. |
 | Collision | Root plus `/foreign` produced two handlers. | Refuse enable/repair; preserve foreign state. Exact owned root disable may remove only `/`. |
 | Drift | Root target changed to unused loopback port `43171`; remote request returned `502` while the real loopback probe stayed healthy. | Unavailable/ownership conflict; no automatic overwrite or removal. |
-| Public/Funnel | `AllowFunnel` absent and `tailscale funnel status --json` empty in every accepted/final state. | Any Funnel/public state is a hard conflict; HostDeck never invokes `tailscale funnel`. |
+| Public/Funnel | `AllowFunnel` is absent for private Serve and present for Funnel. Both exact 1.98.8 JSON status commands return the same full ServeConfig rather than separate Serve/Funnel projections. | Any `AllowFunnel` field is a hard conflict; disagreement between the duplicate reads fails closed; HostDeck never invokes a Funnel mutation. |
 
 ### HTTPS Consent
 
 - The first Serve command did not apply until tailnet HTTPS consent completed.
 - The web consent UI selected HTTPS and Funnel by default. Funnel was explicitly unchecked before consent.
-- After consent, exactly one certificate domain existed, Serve was private, `AllowFunnel` was absent, and Funnel status was empty.
+- After consent, exactly one certificate domain existed, Serve was private, and `AllowFunnel` was absent. Later implementation validation established that the `funnel status --json` alias returns that same private ServeConfig rather than an empty Funnel-only projection.
 - Product automation must not click or script consent, enable HTTPS policy, or accept Funnel. It reports a bounded local consent-required state, requires human action, and requires a fresh explicit enable/read-back afterward.
 
 ## Proxy And Header Evidence

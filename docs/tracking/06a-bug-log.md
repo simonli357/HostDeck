@@ -13,6 +13,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-005 | A finite Readable SSE source completes on a real listener but the pinned plugin leaves the HTTP response and handler open. | High | Backlog bugfix | Closed | `IFC-V1-023` / `IFC-V1-025` | Readable-end raw-response termination plus real finite-response and active-shutdown regressions; `artifacts/ifc-v1-025-fastify-host-lifecycle.md`. |
 | BUG-006 | Exact Codex emits notifications after the initialize response but before `initialized`; the connection treats them as pre-initialize violations and terminates. | High | Small bugfix | Closed | `INT-V1-004` / `INT-V1-006` | Bounded ordered response/ack queue, hostile-window tests, exact private-socket smokes, and semantic capture. |
 | BUG-007 | The goal-based legacy thread materialization path sets an active goal, which autonomously starts model turns despite its no-model contract. | Critical | Backlog bugfix | Closed | `INT-V1-005` / `INT-V1-006` | Paused internal goal, active-marker recovery, idle/zero-turn/token/history real smoke, corrected evidence, `DEC-022`. |
+| BUG-008 | Private Serve is classified as public because the observer treats a nonempty `funnel status --json` result as a distinct Funnel projection. | High | Backlog bugfix | Closed | `IFC-V1-071` / `IFC-V1-072` | Exact 1.98.8 source/live semantics, duplicate-read equality regression, corrected active observer smoke, and private enable/read-back/path-off smoke. |
 
 ## Routing
 
@@ -118,3 +119,16 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Fix: create the version-scoped internal marker with explicit `status: paused`; if recovery finds a prior active marker, pause it before clear and reject unsupported terminal marker states.
 - Validation: unit request/status/recovery assertions plus exact isolated 0.144.0 lifecycle smoke requiring idle state, empty stored turns, no `turn/started`, no token-usage update, and no agent-message delta before TUI resume.
 - Closed by: corrected `INT-V1-005` lifecycle plus `INT-V1-006`; evidence in `artifacts/int-v1-005-managed-thread-lifecycle.md` and `artifacts/int-v1-006-codex-operation-semantics.md`.
+
+### BUG-008 Private Serve Misclassified As Funnel
+
+- Symptom: after the ownership-safe manager created one private HTTPS root proxy from an empty profile, configured observation reported `public` and correctly refused cleanup.
+- Impact: every valid nonempty private Serve mapping would remain unavailable; explicit enable could end incomplete and leave an owned mapping requiring manual path-scoped cleanup.
+- Route: backlog bugfix against completed `IFC-V1-071`, discovered by `IFC-V1-072` live mutation evidence; expected private/public ownership remains unchanged.
+- Related requirements: `FR-018`, `NFR-005`, `NFR-010`, `NFR-013`, `PR-003`, `PR-007`, `SFR-015`, `DEC-027`.
+- Affected / owning task: observer behavior in `IFC-V1-071`; manager validation in `IFC-V1-072`.
+- Blocks: resolved before `IFC-V1-072` closure.
+- Root cause: fixtures modeled `tailscale funnel status --json` as a separate Funnel-only projection. Exact 1.98.8 source and redacted live inspection proved both Serve and Funnel status commands call the same implementation and serialize the same ServeConfig; public exposure is represented by `AllowFunnel`.
+- Fix: require the two parsed ServeConfig reads to be deeply equal, fail disagreement as `schema_invalid`, and classify public state only when `AllowFunnel` is present. Preserve the second bounded read as a race/consistency check.
+- Validation: 23 focused observer regressions, corrected real active-profile observer smoke, exact-source review, normalized live equality/cleanup inspection, and real manager private enable/exact read-back/HTTPS proxy/path-off/repeat smoke with final empty state.
+- Closed by: `IFC-V1-071` corrective implementation and `IFC-V1-072` live validation; evidence in `artifacts/ifc-v1-070-tailscale-remote-ingress-spike.md` and `artifacts/ifc-v1-071-tailscale-observer.md`.
