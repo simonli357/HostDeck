@@ -36,8 +36,8 @@ Requirement refs: `FR-002`, `FR-005` to `FR-010`, `FR-016`, `NFR-004`, `IR-001` 
 | Work | Tasks | Status |
 | --- | --- | --- |
 | Historical view-model/state helpers | `FE-V1-001` | Retained; requires structured mobile rebaseline. |
-| Mobile structured state/interaction rebaseline | `FE-V1-004` | Blocked by contracts and real event semantics. |
-| Replacement visual directions | Reopened `FE-V1-002` | Blocked by `FE-V1-004`. |
+| Mobile structured state/interaction rebaseline | `FE-V1-004` | Done; executable matrix and evidence in `artifacts/fe-v1-004-mobile-state-interaction-contract.md`. |
+| Replacement visual directions | `FE-V1-002` | Ready; selected matrix is complete. |
 | Human selection | `FE-V1-003` | Blocked by replacement options. |
 | Phone-first shell and typed HTTP/SSE/CSRF/state clients | `FE-V1-010`, `FE-V1-019`, `FE-V1-023` to `FE-V1-025` | Blocked by visual selection and the assembled production API. |
 | Mission Control and structured Session Detail | `FE-V1-011`, `FE-V1-012` | Blocked by approved state contracts and coordinated clients. |

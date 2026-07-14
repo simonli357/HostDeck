@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-004` Rebase mobile information architecture and state matrix | ready | none | Maps phone-first journeys to the accepted remote/access contracts before replacement visual directions are generated. |
+| 1 | `FE-V1-002` Generate two complete replacement mobile visual directions | ready | none | Uses the accepted 141-state/39-interaction phone contract to produce structurally distinct mockup targets before human selection. |
 | 2 | `IFC-V1-077` Implement fragment-safe remote pairing URL/QR creation and browser claim composition | ready | none | Uses the proven ready remote origin and app authorization to make physical-phone pairing possible without leaking the one-time code. |
 | 3 | `IFC-V1-069` Implement the bounded projected-event diagnostic read route | ready | none | Exposes the completed retained projection contract through one bounded authenticated read. |
 | 4 | `IFC-V1-060` Implement managed-thread resume metadata API and CLI | ready | none | Exposes the completed exact safe TUI resume contract without executing a phone shell. |
@@ -39,7 +39,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
-| Mobile visual direction | Reopened `FE-V1-002`, `FE-V1-003` | Real state matrix, two replacement options, human selection | React screen implementation. |
+| Mobile visual direction | `FE-V1-002`, `FE-V1-003` | Two complete replacement options and human selection | React screen implementation. |
 | Release | `REL-V1-010` | All module hardening, clean package/service/remote-phone/profile/security evidence, human acceptance | V1 release and V2 planning. |
 
 ## Status Vocabulary
