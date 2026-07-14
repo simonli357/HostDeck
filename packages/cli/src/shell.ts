@@ -1,17 +1,35 @@
+import { randomUUID } from "node:crypto";
 import type { ApiErrorEnvelope, ApiSession } from "@hostdeck/contracts";
+import {
+  type RemoteDisableRequest,
+  type RemoteEnableRequest,
+  remoteDisableRequestSchema,
+  remoteEnableRequestSchema
+} from "@hostdeck/contracts";
 import { type HostHttpService, type StartHostHttpServiceInput, startHostHttpService } from "@hostdeck/server";
 import { createHostDeckApiClient, type HostDeckApiClient, type HttpFetch } from "./api-client.js";
 import { type LoadCliConfigOptions, loadCliConfig } from "./config.js";
-import { apiFailure, configFailure, toCliFailure, usageFailure } from "./errors.js";
+import {
+  apiFailure,
+  configFailure,
+  internalFailure,
+  toCliFailure,
+  usageFailure
+} from "./errors.js";
 import { type CliExitCode, cliExitCodes } from "./exit-codes.js";
 import { createLocalAdmin, type LocalAdmin } from "./local-admin.js";
 import { parseCliArgs } from "./parser.js";
+import {
+  createHostDeckRemoteControlClient,
+  type HostDeckRemoteControlClient
+} from "./remote-control-client.js";
 import {
   renderAttachCommand,
   renderFailure,
   renderHelp,
   renderLockCommand,
   renderPairingCode,
+  renderRemoteState,
   renderServeStarted,
   renderServeStopped,
   renderSessionList,
@@ -34,6 +52,10 @@ export interface CliRunOptions {
   readonly fetch?: HttpFetch;
   readonly client?: HostDeckApiClient;
   readonly localAdmin?: LocalAdmin;
+  readonly remoteClient?: HostDeckRemoteControlClient;
+  readonly createOperationId?: (
+    action: "disable" | "enable"
+  ) => string;
   readonly startService?: (input: StartHostHttpServiceInput) => Promise<HostHttpService>;
   readonly waitForShutdown?: () => Promise<void>;
   readonly writeStdout?: (chunk: string) => void;
@@ -71,6 +93,34 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     const config = loadCliConfig(configOptions);
+
+    if (parsed.command.kind === "remote") {
+      const remoteClientOptions = { baseUrl: config.baseUrl };
+      if (options.fetch !== undefined) {
+        Object.assign(remoteClientOptions, { fetch: options.fetch });
+      }
+      const remoteClient =
+        options.remoteClient ??
+        createHostDeckRemoteControlClient(remoteClientOptions);
+      if (parsed.command.action === "status") {
+        return success(
+          renderRemoteState(
+            await remoteClient.status(),
+            parsed.command.json
+          )
+        );
+      }
+      const request = createRemoteMutationRequest(
+        parsed.command.action,
+        options.createOperationId ?? createRemoteOperationId
+      );
+      const state =
+        parsed.command.action === "enable"
+          ? await remoteClient.enable(request as RemoteEnableRequest)
+          : await remoteClient.disable(request as RemoteDisableRequest);
+      return success(renderRemoteState(state, parsed.command.json));
+    }
+
     const localAdmin =
       options.localAdmin ??
       createLocalAdmin({
@@ -172,6 +222,31 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
   } catch (error) {
     return failure(toCliFailure(error));
   }
+}
+
+function createRemoteMutationRequest(
+  action: "disable" | "enable",
+  createOperationId: (action: "disable" | "enable") => string
+): RemoteDisableRequest | RemoteEnableRequest {
+  let operationId: unknown;
+  try {
+    operationId = createOperationId(action);
+  } catch (error) {
+    throw internalFailure("Remote control operation id generation failed.", error);
+  }
+  const candidate = { operation_id: operationId, confirmed: true };
+  const parsed =
+    action === "enable"
+      ? remoteEnableRequestSchema.safeParse(candidate)
+      : remoteDisableRequestSchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw internalFailure("Remote control operation id generation failed.");
+  }
+  return parsed.data;
+}
+
+function createRemoteOperationId(action: "disable" | "enable"): string {
+  return `op_remote_${action}_${randomUUID().replaceAll("-", "")}`;
 }
 
 async function resolveManagedSession(client: HostDeckApiClient, target: string): Promise<ApiSession> {

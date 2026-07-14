@@ -18,7 +18,12 @@ export type ParsedCliCommand =
       readonly json: boolean;
     }
   | { readonly kind: "lock"; readonly reason?: string; readonly json: boolean }
-  | { readonly kind: "unlock"; readonly json: boolean };
+  | { readonly kind: "unlock"; readonly json: boolean }
+  | {
+      readonly kind: "remote";
+      readonly action: "disable" | "enable" | "status";
+      readonly json: boolean;
+    };
 
 export interface ParsedCliArgs {
   readonly command: ParsedCliCommand;
@@ -250,7 +255,34 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
     return { command: { kind: "unlock", json: parseNoArgJsonOptions("unlock", rest, json) }, configFlags };
   }
 
+  if (command === "remote") {
+    return {
+      command: parseRemoteCommand(rest, json),
+      configFlags
+    };
+  }
+
   throw usageFailure(`Unknown command: ${command ?? ""}`);
+}
+
+function parseRemoteCommand(
+  args: readonly string[],
+  globalJson: boolean
+): Extract<ParsedCliCommand, { readonly kind: "remote" }> {
+  const [action, ...rest] = args;
+  if (action === undefined) {
+    throw usageFailure(
+      "The remote command requires status, enable, or disable."
+    );
+  }
+  if (action !== "status" && action !== "enable" && action !== "disable") {
+    throw usageFailure(`Unknown remote command: ${action}`);
+  }
+  return {
+    kind: "remote",
+    action,
+    json: parseNoArgJsonOptions(`remote ${action}`, rest, globalJson)
+  };
 }
 
 function parseStartOptions(args: readonly string[]): { readonly name: string; readonly cwd: string; readonly json: boolean } {

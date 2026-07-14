@@ -104,6 +104,20 @@ export function apiFailure(status: number, apiError: ApiErrorEnvelope): CliFailu
   return new CliFailure(input);
 }
 
+export function clientOperationFailure(
+  code: ApiErrorEnvelope["code"],
+  message: string,
+  retryable = false
+): CliFailure {
+  return new CliFailure({
+    kind: "api_error",
+    code,
+    message,
+    exitCode: cliExitCodes.apiError,
+    retryable
+  });
+}
+
 export function internalFailure(message: string, cause?: unknown): CliFailure {
   return new CliFailure({
     kind: "internal",

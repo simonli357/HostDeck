@@ -4,5 +4,6 @@ export * from "./errors.js";
 export * from "./exit-codes.js";
 export * from "./local-admin.js";
 export * from "./parser.js";
+export * from "./remote-control-client.js";
 export * from "./render.js";
 export * from "./shell.js";

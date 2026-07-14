@@ -28,6 +28,7 @@ pnpm test:contract
 pnpm test:integration
 pnpm test:web
 pnpm test:tmux
+pnpm exec vitest run packages/cli/src/remote-control-client.test.ts packages/cli/src/remote-cli.test.ts
 pnpm smoke:codex-compatibility
 pnpm smoke:codex-ipc
 pnpm smoke:codex-threads
@@ -64,7 +65,7 @@ pnpm generate:codex-bindings
 
 ## Explicit Gaps
 
-- CLI binary: `codexdeck` is not installed as a workspace or packaged executable yet; `pnpm exec codexdeck --help` currently fails with command not found. Keep `codexdeck ...` examples out of copy-paste command blocks until build/package or clean install smoke provides a runnable executable path.
+- CLI binary: the source command contract includes `remote status`, `remote enable`, and `remote disable`, but `codexdeck` is not installed as a workspace or packaged executable yet; `pnpm exec codexdeck --help` currently fails with command not found. Keep `codexdeck ...` examples out of copy-paste command blocks until build/package or clean install smoke provides a runnable executable path.
 - E2E validation: `pnpm test:e2e` intentionally exits nonzero until `REL-V1-007` implements it.
 - Build/package: `pnpm build` intentionally exits nonzero until `IFC-V1-021` implements it.
 - Local release smoke: `pnpm smoke:local` intentionally exits nonzero until `REL-V1-006` implements it.

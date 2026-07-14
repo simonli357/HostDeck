@@ -1,4 +1,12 @@
-import type { ApiSession, HostStatusResponse, SessionListResponse, StartSessionResponse, WriteResponse } from "@hostdeck/contracts";
+import {
+  type ApiSession,
+  type HostStatusResponse,
+  type RemoteIngressPublicState,
+  remoteIngressPublicStateSchema,
+  type SessionListResponse,
+  type StartSessionResponse,
+  type WriteResponse
+} from "@hostdeck/contracts";
 import type { CliFailure } from "./errors.js";
 import type { LockCommandResult, PairingCommandResult } from "./local-admin.js";
 
@@ -15,6 +23,7 @@ export function renderHelp(): string {
     "  codexdeck pair [--label LABEL] [--ttl-minutes MINUTES] [--read-only] [--json]",
     "  codexdeck lock [--reason TEXT] [--json]",
     "  codexdeck unlock [--json]",
+    "  codexdeck remote status|enable|disable [--json]",
     "  codexdeck help",
     "  codexdeck version",
     "",
@@ -139,6 +148,34 @@ export function renderStatus(status: HostStatusResponse, json: boolean): string 
     `Tmux: ${status.tmux.state}`,
     `Stream: ${status.stream.state}`,
     `Stale sessions: ${status.stale_session_count}`,
+    ""
+  ].join("\n");
+}
+
+export function renderRemoteState(
+  candidate: RemoteIngressPublicState,
+  json: boolean
+): string {
+  const parsed = remoteIngressPublicStateSchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw new TypeError("Remote ingress state rendering failed.");
+  }
+  const state = parsed.data;
+  const output = Object.freeze({
+    generation: state.generation,
+    availability: state.availability,
+    reason: state.reason,
+    laptop_action_required: state.laptop_action_required,
+    observed_at: state.observed_at
+  });
+  if (json) return `${JSON.stringify(output, null, 2)}\n`;
+
+  return [
+    `Remote access: ${state.availability}`,
+    `Reason: ${state.reason ?? "none"}`,
+    `Laptop action required: ${state.laptop_action_required ? "yes" : "no"}`,
+    `Generation: ${state.generation}`,
+    `Observed: ${state.observed_at ?? "not observed"}`,
     ""
   ].join("\n");
 }
