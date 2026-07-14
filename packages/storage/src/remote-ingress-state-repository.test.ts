@@ -270,6 +270,39 @@ describe("remote ingress state repository", () => {
     }
   });
 
+  it("releases selection only when a latched disable completes with verified absent evidence", () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createRemoteIngressStateRepository(open.db);
+      repository.compareAndSet({
+        expected_generation: null,
+        state: readyState(1)
+      });
+      expect(() =>
+        repository.compareAndSet({
+          expected_generation: 1,
+          state: unconfiguredDisabledState(2)
+        })
+      ).toThrowError(
+        expect.objectContaining({ code: "remote_ingress_selection_conflict" })
+      );
+
+      repository.compareAndSet({
+        expected_generation: 1,
+        state: cleanupLatchedState(2)
+      });
+      const cleared = unconfiguredDisabledState(3);
+      expect(
+        repository.compareAndSet({
+          expected_generation: 2,
+          state: cleared
+        }).after
+      ).toEqual(cleared);
+    } finally {
+      open.db.close();
+    }
+  });
+
   it("preserves update and last-observation chronology", () => {
     const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
     try {
@@ -637,6 +670,45 @@ function disabledState(
     availability: "disabled",
     admission: "closed",
     serve,
+    observed_at: at,
+    updated_at: at
+  });
+}
+
+function cleanupLatchedState(generation: number): RemoteIngressState {
+  const at = timestamp(generation);
+  return parseState({
+    ...disabledState(generation, "exact"),
+    operation_failure: "cleanup_incomplete",
+    reason: "cleanup_incomplete",
+    observed_at: at,
+    updated_at: at
+  });
+}
+
+function unconfiguredDisabledState(generation: number): RemoteIngressState {
+  const at = timestamp(generation);
+  return parseState({
+    schema_version: 1,
+    generation,
+    intent: "disabled",
+    availability: "disabled",
+    admission: "closed",
+    observation: "current",
+    client: "available",
+    profile: {
+      state: "absent",
+      comparison: {
+        relation: "unconfigured",
+        expected_profile_key: null,
+        active_profile_key: null
+      }
+    },
+    serve: null,
+    expected_serve: null,
+    external_origin: null,
+    operation_failure: null,
+    reason: null,
     observed_at: at,
     updated_at: at
   });

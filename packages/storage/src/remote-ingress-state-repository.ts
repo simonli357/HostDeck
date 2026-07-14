@@ -287,7 +287,26 @@ function assertSelectionTransition(
     before.profile.state === "dedicated" &&
     before.serve === "absent" &&
     before.operation_failure === null;
-  if (!cleanUnconfiguredState && !verifiedDisabledState) {
+  const verifiedCleanupCompletion =
+    hadSelection &&
+    before.intent === "disabled" &&
+    before.operation_failure === "cleanup_incomplete" &&
+    after.intent === "disabled" &&
+    after.observation === "current" &&
+    after.client === "available" &&
+    after.profile.state === "absent" &&
+    after.profile.comparison.relation === "unconfigured" &&
+    after.profile.comparison.expected_profile_key === null &&
+    after.profile.comparison.active_profile_key === null &&
+    after.serve === null &&
+    after.expected_serve === null &&
+    after.external_origin === null &&
+    after.operation_failure === null;
+  if (
+    !cleanUnconfiguredState &&
+    !verifiedDisabledState &&
+    !verifiedCleanupCompletion
+  ) {
     throw new HostDeckRemoteIngressStateRepositoryError(
       "remote_ingress_selection_conflict",
       "Remote ingress selection can change only after verified disablement."
