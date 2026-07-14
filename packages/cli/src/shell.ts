@@ -4,7 +4,9 @@ import {
   type RemoteDisableRequest,
   type RemoteEnableRequest,
   remoteDisableRequestSchema,
-  remoteEnableRequestSchema
+  remoteEnableRequestSchema,
+  type SelectedPairRequest,
+  selectedPairRequestSchema
 } from "@hostdeck/contracts";
 import { type HostHttpService, type StartHostHttpServiceInput, startHostHttpService } from "@hostdeck/server";
 import { createHostDeckApiClient, type HostDeckApiClient, type HttpFetch } from "./api-client.js";
@@ -18,6 +20,10 @@ import {
 } from "./errors.js";
 import { type CliExitCode, cliExitCodes } from "./exit-codes.js";
 import { createLocalAdmin, type LocalAdmin } from "./local-admin.js";
+import {
+  createHostDeckPairingLinkClient,
+  type HostDeckPairingLinkClient
+} from "./pairing-link-client.js";
 import { parseCliArgs } from "./parser.js";
 import {
   createHostDeckRemoteControlClient,
@@ -28,7 +34,7 @@ import {
   renderFailure,
   renderHelp,
   renderLockCommand,
-  renderPairingCode,
+  renderPairingLink,
   renderRemoteState,
   renderServeStarted,
   renderServeStopped,
@@ -36,7 +42,8 @@ import {
   renderStartSession,
   renderStatus,
   renderVersion,
-  renderWriteAccepted
+  renderWriteAccepted,
+  type TerminalQrRenderer
 } from "./render.js";
 
 export interface CliRunResult {
@@ -52,10 +59,13 @@ export interface CliRunOptions {
   readonly fetch?: HttpFetch;
   readonly client?: HostDeckApiClient;
   readonly localAdmin?: LocalAdmin;
+  readonly pairingClient?: HostDeckPairingLinkClient;
   readonly remoteClient?: HostDeckRemoteControlClient;
   readonly createOperationId?: (
     action: "disable" | "enable"
   ) => string;
+  readonly createPairOperationId?: () => string;
+  readonly renderPairingQr?: TerminalQrRenderer;
   readonly startService?: (input: StartHostHttpServiceInput) => Promise<HostHttpService>;
   readonly waitForShutdown?: () => Promise<void>;
   readonly writeStdout?: (chunk: string) => void;
@@ -119,6 +129,26 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
           ? await remoteClient.enable(request as RemoteEnableRequest)
           : await remoteClient.disable(request as RemoteDisableRequest);
       return success(renderRemoteState(state, parsed.command.json));
+    }
+
+    if (parsed.command.kind === "pair") {
+      const pairingClientOptions = { baseUrl: config.baseUrl };
+      if (options.fetch !== undefined) {
+        Object.assign(pairingClientOptions, { fetch: options.fetch });
+      }
+      const pairingClient =
+        options.pairingClient ??
+        createHostDeckPairingLinkClient(pairingClientOptions);
+      const request = createPairingRequest(
+        parsed.command,
+        options.createPairOperationId ?? createPairOperationId
+      );
+      return success(
+        await renderPairingLink(
+          await pairingClient.issue(request),
+          options.renderPairingQr
+        )
+      );
     }
 
     const localAdmin =
@@ -189,19 +219,6 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
       return success(renderWriteAccepted(await client.stopSession(session.id)));
     }
 
-    if (parsed.command.kind === "pair") {
-      return success(
-        renderPairingCode(
-          localAdmin.createPairingCode({
-            permission: parsed.command.permission,
-            ttlMinutes: parsed.command.ttlMinutes,
-            ...(parsed.command.label !== undefined ? { label: parsed.command.label } : {})
-          }),
-          parsed.command.json
-        )
-      );
-    }
-
     if (parsed.command.kind === "lock") {
       return success(
         renderLockCommand(
@@ -245,8 +262,33 @@ function createRemoteMutationRequest(
   return parsed.data;
 }
 
+function createPairingRequest(
+  command: Extract<ReturnType<typeof parseCliArgs>["command"], { readonly kind: "pair" }>,
+  createOperationId: () => string
+): SelectedPairRequest {
+  let operationId: unknown;
+  try {
+    operationId = createOperationId();
+  } catch {
+    throw internalFailure("Pairing operation id generation failed.");
+  }
+  const parsed = selectedPairRequestSchema.safeParse({
+    operation_id: operationId,
+    permission: command.permission,
+    ...(command.label === undefined ? {} : { client_label: command.label })
+  });
+  if (!parsed.success) {
+    throw usageFailure("Pairing options do not satisfy the selected pairing contract.");
+  }
+  return parsed.data;
+}
+
 function createRemoteOperationId(action: "disable" | "enable"): string {
   return `op_remote_${action}_${randomUUID().replaceAll("-", "")}`;
+}
+
+function createPairOperationId(): string {
+  return `op_pair_request_${randomUUID().replaceAll("-", "")}`;
 }
 
 async function resolveManagedSession(client: HostDeckApiClient, target: string): Promise<ApiSession> {

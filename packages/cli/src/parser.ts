@@ -14,8 +14,6 @@ export type ParsedCliCommand =
       readonly kind: "pair";
       readonly label?: string;
       readonly permission: "read" | "write";
-      readonly ttlMinutes: number;
-      readonly json: boolean;
     }
   | { readonly kind: "lock"; readonly reason?: string; readonly json: boolean }
   | { readonly kind: "unlock"; readonly json: boolean }
@@ -230,9 +228,7 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
       command: {
         kind: "pair",
         ...(parsed.label !== undefined ? { label: parsed.label } : {}),
-        permission: parsed.permission,
-        ttlMinutes: parsed.ttlMinutes,
-        json: parsed.json
+        permission: parsed.permission
       },
       configFlags
     };
@@ -364,13 +360,13 @@ function parseNoArgJsonOptions(command: string, args: readonly string[], globalJ
 function parsePairOptions(args: readonly string[], globalJson: boolean): {
   readonly label?: string;
   readonly permission: "read" | "write";
-  readonly ttlMinutes: number;
-  readonly json: boolean;
 } {
+  if (globalJson) {
+    throw usageFailure("The pair command does not support --json because its output contains a one-time secret.");
+  }
   let label: string | undefined;
   let permission: "read" | "write" = "write";
-  let ttlMinutes = 10;
-  let json = globalJson;
+  let permissionOptionSeen = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
@@ -380,39 +376,33 @@ function parsePairOptions(args: readonly string[], globalJson: boolean): {
     }
 
     if (token === "--json") {
-      json = true;
-      continue;
+      throw usageFailure("The pair command does not support --json because its output contains a one-time secret.");
     }
 
     if (token === "--label") {
+      if (label !== undefined) throw usageFailure("The pair command accepts --label only once.");
       label = readOptionValue(args, index, "--label");
       index += 1;
       continue;
     }
 
     if (token.startsWith("--label=")) {
+      if (label !== undefined) throw usageFailure("The pair command accepts --label only once.");
       label = readInlineOptionValue(token, "--label");
       continue;
     }
 
-    if (token === "--ttl-minutes") {
-      ttlMinutes = parsePositiveInteger(readOptionValue(args, index, "--ttl-minutes"), "--ttl-minutes");
-      index += 1;
-      continue;
-    }
-
-    if (token.startsWith("--ttl-minutes=")) {
-      ttlMinutes = parsePositiveInteger(readInlineOptionValue(token, "--ttl-minutes"), "--ttl-minutes");
-      continue;
-    }
-
     if (token === "--read-only") {
+      if (permissionOptionSeen) throw usageFailure("The pair command accepts one permission option.");
       permission = "read";
+      permissionOptionSeen = true;
       continue;
     }
 
     if (token === "--write") {
+      if (permissionOptionSeen) throw usageFailure("The pair command accepts one permission option.");
       permission = "write";
+      permissionOptionSeen = true;
       continue;
     }
 
@@ -425,9 +415,7 @@ function parsePairOptions(args: readonly string[], globalJson: boolean): {
 
   return {
     ...(label !== undefined ? { label } : {}),
-    permission,
-    ttlMinutes,
-    json
+    permission
   };
 }
 
@@ -497,18 +485,4 @@ function readInlineOptionValue(token: string, optionName: string): string {
   }
 
   return value;
-}
-
-function parsePositiveInteger(value: string, optionName: string): number {
-  if (!/^\d+$/u.test(value)) {
-    throw usageFailure(`${optionName} must be a positive integer.`, optionName);
-  }
-
-  const parsed = Number(value);
-
-  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 1440) {
-    throw usageFailure(`${optionName} must be between 1 and 1440.`, optionName);
-  }
-
-  return parsed;
 }

@@ -16,5 +16,8 @@
   "dependencies": {
     "@hostdeck/contracts": "workspace:*",
     "@hostdeck/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@hostdeck/server": "workspace:*"
   }
 }

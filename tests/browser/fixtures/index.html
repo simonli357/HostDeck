@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HostDeck pairing bootstrap test</title>
+  </head>
+  <body>
+    <script type="module">
+      import { bootstrapBrowserPairing } from "../../../packages/web/src/pairing-bootstrap.ts";
+
+      const externalOrigin = "https://private-laptop.fixture-tailnet.ts.net";
+      const operationSession = crypto.randomUUID().replaceAll("-", "").slice(0, 8);
+      let operationCounter = 0;
+
+      window.hostDeckPairingTest = {
+        urlImmediatelyAfterStart: null,
+        run() {
+          const pending = bootstrapBrowserPairing({
+            location: {
+              origin: externalOrigin,
+              pathname: window.location.pathname,
+              search: window.location.search,
+              hash: window.location.hash
+            },
+            history: window.history,
+            fetch: window.fetch.bind(window),
+            createOperationId(operation) {
+              operationCounter += 1;
+              return `op_browser_${operation}_${operationSession}_${String(operationCounter).padStart(4, "0")}`;
+            }
+          });
+          this.urlImmediatelyAfterStart = window.location.href;
+          return pending;
+        }
+      };
+    </script>
+  </body>
+</html>

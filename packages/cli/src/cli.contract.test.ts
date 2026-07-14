@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { HttpResponse } from "./api-client.js";
 import { cliExitCodes } from "./exit-codes.js";
 import type { LocalAdmin } from "./local-admin.js";
+import type { HostDeckPairingLinkClient } from "./pairing-link-client.js";
 import { parseCliArgs } from "./parser.js";
 import { runCli } from "./shell.js";
 
@@ -131,9 +132,9 @@ describe("CLI shell contract", () => {
       },
       {
         label: "pair",
-        args: ["pair", "--label=phone", "--ttl-minutes", "5", "--read-only", "--json"],
+        args: ["pair", "--label=phone", "--read-only"],
         expected: {
-          command: { kind: "pair", label: "phone", permission: "read", ttlMinutes: 5, json: true },
+          command: { kind: "pair", label: "phone", permission: "read" },
           configFlags: {}
         }
       },
@@ -395,21 +396,40 @@ describe("CLI shell contract", () => {
     expect(result.stdout).toContain("stop accepted for sess_cli_contract_01");
   });
 
-  it("creates pairing codes through the local admin path with expiry visible", async () => {
+  it("creates one fragment link through the selected client and QR renderer", async () => {
     const calls: unknown[] = [];
-    const result = await runCli(["pair", "--label", "phone", "--ttl-minutes", "5", "--read-only"], {
+    let qrInput = "";
+    const result = await runCli(["pair", "--label", "phone", "--read-only"], {
       env: {},
-      localAdmin: fakeLocalAdmin(calls)
+      pairingClient: fakePairingClient(calls),
+      createPairOperationId: () => "op_pair_request_contract_0001",
+      renderPairingQr: async (link) => {
+        qrInput = link;
+        return "terminal-qr";
+      }
     });
 
     expect(result.exitCode).toBe(cliExitCodes.ok);
     expect(result.stderr).toBe("");
-    expect(result.stdout).toContain("Pairing code created.");
-    expect(result.stdout).toContain("Code: 135790");
+    expect(result.stdout).toContain("Pairing link created.");
+    expect(result.stdout).toContain("terminal-qr");
+    expect(result.stdout).toContain(
+      "https://private-laptop.fixture-tailnet.ts.net/#pair=AbCdEfGhIjKlMnOpQrSt_1"
+    );
     expect(result.stdout).toContain("Permission: read");
-    expect(result.stdout).toContain("Expires: 2026-07-09T08:05:00.000Z");
-    expect(result.stdout).toContain("No device token was created or stored by this command.");
-    expect(calls).toEqual([{ method: "pair", permission: "read", ttlMinutes: 5, label: "phone" }]);
+    expect(result.stdout).toContain("Expires: 2026-07-13T22:05:00.000Z");
+    expect(result.stdout).not.toContain("Code:");
+    expect(qrInput).toBe(
+      "https://private-laptop.fixture-tailnet.ts.net/#pair=AbCdEfGhIjKlMnOpQrSt_1"
+    );
+    expect(calls).toEqual([
+      {
+        method: "pair_link",
+        operation_id: "op_pair_request_contract_0001",
+        permission: "read",
+        client_label: "phone"
+      }
+    ]);
   });
 
   it("locks and unlocks through local admin commands", async () => {
@@ -494,7 +514,10 @@ describe("CLI shell contract", () => {
       { label: "send", args: ["send", "contract-demo"], message: "send command requires a session target and text" },
       { label: "attach", args: ["attach"], message: "attach command requires exactly one session target" },
       { label: "stop", args: ["stop", "one", "two"], message: "stop command requires exactly one session target" },
-      { label: "pair", args: ["pair", "--ttl-minutes", "0"], message: "--ttl-minutes must be between 1 and 1440" },
+      { label: "pair ttl", args: ["pair", "--ttl-minutes", "5"], message: "Unknown pair option: --ttl-minutes" },
+      { label: "pair json", args: ["--json", "pair"], message: "pair command does not support --json" },
+      { label: "pair permission", args: ["pair", "--read-only", "--write"], message: "accepts one permission option" },
+      { label: "pair label", args: ["pair", "--label", "one", "--label=two"], message: "accepts --label only once" },
       { label: "lock", args: ["lock", "extra"], message: "Unexpected lock argument" },
       { label: "unlock", args: ["unlock", "extra"], message: "unlock command does not accept positional arguments" },
       { label: "removed lan command", args: ["lan", "enable"], message: "Unknown command: lan" }
@@ -659,6 +682,20 @@ function fakeLocalAdmin(calls: unknown[]): LocalAdmin {
         locked: input.locked,
         updated_at: "2026-07-09T08:00:00.000Z",
         audit_event_id: input.locked ? "audit_lock" : "audit_unlock"
+      };
+    }
+  };
+}
+
+function fakePairingClient(calls: unknown[]): HostDeckPairingLinkClient {
+  return {
+    async issue(input) {
+      calls.push({ method: "pair_link", ...input });
+      return {
+        link: "https://private-laptop.fixture-tailnet.ts.net/#pair=AbCdEfGhIjKlMnOpQrSt_1",
+        permission: input.permission,
+        client_label: input.client_label ?? null,
+        expires_at: "2026-07-13T22:05:00.000Z"
       };
     }
   };

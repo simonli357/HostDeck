@@ -12,10 +12,21 @@ import {
   createAuthDeviceRepository,
   createPairingCodeRepository,
   createSelectedAuditRepository,
+  createSelectedCsrfAuthorizationRepository,
   openMigratedDatabase,
   type SelectedAuditRepository
 } from "@hostdeck/storage";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  type BrowserPairingResponsePort,
+  bootstrapBrowserPairing,
+  browserCsrfBootstrapPath,
+  browserPairClaimPath
+} from "../../web/src/pairing-bootstrap.js";
+import {
+  createHostDeckCsrfPolicy,
+  createHostDeckCsrfRouteRegistration
+} from "./csrf-routes.js";
 import {
   createHostDeckTailscaleServeFastifyApp,
   type HostDeckFastifyInstance,
@@ -52,6 +63,7 @@ const sourceB = "100.127.30.40";
 const rawPairingCode = "abcdefghijklmnopqrstuv";
 const rawDeviceToken = "D".repeat(43);
 const rawCsrfToken = "C".repeat(43);
+const rotatedCsrfToken = "R".repeat(43);
 const identityLogin = "private-fixture@example.test";
 const tempDirectories: string[] = [];
 const openApps: HostDeckFastifyInstance[] = [];
@@ -68,6 +80,129 @@ afterEach(async () => {
 });
 
 describe("Tailscale Serve pairing authorization composition", () => {
+  it("composes fragment bootstrap through remote claim, hardened cookie, CSRF, audit, and SQLite", async () => {
+    const harness = createHarness();
+    await harness.app.ready();
+    const issued = await issueCode(
+      harness.app,
+      "op_remote_browser_issue_01",
+      "write"
+    );
+    const location = {
+      origin: externalOrigin,
+      pathname: "/",
+      search: "",
+      hash: `#pair=${issued.code}`
+    };
+    const order: string[] = [];
+    const requests: Array<{
+      readonly path: string;
+      readonly body: string;
+      readonly referrerPolicy: string;
+    }> = [];
+    let deviceCookie: string | null = null;
+    let operationIndex = 0;
+
+    const result = await bootstrapBrowserPairing({
+      location,
+      history: {
+        state: { retained: true },
+        replaceState(data, _unused, path) {
+          expect(data).toEqual({ retained: true });
+          order.push(`history:${path}`);
+          location.hash = "";
+        }
+      },
+      createOperationId(operation) {
+        operationIndex += 1;
+        order.push(`id:${operation}`);
+        return `op_remote_browser_${operation}_${String(operationIndex).padStart(2, "0")}`;
+      },
+      fetch: async (path, init) => {
+        order.push(`fetch:${path}`);
+        expect(location.hash).toBe("");
+        const body = init.body;
+        requests.push({ path, body, referrerPolicy: init.referrerPolicy });
+        const response = await harness.app.inject({
+          headers: {
+            ...remoteHeaders(sourceA, {
+              contentType: true,
+              origin: true,
+              ...(deviceCookie === null ? {} : { cookie: deviceCookie })
+            }),
+            accept: "application/json",
+            "cache-control": "no-store"
+          },
+          method: "POST",
+          payload: body,
+          url: path
+        });
+        const setCookie = response.headers["set-cookie"];
+        if (setCookie !== undefined) {
+          const cookie = requireSingleHeader(setCookie);
+          const match = new RegExp(`^${hostDeckDeviceCookieName}=([^;]+)`, "u").exec(cookie);
+          if (match?.[1] !== undefined) deviceCookie = match[1];
+        }
+        return browserResponse(response.statusCode, response.headers, response.body);
+      }
+    });
+
+    expect(result).toMatchObject({
+      state: "paired",
+      permission: "write",
+      client_label: "Android phone",
+      csrf_token: rotatedCsrfToken,
+      csrf_generation: 2
+    });
+    expect(JSON.stringify(result)).not.toContain(issued.code);
+    expect(JSON.stringify(result)).not.toContain(rawDeviceToken);
+    expect(deviceCookie).toBe(rawDeviceToken);
+    expect(order).toEqual([
+      "history:/",
+      "id:pair_claim",
+      `fetch:${browserPairClaimPath}`,
+      "id:csrf_bootstrap",
+      `fetch:${browserCsrfBootstrapPath}`
+    ]);
+    expect(requests.map(({ path }) => path)).toEqual([
+      browserPairClaimPath,
+      browserCsrfBootstrapPath
+    ]);
+    expect(requests.every(({ path }) => !path.includes(issued.code))).toBe(true);
+    expect(requests.every(({ referrerPolicy }) => referrerPolicy === "no-referrer")).toBe(true);
+    expect(
+      harness.db.prepare("SELECT COUNT(*) AS count FROM auth_devices").get()
+    ).toEqual({ count: 1 });
+    expect(harness.pairing.require(issued.pairing_id)).toMatchObject({
+      used_at: baseTime.toISOString(),
+      claimed_device_id: "client_ABCDEFGHIJKLMNOPQRSTUVWX"
+    });
+    expect(
+      harness.audit.require("op_remote_browser_issue_01").records.at(-1)
+    ).toMatchObject({ phase: "terminal", outcome: "succeeded" });
+    expect(
+      harness.audit.require("op_remote_browser_pair_claim_01").records.at(-1)
+    ).toMatchObject({ phase: "terminal", outcome: "succeeded" });
+    expect(
+      harness.audit.require("op_remote_browser_csrf_bootstrap_02").records.at(-1)
+    ).toMatchObject({ phase: "terminal", outcome: "succeeded" });
+
+    const auditRows = JSON.stringify(
+      harness.db
+        .prepare("SELECT * FROM selected_audit_events ORDER BY operation_id, phase")
+        .all()
+    );
+    for (const secret of [issued.code, rawDeviceToken, rawCsrfToken, rotatedCsrfToken]) {
+      expect(auditRows).not.toContain(secret);
+    }
+    assertSecretsAbsentFromSqlite(harness.dbPath, [
+      issued.code,
+      rawDeviceToken,
+      rawCsrfToken,
+      rotatedCsrfToken
+    ]);
+  });
+
   it("uses admitted source hashing for SQLite limits and issues only a hardened device cookie", async () => {
     const harness = createHarness();
     await harness.app.ready();
@@ -581,6 +716,17 @@ function createHarness(options: HarnessOptions = {}): Harness {
     audit: executor,
     pairing: policy
   });
+  const csrfRepository = createSelectedCsrfAuthorizationRepository(opened.db, {
+    generateCsrfToken: () => rotatedCsrfToken
+  });
+  const csrfPolicy = createHostDeckCsrfPolicy({
+    csrf: {
+      authorizeBrowserWrite: (input) =>
+        csrfRepository.authorizeBrowserWrite(input),
+      rotateBootstrap: (input) => csrfRepository.rotateBootstrap(input)
+    },
+    now: () => new Date(baseTime.getTime() + 1_000)
+  });
   const app = createHostDeckTailscaleServeFastifyApp({
     observeInternalError: () => undefined,
     requestAuthenticationPolicy: createHostDeckRequestAuthenticationPolicy({
@@ -588,7 +734,11 @@ function createHarness(options: HarnessOptions = {}): Harness {
       now: () => new Date(baseTime.getTime() + 1_000)
     }),
     resourceBudget: budget,
-    routePlugins: [pairingRegistration, protectedRoute()],
+    routePlugins: [
+      pairingRegistration,
+      createHostDeckCsrfRouteRegistration({ audit: executor, csrf: csrfPolicy }),
+      protectedRoute()
+    ],
     tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
       localOrigin,
       readRemoteAdmission() {
@@ -763,6 +913,43 @@ function deriveSourceKey(source: string): string {
 function requireSingleHeader(value: string | string[] | undefined): string {
   if (typeof value !== "string") throw new TypeError("Expected one response header.");
   return value;
+}
+
+function browserResponse(
+  status: number,
+  headers: Readonly<Record<string, number | string | string[] | undefined>>,
+  body: string
+): BrowserPairingResponsePort {
+  const encoded = new TextEncoder().encode(body);
+  let read = false;
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    headers: {
+      get(name) {
+        const value = headers[name.toLowerCase()];
+        if (typeof value === "string") return value;
+        if (typeof value === "number") return String(value);
+        if (name.toLowerCase() === "content-length") {
+          return String(encoded.byteLength);
+        }
+        return null;
+      }
+    },
+    body: {
+      getReader() {
+        return {
+          async read() {
+            if (read) return { done: true };
+            read = true;
+            return { done: false, value: encoded };
+          },
+          async cancel() {},
+          releaseLock() {}
+        };
+      }
+    }
+  };
 }
 
 function assertSecretsAbsentFromSqlite(

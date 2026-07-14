@@ -1,14 +1,24 @@
+import { Buffer } from "node:buffer";
 import {
   type ApiSession,
+  defaultResourceBudget,
   type HostStatusResponse,
+  pairingClientLabelSchema,
   type RemoteIngressPublicState,
   remoteIngressPublicStateSchema,
   type SessionListResponse,
   type StartSessionResponse,
+  selectedPairingLinkSchema,
+  selectedPairingPermissionSchema,
   type WriteResponse
 } from "@hostdeck/contracts";
+import QRCode from "qrcode";
 import type { CliFailure } from "./errors.js";
-import type { LockCommandResult, PairingCommandResult } from "./local-admin.js";
+import { internalFailure } from "./errors.js";
+import type { LockCommandResult } from "./local-admin.js";
+import type { PairingLinkCommandResult } from "./pairing-link-client.js";
+
+export type TerminalQrRenderer = (link: string) => Promise<string>;
 
 export function renderHelp(): string {
   return [
@@ -20,7 +30,7 @@ export function renderHelp(): string {
     "  codexdeck send SESSION TEXT...",
     "  codexdeck attach SESSION",
     "  codexdeck stop SESSION",
-    "  codexdeck pair [--label LABEL] [--ttl-minutes MINUTES] [--read-only] [--json]",
+    "  codexdeck pair [--label LABEL] [--read-only | --write]",
     "  codexdeck lock [--reason TEXT] [--json]",
     "  codexdeck unlock [--json]",
     "  codexdeck remote status|enable|disable [--json]",
@@ -93,20 +103,63 @@ export function renderServeStopped(): string {
   return "HostDeck daemon stopped.\n";
 }
 
-export function renderPairingCode(response: PairingCommandResult, json: boolean): string {
-  if (json) {
-    return `${JSON.stringify(response, null, 2)}\n`;
+export async function renderPairingLink(
+  response: PairingLinkCommandResult,
+  renderQr: TerminalQrRenderer = renderTerminalQr
+): Promise<string> {
+  if (
+    !selectedPairingLinkSchema.safeParse(response.link).success ||
+    !selectedPairingPermissionSchema.safeParse(response.permission).success ||
+    !pairingClientLabelSchema.safeParse(response.client_label).success ||
+    !Number.isFinite(Date.parse(response.expires_at))
+  ) {
+    throw internalFailure("Pairing-link rendering input is invalid.");
   }
 
-  return [
-    "Pairing code created.",
-    `Code: ${response.code}`,
+  let qr: string;
+  try {
+    qr = await renderQr(response.link);
+  } catch {
+    throw internalFailure("Terminal QR rendering failed.");
+  }
+  if (
+    typeof qr !== "string" ||
+    qr.length === 0 ||
+    qr.includes("\0") ||
+    Buffer.byteLength(qr, "utf8") > defaultResourceBudget.cli_response_max_bytes
+  ) {
+    throw internalFailure("Terminal QR rendering produced invalid output.");
+  }
+
+  const output = [
+    "Pairing link created.",
+    "Scan with the phone:",
+    qr.endsWith("\n") ? qr.slice(0, -1) : qr,
+    "Open instead:",
+    response.link,
     `Permission: ${response.permission}`,
+    ...(response.client_label === null ? [] : [`Label: ${response.client_label}`]),
     `Expires: ${response.expires_at}`,
-    `Pairing ID: ${response.pairing_id}`,
-    "No device token was created or stored by this command.",
+    "This link is one-time and is not saved by HostDeck.",
     ""
   ].join("\n");
+  if (Buffer.byteLength(output, "utf8") > defaultResourceBudget.cli_response_max_bytes) {
+    throw internalFailure("Terminal pairing output exceeds its selected limit.");
+  }
+  return output;
+}
+
+async function renderTerminalQr(link: string): Promise<string> {
+  try {
+    return await QRCode.toString(link, {
+      type: "terminal",
+      small: true,
+      errorCorrectionLevel: "M",
+      margin: 1
+    });
+  } catch {
+    throw internalFailure("Terminal QR rendering failed.");
+  }
 }
 
 export function renderLockCommand(response: LockCommandResult, json: boolean): string {

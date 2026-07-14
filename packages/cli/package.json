@@ -16,6 +16,10 @@
   "dependencies": {
     "@hostdeck/contracts": "workspace:*",
     "@hostdeck/server": "workspace:*",
-    "@hostdeck/storage": "workspace:*"
+    "@hostdeck/storage": "workspace:*",
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "@types/qrcode": "1.5.6"
   }
 }
