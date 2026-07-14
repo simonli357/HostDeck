@@ -29,6 +29,7 @@ pnpm test:integration
 pnpm test:web
 pnpm test:tmux
 pnpm exec vitest run packages/cli/src/remote-control-client.test.ts packages/cli/src/remote-cli.test.ts
+pnpm smoke:remote-control
 pnpm smoke:codex-compatibility
 pnpm smoke:codex-ipc
 pnpm smoke:codex-threads

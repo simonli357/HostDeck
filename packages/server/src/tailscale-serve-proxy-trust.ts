@@ -720,7 +720,11 @@ function admittedOriginKind(
   rawHeaders: readonly string[]
 ): TailscaleServeRequestTrustContext["origin_kind"] {
   for (let index = 0; index < rawHeaders.length; index += 2) {
-    if (rawHeaders[index]?.toLowerCase() === "origin") return "same_origin";
+    const name = rawHeaders[index]?.toLowerCase();
+    if (name === hostDeckLocalAdminRequestHeaderName) {
+      return "local_non_browser";
+    }
+    if (name === "origin") return "same_origin";
   }
   return isSafeMethod(method) ? "safe_no_origin" : "local_non_browser";
 }

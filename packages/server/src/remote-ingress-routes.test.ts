@@ -379,6 +379,14 @@ describe("selected remote-ingress API routes", () => {
     const harness = createHarness({ selectedRemote: true });
     await harness.app.ready();
 
+    const localStatus = await harness.app.inject({
+      method: "GET",
+      url: "/api/v1/remote/status",
+      headers: { ...localSelectedHeaders(), ...localAdminHeaders() }
+    });
+    expect(localStatus.statusCode, localStatus.body).toBe(200);
+    expectNoStore(localStatus.headers);
+
     const unpaired = await harness.app.inject({
       method: "GET",
       url: "/api/v1/remote/status",

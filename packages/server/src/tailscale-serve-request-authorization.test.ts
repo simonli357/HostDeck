@@ -23,6 +23,10 @@ import {
   resolveHostDeckRequestAuthentication
 } from "./fastify-request-authentication.js";
 import {
+  hostDeckLocalAdminRequestHeaderName,
+  hostDeckLocalAdminRequestHeaderValue
+} from "./fastify-request-trust.js";
+import {
   createTailscaleServeProxyTrustPolicy,
   type TailscaleServeRemoteAdmissionSnapshot,
   tailscaleServeProxyTrustSnapshot
@@ -119,6 +123,25 @@ describe("Tailscale Serve request authorization composition", () => {
     expect(local.json()).toMatchObject({
       state: "local_admin",
       network_mode: "loopback",
+      transport: "http",
+      permission: "local_admin"
+    });
+    expect(admissionReads).toBe(0);
+
+    const localSignaledRead = await app.inject({
+      headers: {
+        host: new URL(localOrigin).host,
+        [hostDeckLocalAdminRequestHeaderName]:
+          hostDeckLocalAdminRequestHeaderValue
+      },
+      method: "GET",
+      url: "/admin-read"
+    });
+    expect(localSignaledRead.statusCode, localSignaledRead.body).toBe(200);
+    expect(localSignaledRead.json()).toMatchObject({
+      state: "local_admin",
+      network_mode: "loopback",
+      origin_kind: "local_non_browser",
       transport: "http",
       permission: "local_admin"
     });
@@ -491,6 +514,16 @@ function authorizationRoutes(
       }
       app.post(
         "/admin",
+        {
+          async preHandler(request) {
+            requireHostDeckRequestAuthentication(request, "local_admin");
+          },
+          schema: { response: { 200: selectedRequestAuthenticationContextSchema } }
+        },
+        async (request) => resolveHostDeckRequestAuthentication(request)
+      );
+      app.get(
+        "/admin-read",
         {
           async preHandler(request) {
             requireHostDeckRequestAuthentication(request, "local_admin");
