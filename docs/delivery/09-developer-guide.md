@@ -87,25 +87,25 @@ Supported config inputs:
 
 ## Foreground Service Behavior
 
-`codexdeck serve` is the intended foreground daemon command once the runnable binary path exists. The service code currently:
+`codexdeck serve` is the intended foreground daemon command once the runnable binary path exists. The existing source service is the historical custom-listener composition pending `IFC-V1-067`, not the selected production composition. It currently:
 
 - opens the configured local SQLite database and runs migrations;
 - resolves absolute non-overlapping local paths, acquires the state lease before config/runtime/database mutation, and enforces `0700` directories plus `0600` database/lease files;
 - validates settings, network bind, tmux discovery, and restart reconciliation before reporting ready;
 - binds localhost by default on port `3777`;
-- exposes registered HTTP route families for host status, sessions, output replay/stream, writes, pairing, security, and network state;
+- exposes historical custom-listener route families, including direct-LAN network state; those registrations are excluded from the selected server package-root surface and are not selected V1 behavior;
 - keeps local-admin CLI writes limited to loopback non-browser requests;
 - requires browser writes to use the paired device cookie plus `X-HostDeck-CSRF`;
-- rejects dashboard unlock and LAN mutation paths in V1;
+- keeps dashboard unlock rejected; historical LAN mutation code remains isolated for disposition rather than selected use;
 - closes the HTTP listener and storage handle on service shutdown.
 
 Long-running service wrapping is not implemented yet. Use foreground mode during development and keep OS service wrapper instructions out of release docs until `REL-V1-006` validates them.
 
-## LAN And Safety Notes
+## Remote And Safety Notes
 
-- Default bind is localhost-only.
-- `codexdeck lan enable --bind-host 0.0.0.0` changes stored LAN/bind settings through the local-admin path, but daemon listener changes require restart or future controlled rebind.
-- `codexdeck lan disable` restores localhost settings.
+- The selected production listener boundary is localhost-only; Tailscale Serve will proxy private HTTPS to that loopback listener.
+- The selected source CLI rejects `codexdeck lan`; direct-LAN/custom-CA commands are historical and unsupported for remote V1.
+- `codexdeck remote status`, `remote enable`, and `remote disable` remain unimplemented until `IFC-V1-076`; do not infer availability from the manifest alone.
 - `codexdeck unlock` is CLI-only in V1; dashboard unlock remains rejected.
 - Pairing codes, device tokens, and CSRF tokens are stored only as hashes in local SQLite.
 

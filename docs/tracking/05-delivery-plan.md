@@ -7,7 +7,7 @@ Owns milestone, module maturity, production passes, and release truth.
 - Current pass: selected runtime integration plus Tailscale-first remote-access foundation and production host interface.
 - Current milestone: M1 selected foundation is complete; M2 real structured vertical and M3 remote host interface are in progress.
 - Release state: no-go; selected production path is not implemented.
-- Next exit: `IFC-V1-075` removes the historical LAN/certificate route surface, then the observer, Serve manager, proxy trust, and remote application path can compose against complete contracts/storage.
+- Next exit: `IFC-V1-071` implements the bounded read-only Tailscale observer, followed by ownership-safe Serve management, proxy trust, and remote application composition against the completed contracts/storage and 35-route manifest.
 
 ## Milestones
 
