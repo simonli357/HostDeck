@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-070` Spike exact Tailscale profile/Serve remote-ingress behavior | ready | none | Every changed remote contract and implementation leaf depends on real versioned profile, Serve, proxy, SSE, phone, permission, and noninterference evidence. |
+| 1 | `FND-V1-018` Define normalized remote-ingress contracts and fixtures | ready | none | Converts the completed 1.98.8 profile/Serve/proxy/phone spike into strict redacted contracts consumed by storage, observer, trust, manifest, and mobile-state work. |
 | 2 | `IFC-V1-069` Implement the bounded projected-event diagnostic read route | ready | none | Exposes the completed retained projection contract through one bounded authenticated read. |
 | 3 | `IFC-V1-060` Implement managed-thread resume metadata API and CLI | ready | none | Exposes the completed exact safe TUI resume contract without executing a phone shell. |
 | 4 | `IFC-V1-043` Implement the read-only usage API and CLI | ready | none | Exposes the completed exact usage capability through the authenticated selected manifest. |
@@ -31,7 +31,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 | 13 | `IFC-V1-044` Implement pending-approval read/respond API and CLI mappings | ready | none | Exposes the completed approval service through the selected read and write boundaries. |
 | 14 | `IFC-V1-045` Implement exact active-turn interrupt API and CLI command | ready | none | Exposes the completed exact-turn interrupt service through the selected write gate. |
 | 15 | `IFC-V1-049` Enforce operation idempotency and concurrency limits | ready | none | Hardens duplicate and concurrent selected writes before aggregate production composition. |
-| 16 | `INT-V1-007` Implement runtime process/socket supervision | ready | none | The accepted structured vertical permits explicit foreground/service ownership work while remote contracts wait on the spike. |
+| 16 | `INT-V1-007` Implement runtime process/socket supervision | ready | none | The accepted structured vertical permits explicit foreground/service ownership work independently of remote contract implementation. |
 | 17 | `IFC-V1-035` Add bounded subscriber queues and revoke/disconnect/archive cleanup | ready | none | Exact active/opening-stream revoke is complete; bounded subscriber ownership can progress independently of the ingress spike. |
 
 ## Intentional Blockers
