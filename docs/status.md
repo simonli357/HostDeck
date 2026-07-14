@@ -250,4 +250,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-031` criteria `47cafb7`, contracts `3c6df02`, storage `bc25473`, certificate owner `7103508`, lifecycle `cb790e6`, routes `f8d9aa8`, and transition hardening `9e6c0b7` are pushed.
 - `IFC-V1-059` exact revoke and active-authority implementation is committed as `276303d`; the frozen `IFC-V1-033` matrix is `e5b2414`, and its automated aggregate plus physical runner are pushed as `b4426c8`.
 - `REL-V1-012` remote-access planning rebaseline is pushed as `2962b61`; planning/scaffold/lint/type/diff checks pass.
+- `IFC-V1-070` exact Tailscale 1.98.8 spike, redacted physical evidence, frozen downstream criteria, block maturity, and queue closure are pushed as `3f01b77`.
 - Next action: execute `FND-V1-018`: derive strict normalized remote-ingress/profile/Serve/proxy/mobile contracts and redacted deterministic fixtures from the frozen 1.98.8 spike before any Tailscale product command or UI implementation.
