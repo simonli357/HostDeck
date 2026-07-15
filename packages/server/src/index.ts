@@ -51,4 +51,5 @@ export * from "./tailscale-observer.js";
 export * from "./tailscale-serve-manager.js";
 export * from "./tailscale-serve-proxy-trust.js";
 export * from "./tailscale-serve-request-authorization.js";
+export * from "./usage-routes.js";
 export * from "./write-routes.js";

@@ -10,6 +10,10 @@ import {
   type StartSessionResponse,
   selectedPairingLinkSchema,
   selectedPairingPermissionSchema,
+  type UsageRateLimitWindow,
+  type UsageSnapshot,
+  type UsageTokenBreakdown,
+  usageSnapshotSchema,
   type WriteResponse
 } from "@hostdeck/contracts";
 import QRCode from "qrcode";
@@ -30,6 +34,7 @@ export function renderHelp(): string {
     "  codexdeck send SESSION TEXT...",
     "  codexdeck attach SESSION",
     "  codexdeck resume SESSION_ID",
+    "  codexdeck usage SESSION_ID [--json]",
     "  codexdeck stop SESSION",
     "  codexdeck pair [--label LABEL] [--read-only | --write]",
     "  codexdeck lock [--reason TEXT] [--json]",
@@ -232,6 +237,105 @@ export function renderRemoteState(
     `Observed: ${state.observed_at ?? "not observed"}`,
     ""
   ].join("\n");
+}
+
+export function renderUsageSnapshot(
+  candidate: UsageSnapshot,
+  json: boolean
+): string {
+  let parsed: ReturnType<typeof usageSnapshotSchema.safeParse>;
+  try {
+    parsed = usageSnapshotSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Usage rendering input is invalid.");
+  }
+  if (!parsed.success) {
+    throw internalFailure("Usage rendering input is invalid.");
+  }
+  const snapshot = parsed.data;
+  const output = json
+    ? `${JSON.stringify(snapshot, null, 2)}\n`
+    : renderUsageText(snapshot);
+  if (
+    output.includes("\0") ||
+    Buffer.byteLength(output, "utf8") >
+      defaultResourceBudget.cli_response_max_bytes
+  ) {
+    throw internalFailure("Usage rendering output exceeds its selected limit.");
+  }
+  return output;
+}
+
+function renderUsageText(snapshot: UsageSnapshot): string {
+  const summary = snapshot.account.summary;
+  const lines = [
+    `Usage: ${snapshot.target.session_id}`,
+    `Runtime: ${snapshot.runtime_version} (generation ${snapshot.connection_generation})`,
+    `Measured: ${snapshot.measured_at}`,
+    "",
+    "Account usage",
+    `Lifetime tokens: ${formatNullableNumber(summary.lifetime_tokens)}`,
+    `Peak daily tokens: ${formatNullableNumber(summary.peak_daily_tokens)}`,
+    `Longest running turn seconds: ${formatNullableNumber(summary.longest_running_turn_seconds)}`,
+    `Current streak days: ${formatNullableNumber(summary.current_streak_days)}`,
+    `Longest streak days: ${formatNullableNumber(summary.longest_streak_days)}`
+  ];
+  if (snapshot.account.daily_buckets === null) {
+    lines.push("Daily usage: not reported");
+  } else if (snapshot.account.daily_buckets.length === 0) {
+    lines.push("Daily usage: no buckets reported");
+  } else {
+    lines.push(`Daily usage: ${snapshot.account.daily_buckets.length} buckets`);
+    for (const bucket of snapshot.account.daily_buckets) {
+      lines.push(`  ${bucket.start_date}: ${bucket.tokens} tokens`);
+    }
+  }
+
+  lines.push("", "Thread usage");
+  if (snapshot.thread.state === "not_observed") {
+    lines.push("Observation: not observed");
+  } else {
+    lines.push(
+      `Observation: ${snapshot.thread.observed_at}`,
+      `Turn: ${snapshot.thread.turn_id}`,
+      formatTokenBreakdown("Total", snapshot.thread.total),
+      formatTokenBreakdown("Last", snapshot.thread.last),
+      `Context window: ${formatNullableNumber(snapshot.thread.model_context_window)}`
+    );
+  }
+
+  lines.push("", "Runtime rate limits");
+  if (snapshot.rate_limits.state === "not_observed") {
+    lines.push("Observation: not observed");
+  } else {
+    lines.push(
+      `Observation: ${snapshot.rate_limits.observed_at}`,
+      formatRateLimitWindow("Primary window", snapshot.rate_limits.primary),
+      formatRateLimitWindow("Secondary window", snapshot.rate_limits.secondary),
+      `Reached type: ${snapshot.rate_limits.reached_type ?? "not reported"}`
+    );
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+function formatNullableNumber(value: number | null): string {
+  return value === null ? "not reported" : String(value);
+}
+
+function formatTokenBreakdown(
+  label: string,
+  value: UsageTokenBreakdown
+): string {
+  return `${label}: total=${value.total_tokens} input=${value.input_tokens} cached_input=${value.cached_input_tokens} output=${value.output_tokens} reasoning_output=${value.reasoning_output_tokens}`;
+}
+
+function formatRateLimitWindow(
+  label: string,
+  value: UsageRateLimitWindow | null
+): string {
+  if (value === null) return `${label}: not reported`;
+  return `${label}: used=${value.used_percent}% duration_minutes=${formatNullableNumber(value.window_duration_minutes)} resets=${value.resets_at ?? "not reported"}`;
 }
 
 export function renderFailure(error: CliFailure): string {

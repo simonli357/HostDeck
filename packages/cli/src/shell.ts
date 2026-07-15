@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type {
   ApiErrorEnvelope,
   ApiSession,
-  SelectedResumeMetadataResponse
+  SelectedResumeMetadataResponse,
+  UsageSnapshot
 } from "@hostdeck/contracts";
 import {
   type RemoteDisableRequest,
@@ -12,7 +13,9 @@ import {
   type SelectedPairRequest,
   selectedPairRequestSchema,
   selectedResumeMetadataResponseSchema,
-  selectedResumeParamsSchema
+  selectedResumeParamsSchema,
+  sessionIdParamsSchema,
+  usageSnapshotSchema
 } from "@hostdeck/contracts";
 import { type HostHttpService, type StartHostHttpServiceInput, startHostHttpService } from "@hostdeck/server";
 import { createHostDeckApiClient, type HostDeckApiClient, type HttpFetch } from "./api-client.js";
@@ -48,6 +51,7 @@ import {
   renderSessionList,
   renderStartSession,
   renderStatus,
+  renderUsageSnapshot,
   renderVersion,
   renderWriteAccepted,
   type TerminalQrRenderer
@@ -60,6 +64,10 @@ import {
   createHostDeckResumeLauncher,
   type HostDeckResumeLauncher
 } from "./resume-launcher.js";
+import {
+  createHostDeckUsageClient,
+  type HostDeckUsageClient
+} from "./usage-client.js";
 
 export interface CliRunResult {
   readonly exitCode: CliExitCode;
@@ -78,6 +86,7 @@ export interface CliRunOptions {
   readonly remoteClient?: HostDeckRemoteControlClient;
   readonly resumeClient?: HostDeckResumeClient;
   readonly resumeLauncher?: HostDeckResumeLauncher;
+  readonly usageClient?: HostDeckUsageClient;
   readonly createOperationId?: (
     action: "disable" | "enable"
   ) => string;
@@ -192,6 +201,23 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
         options.resumeLauncher ?? createHostDeckResumeLauncher();
       await Reflect.apply(launcher.launch, undefined, [metadata.launch]);
       return success("");
+    }
+
+    if (parsed.command.kind === "usage") {
+      const target = parseUsageTarget(parsed.command.session);
+      let usageClient = options.usageClient;
+      if (usageClient === undefined) {
+        const usageClientOptions = { baseUrl: config.baseUrl };
+        if (options.fetch !== undefined) {
+          Object.assign(usageClientOptions, { fetch: options.fetch });
+        }
+        usageClient = createHostDeckUsageClient(usageClientOptions);
+      }
+      const snapshot = parseUsageSnapshot(
+        await Reflect.apply(usageClient.read, undefined, [target]),
+        target
+      );
+      return success(renderUsageSnapshot(snapshot, parsed.command.json));
     }
 
     const localAdmin =
@@ -355,6 +381,40 @@ function parseResumeMetadata(
   if (!parsed.success || parsed.data.session_id !== sessionId) {
     throw internalFailure(
       "HostDeck resume client returned invalid managed-thread metadata."
+    );
+  }
+  return parsed.data;
+}
+
+function parseUsageTarget(candidate: string): string {
+  const parsed = sessionIdParamsSchema.safeParse({ session_id: candidate });
+  if (!parsed.success) {
+    throw usageFailure(
+      "Usage requires one valid managed session id.",
+      "session"
+    );
+  }
+  return parsed.data.session_id;
+}
+
+function parseUsageSnapshot(
+  candidate: unknown,
+  sessionId: string
+): UsageSnapshot {
+  let parsed: ReturnType<typeof usageSnapshotSchema.safeParse>;
+  try {
+    parsed = usageSnapshotSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure(
+      "HostDeck usage client returned invalid managed-session data."
+    );
+  }
+  if (
+    !parsed.success ||
+    parsed.data.target.session_id !== sessionId
+  ) {
+    throw internalFailure(
+      "HostDeck usage client returned invalid managed-session data."
     );
   }
   return parsed.data;
