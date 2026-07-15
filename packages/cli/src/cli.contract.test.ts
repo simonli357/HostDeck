@@ -146,6 +146,18 @@ describe("CLI shell contract", () => {
         }
       },
       {
+        label: "skills",
+        args: ["skills", "sess_cli_contract_01", "--json"],
+        expected: {
+          command: {
+            kind: "skills",
+            session: "sess_cli_contract_01",
+            json: true
+          },
+          configFlags: {}
+        }
+      },
+      {
         label: "stop",
         args: ["stop", "contract-demo"],
         expected: { command: { kind: "stop", session: "contract-demo" }, configFlags: {} }
@@ -190,6 +202,7 @@ describe("CLI shell contract", () => {
     expect(help.stdout).toContain("codexdeck [--api-url URL | --host HOST --port PORT] status [--json]");
     expect(help.stdout).toContain("codexdeck resume SESSION_ID");
     expect(help.stdout).toContain("codexdeck usage SESSION_ID [--json]");
+    expect(help.stdout).toContain("codexdeck skills SESSION_ID [--json]");
     expect(help.stdout).not.toMatch(/codexdeck lan(?:\s|$)/iu);
     expect(help.stdout).toContain("Global connection and state options must appear before the command.");
     expect(version).toMatchObject({

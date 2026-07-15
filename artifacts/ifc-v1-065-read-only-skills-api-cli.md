@@ -38,7 +38,40 @@ Expose the completed structured skills runtime through the exact authenticated s
 
 ## Evidence
 
-Pending implementation and validation.
+### Implemented Boundary
+
+- `@hostdeck/server` now owns one standalone `selected-skills-read` registration. It snapshots only exact `state.get` and `skills.list` methods, resolves the Codex thread from one schema-validated selected mapping/projection, creates an internal skills intent, passes the managed request signal, reparses the complete response, and rejects cross-session/thread output.
+- The route binds only `GET /api/v1/sessions/:session_id/skills`, rejects all query fields and adjacent methods/paths, disables implicit `HEAD`, sets `no-store`, and authenticates before params, state, or runtime access. Its manifest assertion fixes read authority, no CSRF/lock/audit, no credential effect, and `IFC-V1-065` ownership.
+- Every typed control failure has a fixed public status/code/message. Missing, unreadable, stale, mismatched, unsupported, unavailable, overloaded, storage-failed, protocol-invalid, malformed-output, and unexpected states remain bounded and cause-free.
+- `@hostdeck/cli` now owns a dedicated exact-loopback skills client and `codexdeck skills SESSION_ID [--json]`. The branch validates the target before client access and executes before legacy API/local-admin construction. It performs one bounded GET, never retries, strips server details from typed errors, and rejects malformed, path-bearing, oversized, or cross-session output before rendering.
+- Text rendering distinguishes content, empty, partial, and error states; reports exact skill/error counts; shows deterministic scope/enabled/nullable-description summaries; and keeps error details redacted. C0/ANSI, C1, line-separator, and bidirectional controls are escaped as terminal-safe literals. JSON preserves the exact public contract. Both forms are reparsed and byte-bounded.
+
+### Hardening Outcome
+
+| Area | Outcome |
+| --- | --- |
+| Target and read semantics | Pass: the caller can provide only one session id; query cwd/thread/reload overrides reject. The route creates a valid unique internal skills intent, validates durable mapping/projection identity, calls one receiverless runtime read with one request signal, and reparses the exact target. |
+| Route and authorization | Pass: seven direct route cases cover strict accessor-free port snapshots, canonical/adjacent route inventory, real control-service composition with only the selected cwd, auth-before-validation, loopback plus paired read/write access, Tailscale identity non-authority, missing/corrupt state, all 10 typed control failures, malformed/path-bearing output, and internal-error observation. |
+| CLI client and surface | Pass: 14 client/command cases cover exact accessor-free options, loopback-only URL policy, one no-store GET, invalid targets, parser/help exclusions, receiverless handoff, no legacy/local-admin access, all four public states, sanitized typed/untyped/fetch/JSON failures, hostile/path-bearing/oversized output, no retry, and exact JSON. |
+| Rendering | Pass: direct command assertions cover deterministic content, null and empty descriptions, empty/partial/error states, redacted error counts, output byte exhaustion, and terminal control escaping without invented paths or raw error details. |
+| Mutation/privacy inspection | Pass: the standalone skills route/client import no write gate, audit executor, filesystem, process, shell, terminal, timer, retry, raw protocol method, reload option, dependency metadata, prompt, icon, or raw error-message path. Cwd exists only inside selected mapping/projection consistency and the pre-existing runtime service. Manifest `audit === null`, authentication names, retryability fields, and one guarded local TypeError message comparison are the only matching production terms. No dependency, package manifest, or lockfile changed. |
+
+### Validation
+
+| Gate | Result |
+| --- | --- |
+| Focused skills route/client/CLI | Pass: 3 files, 21 tests. |
+| Focused adjacent skills runtime | Pass: adapter/control/route/client/CLI, 5 files and 39 tests; the skills contract also passes in the full contract suite. |
+| `pnpm test:unit` | Pass: 141 files and 1,330 tests; 22 opt-in device/smoke files and 36 tests skipped. |
+| `pnpm test:contract` | Pass: 30 files, 257 tests, including the updated all-V1-CLI-command scenario. |
+| `pnpm test:integration` | Pass: 2 files, 16 tests. |
+| `pnpm test:web` | Pass: 3 files, 33 tests. |
+| `pnpm typecheck` | Pass across the workspace. |
+| `pnpm lint` | Pass across 415 files plus all 9 package exports. |
+| Scaffold/planning | Pass: 9 packages, 18 root scripts; 212 tasks, 84 requirements, 649 dependencies, and 13 queued tasks before closure. |
+| Exact runtime | Pass: isolated Codex 0.144.0 verifies 671 generated binding files at SHA-256 `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`; real no-model structured skills smoke passes 1 test. The default Codex 0.144.3 installation was not changed. |
+| Install/diff | `pnpm install --offline --frozen-lockfile`, targeted Biome, manual source/output review, forbidden-path/privacy scans, and `git diff --check` pass. The documented packaging gap was rechecked: `pnpm exec codexdeck --help` still reports command not found. |
+| `pnpm audit --prod` | Unavailable: npm's retired legacy audit endpoint returned HTTP 410 and directed clients to the bulk advisory endpoint. No dependency or lockfile changed. |
 
 ## Downstream Ownership
 

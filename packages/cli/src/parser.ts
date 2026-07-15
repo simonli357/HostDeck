@@ -11,6 +11,7 @@ export type ParsedCliCommand =
   | { readonly kind: "attach"; readonly session: string }
   | { readonly kind: "resume"; readonly session: string }
   | { readonly kind: "usage"; readonly session: string; readonly json: boolean }
+  | { readonly kind: "skills"; readonly session: string; readonly json: boolean }
   | { readonly kind: "stop"; readonly session: string }
   | {
       readonly kind: "pair";
@@ -237,6 +238,17 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
       command: {
         kind: "usage",
         session: singleSessionArgument("usage", rest),
+        json
+      },
+      configFlags
+    };
+  }
+
+  if (command === "skills") {
+    return {
+      command: {
+        kind: "skills",
+        session: singleSessionArgument("skills", rest),
         json
       },
       configFlags

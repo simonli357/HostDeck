@@ -3,6 +3,7 @@ import type {
   ApiErrorEnvelope,
   ApiSession,
   SelectedResumeMetadataResponse,
+  SkillsSnapshot,
   UsageSnapshot
 } from "@hostdeck/contracts";
 import {
@@ -15,6 +16,7 @@ import {
   selectedResumeMetadataResponseSchema,
   selectedResumeParamsSchema,
   sessionIdParamsSchema,
+  skillsSnapshotSchema,
   usageSnapshotSchema
 } from "@hostdeck/contracts";
 import { type HostHttpService, type StartHostHttpServiceInput, startHostHttpService } from "@hostdeck/server";
@@ -49,6 +51,7 @@ import {
   renderServeStarted,
   renderServeStopped,
   renderSessionList,
+  renderSkillsSnapshot,
   renderStartSession,
   renderStatus,
   renderUsageSnapshot,
@@ -64,6 +67,10 @@ import {
   createHostDeckResumeLauncher,
   type HostDeckResumeLauncher
 } from "./resume-launcher.js";
+import {
+  createHostDeckSkillsClient,
+  type HostDeckSkillsClient
+} from "./skills-client.js";
 import {
   createHostDeckUsageClient,
   type HostDeckUsageClient
@@ -86,6 +93,7 @@ export interface CliRunOptions {
   readonly remoteClient?: HostDeckRemoteControlClient;
   readonly resumeClient?: HostDeckResumeClient;
   readonly resumeLauncher?: HostDeckResumeLauncher;
+  readonly skillsClient?: HostDeckSkillsClient;
   readonly usageClient?: HostDeckUsageClient;
   readonly createOperationId?: (
     action: "disable" | "enable"
@@ -218,6 +226,23 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
         target
       );
       return success(renderUsageSnapshot(snapshot, parsed.command.json));
+    }
+
+    if (parsed.command.kind === "skills") {
+      const target = parseSkillsTarget(parsed.command.session);
+      let skillsClient = options.skillsClient;
+      if (skillsClient === undefined) {
+        const skillsClientOptions = { baseUrl: config.baseUrl };
+        if (options.fetch !== undefined) {
+          Object.assign(skillsClientOptions, { fetch: options.fetch });
+        }
+        skillsClient = createHostDeckSkillsClient(skillsClientOptions);
+      }
+      const snapshot = parseSkillsSnapshot(
+        await Reflect.apply(skillsClient.list, undefined, [target]),
+        target
+      );
+      return success(renderSkillsSnapshot(snapshot, parsed.command.json));
     }
 
     const localAdmin =
@@ -415,6 +440,37 @@ function parseUsageSnapshot(
   ) {
     throw internalFailure(
       "HostDeck usage client returned invalid managed-session data."
+    );
+  }
+  return parsed.data;
+}
+
+function parseSkillsTarget(candidate: string): string {
+  const parsed = sessionIdParamsSchema.safeParse({ session_id: candidate });
+  if (!parsed.success) {
+    throw usageFailure(
+      "Skills requires one valid managed session id.",
+      "session"
+    );
+  }
+  return parsed.data.session_id;
+}
+
+function parseSkillsSnapshot(
+  candidate: unknown,
+  sessionId: string
+): SkillsSnapshot {
+  let parsed: ReturnType<typeof skillsSnapshotSchema.safeParse>;
+  try {
+    parsed = skillsSnapshotSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure(
+      "HostDeck skills client returned invalid managed-session data."
+    );
+  }
+  if (!parsed.success || parsed.data.target.session_id !== sessionId) {
+    throw internalFailure(
+      "HostDeck skills client returned invalid managed-session data."
     );
   }
   return parsed.data;

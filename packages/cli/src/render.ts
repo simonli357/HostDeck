@@ -7,9 +7,11 @@ import {
   type RemoteIngressPublicState,
   remoteIngressPublicStateSchema,
   type SessionListResponse,
+  type SkillsSnapshot,
   type StartSessionResponse,
   selectedPairingLinkSchema,
   selectedPairingPermissionSchema,
+  skillsSnapshotSchema,
   type UsageRateLimitWindow,
   type UsageSnapshot,
   type UsageTokenBreakdown,
@@ -35,6 +37,7 @@ export function renderHelp(): string {
     "  codexdeck attach SESSION",
     "  codexdeck resume SESSION_ID",
     "  codexdeck usage SESSION_ID [--json]",
+    "  codexdeck skills SESSION_ID [--json]",
     "  codexdeck stop SESSION",
     "  codexdeck pair [--label LABEL] [--read-only | --write]",
     "  codexdeck lock [--reason TEXT] [--json]",
@@ -264,6 +267,67 @@ export function renderUsageSnapshot(
     throw internalFailure("Usage rendering output exceeds its selected limit.");
   }
   return output;
+}
+
+export function renderSkillsSnapshot(
+  candidate: SkillsSnapshot,
+  json: boolean
+): string {
+  let parsed: ReturnType<typeof skillsSnapshotSchema.safeParse>;
+  try {
+    parsed = skillsSnapshotSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Skills rendering input is invalid.");
+  }
+  if (!parsed.success) {
+    throw internalFailure("Skills rendering input is invalid.");
+  }
+  const snapshot = parsed.data;
+  const output = json
+    ? `${JSON.stringify(snapshot, null, 2)}\n`
+    : renderSkillsText(snapshot);
+  if (
+    output.includes("\0") ||
+    Buffer.byteLength(output, "utf8") >
+      defaultResourceBudget.cli_response_max_bytes
+  ) {
+    throw internalFailure("Skills rendering output exceeds its selected limit.");
+  }
+  return output;
+}
+
+function renderSkillsText(snapshot: SkillsSnapshot): string {
+  const lines = [
+    `Skills: ${snapshot.target.session_id}`,
+    `Runtime: ${snapshot.runtime_version} (generation ${snapshot.connection_generation})`,
+    `Observed: ${snapshot.observed_at}`,
+    `State: ${snapshot.state}`,
+    `Skill count: ${snapshot.skills.length}`,
+    `Skill errors: ${snapshot.error_count}${snapshot.error_count === 0 ? "" : " (details redacted)"}`
+  ];
+  if (snapshot.skills.length === 0) {
+    lines.push("", "No skills reported.", "");
+    return lines.join("\n");
+  }
+
+  lines.push("");
+  for (const skill of snapshot.skills) {
+    lines.push(
+      `[${skill.enabled ? "enabled" : "disabled"}] ${escapeTerminalText(skill.name)} (${skill.scope})`,
+      `Description: ${skill.description === null || skill.description.length === 0 ? "not provided" : escapeTerminalText(skill.description)}`
+    );
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+function escapeTerminalText(value: string): string {
+  const escaped = JSON.stringify(value);
+  return escaped
+    .slice(1, -1)
+    .replace(/[\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/gu, (character) =>
+      `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`
+    );
 }
 
 function renderUsageText(snapshot: UsageSnapshot): string {
