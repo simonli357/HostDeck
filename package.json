@@ -35,6 +35,7 @@
     "smoke:codex-interrupt": "HOSTDECK_REQUIRE_CODEX_INTERRUPT_SMOKE=1 vitest run packages/server/src/codex-interrupt-control.smoke.test.ts",
     "smoke:codex-vertical": "HOSTDECK_REQUIRE_CODEX_VERTICAL_SMOKE=1 vitest run packages/server/src/codex-structured-vertical.smoke.test.ts",
     "smoke:remote-control": "HOSTDECK_REQUIRE_REMOTE_CONTROL_SMOKE=1 vitest run packages/cli/src/remote-control.smoke.test.ts",
+    "smoke:pairing-android": "HOSTDECK_REQUIRE_PAIRING_ANDROID_SMOKE=1 vitest run packages/cli/src/pairing-android.smoke.test.ts",
     "smoke:android-security": "HOSTDECK_REQUIRE_ANDROID_SECURITY_ACCEPTANCE=1 vitest run packages/server/src/security-acceptance-android.smoke.test.ts",
     "test:web": "vitest run packages/web/src/view-models.test.ts packages/web/src/pairing-bootstrap.test.ts packages/test-fixtures/src/fixtures.test.ts",
     "test:browser:pairing": "playwright test --config playwright.pairing.config.ts",

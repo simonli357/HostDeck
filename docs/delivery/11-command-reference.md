@@ -41,6 +41,7 @@ pnpm exec vitest run tests/service-mode-smoke.test.ts
 ## Physical Android Security Acceptance
 
 ```bash
+pnpm smoke:pairing-android
 pnpm smoke:android-security
 ```
 
