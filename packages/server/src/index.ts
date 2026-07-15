@@ -31,6 +31,7 @@ export * from "./managed-thread-service.js";
 export * from "./output-reader.js";
 export * from "./pairing-routes.js";
 export * from "./pending-turn-settings.js";
+export * from "./projected-event-routes.js";
 export * from "./projection-fanout-hub.js";
 export * from "./projection-replay-live-handoff.js";
 export * from "./read-routes.js";
