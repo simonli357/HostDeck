@@ -2,11 +2,11 @@
 
 Date: 2026-07-11
 
-Status: complete and validated.
+Status: complete and validated. Catalog counts below describe this leaf at closure; `DAT-V1-032` later rebaselined selected remote actions and `IFC-V1-040` catalog-backed `session_start`.
 
 ## Outcome
 
-- The durable selected catalog now has exactly 20 actions, including the exact ten-action security subset and catalog-backed `csrf_bootstrap` manifest ownership.
+- At this leaf's closure, the durable selected catalog had exactly 20 actions, including the exact ten-action security subset and catalog-backed `csrf_bootstrap` manifest ownership.
 - Migration 010 preserves every prior field and JSON byte, restores both indexes and all append-only/state triggers, and marks migrated rows with nullable legacy provenance. Every current security repository write stores `security_schema_version = 1`; non-security and migrated legacy rows remain unversioned.
 - Current security writes enforce truthful actors, exact targets, strict phase-specific version-1 summaries, and cause-free bounded errors. Pairing-client identity is valid only for `pair_claim`.
 - Legacy security rows remain readable even when their former generic summary contains a `schema_version` key. Versioned rows are revalidated strictly on every read, and corrupt security reads/writes do not expose native causes or variable identifiers.
@@ -73,7 +73,7 @@ Accepted records require their safe intent fields. Succeeded records require the
 | Criterion | Required evidence |
 | --- | --- |
 | Forward-only catalog migration | Migration 010 rebuilds only `selected_audit_events`, adds `csrf_bootstrap` to the action constraint, preserves every prior row byte-for-byte, and recreates the primary/unique constraints, both retention indexes, and all append-only/state triggers. Published migrations remain byte-identical. Fresh and 009 databases pass; failed rebuild rolls back. |
-| Complete selected catalog | Core exposes exactly 20 total selected audit actions and the exact 10-action security subset with no duplicates. CSRF bootstrap becomes catalog-backed in the selected API manifest; only `session_start` remains an owned extension. |
+| Complete selected catalog | At this leaf's closure, core exposed exactly 20 total selected audit actions and the exact 10-action security subset with no duplicates. CSRF bootstrap became catalog-backed in the selected API manifest; `session_start` remained the downstream `IFC-V1-040` extension at that time. |
 | Truthful actors | A strict unpaired pairing-client actor is added without breaking stored legacy actors. Action-specific current writes reject system impersonation, paired identity before claim, dashboard local-admin claims, read-only mutation outside CSRF bootstrap, wrong origin shape, and CLI/device/origin contradictions. |
 | Exact targets | CSRF bootstrap targets the same dashboard actor device; revoke targets the named device; all other security actions target `local_host`. Wrong target type or mismatched authenticated device rejects before SQLite. |
 | Safe current-write summaries | Each action accepts only its frozen version-1 fields and phase-appropriate required values. Unknown/missing versions, unknown keys, nested values, wrong literals, malformed ids/times/fingerprints, unsafe integers, and action/summary mismatches reject without a row. |

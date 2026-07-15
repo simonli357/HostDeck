@@ -2,7 +2,7 @@
 
 Date: 2026-07-15
 
-Status: criteria frozen before implementation.
+Status: complete. Implementation `6ec6d39`.
 
 ## Scope
 
@@ -61,3 +61,43 @@ Implement the selected managed-session creation boundary from durable audit thro
 - Full unit, contract, integration, web, all-package typecheck, lint/exports, scaffold, planning, frozen install, exact Codex binding, and production audit gates.
 - A bounded exact-0.144.0 smoke starts and archives one isolated managed thread when the environment gate is enabled; ordinary tests use no fake readiness claim for that smoke.
 - Manual staged-diff, migration SQL, audit privacy, failure-order, route surface, CLI output/control-character, and no-legacy-fallback inspection.
+
+## Implemented Boundary
+
+- Migration 016 promotes `session_start` into the active and persisted selected audit catalogs without changing prior migration bytes. It rebuilds the append-only table, preserves prior record JSON byte-for-byte, restores both indexes and all four triggers, requires null security provenance, and rejects unsupported actions, invalid provenance, unsafe summaries, and standalone start rejections.
+- A branded selected-write audit executor now covers `session_start` plus the eight selected non-security mutations. It proves accepted and terminal repository trails exactly, dispatches once, never retries, records throws or malformed transitions as incomplete, preserves succeeded mutation truth across response-preparation failure, and suppresses unproven responses.
+- The managed-thread start saga now reports every post-thread branch as `remote_succeeded`, including recovery identity, materialization, mapping, branch capture, finalization, and persisted-identity failures. Known no-thread outcomes remain failed even when failed-recovery persistence itself fails.
+- `POST /api/v1/sessions` is an exact standalone selected registration over the common write gate. It admits loopback local admin and paired HTTPS writers, proves unlocked host and current lifecycle-capable runtime before audit, calls the recoverable service receiverlessly once, returns only strict `201` session-start data, and maps partial outcomes to bounded non-retryable errors.
+- `codexdeck start --name NAME --cwd PATH [--json]` now uses a dedicated direct-loopback client before legacy client/local-admin construction. It generates the operation id internally, sends one exact POST, requires exact `201` and correlated output, sanitizes failures, escapes terminal controls, and exposes no tmux, import, caller-supplied operation/thread id, remote URL, or retry path.
+- One real vertical composes the source CLI, bounded HTTP listener, selected route/gate/audit executor, SQLite repositories, managed saga, and protocol-shaped Codex thread client. Repeating the same operation id cannot issue a second start.
+
+## Hardening Outcome
+
+| Area | Outcome |
+| --- | --- |
+| Catalog and restart | Pass: fresh/prior migration, rollback, prior-row bytes, index/trigger restoration, provenance, strict current/stored records, rejection denial, and reopen/orphan reconciliation pass. The accepted row remains byte-identical after restart. |
+| Audit and dispatch | Pass: all nine common actions, accessor/forgery rejection, exact accepted/terminal proofs, explicit failed/incomplete, throw/malformed conversion, preparation failure, same-operation contention, terminal failure, bounded counters, and no retry pass. |
+| Saga truth | Pass: invalid cwd and duplicate alias pre-dispatch, known no-thread rejection, unknown start, recovered reservation, concrete-thread contradiction, post-thread materialization/storage/mapping/finalization failure, and persisted recovery paths retain the strongest known outcome and dispatch at most once. |
+| Route and authority | Pass: exact manifest/factory/port construction, local loopback and real paired HTTPS writer success, stale CSRF/read-only/lock rejection, complete runtime-state matrix, strict response identity/version, audit failure, malformed service output, and operation replay pass. |
+| CLI | Pass: exact loopback URL and POST, exact `201`, request/response correlation, local operation-id generation, parser/help exclusions, text/JSON output, terminal escaping, sanitized errors, no retry, and legacy/local-admin isolation pass. |
+| Ownership | Pass: no aggregate production registration, browser UI, phone run, package/bin claim, runtime supervision, prompt/control route, or legacy removal was added. |
+
+## Validation Evidence
+
+| Gate | Result |
+| --- | --- |
+| Focused start boundary | Pass: 7 files, 65 tests; strict start contracts add 3 contract tests. |
+| `pnpm test:unit` | Pass: 146 files and 1,378 tests; 22 opt-in device/smoke files and 36 tests skipped. |
+| `pnpm test:contract` | Pass: 31 files, 260 tests. |
+| `pnpm test:integration` | Pass: 3 files, 17 tests, including the new start vertical. |
+| `pnpm test:web` | Pass: 3 files, 33 tests. |
+| Static/repository gates | Root and all-package typechecks, lint/export checks over 425 files and 9 packages, scaffold, planning, frozen offline install, staged diff, migration SQL, privacy/failure-order, and forbidden-surface review pass. |
+| Exact runtime | The isolated Codex 0.144.0 binary verifies all 671 generated binding files at SHA-256 `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`; the real no-model thread lifecycle start/materialize/TUI/archive smoke passes. The default 0.144.3 installation was not changed or accepted as exact evidence. |
+| Supply chain | Frozen offline install passes and the production inventory contains permissive license categories only. `pnpm audit --prod` is unavailable because npm's retired legacy endpoint returns HTTP 410; no dependency or lockfile changed. |
+| Packaging | The source command is proven, but `pnpm exec codexdeck --help` still reports command not found. Runnable packaging remains downstream. |
+
+## Downstream Ownership
+
+- `IFC-V1-046` owns aggregate production registration and selected remote vertical acceptance; `IFC-V1-049` owns replayable operation idempotency and concurrency limits.
+- `IFC-V1-021` and packaging/release leaves own an installed `codexdeck` executable. `FE-V1-019` owns dashboard consumption after the recorded visual selection.
+- This headless leaf required no connected phone. Physical remote-phone behavior remains owned by the aggregate mobile and release gates.
