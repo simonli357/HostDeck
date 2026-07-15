@@ -38,6 +38,8 @@ export * from "./read-routes.js";
 export * from "./remote-ingress-control-service.js";
 export * from "./remote-ingress-routes.js";
 export * from "./restart-reconciler.js";
+export * from "./resume-metadata.js";
+export * from "./resume-routes.js";
 export * from "./security-mutation-audit-executor.js";
 export * from "./security-routes.js";
 export * from "./selected-api-route-manifest.js";

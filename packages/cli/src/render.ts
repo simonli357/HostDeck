@@ -29,6 +29,7 @@ export function renderHelp(): string {
     "  codexdeck list [--json]",
     "  codexdeck send SESSION TEXT...",
     "  codexdeck attach SESSION",
+    "  codexdeck resume SESSION_ID",
     "  codexdeck stop SESSION",
     "  codexdeck pair [--label LABEL] [--read-only | --write]",
     "  codexdeck lock [--reason TEXT] [--json]",

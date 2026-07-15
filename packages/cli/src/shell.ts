@@ -1,18 +1,25 @@
 import { randomUUID } from "node:crypto";
-import type { ApiErrorEnvelope, ApiSession } from "@hostdeck/contracts";
+import type {
+  ApiErrorEnvelope,
+  ApiSession,
+  SelectedResumeMetadataResponse
+} from "@hostdeck/contracts";
 import {
   type RemoteDisableRequest,
   type RemoteEnableRequest,
   remoteDisableRequestSchema,
   remoteEnableRequestSchema,
   type SelectedPairRequest,
-  selectedPairRequestSchema
+  selectedPairRequestSchema,
+  selectedResumeMetadataResponseSchema,
+  selectedResumeParamsSchema
 } from "@hostdeck/contracts";
 import { type HostHttpService, type StartHostHttpServiceInput, startHostHttpService } from "@hostdeck/server";
 import { createHostDeckApiClient, type HostDeckApiClient, type HttpFetch } from "./api-client.js";
 import { type LoadCliConfigOptions, loadCliConfig } from "./config.js";
 import {
   apiFailure,
+  clientOperationFailure,
   configFailure,
   internalFailure,
   toCliFailure,
@@ -45,6 +52,14 @@ import {
   renderWriteAccepted,
   type TerminalQrRenderer
 } from "./render.js";
+import {
+  createHostDeckResumeClient,
+  type HostDeckResumeClient
+} from "./resume-client.js";
+import {
+  createHostDeckResumeLauncher,
+  type HostDeckResumeLauncher
+} from "./resume-launcher.js";
 
 export interface CliRunResult {
   readonly exitCode: CliExitCode;
@@ -61,6 +76,8 @@ export interface CliRunOptions {
   readonly localAdmin?: LocalAdmin;
   readonly pairingClient?: HostDeckPairingLinkClient;
   readonly remoteClient?: HostDeckRemoteControlClient;
+  readonly resumeClient?: HostDeckResumeClient;
+  readonly resumeLauncher?: HostDeckResumeLauncher;
   readonly createOperationId?: (
     action: "disable" | "enable"
   ) => string;
@@ -149,6 +166,32 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
           options.renderPairingQr
         )
       );
+    }
+
+    if (parsed.command.kind === "resume") {
+      const target = parseResumeTarget(parsed.command.session);
+      let resumeClient = options.resumeClient;
+      if (resumeClient === undefined) {
+        const resumeClientOptions = { baseUrl: config.baseUrl };
+        if (options.fetch !== undefined) {
+          Object.assign(resumeClientOptions, { fetch: options.fetch });
+        }
+        resumeClient = createHostDeckResumeClient(resumeClientOptions);
+      }
+      const metadata = parseResumeMetadata(
+        await Reflect.apply(resumeClient.read, undefined, [target]),
+        target
+      );
+      if (!metadata.available || metadata.launch === null) {
+        throw clientOperationFailure(
+          "capability_unavailable",
+          "Managed session is not available for laptop resume."
+        );
+      }
+      const launcher =
+        options.resumeLauncher ?? createHostDeckResumeLauncher();
+      await Reflect.apply(launcher.launch, undefined, [metadata.launch]);
+      return success("");
     }
 
     const localAdmin =
@@ -289,6 +332,32 @@ function createRemoteOperationId(action: "disable" | "enable"): string {
 
 function createPairOperationId(): string {
   return `op_pair_request_${randomUUID().replaceAll("-", "")}`;
+}
+
+function parseResumeTarget(candidate: string): string {
+  const parsed = selectedResumeParamsSchema.safeParse({
+    session_id: candidate
+  });
+  if (!parsed.success) {
+    throw usageFailure(
+      "Laptop resume requires one valid managed session id.",
+      "session"
+    );
+  }
+  return parsed.data.session_id;
+}
+
+function parseResumeMetadata(
+  candidate: unknown,
+  sessionId: string
+): SelectedResumeMetadataResponse {
+  const parsed = selectedResumeMetadataResponseSchema.safeParse(candidate);
+  if (!parsed.success || parsed.data.session_id !== sessionId) {
+    throw internalFailure(
+      "HostDeck resume client returned invalid managed-thread metadata."
+    );
+  }
+  return parsed.data;
 }
 
 async function resolveManagedSession(client: HostDeckApiClient, target: string): Promise<ApiSession> {

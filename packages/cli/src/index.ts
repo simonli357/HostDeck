@@ -7,4 +7,6 @@ export * from "./pairing-link-client.js";
 export * from "./parser.js";
 export * from "./remote-control-client.js";
 export * from "./render.js";
+export * from "./resume-client.js";
+export * from "./resume-launcher.js";
 export * from "./shell.js";

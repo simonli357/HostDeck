@@ -13,6 +13,7 @@ export * from "./security-audit.js";
 export * from "./selected-event-page.js";
 export * from "./selected-mobile.js";
 export * from "./selected-operations.js";
+export * from "./selected-resume.js";
 export * from "./selected-runtime.js";
 export * from "./selected-storage.js";
 export * from "./storage.js";

@@ -9,6 +9,7 @@ export type ParsedCliCommand =
   | { readonly kind: "list"; readonly json: boolean }
   | { readonly kind: "send"; readonly session: string; readonly text: string }
   | { readonly kind: "attach"; readonly session: string }
+  | { readonly kind: "resume"; readonly session: string }
   | { readonly kind: "stop"; readonly session: string }
   | {
       readonly kind: "pair";
@@ -215,6 +216,19 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
 
   if (command === "attach") {
     return { command: { kind: "attach", session: singleSessionArgument("attach", rest) }, configFlags };
+  }
+
+  if (command === "resume") {
+    if (json) {
+      throw usageFailure("The resume command does not support --json.");
+    }
+    return {
+      command: {
+        kind: "resume",
+        session: singleSessionArgument("resume", rest)
+      },
+      configFlags
+    };
   }
 
   if (command === "stop") {
