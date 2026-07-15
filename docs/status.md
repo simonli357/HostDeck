@@ -302,5 +302,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-060` exact resume contracts, reader, route, loopback CLI client, no-shell launcher, tests, and evidence are pushed as `d4d6c6f`.
 - `IFC-V1-043` exact usage route, loopback CLI client, truthful renderers, tests, and evidence are pushed as `669e26c`; this owner-doc closure advances the queue to `IFC-V1-065`.
 - `IFC-V1-065` hardening criteria are `44ae19a`; the exact skills route, loopback CLI client, four-state renderers, tests, and evidence are pushed as `baed9b5`; this owner-doc closure advances the queue to `IFC-V1-040`.
-- `IFC-V1-040` hardening criteria are pushed as `4a8633e`; implementation is committed as `6ec6d39`. This owner-doc closure advances the selected queue to `IFC-V1-061`.
+- `IFC-V1-040` hardening criteria are pushed as `4a8633e`, implementation as `6ec6d39`, and owner-doc closure as `13bcc13`. The selected queue now advances to `IFC-V1-061`.
 - Next action: implement `IFC-V1-061` exact managed-thread archive API and CLI command. The phone may stay disconnected; React implementation independently waits for the `FE-V1-003` recorded visual selection.
