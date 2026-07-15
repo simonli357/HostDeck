@@ -39,7 +39,8 @@ describe("SQLite migration runner", () => {
       "202607120012_selected_lan_configuration": "fe01df684e04d66f6efa859fd0845ba77b39ec1ce497065f942fa4bc9d84761e",
       "202607130013_remote_ingress_state": "342f963fc3fd349353ee2487346ec4862b2ec16e5b0275b49de3a577fc95258d",
       "202607130014_remote_audit_catalog": "c8c94dda5c2cf3a2af5a85e8ce58f53feadbfcccfcc84f3a57715415d78eaf65",
-      "202607130015_remote_admission_proof": "7b080b4cb2054274001f8bbedb35a04b9f904b6b6bbf362c3ddd222382054d12"
+      "202607130015_remote_admission_proof": "7b080b4cb2054274001f8bbedb35a04b9f904b6b6bbf362c3ddd222382054d12",
+      "202607150016_session_start_audit_catalog": "4d6ebd8346b5e329cae5aa6e4f396eb130e73ccbf153388e0f1807821e5c806f"
     });
   });
 
@@ -65,7 +66,8 @@ describe("SQLite migration runner", () => {
         "202607120012_selected_lan_configuration",
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
-        "202607130015_remote_admission_proof"
+        "202607130015_remote_admission_proof",
+        "202607150016_session_start_audit_catalog"
       ]);
       expect(tableNames(db)).toEqual([
         "audit_events",
@@ -90,7 +92,7 @@ describe("SQLite migration runner", () => {
         "sessions",
         "settings"
       ]);
-      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 15 });
+      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 16 });
       expect(
         db
           .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
@@ -133,7 +135,8 @@ describe("SQLite migration runner", () => {
         "202607120012_selected_lan_configuration",
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
-        "202607130015_remote_admission_proof"
+        "202607130015_remote_admission_proof",
+        "202607150016_session_start_audit_catalog"
       ]);
       expect(migrated.db.prepare("SELECT id FROM audit_events WHERE id = 'audit_legacy_preserved'").get()).toEqual({
         id: "audit_legacy_preserved"
@@ -196,7 +199,8 @@ describe("SQLite migration runner", () => {
         "202607120012_selected_lan_configuration",
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
-        "202607130015_remote_admission_proof"
+        "202607130015_remote_admission_proof",
+        "202607150016_session_start_audit_catalog"
       ]);
       expect(migrated.db.prepare("SELECT id FROM selected_audit_events WHERE operation_id = ?").get("op_index_preserved")).toEqual({
         id: "audit:index:preserved"
@@ -264,7 +268,8 @@ describe("SQLite migration runner", () => {
         "202607120012_selected_lan_configuration",
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
-        "202607130015_remote_admission_proof"
+        "202607130015_remote_admission_proof",
+        "202607150016_session_start_audit_catalog"
       ]);
       expect(migrated.db.prepare("SELECT * FROM auth_devices WHERE id = ?").get("client_csrf_migration")).toEqual({
         id: "client_csrf_migration",
@@ -354,7 +359,8 @@ describe("SQLite migration runner", () => {
         "202607120012_selected_lan_configuration",
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
-        "202607130015_remote_admission_proof"
+        "202607130015_remote_admission_proof",
+        "202607150016_session_start_audit_catalog"
       ]);
       expect(
         migrated.db
@@ -559,7 +565,8 @@ describe("SQLite migration runner", () => {
         "202607120012_selected_lan_configuration",
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
-        "202607130015_remote_admission_proof"
+        "202607130015_remote_admission_proof",
+        "202607150016_session_start_audit_catalog"
       ]);
       expect(
         migrated.db
@@ -784,7 +791,8 @@ describe("SQLite migration runner", () => {
         "202607120012_selected_lan_configuration",
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
-        "202607130015_remote_admission_proof"
+        "202607130015_remote_admission_proof",
+        "202607150016_session_start_audit_catalog"
       ]);
       expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM selected_sessions").get()).toEqual({ count: 0 });
       expect(migrated.db.prepare("SELECT * FROM legacy_session_dispositions").get()).toMatchObject({

@@ -110,6 +110,85 @@ describe("managed Codex thread start saga", () => {
     expect(fixture.threads.start_calls).toBe(2);
   });
 
+  it("rejects an invalid cwd before reservation or Codex dispatch", async () => {
+    const fixture = createFixture();
+    const service = createManagedCodexThreadService({
+      threads: fixture.threads,
+      states: fixture.states,
+      now: () => now,
+      create_session_id: () => "sess_managed_001" as SessionId,
+      validate_cwd: async () => {
+        throw new Error("private-invalid-cwd-sentinel");
+      },
+      capture_branch: () => "main"
+    });
+
+    await expectServiceError(service.start(request), "invalid_cwd", {
+      outcome: "not_sent",
+      thread_id: null
+    });
+    expect(fixture.states.listRecoveries()).toEqual([]);
+    expect(fixture.threads.start_calls).toBe(0);
+  });
+
+  it("records a known remote rejection as a failed no-thread outcome", async () => {
+    const fixture = createFixture();
+    fixture.threads.start_error = new HostDeckCodexAdapterError(
+      "remote_error",
+      "private-remote-rejection-sentinel",
+      {
+        outcome: "remote_rejected",
+        retry_safe: false,
+        rpc_code: -32_600
+      }
+    );
+
+    await expectServiceError(fixture.service.start(request), "runtime_unavailable", {
+      outcome: "remote_rejected",
+      thread_id: null
+    });
+    expect(fixture.states.getRecovery(request.operation_id)).toMatchObject({
+      state: "failed",
+      codex_thread_id: null,
+      error_code: "runtime_unavailable"
+    });
+    expect(fixture.threads.start_calls).toBe(1);
+  });
+
+  it("preserves a known no-thread outcome when failed-recovery persistence fails", async () => {
+    const base = createFixture();
+    base.threads.start_error = new HostDeckCodexAdapterError(
+      "remote_error",
+      "private-remote-rejection-sentinel",
+      {
+        outcome: "remote_rejected",
+        retry_safe: false,
+        rpc_code: -32_600
+      }
+    );
+    const failingStates: SelectedStateRepository = {
+      ...base.states,
+      putRecovery(candidate) {
+        const parsed = selectedSessionStartRecoveryRecordSchema.parse(candidate);
+        if (parsed.state === "failed") {
+          throw new Error("injected failed-recovery persistence failure");
+        }
+        return base.states.putRecovery(parsed);
+      }
+    };
+
+    await expectServiceError(
+      serviceFor(base.threads, failingStates).start(request),
+      "storage_error",
+      { outcome: "remote_rejected", thread_id: null }
+    );
+    expect(base.states.getRecovery(request.operation_id)).toMatchObject({
+      state: "reserved",
+      codex_thread_id: null
+    });
+    expect(base.threads.start_calls).toBe(1);
+  });
+
   it("leaves an unknown start reserved and never dispatches it a second time", async () => {
     const fixture = createFixture();
     fixture.threads.start_error = new HostDeckCodexAdapterError("unknown_outcome", "start outcome unknown", {
@@ -153,7 +232,10 @@ describe("managed Codex thread start saga", () => {
     };
     const failingService = serviceFor(base.threads, failingStates);
 
-    await expectServiceError(failingService.start(request), "storage_error");
+    await expectServiceError(failingService.start(request), "storage_error", {
+      outcome: "remote_succeeded",
+      thread_id: "thread-managed-1"
+    });
     expect(base.states.getRecovery(request.operation_id)).toMatchObject({
       state: "thread_created",
       codex_thread_id: "thread-managed-1"
@@ -176,8 +258,46 @@ describe("managed Codex thread start saga", () => {
       threadRecord({ id: "thread-a", thread_source: codexThreadOperationMarker(request.operation_id) }),
       threadRecord({ id: "thread-b", thread_source: codexThreadOperationMarker(request.operation_id), archived: true })
     );
-    await expectServiceError(fixture.service.start(request), "thread_conflict");
+    await expectServiceError(fixture.service.start(request), "thread_conflict", {
+      outcome: "remote_succeeded",
+      thread_id: null
+    });
     expect(fixture.threads.start_calls).toBe(0);
+  });
+
+  it("reports a recovered concrete thread with contradictory cwd as remotely created", async () => {
+    const fixture = createFixture();
+    fixture.states.putRecovery(recoveryRecord());
+    fixture.threads.records.push(
+      threadRecord({
+        id: "thread-recovered-wrong-cwd",
+        cwd: "/tmp/other-project",
+        thread_source: codexThreadOperationMarker(request.operation_id)
+      })
+    );
+
+    await expectServiceError(fixture.service.start(request), "identity_mismatch", {
+      outcome: "remote_succeeded",
+      thread_id: "thread-recovered-wrong-cwd"
+    });
+    expect(fixture.threads.start_calls).toBe(0);
+  });
+
+  it("reports contradictory thread-created and persisted recovery markers as remotely created", async () => {
+    for (const state of ["thread_created", "persisted"] as const) {
+      const base = createFixture();
+      const malformedRecovery = { ...recoveryRecord(), state };
+      const states: SelectedStateRepository = {
+        ...base.states,
+        getRecovery: () => malformedRecovery
+      };
+
+      await expectServiceError(serviceFor(base.threads, states).start(request), "identity_mismatch", {
+        outcome: "remote_succeeded",
+        thread_id: null
+      });
+      expect(base.threads.start_calls).toBe(0);
+    }
   });
 
   it("persists the returned thread id before materialization and resumes that phase without another start", async () => {
@@ -187,7 +307,10 @@ describe("managed Codex thread start saga", () => {
       retry_safe: false
     });
 
-    await expectServiceError(fixture.service.start(request), "unknown_outcome");
+    await expectServiceError(fixture.service.start(request), "unknown_outcome", {
+      outcome: "remote_succeeded",
+      thread_id: "thread-managed-1"
+    });
     expect(fixture.states.getRecovery(request.operation_id)).toMatchObject({
       state: "thread_created",
       codex_thread_id: "thread-managed-1"
@@ -212,7 +335,10 @@ describe("managed Codex thread start saga", () => {
       rpc_code: -32_600
     });
 
-    await expectServiceError(fixture.service.start(request), "recovery_required");
+    await expectServiceError(fixture.service.start(request), "recovery_required", {
+      outcome: "remote_succeeded",
+      thread_id: "thread-managed-1"
+    });
     expect(fixture.states.getRecovery(request.operation_id)).toMatchObject({
       state: "thread_created",
       codex_thread_id: "thread-managed-1"
@@ -220,6 +346,61 @@ describe("managed Codex thread start saga", () => {
     expect(fixture.threads.start_calls).toBe(1);
     await expectServiceError(fixture.service.start(request), "recovery_required");
     expect(fixture.threads.start_calls).toBe(1);
+  });
+
+  it("reports confirmed remote creation when its thread-created recovery write fails", async () => {
+    const base = createFixture();
+    const failingStates: SelectedStateRepository = {
+      ...base.states,
+      putRecovery(candidate) {
+        const parsed = selectedSessionStartRecoveryRecordSchema.parse(candidate);
+        if (parsed.state === "thread_created") throw new Error("injected recovery identity failure");
+        return base.states.putRecovery(parsed);
+      }
+    };
+
+    await expectServiceError(serviceFor(base.threads, failingStates).start(request), "storage_error", {
+      outcome: "remote_succeeded",
+      thread_id: "thread-managed-1"
+    });
+    expect(base.states.getRecovery(request.operation_id)).toMatchObject({ state: "reserved", codex_thread_id: null });
+    expect(base.threads.start_calls).toBe(1);
+  });
+
+  it("reports a contradictory materialized thread as remotely created", async () => {
+    const fixture = createFixture();
+    fixture.threads.ensureMaterialized = async () =>
+      threadRecord({ id: "thread-materialized-contradiction" });
+
+    await expectServiceError(fixture.service.start(request), "identity_mismatch", {
+      outcome: "remote_succeeded",
+      thread_id: "thread-materialized-contradiction"
+    });
+    expect(fixture.states.getRecovery(request.operation_id)).toMatchObject({
+      state: "thread_created",
+      codex_thread_id: "thread-managed-1"
+    });
+    expect(fixture.threads.start_calls).toBe(1);
+  });
+
+  it("reports confirmed remote creation when recovery finalization fails", async () => {
+    const base = createFixture();
+    const failingStates: SelectedStateRepository = {
+      ...base.states,
+      deleteRecovery() {
+        throw new Error("injected recovery finalization failure");
+      }
+    };
+
+    await expectServiceError(serviceFor(base.threads, failingStates).start(request), "storage_error", {
+      outcome: "remote_succeeded",
+      thread_id: "thread-managed-1"
+    });
+    expect(base.states.require("sess_managed_001").mapping.codex_thread_id).toBe("thread-managed-1");
+    expect(base.states.getRecovery(request.operation_id)).toMatchObject({
+      state: "persisted",
+      codex_thread_id: "thread-managed-1"
+    });
   });
 });
 
@@ -482,12 +663,16 @@ function threadRecord(overrides: Record<string, unknown> = {}): CodexThreadRecor
   };
 }
 
-async function expectServiceError(promise: Promise<unknown>, code: ManagedCodexThreadServiceErrorCode): Promise<void> {
+async function expectServiceError(
+  promise: Promise<unknown>,
+  code: ManagedCodexThreadServiceErrorCode,
+  expected: Partial<HostDeckManagedCodexThreadServiceError> = {}
+): Promise<void> {
   try {
     await promise;
   } catch (error) {
     expect(error).toBeInstanceOf(HostDeckManagedCodexThreadServiceError);
-    expect(error).toMatchObject({ code });
+    expect(error).toMatchObject({ code, ...expected });
     return;
   }
   throw new Error(`Expected HostDeckManagedCodexThreadServiceError ${code}.`);

@@ -40,6 +40,7 @@ import type {
   SelectedApiAuditAction,
   SelectedApiRouteManifestEntry
 } from "./selected-api-route-manifest.js";
+import { HostDeckSelectedWriteAuditExecutorError } from "./selected-write-audit-executor.js";
 import {
   assertAcceptedAuditContext,
   assertHostDeckSelectedWriteAuditPort,
@@ -562,7 +563,10 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
     } catch (error) {
       rethrowStaleIngressFailure(request, authority.authentication);
       increment(this.counters, "auditFailures");
-      if (error instanceof HostDeckSecurityMutationAuditExecutorError) {
+      if (
+        error instanceof HostDeckSecurityMutationAuditExecutorError ||
+        error instanceof HostDeckSelectedWriteAuditExecutorError
+      ) {
         throw auditExecutorFailure(error);
       }
       if (isOwnedGateError(error)) {
@@ -753,7 +757,7 @@ function timeoutError(): HostDeckHttpError {
 }
 
 function auditExecutorFailure(
-  error: HostDeckSecurityMutationAuditExecutorError
+  error: HostDeckSecurityMutationAuditExecutorError | HostDeckSelectedWriteAuditExecutorError
 ): HostDeckHttpError {
   return new HostDeckHttpError({
     code: error.api_code,

@@ -1,4 +1,7 @@
-import { hostStatusResponseSchema } from "@hostdeck/contracts";
+import {
+  hostStatusResponseSchema,
+  selectedSessionStartResponseSchema
+} from "@hostdeck/contracts";
 import { describe, expect, it } from "vitest";
 import type { HttpResponse } from "./api-client.js";
 import { cliExitCodes } from "./exit-codes.js";
@@ -69,6 +72,32 @@ const staleSession = {
   attention: "unknown",
   last_activity_at: null
 } as const;
+
+const selectedStartResponse = selectedSessionStartResponseSchema.parse({
+  operation_id: "op_session_start_contract_0001",
+  session: {
+    id: "sess_cli_contract_01",
+    name: "contract-demo",
+    codex_thread_id: "thread-cli-contract-01",
+    cwd: "/home/simonli/HostDeck",
+    runtime_source: "codex_app_server",
+    runtime_version: "0.144.0",
+    created_at: "2026-07-09T08:00:00.000Z",
+    archived_at: null,
+    session_state: "active",
+    turn_state: "idle",
+    attention: "none",
+    freshness: "current",
+    freshness_reason: null,
+    updated_at: "2026-07-09T08:00:00.000Z",
+    last_activity_at: "2026-07-09T08:00:00.000Z",
+    branch: "main",
+    model: "gpt-5.5-codex",
+    goal: null,
+    recent_summary: "Managed Codex session ready.",
+    last_event_cursor: null
+  }
+});
 
 describe("CLI shell contract", () => {
   it("parses every V1 CLI command and config flag family", () => {
@@ -341,12 +370,17 @@ describe("CLI shell contract", () => {
     });
   });
 
-  it("starts a session and renders the managed tmux target", async () => {
+  it("starts a selected managed session without exposing a legacy backend", async () => {
     const result = await runCli(["start", "--name", "contract-demo", "--cwd", "/home/simonli/HostDeck"], {
       env: {},
+      createStartOperationId: () => "op_session_start_contract_0001",
       fetch: async (_url, init) => {
-        expect(init.body).toBe(JSON.stringify({ name: "contract-demo", cwd: "/home/simonli/HostDeck" }));
-        return jsonResponse(201, { session: runningSession });
+        expect(init.body).toBe(JSON.stringify({
+          operation_id: "op_session_start_contract_0001",
+          name: "contract-demo",
+          cwd: "/home/simonli/HostDeck"
+        }));
+        return jsonResponse(201, selectedStartResponse);
       }
     });
 
@@ -356,7 +390,8 @@ describe("CLI shell contract", () => {
     });
     expect(result.stdout).toContain("Started session: contract-demo");
     expect(result.stdout).toContain("ID: sess_cli_contract_01");
-    expect(result.stdout).toContain("Tmux: hostdeck_sess_cli_contract_01");
+    expect(result.stdout).toContain("Runtime: codex_app_server 0.144.0");
+    expect(result.stdout).not.toMatch(/tmux|backend/iu);
   });
 
   it("lists sessions with lifecycle, status, attention, and stale state visible", async () => {
@@ -672,9 +707,17 @@ describe("CLI shell contract", () => {
 
       expect(result.exitCode, scenario.label).toBe(cliExitCodes.apiError);
       expect(result.stdout, scenario.label).toBe("");
-      expect(result.stderr, scenario.label).toContain("HostDeck CLI error (permission_denied): Read token is required.");
+      expect(result.stderr, scenario.label).toContain(
+        scenario.label === "start"
+          ? "HostDeck CLI error (permission_denied): Managed session start is not permitted."
+          : "HostDeck CLI error (permission_denied): Read token is required."
+      );
       expect(result.stderr, scenario.label).toContain("HTTP status: 403");
-      expect(result.stderr, scenario.label).toContain("Field: authorization");
+      if (scenario.label === "start") {
+        expect(result.stderr).not.toContain("Field: authorization");
+      } else {
+        expect(result.stderr).toContain("Field: authorization");
+      }
     }
   });
 });

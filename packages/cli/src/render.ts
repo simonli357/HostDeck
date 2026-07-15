@@ -6,11 +6,12 @@ import {
   pairingClientLabelSchema,
   type RemoteIngressPublicState,
   remoteIngressPublicStateSchema,
+  type SelectedSessionStartResponse,
   type SessionListResponse,
   type SkillsSnapshot,
-  type StartSessionResponse,
   selectedPairingLinkSchema,
   selectedPairingPermissionSchema,
+  selectedSessionStartResponseSchema,
   skillsSnapshotSchema,
   type UsageRateLimitWindow,
   type UsageSnapshot,
@@ -60,16 +61,25 @@ export function renderHelp(): string {
   ].join("\n");
 }
 
-export function renderStartSession(response: StartSessionResponse, json: boolean): string {
+export function renderStartSession(
+  candidate: SelectedSessionStartResponse,
+  json: boolean
+): string {
+  const parsed = selectedSessionStartResponseSchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw internalFailure("Session-start rendering input is invalid.");
+  }
+  const response = parsed.data;
   if (json) {
     return `${JSON.stringify(response, null, 2)}\n`;
   }
 
   return [
-    `Started session: ${response.session.name}`,
-    `ID: ${response.session.id}`,
-    `CWD: ${response.session.cwd}`,
-    `Tmux: ${response.session.backend.tmux.session_name}`,
+    `Started session: ${escapeTerminalText(response.session.name)}`,
+    `ID: ${escapeTerminalText(response.session.id)}`,
+    `State: ${response.session.session_state}`,
+    `CWD: ${escapeTerminalText(response.session.cwd)}`,
+    `Runtime: ${response.session.runtime_source} ${escapeTerminalText(response.session.runtime_version)}`,
     ""
   ].join("\n");
 }

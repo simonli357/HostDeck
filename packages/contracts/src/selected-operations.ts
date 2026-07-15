@@ -946,6 +946,13 @@ export const selectedStartSessionRequestSchema = z
   })
   .strict();
 
+export const selectedSessionStartResponseSchema = z
+  .object({
+    operation_id: clientOperationIdSchema,
+    session: managedSessionProjectionSchema
+  })
+  .strict();
+
 export const selectedSessionListResponseSchema = z
   .object({
     sessions: z.array(managedSessionProjectionSchema)
@@ -1012,6 +1019,7 @@ export type SkillSummary = z.infer<typeof skillSummarySchema>;
 export type SkillsSnapshot = z.infer<typeof skillsSnapshotSchema>;
 export type PendingApproval = z.infer<typeof pendingApprovalSchema>;
 export type SelectedStartSessionRequest = z.infer<typeof selectedStartSessionRequestSchema>;
+export type SelectedSessionStartResponse = z.infer<typeof selectedSessionStartResponseSchema>;
 
 export function selectedOperationKind(intent: SelectedOperationIntent): SelectedOperationKind {
   return intent.kind;

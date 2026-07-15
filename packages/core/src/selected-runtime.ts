@@ -140,14 +140,19 @@ export const persistedSelectedSecurityAuditActions = [
 ] as const;
 export type PersistedSelectedSecurityAuditAction = (typeof persistedSelectedSecurityAuditActions)[number];
 
+export const selectedSessionLifecycleAuditActions = ["session_start"] as const;
+export type SelectedSessionLifecycleAuditAction = (typeof selectedSessionLifecycleAuditActions)[number];
+
 export const selectedAuditActions = [
   ...selectedOperationKinds,
+  ...selectedSessionLifecycleAuditActions,
   ...selectedSecurityAuditActions
 ] as const;
 export type SelectedAuditAction = (typeof selectedAuditActions)[number];
 
 export const persistedSelectedAuditActions = [
   ...selectedOperationKinds,
+  ...selectedSessionLifecycleAuditActions,
   ...persistedSelectedSecurityAuditActions
 ] as const;
 export type PersistedSelectedAuditAction = (typeof persistedSelectedAuditActions)[number];

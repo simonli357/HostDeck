@@ -11,4 +11,5 @@ export * from "./resume-client.js";
 export * from "./resume-launcher.js";
 export * from "./shell.js";
 export * from "./skills-client.js";
+export * from "./start-client.js";
 export * from "./usage-client.js";

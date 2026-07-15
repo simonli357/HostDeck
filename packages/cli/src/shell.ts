@@ -3,10 +3,13 @@ import type {
   ApiErrorEnvelope,
   ApiSession,
   SelectedResumeMetadataResponse,
+  SelectedSessionStartResponse,
+  SelectedStartSessionRequest,
   SkillsSnapshot,
   UsageSnapshot
 } from "@hostdeck/contracts";
 import {
+  clientOperationIdSchema,
   type RemoteDisableRequest,
   type RemoteEnableRequest,
   remoteDisableRequestSchema,
@@ -15,6 +18,8 @@ import {
   selectedPairRequestSchema,
   selectedResumeMetadataResponseSchema,
   selectedResumeParamsSchema,
+  selectedSessionStartResponseSchema,
+  selectedStartSessionRequestSchema,
   sessionIdParamsSchema,
   skillsSnapshotSchema,
   usageSnapshotSchema
@@ -72,6 +77,10 @@ import {
   type HostDeckSkillsClient
 } from "./skills-client.js";
 import {
+  createHostDeckStartClient,
+  type HostDeckStartClient
+} from "./start-client.js";
+import {
   createHostDeckUsageClient,
   type HostDeckUsageClient
 } from "./usage-client.js";
@@ -94,11 +103,13 @@ export interface CliRunOptions {
   readonly resumeClient?: HostDeckResumeClient;
   readonly resumeLauncher?: HostDeckResumeLauncher;
   readonly skillsClient?: HostDeckSkillsClient;
+  readonly startClient?: HostDeckStartClient;
   readonly usageClient?: HostDeckUsageClient;
   readonly createOperationId?: (
     action: "disable" | "enable"
   ) => string;
   readonly createPairOperationId?: () => string;
+  readonly createStartOperationId?: () => string;
   readonly renderPairingQr?: TerminalQrRenderer;
   readonly startService?: (input: StartHostHttpServiceInput) => Promise<HostHttpService>;
   readonly waitForShutdown?: () => Promise<void>;
@@ -245,6 +256,26 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
       return success(renderSkillsSnapshot(snapshot, parsed.command.json));
     }
 
+    if (parsed.command.kind === "start") {
+      let startClient = options.startClient;
+      if (startClient === undefined) {
+        const startClientOptions = { baseUrl: config.baseUrl };
+        if (options.fetch !== undefined) {
+          Object.assign(startClientOptions, { fetch: options.fetch });
+        }
+        startClient = createHostDeckStartClient(startClientOptions);
+      }
+      const startRequest = createSessionStartRequest(
+        parsed.command,
+        options.createStartOperationId ?? createStartOperationId
+      );
+      const response = parseSessionStartResponse(
+        await Reflect.apply(startClient.start, undefined, [startRequest]),
+        startRequest
+      );
+      return success(renderStartSession(response, parsed.command.json));
+    }
+
     const localAdmin =
       options.localAdmin ??
       createLocalAdmin({
@@ -285,10 +316,6 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
 
     if (parsed.command.kind === "status") {
       return success(renderStatus(await client.getStatus(), parsed.command.json));
-    }
-
-    if (parsed.command.kind === "start") {
-      return success(renderStartSession(await client.startSession({ name: parsed.command.name, cwd: parsed.command.cwd }), parsed.command.json));
     }
 
     if (parsed.command.kind === "list") {
@@ -383,6 +410,58 @@ function createRemoteOperationId(action: "disable" | "enable"): string {
 
 function createPairOperationId(): string {
   return `op_pair_request_${randomUUID().replaceAll("-", "")}`;
+}
+
+function createStartOperationId(): string {
+  return `op_session_start_${randomUUID().replaceAll("-", "")}`;
+}
+
+function createSessionStartRequest(
+  command: Extract<
+    ReturnType<typeof parseCliArgs>["command"],
+    { readonly kind: "start" }
+  >,
+  createOperationId: () => string
+): SelectedStartSessionRequest {
+  let operationId: unknown;
+  try {
+    operationId = Reflect.apply(createOperationId, undefined, []);
+  } catch (error) {
+    throw internalFailure("Session-start operation id generation failed.", error);
+  }
+  if (!clientOperationIdSchema.safeParse(operationId).success) {
+    throw internalFailure("Session-start operation id generation failed.");
+  }
+  const parsed = selectedStartSessionRequestSchema.safeParse({
+    operation_id: operationId,
+    name: command.name,
+    cwd: command.cwd
+  });
+  if (!parsed.success) {
+    throw usageFailure(
+      "Start options do not satisfy the managed-session contract.",
+      "start"
+    );
+  }
+  return parsed.data;
+}
+
+function parseSessionStartResponse(
+  candidate: unknown,
+  request: SelectedStartSessionRequest
+): SelectedSessionStartResponse {
+  const parsed = selectedSessionStartResponseSchema.safeParse(candidate);
+  if (
+    !parsed.success ||
+    parsed.data.operation_id !== request.operation_id ||
+    parsed.data.session.name !== request.name ||
+    parsed.data.session.cwd !== request.cwd
+  ) {
+    throw internalFailure(
+      "HostDeck start client returned invalid managed-session data."
+    );
+  }
+  return parsed.data;
 }
 
 function parseResumeTarget(candidate: string): string {

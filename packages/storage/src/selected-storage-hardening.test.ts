@@ -70,7 +70,7 @@ const privateMaterial = "-----BEGIN PRIVATE KEY-----aggregate-private-material";
 const fullTranscript = "aggregate-full-transcript-must-never-become-hostdeck-durable-truth";
 const selectedDeviceId = `client_${"d".repeat(24)}`;
 const pairingSourceKey = `sha256:${"a".repeat(64)}`;
-const currentMigrationVersion = "202607130015_remote_admission_proof";
+const currentMigrationVersion = "202607150016_session_start_audit_catalog";
 
 afterEach(() => {
   for (const root of cleanup.splice(0).reverse()) {

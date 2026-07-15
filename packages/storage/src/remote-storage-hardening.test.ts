@@ -116,9 +116,10 @@ describe("remote state and audit aggregate hardening", () => {
           applied: [
             "202607130013_remote_ingress_state",
             "202607130014_remote_audit_catalog",
-            "202607130015_remote_admission_proof"
+            "202607130015_remote_admission_proof",
+            "202607150016_session_start_audit_catalog"
           ],
-          currentVersion: "202607130015_remote_admission_proof"
+          currentVersion: "202607150016_session_start_audit_catalog"
         });
         expect(rawAuditRows(current.db)).toEqual(historicalBefore);
         expect(
@@ -366,7 +367,7 @@ describe("remote state and audit aggregate hardening", () => {
       try {
         expect(restarted.result).toEqual({
           applied: [],
-          currentVersion: "202607130015_remote_admission_proof"
+          currentVersion: "202607150016_session_start_audit_catalog"
         });
         const state = createRemoteIngressStateRepository(restarted.db);
         const audit = createSelectedAuditRepository(restarted.db);
@@ -560,7 +561,7 @@ describe("remote state and audit aggregate hardening", () => {
     try {
       expect(fresh.result.applied).toHaveLength(defaultMigrations.length);
       expect(fresh.result.currentVersion).toBe(
-        "202607130015_remote_admission_proof"
+        "202607150016_session_start_audit_catalog"
       );
       inspectSchemaAndHealth(fresh.db);
     } finally {
@@ -575,7 +576,9 @@ describe("remote state and audit aggregate hardening", () => {
     statePrior.db.close();
     const stateFailureDb = new Database(stateFailurePath);
     try {
-      const stateMigration = defaultMigrations.at(-3);
+      const stateMigration = defaultMigrations.find(
+        (migration) => migration.version === "202607130013_remote_ingress_state"
+      );
       if (stateMigration === undefined) throw new Error("Missing remote state migration.");
       const interruptedState = {
         ...stateMigration,
@@ -603,7 +606,7 @@ describe("remote state and audit aggregate hardening", () => {
 
     const auditFailurePath = tempDbPath("audit-failure");
     const auditPrior = openMigratedDatabase(auditFailurePath, {
-      migrations: defaultMigrations.slice(0, -2),
+      migrations: defaultMigrations.slice(0, -3),
       now: fixedNow
     });
     let auditTableBefore: string;
@@ -617,7 +620,9 @@ describe("remote state and audit aggregate hardening", () => {
     }
     const auditFailureDb = new Database(auditFailurePath);
     try {
-      const auditMigration = defaultMigrations.at(-2);
+      const auditMigration = defaultMigrations.find(
+        (migration) => migration.version === "202607130014_remote_audit_catalog"
+      );
       if (auditMigration === undefined) throw new Error("Missing remote audit migration.");
       const interruptedAudit = {
         ...auditMigration,
@@ -625,13 +630,13 @@ describe("remote state and audit aggregate hardening", () => {
       } satisfies StorageMigration;
       expect(() =>
         runMigrations(auditFailureDb, {
-          migrations: [...defaultMigrations.slice(0, -2), interruptedAudit],
+          migrations: [...defaultMigrations.slice(0, -3), interruptedAudit],
           now: fixedNow
         })
       ).toThrow(HostDeckMigrationError);
       expect(selectedAuditTableSql(auditFailureDb)).toBe(auditTableBefore);
       expect(rawAuditRows(auditFailureDb)).toEqual(auditRowsBefore);
-      expect(migrationCount(auditFailureDb)).toBe(defaultMigrations.length - 2);
+      expect(migrationCount(auditFailureDb)).toBe(defaultMigrations.length - 3);
     } finally {
       auditFailureDb.close();
     }
@@ -974,9 +979,9 @@ function hostTarget() {
 }
 
 function migrationsBeforeRemoteStorage(): readonly StorageMigration[] {
-  const migrations = defaultMigrations.slice(0, -3);
+  const migrations = defaultMigrations.slice(0, -4);
   if (migrations.at(-1)?.version !== "202607120012_selected_lan_configuration") {
-    throw new Error("Remote storage migrations are not the final three migrations.");
+    throw new Error("Remote storage migrations do not follow selected LAN storage.");
   }
   return migrations;
 }

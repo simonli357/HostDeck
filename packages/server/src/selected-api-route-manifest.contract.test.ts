@@ -209,21 +209,21 @@ describe("selected API route manifest", () => {
     }
   });
 
-  it("makes audit-catalog extensions explicit and leaves no unknown action", () => {
+  it("uses only selected audit-catalog actions and leaves no extension open", () => {
     const knownActions = new Set<string>(selectedApiAuditActions);
     const selectedActions = new Set(selectedAuditActions);
     const ownedExtensions = selectedApiRouteManifest
       .filter((route) => route.audit?.catalog_state === "owned_extension")
       .map((route) => route.audit?.action)
       .sort();
-    expect(ownedExtensions).toEqual(["session_start"]);
+    expect(ownedExtensions).toEqual([]);
     expect(
       Object.fromEntries(
         selectedApiRouteManifest
           .filter((route) => route.audit?.catalog_state === "owned_extension")
           .map((route) => [route.audit?.action, route.audit?.catalog_owner_task])
       )
-    ).toEqual({ session_start: "IFC-V1-040" });
+    ).toEqual({});
     for (const action of historicalSelectedNetworkAuditActions) {
       expect(knownActions.has(action)).toBe(false);
       expect(
@@ -235,10 +235,9 @@ describe("selected API route manifest", () => {
     for (const route of selectedApiRouteManifest) {
       if (route.audit === null) continue;
       expect(knownActions.has(route.audit.action)).toBe(true);
-      expect(selectedActions.has(route.audit.action as (typeof selectedAuditActions)[number])).toBe(
-        route.audit.catalog_state === "selected"
-      );
-      expect(route.audit.catalog_owner_task === null).toBe(route.audit.catalog_state === "selected");
+      expect(selectedActions.has(route.audit.action as (typeof selectedAuditActions)[number])).toBe(true);
+      expect(route.audit.catalog_state).toBe("selected");
+      expect(route.audit.catalog_owner_task).toBeNull();
     }
   });
 

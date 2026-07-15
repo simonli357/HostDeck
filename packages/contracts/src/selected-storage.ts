@@ -217,6 +217,63 @@ export const selectedAuditTargetSchema = z.discriminatedUnion("type", [
 export const selectedAuditEventRecordSchema = createAuditEventRecordSchema(selectedAuditActions);
 export const persistedSelectedAuditEventRecordSchema = createAuditEventRecordSchema(persistedSelectedAuditActions);
 
+export const selectedSessionStartAuditPayloadSummarySchema = z
+  .object({
+    schema_version: z.literal(1),
+    name_length: positiveSafeIntegerSchema.max(64).optional(),
+    cwd_present: z.literal(true).optional(),
+    created: z.literal(true).optional(),
+    reconciliation_reason: z.literal("host_restart_without_terminal").optional()
+  })
+  .strict();
+
+export const selectedSessionStartAuditEventRecordSchema = selectedAuditEventRecordSchema.superRefine(
+  (value, context) => {
+    if (value.action !== "session_start") {
+      context.addIssue({ code: "custom", message: "Session-start audit records require the session_start action." });
+      return;
+    }
+    if (value.outcome === "rejected") {
+      context.addIssue({ code: "custom", message: "Session-start audit records cannot be standalone rejections." });
+    }
+    if (value.target.type !== "host" || value.target.host_id !== "local_host") {
+      context.addIssue({ code: "custom", message: "Session-start audit records must target the local host." });
+    }
+    if (value.actor.type !== "cli" && !(value.actor.type === "dashboard" && value.actor.permission === "write")) {
+      context.addIssue({ code: "custom", message: "Session start requires local-admin or paired-writer authority." });
+    }
+    const summary = selectedSessionStartAuditPayloadSummarySchema.safeParse(value.payload_summary);
+    if (!summary.success) {
+      context.addIssue({
+        code: "custom",
+        message: "Session-start audit summary is invalid.",
+        path: ["payload_summary"]
+      });
+      return;
+    }
+    const keys = Object.keys(summary.data).sort();
+    const expected =
+      value.phase === "accepted"
+        ? ["cwd_present", "name_length", "schema_version"]
+        : value.outcome === "succeeded"
+          ? ["created", "schema_version"]
+          : summary.data.reconciliation_reason === undefined
+            ? ["schema_version"]
+            : ["reconciliation_reason", "schema_version"];
+    if (
+      keys.length !== expected.length ||
+      keys.some((key, index) => key !== expected[index]) ||
+      (summary.data.reconciliation_reason !== undefined && value.outcome !== "incomplete")
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Session-start audit summary contradicts its phase or outcome.",
+        path: ["payload_summary"]
+      });
+    }
+  }
+);
+
 export const selectedSecurityAuditEventRecordSchema = selectedAuditEventRecordSchema.superRefine((value, context) => {
   if (!isSelectedSecurityAuditAction(value.action)) {
     context.addIssue({ code: "custom", message: "Security audit records require one selected security action." });
@@ -471,6 +528,7 @@ export type SelectedAuditActor = z.infer<typeof selectedAuditActorSchema>;
 export type SelectedAuditTarget = z.infer<typeof selectedAuditTargetSchema>;
 export type SelectedAuditEventRecord = z.infer<typeof selectedAuditEventRecordSchema>;
 export type PersistedSelectedAuditEventRecord = z.infer<typeof persistedSelectedAuditEventRecordSchema>;
+export type SelectedSessionStartAuditEventRecord = z.infer<typeof selectedSessionStartAuditEventRecordSchema>;
 export type SelectedSecurityAuditEventRecord = z.infer<typeof selectedSecurityAuditEventRecordSchema>;
 export type SelectedSecurityAuditV1EventRecord = z.infer<typeof selectedSecurityAuditV1EventRecordSchema>;
 export type HistoricalSelectedNetworkAuditEventRecord = z.infer<typeof historicalSelectedNetworkAuditEventRecordSchema>;

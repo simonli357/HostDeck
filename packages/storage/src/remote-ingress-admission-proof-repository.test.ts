@@ -38,7 +38,7 @@ describe("remote admission proof migration", () => {
   it("adds one empty proof row owner and atomic accepted-mutation invalidation trigger", () => {
     const path = tempDbPath();
     const prior = openMigratedDatabase(path, {
-      migrations: defaultMigrations.slice(0, -1),
+      migrations: defaultMigrations.slice(0, -2),
       now: fixedNow
     });
     prior.db.close();
@@ -46,7 +46,8 @@ describe("remote admission proof migration", () => {
     const migrated = openMigratedDatabase(path, { now: fixedNow });
     try {
       expect(migrated.result.applied).toEqual([
-        "202607130015_remote_admission_proof"
+        "202607130015_remote_admission_proof",
+        "202607150016_session_start_audit_catalog"
       ]);
       expect(
         migrated.db

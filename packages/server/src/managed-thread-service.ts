@@ -164,7 +164,7 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
       throw serviceError(
         "storage_error",
         "Codex created a thread but HostDeck could not persist its recovery identity.",
-        "unknown",
+        "remote_succeeded",
         false,
         started.thread.id,
         error
@@ -373,11 +373,25 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
       );
     }
     if (matches.length !== 1) {
-      throw serviceError("thread_conflict", "Multiple Codex threads claim one HostDeck start operation.", "unknown", false);
+      throw serviceError(
+        "thread_conflict",
+        "Multiple Codex threads claim one HostDeck start operation.",
+        "remote_succeeded",
+        false
+      );
     }
     const thread = matches[0];
-    if (thread === undefined || thread.cwd !== recovery.cwd) {
+    if (thread === undefined) {
       throw serviceError("identity_mismatch", "Recovered Codex thread cwd does not match the reserved session.", "unknown", false);
+    }
+    if (thread.cwd !== recovery.cwd) {
+      throw serviceError(
+        "identity_mismatch",
+        "Recovered Codex thread cwd does not match the reserved session.",
+        "remote_succeeded",
+        false,
+        thread.id
+      );
     }
     let threadCreated: SelectedSessionStartRecoveryRecord;
     try {
@@ -388,7 +402,7 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
         updated_at: this.advanceTimestamp(recovery.updated_at)
       });
     } catch (error) {
-      throw mapStorageError(error, "Recovered Codex thread identity could not be persisted.", thread.id);
+      throw mapStorageError(error, "Recovered Codex thread identity could not be persisted.", thread.id, "remote_succeeded");
     }
     return this.materializeRecovery(threadCreated, null);
   }
@@ -398,7 +412,12 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
     model: string | null
   ): Promise<SelectedSessionState> {
     if (recovery.codex_thread_id === null) {
-      throw serviceError("identity_mismatch", "Thread-created recovery is missing its Codex thread id.", "unknown", false);
+      throw serviceError(
+        "identity_mismatch",
+        "Thread-created recovery is missing its Codex thread id.",
+        "remote_succeeded",
+        false
+      );
     }
     let thread: CodexThreadRecord;
     try {
@@ -420,13 +439,19 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
     model: string | null
   ): SelectedSessionState {
     if (recovery.codex_thread_id !== thread.id || recovery.cwd !== thread.cwd) {
-      throw serviceError("identity_mismatch", "Codex thread does not match its recovery record.", "unknown", false, thread.id);
+      throw serviceError(
+        "identity_mismatch",
+        "Codex thread does not match its recovery record.",
+        "remote_succeeded",
+        false,
+        thread.id
+      );
     }
     let existing: SelectedSessionState | null;
     try {
       existing = this.options.states.get(recovery.session_id);
     } catch (error) {
-      throw mapStorageError(error, "Existing Codex thread mapping could not be read.", thread.id);
+      throw mapStorageError(error, "Existing Codex thread mapping could not be read.", thread.id, "remote_succeeded");
     }
     let state: SelectedSessionState;
     if (existing === null) {
@@ -434,7 +459,7 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
       try {
         this.options.states.create(state);
       } catch (error) {
-        throw mapStorageError(error, "Codex thread mapping could not be persisted.", thread.id);
+        throw mapStorageError(error, "Codex thread mapping could not be persisted.", thread.id, "remote_succeeded");
       }
     } else {
       assertPersistedIdentity(existing, recovery, thread);
@@ -452,29 +477,61 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
         throw new Error("Recovery row disappeared before finalization.");
       }
     } catch (error) {
-      throw serviceError("storage_error", "Persisted session-start recovery could not be finalized.", "unknown", false, thread.id, error);
+      throw serviceError(
+        "storage_error",
+        "Persisted session-start recovery could not be finalized.",
+        "remote_succeeded",
+        false,
+        thread.id,
+        error
+      );
     }
     return state;
   }
 
   private finishPersistedRecovery(recovery: SelectedSessionStartRecoveryRecord): SelectedSessionState {
     if (recovery.codex_thread_id === null) {
-      throw serviceError("identity_mismatch", "Persisted start recovery is missing its thread id.", "unknown", false);
+      throw serviceError(
+        "identity_mismatch",
+        "Persisted start recovery is missing its thread id.",
+        "remote_succeeded",
+        false
+      );
     }
     let state: SelectedSessionState | null;
     try {
       state = this.options.states.get(recovery.session_id);
     } catch (error) {
-      throw mapStorageError(error, "Persisted session-start mapping could not be read.");
+      throw mapStorageError(
+        error,
+        "Persisted session-start mapping could not be read.",
+        recovery.codex_thread_id,
+        "remote_succeeded"
+      );
     }
-    if (state === null) throw serviceError("storage_error", "Persisted start recovery has no selected mapping.", "unknown", false);
+    if (state === null) {
+      throw serviceError(
+        "storage_error",
+        "Persisted start recovery has no selected mapping.",
+        "remote_succeeded",
+        false,
+        recovery.codex_thread_id
+      );
+    }
     assertPersistedIdentity(state, recovery, { id: recovery.codex_thread_id, cwd: recovery.cwd });
     try {
       if (!this.options.states.deleteRecovery(recovery.operation_id)) {
         throw new Error("Recovery row disappeared before finalization.");
       }
     } catch (error) {
-      throw serviceError("storage_error", "Persisted session-start recovery could not be finalized.", "unknown", false, null, error);
+      throw serviceError(
+        "storage_error",
+        "Persisted session-start recovery could not be finalized.",
+        "remote_succeeded",
+        false,
+        recovery.codex_thread_id,
+        error
+      );
     }
     return state;
   }
@@ -491,7 +548,14 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
     try {
       branch = this.captureBranch(recovery.cwd);
     } catch (error) {
-      throw serviceError("storage_error", "Git branch metadata capture failed during thread mapping.", "unknown", false, thread.id, error);
+      throw serviceError(
+        "storage_error",
+        "Git branch metadata capture failed during thread mapping.",
+        "remote_succeeded",
+        false,
+        thread.id,
+        error
+      );
     }
     return {
       mapping: {
@@ -612,7 +676,14 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
         error_message: bounded(error.message)
       });
     } catch (storageError) {
-      throw serviceError("storage_error", "Known Codex start failure could not be recorded.", "unknown", false, null, storageError);
+      throw serviceError(
+        "storage_error",
+        "Known Codex start failure could not be recorded.",
+        error.outcome === "remote_rejected" ? "remote_rejected" : "not_sent",
+        false,
+        null,
+        storageError
+      );
     }
   }
 
@@ -740,7 +811,13 @@ function assertPersistedIdentity(
     state.mapping.codex_thread_id !== thread.id ||
     thread.cwd !== recovery.cwd
   ) {
-    throw serviceError("identity_mismatch", "Persisted managed session does not match start recovery identity.", "unknown", false, thread.id);
+    throw serviceError(
+      "identity_mismatch",
+      "Persisted managed session does not match start recovery identity.",
+      "remote_succeeded",
+      false,
+      thread.id
+    );
   }
 }
 
@@ -770,35 +847,41 @@ function mapAdapterError(error: unknown, fallback: string): HostDeckManagedCodex
 function mapMaterializationError(error: unknown, threadId: string): HostDeckManagedCodexThreadServiceError {
   if (error instanceof HostDeckCodexAdapterError) {
     if (error.outcome === "unknown" || error.code === "unknown_outcome") {
-      return serviceError("unknown_outcome", error.message, "unknown", false, threadId, error);
+      return serviceError("unknown_outcome", error.message, "remote_succeeded", false, threadId, error);
     }
     if (error.outcome === "remote_rejected" || error.outcome === "not_applicable") {
       return serviceError(
         "recovery_required",
         `Codex thread materialization requires recovery: ${error.message}`,
-        error.outcome === "remote_rejected" ? "remote_rejected" : "unknown",
+        "remote_succeeded",
         false,
         threadId,
         error
       );
     }
   }
-  return mapAdapterError(error, "Recovery Codex thread could not be materialized and verified.");
+  const mapped = mapAdapterError(error, "Recovery Codex thread could not be materialized and verified.");
+  return serviceError(mapped.code, mapped.message, "remote_succeeded", false, threadId, error);
 }
 
-function mapStorageError(error: unknown, fallback: string, threadId: string | null = null): HostDeckManagedCodexThreadServiceError {
+function mapStorageError(
+  error: unknown,
+  fallback: string,
+  threadId: string | null = null,
+  outcome: ManagedCodexThreadServiceOutcome = "not_sent"
+): HostDeckManagedCodexThreadServiceError {
   if (error instanceof HostDeckSelectedStateRepositoryError) {
     if (error.code === "duplicate_session_name") {
-      return serviceError("duplicate_session_name", error.message, "not_sent", false, threadId, error);
+      return serviceError("duplicate_session_name", error.message, outcome, false, threadId, error);
     }
     if (["duplicate_thread_id", "identity_mismatch", "recovery_conflict", "session_exists"].includes(error.code)) {
-      return serviceError("thread_conflict", error.message, "not_sent", false, threadId, error);
+      return serviceError("thread_conflict", error.message, outcome, false, threadId, error);
     }
     if (error.code === "session_not_found") {
-      return serviceError("thread_not_found", error.message, "not_sent", false, threadId, error);
+      return serviceError("thread_not_found", error.message, outcome, false, threadId, error);
     }
   }
-  return serviceError("storage_error", fallback, "not_sent", false, threadId, error);
+  return serviceError("storage_error", fallback, outcome, false, threadId, error);
 }
 
 function issueFromError(error: unknown, sessionId: string | null, operationId: string | null): ManagedThreadReconciliationIssue {

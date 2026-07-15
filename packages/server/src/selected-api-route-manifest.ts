@@ -138,11 +138,7 @@ export const selectedApiSchemaIds = [
   "selected_api_error_v1"
 ] as const;
 
-const selectedApiAuditExtensions = ["session_start"] as const;
-export const selectedApiAuditActions = Object.freeze([
-  ...selectedAuditActions,
-  ...selectedApiAuditExtensions
-]);
+export const selectedApiAuditActions = Object.freeze([...selectedAuditActions]);
 
 export type SelectedApiRouteMethod = (typeof selectedApiRouteMethods)[number];
 export type SelectedApiRouteFamily = (typeof selectedApiRouteFamilies)[number];
@@ -306,7 +302,7 @@ export const selectedApiRouteManifest: readonly SelectedApiRouteManifestEntry[] 
     ...sessionWritePolicy,
     target: "new_managed_session",
     operation_kind: null,
-    audit: extensionAudit("selected_write_gate", "session_start", "IFC-V1-040"),
+    audit: selectedWriteAudit("session_start"),
     handler: "sessions.start",
     owner_task: "IFC-V1-040"
   }),
@@ -808,19 +804,6 @@ function selectedWriteAudit(action: SelectedAuditAction): SelectedApiAuditContra
 
 function securityAudit(action: SelectedAuditAction): SelectedApiAuditContract {
   return { executor: "security_executor", action, catalog_state: "selected", catalog_owner_task: null };
-}
-
-function extensionAudit(
-  executor: SelectedApiAuditExecutor,
-  action: (typeof selectedApiAuditExtensions)[number],
-  catalogOwnerTask: SelectedApiAuditCatalogOwnerTask
-): SelectedApiAuditContract {
-  return {
-    executor,
-    action,
-    catalog_state: "owned_extension",
-    catalog_owner_task: catalogOwnerTask
-  };
 }
 
 function deepFreeze<T>(value: T): T {

@@ -6,14 +6,14 @@ import {
   selectedSecurityAuditPayloadContractSchema
 } from "@hostdeck/contracts";
 import {
+  type ErrorCode,
   isErrorCode,
   type RuntimeCapability,
   runtimeCapabilities
 } from "@hostdeck/core";
 import type {
   ExecuteSecurityMutationInput,
-  SecurityMutationExecutionResult,
-  SecurityMutationTransition
+  SecurityMutationExecutionResult
 } from "./security-mutation-audit-executor.js";
 import {
   type SelectedApiAuditAction,
@@ -83,7 +83,17 @@ export interface CreateHostDeckSelectedWriteTargetResolutionInput<TValue> {
   readonly value: TValue;
 }
 
-export type ParsedSelectedWriteTransition<TResponse> = SecurityMutationTransition<TResponse>;
+export type ParsedSelectedWriteTransition<TResponse> =
+  | Readonly<{
+      outcome: "succeeded";
+      payload_summary: Readonly<Record<string, string | number | boolean | null>>;
+      response: TResponse;
+    }>
+  | Readonly<{
+      outcome: "failed" | "incomplete";
+      error_code: ErrorCode;
+      payload_summary: Readonly<Record<string, string | number | boolean | null>>;
+    }>;
 
 type SelectedWriteAuditPhase = "accepted" | "terminal";
 type SelectedWriteAuditOutcome =
@@ -284,7 +294,8 @@ export function requireSelectedWriteManifest(
     entry.csrf !== "required_for_device" ||
     !["not_applicable", "requires_unlocked_host"].includes(entry.lock) ||
     entry.audit.executor !== executor ||
-    (entry.audit.catalog_state === "owned_extension") !== (entry.id === "session_start") ||
+    entry.audit.catalog_state !== "selected" ||
+    entry.audit.catalog_owner_task !== null ||
     (entry.operation_kind !== null && entry.operation_kind !== entry.audit.action)
   ) {
     throw new TypeError("HostDeck selected-write manifest policy is contradictory.");

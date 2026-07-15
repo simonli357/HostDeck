@@ -3,7 +3,11 @@ import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { cliExitCodes, runCli } from "../packages/cli/src/index.js";
+import {
+  cliExitCodes,
+  createHostDeckApiClient,
+  runCli
+} from "../packages/cli/src/index.js";
 import { startHostHttpService } from "../packages/server/src/index.js";
 import {
   createFakeTmuxAdapter,
@@ -70,7 +74,7 @@ describe("service-mode CLI smoke", () => {
     }
   });
 
-  it("runs CLI start, list, send, and stop through the foreground HTTP service", async () => {
+  it("runs CLI list, send, and stop through the foreground legacy HTTP service", async () => {
     const port = await getAvailablePort("127.0.0.1");
     const stateDir = tempDir("hostdeck-service-cli-routes-state-");
     const fakeTmux = createFakeTmuxAdapter({ now: fixedNow });
@@ -86,11 +90,12 @@ describe("service-mode CLI smoke", () => {
     });
 
     try {
-      const start = await runCli(["--api-url", service.baseUrl.toString(), "start", "--name", "cli-http-demo", "--cwd", stateDir], {
-        env: {}
+      await createHostDeckApiClient({
+        baseUrl: service.baseUrl
+      }).startSession({
+        name: "cli-http-demo",
+        cwd: stateDir
       });
-      expect(start.exitCode).toBe(cliExitCodes.ok);
-      expect(start.stdout).toContain("Started session: cli-http-demo");
 
       const list = await runCli(["--api-url", service.baseUrl.toString(), "list"], { env: {} });
       expect(list.exitCode).toBe(cliExitCodes.ok);

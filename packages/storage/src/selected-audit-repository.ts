@@ -16,7 +16,8 @@ import {
   selectedAuditEventRecordSchema,
   selectedAuditTrailSchema,
   selectedSecurityAuditEventRecordSchema,
-  selectedSecurityAuditV1EventRecordSchema
+  selectedSecurityAuditV1EventRecordSchema,
+  selectedSessionStartAuditEventRecordSchema
 } from "@hostdeck/contracts";
 import type Database from "better-sqlite3";
 
@@ -226,7 +227,7 @@ export function reconcileSelectedAuditOrphansBatch(
         outcome: "incomplete",
         payload_summary: reconciliationPayloadSummary(accepted, candidate),
         error_code: "runtime_unavailable"
-      }, candidate);
+      }, candidate, accepted.action);
       parseTrail(operationId, [accepted, terminal], "audit_operation_conflict");
       insertRecord(db, terminal, reconciliationSecuritySchemaVersion(candidate));
     }
@@ -846,6 +847,8 @@ function parseRecord(candidate: unknown, catalog: AuditWriteCatalog): WritableAu
       ? historicalSelectedNetworkAuditEventRecordSchema.safeParse(candidate)
       : isSelectedSecurityAuditAction(securityAction)
         ? selectedSecurityAuditEventRecordSchema.safeParse(candidate)
+        : securityAction === "session_start"
+          ? selectedSessionStartAuditEventRecordSchema.safeParse(candidate)
         : selectedAuditEventRecordSchema.safeParse(candidate);
   if (!result.success) {
     throw new HostDeckSelectedAuditRepositoryError(
@@ -908,7 +911,10 @@ function parseStoredRecord(row: SelectedAuditRow): PersistedSelectedAuditEventRe
         "Stored selected security audit record is missing its contract version."
       );
     }
-    const result = persistedSelectedAuditEventRecordSchema.safeParse(candidate);
+    const result =
+      row.action === "session_start"
+        ? selectedSessionStartAuditEventRecordSchema.safeParse(candidate)
+        : persistedSelectedAuditEventRecordSchema.safeParse(candidate);
     if (!result.success) {
       throw new HostDeckSelectedAuditRepositoryError("invalid_audit_trail", "Stored selected audit record is invalid.", {
         cause: result.error
@@ -955,6 +961,12 @@ function reconciliationPayloadSummary(
   accepted: PersistedSelectedAuditEventRecord,
   candidate: PendingAuditCandidate
 ): Readonly<Record<string, unknown>> {
+  if (accepted.action === "session_start") {
+    return Object.freeze({
+      schema_version: 1,
+      reconciliation_reason: "host_restart_without_terminal"
+    });
+  }
   if (!candidate.securityAction) return Object.freeze({ reason: "host_restart_without_terminal" });
   if (
     reconciliationSecuritySchemaVersion(candidate) === 2 &&
@@ -987,7 +999,8 @@ function reconciliationPayloadSummary(
 
 function parseReconciliationRecord(
   candidate: unknown,
-  pending: PendingAuditCandidate
+  pending: PendingAuditCandidate,
+  action: PersistedSelectedAuditEventRecord["action"]
 ): PersistedSelectedAuditEventRecord {
   const version = reconciliationSecuritySchemaVersion(pending);
   const result =
@@ -995,6 +1008,8 @@ function parseReconciliationRecord(
       ? selectedSecurityAuditEventRecordSchema.safeParse(candidate)
       : version === 1
         ? selectedSecurityAuditV1EventRecordSchema.safeParse(candidate)
+        : action === "session_start"
+          ? selectedSessionStartAuditEventRecordSchema.safeParse(candidate)
         : selectedAuditEventRecordSchema.safeParse(candidate);
   if (!result.success) {
     throw new HostDeckSelectedAuditRepositoryError(
