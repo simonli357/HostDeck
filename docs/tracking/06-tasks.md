@@ -16,19 +16,18 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-065` Implement the read-only skills API and CLI | ready | none | Exposes the completed exact skills capability through the authenticated selected manifest. |
-| 2 | `IFC-V1-040` Implement exact managed-session start API and CLI command | ready | none | Exposes the completed managed-thread start service through the selected write gate. |
-| 3 | `IFC-V1-061` Implement exact managed-thread archive API and CLI command | ready | none | Exposes the completed archive service through the selected write gate. |
-| 4 | `IFC-V1-041` Implement one-session prompt API and CLI send command | ready | none | Exposes the completed prompt runtime service through the selected write gate. |
-| 5 | `IFC-V1-042` Implement exact model catalog/read/select API and CLI mappings | ready | none | Exposes the selected model capability without slash-command fallback. |
-| 6 | `IFC-V1-062` Implement exact goal API and CLI mappings | ready | none | Exposes the selected goal lifecycle without slash-command fallback. |
-| 7 | `IFC-V1-063` Implement exact plan API and CLI mappings | ready | none | Exposes the selected plan-mode capability without slash-command fallback. |
-| 8 | `IFC-V1-064` Implement compact progress read and confirmed compact API/CLI mapping | ready | none | Exposes the selected compact capability and truthful progress state. |
-| 9 | `IFC-V1-044` Implement pending-approval read/respond API and CLI mappings | ready | none | Exposes the completed approval service through the selected read and write boundaries. |
-| 10 | `IFC-V1-045` Implement exact active-turn interrupt API and CLI command | ready | none | Exposes the completed exact-turn interrupt service through the selected write gate. |
-| 11 | `IFC-V1-049` Enforce operation idempotency and concurrency limits | ready | none | Hardens duplicate and concurrent selected writes before aggregate production composition. |
-| 12 | `INT-V1-007` Implement runtime process/socket supervision | ready | none | The accepted structured vertical permits explicit foreground/service ownership work independently of remote contract implementation. |
-| 13 | `IFC-V1-035` Add bounded subscriber queues and revoke/disconnect/archive cleanup | ready | none | Exact active/opening-stream revoke is complete; bounded subscriber ownership can progress independently of the ingress spike. |
+| 1 | `IFC-V1-040` Implement exact managed-session start API and CLI command | ready | none | Exposes the completed managed-thread start service through the selected write gate. |
+| 2 | `IFC-V1-061` Implement exact managed-thread archive API and CLI command | ready | none | Exposes the completed archive service through the selected write gate. |
+| 3 | `IFC-V1-041` Implement one-session prompt API and CLI send command | ready | none | Exposes the completed prompt runtime service through the selected write gate. |
+| 4 | `IFC-V1-042` Implement exact model catalog/read/select API and CLI mappings | ready | none | Exposes the selected model capability without slash-command fallback. |
+| 5 | `IFC-V1-062` Implement exact goal API and CLI mappings | ready | none | Exposes the selected goal lifecycle without slash-command fallback. |
+| 6 | `IFC-V1-063` Implement exact plan API and CLI mappings | ready | none | Exposes the selected plan-mode capability without slash-command fallback. |
+| 7 | `IFC-V1-064` Implement compact progress read and confirmed compact API/CLI mapping | ready | none | Exposes the selected compact capability and truthful progress state. |
+| 8 | `IFC-V1-044` Implement pending-approval read/respond API and CLI mappings | ready | none | Exposes the completed approval service through the selected read and write boundaries. |
+| 9 | `IFC-V1-045` Implement exact active-turn interrupt API and CLI command | ready | none | Exposes the completed exact-turn interrupt service through the selected write gate. |
+| 10 | `IFC-V1-049` Enforce operation idempotency and concurrency limits | ready | none | Hardens duplicate and concurrent selected writes before aggregate production composition. |
+| 11 | `INT-V1-007` Implement runtime process/socket supervision | ready | none | The accepted structured vertical permits explicit foreground/service ownership work independently of remote contract implementation. |
+| 12 | `IFC-V1-035` Add bounded subscriber queues and revoke/disconnect/archive cleanup | ready | none | Exact active/opening-stream revoke is complete; bounded subscriber ownership can progress independently of the ingress spike. |
 
 ## Intentional Blockers
 
