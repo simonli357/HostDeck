@@ -204,6 +204,9 @@ describe.skipIf(!requireSmoke)(
             } | null;
           } = { current: null };
           let connectionATransportError = "none";
+          let connectionATransportCause = "none";
+          let tuiATeardownStage: "before" | "during" | "after" = "before";
+          let connectionACloseStage = "none";
 
           const consume = (
             message: CodexConnectionNotification,
@@ -231,6 +234,9 @@ describe.skipIf(!requireSmoke)(
                 connectionATransportError = classifyTransportError(
                   event.error.message
                 );
+                connectionATransportCause = classifyTransportCause(
+                  event.error.cause
+                );
               }
               return;
             }
@@ -242,6 +248,7 @@ describe.skipIf(!requireSmoke)(
               clean: event.clean,
               reason_class: classifyTransportCloseReason(event.reason)
             };
+            connectionACloseStage = tuiATeardownStage;
           });
           connectionA = createCodexAppServerConnection({
             transport: transportA,
@@ -415,7 +422,9 @@ describe.skipIf(!requireSmoke)(
           expect(isProcessAlive(appServerPid)).toBe(true);
           expect(socketIdentity(socketPath)).toBe(appSocketIdentity);
 
+          tuiATeardownStage = "during";
           await tuiA.close();
+          tuiATeardownStage = "after";
           tuiA = null;
           try {
             await waitFor(
@@ -495,6 +504,8 @@ describe.skipIf(!requireSmoke)(
                   connectionAClose.current?.reason_class ?? "none"
                 }`,
                 `transport_error=${connectionATransportError}`,
+                `transport_cause=${connectionATransportCause}`,
+                `transport_close_stage=${connectionACloseStage}`,
                 `generation_stable=${String(
                   liveConnectionA.generation === expectedGenerationA
                 )}`,
@@ -512,6 +523,15 @@ describe.skipIf(!requireSmoke)(
                 )}`,
                 `app_logged_queue_disconnect=${String(
                   appDiagnostics.includes("outbound queue")
+                )}`,
+                `app_logged_receive_error=${String(
+                  appDiagnostics.includes("websocket receive error")
+                )}`,
+                `app_logged_disconnected_drop=${String(
+                  appDiagnostics.includes("disconnected connection")
+                )}`,
+                `app_logged_router_exit=${String(
+                  appDiagnostics.includes("outbound router task exited")
                 )}`,
                 `app_logged_panic=${String(
                   appDiagnostics.toLowerCase().includes("panic")
@@ -1297,6 +1317,26 @@ function classifyTransportError(message: string): string {
     return "overload";
   }
   return "other";
+}
+
+function classifyTransportCause(cause: unknown): string {
+  if (!(cause instanceof Error)) return "none";
+  const code =
+    "code" in cause && typeof cause.code === "string"
+      ? cause.code
+      : "";
+  if (
+    [
+      "ECONNABORTED",
+      "ECONNRESET",
+      "ENOTCONN",
+      "EPIPE",
+      "ETIMEDOUT"
+    ].includes(code)
+  ) {
+    return code;
+  }
+  return code === "" ? "no_code" : "other";
 }
 
 function socketMatchesIdentity(
