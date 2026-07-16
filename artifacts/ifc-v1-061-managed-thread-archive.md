@@ -2,7 +2,7 @@
 
 Date: 2026-07-15
 
-Status: hardening criteria frozen before implementation.
+Status: complete.
 
 ## Scope
 
@@ -88,6 +88,15 @@ Implement the selected managed-thread archive boundary from exact wire intent th
 - Full unit, contract, integration, web, root/all-package typecheck, lint/exports, scaffold, planning, frozen install, exact binding, and production supply-chain gates.
 - Rerun the existing exact Codex 0.144.0 thread lifecycle smoke when the isolated reviewed binary is available; it already owns real `thread/archive` protocol semantics. No physical phone is required for this headless leaf.
 - Manual staged diff, selected/legacy import separation, audit/privacy, public output, no-row-delete, no-second-dispatch, and no-unowned-doc-churn inspection.
+
+## Completion Evidence
+
+- `1d309de` froze these criteria before implementation. `2814ba9` implements the strict target-free request, unresolved-target write-gate mode, durable accepted receipt propagation, hardened archive saga, exact Fastify route, source CLI command, and vertical evidence. `914f349` closes `BUG-010`, the cleanup race discovered while rerunning the real lifecycle smoke.
+- Focused archive/gate/service/route/client/CLI coverage passed 115 tests across 11 files; the final selected regression set passed 77 tests across 6 files. The exact CLI-to-HTTP-to-gate/audit/service/SQLite/fake-Codex vertical passed, including response loss and same-operation retry without redispatch.
+- Full validation passed: unit 1,407 with 36 skipped across 149 passing and 22 skipped files; contract 261 across 31 files; integration 18 across 4 files; web 33 across 3 files; root typecheck; lint and 9-package export check; scaffold; planning; and frozen-lockfile install.
+- The default Codex 0.144.3 correctly failed the version gate. The isolated reviewed Codex 0.144.0 then passed the binding check for 671 files at tree identity `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24` and passed two consecutive real no-turn start/list/read/resume/archive lifecycle smokes with no retained temporary root.
+- `pnpm audit --prod` remains externally unavailable because npm's retired audit endpoint returns HTTP 410. No dependency or lockfile changed in this leaf.
+- Manual review confirmed auth/lock/deadline before target reads, exact durable receipt identity, full mapping/projection/runtime identity checks, one archive dispatch, durable uncertainty latching and restart reconciliation, retained archived rows, stable bounded errors, no legacy `stop` reuse, and no aggregate/UI/package/phone claim.
 
 ## Downstream Ownership
 
