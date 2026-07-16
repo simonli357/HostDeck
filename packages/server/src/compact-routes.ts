@@ -35,6 +35,10 @@ import {
   selectedApiRouteManifest
 } from "./selected-api-route-manifest.js";
 import {
+  assertHostDeckSelectedWriteAdmissionPolicy,
+  type HostDeckSelectedWriteAdmissionPolicy
+} from "./selected-write-admission-policy.js";
+import {
   assertHostDeckSelectedWriteAuditExecutor,
   type HostDeckSelectedWriteAuditExecutor
 } from "./selected-write-audit-executor.js";
@@ -54,6 +58,7 @@ export interface HostDeckCompactRuntimePort {
 }
 
 export interface CreateHostDeckCompactRouteRegistrationInput {
+  readonly admission: HostDeckSelectedWriteAdmissionPolicy;
   readonly audit: HostDeckSelectedWriteAuditExecutor;
   readonly compact: Pick<CodexCompactControlService, "compact" | "snapshot">;
   readonly csrf: HostDeckCsrfPolicy;
@@ -88,7 +93,7 @@ interface CompactManifestEntries {
   readonly start: SelectedApiRouteManifestEntry;
 }
 
-const registrationInputKeys = ["audit", "compact", "csrf", "lock", "runtime", "state"] as const;
+const registrationInputKeys = ["admission", "audit", "compact", "csrf", "lock", "runtime", "state"] as const;
 const compactPortKeys = ["compact", "snapshot"] as const;
 const runtimePortKeys = ["read"] as const;
 const statePortKeys = ["get"] as const;
@@ -101,6 +106,7 @@ export function createHostDeckCompactRouteRegistration(
   input: CreateHostDeckCompactRouteRegistrationInput
 ): HostDeckRoutePluginRegistration {
   const values = readExactDataObject(input, registrationInputKeys, "HostDeck compact route input is invalid.");
+  assertHostDeckSelectedWriteAdmissionPolicy(values.admission);
   assertHostDeckSelectedWriteAuditExecutor(values.audit);
   assertHostDeckCsrfPolicy(values.csrf);
   assertHostDeckHostLockPolicy(values.lock);
@@ -111,6 +117,7 @@ export function createHostDeckCompactRouteRegistration(
     execute: values.audit.execute as HostDeckSelectedWriteAuditExecute<"compact">
   });
   const gate = createHostDeckSelectedWriteGate({
+    admission: values.admission,
     manifest: manifest.start,
     audit,
     csrf: values.csrf,

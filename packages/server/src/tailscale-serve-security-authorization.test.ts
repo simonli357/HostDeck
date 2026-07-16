@@ -45,6 +45,7 @@ import {
   type SelectedApiRouteManifestEntry,
   selectedApiRouteManifest
 } from "./selected-api-route-manifest.js";
+import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
 import {
   createHostDeckSelectedWriteAuditPort,
   createHostDeckSelectedWriteGate,
@@ -598,6 +599,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
     }
   });
   const writeGate = createHostDeckSelectedWriteGate({
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     audit: writeAudit,
     csrf: csrfPolicy,
     lock,
@@ -615,6 +617,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
     }),
     createHostDeckDeviceRevokeRouteRegistration({
       activeDeviceAuthority: authenticationPolicy.activeDeviceAuthority,
+      admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
       audit: auditExecutor,
       csrf: csrfPolicy,
       devices: { revoke: (input) => revocation.revoke(input) },

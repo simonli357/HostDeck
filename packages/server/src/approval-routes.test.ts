@@ -45,6 +45,7 @@ import {
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import { createHostDeckHostLockPolicy } from "./host-lock-routes.js";
 import { createHostDeckLanCertificatePolicy } from "./lan-certificate-policy.js";
+import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
 import { createHostDeckSelectedWriteAuditExecutor } from "./selected-write-audit-executor.js";
 
 const temporaryDirectories: string[] = [];
@@ -94,6 +95,11 @@ describe("selected approval routes", () => {
         null,
         {},
         { ...harness.routeInput, extra: true },
+        { ...harness.routeInput, admission: undefined },
+        {
+          ...harness.routeInput,
+          admission: Object.freeze({ ...harness.routeInput.admission })
+        },
         { ...harness.routeInput, approvals: {} },
         { ...harness.routeInput, approvals: { ...harness.routeInput.approvals, extra: true } },
         { ...harness.routeInput, audit: {} },
@@ -410,11 +416,14 @@ describe("selected approval routes", () => {
     }
   });
 
-  it("blocks duplicate operation ids and suppresses success when terminal audit fails", async () => {
+  it("replays duplicate operation results and suppresses success when terminal audit fails", async () => {
     const duplicate = await createHarness();
     try {
-      expect((await respondApproval(duplicate, responseRequest)).statusCode).toBe(200);
-      expectStableError(await respondApproval(duplicate, responseRequest), 409, "operation_conflict");
+      const first = await respondApproval(duplicate, responseRequest);
+      expect(first.statusCode, first.body).toBe(200);
+      const replay = await respondApproval(duplicate, responseRequest);
+      expect(replay.statusCode, replay.body).toBe(200);
+      expect(replay.json()).toEqual(first.json());
       expect(duplicate.respondCalls()).toHaveLength(1);
     } finally {
       await duplicate.close();
@@ -448,6 +457,7 @@ interface HarnessOptions {
 }
 
 interface RouteInputFixture {
+  readonly admission: CreateHostDeckApprovalRouteRegistrationInput["admission"];
   readonly approvals: CreateHostDeckApprovalRouteRegistrationInput["approvals"];
   readonly audit: ReturnType<typeof createHostDeckSelectedWriteAuditExecutor>;
   readonly csrf: ReturnType<typeof createHostDeckCsrfPolicy>;
@@ -536,6 +546,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   let stateIndex = 0;
   let runtimeIndex = 0;
   const routeInput: RouteInputFixture = {
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     approvals: {
       async list(this: void, target: unknown) {
         listThis = this;
@@ -690,6 +701,7 @@ async function createPairedHarness(): Promise<PairedHarness> {
   });
   const respondCalls: Record<string, unknown>[] = [];
   const registration = createHostDeckApprovalRouteRegistration({
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     approvals: {
       async list() {
         return [approval("pending", null)];

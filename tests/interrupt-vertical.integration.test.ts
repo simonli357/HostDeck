@@ -27,6 +27,7 @@ import {
   createHostDeckInterruptRouteRegistration,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckRequestTrustPolicy,
+  createHostDeckSelectedWriteAdmissionPolicy,
   createHostDeckSelectedWriteAuditExecutor
 } from "../packages/server/src/index.js";
 import {
@@ -116,6 +117,10 @@ describe("managed-session interrupt selected vertical", () => {
       now: () => new Date(auditTimestamp)
     });
     const registration = createHostDeckInterruptRouteRegistration({
+      admission: createHostDeckSelectedWriteAdmissionPolicy({
+        resourceBudget: defaultResourceBudget,
+        now: () => performance.now()
+      }),
       interrupts: {
         interrupt: interruptService.interrupt,
         requireInterruptible: interruptService.requireInterruptible,
@@ -205,8 +210,8 @@ describe("managed-session interrupt selected vertical", () => {
         env: {},
         createInterruptOperationId: () => operationId
       });
-      expect(replay).toMatchObject({ exitCode: cliExitCodes.apiError, stdout: "" });
-      expect(replay.stderr).toContain("operation_conflict");
+      expect(replay).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });
+      expect(replay.stdout).toBe(response.stdout);
       expect(adapter.calls).toHaveLength(1);
 
       const duplicate = await runCli(args, {

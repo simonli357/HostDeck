@@ -38,6 +38,7 @@ import {
   HostDeckManagedCodexThreadServiceError,
   type ManagedCodexThreadServiceOutcome
 } from "./managed-thread-service.js";
+import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
 import { createHostDeckSelectedWriteAuditExecutor } from "./selected-write-audit-executor.js";
 import {
   createHostDeckSessionArchiveRouteRegistration,
@@ -92,6 +93,11 @@ describe("selected managed-session archive route", () => {
         null,
         {},
         { ...harness.routeInput, extra: true },
+        { ...harness.routeInput, admission: undefined },
+        {
+          ...harness.routeInput,
+          admission: Object.freeze({ ...harness.routeInput.admission })
+        },
         { ...harness.routeInput, audit: {} },
         { ...harness.routeInput, csrf: {} },
         { ...harness.routeInput, lock: {} },
@@ -413,13 +419,14 @@ describe("selected managed-session archive route", () => {
     }
   });
 
-  it("rejects a duplicate operation id after one successful dispatch", async () => {
+  it("replays a duplicate operation result after one successful dispatch", async () => {
     const harness = await createHarness();
     try {
       const first = await archive(harness, archiveRequest);
       expect(first.statusCode, first.body).toBe(202);
       const duplicate = await archive(harness, archiveRequest);
-      expectStableError(duplicate, 409, "operation_conflict");
+      expect(duplicate.statusCode, duplicate.body).toBe(202);
+      expect(duplicate.json()).toEqual(first.json());
       expect(harness.archiveCalls()).toEqual([sessionId]);
       expect(
         harness.auditRepository.require(archiveRequest.operation_id).records
@@ -484,7 +491,8 @@ describe("selected managed-session archive route", () => {
         ...archiveRequest,
         operation_id: operationId
       });
-      expectStableError(retry, 409, "operation_conflict");
+      expect(retry.statusCode, retry.body).toBe(202);
+      expect(retry.json()).toMatchObject({ operation_id: operationId, state: "accepted" });
       expect(harness.archiveCalls()).toEqual([sessionId]);
     } finally {
       releaseArchive?.();
@@ -504,6 +512,7 @@ interface HarnessOptions {
 }
 
 interface RouteInputFixture {
+  readonly admission: ReturnType<typeof createHostDeckSelectedWriteAdmissionPolicy>;
   readonly audit: ReturnType<typeof createHostDeckSelectedWriteAuditExecutor>;
   readonly csrf: ReturnType<typeof createHostDeckCsrfPolicy>;
   readonly lock: ReturnType<typeof createHostDeckHostLockPolicy>;
@@ -569,6 +578,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   const archiveCalls: string[] = [];
   let runtimeReads = 0;
   const routeInput: RouteInputFixture = {
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     audit,
     csrf,
     lock,
@@ -677,6 +687,7 @@ async function createPairedHarness(
   const archiveCalls: string[] = [];
   let runtimeReads = 0;
   const registration = createHostDeckSessionArchiveRouteRegistration({
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     audit,
     csrf,
     lock,

@@ -34,6 +34,10 @@ import {
   selectedApiRouteManifest
 } from "./selected-api-route-manifest.js";
 import {
+  assertHostDeckSelectedWriteAdmissionPolicy,
+  type HostDeckSelectedWriteAdmissionPolicy
+} from "./selected-write-admission-policy.js";
+import {
   assertHostDeckSelectedWriteAuditExecutor,
   type HostDeckSelectedWriteAuditExecutor
 } from "./selected-write-audit-executor.js";
@@ -53,6 +57,7 @@ export interface HostDeckInterruptRuntimePort {
 }
 
 export interface CreateHostDeckInterruptRouteRegistrationInput {
+  readonly admission: HostDeckSelectedWriteAdmissionPolicy;
   readonly interrupts: Pick<
     CodexInterruptControlService,
     "interrupt" | "requireInterruptible" | "waitForTerminal"
@@ -85,7 +90,7 @@ interface InterruptAdmission {
   readonly target_key: string;
 }
 
-const registrationInputKeys = ["audit", "csrf", "interrupts", "lock", "runtime", "state"] as const;
+const registrationInputKeys = ["admission", "audit", "csrf", "interrupts", "lock", "runtime", "state"] as const;
 const interruptPortKeys = ["interrupt", "requireInterruptible", "waitForTerminal"] as const;
 const runtimePortKeys = ["read"] as const;
 const statePortKeys = ["get"] as const;
@@ -97,6 +102,7 @@ export function createHostDeckInterruptRouteRegistration(
   input: CreateHostDeckInterruptRouteRegistrationInput
 ): HostDeckRoutePluginRegistration {
   const values = readExactDataObject(input, registrationInputKeys, "HostDeck interrupt route input is invalid.");
+  assertHostDeckSelectedWriteAdmissionPolicy(values.admission);
   assertHostDeckSelectedWriteAuditExecutor(values.audit);
   assertHostDeckCsrfPolicy(values.csrf);
   assertHostDeckHostLockPolicy(values.lock);
@@ -106,7 +112,7 @@ export function createHostDeckInterruptRouteRegistration(
     executor: "selected_write_gate",
     execute: values.audit.execute as HostDeckSelectedWriteAuditExecute<"interrupt">
   });
-  const gate = createHostDeckSelectedWriteGate({ manifest, audit, csrf: values.csrf, lock: values.lock });
+  const gate = createHostDeckSelectedWriteGate({ admission: values.admission, manifest, audit, csrf: values.csrf, lock: values.lock });
   let registered = false;
 
   return Object.freeze({

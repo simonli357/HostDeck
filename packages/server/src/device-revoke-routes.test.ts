@@ -42,6 +42,7 @@ import { createHostDeckSseTransportRegistration } from "./fastify-sse-transport.
 import { createHostDeckHostLockPolicy } from "./host-lock-routes.js";
 import { createHostDeckLanCertificatePolicy } from "./lan-certificate-policy.js";
 import { createSecurityMutationAuditExecutor } from "./security-mutation-audit-executor.js";
+import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
 
 const tempDirectories: string[] = [];
 const createdAt = new Date("2026-07-13T12:00:00.000Z");
@@ -96,6 +97,11 @@ describe("selected paired-device revoke route", () => {
         null,
         {},
         { ...harness.routeInput, extra: true },
+        { ...harness.routeInput, admission: undefined },
+        {
+          ...harness.routeInput,
+          admission: Object.freeze({ ...harness.routeInput.admission })
+        },
         { ...harness.routeInput, now: null },
         { ...harness.routeInput, devices: {} },
         { ...harness.routeInput, devices: { revoke: harness.routeInput.devices.revoke, extra: true } },
@@ -562,6 +568,7 @@ interface RouteInputFixture {
   readonly activeDeviceAuthority: ReturnType<
     typeof createHostDeckRequestAuthenticationPolicy
   >["activeDeviceAuthority"];
+  readonly admission: ReturnType<typeof createHostDeckSelectedWriteAdmissionPolicy>;
   readonly audit: ReturnType<typeof createSecurityMutationAuditExecutor>;
   readonly csrf: ReturnType<typeof createHostDeckCsrfPolicy>;
   readonly devices: { readonly revoke: ReturnType<typeof createDeviceRevocationRepository>["revoke"] };
@@ -685,6 +692,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
     now: nextDate
   });
   const routeInput: RouteInputFixture = {
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     activeDeviceAuthority: authenticationPolicy.activeDeviceAuthority,
     audit,
     csrf,

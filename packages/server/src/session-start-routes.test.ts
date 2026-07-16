@@ -38,6 +38,7 @@ import {
   HostDeckManagedCodexThreadServiceError,
   type ManagedCodexThreadServiceOutcome
 } from "./managed-thread-service.js";
+import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
 import { createHostDeckSelectedWriteAuditExecutor } from "./selected-write-audit-executor.js";
 import {
   createHostDeckSessionStartRouteRegistration,
@@ -89,6 +90,11 @@ describe("selected managed-session start route", () => {
         null,
         {},
         { ...harness.routeInput, extra: true },
+        { ...harness.routeInput, admission: undefined },
+        {
+          ...harness.routeInput,
+          admission: Object.freeze({ ...harness.routeInput.admission })
+        },
         { ...harness.routeInput, audit: {} },
         { ...harness.routeInput, csrf: {} },
         { ...harness.routeInput, lock: {} },
@@ -449,13 +455,14 @@ describe("selected managed-session start route", () => {
     }
   });
 
-  it("lets one operation-id dispatch win and rejects replay before a second start", async () => {
+  it("replays one operation-id result without a second start", async () => {
     const harness = await createHarness();
     try {
       const first = await start(harness, request);
       const second = await start(harness, request);
       expect(first.statusCode, first.body).toBe(201);
-      expectStableError(second, 409, "operation_conflict");
+      expect(second.statusCode, second.body).toBe(201);
+      expect(second.json()).toEqual(first.json());
       expect(harness.startCalls()).toHaveLength(1);
       expect(harness.auditRepository.require(request.operation_id)).toMatchObject({
         state: "terminal",
@@ -477,6 +484,10 @@ describe("selected managed-session start route", () => {
         state: "pending",
         records: [{ phase: "accepted", outcome: "accepted" }]
       });
+      const replay = await start(harness, request);
+      expectStableError(replay, 503, "audit_unavailable");
+      expect(harness.startCalls()).toHaveLength(1);
+      expect(harness.auditRepository.require(request.operation_id).records).toHaveLength(1);
     } finally {
       await harness.close();
     }
@@ -489,6 +500,16 @@ describe("selected managed-session start route", () => {
       expectStableError(response, 503, "audit_unavailable", true);
       expect(harness.startCalls()).toEqual([]);
       expect(harness.auditRepository.get(request.operation_id)).toBeNull();
+      const retry = await start(harness, request);
+      expect(retry.statusCode, retry.body).toBe(201);
+      expect(harness.startCalls()).toHaveLength(1);
+      expect(harness.auditRepository.require(request.operation_id)).toMatchObject({
+        state: "terminal",
+        records: [
+          { phase: "accepted", outcome: "accepted" },
+          { phase: "terminal", outcome: "succeeded" }
+        ]
+      });
     } finally {
       await harness.close();
     }
@@ -519,6 +540,7 @@ interface HarnessOptions {
 }
 
 interface RouteInputFixture {
+  readonly admission: ReturnType<typeof createHostDeckSelectedWriteAdmissionPolicy>;
   readonly audit: ReturnType<typeof createHostDeckSelectedWriteAuditExecutor>;
   readonly csrf: ReturnType<typeof createHostDeckCsrfPolicy>;
   readonly lock: ReturnType<typeof createHostDeckHostLockPolicy>;
@@ -552,14 +574,19 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
     now: () => new Date(timestamp)
   });
   const baseAuditRepository = createSelectedAuditRepository(open.db);
+  let acceptedAuditFailuresRemaining = options.failAcceptedAudit ? 1 : 0;
   const executorRepository: SelectedAuditRepository = options.failAcceptedAudit
     ? {
         ...baseAuditRepository,
-        recordAccepted() {
-          throw new HostDeckSelectedAuditRepositoryError(
-            "audit_unavailable",
-            "private-audit-unavailable-sentinel"
-          );
+        recordAccepted(record) {
+          if (acceptedAuditFailuresRemaining > 0) {
+            acceptedAuditFailuresRemaining -= 1;
+            throw new HostDeckSelectedAuditRepositoryError(
+              "audit_unavailable",
+              "private-audit-unavailable-sentinel"
+            );
+          }
+          return baseAuditRepository.recordAccepted(record);
         }
       }
     : options.failTerminalAudit
@@ -606,6 +633,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
     : runtimeCandidate();
   const calls: unknown[] = [];
   const routeInput: RouteInputFixture = {
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     audit,
     csrf,
     lock,
@@ -714,6 +742,7 @@ async function createPairedHarness(
   });
   const calls: unknown[] = [];
   const registration = createHostDeckSessionStartRouteRegistration({
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     audit,
     csrf,
     lock,

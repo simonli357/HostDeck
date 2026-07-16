@@ -47,6 +47,10 @@ import {
   type SelectedApiRouteManifestEntry,
   selectedApiRouteManifest
 } from "./selected-api-route-manifest.js";
+import {
+  assertHostDeckSelectedWriteAdmissionPolicy,
+  type HostDeckSelectedWriteAdmissionPolicy
+} from "./selected-write-admission-policy.js";
 import { createHostDeckSelectedWriteGate } from "./selected-write-gate.js";
 import {
   createHostDeckSelectedWriteAuditPort,
@@ -63,6 +67,7 @@ export interface HostDeckDeviceRevokePort {
 
 export interface CreateHostDeckDeviceRevokeRouteRegistrationInput {
   readonly activeDeviceAuthority: HostDeckActiveDeviceAuthorityPolicy;
+  readonly admission: HostDeckSelectedWriteAdmissionPolicy;
   readonly audit: SecurityMutationAuditExecutor;
   readonly csrf: HostDeckCsrfPolicy;
   readonly devices: HostDeckDeviceRevokePort;
@@ -99,6 +104,7 @@ type RevokeDevice = HostDeckDeviceRevokePort["revoke"];
 
 const routeInputKeys = [
   "activeDeviceAuthority",
+  "admission",
   "audit",
   "csrf",
   "devices",
@@ -136,6 +142,7 @@ export function createHostDeckDeviceRevokeRouteRegistration(
     "HostDeck device-revoke route input is invalid."
   );
   assertHostDeckActiveDeviceAuthorityPolicy(values.activeDeviceAuthority);
+  assertHostDeckSelectedWriteAdmissionPolicy(values.admission);
   assertHostDeckSecurityMutationAuditExecutor(values.audit);
   assertHostDeckCsrfPolicy(values.csrf);
   assertHostDeckHostLockPolicy(values.lock);
@@ -156,6 +163,7 @@ export function createHostDeckDeviceRevokeRouteRegistration(
     execute: values.audit.execute as HostDeckSelectedWriteAuditExecute<"device_revoke">
   });
   const gate = createHostDeckSelectedWriteGate({
+    admission: values.admission,
     manifest,
     audit,
     csrf: values.csrf,

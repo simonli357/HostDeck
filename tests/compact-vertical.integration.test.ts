@@ -27,6 +27,7 @@ import {
   createHostDeckHostLockPolicy,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckRequestTrustPolicy,
+  createHostDeckSelectedWriteAdmissionPolicy,
   createHostDeckSelectedWriteAuditExecutor
 } from "../packages/server/src/index.js";
 import {
@@ -97,6 +98,10 @@ describe("managed-session compact selected vertical", () => {
       now: () => new Date(auditTimestamp)
     });
     const registration = createHostDeckCompactRouteRegistration({
+      admission: createHostDeckSelectedWriteAdmissionPolicy({
+        resourceBudget: defaultResourceBudget,
+        now: () => performance.now()
+      }),
       audit,
       compact: { compact: compactService.compact, snapshot: compactService.snapshot },
       csrf,
@@ -195,8 +200,8 @@ describe("managed-session compact selected vertical", () => {
         env: {},
         createCompactOperationId: () => operationId
       });
-      expect(duplicate).toMatchObject({ exitCode: cliExitCodes.apiError, stdout: "" });
-      expect(duplicate.stderr).toContain("operation_conflict");
+      expect(duplicate).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });
+      expect(duplicate.stdout).toBe(accepted.stdout);
       expect(runtimeCompact.calls).toHaveLength(1);
       expect(auditRepository.require(operationId).records).toHaveLength(2);
 

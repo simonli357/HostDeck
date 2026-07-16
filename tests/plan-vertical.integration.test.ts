@@ -31,6 +31,7 @@ import {
   createHostDeckPlanRouteRegistration,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckRequestTrustPolicy,
+  createHostDeckSelectedWriteAdmissionPolicy,
   createHostDeckSelectedWriteAuditExecutor
 } from "../packages/server/src/index.js";
 import {
@@ -132,6 +133,10 @@ describe("managed-session Plan selected vertical", () => {
       now: () => new Date(auditTimestamp)
     });
     const registration = createHostDeckPlanRouteRegistration({
+      admission: createHostDeckSelectedWriteAdmissionPolicy({
+        resourceBudget: defaultResourceBudget,
+        now: () => performance.now()
+      }),
       audit,
       csrf,
       lock,
@@ -296,8 +301,8 @@ describe("managed-session Plan selected vertical", () => {
         env: {},
         createPlanOperationId: () => enterOperationId
       });
-      expect(duplicate).toMatchObject({ exitCode: cliExitCodes.apiError, stdout: "" });
-      expect(duplicate.stderr).toContain("operation_conflict");
+      expect(duplicate).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });
+      expect(duplicate.stdout).toBe(entered.stdout);
       expect(runtimePlans.listCalls).toHaveLength(catalogCallsBeforeDuplicate);
       expect(runtimePlans.startCalls).toEqual([]);
       expect(auditRepository.require(enterOperationId).records).toHaveLength(2);

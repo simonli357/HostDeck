@@ -35,6 +35,10 @@ import {
   selectedApiRouteManifest
 } from "./selected-api-route-manifest.js";
 import {
+  assertHostDeckSelectedWriteAdmissionPolicy,
+  type HostDeckSelectedWriteAdmissionPolicy
+} from "./selected-write-admission-policy.js";
+import {
   assertHostDeckSelectedWriteAuditExecutor,
   type HostDeckSelectedWriteAuditExecutor
 } from "./selected-write-audit-executor.js";
@@ -54,6 +58,7 @@ export interface HostDeckGoalRuntimePort {
 }
 
 export interface CreateHostDeckGoalRouteRegistrationInput {
+  readonly admission: HostDeckSelectedWriteAdmissionPolicy;
   readonly audit: HostDeckSelectedWriteAuditExecutor;
   readonly csrf: HostDeckCsrfPolicy;
   readonly goals: Pick<CodexGoalControlService, "mutate" | "snapshot">;
@@ -92,7 +97,7 @@ interface MaterializedGoalMutation {
   readonly snapshot: GoalControlSnapshot;
 }
 
-const registrationInputKeys = ["audit", "csrf", "goals", "lock", "runtime", "state"] as const;
+const registrationInputKeys = ["admission", "audit", "csrf", "goals", "lock", "runtime", "state"] as const;
 const goalPortKeys = ["mutate", "snapshot"] as const;
 const runtimePortKeys = ["read"] as const;
 const statePortKeys = ["get"] as const;
@@ -112,6 +117,7 @@ export function createHostDeckGoalRouteRegistration(
   input: CreateHostDeckGoalRouteRegistrationInput
 ): HostDeckRoutePluginRegistration {
   const values = readExactDataObject(input, registrationInputKeys, "HostDeck goal route input is invalid.");
+  assertHostDeckSelectedWriteAdmissionPolicy(values.admission);
   assertHostDeckSelectedWriteAuditExecutor(values.audit);
   assertHostDeckCsrfPolicy(values.csrf);
   assertHostDeckHostLockPolicy(values.lock);
@@ -122,6 +128,7 @@ export function createHostDeckGoalRouteRegistration(
     execute: values.audit.execute as HostDeckSelectedWriteAuditExecute<"goal">
   });
   const gate = createHostDeckSelectedWriteGate({
+    admission: values.admission,
     manifest: manifest.mutate,
     audit,
     csrf: values.csrf,

@@ -30,6 +30,7 @@ import {
   createHostDeckModelRouteRegistration,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckRequestTrustPolicy,
+  createHostDeckSelectedWriteAdmissionPolicy,
   createHostDeckSelectedWriteAuditExecutor
 } from "../packages/server/src/index.js";
 import {
@@ -122,6 +123,10 @@ describe("managed-session model selected vertical", () => {
       now: () => new Date(auditTimestamp)
     });
     const registration = createHostDeckModelRouteRegistration({
+      admission: createHostDeckSelectedWriteAdmissionPolicy({
+        resourceBudget: defaultResourceBudget,
+        now: () => performance.now()
+      }),
       audit,
       csrf,
       lock,
@@ -236,8 +241,8 @@ describe("managed-session model selected vertical", () => {
         env: {},
         createModelOperationId: () => operationId
       });
-      expect(duplicate).toMatchObject({ exitCode: cliExitCodes.apiError, stdout: "" });
-      expect(duplicate.stderr).toContain("operation_conflict");
+      expect(duplicate).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });
+      expect(duplicate.stdout).toBe(selected.stdout);
       expect(runtimeModels.listCalls).toHaveLength(2);
       expect(runtimeModels.readCalls).toHaveLength(2);
       expect(runtimeModels.startCalls).toEqual([]);

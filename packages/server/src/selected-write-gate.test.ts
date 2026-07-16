@@ -9,6 +9,7 @@ import {
   defaultRetentionPolicy,
   managedSessionTargetSchema,
   promptOperationIntentSchema,
+  type ResourceBudget,
   resolveResourceBudget
 } from "@hostdeck/contracts";
 import {
@@ -45,6 +46,7 @@ import {
   type SelectedApiRouteManifestEntry,
   selectedApiRouteManifest
 } from "./selected-api-route-manifest.js";
+import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
 import {
   assertHostDeckSelectedWriteGate,
   assertHostDeckSelectedWriteUnresolvedMutation,
@@ -128,6 +130,7 @@ describe("selected exact-target write gate", () => {
       { ...dependencies, manifest: { ...promptManifest } },
       { ...dependencies, manifest: manifest("session_detail") },
       { ...dependencies, manifest: manifest("host_lock") },
+      { ...dependencies, admission: Object.freeze({ ...dependencies.admission }) },
       { ...dependencies, audit: Object.freeze({ ...dependencies.audit }) },
       { ...dependencies, csrf: Object.freeze({ ...dependencies.csrf }) },
       { ...dependencies, lock: Object.freeze({ ...dependencies.lock }) },
@@ -146,6 +149,7 @@ describe("selected exact-target write gate", () => {
     let accessorCalls = 0;
     const accessor = Object.defineProperties(
       {
+        admission: dependencies.admission,
         audit: dependencies.audit,
         csrf: dependencies.csrf,
         lock: dependencies.lock
@@ -523,6 +527,55 @@ describe("selected exact-target write gate", () => {
         dispatches: 1,
         response_preparations: 1,
         succeeded_results: 1
+      });
+    } finally {
+      await harness.app.close();
+    }
+  });
+
+  it("maps local-admin rate exhaustion before lock, target, audit, or dispatch", async () => {
+    const harness = createPromptHarness({
+      resourceBudget: resolveResourceBudget({
+        mutation_max_requests_per_device: 1
+      })
+    });
+    await harness.app.ready();
+    try {
+      const first = await harness.app.inject({
+        method: "POST",
+        url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+        payload: promptRequest("op_gate_rate_0001", promptTarget, "first")
+      });
+      expect(first.statusCode, first.body).toBe(200);
+
+      const rejected = await harness.app.inject({
+        method: "POST",
+        url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+        payload: promptRequest("op_gate_rate_0002", promptTarget, "second")
+      });
+      expect(rejected.statusCode, rejected.body).toBe(429);
+      expect(rejected.json()).toMatchObject({
+        error: { code: "rate_limited", retryable: true }
+      });
+      expect(harness.events).toEqual([
+        "parse",
+        "lock:read",
+        "target:resolve",
+        "audit:accepted",
+        "dispatch",
+        "response:prepare",
+        "audit:succeeded",
+        "parse"
+      ]);
+      expect(harness.gate.snapshot()).toMatchObject({
+        attempts: 2,
+        dispatches: 1,
+        succeeded_results: 1
+      });
+      expect(harness.admission.snapshot()).toMatchObject({
+        attempts: 2,
+        owner_claims: 1,
+        rate_rejections: 1
       });
     } finally {
       await harness.app.close();
@@ -1108,7 +1161,7 @@ describe("selected exact-target write gate", () => {
     }
   });
 
-  it("uses the real security executor and SQLite trail to reject concurrent duplicate operation IDs before a second dispatch", async () => {
+  it("uses the real security executor and SQLite trail to replay a concurrent same-intent operation without second audit or dispatch", async () => {
     const barrier = deferred<void>();
     const harness = createDeviceRevokeHarness({ dispatchBarrier: barrier.promise });
     await harness.app.ready();
@@ -1124,10 +1177,11 @@ describe("selected exact-target write gate", () => {
         url: "/api/v1/access/devices/client_target_alpha/revoke",
         payload: { operation_id: "op_gate_revoke_0001", confirmed: true }
       });
-      await waitFor(() => harness.auditAttempts() === 2);
+      await waitFor(() => harness.gate.snapshot().attempts === 2);
       barrier.resolve();
       const responses = await Promise.all([first, second]);
-      expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+      expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 200]);
+      expect(harness.auditAttempts()).toBe(1);
       expect(harness.dispatches()).toBe(1);
       expect(harness.lockChecks()).toBe(0);
       const trail = harness.repository.require("op_gate_revoke_0001");
@@ -1150,9 +1204,9 @@ describe("selected exact-target write gate", () => {
       ]);
       expect(harness.gate.snapshot()).toMatchObject({
         attempts: 2,
-        audit_failures: 1,
+        audit_failures: 0,
         dispatches: 1,
-        succeeded_results: 1
+        succeeded_results: 2
       });
     } finally {
       barrier.resolve();
@@ -1213,16 +1267,24 @@ describe("selected exact-target write gate", () => {
         const trail = harness.repository.require(fixtureCase.operationId);
         expect(trail.state).toBe(fixtureCase.expectedState);
         expect(trail.records.at(-1)?.outcome).toBe(fixtureCase.expectedOutcome);
+        const recordCount = trail.records.length;
 
-        if (fixtureCase.name === "terminal audit") {
-          const duplicate = await request();
-          expect(duplicate.statusCode).toBe(409);
-          expect(duplicate.json()).toMatchObject({
-            error: { code: "operation_conflict" }
-          });
-          expect(harness.dispatches()).toBe(1);
-          expect(harness.repository.require(fixtureCase.operationId).state).toBe("pending");
-        }
+        const duplicate = await request();
+        expect(
+          duplicate.statusCode,
+          `${fixtureCase.name} replay: ${duplicate.body}`
+        ).toBe(fixtureCase.expectedStatus);
+        expect(duplicate.json()).toMatchObject({
+          error: { code: fixtureCase.expectedCode }
+        });
+        expect(harness.dispatches()).toBe(1);
+        expect(harness.repository.require(fixtureCase.operationId)).toMatchObject({
+          state: fixtureCase.expectedState,
+          records: expect.any(Array)
+        });
+        expect(
+          harness.repository.require(fixtureCase.operationId).records
+        ).toHaveLength(recordCount);
       } finally {
         await harness.app.close();
       }
@@ -1284,6 +1346,7 @@ interface PromptHarnessOptions {
   readonly prepareFailure?: boolean;
   readonly privateHttpErrorStage?: "audit" | "parse" | "target";
   readonly rejectCsrf?: boolean;
+  readonly resourceBudget?: ResourceBudget;
   readonly secure?: boolean;
   readonly shortDeadline?: boolean;
   readonly targetFailure?: boolean;
@@ -1294,6 +1357,7 @@ interface PromptHarnessOptions {
 }
 
 interface PromptHarness {
+  readonly admission: ReturnType<typeof createHostDeckSelectedWriteAdmissionPolicy>;
   readonly activeDeviceAuthority: ReturnType<
     typeof createHostDeckRequestAuthenticationPolicy
   >["activeDeviceAuthority"];
@@ -1321,6 +1385,9 @@ function createPromptHarness(options: PromptHarnessOptions = {}): PromptHarness 
   let authenticationCalls = 0;
   let csrfCalls = 0;
   const permission = options.permission ?? "write";
+  const resourceBudget =
+    options.resourceBudget ??
+    (options.shortDeadline ? shortRequestBudget : defaultResourceBudget);
   const authentication = frozenAuthentication(permission, authenticatedAt);
   const csrfAuthentication = frozenAuthentication(permission, authorizedAt);
   const audit = createHostDeckSelectedWriteAuditPort<"prompt">({
@@ -1358,7 +1425,12 @@ function createPromptHarness(options: PromptHarnessOptions = {}): PromptHarness 
     },
     now: () => new Date(authorizedAt)
   });
+  const admission = createHostDeckSelectedWriteAdmissionPolicy({
+    resourceBudget,
+    now: () => performance.now()
+  });
   const gate = createHostDeckSelectedWriteGate({
+    admission,
     manifest: manifest("prompt_dispatch"),
     audit,
     csrf,
@@ -1387,10 +1459,11 @@ function createPromptHarness(options: PromptHarnessOptions = {}): PromptHarness 
       mode: options.secure ? "lan" : "loopback",
       transport
     }),
-    resourceBudget: options.shortDeadline ? shortRequestBudget : defaultResourceBudget,
+    resourceBudget,
     routePlugins: [registration]
   });
   return {
+    admission,
     activeDeviceAuthority: requestAuthenticationPolicy.activeDeviceAuthority,
     app,
     authenticationCalls: () => authenticationCalls,
@@ -1418,6 +1491,7 @@ async function createSecurePromptHarness(
   let authenticationCalls = 0;
   let csrfCalls = 0;
   const permission = options.permission ?? "write";
+  const resourceBudget = options.resourceBudget ?? defaultResourceBudget;
   const authentication = frozenAuthentication(permission, authenticatedAt);
   const csrfAuthentication = frozenAuthentication(permission, authorizedAt);
   const csrf = createHostDeckCsrfPolicy({
@@ -1448,7 +1522,12 @@ async function createSecurePromptHarness(
     },
     now: () => new Date(authorizedAt)
   });
+  const admission = createHostDeckSelectedWriteAdmissionPolicy({
+    resourceBudget,
+    now: () => performance.now()
+  });
   const gate = createHostDeckSelectedWriteGate({
+    admission,
     manifest: manifest("prompt_dispatch"),
     audit: createHostDeckSelectedWriteAuditPort<"prompt">({
       executor: "selected_write_gate",
@@ -1473,12 +1552,13 @@ async function createSecurePromptHarness(
       mode: "lan",
       transport: "https"
     }),
-    resourceBudget: defaultResourceBudget,
+    resourceBudget,
     routePlugins: [promptRegistration(gate, events, { ...options, secure: true })],
     tls: certificates.loadTls({ bind_host: "192.168.0.29", bind_port: 3777 })
   });
   await app.listen({ host: "127.0.0.1", port: 0, listenTextResolver: () => "" });
   return {
+    admission,
     activeDeviceAuthority: requestAuthenticationPolicy.activeDeviceAuthority,
     app,
     authenticationCalls: () => authenticationCalls,
@@ -1742,6 +1822,7 @@ function createPassThroughAuditExecute(
 
 function createGateDependencies(routeId: string) {
   return {
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     manifest: manifest(routeId),
     audit: createHostDeckSelectedWriteAuditPort<"prompt">({
       executor: "selected_write_gate",
@@ -1837,6 +1918,7 @@ function createDeviceRevokeHarness(
     now: () => new Date(authorizedAt)
   });
   const gate = createHostDeckSelectedWriteGate({
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     manifest: manifest("device_revoke"),
     audit,
     csrf,

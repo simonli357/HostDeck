@@ -48,6 +48,7 @@ import {
   createHostDeckPromptRouteRegistration,
   hostDeckPromptRouteRegistrationId
 } from "./prompt-routes.js";
+import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
 import { createHostDeckSelectedWriteAuditExecutor } from "./selected-write-audit-executor.js";
 
 const temporaryDirectories: string[] = [];
@@ -98,6 +99,11 @@ describe("selected managed-session prompt route", () => {
         null,
         {},
         { ...harness.routeInput, extra: true },
+        { ...harness.routeInput, admission: undefined },
+        {
+          ...harness.routeInput,
+          admission: Object.freeze({ ...harness.routeInput.admission })
+        },
         { ...harness.routeInput, audit: {} },
         { ...harness.routeInput, csrf: {} },
         { ...harness.routeInput, lock: {} },
@@ -497,13 +503,14 @@ describe("selected managed-session prompt route", () => {
     }
   });
 
-  it("blocks duplicate operation ids without a second prompt dispatch", async () => {
+  it("replays duplicate operation results without a second prompt dispatch", async () => {
     const harness = await createHarness();
     try {
       const first = await sendPrompt(harness, promptRequest);
       expect(first.statusCode, first.body).toBe(202);
       const duplicate = await sendPrompt(harness, promptRequest);
-      expectStableError(duplicate, 409, "operation_conflict");
+      expect(duplicate.statusCode, duplicate.body).toBe(202);
+      expect(duplicate.json()).toEqual(first.json());
       expect(harness.dispatchCalls()).toHaveLength(1);
       expect(
         harness.auditRepository.require(promptRequest.operation_id).records
@@ -571,7 +578,8 @@ describe("selected managed-session prompt route", () => {
         ...promptRequest,
         operation_id: operationId
       });
-      expectStableError(retry, 409, "operation_conflict");
+      expect(retry.statusCode, retry.body).toBe(202);
+      expect(retry.json()).toMatchObject({ operation_id: operationId, state: "accepted" });
       expect(harness.dispatchCalls()).toHaveLength(1);
     } finally {
       releaseDispatch?.();
@@ -621,6 +629,7 @@ interface HarnessOptions {
 }
 
 interface RouteInputFixture {
+  readonly admission: CreateHostDeckPromptRouteRegistrationInput["admission"];
   readonly audit: ReturnType<typeof createHostDeckSelectedWriteAuditExecutor>;
   readonly csrf: ReturnType<typeof createHostDeckCsrfPolicy>;
   readonly lock: ReturnType<typeof createHostDeckHostLockPolicy>;
@@ -697,6 +706,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   let acceptedBeforeDispatch = false;
   let signalObserved = false;
   const routeInput: RouteInputFixture = {
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     audit,
     csrf,
     lock,
@@ -857,6 +867,7 @@ async function createPairedHarness(
   const dispatchCalls: Record<string, unknown>[] = [];
   let runtimeReads = 0;
   const registration = createHostDeckPromptRouteRegistration({
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     audit,
     csrf,
     lock,

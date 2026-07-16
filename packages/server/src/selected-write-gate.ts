@@ -40,6 +40,12 @@ import type {
   SelectedApiAuditAction,
   SelectedApiRouteManifestEntry
 } from "./selected-api-route-manifest.js";
+import {
+  assertHostDeckSelectedWriteAdmissionPolicy,
+  type HostDeckSelectedWriteAdmissionDecision,
+  type HostDeckSelectedWriteAdmissionPolicy,
+  isHostDeckSelectedWriteAdmissionError
+} from "./selected-write-admission-policy.js";
 import { HostDeckSelectedWriteAuditExecutorError } from "./selected-write-audit-executor.js";
 import {
   assertHostDeckSelectedWriteAuditPort,
@@ -63,6 +69,7 @@ import {
 export * from "./selected-write-gate-contracts.js";
 
 export type HostDeckSelectedWriteGateStage =
+  | "admission"
   | "audit"
   | "authorization"
   | "configuration"
@@ -73,6 +80,7 @@ export type HostDeckSelectedWriteGateStage =
   | "target";
 
 export type HostDeckSelectedWriteGateErrorCode =
+  | "admission_contract_failed"
   | "audit_contract_failed"
   | "authorization_contract_failed"
   | "configuration_invalid"
@@ -183,6 +191,7 @@ export interface ExecuteHostDeckSelectedWriteGateInput<
 export interface CreateHostDeckSelectedWriteGateInput<
   TAction extends SelectedApiAuditAction
 > {
+  readonly admission: HostDeckSelectedWriteAdmissionPolicy;
   readonly manifest: SelectedApiRouteManifestEntry;
   readonly audit: HostDeckSelectedWriteAuditPort<TAction>;
   readonly csrf: HostDeckCsrfPolicy;
@@ -261,6 +270,7 @@ interface AuditObservation<TPreparedResponse> {
 const acceptedGates = new WeakSet<object>();
 const acceptedGateErrors = new WeakSet<object>();
 const gateErrorMessages: Record<HostDeckSelectedWriteGateErrorCode, string> = {
+  admission_contract_failed: "Selected-write admission boundary returned invalid state.",
   audit_contract_failed: "Selected-write audit boundary returned invalid state.",
   authorization_contract_failed: "Selected-write authorization boundary returned invalid state.",
   configuration_invalid: "Selected-write gate configuration is invalid.",
@@ -276,13 +286,16 @@ const maxCounter = Number.MAX_SAFE_INTEGER;
 export function createHostDeckSelectedWriteGate<
   TAction extends SelectedApiAuditAction
 >(input: CreateHostDeckSelectedWriteGateInput<TAction>): HostDeckSelectedWriteGate<TAction> {
-  let values: Readonly<Record<"audit" | "csrf" | "lock" | "manifest", unknown>>;
+  let values: Readonly<
+    Record<"admission" | "audit" | "csrf" | "lock" | "manifest", unknown>
+  >;
   try {
     values = readExactDataObject(
       input,
-      ["audit", "csrf", "lock", "manifest"],
+      ["admission", "audit", "csrf", "lock", "manifest"],
       "HostDeck selected-write gate input is invalid."
     );
+    assertHostDeckSelectedWriteAdmissionPolicy(values.admission);
     assertHostDeckSelectedWriteAuditPort<TAction>(values.audit);
     assertHostDeckCsrfPolicy(values.csrf);
     assertHostDeckHostLockPolicy(values.lock);
@@ -300,6 +313,7 @@ export function createHostDeckSelectedWriteGate<
   }
   const implementation = new DefaultHostDeckSelectedWriteGate(
     manifest,
+    values.admission as HostDeckSelectedWriteAdmissionPolicy,
     values.audit as HostDeckSelectedWriteAuditPort<TAction>,
     values.csrf as HostDeckCsrfPolicy,
     values.lock as HostDeckHostLockPolicy
@@ -380,6 +394,7 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
 
   constructor(
     private readonly manifest: SelectedApiRouteManifestEntry,
+    private readonly admission: HostDeckSelectedWriteAdmissionPolicy,
     private readonly audit: HostDeckSelectedWriteAuditPort<TAction>,
     private readonly csrf: HostDeckCsrfPolicy,
     private readonly lock: HostDeckHostLockPolicy
@@ -515,16 +530,6 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
       throw ownedBoundaryFailure(error, "authorization_contract_failed", "authorization");
     }
 
-    let lockState: HostDeckDurableLockState | null = null;
-    try {
-      if (this.manifest.lock === "requires_unlocked_host") {
-        lockState = requireHostDeckHostUnlocked(this.lock);
-      }
-    } catch (error) {
-      increment(this.counters, "lockFailures");
-      throw ownedBoundaryFailure(error, "lock_contract_failed", "lock");
-    }
-
     let deadline: OperationDeadline;
     try {
       deadline = hostDeckRequestDeadline(request);
@@ -537,6 +542,48 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
         "target_contract_failed",
         "target",
         "Selected mutation target is unavailable."
+      );
+    }
+
+    let admissionDecision: HostDeckSelectedWriteAdmissionDecision<
+      SecurityMutationExecutionResult<TPreparedResponse>
+    >;
+    try {
+      admissionDecision = this.admission.begin<
+        SecurityMutationExecutionResult<TPreparedResponse>
+      >({
+        operation_id: parsedMutation.operation_id,
+        actor: authority.actor,
+        route_id: this.manifest.id,
+        intent: selectedWriteAdmissionIntent(parsedMutation, mode),
+        signal: deadline.signal
+      });
+    } catch (error) {
+      throw admissionBoundaryFailure(error);
+    }
+    if (admissionDecision.state === "replay") {
+      let replayed: SecurityMutationExecutionResult<TPreparedResponse>;
+      try {
+        replayed = parseSelectedWriteAuditResult<TPreparedResponse>(
+          await admissionDecision.replay()
+        );
+      } catch (error) {
+        throw admissionBoundaryFailure(error);
+      }
+      this.recordResult(replayed);
+      return replayed;
+    }
+    const admissionOwner = admissionDecision;
+
+    let lockState: HostDeckDurableLockState | null = null;
+    try {
+      if (this.manifest.lock === "requires_unlocked_host") {
+        lockState = requireHostDeckHostUnlocked(this.lock);
+      }
+    } catch (error) {
+      increment(this.counters, "lockFailures");
+      return admissionOwner.abandon(
+        ownedBoundaryFailure(error, "lock_contract_failed", "lock")
       );
     }
 
@@ -569,20 +616,30 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
       requireOpenDeadline(deadline);
     } catch (error) {
       increment(this.counters, "targetFailures");
-      if (deadline.signal.aborted) throw timeoutError();
-      throw callbackFailure(
-        error,
-        "target_contract_failed",
-        "target",
-        "Selected mutation target is unavailable."
+      return admissionOwner.abandon(
+        deadline.signal.aborted
+          ? timeoutError()
+          : callbackFailure(
+              error,
+              "target_contract_failed",
+              "target",
+              "Selected mutation target is unavailable."
+            )
       );
     }
 
     if (mutation === null) {
       this.contractFailure();
-      throw gateError("target_contract_failed", "internal_error", "target", false);
+      return admissionOwner.abandon(
+        gateError("target_contract_failed", "internal_error", "target", false)
+      );
     }
     const finalizedMutation = mutation;
+    try {
+      admissionOwner.bindTarget(finalizedMutation.target);
+    } catch (error) {
+      throw admissionBoundaryFailure(error);
+    }
     const observation: AuditObservation<TPreparedResponse> = {
       transitionCalls: 0,
       transitionOutcome: null,
@@ -713,18 +770,14 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
         })
       ]);
     } catch (error) {
-      rethrowStaleIngressFailure(request, authority.authentication);
       increment(this.counters, "auditFailures");
-      if (
-        error instanceof HostDeckSecurityMutationAuditExecutorError ||
-        error instanceof HostDeckSelectedWriteAuditExecutorError
-      ) {
-        throw auditExecutorFailure(error);
-      }
-      if (isOwnedGateError(error)) {
-        throw error;
-      }
-      throw gateError("audit_contract_failed", "internal_error", "audit", false);
+      const mapped = mapAuditBoundaryFailure(
+        error,
+        request,
+        authority.authentication
+      );
+      if (isProvenAuditNotStarted(error)) return admissionOwner.abandon(mapped);
+      return admissionOwner.fail(mapped);
     } finally {
       auditCallbacksOpen = false;
     }
@@ -754,18 +807,145 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
     } catch {
       increment(this.counters, "auditFailures");
       this.contractFailure();
-      throw gateError("audit_contract_failed", "internal_error", "audit", false);
+      return admissionOwner.fail(
+        gateError("audit_contract_failed", "internal_error", "audit", false)
+      );
     }
 
-    if (result.outcome === "succeeded") increment(this.counters, "succeededResults");
-    else if (result.outcome === "failed") increment(this.counters, "failedResults");
-    else increment(this.counters, "incompleteResults");
-    return result;
+    let retained: SecurityMutationExecutionResult<TPreparedResponse>;
+    try {
+      retained = admissionOwner.complete(result);
+    } catch (error) {
+      throw admissionBoundaryFailure(error);
+    }
+    this.recordResult(retained);
+    return retained;
   }
 
   private contractFailure(): void {
     increment(this.counters, "contractFailures");
   }
+
+  private recordResult(result: SecurityMutationExecutionResult<unknown>): void {
+    if (result.outcome === "succeeded") increment(this.counters, "succeededResults");
+    else if (result.outcome === "failed") increment(this.counters, "failedResults");
+    else increment(this.counters, "incompleteResults");
+  }
+}
+
+function selectedWriteAdmissionIntent<
+  TAction extends SelectedApiAuditAction,
+  TSelector,
+  TParsedValue
+>(
+  mutation:
+    | HostDeckSelectedWriteMutation<TAction, TParsedValue>
+    | HostDeckSelectedWriteUnresolvedMutation<TAction, TSelector, TParsedValue>,
+  mode: "resolved" | "unresolved"
+): Readonly<Record<string, unknown>> {
+  if (mode === "resolved") {
+    const resolved = mutation as HostDeckSelectedWriteMutation<TAction, TParsedValue>;
+    return Object.freeze({
+      action: resolved.action,
+      target: resolved.target,
+      accepted_summary: resolved.accepted_summary,
+      value: resolved.value
+    });
+  }
+  const unresolved = mutation as HostDeckSelectedWriteUnresolvedMutation<
+    TAction,
+    TSelector,
+    TParsedValue
+  >;
+  return Object.freeze({
+    action: unresolved.action,
+    selector: unresolved.selector,
+    accepted_summary: unresolved.accepted_summary,
+    value: unresolved.value
+  });
+}
+
+function admissionBoundaryFailure(error: unknown): Error {
+  if (error instanceof HostDeckHttpError || isOwnedGateError(error)) return error;
+  if (!isHostDeckSelectedWriteAdmissionError(error)) {
+    return gateError(
+      "admission_contract_failed",
+      "internal_error",
+      "admission",
+      false
+    );
+  }
+  return new HostDeckHttpError({
+    code: error.api_code,
+    message: admissionFailureMessage(error.api_code),
+    retryable: error.retry_safe,
+    status: admissionFailureStatus(error.api_code)
+  });
+}
+
+function admissionFailureStatus(code: ErrorCode): number {
+  switch (code) {
+    case "validation_error":
+      return 400;
+    case "operation_conflict":
+      return 409;
+    case "rate_limited":
+      return 429;
+    case "operation_timeout":
+      return 504;
+    case "service_overloaded":
+      return 503;
+    default:
+      return 500;
+  }
+}
+
+function admissionFailureMessage(code: ErrorCode): string {
+  switch (code) {
+    case "validation_error":
+      return "Selected mutation admission input is invalid.";
+    case "operation_conflict":
+      return "Selected mutation conflicts with a retained operation.";
+    case "rate_limited":
+      return "Selected mutation request rate is exhausted.";
+    case "operation_timeout":
+      return "Selected mutation replay deadline exceeded.";
+    case "service_overloaded":
+      return "Selected mutation admission capacity is exhausted.";
+    default:
+      return "Selected mutation admission could not be completed.";
+  }
+}
+
+function mapAuditBoundaryFailure(
+  error: unknown,
+  request: FastifyRequest,
+  authentication: SelectedRequestAuthenticationContext
+): Error {
+  try {
+    rethrowStaleIngressFailure(request, authentication);
+  } catch (staleError) {
+    if (staleError instanceof HostDeckHttpError) return staleError;
+    return gateError("audit_contract_failed", "internal_error", "audit", false);
+  }
+  if (
+    error instanceof HostDeckSecurityMutationAuditExecutorError ||
+    error instanceof HostDeckSelectedWriteAuditExecutorError
+  ) {
+    return auditExecutorFailure(error);
+  }
+  if (isOwnedGateError(error)) return error;
+  return gateError("audit_contract_failed", "internal_error", "audit", false);
+}
+
+function isProvenAuditNotStarted(error: unknown): boolean {
+  return (
+    (error instanceof HostDeckSecurityMutationAuditExecutorError ||
+      error instanceof HostDeckSelectedWriteAuditExecutorError) &&
+    error.mutation_outcome === "not_started" &&
+    error.audit_state === "none" &&
+    error.api_code !== "operation_conflict"
+  );
 }
 
 function rethrowStaleIngressFailure(

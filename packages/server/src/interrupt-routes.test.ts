@@ -45,6 +45,7 @@ import {
   hostDeckInterruptRouteRegistrationId
 } from "./interrupt-routes.js";
 import { createHostDeckLanCertificatePolicy } from "./lan-certificate-policy.js";
+import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
 import { createHostDeckSelectedWriteAuditExecutor } from "./selected-write-audit-executor.js";
 
 const temporaryDirectories: string[] = [];
@@ -93,6 +94,11 @@ describe("selected interrupt route", () => {
         null,
         {},
         { ...harness.routeInput, extra: true },
+        { ...harness.routeInput, admission: undefined },
+        {
+          ...harness.routeInput,
+          admission: Object.freeze({ ...harness.routeInput.admission })
+        },
         { ...harness.routeInput, interrupts: {} },
         { ...harness.routeInput, interrupts: { ...harness.routeInput.interrupts, extra: true } },
         { ...harness.routeInput, audit: {} },
@@ -390,11 +396,14 @@ describe("selected interrupt route", () => {
     }
   });
 
-  it("blocks duplicate operation ids and suppresses success when terminal audit fails", async () => {
+  it("replays duplicate operation results and suppresses success when terminal audit fails", async () => {
     const duplicate = await createHarness();
     try {
-      expect((await interruptTurn(duplicate, interruptRequest)).statusCode).toBe(200);
-      expectStableError(await interruptTurn(duplicate, interruptRequest), 409, "operation_conflict");
+      const first = await interruptTurn(duplicate, interruptRequest);
+      expect(first.statusCode, first.body).toBe(200);
+      const replay = await interruptTurn(duplicate, interruptRequest);
+      expect(replay.statusCode, replay.body).toBe(200);
+      expect(replay.json()).toEqual(first.json());
       expect(duplicate.interruptCalls()).toHaveLength(1);
     } finally {
       await duplicate.close();
@@ -427,6 +436,7 @@ interface HarnessOptions {
 }
 
 interface RouteInputFixture {
+  readonly admission: CreateHostDeckInterruptRouteRegistrationInput["admission"];
   readonly interrupts: CreateHostDeckInterruptRouteRegistrationInput["interrupts"];
   readonly audit: ReturnType<typeof createHostDeckSelectedWriteAuditExecutor>;
   readonly csrf: ReturnType<typeof createHostDeckCsrfPolicy>;
@@ -512,6 +522,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   let stateReads = 0;
   let runtimeReads = 0;
   const routeInput: RouteInputFixture = {
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     interrupts: {
       async requireInterruptible(this: void, target: unknown) {
         requireThis = this;
@@ -663,6 +674,7 @@ async function createPairedHarness(): Promise<PairedHarness> {
   });
   const interruptCalls: Record<string, unknown>[] = [];
   const registration = createHostDeckInterruptRouteRegistration({
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     interrupts: {
       async requireInterruptible() {},
       async interrupt(intent: unknown) {

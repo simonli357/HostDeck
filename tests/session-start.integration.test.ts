@@ -16,6 +16,7 @@ import {
   createHostDeckHostLockPolicy,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckRequestTrustPolicy,
+  createHostDeckSelectedWriteAdmissionPolicy,
   createHostDeckSelectedWriteAuditExecutor,
   createHostDeckSessionStartRouteRegistration,
   createManagedCodexThreadService
@@ -100,6 +101,10 @@ describe("managed-session start vertical", () => {
       now: () => new Date(at)
     });
     const route = createHostDeckSessionStartRouteRegistration({
+      admission: createHostDeckSelectedWriteAdmissionPolicy({
+        resourceBudget: defaultResourceBudget,
+        now: () => performance.now()
+      }),
       audit,
       csrf,
       lock,
@@ -188,11 +193,13 @@ describe("managed-session start vertical", () => {
         { env: {}, createStartOperationId: () => operationId }
       );
       expect(repeated).toMatchObject({
-        exitCode: cliExitCodes.apiError,
-        stdout: ""
+        exitCode: cliExitCodes.ok,
+        stderr: ""
       });
-      expect(repeated.stderr).toContain("requires recovery before another attempt");
+      expect(repeated.stdout).toContain("Started session: vertical-session");
+      expect(repeated.stdout).toContain("ID: sess_start_vertical_001");
       expect(threadFixture.startCalls()).toHaveLength(1);
+      expect(audits.require(operationId).records).toHaveLength(2);
     } finally {
       await app.close();
       if (open.db.open) open.db.close();

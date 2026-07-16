@@ -27,6 +27,7 @@ import {
   createHostDeckHostLockPolicy,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckRequestTrustPolicy,
+  createHostDeckSelectedWriteAdmissionPolicy,
   createHostDeckSelectedWriteAuditExecutor
 } from "../packages/server/src/index.js";
 import {
@@ -132,6 +133,10 @@ describe("managed-session goal selected vertical", () => {
       now: () => new Date(auditTimestamp)
     });
     const registration = createHostDeckGoalRouteRegistration({
+      admission: createHostDeckSelectedWriteAdmissionPolicy({
+        resourceBudget: defaultResourceBudget,
+        now: () => performance.now()
+      }),
       audit,
       csrf,
       goals: {
@@ -264,8 +269,8 @@ describe("managed-session goal selected vertical", () => {
         env: {},
         createGoalOperationId: () => setOperationId
       });
-      expect(duplicate).toMatchObject({ exitCode: cliExitCodes.apiError, stdout: "" });
-      expect(duplicate.stderr).toContain("operation_conflict");
+      expect(duplicate).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });
+      expect(duplicate.stdout).toBe(set.stdout);
       expect(runtimeGoals.setPausedCalls).toHaveLength(1);
       expect(runtimeGoals.setStatusCalls).toHaveLength(1);
       expect(auditRepository.require(setOperationId).records).toHaveLength(2);

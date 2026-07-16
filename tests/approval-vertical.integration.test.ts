@@ -32,6 +32,7 @@ import {
   createHostDeckHostLockPolicy,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckRequestTrustPolicy,
+  createHostDeckSelectedWriteAdmissionPolicy,
   createHostDeckSelectedWriteAuditExecutor
 } from "../packages/server/src/index.js";
 import {
@@ -161,6 +162,10 @@ describe("managed-session approval selected vertical", () => {
       now: () => new Date(auditTimestamp)
     });
     const registration = createHostDeckApprovalRouteRegistration({
+      admission: createHostDeckSelectedWriteAdmissionPolicy({
+        resourceBudget: defaultResourceBudget,
+        now: () => performance.now()
+      }),
       approvals: {
         list: approvalService.list,
         respond: approvalService.respond,
@@ -290,8 +295,8 @@ describe("managed-session approval selected vertical", () => {
         env: {},
         createApprovalOperationId: () => operationId
       });
-      expect(replay).toMatchObject({ exitCode: cliExitCodes.apiError, stdout: "" });
-      expect(replay.stderr).toContain("approval_not_pending");
+      expect(replay).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });
+      expect(replay.stdout).toBe(response.stdout);
       expect(adapter.responses).toHaveLength(1);
 
       const duplicate = await runCli(respondArgs, {

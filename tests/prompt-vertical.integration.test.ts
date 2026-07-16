@@ -31,6 +31,7 @@ import {
   createHostDeckPromptRouteRegistration,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckRequestTrustPolicy,
+  createHostDeckSelectedWriteAdmissionPolicy,
   createHostDeckSelectedWriteAuditExecutor
 } from "../packages/server/src/index.js";
 import {
@@ -116,6 +117,10 @@ describe("managed-session prompt selected vertical", () => {
       now: () => new Date(eventTimestamp)
     });
     const registration = createHostDeckPromptRouteRegistration({
+      admission: createHostDeckSelectedWriteAdmissionPolicy({
+        resourceBudget: defaultResourceBudget,
+        now: () => performance.now()
+      }),
       audit,
       csrf,
       lock,
@@ -271,10 +276,10 @@ describe("managed-session prompt selected vertical", () => {
         createPromptOperationId: () => operationId
       });
       expect(duplicate).toMatchObject({
-        exitCode: cliExitCodes.apiError,
-        stdout: ""
+        exitCode: cliExitCodes.ok,
+        stderr: ""
       });
-      expect(duplicate.stderr).toContain("operation_conflict");
+      expect(duplicate.stdout).toBe(result.stdout);
       expect(duplicate.stderr).not.toContain(privatePrompt);
       expect(turns.startCalls).toHaveLength(1);
       expect(turns.steerCalls).toHaveLength(0);

@@ -20,6 +20,7 @@ import {
   createHostDeckHostLockPolicy,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckRequestTrustPolicy,
+  createHostDeckSelectedWriteAdmissionPolicy,
   createHostDeckSelectedWriteAuditExecutor,
   createHostDeckSessionArchiveRouteRegistration,
   createManagedCodexThreadService
@@ -104,6 +105,10 @@ describe("managed-session archive selected vertical", () => {
       now: () => new Date(archiveTimestamp)
     });
     const registration = createHostDeckSessionArchiveRouteRegistration({
+      admission: createHostDeckSelectedWriteAdmissionPolicy({
+        resourceBudget: defaultResourceBudget,
+        now: () => performance.now()
+      }),
       audit,
       csrf,
       lock,

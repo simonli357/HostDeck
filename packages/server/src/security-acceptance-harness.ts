@@ -63,6 +63,7 @@ import {
   hostDeckPairingPolicySnapshot
 } from "./pairing-routes.js";
 import { createSecurityMutationAuditExecutor } from "./security-mutation-audit-executor.js";
+import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
 
 const sentinelReadPath = "/__acceptance/v1/read";
 const sentinelWritePath = "/__acceptance/v1/write";
@@ -301,6 +302,7 @@ export async function createSecurityAcceptanceHarness(
   const deviceRevocation = createDeviceRevocationRepository(opened.db);
   const revokeRegistration = createHostDeckDeviceRevokeRouteRegistration({
     activeDeviceAuthority: authenticationPolicy.activeDeviceAuthority,
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     audit: auditExecutor,
     csrf: csrfPolicy,
     devices: { revoke: (candidate) => deviceRevocation.revoke(candidate) },

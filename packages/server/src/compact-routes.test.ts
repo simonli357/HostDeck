@@ -46,6 +46,7 @@ import {
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import { createHostDeckHostLockPolicy } from "./host-lock-routes.js";
 import { createHostDeckLanCertificatePolicy } from "./lan-certificate-policy.js";
+import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
 import { createHostDeckSelectedWriteAuditExecutor } from "./selected-write-audit-executor.js";
 
 const temporaryDirectories: string[] = [];
@@ -96,6 +97,11 @@ describe("selected managed-session compact routes", () => {
         null,
         {},
         { ...harness.routeInput, extra: true },
+        { ...harness.routeInput, admission: undefined },
+        {
+          ...harness.routeInput,
+          admission: Object.freeze({ ...harness.routeInput.admission })
+        },
         { ...harness.routeInput, audit: {} },
         { ...harness.routeInput, compact: {} },
         { ...harness.routeInput, compact: { ...harness.routeInput.compact, extra: true } },
@@ -459,11 +465,14 @@ describe("selected managed-session compact routes", () => {
     }
   });
 
-  it("blocks duplicate operation ids, preserves response-loss truth, and suppresses unproven audit success", async () => {
+  it("replays duplicate operation results, preserves response-loss truth, and suppresses unproven audit success", async () => {
     const duplicate = await createHarness();
     try {
-      expect((await startCompact(duplicate, startRequest)).statusCode).toBe(202);
-      expectStableError(await startCompact(duplicate, startRequest), 409, "operation_conflict");
+      const first = await startCompact(duplicate, startRequest);
+      expect(first.statusCode, first.body).toBe(202);
+      const replay = await startCompact(duplicate, startRequest);
+      expect(replay.statusCode, replay.body).toBe(202);
+      expect(replay.json()).toEqual(first.json());
       expect(duplicate.startCalls()).toHaveLength(1);
     } finally {
       await duplicate.close();
@@ -503,11 +512,11 @@ describe("selected managed-session compact routes", () => {
       releaseStart?.();
       await closed;
       await waitFor(() => loss.auditRepository.get(operationId)?.state === "terminal");
-      expectStableError(
-        await startCompact(loss, { ...startRequest, operation_id: operationId }),
-        409,
-        "operation_conflict"
-      );
+      const replay = await startCompact(loss, { ...startRequest, operation_id: operationId });
+      expect(replay.statusCode, replay.body).toBe(202);
+      expect(replay.json()).toMatchObject({
+        progress: { operation_id: operationId, state: "accepted" }
+      });
       expect(loss.startCalls()).toHaveLength(1);
     } finally {
       releaseStart?.();
@@ -583,6 +592,7 @@ interface HarnessOptions {
 }
 
 interface RouteInputFixture {
+  readonly admission: CreateHostDeckCompactRouteRegistrationInput["admission"];
   readonly audit: ReturnType<typeof createHostDeckSelectedWriteAuditExecutor>;
   readonly compact: CreateHostDeckCompactRouteRegistrationInput["compact"];
   readonly csrf: ReturnType<typeof createHostDeckCsrfPolicy>;
@@ -655,6 +665,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   let snapshotIndex = 0;
   let startIndex = 0;
   const routeInput: RouteInputFixture = {
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     audit,
     compact: {
       async snapshot(target: unknown) {
@@ -788,6 +799,7 @@ async function createPairedHarness(permission: "read" | "write"): Promise<Paired
   const startCalls: Record<string, unknown>[] = [];
   let stateReads = 0;
   const registration = createHostDeckCompactRouteRegistration({
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     audit,
     compact: {
       async snapshot() {

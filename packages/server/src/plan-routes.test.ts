@@ -46,6 +46,7 @@ import {
   createHostDeckPlanRouteRegistration,
   hostDeckPlanRouteRegistrationId
 } from "./plan-routes.js";
+import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
 import { createHostDeckSelectedWriteAuditExecutor } from "./selected-write-audit-executor.js";
 
 const temporaryDirectories: string[] = [];
@@ -95,6 +96,11 @@ describe("selected managed-session Plan routes", () => {
         null,
         {},
         { ...harness.routeInput, extra: true },
+        { ...harness.routeInput, admission: undefined },
+        {
+          ...harness.routeInput,
+          admission: Object.freeze({ ...harness.routeInput.admission })
+        },
         { ...harness.routeInput, audit: {} },
         { ...harness.routeInput, csrf: {} },
         { ...harness.routeInput, lock: {} },
@@ -506,11 +512,14 @@ describe("selected managed-session Plan routes", () => {
     }
   });
 
-  it("blocks duplicate operation ids and keeps response-loss selection authoritative", async () => {
+  it("replays duplicate operation results and keeps response-loss selection authoritative", async () => {
     const duplicate = await createHarness();
     try {
-      expect((await selectPlan(duplicate, enterRequest)).statusCode).toBe(200);
-      expectStableError(await selectPlan(duplicate, enterRequest), 409, "operation_conflict");
+      const first = await selectPlan(duplicate, enterRequest);
+      expect(first.statusCode, first.body).toBe(200);
+      const replay = await selectPlan(duplicate, enterRequest);
+      expect(replay.statusCode, replay.body).toBe(200);
+      expect(replay.json()).toEqual(first.json());
       expect(duplicate.selectCalls()).toHaveLength(1);
       expect(duplicate.auditRepository.require(enterRequest.operation_id).records).toHaveLength(2);
     } finally {
@@ -551,11 +560,11 @@ describe("selected managed-session Plan routes", () => {
       releaseSelect?.();
       await closed;
       await waitFor(() => loss.auditRepository.get(operationId)?.state === "terminal");
-      expectStableError(
-        await selectPlan(loss, { ...enterRequest, operation_id: operationId }),
-        409,
-        "operation_conflict"
-      );
+      const replay = await selectPlan(loss, { ...enterRequest, operation_id: operationId });
+      expect(replay.statusCode, replay.body).toBe(200);
+      expect(replay.json()).toMatchObject({
+        pending: { selection_operation_id: operationId }
+      });
       expect(loss.selectCalls()).toHaveLength(1);
       expect(loss.auditRepository.require(operationId).records[1]).toMatchObject({ outcome: "succeeded" });
     } finally {
@@ -600,6 +609,7 @@ interface HarnessOptions {
 }
 
 interface RouteInputFixture {
+  readonly admission: CreateHostDeckPlanRouteRegistrationInput["admission"];
   readonly audit: ReturnType<typeof createHostDeckSelectedWriteAuditExecutor>;
   readonly csrf: ReturnType<typeof createHostDeckCsrfPolicy>;
   readonly lock: ReturnType<typeof createHostDeckHostLockPolicy>;
@@ -674,6 +684,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   let snapshotIndex = 0;
   let selectIndex = 0;
   const routeInput: RouteInputFixture = {
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     audit,
     csrf,
     lock,
@@ -812,6 +823,7 @@ async function createPairedHarness(permission: "read" | "write"): Promise<Paired
   });
   const selectCalls: Record<string, unknown>[] = [];
   const registration = createHostDeckPlanRouteRegistration({
+    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
     audit,
     csrf,
     lock,

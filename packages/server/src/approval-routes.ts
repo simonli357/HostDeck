@@ -39,6 +39,10 @@ import {
   selectedApiRouteManifest
 } from "./selected-api-route-manifest.js";
 import {
+  assertHostDeckSelectedWriteAdmissionPolicy,
+  type HostDeckSelectedWriteAdmissionPolicy
+} from "./selected-write-admission-policy.js";
+import {
   assertHostDeckSelectedWriteAuditExecutor,
   type HostDeckSelectedWriteAuditExecutor
 } from "./selected-write-audit-executor.js";
@@ -58,6 +62,7 @@ export interface HostDeckApprovalRuntimePort {
 }
 
 export interface CreateHostDeckApprovalRouteRegistrationInput {
+  readonly admission: HostDeckSelectedWriteAdmissionPolicy;
   readonly approvals: Pick<CodexApprovalControlService, "list" | "respond" | "snapshot" | "waitForTerminal">;
   readonly audit: HostDeckSelectedWriteAuditExecutor;
   readonly csrf: HostDeckCsrfPolicy;
@@ -100,7 +105,7 @@ interface ApprovalManifestEntries {
   readonly respond: SelectedApiRouteManifestEntry;
 }
 
-const registrationInputKeys = ["approvals", "audit", "csrf", "lock", "runtime", "state"] as const;
+const registrationInputKeys = ["admission", "approvals", "audit", "csrf", "lock", "runtime", "state"] as const;
 const approvalPortKeys = ["list", "respond", "snapshot", "waitForTerminal"] as const;
 const runtimePortKeys = ["read"] as const;
 const statePortKeys = ["get"] as const;
@@ -112,6 +117,7 @@ export function createHostDeckApprovalRouteRegistration(
   input: CreateHostDeckApprovalRouteRegistrationInput
 ): HostDeckRoutePluginRegistration {
   const values = readExactDataObject(input, registrationInputKeys, "HostDeck approval route input is invalid.");
+  assertHostDeckSelectedWriteAdmissionPolicy(values.admission);
   assertHostDeckSelectedWriteAuditExecutor(values.audit);
   assertHostDeckCsrfPolicy(values.csrf);
   assertHostDeckHostLockPolicy(values.lock);
@@ -122,6 +128,7 @@ export function createHostDeckApprovalRouteRegistration(
     execute: values.audit.execute as HostDeckSelectedWriteAuditExecute<"approval_response">
   });
   const gate = createHostDeckSelectedWriteGate({
+    admission: values.admission,
     manifest: manifest.respond,
     audit,
     csrf: values.csrf,

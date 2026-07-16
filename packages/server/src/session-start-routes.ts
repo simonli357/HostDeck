@@ -34,6 +34,10 @@ import {
   selectedApiRouteManifest
 } from "./selected-api-route-manifest.js";
 import {
+  assertHostDeckSelectedWriteAdmissionPolicy,
+  type HostDeckSelectedWriteAdmissionPolicy
+} from "./selected-write-admission-policy.js";
+import {
   assertHostDeckSelectedWriteAuditExecutor,
   type HostDeckSelectedWriteAuditExecutor
 } from "./selected-write-audit-executor.js";
@@ -53,6 +57,7 @@ export interface HostDeckSessionStartRuntimePort {
 }
 
 export interface CreateHostDeckSessionStartRouteRegistrationInput {
+  readonly admission: HostDeckSelectedWriteAdmissionPolicy;
   readonly audit: HostDeckSelectedWriteAuditExecutor;
   readonly csrf: HostDeckCsrfPolicy;
   readonly lock: HostDeckHostLockPolicy;
@@ -73,7 +78,7 @@ interface SessionStartRuntimeResolution {
   readonly runtime_version: string;
 }
 
-const routeInputKeys = ["audit", "csrf", "lock", "runtime", "sessions"] as const;
+const routeInputKeys = ["admission", "audit", "csrf", "lock", "runtime", "sessions"] as const;
 const runtimePortKeys = ["read"] as const;
 const sessionPortKeys = ["start"] as const;
 const selectedStateKeys = ["mapping", "projection"] as const;
@@ -91,6 +96,7 @@ export function createHostDeckSessionStartRouteRegistration(
     routeInputKeys,
     "HostDeck session-start route input is invalid."
   );
+  assertHostDeckSelectedWriteAdmissionPolicy(values.admission);
   assertHostDeckSelectedWriteAuditExecutor(values.audit);
   assertHostDeckCsrfPolicy(values.csrf);
   assertHostDeckHostLockPolicy(values.lock);
@@ -101,6 +107,7 @@ export function createHostDeckSessionStartRouteRegistration(
     execute: values.audit.execute as HostDeckSelectedWriteAuditExecute<"session_start">
   });
   const gate = createHostDeckSelectedWriteGate({
+    admission: values.admission,
     manifest,
     audit,
     csrf: values.csrf,

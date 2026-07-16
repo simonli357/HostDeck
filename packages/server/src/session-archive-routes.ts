@@ -36,6 +36,10 @@ import {
   selectedApiRouteManifest
 } from "./selected-api-route-manifest.js";
 import {
+  assertHostDeckSelectedWriteAdmissionPolicy,
+  type HostDeckSelectedWriteAdmissionPolicy
+} from "./selected-write-admission-policy.js";
+import {
   assertHostDeckSelectedWriteAuditExecutor,
   type HostDeckSelectedWriteAuditExecutor
 } from "./selected-write-audit-executor.js";
@@ -55,6 +59,7 @@ export interface HostDeckSessionArchiveRuntimePort {
 }
 
 export interface CreateHostDeckSessionArchiveRouteRegistrationInput {
+  readonly admission: HostDeckSelectedWriteAdmissionPolicy;
   readonly audit: HostDeckSelectedWriteAuditExecutor;
   readonly csrf: HostDeckCsrfPolicy;
   readonly lock: HostDeckHostLockPolicy;
@@ -82,7 +87,7 @@ interface ResolvedManagedTarget {
   readonly runtime_version: string;
 }
 
-const routeInputKeys = ["audit", "csrf", "lock", "runtime", "sessions"] as const;
+const routeInputKeys = ["admission", "audit", "csrf", "lock", "runtime", "sessions"] as const;
 const runtimePortKeys = ["read"] as const;
 const sessionPortKeys = ["archive", "read"] as const;
 const routeCandidateKeys = ["body", "params"] as const;
@@ -97,6 +102,7 @@ export function createHostDeckSessionArchiveRouteRegistration(
     routeInputKeys,
     "HostDeck session-archive route input is invalid."
   );
+  assertHostDeckSelectedWriteAdmissionPolicy(values.admission);
   assertHostDeckSelectedWriteAuditExecutor(values.audit);
   assertHostDeckCsrfPolicy(values.csrf);
   assertHostDeckHostLockPolicy(values.lock);
@@ -107,6 +113,7 @@ export function createHostDeckSessionArchiveRouteRegistration(
     execute: values.audit.execute as HostDeckSelectedWriteAuditExecute<"archive">
   });
   const gate = createHostDeckSelectedWriteGate({
+    admission: values.admission,
     manifest,
     audit,
     csrf: values.csrf,

@@ -50,6 +50,7 @@ export * from "./resume-routes.js";
 export * from "./security-mutation-audit-executor.js";
 export * from "./security-routes.js";
 export * from "./selected-api-route-manifest.js";
+export * from "./selected-write-admission-policy.js";
 export * from "./selected-write-audit-executor.js";
 export * from "./selected-write-gate.js";
 export * from "./session-archive-routes.js";
