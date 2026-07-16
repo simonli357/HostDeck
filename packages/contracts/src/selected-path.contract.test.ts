@@ -10,6 +10,7 @@ import {
   modelSelectionRequestSchema,
   pendingApprovalSchema,
   planControlSnapshotSchema,
+  planSelectionRequestSchema,
   promptDispatchResponseSchema,
   promptSessionRequestSchema,
   promptTurnControlSnapshotSchema,
@@ -462,6 +463,67 @@ describe("selected structured operation contracts", () => {
       }
     ]) {
       expect(() => goalMutationRequestSchema.parse(candidate)).toThrow();
+    }
+  });
+
+  it("exposes strict target-free public Plan selections", () => {
+    expect(
+      planSelectionRequestSchema.parse({
+        operation_id: "op_contract_plan_request_enter",
+        kind: "plan",
+        action: "enter",
+        expected_pending_revision: null
+      })
+    ).toEqual({
+      operation_id: "op_contract_plan_request_enter",
+      kind: "plan",
+      action: "enter",
+      expected_pending_revision: null
+    });
+    expect(
+      planSelectionRequestSchema.parse({
+        operation_id: "op_contract_plan_request_exit",
+        kind: "plan",
+        action: "exit",
+        expected_pending_revision: 3
+      })
+    ).toBeTruthy();
+    for (const candidate of [
+      {
+        operation_id: "op_contract_plan_request_target",
+        kind: "plan",
+        action: "enter",
+        expected_pending_revision: null,
+        target
+      },
+      {
+        operation_id: "op_contract_plan_request_mode",
+        kind: "plan",
+        action: "enter",
+        expected_pending_revision: null,
+        mode: "plan"
+      },
+      {
+        operation_id: "op_contract_plan_request_text",
+        kind: "plan",
+        action: "enter",
+        expected_pending_revision: null,
+        text: "/plan"
+      },
+      {
+        operation_id: "op_contract_plan_request_revision",
+        kind: "plan",
+        action: "exit",
+        expected_pending_revision: 0
+      },
+      {
+        operation_id: "op_contract_plan_request_action",
+        kind: "plan",
+        action: "default",
+        expected_pending_revision: null
+      }
+    ]) {
+      expect(() => planSelectionRequestSchema.parse(candidate)).toThrow();
     }
   });
 

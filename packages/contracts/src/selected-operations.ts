@@ -178,6 +178,15 @@ export const planOperationIntentSchema = z
   })
   .strict();
 
+export const planSelectionRequestSchema = z
+  .object({
+    operation_id: clientOperationIdSchema,
+    kind: z.literal("plan"),
+    action: z.enum(["enter", "exit"]),
+    expected_pending_revision: positiveSafeIntegerSchema.nullable()
+  })
+  .strict();
+
 export const usageOperationIntentSchema = z
   .object({
     ...managedOperationBaseShape,
@@ -1055,6 +1064,7 @@ export type PromptSessionRequest = z.infer<typeof promptSessionRequestSchema>;
 export type PromptDispatchResponse = z.infer<typeof promptDispatchResponseSchema>;
 export type ModelSelectionRequest = z.infer<typeof modelSelectionRequestSchema>;
 export type GoalMutationRequest = z.infer<typeof goalMutationRequestSchema>;
+export type PlanSelectionRequest = z.infer<typeof planSelectionRequestSchema>;
 export type ArchiveSessionRequest = z.infer<typeof archiveSessionRequestSchema>;
 export type SelectedOperationDispatch = z.infer<typeof selectedOperationDispatchSchema>;
 export type SelectedOperationTerminalOutcome = z.infer<typeof selectedOperationTerminalOutcomeSchema>;

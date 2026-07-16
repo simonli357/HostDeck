@@ -11,10 +11,16 @@ import {
   type ModelSelectionRequest,
   modelControlSnapshotSchema,
   modelSelectionRequestSchema,
+  type PlanControlSnapshot,
+  type PlanMode,
+  type PlanSelectionRequest,
   type PromptDispatchResponse,
   pairingClientLabelSchema,
+  planControlSnapshotSchema,
+  planSelectionRequestSchema,
   promptDispatchResponseSchema,
   type RemoteIngressPublicState,
+  type ResolvedPlanSettings,
   remoteIngressPublicStateSchema,
   type SelectedOperationDispatch,
   type SelectedSessionStartResponse,
@@ -55,6 +61,8 @@ export function renderHelp(): string {
     "  codexdeck goal SESSION_ID [--json]",
     "  codexdeck goal SESSION_ID set --objective OBJECTIVE [--expected-revision REVISION] [--json]",
     "  codexdeck goal SESSION_ID pause|resume|complete|clear --expected-revision REVISION [--json]",
+    "  codexdeck plan SESSION_ID [--json]",
+    "  codexdeck plan SESSION_ID enter|exit [--expected-revision REVISION] [--json]",
     "  codexdeck usage SESSION_ID [--json]",
     "  codexdeck skills SESSION_ID [--json]",
     "  codexdeck pair [--label LABEL] [--read-only | --write]",
@@ -196,6 +204,37 @@ export function renderGoalSnapshot(
   const output = json ? `${JSON.stringify(parsed.data, null, 2)}\n` : renderGoalText(parsed.data, mutation);
   if (output.includes("\0") || Buffer.byteLength(output, "utf8") > defaultResourceBudget.cli_response_max_bytes) {
     throw internalFailure("Goal rendering output exceeds its selected limit.");
+  }
+  return output;
+}
+
+export function renderPlanSnapshot(
+  candidate: PlanControlSnapshot,
+  json: boolean,
+  selectionCandidate?: PlanSelectionRequest
+): string {
+  let parsed: ReturnType<typeof planControlSnapshotSchema.safeParse>;
+  try {
+    parsed = planControlSnapshotSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Plan rendering input is invalid.");
+  }
+  if (!parsed.success) throw internalFailure("Plan rendering input is invalid.");
+  let selection: PlanSelectionRequest | null = null;
+  if (selectionCandidate !== undefined) {
+    const parsedSelection = planSelectionRequestSchema.safeParse({
+      operation_id: selectionCandidate.operation_id,
+      kind: selectionCandidate.kind,
+      action: selectionCandidate.action,
+      expected_pending_revision: selectionCandidate.expected_pending_revision
+    });
+    if (!parsedSelection.success) throw internalFailure("Plan rendering selection is invalid.");
+    selection = parsedSelection.data;
+    assertRenderedPlanSelection(parsed.data, selection);
+  }
+  const output = json ? `${JSON.stringify(parsed.data, null, 2)}\n` : renderPlanText(parsed.data, selection);
+  if (output.includes("\0") || Buffer.byteLength(output, "utf8") > defaultResourceBudget.cli_response_max_bytes) {
+    throw internalFailure("Plan rendering output exceeds its selected limit.");
   }
   return output;
 }
@@ -574,6 +613,114 @@ function renderGoalText(snapshot: GoalControlSnapshot, mutation: GoalMutationReq
   }
   lines.push("");
   return lines.join("\n");
+}
+
+function assertRenderedPlanSelection(snapshot: PlanControlSnapshot, selection: PlanSelectionRequest): void {
+  const desiredMode = selection.action === "enter" ? "plan" : "default";
+  if (!snapshot.modes.some((entry) => entry.mode === desiredMode)) {
+    throw internalFailure("Plan rendering selection is absent from the catalog.");
+  }
+  if (snapshot.pending !== null) {
+    if (
+      snapshot.pending.selection_operation_id !== selection.operation_id ||
+      snapshot.pending.mode !== desiredMode ||
+      snapshot.pending.catalog_state !== "available" ||
+      snapshot.pending.phase !== "pending" ||
+      snapshot.pending.turn_id !== null ||
+      snapshot.pending.resolved_settings !== null ||
+      snapshot.pending.error !== null ||
+      (selection.expected_pending_revision !== null &&
+        snapshot.pending.revision <= selection.expected_pending_revision)
+    ) {
+      throw internalFailure("Plan rendering selection is contradictory.");
+    }
+    return;
+  }
+  if (snapshot.current.state !== "confirmed" || snapshot.current.mode !== desiredMode) {
+    throw internalFailure("Plan rendering selection is contradictory.");
+  }
+}
+
+function renderPlanText(snapshot: PlanControlSnapshot, selection: PlanSelectionRequest | null): string {
+  const lines: string[] = [];
+  if (selection !== null) {
+    const desiredMode = selection.action === "enter" ? "plan" : "default";
+    if (snapshot.pending?.selection_operation_id === selection.operation_id) {
+      lines.push(
+        `Plan selection pending: ${selection.action} ${formatPlanMode(desiredMode)} mode, revision ${snapshot.pending.revision}. No turn was started.`
+      );
+    } else if (selection.expected_pending_revision !== null) {
+      lines.push(`Pending Plan selection cleared; ${formatPlanMode(desiredMode)} mode is confirmed.`);
+    } else {
+      lines.push(`Requested ${formatPlanMode(desiredMode)} mode is already confirmed.`);
+    }
+    lines.push("");
+  }
+
+  if (snapshot.current.state === "unknown") {
+    lines.push("Current mode: unknown.");
+  } else {
+    const runtimeModel = snapshot.current.runtime_model;
+    const observedAt = snapshot.current.observed_at;
+    if (runtimeModel === null || observedAt === null) {
+      throw internalFailure("Plan rendering current state is contradictory.");
+    }
+    lines.push(
+      `Current mode: ${formatPlanMode(snapshot.current.mode)} (confirmed).`,
+      `Current model: ${escapeTerminalText(runtimeModel)}.`,
+      `Current effort: ${formatPlanEffort(snapshot.current.reasoning_effort)}.`,
+      `Current observed: ${observedAt}.`
+    );
+  }
+
+  if (snapshot.pending === null) {
+    lines.push("Pending selection: none.");
+  } else {
+    const pending = snapshot.pending;
+    lines.push(
+      `Pending selection: ${formatPlanMode(pending.mode)} mode, revision ${pending.revision}, ${pending.phase}.`,
+      `Pending catalog state: ${pending.catalog_state}.`,
+      `Pending selected: ${pending.selected_at}.`,
+      `Pending turn: ${pending.turn_id === null ? "none" : escapeTerminalText(pending.turn_id)}.`,
+      `Pending resolved settings: ${formatResolvedPlanSettings(pending.resolved_settings)}.`,
+      `Pending error: ${pending.error === null ? "none" : pending.error.code}.`
+    );
+  }
+
+  const execution = snapshot.execution;
+  lines.push(
+    `Execution: ${execution.state}.`,
+    `Execution turn: ${execution.turn_id === null ? "none" : escapeTerminalText(execution.turn_id)}.`,
+    `Execution evidence: ${execution.evidence}.`,
+    `Execution summary: ${execution.summary === null ? "none" : escapeTerminalText(execution.summary)}.`,
+    `Execution updated: ${execution.updated_at ?? "none"}.`,
+    `Catalog revision: ${snapshot.catalog_revision}.`,
+    `Catalog observed: ${snapshot.catalog_observed_at}.`,
+    "",
+    "Modes:"
+  );
+  for (const mode of snapshot.modes) {
+    lines.push(
+      `- ${escapeTerminalText(mode.name)} [${formatPlanMode(mode.mode)}]; model ${mode.preset_model === null ? "unchanged" : escapeTerminalText(mode.preset_model)}; effort ${mode.preset_reasoning_effort === null ? "unchanged" : escapeTerminalText(mode.preset_reasoning_effort)}.`
+    );
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+function formatPlanMode(mode: PlanMode | null): string {
+  if (mode === "plan") return "Plan";
+  if (mode === "default") return "Default";
+  return "unknown";
+}
+
+function formatPlanEffort(effort: string | null): string {
+  return effort === null ? "not reported" : escapeTerminalText(effort);
+}
+
+function formatResolvedPlanSettings(settings: ResolvedPlanSettings | null): string {
+  if (settings === null) return "none";
+  return `model ${escapeTerminalText(settings.runtime_model)}, effort ${formatPlanEffort(settings.reasoning_effort)}`;
 }
 
 function formatModelEffort(effort: string | null): string {

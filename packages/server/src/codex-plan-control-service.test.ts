@@ -310,6 +310,42 @@ describe("Codex pending Plan control", () => {
     expect(harness.plans.startCalls).toHaveLength(0);
   });
 
+  it("fails closed on malformed, contradictory, recovery, and misplaced selected state", async () => {
+    const malformed = createHarness();
+    malformed.states.set(targetA.session_id, { mapping: {}, projection: {} } as never);
+    await expectPlanError(malformed.planService.snapshot(targetA), "target_mismatch");
+    expect(malformed.planService.readPendingSettings(targetA as never)).toEqual([]);
+
+    const contradictory = createHarness();
+    const contradictoryState = selectedState(targetA.session_id, targetA.codex_thread_id);
+    contradictory.states.set(targetA.session_id, {
+      mapping: contradictoryState.mapping,
+      projection: {
+        ...contradictoryState.projection,
+        session: {
+          ...contradictoryState.projection.session,
+          cwd: "/tmp/contradictory-plan-cwd" as typeof contradictoryState.projection.session.cwd
+        }
+      }
+    });
+    await expectPlanError(contradictory.planService.snapshot(targetA), "target_mismatch");
+    expect(contradictory.planService.readPendingSettings(targetA as never)).toEqual([]);
+
+    const recovery = createHarness();
+    const recoveryState = selectedState(targetA.session_id, targetA.codex_thread_id);
+    recovery.states.set(targetA.session_id, {
+      mapping: { ...recoveryState.mapping, disposition: "recovery_required" },
+      projection: recoveryState.projection
+    });
+    await expectPlanError(recovery.planService.snapshot(targetA), "target_not_writable");
+    expect(recovery.planService.readPendingSettings(targetA as never)).toEqual([]);
+
+    const misplaced = createHarness();
+    misplaced.states.set(targetA.session_id, selectedState(targetB.session_id, targetB.codex_thread_id));
+    await expectPlanError(misplaced.planService.snapshot(targetA), "target_mismatch");
+    expect(misplaced.planService.readPendingSettings(targetA as never)).toEqual([]);
+  });
+
   it("reserves global capacity across concurrent catalog reads and isolates sessions", async () => {
     const harness = createHarness({ includeSecondState: true, maxPendingSelections: 1 });
     const deferred = deferredResult<CodexPlanCatalog>();

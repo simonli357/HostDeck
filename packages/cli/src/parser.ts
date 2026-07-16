@@ -27,6 +27,13 @@ export type ParsedCliCommand =
       readonly expectedRevision: string | null;
       readonly json: boolean;
     }
+  | {
+      readonly kind: "plan";
+      readonly session: string;
+      readonly action: "enter" | "exit" | null;
+      readonly expectedRevision: number | null;
+      readonly json: boolean;
+    }
   | { readonly kind: "usage"; readonly session: string; readonly json: boolean }
   | { readonly kind: "skills"; readonly session: string; readonly json: boolean }
   | { readonly kind: "stop"; readonly session: string }
@@ -161,7 +168,7 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
     }
 
     if (token === "--") {
-      if (positionals[0] === "model" || positionals[0] === "goal") {
+      if (positionals[0] === "model" || positionals[0] === "goal" || positionals[0] === "plan") {
         throw usageFailure(`The ${positionals[0]} command does not accept an option terminator.`);
       }
       positionals.push(...args.slice(index + 1));
@@ -288,6 +295,20 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
         session: parsed.session,
         action: parsed.action,
         objective: parsed.objective,
+        expectedRevision: parsed.expectedRevision,
+        json: parsed.json
+      },
+      configFlags
+    };
+  }
+
+  if (command === "plan") {
+    const parsed = parsePlanOptions(rest, json);
+    return {
+      command: {
+        kind: "plan",
+        session: parsed.session,
+        action: parsed.action,
         expectedRevision: parsed.expectedRevision,
         json: parsed.json
       },
@@ -614,6 +635,66 @@ function parseGoalRevision(candidate: string): string {
     throw usageFailure("Goal expected revision must be 64 lowercase hexadecimal characters.");
   }
   return candidate;
+}
+
+function parsePlanOptions(
+  args: readonly string[],
+  globalJson: boolean
+): {
+  readonly session: string;
+  readonly action: "enter" | "exit" | null;
+  readonly expectedRevision: number | null;
+  readonly json: boolean;
+} {
+  const [session, actionCandidate, ...rest] = args;
+  if (session === undefined || session.startsWith("-")) {
+    throw usageFailure("The plan command requires one managed session id.");
+  }
+  if (actionCandidate === undefined) {
+    return { session, action: null, expectedRevision: null, json: globalJson };
+  }
+  if (actionCandidate !== "enter" && actionCandidate !== "exit") {
+    throw usageFailure(`Unknown plan action: ${actionCandidate}`);
+  }
+
+  let expectedRevision: number | null = null;
+  let revisionSeen = false;
+  let json = globalJson;
+  for (let index = 0; index < rest.length; index += 1) {
+    const token = rest[index];
+    if (token === undefined) continue;
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
+    if (token === "--expected-revision") {
+      if (revisionSeen) throw usageFailure("The plan command accepts --expected-revision only once.");
+      expectedRevision = parsePlanRevision(readOptionValue(rest, index, "--expected-revision"));
+      revisionSeen = true;
+      index += 1;
+      continue;
+    }
+    if (token.startsWith("--expected-revision=")) {
+      if (revisionSeen) throw usageFailure("The plan command accepts --expected-revision only once.");
+      expectedRevision = parsePlanRevision(readInlineOptionValue(token, "--expected-revision"));
+      revisionSeen = true;
+      continue;
+    }
+    if (token.startsWith("-")) throw usageFailure(`Unknown plan option: ${token}`);
+    throw usageFailure(`Unexpected plan argument: ${token}`);
+  }
+  return { session, action: actionCandidate, expectedRevision, json };
+}
+
+function parsePlanRevision(candidate: string): number {
+  if (!/^[1-9]\d*$/u.test(candidate)) {
+    throw usageFailure("Plan expected revision must be a positive integer.");
+  }
+  const revision = Number(candidate);
+  if (!Number.isSafeInteger(revision)) {
+    throw usageFailure("Plan expected revision exceeds the supported range.");
+  }
+  return revision;
 }
 
 function parsePairOptions(args: readonly string[], globalJson: boolean): {

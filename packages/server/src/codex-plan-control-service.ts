@@ -19,7 +19,9 @@ import {
   positiveSafeIntegerSchema,
   promptOperationIntentSchema,
   resourceBudgetDefinitionByKey,
-  type SelectedOperationIntent
+  type SelectedOperationIntent,
+  selectedSessionMappingRecordSchema,
+  selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
 import type { ErrorCode, IsoTimestamp } from "@hostdeck/core";
 import type { SelectedSessionState, SelectedStateRepository } from "@hostdeck/storage";
@@ -173,12 +175,17 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
   }
 
   readPendingSettings(target: ManagedSessionTarget): readonly PendingTurnSetting[] {
-    const state = this.options.states.get(target.session_id);
+    const candidate = this.options.states.get(target.session_id);
+    const state = candidate === null ? null : parseSelectedPlanState(candidate);
     if (
       state === null ||
+      state.mapping.id !== target.session_id ||
       state.mapping.codex_thread_id !== target.codex_thread_id ||
+      !selectedIdentityMatches(state) ||
+      state.mapping.disposition !== "selected" ||
       state.mapping.archived_at !== null ||
-      state.projection.session.session_state === "archived"
+      state.projection.session.session_state !== "active" ||
+      state.projection.session.freshness !== "current"
     ) {
       return [];
     }
@@ -671,25 +678,54 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
   }
 
   private requireTarget(target: ManagedSessionTarget, writable: boolean): SelectedSessionState {
-    const state = this.options.states.get(target.session_id);
-    if (state === null) {
+    const candidate = this.options.states.get(target.session_id);
+    if (candidate === null) {
       this.clearSession(target.session_id);
       throw planError("target_not_found", "session_not_found", "The selected managed session does not exist.", "not_sent", false);
     }
-    if (state.mapping.codex_thread_id !== target.codex_thread_id) {
+    const state = parseSelectedPlanState(candidate);
+    if (state === null) {
+      throw planError(
+        "target_mismatch",
+        "stale_session",
+        "The selected managed session identity requires reconciliation.",
+        "not_sent",
+        false
+      );
+    }
+    if (state.mapping.id !== target.session_id || state.mapping.codex_thread_id !== target.codex_thread_id) {
       throw planError("target_mismatch", "invalid_session_id", "The selected session and Codex thread identity do not match.", "not_sent", false);
     }
-    if (state.mapping.archived_at !== null || state.projection.session.session_state === "archived") {
+    if (!selectedIdentityMatches(state)) {
+      throw planError(
+        "target_mismatch",
+        "stale_session",
+        "The selected managed session identity requires reconciliation.",
+        "not_sent",
+        false
+      );
+    }
+    if (state.mapping.disposition !== "selected") {
+      throw planError(
+        "target_not_writable",
+        "stale_session",
+        "The selected managed session requires recovery before Plan control.",
+        "not_sent",
+        false
+      );
+    }
+    const session = state.projection.session;
+    if (state.mapping.archived_at !== null || session.session_state === "archived") {
       this.clearSession(target.session_id);
       throw planError("target_not_writable", "session_not_writable", "The selected managed session is archived.", "not_sent", false);
     }
     if (
       writable &&
-      (state.projection.session.session_state !== "active" || state.projection.session.freshness !== "current")
+      (session.session_state !== "active" || session.freshness !== "current")
     ) {
       throw planError(
         "target_not_writable",
-        state.projection.session.freshness === "current" ? "session_not_writable" : "stale_session",
+        session.freshness === "current" ? "session_not_writable" : "stale_session",
         "The selected managed session is not currently writable.",
         "not_sent",
         true
@@ -785,6 +821,31 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
         if (this.tails.get(sessionId) === tail) this.tails.delete(sessionId);
       });
   }
+}
+
+function parseSelectedPlanState(candidate: SelectedSessionState): SelectedSessionState | null {
+  try {
+    const mapping = selectedSessionMappingRecordSchema.safeParse(candidate.mapping);
+    const projection = selectedSessionProjectionRecordSchema.safeParse(candidate.projection);
+    if (!mapping.success || !projection.success) return null;
+    return { mapping: mapping.data, projection: projection.data };
+  } catch {
+    return null;
+  }
+}
+
+function selectedIdentityMatches(state: SelectedSessionState): boolean {
+  const session = state.projection.session;
+  return (
+    state.mapping.id === session.id &&
+    state.mapping.name === session.name &&
+    state.mapping.codex_thread_id === session.codex_thread_id &&
+    state.mapping.cwd === session.cwd &&
+    state.mapping.runtime_source === session.runtime_source &&
+    state.mapping.runtime_version === session.runtime_version &&
+    state.mapping.created_at === session.created_at &&
+    state.mapping.archived_at === session.archived_at
+  );
 }
 
 function publicPending(pending: InternalPendingPlan | undefined): PendingPlanSelection | null {

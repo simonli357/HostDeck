@@ -6,6 +6,8 @@ import type {
   GoalMutationRequest,
   ModelControlSnapshot,
   ModelSelectionRequest,
+  PlanControlSnapshot,
+  PlanSelectionRequest,
   PromptDispatchResponse,
   SelectedOperationDispatch,
   SelectedResumeMetadataResponse,
@@ -21,6 +23,8 @@ import {
   goalMutationRequestSchema,
   modelControlSnapshotSchema,
   modelSelectionRequestSchema,
+  planControlSnapshotSchema,
+  planSelectionRequestSchema,
   promptDispatchResponseSchema,
   promptSessionRequestSchema,
   type RemoteDisableRequest,
@@ -72,6 +76,11 @@ import {
 } from "./pairing-link-client.js";
 import { parseCliArgs } from "./parser.js";
 import {
+  createHostDeckPlanClient,
+  type HostDeckPlanClient,
+  type HostDeckPlanClientSelectionRequest
+} from "./plan-client.js";
+import {
   createHostDeckPromptClient,
   type HostDeckPromptClient,
   type HostDeckPromptClientRequest
@@ -89,6 +98,7 @@ import {
   renderLockCommand,
   renderModelSnapshot,
   renderPairingLink,
+  renderPlanSnapshot,
   renderPromptDispatch,
   renderRemoteState,
   renderServeStarted,
@@ -138,6 +148,7 @@ export interface CliRunOptions {
   readonly localAdmin?: LocalAdmin;
   readonly goalClient?: HostDeckGoalClient;
   readonly modelClient?: HostDeckModelClient;
+  readonly planClient?: HostDeckPlanClient;
   readonly archiveClient?: HostDeckArchiveClient;
   readonly promptClient?: HostDeckPromptClient;
   readonly pairingClient?: HostDeckPairingLinkClient;
@@ -154,6 +165,7 @@ export interface CliRunOptions {
   readonly createArchiveOperationId?: () => string;
   readonly createGoalOperationId?: () => string;
   readonly createModelOperationId?: () => string;
+  readonly createPlanOperationId?: () => string;
   readonly createPromptOperationId?: () => string;
   readonly createStartOperationId?: () => string;
   readonly renderPairingQr?: TerminalQrRenderer;
@@ -314,6 +326,29 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
         request
       );
       return success(renderGoalSnapshot(snapshot, parsed.command.json, request));
+    }
+
+    if (parsed.command.kind === "plan") {
+      const target = parsePlanTarget(parsed.command.session);
+      let planClient = options.planClient;
+      if (planClient === undefined) {
+        const planClientOptions = { baseUrl: config.baseUrl };
+        if (options.fetch !== undefined) Object.assign(planClientOptions, { fetch: options.fetch });
+        planClient = createHostDeckPlanClient(planClientOptions);
+      }
+      if (parsed.command.action === null) {
+        const snapshot = parsePlanSnapshot(await Reflect.apply(planClient.read, undefined, [target]));
+        return success(renderPlanSnapshot(snapshot, parsed.command.json));
+      }
+      const request = createPlanSelectionRequest(
+        parsed.command,
+        options.createPlanOperationId ?? createPlanOperationId
+      );
+      const snapshot = parsePlanSelectionSnapshot(
+        await Reflect.apply(planClient.select, undefined, [request]),
+        request
+      );
+      return success(renderPlanSnapshot(snapshot, parsed.command.json, request));
     }
 
     if (parsed.command.kind === "usage") {
@@ -558,6 +593,10 @@ function createModelOperationId(): string {
 
 function createGoalOperationId(): string {
   return `op_goal_${randomUUID().replaceAll("-", "")}`;
+}
+
+function createPlanOperationId(): string {
+  return `op_plan_${randomUUID().replaceAll("-", "")}`;
 }
 
 function createSessionStartRequest(
@@ -897,6 +936,86 @@ function assertGoalMutationCorrelation(snapshot: GoalControlSnapshot, request: G
       goal.revision === request.expected_goal_revision)
   ) {
     throw internalFailure("HostDeck goal client returned contradictory mutation data.");
+  }
+}
+
+function parsePlanTarget(candidate: string): string {
+  const parsed = sessionIdParamsSchema.safeParse({ session_id: candidate });
+  if (!parsed.success) throw usageFailure("Plan requires one valid managed session id.", "session");
+  return parsed.data.session_id;
+}
+
+function createPlanSelectionRequest(
+  command: Extract<ReturnType<typeof parseCliArgs>["command"], { readonly kind: "plan" }>,
+  createOperationId: () => string
+): HostDeckPlanClientSelectionRequest {
+  if (command.action === null) throw internalFailure("Plan selection command lost its action.");
+  let operationId: unknown;
+  try {
+    operationId = Reflect.apply(createOperationId, undefined, []);
+  } catch (error) {
+    throw internalFailure("Plan operation id generation failed.", error);
+  }
+  const target = sessionIdParamsSchema.safeParse({ session_id: command.session });
+  const body = planSelectionRequestSchema.safeParse({
+    operation_id: operationId,
+    kind: "plan",
+    action: command.action,
+    expected_pending_revision: command.expectedRevision
+  });
+  if (!target.success) throw usageFailure("Plan requires one valid managed session id.", "session");
+  if (!body.success) {
+    if (!clientOperationIdSchema.safeParse(operationId).success) {
+      throw internalFailure("Plan operation id generation failed.");
+    }
+    throw usageFailure("Plan selection does not satisfy the selected Plan contract.", "plan");
+  }
+  return Object.freeze({ ...body.data, session_id: target.data.session_id });
+}
+
+function parsePlanSnapshot(candidate: unknown): PlanControlSnapshot {
+  let parsed: ReturnType<typeof planControlSnapshotSchema.safeParse>;
+  try {
+    parsed = planControlSnapshotSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("HostDeck Plan client returned invalid managed-session data.");
+  }
+  if (!parsed.success) throw internalFailure("HostDeck Plan client returned invalid managed-session data.");
+  return parsed.data;
+}
+
+function parsePlanSelectionSnapshot(
+  candidate: unknown,
+  request: HostDeckPlanClientSelectionRequest
+): PlanControlSnapshot {
+  const snapshot = parsePlanSnapshot(candidate);
+  assertPlanSelectionCorrelation(snapshot, request);
+  return snapshot;
+}
+
+function assertPlanSelectionCorrelation(snapshot: PlanControlSnapshot, request: PlanSelectionRequest): void {
+  const desiredMode = request.action === "enter" ? "plan" : "default";
+  if (!snapshot.modes.some((entry) => entry.mode === desiredMode)) {
+    throw internalFailure("HostDeck Plan client returned contradictory selection data.");
+  }
+  if (snapshot.pending !== null) {
+    if (
+      snapshot.pending.selection_operation_id !== request.operation_id ||
+      snapshot.pending.mode !== desiredMode ||
+      snapshot.pending.catalog_state !== "available" ||
+      snapshot.pending.phase !== "pending" ||
+      snapshot.pending.turn_id !== null ||
+      snapshot.pending.resolved_settings !== null ||
+      snapshot.pending.error !== null ||
+      (request.expected_pending_revision !== null &&
+        snapshot.pending.revision <= request.expected_pending_revision)
+    ) {
+      throw internalFailure("HostDeck Plan client returned contradictory selection data.");
+    }
+    return;
+  }
+  if (snapshot.current.state !== "confirmed" || snapshot.current.mode !== desiredMode) {
+    throw internalFailure("HostDeck Plan client returned contradictory selection data.");
   }
 }
 

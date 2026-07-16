@@ -8,6 +8,7 @@ export * from "./local-admin.js";
 export * from "./model-client.js";
 export * from "./pairing-link-client.js";
 export * from "./parser.js";
+export * from "./plan-client.js";
 export * from "./prompt-client.js";
 export * from "./remote-control-client.js";
 export * from "./render.js";
