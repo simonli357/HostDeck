@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-032` Run aggregate selected-runtime lifecycle acceptance | in_progress | none | Reconnect, crash, HostDeck restart, and TUI coexistence leaves are complete; freeze and execute one non-duplicative lifecycle evidence map. |
+| 1 | `INT-V1-032` Run aggregate selected-runtime lifecycle acceptance | in_progress | none | Frozen criteria require one fixed deterministic-plus-exact subprocess matrix, strict private child reports, contradiction checks, and complete aggregate cleanup. |
 | 2 | `IFC-V1-035` Add bounded subscriber queues and revoke/disconnect/archive cleanup | ready | none | Exact active/opening-stream revoke is complete; bounded subscriber ownership can progress independently. |
 
 ## Intentional Blockers
