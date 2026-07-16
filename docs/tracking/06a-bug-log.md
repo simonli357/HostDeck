@@ -15,6 +15,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-007 | The goal-based legacy thread materialization path sets an active goal, which autonomously starts model turns despite its no-model contract. | Critical | Backlog bugfix | Closed | `INT-V1-005` / `INT-V1-006` | Paused internal goal, active-marker recovery, idle/zero-turn/token/history real smoke, corrected evidence, `DEC-022`. |
 | BUG-008 | Private Serve is classified as public because the observer treats a nonempty `funnel status --json` result as a distinct Funnel projection. | High | Backlog bugfix | Closed | `IFC-V1-071` / `IFC-V1-072` | Exact 1.98.8 source/live semantics, duplicate-read equality regression, corrected active observer smoke, and private enable/read-back/path-off smoke. |
 | BUG-009 | Proxy-decision invariants reject truthful combined hostile-header assessments unless lower-priority forwarding and identity evidence is falsely normalized. | High | Backlog bugfix | Closed | `FND-V1-018` / `IFC-V1-073` | Precedence-aware schema plus combined lookalike/unknown/identity/forwarding contract regressions. |
+| BUG-010 | The exact Codex thread lifecycle smoke can fail cleanup when the native app-server outlives its npm launcher while settling its temporary plugin cache. | Low | Small bugfix | Closed | Validation harness / `IFC-V1-061` | Owned-socket shutdown wait, bounded recursive-remove retries, and consecutive exact 0.144.0 lifecycle smokes. |
 
 ## Routing
 
@@ -146,3 +147,14 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Fix: require lookalike precedence, permit unknown reserved context to precede malformed standard identity, constrain forwarding only for reasons that logically determine its assessment, and allow missing forwarding to be wholly absent or partial/invalid.
 - Validation: all rejection reasons retain coherent representative evidence; strict reason-specific forwarding contradictions reject; combined lookalike plus malformed identity, unknown reserved plus malformed identity, and malformed identity plus missing forwarding preserve truthful assessments; incorrect lower-priority reasons reject.
 - Closed by: `IFC-V1-073` contract correction and focused contract suite.
+
+### BUG-010 Codex Lifecycle Smoke Cleanup Race
+
+- Symptom: the exact Codex 0.144.0 thread lifecycle assertions complete, but temporary-home teardown can fail with `ENOTEMPTY` under `plugins/cache/openai-curated-remote`.
+- Impact: valid real archive evidence can report a cleanup-only failure based on Codex background filesystem settling.
+- Route: small bugfix; temp-resource ownership and eventual complete removal are already required, with no product or planning change.
+- Affected / owning task: validation harness; discovered while closing `IFC-V1-061`.
+- Root cause: the exact native app-server can outlive and be reparented from its npm launcher after the client disconnects, while recursive `rm` also used Node's zero-retry default. Teardown could therefore race the real socket owner and its plugin-cache writes.
+- Fix: wait up to 10 seconds for the owned Unix socket to disappear after client/launcher shutdown, then retain fail-loud removal with five bounded native retries at 100 ms intervals.
+- Validation: two consecutive exact Codex 0.144.0 thread lifecycle smokes, type/lint checks, and absence of retained `hostdeck-thread-smoke-*` roots.
+- Closed by: current `IFC-V1-061` validation unit.

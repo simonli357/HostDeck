@@ -38,7 +38,7 @@ describe.skipIf(!requireSmoke)("installed Codex managed-thread lifecycle smoke",
         await seedCodexAuthentication(codexHome);
         execFileSync("git", ["init", "-q", "-b", "main", projectDirectory], { timeout: 10_000 });
       } catch (error) {
-        await rm(root, { recursive: true, force: true });
+        await removeTemporaryRoot(root);
         throw error;
       }
 
@@ -147,7 +147,8 @@ describe.skipIf(!requireSmoke)("installed Codex managed-thread lifecycle smoke",
       if (tui !== null) await collectCleanupError(tui.close(), cleanupErrors);
       await collectCleanupError(connection.close("HostDeck thread lifecycle smoke completed."), cleanupErrors);
       await collectCleanupError(stopChild(child), cleanupErrors);
-      await collectCleanupError(rm(root, { recursive: true, force: true }), cleanupErrors);
+      await collectCleanupError(waitForSocketRemoval(socketPath), cleanupErrors);
+      await collectCleanupError(removeTemporaryRoot(root), cleanupErrors);
       if (lifecycleError !== null && cleanupErrors.length > 0) {
         throw new AggregateError([lifecycleError, ...cleanupErrors], "Codex thread lifecycle and cleanup failed.");
       }
@@ -285,6 +286,26 @@ async function stopChild(child: ChildProcess): Promise<void> {
   if (await settlesWithin(exited, 2_000)) return;
   child.kill("SIGKILL");
   if (!(await settlesWithin(exited, 1_000))) throw new Error("Codex app-server did not exit after SIGKILL.");
+}
+
+async function removeTemporaryRoot(root: string): Promise<void> {
+  await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
+async function waitForSocketRemoval(socketPath: string): Promise<void> {
+  await waitFor(
+    async () => {
+      try {
+        await lstat(socketPath);
+        return false;
+      } catch (error) {
+        if (!isMissingFile(error)) throw error;
+        return true;
+      }
+    },
+    10_000,
+    () => "Codex app-server did not remove its owned Unix socket after the client disconnected."
+  );
 }
 
 async function settlesWithin(promise: Promise<void>, milliseconds: number): Promise<boolean> {
