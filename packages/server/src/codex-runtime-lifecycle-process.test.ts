@@ -48,48 +48,56 @@ describe("owned lifecycle scenario process runner", () => {
     });
   });
 
-  it("terminates the complete owned group on timeout", async () => {
-    const root = privateRoot();
-    const pidPath = join(root, "descendant.pid");
-    const script = [
-      "const { spawn } = require('node:child_process');",
-      "const { writeFileSync } = require('node:fs');",
-      "const child = spawn('/usr/bin/sleep', ['60'], { stdio: 'ignore' });",
-      "writeFileSync(process.env.HOSTDECK_FIXTURE_PID, String(child.pid));",
-      "setInterval(() => undefined, 1000);"
-    ].join("");
+  it(
+    "terminates the complete owned group on timeout",
+    async () => {
+      const root = privateRoot();
+      const pidPath = join(root, "descendant.pid");
+      const script = [
+        "const { spawn } = require('node:child_process');",
+        "const { writeFileSync } = require('node:fs');",
+        "const child = spawn('/usr/bin/sleep', ['60'], { stdio: 'ignore' });",
+        "writeFileSync(process.env.HOSTDECK_FIXTURE_PID, String(child.pid));",
+        "setInterval(() => undefined, 1000);"
+      ].join("");
 
-    await expect(
-      runOwnedLifecycleScenario({
-        ...command(root, ["-e", script]),
-        env: {
-          ...process.env,
-          HOSTDECK_FIXTURE_PID: pidPath
-        },
-        timeout_ms: 150
-      })
-    ).rejects.toMatchObject({ code: "timeout" });
+      await expect(
+        runOwnedLifecycleScenario({
+          ...command(root, ["-e", script]),
+          env: {
+            ...process.env,
+            HOSTDECK_FIXTURE_PID: pidPath
+          },
+          timeout_ms: 2_000
+        })
+      ).rejects.toMatchObject({ code: "timeout" });
 
-    const descendantPid = Number(readFileSync(pidPath, "utf8"));
-    expect(Number.isSafeInteger(descendantPid)).toBe(true);
-    expect(isProcessAlive(descendantPid)).toBe(false);
-  });
+      const descendantPid = Number(readFileSync(pidPath, "utf8"));
+      expect(Number.isSafeInteger(descendantPid)).toBe(true);
+      expect(isProcessAlive(descendantPid)).toBe(false);
+    },
+    10_000
+  );
 
-  it("escalates to KILL when the owned group ignores TERM", async () => {
-    const root = privateRoot();
-    const started = Date.now();
+  it(
+    "escalates to KILL when the owned group ignores TERM",
+    async () => {
+      const root = privateRoot();
+      const started = Date.now();
 
-    await expect(
-      runOwnedLifecycleScenario({
-        ...command(root, [
-          "-e",
-          "process.on('SIGTERM', () => undefined); setInterval(() => undefined, 1000)"
-        ]),
-        timeout_ms: 100
-      })
-    ).rejects.toMatchObject({ code: "timeout" });
-    expect(Date.now() - started).toBeGreaterThanOrEqual(2_000);
-  });
+      await expect(
+        runOwnedLifecycleScenario({
+          ...command(root, [
+            "-e",
+            "process.on('SIGTERM', () => undefined); setInterval(() => undefined, 1000)"
+          ]),
+          timeout_ms: 2_000
+        })
+      ).rejects.toMatchObject({ code: "timeout" });
+      expect(Date.now() - started).toBeGreaterThanOrEqual(3_800);
+    },
+    10_000
+  );
 
   it("terminates the owned group when combined output exceeds its bound", async () => {
     const root = privateRoot();
