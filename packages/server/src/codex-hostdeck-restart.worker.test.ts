@@ -171,6 +171,8 @@ async function runServiceInitial(
       )
     );
 
+    let turnStartRequestCount = 0;
+    turnStartRequestCount += 1;
     const accepted = await createCodexTurnClient(connection).startTurn({
       operation_id: turnOperationId,
       thread_id: thread.id,
@@ -181,6 +183,8 @@ async function runServiceInitial(
         reasoning_effort: selectedModel.reasoning_effort
       }
     });
+    let acceptedModelTurnCount = 0;
+    acceptedModelTurnCount += 1;
     writeHostDeckRestartPrivateJson(environment.shared_path, {
       schema_version: 1,
       session_id: sessionId,
@@ -209,7 +213,9 @@ async function runServiceInitial(
       generation: null,
       boundary_count: 0,
       resumed_count: 0,
-      ready_count: 0
+      ready_count: 0,
+      turn_start_request_count: turnStartRequestCount,
+      accepted_model_turn_count: acceptedModelTurnCount
     });
 
     await waitForRelease(environment);
@@ -490,7 +496,9 @@ async function runServiceRestart(
       generation: 1,
       boundary_count: 1,
       resumed_count: 1,
-      ready_count: 1
+      ready_count: 1,
+      turn_start_request_count: 0,
+      accepted_model_turn_count: 0
     });
 
     await waitFor(
@@ -582,7 +590,9 @@ async function runForeground(
       generation: null,
       boundary_count: 0,
       resumed_count: 0,
-      ready_count: 0
+      ready_count: 0,
+      turn_start_request_count: 0,
+      accepted_model_turn_count: 0
     });
 
     await waitForRelease(environment);
@@ -723,6 +733,8 @@ function writeReadyReport(
     readonly boundary_count: number;
     readonly resumed_count: number;
     readonly ready_count: number;
+    readonly turn_start_request_count: number;
+    readonly accepted_model_turn_count: number;
   }
 ): void {
   const snapshot = resources.supervisor.snapshot();
@@ -747,6 +759,8 @@ function writeReadyReport(
     boundary_count: facts.boundary_count,
     resumed_count: facts.resumed_count,
     ready_count: facts.ready_count,
+    turn_start_request_count: facts.turn_start_request_count,
+    accepted_model_turn_count: facts.accepted_model_turn_count,
     supervisor: {
       mode: snapshot.mode,
       phase: "ready",

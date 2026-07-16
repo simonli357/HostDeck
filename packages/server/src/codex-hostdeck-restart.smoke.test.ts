@@ -37,6 +37,7 @@ import {
   socketIdentity,
   writeHostDeckRestartPrivateJson
 } from "./codex-hostdeck-restart-smoke-support.js";
+import { requirePrivateLifecycleReportPath } from "./codex-runtime-lifecycle-files.js";
 
 const requireSmoke =
   process.env.HOSTDECK_REQUIRE_CODEX_RESTART_SMOKE === "1";
@@ -44,8 +45,9 @@ const codexBin = resolve(process.env.HOSTDECK_CODEX_BIN ?? "codex");
 const defaultEvidencePath = resolve(
   "artifacts/int-v1-030-hostdeck-restart-evidence.json"
 );
+const configuredEvidencePath = process.env.HOSTDECK_CODEX_RESTART_REPORT;
 const evidencePath = resolve(
-  process.env.HOSTDECK_CODEX_RESTART_REPORT ?? defaultEvidencePath
+  configuredEvidencePath ?? defaultEvidencePath
 );
 const workerTestPath = resolve(
   "packages/server/src/codex-hostdeck-restart.worker.test.ts"
@@ -130,6 +132,8 @@ describe.skipIf(!requireSmoke)("exact Codex HostDeck restart continuity smoke", 
           boundary_count: 0,
           resumed_count: 0,
           ready_count: 0,
+          turn_start_request_count: 1,
+          accepted_model_turn_count: 1,
           supervisor: {
             mode: "service_owned",
             spawn_attempts: 0,
@@ -177,6 +181,8 @@ describe.skipIf(!requireSmoke)("exact Codex HostDeck restart continuity smoke", 
           boundary_count: 1,
           resumed_count: 1,
           ready_count: 1,
+          turn_start_request_count: 0,
+          accepted_model_turn_count: 0,
           supervisor: {
             mode: "service_owned",
             spawn_attempts: 0,
@@ -300,6 +306,33 @@ describe.skipIf(!requireSmoke)("exact Codex HostDeck restart continuity smoke", 
         expect(isProcessAlive(foregroundBReady.runtime_pid)).toBe(false);
         expect(existsSync(foregroundLayout.socket_path)).toBe(false);
 
+        const readyReports = [
+          serviceAReady,
+          serviceBReady,
+          foregroundAReady,
+          foregroundBReady
+        ];
+        const turnStartRequestCount = readyReports.reduce(
+          (total, report) => total + report.turn_start_request_count,
+          0
+        );
+        const acceptedModelTurnCount = readyReports.reduce(
+          (total, report) => total + report.accepted_model_turn_count,
+          0
+        );
+        const mutationRetryCount =
+          turnStartRequestCount - acceptedModelTurnCount;
+        if (
+          turnStartRequestCount !== 1 ||
+          acceptedModelTurnCount !== 1 ||
+          mutationRetryCount !== 0
+        ) {
+          throw new Error("Exact restart turn budget is invalid.");
+        }
+        expect(turnStartRequestCount).toBe(1);
+        expect(acceptedModelTurnCount).toBe(1);
+        expect(mutationRetryCount).toBe(0);
+
         evidence = Object.freeze({
           schema_version: 1,
           task: "INT-V1-030",
@@ -330,7 +363,10 @@ describe.skipIf(!requireSmoke)("exact Codex HostDeck restart continuity smoke", 
             completion_observed_after_restart: true,
             restart_boundary_count: 1,
             no_override_resume_count: 1,
-            ready_count: 1
+            ready_count: 1,
+            turn_start_request_count: turnStartRequestCount,
+            model_turn_count: acceptedModelTurnCount,
+            mutation_retry_count: mutationRetryCount
           },
           foreground_child: {
             hostdeck_process_count: 2,
@@ -502,6 +538,9 @@ interface RedactedEvidence {
     readonly restart_boundary_count: 1;
     readonly no_override_resume_count: 1;
     readonly ready_count: 1;
+    readonly turn_start_request_count: 1;
+    readonly model_turn_count: 1;
+    readonly mutation_retry_count: 0;
   };
   readonly foreground_child: {
     readonly hostdeck_process_count: 2;
@@ -1000,6 +1039,10 @@ function readRedactedEvidence(path: string): unknown {
 }
 
 function assertEvidencePath(path: string): void {
+  if (configuredEvidencePath !== undefined) {
+    requirePrivateLifecycleReportPath(path, "restart-report.json");
+    return;
+  }
   const artifacts = resolve("artifacts");
   const relationship = relative(artifacts, path);
   if (

@@ -86,6 +86,7 @@ HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-vertical
 HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-supervisor
 HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-restart
 HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-tui-coexistence
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:codex-lifecycle
 ```
 
 ## Regenerate Reviewed Codex Binding

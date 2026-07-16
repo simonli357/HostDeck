@@ -108,6 +108,12 @@ describe("HostDeck restart smoke support", () => {
         boundary_count: -1
       })
     ).toThrow(/boundary count/u);
+    expect(() =>
+      parseHostDeckRestartWorkerReport({
+        ...valid,
+        turn_start_request_count: 2
+      })
+    ).toThrow(/turn budget/u);
 
     const root = tempRoot();
     const path = join(root, "ready.json");
@@ -193,6 +199,8 @@ function readyReport() {
     boundary_count: 0,
     resumed_count: 0,
     ready_count: 0,
+    turn_start_request_count: 1,
+    accepted_model_turn_count: 1,
     supervisor: {
       mode: "service_owned",
       phase: "ready",

@@ -66,6 +66,8 @@ export interface HostDeckRestartWorkerReadyReport {
   readonly boundary_count: number;
   readonly resumed_count: number;
   readonly ready_count: number;
+  readonly turn_start_request_count: number;
+  readonly accepted_model_turn_count: number;
   readonly supervisor: HostDeckRestartSupervisorReport;
 }
 
@@ -109,6 +111,7 @@ const environmentNames = Object.freeze({
 const maxJsonBytes = 16 * 1024;
 const maxPathBytes = 4_096;
 const reportReadyKeys = [
+  "accepted_model_turn_count",
   "boundary_count",
   "compatibility_state",
   "generation",
@@ -125,6 +128,7 @@ const reportReadyKeys = [
   "supervisor",
   "thread_id",
   "turn_id",
+  "turn_start_request_count",
   "turn_state"
 ] as const;
 const reportResultKeys = [
@@ -488,6 +492,22 @@ function parseReadyReport(
   ) {
     throw new TypeError("HostDeck restart worker generation is inconsistent.");
   }
+  const turnStartRequestCount = requireNonNegativeInteger(
+    record.turn_start_request_count,
+    "turn start request count"
+  );
+  const acceptedModelTurnCount = requireNonNegativeInteger(
+    record.accepted_model_turn_count,
+    "accepted model turn count"
+  );
+  if (
+    (mode === "service_initial" &&
+      (turnStartRequestCount !== 1 || acceptedModelTurnCount !== 1)) ||
+    (mode !== "service_initial" &&
+      (turnStartRequestCount !== 0 || acceptedModelTurnCount !== 0))
+  ) {
+    throw new TypeError("HostDeck restart worker turn budget is inconsistent.");
+  }
   return deepFreeze({
     schema_version: 1,
     phase: "ready",
@@ -518,6 +538,8 @@ function parseReadyReport(
       "resumed count"
     ),
     ready_count: requireNonNegativeInteger(record.ready_count, "ready count"),
+    turn_start_request_count: turnStartRequestCount,
+    accepted_model_turn_count: acceptedModelTurnCount,
     supervisor: {
       mode: supervisorMode,
       phase: "ready",

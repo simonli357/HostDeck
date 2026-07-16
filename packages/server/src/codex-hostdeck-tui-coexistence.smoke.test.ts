@@ -67,6 +67,7 @@ import {
   socketIdentity,
   writeCodexSmokePrivateJson
 } from "./codex-hostdeck-restart-smoke-support.js";
+import { requirePrivateLifecycleReportPath } from "./codex-runtime-lifecycle-files.js";
 
 const requireSmoke =
   process.env.HOSTDECK_REQUIRE_CODEX_TUI_COEXISTENCE_SMOKE === "1";
@@ -74,8 +75,10 @@ const codexBin = resolve(process.env.HOSTDECK_CODEX_BIN ?? "codex");
 const defaultEvidencePath = resolve(
   "artifacts/int-v1-031-hostdeck-tui-coexistence-evidence.json"
 );
+const configuredEvidencePath =
+  process.env.HOSTDECK_CODEX_TUI_COEXISTENCE_REPORT;
 const evidencePath = resolve(
-  process.env.HOSTDECK_CODEX_TUI_COEXISTENCE_REPORT ?? defaultEvidencePath
+  configuredEvidencePath ?? defaultEvidencePath
 );
 const maximumBufferedNotifications = 512;
 const maximumDiagnosticEntries = 1_024;
@@ -2023,6 +2026,10 @@ function currentCommit(): string {
 }
 
 function assertEvidencePath(path: string): void {
+  if (configuredEvidencePath !== undefined) {
+    requirePrivateLifecycleReportPath(path, "coexistence-report.json");
+    return;
+  }
   const artifacts = resolve("artifacts");
   const relationship = relative(artifacts, path);
   if (
