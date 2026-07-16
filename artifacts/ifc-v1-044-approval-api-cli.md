@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: hardening criteria frozen before implementation.
+Status: complete.
 
 ## Scope
 
@@ -117,3 +117,14 @@ Implement the selected one-session approval list and exact confirmed approval-re
 - `FE-V1-022` owns the approved mobile inline approval, risk-dependent confirmation, duplicate-disable, final-state, accessibility, and visual acceptance surface.
 - `IFC-V1-067` owns historical raw/tmux surface disposition.
 - Packaging/release leaves own an installed `codexdeck` executable and clean-install command smoke.
+
+## Completion Evidence
+
+- Implemented strict target-free approval response and target-correlated list/terminal response contracts, exact selected manifest schema ids, and event-proven audit summaries. The internal target-bearing intent remains service-only.
+- Hardened the production approval service around complete selected mapping/projection identity, selected disposition, exact runtime version and generation, fail-closed state ports, and an abort-aware event-driven terminal waiter. Waiters clean up on terminal proof, supersede, disconnect, abort, and close without polling or a retry path.
+- Added authenticated no-store GET and common-gate POST routes. The write path requires paired-device CSRF when applicable, an unlocked host, exact pending target/runtime admission, durable accepted audit, a second pending recheck, one receiverless response call, both normalized terminal facts, final-decision correlation, continuity recheck, and terminal audit proof.
+- Added the dedicated bounded direct-loopback client and exact source CLI forms `approvals SESSION_ID [--json]` and `approvals SESSION_ID REQUEST_ID approve|deny --confirm [--json]`. Operation ids are internal, text output escapes terminal controls, JSON is schema-exact, and no target/runtime/force/retry/slash/legacy path is exposed.
+- Direct evidence passes for 53 approval contract/service/route/client/CLI tests plus one real CLI -> loopback HTTP -> selected gate/audit -> production approval service -> SQLite vertical. The vertical proves empty, pending, responding, and final reads; one exact response; each terminal event remaining insufficient alone; second-session isolation; same/distinct-operation rejection; and raw audit privacy. Paired private HTTPS evidence proves read parity, writer CSRF, read-only denial, and the paired audit actor.
+- Workspace validation passes: unit 1,569 with 36 intentional external/device skips; contract 272; integration 24; web 33; root and all-package typechecks; lint/exports over 468 files and 9 packages; scaffold; planning; frozen offline install; permissive production license inventory; and diff checks. The exact reviewed Codex 0.144.0 binding verifies 671 files and the authenticated approval smoke passes after replacing its partial selected-state fixture with complete production-valid identity.
+- The default Codex 0.144.3 remains intentionally incompatible and was not modified. `pnpm audit --prod` could not produce advisory evidence because npm's retired endpoint returned HTTP 410. No dependency or lockfile changed, and no physical phone was required for this headless leaf.
+- Criteria commit `87477f7`; implementation `637bdca`.

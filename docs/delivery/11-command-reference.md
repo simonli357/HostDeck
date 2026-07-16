@@ -45,6 +45,9 @@ pnpm exec vitest run --config vitest.integration.config.ts tests/plan-vertical.i
 pnpm exec vitest run packages/codex-adapter/src/compact-client.test.ts packages/server/src/codex-compact-control-service.test.ts packages/server/src/compact-routes.test.ts packages/cli/src/compact-client.test.ts packages/cli/src/compact-cli.test.ts
 pnpm exec vitest run --config vitest.contract.config.ts packages/contracts/src/compact.contract.test.ts packages/server/src/selected-api-route-manifest.contract.test.ts
 pnpm exec vitest run --config vitest.integration.config.ts tests/compact-vertical.integration.test.ts
+pnpm exec vitest run packages/server/src/codex-approval-control-service.test.ts packages/server/src/approval-routes.test.ts packages/cli/src/approval-client.test.ts packages/cli/src/approval-cli.test.ts
+pnpm exec vitest run --config vitest.contract.config.ts packages/contracts/src/approval.contract.test.ts
+pnpm exec vitest run --config vitest.integration.config.ts tests/approval-vertical.integration.test.ts
 pnpm smoke:remote-control
 pnpm smoke:codex-compatibility
 pnpm smoke:codex-ipc
@@ -83,7 +86,7 @@ pnpm generate:codex-bindings
 
 ## Explicit Gaps
 
-- CLI binary: the source command contract includes `start --name NAME --cwd PATH [--json]`, `send SESSION_ID TEXT... [--json]`, the selected `model` read/select forms, the selected `goal` read/set/pause/resume/complete/clear forms, the selected `plan` read/enter/exit forms, `compact SESSION_ID [--json]`, `compact SESSION_ID --confirm [--json]`, `remote status`, `remote enable`, `remote disable`, `resume SESSION_ID`, `archive SESSION_ID [--json]`, `usage SESSION_ID [--json]`, and `skills SESSION_ID [--json]`, but `codexdeck` is not installed as a workspace or packaged executable yet; `pnpm exec codexdeck --help` currently fails with command not found. Keep `codexdeck ...` examples out of copy-paste command blocks until build/package or clean install smoke provides a runnable executable path.
+- CLI binary: the source command contract includes `start --name NAME --cwd PATH [--json]`, `send SESSION_ID TEXT... [--json]`, the selected `model` read/select forms, the selected `goal` read/set/pause/resume/complete/clear forms, the selected `plan` read/enter/exit forms, `compact SESSION_ID [--json]`, `compact SESSION_ID --confirm [--json]`, `approvals SESSION_ID [--json]`, `approvals SESSION_ID REQUEST_ID approve|deny --confirm [--json]`, `remote status`, `remote enable`, `remote disable`, `resume SESSION_ID`, `archive SESSION_ID [--json]`, `usage SESSION_ID [--json]`, and `skills SESSION_ID [--json]`, but `codexdeck` is not installed as a workspace or packaged executable yet; `pnpm exec codexdeck --help` currently fails with command not found. Keep `codexdeck ...` examples out of copy-paste command blocks until build/package or clean install smoke provides a runnable executable path.
 - E2E validation: `pnpm test:e2e` intentionally exits nonzero until `REL-V1-007` implements it.
 - Build/package: `pnpm build` intentionally exits nonzero until `IFC-V1-021` implements it.
 - Local release smoke: `pnpm smoke:local` intentionally exits nonzero until `REL-V1-006` implements it.
