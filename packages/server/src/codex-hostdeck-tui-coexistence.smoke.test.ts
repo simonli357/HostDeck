@@ -144,6 +144,7 @@ describe.skipIf(!requireSmoke)(
           throw error;
         }
         const appOutput = captureBoundedChildOutput(appServer);
+        let appServerProcessGroupId: number | null = null;
         let appSocketIdentity: string | null = null;
         let connectionA: CodexAppServerConnection | null = null;
         let connectionB: CodexAppServerConnection | null = null;
@@ -164,8 +165,13 @@ describe.skipIf(!requireSmoke)(
         let evidence: CoexistenceEvidence | null = null;
 
         try {
+          appServerProcessGroupId = requireChildPid(appServer);
+          assertOwnedProcessGroupLeader(
+            appServerProcessGroupId,
+            "app-server"
+          );
           await waitForSocket(socketPath, appServer, appOutput);
-          const appServerPid = requireChildPid(appServer);
+          const appServerPid = appServerProcessGroupId;
           appSocketIdentity = socketIdentity(socketPath);
           expect(isProcessAlive(appServerPid)).toBe(true);
           expect(lstatSync(root).mode & 0o077).toBe(0);
@@ -674,7 +680,13 @@ describe.skipIf(!requireSmoke)(
           }
           let appServerStoppedByOuterOwner = false;
           try {
-            appServerStoppedByOuterOwner = await stopChild(appServer);
+            appServerStoppedByOuterOwner =
+              appServerProcessGroupId === null
+                ? await stopChild(appServer)
+                : await stopAppServerProcessGroup(
+                    appServer,
+                    appServerProcessGroupId
+                  );
           } catch (error) {
             cleanupErrors.push(error);
           }
@@ -863,6 +875,7 @@ function startAppServer(
       cwd,
       env: { ...process.env, CODEX_HOME: codexHome },
       stdio: ["ignore", "ignore", "pipe"],
+      detached: true,
       shell: false
     }
   );
@@ -1177,6 +1190,7 @@ async function startTui(input: {
     TERM: "xterm-256color"
   };
   let running = false;
+  let processGroupStopped = false;
   let panePid: number | null = null;
   let latestOutput = "";
   const capture = async () => {
@@ -1280,6 +1294,7 @@ async function startTui(input: {
       ).stdout.trim(),
       "TUI pane pid"
     );
+    assertOwnedProcessGroupLeader(panePid, "TUI");
     await waitFor(
       async () => {
         const snapshot = await capture();
@@ -1297,6 +1312,18 @@ async function startTui(input: {
     const fixedPid = panePid;
     const close = async () => {
       if (!running) return;
+      if (!processGroupStopped) {
+        const stopped = await stopOwnedProcessGroup(
+          fixedPid,
+          "Coexistence TUI"
+        );
+        processGroupStopped = true;
+        if (!stopped) {
+          throw new Error(
+            "Coexistence TUI process group exited before owner teardown."
+          );
+        }
+      }
       await runFile(
         "tmux",
         ["-S", input.tmux_socket_path, "kill-server"],
@@ -1305,7 +1332,7 @@ async function startTui(input: {
       running = false;
       await waitFor(
         () =>
-          !isProcessAlive(fixedPid) &&
+          !isProcessGroupAlive(fixedPid) &&
           !existsSync(input.tmux_socket_path),
         5_000,
         "Coexistence TUI process or tmux socket remained after close."
@@ -1315,7 +1342,11 @@ async function startTui(input: {
       pid: fixedPid,
       output: latestOutput,
       assertAlive() {
-        if (!running || !isProcessAlive(fixedPid)) {
+        if (
+          !running ||
+          !isProcessAlive(fixedPid) ||
+          !isProcessGroupAlive(fixedPid)
+        ) {
           throw new Error("Coexistence TUI process is not alive.");
         }
       },
@@ -1339,6 +1370,15 @@ async function startTui(input: {
     };
   } catch (error) {
     const cleanupErrors: unknown[] = [];
+    if (panePid !== null) {
+      await collectCleanup(
+        stopOwnedProcessGroup(
+          panePid,
+          "Failed coexistence TUI"
+        ).then(() => undefined),
+        cleanupErrors
+      );
+    }
     if (running) {
       await collectCleanup(
         runFile(
@@ -1352,7 +1392,7 @@ async function startTui(input: {
     await collectCleanup(
       waitFor(
         () =>
-          (panePid === null || !isProcessAlive(panePid)) &&
+          (panePid === null || !isProcessGroupAlive(panePid)) &&
           !existsSync(input.tmux_socket_path),
         5_000,
         "Coexistence TUI process or socket remained after failed startup."
@@ -1485,6 +1525,113 @@ async function stopChild(child: ChildProcess): Promise<boolean> {
     throw new Error("Coexistence app-server did not stop.");
   }
   return true;
+}
+
+async function stopAppServerProcessGroup(
+  child: ChildProcess,
+  processGroupId: number
+): Promise<boolean> {
+  const exited =
+    child.exitCode !== null || child.signalCode !== null
+      ? Promise.resolve()
+      : once(child, "exit").then(() => undefined);
+  const stopped = await stopOwnedProcessGroup(
+    processGroupId,
+    "Coexistence app-server"
+  );
+  if (!stopped) return false;
+  if (!(await settlesWithin(exited, 2_000))) {
+    throw new Error("Coexistence app-server launcher did not exit.");
+  }
+  return true;
+}
+
+async function stopOwnedProcessGroup(
+  processGroupId: number,
+  label: string
+): Promise<boolean> {
+  if (!isProcessGroupAlive(processGroupId)) return false;
+  signalProcessGroup(processGroupId, "SIGTERM");
+  if (await waitForProcessGroupAbsence(processGroupId, 3_000)) {
+    return true;
+  }
+  signalProcessGroup(processGroupId, "SIGKILL");
+  if (!(await waitForProcessGroupAbsence(processGroupId, 2_000))) {
+    throw new Error(`${label} process group did not stop.`);
+  }
+  return true;
+}
+
+function signalProcessGroup(
+  processGroupId: number,
+  signal: NodeJS.Signals
+): void {
+  try {
+    process.kill(-processGroupId, signal);
+  } catch (error) {
+    if (!isErrno(error, "ESRCH")) throw error;
+  }
+}
+
+async function waitForProcessGroupAbsence(
+  processGroupId: number,
+  timeoutMs: number
+): Promise<boolean> {
+  const started = Date.now();
+  while (isProcessGroupAlive(processGroupId)) {
+    if (Date.now() - started >= timeoutMs) return false;
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+  }
+  return true;
+}
+
+function isProcessGroupAlive(processGroupId: number): boolean {
+  try {
+    process.kill(-processGroupId, 0);
+    return true;
+  } catch (error) {
+    if (isErrno(error, "ESRCH")) return false;
+    if (isErrno(error, "EPERM")) return true;
+    throw error;
+  }
+}
+
+function assertOwnedProcessGroupLeader(pid: number, label: string): void {
+  const identity = readProcessGroupIdentity(pid);
+  const current = readProcessGroupIdentity(process.pid);
+  if (
+    identity.process_group_id !== pid ||
+    identity.session_id !== pid ||
+    identity.process_group_id === current.process_group_id ||
+    identity.session_id === current.session_id
+  ) {
+    throw new Error(`${label} does not own an isolated process group.`);
+  }
+}
+
+function readProcessGroupIdentity(pid: number): {
+  readonly process_group_id: number;
+  readonly session_id: number;
+} {
+  const raw = readFileSync(`/proc/${pid}/stat`, "utf8");
+  if (raw.length < 8 || raw.length > 8_192) {
+    throw new Error("Coexistence process identity is invalid.");
+  }
+  const commandEnd = raw.lastIndexOf(") ");
+  if (!raw.startsWith(`${pid} (`) || commandEnd < 3) {
+    throw new Error("Coexistence process identity has an invalid shape.");
+  }
+  const fields = raw.slice(commandEnd + 2).trim().split(/\s+/u);
+  if (fields.length < 20) {
+    throw new Error("Coexistence process identity is incomplete.");
+  }
+  return {
+    process_group_id: parsePositiveInteger(
+      fields[2] ?? "",
+      "process group id"
+    ),
+    session_id: parsePositiveInteger(fields[3] ?? "", "session id")
+  };
 }
 
 function removeStoppedSocket(
