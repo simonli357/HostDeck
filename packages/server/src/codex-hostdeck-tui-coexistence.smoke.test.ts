@@ -31,6 +31,7 @@ import {
   codexBindingDescriptor,
   createCodexAppServerConnection,
   createCodexModelClient,
+  createCodexReconciliationReadClient,
   createCodexThreadClient,
   createCodexTurnClient,
   createCodexUnixWebSocketTransport,
@@ -38,6 +39,7 @@ import {
   parseCodexCliVersionOutput
 } from "@hostdeck/codex-adapter";
 import {
+  defaultResourceBudget,
   type ModelCatalogEntry,
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
@@ -296,6 +298,10 @@ describe.skipIf(!requireSmoke)(
 
           const portA = recordingPort(connectionA, requestRecords);
           const threadsA = createCodexThreadClient(portA);
+          const reconciliationA = createCodexReconciliationReadClient(
+            portA,
+            defaultResourceBudget
+          );
           const managed = await createMaterializedThread(
             threadsA,
             managedProject,
@@ -458,10 +464,26 @@ describe.skipIf(!requireSmoke)(
           } catch (error) {
             let runtimeReadSucceeded = false;
             let runtimeIdle = false;
+            let runtimeWaitingOnApproval = false;
+            let runtimeWaitingOnUserInput = false;
+            let latestTurnStatus = "read_failed";
             try {
               const runtimeThread = await threadsA.read(managedThreadId);
               runtimeReadSucceeded = true;
               runtimeIdle = runtimeThread.status === "idle";
+              runtimeWaitingOnApproval = runtimeThread.active_flags.includes(
+                "waiting_on_approval"
+              );
+              runtimeWaitingOnUserInput = runtimeThread.active_flags.includes(
+                "waiting_on_user_input"
+              );
+            } catch {
+              // The bounded diagnostic below records only the failed read.
+            }
+            try {
+              latestTurnStatus =
+                (await reconciliationA.readLatestTurn(managedThreadId))
+                  ?.status ?? "missing";
             } catch {
               // The bounded diagnostic below records only the failed read.
             }
@@ -488,8 +510,18 @@ describe.skipIf(!requireSmoke)(
                 )}`,
                 `runtime_read=${String(runtimeReadSucceeded)}`,
                 `runtime_idle=${String(runtimeIdle)}`,
+                `runtime_waiting_approval=${String(
+                  runtimeWaitingOnApproval
+                )}`,
+                `runtime_waiting_input=${String(
+                  runtimeWaitingOnUserInput
+                )}`,
+                `latest_turn=${latestTurnStatus}`,
                 `pipeline_failed=${String(pipeline.failure !== null)}`,
                 `pending=${pipeline.pending_count}`,
+                `pending_server_requests=${
+                  liveConnectionA.pending_server_request_count
+                }`,
                 `connection_ready=${String(
                   liveConnectionA.state === "ready"
                 )}`,
