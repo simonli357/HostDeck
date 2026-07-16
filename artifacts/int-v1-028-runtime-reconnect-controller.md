@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: hardening criteria frozen before implementation.
+Status: complete.
 
 ## Hardening Audit Amendment
 
@@ -83,6 +83,31 @@ Implement one headless selected-runtime reconnect controller around the existing
 - Connection/broker regression tests add stale-generation notification/server-request rejection and preserve current response, unknown-outcome, late-response, compatibility, and explicit reconnect behavior.
 - A headless integration composes the real controller with scripted transport, actual request broker/connection, approval disconnect service, and selected projection-like lifecycle recorder to prove sent mutation uncertainty, immediate write closure, approval supersession, held callbacks, compatibility recheck, read-only reconcile, resubscription, and same-generation readiness without a model call.
 - Run affected package tests, full unit/contract/integration/web suites, root and all-package typechecks, lint/exports, scaffold, planning, frozen offline install, exact 0.144.0 binding, production dependency/license checks, `git diff --check`, active-handle inspection, and manual state/order/privacy/no-retry review.
+
+## Implementation And Hardening Evidence
+
+- `CodexRuntimeReconnectController` now owns the selected connection lifecycle, exact public phases, same-generation admission, once-per-generation disconnect cleanup, bounded equal-jitter retry, repeated compatibility checks, read-only reconciliation, restricted resubscription, held inbound delivery, and final ready publication.
+- Every ordinary request and approval response remains closed until final admission. The controller never stores or replays a mutation, and the existing broker retains distinct read-retry-safe versus mutation-unknown disconnect outcomes.
+- Lifecycle runtime ports use method allowlists and revocable generation leases. Reconciliation permits only reviewed reads; resubscription additionally permits only `thread/resume`; the ready hook receives no request surface.
+- Fatal protocol issues, malformed compatibility, stale-generation frames, invalid injected contracts, lifecycle failures, and impossible state terminate with bounded privacy-safe errors. Caller cancellation and close remain effective even when connect, sleep, or lifecycle collaborators do not cooperate.
+- A real precomposed approval service is exercised during held callback delivery and reconnect. Connection-bound approvals are superseded before retry, while same-generation registration remains possible only inside the synchronous compatibility window.
+- Resource policy now owns reviewed initial/max reconnect delays and rejects an initial delay greater than the maximum. No dependency, fallback transport, process-restart behavior, durable reconciliation, or UI surface was added.
+
+## Validation Results
+
+| Evidence | Result |
+| --- | --- |
+| Focused adapter/controller matrix | 57 passed. |
+| Headless controller integration | 1 passed with the real broker/connection and approval composition. |
+| Focused resource contracts | 6 passed. |
+| Unit suite | 1,663 passed, 37 skipped across 173 passed and 23 skipped files. Android-gated cases reported no connected device, which is outside this headless leaf. |
+| Contract / integration / web | 276 / 32 / 33 passed. |
+| Static and repository gates | Root and all 9 package typechecks, lint over 486 files, package exports, scaffold, planning, offline frozen install, license inventory, and diff checks passed. |
+| Exact runtime | Reviewed 0.144.0 binding (671 generated files), no-model compatibility smoke, and Unix IPC smoke passed using the isolated pinned binary. The user's default 0.144.3 remains intentionally ineligible as exact evidence. |
+| Dependency/security check | Production licenses are permissive. npm audit returned no advisory result because the retired registry endpoint responded HTTP 410; no dependency or lockfile changed. |
+| Manual inspection | Phase/admission order, no replay, callback/lease revocation, timer/listener cleanup, bounded snapshots/errors, and absence of retained runtime test processes/sockets passed. |
+
+Criteria commits: `3861c37`, `daf6607`. Implementation commit: `6a142dd`.
 
 ## Downstream Ownership
 

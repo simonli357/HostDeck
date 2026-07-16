@@ -49,9 +49,10 @@ No fake-Codex or fake-tmux test can satisfy these gates.
 | Event normalization and exact prompt targeting | `INT-V1-017`, `INT-V1-018` | Done; strict ordered projection plus exact composed start/event-gated steer pass deterministic and real two-thread evidence. |
 | Model, goal, plan, usage, compact, and skills ports | `INT-V1-019` to `INT-V1-024` | Done; every structured control/read port passes deterministic matrices and bounded exact-0.144.0 runtime evidence. |
 | Approval and interrupt ports | `INT-V1-025`, `INT-V1-026` | Done; strict approval decoding/routing and exact active-turn interrupt both pass deterministic matrices and bounded real 0.144.0 evidence without archive substitution. |
-| Assembled real structured vertical | `INT-V1-027` | Ready; every required structured port dependency is done. |
-| Runtime process/socket supervisor | `INT-V1-007` | Blocked by the assembled real vertical. |
-| Reconnect, crash, HostDeck restart, and TUI coexistence | `INT-V1-028` to `INT-V1-031` | Blocked by the supervisor, with explicit local-state prerequisites. |
+| Assembled real structured vertical | `INT-V1-027` | Done: four exact 0.144.0 two-thread aggregate runs prove the selected ports as one pipeline. |
+| Runtime process/socket supervisor | `INT-V1-007` | Done: strict foreground-child and service-owned private Unix-socket modes pass deterministic, real Linux, and exact-runtime evidence. |
+| Bounded reconnect controller | `INT-V1-028` | Done: generation-gated lifecycle, compatibility, backoff, held inbound, cleanup, cancellation, and no-mutation-replay evidence pass. |
+| Crash reconciliation, HostDeck restart, and TUI coexistence | `INT-V1-029` to `INT-V1-031` | In progress: `INT-V1-029` and `INT-V1-031` are ready; `INT-V1-030` follows durable crash reconciliation. |
 | Aggregate runtime lifecycle acceptance | `INT-V1-032` | Blocked by `INT-V1-028` to `INT-V1-031`. |
 | Legacy tmux disposition | `INT-V1-008` | Blocked by lifecycle acceptance and historical evidence review. |
 | Reopened runtime hardening | `INT-V1-091` | Blocked by selected lifecycle, data maintenance, and legacy disposition. |
