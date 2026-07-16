@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: complete. Criteria were frozen in `37d6861`; the exact harness began in `55ca459`, was hardened through `692ca9d`, and emitted `artifacts/int-v1-031-hostdeck-tui-coexistence-evidence.json` from the clean production-default commit.
+Status: complete, with repeatability correction `BUG-011` in validation. Criteria were frozen in `37d6861`; the exact harness began in `55ca459`, was hardened through `692ca9d`, and emitted `artifacts/int-v1-031-hostdeck-tui-coexistence-evidence.json` from the clean production-default commit.
 
 ## Scope
 
@@ -36,7 +36,7 @@ Prove that exact Codex 0.144.0 supports the selected V1 multi-client contract on
 
 ## HostDeck-Disconnect Direction
 
-1. Exact TUI B resumes the same now-terminal managed thread. Its bounded output must contain the private sentinel from the prior shared turn, not only generic Codex chrome or the repository basename.
+1. Exact TUI B resumes the same now-terminal managed thread. The strict resume builder and bounded process command line must carry the exact managed thread id, the TUI must render the exact managed cwd, and later HostDeck read-back must match both identities; model reply text and viewport history are not identity authorities.
 2. HostDeck A drains its event pipeline and closes only its client connection. App-server PID/socket identity and TUI B process remain unchanged; TUI B must still answer pane liveness and bounded capture checks.
 3. While TUI B is still alive, HostDeck connection B performs a fresh exact handshake and reads the same thread/cwd/terminal turn. It must not create, import, resume with overrides, or mutate a replacement thread.
 4. TUI B then closes completely. HostDeck B remains ready and performs another exact read of the same thread before cleanup. This separates TUI client lifetime from runtime and HostDeck client lifetime in both orders.
@@ -60,7 +60,7 @@ Prove that exact Codex 0.144.0 supports the selected V1 multi-client contract on
 ## Failure Truth
 
 - Missing/wrong binary, non-0.144.0 version, missing/private-auth violation, missing tmux, insecure root/socket, incompatible handshake, or early app-server exit fails before evidence.
-- TUI wrong-thread/wrong-cwd output, early pane death, output overflow, duplicate/reused TUI process, missing sentinel, or incomplete tmux cleanup fails.
+- TUI wrong-thread/wrong-cwd identity, early pane death, output overflow, duplicate/reused TUI process, missing active-turn sentinel in TUI A, or incomplete tmux cleanup fails.
 - Any model-budget excess, wrong turn target, second turn, malformed/duplicate/out-of-order managed event, managed classification race, pipeline/storage/publication failure, foreign durable state, or request/generation drift fails.
 - HostDeck close that stops app-server/TUI, TUI close that disconnects HostDeck or loses terminal events, replacement socket identity, timeout, cleanup failure, or dirty-worktree evidence attempt fails without a passing artifact.
 - No retry, fake notification, direct projection rewrite, terminal-text parsing as HostDeck state, literal slash input, hidden fallback, or in-process fake client may convert failure into success.
@@ -83,6 +83,7 @@ Prove that exact Codex 0.144.0 supports the selected V1 multi-client contract on
 - Early exact failures that looked like peer-client teardown were a HostDeck transport defect: Codex emitted a legitimate message above the old 1 MiB default, so `ws` closed HostDeck with `WS_ERR_UNSUPPORTED_MESSAGE_LENGTH` while app-server and its socket remained alive. The measured exact high-water mark was about 2.95 MB.
 - The shared resource contract now uses the existing 8 MiB hard ceiling as the default inbound frame bound and an 8 MiB buffered-write bound. Protocol and scripted transports consume that one default, a 3,000,000-byte regression protects it, and the exact smoke proves the production default rather than a test override.
 - Private evidence is published only after reverse cleanup and a clean-commit check. Failure diagnostics retain bounded classifications and counts rather than paths, identifiers, prompts, pane output, auth, or raw protocol content.
+- `BUG-011` found three repeatability hazards when `INT-V1-032` reran this proof: a 20-second command paired with a one-call prompt could outlive the model's initial tool wait, second-TUI identity depended on model reply replay, and a fresh test home could enter Codex's startup update path. The corrected harness uses an eight-second command with a required 15-second initial wait, direct resume-id/cwd/read-back identity, a private `check_for_update_on_startup = false` test setting, a bounded history-load deadline, and content-free readiness diagnostics.
 
 ## Validation Result
 
@@ -90,6 +91,7 @@ Prove that exact Codex 0.144.0 supports the selected V1 multi-client contract on
 - Root and all-package typechecks, lint/package exports, scaffold, frozen offline install, diff checks, and the isolated exact Codex 0.144.0 671-file binding check passed. The default installed 0.144.3 binary correctly remains ineligible for reviewed-binding evidence.
 - The production-default exact coexistence smoke passed against clean commit `692ca9d16d13790cbddb88f24f128af9ad820569` in 54.99 seconds. It proves one model turn, two HostDeck connections, two distinct sequential TUI processes, both teardown directions, contiguous durable publication, unmanaged-thread non-import, and complete outer-owner cleanup.
 - The evidence file is one owner-only regular link at mode `0600`, records a 2,951,421-byte maximum inbound message and zero remaining resources, and contains no retained path, PID, socket identity, thread/turn id, model, prompt, TUI output, or auth value. No matching process or temporary smoke root remained after validation.
+- Corrective `BUG-011` dirty-worktree probes complete both teardown directions and reach only the intentional clean-commit evidence guard. Clean corrective and aggregate evidence remain pending before `BUG-011` closure.
 
 ## Downstream Ownership
 

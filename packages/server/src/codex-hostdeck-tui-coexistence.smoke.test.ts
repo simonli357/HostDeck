@@ -84,6 +84,9 @@ const maximumBufferedNotifications = 512;
 const maximumDiagnosticEntries = 1_024;
 const maximumOutputBytes = 64 * 1_024;
 const sentinel = "HOSTDECK_COEXIST_031";
+const commandIntervalSeconds = 8;
+const commandInitialWaitMs = 15_000;
+const tuiReadinessTimeoutMs = 30_000;
 const overallTimeoutMs = 240_000;
 
 describe.skipIf(!requireSmoke)(
@@ -648,12 +651,15 @@ describe.skipIf(!requireSmoke)(
             codex_home: codexHome,
             cwd: managedProject,
             tmux_socket_path: tuiBSocketPath,
-            expected_text: sentinel
+            expected_text: basename(managedProject)
           });
           const tuiBPid = tuiB.pid;
           expect(tuiBPid).not.toBe(tuiAPid);
           tuiB.assertAlive();
-          expect(tuiB.output).toContain(sentinel);
+          expect(tuiB.output).toContain(basename(managedProject));
+          expect(readBoundedProcessCommandLine(tuiBPid)).toContain(
+            managedThreadId
+          );
 
           await pipeline.barrier();
           await connectionA.close(
@@ -701,7 +707,9 @@ describe.skipIf(!requireSmoke)(
           retainedEventCount = finalRetained.length;
           expect(publicationCount).toBe(retainedEventCount);
           tuiB.assertAlive();
-          expect((await tuiB.capture()).output).toContain(sentinel);
+          expect((await tuiB.capture()).output).toContain(
+            basename(managedProject)
+          );
           expect(isProcessAlive(appServerPid)).toBe(true);
           expect(socketIdentity(socketPath)).toBe(appSocketIdentity);
 
@@ -1142,6 +1150,11 @@ function prepareCodexHome(destination: string): void {
   const copied = join(destination, "auth.json");
   copyFileSync(source, copied);
   chmodSync(copied, 0o600);
+  writeFileSync(
+    join(destination, "config.toml"),
+    "check_for_update_on_startup = false\n",
+    { flag: "wx", mode: 0o600 }
+  );
 }
 
 function initializeGitRepository(path: string): void {
@@ -1326,8 +1339,10 @@ function coexistencePrompt(markerPath: string): string {
   const quoted = shellQuote(markerPath);
   return [
     sentinel,
-    "Use the shell tool exactly once to run this command:",
-    `printf started > ${quoted}; sleep 20; printf finished > ${quoted}`,
+    "Use the exec_command shell tool exactly once to run this command:",
+    `printf started > ${quoted}; sleep ${commandIntervalSeconds}; printf finished > ${quoted}`,
+    `Set yield_time_ms to ${commandInitialWaitMs} so the command finishes in that same tool call.`,
+    "Do not start another command or return before this command exits.",
     `Wait for it to finish, then reply with exactly ${sentinel}_DONE.`
   ].join("\n");
 }
@@ -1546,20 +1561,36 @@ async function startTui(input: {
       "TUI pane pid"
     );
     assertOwnedProcessGroupLeader(panePid, "TUI");
-    await waitFor(
-      async () => {
-        const snapshot = await capture();
-        if (snapshot.pane_dead) {
-          throw new Error("Coexistence TUI exited before inspection.");
-        }
-        return (
-          snapshot.output.includes("OpenAI Codex") &&
-          snapshot.output.includes(input.expected_text)
-        );
-      },
-      10_000,
-      "Coexistence TUI did not render its expected managed-thread view."
-    );
+    try {
+      await waitFor(
+        async () => {
+          const snapshot = await capture();
+          if (snapshot.pane_dead) {
+            throw new Error("Coexistence TUI exited before inspection.");
+          }
+          return (
+            snapshot.output.includes("OpenAI Codex") &&
+            snapshot.output.includes(input.expected_text)
+          );
+        },
+        tuiReadinessTimeoutMs,
+        "Coexistence TUI did not render its expected managed-thread view."
+      );
+    } catch (error) {
+      const snapshot = await capture();
+      throw new Error(
+        [
+          "Coexistence TUI readiness diagnostic:",
+          `pane_dead=${String(snapshot.pane_dead)}`,
+          `process_alive=${String(isProcessAlive(panePid))}`,
+          `group_alive=${String(isProcessGroupAlive(panePid))}`,
+          `rendered_product=${String(snapshot.output.includes("OpenAI Codex"))}`,
+          `rendered_expected=${String(snapshot.output.includes(input.expected_text))}`,
+          `output_bytes=${Buffer.byteLength(snapshot.output, "utf8")}`
+        ].join(" "),
+        { cause: error }
+      );
+    }
     const fixedPid = panePid;
     const fixedTmuxServerPid = tmuxServerPid;
     const fixedTmuxSocketIdentity = tmuxSocketIdentity;
