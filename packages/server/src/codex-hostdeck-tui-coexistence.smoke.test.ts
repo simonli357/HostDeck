@@ -203,6 +203,7 @@ describe.skipIf(!requireSmoke)(
               readonly reason_class: string;
             } | null;
           } = { current: null };
+          let connectionATransportError = "none";
 
           const consume = (
             message: CodexConnectionNotification,
@@ -225,10 +226,13 @@ describe.skipIf(!requireSmoke)(
             socket_path: socketPath
           });
           transportA.subscribe((event) => {
-            if (
-              event.type !== "close" ||
-              connectionAClose.current !== null
-            ) {
+            if (event.type === "error") {
+              connectionATransportError = classifyTransportError(
+                event.error.message
+              );
+              return;
+            }
+            if (event.type !== "close" || connectionAClose.current !== null) {
               return;
             }
             connectionAClose.current = {
@@ -488,6 +492,7 @@ describe.skipIf(!requireSmoke)(
                 `transport_close_reason=${
                   connectionAClose.current?.reason_class ?? "none"
                 }`,
+                `transport_error=${connectionATransportError}`,
                 `generation_stable=${String(
                   liveConnectionA.generation === expectedGenerationA
                 )}`,
@@ -1279,6 +1284,16 @@ function classifyTransportCloseReason(reason: string): string {
   if (normalized.includes("socket")) return "socket";
   if (normalized.includes("hostdeck")) return "hostdeck_requested";
   if (normalized === "") return "empty";
+  return "other";
+}
+
+function classifyTransportError(message: string): string {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("heartbeat")) return "heartbeat";
+  if (normalized.includes("protocol")) return "protocol";
+  if (normalized.includes("queue") || normalized.includes("overload")) {
+    return "overload";
+  }
   return "other";
 }
 
