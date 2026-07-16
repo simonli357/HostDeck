@@ -196,6 +196,13 @@ describe.skipIf(!requireSmoke)(
           let publicationCount = 0;
           let retainedEventCount = 0;
           let expectedGenerationA: number | null = null;
+          const connectionAClose: {
+            current: {
+              readonly code: number;
+              readonly clean: boolean;
+              readonly reason_class: string;
+            } | null;
+          } = { current: null };
 
           const consume = (
             message: CodexConnectionNotification,
@@ -214,10 +221,24 @@ describe.skipIf(!requireSmoke)(
             });
           };
 
+          const transportA = createCodexUnixWebSocketTransport({
+            socket_path: socketPath
+          });
+          transportA.subscribe((event) => {
+            if (
+              event.type !== "close" ||
+              connectionAClose.current !== null
+            ) {
+              return;
+            }
+            connectionAClose.current = {
+              code: event.code,
+              clean: event.clean,
+              reason_class: classifyTransportCloseReason(event.reason)
+            };
+          });
           connectionA = createCodexAppServerConnection({
-            transport: createCodexUnixWebSocketTransport({
-              socket_path: socketPath
-            }),
+            transport: transportA,
             observed_version: codexBindingDescriptor.codex_version,
             on_notification(message) {
               if (connectionA === null) return;
@@ -251,6 +272,7 @@ describe.skipIf(!requireSmoke)(
             }
           });
           await connectionA.connect(AbortSignal.timeout(10_000));
+          const liveConnectionA = connectionA;
           expectedGenerationA = connectionA.generation;
           expect(expectedGenerationA).toBeGreaterThan(0);
           expect(connectionA.compatibility).toMatchObject({
@@ -394,6 +416,16 @@ describe.skipIf(!requireSmoke)(
               async () => {
                 await pipeline?.barrier();
                 assertNoBackgroundErrors(backgroundErrors);
+                if (
+                  liveConnectionA.state !== "ready" ||
+                  !isProcessAlive(appServerPid) ||
+                  !isProcessGroupAlive(appServerPid) ||
+                  !socketMatchesIdentity(socketPath, appSocketIdentity)
+                ) {
+                  throw new Error(
+                    "Coexistence runtime disconnected before shared-turn completion."
+                  );
+                }
                 return (
                   readMarker(markerPath) === "finished" &&
                   repository.require("sess_tui_coexistence_001")
@@ -428,6 +460,7 @@ describe.skipIf(!requireSmoke)(
             const projection = repository.require(
               "sess_tui_coexistence_001"
             ).projection.session;
+            const appDiagnostics = appOutput.read();
             throw new Error(
               [
                 "HostDeck shared-turn completion diagnostic:",
@@ -442,9 +475,39 @@ describe.skipIf(!requireSmoke)(
                 `runtime_idle=${String(runtimeIdle)}`,
                 `pipeline_failed=${String(pipeline.failure !== null)}`,
                 `pending=${pipeline.pending_count}`,
-                `connection_ready=${String(connectionA.state === "ready")}`,
+                `connection_ready=${String(
+                  liveConnectionA.state === "ready"
+                )}`,
+                `transport_open=${String(transportA.state === "open")}`,
+                `transport_close_code=${
+                  connectionAClose.current?.code ?? 0
+                }`,
+                `transport_close_clean=${String(
+                  connectionAClose.current?.clean ?? false
+                )}`,
+                `transport_close_reason=${
+                  connectionAClose.current?.reason_class ?? "none"
+                }`,
                 `generation_stable=${String(
-                  connectionA.generation === expectedGenerationA
+                  liveConnectionA.generation === expectedGenerationA
+                )}`,
+                `app_process_alive=${String(
+                  isProcessAlive(appServerPid)
+                )}`,
+                `app_group_alive=${String(
+                  isProcessGroupAlive(appServerPid)
+                )}`,
+                `app_socket_stable=${String(
+                  socketMatchesIdentity(socketPath, appSocketIdentity)
+                )}`,
+                `app_logged_shutdown_signal=${String(
+                  appDiagnostics.includes("shutdown signal")
+                )}`,
+                `app_logged_queue_disconnect=${String(
+                  appDiagnostics.includes("outbound queue")
+                )}`,
+                `app_logged_panic=${String(
+                  appDiagnostics.toLowerCase().includes("panic")
                 )}`,
                 `app_output_overflow=${String(appOutput.overflowed())}`,
                 `app_spawn_failed=${String(appOutput.failure() !== null)}`
@@ -1208,6 +1271,27 @@ function readMarker(path: string): string | null {
     throw new Error("Coexistence marker is invalid.");
   }
   return readFileSync(path, "utf8").trim();
+}
+
+function classifyTransportCloseReason(reason: string): string {
+  const normalized = reason.toLowerCase();
+  if (normalized.includes("heartbeat")) return "heartbeat";
+  if (normalized.includes("socket")) return "socket";
+  if (normalized.includes("hostdeck")) return "hostdeck_requested";
+  if (normalized === "") return "empty";
+  return "other";
+}
+
+function socketMatchesIdentity(
+  path: string,
+  expectedIdentity: string | null
+): boolean {
+  if (expectedIdentity === null || !existsSync(path)) return false;
+  try {
+    return socketIdentity(path) === expectedIdentity;
+  } catch {
+    return false;
+  }
 }
 
 async function startTui(input: {
