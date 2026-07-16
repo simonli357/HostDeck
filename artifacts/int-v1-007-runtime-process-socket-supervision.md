@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: hardening criteria frozen before implementation.
+Status: complete.
 
 ## Scope
 
@@ -45,7 +45,7 @@ Implement one headless runtime supervisor for the selected dedicated Codex app-s
 - Startup checks the caller's deadline before every inspect, probe, spawn, and retry. Deadline expiry and caller abort remain distinct stable failures. Retry sleeps are abortable and never extend the original deadline.
 - Any failure after foreground spawn attempts child termination and identity-safe socket cleanup before releasing the process claim. Cleanup failures are retained with the primary failure; they never turn failure into success.
 - Normal foreground close sends `SIGTERM`, waits only within its cleanup allocation, escalates to `SIGKILL` if still running, waits again within the same caller deadline, then removes only the exact socket identity observed for this owned runtime. Missing socket is already clean; replacement or wrong-type state is a cleanup conflict and is not removed.
-- If the close deadline is already expired, the supervisor still attempts the safety-critical `SIGKILL` and identity-safe unlink, reports timeout/failure truthfully, and releases only capabilities that are actually settled. It never signals by discovered pid, process name, socket peer, or stale metadata.
+- If the close deadline is already expired, the supervisor still attempts the safety-critical `SIGKILL`, reports timeout/failure truthfully, and releases only capabilities that are actually settled. It unlinks only after the owned child is reaped; a late reap triggers identity-safe deferred cleanup without relabeling the failed close. It never signals by discovered pid, process name, socket peer, or stale metadata.
 - Service close releases only the HostDeck process-local observation claim. It leaves the sibling and socket untouched even when readiness, compatibility, or later HostDeck work fails.
 
 ## Observability And Privacy
@@ -74,6 +74,37 @@ Implement one headless runtime supervisor for the selected dedicated Codex app-s
 - Linux process/socket integration uses temporary owner-only runtime directories and generated executable fixtures to prove fixed argv, real spawn/exit signals, socket mode/identity, stale and active collisions, service non-ownership, escalation, reverse cleanup, and same-path restart.
 - An opt-in no-model smoke uses the isolated exact Codex 0.144.0 binary twice: production foreground supervision plus compatibility handshake, then an externally started service sibling observed by the production service-mode supervisor. It inspects Unix socket type/mode, child survival across service-supervisor close, terminal process exit, and filesystem cleanup.
 - Run focused tests, full unit/contract/integration/web suites, root and all-package typechecks, lint/exports, scaffold, planning, frozen offline install, exact binding, production dependency/license checks, `git diff --check`, active-handle/process/socket inspection, and manual mode/argument/privacy review.
+
+## Implementation
+
+- `packages/server/src/codex-runtime-supervisor.ts` implements the strict two-mode lifecycle state machine, process-local canonical-socket claim, deadline handling, readiness, exit observation, reverse cleanup, and privacy-safe snapshots.
+- `packages/server/src/codex-runtime-supervisor-node.ts` isolates production Node process and Unix-socket operations. Foreground spawn is fixed to `app-server --listen unix://<socket>` with `shell: false`; service mode has no process capability.
+- Unit tests cover strict construction, active/stale/duplicate ownership, service noninterference, sync/async process failures, child exit races, abort/timeout, TERM-to-KILL escalation, malformed ports, replacement-socket conflicts, late reap, restart, and snapshot privacy.
+- Linux integration tests use real processes and Unix sockets for argv, socket identity/mode, foreground cleanup/restart, service sibling survival, insecure parent/symlink rejection, asynchronous `ENOENT`/`EACCES`, and ignored-TERM escalation.
+- The exact-runtime smoke composes the production supervisor with the production Unix transport and compatibility connection in both modes. Foreground close reaps the owned process and removes its socket; service close leaves the externally started sibling alive until explicit test cleanup.
+- Criteria commit: `9b7c7f4`. Implementation commit: `d0449fc`.
+
+## Hardening Findings
+
+- Cleanup initially could unlink the socket before a signaled child was reaped. Cleanup now waits for authoritative exit and performs deferred identity-safe removal after a late reap.
+- A readiness microtask gap could publish ready after child exit. Foreground readiness now rechecks the authoritative child state immediately before publication.
+- Claim release initially depended on diagnostic counts instead of settled resources. The claim now remains held until process and socket ownership are actually settled.
+- Cleanup inspection could repair the mode of a replacement socket. Cleanup now observes identity without mutating a socket it does not own.
+- Clock, socket-removal, and malformed-exit failures now retain stable supervisor classifications instead of leaking raw or contradictory state.
+
+## Validation Evidence
+
+| Check | Result |
+| --- | --- |
+| Focused supervisor unit | 18 passed. |
+| Linux supervisor integration | 5 passed with real child processes and Unix sockets. |
+| Exact Codex 0.144.0 supervisor smoke | 1 passed; foreground and service-owned compatibility-ready lifecycles completed without a model call and with explicit cleanup. |
+| Full unit | 172 files passed, 23 skipped; 1,628 tests passed, 37 opt-in/external tests skipped. No Android device was required. |
+| Full contract / integration / web | 276 / 31 / 33 passed. |
+| Static and planning gates | Root and all nine package typechecks, lint/exports over 483 files, scaffold, planning (212 tasks, 84 requirements, 649 dependencies, 2 queued), frozen offline install, and `git diff --check` passed. |
+| Exact binding | Codex 0.144.0 verified across 671 generated files at tree identity `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. |
+| Production dependencies | No dependency changed. Production licenses are MIT, BSD, ISC, Apache, BlueOak, and compatible permissive combinations. `pnpm audit --prod` could not query advisories because npm's retired audit endpoint returned HTTP 410; it reported no vulnerability result. |
+| Manual review | Fixed Unix-only argv, no shell/TCP/LAN fallback, mode-specific process capabilities, child-before-socket cleanup, replacement identity, bounded public diagnostics, and downstream exclusions pass. |
 
 ## Downstream Ownership
 

@@ -16,8 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-007` Implement runtime process/socket supervision | ready | none | The accepted structured vertical permits explicit foreground/service ownership work independently of remote contract implementation. |
-| 2 | `IFC-V1-035` Add bounded subscriber queues and revoke/disconnect/archive cleanup | ready | none | Exact active/opening-stream revoke is complete; bounded subscriber ownership can progress independently of the ingress spike. |
+| 1 | `INT-V1-028` Implement bounded reconnect/compatibility/reconciliation transitions | ready | none | Runtime ownership is now explicit; reconnect can consume the existing connection skeleton without retrying accepted mutations. |
+| 2 | `INT-V1-031` Prove HostDeck and laptop TUI multi-client coexistence | ready | none | The accepted structured vertical and explicit runtime ownership now permit bounded exact-runtime coexistence evidence. |
+| 3 | `IFC-V1-035` Add bounded subscriber queues and revoke/disconnect/archive cleanup | ready | none | Exact active/opening-stream revoke is complete; bounded subscriber ownership can progress independently. |
 
 ## Intentional Blockers
 

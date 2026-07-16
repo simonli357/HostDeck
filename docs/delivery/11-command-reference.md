@@ -53,6 +53,8 @@ pnpm exec vitest run --config vitest.contract.config.ts packages/contracts/src/i
 pnpm exec vitest run --config vitest.integration.config.ts tests/interrupt-vertical.integration.test.ts
 pnpm exec vitest run packages/server/src/selected-write-admission-policy.test.ts packages/server/src/selected-write-gate.test.ts
 pnpm exec vitest run --config vitest.integration.config.ts tests/selected-write-admission.integration.test.ts
+pnpm exec vitest run packages/server/src/codex-runtime-supervisor.test.ts
+pnpm exec vitest run --config vitest.integration.config.ts tests/codex-runtime-supervisor.integration.test.ts
 pnpm smoke:remote-control
 pnpm smoke:codex-compatibility
 pnpm smoke:codex-ipc
@@ -81,6 +83,7 @@ HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-prompt
 HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-approval
 HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-interrupt
 HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-vertical
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-supervisor
 ```
 
 ## Regenerate Reviewed Codex Binding
