@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: production-hardening criteria frozen before implementation.
+Status: complete. Criteria were frozen in `37d6861`; the exact harness began in `55ca459`, was hardened through `692ca9d`, and emitted `artifacts/int-v1-031-hostdeck-tui-coexistence-evidence.json` from the clean production-default commit.
 
 ## Scope
 
@@ -76,6 +76,20 @@ Prove that exact Codex 0.144.0 supports the selected V1 multi-client contract on
 - Add the opt-in exact coexistence smoke plus direct tests for any reusable coordination/report helper introduced. Reuse production thread clients, command builder, transport/connection, event pipeline, storage, and bounded resource policy.
 - Run focused TUI-command/pipeline/storage tests; full unit, contract, integration, and web suites; root/all-package typechecks; lint/exports; scaffold/planning; exact 0.144.0 binding and relevant no-model/IPC/TUI smokes; frozen offline install and production license/audit checks where available; diff/privacy/process/socket/temp inspection; and manual request/event/ownership review.
 - The physical phone may remain disconnected for this runtime leaf.
+
+## Implementation Findings
+
+- The app-server launcher and each TUI terminal required explicit process-tree ownership. Cleanup now isolates the app-server process group, verifies the TUI pane/process group/session, stops only owned groups, and removes a stale tmux socket inode only after its daemon is gone and its recorded identity is unchanged.
+- Early exact failures that looked like peer-client teardown were a HostDeck transport defect: Codex emitted a legitimate message above the old 1 MiB default, so `ws` closed HostDeck with `WS_ERR_UNSUPPORTED_MESSAGE_LENGTH` while app-server and its socket remained alive. The measured exact high-water mark was about 2.95 MB.
+- The shared resource contract now uses the existing 8 MiB hard ceiling as the default inbound frame bound and an 8 MiB buffered-write bound. Protocol and scripted transports consume that one default, a 3,000,000-byte regression protects it, and the exact smoke proves the production default rather than a test override.
+- Private evidence is published only after reverse cleanup and a clean-commit check. Failure diagnostics retain bounded classifications and counts rather than paths, identifiers, prompts, pane output, auth, or raw protocol content.
+
+## Validation Result
+
+- Focused protocol/resource/transport coverage passed 44 tests, including the 3,000,000-byte default-bound regression. Full unit passed 1,699 with 40 opt-in skips; contract passed 277; integration passed 33; web passed 33.
+- Root and all-package typechecks, lint/package exports, scaffold, frozen offline install, diff checks, and the isolated exact Codex 0.144.0 671-file binding check passed. The default installed 0.144.3 binary correctly remains ineligible for reviewed-binding evidence.
+- The production-default exact coexistence smoke passed against clean commit `692ca9d16d13790cbddb88f24f128af9ad820569` in 54.99 seconds. It proves one model turn, two HostDeck connections, two distinct sequential TUI processes, both teardown directions, contiguous durable publication, unmanaged-thread non-import, and complete outer-owner cleanup.
+- The evidence file is one owner-only regular link at mode `0600`, records a 2,951,421-byte maximum inbound message and zero remaining resources, and contains no retained path, PID, socket identity, thread/turn id, model, prompt, TUI output, or auth value. No matching process or temporary smoke root remained after validation.
 
 ## Downstream Ownership
 
