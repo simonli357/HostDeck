@@ -6,6 +6,7 @@ export * from "./config.js";
 export * from "./errors.js";
 export * from "./exit-codes.js";
 export * from "./goal-client.js";
+export * from "./interrupt-client.js";
 export * from "./local-admin.js";
 export * from "./model-client.js";
 export * from "./pairing-link-client.js";

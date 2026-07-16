@@ -4,6 +4,7 @@ import {
   type NormalizedCodexEvent
 } from "@hostdeck/codex-adapter";
 import {
+  codexVersionSchema,
   defaultResourceBudget,
   interruptOperationIntentSchema,
   isoTimestampSchema,
@@ -11,6 +12,8 @@ import {
   type SelectedOperationIntent,
   type SelectedOperationProgress,
   selectedOperationProgressSchema,
+  selectedSessionMappingRecordSchema,
+  selectedSessionProjectionRecordSchema,
   type TurnOperationTarget,
   turnOperationTargetSchema
 } from "@hostdeck/contracts";
@@ -27,9 +30,11 @@ export type CodexInterruptControlErrorCode =
   | "runtime_protocol_error"
   | "runtime_unavailable"
   | "service_overloaded"
+  | "state_unavailable"
   | "target_mismatch"
   | "target_not_found"
   | "target_not_writable"
+  | "target_stale"
   | "unknown_outcome";
 
 export type CodexInterruptControlOutcome = "not_sent" | "remote_rejected" | "unknown";
@@ -54,15 +59,17 @@ export interface CodexInterruptControlStatePort {
 }
 
 export interface CodexInterruptControlServiceOptions {
-  readonly turns: Pick<CodexTurnClient, "interruptTurn">;
+  readonly turns: Pick<CodexTurnClient, "interruptTurn" | "runtime_version">;
   readonly states: CodexInterruptControlStatePort;
   readonly max_tracked_turns?: number;
   readonly now?: () => string;
 }
 
 export interface CodexInterruptControlService {
+  readonly requireInterruptible: (target: unknown) => Promise<void>;
   readonly snapshot: (target: unknown) => Promise<SelectedOperationProgress | null>;
   readonly interrupt: (intent: unknown, signal?: AbortSignal) => Promise<SelectedOperationProgress>;
+  readonly waitForTerminal: (target: unknown, signal: AbortSignal) => Promise<SelectedOperationProgress>;
   readonly observeEvent: (event: NormalizedCodexEvent) => Promise<void>;
   readonly active_count: number;
   readonly pending_count: number;
@@ -82,15 +89,31 @@ interface TrackedInterrupt {
   terminal_status: TurnCompletedEvent["status"] | null;
 }
 
+interface TerminalWaiter {
+  readonly signal: AbortSignal;
+  readonly onAbort: () => void;
+  readonly resolve: (progress: SelectedOperationProgress) => void;
+}
+
+interface ParsedOptions {
+  readonly turns: Pick<CodexTurnClient, "interruptTurn" | "runtime_version">;
+  readonly states: CodexInterruptControlStatePort;
+  readonly max_tracked_turns: number;
+  readonly now: () => string;
+}
+
 const activeProjectionStates = new Set(["in_progress", "waiting_for_approval", "waiting_for_input"]);
+const selectedStateKeys = ["mapping", "projection"] as const;
 
 export function createCodexInterruptControlService(
   options: CodexInterruptControlServiceOptions
 ): CodexInterruptControlService {
-  const implementation = new DefaultCodexInterruptControlService(options);
+  const implementation = new DefaultCodexInterruptControlService(parseOptions(options));
   return Object.freeze({
+    requireInterruptible: (target: unknown) => implementation.requireInterruptible(target),
     snapshot: (target: unknown) => implementation.snapshot(target),
     interrupt: (intent: unknown, signal?: AbortSignal) => implementation.interrupt(intent, signal),
+    waitForTerminal: (target: unknown, signal: AbortSignal) => implementation.waitForTerminal(target, signal),
     observeEvent: (event: NormalizedCodexEvent) => implementation.observeEvent(event),
     get active_count() {
       return implementation.active_count;
@@ -110,23 +133,9 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
   private readonly archivedSessions = new Set<string>();
   private readonly terminalByTarget = new Map<string, TurnCompletedEvent>();
   private readonly tails = new Map<string, Promise<void>>();
-  private readonly maxTrackedTurns: number;
-  private readonly now: () => string;
+  private readonly waiters = new Map<string, Set<TerminalWaiter>>();
 
-  constructor(private readonly options: CodexInterruptControlServiceOptions) {
-    if (
-      options === null ||
-      typeof options !== "object" ||
-      typeof options.turns?.interruptTurn !== "function" ||
-      typeof options.states?.get !== "function" ||
-      typeof options.states.getByThreadId !== "function" ||
-      (options.now !== undefined && typeof options.now !== "function")
-    ) {
-      throw new TypeError("Codex interrupt control requires exact turn, selected-state, and clock ports.");
-    }
-    this.maxTrackedTurns = parseCapacity(options.max_tracked_turns);
-    this.now = options.now ?? (() => new Date().toISOString());
-  }
+  constructor(private readonly options: ParsedOptions) {}
 
   get active_count(): number {
     return this.activeBySession.size;
@@ -140,6 +149,13 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
 
   get tracked_count(): number {
     return this.interruptsBySession.size;
+  }
+
+  async requireInterruptible(targetInput: unknown): Promise<void> {
+    const target = parseTarget(targetInput);
+    await this.serialized(target.session_id, async () => {
+      this.requireInterruptibleTarget(target);
+    });
   }
 
   async snapshot(targetInput: unknown): Promise<SelectedOperationProgress | null> {
@@ -158,55 +174,7 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
       throw interruptError("invalid_request", "validation_error", "The interrupt request signal is invalid.", "not_sent", true);
     }
     return this.serialized(intent.target.session_id, async () => {
-      const state = this.requireWritableTarget(intent.target);
-      if (!activeProjectionStates.has(state.projection.session.turn_state)) {
-        throw interruptError(
-          "operation_conflict",
-          "operation_conflict",
-          `The selected turn projection is ${state.projection.session.turn_state}, not actively interruptible.`,
-          "not_sent",
-          true
-        );
-      }
-      const active = this.activeBySession.get(intent.target.session_id);
-      if (active === undefined) {
-        throw interruptError(
-          "operation_conflict",
-          "operation_conflict",
-          "The selected turn has no matching normalized turn-start evidence.",
-          "not_sent",
-          true
-        );
-      }
-      if (!sameTarget(active.target, intent.target)) {
-        throw interruptError(
-          "operation_conflict",
-          "operation_conflict",
-          "The requested interrupt does not match the event-proven active turn.",
-          "not_sent",
-          true
-        );
-      }
-
-      const existing = this.interruptsBySession.get(intent.target.session_id);
-      if (existing !== undefined && ["accepted", "sending", "unknown"].includes(existing.phase)) {
-        throw interruptError(
-          "operation_conflict",
-          existing.phase === "unknown" ? "unknown_error" : "operation_conflict",
-          "A prior interrupt for this session is still awaiting authoritative reconciliation.",
-          "not_sent",
-          false
-        );
-      }
-      if (existing !== undefined && sameTarget(existing.intent.target, intent.target)) {
-        throw interruptError(
-          "operation_conflict",
-          "operation_conflict",
-          "The exact turn already has a terminal interrupt attempt.",
-          "not_sent",
-          false
-        );
-      }
+      this.requireInterruptibleTarget(intent.target);
 
       const requestedAt = this.timestamp();
       const record: TrackedInterrupt = {
@@ -272,10 +240,63 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
     });
   }
 
+  async waitForTerminal(targetInput: unknown, signal: AbortSignal): Promise<SelectedOperationProgress> {
+    const target = parseTarget(targetInput);
+    if (!(signal instanceof AbortSignal)) {
+      throw interruptError(
+        "invalid_request",
+        "validation_error",
+        "The interrupt terminal-wait signal is invalid.",
+        "not_sent",
+        true
+      );
+    }
+    if (signal.aborted) throw terminalWaitAborted();
+
+    const outcome = await this.serialized(target.session_id, async () => {
+      this.requireIdentity(target);
+      const record = this.interruptsBySession.get(target.session_id);
+      if (record === undefined || !sameTarget(record.intent.target, target)) {
+        throw interruptError(
+          "operation_conflict",
+          "operation_conflict",
+          "The exact interrupt attempt is not registered.",
+          "not_sent",
+          false
+        );
+      }
+      if (record.phase === "terminal") {
+        if (record.progress === null) {
+          throw interruptError(
+            "runtime_protocol_error",
+            "protocol_error",
+            "Terminal interrupt state has no operation progress.",
+            "not_sent",
+            false
+          );
+        }
+        return Object.freeze({ terminal: record.progress });
+      }
+      if (!["accepted", "sending", "unknown"].includes(record.phase)) {
+        throw interruptError(
+          "runtime_protocol_error",
+          "protocol_error",
+          "Interrupt state cannot enter terminal waiting.",
+          "not_sent",
+          false
+        );
+      }
+      return Object.freeze({ waiting: this.createTerminalWaiter(target, signal) });
+    });
+    if ("terminal" in outcome) return outcome.terminal;
+    return await outcome.waiting;
+  }
+
   async observeEvent(event: NormalizedCodexEvent): Promise<void> {
     if (!("thread_id" in event)) return;
-    const state = this.options.states.getByThreadId(event.thread_id);
+    const state = this.readStateByThreadId(event.thread_id);
     if (state === null) return;
+    this.requireRuntimeState(state);
     const sessionId = state.mapping.id;
 
     if (event.method === "thread/archived") this.archivedSessions.add(sessionId);
@@ -325,6 +346,7 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
           message: "A later turn started without terminal evidence for the interrupted turn.",
           retryable: false
         });
+        this.notifyWaiters(record.intent.target, record.progress);
       }
       this.activeBySession.set(sessionId, {
         target: parseInternalTarget({
@@ -357,13 +379,13 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
     if (event.status === "interrupted") {
       record.progress = progress(record, "interrupted", event.captured_at, null);
     } else {
-      const detail = event.status === "failed" && event.error_message !== null ? `: ${event.error_message}` : "";
       record.progress = progress(record, "failed", event.captured_at, {
         code: "operation_conflict",
-        message: bounded(`The turn reached ${event.status} instead of interrupted${detail}.`),
+        message: `The turn reached ${event.status} instead of interrupted.`,
         retryable: false
       });
     }
+    this.notifyWaiters(record.intent.target, record.progress);
     return record.progress;
   }
 
@@ -374,6 +396,7 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
       message: "The session archived before interrupt terminal proof.",
       retryable: false
     });
+    this.notifyWaiters(record.intent.target, record.progress);
     return record.progress;
   }
 
@@ -399,7 +422,7 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
   }
 
   private requireIdentity(target: TurnOperationTarget): SelectedSessionState {
-    const state = this.options.states.get(target.session_id);
+    const state = this.readState(target.session_id);
     if (state === null) {
       this.activeBySession.delete(target.session_id);
       this.interruptsBySession.delete(target.session_id);
@@ -410,11 +433,21 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
     if (state.mapping.codex_thread_id !== target.codex_thread_id) {
       throw interruptError("target_mismatch", "invalid_session_id", "The selected session and interrupt thread do not match.", "not_sent", false);
     }
+    this.requireRuntimeState(state);
     return state;
   }
 
   private requireWritableTarget(target: TurnOperationTarget): SelectedSessionState {
     const state = this.requireIdentity(target);
+    if (state.mapping.disposition !== "selected") {
+      throw interruptError(
+        "target_stale",
+        "stale_session",
+        "The selected interrupt session requires recovery.",
+        "not_sent",
+        false
+      );
+    }
     if (state.mapping.archived_at !== null || state.projection.session.session_state === "archived") {
       this.activeBySession.delete(target.session_id);
       const record = this.interruptsBySession.get(target.session_id);
@@ -435,16 +468,206 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
     return state;
   }
 
+  private requireInterruptibleTarget(target: TurnOperationTarget): void {
+    const state = this.requireWritableTarget(target);
+    if (!activeProjectionStates.has(state.projection.session.turn_state)) {
+      throw interruptError(
+        "operation_conflict",
+        "operation_conflict",
+        `The selected turn projection is ${state.projection.session.turn_state}, not actively interruptible.`,
+        "not_sent",
+        true
+      );
+    }
+    const active = this.activeBySession.get(target.session_id);
+    if (active === undefined) {
+      throw interruptError(
+        "operation_conflict",
+        "operation_conflict",
+        "The selected turn has no matching normalized turn-start evidence.",
+        "not_sent",
+        true
+      );
+    }
+    if (!sameTarget(active.target, target)) {
+      throw interruptError(
+        "operation_conflict",
+        "operation_conflict",
+        "The requested interrupt does not match the event-proven active turn.",
+        "not_sent",
+        true
+      );
+    }
+
+    const existing = this.interruptsBySession.get(target.session_id);
+    if (existing !== undefined && ["accepted", "sending", "unknown"].includes(existing.phase)) {
+      throw interruptError(
+        "operation_conflict",
+        existing.phase === "unknown" ? "unknown_error" : "operation_conflict",
+        "A prior interrupt for this session is still awaiting authoritative reconciliation.",
+        "not_sent",
+        false
+      );
+    }
+    if (existing !== undefined && sameTarget(existing.intent.target, target)) {
+      throw interruptError(
+        "operation_conflict",
+        "operation_conflict",
+        "The exact turn already has a terminal interrupt attempt.",
+        "not_sent",
+        false
+      );
+    }
+  }
+
+  private readState(sessionId: string): SelectedSessionState | null {
+    let candidate: unknown;
+    try {
+      candidate = Reflect.apply(this.options.states.get, undefined, [sessionId]);
+    } catch (error) {
+      throw interruptError(
+        "state_unavailable",
+        "storage_error",
+        "Selected state could not read the interrupt target.",
+        "not_sent",
+        true,
+        error
+      );
+    }
+    if (candidate === null) return null;
+    const state = parseSelectedInterruptState(candidate);
+    if (state === null || !selectedIdentityMatches(state)) {
+      throw interruptError(
+        "target_mismatch",
+        "stale_session",
+        "The selected interrupt target identity requires reconciliation.",
+        "not_sent",
+        false
+      );
+    }
+    return state;
+  }
+
+  private readStateByThreadId(threadId: string): SelectedSessionState | null {
+    let candidate: unknown;
+    try {
+      candidate = Reflect.apply(this.options.states.getByThreadId, undefined, [threadId]);
+    } catch (error) {
+      throw interruptError(
+        "state_unavailable",
+        "storage_error",
+        "Selected state could not resolve the interrupt thread.",
+        "not_sent",
+        true,
+        error
+      );
+    }
+    if (candidate === null) return null;
+    const state = parseSelectedInterruptState(candidate);
+    if (state === null || state.mapping.codex_thread_id !== threadId || !selectedIdentityMatches(state)) {
+      throw interruptError(
+        "target_mismatch",
+        "stale_session",
+        "The selected interrupt thread identity requires reconciliation.",
+        "not_sent",
+        false
+      );
+    }
+    return state;
+  }
+
+  private requireRuntimeState(state: SelectedSessionState): void {
+    const runtimeVersion = this.activeRuntimeVersion();
+    if (
+      state.mapping.runtime_version !== runtimeVersion ||
+      state.projection.session.runtime_version !== runtimeVersion
+    ) {
+      throw interruptError(
+        "target_stale",
+        "stale_session",
+        "The selected interrupt session belongs to another Codex runtime version.",
+        "not_sent",
+        true
+      );
+    }
+  }
+
+  private activeRuntimeVersion(): string {
+    let candidate: unknown;
+    try {
+      candidate = this.options.turns.runtime_version;
+    } catch (error) {
+      throw mapAdapterError(error, "Codex interrupt runtime identity is unavailable.");
+    }
+    const parsed = codexVersionSchema.safeParse(candidate);
+    if (!parsed.success) {
+      throw interruptError(
+        "runtime_protocol_error",
+        "protocol_error",
+        "Codex interrupt runtime version is invalid.",
+        "not_sent",
+        false,
+        parsed.error
+      );
+    }
+    return parsed.data;
+  }
+
+  private createTerminalWaiter(target: TurnOperationTarget, signal: AbortSignal): Promise<SelectedOperationProgress> {
+    const key = targetKey(target.session_id, target.turn_id);
+    return new Promise<SelectedOperationProgress>((resolve, reject) => {
+      let settled = false;
+      const cleanup = () => {
+        signal.removeEventListener("abort", onAbort);
+        const waiters = this.waiters.get(key);
+        waiters?.delete(waiter);
+        if (waiters?.size === 0) this.waiters.delete(key);
+      };
+      const onAbort = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(terminalWaitAborted());
+      };
+      const waiter: TerminalWaiter = {
+        signal,
+        onAbort,
+        resolve: (value) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve(value);
+        }
+      };
+      const waiters = this.waiters.get(key) ?? new Set<TerminalWaiter>();
+      waiters.add(waiter);
+      this.waiters.set(key, waiters);
+      signal.addEventListener("abort", onAbort, { once: true });
+      if (signal.aborted) onAbort();
+    });
+  }
+
+  private notifyWaiters(target: TurnOperationTarget, value: SelectedOperationProgress): void {
+    const key = targetKey(target.session_id, target.turn_id);
+    const waiters = this.waiters.get(key);
+    if (waiters === undefined) return;
+    this.waiters.delete(key);
+    for (const waiter of waiters) {
+      waiter.signal.removeEventListener("abort", waiter.onAbort);
+      waiter.resolve(value);
+    }
+  }
+
   private ensureCapacity(sessionId: string): void {
     const trackedSessions = new Set([...this.activeBySession.keys(), ...this.interruptsBySession.keys()]);
-    if (trackedSessions.has(sessionId) || trackedSessions.size < this.maxTrackedTurns) return;
+    if (trackedSessions.has(sessionId) || trackedSessions.size < this.options.max_tracked_turns) return;
     const evictable = [...this.interruptsBySession.entries()]
       .filter(([candidate, record]) => record.phase === "terminal" && !this.activeBySession.has(candidate))
       .sort((left, right) => (left[1].progress?.updated_at ?? "").localeCompare(right[1].progress?.updated_at ?? ""));
     for (const [candidate] of evictable) {
       this.interruptsBySession.delete(candidate);
       trackedSessions.delete(candidate);
-      if (trackedSessions.size < this.maxTrackedTurns) return;
+      if (trackedSessions.size < this.options.max_tracked_turns) return;
     }
     throw interruptError(
       "service_overloaded",
@@ -456,7 +679,7 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
   }
 
   private timestamp(): IsoTimestamp {
-    const parsed = isoTimestampSchema.safeParse(this.now());
+    const parsed = isoTimestampSchema.safeParse(Reflect.apply(this.options.now, undefined, []));
     if (!parsed.success) {
       throw interruptError("invalid_request", "internal_error", "The interrupt-control clock returned an invalid timestamp.", "not_sent", false, parsed.error);
     }
@@ -537,6 +760,138 @@ function progress(
     );
   }
   return deepFreeze(parsed.data);
+}
+
+function parseOptions(candidate: unknown): ParsedOptions {
+  const value = readExactOptionObject(candidate);
+  const turns = value.turns;
+  const states = value.states;
+  if (
+    turns === null ||
+    typeof turns !== "object" ||
+    !hasDataFunctionProperty(turns, "interruptTurn") ||
+    !hasDataOrAccessorProperty(turns, "runtime_version") ||
+    states === null ||
+    typeof states !== "object" ||
+    !hasDataFunctionProperty(states, "get") ||
+    !hasDataFunctionProperty(states, "getByThreadId") ||
+    (value.now !== undefined && typeof value.now !== "function")
+  ) {
+    throw new TypeError("Codex interrupt control requires exact turn, selected-state, and clock ports.");
+  }
+  return Object.freeze({
+    turns: turns as Pick<CodexTurnClient, "interruptTurn" | "runtime_version">,
+    states: states as CodexInterruptControlStatePort,
+    max_tracked_turns: parseCapacity(value.max_tracked_turns as number | undefined),
+    now: (value.now as (() => string) | undefined) ?? (() => new Date().toISOString())
+  });
+}
+
+function readExactOptionObject(candidate: unknown): Readonly<Record<string, unknown>> {
+  const required = ["states", "turns"];
+  const allowed = [...required, "max_tracked_turns", "now"];
+  const message = "Codex interrupt control options must be an exact plain data object.";
+  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) throw new TypeError(message);
+  try {
+    const prototype: unknown = Object.getPrototypeOf(candidate);
+    const descriptors = Object.getOwnPropertyDescriptors(candidate);
+    const keys = Reflect.ownKeys(descriptors);
+    if (
+      (prototype !== Object.prototype && prototype !== null) ||
+      keys.some((key) => typeof key !== "string" || !allowed.includes(key)) ||
+      required.some((key) => !Object.hasOwn(descriptors, key)) ||
+      keys.some((key) => {
+        if (typeof key !== "string") return true;
+        const descriptor = descriptors[key];
+        return descriptor === undefined || !("value" in descriptor) || !descriptor.enumerable;
+      })
+    ) {
+      throw new TypeError(message);
+    }
+    return Object.freeze(Object.fromEntries(keys.map((key) => [key, descriptors[key as string]?.value])));
+  } catch (error) {
+    if (error instanceof TypeError && error.message === message) throw error;
+    throw new TypeError(message);
+  }
+}
+
+function hasDataFunctionProperty(candidate: object, key: string): boolean {
+  let current: object | null = candidate;
+  while (current !== null) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, key);
+    if (descriptor !== undefined) return "value" in descriptor && typeof descriptor.value === "function";
+    current = Object.getPrototypeOf(current) as object | null;
+  }
+  return false;
+}
+
+function hasDataOrAccessorProperty(candidate: object, key: string): boolean {
+  let current: object | null = candidate;
+  while (current !== null) {
+    if (Object.getOwnPropertyDescriptor(current, key) !== undefined) return true;
+    current = Object.getPrototypeOf(current) as object | null;
+  }
+  return false;
+}
+
+function parseSelectedInterruptState(candidate: unknown): SelectedSessionState | null {
+  try {
+    const state = readExactDataObject(candidate, selectedStateKeys);
+    const mapping = selectedSessionMappingRecordSchema.safeParse(state.mapping);
+    const projection = selectedSessionProjectionRecordSchema.safeParse(state.projection);
+    if (!mapping.success || !projection.success) return null;
+    return Object.freeze({ mapping: mapping.data, projection: projection.data });
+  } catch {
+    return null;
+  }
+}
+
+function selectedIdentityMatches(state: SelectedSessionState): boolean {
+  const session = state.projection.session;
+  return (
+    state.mapping.id === session.id &&
+    state.mapping.name === session.name &&
+    state.mapping.codex_thread_id === session.codex_thread_id &&
+    state.mapping.cwd === session.cwd &&
+    state.mapping.runtime_source === session.runtime_source &&
+    state.mapping.runtime_version === session.runtime_version &&
+    state.mapping.created_at === session.created_at &&
+    state.mapping.archived_at === session.archived_at
+  );
+}
+
+function readExactDataObject<const Keys extends readonly string[]>(
+  candidate: unknown,
+  keys: Keys
+): Readonly<Record<Keys[number], unknown>> {
+  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) throw new TypeError();
+  const prototype: unknown = Object.getPrototypeOf(candidate);
+  const descriptors = Object.getOwnPropertyDescriptors(candidate);
+  const actualKeys = Reflect.ownKeys(descriptors);
+  if (
+    (prototype !== Object.prototype && prototype !== null) ||
+    actualKeys.length !== keys.length ||
+    actualKeys.some((key) => typeof key !== "string" || !keys.includes(key)) ||
+    keys.some((key) => {
+      const descriptor = descriptors[key];
+      return descriptor === undefined || !("value" in descriptor) || !descriptor.enumerable;
+    })
+  ) {
+    throw new TypeError();
+  }
+  return Object.freeze(Object.fromEntries(keys.map((key) => [key, descriptors[key]?.value]))) as Readonly<
+    Record<Keys[number], unknown>
+  >;
+}
+
+function terminalWaitAborted(): HostDeckCodexInterruptControlError {
+  return interruptError(
+    "unknown_outcome",
+    "operation_timeout",
+    "Interrupt terminal proof was interrupted before an authoritative outcome.",
+    "unknown",
+    false
+  );
 }
 
 function parseCapacity(candidate: number | undefined): number {

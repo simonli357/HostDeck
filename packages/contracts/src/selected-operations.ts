@@ -72,6 +72,13 @@ export const turnOperationTargetSchema = z
   })
   .strict();
 
+export const sessionTurnParamsSchema = z
+  .object({
+    session_id: sessionIdSchema,
+    turn_id: codexTurnIdSchema
+  })
+  .strict();
+
 export const selectedOperationTargetSchema = z.discriminatedUnion("type", [
   managedSessionTargetSchema,
   approvalOperationTargetSchema,
@@ -252,6 +259,14 @@ export const interruptOperationIntentSchema = z
   })
   .strict();
 
+export const interruptRequestSchema = z
+  .object({
+    operation_id: clientOperationIdSchema,
+    kind: z.literal("interrupt"),
+    confirm: z.literal(true)
+  })
+  .strict();
+
 export const archiveOperationIntentSchema = z
   .object({
     ...managedOperationBaseShape,
@@ -427,6 +442,27 @@ export const selectedOperationProgressSchema = z
     }
     if (!["failed", "incomplete"].includes(value.state) && value.error !== null) {
       context.addIssue({ code: "custom", message: "Only failed or incomplete operation progress may carry an error." });
+    }
+  });
+
+export const interruptResponseSchema = z
+  .object({
+    operation_id: clientOperationIdSchema,
+    kind: z.literal("interrupt"),
+    target: turnOperationTargetSchema,
+    state: z.literal("interrupted"),
+    updated_at: isoTimestampSchema,
+    turn_id: codexTurnIdSchema,
+    error: z.null()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.turn_id !== value.target.turn_id) {
+      context.addIssue({
+        code: "custom",
+        message: "Interrupt response turn identity must match its exact target.",
+        path: ["turn_id"]
+      });
     }
   });
 
@@ -1146,6 +1182,7 @@ export type ManagedSessionTarget = z.infer<typeof managedSessionTargetSchema>;
 export type ApprovalOperationTarget = z.infer<typeof approvalOperationTargetSchema>;
 export type SessionApprovalParams = z.infer<typeof sessionApprovalParamsSchema>;
 export type TurnOperationTarget = z.infer<typeof turnOperationTargetSchema>;
+export type SessionTurnParams = z.infer<typeof sessionTurnParamsSchema>;
 export type SelectedOperationTarget = z.infer<typeof selectedOperationTargetSchema>;
 export type SelectedOperationIntent = z.infer<typeof selectedOperationIntentSchema>;
 export type PromptSessionRequest = z.infer<typeof promptSessionRequestSchema>;
@@ -1156,6 +1193,8 @@ export type PlanSelectionRequest = z.infer<typeof planSelectionRequestSchema>;
 export type CompactStartRequest = z.infer<typeof compactStartRequestSchema>;
 export type CompactProgressResponse = z.infer<typeof compactProgressResponseSchema>;
 export type ApprovalResponseRequest = z.infer<typeof approvalResponseRequestSchema>;
+export type InterruptRequest = z.infer<typeof interruptRequestSchema>;
+export type InterruptResponse = z.infer<typeof interruptResponseSchema>;
 export type ArchiveSessionRequest = z.infer<typeof archiveSessionRequestSchema>;
 export type SelectedOperationDispatch = z.infer<typeof selectedOperationDispatchSchema>;
 export type SelectedOperationTerminalOutcome = z.infer<typeof selectedOperationTerminalOutcomeSchema>;

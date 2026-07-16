@@ -30,6 +30,7 @@ export * from "./fastify-zod.js";
 export * from "./goal-routes.js";
 export * from "./host-lock-routes.js";
 export * from "./host-service.js";
+export * from "./interrupt-routes.js";
 export * from "./managed-thread-service.js";
 export * from "./model-routes.js";
 export * from "./output-reader.js";

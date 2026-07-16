@@ -45,6 +45,13 @@ export type ParsedCliCommand =
       readonly confirm: boolean;
       readonly json: boolean;
     }
+  | {
+      readonly kind: "interrupt";
+      readonly session: string;
+      readonly turn: string;
+      readonly confirm: true;
+      readonly json: boolean;
+    }
   | { readonly kind: "stop"; readonly session: string }
   | {
       readonly kind: "pair";
@@ -182,7 +189,8 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
         positionals[0] === "goal" ||
         positionals[0] === "plan" ||
         positionals[0] === "compact" ||
-        positionals[0] === "approvals"
+        positionals[0] === "approvals" ||
+        positionals[0] === "interrupt"
       ) {
         throw usageFailure(`The ${positionals[0]} command does not accept an option terminator.`);
       }
@@ -375,6 +383,20 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
         request: parsed.request,
         decision: parsed.decision,
         confirm: parsed.confirm,
+        json: parsed.json
+      },
+      configFlags
+    };
+  }
+
+  if (command === "interrupt") {
+    const parsed = parseInterruptOptions(rest, json);
+    return {
+      command: {
+        kind: "interrupt",
+        session: parsed.session,
+        turn: parsed.turn,
+        confirm: true,
         json: parsed.json
       },
       configFlags
@@ -790,6 +812,20 @@ function parseApprovalsOptions(
     );
   }
   return { session, request, decision, confirm: true, json: globalJson };
+}
+
+function parseInterruptOptions(
+  args: readonly string[],
+  globalJson: boolean
+): { readonly session: string; readonly turn: string; readonly json: boolean } {
+  const [session, turn, ...rest] = args;
+  if (session === undefined || session.startsWith("-") || turn === undefined || turn.startsWith("-")) {
+    throw usageFailure("Interrupt requires SESSION_ID TURN_ID --confirm.");
+  }
+  if (rest.length !== 1 || rest[0] !== "--confirm") {
+    throw usageFailure("Interrupt requires SESSION_ID TURN_ID --confirm.");
+  }
+  return { session, turn, json: globalJson };
 }
 
 function parsePairOptions(args: readonly string[], globalJson: boolean): {

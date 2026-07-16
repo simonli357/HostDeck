@@ -5,6 +5,7 @@ import type {
   CompactProgressResponse,
   GoalControlSnapshot,
   GoalMutationRequest,
+  InterruptResponse,
   ModelControlSnapshot,
   ModelSelectionRequest,
   PendingApprovalListResponse,
@@ -27,6 +28,8 @@ import {
   compactStartRequestSchema,
   goalControlSnapshotSchema,
   goalMutationRequestSchema,
+  interruptRequestSchema,
+  interruptResponseSchema,
   modelControlSnapshotSchema,
   modelSelectionRequestSchema,
   pendingApprovalListResponseSchema,
@@ -48,6 +51,7 @@ import {
   selectedStartSessionRequestSchema,
   sessionApprovalParamsSchema,
   sessionIdParamsSchema,
+  sessionTurnParamsSchema,
   skillsSnapshotSchema,
   usageSnapshotSchema
 } from "@hostdeck/contracts";
@@ -83,6 +87,11 @@ import {
   type HostDeckGoalClient,
   type HostDeckGoalClientMutationRequest
 } from "./goal-client.js";
+import {
+  createHostDeckInterruptClient,
+  type HostDeckInterruptClient,
+  type HostDeckInterruptClientRequest
+} from "./interrupt-client.js";
 import { createLocalAdmin, type LocalAdmin } from "./local-admin.js";
 import {
   createHostDeckModelClient,
@@ -117,6 +126,7 @@ import {
   renderFailure,
   renderGoalSnapshot,
   renderHelp,
+  renderInterruptResponse,
   renderLockCommand,
   renderModelSnapshot,
   renderPairingLink,
@@ -171,6 +181,7 @@ export interface CliRunOptions {
   readonly goalClient?: HostDeckGoalClient;
   readonly compactClient?: HostDeckCompactClient;
   readonly approvalClient?: HostDeckApprovalClient;
+  readonly interruptClient?: HostDeckInterruptClient;
   readonly modelClient?: HostDeckModelClient;
   readonly planClient?: HostDeckPlanClient;
   readonly archiveClient?: HostDeckArchiveClient;
@@ -189,6 +200,7 @@ export interface CliRunOptions {
   readonly createArchiveOperationId?: () => string;
   readonly createCompactOperationId?: () => string;
   readonly createApprovalOperationId?: () => string;
+  readonly createInterruptOperationId?: () => string;
   readonly createGoalOperationId?: () => string;
   readonly createModelOperationId?: () => string;
   readonly createPlanOperationId?: () => string;
@@ -465,6 +477,24 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
       return success(renderApprovalResponse(response, parsed.command.json));
     }
 
+    if (parsed.command.kind === "interrupt") {
+      let interruptClient = options.interruptClient;
+      if (interruptClient === undefined) {
+        const interruptClientOptions = { baseUrl: config.baseUrl };
+        if (options.fetch !== undefined) Object.assign(interruptClientOptions, { fetch: options.fetch });
+        interruptClient = createHostDeckInterruptClient(interruptClientOptions);
+      }
+      const request = createInterruptRequest(
+        parsed.command,
+        options.createInterruptOperationId ?? createInterruptOperationId
+      );
+      const response = parseInterruptResponse(
+        await Reflect.apply(interruptClient.interrupt, undefined, [request]),
+        request
+      );
+      return success(renderInterruptResponse(response, parsed.command.json));
+    }
+
     if (parsed.command.kind === "start") {
       let startClient = options.startClient;
       if (startClient === undefined) {
@@ -702,6 +732,10 @@ function createCompactOperationId(): string {
 
 function createApprovalOperationId(): string {
   return `op_approval_${randomUUID().replaceAll("-", "")}`;
+}
+
+function createInterruptOperationId(): string {
+  return `op_interrupt_${randomUUID().replaceAll("-", "")}`;
 }
 
 function createSessionStartRequest(
@@ -1267,6 +1301,50 @@ function parseApprovalResponse(
     parsed.data.approval.target.request_id !== request.request_id
   ) {
     throw internalFailure("HostDeck approval client returned contradictory response data.");
+  }
+  return parsed.data;
+}
+
+function createInterruptRequest(
+  command: Extract<ReturnType<typeof parseCliArgs>["command"], { readonly kind: "interrupt" }>,
+  createOperationId: () => string
+): HostDeckInterruptClientRequest {
+  if (!command.confirm) throw internalFailure("Interrupt command lost its confirmation.");
+  let operationId: unknown;
+  try {
+    operationId = Reflect.apply(createOperationId, undefined, []);
+  } catch (error) {
+    throw internalFailure("Interrupt operation id generation failed.", error);
+  }
+  const params = sessionTurnParamsSchema.safeParse({ session_id: command.session, turn_id: command.turn });
+  const body = interruptRequestSchema.safeParse({
+    operation_id: operationId,
+    kind: "interrupt",
+    confirm: true
+  });
+  if (!params.success) throw usageFailure("Interrupt target is invalid.", "interrupt");
+  if (!body.success) throw internalFailure("Interrupt operation id generation failed.");
+  return Object.freeze({ ...params.data, ...body.data });
+}
+
+function parseInterruptResponse(
+  candidate: unknown,
+  request: HostDeckInterruptClientRequest
+): InterruptResponse {
+  let parsed: ReturnType<typeof interruptResponseSchema.safeParse>;
+  try {
+    parsed = interruptResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("HostDeck interrupt client returned invalid response data.");
+  }
+  if (
+    !parsed.success ||
+    parsed.data.operation_id !== request.operation_id ||
+    parsed.data.target.session_id !== request.session_id ||
+    parsed.data.target.turn_id !== request.turn_id ||
+    parsed.data.turn_id !== request.turn_id
+  ) {
+    throw internalFailure("HostDeck interrupt client returned contradictory response data.");
   }
   return parsed.data;
 }

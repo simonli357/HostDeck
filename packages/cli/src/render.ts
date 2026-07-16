@@ -9,6 +9,8 @@ import {
   goalControlSnapshotSchema,
   goalMutationRequestSchema,
   type HostStatusResponse,
+  type InterruptResponse,
+  interruptResponseSchema,
   type ModelControlSnapshot,
   type ModelSelectionRequest,
   modelControlSnapshotSchema,
@@ -76,6 +78,7 @@ export function renderHelp(): string {
     "  codexdeck skills SESSION_ID [--json]",
     "  codexdeck approvals SESSION_ID [--json]",
     "  codexdeck approvals SESSION_ID REQUEST_ID approve|deny --confirm [--json]",
+    "  codexdeck interrupt SESSION_ID TURN_ID --confirm [--json]",
     "  codexdeck pair [--label LABEL] [--read-only | --write]",
     "  codexdeck lock [--reason TEXT] [--json]",
     "  codexdeck unlock [--json]",
@@ -522,6 +525,21 @@ export function renderApprovalResponse(candidate: PendingApprovalResponse, json:
     ? `${JSON.stringify(parsed.data, null, 2)}\n`
     : `Approval ${parsed.data.requested_decision} finalized for ${escapeTerminalText(parsed.data.approval.target.session_id)} (request ${escapeTerminalText(parsed.data.approval.target.request_id)}).\n`;
   requireBoundedRender(output, "Approval-response");
+  return output;
+}
+
+export function renderInterruptResponse(candidate: InterruptResponse, json: boolean): string {
+  let parsed: ReturnType<typeof interruptResponseSchema.safeParse>;
+  try {
+    parsed = interruptResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Interrupt rendering input is invalid.");
+  }
+  if (!parsed.success) throw internalFailure("Interrupt rendering input is invalid.");
+  const output = json
+    ? `${JSON.stringify(parsed.data, null, 2)}\n`
+    : `Interrupted turn ${escapeTerminalText(parsed.data.turn_id)} for ${escapeTerminalText(parsed.data.target.session_id)}.\n`;
+  requireBoundedRender(output, "Interrupt");
   return output;
 }
 

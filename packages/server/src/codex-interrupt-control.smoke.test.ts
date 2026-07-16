@@ -20,7 +20,11 @@ import {
   createCodexUnixWebSocketTransport,
   parseCodexCliVersionOutput
 } from "@hostdeck/codex-adapter";
-import type { ModelCatalogEntry } from "@hostdeck/contracts";
+import {
+  type ModelCatalogEntry,
+  selectedSessionMappingRecordSchema,
+  selectedSessionProjectionRecordSchema
+} from "@hostdeck/contracts";
 import type { CodexThreadId } from "@hostdeck/core";
 import type { SelectedSessionState } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
@@ -150,11 +154,13 @@ describe.skipIf(!requireSmoke)("installed Codex interrupt-control smoke", () => 
           error: null
         });
         expect(turnMethods.filter((method) => method === "turn/interrupt")).toHaveLength(1);
+        const terminalWait = service.waitForTerminal(exactTarget, new AbortController().signal);
 
         const completed = await waitForTurnCompleted(notifications, threadA, acceptedTurnId, cursor.value, 60_000);
         expect(turnTerminalShape(completed.notification)).toEqual({ status: "interrupted", error: null });
         states.set(targetA.session_id, selectedState(targetA.session_id, threadA, projectA, "interrupted"));
         await processNotificationsThrough(notifications, cursor, completed.index, normalizer, service);
+        await expect(terminalWait).resolves.toMatchObject({ state: "interrupted", error: null });
         expect(await service.snapshot(exactTarget)).toMatchObject({ state: "interrupted", error: null });
 
         const [threadAAfter, threadBAfter] = await Promise.all([threads.read(threadA), threads.read(threadB)]);
@@ -292,10 +298,49 @@ function selectedState(
   cwd: string,
   turnState: "idle" | "in_progress" | "interrupted" | "waiting_for_approval"
 ): SelectedSessionState {
+  const mapping = selectedSessionMappingRecordSchema.parse({
+    id: sessionId,
+    name: sessionId,
+    codex_thread_id: threadId,
+    cwd,
+    runtime_source: "codex_app_server",
+    runtime_version: codexBindingDescriptor.codex_version,
+    disposition: "selected",
+    created_at: "2026-07-10T00:00:00.000Z",
+    updated_at: "2026-07-10T00:00:00.000Z",
+    archived_at: null
+  });
   return {
-    mapping: { id: sessionId, name: sessionId, codex_thread_id: threadId, cwd, archived_at: null },
-    projection: { session: { session_state: "active", freshness: "current", turn_state: turnState } }
-  } as unknown as SelectedSessionState;
+    mapping,
+    projection: selectedSessionProjectionRecordSchema.parse({
+      session: {
+        id: mapping.id,
+        name: mapping.name,
+        codex_thread_id: mapping.codex_thread_id,
+        cwd: mapping.cwd,
+        runtime_source: mapping.runtime_source,
+        runtime_version: mapping.runtime_version,
+        created_at: mapping.created_at,
+        archived_at: null,
+        session_state: "active",
+        turn_state: turnState,
+        attention: turnState === "waiting_for_approval" ? "needs_approval" : "none",
+        freshness: "current",
+        freshness_reason: null,
+        updated_at: mapping.updated_at,
+        last_activity_at: mapping.updated_at,
+        branch: null,
+        model: null,
+        goal: null,
+        recent_summary: "Managed interrupt smoke session.",
+        last_event_cursor: null
+      },
+      retained_event_count: 0,
+      retained_event_bytes: 0,
+      earliest_retained_cursor: null,
+      retention_boundary_cursor: null
+    })
+  };
 }
 
 async function processNotificationsThrough(

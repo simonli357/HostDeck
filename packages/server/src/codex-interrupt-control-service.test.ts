@@ -4,6 +4,10 @@ import {
   HostDeckCodexAdapterError,
   type NormalizedCodexEvent
 } from "@hostdeck/codex-adapter";
+import {
+  selectedSessionMappingRecordSchema,
+  selectedSessionProjectionRecordSchema
+} from "@hostdeck/contracts";
 import type { SelectedSessionState } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
 import {
@@ -64,6 +68,43 @@ describe("Codex interrupt control", () => {
     expect(harness.service.active_count).toBe(0);
     expect(harness.service.pending_count).toBe(0);
     expect(harness.states.get(targetA.session_id)?.mapping.archived_at).toBeNull();
+  });
+
+  it("proves exact interruptibility without dispatching and rejects it after one terminal attempt", async () => {
+    const harness = await activeHarness();
+    await expect(harness.service.requireInterruptible(targetA)).resolves.toBeUndefined();
+    expect(harness.turns.calls).toHaveLength(0);
+
+    await harness.service.interrupt(interruptIntent(targetA, "op_interrupt_admission_0001"));
+    await harness.service.observeEvent(turnCompletedEvent(targetA, "interrupted"));
+    await expectInterruptError(harness.service.requireInterruptible(targetA), "operation_conflict");
+    expect(harness.turns.calls).toHaveLength(1);
+  });
+
+  it("waits event-driven for exact terminal truth and removes an aborted waiter", async () => {
+    const completed = await activeHarness();
+    await completed.service.interrupt(interruptIntent(targetA, "op_interrupt_wait_0001"));
+    const completionSignal = new AbortController();
+    let settled = false;
+    const waiting = completed.service.waitForTerminal(targetA, completionSignal.signal).finally(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    await completed.service.observeEvent(turnCompletedEvent(targetA, "interrupted"));
+    await expect(waiting).resolves.toMatchObject({ state: "interrupted", error: null });
+
+    const aborted = await activeHarness();
+    await aborted.service.interrupt(interruptIntent(targetA, "op_interrupt_wait_abort_0001"));
+    const abortController = new AbortController();
+    const abortedWait = aborted.service.waitForTerminal(targetA, abortController.signal);
+    abortController.abort();
+    const waitError = await expectInterruptError(abortedWait, "unknown_outcome");
+    expect(waitError).toMatchObject({ api_code: "operation_timeout", outcome: "unknown", retry_safe: false });
+    await aborted.service.observeEvent(turnCompletedEvent(targetA, "interrupted"));
+    await expect(aborted.service.waitForTerminal(targetA, new AbortController().signal)).resolves.toMatchObject({
+      state: "interrupted"
+    });
   });
 
   it("accepts a goal or TUI-originated active event without prompt-control ownership", async () => {
@@ -235,7 +276,96 @@ describe("Codex interrupt control", () => {
       harness.service.interrupt(interruptIntent(targetA, "op_interrupt_signal_0001"), {} as never),
       "invalid_request"
     );
+    await expectInterruptError(harness.service.waitForTerminal(targetA, {} as never), "invalid_request");
     expect(harness.turns.calls).toHaveLength(0);
+  });
+
+  it("fails closed for complete selected identity, runtime version, and state-port errors", async () => {
+    const runtimeDrift = await activeHarness();
+    runtimeDrift.states.set(targetA.session_id, selectedStateWithRuntime(targetA, "0.145.0", "in_progress"));
+    await expectInterruptError(
+      runtimeDrift.service.interrupt(interruptIntent(targetA, "op_interrupt_runtime_drift_0001")),
+      "target_stale"
+    );
+
+    const recovery = await activeHarness();
+    recovery.states.set(targetA.session_id, selectedStateWithDisposition(targetA, "recovery_required", "in_progress"));
+    await expectInterruptError(
+      recovery.service.interrupt(interruptIntent(targetA, "op_interrupt_recovery_0001")),
+      "target_stale"
+    );
+
+    const malformed = await activeHarness();
+    malformed.states.set(targetA.session_id, {
+      mapping: { ...selectedState(targetA).mapping, cwd: "/tmp/identity-a" },
+      projection: {
+        ...selectedState(targetA, "in_progress").projection,
+        session: { ...selectedState(targetA, "in_progress").projection.session, cwd: "/tmp/identity-b" }
+      }
+    } as SelectedSessionState);
+    await expectInterruptError(
+      malformed.service.interrupt(interruptIntent(targetA, "op_interrupt_identity_0001")),
+      "target_mismatch"
+    );
+
+    const stateFailure = createHarness({ throwOnGet: true });
+    stateFailure.states.set(targetA.session_id, selectedState(targetA, "in_progress"));
+    await stateFailure.service.observeEvent(turnStartedEvent(targetA));
+    await expectInterruptError(
+      stateFailure.service.interrupt(interruptIntent(targetA, "op_interrupt_state_failure_0001")),
+      "state_unavailable"
+    );
+
+    expect([
+      runtimeDrift.turns.calls.length,
+      recovery.turns.calls.length,
+      malformed.turns.calls.length,
+      stateFailure.turns.calls.length
+    ]).toEqual([0, 0, 0, 0]);
+  });
+
+  it("requires exact accessor-free options and a compatibility-aware turn port", () => {
+    const harness = createHarness();
+    const base = {
+      turns: harness.turns,
+      states: {
+        get: (session: string) => harness.states.get(session) ?? null,
+        getByThreadId: (thread: string) =>
+          [...harness.states.values()].find((state) => state.mapping.codex_thread_id === thread) ?? null
+      }
+    };
+    for (const candidate of [
+      null,
+      {},
+      { ...base, extra: true },
+      { ...base, turns: { interruptTurn: harness.turns.interruptTurn } },
+      { ...base, states: { get: base.states.get } },
+      { ...base, now: "invalid" },
+      { ...base, max_tracked_turns: 0 }
+    ]) {
+      expect(() => createCodexInterruptControlService(candidate as never)).toThrow();
+    }
+    let accessorCalls = 0;
+    const accessor = Object.defineProperty({ states: base.states }, "turns", {
+      enumerable: true,
+      get() {
+        accessorCalls += 1;
+        throw new Error("private turn accessor");
+      }
+    });
+    expect(() => createCodexInterruptControlService(accessor as never)).toThrow();
+    expect(accessorCalls).toBe(0);
+
+    let portAccessorCalls = 0;
+    const hostileTurns = Object.defineProperty({ runtime_version: "0.144.0" }, "interruptTurn", {
+      enumerable: true,
+      get() {
+        portAccessorCalls += 1;
+        throw new Error("private interrupt method accessor");
+      }
+    });
+    expect(() => createCodexInterruptControlService({ ...base, turns: hostileTurns } as never)).toThrow();
+    expect(portAccessorCalls).toBe(0);
   });
 
   it("marks archive during accepted interrupt incomplete without treating it as interruption", async () => {
@@ -335,6 +465,7 @@ describe("Codex interrupt control", () => {
 
 interface FakeTurns {
   readonly calls: CodexTurnInterruptInput[];
+  runtime_version: string;
   error: Error | null;
   gate: Promise<void> | null;
   result: CodexTurnInterruptAccepted | null;
@@ -348,9 +479,16 @@ interface Harness {
   readonly now: { value: string };
 }
 
-function createHarness(options: { readonly includeSecondState?: boolean; readonly maxTrackedTurns?: number } = {}): Harness {
+function createHarness(
+  options: {
+    readonly includeSecondState?: boolean;
+    readonly maxTrackedTurns?: number;
+    readonly throwOnGet?: boolean;
+  } = {}
+): Harness {
   const turns: FakeTurns = {
     calls: [],
+    runtime_version: "0.144.0",
     error: null,
     gate: null,
     result: null,
@@ -373,13 +511,39 @@ function createHarness(options: { readonly includeSecondState?: boolean; readonl
   const service = createCodexInterruptControlService({
     turns,
     states: {
-      get: (sessionId) => states.get(sessionId) ?? null,
+      get: (sessionId) => {
+        if (options.throwOnGet) throw new Error("private selected-state failure");
+        return states.get(sessionId) ?? null;
+      },
       getByThreadId: (threadId) => [...states.values()].find((state) => state.mapping.codex_thread_id === threadId) ?? null
     },
     ...(options.maxTrackedTurns === undefined ? {} : { max_tracked_turns: options.maxTrackedTurns }),
     now: () => now.value
   });
   return { service, turns, states, now };
+}
+
+function selectedStateWithRuntime(target: TestTarget, runtimeVersion: string, turnState = "idle"): SelectedSessionState {
+  const state = selectedState(target, turnState);
+  return {
+    mapping: selectedSessionMappingRecordSchema.parse({ ...state.mapping, runtime_version: runtimeVersion }),
+    projection: selectedSessionProjectionRecordSchema.parse({
+      ...state.projection,
+      session: { ...state.projection.session, runtime_version: runtimeVersion }
+    })
+  };
+}
+
+function selectedStateWithDisposition(
+  target: TestTarget,
+  disposition: "recovery_required" | "selected",
+  turnState = "idle"
+): SelectedSessionState {
+  const state = selectedState(target, turnState);
+  return {
+    mapping: selectedSessionMappingRecordSchema.parse({ ...state.mapping, disposition }),
+    projection: state.projection
+  };
 }
 
 async function activeHarness(): Promise<Harness> {
@@ -395,22 +559,55 @@ function selectedState(
   freshness = "current",
   archived = false
 ): SelectedSessionState {
+  const archivedAt = archived ? observedAt : null;
+  const mapping = selectedSessionMappingRecordSchema.parse({
+    id: target.session_id,
+    name: target.session_id,
+    codex_thread_id: target.codex_thread_id,
+    cwd: "/tmp/interrupt-project",
+    runtime_source: "codex_app_server",
+    runtime_version: "0.144.0",
+    disposition: "selected",
+    created_at: observedAt,
+    updated_at: observedAt,
+    archived_at: archivedAt
+  });
   return {
-    mapping: {
-      id: target.session_id,
-      name: target.session_id,
-      codex_thread_id: target.codex_thread_id,
-      cwd: "/tmp/interrupt-project",
-      archived_at: archived ? observedAt : null
-    },
-    projection: {
+    mapping,
+    projection: selectedSessionProjectionRecordSchema.parse({
       session: {
+        id: mapping.id,
+        name: mapping.name,
+        codex_thread_id: mapping.codex_thread_id,
+        cwd: mapping.cwd,
+        runtime_source: mapping.runtime_source,
+        runtime_version: mapping.runtime_version,
+        created_at: mapping.created_at,
+        archived_at: archivedAt,
         session_state: archived ? "archived" : "active",
-        turn_state: turnState,
-        freshness
-      }
-    }
-  } as unknown as SelectedSessionState;
+        turn_state: archived ? "idle" : turnState,
+        attention:
+          turnState === "waiting_for_approval"
+            ? "needs_approval"
+            : turnState === "waiting_for_input"
+              ? "needs_input"
+              : "none",
+        freshness,
+        freshness_reason: freshness === "current" ? null : "Runtime reconciliation is required.",
+        updated_at: observedAt,
+        last_activity_at: observedAt,
+        branch: null,
+        model: null,
+        goal: null,
+        recent_summary: "Managed interrupt test session.",
+        last_event_cursor: null
+      },
+      retained_event_count: 0,
+      retained_event_bytes: 0,
+      earliest_retained_cursor: null,
+      retention_boundary_cursor: null
+    })
+  };
 }
 
 function interruptIntent(target: TestTarget, operationId: string) {
