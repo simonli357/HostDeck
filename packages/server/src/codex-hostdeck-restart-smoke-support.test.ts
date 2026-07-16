@@ -14,8 +14,10 @@ import {
   parseHostDeckRestartWorkerEnvironment,
   parseHostDeckRestartWorkerReport,
   readBoundedProcessCommandLine,
+  readCodexSmokePrivateJson,
   readDirectChildProcessIds,
   readHostDeckRestartWorkerReport,
+  writeCodexSmokePrivateJson,
   writeHostDeckRestartWorkerReport
 } from "./codex-hostdeck-restart-smoke-support.js";
 
@@ -65,6 +67,13 @@ describe("HostDeck restart smoke support", () => {
       true
     );
     expect(() => writeHostDeckRestartWorkerReport(path, report)).toThrow();
+
+    const genericPath = join(root, "generic.json");
+    writeCodexSmokePrivateJson(genericPath, { proof: true });
+    expect(readCodexSmokePrivateJson(genericPath)).toEqual({ proof: true });
+    expect(() =>
+      writeCodexSmokePrivateJson(join(root, "undefined.json"), undefined)
+    ).toThrow("not JSON serializable");
 
     const insecure = join(root, "insecure.json");
     writeFileSync(insecure, JSON.stringify(report), { mode: 0o644 });

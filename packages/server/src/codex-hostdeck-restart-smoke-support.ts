@@ -272,9 +272,20 @@ export function writeHostDeckRestartPrivateJson(
   path: string,
   value: unknown
 ): void {
-  const data = Buffer.from(`${JSON.stringify(value)}\n`, "utf8");
+  writeCodexSmokePrivateJson(path, value);
+}
+
+export function writeCodexSmokePrivateJson(
+  path: string,
+  value: unknown
+): void {
+  const encoded = JSON.stringify(value);
+  if (encoded === undefined) {
+    throw new TypeError("Codex smoke private value is not JSON serializable.");
+  }
+  const data = Buffer.from(`${encoded}\n`, "utf8");
   if (data.byteLength > maxJsonBytes) {
-    throw new TypeError("HostDeck restart worker report exceeds its byte bound.");
+    throw new TypeError("Codex smoke private JSON exceeds its byte bound.");
   }
   const temporaryPath = `${path}.${process.pid}.tmp`;
   let descriptor: number | null = null;
@@ -327,6 +338,10 @@ export function readHostDeckRestartWorkerReport(
 }
 
 export function readHostDeckRestartPrivateJson(path: string): unknown {
+  return readCodexSmokePrivateJson(path);
+}
+
+export function readCodexSmokePrivateJson(path: string): unknown {
   const metadata = lstatSync(path);
   if (
     !metadata.isFile() ||
@@ -336,20 +351,20 @@ export function readHostDeckRestartPrivateJson(path: string): unknown {
     metadata.size < 2 ||
     metadata.size > maxJsonBytes
   ) {
-    throw new TypeError("HostDeck restart worker report file is insecure or invalid.");
+    throw new TypeError("Codex smoke private JSON file is insecure or invalid.");
   }
   if (
     process.getuid !== undefined &&
     metadata.uid !== process.getuid()
   ) {
-    throw new TypeError("HostDeck restart worker report has a foreign owner.");
+    throw new TypeError("Codex smoke private JSON has a foreign owner.");
   }
   const raw = readFileSync(path, "utf8");
   let decoded: unknown;
   try {
     decoded = JSON.parse(raw);
   } catch (error) {
-    throw new TypeError("HostDeck restart worker report is not valid JSON.", {
+    throw new TypeError("Codex smoke private file is not valid JSON.", {
       cause: error
     });
   }

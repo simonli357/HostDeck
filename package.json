@@ -24,6 +24,7 @@
     "smoke:codex-ipc": "HOSTDECK_REQUIRE_CODEX_IPC_SMOKE=1 vitest run packages/codex-adapter/src/codex-ipc.smoke.test.ts",
     "smoke:codex-restart": "HOSTDECK_REQUIRE_CODEX_RESTART_SMOKE=1 vitest run packages/server/src/codex-hostdeck-restart.smoke.test.ts",
     "smoke:codex-supervisor": "HOSTDECK_REQUIRE_CODEX_SUPERVISOR_SMOKE=1 vitest run packages/server/src/codex-runtime-supervisor.smoke.test.ts",
+    "smoke:codex-tui-coexistence": "HOSTDECK_REQUIRE_CODEX_TUI_COEXISTENCE_SMOKE=1 vitest run packages/server/src/codex-hostdeck-tui-coexistence.smoke.test.ts",
     "smoke:codex-threads": "HOSTDECK_REQUIRE_CODEX_THREAD_SMOKE=1 vitest run packages/codex-adapter/src/codex-thread-lifecycle.smoke.test.ts",
     "smoke:codex-semantics": "HOSTDECK_REQUIRE_CODEX_SEMANTICS_SMOKE=1 vitest run packages/codex-adapter/src/codex-operation-semantics.smoke.test.ts",
     "smoke:codex-model": "HOSTDECK_REQUIRE_CODEX_MODEL_SMOKE=1 vitest run packages/codex-adapter/src/codex-model-control.smoke.test.ts",
