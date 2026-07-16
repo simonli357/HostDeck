@@ -4,6 +4,16 @@ Date: 2026-07-16
 
 Status: hardening criteria frozen before implementation.
 
+## Hardening Audit Amendment
+
+The first executable pass exposed additional criteria before closure fixes:
+
+- Public phase `ready` must mean the admitted generation is already final. The final lifecycle callback runs while the controller remains non-ready; no snapshot may report `ready` with a null admitted generation.
+- The lifecycle runtime port is a revocable cycle lease. It rejects use after cycle completion/failure and dispatches only an explicit reconciliation-read method set; the resubscribe step additionally permits only the reviewed idempotent `thread/resume` request. A caller-supplied `kind: "read"` cannot disguise a mutation method.
+- Generation-aware approval clients must be composable before initial start, while every actual parse/response remains generation-positive and compatibility-gated. During synchronous held-callback delivery only, the controller exposes the completed handshake compatibility needed to register inbound truth while its request/response admission remains closed. The scope ends when the callback returns.
+- Fatal protocol issues, stale-generation frames, and callback contract failures are terminal, not reconnectable transport failures. Closing that generation still runs the once-per-generation disconnected cleanup before terminal publication.
+- Injected random, clock, transport-property, and sleep contracts fail with bounded controller errors. Backoff cancellation does not depend on an injected sleep implementation cooperating, and terminal reporting cannot strand initial readiness if owned shutdown reports an error.
+
 ## Scope
 
 Implement one headless selected-runtime reconnect controller around the existing Unix transport and compatibility connection. It owns immediate write closure after transport loss, connection-generation cleanup, capped cancellable backoff, repeated compatibility handshake, a read-only reconciliation gate, bounded inbound holdback, resubscription ordering, and admission only after the full cycle succeeds. Durable mapping/thread/turn reconciliation, replay-boundary persistence, app-server restart evidence, HostDeck-only restart, TUI coexistence, host startup composition, and release acceptance remain downstream.
@@ -21,10 +31,10 @@ Implement one headless selected-runtime reconnect controller around the existing
 
 - Add a `CodexRuntimeReconnectController` in `@hostdeck/codex-adapter`. It exclusively owns one existing `CodexTextTransport` and its internally constructed `CodexAppServerConnection`; the raw connection never escapes.
 - The controller exposes compatibility, generation, request, server-response, start, close, and privacy-safe snapshot surfaces needed by existing adapter clients. All application requests and server responses pass through this outer port.
-- Exact phases are `idle`, `connecting`, `reconciling`, `resubscribing`, `ready`, `disconnected`, `backing_off`, `incompatible`, `failed`, `closing`, and `closed`. Only `ready` admits requests or approval responses, and its admitted generation must equal the current transport generation.
+- Exact phases are `idle`, `connecting`, `reconciling`, `resubscribing`, `ready`, `disconnected`, `backing_off`, `incompatible`, `failed`, `closing`, and `closed`. Only `ready` admits requests or approval responses, its admitted generation must equal the current transport generation, and `ready` is never published before that admission is final.
 - Add an injected lifecycle port with four ordered operations: `disconnected`, `reconcile`, `resubscribe`, and `ready`. Each receives a caller-owned operation deadline. `reconcile` receives only a same-generation read-only request port; it cannot dispatch a mutation through the controller contract.
 - `disconnected` is called once for every lost positive generation before another connection attempt. The production composition will use it to publish runtime/projection unavailability and invoke approval generation cleanup. Failure to establish that truth is terminal and cannot be hidden by reconnecting.
-- `reconcile` and `resubscribe` must both complete for the same current generation before `ready` runs. Any disconnect, deadline, generation change, malformed callback result, or lifecycle failure prevents admission. Lifecycle-step automatic retry is forbidden because downstream storage/subscription side effects require explicit idempotency ownership.
+- `reconcile` and `resubscribe` must both complete for the same current generation before `ready` runs. Their runtime lease is method-restricted, generation-stable, deadline-bound, and revoked on every terminal path. Any disconnect, deadline, generation change, malformed callback result, or lifecycle failure prevents admission. Lifecycle-step automatic retry is forbidden because downstream storage/subscription side effects require explicit idempotency ownership.
 - Concrete durable thread reconciliation and disconnect-boundary persistence remain `INT-V1-029`; this leaf proves that their port is ordered, read-only at the adapter boundary, generation-stable, deadline-bound, and mandatory before admission.
 
 ## Disconnect And Retry Contract
@@ -39,6 +49,7 @@ Implement one headless selected-runtime reconnect controller around the existing
 ## Inbound And Generation Contract
 
 - During connect, handshake, reconcile, and resubscribe, normalized connection callbacks are held in one FIFO with separate configured notification and server-request ceilings. They are released only for the admitted generation after resubscription and before final ready admission.
+- Held inbound registration receives a synchronous compatibility-only window after handshake and resubscription. This permits precomposed consumers to record the inbound event for the current generation; ordinary application requests and server responses remain blocked until final admission, and the window cannot escape the callback stack.
 - Overflow fails the generation closed. A disconnect clears the FIFO; no callback from an unadmitted or stale generation reaches application code.
 - The broker rejects every message event whose generation differs from the transport's current generation before decoding, correlation, notification delivery, or server-request registration. This impossible transport-contract violation terminates the current connection with a bounded protocol issue.
 - Reconciliation reads carry the cycle deadline and exact generation. Mutation-kind input, generation drift before/after await, or a response arriving after disconnect fails without retrying the request.
