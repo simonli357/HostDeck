@@ -601,6 +601,34 @@ class DefaultCodexPromptControlService implements CodexPromptControlService {
     if (state.mapping.codex_thread_id !== target.codex_thread_id) {
       throw promptError("target_mismatch", "invalid_session_id", "The selected session and Codex thread identity do not match.", "not_sent", false);
     }
+    const session = state.projection.session;
+    if (
+      state.mapping.id !== session.id ||
+      state.mapping.name !== session.name ||
+      state.mapping.codex_thread_id !== session.codex_thread_id ||
+      state.mapping.cwd !== session.cwd ||
+      state.mapping.runtime_source !== session.runtime_source ||
+      state.mapping.runtime_version !== session.runtime_version ||
+      state.mapping.created_at !== session.created_at ||
+      state.mapping.archived_at !== session.archived_at
+    ) {
+      throw promptError(
+        "target_mismatch",
+        "stale_session",
+        "The selected managed session identity requires reconciliation.",
+        "not_sent",
+        false
+      );
+    }
+    if (state.mapping.disposition !== "selected") {
+      throw promptError(
+        "target_not_writable",
+        "stale_session",
+        "The selected managed session requires recovery before prompt dispatch.",
+        "not_sent",
+        false
+      );
+    }
     if (state.mapping.archived_at !== null || state.projection.session.session_state === "archived") {
       this.clearSession(target.session_id);
       throw promptError("target_not_writable", "session_not_writable", "The selected managed session is archived.", "not_sent", false);

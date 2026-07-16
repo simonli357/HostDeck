@@ -143,9 +143,14 @@ describe("CLI shell contract", () => {
       },
       {
         label: "send",
-        args: ["send", "contract-demo", "Continue", "carefully"],
+        args: ["send", "sess_cli_contract_01", "Continue", "carefully"],
         expected: {
-          command: { kind: "send", session: "contract-demo", text: "Continue carefully" },
+          command: {
+            kind: "send",
+            session: "sess_cli_contract_01",
+            text: "Continue carefully",
+            json: false
+          },
           configFlags: {}
         }
       },
@@ -406,31 +411,38 @@ describe("CLI shell contract", () => {
     expect(result.stdout).toContain("sess_cli_contract_02  stale-demo  lifecycle=stale stale");
   });
 
-  it("sends prompt text to exactly one resolved session target", async () => {
+  it("sends prompt text directly to exactly one selected session id", async () => {
     const requests: string[] = [];
-    const result = await runCli(["send", "contract-demo", "Continue", "carefully"], {
+    const result = await runCli(["send", runningSession.id, "Continue", "carefully"], {
       env: {},
+      createPromptOperationId: () => "op_prompt_cli_contract_001",
       fetch: async (url, init) => {
         requests.push(`${init.method} ${url} ${init.body ?? ""}`);
-
-        if (url.endsWith("/api/sessions")) {
-          return jsonResponse(200, { sessions: [runningSession] });
-        }
-
         return jsonResponse(202, {
-          accepted: true,
-          session_id: runningSession.id,
-          action: "prompt",
-          audit_required: true
+          operation_id: "op_prompt_cli_contract_001",
+          kind: "prompt",
+          target: {
+            type: "managed_session",
+            session_id: runningSession.id,
+            codex_thread_id: "thread-cli-contract-01"
+          },
+          state: "accepted",
+          accepted_at: "2026-07-09T08:00:00.000Z",
+          audit_record_id: "audit_prompt_cli_contract_001",
+          turn_id: "turn-cli-contract-01",
+          action: "start"
         });
       }
     });
 
     expect(result.exitCode).toBe(cliExitCodes.ok);
-    expect(result.stdout).toContain("prompt accepted for sess_cli_contract_01");
+    expect(result.stdout).toContain("Prompt start accepted for sess_cli_contract_01");
     expect(requests).toEqual([
-      "GET http://127.0.0.1:3777/api/sessions ",
-      `POST http://127.0.0.1:3777/api/sessions/${runningSession.id}/input ${JSON.stringify({ text: "Continue carefully" })}`
+      `POST http://127.0.0.1:3777/api/v1/sessions/${runningSession.id}/prompts ${JSON.stringify({
+        operation_id: "op_prompt_cli_contract_001",
+        kind: "prompt",
+        text: "Continue carefully"
+      })}`
     ]);
   });
 
@@ -522,7 +534,7 @@ describe("CLI shell contract", () => {
     ]);
   });
 
-  it("fails stale attach and send without posting unproven writes", async () => {
+  it("keeps historical stale attach local and preserves selected prompt API rejection", async () => {
     const staleAttach = await runCli(["attach", staleSession.name], {
       env: {},
       fetch: async () => jsonResponse(200, { sessions: [staleSession] })
@@ -532,37 +544,41 @@ describe("CLI shell contract", () => {
     expect(staleAttach.stderr).toContain("HostDeck CLI error (stale_session)");
 
     const requests: string[] = [];
-    const staleSend = await runCli(["send", staleSession.name, "hello"], {
+    const staleSend = await runCli(["send", staleSession.id, "hello"], {
       env: {},
+      createPromptOperationId: () => "op_prompt_cli_contract_stale",
       fetch: async (url, init) => {
         requests.push(`${init.method} ${url}`);
-        return jsonResponse(200, { sessions: [staleSession] });
+        return jsonResponse(409, {
+          error: {
+            code: "stale_session",
+            message: "private stale session details",
+            retryable: false
+          }
+        });
       }
     });
 
     expect(staleSend.exitCode).toBe(cliExitCodes.apiError);
     expect(staleSend.stderr).toContain("HostDeck CLI error (stale_session)");
-    expect(requests).toEqual(["GET http://127.0.0.1:3777/api/sessions"]);
+    expect(requests).toEqual([
+      `POST http://127.0.0.1:3777/api/v1/sessions/${staleSession.id}/prompts`
+    ]);
   });
 
-  it("fails ambiguous session targets before sending a write", async () => {
-    const result = await runCli(["send", runningSession.id, "hello"], {
+  it("rejects prompt aliases before any selected request", async () => {
+    let requests = 0;
+    const result = await runCli(["send", runningSession.name, "hello"], {
       env: {},
-      fetch: async () =>
-        jsonResponse(200, {
-          sessions: [
-            runningSession,
-            {
-              ...runningSession,
-              id: "sess_cli_contract_03",
-              name: runningSession.id
-            }
-          ]
-        })
+      fetch: async () => {
+        requests += 1;
+        return jsonResponse(500, {});
+      }
     });
 
     expect(result.exitCode).toBe(cliExitCodes.usage);
-    expect(result.stderr).toContain("matches more than one managed session");
+    expect(result.stderr).toContain("valid managed session id");
+    expect(requests).toBe(0);
   });
 
   it("returns stable usage exits for malformed args", async () => {
@@ -651,7 +667,7 @@ describe("CLI shell contract", () => {
       { label: "status", args: ["status"] },
       { label: "start", args: ["start", "--name", "contract-demo", "--cwd", "/tmp/hostdeck-demo"] },
       { label: "list", args: ["list"] },
-      { label: "send", args: ["send", "contract-demo", "hello"] },
+      { label: "send", args: ["send", runningSession.id, "hello"] },
       { label: "attach", args: ["attach", "contract-demo"] },
       { label: "stop", args: ["stop", "contract-demo"] }
     ] as const;
@@ -691,7 +707,7 @@ describe("CLI shell contract", () => {
       { label: "status", args: ["status"] },
       { label: "start", args: ["start", "--name", "contract-demo", "--cwd", "/tmp/hostdeck-demo"] },
       { label: "list", args: ["list"] },
-      { label: "send", args: ["send", "contract-demo", "hello"] },
+      { label: "send", args: ["send", runningSession.id, "hello"] },
       { label: "attach", args: ["attach", "contract-demo"] },
       { label: "stop", args: ["stop", "contract-demo"] }
     ] as const;
@@ -710,10 +726,12 @@ describe("CLI shell contract", () => {
       expect(result.stderr, scenario.label).toContain(
         scenario.label === "start"
           ? "HostDeck CLI error (permission_denied): Managed session start is not permitted."
-          : "HostDeck CLI error (permission_denied): Read token is required."
+          : scenario.label === "send"
+            ? "HostDeck CLI error (permission_denied): Prompt dispatch is not permitted."
+            : "HostDeck CLI error (permission_denied): Read token is required."
       );
       expect(result.stderr, scenario.label).toContain("HTTP status: 403");
-      if (scenario.label === "start") {
+      if (scenario.label === "start" || scenario.label === "send") {
         expect(result.stderr).not.toContain("Field: authorization");
       } else {
         expect(result.stderr).toContain("Field: authorization");

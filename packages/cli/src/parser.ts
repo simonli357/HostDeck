@@ -8,7 +8,7 @@ export type ParsedCliCommand =
   | { readonly kind: "start"; readonly name: string; readonly cwd: string; readonly json: boolean }
   | { readonly kind: "list"; readonly json: boolean }
   | { readonly kind: "archive"; readonly session: string; readonly json: boolean }
-  | { readonly kind: "send"; readonly session: string; readonly text: string }
+  | { readonly kind: "send"; readonly session: string; readonly text: string; readonly json: boolean }
   | { readonly kind: "attach"; readonly session: string }
   | { readonly kind: "resume"; readonly session: string }
   | { readonly kind: "usage"; readonly session: string; readonly json: boolean }
@@ -222,7 +222,8 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
       command: {
         kind: "send",
         session: session ?? "",
-        text: textParts.join(" ")
+        text: textParts.join(" "),
+        json
       },
       configFlags
     };

@@ -3,7 +3,9 @@ import {
   type ApiSession,
   defaultResourceBudget,
   type HostStatusResponse,
+  type PromptDispatchResponse,
   pairingClientLabelSchema,
+  promptDispatchResponseSchema,
   type RemoteIngressPublicState,
   remoteIngressPublicStateSchema,
   type SelectedOperationDispatch,
@@ -37,7 +39,7 @@ export function renderHelp(): string {
     "  codexdeck start --name NAME --cwd PATH [--json]",
     "  codexdeck archive SESSION_ID [--json]",
     "  codexdeck list [--json]",
-    "  codexdeck send SESSION TEXT...",
+    "  codexdeck send SESSION_ID TEXT... [--json]",
     "  codexdeck attach SESSION",
     "  codexdeck resume SESSION_ID",
     "  codexdeck usage SESSION_ID [--json]",
@@ -101,6 +103,19 @@ export function renderArchiveSession(
   }
   if (json) return `${JSON.stringify(parsed.data, null, 2)}\n`;
   return `Archive accepted for ${escapeTerminalText(parsed.data.target.session_id)}.\n`;
+}
+
+export function renderPromptDispatch(
+  candidate: PromptDispatchResponse,
+  json: boolean
+): string {
+  const parsed = promptDispatchResponseSchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw internalFailure("Prompt-dispatch rendering input is invalid.");
+  }
+  if (json) return `${JSON.stringify(parsed.data, null, 2)}\n`;
+  const action = parsed.data.action === "start" ? "start" : "steer";
+  return `Prompt ${action} accepted for ${escapeTerminalText(parsed.data.target.session_id)} (turn ${escapeTerminalText(parsed.data.turn_id)}).\n`;
 }
 
 export function renderSessionList(response: SessionListResponse, json: boolean): string {

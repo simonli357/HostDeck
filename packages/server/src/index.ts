@@ -34,6 +34,7 @@ export * from "./pending-turn-settings.js";
 export * from "./projected-event-routes.js";
 export * from "./projection-fanout-hub.js";
 export * from "./projection-replay-live-handoff.js";
+export * from "./prompt-routes.js";
 export * from "./read-routes.js";
 export * from "./remote-ingress-control-service.js";
 export * from "./remote-ingress-routes.js";

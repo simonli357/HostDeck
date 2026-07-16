@@ -76,11 +76,34 @@ const managedOperationBaseShape = {
   target: managedSessionTargetSchema
 };
 
+const promptTextSchema = z.string().trim().min(1).max(operationLimits.promptLength);
+
 export const promptOperationIntentSchema = z
   .object({
     ...managedOperationBaseShape,
     kind: z.literal("prompt"),
-    text: z.string().trim().min(1).max(operationLimits.promptLength)
+    text: promptTextSchema
+  })
+  .strict();
+
+export const promptSessionRequestSchema = z
+  .object({
+    operation_id: clientOperationIdSchema,
+    kind: z.literal("prompt"),
+    text: promptTextSchema
+  })
+  .strict();
+
+export const promptDispatchResponseSchema = z
+  .object({
+    operation_id: clientOperationIdSchema,
+    kind: z.literal("prompt"),
+    target: managedSessionTargetSchema,
+    state: z.literal("accepted"),
+    accepted_at: isoTimestampSchema,
+    audit_record_id: z.string().min(1).max(120),
+    turn_id: codexTurnIdSchema,
+    action: z.enum(["start", "steer"])
   })
   .strict();
 
@@ -997,6 +1020,8 @@ export type ApprovalOperationTarget = z.infer<typeof approvalOperationTargetSche
 export type TurnOperationTarget = z.infer<typeof turnOperationTargetSchema>;
 export type SelectedOperationTarget = z.infer<typeof selectedOperationTargetSchema>;
 export type SelectedOperationIntent = z.infer<typeof selectedOperationIntentSchema>;
+export type PromptSessionRequest = z.infer<typeof promptSessionRequestSchema>;
+export type PromptDispatchResponse = z.infer<typeof promptDispatchResponseSchema>;
 export type ArchiveSessionRequest = z.infer<typeof archiveSessionRequestSchema>;
 export type SelectedOperationDispatch = z.infer<typeof selectedOperationDispatchSchema>;
 export type SelectedOperationTerminalOutcome = z.infer<typeof selectedOperationTerminalOutcomeSchema>;

@@ -330,7 +330,7 @@ describe("write rejection integration", () => {
 
   it("reports daemon-unavailable write commands before any write can reach the daemon", async () => {
     for (const args of [
-      ["send", "contract-demo", "hello"],
+      ["send", "sess_int_reject_unavailable_01", "hello"],
       ["stop", "contract-demo"]
     ] as const) {
       const result = await runCli(args, {

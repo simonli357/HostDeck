@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
   ApiErrorEnvelope,
   ApiSession,
+  PromptDispatchResponse,
   SelectedOperationDispatch,
   SelectedResumeMetadataResponse,
   SelectedSessionStartResponse,
@@ -12,6 +13,8 @@ import type {
 import {
   archiveSessionRequestSchema,
   clientOperationIdSchema,
+  promptDispatchResponseSchema,
+  promptSessionRequestSchema,
   type RemoteDisableRequest,
   type RemoteEnableRequest,
   remoteDisableRequestSchema,
@@ -51,6 +54,11 @@ import {
 } from "./pairing-link-client.js";
 import { parseCliArgs } from "./parser.js";
 import {
+  createHostDeckPromptClient,
+  type HostDeckPromptClient,
+  type HostDeckPromptClientRequest
+} from "./prompt-client.js";
+import {
   createHostDeckRemoteControlClient,
   type HostDeckRemoteControlClient
 } from "./remote-control-client.js";
@@ -61,6 +69,7 @@ import {
   renderHelp,
   renderLockCommand,
   renderPairingLink,
+  renderPromptDispatch,
   renderRemoteState,
   renderServeStarted,
   renderServeStopped,
@@ -108,6 +117,7 @@ export interface CliRunOptions {
   readonly client?: HostDeckApiClient;
   readonly localAdmin?: LocalAdmin;
   readonly archiveClient?: HostDeckArchiveClient;
+  readonly promptClient?: HostDeckPromptClient;
   readonly pairingClient?: HostDeckPairingLinkClient;
   readonly remoteClient?: HostDeckRemoteControlClient;
   readonly resumeClient?: HostDeckResumeClient;
@@ -120,6 +130,7 @@ export interface CliRunOptions {
   ) => string;
   readonly createPairOperationId?: () => string;
   readonly createArchiveOperationId?: () => string;
+  readonly createPromptOperationId?: () => string;
   readonly createStartOperationId?: () => string;
   readonly renderPairingQr?: TerminalQrRenderer;
   readonly startService?: (input: StartHostHttpServiceInput) => Promise<HostHttpService>;
@@ -307,6 +318,26 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
       return success(renderArchiveSession(response, parsed.command.json));
     }
 
+    if (parsed.command.kind === "send") {
+      let promptClient = options.promptClient;
+      if (promptClient === undefined) {
+        const promptClientOptions = { baseUrl: config.baseUrl };
+        if (options.fetch !== undefined) {
+          Object.assign(promptClientOptions, { fetch: options.fetch });
+        }
+        promptClient = createHostDeckPromptClient(promptClientOptions);
+      }
+      const promptRequest = createPromptRequest(
+        parsed.command,
+        options.createPromptOperationId ?? createPromptOperationId
+      );
+      const response = parsePromptResponse(
+        await Reflect.apply(promptClient.send, undefined, [promptRequest]),
+        promptRequest
+      );
+      return success(renderPromptDispatch(response, parsed.command.json));
+    }
+
     const localAdmin =
       options.localAdmin ??
       createLocalAdmin({
@@ -351,12 +382,6 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
 
     if (parsed.command.kind === "list") {
       return success(renderSessionList(await client.listSessions(), parsed.command.json));
-    }
-
-    if (parsed.command.kind === "send") {
-      const session = await resolveManagedSession(client, parsed.command.session);
-      requireWritableSession(session);
-      return success(renderWriteAccepted(await client.sendPrompt(session.id, parsed.command.text)));
     }
 
     if (parsed.command.kind === "attach") {
@@ -449,6 +474,10 @@ function createStartOperationId(): string {
 
 function createArchiveOperationId(): string {
   return `op_session_archive_${randomUUID().replaceAll("-", "")}`;
+}
+
+function createPromptOperationId(): string {
+  return `op_prompt_${randomUUID().replaceAll("-", "")}`;
 }
 
 function createSessionStartRequest(
@@ -545,6 +574,54 @@ function parseSessionArchiveResponse(
   ) {
     throw internalFailure(
       "HostDeck archive client returned invalid managed-session data."
+    );
+  }
+  return parsed.data;
+}
+
+function createPromptRequest(
+  command: Extract<
+    ReturnType<typeof parseCliArgs>["command"],
+    { readonly kind: "send" }
+  >,
+  createOperationId: () => string
+): HostDeckPromptClientRequest {
+  let operationId: unknown;
+  try {
+    operationId = Reflect.apply(createOperationId, undefined, []);
+  } catch (error) {
+    throw internalFailure("Prompt operation id generation failed.", error);
+  }
+  const target = sessionIdParamsSchema.safeParse({ session_id: command.session });
+  const body = promptSessionRequestSchema.safeParse({
+    operation_id: operationId,
+    kind: "prompt",
+    text: command.text
+  });
+  if (!target.success) {
+    throw usageFailure("Send requires one valid managed session id.", "session");
+  }
+  if (!body.success) {
+    if (!clientOperationIdSchema.safeParse(operationId).success) {
+      throw internalFailure("Prompt operation id generation failed.");
+    }
+    throw usageFailure("Send requires non-empty prompt text within the selected limit.", "text");
+  }
+  return Object.freeze({ ...body.data, session_id: target.data.session_id });
+}
+
+function parsePromptResponse(
+  candidate: unknown,
+  request: HostDeckPromptClientRequest
+): PromptDispatchResponse {
+  const parsed = promptDispatchResponseSchema.safeParse(candidate);
+  if (
+    !parsed.success ||
+    parsed.data.operation_id !== request.operation_id ||
+    parsed.data.target.session_id !== request.session_id
+  ) {
+    throw internalFailure(
+      "HostDeck prompt client returned invalid managed-session data."
     );
   }
   return parsed.data;

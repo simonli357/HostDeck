@@ -323,12 +323,30 @@ describe("Codex prompt control", () => {
     expect(await conflict.service.snapshot(targetA)).toEqual(idlePromptState());
   });
 
-  it("rejects mismatched, stale, archived, and malformed targets without mutation", async () => {
+  it("rejects mismatched, contradictory, recovery, stale, archived, and malformed targets without mutation", async () => {
     const harness = createHarness();
     await expectPromptError(
       harness.service.dispatch(promptIntent({ target: { ...targetA, codex_thread_id: "thread-other" } as never })),
       "target_mismatch"
     );
+    const contradictory = selectedState(targetA.session_id, targetA.codex_thread_id);
+    harness.states.set(targetA.session_id, {
+      ...contradictory,
+      projection: {
+        ...contradictory.projection,
+        session: {
+          ...contradictory.projection.session,
+          cwd: "/tmp/contradictory-prompt-state" as SelectedSessionState["projection"]["session"]["cwd"]
+        }
+      }
+    });
+    await expectPromptError(harness.service.dispatch(promptIntent()), "target_mismatch");
+    const recovery = selectedState(targetA.session_id, targetA.codex_thread_id);
+    harness.states.set(targetA.session_id, {
+      ...recovery,
+      mapping: { ...recovery.mapping, disposition: "recovery_required" }
+    });
+    await expectPromptError(harness.service.dispatch(promptIntent()), "target_not_writable");
     harness.states.set(targetA.session_id, selectedState(targetA.session_id, targetA.codex_thread_id, "idle", false, "stale"));
     await expectPromptError(harness.service.dispatch(promptIntent()), "target_not_writable");
     harness.states.set(targetA.session_id, selectedState(targetA.session_id, targetA.codex_thread_id, "idle", true));
@@ -564,20 +582,50 @@ function promptIntent(
 function selectedState(
   sessionId: string,
   threadId: string,
-  turnState = "idle",
+  turnState: SelectedSessionState["projection"]["session"]["turn_state"] = "idle",
   archived = false,
-  freshness = "current"
+  freshness: SelectedSessionState["projection"]["session"]["freshness"] = "current"
 ): SelectedSessionState {
+  const selectedTimestamp = observedAt as SelectedSessionState["mapping"]["created_at"];
+  const archivedAt = archived ? selectedTimestamp : null;
+  const identity = {
+    id: sessionId as SelectedSessionState["mapping"]["id"],
+    name: sessionId.replace(/^sess_/u, "") as SelectedSessionState["mapping"]["name"],
+    codex_thread_id: threadId as SelectedSessionState["mapping"]["codex_thread_id"],
+    cwd: `/tmp/${sessionId}` as SelectedSessionState["mapping"]["cwd"],
+    runtime_source: "codex_app_server" as const,
+    runtime_version: "0.144.0" as SelectedSessionState["mapping"]["runtime_version"],
+    created_at: selectedTimestamp,
+    archived_at: archivedAt
+  };
   return {
-    mapping: { id: sessionId, codex_thread_id: threadId, archived_at: archived ? observedAt : null },
+    mapping: {
+      ...identity,
+      disposition: "selected",
+      updated_at: selectedTimestamp
+    },
     projection: {
       session: {
+        ...identity,
         session_state: archived ? "archived" : "active",
         freshness,
-        turn_state: turnState
-      }
+        freshness_reason: freshness === "current" ? null : "Projection requires reconciliation.",
+        turn_state: turnState,
+        attention: "none",
+        updated_at: selectedTimestamp,
+        last_activity_at: null,
+        branch: null,
+        model: null,
+        goal: null,
+        recent_summary: "",
+        last_event_cursor: null
+      },
+      retained_event_count: 0,
+      retained_event_bytes: 0,
+      earliest_retained_cursor: null,
+      retention_boundary_cursor: null
     }
-  } as unknown as SelectedSessionState;
+  };
 }
 
 function turnStartedEvent(target: typeof targetA | typeof targetB, turnId: string): NormalizedCodexEvent {

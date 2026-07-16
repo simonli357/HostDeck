@@ -8,6 +8,8 @@ import {
   modelControlSnapshotSchema,
   pendingApprovalSchema,
   planControlSnapshotSchema,
+  promptDispatchResponseSchema,
+  promptSessionRequestSchema,
   promptTurnControlSnapshotSchema,
   runtimeCompatibilitySchema,
   selectedAuditActorSchema,
@@ -137,6 +139,76 @@ describe("selected runtime compatibility", () => {
 });
 
 describe("selected structured operation contracts", () => {
+  it("keeps the public prompt request canonical and target-free", () => {
+    expect(
+      promptSessionRequestSchema.parse({
+        operation_id: "op_contract_prompt_request",
+        kind: "prompt",
+        text: "  Continue the selected task.  "
+      })
+    ).toEqual({
+      operation_id: "op_contract_prompt_request",
+      kind: "prompt",
+      text: "Continue the selected task."
+    });
+    for (const candidate of [
+      {
+        operation_id: "op_contract_prompt_request",
+        kind: "prompt",
+        text: "   "
+      },
+      {
+        operation_id: "op_contract_prompt_request",
+        kind: "prompt",
+        text: "x".repeat(20_001)
+      },
+      {
+        operation_id: "op_contract_prompt_request",
+        kind: "prompt",
+        text: "Continue.",
+        target
+      },
+      {
+        operation_id: "op_contract_prompt_request",
+        kind: "prompt",
+        text: "Continue.",
+        codex_thread_id: target.codex_thread_id
+      },
+      {
+        operation_id: "op_contract_prompt_request",
+        kind: "prompt",
+        text: "Continue.",
+        action: "start"
+      }
+    ]) {
+      expect(() => promptSessionRequestSchema.parse(candidate)).toThrow();
+    }
+  });
+
+  it("requires one exact accepted prompt dispatch receipt", () => {
+    const response = {
+      operation_id: "op_contract_prompt_response",
+      kind: "prompt",
+      target,
+      state: "accepted",
+      accepted_at: timestamp,
+      audit_record_id: "audit:contract:prompt",
+      turn_id: "turn-contract-prompt",
+      action: "start"
+    } as const;
+    expect(promptDispatchResponseSchema.parse(response)).toEqual(response);
+    for (const candidate of [
+      { ...response, kind: "model" },
+      { ...response, state: "completed" },
+      { ...response, action: "resume" },
+      { ...response, turn_id: "" },
+      { ...response, text: "private prompt" },
+      { ...response, model_revision: 1 }
+    ]) {
+      expect(() => promptDispatchResponseSchema.parse(candidate)).toThrow();
+    }
+  });
+
   it("keeps the public archive request target-free and confirmation-exact", () => {
     expect(
       archiveSessionRequestSchema.parse({

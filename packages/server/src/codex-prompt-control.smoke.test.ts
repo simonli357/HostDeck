@@ -21,7 +21,9 @@ import {
   clientOperationIdSchema,
   type ManagedSessionTarget,
   type ModelCatalogEntry,
-  managedSessionTargetSchema
+  managedSessionTargetSchema,
+  selectedSessionMappingRecordSchema,
+  selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
 import type { CodexThreadId } from "@hostdeck/core";
 import type { SelectedSessionState } from "@hostdeck/storage";
@@ -332,13 +334,52 @@ function findStateByThread(states: Map<string, SelectedSessionState>, threadId: 
   return [...states.values()].find((state) => state.mapping.codex_thread_id === threadId) ?? null;
 }
 
-function selectedState(target: ManagedSessionTarget, turnState: string): SelectedSessionState {
-  return {
-    mapping: { id: target.session_id, codex_thread_id: target.codex_thread_id, archived_at: null },
-    projection: {
-      session: { session_state: "active", freshness: "current", turn_state: turnState }
-    }
-  } as unknown as SelectedSessionState;
+function selectedState(
+  target: ManagedSessionTarget,
+  turnState: SelectedSessionState["projection"]["session"]["turn_state"]
+): SelectedSessionState {
+  const observedAt = "2026-07-15T00:00:00.000Z";
+  const mapping = selectedSessionMappingRecordSchema.parse({
+    id: target.session_id,
+    name: target.session_id.replace(/^sess_/u, ""),
+    codex_thread_id: target.codex_thread_id,
+    cwd: `/tmp/${target.session_id}`,
+    runtime_source: "codex_app_server",
+    runtime_version: codexBindingDescriptor.codex_version,
+    disposition: "selected",
+    created_at: observedAt,
+    updated_at: observedAt,
+    archived_at: null
+  });
+  const projection = selectedSessionProjectionRecordSchema.parse({
+    session: {
+      id: mapping.id,
+      name: mapping.name,
+      codex_thread_id: mapping.codex_thread_id,
+      cwd: mapping.cwd,
+      runtime_source: mapping.runtime_source,
+      runtime_version: mapping.runtime_version,
+      created_at: mapping.created_at,
+      archived_at: null,
+      session_state: "active",
+      turn_state: turnState,
+      attention: "none",
+      freshness: "current",
+      freshness_reason: null,
+      updated_at: observedAt,
+      last_activity_at: observedAt,
+      branch: "main",
+      model: null,
+      goal: null,
+      recent_summary: "Managed prompt smoke session.",
+      last_event_cursor: null
+    },
+    retained_event_count: 0,
+    retained_event_bytes: 0,
+    earliest_retained_cursor: null,
+    retention_boundary_cursor: null
+  });
+  return { mapping, projection };
 }
 
 function managedTarget(sessionId: string, threadId: string): ManagedSessionTarget {

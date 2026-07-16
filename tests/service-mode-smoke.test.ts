@@ -74,7 +74,7 @@ describe("service-mode CLI smoke", () => {
     }
   });
 
-  it("runs CLI list, send, and stop through the foreground legacy HTTP service", async () => {
+  it("runs legacy CLI list and stop through the foreground HTTP service without prompt input", async () => {
     const port = await getAvailablePort("127.0.0.1");
     const stateDir = tempDir("hostdeck-service-cli-routes-state-");
     const fakeTmux = createFakeTmuxAdapter({ now: fixedNow });
@@ -102,20 +102,10 @@ describe("service-mode CLI smoke", () => {
       expect(list.stdout).toContain("cli-http-demo");
       expect(list.stdout).toContain("lifecycle=running");
 
-      const send = await runCli(["--api-url", service.baseUrl.toString(), "send", "cli-http-demo", "Continue", "from", "CLI"], {
-        env: {}
-      });
-      expect(send.exitCode).toBe(cliExitCodes.ok);
-      expect(send.stdout).toContain("prompt accepted");
-      expect(fakeTmux.sentInputs()).toHaveLength(1);
-      expect(fakeTmux.sentInputs()[0]).toMatchObject({
-        text: "Continue from CLI",
-        enter: true
-      });
-
       const stop = await runCli(["--api-url", service.baseUrl.toString(), "stop", "cli-http-demo"], { env: {} });
       expect(stop.exitCode).toBe(cliExitCodes.ok);
       expect(stop.stdout).toContain("stop accepted");
+      expect(fakeTmux.sentInputs()).toEqual([]);
     } finally {
       await service.close();
     }
