@@ -405,7 +405,7 @@ describe("managed Codex thread start saga", () => {
 });
 
 describe("managed Codex archive and reconciliation", () => {
-  it("archives the exact mapped thread once and persists immutable archive state", async () => {
+  it("archives the exact mapped thread once and rejects an already archived session", async () => {
     const fixture = createFixture();
     await fixture.service.start(request);
 
@@ -414,8 +414,79 @@ describe("managed Codex archive and reconciliation", () => {
       mapping: { codex_thread_id: "thread-managed-1", archived_at: expect.any(String) },
       projection: { session: { session_state: "archived", turn_state: "idle", attention: "none" } }
     });
-    await fixture.service.archive("sess_managed_001");
+    await expectServiceError(
+      fixture.service.archive("sess_managed_001"),
+      "thread_already_archived"
+    );
     expect(fixture.threads.archive_calls).toEqual(["thread-managed-1"]);
+  });
+
+  it("rejects a remotely archived thread before dispatch even when local state is active", async () => {
+    const fixture = createFixture();
+    await fixture.service.start(request);
+    const current = fixture.threads.records[0];
+    if (current === undefined) throw new Error("Expected fake managed thread.");
+    fixture.threads.records[0] = { ...current, archived: true };
+
+    await expectServiceError(
+      fixture.service.archive("sess_managed_001"),
+      "thread_already_archived"
+    );
+    expect(fixture.threads.archive_calls).toHaveLength(0);
+  });
+
+  it("rejects non-idle runtime state and runtime-version drift before dispatch", async () => {
+    const active = createFixture();
+    await active.service.start(request);
+    const activeThread = active.threads.records[0];
+    if (activeThread === undefined) throw new Error("Expected fake managed thread.");
+    active.threads.records[0] = {
+      ...activeThread,
+      status: "active",
+      active_flags: []
+    };
+    await expectServiceError(
+      active.service.archive("sess_managed_001"),
+      "thread_not_writable"
+    );
+    expect(active.threads.archive_calls).toHaveLength(0);
+
+    const drifted = createFixture();
+    await drifted.service.start(request);
+    drifted.threads.runtime_version = "0.145.0";
+    await expectServiceError(
+      drifted.service.archive("sess_managed_001"),
+      "runtime_incompatible"
+    );
+    expect(drifted.threads.archive_calls).toHaveLength(0);
+  });
+
+  it("rejects a durable state revision race immediately before dispatch", async () => {
+    const base = createFixture();
+    await base.service.start(request);
+    let reads = 0;
+    const racingStates: SelectedStateRepository = {
+      ...base.states,
+      require(sessionId) {
+        const state = base.states.require(sessionId);
+        reads += 1;
+        if (reads !== 2) return state;
+        return {
+          ...state,
+          projection: {
+            ...state.projection,
+            session: {
+              ...state.projection.session,
+              updated_at: isoTimestampSchema.parse("2026-07-15T14:30:00.000Z")
+            }
+          }
+        };
+      }
+    };
+    const service = serviceFor(base.threads, racingStates);
+
+    await expectServiceError(service.archive("sess_managed_001"), "thread_conflict");
+    expect(base.threads.archive_calls).toHaveLength(0);
   });
 
   it("rejects a concurrent archive before a second Codex mutation is dispatched", async () => {
@@ -444,6 +515,92 @@ describe("managed Codex archive and reconciliation", () => {
     expect(fixture.threads.archive_calls).toHaveLength(0);
   });
 
+  it("preserves known remote rejection without archiving local state", async () => {
+    const fixture = createFixture();
+    await fixture.service.start(request);
+    fixture.threads.archive_error = new HostDeckCodexAdapterError(
+      "remote_error",
+      "private remote rejection",
+      {
+        outcome: "remote_rejected",
+        retry_safe: false,
+        rpc_code: -32_004
+      }
+    );
+
+    await expectServiceError(
+      fixture.service.archive("sess_managed_001"),
+      "runtime_unavailable",
+      { outcome: "remote_rejected" }
+    );
+    expect(fixture.threads.archive_calls).toEqual(["thread-managed-1"]);
+    expect(fixture.states.require("sess_managed_001").mapping.archived_at).toBeNull();
+  });
+
+  it("maps a proven not-sent adapter timeout without creating an uncertainty latch", async () => {
+    const fixture = createFixture();
+    await fixture.service.start(request);
+    fixture.threads.archive_error = new HostDeckCodexAdapterError(
+      "request_timeout",
+      "private not-sent timeout",
+      { outcome: "not_sent", retry_safe: true }
+    );
+
+    await expectServiceError(
+      fixture.service.archive("sess_managed_001"),
+      "operation_timeout",
+      { outcome: "not_sent" }
+    );
+    expect(fixture.states.require("sess_managed_001")).toMatchObject({
+      mapping: { disposition: "selected", archived_at: null },
+      projection: { session: { session_state: "active", freshness: "current" } }
+    });
+    expect(fixture.threads.archive_calls).toEqual(["thread-managed-1"]);
+  });
+
+  it("latches an ambiguous archive timeout and refuses a second dispatch until reconciliation", async () => {
+    const fixture = createFixture();
+    await fixture.service.start(request);
+    fixture.threads.archive_error = new HostDeckCodexAdapterError(
+      "request_timeout",
+      "private ambiguous timeout",
+      { outcome: "unknown", retry_safe: false }
+    );
+
+    await expectServiceError(
+      fixture.service.archive("sess_managed_001"),
+      "unknown_outcome",
+      { outcome: "unknown" }
+    );
+    fixture.threads.archive_error = null;
+    await expectServiceError(
+      fixture.service.archive("sess_managed_001"),
+      "recovery_required",
+      { outcome: "unknown" }
+    );
+    expect(fixture.states.require("sess_managed_001")).toMatchObject({
+      mapping: { disposition: "recovery_required", archived_at: null },
+      projection: {
+        session: {
+          session_state: "stale",
+          turn_state: "unknown",
+          freshness: "stale"
+        }
+      }
+    });
+    const restarted = serviceFor(fixture.threads, fixture.states);
+    await expectServiceError(
+      restarted.archive("sess_managed_001"),
+      "thread_not_writable"
+    );
+    expect(fixture.threads.archive_calls).toEqual(["thread-managed-1"]);
+    await restarted.reconcile();
+    expect(fixture.states.require("sess_managed_001")).toMatchObject({
+      mapping: { disposition: "selected", archived_at: null },
+      projection: { session: { session_state: "active", freshness: "current" } }
+    });
+  });
+
   it("reports confirmed remote archive plus local persistence failure and repairs on reconciliation", async () => {
     const base = createFixture();
     await base.service.start(request);
@@ -466,7 +623,13 @@ describe("managed Codex archive and reconciliation", () => {
     expect(base.states.require("sess_managed_001").mapping.archived_at).toBeNull();
 
     failReplace = false;
-    await service.reconcile();
+    const restarted = serviceFor(base.threads, failingStates);
+    await expectServiceError(
+      restarted.archive("sess_managed_001"),
+      "thread_already_archived"
+    );
+    expect(base.threads.archive_calls).toEqual(["thread-managed-1"]);
+    await restarted.reconcile();
     expect(base.states.require("sess_managed_001").mapping.archived_at).not.toBeNull();
   });
 
@@ -549,12 +712,13 @@ function serviceFor(threads: CodexThreadClient, states: SelectedStateRepository)
 }
 
 class FakeThreadClient implements CodexThreadClient {
-  readonly runtime_version = "0.144.0";
+  runtime_version = "0.144.0";
   readonly records: CodexThreadRecord[] = [];
   start_calls = 0;
   materialize_calls = 0;
   archive_calls: string[] = [];
   archive_gate: Promise<void> | null = null;
+  archive_error: HostDeckCodexAdapterError | null = null;
   start_error: HostDeckCodexAdapterError | null = null;
   materialize_error: HostDeckCodexAdapterError | null = null;
 
@@ -612,6 +776,7 @@ class FakeThreadClient implements CodexThreadClient {
     if (thread === undefined) throw new Error("Fake thread is missing.");
     this.archive_calls.push(threadId);
     await this.archive_gate;
+    if (this.archive_error !== null) throw this.archive_error;
     this.records[index] = { ...thread, archived: true };
   }
 }

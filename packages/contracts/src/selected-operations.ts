@@ -173,6 +173,14 @@ export const archiveOperationIntentSchema = z
   })
   .strict();
 
+export const archiveSessionRequestSchema = z
+  .object({
+    operation_id: clientOperationIdSchema,
+    kind: z.literal("archive"),
+    confirm: z.literal(true)
+  })
+  .strict();
+
 export const selectedOperationIntentSchema = z.discriminatedUnion("kind", [
   promptOperationIntentSchema,
   modelOperationIntentSchema,
@@ -989,6 +997,7 @@ export type ApprovalOperationTarget = z.infer<typeof approvalOperationTargetSche
 export type TurnOperationTarget = z.infer<typeof turnOperationTargetSchema>;
 export type SelectedOperationTarget = z.infer<typeof selectedOperationTargetSchema>;
 export type SelectedOperationIntent = z.infer<typeof selectedOperationIntentSchema>;
+export type ArchiveSessionRequest = z.infer<typeof archiveSessionRequestSchema>;
 export type SelectedOperationDispatch = z.infer<typeof selectedOperationDispatchSchema>;
 export type SelectedOperationTerminalOutcome = z.infer<typeof selectedOperationTerminalOutcomeSchema>;
 export type SelectedOperationProgress = z.infer<typeof selectedOperationProgressSchema>;

@@ -47,10 +47,12 @@ import {
 } from "./selected-api-route-manifest.js";
 import {
   assertHostDeckSelectedWriteGate,
+  assertHostDeckSelectedWriteUnresolvedMutation,
   createHostDeckSelectedWriteAuditPort,
   createHostDeckSelectedWriteGate,
   createHostDeckSelectedWriteMutation,
   createHostDeckSelectedWriteTargetResolution,
+  createHostDeckSelectedWriteUnresolvedMutation,
   type ExecuteSelectedWriteAuditInput,
   type HostDeckSelectedWriteAuditExecute,
   HostDeckSelectedWriteGateError,
@@ -81,7 +83,11 @@ const secondPromptTarget = Object.freeze(
     codex_thread_id: "thread-gate-bravo"
   })
 );
-const acceptedAuditContext = Object.freeze({ audit_state: "accepted" as const });
+const acceptedAuditContext = Object.freeze({
+  audit_state: "accepted" as const,
+  audit_record_id: "audit:gate:accepted",
+  accepted_at: auditAt
+});
 const shortRequestBudget = resolveResourceBudget({
   http_headers_timeout_ms: 1_000,
   http_request_receive_timeout_ms: 1_000,
@@ -157,6 +163,59 @@ describe("selected exact-target write gate", () => {
     expect(() => createHostDeckSelectedWriteGate(accessor as never)).toThrow(
       HostDeckSelectedWriteGateError
     );
+    expect(accessorCalls).toBe(0);
+  });
+
+  it("brands target-free archive input without accepting target or accessor injection", () => {
+    const unresolved = createHostDeckSelectedWriteUnresolvedMutation({
+      operation_id: "op_gate_unresolved_archive_001",
+      action: "archive",
+      accepted_summary: Object.freeze({
+        schema_version: 1 as const,
+        confirmed: true as const
+      }),
+      selector: Object.freeze({ session_id: "sess_gate_alpha" }),
+      value: Object.freeze({ kind: "archive", confirm: true as const })
+    });
+    expect(Object.isFrozen(unresolved)).toBe(true);
+    expect(Object.isFrozen(unresolved.selector)).toBe(true);
+    expect(Object.isFrozen(unresolved.value)).toBe(true);
+    expect(() =>
+      assertHostDeckSelectedWriteUnresolvedMutation(unresolved)
+    ).not.toThrow();
+    expect(() =>
+      assertHostDeckSelectedWriteUnresolvedMutation(
+        Object.freeze({ ...unresolved })
+      )
+    ).toThrow(TypeError);
+    expect(() =>
+      createHostDeckSelectedWriteUnresolvedMutation({
+        operation_id: unresolved.operation_id,
+        action: "archive",
+        accepted_summary: unresolved.accepted_summary,
+        selector: unresolved.selector,
+        value: unresolved.value,
+        target: promptTarget
+      } as never)
+    ).toThrow(TypeError);
+
+    let accessorCalls = 0;
+    const hostileSelector = Object.defineProperty({}, "session_id", {
+      enumerable: true,
+      get() {
+        accessorCalls += 1;
+        return "sess_gate_alpha";
+      }
+    });
+    expect(() =>
+      createHostDeckSelectedWriteUnresolvedMutation({
+        operation_id: unresolved.operation_id,
+        action: "archive",
+        accepted_summary: unresolved.accepted_summary,
+        selector: hostileSelector,
+        value: unresolved.value
+      })
+    ).toThrow(TypeError);
     expect(accessorCalls).toBe(0);
   });
 
@@ -1517,6 +1576,11 @@ function promptRegistration(
             },
             async dispatch(context) {
               events.push("dispatch");
+              expect(context.accepted_audit).toEqual({
+                audit_record_id: acceptedAuditContext.audit_record_id,
+                accepted_at: acceptedAuditContext.accepted_at
+              });
+              expect(Object.isFrozen(context.accepted_audit)).toBe(true);
               if (options.accessorDispatchResult) {
                 return Object.defineProperties(
                   {},
@@ -1841,6 +1905,7 @@ function createDeviceRevokeHarness(
               });
             },
             async dispatch(context) {
+              expect(context.accepted_audit).toBeNull();
               dispatches += 1;
               dispatchStarted.resolve();
               await options.dispatchBarrier;

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
   ApiErrorEnvelope,
   ApiSession,
+  SelectedOperationDispatch,
   SelectedResumeMetadataResponse,
   SelectedSessionStartResponse,
   SelectedStartSessionRequest,
@@ -9,12 +10,14 @@ import type {
   UsageSnapshot
 } from "@hostdeck/contracts";
 import {
+  archiveSessionRequestSchema,
   clientOperationIdSchema,
   type RemoteDisableRequest,
   type RemoteEnableRequest,
   remoteDisableRequestSchema,
   remoteEnableRequestSchema,
   type SelectedPairRequest,
+  selectedOperationDispatchSchema,
   selectedPairRequestSchema,
   selectedResumeMetadataResponseSchema,
   selectedResumeParamsSchema,
@@ -26,6 +29,11 @@ import {
 } from "@hostdeck/contracts";
 import { type HostHttpService, type StartHostHttpServiceInput, startHostHttpService } from "@hostdeck/server";
 import { createHostDeckApiClient, type HostDeckApiClient, type HttpFetch } from "./api-client.js";
+import {
+  createHostDeckArchiveClient,
+  type HostDeckArchiveClient,
+  type HostDeckArchiveClientRequest
+} from "./archive-client.js";
 import { type LoadCliConfigOptions, loadCliConfig } from "./config.js";
 import {
   apiFailure,
@@ -47,6 +55,7 @@ import {
   type HostDeckRemoteControlClient
 } from "./remote-control-client.js";
 import {
+  renderArchiveSession,
   renderAttachCommand,
   renderFailure,
   renderHelp,
@@ -98,6 +107,7 @@ export interface CliRunOptions {
   readonly fetch?: HttpFetch;
   readonly client?: HostDeckApiClient;
   readonly localAdmin?: LocalAdmin;
+  readonly archiveClient?: HostDeckArchiveClient;
   readonly pairingClient?: HostDeckPairingLinkClient;
   readonly remoteClient?: HostDeckRemoteControlClient;
   readonly resumeClient?: HostDeckResumeClient;
@@ -109,6 +119,7 @@ export interface CliRunOptions {
     action: "disable" | "enable"
   ) => string;
   readonly createPairOperationId?: () => string;
+  readonly createArchiveOperationId?: () => string;
   readonly createStartOperationId?: () => string;
   readonly renderPairingQr?: TerminalQrRenderer;
   readonly startService?: (input: StartHostHttpServiceInput) => Promise<HostHttpService>;
@@ -276,6 +287,26 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
       return success(renderStartSession(response, parsed.command.json));
     }
 
+    if (parsed.command.kind === "archive") {
+      let archiveClient = options.archiveClient;
+      if (archiveClient === undefined) {
+        const archiveClientOptions = { baseUrl: config.baseUrl };
+        if (options.fetch !== undefined) {
+          Object.assign(archiveClientOptions, { fetch: options.fetch });
+        }
+        archiveClient = createHostDeckArchiveClient(archiveClientOptions);
+      }
+      const archiveRequest = createSessionArchiveRequest(
+        parsed.command,
+        options.createArchiveOperationId ?? createArchiveOperationId
+      );
+      const response = parseSessionArchiveResponse(
+        await Reflect.apply(archiveClient.archive, undefined, [archiveRequest]),
+        archiveRequest
+      );
+      return success(renderArchiveSession(response, parsed.command.json));
+    }
+
     const localAdmin =
       options.localAdmin ??
       createLocalAdmin({
@@ -416,6 +447,10 @@ function createStartOperationId(): string {
   return `op_session_start_${randomUUID().replaceAll("-", "")}`;
 }
 
+function createArchiveOperationId(): string {
+  return `op_session_archive_${randomUUID().replaceAll("-", "")}`;
+}
+
 function createSessionStartRequest(
   command: Extract<
     ReturnType<typeof parseCliArgs>["command"],
@@ -459,6 +494,57 @@ function parseSessionStartResponse(
   ) {
     throw internalFailure(
       "HostDeck start client returned invalid managed-session data."
+    );
+  }
+  return parsed.data;
+}
+
+function createSessionArchiveRequest(
+  command: Extract<
+    ReturnType<typeof parseCliArgs>["command"],
+    { readonly kind: "archive" }
+  >,
+  createOperationId: () => string
+): HostDeckArchiveClientRequest {
+  let operationId: unknown;
+  try {
+    operationId = Reflect.apply(createOperationId, undefined, []);
+  } catch (error) {
+    throw internalFailure("Session-archive operation id generation failed.", error);
+  }
+  const target = sessionIdParamsSchema.safeParse({ session_id: command.session });
+  const body = archiveSessionRequestSchema.safeParse({
+    operation_id: operationId,
+    kind: "archive",
+    confirm: true
+  });
+  if (!target.success) {
+    throw usageFailure(
+      "Archive requires one valid managed session id.",
+      "session"
+    );
+  }
+  if (!body.success) {
+    throw internalFailure("Session-archive operation id generation failed.");
+  }
+  return Object.freeze({ ...body.data, session_id: target.data.session_id });
+}
+
+function parseSessionArchiveResponse(
+  candidate: unknown,
+  request: HostDeckArchiveClientRequest
+): SelectedOperationDispatch {
+  const parsed = selectedOperationDispatchSchema.safeParse(candidate);
+  if (
+    !parsed.success ||
+    parsed.data.state !== "accepted" ||
+    parsed.data.kind !== "archive" ||
+    parsed.data.operation_id !== request.operation_id ||
+    parsed.data.target.type !== "managed_session" ||
+    parsed.data.target.session_id !== request.session_id
+  ) {
+    throw internalFailure(
+      "HostDeck archive client returned invalid managed-session data."
     );
   }
   return parsed.data;

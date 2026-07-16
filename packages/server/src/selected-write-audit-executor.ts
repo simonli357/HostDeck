@@ -23,6 +23,7 @@ import type {
   SecurityMutationTransition
 } from "./security-mutation-audit-executor.js";
 import {
+  type HostDeckSelectedWriteAcceptedAuditContext,
   type ParsedSelectedWriteTransition,
   parseSelectedWriteAuditSummary,
   parseSelectedWriteTransition,
@@ -74,7 +75,7 @@ export interface ExecuteHostDeckSelectedWriteAuditInput<TResponse, TPreparedResp
   readonly emergency_lock_on_audit_unavailable: false;
   readonly transition: (
     this: void,
-    context: Readonly<{ readonly audit_state: "accepted" }>
+    context: HostDeckSelectedWriteAcceptedAuditContext
   ) => Promise<SecurityMutationTransition<TResponse>> | SecurityMutationTransition<TResponse>;
   readonly prepare_response: (
     this: void,
@@ -131,7 +132,6 @@ interface MutableCounters {
   transitionContractFailures: number;
 }
 
-const acceptedContext = Object.freeze({ audit_state: "accepted" as const });
 const incompleteSummary = Object.freeze({ schema_version: 1 as const });
 const acceptedExecutors = new WeakSet<object>();
 const errorMessages: Record<HostDeckSelectedWriteAuditExecutorErrorCode, string> = {
@@ -238,6 +238,11 @@ class DefaultSelectedWriteAuditExecutor {
 
     let rawTransition: unknown;
     try {
+      const acceptedContext: HostDeckSelectedWriteAcceptedAuditContext = Object.freeze({
+        audit_state: "accepted",
+        audit_record_id: accepted.id,
+        accepted_at: accepted.at
+      });
       rawTransition = await Reflect.apply(parsed.transition, undefined, [acceptedContext]);
     } catch {
       return this.finishUnknownTransition(accepted, "transition_failed");

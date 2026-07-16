@@ -1,6 +1,7 @@
 import { requiredRuntimeCapabilities, runtimeCapabilities, selectedOperationKinds } from "@hostdeck/core";
 import { describe, expect, it } from "vitest";
 import {
+  archiveSessionRequestSchema,
   goalControlSnapshotSchema,
   legacySessionDispositionRecordSchema,
   managedSessionProjectionSchema,
@@ -136,6 +137,41 @@ describe("selected runtime compatibility", () => {
 });
 
 describe("selected structured operation contracts", () => {
+  it("keeps the public archive request target-free and confirmation-exact", () => {
+    expect(
+      archiveSessionRequestSchema.parse({
+        operation_id: "op_contract_archive_request",
+        kind: "archive",
+        confirm: true
+      })
+    ).toEqual({
+      operation_id: "op_contract_archive_request",
+      kind: "archive",
+      confirm: true
+    });
+    for (const candidate of [
+      {
+        operation_id: "op_contract_archive_request",
+        kind: "archive",
+        confirm: false
+      },
+      {
+        operation_id: "op_contract_archive_request",
+        kind: "archive",
+        confirm: true,
+        target
+      },
+      {
+        operation_id: "op_contract_archive_request",
+        kind: "archive",
+        confirm: true,
+        codex_thread_id: target.codex_thread_id
+      }
+    ]) {
+      expect(() => archiveSessionRequestSchema.parse(candidate)).toThrow();
+    }
+  });
+
   it("parses every selected operation as a typed exact-target intent", () => {
     const inputs = [
       { kind: "prompt", text: "Continue with the next ready task." },

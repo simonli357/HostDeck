@@ -30,11 +30,15 @@ export type ManagedCodexThreadServiceErrorCode =
   | "identity_mismatch"
   | "invalid_cwd"
   | "invalid_request"
+  | "operation_timeout"
   | "recovery_required"
+  | "runtime_incompatible"
   | "runtime_unavailable"
   | "storage_error"
+  | "thread_already_archived"
   | "thread_conflict"
   | "thread_not_found"
+  | "thread_not_writable"
   | "unknown_outcome";
 
 export type ManagedCodexThreadServiceOutcome = "not_sent" | "remote_rejected" | "remote_succeeded" | "unknown";
@@ -204,42 +208,115 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
     this.archiveInFlight.add(parsedSessionId);
     try {
       const current = this.read(parsedSessionId);
-      if (current.mapping.archived_at !== null) return current;
+      assertArchivableState(current);
+      let runtimeVersion: string;
+      try {
+        runtimeVersion = this.options.threads.runtime_version;
+      } catch (error) {
+        throw mapAdapterError(error, "Codex runtime version could not be verified before archive.");
+      }
+      if (
+        current.mapping.runtime_version !== runtimeVersion ||
+        current.projection.session.runtime_version !== runtimeVersion
+      ) {
+        throw serviceError(
+          "runtime_incompatible",
+          "Managed session runtime version changed and requires reconciliation before archive.",
+          "not_sent",
+          false,
+          current.mapping.codex_thread_id
+        );
+      }
+
+      let listedThreads: readonly CodexThreadRecord[];
+      try {
+        listedThreads = await this.options.threads.listAll();
+      } catch (error) {
+        throw mapAdapterError(error, "Codex thread disposition could not be verified before archive.");
+      }
+      const listedMatches = listedThreads.filter(
+        (thread) => thread.id === current.mapping.codex_thread_id
+      );
+      const listedThread = listedMatches[0];
+      if (listedMatches.length !== 1 || listedThread === undefined) {
+        throw serviceError(
+          listedMatches.length === 0 ? "thread_not_found" : "identity_mismatch",
+          "Managed Codex thread could not be resolved exactly before archive.",
+          "not_sent",
+          false,
+          current.mapping.codex_thread_id
+        );
+      }
+      if (listedThread.archived === true) {
+        throw serviceError(
+          "thread_already_archived",
+          "Managed Codex thread is already archived.",
+          "not_sent",
+          false,
+          current.mapping.codex_thread_id
+        );
+      }
+      if (listedThread.archived !== false) {
+        throw serviceError(
+          "identity_mismatch",
+          "Codex thread disposition is not authoritative for archive.",
+          "not_sent",
+          false,
+          current.mapping.codex_thread_id
+        );
+      }
+      assertRuntimeThreadArchivable(listedThread, current);
+
       let runtimeThread: CodexThreadRecord;
       try {
         runtimeThread = await this.options.threads.read(current.mapping.codex_thread_id);
       } catch (error) {
         throw mapAdapterError(error, "Codex thread could not be verified before archive.");
       }
-      if (runtimeThread.cwd !== current.mapping.cwd || !isSupportedCodexThreadSource(runtimeThread.source)) {
-        throw serviceError(
-          "identity_mismatch",
-          "Codex thread identity could not be verified before archive.",
-          "not_sent",
-          false,
-          current.mapping.codex_thread_id
-        );
-      }
+      assertRuntimeThreadArchivable(runtimeThread, current);
+
+      const dispatchState = this.read(parsedSessionId);
+      assertSameArchiveCandidate(current, dispatchState);
       try {
         await this.options.threads.archive(current.mapping.codex_thread_id);
       } catch (error) {
         const mapped = mapAdapterError(error, "Codex thread archive failed.");
-        if (mapped.outcome === "unknown") this.uncertainArchives.add(parsedSessionId);
+        if (mapped.outcome === "unknown") {
+          this.uncertainArchives.add(parsedSessionId);
+          try {
+            this.markStale(
+              dispatchState,
+              "Codex archive outcome is uncertain and requires reconciliation."
+            );
+          } catch (latchError) {
+            throw serviceError(
+              "recovery_required",
+              "Codex archive outcome is uncertain and its durable recovery latch could not be persisted.",
+              "unknown",
+              false,
+              current.mapping.codex_thread_id,
+              new AggregateError([error, latchError])
+            );
+          }
+        }
         throw mapped;
       }
 
-      const updatedAt = this.advanceTimestamp(current.mapping.updated_at, current.projection.session.updated_at);
+      const updatedAt = this.advanceTimestamp(
+        dispatchState.mapping.updated_at,
+        dispatchState.projection.session.updated_at
+      );
       const archived = {
         mapping: {
-          ...current.mapping,
+          ...dispatchState.mapping,
           disposition: "selected" as const,
           updated_at: updatedAt,
           archived_at: updatedAt
         },
         projection: {
-          ...current.projection,
+          ...dispatchState.projection,
           session: {
-            ...current.projection.session,
+            ...dispatchState.projection.session,
             session_state: "archived" as const,
             turn_state: "idle" as const,
             attention: "none" as const,
@@ -253,7 +330,10 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
         }
       };
       try {
-        const persisted = this.options.states.replace(archived, selectedStateRevision(current));
+        const persisted = this.options.states.replace(
+          archived,
+          selectedStateRevision(dispatchState)
+        );
         this.uncertainArchives.delete(parsedSessionId);
         return persisted;
       } catch (error) {
@@ -821,6 +901,121 @@ function assertPersistedIdentity(
   }
 }
 
+function assertArchivableState(state: SelectedSessionState): void {
+  const mapping = state.mapping;
+  const session = state.projection.session;
+  if (
+    mapping.archived_at !== null ||
+    session.archived_at !== null ||
+    session.session_state === "archived"
+  ) {
+    throw serviceError(
+      "thread_already_archived",
+      "Managed session is already archived.",
+      "not_sent",
+      false,
+      mapping.codex_thread_id
+    );
+  }
+  if (
+    mapping.id !== session.id ||
+    mapping.name !== session.name ||
+    mapping.codex_thread_id !== session.codex_thread_id ||
+    mapping.cwd !== session.cwd ||
+    mapping.runtime_source !== session.runtime_source ||
+    mapping.runtime_version !== session.runtime_version ||
+    mapping.created_at !== session.created_at
+  ) {
+    throw serviceError(
+      "identity_mismatch",
+      "Managed session mapping and projection identities do not match.",
+      "not_sent",
+      false,
+      mapping.codex_thread_id
+    );
+  }
+  if (
+    mapping.disposition !== "selected" ||
+    session.session_state !== "active" ||
+    session.turn_state !== "idle" ||
+    session.freshness !== "current"
+  ) {
+    throw serviceError(
+      "thread_not_writable",
+      "Managed session is not current and idle for archive.",
+      "not_sent",
+      false,
+      mapping.codex_thread_id
+    );
+  }
+}
+
+function assertRuntimeThreadArchivable(
+  thread: CodexThreadRecord,
+  state: SelectedSessionState
+): void {
+  if (
+    thread.id !== state.mapping.codex_thread_id ||
+    thread.cwd !== state.mapping.cwd ||
+    !isSupportedCodexThreadSource(thread.source)
+  ) {
+    throw serviceError(
+      "identity_mismatch",
+      "Codex thread identity could not be verified before archive.",
+      "not_sent",
+      false,
+      state.mapping.codex_thread_id
+    );
+  }
+  if (thread.archived === true) {
+    throw serviceError(
+      "thread_already_archived",
+      "Managed Codex thread is already archived.",
+      "not_sent",
+      false,
+      state.mapping.codex_thread_id
+    );
+  }
+  if (thread.status !== "idle" || thread.active_flags.length !== 0) {
+    throw serviceError(
+      "thread_not_writable",
+      "Managed Codex thread is not idle for archive.",
+      "not_sent",
+      false,
+      state.mapping.codex_thread_id
+    );
+  }
+}
+
+function assertSameArchiveCandidate(
+  before: SelectedSessionState,
+  candidate: SelectedSessionState
+): void {
+  assertArchivableState(candidate);
+  const expected = selectedStateRevision(before);
+  const actual = selectedStateRevision(candidate);
+  if (
+    before.mapping.id !== candidate.mapping.id ||
+    before.mapping.name !== candidate.mapping.name ||
+    before.mapping.codex_thread_id !== candidate.mapping.codex_thread_id ||
+    before.mapping.cwd !== candidate.mapping.cwd ||
+    before.mapping.runtime_source !== candidate.mapping.runtime_source ||
+    before.mapping.runtime_version !== candidate.mapping.runtime_version ||
+    before.mapping.created_at !== candidate.mapping.created_at ||
+    expected.mapping_updated_at !== actual.mapping_updated_at ||
+    expected.projection_updated_at !== actual.projection_updated_at ||
+    expected.last_event_cursor !== actual.last_event_cursor
+  ) {
+    throw serviceError(
+      "thread_conflict",
+      "Managed session changed while archive target was being verified.",
+      "not_sent",
+      false,
+      before.mapping.codex_thread_id
+    );
+  }
+}
+
 function isKnownNoThreadOutcome(error: unknown): error is HostDeckCodexAdapterError {
   return error instanceof HostDeckCodexAdapterError && ["not_sent", "remote_rejected"].includes(error.outcome);
 }
@@ -837,6 +1032,16 @@ function mapAdapterError(error: unknown, fallback: string): HostDeckManagedCodex
   }
   if (error.outcome === "unknown" || error.code === "unknown_outcome") {
     return serviceError("unknown_outcome", error.message, "unknown", false, null, error);
+  }
+  if (["request_aborted", "request_timeout"].includes(error.code)) {
+    return serviceError(
+      "operation_timeout",
+      error.message,
+      error.outcome === "remote_rejected" ? "remote_rejected" : "not_sent",
+      error.retry_safe,
+      null,
+      error
+    );
   }
   if (error.outcome === "remote_rejected") {
     return serviceError("runtime_unavailable", error.message, "remote_rejected", error.retry_safe, null, error);

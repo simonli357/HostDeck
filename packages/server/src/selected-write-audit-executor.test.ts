@@ -249,7 +249,11 @@ describe("selected non-security write audit executor", () => {
         emergency_lock_on_audit_unavailable: false,
         transition(context) {
           transitionCalls += 1;
-          expect(context).toEqual({ audit_state: "accepted" });
+          expect(context).toEqual({
+            audit_state: "accepted",
+            audit_record_id: `audit:selected-write:${index * 2 + 1}`,
+            accepted_at: acceptedAt
+          });
           expect(Object.isFrozen(context)).toBe(true);
           return Object.freeze({
             outcome: "succeeded" as const,

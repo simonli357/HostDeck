@@ -566,7 +566,13 @@ function createHarness(options: HarnessOptions = {}): Harness {
       let result: Awaited<ReturnType<typeof transition>>;
       try {
         if (options.changeBeforeDispatch) admission = openAdmission(8);
-        result = await transition(Object.freeze({ audit_state: "accepted" }));
+        result = await transition(
+          Object.freeze({
+            audit_state: "accepted",
+            audit_record_id: "audit:remote:selected-write:accepted",
+            accepted_at: baseTime.toISOString()
+          })
+        );
       } catch {
         throw new HostDeckSecurityMutationAuditExecutorError(
           "transition_failed",

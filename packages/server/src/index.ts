@@ -45,6 +45,7 @@ export * from "./security-routes.js";
 export * from "./selected-api-route-manifest.js";
 export * from "./selected-write-audit-executor.js";
 export * from "./selected-write-gate.js";
+export * from "./session-archive-routes.js";
 export * from "./session-control-routes.js";
 export * from "./session-start-routes.js";
 export * from "./skills-routes.js";

@@ -1,6 +1,7 @@
 import {
   auditPayloadSummarySchema,
   clientOperationIdSchema,
+  isoTimestampSchema,
   type SelectedAuditTarget,
   selectedAuditTargetSchema,
   selectedSecurityAuditPayloadContractSchema
@@ -71,6 +72,40 @@ export interface CreateHostDeckSelectedWriteMutationInput<
   readonly value: TValue;
 }
 
+export interface HostDeckSelectedWriteUnresolvedMutation<
+  TAction extends SelectedApiAuditAction,
+  TSelector,
+  TValue
+> {
+  readonly operation_id: string;
+  readonly action: TAction;
+  readonly accepted_summary: Readonly<Record<string, string | number | boolean | null>>;
+  readonly selector: TSelector;
+  readonly value: TValue;
+}
+
+export interface CreateHostDeckSelectedWriteUnresolvedMutationInput<
+  TAction extends SelectedApiAuditAction,
+  TSelector,
+  TValue
+> {
+  readonly operation_id: string;
+  readonly action: TAction;
+  readonly accepted_summary: unknown;
+  readonly selector: TSelector;
+  readonly value: TValue;
+}
+
+export interface HostDeckSelectedWriteAcceptedAuditReceipt {
+  readonly audit_record_id: string;
+  readonly accepted_at: string;
+}
+
+export interface HostDeckSelectedWriteAcceptedAuditContext
+  extends HostDeckSelectedWriteAcceptedAuditReceipt {
+  readonly audit_state: "accepted";
+}
+
 export interface HostDeckSelectedWriteTargetResolution<TValue> {
   readonly target: SelectedAuditTarget;
   readonly capability: RuntimeCapability | null;
@@ -109,6 +144,7 @@ interface SelectedWriteSummaryContract {
 
 const acceptedAuditPorts = new WeakSet<object>();
 const acceptedMutations = new WeakSet<object>();
+const acceptedUnresolvedMutations = new WeakSet<object>();
 const acceptedTargetResolutions = new WeakSet<object>();
 const canonicalDataLimits = Object.freeze({
   arrayItems: 256,
@@ -229,6 +265,73 @@ export function assertHostDeckSelectedWriteMutation<
   ) {
     throw new TypeError(
       "HostDeck selected-write mutation must be created by createHostDeckSelectedWriteMutation."
+    );
+  }
+}
+
+export function createHostDeckSelectedWriteUnresolvedMutation<
+  TAction extends SelectedApiAuditAction,
+  TSelector,
+  TValue
+>(
+  input: CreateHostDeckSelectedWriteUnresolvedMutationInput<TAction, TSelector, TValue>
+): HostDeckSelectedWriteUnresolvedMutation<TAction, TSelector, TValue> {
+  const values = readExactDataObject(
+    input,
+    ["accepted_summary", "action", "operation_id", "selector", "value"],
+    "HostDeck unresolved selected-write mutation input is invalid."
+  );
+  const operationId = clientOperationIdSchema.safeParse(values.operation_id);
+  if (
+    !operationId.success ||
+    typeof values.action !== "string" ||
+    !(selectedApiAuditActions as readonly string[]).includes(values.action)
+  ) {
+    throw new TypeError(
+      "HostDeck unresolved selected-write mutation does not match its bounded contract."
+    );
+  }
+  const summary = parseSelectedWriteAuditSummary(
+    values.action as TAction,
+    "accepted",
+    "accepted",
+    values.accepted_summary
+  );
+  const selector = cloneCanonicalData(
+    values.selector,
+    "Unresolved selected-write selector is invalid."
+  );
+  const value = cloneCanonicalData(
+    values.value,
+    "Unresolved selected-write mutation value is invalid."
+  );
+  const mutation: HostDeckSelectedWriteUnresolvedMutation<TAction, TSelector, TValue> =
+    Object.freeze({
+      operation_id: operationId.data,
+      action: values.action as TAction,
+      accepted_summary: summary,
+      selector: selector as TSelector,
+      value: value as TValue
+    });
+  acceptedUnresolvedMutations.add(mutation);
+  return mutation;
+}
+
+export function assertHostDeckSelectedWriteUnresolvedMutation<
+  TAction extends SelectedApiAuditAction,
+  TSelector,
+  TValue
+>(
+  candidate: unknown
+): asserts candidate is HostDeckSelectedWriteUnresolvedMutation<TAction, TSelector, TValue> {
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    !acceptedUnresolvedMutations.has(candidate) ||
+    !Object.isFrozen(candidate)
+  ) {
+    throw new TypeError(
+      "HostDeck unresolved selected-write mutation must be created by createHostDeckSelectedWriteUnresolvedMutation."
     );
   }
 }
@@ -451,11 +554,39 @@ export function parseSelectedWriteAuditResult<TPreparedResponse>(
   throw new TypeError("Selected-write audit result is invalid.");
 }
 
-export function assertAcceptedAuditContext(candidate: unknown): void {
-  const values = readExactFrozenDataObject(candidate, ["audit_state"]);
-  if (values.audit_state !== "accepted") {
+export function parseAcceptedAuditContext(
+  candidate: unknown,
+  executor: SelectedApiAuditExecutor
+): HostDeckSelectedWriteAcceptedAuditReceipt | null {
+  if (executor === "security_executor") {
+    const values = readExactFrozenDataObject(candidate, ["audit_state"]);
+    if (values.audit_state !== "accepted") {
+      throw new TypeError("Selected-write dispatch requires accepted durable audit context.");
+    }
+    return null;
+  }
+  const values = readExactFrozenDataObject(candidate, [
+    "accepted_at",
+    "audit_record_id",
+    "audit_state"
+  ]);
+  if (
+    values.audit_state !== "accepted" ||
+    typeof values.audit_record_id !== "string" ||
+    values.audit_record_id.length < 1 ||
+    values.audit_record_id.length > 120 ||
+    !/^[a-zA-Z0-9_.:-]+$/u.test(values.audit_record_id)
+  ) {
     throw new TypeError("Selected-write dispatch requires accepted durable audit context.");
   }
+  const acceptedAt = isoTimestampSchema.safeParse(values.accepted_at);
+  if (!acceptedAt.success) {
+    throw new TypeError("Selected-write dispatch requires accepted durable audit context.");
+  }
+  return Object.freeze({
+    audit_record_id: values.audit_record_id,
+    accepted_at: acceptedAt.data
+  });
 }
 
 export function readExactDataObject<const TKey extends string>(

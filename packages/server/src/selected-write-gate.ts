@@ -42,14 +42,18 @@ import type {
 } from "./selected-api-route-manifest.js";
 import { HostDeckSelectedWriteAuditExecutorError } from "./selected-write-audit-executor.js";
 import {
-  assertAcceptedAuditContext,
   assertHostDeckSelectedWriteAuditPort,
   assertHostDeckSelectedWriteMutation,
   assertHostDeckSelectedWriteTargetResolution,
+  assertHostDeckSelectedWriteUnresolvedMutation,
+  createHostDeckSelectedWriteMutation,
+  type HostDeckSelectedWriteAcceptedAuditReceipt,
   type HostDeckSelectedWriteAuditPort,
   type HostDeckSelectedWriteMutation,
   type HostDeckSelectedWriteTargetResolution,
+  type HostDeckSelectedWriteUnresolvedMutation,
   type ParsedSelectedWriteTransition,
+  parseAcceptedAuditContext,
   parseSelectedWriteAuditResult,
   parseSelectedWriteTransition,
   readExactDataObject,
@@ -110,8 +114,40 @@ export interface HostDeckSelectedWriteDispatchContext<
   TParsedValue,
   TResolvedValue
 > extends HostDeckSelectedWriteTargetContext {
+  readonly accepted_audit: HostDeckSelectedWriteAcceptedAuditReceipt | null;
   readonly mutation: HostDeckSelectedWriteMutation<TAction, TParsedValue>;
   readonly resolution: HostDeckSelectedWriteTargetResolution<TResolvedValue>;
+}
+
+export interface ExecuteHostDeckSelectedWriteUnresolvedGateInput<
+  TAction extends SelectedApiAuditAction,
+  TSelector,
+  TParsedValue,
+  TResolvedValue,
+  TResponse,
+  TPreparedResponse
+> {
+  readonly request: FastifyRequest;
+  readonly candidate: unknown;
+  readonly parse: (
+    this: void,
+    candidate: unknown
+  ) => HostDeckSelectedWriteUnresolvedMutation<TAction, TSelector, TParsedValue>;
+  readonly resolve_target: (
+    this: void,
+    mutation: HostDeckSelectedWriteUnresolvedMutation<TAction, TSelector, TParsedValue>,
+    context: HostDeckSelectedWriteTargetContext
+  ) =>
+    | Promise<HostDeckSelectedWriteTargetResolution<TResolvedValue>>
+    | HostDeckSelectedWriteTargetResolution<TResolvedValue>;
+  readonly dispatch: (
+    this: void,
+    context: HostDeckSelectedWriteDispatchContext<TAction, TParsedValue, TResolvedValue>
+  ) => Promise<unknown> | unknown;
+  readonly prepare_response: (
+    this: void,
+    response: TResponse
+  ) => Promise<TPreparedResponse> | TPreparedResponse;
 }
 
 export interface ExecuteHostDeckSelectedWriteGateInput<
@@ -173,6 +209,22 @@ export interface HostDeckSelectedWriteGate<TAction extends SelectedApiAuditActio
   readonly execute: <TParsedValue, TResolvedValue, TResponse, TPreparedResponse>(
     input: ExecuteHostDeckSelectedWriteGateInput<
       TAction,
+      TParsedValue,
+      TResolvedValue,
+      TResponse,
+      TPreparedResponse
+    >
+  ) => Promise<SecurityMutationExecutionResult<TPreparedResponse>>;
+  readonly executeUnresolved: <
+    TSelector,
+    TParsedValue,
+    TResolvedValue,
+    TResponse,
+    TPreparedResponse
+  >(
+    input: ExecuteHostDeckSelectedWriteUnresolvedGateInput<
+      TAction,
+      TSelector,
       TParsedValue,
       TResolvedValue,
       TResponse,
@@ -265,6 +317,29 @@ export function createHostDeckSelectedWriteGate<
       implementation.execute<TParsedValue, TResolvedValue, TResponse, TPreparedResponse>(
         execution
       ),
+    executeUnresolved: <
+      TSelector,
+      TParsedValue,
+      TResolvedValue,
+      TResponse,
+      TPreparedResponse
+    >(
+      execution: ExecuteHostDeckSelectedWriteUnresolvedGateInput<
+        TAction,
+        TSelector,
+        TParsedValue,
+        TResolvedValue,
+        TResponse,
+        TPreparedResponse
+      >
+    ) =>
+      implementation.executeUnresolved<
+        TSelector,
+        TParsedValue,
+        TResolvedValue,
+        TResponse,
+        TPreparedResponse
+      >(execution),
     snapshot: () => implementation.snapshot()
   });
   acceptedGates.add(gate);
@@ -337,6 +412,47 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
       TPreparedResponse
     >
   ): Promise<SecurityMutationExecutionResult<TPreparedResponse>> {
+    return this.executeInternal<never, TParsedValue, TResolvedValue, TResponse, TPreparedResponse>(
+      input,
+      "resolved"
+    );
+  }
+
+  async executeUnresolved<
+    TSelector,
+    TParsedValue,
+    TResolvedValue,
+    TResponse,
+    TPreparedResponse
+  >(
+    input: ExecuteHostDeckSelectedWriteUnresolvedGateInput<
+      TAction,
+      TSelector,
+      TParsedValue,
+      TResolvedValue,
+      TResponse,
+      TPreparedResponse
+    >
+  ): Promise<SecurityMutationExecutionResult<TPreparedResponse>> {
+    return this.executeInternal<
+      TSelector,
+      TParsedValue,
+      TResolvedValue,
+      TResponse,
+      TPreparedResponse
+    >(input, "unresolved");
+  }
+
+  private async executeInternal<
+    TSelector,
+    TParsedValue,
+    TResolvedValue,
+    TResponse,
+    TPreparedResponse
+  >(
+    input: unknown,
+    mode: "resolved" | "unresolved"
+  ): Promise<SecurityMutationExecutionResult<TPreparedResponse>> {
     increment(this.counters, "attempts");
     let execution: Readonly<Record<string, unknown>>;
     try {
@@ -360,13 +476,26 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
       throw gateError("input_invalid", "validation_error", "input", true);
     }
 
-    let mutation: HostDeckSelectedWriteMutation<TAction, TParsedValue>;
+    let parsedMutation:
+      | HostDeckSelectedWriteMutation<TAction, TParsedValue>
+      | HostDeckSelectedWriteUnresolvedMutation<TAction, TSelector, TParsedValue>;
+    let mutation: HostDeckSelectedWriteMutation<TAction, TParsedValue> | null = null;
     try {
-      mutation = Reflect.apply(execution.parse as (candidate: unknown) => unknown, undefined, [
-        execution.candidate
-      ]) as HostDeckSelectedWriteMutation<TAction, TParsedValue>;
-      assertHostDeckSelectedWriteMutation<TAction, TParsedValue>(mutation);
-      assertMutationMatchesManifest(mutation, this.manifest);
+      parsedMutation = Reflect.apply(
+        execution.parse as (candidate: unknown) => unknown,
+        undefined,
+        [execution.candidate]
+      ) as typeof parsedMutation;
+      if (mode === "resolved") {
+        assertHostDeckSelectedWriteMutation<TAction, TParsedValue>(parsedMutation);
+        assertMutationMatchesManifest(parsedMutation, this.manifest);
+        mutation = parsedMutation;
+      } else {
+        assertHostDeckSelectedWriteUnresolvedMutation<TAction, TSelector, TParsedValue>(
+          parsedMutation
+        );
+        assertUnresolvedMutationMatchesManifest(parsedMutation, this.manifest);
+      }
     } catch (error) {
       increment(this.counters, "parseFailures");
       throw callbackFailure(
@@ -422,10 +551,21 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
       resolution = (await Reflect.apply(
         execution.resolve_target as (...args: unknown[]) => unknown,
         undefined,
-        [mutation, targetContext]
+        [parsedMutation, targetContext]
       )) as HostDeckSelectedWriteTargetResolution<TResolvedValue>;
       assertHostDeckSelectedWriteTargetResolution<TResolvedValue>(resolution);
-      assertResolutionMatchesMutation(resolution, mutation, this.manifest);
+      if (mutation === null) {
+        assertResolutionMatchesUnresolvedMutation(resolution, this.manifest);
+        mutation = createHostDeckSelectedWriteMutation({
+          operation_id: parsedMutation.operation_id,
+          action: parsedMutation.action,
+          target: resolution.target,
+          accepted_summary: parsedMutation.accepted_summary,
+          value: parsedMutation.value
+        });
+      } else {
+        assertResolutionMatchesMutation(resolution, mutation, this.manifest);
+      }
       requireOpenDeadline(deadline);
     } catch (error) {
       increment(this.counters, "targetFailures");
@@ -438,15 +578,11 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
       );
     }
 
-    const dispatchContext: HostDeckSelectedWriteDispatchContext<
-      TAction,
-      TParsedValue,
-      TResolvedValue
-    > = Object.freeze({
-      ...targetContext,
-      mutation,
-      resolution
-    });
+    if (mutation === null) {
+      this.contractFailure();
+      throw gateError("target_contract_failed", "internal_error", "target", false);
+    }
+    const finalizedMutation = mutation;
     const observation: AuditObservation<TPreparedResponse> = {
       transitionCalls: 0,
       transitionOutcome: null,
@@ -465,7 +601,13 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
         this.contractFailure();
         throw gateError("dispatch_contract_failed", "internal_error", "dispatch", false);
       }
-      assertAcceptedAuditContext(auditContext);
+      let acceptedAudit: HostDeckSelectedWriteAcceptedAuditReceipt | null;
+      try {
+        acceptedAudit = parseAcceptedAuditContext(auditContext, this.audit.executor);
+      } catch {
+        this.contractFailure();
+        throw gateError("dispatch_contract_failed", "internal_error", "dispatch", false);
+      }
       if (isDeadlineClosed(deadline)) {
         increment(this.counters, "preDispatchTimeouts");
         observation.transitionOutcome = "failed";
@@ -481,7 +623,7 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
       } catch (error) {
         if (error instanceof HostDeckHttpError && error.code === "permission_denied") {
           const revoked = parseSelectedWriteTransition<TResponse>(
-            mutation.action,
+            finalizedMutation.action,
             Object.freeze({
               outcome: "failed" as const,
               error_code: "permission_denied" as const,
@@ -496,6 +638,16 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
         throw error;
       }
       increment(this.counters, "dispatches");
+      const dispatchContext: HostDeckSelectedWriteDispatchContext<
+        TAction,
+        TParsedValue,
+        TResolvedValue
+      > = Object.freeze({
+        ...targetContext,
+        accepted_audit: acceptedAudit,
+        mutation: finalizedMutation,
+        resolution
+      });
       let raw: unknown;
       try {
         raw = await Reflect.apply(
@@ -517,7 +669,7 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
       }
       let parsed: ParsedSelectedWriteTransition<TResponse>;
       try {
-        parsed = parseSelectedWriteTransition<TResponse>(mutation.action, raw);
+        parsed = parseSelectedWriteTransition<TResponse>(finalizedMutation.action, raw);
       } catch {
         this.contractFailure();
         throw gateError("dispatch_contract_failed", "internal_error", "dispatch", false);
@@ -550,11 +702,11 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
     try {
       rawAuditResult = await Reflect.apply(this.audit.execute, undefined, [
         Object.freeze({
-          operation_id: mutation.operation_id,
+          operation_id: finalizedMutation.operation_id,
           actor: authority.actor,
-          action: mutation.action,
-          target: mutation.target,
-          accepted_summary: mutation.accepted_summary,
+          action: finalizedMutation.action,
+          target: finalizedMutation.target,
+          accepted_summary: finalizedMutation.accepted_summary,
           emergency_lock_on_audit_unavailable: false,
           transition,
           prepare_response: prepareResponse
@@ -701,6 +853,13 @@ function assertMutationMatchesManifest<TAction extends SelectedApiAuditAction>(
   if (mutation.target.type !== expectedTarget) throw new TypeError();
 }
 
+function assertUnresolvedMutationMatchesManifest<TAction extends SelectedApiAuditAction>(
+  mutation: HostDeckSelectedWriteUnresolvedMutation<TAction, unknown, unknown>,
+  manifest: SelectedApiRouteManifestEntry
+): void {
+  if (manifest.audit === null || mutation.action !== manifest.audit.action) throw new TypeError();
+}
+
 function assertResolutionMatchesMutation<TAction extends SelectedApiAuditAction>(
   resolution: HostDeckSelectedWriteTargetResolution<unknown>,
   mutation: HostDeckSelectedWriteMutation<TAction, unknown>,
@@ -708,6 +867,18 @@ function assertResolutionMatchesMutation<TAction extends SelectedApiAuditAction>
 ): void {
   if (!isDeepStrictEqual(resolution.target, mutation.target)) {
     throw new TypeError("Selected-write target resolution changed the parsed target.");
+  }
+  if (resolution.capability !== expectedCapability(manifest)) {
+    throw new TypeError("Selected-write target resolution proved the wrong capability.");
+  }
+}
+
+function assertResolutionMatchesUnresolvedMutation(
+  resolution: HostDeckSelectedWriteTargetResolution<unknown>,
+  manifest: SelectedApiRouteManifestEntry
+): void {
+  if (resolution.target.type !== expectedAuditTargetType(manifest)) {
+    throw new TypeError("Selected-write target resolution proved the wrong target type.");
   }
   if (resolution.capability !== expectedCapability(manifest)) {
     throw new TypeError("Selected-write target resolution proved the wrong capability.");

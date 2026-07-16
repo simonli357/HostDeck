@@ -6,9 +6,11 @@ import {
   pairingClientLabelSchema,
   type RemoteIngressPublicState,
   remoteIngressPublicStateSchema,
+  type SelectedOperationDispatch,
   type SelectedSessionStartResponse,
   type SessionListResponse,
   type SkillsSnapshot,
+  selectedOperationDispatchSchema,
   selectedPairingLinkSchema,
   selectedPairingPermissionSchema,
   selectedSessionStartResponseSchema,
@@ -33,13 +35,13 @@ export function renderHelp(): string {
     "  codexdeck [--state-dir PATH] [--database PATH] [--port PORT] serve",
     "  codexdeck [--api-url URL | --host HOST --port PORT] status [--json]",
     "  codexdeck start --name NAME --cwd PATH [--json]",
+    "  codexdeck archive SESSION_ID [--json]",
     "  codexdeck list [--json]",
     "  codexdeck send SESSION TEXT...",
     "  codexdeck attach SESSION",
     "  codexdeck resume SESSION_ID",
     "  codexdeck usage SESSION_ID [--json]",
     "  codexdeck skills SESSION_ID [--json]",
-    "  codexdeck stop SESSION",
     "  codexdeck pair [--label LABEL] [--read-only | --write]",
     "  codexdeck lock [--reason TEXT] [--json]",
     "  codexdeck unlock [--json]",
@@ -82,6 +84,23 @@ export function renderStartSession(
     `Runtime: ${response.session.runtime_source} ${escapeTerminalText(response.session.runtime_version)}`,
     ""
   ].join("\n");
+}
+
+export function renderArchiveSession(
+  candidate: SelectedOperationDispatch,
+  json: boolean
+): string {
+  const parsed = selectedOperationDispatchSchema.safeParse(candidate);
+  if (
+    !parsed.success ||
+    parsed.data.state !== "accepted" ||
+    parsed.data.kind !== "archive" ||
+    parsed.data.target.type !== "managed_session"
+  ) {
+    throw internalFailure("Session-archive rendering input is invalid.");
+  }
+  if (json) return `${JSON.stringify(parsed.data, null, 2)}\n`;
+  return `Archive accepted for ${escapeTerminalText(parsed.data.target.session_id)}.\n`;
 }
 
 export function renderSessionList(response: SessionListResponse, json: boolean): string {

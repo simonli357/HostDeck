@@ -378,12 +378,18 @@ function mapServiceErrorCode(error: HostDeckManagedCodexThreadServiceError): Err
     case "runtime_unavailable":
     case "unknown_outcome":
       return "runtime_unavailable";
+    case "runtime_incompatible":
+      return "incompatible_runtime";
+    case "operation_timeout":
+      return "operation_timeout";
     case "storage_error":
       return "storage_error";
     case "identity_mismatch":
     case "recovery_required":
+    case "thread_already_archived":
     case "thread_conflict":
     case "thread_not_found":
+    case "thread_not_writable":
       return "operation_conflict";
     case "invalid_request":
       return "internal_error";
