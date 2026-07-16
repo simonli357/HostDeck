@@ -52,7 +52,7 @@ No fake-Codex or fake-tmux test can satisfy these gates.
 | Assembled real structured vertical | `INT-V1-027` | Done: four exact 0.144.0 two-thread aggregate runs prove the selected ports as one pipeline. |
 | Runtime process/socket supervisor | `INT-V1-007` | Done: strict foreground-child and service-owned private Unix-socket modes pass deterministic, real Linux, and exact-runtime evidence. |
 | Bounded reconnect controller | `INT-V1-028` | Done: generation-gated lifecycle, compatibility, backoff, held inbound, cleanup, cancellation, and no-mutation-replay evidence pass. |
-| Crash reconciliation, HostDeck restart, and TUI coexistence | `INT-V1-029` to `INT-V1-031` | In progress: `INT-V1-029` and `INT-V1-031` are ready; `INT-V1-030` follows durable crash reconciliation. |
+| Crash reconciliation, HostDeck restart, and TUI coexistence | `INT-V1-029` to `INT-V1-031` | In progress: `INT-V1-029` is complete with durable boundary/reconciliation evidence; `INT-V1-030` and `INT-V1-031` are ready for real restart and TUI-coexistence proof. |
 | Aggregate runtime lifecycle acceptance | `INT-V1-032` | Blocked by `INT-V1-028` to `INT-V1-031`. |
 | Legacy tmux disposition | `INT-V1-008` | Blocked by lifecycle acceptance and historical evidence review. |
 | Reopened runtime hardening | `INT-V1-091` | Blocked by selected lifecycle, data maintenance, and legacy disposition. |

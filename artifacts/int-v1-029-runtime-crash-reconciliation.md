@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: production-hardening criteria frozen before implementation.
+Status: complete. Criteria `5ddde3e`; implementation `7f829cc`.
 
 ## Scope
 
@@ -103,3 +103,25 @@ Service-owned app-server/HostDeck multi-process restart proof remains `INT-V1-03
 - `INT-V1-031` proves the laptop TUI and HostDeck remain concurrent clients of one exact managed thread.
 - `INT-V1-032` combines reconnect, app-server crash, HostDeck restart, approvals, incomplete outcomes, TUI coexistence, and cleanup into selected-runtime acceptance.
 - `IFC-V1-036` to `IFC-V1-038` compose this lifecycle with host health, startup, SSE/fanout, graceful drain, audit maintenance, and listener readiness.
+
+## Implemented
+
+- Added a strict reconnect-only adapter client for bounded active/archived enumeration, exact thread/goal/latest-turn reads, and one no-override resume. Raw protocol shapes, paths, identifiers, goals, and model values remain adapter-private.
+- Added structured durable collaboration settings, migration `202607160017_selected_session_settings_projection`, exact projection validation, and current-target-only Plan rehydration. Historical or contradictory settings remain unknown.
+- Added one atomic SQLite continuity replacement that preserves the durable cursor floor, replaces retained pre-gap events with one first `replay_boundary`, commits reconciled session truth, and reports post-commit publication uncertainty honestly.
+- Added the server-owned reconciliation lifecycle in the required order: approval supersession, accepted-only audit reconciliation, durable disconnect truth, exact read-only reconciliation, boundary replacement, exact resume, model/settings persistence, event barriers, Plan rehydration, runtime-ready publication, then admission.
+- Closed two admission races: work arriving while the ready callback is pending must drain before generation admission, and cwd/archive/runtime identity changes after initial reconciliation conflict before resume or ready.
+
+## Evidence
+
+- Direct contract, adapter, lifecycle, controller, Plan, approval, projection, migration, storage, and continuity matrices cover normal, invalid, boundary, repeated, rollback, publication-unknown, cancellation, identity-race, capacity, cursor-exhaustion, and privacy cases.
+- The headless crash-reconciliation integration composes the real reconnect controller, scripted protocol transport, migrated SQLite repository, production append/continuity/audit ports, approval control, Plan control, and event pipeline. It proves running interruption, accepted-write audit incompletion, approval supersession/re-registration, one boundary, exact resume, model/mode reconciliation, a deliberately held ready-window event, no mutation replay, and final write admission.
+- Final workspace results: unit 1,686 passed/37 external-device skipped; contract 277 passed; integration 33 passed; web 33 passed; root and all-package typechecks, lint/exports (491 files/9 packages), scaffold, planning, exact 0.144.0 binding, no-model compatibility, Unix IPC and supervisor smokes, frozen offline install, license inventory, and diff checks pass.
+- The default Codex 0.144.3 remains ineligible for exact-runtime evidence; the isolated exact 0.144.0 binary passed. npm's retired audit endpoint returned HTTP 410, so no advisory result is claimed. No dependency or lockfile changed.
+
+## Manual Inspection
+
+- The lifecycle has no create/import/fork/archive/turn/control/approval mutation surface; the only runtime write exposed to it is exact reconnect-scoped `thread/resume`.
+- Public results and snapshots contain bounded counts, continuity, generation, and reason codes only. They exclude cwd, ids, goals, model values, raw payloads, audit targets, approval content, and internal causes.
+- Broken config, malformed runtime/storage truth, generation loss, partial audit, failed publication, barrier failure, and impossible state combinations fail closed before admission. No fallback parses display text or invents completion, mode, continuity, or mutation outcome.
+- Service-process survival, foreground ownership, real multi-process HostDeck restart, TUI coexistence, host startup/health, SSE, UI, phone, packaging, and release readiness remain owned by the downstream tasks above.
