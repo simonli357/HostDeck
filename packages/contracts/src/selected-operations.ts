@@ -202,6 +202,14 @@ export const compactOperationIntentSchema = z
   })
   .strict();
 
+export const compactStartRequestSchema = z
+  .object({
+    operation_id: clientOperationIdSchema,
+    kind: z.literal("compact"),
+    confirm: z.literal(true)
+  })
+  .strict();
+
 export const skillsOperationIntentSchema = z
   .object({
     ...managedOperationBaseShape,
@@ -355,6 +363,21 @@ export const selectedOperationProgressSchema = z
     }
     if (!["failed", "incomplete"].includes(value.state) && value.error !== null) {
       context.addIssue({ code: "custom", message: "Only failed or incomplete operation progress may carry an error." });
+    }
+  });
+
+export const compactProgressResponseSchema = z
+  .object({
+    progress: selectedOperationProgressSchema.nullable()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.progress !== null && value.progress.kind !== "compact") {
+      context.addIssue({
+        code: "custom",
+        message: "Compact progress responses may contain only compact operation progress.",
+        path: ["progress", "kind"]
+      });
     }
   });
 
@@ -1065,6 +1088,8 @@ export type PromptDispatchResponse = z.infer<typeof promptDispatchResponseSchema
 export type ModelSelectionRequest = z.infer<typeof modelSelectionRequestSchema>;
 export type GoalMutationRequest = z.infer<typeof goalMutationRequestSchema>;
 export type PlanSelectionRequest = z.infer<typeof planSelectionRequestSchema>;
+export type CompactStartRequest = z.infer<typeof compactStartRequestSchema>;
+export type CompactProgressResponse = z.infer<typeof compactProgressResponseSchema>;
 export type ArchiveSessionRequest = z.infer<typeof archiveSessionRequestSchema>;
 export type SelectedOperationDispatch = z.infer<typeof selectedOperationDispatchSchema>;
 export type SelectedOperationTerminalOutcome = z.infer<typeof selectedOperationTerminalOutcomeSchema>;

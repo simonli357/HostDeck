@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
   ApiErrorEnvelope,
   ApiSession,
+  CompactProgressResponse,
   GoalControlSnapshot,
   GoalMutationRequest,
   ModelControlSnapshot,
@@ -19,6 +20,8 @@ import type {
 import {
   archiveSessionRequestSchema,
   clientOperationIdSchema,
+  compactProgressResponseSchema,
+  compactStartRequestSchema,
   goalControlSnapshotSchema,
   goalMutationRequestSchema,
   modelControlSnapshotSchema,
@@ -49,6 +52,11 @@ import {
   type HostDeckArchiveClient,
   type HostDeckArchiveClientRequest
 } from "./archive-client.js";
+import {
+  createHostDeckCompactClient,
+  type HostDeckCompactClient,
+  type HostDeckCompactClientStartRequest
+} from "./compact-client.js";
 import { type LoadCliConfigOptions, loadCliConfig } from "./config.js";
 import {
   apiFailure,
@@ -92,6 +100,7 @@ import {
 import {
   renderArchiveSession,
   renderAttachCommand,
+  renderCompactProgress,
   renderFailure,
   renderGoalSnapshot,
   renderHelp,
@@ -147,6 +156,7 @@ export interface CliRunOptions {
   readonly client?: HostDeckApiClient;
   readonly localAdmin?: LocalAdmin;
   readonly goalClient?: HostDeckGoalClient;
+  readonly compactClient?: HostDeckCompactClient;
   readonly modelClient?: HostDeckModelClient;
   readonly planClient?: HostDeckPlanClient;
   readonly archiveClient?: HostDeckArchiveClient;
@@ -163,6 +173,7 @@ export interface CliRunOptions {
   ) => string;
   readonly createPairOperationId?: () => string;
   readonly createArchiveOperationId?: () => string;
+  readonly createCompactOperationId?: () => string;
   readonly createGoalOperationId?: () => string;
   readonly createModelOperationId?: () => string;
   readonly createPlanOperationId?: () => string;
@@ -368,6 +379,34 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
       return success(renderUsageSnapshot(snapshot, parsed.command.json));
     }
 
+    if (parsed.command.kind === "compact") {
+      const target = parseCompactTarget(parsed.command.session);
+      let compactClient = options.compactClient;
+      if (compactClient === undefined) {
+        const compactClientOptions = { baseUrl: config.baseUrl };
+        if (options.fetch !== undefined) Object.assign(compactClientOptions, { fetch: options.fetch });
+        compactClient = createHostDeckCompactClient(compactClientOptions);
+      }
+      if (!parsed.command.confirm) {
+        const response = parseCompactResponse(
+          await Reflect.apply(compactClient.read, undefined, [target]),
+          target,
+          null
+        );
+        return success(renderCompactProgress(response, target, parsed.command.json));
+      }
+      const request = createCompactStartRequest(
+        parsed.command,
+        options.createCompactOperationId ?? createCompactOperationId
+      );
+      const response = parseCompactResponse(
+        await Reflect.apply(compactClient.start, undefined, [request]),
+        target,
+        request
+      );
+      return success(renderCompactProgress(response, target, parsed.command.json));
+    }
+
     if (parsed.command.kind === "skills") {
       const target = parseSkillsTarget(parsed.command.session);
       let skillsClient = options.skillsClient;
@@ -546,6 +585,23 @@ function createRemoteMutationRequest(
   return parsed.data;
 }
 
+function compactCliProgressMessage(code: ApiErrorEnvelope["code"]): string {
+  switch (code) {
+    case "unknown_error":
+      return "Compact outcome is unknown and requires reconciliation.";
+    case "operation_conflict":
+      return "Compact progress conflicts with observed runtime state.";
+    case "protocol_error":
+      return "Codex compact lifecycle failed protocol validation.";
+    case "runtime_unavailable":
+      return "Codex compact lifecycle lost runtime continuity.";
+    case "session_not_writable":
+      return "Managed session became unavailable during compaction.";
+    default:
+      return "Compact progress could not be verified.";
+  }
+}
+
 function createPairingRequest(
   command: Extract<ReturnType<typeof parseCliArgs>["command"], { readonly kind: "pair" }>,
   createOperationId: () => string
@@ -597,6 +653,10 @@ function createGoalOperationId(): string {
 
 function createPlanOperationId(): string {
   return `op_plan_${randomUUID().replaceAll("-", "")}`;
+}
+
+function createCompactOperationId(): string {
+  return `op_compact_${randomUUID().replaceAll("-", "")}`;
 }
 
 function createSessionStartRequest(
@@ -1028,6 +1088,73 @@ function parseUsageTarget(candidate: string): string {
     );
   }
   return parsed.data.session_id;
+}
+
+function parseCompactTarget(candidate: string): string {
+  const parsed = sessionIdParamsSchema.safeParse({ session_id: candidate });
+  if (!parsed.success) throw usageFailure("Compact requires one valid managed session id.", "session");
+  return parsed.data.session_id;
+}
+
+function createCompactStartRequest(
+  command: Extract<ReturnType<typeof parseCliArgs>["command"], { readonly kind: "compact" }>,
+  createOperationId: () => string
+): HostDeckCompactClientStartRequest {
+  if (!command.confirm) throw internalFailure("Compact start command lost its confirmation.");
+  let operationId: unknown;
+  try {
+    operationId = Reflect.apply(createOperationId, undefined, []);
+  } catch (error) {
+    throw internalFailure("Compact operation id generation failed.", error);
+  }
+  const target = sessionIdParamsSchema.safeParse({ session_id: command.session });
+  const body = compactStartRequestSchema.safeParse({
+    operation_id: operationId,
+    kind: "compact",
+    confirm: true
+  });
+  if (!target.success) throw usageFailure("Compact requires one valid managed session id.", "session");
+  if (!body.success) throw internalFailure("Compact operation id generation failed.");
+  return Object.freeze({ ...body.data, session_id: target.data.session_id });
+}
+
+function parseCompactResponse(
+  candidate: unknown,
+  sessionId: string,
+  request: HostDeckCompactClientStartRequest | null
+): CompactProgressResponse {
+  let parsed: ReturnType<typeof compactProgressResponseSchema.safeParse>;
+  try {
+    parsed = compactProgressResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("HostDeck compact client returned invalid managed-session data.");
+  }
+  if (!parsed.success) throw internalFailure("HostDeck compact client returned invalid managed-session data.");
+  const progress = parsed.data.progress;
+  if (progress !== null && progress.target.session_id !== sessionId) {
+    throw internalFailure("HostDeck compact client returned invalid managed-session data.");
+  }
+  if (
+    request !== null &&
+    (progress === null ||
+      progress.operation_id !== request.operation_id ||
+      progress.state !== "accepted" ||
+      progress.turn_id !== null ||
+      progress.error !== null)
+  ) {
+    throw internalFailure("HostDeck compact client returned contradictory start data.");
+  }
+  if (progress === null || progress.error === null) return parsed.data;
+  return compactProgressResponseSchema.parse({
+    progress: {
+      ...progress,
+      error: {
+        code: progress.error.code,
+        message: compactCliProgressMessage(progress.error.code),
+        retryable: progress.error.retryable
+      }
+    }
+  });
 }
 
 function parseUsageSnapshot(

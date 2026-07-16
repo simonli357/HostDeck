@@ -1,6 +1,8 @@
 import { Buffer } from "node:buffer";
 import {
   type ApiSession,
+  type CompactProgressResponse,
+  compactProgressResponseSchema,
   defaultResourceBudget,
   type GoalControlSnapshot,
   type GoalMutationRequest,
@@ -30,6 +32,7 @@ import {
   selectedPairingLinkSchema,
   selectedPairingPermissionSchema,
   selectedSessionStartResponseSchema,
+  sessionIdParamsSchema,
   skillsSnapshotSchema,
   type UsageRateLimitWindow,
   type UsageSnapshot,
@@ -64,6 +67,8 @@ export function renderHelp(): string {
     "  codexdeck plan SESSION_ID [--json]",
     "  codexdeck plan SESSION_ID enter|exit [--expected-revision REVISION] [--json]",
     "  codexdeck usage SESSION_ID [--json]",
+    "  codexdeck compact SESSION_ID [--json]",
+    "  codexdeck compact SESSION_ID --confirm [--json]",
     "  codexdeck skills SESSION_ID [--json]",
     "  codexdeck pair [--label LABEL] [--read-only | --write]",
     "  codexdeck lock [--reason TEXT] [--json]",
@@ -235,6 +240,29 @@ export function renderPlanSnapshot(
   const output = json ? `${JSON.stringify(parsed.data, null, 2)}\n` : renderPlanText(parsed.data, selection);
   if (output.includes("\0") || Buffer.byteLength(output, "utf8") > defaultResourceBudget.cli_response_max_bytes) {
     throw internalFailure("Plan rendering output exceeds its selected limit.");
+  }
+  return output;
+}
+
+export function renderCompactProgress(
+  candidate: CompactProgressResponse,
+  sessionIdCandidate: string,
+  json: boolean
+): string {
+  const response = compactProgressResponseSchema.safeParse(candidate);
+  const params = sessionIdParamsSchema.safeParse({ session_id: sessionIdCandidate });
+  if (
+    !response.success ||
+    !params.success ||
+    (response.data.progress !== null && response.data.progress.target.session_id !== params.data.session_id)
+  ) {
+    throw internalFailure("Compact rendering input is invalid.");
+  }
+  const output = json
+    ? `${JSON.stringify(response.data, null, 2)}\n`
+    : renderCompactText(response.data, params.data.session_id);
+  if (output.includes("\0") || Buffer.byteLength(output, "utf8") > defaultResourceBudget.cli_response_max_bytes) {
+    throw internalFailure("Compact rendering output exceeds its selected limit.");
   }
   return output;
 }
@@ -734,6 +762,36 @@ function escapeTerminalText(value: string): string {
     .replace(/[\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/gu, (character) =>
       `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`
     );
+}
+
+function renderCompactText(response: CompactProgressResponse, sessionId: string): string {
+  const progress = response.progress;
+  const session = escapeTerminalText(sessionId);
+  if (progress === null) return `Compact: no tracked operation for ${session}.\n`;
+  switch (progress.state) {
+    case "accepted":
+      return `Compact accepted for ${session}. Completion is not yet proven.\n`;
+    case "running":
+      return `Compact running for ${session} (turn ${renderCompactTurnId(progress.turn_id)}). Completion is not yet proven.\n`;
+    case "completed":
+      return `Compact completed for ${session} (turn ${renderCompactTurnId(progress.turn_id)}).\n`;
+    case "interrupted":
+      return `Compact interrupted for ${session} (turn ${renderCompactTurnId(progress.turn_id)}).\n`;
+    case "failed":
+      return `Compact failed for ${session} (error: ${renderCompactErrorCode(progress.error)}).\n`;
+    case "incomplete":
+      return `Compact outcome incomplete for ${session} (error: ${renderCompactErrorCode(progress.error)}).\n`;
+  }
+}
+
+function renderCompactTurnId(turnId: string | null): string {
+  if (turnId === null) throw internalFailure("Compact rendering lost event-proven turn identity.");
+  return escapeTerminalText(turnId);
+}
+
+function renderCompactErrorCode(error: { readonly code: string } | null): string {
+  if (error === null) throw internalFailure("Compact rendering lost terminal error identity.");
+  return escapeTerminalText(error.code);
 }
 
 function renderUsageText(snapshot: UsageSnapshot): string {

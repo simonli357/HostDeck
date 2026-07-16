@@ -14,7 +14,9 @@ import {
   resourceBudgetDefinitionByKey,
   type SelectedOperationIntent,
   type SelectedOperationProgress,
-  selectedOperationProgressSchema
+  selectedOperationProgressSchema,
+  selectedSessionMappingRecordSchema,
+  selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
 import type { ErrorCode, IsoTimestamp } from "@hostdeck/core";
 import type { SelectedSessionState, SelectedStateRepository } from "@hostdeck/storage";
@@ -123,6 +125,7 @@ const compactEventMethods = new Set([
 ]);
 const terminalTurnStates = new Set(["idle", "completed", "interrupted", "failed"]);
 const openPhases = new Set<CompactPhase>(["sending", "accepted", "running", "item_completed", "unknown"]);
+const selectedStateKeys = ["mapping", "projection"] as const;
 
 export function createCodexCompactControlService(
   options: CodexCompactControlServiceOptions
@@ -643,7 +646,17 @@ class DefaultCodexCompactControlService implements CodexCompactControlService {
         false
       );
     }
-    if (state.mapping.codex_thread_id !== target.codex_thread_id) {
+    const parsed = parseSelectedCompactState(state);
+    if (parsed === null) {
+      throw compactError(
+        "target_mismatch",
+        "stale_session",
+        "The selected managed session identity requires reconciliation.",
+        "not_sent",
+        false
+      );
+    }
+    if (parsed.mapping.id !== target.session_id || parsed.mapping.codex_thread_id !== target.codex_thread_id) {
       throw compactError(
         "target_mismatch",
         "invalid_session_id",
@@ -652,12 +665,31 @@ class DefaultCodexCompactControlService implements CodexCompactControlService {
         false
       );
     }
-    return state;
+    if (!selectedIdentityMatches(parsed)) {
+      throw compactError(
+        "target_mismatch",
+        "stale_session",
+        "The selected managed session identity requires reconciliation.",
+        "not_sent",
+        false
+      );
+    }
+    if (parsed.mapping.disposition !== "selected") {
+      throw compactError(
+        "target_stale",
+        "stale_session",
+        "The selected managed session requires recovery before compact control.",
+        "not_sent",
+        false
+      );
+    }
+    return parsed;
   }
 
   private readStateByThreadId(threadId: string): SelectedSessionState | null {
+    let candidate: SelectedSessionState | null;
     try {
-      return this.options.states.getByThreadId(threadId);
+      candidate = this.options.states.getByThreadId(threadId);
     } catch (error) {
       throw compactError(
         "state_unavailable",
@@ -668,6 +700,27 @@ class DefaultCodexCompactControlService implements CodexCompactControlService {
         error
       );
     }
+    if (candidate === null) return null;
+    const state = parseSelectedCompactState(candidate);
+    if (state === null || state.mapping.codex_thread_id !== threadId || !selectedIdentityMatches(state)) {
+      throw compactError(
+        "target_mismatch",
+        "stale_session",
+        "The compact event target identity requires reconciliation.",
+        "not_sent",
+        false
+      );
+    }
+    if (state.mapping.disposition !== "selected") {
+      throw compactError(
+        "target_stale",
+        "stale_session",
+        "The compact event target requires recovery before observation.",
+        "not_sent",
+        false
+      );
+    }
+    return state;
   }
 
   private ensureCapacity(sessionId: string): void {
@@ -776,6 +829,56 @@ function parseIntent(candidate: unknown): CompactIntent {
     );
   }
   return parsed.data;
+}
+
+function parseSelectedCompactState(candidate: unknown): SelectedSessionState | null {
+  try {
+    const state = readExactDataObject(candidate, selectedStateKeys);
+    const mapping = selectedSessionMappingRecordSchema.safeParse(state.mapping);
+    const projection = selectedSessionProjectionRecordSchema.safeParse(state.projection);
+    if (!mapping.success || !projection.success) return null;
+    return Object.freeze({ mapping: mapping.data, projection: projection.data });
+  } catch {
+    return null;
+  }
+}
+
+function selectedIdentityMatches(state: SelectedSessionState): boolean {
+  const session = state.projection.session;
+  return (
+    state.mapping.id === session.id &&
+    state.mapping.name === session.name &&
+    state.mapping.codex_thread_id === session.codex_thread_id &&
+    state.mapping.cwd === session.cwd &&
+    state.mapping.runtime_source === session.runtime_source &&
+    state.mapping.runtime_version === session.runtime_version &&
+    state.mapping.created_at === session.created_at &&
+    state.mapping.archived_at === session.archived_at
+  );
+}
+
+function readExactDataObject<const Keys extends readonly string[]>(
+  candidate: unknown,
+  keys: Keys
+): Readonly<Record<Keys[number], unknown>> {
+  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) throw new TypeError();
+  const prototype: unknown = Object.getPrototypeOf(candidate);
+  const descriptors = Object.getOwnPropertyDescriptors(candidate);
+  const actualKeys = Reflect.ownKeys(descriptors);
+  if (
+    (prototype !== Object.prototype && prototype !== null) ||
+    actualKeys.length !== keys.length ||
+    actualKeys.some((key) => typeof key !== "string" || !keys.includes(key)) ||
+    keys.some((key) => {
+      const descriptor = descriptors[key];
+      return descriptor === undefined || !("value" in descriptor) || !descriptor.enumerable;
+    })
+  ) {
+    throw new TypeError();
+  }
+  return Object.freeze(Object.fromEntries(keys.map((key) => [key, descriptors[key]?.value]))) as Readonly<
+    Record<Keys[number], unknown>
+  >;
 }
 
 function parseTarget(candidate: unknown): ManagedSessionTarget {

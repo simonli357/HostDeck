@@ -162,7 +162,8 @@ describe.skipIf(!requireSmoke)("exact Codex compact-control smoke", () => {
         const normalizer = createCodexEventNormalizer({
           is_managed_thread: (candidate) => candidate === threadA || candidate === threadB
         });
-        const cursor = { value: notifications.length };
+        const compactNotificationStart = notifications.length;
+        const cursor = { value: compactNotificationStart };
 
         const accepted = await compactService.compact({
           operation_id: "op_compact_smoke_0001",
@@ -281,8 +282,11 @@ describe.skipIf(!requireSmoke)("exact Codex compact-control smoke", () => {
           target: targetA,
           kind: "usage"
         });
-        expect(usageSnapshot.thread).toMatchObject({ state: "observed", turn_id: compactTurnId });
-        if (usageSnapshot.thread.state !== "observed") throw new Error("Compact smoke lost its thread usage observation.");
+        if (countThreadUsageNotifications(notifications, compactNotificationStart, terminal.index, threadA) === 0) {
+          expect(usageSnapshot.thread).toEqual({ state: "not_observed", scope: "thread" });
+        } else {
+          expect(usageSnapshot.thread).toMatchObject({ state: "observed", turn_id: compactTurnId });
+        }
         if (interruptAttempted) {
           expect(turnMethods.filter((method) => method === "turn/interrupt")).toHaveLength(1);
         }
@@ -526,6 +530,20 @@ function countContextItemNotifications(
   method: "item/started" | "item/completed"
 ): number {
   return notifications.filter((notification) => notificationIsContextItem(notification, threadId, method)).length;
+}
+
+function countThreadUsageNotifications(
+  notifications: readonly CodexConnectionNotification[],
+  startIndex: number,
+  endIndex: number,
+  threadId: string
+): number {
+  return notifications.slice(startIndex, endIndex + 1).filter(
+    (notification) =>
+      notification.method === "thread/tokenUsage/updated" &&
+      isRecord(notification.params) &&
+      notification.params.threadId === threadId
+  ).length;
 }
 
 function countTurnNotifications(notifications: readonly CodexConnectionNotification[], threadId: string): number {

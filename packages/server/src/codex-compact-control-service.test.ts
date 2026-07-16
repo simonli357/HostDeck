@@ -371,6 +371,60 @@ describe("Codex compact control service", () => {
     );
     expect(unsupported.compact.calls).toHaveLength(0);
   });
+
+  it("rejects malformed, accessor-backed, contradictory, and misplaced selected state without wire access", async () => {
+    const malformed = createHarness();
+    malformed.states.bySession.set(targetA.session_id, {
+      ...selectedState(targetA),
+      extra: true
+    } as never);
+    await expectCompactError(
+      malformed.service.compact(compactIntent(targetA, "op_compact_control_malformed_state_0001")),
+      "target_mismatch"
+    );
+    expect(malformed.compact.calls).toEqual([]);
+
+    const contradictory = createHarness();
+    const state = selectedState(targetA);
+    contradictory.states.bySession.set(targetA.session_id, {
+      mapping: state.mapping,
+      projection: {
+        ...state.projection,
+        session: { ...state.projection.session, cwd: "/tmp/contradictory-compact-cwd" }
+      }
+    } as SelectedSessionState);
+    await expectCompactError(
+      contradictory.service.compact(compactIntent(targetA, "op_compact_control_contradictory_state_0001")),
+      "target_mismatch"
+    );
+    expect(contradictory.compact.calls).toEqual([]);
+
+    let accessorCalls = 0;
+    const accessorState = Object.defineProperty({}, "mapping", {
+      enumerable: true,
+      get() {
+        accessorCalls += 1;
+        throw new Error("private-compact-state-accessor");
+      }
+    });
+    Object.defineProperty(accessorState, "projection", {
+      enumerable: true,
+      value: state.projection
+    });
+    const accessor = createHarness();
+    accessor.states.bySession.set(targetA.session_id, accessorState as SelectedSessionState);
+    await expectCompactError(
+      accessor.service.compact(compactIntent(targetA, "op_compact_control_accessor_state_0001")),
+      "target_mismatch"
+    );
+    expect(accessorCalls).toBe(0);
+    expect(accessor.compact.calls).toEqual([]);
+
+    const misplaced = await acceptedHarness(targetA);
+    misplaced.states.byThread.set(targetA.codex_thread_id, selectedState(targetB));
+    await expectCompactError(misplaced.service.observe(turnStarted(targetA, turnA, 1), 3), "target_mismatch");
+    expect(await misplaced.service.snapshot(targetA)).toMatchObject({ state: "accepted" });
+  });
 });
 
 class FakeCompactClient implements CodexCompactClient {

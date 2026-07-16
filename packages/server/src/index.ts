@@ -11,6 +11,7 @@ export * from "./codex-projection-service.js";
 export * from "./codex-prompt-control-service.js";
 export * from "./codex-skills-control-service.js";
 export * from "./codex-usage-control-service.js";
+export * from "./compact-routes.js";
 export * from "./csrf-routes.js";
 export * from "./device-authority-lifecycle.js";
 export * from "./device-list-routes.js";

@@ -168,7 +168,7 @@ const selectedWriteSummaryContracts: Partial<
     ["changed"]
   ),
   plan: summaryContract(["plan_action", "expected_revision_present"], ["changed"]),
-  compact: summaryContract(["confirmed"], ["started"]),
+  compact: summaryContract(["confirmed"], ["accepted"]),
   approval_response: summaryContract(["decision", "confirmed"], ["applied"]),
   interrupt: summaryContract(["confirmed"], ["interrupted"]),
   archive: summaryContract(["confirmed"], ["archived"])

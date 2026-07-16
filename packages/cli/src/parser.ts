@@ -35,6 +35,7 @@ export type ParsedCliCommand =
       readonly json: boolean;
     }
   | { readonly kind: "usage"; readonly session: string; readonly json: boolean }
+  | { readonly kind: "compact"; readonly session: string; readonly confirm: boolean; readonly json: boolean }
   | { readonly kind: "skills"; readonly session: string; readonly json: boolean }
   | { readonly kind: "stop"; readonly session: string }
   | {
@@ -168,7 +169,12 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
     }
 
     if (token === "--") {
-      if (positionals[0] === "model" || positionals[0] === "goal" || positionals[0] === "plan") {
+      if (
+        positionals[0] === "model" ||
+        positionals[0] === "goal" ||
+        positionals[0] === "plan" ||
+        positionals[0] === "compact"
+      ) {
         throw usageFailure(`The ${positionals[0]} command does not accept an option terminator.`);
       }
       positionals.push(...args.slice(index + 1));
@@ -322,6 +328,19 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
         kind: "usage",
         session: singleSessionArgument("usage", rest),
         json
+      },
+      configFlags
+    };
+  }
+
+  if (command === "compact") {
+    const parsed = parseCompactOptions(rest, json);
+    return {
+      command: {
+        kind: "compact",
+        session: parsed.session,
+        confirm: parsed.confirm,
+        json: parsed.json
       },
       configFlags
     };
@@ -695,6 +714,27 @@ function parsePlanRevision(candidate: string): number {
     throw usageFailure("Plan expected revision exceeds the supported range.");
   }
   return revision;
+}
+
+function parseCompactOptions(
+  args: readonly string[],
+  globalJson: boolean
+): { readonly session: string; readonly confirm: boolean; readonly json: boolean } {
+  const [session, ...rest] = args;
+  if (session === undefined || session.startsWith("-")) {
+    throw usageFailure("The compact command requires one managed session id.");
+  }
+  let confirm = false;
+  for (const token of rest) {
+    if (token === "--confirm") {
+      if (confirm) throw usageFailure("The compact command accepts --confirm only once.");
+      confirm = true;
+      continue;
+    }
+    if (token.startsWith("-")) throw usageFailure(`Unknown compact option: ${token}`);
+    throw usageFailure(`Unexpected compact argument: ${token}`);
+  }
+  return { session, confirm, json: globalJson };
 }
 
 function parsePairOptions(args: readonly string[], globalJson: boolean): {

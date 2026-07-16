@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   compactOperationIntentSchema,
+  compactProgressResponseSchema,
+  compactStartRequestSchema,
   defaultResourceBudget,
   resourceBudgetDefinitionByKey,
   selectedOperationProgressSchema,
@@ -25,6 +27,33 @@ describe("structured compact contracts", () => {
     ).toThrow();
     expect(() =>
       compactOperationIntentSchema.parse({ operation_id: operationId, target, kind: "compact", confirm: true, extra: true })
+    ).toThrow();
+  });
+
+  it("keeps the public start request target-free and the read response explicitly nullable", () => {
+    expect(compactStartRequestSchema.parse({ operation_id: operationId, kind: "compact", confirm: true })).toEqual({
+      operation_id: operationId,
+      kind: "compact",
+      confirm: true
+    });
+    for (const candidate of [
+      { operation_id: operationId, kind: "compact", confirm: false },
+      { operation_id: operationId, kind: "compact", confirm: true, target },
+      { operation_id: operationId, kind: "compact", confirm: true, force: true }
+    ]) {
+      expect(() => compactStartRequestSchema.parse(candidate)).toThrow();
+    }
+
+    expect(compactProgressResponseSchema.parse({ progress: null })).toEqual({ progress: null });
+    expect(compactProgressResponseSchema.parse({ progress: progress("accepted", null, null) }).progress?.kind).toBe(
+      "compact"
+    );
+    expect(() => compactProgressResponseSchema.parse({})).toThrow();
+    expect(() => compactProgressResponseSchema.parse({ progress: progress("accepted", null, null), extra: true })).toThrow();
+    expect(() =>
+      compactProgressResponseSchema.parse({
+        progress: { ...progress("accepted", null, null), kind: "prompt" }
+      })
     ).toThrow();
   });
 
