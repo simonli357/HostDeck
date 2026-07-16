@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-031` Prove HostDeck and laptop TUI multi-client coexistence | ready | none | Restart continuity is complete; exact concurrent HostDeck/TUI ownership is the remaining leaf before aggregate runtime acceptance. |
+| 1 | `INT-V1-031` Prove HostDeck and laptop TUI multi-client coexistence | in_progress | none | Harsh one-turn, bidirectional teardown, foreign-thread, privacy, and cleanup criteria are frozen before implementation. |
 | 2 | `IFC-V1-035` Add bounded subscriber queues and revoke/disconnect/archive cleanup | ready | none | Exact active/opening-stream revoke is complete; bounded subscriber ownership can progress independently. |
 
 ## Intentional Blockers
