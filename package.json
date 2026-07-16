@@ -22,6 +22,7 @@
     "test:tmux": "HOSTDECK_REQUIRE_TMUX_SMOKE=1 vitest run packages/tmux-adapter/src/index.test.ts packages/server/src/tmux-smoke.test.ts",
     "smoke:codex-compatibility": "HOSTDECK_REQUIRE_CODEX_COMPATIBILITY_SMOKE=1 vitest run packages/codex-adapter/src/installed-codex.smoke.test.ts",
     "smoke:codex-ipc": "HOSTDECK_REQUIRE_CODEX_IPC_SMOKE=1 vitest run packages/codex-adapter/src/codex-ipc.smoke.test.ts",
+    "smoke:codex-supervisor": "HOSTDECK_REQUIRE_CODEX_SUPERVISOR_SMOKE=1 vitest run packages/server/src/codex-runtime-supervisor.smoke.test.ts",
     "smoke:codex-threads": "HOSTDECK_REQUIRE_CODEX_THREAD_SMOKE=1 vitest run packages/codex-adapter/src/codex-thread-lifecycle.smoke.test.ts",
     "smoke:codex-semantics": "HOSTDECK_REQUIRE_CODEX_SEMANTICS_SMOKE=1 vitest run packages/codex-adapter/src/codex-operation-semantics.smoke.test.ts",
     "smoke:codex-model": "HOSTDECK_REQUIRE_CODEX_MODEL_SMOKE=1 vitest run packages/codex-adapter/src/codex-model-control.smoke.test.ts",
