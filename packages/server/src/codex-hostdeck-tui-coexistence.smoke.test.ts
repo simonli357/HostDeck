@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import {
   type ChildProcess,
   execFileSync,
@@ -41,6 +42,7 @@ import {
 import {
   defaultResourceBudget,
   type ModelCatalogEntry,
+  resourceBudgetDefinitionByKey,
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
@@ -207,6 +209,7 @@ describe.skipIf(!requireSmoke)(
           } = { current: null };
           let connectionATransportError = "none";
           let connectionATransportCause = "none";
+          let maximumInboundMessageBytes = 0;
           let tuiATeardownStage: "before" | "during" | "after" = "before";
           let connectionACloseStage = "none";
 
@@ -228,9 +231,20 @@ describe.skipIf(!requireSmoke)(
           };
 
           const transportA = createCodexUnixWebSocketTransport({
-            socket_path: socketPath
+            socket_path: socketPath,
+            max_frame_bytes:
+              resourceBudgetDefinitionByKey.protocol_max_frame_bytes.maximum,
+            max_buffered_bytes:
+              resourceBudgetDefinitionByKey.protocol_max_buffered_bytes.maximum
           });
           transportA.subscribe((event) => {
+            if (event.type === "message") {
+              maximumInboundMessageBytes = Math.max(
+                maximumInboundMessageBytes,
+                Buffer.byteLength(event.text, "utf8")
+              );
+              return;
+            }
             if (event.type === "error") {
               if (connectionATransportError === "none") {
                 connectionATransportError = classifyTransportError(
@@ -522,6 +536,7 @@ describe.skipIf(!requireSmoke)(
                 `pending_server_requests=${
                   liveConnectionA.pending_server_request_count
                 }`,
+                `maximum_inbound_message_bytes=${maximumInboundMessageBytes}`,
                 `connection_ready=${String(
                   liveConnectionA.state === "ready"
                 )}`,
@@ -694,7 +709,11 @@ describe.skipIf(!requireSmoke)(
 
           connectionB = createCodexAppServerConnection({
             transport: createCodexUnixWebSocketTransport({
-              socket_path: socketPath
+              socket_path: socketPath,
+              max_frame_bytes:
+                resourceBudgetDefinitionByKey.protocol_max_frame_bytes.maximum,
+              max_buffered_bytes:
+                resourceBudgetDefinitionByKey.protocol_max_buffered_bytes.maximum
             }),
             observed_version: codexBindingDescriptor.codex_version
           });
@@ -746,7 +765,8 @@ describe.skipIf(!requireSmoke)(
               exact_binding: true,
               app_server_process_count: 1,
               app_server_identity_stable: true,
-              private_unix_socket_stable: true
+              private_unix_socket_stable: true,
+              maximum_inbound_message_bytes: maximumInboundMessageBytes
             },
             clients: {
               hostdeck_connection_count: 2,
@@ -953,6 +973,7 @@ interface CoexistenceEvidence {
     readonly app_server_process_count: 1;
     readonly app_server_identity_stable: true;
     readonly private_unix_socket_stable: true;
+    readonly maximum_inbound_message_bytes: number;
   };
   readonly clients: {
     readonly hostdeck_connection_count: 2;
