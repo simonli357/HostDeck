@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M2/M3 selected runtime and remote host-interface integration after the approved cross-network V1 rebaseline.
-- Active task: `IFC-V1-049` is the next ready leaf after `IFC-V1-045` completed the exact active-turn event-proven interrupt API/laptop-local source CLI mapping.
+- Active task: `INT-V1-007` is the next ready leaf after `IFC-V1-049` completed shared selected-mutation idempotency, replay, rate, and concurrency admission.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.3; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract plus 14 current Signal Ledger/Focus Rail visual targets are complete; both desktop-led boards remain rejected, and `FE-V1-003` is blocked only by human selection of exact assets/approved drift.
@@ -324,4 +324,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-064` hardening criteria are pushed as `73b2fc4` and implementation as `163a129`; full selected/workspace and exact Codex 0.144.0 compact evidence pass. This owner-doc closure advances the selected queue to `IFC-V1-044`.
 - `IFC-V1-044` hardening criteria are pushed as `87477f7` and implementation as `637bdca`; full selected/workspace and exact Codex 0.144.0 approval evidence pass. This owner-doc closure advances the selected queue to `IFC-V1-045`.
 - `IFC-V1-045` hardening criteria are pushed as `23cbd7f` and implementation as `d98ab2e`; full selected/workspace and exact Codex 0.144.0 interrupt evidence pass. This owner-doc closure advances the selected queue to `IFC-V1-049`.
-- Next action: implement `IFC-V1-049` operation idempotency and concurrency limits. The phone may stay disconnected; React implementation independently waits for the `FE-V1-003` recorded visual selection.
+- `IFC-V1-049` hardening criteria are pushed as `5477a50` and implementation as `fc5f182`; focused policy/gate/route and cross-route SQLite evidence plus all workspace suites, typechecks, lint, scaffold, planning, offline install, license, and diff checks pass. The installed Codex 0.144.3 remains ineligible for the exact reviewed 0.144.0 binding check, and npm's retired audit endpoint still returns HTTP 410; neither gap came from this dependency-free leaf.
+- Next action: implement `INT-V1-007` runtime process/socket supervision. The phone may stay disconnected; React implementation independently waits for the `FE-V1-003` recorded visual selection.

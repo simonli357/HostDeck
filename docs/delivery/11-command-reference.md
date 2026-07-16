@@ -51,6 +51,8 @@ pnpm exec vitest run --config vitest.integration.config.ts tests/approval-vertic
 pnpm exec vitest run packages/server/src/codex-interrupt-control-service.test.ts packages/server/src/interrupt-routes.test.ts packages/cli/src/interrupt-client.test.ts packages/cli/src/interrupt-cli.test.ts
 pnpm exec vitest run --config vitest.contract.config.ts packages/contracts/src/interrupt.contract.test.ts
 pnpm exec vitest run --config vitest.integration.config.ts tests/interrupt-vertical.integration.test.ts
+pnpm exec vitest run packages/server/src/selected-write-admission-policy.test.ts packages/server/src/selected-write-gate.test.ts
+pnpm exec vitest run --config vitest.integration.config.ts tests/selected-write-admission.integration.test.ts
 pnpm smoke:remote-control
 pnpm smoke:codex-compatibility
 pnpm smoke:codex-ipc

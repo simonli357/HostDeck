@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: hardening criteria frozen before implementation.
+Status: complete.
 
 ## Scope
 
@@ -28,7 +28,7 @@ Implement one explicit process-level admission and idempotency policy shared by 
 ## Identity And Replay Contract
 
 - The operation key is the strict client operation id. Intent equality is a SHA-256 digest over a canonical, accessor-free, cycle-free representation of the authenticated audit actor, selected route id, action, accepted summary, and complete parsed target-or-selector plus value.
-- Canonical encoding sorts object keys, distinguishes JSON primitive/array/object forms, rejects non-finite numbers, unsupported prototypes, accessors, symbols, cycles, excessive depth/fields/items/bytes, and retains only the digest. Raw prompts, objectives, paths, model values, request bodies, actor fields, and target ids are not stored in admission state or diagnostics.
+- Canonical encoding sorts object keys, distinguishes JSON primitive/array/object forms, rejects non-finite numbers, unsupported prototypes, accessors, symbols, cycles, excessive depth/fields/items/bytes, and retains only the digest of raw intent. Admission state retains the bounded immutable public gate result required for exact replay until TTL; request-only private fields that are absent from that public result are not retained. Snapshots and diagnostics expose no prompt, objective, path, model value, request body, actor field, target id, digest, replay result, or error.
 - The same operation id, same authenticated actor, and same canonical intent joins the existing operation. It consumes the actor's request-rate budget but no second in-flight slot, target bind, accepted audit, response preparation, or dispatch.
 - An in-flight replay waits for the owner's retained result under only the replay request's existing AbortSignal. Replay abort removes its listener and never cancels or relabels the owner.
 - A retained terminal replay returns the exact immutable succeeded, failed, or incomplete gate result, or rethrows the same bounded post-admission error, without touching lock, target, audit, or dispatch.
@@ -67,7 +67,7 @@ Implement one explicit process-level admission and idempotency policy shared by 
 | Area | Required evidence |
 | --- | --- |
 | Construction | Exact branded policy, strict resource-budget/clock input, no defaults, copies, accessors, invalid clocks, or policy identity substitution. |
-| Canonical intent | Deterministic key-order-independent digest, actor/route/action/target-or-selector/value coverage, hostile object rejection, no raw data retained or exposed. |
+| Canonical intent | Deterministic key-order-independent digest, actor/route/action/target-or-selector/value coverage, hostile object rejection, no raw intent or key exposed, and bounded public replay results isolated from diagnostics. |
 | Idempotency | Same completed/in-flight intent replays one result; conflicting actor/route/payload rejects; post-TTL/restart durable conflict never redispatches. |
 | Rate/capacity | Exact fixed-window boundary, actor isolation, local-admin bucket, tracked-key pruning/cap, and stable pre-side-effect 429/503 outcomes. |
 | Concurrency | Deterministic per-actor/per-target/global winners across independent gate/route families; same-operation join uses no second slot; exact release and peak accounting. |
@@ -82,6 +82,16 @@ Implement one explicit process-level admission and idempotency policy shared by 
 - Route input tests reject missing/copied admission policies. Existing selected route suites and verticals must consume explicit policies without private defaults.
 - A real SQLite cross-route integration uses at least two selected mutation families and two exact targets. It proves same-operation one-dispatch replay, conflicting reuse, per-target/global contention, terminal/accepted trail consistency, response-loss retry, and raw storage/snapshot privacy.
 - Run focused policy/gate/route tests, full unit/contract/integration/web suites, root and all-package typechecks, lint/exports, scaffold, planning, frozen offline install, exact reviewed Codex binding, production dependency/license checks, and diff/manual privacy/order inspection. No physical phone or model call is required for this headless leaf.
+
+## Implementation And Evidence
+
+- `HostDeckSelectedWriteAdmissionPolicy` now owns strict canonical intent hashing, fixed-window actor rate limits, operation replay/conflict state, per-actor/per-target/global admission, TTL/capacity pruning, count-only snapshots, and fail-loud contract checks. The selected write gate requires the branded policy and applies it before lock, target, audit, and dispatch work.
+- All ten selected mutation route families require an explicit shared policy. Direct route suites reject omitted or copied policy identities; no route creates a private fallback.
+- The real Fastify/SQLite integration composes prompt and archive routes with one policy and proves cross-route replay/conflict, response loss, one audit/dispatch, target contention and isolation, pre-audit retry, TTL eviction followed by durable conflict, and storage/snapshot privacy.
+- Focused evidence: 49 policy/gate/start tests, 14 direct policy tests, 104 selected route tests, one cross-route integration, and 10 affected vertical integrations passed.
+- Workspace evidence: unit 1,610 passed with 36 skipped; contract 276, integration 26, and web 33 passed. Root and all-package typechecks, lint/exports, scaffold, planning, frozen offline install, production license inventory, `git diff --check`, and manual order/privacy/default review passed.
+- The exact binding check remains externally blocked because the installed Codex is 0.144.3 while the reviewed binding is exact 0.144.0; the repository already records the isolated cached 0.144.0 reproduction path. Production audit remains unavailable because npm's retired audit endpoint returns HTTP 410. Neither gap was introduced by this leaf, and no dependency or lockfile changed.
+- Criteria commit: `5477a50`. Implementation commit: `fc5f182`.
 
 ## Downstream Ownership
 
