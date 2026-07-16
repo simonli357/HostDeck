@@ -1325,15 +1325,7 @@ function classifyTransportCause(cause: unknown): string {
     "code" in cause && typeof cause.code === "string"
       ? cause.code
       : "";
-  if (
-    [
-      "ECONNABORTED",
-      "ECONNRESET",
-      "ENOTCONN",
-      "EPIPE",
-      "ETIMEDOUT"
-    ].includes(code)
-  ) {
+  if (/^[A-Z][A-Z0-9_]{0,63}$/u.test(code)) {
     return code;
   }
   return code === "" ? "no_code" : "other";
