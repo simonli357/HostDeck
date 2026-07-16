@@ -1,4 +1,5 @@
 export * from "./api-client.js";
+export * from "./approval-client.js";
 export * from "./archive-client.js";
 export * from "./compact-client.js";
 export * from "./config.js";

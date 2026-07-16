@@ -17,7 +17,14 @@ import {
   createCodexUnixWebSocketTransport,
   parseCodexCliVersionOutput
 } from "@hostdeck/codex-adapter";
-import type { ManagedSessionTarget, ModelCatalogEntry, PendingApproval } from "@hostdeck/contracts";
+import {
+  type ManagedSessionTarget,
+  type ModelCatalogEntry,
+  type PendingApproval,
+  type SelectedSessionProjectionRecord,
+  selectedSessionMappingRecordSchema,
+  selectedSessionProjectionRecordSchema
+} from "@hostdeck/contracts";
 import type { CodexThreadId } from "@hostdeck/core";
 import type { SelectedSessionState } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
@@ -120,7 +127,7 @@ describe.skipIf(!requireSmoke)("installed Codex approval-control smoke", () => {
         const threads = createCodexThreadClient(connection);
         threadId = await createManagedThread(threads, project);
         const target = managedTarget("sess_approval_smoke", threadId);
-        const states = new Map<string, SelectedSessionState>([[target.session_id, selectedState(target)]]);
+        const states = new Map<string, SelectedSessionState>([[target.session_id, selectedState(target, project)]]);
         const backgroundErrors: Error[] = [];
         service = createCodexApprovalControlService({
           approvals: createCodexApprovalClient(connection),
@@ -462,18 +469,49 @@ function selectBoundedSmokeModel(models: readonly ModelCatalogEntry[]): SmokeMod
   return { runtime_model: model.runtime_model, reasoning_effort: effort.id };
 }
 
-function selectedState(targetInput: ManagedSessionTarget): SelectedSessionState {
-  return {
-    mapping: {
-      id: targetInput.session_id,
-      name: "approval-smoke",
-      codex_thread_id: targetInput.codex_thread_id,
-      archived_at: null
+function selectedState(targetInput: ManagedSessionTarget, cwd: string): SelectedSessionState {
+  const observedAt = new Date().toISOString();
+  const mapping = selectedSessionMappingRecordSchema.parse({
+    id: targetInput.session_id,
+    name: "approval-smoke",
+    codex_thread_id: targetInput.codex_thread_id,
+    cwd,
+    runtime_source: "codex_app_server",
+    runtime_version: codexBindingDescriptor.codex_version,
+    disposition: "selected",
+    created_at: observedAt,
+    updated_at: observedAt,
+    archived_at: null
+  });
+  const projection: SelectedSessionProjectionRecord = selectedSessionProjectionRecordSchema.parse({
+    session: {
+      id: mapping.id,
+      name: mapping.name,
+      codex_thread_id: mapping.codex_thread_id,
+      cwd: mapping.cwd,
+      runtime_source: mapping.runtime_source,
+      runtime_version: mapping.runtime_version,
+      created_at: mapping.created_at,
+      archived_at: null,
+      session_state: "active",
+      turn_state: "waiting_for_approval",
+      attention: "needs_approval",
+      freshness: "current",
+      freshness_reason: null,
+      updated_at: observedAt,
+      last_activity_at: observedAt,
+      branch: "main",
+      model: null,
+      goal: null,
+      recent_summary: "Managed approval smoke session.",
+      last_event_cursor: null
     },
-    projection: {
-      session: { session_state: "active", freshness: "current", turn_state: "idle" }
-    }
-  } as unknown as SelectedSessionState;
+    retained_event_count: 0,
+    retained_event_bytes: 0,
+    earliest_retained_cursor: null,
+    retention_boundary_cursor: null
+  });
+  return { mapping, projection };
 }
 
 function managedTarget(sessionId: string, threadId: string): ManagedSessionTarget {

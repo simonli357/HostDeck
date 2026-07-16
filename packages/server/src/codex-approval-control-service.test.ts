@@ -4,7 +4,12 @@ import {
   HostDeckCodexAdapterError,
   type NormalizedCodexEvent
 } from "@hostdeck/codex-adapter";
-import { isoTimestampSchema, runtimeRequestIdSchema } from "@hostdeck/contracts";
+import {
+  isoTimestampSchema,
+  runtimeRequestIdSchema,
+  selectedSessionMappingRecordSchema,
+  selectedSessionProjectionRecordSchema
+} from "@hostdeck/contracts";
 import type { SelectedSessionState } from "@hostdeck/storage";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -380,6 +385,154 @@ describe("Codex approval control", () => {
     expect(await harness.service.snapshot(registered.target)).toMatchObject({ state: "superseded", decision: null });
   });
 
+  it("waits event-driven for both terminal facts and returns the exact final decision", async () => {
+    const harness = createHarness();
+    const registered = harness.service.register(approvalRequest("terminal-wait"));
+    await harness.service.respond(responseIntent(registered, "approve", "op_approval_terminal_wait_0001"));
+    const controller = new AbortController();
+    let settled = false;
+    const terminal = harness.service.waitForTerminal(registered.target, controller.signal).finally(() => {
+      settled = true;
+    });
+
+    await harness.service.observeEvent(resolvedEvent(registered));
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    await harness.service.observeEvent(itemCompletedEvent(registered, "command"));
+    await expect(terminal).resolves.toMatchObject({ state: "approved", decision: "approve" });
+    expect(harness.approvals.respondCalls).toHaveLength(1);
+  });
+
+  it("cleans an aborted terminal waiter without permitting another response", async () => {
+    const harness = createHarness();
+    const registered = harness.service.register(approvalRequest("terminal-abort"));
+    await harness.service.respond(responseIntent(registered, "deny", "op_approval_terminal_abort_0001"));
+    const controller = new AbortController();
+    const terminal = harness.service.waitForTerminal(registered.target, controller.signal);
+    controller.abort();
+
+    const error = await expectApprovalError(terminal, "unknown_outcome");
+    expect(error).toMatchObject({ api_code: "operation_timeout", outcome: "unknown", retry_safe: false });
+    await expectApprovalError(
+      harness.service.respond(responseIntent(registered, "approve", "op_approval_terminal_abort_retry_0001")),
+      "approval_not_pending"
+    );
+    await harness.service.observeEvent(itemCompletedEvent(registered, "command"));
+    await harness.service.observeEvent(resolvedEvent(registered));
+    await expect(harness.service.waitForTerminal(registered.target, new AbortController().signal)).resolves.toMatchObject({
+      state: "denied",
+      decision: "deny"
+    });
+    expect(harness.approvals.respondCalls).toHaveLength(1);
+  });
+
+  it("settles terminal waiters on disconnect and service close without inventing decisions", async () => {
+    const disconnected = createHarness();
+    const first = disconnected.service.register(approvalRequest("wait-disconnect"));
+    await disconnected.service.respond(responseIntent(first, "approve", "op_approval_wait_disconnect_0001"));
+    const firstWait = disconnected.service.waitForTerminal(first.target, new AbortController().signal);
+    await disconnected.service.disconnect(1);
+    await expect(firstWait).resolves.toMatchObject({ state: "superseded", decision: null });
+
+    const closed = createHarness();
+    const second = closed.service.register(approvalRequest("wait-close"));
+    await closed.service.respond(responseIntent(second, "approve", "op_approval_wait_close_0001"));
+    const secondWait = closed.service.waitForTerminal(second.target, new AbortController().signal);
+    closed.service.close();
+    await expect(secondWait).resolves.toMatchObject({ state: "superseded", decision: null });
+  });
+
+  it("rejects malformed, contradictory, recovery, stale-runtime, and unavailable selected state", async () => {
+    const malformed = createHarness();
+    malformed.states.set(target.session_id, { ...selectedState(), extra: true } as unknown as SelectedSessionState);
+    expect(() => malformed.service.register(approvalRequest("malformed-state"))).toThrow(
+      "identity requires reconciliation"
+    );
+
+    const contradictory = createHarness();
+    const base = selectedState();
+    contradictory.states.set(target.session_id, {
+      mapping: base.mapping,
+      projection: selectedSessionProjectionRecordSchema.parse({
+        ...base.projection,
+        session: { ...base.projection.session, name: "different-session" }
+      })
+    });
+    expect(() => contradictory.service.register(approvalRequest("contradictory-state"))).toThrow(
+      "identity requires reconciliation"
+    );
+
+    const recovery = createHarness();
+    recovery.states.set(target.session_id, {
+      ...base,
+      mapping: selectedSessionMappingRecordSchema.parse({ ...base.mapping, disposition: "recovery_required" })
+    });
+    expect(() => recovery.service.register(approvalRequest("recovery-state"))).toThrow("requires recovery");
+
+    const staleRuntime = createHarness();
+    staleRuntime.states.set(target.session_id, selectedStateWithRuntime("0.145.0"));
+    expect(() => staleRuntime.service.register(approvalRequest("runtime-state"))).toThrow("another Codex runtime version");
+
+    const unavailable = createHarness();
+    unavailable.stateErrors.getByThreadId = new Error("secret storage detail");
+    const unavailableError = expectSyncApprovalError(() =>
+      unavailable.service.register(approvalRequest("state-unavailable"))
+    );
+    expect(unavailableError).toMatchObject({
+      code: "state_unavailable",
+      api_code: "storage_error"
+    });
+
+    const unavailableAfterRegistration = createHarness();
+    const pending = unavailableAfterRegistration.service.register(approvalRequest("state-unavailable-late"));
+    unavailableAfterRegistration.stateErrors.get = new Error("secret storage detail");
+    await expectApprovalError(
+      unavailableAfterRegistration.service.respond(
+        responseIntent(pending, "approve", "op_approval_state_unavailable_0001")
+      ),
+      "state_unavailable"
+    );
+    expect(unavailableAfterRegistration.approvals.respondCalls).toHaveLength(0);
+  });
+
+  it("rejects top-level option and selected-state accessors without invoking them", async () => {
+    let optionAccessed = false;
+    const options = {
+      states: { get: () => null, getByThreadId: () => null },
+      on_background_error: () => undefined
+    } as Record<string, unknown>;
+    Object.defineProperty(options, "approvals", {
+      enumerable: true,
+      get() {
+        optionAccessed = true;
+        throw new Error("must not run");
+      }
+    });
+    expect(() => createCodexApprovalControlService(options as never)).toThrow("option fields are invalid");
+    expect(optionAccessed).toBe(false);
+
+    const harness = createHarness();
+    const registered = harness.service.register(approvalRequest("accessor-state"));
+    let stateAccessed = false;
+    const accessorState = {};
+    for (const key of ["mapping", "projection"] as const) {
+      Object.defineProperty(accessorState, key, {
+        enumerable: true,
+        get() {
+          stateAccessed = true;
+          throw new Error("must not run");
+        }
+      });
+    }
+    harness.states.set(target.session_id, accessorState as SelectedSessionState);
+    await expectApprovalError(
+      harness.service.respond(responseIntent(registered, "approve", "op_approval_accessor_state_0001")),
+      "target_mismatch"
+    );
+    expect(stateAccessed).toBe(false);
+    expect(harness.approvals.respondCalls).toHaveLength(0);
+  });
+
   it("rejects malformed confirmation, wrong target identity, and duplicate registration before send", async () => {
     const harness = createHarness();
     const registered = harness.service.register(approvalRequest(20));
@@ -402,6 +555,7 @@ describe("Codex approval control", () => {
 
 interface FakeApprovalClient extends CodexApprovalClient {
   generation: number;
+  runtime_version: string;
   readonly respondCalls: Array<{ readonly request: CodexApprovalRequest; readonly decision: "approve" | "deny" }>;
   respondError: Error | null;
   respondGate: Promise<void> | null;
@@ -413,6 +567,7 @@ interface Harness {
   readonly states: Map<string, SelectedSessionState>;
   readonly now: { value: string };
   readonly backgroundErrors: Error[];
+  readonly stateErrors: { get: Error | null; getByThreadId: Error | null };
 }
 
 function createHarness(options: { readonly max_tracked_approvals?: number } = {}): Harness {
@@ -434,11 +589,18 @@ function createHarness(options: { readonly max_tracked_approvals?: number } = {}
   const states = new Map<string, SelectedSessionState>([[target.session_id, selectedState()]]);
   const now = { value: observedAt };
   const backgroundErrors: Error[] = [];
+  const stateErrors = { get: null as Error | null, getByThreadId: null as Error | null };
   const service = createCodexApprovalControlService({
     approvals,
     states: {
-      get: (sessionId) => states.get(sessionId) ?? null,
-      getByThreadId: (threadId) => [...states.values()].find((state) => state.mapping.codex_thread_id === threadId) ?? null
+      get: (sessionId) => {
+        if (stateErrors.get !== null) throw stateErrors.get;
+        return states.get(sessionId) ?? null;
+      },
+      getByThreadId: (threadId) => {
+        if (stateErrors.getByThreadId !== null) throw stateErrors.getByThreadId;
+        return [...states.values()].find((state) => state.mapping.codex_thread_id === threadId) ?? null;
+      }
     },
     expiry_ms: 1_000,
     ...(options.max_tracked_approvals === undefined ? {} : { max_tracked_approvals: options.max_tracked_approvals }),
@@ -446,7 +608,7 @@ function createHarness(options: { readonly max_tracked_approvals?: number } = {}
     on_background_error: (error) => backgroundErrors.push(error)
   });
   services.push(service);
-  return { service, approvals, states, now, backgroundErrors };
+  return { service, approvals, states, now, backgroundErrors, stateErrors };
 }
 
 function approvalRequest(
@@ -549,22 +711,60 @@ function turnCompletedEvent(approval: { readonly target: PendingTarget }): Norma
 }
 
 function selectedState(freshness = "current", archived = false): SelectedSessionState {
+  const archivedAt = archived ? observedAt : null;
   return {
-    mapping: {
+    mapping: selectedSessionMappingRecordSchema.parse({
       id: target.session_id,
       name: "approval-session",
       codex_thread_id: target.codex_thread_id,
       cwd: "/tmp/approval-project",
-      archived_at: archived ? observedAt : null
-    },
-    projection: {
+      runtime_source: "codex_app_server",
+      runtime_version: "0.144.0",
+      disposition: "selected",
+      created_at: observedAt,
+      updated_at: observedAt,
+      archived_at: archivedAt
+    }),
+    projection: selectedSessionProjectionRecordSchema.parse({
       session: {
+        id: target.session_id,
+        name: "approval-session",
+        codex_thread_id: target.codex_thread_id,
+        cwd: "/tmp/approval-project",
+        runtime_source: "codex_app_server",
+        runtime_version: "0.144.0",
+        created_at: observedAt,
+        archived_at: archivedAt,
         session_state: archived ? "archived" : "active",
+        turn_state: archived ? "idle" : "waiting_for_approval",
+        attention: archived ? "none" : "needs_approval",
         freshness,
-        turn_state: "waiting_for_approval"
-      }
-    }
-  } as unknown as SelectedSessionState;
+        freshness_reason: freshness === "current" ? null : "Runtime reconnect is required.",
+        updated_at: observedAt,
+        last_activity_at: observedAt,
+        branch: null,
+        model: null,
+        goal: null,
+        recent_summary: "Codex is waiting for approval.",
+        last_event_cursor: null
+      },
+      retained_event_count: 0,
+      retained_event_bytes: 0,
+      earliest_retained_cursor: null,
+      retention_boundary_cursor: null
+    })
+  };
+}
+
+function selectedStateWithRuntime(runtimeVersion: string): SelectedSessionState {
+  const state = selectedState();
+  return {
+    mapping: selectedSessionMappingRecordSchema.parse({ ...state.mapping, runtime_version: runtimeVersion }),
+    projection: selectedSessionProjectionRecordSchema.parse({
+      ...state.projection,
+      session: { ...state.projection.session, runtime_version: runtimeVersion }
+    })
+  };
 }
 
 async function expectApprovalError(
@@ -579,6 +779,16 @@ async function expectApprovalError(
     return error as HostDeckCodexApprovalControlError;
   }
   throw new Error(`Expected approval error ${code}.`);
+}
+
+function expectSyncApprovalError(operation: () => unknown): HostDeckCodexApprovalControlError {
+  try {
+    operation();
+  } catch (error) {
+    expect(error).toBeInstanceOf(HostDeckCodexApprovalControlError);
+    return error as HostDeckCodexApprovalControlError;
+  }
+  throw new Error("Expected a synchronous approval-control error.");
 }
 
 async function snapshotWithoutSweep(harness: Harness, approval: { readonly target: PendingTarget }) {

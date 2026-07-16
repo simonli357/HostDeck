@@ -512,7 +512,7 @@ function successSummary(action: HostDeckSelectedWriteAuditAction) {
     goal: { schema_version: 1, changed: true },
     plan: { schema_version: 1, changed: true },
     compact: { schema_version: 1, accepted: true },
-    approval_response: { schema_version: 1, applied: true },
+    approval_response: { schema_version: 1, decision_finalized: true },
     interrupt: { schema_version: 1, interrupted: true },
     archive: { schema_version: 1, archived: true }
   } as const;

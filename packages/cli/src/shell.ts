@@ -7,6 +7,8 @@ import type {
   GoalMutationRequest,
   ModelControlSnapshot,
   ModelSelectionRequest,
+  PendingApprovalListResponse,
+  PendingApprovalResponse,
   PlanControlSnapshot,
   PlanSelectionRequest,
   PromptDispatchResponse,
@@ -18,6 +20,7 @@ import type {
   UsageSnapshot
 } from "@hostdeck/contracts";
 import {
+  approvalResponseRequestSchema,
   archiveSessionRequestSchema,
   clientOperationIdSchema,
   compactProgressResponseSchema,
@@ -26,6 +29,8 @@ import {
   goalMutationRequestSchema,
   modelControlSnapshotSchema,
   modelSelectionRequestSchema,
+  pendingApprovalListResponseSchema,
+  pendingApprovalResponseSchema,
   planControlSnapshotSchema,
   planSelectionRequestSchema,
   promptDispatchResponseSchema,
@@ -41,12 +46,18 @@ import {
   selectedResumeParamsSchema,
   selectedSessionStartResponseSchema,
   selectedStartSessionRequestSchema,
+  sessionApprovalParamsSchema,
   sessionIdParamsSchema,
   skillsSnapshotSchema,
   usageSnapshotSchema
 } from "@hostdeck/contracts";
 import { type HostHttpService, type StartHostHttpServiceInput, startHostHttpService } from "@hostdeck/server";
 import { createHostDeckApiClient, type HostDeckApiClient, type HttpFetch } from "./api-client.js";
+import {
+  createHostDeckApprovalClient,
+  type HostDeckApprovalClient,
+  type HostDeckApprovalClientResponseRequest
+} from "./approval-client.js";
 import {
   createHostDeckArchiveClient,
   type HostDeckArchiveClient,
@@ -98,6 +109,8 @@ import {
   type HostDeckRemoteControlClient
 } from "./remote-control-client.js";
 import {
+  renderApprovalList,
+  renderApprovalResponse,
   renderArchiveSession,
   renderAttachCommand,
   renderCompactProgress,
@@ -157,6 +170,7 @@ export interface CliRunOptions {
   readonly localAdmin?: LocalAdmin;
   readonly goalClient?: HostDeckGoalClient;
   readonly compactClient?: HostDeckCompactClient;
+  readonly approvalClient?: HostDeckApprovalClient;
   readonly modelClient?: HostDeckModelClient;
   readonly planClient?: HostDeckPlanClient;
   readonly archiveClient?: HostDeckArchiveClient;
@@ -174,6 +188,7 @@ export interface CliRunOptions {
   readonly createPairOperationId?: () => string;
   readonly createArchiveOperationId?: () => string;
   readonly createCompactOperationId?: () => string;
+  readonly createApprovalOperationId?: () => string;
   readonly createGoalOperationId?: () => string;
   readonly createModelOperationId?: () => string;
   readonly createPlanOperationId?: () => string;
@@ -424,6 +439,32 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
       return success(renderSkillsSnapshot(snapshot, parsed.command.json));
     }
 
+    if (parsed.command.kind === "approvals") {
+      const target = parseApprovalTarget(parsed.command.session);
+      let approvalClient = options.approvalClient;
+      if (approvalClient === undefined) {
+        const approvalClientOptions = { baseUrl: config.baseUrl };
+        if (options.fetch !== undefined) Object.assign(approvalClientOptions, { fetch: options.fetch });
+        approvalClient = createHostDeckApprovalClient(approvalClientOptions);
+      }
+      if (parsed.command.request === null) {
+        const response = parseApprovalList(
+          await Reflect.apply(approvalClient.list, undefined, [target]),
+          target
+        );
+        return success(renderApprovalList(response, parsed.command.json));
+      }
+      const request = createApprovalResponseRequest(
+        parsed.command,
+        options.createApprovalOperationId ?? createApprovalOperationId
+      );
+      const response = parseApprovalResponse(
+        await Reflect.apply(approvalClient.respond, undefined, [request]),
+        request
+      );
+      return success(renderApprovalResponse(response, parsed.command.json));
+    }
+
     if (parsed.command.kind === "start") {
       let startClient = options.startClient;
       if (startClient === undefined) {
@@ -657,6 +698,10 @@ function createPlanOperationId(): string {
 
 function createCompactOperationId(): string {
   return `op_compact_${randomUUID().replaceAll("-", "")}`;
+}
+
+function createApprovalOperationId(): string {
+  return `op_approval_${randomUUID().replaceAll("-", "")}`;
 }
 
 function createSessionStartRequest(
@@ -1155,6 +1200,75 @@ function parseCompactResponse(
       }
     }
   });
+}
+
+function parseApprovalTarget(candidate: string): string {
+  const parsed = sessionIdParamsSchema.safeParse({ session_id: candidate });
+  if (!parsed.success) throw usageFailure("Approvals requires one valid managed session id.", "session");
+  return parsed.data.session_id;
+}
+
+function createApprovalResponseRequest(
+  command: Extract<ReturnType<typeof parseCliArgs>["command"], { readonly kind: "approvals" }>,
+  createOperationId: () => string
+): HostDeckApprovalClientResponseRequest {
+  if (command.request === null || command.decision === null || !command.confirm) {
+    throw internalFailure("Approval response command lost its request, decision, or confirmation.");
+  }
+  let operationId: unknown;
+  try {
+    operationId = Reflect.apply(createOperationId, undefined, []);
+  } catch (error) {
+    throw internalFailure("Approval operation id generation failed.", error);
+  }
+  const params = sessionApprovalParamsSchema.safeParse({
+    session_id: command.session,
+    request_id: command.request
+  });
+  const body = approvalResponseRequestSchema.safeParse({
+    operation_id: operationId,
+    kind: "approval_response",
+    decision: command.decision,
+    confirm: true
+  });
+  if (!params.success) throw usageFailure("Approval response target is invalid.", "approvals");
+  if (!body.success) throw internalFailure("Approval operation id generation failed.");
+  return Object.freeze({ ...params.data, ...body.data });
+}
+
+function parseApprovalList(candidate: unknown, sessionId: string): PendingApprovalListResponse {
+  let parsed: ReturnType<typeof pendingApprovalListResponseSchema.safeParse>;
+  try {
+    parsed = pendingApprovalListResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("HostDeck approval client returned invalid managed-session data.");
+  }
+  if (!parsed.success || parsed.data.target.session_id !== sessionId) {
+    throw internalFailure("HostDeck approval client returned invalid managed-session data.");
+  }
+  return parsed.data;
+}
+
+function parseApprovalResponse(
+  candidate: unknown,
+  request: HostDeckApprovalClientResponseRequest
+): PendingApprovalResponse {
+  let parsed: ReturnType<typeof pendingApprovalResponseSchema.safeParse>;
+  try {
+    parsed = pendingApprovalResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("HostDeck approval client returned invalid response data.");
+  }
+  if (
+    !parsed.success ||
+    parsed.data.operation_id !== request.operation_id ||
+    parsed.data.requested_decision !== request.decision ||
+    parsed.data.approval.target.session_id !== request.session_id ||
+    parsed.data.approval.target.request_id !== request.request_id
+  ) {
+    throw internalFailure("HostDeck approval client returned contradictory response data.");
+  }
+  return parsed.data;
 }
 
 function parseUsageSnapshot(

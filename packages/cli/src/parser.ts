@@ -37,6 +37,14 @@ export type ParsedCliCommand =
   | { readonly kind: "usage"; readonly session: string; readonly json: boolean }
   | { readonly kind: "compact"; readonly session: string; readonly confirm: boolean; readonly json: boolean }
   | { readonly kind: "skills"; readonly session: string; readonly json: boolean }
+  | {
+      readonly kind: "approvals";
+      readonly session: string;
+      readonly request: string | null;
+      readonly decision: "approve" | "deny" | null;
+      readonly confirm: boolean;
+      readonly json: boolean;
+    }
   | { readonly kind: "stop"; readonly session: string }
   | {
       readonly kind: "pair";
@@ -173,7 +181,8 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
         positionals[0] === "model" ||
         positionals[0] === "goal" ||
         positionals[0] === "plan" ||
-        positionals[0] === "compact"
+        positionals[0] === "compact" ||
+        positionals[0] === "approvals"
       ) {
         throw usageFailure(`The ${positionals[0]} command does not accept an option terminator.`);
       }
@@ -352,6 +361,21 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
         kind: "skills",
         session: singleSessionArgument("skills", rest),
         json
+      },
+      configFlags
+    };
+  }
+
+  if (command === "approvals") {
+    const parsed = parseApprovalsOptions(rest, json);
+    return {
+      command: {
+        kind: "approvals",
+        session: parsed.session,
+        request: parsed.request,
+        decision: parsed.decision,
+        confirm: parsed.confirm,
+        json: parsed.json
       },
       configFlags
     };
@@ -735,6 +759,37 @@ function parseCompactOptions(
     throw usageFailure(`Unexpected compact argument: ${token}`);
   }
   return { session, confirm, json: globalJson };
+}
+
+function parseApprovalsOptions(
+  args: readonly string[],
+  globalJson: boolean
+): {
+  readonly session: string;
+  readonly request: string | null;
+  readonly decision: "approve" | "deny" | null;
+  readonly confirm: boolean;
+  readonly json: boolean;
+} {
+  const [session, request, decision, ...rest] = args;
+  if (session === undefined || session.startsWith("-")) {
+    throw usageFailure("The approvals command requires one managed session id.");
+  }
+  if (request === undefined && decision === undefined && rest.length === 0) {
+    return { session, request: null, decision: null, confirm: false, json: globalJson };
+  }
+  if (
+    request === undefined ||
+    request.startsWith("-") ||
+    (decision !== "approve" && decision !== "deny") ||
+    rest.length !== 1 ||
+    rest[0] !== "--confirm"
+  ) {
+    throw usageFailure(
+      "Approval response requires SESSION_ID REQUEST_ID approve|deny --confirm."
+    );
+  }
+  return { session, request, decision, confirm: true, json: globalJson };
 }
 
 function parsePairOptions(args: readonly string[], globalJson: boolean): {

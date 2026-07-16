@@ -56,6 +56,13 @@ export const approvalOperationTargetSchema = z
   })
   .strict();
 
+export const sessionApprovalParamsSchema = z
+  .object({
+    session_id: sessionIdSchema,
+    request_id: runtimeRequestIdSchema
+  })
+  .strict();
+
 export const turnOperationTargetSchema = z
   .object({
     type: z.literal("turn"),
@@ -227,6 +234,15 @@ export const approvalResponseOperationIntentSchema = z
   })
   .strict();
 
+export const approvalResponseRequestSchema = z
+  .object({
+    operation_id: clientOperationIdSchema,
+    kind: z.literal("approval_response"),
+    decision: z.enum(["approve", "deny"]),
+    confirm: z.literal(true)
+  })
+  .strict();
+
 export const interruptOperationIntentSchema = z
   .object({
     operation_id: clientOperationIdSchema,
@@ -291,6 +307,54 @@ export const pendingApprovalSchema = z
     }
     if (["expired", "superseded"].includes(value.state) && value.decision !== null) {
       context.addIssue({ code: "custom", message: "Expired or superseded requests must not invent a decision." });
+    }
+  });
+
+export const pendingApprovalListResponseSchema = z
+  .object({
+    target: managedSessionTargetSchema,
+    approvals: z.array(pendingApprovalSchema).max(64)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const requestIds = new Set<string>();
+    for (const [index, approval] of value.approvals.entries()) {
+      if (
+        approval.target.session_id !== value.target.session_id ||
+        approval.target.codex_thread_id !== value.target.codex_thread_id
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Approval list entries must target the selected managed session.",
+          path: ["approvals", index, "target"]
+        });
+      }
+      if (requestIds.has(approval.target.request_id)) {
+        context.addIssue({
+          code: "custom",
+          message: "Approval lists cannot repeat a runtime request id.",
+          path: ["approvals", index, "target", "request_id"]
+        });
+      }
+      requestIds.add(approval.target.request_id);
+    }
+  });
+
+export const pendingApprovalResponseSchema = z
+  .object({
+    operation_id: clientOperationIdSchema,
+    requested_decision: z.enum(["approve", "deny"]),
+    approval: pendingApprovalSchema
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const expectedState = value.requested_decision === "approve" ? "approved" : "denied";
+    if (value.approval.state !== expectedState || value.approval.decision !== value.requested_decision) {
+      context.addIssue({
+        code: "custom",
+        message: "Approval responses require an authoritative matching terminal decision.",
+        path: ["approval"]
+      });
     }
   });
 
@@ -1080,6 +1144,7 @@ export const selectedEventQuerySchema = z
 
 export type ManagedSessionTarget = z.infer<typeof managedSessionTargetSchema>;
 export type ApprovalOperationTarget = z.infer<typeof approvalOperationTargetSchema>;
+export type SessionApprovalParams = z.infer<typeof sessionApprovalParamsSchema>;
 export type TurnOperationTarget = z.infer<typeof turnOperationTargetSchema>;
 export type SelectedOperationTarget = z.infer<typeof selectedOperationTargetSchema>;
 export type SelectedOperationIntent = z.infer<typeof selectedOperationIntentSchema>;
@@ -1090,6 +1155,7 @@ export type GoalMutationRequest = z.infer<typeof goalMutationRequestSchema>;
 export type PlanSelectionRequest = z.infer<typeof planSelectionRequestSchema>;
 export type CompactStartRequest = z.infer<typeof compactStartRequestSchema>;
 export type CompactProgressResponse = z.infer<typeof compactProgressResponseSchema>;
+export type ApprovalResponseRequest = z.infer<typeof approvalResponseRequestSchema>;
 export type ArchiveSessionRequest = z.infer<typeof archiveSessionRequestSchema>;
 export type SelectedOperationDispatch = z.infer<typeof selectedOperationDispatchSchema>;
 export type SelectedOperationTerminalOutcome = z.infer<typeof selectedOperationTerminalOutcomeSchema>;
@@ -1120,6 +1186,8 @@ export type UsageSnapshot = z.infer<typeof usageSnapshotSchema>;
 export type SkillSummary = z.infer<typeof skillSummarySchema>;
 export type SkillsSnapshot = z.infer<typeof skillsSnapshotSchema>;
 export type PendingApproval = z.infer<typeof pendingApprovalSchema>;
+export type PendingApprovalListResponse = z.infer<typeof pendingApprovalListResponseSchema>;
+export type PendingApprovalResponse = z.infer<typeof pendingApprovalResponseSchema>;
 export type SelectedStartSessionRequest = z.infer<typeof selectedStartSessionRequestSchema>;
 export type SelectedSessionStartResponse = z.infer<typeof selectedSessionStartResponseSchema>;
 

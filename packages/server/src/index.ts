@@ -1,4 +1,5 @@
 export * from "./api-route-contracts.js";
+export * from "./approval-routes.js";
 export * from "./codex-approval-control-service.js";
 export * from "./codex-compact-control-service.js";
 export * from "./codex-control-event-observer.js";

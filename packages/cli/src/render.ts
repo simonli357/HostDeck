@@ -13,11 +13,15 @@ import {
   type ModelSelectionRequest,
   modelControlSnapshotSchema,
   modelSelectionRequestSchema,
+  type PendingApprovalListResponse,
+  type PendingApprovalResponse,
   type PlanControlSnapshot,
   type PlanMode,
   type PlanSelectionRequest,
   type PromptDispatchResponse,
   pairingClientLabelSchema,
+  pendingApprovalListResponseSchema,
+  pendingApprovalResponseSchema,
   planControlSnapshotSchema,
   planSelectionRequestSchema,
   promptDispatchResponseSchema,
@@ -70,6 +74,8 @@ export function renderHelp(): string {
     "  codexdeck compact SESSION_ID [--json]",
     "  codexdeck compact SESSION_ID --confirm [--json]",
     "  codexdeck skills SESSION_ID [--json]",
+    "  codexdeck approvals SESSION_ID [--json]",
+    "  codexdeck approvals SESSION_ID REQUEST_ID approve|deny --confirm [--json]",
     "  codexdeck pair [--label LABEL] [--read-only | --write]",
     "  codexdeck lock [--reason TEXT] [--json]",
     "  codexdeck unlock [--json]",
@@ -487,6 +493,70 @@ export function renderSkillsSnapshot(
     throw internalFailure("Skills rendering output exceeds its selected limit.");
   }
   return output;
+}
+
+export function renderApprovalList(candidate: PendingApprovalListResponse, json: boolean): string {
+  let parsed: ReturnType<typeof pendingApprovalListResponseSchema.safeParse>;
+  try {
+    parsed = pendingApprovalListResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Approval-list rendering input is invalid.");
+  }
+  if (!parsed.success) throw internalFailure("Approval-list rendering input is invalid.");
+  const output = json
+    ? `${JSON.stringify(parsed.data, null, 2)}\n`
+    : renderApprovalListText(parsed.data);
+  requireBoundedRender(output, "Approval-list");
+  return output;
+}
+
+export function renderApprovalResponse(candidate: PendingApprovalResponse, json: boolean): string {
+  let parsed: ReturnType<typeof pendingApprovalResponseSchema.safeParse>;
+  try {
+    parsed = pendingApprovalResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Approval-response rendering input is invalid.");
+  }
+  if (!parsed.success) throw internalFailure("Approval-response rendering input is invalid.");
+  const output = json
+    ? `${JSON.stringify(parsed.data, null, 2)}\n`
+    : `Approval ${parsed.data.requested_decision} finalized for ${escapeTerminalText(parsed.data.approval.target.session_id)} (request ${escapeTerminalText(parsed.data.approval.target.request_id)}).\n`;
+  requireBoundedRender(output, "Approval-response");
+  return output;
+}
+
+function renderApprovalListText(response: PendingApprovalListResponse): string {
+  const lines = [
+    `Approvals: ${escapeTerminalText(response.target.session_id)}`,
+    `Thread: ${escapeTerminalText(response.target.codex_thread_id)}`,
+    `Count: ${response.approvals.length}`
+  ];
+  if (response.approvals.length === 0) {
+    lines.push("", "No approval requests.", "");
+    return lines.join("\n");
+  }
+  for (const approval of response.approvals) {
+    lines.push(
+      "",
+      `[${approval.state}] ${escapeTerminalText(approval.target.request_id)}`,
+      `Action: ${escapeTerminalText(approval.action)}`,
+      `Scope: ${escapeTerminalText(approval.scope)}`,
+      `Reason: ${approval.reason === null || approval.reason.length === 0 ? "not provided" : escapeTerminalText(approval.reason)}`,
+      `Risk: ${approval.risk}`,
+      `Grant: ${approval.grant_scope}`,
+      `Created: ${approval.created_at}`,
+      `Expires: ${approval.expires_at ?? "none"}`,
+      `Decision: ${approval.decision ?? "none"}`
+    );
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+function requireBoundedRender(output: string, label: string): void {
+  if (output.includes("\0") || Buffer.byteLength(output, "utf8") > defaultResourceBudget.cli_response_max_bytes) {
+    throw internalFailure(`${label} rendering output exceeds its selected limit.`);
+  }
 }
 
 function renderSkillsText(snapshot: SkillsSnapshot): string {

@@ -169,7 +169,7 @@ const selectedWriteSummaryContracts: Partial<
   ),
   plan: summaryContract(["plan_action", "expected_revision_present"], ["changed"]),
   compact: summaryContract(["confirmed"], ["accepted"]),
-  approval_response: summaryContract(["decision", "confirmed"], ["applied"]),
+  approval_response: summaryContract(["decision", "confirmed"], ["decision_finalized"]),
   interrupt: summaryContract(["confirmed"], ["interrupted"]),
   archive: summaryContract(["confirmed"], ["archived"])
 });
@@ -717,7 +717,7 @@ function validSummaryField(
     case "expected_revision_present":
       return typeof value === "boolean";
     case "accepted":
-    case "applied":
+    case "decision_finalized":
     case "archived":
     case "confirmed":
     case "created":
