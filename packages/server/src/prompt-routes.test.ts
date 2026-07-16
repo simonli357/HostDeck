@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { request as httpRequest } from "node:http";
 import { request as httpsRequest, type RequestOptions } from "node:https";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -508,6 +509,72 @@ describe("selected managed-session prompt route", () => {
         harness.auditRepository.require(promptRequest.operation_id).records
       ).toHaveLength(2);
     } finally {
+      await harness.close();
+    }
+  });
+
+  it("keeps accepted prompt and terminal audit authoritative after HTTP response loss", async () => {
+    let releaseDispatch: (() => void) | undefined;
+    const barrier = new Promise<void>((resolve) => {
+      releaseDispatch = resolve;
+    });
+    const operationId = "op_prompt_route_response_loss";
+    const harness = await createHarness({ dispatchBarrier: barrier });
+    try {
+      await harness.app.listen({
+        host: "127.0.0.1",
+        port: 0,
+        listenTextResolver: () => ""
+      });
+      const address = harness.app.server.address();
+      if (address === null || typeof address === "string") {
+        throw new Error("Prompt response-loss listener is unavailable.");
+      }
+      const body = JSON.stringify({
+        ...promptRequest,
+        operation_id: operationId
+      });
+      const outgoing = httpRequest({
+        hostname: "127.0.0.1",
+        port: address.port,
+        method: "POST",
+        path: `/api/v1/sessions/${sessionId}/prompts`,
+        headers: {
+          host: "localhost",
+          accept: "application/json",
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(body),
+          connection: "close"
+        }
+      });
+      const closed = new Promise<void>((resolve) => {
+        outgoing.once("error", () => resolve());
+        outgoing.once("close", () => resolve());
+      });
+      outgoing.end(body);
+      await waitFor(() => harness.dispatchCalls().length === 1);
+      outgoing.destroy();
+      releaseDispatch?.();
+      await closed;
+      await waitFor(
+        () => harness.auditRepository.get(operationId)?.state === "terminal"
+      );
+
+      expect(harness.auditRepository.require(operationId)).toMatchObject({
+        state: "terminal",
+        records: [
+          { phase: "accepted", outcome: "accepted" },
+          { phase: "terminal", outcome: "succeeded" }
+        ]
+      });
+      const retry = await sendPrompt(harness, {
+        ...promptRequest,
+        operation_id: operationId
+      });
+      expectStableError(retry, 409, "operation_conflict");
+      expect(harness.dispatchCalls()).toHaveLength(1);
+    } finally {
+      releaseDispatch?.();
       await harness.close();
     }
   });
