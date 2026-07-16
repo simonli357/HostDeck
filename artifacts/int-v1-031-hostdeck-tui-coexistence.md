@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: complete, with repeatability correction `BUG-011` in validation. Criteria were frozen in `37d6861`; the exact harness began in `55ca459`, was hardened through `692ca9d`, and emitted `artifacts/int-v1-031-hostdeck-tui-coexistence-evidence.json` from the clean production-default commit.
+Status: complete, including repeatability correction `BUG-011`. Criteria were frozen in `37d6861`; the exact harness began in `55ca459`, was hardened through `692ca9d`, and the corrective proof is included in current aggregate evidence from `7584321`.
 
 ## Scope
 
@@ -91,7 +91,7 @@ Prove that exact Codex 0.144.0 supports the selected V1 multi-client contract on
 - Root and all-package typechecks, lint/package exports, scaffold, frozen offline install, diff checks, and the isolated exact Codex 0.144.0 671-file binding check passed. The default installed 0.144.3 binary correctly remains ineligible for reviewed-binding evidence.
 - The production-default exact coexistence smoke passed against clean commit `692ca9d16d13790cbddb88f24f128af9ad820569` in 54.99 seconds. It proves one model turn, two HostDeck connections, two distinct sequential TUI processes, both teardown directions, contiguous durable publication, unmanaged-thread non-import, and complete outer-owner cleanup.
 - The evidence file is one owner-only regular link at mode `0600`, records a 2,951,421-byte maximum inbound message and zero remaining resources, and contains no retained path, PID, socket identity, thread/turn id, model, prompt, TUI output, or auth value. No matching process or temporary smoke root remained after validation.
-- Corrective `BUG-011` dirty-worktree probes complete both teardown directions and reach only the intentional clean-commit evidence guard. Clean corrective and aggregate evidence remain pending before `BUG-011` closure.
+- Corrective `BUG-011` validation passed the clean exact coexistence smoke in 24.29 seconds and the no-retry four-scenario lifecycle aggregate in 91.01 seconds on `75843219be62587110b5fa60fed18544d6468785`. The current aggregate records one coexistence model turn, two HostDeck/two TUI lifetimes, equal 38-event publication/retention counts, zero pipeline/duplicate/foreign-mapping failures, a 2,972,300-byte maximum message, and zero cleanup residue.
 
 ## Downstream Ownership
 

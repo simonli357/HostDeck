@@ -53,8 +53,8 @@ No fake-Codex or fake-tmux test can satisfy these gates.
 | Runtime process/socket supervisor | `INT-V1-007` | Done: strict foreground-child and service-owned private Unix-socket modes pass deterministic, real Linux, and exact-runtime evidence. |
 | Bounded reconnect controller | `INT-V1-028` | Done: generation-gated lifecycle, compatibility, backoff, held inbound, cleanup, cancellation, and no-mutation-replay evidence pass. |
 | Crash reconciliation, HostDeck restart, and TUI coexistence | `INT-V1-029` to `INT-V1-031` | Done: durable crash recovery, exact multi-process HostDeck restart, and exact bidirectional HostDeck/TUI teardown evidence pass with private cleanup. |
-| Aggregate runtime lifecycle acceptance | `INT-V1-032` | In progress: all prerequisite leaves are complete and harsh non-duplicative orchestration/report/privacy/cleanup criteria are frozen before implementation. |
-| Legacy tmux disposition | `INT-V1-008` | Blocked by lifecycle acceptance and historical evidence review. |
+| Aggregate runtime lifecycle acceptance | `INT-V1-032` | Done: fixed deterministic plus exact 0.144.0 subprocess matrix passes ownership/reconnect/crash/restart/TUI/integrity/privacy/cleanup acceptance with no retry. |
+| Legacy tmux disposition | `INT-V1-008` | In progress: lifecycle acceptance and historical evidence review are complete. |
 | Reopened runtime hardening | `INT-V1-091` | Blocked by selected lifecycle, data maintenance, and legacy disposition. |
 
 Owning backlog: `docs/tracking/backlog/tmux-output.md` (filename retained to preserve historical links; title/scope are rebaselined).

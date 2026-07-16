@@ -16,7 +16,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-008 | Private Serve is classified as public because the observer treats a nonempty `funnel status --json` result as a distinct Funnel projection. | High | Backlog bugfix | Closed | `IFC-V1-071` / `IFC-V1-072` | Exact 1.98.8 source/live semantics, duplicate-read equality regression, corrected active observer smoke, and private enable/read-back/path-off smoke. |
 | BUG-009 | Proxy-decision invariants reject truthful combined hostile-header assessments unless lower-priority forwarding and identity evidence is falsely normalized. | High | Backlog bugfix | Closed | `FND-V1-018` / `IFC-V1-073` | Precedence-aware schema plus combined lookalike/unknown/identity/forwarding contract regressions. |
 | BUG-010 | The exact Codex thread lifecycle smoke can fail cleanup when the native app-server outlives its npm launcher while settling its temporary plugin cache. | Low | Small bugfix | Closed | Validation harness / `IFC-V1-061` | Owned-socket shutdown wait, bounded recursive-remove retries, and consecutive exact 0.144.0 lifecycle smokes. |
-| BUG-011 | The exact HostDeck/TUI coexistence smoke can leave its marker command unfinished or pause TUI B before the product view, despite healthy completed runtime state. | Medium | Small bugfix | In validation | Validation harness / `INT-V1-031` / `INT-V1-032` | Bounded prompt/tool timing, direct second-TUI identity proof, isolated update-check suppression, and sanitized readiness diagnostics; clean exact rerun pending. |
+| BUG-011 | The exact HostDeck/TUI coexistence smoke can leave its marker command unfinished or pause TUI B before the product view, despite healthy completed runtime state. | Medium | Small bugfix | Closed | Validation harness / `INT-V1-031` / `INT-V1-032` | Bounded prompt/tool timing, direct second-TUI identity proof, isolated update-check suppression, sanitized diagnostics, and clean exact standalone/aggregate passes. |
 
 ## Routing
 
@@ -166,8 +166,8 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Impact: valid runtime lifecycle behavior could fail based on minimal-model shell wait choices or an interactive update check, preventing repeatable `INT-V1-031` and `INT-V1-032` evidence.
 - Route: small bugfix; expected multi-client identity, lifecycle, and cleanup behavior remains unchanged, while the local exact-runtime harness removes nondeterministic validation inputs.
 - Affected / owning task: validation harness from completed `INT-V1-031`; discovered while validating `INT-V1-032`.
-- Blocks: clean exact `INT-V1-032` aggregate evidence and closure.
+- Blocks: resolved before `INT-V1-032` closure.
 - Root cause: the 20-second marker interval exceeded the shell tool's common initial yield, but the prompt prohibited a second wait call; TUI B identity depended on model sentinel replay instead of the exact resume target; and the isolated `CODEX_HOME` omitted Codex's supported startup-update suppression.
 - Fix: use an eight-second marker interval with an explicit 15-second initial tool wait, prove TUI B by exact resume thread id plus managed cwd and HostDeck read-back, set only `check_for_update_on_startup = false` in the private test home, allow a bounded 30-second history-view readiness window, and emit classifications rather than terminal content on readiness failure.
-- Validation: dirty-worktree diagnostics complete both teardown directions and stop only at the intentional clean-commit publication guard; type/lint, clean exact coexistence, aggregate lifecycle, and cleanup validation remain pending.
-- Closed by: pending the clean exact evidence commit.
+- Validation: dirty-worktree diagnostics complete both teardown directions and stop only at the intentional clean-commit publication guard. The clean exact coexistence smoke then passed in 24.29 seconds, and the no-retry four-scenario aggregate passed in 91.01 seconds with zero resource residue; full workspace and supply-chain gates also pass.
+- Closed by: corrective harness commit `7584321`; aggregate evidence in `artifacts/int-v1-032-runtime-lifecycle-acceptance-evidence.json`.

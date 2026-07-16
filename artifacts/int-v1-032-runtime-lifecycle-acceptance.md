@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: production-hardening criteria frozen before implementation.
+Status: complete. Criteria were frozen before implementation; the aggregate evidence is bound to clean pushed commit `75843219be62587110b5fa60fed18544d6468785`.
 
 ## Scope
 
@@ -93,6 +93,22 @@ No scenario may be omitted, reordered, retried after failure, replaced by anothe
 - Harden the exact supervisor smoke to emit a private cleanup-complete report and own the complete wrapper/native process group without changing production behavior.
 - Run focused parser/orchestrator/process tests; full unit/contract/integration/web suites; root/all-package typechecks; lint/exports; scaffold/planning; exact 0.144.0 binding; frozen offline install; production license/audit checks where available; diff/privacy/process/socket/temp/active-handle inspection; and the complete aggregate command from a clean pushed commit.
 - The physical phone may remain disconnected.
+
+## Implementation
+
+- Added one strict aggregate schema/parser and exact child-report parsers for deterministic Vitest JSON, supervisor, HostDeck restart, and TUI coexistence truth. Exact keys, bounded counts, current commit/version, cross-scenario invariants, deep-frozen output, and privacy declarations fail closed.
+- Added a fixed four-entry manifest, private path/inventory guards, and a Linux detached-process runner with bounded output/deadlines, scenario-attributed failures, owned process-group TERM-to-KILL cleanup, and no shell or retry path.
+- Added the opt-in outer smoke and `pnpm smoke:codex-lifecycle`. It creates short private roots that remain within Unix socket limits, executes the five fixed test files sequentially, removes every child report/root, and atomically publishes one owner-only aggregate artifact only after complete cleanup.
+- Hardened the supervisor private report and reused strict private reports from restart/coexistence. Parser and fixture regressions cover malformed/extra/stale/contradictory reports, finite high-resolution Vitest timestamps, unsafe paths/files, setup rejection, process-group descendants, output overflow, timeout escalation, and no-artifact failure.
+- Aggregate validation exposed and fixed `BUG-011`: the exact TUI proof now has bounded model/tool timing, direct second-TUI resume identity, an isolated no-update test configuration, bounded readiness, and content-free diagnostics. No production runtime behavior or dependency changed.
+
+## Validation Result
+
+- `HOSTDECK_CODEX_BIN=/tmp/hostdeck-codex-0.144.0/node_modules/@openai/codex/bin/codex.js pnpm smoke:codex-lifecycle` passed in 91.01 seconds from clean pushed commit `75843219be62587110b5fa60fed18544d6468785`, with no retry. Four scenarios, five fixed test files, two deterministic tests, three exact scenarios, six app-server lifetimes, and exactly two model turns passed.
+- The aggregate proves four HostDeck OS processes, two HostDeck connections, two TUI processes, three foreground and two service runtime lifetimes, one exact restart boundary, one no-override resume, zero coexistence pipeline/duplicate/foreign-mapping failures, equal publication/retention counts, and a 2,972,300-byte maximum inbound message.
+- The final `0600` single-link artifact contains no PID, path, socket/process identity, thread/turn/session/request id, model, prompt, TUI output, auth, raw protocol/audit, or error cause. Every process, app-server, TUI, tmux socket, Unix socket, temporary root, and child-report cleanup count is zero; process and `/tmp/hd-lc-*` inspection found no residue.
+- Focused lifecycle coverage passed 25 tests with one opt-in skip before exact execution. Full unit passed 1,724 with 41 opt-in skips; contract 277; integration 33; web 33. Root/all-package typechecks, lint/exports over 509 files and nine packages, scaffold, planning (212 tasks/84 requirements/649 dependencies), exact 671-file binding, frozen offline install, permissive production-license inventory, and production audit with no known vulnerabilities all passed.
+- Implementation units are pushed through `27e8ea9`, `a8bee14`, `31df836`, `b0cf5a2`, `e67e263`, and `7584321`. The physical phone was not required for this headless runtime gate.
 
 ## Downstream Ownership
 
