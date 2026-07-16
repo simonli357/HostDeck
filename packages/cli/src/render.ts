@@ -1,6 +1,5 @@
 import { Buffer } from "node:buffer";
 import {
-  type ApiSession,
   type CompactProgressResponse,
   compactProgressResponseSchema,
   defaultResourceBudget,
@@ -8,7 +7,6 @@ import {
   type GoalMutationRequest,
   goalControlSnapshotSchema,
   goalMutationRequestSchema,
-  type HostStatusResponse,
   type InterruptResponse,
   interruptResponseSchema,
   type ModelControlSnapshot,
@@ -32,7 +30,6 @@ import {
   remoteIngressPublicStateSchema,
   type SelectedOperationDispatch,
   type SelectedSessionStartResponse,
-  type SessionListResponse,
   type SkillsSnapshot,
   selectedOperationDispatchSchema,
   selectedPairingLinkSchema,
@@ -44,8 +41,8 @@ import {
   type UsageSnapshot,
   type UsageTokenBreakdown,
   usageSnapshotSchema,
-  type WriteResponse
 } from "@hostdeck/contracts";
+import type { LegacySessionResetResult, LegacySessionSummary } from "@hostdeck/storage";
 import QRCode from "qrcode";
 import type { CliFailure } from "./errors.js";
 import { internalFailure } from "./errors.js";
@@ -57,13 +54,9 @@ export type TerminalQrRenderer = (link: string) => Promise<string>;
 export function renderHelp(): string {
   return [
     "Usage:",
-    "  codexdeck [--state-dir PATH] [--database PATH] [--port PORT] serve",
-    "  codexdeck [--api-url URL | --host HOST --port PORT] status [--json]",
     "  codexdeck start --name NAME --cwd PATH [--json]",
     "  codexdeck archive SESSION_ID [--json]",
-    "  codexdeck list [--json]",
     "  codexdeck send SESSION_ID TEXT... [--json]",
-    "  codexdeck attach SESSION",
     "  codexdeck resume SESSION_ID",
     "  codexdeck model SESSION_ID [--json]",
     "  codexdeck model SESSION_ID MODEL_ID [--effort EFFORT] [--expected-revision REVISION] [--json]",
@@ -79,6 +72,8 @@ export function renderHelp(): string {
     "  codexdeck approvals SESSION_ID [--json]",
     "  codexdeck approvals SESSION_ID REQUEST_ID approve|deny --confirm [--json]",
     "  codexdeck interrupt SESSION_ID TURN_ID --confirm [--json]",
+    "  codexdeck legacy status [--json]",
+    "  codexdeck legacy reset --confirm [--json]",
     "  codexdeck pair [--label LABEL] [--read-only | --write]",
     "  codexdeck lock [--reason TEXT] [--json]",
     "  codexdeck unlock [--json]",
@@ -276,44 +271,6 @@ export function renderCompactProgress(
   return output;
 }
 
-export function renderSessionList(response: SessionListResponse, json: boolean): string {
-  if (json) {
-    return `${JSON.stringify(response, null, 2)}\n`;
-  }
-
-  if (response.sessions.length === 0) {
-    return "No HostDeck sessions.\n";
-  }
-
-  return `${response.sessions.map(renderSessionLine).join("\n")}\n`;
-}
-
-export function renderAttachCommand(session: ApiSession): string {
-  return [
-    `Attach session: ${session.name}`,
-    `ID: ${session.id}`,
-    `Lifecycle: ${session.lifecycle_state}`,
-    `Tmux command: tmux attach-session -t ${session.backend.tmux.session_name}`,
-    ""
-  ].join("\n");
-}
-
-export function renderWriteAccepted(response: WriteResponse): string {
-  if (!response.accepted) {
-    return `Rejected ${response.error.code}: ${response.error.message}\n`;
-  }
-
-  return `${response.action} accepted for ${response.session_id}. Audit required: ${response.audit_required ? "yes" : "no"}\n`;
-}
-
-export function renderServeStarted(baseUrl: URL): string {
-  return `HostDeck daemon ready at ${baseUrl.toString().replace(/\/$/u, "")}\n`;
-}
-
-export function renderServeStopped(): string {
-  return "HostDeck daemon stopped.\n";
-}
-
 export async function renderPairingLink(
   response: PairingLinkCommandResult,
   renderQr: TerminalQrRenderer = renderTerminalQr
@@ -385,35 +342,71 @@ export function renderLockCommand(response: LockCommandResult, json: boolean): s
   ].join("\n");
 }
 
-export function renderVersion(version: string): string {
-  return `codexdeck ${version}\n`;
-}
-
-function renderSessionLine(session: ApiSession): string {
-  const branch = session.branch === null ? "" : ` branch=${session.branch}`;
-  const stale = session.lifecycle_state === "stale" ? " stale" : "";
-
-  return `${session.id}  ${session.name}  lifecycle=${session.lifecycle_state}${stale} status=${session.status} attention=${session.attention}${branch} cwd=${session.cwd}`;
-}
-
-export function renderStatus(status: HostStatusResponse, json: boolean): string {
-  if (json) {
-    return `${JSON.stringify(status, null, 2)}\n`;
-  }
-
-  const readiness = status.storage.state === "ok" && status.tmux.state === "ok" && status.stream.state === "ok" && status.last_error === null ? "ready" : "not ready";
-
+export function renderLegacySessionStatus(candidate: unknown, json: boolean): string {
+  const response = parseLegacySessionSummary(candidate);
+  if (json) return `${JSON.stringify(response, null, 2)}\n`;
   return [
-    `HostDeck daemon: ${readiness}`,
-    `Version: ${status.version}`,
-    `Bind: ${status.bind.mode} (${status.bind.host}:${status.bind.port})`,
-    `Lock: ${status.locked ? "locked" : "unlocked"}`,
-    `Storage: ${status.storage.state}`,
-    `Tmux: ${status.tmux.state}`,
-    `Stream: ${status.stream.state}`,
-    `Stale sessions: ${status.stale_session_count}`,
+    `Legacy sessions: ${response.legacy_session_count}`,
+    `Disposition: ${response.disposition}`,
     ""
   ].join("\n");
+}
+
+export function renderLegacySessionReset(candidate: unknown, json: boolean): string {
+  const response = parseLegacySessionReset(candidate);
+  if (json) return `${JSON.stringify(response, null, 2)}\n`;
+  return [
+    `Legacy sessions removed: ${response.removed_session_count}`,
+    `Legacy sessions remaining: ${response.remaining_session_count}`,
+    ""
+  ].join("\n");
+}
+
+function parseLegacySessionSummary(candidate: unknown): LegacySessionSummary {
+  if (
+    !hasExactKeys(candidate, ["disposition", "legacy_session_count"]) ||
+    candidate.disposition !== "legacy_unmigrated" ||
+    !isNonNegativeSafeInteger(candidate.legacy_session_count)
+  ) {
+    throw internalFailure("Legacy session status rendering input is invalid.");
+  }
+  return Object.freeze({
+    disposition: candidate.disposition,
+    legacy_session_count: candidate.legacy_session_count
+  });
+}
+
+function parseLegacySessionReset(candidate: unknown): LegacySessionResetResult {
+  if (
+    !hasExactKeys(candidate, ["disposition", "remaining_session_count", "removed_session_count"]) ||
+    candidate.disposition !== "legacy_unmigrated" ||
+    candidate.remaining_session_count !== 0 ||
+    !isNonNegativeSafeInteger(candidate.removed_session_count)
+  ) {
+    throw internalFailure("Legacy session reset rendering input is invalid.");
+  }
+  return Object.freeze({
+    disposition: candidate.disposition,
+    removed_session_count: candidate.removed_session_count,
+    remaining_session_count: 0
+  });
+}
+
+function hasExactKeys(candidate: unknown, expected: readonly string[]): candidate is Record<string, unknown> {
+  return (
+    typeof candidate === "object" &&
+    candidate !== null &&
+    !Array.isArray(candidate) &&
+    Object.keys(candidate).sort().join("\0") === [...expected].sort().join("\0")
+  );
+}
+
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= 0;
+}
+
+export function renderVersion(version: string): string {
+  return `codexdeck ${version}\n`;
 }
 
 export function renderRemoteState(
@@ -966,7 +959,7 @@ export function renderFailure(error: CliFailure): string {
   }
 
   if (error.kind === "daemon_unavailable") {
-    lines.push("Start the daemon with `codexdeck serve`, then retry.");
+    lines.push("Start the selected HostDeck service, then retry.");
   }
 
   if (error.kind === "usage") {

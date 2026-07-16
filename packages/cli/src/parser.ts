@@ -3,13 +3,9 @@ import { usageFailure } from "./errors.js";
 export type ParsedCliCommand =
   | { readonly kind: "help" }
   | { readonly kind: "version" }
-  | { readonly kind: "serve" }
-  | { readonly kind: "status"; readonly json: boolean }
   | { readonly kind: "start"; readonly name: string; readonly cwd: string; readonly json: boolean }
-  | { readonly kind: "list"; readonly json: boolean }
   | { readonly kind: "archive"; readonly session: string; readonly json: boolean }
   | { readonly kind: "send"; readonly session: string; readonly text: string; readonly json: boolean }
-  | { readonly kind: "attach"; readonly session: string }
   | { readonly kind: "resume"; readonly session: string }
   | {
       readonly kind: "model";
@@ -52,7 +48,6 @@ export type ParsedCliCommand =
       readonly confirm: true;
       readonly json: boolean;
     }
-  | { readonly kind: "stop"; readonly session: string }
   | {
       readonly kind: "pair";
       readonly label?: string;
@@ -60,6 +55,12 @@ export type ParsedCliCommand =
     }
   | { readonly kind: "lock"; readonly reason?: string; readonly json: boolean }
   | { readonly kind: "unlock"; readonly json: boolean }
+  | {
+      readonly kind: "legacy";
+      readonly action: "reset" | "status";
+      readonly confirmed: boolean;
+      readonly json: boolean;
+    }
   | {
       readonly kind: "remote";
       readonly action: "disable" | "enable" | "status";
@@ -190,7 +191,8 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
         positionals[0] === "plan" ||
         positionals[0] === "compact" ||
         positionals[0] === "approvals" ||
-        positionals[0] === "interrupt"
+        positionals[0] === "interrupt" ||
+        positionals[0] === "legacy"
       ) {
         throw usageFailure(`The ${positionals[0]} command does not accept an option terminator.`);
       }
@@ -227,26 +229,10 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
     return { command: { kind: "version" }, configFlags };
   }
 
-  if (command === "status") {
-    return { command: { kind: "status", json: parseNoArgJsonOptions("status", rest, json) }, configFlags };
-  }
-
-  if (command === "serve") {
-    if (rest.length > 0) {
-      throw usageFailure("The serve command does not accept positional arguments.");
-    }
-
-    return { command: { kind: "serve" }, configFlags };
-  }
-
   if (command === "start") {
     const parsed = parseStartOptions(rest);
 
     return { command: { kind: "start", name: parsed.name, cwd: parsed.cwd, json: parsed.json || json }, configFlags };
-  }
-
-  if (command === "list") {
-    return { command: { kind: "list", json: parseNoArgJsonOptions("list", rest, json) }, configFlags };
   }
 
   if (command === "archive") {
@@ -276,10 +262,6 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
       },
       configFlags
     };
-  }
-
-  if (command === "attach") {
-    return { command: { kind: "attach", session: singleSessionArgument("attach", rest) }, configFlags };
   }
 
   if (command === "resume") {
@@ -403,10 +385,6 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
     };
   }
 
-  if (command === "stop") {
-    return { command: { kind: "stop", session: singleSessionArgument("stop", rest) }, configFlags };
-  }
-
   if (command === "pair") {
     const parsed = parsePairOptions(rest, json);
 
@@ -437,6 +415,10 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
     return { command: { kind: "unlock", json: parseNoArgJsonOptions("unlock", rest, json) }, configFlags };
   }
 
+  if (command === "legacy") {
+    return { command: parseLegacyCommand(rest, json), configFlags };
+  }
+
   if (command === "remote") {
     return {
       command: parseRemoteCommand(rest, json),
@@ -445,6 +427,28 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
   }
 
   throw usageFailure(`Unknown command: ${command ?? ""}`);
+}
+
+function parseLegacyCommand(
+  args: readonly string[],
+  globalJson: boolean
+): Extract<ParsedCliCommand, { readonly kind: "legacy" }> {
+  const [action, ...rest] = args;
+  if (action === "status") {
+    return {
+      kind: "legacy",
+      action,
+      confirmed: false,
+      json: parseNoArgJsonOptions("legacy status", rest, globalJson)
+    };
+  }
+  if (action === "reset") {
+    if (rest.length !== 1 || rest[0] !== "--confirm") {
+      throw usageFailure("Legacy reset requires --confirm.");
+    }
+    return { kind: "legacy", action, confirmed: true, json: globalJson };
+  }
+  throw usageFailure("Legacy requires status or reset --confirm.");
 }
 
 function parseRemoteCommand(

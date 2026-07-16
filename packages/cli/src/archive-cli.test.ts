@@ -14,7 +14,7 @@ const operationId = "op_session_archive_cli_001";
 const sessionId = "sess_archive_cli_001";
 
 describe("managed-session archive CLI command", () => {
-  it("parses one session id and optional JSON while keeping historical stop separate", () => {
+  it("parses one session id and optional JSON while rejecting removed historical stop", () => {
     expect(parseCliArgs(["archive", sessionId])).toEqual({
       command: { kind: "archive", session: sessionId, json: false },
       configFlags: {}
@@ -23,10 +23,7 @@ describe("managed-session archive CLI command", () => {
       command: { kind: "archive", session: sessionId, json: true },
       configFlags: {}
     });
-    expect(parseCliArgs(["stop", sessionId])).toEqual({
-      command: { kind: "stop", session: sessionId },
-      configFlags: {}
-    });
+    expect(() => parseCliArgs(["stop", sessionId])).toThrow("Unknown command: stop");
     for (const args of [
       ["archive"],
       ["archive", sessionId, "other"],

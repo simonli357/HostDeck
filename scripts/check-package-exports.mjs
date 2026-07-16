@@ -7,7 +7,6 @@ const packages = [
   "codex-adapter",
   "test-fixtures",
   "storage",
-  "tmux-adapter",
   "server",
   "cli",
   "web"

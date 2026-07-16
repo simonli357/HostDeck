@@ -102,6 +102,44 @@ describe("CLI local admin commands", () => {
     }
   });
 
+  it("reports and explicitly resets inert legacy session rows", () => {
+    const harness = createHarness();
+    harness.admin.setLock({ locked: false });
+    const opened = openMigratedDatabase(harness.databasePath);
+    try {
+      opened.db
+        .prepare(
+          `
+            INSERT INTO sessions (
+              id, name, cwd, backend_type, tmux_session, tmux_window, tmux_pane,
+              lifecycle_state, created_at, updated_at, stale_reason
+            ) VALUES (?, ?, ?, 'tmux', ?, NULL, NULL, 'stopped', ?, ?, NULL)
+          `
+        )
+        .run(
+          "sess_legacy_admin_01",
+          "legacy-admin",
+          "/tmp/legacy-admin",
+          "hostdeck_sess_legacy_admin_01",
+          fixedNow.toISOString(),
+          fixedNow.toISOString()
+        );
+    } finally {
+      opened.db.close();
+    }
+
+    expect(harness.admin.getLegacySessions()).toEqual({
+      disposition: "legacy_unmigrated",
+      legacy_session_count: 1
+    });
+    expect(harness.admin.resetLegacySessions({ confirmed: true })).toEqual({
+      disposition: "legacy_unmigrated",
+      removed_session_count: 1,
+      remaining_session_count: 0
+    });
+    expect(harness.admin.getLegacySessions().legacy_session_count).toBe(0);
+  });
+
   it("repairs owner mode drift and rejects a hard-linked database before admin writes", () => {
     const harness = createHarness();
     harness.admin.setLock({ locked: true });

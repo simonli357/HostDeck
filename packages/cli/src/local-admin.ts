@@ -4,9 +4,12 @@ import type { AuditEventRecord, PairingCodeRecord } from "@hostdeck/contracts";
 import {
   createAuditEventRepository,
   createLegacyPairingCodeRepository,
+  createLegacySessionRepository,
   createSettingsRepository,
   HostDeckAuthRepositoryError,
   HostDeckLocalPathError,
+  type LegacySessionResetResult,
+  type LegacySessionSummary,
   openMigratedDatabase,
   openSecureHostDeckRegularFile,
   prepareHostDeckStatePaths
@@ -26,6 +29,11 @@ export interface CreateLocalAdminOptions {
 export interface LocalAdmin {
   readonly createPairingCode: (input: CreatePairingCommandInput) => PairingCommandResult;
   readonly setLock: (input: SetLockCommandInput) => LockCommandResult;
+}
+
+export interface LegacySessionAdmin {
+  readonly getLegacySessions: () => LegacySessionSummary;
+  readonly resetLegacySessions: (input: { readonly confirmed: true }) => LegacySessionResetResult;
 }
 
 export interface CreatePairingCommandInput {
@@ -62,6 +70,7 @@ interface LocalAdminRepos {
   readonly pairingCodes: ReturnType<typeof createLegacyPairingCodeRepository>;
   readonly settings: ReturnType<typeof createSettingsRepository>;
   readonly auditEvents: ReturnType<typeof createAuditEventRepository>;
+  readonly legacySessions: ReturnType<typeof createLegacySessionRepository>;
 }
 
 const localAdminActor: AuditEventRecord["actor"] = {
@@ -71,7 +80,7 @@ const localAdminActor: AuditEventRecord["actor"] = {
 };
 const maxPairingCreateAttempts = 5;
 
-export function createLocalAdmin(options: CreateLocalAdminOptions): LocalAdmin {
+export function createLocalAdmin(options: CreateLocalAdminOptions): LocalAdmin & LegacySessionAdmin {
   const now = options.now ?? (() => new Date());
 
   return {
@@ -135,6 +144,12 @@ export function createLocalAdmin(options: CreateLocalAdminOptions): LocalAdmin {
       }
 
       throw internalFailure("Unable to create a unique HostDeck pairing code.");
+    },
+    getLegacySessions() {
+      return withLocalAdminRepos(options, now, (repos) => repos.legacySessions.summarize());
+    },
+    resetLegacySessions(input) {
+      return withLocalAdminRepos(options, now, (repos) => repos.legacySessions.reset(input));
     },
     setLock(input) {
       const at = now();
@@ -217,7 +232,8 @@ function withLocalAdminRepos<T>(options: CreateLocalAdminOptions, now: () => Dat
       db: opened.db,
       pairingCodes: createLegacyPairingCodeRepository(opened.db),
       settings: createSettingsRepository(opened.db),
-      auditEvents: createAuditEventRepository(opened.db)
+      auditEvents: createAuditEventRepository(opened.db),
+      legacySessions: createLegacySessionRepository(opened.db)
     };
     repos.settings.getOrCreateDefault({
       stateDir: options.stateDir,

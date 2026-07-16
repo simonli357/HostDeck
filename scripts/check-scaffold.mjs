@@ -7,7 +7,6 @@ const packages = [
   "codex-adapter",
   "test-fixtures",
   "storage",
-  "tmux-adapter",
   "server",
   "cli",
   "web"
@@ -24,6 +23,7 @@ const rootFiles = [
 const requiredScripts = [
   "check:scaffold",
   "check:planning",
+  "check:runtime-boundary",
   "check:codex-bindings",
   "generate:codex-bindings",
   "typecheck",
@@ -32,7 +32,6 @@ const requiredScripts = [
   "test:unit",
   "test:contract",
   "test:integration",
-  "test:tmux",
   "smoke:codex-compatibility",
   "smoke:codex-ipc",
   "smoke:codex-lifecycle",

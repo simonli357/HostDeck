@@ -5,9 +5,9 @@ import { describe, expect, it } from "vitest";
 const packages = [
   "core",
   "contracts",
+  "codex-adapter",
   "test-fixtures",
   "storage",
-  "tmux-adapter",
   "server",
   "cli",
   "web"

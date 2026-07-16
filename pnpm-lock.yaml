@@ -101,9 +101,6 @@ importers:
       '@hostdeck/storage':
         specifier: workspace:*
         version: link:../storage
-      '@hostdeck/tmux-adapter':
-        specifier: workspace:*
-        version: link:../tmux-adapter
       '@peculiar/x509':
         specifier: 2.0.0
         version: 2.0.0
@@ -150,12 +147,6 @@ importers:
       '@hostdeck/web':
         specifier: workspace:*
         version: link:../web
-
-  packages/tmux-adapter:
-    dependencies:
-      '@hostdeck/core':
-        specifier: workspace:*
-        version: link:../core
 
   packages/web:
     dependencies:

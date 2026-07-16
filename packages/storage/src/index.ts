@@ -55,6 +55,14 @@ export {
   type TransitionHostDeckLanModeInput
 } from "./lan-configuration-repository.js";
 export {
+  createLegacySessionRepository,
+  HostDeckLegacySessionRepositoryError,
+  type LegacySessionRepository,
+  type LegacySessionRepositoryErrorCode,
+  type LegacySessionResetResult,
+  type LegacySessionSummary
+} from "./legacy-session-repository.js";
+export {
   HostDeckMigrationError,
   type MigrationResult,
   type OpenMigratedDatabaseOptions,

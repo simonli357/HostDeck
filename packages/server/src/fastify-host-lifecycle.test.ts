@@ -11,10 +11,11 @@ import {
   selectedProjectionEventSchema
 } from "@hostdeck/contracts";
 import {
-  parseSessionIdFromTmuxSessionName,
-  type RealTmuxTargetDiscovery,
-  tmuxSessionNameForSession
-} from "@hostdeck/tmux-adapter";
+  acquireHostDeckDaemonLease,
+  prepareHostDeckDaemonLeasePath,
+  prepareHostDeckLocalPathsAfterLease,
+  resolveHostDeckLocalPaths
+} from "@hostdeck/storage";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { HostDeckRoutePluginRegistration } from "./fastify-app.js";
@@ -27,7 +28,6 @@ import {
 } from "./fastify-host-lifecycle.js";
 import { createHostDeckSseTransportRegistration } from "./fastify-sse-transport.js";
 import { createHostDeckStaticBoundaryRegistration } from "./fastify-static-boundary.js";
-import { type HostStartupResult, startHostAgent } from "./startup.js";
 import { testRequestAuthenticationPolicy } from "./test-request-authentication.js";
 
 const temporaryDirectories = new Set<string>();
@@ -447,8 +447,7 @@ describe("selected Fastify host lifecycle", () => {
           blockedPaths,
           blockedPort,
           [probeRegistration([])],
-          fixedNow,
-          () => undefined
+          fixedNow
         )
       );
       expect(listenFailure.code).toBe("listener_bind_failed");
@@ -644,11 +643,10 @@ function startSecureLifecycle(
   paths: SecureLocalPaths,
   port: number,
   routePlugins: readonly HostDeckRoutePluginRegistration[],
-  now: () => Date = fixedNow,
-  checkNetworkBind?: () => void
+  now: () => Date = fixedNow
 ) {
-  let startup: HostStartupResult | null = null;
-  return startHostDeckFastifyLifecycle<HostStartupResult>({
+  let startup: { readonly close: () => void } | null = null;
+  return startHostDeckFastifyLifecycle<{ readonly close: () => void }>({
     createRequestAuthenticationPolicy,
     createRoutePlugins: () => routePlugins,
     observeInternalError: () => undefined,
@@ -662,43 +660,33 @@ function startSecureLifecycle(
       },
       async start(input) {
         input.deadline.throwIfAborted();
-        startup = await startHostAgent({
-          version: "0.0.0-fastify-lifecycle",
-          ...paths,
-          bindPort: port,
-          ...(checkNetworkBind !== undefined ? { checkNetworkBind } : {}),
-          discovery: emptyDiscovery(),
-          now,
-          startOutputReader: () => undefined
+        const resolved = resolveHostDeckLocalPaths({
+          config_dir: paths.configDir,
+          state_dir: paths.stateDir,
+          runtime_dir: paths.runtimeDir,
+          database_path: join(paths.stateDir, "hostdeck.sqlite")
         });
-        input.deadline.throwIfAborted();
-        return {
-          bind: {
-            host: startup.status.bind.host as "127.0.0.1",
-            port: startup.status.bind.port,
-            transport: "http" as const
-          },
-          context: startup
-        };
+        prepareHostDeckDaemonLeasePath(resolved);
+        const lease = acquireHostDeckDaemonLease({ lease_path: resolved.lease_path, now });
+        try {
+          prepareHostDeckLocalPathsAfterLease(resolved);
+          input.deadline.throwIfAborted();
+          startup = Object.freeze({ close: () => lease.release() });
+          return {
+            bind: {
+              host: "127.0.0.1",
+              port,
+              transport: "http" as const
+            },
+            context: startup
+          };
+        } catch (error) {
+          lease.release();
+          throw error;
+        }
       }
     }
   });
-}
-
-function emptyDiscovery(): RealTmuxTargetDiscovery {
-  return {
-    tmuxSessionNameForSession,
-    parseSessionIdFromTmuxSessionName,
-    async listTargets() {
-      return [];
-    },
-    async getTargetBySessionId() {
-      return null;
-    },
-    async reconcileTargets() {
-      return { liveTargets: [], staleTargets: [], unmanagedTargets: [] };
-    }
-  };
 }
 
 function projectionEvent(cursor: number, text: string) {
