@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: production-hardening criteria frozen before implementation.
+Status: complete. Criteria were frozen before implementation in `5740b68`; implementation is `c4244b9`; redacted exact-runtime evidence is `artifacts/int-v1-030-hostdeck-restart-evidence.json`.
 
 ## Scope
 
@@ -68,6 +68,20 @@ This task proves the runtime/state-owner boundary. App-server crash reconciliati
 - The opt-in exact-runtime smoke runs the full service and foreground matrices. It emits one redacted machine-readable evidence file after cleanup succeeds; a failed or partially cleaned run emits no passing artifact.
 - Run focused process/storage/reconnect/reconciliation tests; full unit/contract/integration/web suites; root and all-package typechecks; lint/exports; scaffold/planning; exact 0.144.0 binding and compatibility; frozen offline install; production license/audit check; diff/secret/process/socket/active-handle inspection; and manual ownership/privacy/failure review.
 - The physical phone is not required for this runtime leaf.
+
+## Implementation Findings
+
+- The first exact run exposed invalid chronology when second-precision Codex turn activity preceded a millisecond-precision durable session creation time. Reconciliation now clamps observed activity to durable chronology, boundary timestamps advance past activity, and append/boundary storage paths independently reject impossible chronology before mutation.
+- A fresh HostDeck event normalizer did not know the turn that survived the process gap. Reconciliation now installs strict managed-thread/active-turn state before held notifications drain, resets only gap-sensitive item/request/token state, accepts lifecycle evidence that can truthfully have started during the gap, and consumes the one missed-compaction token exception on the first post-gap usage snapshot.
+- The test worker's Vitest body can spawn from a non-leader Linux thread, so direct-child inventory now examines bounded `/proc/<pid>/task/*/children`. Failed workers run in isolated process groups so cleanup also owns an unpublished foreground grandchild; final service close reasserts zero spawn/TERM/KILL counts.
+- Worker environment/report parsing is exact and bounded. Reports and evidence use owner-only atomic publication, copied auth must be a private current-owner regular file, service stdio is not retained, and evidence generation refuses a dirty worktree.
+
+## Validation Result
+
+- Focused restart/reconciliation/storage coverage: 61 passed, 2 opt-in smokes skipped. Full unit: 1,698 passed, 39 skipped; contract: 277; integration: 33; web: 33.
+- Root and all-package typechecks, lint/package exports, scaffold, planning (212 tasks, 84 requirements, 649 dependencies), diff checks, and the exact Codex 0.144.0 671-file binding check pass.
+- The exact four-process smoke passed against clean pushed commit `c4244b9` in 58.26 seconds. It proves four distinct HostDeck processes, stable service PID/socket/thread/turn, one restart boundary and no-override resume, original-turn completion after restart, two distinct foreground children, final owner cleanup, and no retained PID/path/socket/thread/turn/model/prompt/output/auth value.
+- The evidence file is one owner-only regular link, mode `0600`, bound to full commit `c4244b9047a69acd2f11473286d4d26e68651b20`. No matching runtime process or smoke temporary root remained after validation. npm audit still has no advisory result because the configured retired endpoint returns HTTP 410; no dependency or lockfile changed.
 
 ## Downstream Ownership
 
