@@ -118,8 +118,8 @@ export const resourceBudgetDefinitions = Object.freeze([
   defineResource("protocol_close_timeout_ms", "milliseconds", 100, 2_000, 10_000, "codex_transport", "operation_timeout", "terminate_resource"),
   defineResource("protocol_heartbeat_interval_ms", "milliseconds", 1_000, 15_000, 120_000, "codex_transport", "runtime_unavailable", "terminate_resource"),
   defineResource("protocol_heartbeat_timeout_ms", "milliseconds", 100, 5_000, 30_000, "codex_transport", "runtime_unavailable", "terminate_resource"),
-  defineResource("protocol_max_frame_bytes", "bytes", 1_024, 1_048_576, 8_388_608, "codex_transport", "runtime_unavailable", "terminate_resource"),
-  defineResource("protocol_max_buffered_bytes", "bytes", 1_024, 2_097_152, 16_777_216, "codex_transport", "service_overloaded", "reject_operation"),
+  defineResource("protocol_max_frame_bytes", "bytes", 1_024, 8_388_608, 8_388_608, "codex_transport", "runtime_unavailable", "terminate_resource"),
+  defineResource("protocol_max_buffered_bytes", "bytes", 1_024, 8_388_608, 16_777_216, "codex_transport", "service_overloaded", "reject_operation"),
   defineResource("protocol_max_in_flight_requests", "count", 1, 32, 256, "codex_broker", "service_overloaded", "reject_operation"),
   defineResource("protocol_max_pending_server_requests", "count", 1, 16, 64, "codex_broker", "service_overloaded", "reject_operation"),
   defineResource(

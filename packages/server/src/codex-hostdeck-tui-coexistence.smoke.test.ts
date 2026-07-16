@@ -42,7 +42,6 @@ import {
 import {
   defaultResourceBudget,
   type ModelCatalogEntry,
-  resourceBudgetDefinitionByKey,
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
@@ -231,11 +230,7 @@ describe.skipIf(!requireSmoke)(
           };
 
           const transportA = createCodexUnixWebSocketTransport({
-            socket_path: socketPath,
-            max_frame_bytes:
-              resourceBudgetDefinitionByKey.protocol_max_frame_bytes.maximum,
-            max_buffered_bytes:
-              resourceBudgetDefinitionByKey.protocol_max_buffered_bytes.maximum
+            socket_path: socketPath
           });
           transportA.subscribe((event) => {
             if (event.type === "message") {
@@ -709,11 +704,7 @@ describe.skipIf(!requireSmoke)(
 
           connectionB = createCodexAppServerConnection({
             transport: createCodexUnixWebSocketTransport({
-              socket_path: socketPath,
-              max_frame_bytes:
-                resourceBudgetDefinitionByKey.protocol_max_frame_bytes.maximum,
-              max_buffered_bytes:
-                resourceBudgetDefinitionByKey.protocol_max_buffered_bytes.maximum
+              socket_path: socketPath
             }),
             observed_version: codexBindingDescriptor.codex_version
           });

@@ -94,6 +94,28 @@ describe("Codex Unix WebSocket transport lifecycle", () => {
     await expect(closed).resolves.toMatchObject({ type: "close", clean: false });
   });
 
+  it("accepts exact-runtime-sized inbound messages within the default bound", async () => {
+    const server = await openUnixWebSocketServer();
+    const transport = createCodexUnixWebSocketTransport({
+      socket_path: server.socketPath
+    });
+    const payload = "x".repeat(3_000_000);
+    const message = waitForTransportEvent(
+      transport,
+      (event) => event.type === "message"
+    );
+    server.webSocketServer.on("connection", (socket) => socket.send(payload));
+
+    await transport.connect();
+    const received = await message;
+    expect(received.type).toBe("message");
+    if (received.type !== "message") {
+      throw new Error("Expected the bounded payload as a text message.");
+    }
+    expect(received.text.length).toBe(payload.length);
+    await transport.close("done");
+  });
+
   it("reserves outbound bytes before concurrent writes can exceed the queue bound", async () => {
     const server = await openUnixWebSocketServer();
     const transport = createCodexUnixWebSocketTransport({

@@ -1,3 +1,4 @@
+import { defaultResourceBudget } from "@hostdeck/contracts";
 import { HostDeckCodexAdapterError } from "./errors.js";
 import type {
   CodexTextTransport,
@@ -20,7 +21,8 @@ export class ScriptedCodexTransport implements CodexTextTransport {
   private currentGeneration = 0;
 
   constructor(private readonly options: ScriptedCodexTransportOptions = {}) {
-    this.max_frame_bytes = options.max_frame_bytes ?? 1_048_576;
+    this.max_frame_bytes =
+      options.max_frame_bytes ?? defaultResourceBudget.protocol_max_frame_bytes;
   }
 
   get state(): CodexTransportState {

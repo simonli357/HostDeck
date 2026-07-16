@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { defaultResourceBudget } from "@hostdeck/contracts";
 import { codexBindingDescriptor } from "./binding.js";
 import { boundedProtocolText, HostDeckCodexAdapterError } from "./errors.js";
 import {
@@ -60,7 +61,10 @@ export function isGeneratedClientNotificationMethod(method: string): boolean {
   return generatedClientNotificationSet.has(method);
 }
 
-export function decodeCodexInboundFrame(frame: string, maxFrameBytes = 1_048_576): DecodedCodexInboundMessage {
+export function decodeCodexInboundFrame(
+  frame: string,
+  maxFrameBytes = defaultResourceBudget.protocol_max_frame_bytes
+): DecodedCodexInboundMessage {
   const frameBytes = Buffer.byteLength(frame, "utf8");
   if (!Number.isSafeInteger(maxFrameBytes) || maxFrameBytes < 1 || frameBytes < 1 || frameBytes > maxFrameBytes) {
     throw protocolError(`Codex protocol frame must contain 1 to ${maxFrameBytes} UTF-8 bytes.`);
