@@ -227,9 +227,11 @@ describe.skipIf(!requireSmoke)(
           });
           transportA.subscribe((event) => {
             if (event.type === "error") {
-              connectionATransportError = classifyTransportError(
-                event.error.message
-              );
+              if (connectionATransportError === "none") {
+                connectionATransportError = classifyTransportError(
+                  event.error.message
+                );
+              }
               return;
             }
             if (event.type !== "close" || connectionAClose.current !== null) {
