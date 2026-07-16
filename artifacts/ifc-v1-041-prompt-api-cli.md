@@ -2,7 +2,7 @@
 
 Date: 2026-07-15
 
-Status: hardening criteria frozen before implementation.
+Status: complete. Criteria `c65b18b`; implementation `3039315`; response-loss hardening `a3d20c0`.
 
 ## Scope
 
@@ -101,3 +101,21 @@ Implement the selected one-session prompt boundary from strict session-scoped wi
 - `IFC-V1-046` owns production registration with every selected route and remote ingress.
 - `IFC-V1-067` owns removal or isolation of historical generic prompt/list/tmux/custom-listener surfaces.
 - `IFC-V1-021` and packaging/release leaves own an installed `codexdeck` executable and clean-install command smoke.
+
+## Implemented Result
+
+- Added strict target-free `promptSessionRequestSchema` and prompt-specific `promptDispatchResponseSchema`; the selected manifest now names the public request schema instead of the internal target-bearing intent.
+- Added one exact selected prompt route with local-admin and paired-HTTPS authority, CSRF/lock/write-gate ordering, complete mapping/projection and runtime admission, immediate pre-dispatch recheck, actual accepted-audit receipt, one prompt-service call, and bounded failed/incomplete outcomes.
+- Hardened direct prompt-service admission against mapping/projection identity contradiction and recovery disposition without weakening its existing start, event-proven steer, pending model/Plan, race, ambiguity, capacity, or cross-thread behavior.
+- Added a direct-loopback prompt client and selected `send SESSION_ID TEXT... [--json]` shell path with internal operation ids, one POST, exact correlation, sanitized failures, terminal-safe output, and no session list, alias, historical `/input`, local session storage, retry, or prompt echo.
+- Added exact contract, route, service, client, shell, real SQLite, paired TLS, terminal-audit failure, and CLI-to-HTTP-to-prompt-service fake-Codex vertical evidence. Production aggregate registration remains owned by `IFC-V1-046`; packaging and phone/UI behavior remain downstream.
+
+## Validation Evidence
+
+- Focused prompt, gate, and adjacent archive regression: 85 tests across 8 files passed. Selected contract/manifest/CLI regression: 84 tests across 5 files passed. Prompt vertical: 1 passed.
+- Full repository: unit 1,433 passed/36 explicit skips; contract 263 passed; integration 19 passed; web 33 passed; root typecheck and lint/package exports passed (437 files, 9 packages).
+- Scaffold passed (9 packages, 18 scripts); planning passed (212 tasks, 84 requirements, 649 dependencies); frozen offline install was already current.
+- Reviewed Codex 0.144.0 binding verified 671 files with hash `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`; authenticated exact prompt start/steer smoke passed with the second managed thread unchanged.
+- Real SQLite raw audit rows contain only prompt length and accepted truth, not prompt content. Manual staged diff verified host-resolved targeting, accepted-versus-terminal wording, one-dispatch behavior, selected/legacy isolation, exports, no secret value, and no new dependency.
+- `pnpm audit --prod` remains externally unavailable because npm's retired audit endpoint returns HTTP 410. No dependency or lockfile changed.
+- No physical phone was needed or used for this headless leaf.
