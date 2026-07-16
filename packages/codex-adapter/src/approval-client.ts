@@ -209,7 +209,7 @@ export function createCodexApprovalClient(port: CodexApprovalRequestPort): Codex
     typeof port !== "object" ||
     typeof port.respondToServerRequest !== "function" ||
     !Number.isSafeInteger(port.generation) ||
-    port.generation < 1
+    port.generation < 0
   ) {
     throw new TypeError("Codex approval client requires a compatible generation-aware server-request port.");
   }

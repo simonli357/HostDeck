@@ -3,6 +3,8 @@ import { type ResourceBudget, resourceBudgetSchema } from "@hostdeck/contracts";
 export const codexResourceBudgetKeys = [
   "protocol_connect_timeout_ms",
   "protocol_handshake_timeout_ms",
+  "protocol_reconnect_initial_delay_ms",
+  "protocol_reconnect_max_delay_ms",
   "protocol_read_timeout_ms",
   "protocol_mutation_timeout_ms",
   "protocol_start_timeout_ms",
@@ -40,6 +42,11 @@ export interface CodexConnectionResourceOptions {
   readonly handshake_timeout_ms: number;
   readonly max_in_flight: number;
   readonly max_server_requests: number;
+}
+
+export interface CodexReconnectResourceOptions {
+  readonly initial_delay_ms: number;
+  readonly max_delay_ms: number;
 }
 
 export interface CodexThreadResourceOptions {
@@ -88,6 +95,7 @@ export interface CodexSkillsResourceOptions {
 export interface CodexResourceOptions {
   readonly transport: CodexTransportResourceOptions;
   readonly connection: CodexConnectionResourceOptions;
+  readonly reconnect: CodexReconnectResourceOptions;
   readonly event_pipeline: CodexEventPipelineResourceOptions;
   readonly thread: CodexThreadResourceOptions;
   readonly model: CodexModelResourceOptions;
@@ -112,6 +120,10 @@ export function codexResourceOptionsFromBudget(input: unknown): CodexResourceOpt
       handshake_timeout_ms: budget.protocol_handshake_timeout_ms,
       max_in_flight: budget.protocol_max_in_flight_requests,
       max_server_requests: budget.protocol_max_pending_server_requests
+    }),
+    reconnect: Object.freeze({
+      initial_delay_ms: budget.protocol_reconnect_initial_delay_ms,
+      max_delay_ms: budget.protocol_reconnect_max_delay_ms
     }),
     event_pipeline: Object.freeze({
       max_pending_notifications: budget.protocol_max_pending_notifications

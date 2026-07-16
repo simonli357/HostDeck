@@ -110,6 +110,8 @@ export const resourceBudgetDefinitions = Object.freeze([
 
   defineResource("protocol_connect_timeout_ms", "milliseconds", 500, 5_000, 30_000, "codex_transport", "runtime_unavailable", "abort_operation"),
   defineResource("protocol_handshake_timeout_ms", "milliseconds", 1_000, 10_000, 120_000, "codex_broker", "incompatible_runtime", "abort_operation"),
+  defineResource("protocol_reconnect_initial_delay_ms", "milliseconds", 10, 250, 5_000, "codex_transport", "runtime_unavailable", "abort_operation"),
+  defineResource("protocol_reconnect_max_delay_ms", "milliseconds", 100, 10_000, 60_000, "codex_transport", "runtime_unavailable", "abort_operation"),
   defineResource("protocol_read_timeout_ms", "milliseconds", 1_000, 10_000, 120_000, "codex_broker", "operation_timeout", "abort_operation"),
   defineResource("protocol_mutation_timeout_ms", "milliseconds", 1_000, 15_000, 120_000, "codex_broker", "operation_timeout", "abort_operation"),
   defineResource("protocol_start_timeout_ms", "milliseconds", 1_000, 30_000, 120_000, "codex_broker", "operation_timeout", "abort_operation"),
@@ -221,6 +223,11 @@ export const resourceBudgetSchema = z
     atMost("mutation_max_in_flight_global", "http_max_in_flight_requests", "Mutation concurrency must fit within HTTP request concurrency.");
 
     lessThan("protocol_heartbeat_timeout_ms", "protocol_heartbeat_interval_ms", "Protocol heartbeat timeout must be shorter than its interval.");
+    atMost(
+      "protocol_reconnect_initial_delay_ms",
+      "protocol_reconnect_max_delay_ms",
+      "Protocol reconnect initial delay cannot exceed its maximum delay."
+    );
     atMost("protocol_max_frame_bytes", "protocol_max_buffered_bytes", "One protocol frame must fit in the outbound buffer.");
     lessThan("http_body_max_bytes", "protocol_max_frame_bytes", "An HTTP body plus protocol envelope must fit in one protocol frame.");
     atMost("sse_event_max_bytes", "protocol_max_frame_bytes", "A projected SSE event cannot exceed the protocol frame bound.");

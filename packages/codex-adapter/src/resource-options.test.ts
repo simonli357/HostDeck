@@ -16,6 +16,7 @@ describe("Codex resource options", () => {
     expect(Object.isFrozen(options)).toBe(true);
     expect(Object.isFrozen(options.transport)).toBe(true);
     expect(Object.isFrozen(options.connection)).toBe(true);
+    expect(Object.isFrozen(options.reconnect)).toBe(true);
     expect(Object.isFrozen(options.event_pipeline)).toBe(true);
     expect(Object.isFrozen(options.thread)).toBe(true);
     expect(Object.isFrozen(options.model)).toBe(true);
@@ -37,6 +38,8 @@ describe("Codex resource options", () => {
       protocol_max_in_flight_requests: 8,
       protocol_max_pending_server_requests: 4,
       protocol_max_pending_notifications: 64,
+      protocol_reconnect_initial_delay_ms: 100,
+      protocol_reconnect_max_delay_ms: 2_000,
       protocol_thread_page_size: 50,
       protocol_thread_max_pages: 20,
       protocol_thread_max_loaded_reads: 100,
@@ -58,6 +61,10 @@ describe("Codex resource options", () => {
       connection: {
         max_in_flight: 8,
         max_server_requests: 4
+      },
+      reconnect: {
+        initial_delay_ms: 100,
+        max_delay_ms: 2_000
       },
       event_pipeline: {
         max_pending_notifications: 64
@@ -113,6 +120,8 @@ function mappedProtocolValues(options: CodexResourceOptions) {
   return {
     protocol_connect_timeout_ms: options.transport.handshake_timeout_ms,
     protocol_handshake_timeout_ms: options.connection.handshake_timeout_ms,
+    protocol_reconnect_initial_delay_ms: options.reconnect.initial_delay_ms,
+    protocol_reconnect_max_delay_ms: options.reconnect.max_delay_ms,
     protocol_read_timeout_ms: options.thread.read_timeout_ms,
     protocol_mutation_timeout_ms: options.thread.mutation_timeout_ms,
     protocol_start_timeout_ms: options.thread.start_timeout_ms,

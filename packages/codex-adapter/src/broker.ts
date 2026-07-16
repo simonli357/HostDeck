@@ -196,6 +196,10 @@ class DefaultCodexRequestBroker implements CodexRequestBroker {
   private receiveTransportEvent(event: CodexTransportEvent): void {
     if (this.closed) return;
     if (event.type === "message") {
+      if (event.generation !== this.transport.generation) {
+        this.fatal(brokerError("protocol_violation", "Codex transport delivered a frame from a stale connection generation."));
+        return;
+      }
       this.receiveFrame(event.text, event.generation);
       return;
     }

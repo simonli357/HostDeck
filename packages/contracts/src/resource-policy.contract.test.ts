@@ -15,7 +15,7 @@ import {
 
 describe("selected V1 resource budget", () => {
   it("defines one complete, immutable, observable registry", () => {
-    expect(resourceBudgetDefinitions).toHaveLength(84);
+    expect(resourceBudgetDefinitions).toHaveLength(86);
     expect(Object.isFrozen(resourceBudgetDefinitions)).toBe(true);
     expect(Object.isFrozen(defaultResourceBudget)).toBe(true);
     expect(Object.isFrozen(resourceBudgetDefinitionByKey)).toBe(true);
@@ -64,6 +64,8 @@ describe("selected V1 resource budget", () => {
       mutation_max_in_flight_per_target: 1,
       protocol_connect_timeout_ms: 5_000,
       protocol_handshake_timeout_ms: 10_000,
+      protocol_reconnect_initial_delay_ms: 250,
+      protocol_reconnect_max_delay_ms: 10_000,
       protocol_read_timeout_ms: 10_000,
       protocol_mutation_timeout_ms: 15_000,
       protocol_start_timeout_ms: 30_000,
@@ -160,6 +162,7 @@ describe("selected V1 resource budget", () => {
       { pair_claim_max_in_flight: 32, http_max_in_flight_requests: 1 },
       { mutation_max_in_flight_global: 128, http_max_in_flight_requests: 1 },
       { protocol_heartbeat_timeout_ms: 30_000, protocol_heartbeat_interval_ms: 30_000 },
+      { protocol_reconnect_initial_delay_ms: 5_000, protocol_reconnect_max_delay_ms: 100 },
       { protocol_max_frame_bytes: 8_388_608, protocol_max_buffered_bytes: 1_024 },
       { http_body_max_bytes: 1_048_576, protocol_max_frame_bytes: 1_024 },
       { sse_event_max_bytes: 262_144, protocol_max_frame_bytes: 1_024 },

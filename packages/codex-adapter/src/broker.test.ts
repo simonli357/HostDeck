@@ -118,6 +118,29 @@ describe("Codex request broker hostile inbound handling", () => {
     expect(issues).toContainEqual(expect.objectContaining({ severity: "fatal", code: "protocol_violation" }));
   });
 
+  it.each([
+    ["notification", '{"method":"turn/started","params":{}}'],
+    ["server request", '{"method":"item/fileChange/requestApproval","id":"approval-stale","params":{}}']
+  ])("rejects a stale-generation %s before application delivery", async (_label, frame) => {
+    const transport = await openTransport();
+    const notifications: string[] = [];
+    const requests: string[] = [];
+    const issues: CodexProtocolIssue[] = [];
+    const broker = createCodexRequestBroker(transport, {
+      on_notification: (message) => notifications.push(message.method),
+      on_server_request: (message) => requests.push(message.method),
+      on_protocol_issue: (issue) => issues.push(issue)
+    });
+
+    transport.receiveFromGeneration(frame, 0);
+
+    expect(transport.state).toBe("closed");
+    expect(notifications).toEqual([]);
+    expect(requests).toEqual([]);
+    expect(broker.pending_server_request_count).toBe(0);
+    expect(issues).toContainEqual(expect.objectContaining({ severity: "fatal", code: "protocol_violation" }));
+  });
+
   it("routes generated notifications and reports truly unknown notifications", async () => {
     const transport = await openTransport();
     const notifications: string[] = [];

@@ -151,9 +151,17 @@ describe("Codex approval client", () => {
     expect(port.responses).toHaveLength(0);
   });
 
-  it("rejects a non-positive connection generation at construction", () => {
+  it("allows idle composition but requires a positive generation for use", () => {
     const port = fakePort();
     port.generation = 0;
+    const client = createCodexApprovalClient(port);
+    expect(() => client.generation).toThrow(HostDeckCodexAdapterError);
+    expect(() => client.parseRequest(commandRequest(1))).toThrow(HostDeckCodexAdapterError);
+
+    port.generation = 1;
+    expect(client.parseRequest(commandRequest(1))).toMatchObject({ generation: 1 });
+
+    port.generation = -1;
     expect(() => createCodexApprovalClient(port)).toThrow(TypeError);
   });
 });
