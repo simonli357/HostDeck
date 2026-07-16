@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: hardening criteria frozen before implementation.
+Status: complete.
 
 ## Scope
 
@@ -105,3 +105,13 @@ Implement the selected one-session model catalog/read/select boundary from stric
 - `FE-V1-021` owns the approved mobile `/model` surface and visual state acceptance.
 - `IFC-V1-067` owns historical generic/tmux/raw surface disposition.
 - `IFC-V1-021` and packaging/release leaves own an installed `codexdeck` executable and clean-install command smoke.
+
+## Completion Evidence
+
+- Implemented a strict target-free public selection contract, exact manifest schema ownership, complete selected-state validation in the model service, the authenticated no-store GET route, and the common-gate/audited POST route. Selection remains a process-local next-turn state transition and never starts a Codex turn.
+- Added the dedicated bounded loopback model client plus exact `model` read/select parser, shell, help, JSON, and terminal-safe text mappings. The CLI exposes catalog model ids only and revalidates staged, replacement, clear, and already-current response correlation.
+- Route evidence covers local and paired private-HTTPS reads/writes, read-only rejection, CSRF/lock/gate order, target/runtime drift brackets, capability and compatibility matrices, malformed wire state, duplicate operation ids, raw response loss, terminal-audit failure, monotonic replacement revisions, and raw SQLite audit privacy.
+- Focused validation: 40 model service/route/client/CLI tests, 26 selected contract tests, and one real CLI -> loopback HTTP -> selected gate/audit -> production model service -> SQLite vertical pass. The vertical proves default-effort staging, second-session isolation, duplicate rejection, and zero `turn/start` calls.
+- Workspace validation: unit 1,459 passed with 36 intentional external skips; contract 264; integration 20; web 33; typecheck, lint/exports, scaffold, planning (212 tasks/649 dependencies), frozen install, diff checks, and exact reviewed Codex 0.144.0 binding all pass. The authenticated exact-runtime model smoke passes.
+- `pnpm audit --prod --audit-level=high` could not produce advisory evidence because npm's retired audit endpoint returned HTTP 410. No dependency or lockfile changed in this leaf.
+- Criteria commit `8c057bf`; implementation `5174fb3`.
