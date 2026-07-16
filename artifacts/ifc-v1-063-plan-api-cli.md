@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: hardening criteria frozen before implementation.
+Status: complete.
 
 ## Scope
 
@@ -112,3 +112,14 @@ Implement the selected one-session Plan catalog/read/select boundary from strict
 - `FE-V1-027` owns the approved mobile `/plan` surface and visual-state acceptance.
 - `IFC-V1-067` owns historical raw/slash/tmux surface disposition.
 - Packaging/release leaves own an installed `codexdeck` executable and clean-install command smoke.
+
+## Completion Evidence
+
+- Implemented the strict target-free Plan selection contract and exact selected manifest ownership, hardened complete selected identity/disposition checks in the production Plan service, and added authenticated no-store GET plus common-gate audited POST routes. Enter/exit only stage next-turn Plan/Default state; neither path dispatches a prompt or starts a turn.
+- Added the dedicated bounded loopback Plan client and exact `plan` read/enter/exit parser, shell, help, JSON, and terminal-safe text mappings. The CLI generates operation ids internally, correlates pending/replaced/cleared/no-op results, renders current/pending/execution/catalog truth, and exposes no target/thread/mode-name/model/effort/text/slash/retry surface.
+- Route evidence covers local and paired private HTTPS, read-only/CSRF/lock ordering, malformed wire input, complete target/runtime admission and drift brackets, pending/replacement/clear/no-op states, typed failed versus untyped/incomplete outcomes, duplicate ids, raw response loss, terminal-audit failure, and bounded SQLite summaries. Pending errors are canonicalized, while the typed managed-session audit target is the only audit location containing the thread id.
+- Focused validation: 51 Plan adapter/service/route/client/CLI tests, 57 selected contract/manifest/fixture tests, and one real CLI -> loopback HTTP -> selected gate/audit -> production Plan service -> SQLite vertical pass. The vertical proves confirmed and unknown reads, pending enter, exact revision clear, confirmed no-op, second-session isolation, duplicate rejection, and zero Plan/model turn dispatch.
+- Workspace validation: unit 1,514 passed with 36 intentional external/device skips; contract 266; integration 22; web 33; typecheck, lint/exports, scaffold, planning, frozen offline install, diff checks, and exact reviewed Codex 0.144.0 binding all pass. The authenticated exact-runtime Plan smoke passes.
+- The default `codex` on `PATH` is 0.144.3 and correctly fails the repository's exact binding check; the isolated reviewed 0.144.0 binary verifies all 671 generated binding files and supplied the passing smoke evidence.
+- `pnpm audit --prod --audit-level=high` could not produce advisory evidence because npm's retired audit endpoint returned HTTP 410. No dependency or lockfile changed in this leaf.
+- Criteria commit `56acfda`; implementation `203f339`.
