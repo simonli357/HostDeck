@@ -50,7 +50,7 @@ Implement the selected one-session goal read and lifecycle boundary from strict 
 - The route calls `CodexGoalControlService.mutate` exactly once after accepted audit. It never retries, sends prompt/slash/raw input, invokes a model/Plan selection, interrupts a turn, reads local storage through the CLI, or mutates another session.
 - A typed service error with `not_sent` or `remote_rejected` outcome terminalizes failed. A typed `unknown` outcome, malformed result after dispatch may have occurred, target/runtime drift after mutation, or response-materialization contradiction terminalizes incomplete.
 - Successful resume records a succeeded mutation audit because activation acceptance is proven, while public text says accepted and does not claim running/completed. Goal completion is a separate explicit `complete` action.
-- Unknown/conflict latch details remain visible through the strict snapshot, but public error messages are canonicalized by code; raw adapter causes, paths, credentials, thread ids, and objective text never enter audit or terminal error output.
+- Unknown/conflict latch details remain visible through the strict snapshot, but public error messages are canonicalized by code. The Codex thread id appears only in the repository-wide typed managed-session audit target; it never appears in summaries or errors. Raw adapter causes, paths, credentials, and objective text never enter audit or terminal error output.
 
 ## Outcome Rules
 

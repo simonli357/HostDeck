@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   archiveSessionRequestSchema,
   goalControlSnapshotSchema,
+  goalMutationRequestSchema,
   legacySessionDispositionRecordSchema,
   managedSessionProjectionSchema,
   modelControlSnapshotSchema,
@@ -383,6 +384,85 @@ describe("selected structured operation contracts", () => {
         decision: "deny"
       })
     ).toThrow();
+  });
+
+  it("exposes strict target-free public goal mutations", () => {
+    const revision = "a".repeat(64);
+    expect(
+      goalMutationRequestSchema.parse({
+        operation_id: "op_contract_goal_request_set",
+        kind: "goal",
+        action: "set",
+        objective: "  Complete V1.  ",
+        expected_goal_revision: null
+      })
+    ).toEqual({
+      operation_id: "op_contract_goal_request_set",
+      kind: "goal",
+      action: "set",
+      objective: "Complete V1.",
+      expected_goal_revision: null
+    });
+    for (const action of ["pause", "resume", "complete", "clear"] as const) {
+      expect(
+        goalMutationRequestSchema.parse({
+          operation_id: `op_contract_goal_request_${action}`,
+          kind: "goal",
+          action,
+          objective: null,
+          expected_goal_revision: revision
+        })
+      ).toBeTruthy();
+    }
+    for (const candidate of [
+      {
+        operation_id: "op_contract_goal_request_target",
+        kind: "goal",
+        action: "set",
+        objective: "Complete V1.",
+        expected_goal_revision: null,
+        target
+      },
+      {
+        operation_id: "op_contract_goal_request_missing",
+        kind: "goal",
+        action: "set",
+        objective: null,
+        expected_goal_revision: null
+      },
+      {
+        operation_id: "op_contract_goal_request_objective",
+        kind: "goal",
+        action: "pause",
+        objective: "Injected objective",
+        expected_goal_revision: revision
+      },
+      {
+        operation_id: "op_contract_goal_request_revision",
+        kind: "goal",
+        action: "resume",
+        objective: null,
+        expected_goal_revision: null
+      },
+      {
+        operation_id: "op_contract_goal_request_budget",
+        kind: "goal",
+        action: "set",
+        objective: "Complete V1.",
+        expected_goal_revision: null,
+        token_budget: 10_000
+      },
+      {
+        operation_id: "op_contract_goal_request_status",
+        kind: "goal",
+        action: "set",
+        objective: "Complete V1.",
+        expected_goal_revision: null,
+        status: "active"
+      }
+    ]) {
+      expect(() => goalMutationRequestSchema.parse(candidate)).toThrow();
+    }
   });
 
   it("keeps control availability consistent with negotiated capability state", () => {

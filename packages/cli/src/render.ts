@@ -2,6 +2,10 @@ import { Buffer } from "node:buffer";
 import {
   type ApiSession,
   defaultResourceBudget,
+  type GoalControlSnapshot,
+  type GoalMutationRequest,
+  goalControlSnapshotSchema,
+  goalMutationRequestSchema,
   type HostStatusResponse,
   type ModelControlSnapshot,
   type ModelSelectionRequest,
@@ -48,6 +52,9 @@ export function renderHelp(): string {
     "  codexdeck resume SESSION_ID",
     "  codexdeck model SESSION_ID [--json]",
     "  codexdeck model SESSION_ID MODEL_ID [--effort EFFORT] [--expected-revision REVISION] [--json]",
+    "  codexdeck goal SESSION_ID [--json]",
+    "  codexdeck goal SESSION_ID set --objective OBJECTIVE [--expected-revision REVISION] [--json]",
+    "  codexdeck goal SESSION_ID pause|resume|complete|clear --expected-revision REVISION [--json]",
     "  codexdeck usage SESSION_ID [--json]",
     "  codexdeck skills SESSION_ID [--json]",
     "  codexdeck pair [--label LABEL] [--read-only | --write]",
@@ -157,6 +164,38 @@ export function renderModelSnapshot(
     Buffer.byteLength(output, "utf8") > defaultResourceBudget.cli_response_max_bytes
   ) {
     throw internalFailure("Model rendering output exceeds its selected limit.");
+  }
+  return output;
+}
+
+export function renderGoalSnapshot(
+  candidate: GoalControlSnapshot,
+  json: boolean,
+  mutationCandidate?: GoalMutationRequest
+): string {
+  let parsed: ReturnType<typeof goalControlSnapshotSchema.safeParse>;
+  try {
+    parsed = goalControlSnapshotSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Goal rendering input is invalid.");
+  }
+  if (!parsed.success) throw internalFailure("Goal rendering input is invalid.");
+  let mutation: GoalMutationRequest | null = null;
+  if (mutationCandidate !== undefined) {
+    const parsedMutation = goalMutationRequestSchema.safeParse({
+      operation_id: mutationCandidate.operation_id,
+      kind: mutationCandidate.kind,
+      action: mutationCandidate.action,
+      objective: mutationCandidate.objective,
+      expected_goal_revision: mutationCandidate.expected_goal_revision
+    });
+    if (!parsedMutation.success) throw internalFailure("Goal rendering mutation is invalid.");
+    mutation = parsedMutation.data;
+    assertRenderedGoalMutation(parsed.data, mutation);
+  }
+  const output = json ? `${JSON.stringify(parsed.data, null, 2)}\n` : renderGoalText(parsed.data, mutation);
+  if (output.includes("\0") || Buffer.byteLength(output, "utf8") > defaultResourceBudget.cli_response_max_bytes) {
+    throw internalFailure("Goal rendering output exceeds its selected limit.");
   }
   return output;
 }
@@ -455,6 +494,82 @@ function renderModelText(snapshot: ModelControlSnapshot, selection: ModelSelecti
       .join(", ");
     lines.push(
       `- ${escapeTerminalText(model.label)} [${escapeTerminalText(model.id)}]${model.is_default ? " (default model)" : ""}; efforts: ${efforts}; input: ${model.input_modalities.join(", ")}`
+    );
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+function assertRenderedGoalMutation(snapshot: GoalControlSnapshot, mutation: GoalMutationRequest): void {
+  if (snapshot.uncertain_mutation !== null) throw internalFailure("Goal rendering mutation is contradictory.");
+  if (mutation.action === "clear") {
+    if (snapshot.goal !== null) throw internalFailure("Goal rendering mutation is contradictory.");
+    return;
+  }
+  const goal = snapshot.goal;
+  const expectedStatus =
+    mutation.action === "resume" ? "active" : mutation.action === "complete" ? "complete" : "paused";
+  if (
+    goal === null ||
+    goal.status !== expectedStatus ||
+    (mutation.action === "set" && goal.objective !== mutation.objective) ||
+    (mutation.action === "resume" &&
+      mutation.expected_goal_revision !== null &&
+      goal.revision === mutation.expected_goal_revision)
+  ) {
+    throw internalFailure("Goal rendering mutation is contradictory.");
+  }
+}
+
+function renderGoalText(snapshot: GoalControlSnapshot, mutation: GoalMutationRequest | null): string {
+  const lines: string[] = [];
+  if (mutation !== null) {
+    if (mutation.action === "clear") {
+      lines.push("Goal clear verified.");
+    } else if (mutation.action === "resume") {
+      lines.push("Goal resume accepted.");
+    } else {
+      const noOp = snapshot.goal?.revision === mutation.expected_goal_revision;
+      if (mutation.action === "set") {
+        lines.push(noOp ? "Goal already matches the requested paused objective." : "Goal set in paused state.");
+      } else if (mutation.action === "pause") {
+        lines.push(noOp ? "Goal already paused." : "Goal pause verified.");
+      } else {
+        lines.push(noOp ? "Goal already complete." : "Goal completion verified.");
+      }
+    }
+    lines.push("");
+  }
+
+  if (snapshot.goal === null) {
+    lines.push("Goal: none.");
+  } else {
+    const goal = snapshot.goal;
+    lines.push(
+      `Goal: ${goal.status}.`,
+      `Objective: ${escapeTerminalText(goal.objective)}`,
+      `Revision: ${goal.revision}`,
+      `Token budget: ${goal.token_budget === null ? "none" : goal.token_budget}`,
+      `Tokens used: ${goal.tokens_used}`,
+      `Time used: ${goal.time_used_seconds} seconds`,
+      `Created: ${goal.created_at}`,
+      `Updated: ${goal.updated_at}`
+    );
+  }
+
+  const uncertain = snapshot.uncertain_mutation;
+  if (uncertain === null) {
+    lines.push("Uncertain mutation: none.");
+  } else {
+    lines.push(
+      `Uncertain mutation: ${uncertain.action} (${uncertain.phase}).`,
+      `Requested at: ${uncertain.requested_at}`,
+      `Baseline revision: ${uncertain.baseline_revision ?? "none"}`,
+      `Requested status: ${uncertain.requested_status ?? "none"}`,
+      ...(uncertain.requested_objective === null
+        ? []
+        : [`Requested objective: ${escapeTerminalText(uncertain.requested_objective)}`]),
+      `Error: ${uncertain.error.code}.`
     );
   }
   lines.push("");

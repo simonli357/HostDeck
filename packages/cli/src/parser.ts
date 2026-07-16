@@ -19,6 +19,14 @@ export type ParsedCliCommand =
       readonly expectedRevision: number | null;
       readonly json: boolean;
     }
+  | {
+      readonly kind: "goal";
+      readonly session: string;
+      readonly action: "clear" | "complete" | "pause" | "resume" | "set" | null;
+      readonly objective: string | null;
+      readonly expectedRevision: string | null;
+      readonly json: boolean;
+    }
   | { readonly kind: "usage"; readonly session: string; readonly json: boolean }
   | { readonly kind: "skills"; readonly session: string; readonly json: boolean }
   | { readonly kind: "stop"; readonly session: string }
@@ -153,8 +161,8 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
     }
 
     if (token === "--") {
-      if (positionals[0] === "model") {
-        throw usageFailure("The model command does not accept an option terminator.");
+      if (positionals[0] === "model" || positionals[0] === "goal") {
+        throw usageFailure(`The ${positionals[0]} command does not accept an option terminator.`);
       }
       positionals.push(...args.slice(index + 1));
       break;
@@ -265,6 +273,21 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
         session: parsed.session,
         model: parsed.model,
         effort: parsed.effort,
+        expectedRevision: parsed.expectedRevision,
+        json: parsed.json
+      },
+      configFlags
+    };
+  }
+
+  if (command === "goal") {
+    const parsed = parseGoalOptions(rest, json);
+    return {
+      command: {
+        kind: "goal",
+        session: parsed.session,
+        action: parsed.action,
+        objective: parsed.objective,
         expectedRevision: parsed.expectedRevision,
         json: parsed.json
       },
@@ -508,6 +531,89 @@ function parsePositiveRevision(candidate: string): number {
     throw usageFailure("Model expected revision exceeds the supported range.");
   }
   return revision;
+}
+
+function parseGoalOptions(
+  args: readonly string[],
+  globalJson: boolean
+): {
+  readonly session: string;
+  readonly action: "clear" | "complete" | "pause" | "resume" | "set" | null;
+  readonly objective: string | null;
+  readonly expectedRevision: string | null;
+  readonly json: boolean;
+} {
+  const [session, actionCandidate, ...rest] = args;
+  if (session === undefined || session.startsWith("-")) {
+    throw usageFailure("The goal command requires one managed session id.");
+  }
+  if (actionCandidate === undefined) {
+    return { session, action: null, objective: null, expectedRevision: null, json: globalJson };
+  }
+  if (!isGoalAction(actionCandidate)) {
+    throw usageFailure(`Unknown goal action: ${actionCandidate}`);
+  }
+
+  let objective: string | null = null;
+  let expectedRevision: string | null = null;
+  let objectiveSeen = false;
+  let revisionSeen = false;
+  let json = globalJson;
+  for (let index = 0; index < rest.length; index += 1) {
+    const token = rest[index];
+    if (token === undefined) continue;
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
+    if (token === "--objective") {
+      if (objectiveSeen) throw usageFailure("The goal command accepts --objective only once.");
+      objective = readOptionValue(rest, index, "--objective");
+      objectiveSeen = true;
+      index += 1;
+      continue;
+    }
+    if (token.startsWith("--objective=")) {
+      if (objectiveSeen) throw usageFailure("The goal command accepts --objective only once.");
+      objective = readInlineOptionValue(token, "--objective");
+      objectiveSeen = true;
+      continue;
+    }
+    if (token === "--expected-revision") {
+      if (revisionSeen) throw usageFailure("The goal command accepts --expected-revision only once.");
+      expectedRevision = parseGoalRevision(readOptionValue(rest, index, "--expected-revision"));
+      revisionSeen = true;
+      index += 1;
+      continue;
+    }
+    if (token.startsWith("--expected-revision=")) {
+      if (revisionSeen) throw usageFailure("The goal command accepts --expected-revision only once.");
+      expectedRevision = parseGoalRevision(readInlineOptionValue(token, "--expected-revision"));
+      revisionSeen = true;
+      continue;
+    }
+    if (token.startsWith("-")) throw usageFailure(`Unknown goal option: ${token}`);
+    throw usageFailure(`Unexpected goal argument: ${token}`);
+  }
+
+  if (actionCandidate === "set") {
+    if (!objectiveSeen) throw usageFailure("The goal set action requires --objective.");
+  } else {
+    if (objectiveSeen) throw usageFailure("Only the goal set action accepts --objective.");
+    if (!revisionSeen) throw usageFailure(`The goal ${actionCandidate} action requires --expected-revision.`);
+  }
+  return { session, action: actionCandidate, objective, expectedRevision, json };
+}
+
+function isGoalAction(candidate: string): candidate is "clear" | "complete" | "pause" | "resume" | "set" {
+  return candidate === "set" || candidate === "pause" || candidate === "resume" || candidate === "complete" || candidate === "clear";
+}
+
+function parseGoalRevision(candidate: string): string {
+  if (!/^[a-f0-9]{64}$/u.test(candidate)) {
+    throw usageFailure("Goal expected revision must be 64 lowercase hexadecimal characters.");
+  }
+  return candidate;
 }
 
 function parsePairOptions(args: readonly string[], globalJson: boolean): {

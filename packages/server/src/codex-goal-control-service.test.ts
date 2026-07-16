@@ -5,6 +5,10 @@ import {
   HostDeckCodexAdapterError,
   type NormalizedCodexEvent
 } from "@hostdeck/codex-adapter";
+import {
+  selectedSessionMappingRecordSchema,
+  selectedSessionProjectionRecordSchema
+} from "@hostdeck/contracts";
 import type { SelectedSessionState } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
 import {
@@ -69,6 +73,35 @@ describe("Codex structured goal control", () => {
       "target_mismatch"
     );
     expect(stale.goals.mutations).toHaveLength(0);
+  });
+
+  it("rejects contradictory selected identity and recovery disposition before runtime access", async () => {
+    const contradictory = createHarness({ goal: goalA() });
+    const state = selectedState(targetA.session_id, targetA.codex_thread_id);
+    contradictory.states.set(targetA.session_id, {
+      ...state,
+      projection: {
+        ...state.projection,
+        session: {
+          ...state.projection.session,
+          name: "contradictory" as SelectedSessionState["mapping"]["name"]
+        }
+      }
+    });
+    await expectGoalError(contradictory.service.snapshot(targetA), "target_mismatch");
+
+    const misplaced = createHarness({ goal: goalA() });
+    misplaced.states.set(targetA.session_id, selectedState(targetB.session_id, targetA.codex_thread_id));
+    await expectGoalError(misplaced.service.snapshot(targetA), "target_mismatch");
+
+    const recovery = createHarness({ goal: goalA() });
+    const recoveryState = selectedState(targetA.session_id, targetA.codex_thread_id);
+    recovery.states.set(targetA.session_id, {
+      ...recoveryState,
+      mapping: { ...recoveryState.mapping, disposition: "recovery_required" }
+    });
+    await expectGoalError(recovery.service.snapshot(targetA), "target_not_writable");
+    expect(recovery.goals.mutations).toHaveLength(0);
   });
 
   it("allows pause during an active turn without claiming interrupt", async () => {
@@ -400,16 +433,48 @@ function goalIntent(
 }
 
 function selectedState(sessionId: string, threadId: string, turnState = "idle", archived = false): SelectedSessionState {
-  return {
-    mapping: { id: sessionId, codex_thread_id: threadId, archived_at: archived ? now : null },
-    projection: {
-      session: {
-        session_state: archived ? "archived" : "active",
-        freshness: "current",
-        turn_state: turnState
-      }
-    }
-  } as unknown as SelectedSessionState;
+  const archivedAt = archived ? now : null;
+  const mapping = selectedSessionMappingRecordSchema.parse({
+    id: sessionId,
+    name: sessionId.replace(/^sess_/u, ""),
+    codex_thread_id: threadId,
+    cwd: `/tmp/${sessionId}`,
+    runtime_source: "codex_app_server",
+    runtime_version: "0.144.0",
+    disposition: "selected",
+    created_at: now,
+    updated_at: now,
+    archived_at: archivedAt
+  });
+  const projection = selectedSessionProjectionRecordSchema.parse({
+    session: {
+      id: mapping.id,
+      name: mapping.name,
+      codex_thread_id: mapping.codex_thread_id,
+      cwd: mapping.cwd,
+      runtime_source: mapping.runtime_source,
+      runtime_version: mapping.runtime_version,
+      created_at: mapping.created_at,
+      archived_at: archivedAt,
+      session_state: archived ? "archived" : "active",
+      turn_state: turnState,
+      attention: "none",
+      freshness: "current",
+      freshness_reason: null,
+      updated_at: now,
+      last_activity_at: now,
+      branch: "main",
+      model: "runtime-a",
+      goal: null,
+      recent_summary: "Managed Codex goal session ready.",
+      last_event_cursor: null
+    },
+    retained_event_count: 0,
+    retained_event_bytes: 0,
+    earliest_retained_cursor: null,
+    retention_boundary_cursor: null
+  });
+  return { mapping, projection };
 }
 
 function goalUpdatedEvent(

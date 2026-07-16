@@ -148,6 +148,27 @@ export const goalOperationIntentSchema = z
     }
   });
 
+export const goalMutationRequestSchema = z
+  .object({
+    operation_id: clientOperationIdSchema,
+    kind: z.literal("goal"),
+    action: z.enum(["set", "pause", "resume", "complete", "clear"]),
+    objective: z.string().trim().min(1).max(operationLimits.goalLength).nullable(),
+    expected_goal_revision: z.string().regex(/^[a-f0-9]{64}$/u).nullable()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.action === "set" && value.objective === null) {
+      context.addIssue({ code: "custom", message: "Setting a goal requires an objective." });
+    }
+    if (value.action !== "set" && value.objective !== null) {
+      context.addIssue({ code: "custom", message: "Only the set goal action may carry an objective." });
+    }
+    if (value.action !== "set" && value.expected_goal_revision === null) {
+      context.addIssue({ code: "custom", message: "Existing-goal actions require the observed goal revision." });
+    }
+  });
+
 export const planOperationIntentSchema = z
   .object({
     ...managedOperationBaseShape,
@@ -1033,6 +1054,7 @@ export type SelectedOperationIntent = z.infer<typeof selectedOperationIntentSche
 export type PromptSessionRequest = z.infer<typeof promptSessionRequestSchema>;
 export type PromptDispatchResponse = z.infer<typeof promptDispatchResponseSchema>;
 export type ModelSelectionRequest = z.infer<typeof modelSelectionRequestSchema>;
+export type GoalMutationRequest = z.infer<typeof goalMutationRequestSchema>;
 export type ArchiveSessionRequest = z.infer<typeof archiveSessionRequestSchema>;
 export type SelectedOperationDispatch = z.infer<typeof selectedOperationDispatchSchema>;
 export type SelectedOperationTerminalOutcome = z.infer<typeof selectedOperationTerminalOutcomeSchema>;

@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import type {
   ApiErrorEnvelope,
   ApiSession,
+  GoalControlSnapshot,
+  GoalMutationRequest,
   ModelControlSnapshot,
   ModelSelectionRequest,
   PromptDispatchResponse,
@@ -15,6 +17,8 @@ import type {
 import {
   archiveSessionRequestSchema,
   clientOperationIdSchema,
+  goalControlSnapshotSchema,
+  goalMutationRequestSchema,
   modelControlSnapshotSchema,
   modelSelectionRequestSchema,
   promptDispatchResponseSchema,
@@ -51,6 +55,11 @@ import {
   usageFailure
 } from "./errors.js";
 import { type CliExitCode, cliExitCodes } from "./exit-codes.js";
+import {
+  createHostDeckGoalClient,
+  type HostDeckGoalClient,
+  type HostDeckGoalClientMutationRequest
+} from "./goal-client.js";
 import { createLocalAdmin, type LocalAdmin } from "./local-admin.js";
 import {
   createHostDeckModelClient,
@@ -75,6 +84,7 @@ import {
   renderArchiveSession,
   renderAttachCommand,
   renderFailure,
+  renderGoalSnapshot,
   renderHelp,
   renderLockCommand,
   renderModelSnapshot,
@@ -126,6 +136,7 @@ export interface CliRunOptions {
   readonly fetch?: HttpFetch;
   readonly client?: HostDeckApiClient;
   readonly localAdmin?: LocalAdmin;
+  readonly goalClient?: HostDeckGoalClient;
   readonly modelClient?: HostDeckModelClient;
   readonly archiveClient?: HostDeckArchiveClient;
   readonly promptClient?: HostDeckPromptClient;
@@ -141,6 +152,7 @@ export interface CliRunOptions {
   ) => string;
   readonly createPairOperationId?: () => string;
   readonly createArchiveOperationId?: () => string;
+  readonly createGoalOperationId?: () => string;
   readonly createModelOperationId?: () => string;
   readonly createPromptOperationId?: () => string;
   readonly createStartOperationId?: () => string;
@@ -279,6 +291,29 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
         request
       );
       return success(renderModelSnapshot(snapshot, parsed.command.json, request));
+    }
+
+    if (parsed.command.kind === "goal") {
+      const target = parseGoalTarget(parsed.command.session);
+      let goalClient = options.goalClient;
+      if (goalClient === undefined) {
+        const goalClientOptions = { baseUrl: config.baseUrl };
+        if (options.fetch !== undefined) Object.assign(goalClientOptions, { fetch: options.fetch });
+        goalClient = createHostDeckGoalClient(goalClientOptions);
+      }
+      if (parsed.command.action === null) {
+        const snapshot = parseGoalSnapshot(await Reflect.apply(goalClient.read, undefined, [target]));
+        return success(renderGoalSnapshot(snapshot, parsed.command.json));
+      }
+      const request = createGoalMutationRequest(
+        parsed.command,
+        options.createGoalOperationId ?? createGoalOperationId
+      );
+      const snapshot = parseGoalMutationSnapshot(
+        await Reflect.apply(goalClient.mutate, undefined, [request]),
+        request
+      );
+      return success(renderGoalSnapshot(snapshot, parsed.command.json, request));
     }
 
     if (parsed.command.kind === "usage") {
@@ -519,6 +554,10 @@ function createPromptOperationId(): string {
 
 function createModelOperationId(): string {
   return `op_model_${randomUUID().replaceAll("-", "")}`;
+}
+
+function createGoalOperationId(): string {
+  return `op_goal_${randomUUID().replaceAll("-", "")}`;
 }
 
 function createSessionStartRequest(
@@ -780,6 +819,84 @@ function assertModelSelectionCorrelation(snapshot: ModelControlSnapshot, request
     snapshot.current.reasoning_effort !== resolvedEffort
   ) {
     throw internalFailure("HostDeck model client returned contradictory selection data.");
+  }
+}
+
+function parseGoalTarget(candidate: string): string {
+  const parsed = sessionIdParamsSchema.safeParse({ session_id: candidate });
+  if (!parsed.success) throw usageFailure("Goal requires one valid managed session id.", "session");
+  return parsed.data.session_id;
+}
+
+function createGoalMutationRequest(
+  command: Extract<ReturnType<typeof parseCliArgs>["command"], { readonly kind: "goal" }>,
+  createOperationId: () => string
+): HostDeckGoalClientMutationRequest {
+  if (command.action === null) throw internalFailure("Goal mutation command lost its lifecycle action.");
+  let operationId: unknown;
+  try {
+    operationId = Reflect.apply(createOperationId, undefined, []);
+  } catch (error) {
+    throw internalFailure("Goal operation id generation failed.", error);
+  }
+  const target = sessionIdParamsSchema.safeParse({ session_id: command.session });
+  const body = goalMutationRequestSchema.safeParse({
+    operation_id: operationId,
+    kind: "goal",
+    action: command.action,
+    objective: command.objective,
+    expected_goal_revision: command.expectedRevision
+  });
+  if (!target.success) throw usageFailure("Goal requires one valid managed session id.", "session");
+  if (!body.success) {
+    if (!clientOperationIdSchema.safeParse(operationId).success) {
+      throw internalFailure("Goal operation id generation failed.");
+    }
+    throw usageFailure("Goal mutation does not satisfy the selected goal contract.", "goal");
+  }
+  return Object.freeze({ ...body.data, session_id: target.data.session_id });
+}
+
+function parseGoalSnapshot(candidate: unknown): GoalControlSnapshot {
+  let parsed: ReturnType<typeof goalControlSnapshotSchema.safeParse>;
+  try {
+    parsed = goalControlSnapshotSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("HostDeck goal client returned invalid managed-session data.");
+  }
+  if (!parsed.success) throw internalFailure("HostDeck goal client returned invalid managed-session data.");
+  return parsed.data;
+}
+
+function parseGoalMutationSnapshot(
+  candidate: unknown,
+  request: HostDeckGoalClientMutationRequest
+): GoalControlSnapshot {
+  const snapshot = parseGoalSnapshot(candidate);
+  assertGoalMutationCorrelation(snapshot, request);
+  return snapshot;
+}
+
+function assertGoalMutationCorrelation(snapshot: GoalControlSnapshot, request: GoalMutationRequest): void {
+  if (snapshot.uncertain_mutation !== null) {
+    throw internalFailure("HostDeck goal client returned contradictory mutation data.");
+  }
+  if (request.action === "clear") {
+    if (snapshot.goal !== null) throw internalFailure("HostDeck goal client returned contradictory mutation data.");
+    return;
+  }
+  const goal = snapshot.goal;
+  const expectedStatus =
+    request.action === "resume" ? "active" : request.action === "complete" ? "complete" : "paused";
+  if (
+    goal === null ||
+    goal.status !== expectedStatus ||
+    (request.action === "set" && goal.objective !== request.objective) ||
+    (request.action === "resume" &&
+      request.expected_goal_revision !== null &&
+      goal.revision === request.expected_goal_revision)
+  ) {
+    throw internalFailure("HostDeck goal client returned contradictory mutation data.");
   }
 }
 

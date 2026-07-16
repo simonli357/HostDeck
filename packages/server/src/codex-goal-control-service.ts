@@ -15,6 +15,8 @@ import {
   managedSessionTargetSchema,
   resourceBudgetDefinitionByKey,
   type SelectedOperationIntent,
+  selectedSessionMappingRecordSchema,
+  selectedSessionProjectionRecordSchema,
   type UncertainGoalMutation
 } from "@hostdeck/contracts";
 import type { ErrorCode, IsoTimestamp } from "@hostdeck/core";
@@ -326,13 +328,51 @@ class DefaultCodexGoalControlService implements CodexGoalControlService {
   }
 
   private requireTarget(target: ManagedSessionTarget, writable: boolean): SelectedSessionState {
-    const state = this.options.states.get(target.session_id);
-    if (state === null) {
+    const candidate = this.options.states.get(target.session_id);
+    if (candidate === null) {
       this.uncertainBySession.delete(target.session_id);
       throw goalError("target_not_found", "session_not_found", "The selected managed session does not exist.", "not_sent", false);
     }
-    if (state.mapping.codex_thread_id !== target.codex_thread_id) {
+    const state = parseSelectedGoalState(candidate);
+    if (state === null) {
+      throw goalError(
+        "target_mismatch",
+        "stale_session",
+        "The selected managed session identity requires reconciliation.",
+        "not_sent",
+        false
+      );
+    }
+    if (state.mapping.id !== target.session_id || state.mapping.codex_thread_id !== target.codex_thread_id) {
       throw goalError("target_mismatch", "invalid_session_id", "The selected session and Codex thread identity do not match.", "not_sent", false);
+    }
+    const session = state.projection.session;
+    if (
+      state.mapping.id !== session.id ||
+      state.mapping.name !== session.name ||
+      state.mapping.codex_thread_id !== session.codex_thread_id ||
+      state.mapping.cwd !== session.cwd ||
+      state.mapping.runtime_source !== session.runtime_source ||
+      state.mapping.runtime_version !== session.runtime_version ||
+      state.mapping.created_at !== session.created_at ||
+      state.mapping.archived_at !== session.archived_at
+    ) {
+      throw goalError(
+        "target_mismatch",
+        "stale_session",
+        "The selected managed session identity requires reconciliation.",
+        "not_sent",
+        false
+      );
+    }
+    if (state.mapping.disposition !== "selected") {
+      throw goalError(
+        "target_not_writable",
+        "stale_session",
+        "The selected managed session requires recovery before goal control.",
+        "not_sent",
+        false
+      );
     }
     if (state.mapping.archived_at !== null || state.projection.session.session_state === "archived") {
       this.uncertainBySession.delete(target.session_id);
@@ -450,6 +490,17 @@ class DefaultCodexGoalControlService implements CodexGoalControlService {
         release();
         if (this.tails.get(sessionId) === tail) this.tails.delete(sessionId);
       });
+  }
+}
+
+function parseSelectedGoalState(candidate: SelectedSessionState): SelectedSessionState | null {
+  try {
+    const mapping = selectedSessionMappingRecordSchema.safeParse(candidate.mapping);
+    const projection = selectedSessionProjectionRecordSchema.safeParse(candidate.projection);
+    if (!mapping.success || !projection.success) return null;
+    return { mapping: mapping.data, projection: projection.data };
+  } catch {
+    return null;
   }
 }
 

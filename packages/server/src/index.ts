@@ -25,6 +25,7 @@ export * from "./fastify-resource-options.js";
 export * from "./fastify-sse-transport.js";
 export * from "./fastify-static-boundary.js";
 export * from "./fastify-zod.js";
+export * from "./goal-routes.js";
 export * from "./host-lock-routes.js";
 export * from "./host-service.js";
 export * from "./managed-thread-service.js";
