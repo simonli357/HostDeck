@@ -16,10 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-045` Implement exact active-turn interrupt API and CLI command | ready | none | Exposes the completed exact-turn interrupt service through the selected write gate. |
-| 2 | `IFC-V1-049` Enforce operation idempotency and concurrency limits | ready | none | Hardens duplicate and concurrent selected writes before aggregate production composition. |
-| 3 | `INT-V1-007` Implement runtime process/socket supervision | ready | none | The accepted structured vertical permits explicit foreground/service ownership work independently of remote contract implementation. |
-| 4 | `IFC-V1-035` Add bounded subscriber queues and revoke/disconnect/archive cleanup | ready | none | Exact active/opening-stream revoke is complete; bounded subscriber ownership can progress independently of the ingress spike. |
+| 1 | `IFC-V1-049` Enforce operation idempotency and concurrency limits | ready | none | Hardens duplicate and concurrent selected writes before aggregate production composition. |
+| 2 | `INT-V1-007` Implement runtime process/socket supervision | ready | none | The accepted structured vertical permits explicit foreground/service ownership work independently of remote contract implementation. |
+| 3 | `IFC-V1-035` Add bounded subscriber queues and revoke/disconnect/archive cleanup | ready | none | Exact active/opening-stream revoke is complete; bounded subscriber ownership can progress independently of the ingress spike. |
 
 ## Intentional Blockers
 

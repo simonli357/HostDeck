@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: hardening criteria frozen before implementation.
+Status: complete.
 
 ## Scope
 
@@ -119,3 +119,14 @@ Implement the selected exact-turn interrupt boundary from strict session/turn-sc
 - `FE-V1-036` owns the approved mobile confirmation, pending, terminal, accessibility, and visual acceptance surface.
 - `IFC-V1-067` owns historical raw/slash/tmux surface disposition.
 - Packaging/release leaves own an installed `codexdeck` executable and clean-install command smoke.
+
+## Completion Evidence
+
+- Implemented strict session/turn params, a target-free confirmed interrupt request, an exact terminal-only interrupted response, and selected manifest schema ids. The target-bearing operation intent remains internal to the service boundary.
+- Hardened the production interrupt service around complete selected mapping/projection identity, selected disposition, exact runtime version, fail-closed state ports, route-safe active-turn admission, and an abort-aware event-driven terminal waiter. It sends once, never polls or retries, and recognizes only the matching normalized interrupted terminal event as success.
+- Added the exact selected POST route through the common authority, CSRF, lock, target/runtime/capability, accepted-audit, admission-recheck, one-dispatch, terminal-wait, continuity, and terminal-audit sequence. Local and paired private-HTTPS tests cover malformed, unauthorized, stale, locked, disconnected, conflicting, ambiguous, duplicate, response-loss, and terminal-audit paths.
+- Added the dedicated bounded direct-loopback client and only source CLI form `interrupt SESSION_ID TURN_ID --confirm [--json]`. Operation ids are internal, output is terminal-safe and schema-exact, and no implicit current turn, force, retry, timeout, target/runtime, slash, archive, or delete surface exists.
+- A real source CLI -> HTTP -> selected gate/audit -> production interrupt service -> SQLite vertical proves an accepted in-flight record, one exact adapter call, event-proven terminal response, second-session isolation, same/distinct-operation rejection, and raw audit privacy without archive or delete behavior.
+- Validation passes: 40 direct service/route/client/CLI tests; one interrupt vertical; unit 1,595 with 36 intentional external/device skips; contract 276; integration 25; web 33; root and all-package typechecks; lint/exports over 475 files and 9 packages; scaffold; planning; frozen offline install; permissive production license inventory; exact reviewed Codex 0.144.0 binding over 671 files; authenticated interrupt smoke; and diff checks.
+- The default Codex 0.144.3 remains intentionally incompatible and was not modified. `pnpm audit --prod` could not produce advisory evidence because npm's retired endpoint returned HTTP 410. No dependency or lockfile changed, no aggregate registration or reconnect/UI claim was made, and no physical phone was required for this headless leaf.
+- Criteria commit `23cbd7f`; implementation `d98ab2e`.
