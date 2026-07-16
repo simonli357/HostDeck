@@ -211,10 +211,10 @@ function vitestReport() {
           title: titles[index] as string
         }
       ],
-      endTime: 2,
+      endTime: 2.75,
       message: "" as const,
       name: resolve(path),
-      startTime: 1,
+      startTime: 1.25,
       status: "passed" as const
     }))
   };

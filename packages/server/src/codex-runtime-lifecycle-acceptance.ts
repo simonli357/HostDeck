@@ -9,6 +9,11 @@ const safeCountSchema = z
   .min(0)
   .max(Number.MAX_SAFE_INTEGER);
 const positiveCountSchema = safeCountSchema.min(1);
+const highResolutionTimestampSchema = z
+  .number()
+  .finite()
+  .min(0)
+  .max(Number.MAX_SAFE_INTEGER);
 const noPrivacySchema = z
   .object({
     contains_pid: z.literal(false),
@@ -241,10 +246,10 @@ const vitestAssertionSchema = z
 const vitestFileResultSchema = z
   .object({
     assertionResults: z.array(vitestAssertionSchema).length(1),
-    endTime: safeCountSchema,
+    endTime: highResolutionTimestampSchema,
     message: z.literal(""),
     name: z.string().min(1).max(4_096),
-    startTime: safeCountSchema,
+    startTime: highResolutionTimestampSchema,
     status: z.literal("passed")
   })
   .strict()
