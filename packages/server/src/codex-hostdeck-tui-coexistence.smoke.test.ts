@@ -1192,6 +1192,8 @@ async function startTui(input: {
   let running = false;
   let processGroupStopped = false;
   let panePid: number | null = null;
+  let tmuxServerPid: number | null = null;
+  let tmuxSocketIdentity: string | null = null;
   let latestOutput = "";
   const capture = async () => {
     const output = (
@@ -1251,6 +1253,30 @@ async function startTui(input: {
       { cwd: input.cwd, env: environment }
     );
     running = true;
+    tmuxServerPid = parsePositiveInteger(
+      (
+        await runFile(
+          "tmux",
+          [
+            "-S",
+            input.tmux_socket_path,
+            "display-message",
+            "-p",
+            "#{pid}"
+          ],
+          { env: environment }
+        )
+      ).stdout.trim(),
+      "tmux server pid"
+    );
+    tmuxSocketIdentity = socketIdentity(input.tmux_socket_path);
+    if (
+      !readBoundedProcessCommandLine(tmuxServerPid).includes(
+        input.tmux_socket_path
+      )
+    ) {
+      throw new Error("Coexistence tmux server identity is invalid.");
+    }
     await runFile(
       "tmux",
       [
@@ -1310,6 +1336,8 @@ async function startTui(input: {
       "Coexistence TUI did not render its expected managed-thread view."
     );
     const fixedPid = panePid;
+    const fixedTmuxServerPid = tmuxServerPid;
+    const fixedTmuxSocketIdentity = tmuxSocketIdentity;
     const close = async () => {
       if (!running) return;
       if (!processGroupStopped) {
@@ -1324,10 +1352,11 @@ async function startTui(input: {
           );
         }
       }
-      await runFile(
-        "tmux",
-        ["-S", input.tmux_socket_path, "kill-server"],
-        { env: environment }
+      await stopTuiTmuxServer(
+        input.tmux_socket_path,
+        fixedTmuxServerPid,
+        fixedTmuxSocketIdentity,
+        environment
       );
       running = false;
       await waitFor(
@@ -1380,14 +1409,20 @@ async function startTui(input: {
       );
     }
     if (running) {
-      await collectCleanup(
-        runFile(
-          "tmux",
-          ["-S", input.tmux_socket_path, "kill-server"],
-          { env: environment }
-        ).then(() => undefined),
-        cleanupErrors
-      );
+      const stopTmux =
+        tmuxServerPid === null || tmuxSocketIdentity === null
+          ? runFile(
+              "tmux",
+              ["-S", input.tmux_socket_path, "kill-server"],
+              { env: environment }
+            ).then(() => undefined)
+          : stopTuiTmuxServer(
+              input.tmux_socket_path,
+              tmuxServerPid,
+              tmuxSocketIdentity,
+              environment
+            );
+      await collectCleanup(stopTmux, cleanupErrors);
     }
     await collectCleanup(
       waitFor(
@@ -1406,6 +1441,34 @@ async function startTui(input: {
       );
     }
     throw error;
+  }
+}
+
+async function stopTuiTmuxServer(
+  path: string,
+  serverPid: number,
+  expectedSocketIdentity: string,
+  environment: NodeJS.ProcessEnv
+): Promise<void> {
+  await runFile("tmux", ["-S", path, "kill-server"], {
+    env: environment
+  });
+  await waitFor(
+    () => !isProcessAlive(serverPid),
+    5_000,
+    "Coexistence tmux server remained after owner teardown."
+  );
+  if (
+    !existsSync(path) ||
+    socketIdentity(path) !== expectedSocketIdentity
+  ) {
+    throw new Error(
+      "Refusing to remove a missing or replaced coexistence tmux socket."
+    );
+  }
+  rmSync(path);
+  if (existsSync(path)) {
+    throw new Error("Coexistence tmux socket remained after owner cleanup.");
   }
 }
 
