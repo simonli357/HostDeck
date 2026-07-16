@@ -389,24 +389,69 @@ describe.skipIf(!requireSmoke)(
 
           await tuiA.close();
           tuiA = null;
-          await waitFor(
-            async () => {
-              await pipeline?.barrier();
-              assertNoBackgroundErrors(backgroundErrors);
-              return (
-                readMarker(markerPath) === "finished" &&
-                repository.require("sess_tui_coexistence_001").projection
-                  .session.turn_state === "completed" &&
-                countNormalizedTurnEvent(
+          try {
+            await waitFor(
+              async () => {
+                await pipeline?.barrier();
+                assertNoBackgroundErrors(backgroundErrors);
+                return (
+                  readMarker(markerPath) === "finished" &&
+                  repository.require("sess_tui_coexistence_001")
+                    .projection.session.turn_state === "completed" &&
+                  countNormalizedTurnEvent(
+                    normalizedEvents,
+                    "turn/completed",
+                    accepted.turn_id
+                  ) === 1
+                );
+              },
+              120_000,
+              "HostDeck did not observe the shared turn complete after TUI A closed."
+            );
+          } catch (error) {
+            let runtimeReadSucceeded = false;
+            let runtimeIdle = false;
+            try {
+              const runtimeThread = await threadsA.read(managedThreadId);
+              runtimeReadSucceeded = true;
+              runtimeIdle = runtimeThread.status === "idle";
+            } catch {
+              // The bounded diagnostic below records only the failed read.
+            }
+            const marker = readMarker(markerPath);
+            const markerState =
+              marker === null
+                ? "missing"
+                : marker === "started" || marker === "finished"
+                  ? marker
+                  : "unexpected";
+            const projection = repository.require(
+              "sess_tui_coexistence_001"
+            ).projection.session;
+            throw new Error(
+              [
+                "HostDeck shared-turn completion diagnostic:",
+                `marker=${markerState}`,
+                `projection=${projection.turn_state}`,
+                `normalized_completion=${countNormalizedTurnEvent(
                   normalizedEvents,
                   "turn/completed",
                   accepted.turn_id
-                ) === 1
-              );
-            },
-            120_000,
-            "HostDeck did not observe the shared turn complete after TUI A closed."
-          );
+                )}`,
+                `runtime_read=${String(runtimeReadSucceeded)}`,
+                `runtime_idle=${String(runtimeIdle)}`,
+                `pipeline_failed=${String(pipeline.failure !== null)}`,
+                `pending=${pipeline.pending_count}`,
+                `connection_ready=${String(connectionA.state === "ready")}`,
+                `generation_stable=${String(
+                  connectionA.generation === expectedGenerationA
+                )}`,
+                `app_output_overflow=${String(appOutput.overflowed())}`,
+                `app_spawn_failed=${String(appOutput.failure() !== null)}`
+              ].join(" "),
+              { cause: error }
+            );
+          }
           await pipeline.barrier();
           await waitFor(
             () => pending.size === 0,
