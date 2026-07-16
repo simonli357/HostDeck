@@ -68,11 +68,7 @@ describe.skipIf(!requireAcceptance)(
           process.env.HOSTDECK_CODEX_BIN
         );
         const commit = currentCleanCommit(repositoryRoot);
-        const outerRoot = mkdtempSync(
-          join(tmpdir(), "hostdeck-runtime-lifecycle-acceptance-")
-        );
-        chmodSync(outerRoot, 0o700);
-        assertPrivateLifecycleDirectory(outerRoot);
+        const outerRoot = createPrivateOuterRoot();
         const manifest = createLifecycleScenarioManifest({
           repository_root: repositoryRoot,
           outer_root: outerRoot,
@@ -208,6 +204,23 @@ function requireExactCodexBinary(candidate: string | undefined): string {
     throw new TypeError("Lifecycle acceptance Codex version is unsupported.");
   }
   return path;
+}
+
+function createPrivateOuterRoot(): string {
+  const root = mkdtempSync(join(tmpdir(), "hd-lc-"));
+  try {
+    chmodSync(root, 0o700);
+    assertPrivateLifecycleDirectory(root);
+    if (Buffer.byteLength(root, "utf8") > 32) {
+      throw new TypeError(
+        "Lifecycle temporary root is too long for nested Unix sockets."
+      );
+    }
+    return root;
+  } catch (error) {
+    rmSync(root, { force: true, recursive: true });
+    throw error;
+  }
 }
 
 function currentCleanCommit(repositoryRoot: string): string {

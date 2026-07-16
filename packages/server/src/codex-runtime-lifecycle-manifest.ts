@@ -49,10 +49,10 @@ export function createLifecycleScenarioManifest(
   input: LifecycleScenarioManifestInput
 ): readonly LifecycleScenarioManifestEntry[] {
   const repositoryRoot = resolve(input.repository_root);
-  const integrationRoot = join(input.outer_root, "headless_reconnect_crash");
-  const supervisorRoot = join(input.outer_root, "exact_supervisor");
-  const restartRoot = join(input.outer_root, "exact_hostdeck_restart");
-  const coexistenceRoot = join(input.outer_root, "exact_tui_coexistence");
+  const integrationRoot = join(input.outer_root, "s0");
+  const supervisorRoot = join(input.outer_root, "s1");
+  const restartRoot = join(input.outer_root, "s2");
+  const coexistenceRoot = join(input.outer_root, "s3");
 
   return Object.freeze([
     entry({

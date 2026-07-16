@@ -41,16 +41,16 @@ describe("runtime lifecycle scenario manifest", () => {
     expect(manifest[1]?.command.env).toMatchObject({
       HOSTDECK_CODEX_BIN: "/codex",
       HOSTDECK_CODEX_SUPERVISOR_REPORT:
-        "/outer/exact_supervisor/supervisor-report.json",
+        "/outer/s1/supervisor-report.json",
       HOSTDECK_REQUIRE_CODEX_SUPERVISOR_SMOKE: "1",
-      TMPDIR: "/outer/exact_supervisor"
+      TMPDIR: "/outer/s1"
     });
     expect(manifest[2]?.command.env.HOSTDECK_CODEX_RESTART_REPORT).toBe(
-      "/outer/exact_hostdeck_restart/restart-report.json"
+      "/outer/s2/restart-report.json"
     );
     expect(
       manifest[3]?.command.env.HOSTDECK_CODEX_TUI_COEXISTENCE_REPORT
-    ).toBe("/outer/exact_tui_coexistence/coexistence-report.json");
+    ).toBe("/outer/s3/coexistence-report.json");
     expect(manifest[0]?.command.env.HOSTDECK_CODEX_RESTART_REPORT).toBeUndefined();
     expect(manifest[0]?.command.env.HOSTDECK_REQUIRE_CODEX_LIFECYCLE_ACCEPTANCE)
       .toBeUndefined();
