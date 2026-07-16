@@ -38,6 +38,8 @@ pnpm exec vitest run packages/cli/src/prompt-client.test.ts packages/cli/src/pro
 pnpm exec vitest run --config vitest.integration.config.ts tests/prompt-vertical.integration.test.ts
 pnpm exec vitest run packages/cli/src/model-client.test.ts packages/cli/src/model-cli.test.ts packages/server/src/codex-model-control-service.test.ts packages/server/src/model-routes.test.ts
 pnpm exec vitest run --config vitest.integration.config.ts tests/model-vertical.integration.test.ts
+pnpm exec vitest run packages/cli/src/goal-client.test.ts packages/cli/src/goal-cli.test.ts packages/codex-adapter/src/goal-client.test.ts packages/server/src/codex-goal-control-service.test.ts packages/server/src/goal-routes.test.ts
+pnpm exec vitest run --config vitest.integration.config.ts tests/goal-vertical.integration.test.ts
 pnpm smoke:remote-control
 pnpm smoke:codex-compatibility
 pnpm smoke:codex-ipc
@@ -76,7 +78,7 @@ pnpm generate:codex-bindings
 
 ## Explicit Gaps
 
-- CLI binary: the source command contract includes `start --name NAME --cwd PATH [--json]`, `send SESSION_ID TEXT... [--json]`, `model SESSION_ID [--json]`, `model SESSION_ID MODEL_ID [--effort EFFORT] [--expected-revision REVISION] [--json]`, `remote status`, `remote enable`, `remote disable`, `resume SESSION_ID`, `archive SESSION_ID [--json]`, `usage SESSION_ID [--json]`, and `skills SESSION_ID [--json]`, but `codexdeck` is not installed as a workspace or packaged executable yet; `pnpm exec codexdeck --help` currently fails with command not found. Keep `codexdeck ...` examples out of copy-paste command blocks until build/package or clean install smoke provides a runnable executable path.
+- CLI binary: the source command contract includes `start --name NAME --cwd PATH [--json]`, `send SESSION_ID TEXT... [--json]`, the selected `model` read/select forms, the selected `goal` read/set/pause/resume/complete/clear forms, `remote status`, `remote enable`, `remote disable`, `resume SESSION_ID`, `archive SESSION_ID [--json]`, `usage SESSION_ID [--json]`, and `skills SESSION_ID [--json]`, but `codexdeck` is not installed as a workspace or packaged executable yet; `pnpm exec codexdeck --help` currently fails with command not found. Keep `codexdeck ...` examples out of copy-paste command blocks until build/package or clean install smoke provides a runnable executable path.
 - E2E validation: `pnpm test:e2e` intentionally exits nonzero until `REL-V1-007` implements it.
 - Build/package: `pnpm build` intentionally exits nonzero until `IFC-V1-021` implements it.
 - Local release smoke: `pnpm smoke:local` intentionally exits nonzero until `REL-V1-006` implements it.

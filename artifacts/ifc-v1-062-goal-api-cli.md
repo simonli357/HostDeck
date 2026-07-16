@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: hardening criteria frozen before implementation.
+Status: complete.
 
 ## Scope
 
@@ -108,3 +108,13 @@ Implement the selected one-session goal read and lifecycle boundary from strict 
 - `FE-V1-026` owns the approved mobile `/goal` surface and visual-state acceptance.
 - `IFC-V1-067` owns historical raw/slash/tmux surface disposition.
 - Packaging/release leaves own an installed `codexdeck` executable and clean-install command smoke.
+
+## Completion Evidence
+
+- Implemented the strict target-free goal mutation contract and exact selected manifest ownership, hardened the production goal service's complete selected identity/disposition checks, and added authenticated no-store GET plus common-gate audited POST routes. Internal action/state/dispatch materialization never enters the public snapshot.
+- Added the dedicated bounded loopback goal client and exact `goal` read/set/pause/resume/complete/clear parser, shell, help, JSON, and terminal-safe text mappings. The CLI generates operation ids internally, revalidates lifecycle result correlation, distinguishes verified no-op/change from accepted resume, and exposes no target/thread/token-budget/slash/retry surface.
+- Route evidence covers local and paired private HTTPS, read-only/CSRF/lock ordering, malformed wire input, complete target/runtime admission and drift brackets, all lifecycle/no-op/result combinations, typed known versus unknown outcomes, duplicate ids, raw response loss, terminal-audit failure, and bounded SQLite summaries. The thread id remains only in the repository-wide typed managed-session audit target; objective text, runtime internals, and private errors do not enter summaries or failures.
+- Focused validation: 53 goal adapter/service/route/client/CLI tests, 27 selected contract tests, and one real CLI -> loopback HTTP -> selected gate/audit -> production goal service -> SQLite vertical pass. The vertical proves paused set, proven no-op, accepted resume, second-session isolation, duplicate rejection, and no prompt/slash/turn-client path.
+- Workspace validation: unit 1,485 passed with 36 intentional external/device skips; contract 265; integration 21; web 33; typecheck, lint/exports, scaffold, planning (212 tasks/649 dependencies), frozen offline install, diff checks, and exact reviewed Codex 0.144.0 binding all pass. The authenticated exact-runtime goal smoke passes.
+- `pnpm audit --prod --audit-level=high` could not produce advisory evidence because npm's retired audit endpoint returned HTTP 410. No dependency or lockfile changed in this leaf.
+- Criteria commit `d27c6b8`; implementation and evidence `730ca12`.
