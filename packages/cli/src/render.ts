@@ -3,6 +3,10 @@ import {
   type ApiSession,
   defaultResourceBudget,
   type HostStatusResponse,
+  type ModelControlSnapshot,
+  type ModelSelectionRequest,
+  modelControlSnapshotSchema,
+  modelSelectionRequestSchema,
   type PromptDispatchResponse,
   pairingClientLabelSchema,
   promptDispatchResponseSchema,
@@ -42,6 +46,8 @@ export function renderHelp(): string {
     "  codexdeck send SESSION_ID TEXT... [--json]",
     "  codexdeck attach SESSION",
     "  codexdeck resume SESSION_ID",
+    "  codexdeck model SESSION_ID [--json]",
+    "  codexdeck model SESSION_ID MODEL_ID [--effort EFFORT] [--expected-revision REVISION] [--json]",
     "  codexdeck usage SESSION_ID [--json]",
     "  codexdeck skills SESSION_ID [--json]",
     "  codexdeck pair [--label LABEL] [--read-only | --write]",
@@ -116,6 +122,43 @@ export function renderPromptDispatch(
   if (json) return `${JSON.stringify(parsed.data, null, 2)}\n`;
   const action = parsed.data.action === "start" ? "start" : "steer";
   return `Prompt ${action} accepted for ${escapeTerminalText(parsed.data.target.session_id)} (turn ${escapeTerminalText(parsed.data.turn_id)}).\n`;
+}
+
+export function renderModelSnapshot(
+  candidate: ModelControlSnapshot,
+  json: boolean,
+  selectionCandidate?: ModelSelectionRequest
+): string {
+  let parsed: ReturnType<typeof modelControlSnapshotSchema.safeParse>;
+  try {
+    parsed = modelControlSnapshotSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Model rendering input is invalid.");
+  }
+  if (!parsed.success) throw internalFailure("Model rendering input is invalid.");
+  let selection: ModelSelectionRequest | null = null;
+  if (selectionCandidate !== undefined) {
+    const parsedSelection = modelSelectionRequestSchema.safeParse({
+      operation_id: selectionCandidate.operation_id,
+      kind: selectionCandidate.kind,
+      model_id: selectionCandidate.model_id,
+      reasoning_effort: selectionCandidate.reasoning_effort,
+      expected_pending_revision: selectionCandidate.expected_pending_revision
+    });
+    if (!parsedSelection.success) throw internalFailure("Model rendering selection is invalid.");
+    selection = parsedSelection.data;
+  }
+  const snapshot = parsed.data;
+  const output = json
+    ? `${JSON.stringify(snapshot, null, 2)}\n`
+    : renderModelText(snapshot, selection);
+  if (
+    output.includes("\0") ||
+    Buffer.byteLength(output, "utf8") > defaultResourceBudget.cli_response_max_bytes
+  ) {
+    throw internalFailure("Model rendering output exceeds its selected limit.");
+  }
+  return output;
 }
 
 export function renderSessionList(response: SessionListResponse, json: boolean): string {
@@ -363,6 +406,63 @@ function renderSkillsText(snapshot: SkillsSnapshot): string {
   }
   lines.push("");
   return lines.join("\n");
+}
+
+function renderModelText(snapshot: ModelControlSnapshot, selection: ModelSelectionRequest | null): string {
+  const lines: string[] = [];
+  if (selection !== null) {
+    const selectedModel = snapshot.models.find((model) => model.id === selection.model_id);
+    const resolvedEffort =
+      selection.reasoning_effort ?? selectedModel?.reasoning_efforts.find((effort) => effort.is_default)?.id;
+    if (selectedModel === undefined || resolvedEffort === undefined) {
+      throw internalFailure("Model rendering selection is absent from the catalog.");
+    }
+    if (snapshot.pending?.selection_operation_id === selection.operation_id) {
+      lines.push(
+        `Model selection pending: ${escapeTerminalText(selectedModel.label)} [${escapeTerminalText(selectedModel.id)}], effort ${escapeTerminalText(resolvedEffort)}, revision ${snapshot.pending.revision}.`
+      );
+    } else if (selection.expected_pending_revision !== null) {
+      lines.push("Pending model selection cleared; confirmed current state is unchanged.");
+    } else {
+      lines.push("Requested model and effort are already confirmed current.");
+    }
+    lines.push("");
+  }
+
+  const currentModel =
+    snapshot.current.model_id === null
+      ? null
+      : snapshot.models.find((model) => model.id === snapshot.current.model_id) ?? null;
+  lines.push(
+    currentModel === null
+      ? `Current: ${escapeTerminalText(snapshot.current.runtime_model)} [not in current catalog], effort ${formatModelEffort(snapshot.current.reasoning_effort)}.`
+      : `Current: ${escapeTerminalText(currentModel.label)} [${escapeTerminalText(currentModel.id)}], effort ${formatModelEffort(snapshot.current.reasoning_effort)}.`
+  );
+  if (snapshot.pending === null) {
+    lines.push("Pending: none.");
+  } else {
+    const pendingModel = snapshot.models.find((model) => model.id === snapshot.pending?.model_id);
+    const pendingLabel = pendingModel?.label ?? snapshot.pending.runtime_model;
+    const errorCode = snapshot.pending.error === null ? "" : `, error ${snapshot.pending.error.code}`;
+    lines.push(
+      `Pending: ${escapeTerminalText(pendingLabel)} [${escapeTerminalText(snapshot.pending.model_id)}], effort ${escapeTerminalText(snapshot.pending.reasoning_effort)}, revision ${snapshot.pending.revision}, ${snapshot.pending.phase}${errorCode}.`
+    );
+  }
+  lines.push(`Catalog revision: ${snapshot.catalog_revision}`, `Observed: ${snapshot.catalog_observed_at}`, "", "Models:");
+  for (const model of snapshot.models) {
+    const efforts = model.reasoning_efforts
+      .map((effort) => `${escapeTerminalText(effort.id)}${effort.is_default ? " (default)" : ""}`)
+      .join(", ");
+    lines.push(
+      `- ${escapeTerminalText(model.label)} [${escapeTerminalText(model.id)}]${model.is_default ? " (default model)" : ""}; efforts: ${efforts}; input: ${model.input_modalities.join(", ")}`
+    );
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+function formatModelEffort(effort: string | null): string {
+  return effort === null ? "not reported" : escapeTerminalText(effort);
 }
 
 function escapeTerminalText(value: string): string {

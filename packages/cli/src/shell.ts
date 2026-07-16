@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import type {
   ApiErrorEnvelope,
   ApiSession,
+  ModelControlSnapshot,
+  ModelSelectionRequest,
   PromptDispatchResponse,
   SelectedOperationDispatch,
   SelectedResumeMetadataResponse,
@@ -13,6 +15,8 @@ import type {
 import {
   archiveSessionRequestSchema,
   clientOperationIdSchema,
+  modelControlSnapshotSchema,
+  modelSelectionRequestSchema,
   promptDispatchResponseSchema,
   promptSessionRequestSchema,
   type RemoteDisableRequest,
@@ -49,6 +53,11 @@ import {
 import { type CliExitCode, cliExitCodes } from "./exit-codes.js";
 import { createLocalAdmin, type LocalAdmin } from "./local-admin.js";
 import {
+  createHostDeckModelClient,
+  type HostDeckModelClient,
+  type HostDeckModelClientSelectionRequest
+} from "./model-client.js";
+import {
   createHostDeckPairingLinkClient,
   type HostDeckPairingLinkClient
 } from "./pairing-link-client.js";
@@ -68,6 +77,7 @@ import {
   renderFailure,
   renderHelp,
   renderLockCommand,
+  renderModelSnapshot,
   renderPairingLink,
   renderPromptDispatch,
   renderRemoteState,
@@ -116,6 +126,7 @@ export interface CliRunOptions {
   readonly fetch?: HttpFetch;
   readonly client?: HostDeckApiClient;
   readonly localAdmin?: LocalAdmin;
+  readonly modelClient?: HostDeckModelClient;
   readonly archiveClient?: HostDeckArchiveClient;
   readonly promptClient?: HostDeckPromptClient;
   readonly pairingClient?: HostDeckPairingLinkClient;
@@ -130,6 +141,7 @@ export interface CliRunOptions {
   ) => string;
   readonly createPairOperationId?: () => string;
   readonly createArchiveOperationId?: () => string;
+  readonly createModelOperationId?: () => string;
   readonly createPromptOperationId?: () => string;
   readonly createStartOperationId?: () => string;
   readonly renderPairingQr?: TerminalQrRenderer;
@@ -242,6 +254,31 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
         options.resumeLauncher ?? createHostDeckResumeLauncher();
       await Reflect.apply(launcher.launch, undefined, [metadata.launch]);
       return success("");
+    }
+
+    if (parsed.command.kind === "model") {
+      const target = parseModelTarget(parsed.command.session);
+      let modelClient = options.modelClient;
+      if (modelClient === undefined) {
+        const modelClientOptions = { baseUrl: config.baseUrl };
+        if (options.fetch !== undefined) Object.assign(modelClientOptions, { fetch: options.fetch });
+        modelClient = createHostDeckModelClient(modelClientOptions);
+      }
+      if (parsed.command.model === null) {
+        const snapshot = parseModelSnapshot(
+          await Reflect.apply(modelClient.read, undefined, [target])
+        );
+        return success(renderModelSnapshot(snapshot, parsed.command.json));
+      }
+      const request = createModelSelectionRequest(
+        parsed.command,
+        options.createModelOperationId ?? createModelOperationId
+      );
+      const snapshot = parseModelSelectionSnapshot(
+        await Reflect.apply(modelClient.select, undefined, [request]),
+        request
+      );
+      return success(renderModelSnapshot(snapshot, parsed.command.json, request));
     }
 
     if (parsed.command.kind === "usage") {
@@ -480,6 +517,10 @@ function createPromptOperationId(): string {
   return `op_prompt_${randomUUID().replaceAll("-", "")}`;
 }
 
+function createModelOperationId(): string {
+  return `op_model_${randomUUID().replaceAll("-", "")}`;
+}
+
 function createSessionStartRequest(
   command: Extract<
     ReturnType<typeof parseCliArgs>["command"],
@@ -651,6 +692,95 @@ function parseResumeMetadata(
     );
   }
   return parsed.data;
+}
+
+function parseModelTarget(candidate: string): string {
+  const parsed = sessionIdParamsSchema.safeParse({ session_id: candidate });
+  if (!parsed.success) throw usageFailure("Model requires one valid managed session id.", "session");
+  return parsed.data.session_id;
+}
+
+function createModelSelectionRequest(
+  command: Extract<ReturnType<typeof parseCliArgs>["command"], { readonly kind: "model" }>,
+  createOperationId: () => string
+): HostDeckModelClientSelectionRequest {
+  if (command.model === null) throw internalFailure("Model selection command lost its catalog model id.");
+  let operationId: unknown;
+  try {
+    operationId = Reflect.apply(createOperationId, undefined, []);
+  } catch (error) {
+    throw internalFailure("Model operation id generation failed.", error);
+  }
+  const target = sessionIdParamsSchema.safeParse({ session_id: command.session });
+  const body = modelSelectionRequestSchema.safeParse({
+    operation_id: operationId,
+    kind: "model",
+    model_id: command.model,
+    reasoning_effort: command.effort,
+    expected_pending_revision: command.expectedRevision
+  });
+  if (!target.success) throw usageFailure("Model requires one valid managed session id.", "session");
+  if (!body.success) {
+    if (!clientOperationIdSchema.safeParse(operationId).success) {
+      throw internalFailure("Model operation id generation failed.");
+    }
+    throw usageFailure("Model selection does not satisfy the selected model contract.", "model");
+  }
+  return Object.freeze({ ...body.data, session_id: target.data.session_id });
+}
+
+function parseModelSnapshot(candidate: unknown): ModelControlSnapshot {
+  let parsed: ReturnType<typeof modelControlSnapshotSchema.safeParse>;
+  try {
+    parsed = modelControlSnapshotSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("HostDeck model client returned invalid managed-session data.");
+  }
+  if (!parsed.success) throw internalFailure("HostDeck model client returned invalid managed-session data.");
+  return parsed.data;
+}
+
+function parseModelSelectionSnapshot(
+  candidate: unknown,
+  request: HostDeckModelClientSelectionRequest
+): ModelControlSnapshot {
+  const snapshot = parseModelSnapshot(candidate);
+  assertModelSelectionCorrelation(snapshot, request);
+  return snapshot;
+}
+
+function assertModelSelectionCorrelation(snapshot: ModelControlSnapshot, request: ModelSelectionRequest): void {
+  const model = snapshot.models.find((candidate) => candidate.id === request.model_id);
+  const resolvedEffort =
+    request.reasoning_effort ?? model?.reasoning_efforts.find((candidate) => candidate.is_default)?.id;
+  if (model === undefined || resolvedEffort === undefined) {
+    throw internalFailure("HostDeck model client returned contradictory selection data.");
+  }
+  if (snapshot.pending !== null) {
+    if (
+      snapshot.pending.selection_operation_id !== request.operation_id ||
+      snapshot.pending.model_id !== request.model_id ||
+      snapshot.pending.runtime_model !== model.runtime_model ||
+      snapshot.pending.reasoning_effort !== resolvedEffort ||
+      snapshot.pending.catalog_state !== "available" ||
+      snapshot.pending.phase !== "pending" ||
+      snapshot.pending.turn_id !== null ||
+      snapshot.pending.error !== null ||
+      (request.expected_pending_revision !== null &&
+        snapshot.pending.revision <= request.expected_pending_revision)
+    ) {
+      throw internalFailure("HostDeck model client returned contradictory selection data.");
+    }
+    return;
+  }
+  if (
+    snapshot.current.catalog_state !== "available" ||
+    snapshot.current.model_id !== request.model_id ||
+    snapshot.current.runtime_model !== model.runtime_model ||
+    snapshot.current.reasoning_effort !== resolvedEffort
+  ) {
+    throw internalFailure("HostDeck model client returned contradictory selection data.");
+  }
 }
 
 function parseUsageTarget(candidate: string): string {

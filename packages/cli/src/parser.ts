@@ -11,6 +11,14 @@ export type ParsedCliCommand =
   | { readonly kind: "send"; readonly session: string; readonly text: string; readonly json: boolean }
   | { readonly kind: "attach"; readonly session: string }
   | { readonly kind: "resume"; readonly session: string }
+  | {
+      readonly kind: "model";
+      readonly session: string;
+      readonly model: string | null;
+      readonly effort: string | null;
+      readonly expectedRevision: number | null;
+      readonly json: boolean;
+    }
   | { readonly kind: "usage"; readonly session: string; readonly json: boolean }
   | { readonly kind: "skills"; readonly session: string; readonly json: boolean }
   | { readonly kind: "stop"; readonly session: string }
@@ -145,6 +153,9 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
     }
 
     if (token === "--") {
+      if (positionals[0] === "model") {
+        throw usageFailure("The model command does not accept an option terminator.");
+      }
       positionals.push(...args.slice(index + 1));
       break;
     }
@@ -241,6 +252,21 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
       command: {
         kind: "resume",
         session: singleSessionArgument("resume", rest)
+      },
+      configFlags
+    };
+  }
+
+  if (command === "model") {
+    const parsed = parseModelOptions(rest, json);
+    return {
+      command: {
+        kind: "model",
+        session: parsed.session,
+        model: parsed.model,
+        effort: parsed.effort,
+        expectedRevision: parsed.expectedRevision,
+        json: parsed.json
       },
       configFlags
     };
@@ -406,6 +432,82 @@ function parseNoArgJsonOptions(command: string, args: readonly string[], globalJ
   }
 
   return json;
+}
+
+function parseModelOptions(
+  args: readonly string[],
+  globalJson: boolean
+): {
+  readonly session: string;
+  readonly model: string | null;
+  readonly effort: string | null;
+  readonly expectedRevision: number | null;
+  readonly json: boolean;
+} {
+  const [session, ...rest] = args;
+  if (session === undefined || session.startsWith("-")) {
+    throw usageFailure("The model command requires one managed session id.");
+  }
+  let model: string | null = null;
+  let effort: string | null = null;
+  let expectedRevision: number | null = null;
+  let effortSeen = false;
+  let revisionSeen = false;
+  let json = globalJson;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const token = rest[index];
+    if (token === undefined) continue;
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
+    if (token === "--effort") {
+      if (effortSeen) throw usageFailure("The model command accepts --effort only once.");
+      effort = readOptionValue(rest, index, "--effort");
+      effortSeen = true;
+      index += 1;
+      continue;
+    }
+    if (token.startsWith("--effort=")) {
+      if (effortSeen) throw usageFailure("The model command accepts --effort only once.");
+      effort = readInlineOptionValue(token, "--effort");
+      effortSeen = true;
+      continue;
+    }
+    if (token === "--expected-revision") {
+      if (revisionSeen) throw usageFailure("The model command accepts --expected-revision only once.");
+      expectedRevision = parsePositiveRevision(readOptionValue(rest, index, "--expected-revision"));
+      revisionSeen = true;
+      index += 1;
+      continue;
+    }
+    if (token.startsWith("--expected-revision=")) {
+      if (revisionSeen) throw usageFailure("The model command accepts --expected-revision only once.");
+      expectedRevision = parsePositiveRevision(readInlineOptionValue(token, "--expected-revision"));
+      revisionSeen = true;
+      continue;
+    }
+    if (token.startsWith("-")) throw usageFailure(`Unknown model option: ${token}`);
+    if (model !== null) throw usageFailure(`Unexpected model argument: ${token}`);
+    model = token;
+  }
+
+  if (model === null && (effortSeen || revisionSeen)) {
+    throw usageFailure("Model effort and expected revision require one catalog model id.");
+  }
+  return { session, model, effort, expectedRevision, json };
+}
+
+function parsePositiveRevision(candidate: string): number {
+  if (!/^[1-9]\d*$/u.test(candidate)) {
+    throw usageFailure("Model expected revision must be a positive integer.");
+  }
+  const revision = Number(candidate);
+  if (!Number.isSafeInteger(revision)) {
+    throw usageFailure("Model expected revision exceeds the supported range.");
+  }
+  return revision;
 }
 
 function parsePairOptions(args: readonly string[], globalJson: boolean): {

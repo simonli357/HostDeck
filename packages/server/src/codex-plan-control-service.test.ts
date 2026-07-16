@@ -7,7 +7,11 @@ import {
   HostDeckCodexAdapterError,
   type NormalizedCodexEvent
 } from "@hostdeck/codex-adapter";
-import type { ModelCatalogEntry } from "@hostdeck/contracts";
+import {
+  type ModelCatalogEntry,
+  selectedSessionMappingRecordSchema,
+  selectedSessionProjectionRecordSchema
+} from "@hostdeck/contracts";
 import type { CodexThreadId } from "@hostdeck/core";
 import type { SelectedSessionState } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
@@ -532,16 +536,48 @@ function planTurn(planRevision: number, modelRevision: number | null) {
 }
 
 function selectedState(sessionId: string, threadId: string, turnState = "idle", archived = false): SelectedSessionState {
-  return {
-    mapping: { id: sessionId, codex_thread_id: threadId, archived_at: archived ? observedAt : null },
-    projection: {
-      session: {
-        session_state: archived ? "archived" : "active",
-        freshness: "current",
-        turn_state: turnState
-      }
-    }
-  } as unknown as SelectedSessionState;
+  const archivedAt = archived ? observedAt : null;
+  const mapping = selectedSessionMappingRecordSchema.parse({
+    id: sessionId,
+    name: sessionId.replace(/^sess_/u, ""),
+    codex_thread_id: threadId,
+    cwd: `/tmp/${sessionId}`,
+    runtime_source: "codex_app_server",
+    runtime_version: "0.144.0",
+    disposition: "selected",
+    created_at: observedAt,
+    updated_at: observedAt,
+    archived_at: archivedAt
+  });
+  const projection = selectedSessionProjectionRecordSchema.parse({
+    session: {
+      id: mapping.id,
+      name: mapping.name,
+      codex_thread_id: mapping.codex_thread_id,
+      cwd: mapping.cwd,
+      runtime_source: mapping.runtime_source,
+      runtime_version: mapping.runtime_version,
+      created_at: mapping.created_at,
+      archived_at: archivedAt,
+      session_state: archived ? "archived" : "active",
+      turn_state: turnState,
+      attention: "none",
+      freshness: "current",
+      freshness_reason: null,
+      updated_at: observedAt,
+      last_activity_at: observedAt,
+      branch: "main",
+      model: "runtime-a",
+      goal: null,
+      recent_summary: "Managed Codex Plan session ready.",
+      last_event_cursor: null
+    },
+    retained_event_count: 0,
+    retained_event_bytes: 0,
+    earliest_retained_cursor: null,
+    retention_boundary_cursor: null
+  });
+  return { mapping, projection };
 }
 
 function settingsEvent(mode: "default" | "plan", runtimeModel: string, effort: string | null): NormalizedCodexEvent {

@@ -6,6 +6,7 @@ import {
   legacySessionDispositionRecordSchema,
   managedSessionProjectionSchema,
   modelControlSnapshotSchema,
+  modelSelectionRequestSchema,
   pendingApprovalSchema,
   planControlSnapshotSchema,
   promptDispatchResponseSchema,
@@ -206,6 +207,36 @@ describe("selected structured operation contracts", () => {
       { ...response, model_revision: 1 }
     ]) {
       expect(() => promptDispatchResponseSchema.parse(candidate)).toThrow();
+    }
+  });
+
+  it("keeps the public model selection request canonical and target-free", () => {
+    const request = {
+      operation_id: "op_contract_model_request",
+      kind: "model",
+      model_id: "gpt-5.5-codex",
+      reasoning_effort: null,
+      expected_pending_revision: null
+    } as const;
+    expect(modelSelectionRequestSchema.parse(request)).toEqual(request);
+    expect(
+      modelSelectionRequestSchema.parse({
+        ...request,
+        reasoning_effort: "high",
+        expected_pending_revision: 7
+      })
+    ).toMatchObject({ reasoning_effort: "high", expected_pending_revision: 7 });
+    for (const candidate of [
+      { ...request, target },
+      { ...request, codex_thread_id: target.codex_thread_id },
+      { ...request, runtime_model: "gpt-runtime" },
+      { ...request, expected_pending_revision: 0 },
+      { ...request, expected_pending_revision: -1 },
+      { ...request, expected_pending_revision: 1.5 },
+      { ...request, model_id: "" },
+      { ...request, reasoning_effort: "" }
+    ]) {
+      expect(() => modelSelectionRequestSchema.parse(candidate)).toThrow();
     }
   });
 

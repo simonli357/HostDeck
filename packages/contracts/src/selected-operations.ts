@@ -117,6 +117,16 @@ export const modelOperationIntentSchema = z
   })
   .strict();
 
+export const modelSelectionRequestSchema = z
+  .object({
+    operation_id: clientOperationIdSchema,
+    kind: z.literal("model"),
+    model_id: z.string().min(1).max(operationLimits.modelIdLength),
+    reasoning_effort: z.string().min(1).max(operationLimits.effortLength).nullable(),
+    expected_pending_revision: positiveSafeIntegerSchema.nullable()
+  })
+  .strict();
+
 export const goalOperationIntentSchema = z
   .object({
     ...managedOperationBaseShape,
@@ -1022,6 +1032,7 @@ export type SelectedOperationTarget = z.infer<typeof selectedOperationTargetSche
 export type SelectedOperationIntent = z.infer<typeof selectedOperationIntentSchema>;
 export type PromptSessionRequest = z.infer<typeof promptSessionRequestSchema>;
 export type PromptDispatchResponse = z.infer<typeof promptDispatchResponseSchema>;
+export type ModelSelectionRequest = z.infer<typeof modelSelectionRequestSchema>;
 export type ArchiveSessionRequest = z.infer<typeof archiveSessionRequestSchema>;
 export type SelectedOperationDispatch = z.infer<typeof selectedOperationDispatchSchema>;
 export type SelectedOperationTerminalOutcome = z.infer<typeof selectedOperationTerminalOutcomeSchema>;

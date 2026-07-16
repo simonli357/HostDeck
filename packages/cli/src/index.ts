@@ -4,6 +4,7 @@ export * from "./config.js";
 export * from "./errors.js";
 export * from "./exit-codes.js";
 export * from "./local-admin.js";
+export * from "./model-client.js";
 export * from "./pairing-link-client.js";
 export * from "./parser.js";
 export * from "./prompt-client.js";

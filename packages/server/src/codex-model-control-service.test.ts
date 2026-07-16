@@ -116,6 +116,39 @@ describe("Codex pending model control", () => {
     expect(harness.models.startCalls).toHaveLength(0);
   });
 
+  it("rejects contradictory selected identity and recovery disposition before runtime access", async () => {
+    const contradictory = createHarness();
+    const state = selectedState(targetA.session_id, targetA.codex_thread_id);
+    contradictory.states.set(targetA.session_id, {
+      ...state,
+      projection: {
+        ...state.projection,
+        session: {
+          ...state.projection.session,
+          name: "contradictory" as SelectedSessionState["mapping"]["name"]
+        }
+      }
+    });
+    await expectControlError(contradictory.service.snapshot(targetA), "target_mismatch");
+
+    const misplaced = createHarness();
+    misplaced.states.set(
+      targetA.session_id,
+      selectedState(targetB.session_id, targetA.codex_thread_id)
+    );
+    await expectControlError(misplaced.service.snapshot(targetA), "target_mismatch");
+
+    const recovery = createHarness();
+    const recoveryState = selectedState(targetA.session_id, targetA.codex_thread_id);
+    recovery.states.set(targetA.session_id, {
+      ...recoveryState,
+      mapping: { ...recoveryState.mapping, disposition: "recovery_required" }
+    });
+    const error = await readControlError(recovery.service.snapshot(targetA), "target_not_writable");
+    expect(error.api_code).toBe("stale_session");
+    expect(recovery.service.pending_count).toBe(0);
+  });
+
   it("dispatches one exact turn and clears pending only after matching settings confirmation", async () => {
     const harness = createHarness();
     const selected = await harness.service.select(modelIntent({ model_id: "model-b", reasoning_effort: "low" }));
@@ -480,20 +513,46 @@ function pendingTurn(revision: number) {
 }
 
 function selectedState(sessionId: string, threadId: string, turnState = "idle", archived = false): SelectedSessionState {
+  const selectedTimestamp = observedAt as SelectedSessionState["mapping"]["created_at"];
+  const archivedAt = archived ? selectedTimestamp : null;
+  const identity = {
+    id: sessionId as SelectedSessionState["mapping"]["id"],
+    name: sessionId.replace(/^sess_/u, "") as SelectedSessionState["mapping"]["name"],
+    codex_thread_id: threadId as SelectedSessionState["mapping"]["codex_thread_id"],
+    cwd: `/tmp/${sessionId}` as SelectedSessionState["mapping"]["cwd"],
+    runtime_source: "codex_app_server" as const,
+    runtime_version: "0.144.0" as SelectedSessionState["mapping"]["runtime_version"],
+    created_at: selectedTimestamp,
+    archived_at: archivedAt
+  };
   return {
     mapping: {
-      id: sessionId,
-      codex_thread_id: threadId,
-      archived_at: archived ? observedAt : null
+      ...identity,
+      disposition: "selected",
+      updated_at: selectedTimestamp
     },
     projection: {
       session: {
+        ...identity,
         session_state: archived ? "archived" : "active",
         freshness: "current",
-        turn_state: turnState
-      }
+        freshness_reason: null,
+        turn_state: turnState as SelectedSessionState["projection"]["session"]["turn_state"],
+        attention: "none",
+        updated_at: selectedTimestamp,
+        last_activity_at: null,
+        branch: null,
+        model: null,
+        goal: null,
+        recent_summary: "",
+        last_event_cursor: null
+      },
+      retained_event_count: 0,
+      retained_event_bytes: 0,
+      earliest_retained_cursor: null,
+      retention_boundary_cursor: null
     }
-  } as unknown as SelectedSessionState;
+  };
 }
 
 function settingsEvent(modelName: string, effort: string | null): NormalizedCodexEvent {
@@ -514,12 +573,19 @@ function deferredResult<T>() {
 }
 
 async function expectControlError(promise: Promise<unknown>, code: HostDeckCodexModelControlError["code"]): Promise<void> {
+  await readControlError(promise, code);
+}
+
+async function readControlError(
+  promise: Promise<unknown>,
+  code: HostDeckCodexModelControlError["code"]
+): Promise<HostDeckCodexModelControlError> {
   try {
     await promise;
   } catch (error) {
     expect(error).toBeInstanceOf(HostDeckCodexModelControlError);
     expect(error).toMatchObject({ code });
-    return;
+    return error as HostDeckCodexModelControlError;
   }
   throw new Error(`Expected HostDeckCodexModelControlError ${code}.`);
 }
