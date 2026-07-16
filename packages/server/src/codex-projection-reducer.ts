@@ -107,7 +107,15 @@ export function reduceCodexProjectionEvent(current: SelectedSessionState, event:
           title: "Codex settings updated",
           detail: `Model ${event.model}; collaboration mode ${event.collaboration_mode}; effort ${event.effort ?? "default"}.`
         },
-        { model: event.model },
+        {
+          model: event.model,
+          settings: {
+            collaboration_mode: event.collaboration_mode,
+            runtime_model: event.model,
+            reasoning_effort: event.effort,
+            observed_at: event.captured_at
+          }
+        },
         false
       );
     case "thread/goal/updated": {
@@ -441,6 +449,7 @@ function nextSession(
     last_activity_at: session.last_activity_at,
     branch: session.branch,
     model: session.model,
+    settings: session.settings,
     goal: session.goal,
     recent_summary: session.recent_summary,
     ...patch

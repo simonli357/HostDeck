@@ -10,6 +10,7 @@ export * from "./codex-model-control-service.js";
 export * from "./codex-plan-control-service.js";
 export * from "./codex-projection-service.js";
 export * from "./codex-prompt-control-service.js";
+export * from "./codex-runtime-reconciliation-lifecycle.js";
 export * from "./codex-runtime-supervisor.js";
 export * from "./codex-skills-control-service.js";
 export * from "./codex-usage-control-service.js";

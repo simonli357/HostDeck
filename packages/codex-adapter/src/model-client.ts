@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  absoluteCwdSchema,
   codexModelContractLimits,
   codexThreadIdSchema,
   defaultResourceBudget,
@@ -9,7 +10,7 @@ import {
   type RuntimeCompatibility,
   resourceBudgetDefinitionByKey
 } from "@hostdeck/contracts";
-import type { ClientOperationId, CodexThreadId, IsoTimestamp } from "@hostdeck/core";
+import type { AbsoluteCwd, ClientOperationId, CodexThreadId, IsoTimestamp } from "@hostdeck/core";
 import type { CodexRequestInput } from "./broker.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
 import type { ModelListParams } from "./generated/v2/ModelListParams.js";
@@ -24,6 +25,7 @@ export interface CodexModelCatalog {
 
 export interface CodexThreadModelState {
   readonly thread_id: CodexThreadId;
+  readonly cwd: AbsoluteCwd;
   readonly runtime_model: string;
   readonly reasoning_effort: string | null;
 }
@@ -218,12 +220,17 @@ class DefaultCodexModelClient implements CodexModelClient {
     assertExactKeys(result, resumeResultKeys, "Codex thread/resume fields are invalid.");
     const thread = requireRecord(result.thread, "Codex thread/resume thread must be an object.");
     if (parsePayloadThreadId(thread.id) !== parsedThreadId) throw invalidPayload("Codex thread/resume returned a different thread id.");
+    const responseCwd = parsePayloadCwd(result.cwd);
+    if (parsePayloadCwd(thread.cwd) !== responseCwd) {
+      throw invalidPayload("Codex thread/resume returned contradictory working directories.");
+    }
     if (!Array.isArray(thread.turns) || thread.turns.length !== 0) {
       throw invalidPayload("Codex thread/resume excludeTurns response unexpectedly included turns.");
     }
     parsePrintableString(result.modelProvider, "Codex model provider", 120);
     return Object.freeze({
       thread_id: parsedThreadId,
+      cwd: responseCwd,
       runtime_model: parsePrintableString(result.model, "Codex current model", codexModelContractLimits.identityLength),
       reasoning_effort:
         result.reasoningEffort === null
@@ -433,6 +440,12 @@ function parseInputThreadId(candidate: unknown): CodexThreadId {
 function parsePayloadThreadId(candidate: unknown): CodexThreadId {
   const parsed = codexThreadIdSchema.safeParse(candidate);
   if (!parsed.success) throw invalidPayload("Codex model response thread id is invalid.", parsed.error);
+  return parsed.data;
+}
+
+function parsePayloadCwd(candidate: unknown): AbsoluteCwd {
+  const parsed = absoluteCwdSchema.safeParse(candidate);
+  if (!parsed.success) throw invalidPayload("Codex model response working directory is invalid.", parsed.error);
   return parsed.data;
 }
 

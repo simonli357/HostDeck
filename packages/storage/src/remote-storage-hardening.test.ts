@@ -117,9 +117,10 @@ describe("remote state and audit aggregate hardening", () => {
             "202607130013_remote_ingress_state",
             "202607130014_remote_audit_catalog",
             "202607130015_remote_admission_proof",
-            "202607150016_session_start_audit_catalog"
+            "202607150016_session_start_audit_catalog",
+            "202607160017_selected_session_settings_projection"
           ],
-          currentVersion: "202607150016_session_start_audit_catalog"
+          currentVersion: "202607160017_selected_session_settings_projection"
         });
         expect(rawAuditRows(current.db)).toEqual(historicalBefore);
         expect(
@@ -367,7 +368,7 @@ describe("remote state and audit aggregate hardening", () => {
       try {
         expect(restarted.result).toEqual({
           applied: [],
-          currentVersion: "202607150016_session_start_audit_catalog"
+          currentVersion: "202607160017_selected_session_settings_projection"
         });
         const state = createRemoteIngressStateRepository(restarted.db);
         const audit = createSelectedAuditRepository(restarted.db);
@@ -561,7 +562,7 @@ describe("remote state and audit aggregate hardening", () => {
     try {
       expect(fresh.result.applied).toHaveLength(defaultMigrations.length);
       expect(fresh.result.currentVersion).toBe(
-        "202607150016_session_start_audit_catalog"
+        "202607160017_selected_session_settings_projection"
       );
       inspectSchemaAndHealth(fresh.db);
     } finally {
@@ -605,8 +606,9 @@ describe("remote state and audit aggregate hardening", () => {
     }
 
     const auditFailurePath = tempDbPath("audit-failure");
+    const auditPriorMigrations = migrationsBefore("202607130014_remote_audit_catalog");
     const auditPrior = openMigratedDatabase(auditFailurePath, {
-      migrations: defaultMigrations.slice(0, -3),
+      migrations: auditPriorMigrations,
       now: fixedNow
     });
     let auditTableBefore: string;
@@ -630,13 +632,13 @@ describe("remote state and audit aggregate hardening", () => {
       } satisfies StorageMigration;
       expect(() =>
         runMigrations(auditFailureDb, {
-          migrations: [...defaultMigrations.slice(0, -3), interruptedAudit],
+          migrations: [...auditPriorMigrations, interruptedAudit],
           now: fixedNow
         })
       ).toThrow(HostDeckMigrationError);
       expect(selectedAuditTableSql(auditFailureDb)).toBe(auditTableBefore);
       expect(rawAuditRows(auditFailureDb)).toEqual(auditRowsBefore);
-      expect(migrationCount(auditFailureDb)).toBe(defaultMigrations.length - 3);
+      expect(migrationCount(auditFailureDb)).toBe(auditPriorMigrations.length);
     } finally {
       auditFailureDb.close();
     }
@@ -979,11 +981,17 @@ function hostTarget() {
 }
 
 function migrationsBeforeRemoteStorage(): readonly StorageMigration[] {
-  const migrations = defaultMigrations.slice(0, -4);
+  const migrations = migrationsBefore("202607130013_remote_ingress_state");
   if (migrations.at(-1)?.version !== "202607120012_selected_lan_configuration") {
     throw new Error("Remote storage migrations do not follow selected LAN storage.");
   }
   return migrations;
+}
+
+function migrationsBefore(version: string): readonly StorageMigration[] {
+  const index = defaultMigrations.findIndex((migration) => migration.version === version);
+  if (index < 0) throw new Error(`Unknown migration boundary ${version}.`);
+  return defaultMigrations.slice(0, index);
 }
 
 function inspectSchemaAndHealth(db: Database.Database): void {

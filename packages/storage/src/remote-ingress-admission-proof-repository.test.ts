@@ -37,8 +37,12 @@ afterEach(() => {
 describe("remote admission proof migration", () => {
   it("adds one empty proof row owner and atomic accepted-mutation invalidation trigger", () => {
     const path = tempDbPath();
+    const proofMigrationIndex = defaultMigrations.findIndex(
+      (migration) => migration.version === "202607130015_remote_admission_proof"
+    );
+    if (proofMigrationIndex < 0) throw new Error("Remote admission proof migration is missing.");
     const prior = openMigratedDatabase(path, {
-      migrations: defaultMigrations.slice(0, -2),
+      migrations: defaultMigrations.slice(0, proofMigrationIndex),
       now: fixedNow
     });
     prior.db.close();
@@ -47,7 +51,8 @@ describe("remote admission proof migration", () => {
     try {
       expect(migrated.result.applied).toEqual([
         "202607130015_remote_admission_proof",
-        "202607150016_session_start_audit_catalog"
+        "202607150016_session_start_audit_catalog",
+        "202607160017_selected_session_settings_projection"
       ]);
       expect(
         migrated.db

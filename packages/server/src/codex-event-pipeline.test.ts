@@ -23,6 +23,48 @@ afterEach(() => {
 });
 
 describe("ordered Codex event pipeline", () => {
+  it("drains work enqueued while the barrier is pending and aborts a waiter without stopping the pipeline", async () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      repository.create(stateCandidate("sess_pipeline_a", threadA));
+      const publicationGate = deferred<void>();
+      const publisherEntered = deferred<void>();
+      const pipeline = createCodexEventPipeline({
+        repository,
+        append_port: createProductionProjectionAppendPort({
+          repository,
+          async publish(committed) {
+            if (committed.event.event.cursor === 1) {
+              publisherEntered.resolve();
+              await publicationGate.promise;
+            }
+          }
+        }),
+        normalizer: { now: advancingClock() }
+      });
+
+      const first = pipeline.consume(selected("thread/status/changed", { threadId: threadA, status: { type: "idle" } }));
+      await publisherEntered.promise;
+      const barrier = pipeline.barrier();
+      const second = pipeline.consume(selected("turn/started", { threadId: threadA, turn: rawTurn(turnA, "inProgress") }));
+      const abort = new AbortController();
+      const abortedBarrier = pipeline.barrier(abort.signal);
+      abort.abort(new Error("caller stopped waiting"));
+      await expectPipelineError(abortedBarrier, "pipeline_barrier_aborted");
+
+      publicationGate.resolve();
+      await expect(first).resolves.toMatchObject({ kind: "committed", sequence: 1 });
+      await expect(second).resolves.toMatchObject({ kind: "committed", sequence: 2 });
+      await expect(barrier).resolves.toEqual({ last_sequence: 2 });
+      expect(repository.listEvents("sess_pipeline_a").events.map((event) => event.cursor)).toEqual([1, 2]);
+      expect(pipeline.pending_count).toBe(0);
+      expect(pipeline.failure).toBeNull();
+    } finally {
+      open.db.close();
+    }
+  });
+
   it("serializes raw normalization through post-commit publication while allowing sequence gaps from diagnostics", async () => {
     const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
     try {

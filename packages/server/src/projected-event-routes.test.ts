@@ -1128,6 +1128,7 @@ async function appendMessages(
         last_activity_at: capturedAt,
         branch: session.branch,
         model: session.model,
+        settings: session.settings,
         goal: session.goal,
         recent_summary: `Projected event ${cursor}.`
       }

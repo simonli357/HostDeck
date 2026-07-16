@@ -104,6 +104,11 @@ export interface SelectedStateRepository {
     expectedRevision: unknown,
     retention?: RetentionPolicy | null
   ) => AppendSelectedEventResult;
+  readonly replaceEventsWithBoundary: (
+    event: unknown,
+    nextProjection: unknown,
+    expectedRevision: unknown
+  ) => AppendSelectedEventResult;
   readonly listEvents: (sessionId: string, input?: ListSelectedEventsInput) => SelectedSessionEventStream;
   readonly getLegacyDisposition: (sessionId: string) => LegacySessionDispositionRecord | null;
   readonly listLegacyDispositions: () => readonly LegacySessionDispositionRecord[];
@@ -137,6 +142,7 @@ interface ProjectionRow {
   readonly last_activity_at: string | null;
   readonly branch: string | null;
   readonly model: string | null;
+  readonly settings_json: string | null;
   readonly goal_json: string | null;
   readonly recent_summary: string;
   readonly last_event_cursor: number | null;
@@ -274,6 +280,40 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
     }
   ).immediate;
 
+  const replaceEventsWithBoundaryTransaction = db.transaction(
+    (
+      event: SelectedProjectedEventRecord,
+      nextProjection: SelectedSessionProjectionRecord,
+      expectedRevision: SelectedStateRevision
+    ): AppendSelectedEventResult => {
+      const current = requireState(db, event.event.session_id);
+      assertPersistedEventProjection(db, current.projection);
+      assertCurrentRevision(current, expectedRevision);
+      assertProjectionIdentity(current.mapping, nextProjection);
+      assertContinuityBoundaryReplacement(current.projection, event, nextProjection);
+
+      try {
+        db.prepare("DELETE FROM selected_projected_events WHERE session_id = ?").run(event.event.session_id);
+        insertEvent(db, event);
+        if (updateProjection(db, nextProjection) !== 1) {
+          throw new HostDeckSelectedStateRepositoryError(
+            "session_not_found",
+            `Selected session ${event.event.session_id} does not exist.`
+          );
+        }
+      } catch (error) {
+        if (error instanceof HostDeckSelectedStateRepositoryError) throw error;
+        throw mapEventConstraint(error);
+      }
+
+      return {
+        event,
+        projection: nextProjection,
+        revision: selectedStateRevision({ mapping: current.mapping, projection: nextProjection })
+      };
+    }
+  ).immediate;
+
   const putRecoveryTransaction = db.transaction((record: SelectedSessionStartRecoveryRecord): SelectedSessionStartRecoveryRecord => {
     if (record.updated_at < record.created_at) {
       throw new HostDeckSelectedStateRepositoryError("invalid_recovery", "Session-start recovery update cannot precede creation.");
@@ -347,6 +387,15 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
         parseProjection(nextProjection),
         parseSelectedStateRevision(expectedRevision),
         retention === null ? null : parseSelectedProjectionRetentionPolicy(retention)
+      );
+    },
+    replaceEventsWithBoundary(event, nextProjection, expectedRevision) {
+      const parsedEvent = parseProjectedEventRecord(event);
+      assertEventByteLength(parsedEvent);
+      return replaceEventsWithBoundaryTransaction(
+        parsedEvent,
+        parseProjection(nextProjection),
+        parseSelectedStateRevision(expectedRevision)
       );
     },
     listEvents(sessionId, input = {}) {
@@ -836,6 +885,11 @@ function parseState(candidate: unknown): SelectedSessionState {
 function parseStateRows(mappingRow: MappingRow, projectionRow: ProjectionRow): SelectedSessionState {
   const mapping = parseMapping(mappingRow);
   const goal = parseNullableJson(projectionRow.goal_json, "invalid_projection", "Stored selected goal JSON is invalid.");
+  const settings = parseNullableJson(
+    projectionRow.settings_json,
+    "invalid_projection",
+    "Stored selected settings JSON is invalid."
+  );
   const projection = parseProjection({
     session: {
       id: mapping.id,
@@ -855,6 +909,7 @@ function parseStateRows(mappingRow: MappingRow, projectionRow: ProjectionRow): S
       last_activity_at: projectionRow.last_activity_at,
       branch: projectionRow.branch,
       model: projectionRow.model,
+      settings,
       goal,
       recent_summary: projectionRow.recent_summary,
       last_event_cursor: projectionRow.last_event_cursor
@@ -1096,6 +1151,65 @@ function assertEventAdvance(
   }
 }
 
+function assertContinuityBoundaryReplacement(
+  current: SelectedSessionProjectionRecord,
+  event: SelectedProjectedEventRecord,
+  next: SelectedSessionProjectionRecord
+): void {
+  if (event.event.type !== "replay_boundary" || event.event.reason === "retention") {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_event",
+      "Continuity replacement requires a disconnect, restart, or schema-change boundary."
+    );
+  }
+  if (event.event.session_id !== current.session.id || next.session.id !== current.session.id) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "identity_mismatch",
+      "Continuity boundary and projection must target one selected session."
+    );
+  }
+  if (event.event.captured_at < current.session.created_at) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_event",
+      "Continuity boundary capture cannot precede session creation."
+    );
+  }
+  const floor = Math.max(current.session.last_event_cursor ?? 0, current.retention_boundary_cursor ?? 0);
+  const expectedCursor = floor + 1;
+  const expectedAfter = floor === 0 ? null : floor;
+  if (
+    event.event.cursor !== expectedCursor ||
+    event.event.next_cursor !== expectedCursor ||
+    event.event.after !== expectedAfter
+  ) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "cursor_not_monotonic",
+      "Continuity boundary must advance exactly one cursor beyond durable projection history."
+    );
+  }
+  if (
+    next.session.last_event_cursor !== expectedCursor ||
+    next.session.updated_at < current.session.updated_at ||
+    next.session.updated_at < event.event.captured_at
+  ) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "projection_conflict",
+      "Continuity boundary projection revision does not cover the committed boundary."
+    );
+  }
+  if (
+    next.retained_event_count !== 1 ||
+    next.retained_event_bytes !== event.byte_length ||
+    next.earliest_retained_cursor !== expectedCursor ||
+    next.retention_boundary_cursor !== expectedAfter
+  ) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "projection_conflict",
+      "Continuity boundary must become the only retained projected event."
+    );
+  }
+}
+
 function assertInitialProjection(projection: SelectedSessionProjectionRecord): void {
   if (
     projection.session.last_event_cursor !== null ||
@@ -1303,12 +1417,12 @@ function insertProjection(db: Database.Database, projection: SelectedSessionProj
     `
       INSERT INTO selected_session_projections (
         session_id, session_state, turn_state, attention, freshness, freshness_reason,
-        updated_at, last_activity_at, branch, model, goal_json, recent_summary,
+        updated_at, last_activity_at, branch, model, settings_json, goal_json, recent_summary,
         last_event_cursor, retained_event_count, retained_event_bytes,
         earliest_retained_cursor, retention_boundary_cursor
       ) VALUES (
         @session_id, @session_state, @turn_state, @attention, @freshness, @freshness_reason,
-        @updated_at, @last_activity_at, @branch, @model, @goal_json, @recent_summary,
+        @updated_at, @last_activity_at, @branch, @model, @settings_json, @goal_json, @recent_summary,
         @last_event_cursor, @retained_event_count, @retained_event_bytes,
         @earliest_retained_cursor, @retention_boundary_cursor
       )
@@ -1330,6 +1444,7 @@ function updateProjection(db: Database.Database, projection: SelectedSessionProj
           last_activity_at = @last_activity_at,
           branch = @branch,
           model = @model,
+          settings_json = @settings_json,
           goal_json = @goal_json,
           recent_summary = @recent_summary,
           last_event_cursor = @last_event_cursor,
@@ -1387,6 +1502,7 @@ function projectionToRow(projection: SelectedSessionProjectionRecord): Projectio
     last_activity_at: projection.session.last_activity_at,
     branch: projection.session.branch,
     model: projection.session.model,
+    settings_json: projection.session.settings === null ? null : JSON.stringify(projection.session.settings),
     goal_json: projection.session.goal === null ? null : JSON.stringify(projection.session.goal),
     recent_summary: projection.session.recent_summary,
     last_event_cursor: projection.session.last_event_cursor,

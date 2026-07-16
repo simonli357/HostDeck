@@ -1016,6 +1016,35 @@ describe("selected projection and storage contracts", () => {
     ).toThrow();
   });
 
+  it("persists only structured collaboration settings that agree with the session projection", () => {
+    expect(session.settings).toBeNull();
+    const settings = {
+      collaboration_mode: "plan" as const,
+      runtime_model: "gpt-5.5-codex",
+      reasoning_effort: "high",
+      observed_at: laterTimestamp
+    };
+    expect(managedSessionProjectionSchema.parse({ ...session, settings }).settings).toEqual(settings);
+    expect(() =>
+      managedSessionProjectionSchema.parse({
+        ...session,
+        settings: { ...settings, runtime_model: "different-model" }
+      })
+    ).toThrow("settings model");
+    expect(() =>
+      managedSessionProjectionSchema.parse({
+        ...session,
+        settings: { ...settings, observed_at: "2026-07-09T16:02:00.000Z" }
+      })
+    ).toThrow("settings observation");
+    expect(() =>
+      managedSessionProjectionSchema.parse({
+        ...session,
+        settings: { ...settings, private_value: "not allowed" }
+      })
+    ).toThrow();
+  });
+
   it("stores selected mappings separately from explicitly marked legacy records", () => {
     expect(
       selectedSessionMappingRecordSchema.parse({

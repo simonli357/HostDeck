@@ -12,7 +12,7 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
-import type { CodexThreadId } from "@hostdeck/core";
+import type { AbsoluteCwd, CodexThreadId } from "@hostdeck/core";
 import type { SelectedSessionState } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
 import {
@@ -38,6 +38,74 @@ const targetB = {
 } as const;
 
 describe("Codex pending Plan control", () => {
+  it("rehydrates only durable current settings and clears process-only pending state without runtime calls", async () => {
+    const harness = createHarness();
+    await harness.planService.select(planIntent("enter"));
+    expect(harness.planService.pending_count).toBe(1);
+    harness.states.set(
+      targetA.session_id,
+      selectedState(targetA.session_id, targetA.codex_thread_id, "idle", false, {
+        collaboration_mode: "plan",
+        runtime_model: "runtime-a",
+        reasoning_effort: "high",
+        observed_at: observedAt
+      })
+    );
+
+    await expect(harness.planService.rehydrate(targetA)).resolves.toEqual({
+      state: "confirmed",
+      mode: "plan",
+      runtime_model: "runtime-a",
+      reasoning_effort: "high",
+      observed_at: observedAt
+    });
+    expect(harness.planService.pending_count).toBe(0);
+    expect(harness.plans.startCalls).toEqual([]);
+    expect(harness.models.startCalls).toEqual([]);
+
+    harness.states.set(targetA.session_id, selectedState(targetA.session_id, targetA.codex_thread_id));
+    await expect(harness.planService.rehydrate(targetA)).resolves.toEqual({
+      state: "unknown",
+      mode: null,
+      runtime_model: null,
+      reasoning_effort: null,
+      observed_at: null
+    });
+
+    const stale = selectedState(targetA.session_id, targetA.codex_thread_id, "idle", false, {
+      collaboration_mode: "plan",
+      runtime_model: "runtime-a",
+      reasoning_effort: "high",
+      observed_at: observedAt
+    });
+    harness.states.set(targetA.session_id, {
+      mapping: stale.mapping,
+      projection: {
+        ...stale.projection,
+        session: {
+          ...stale.projection.session,
+          freshness: "stale",
+          freshness_reason: "Runtime resubscription is required."
+        }
+      }
+    });
+    await expect(harness.planService.rehydrate(targetA)).resolves.toMatchObject({ state: "unknown", mode: null });
+
+    harness.states.set(
+      targetA.session_id,
+      selectedState(targetA.session_id, targetA.codex_thread_id, "idle", true, {
+        collaboration_mode: "plan",
+        runtime_model: "runtime-a",
+        reasoning_effort: "high",
+        observed_at: observedAt
+      })
+    );
+    await expect(harness.planService.rehydrate(targetA)).resolves.toMatchObject({ state: "unknown", mode: null });
+    await expect(
+      harness.planService.rehydrate({ ...targetA, codex_thread_id: "thread-plan-other" })
+    ).rejects.toMatchObject({ code: "target_mismatch" });
+  });
+
   it("stores a revisioned next-turn mode without starting a zero-turn toggle", async () => {
     const harness = createHarness();
     expect((await harness.planService.snapshot(targetA)).current).toEqual({
@@ -486,6 +554,7 @@ function fakeModels(): FakeModels {
       this.readHook?.();
       return {
         thread_id: threadId as CodexThreadId,
+        cwd: `/tmp/${threadId === targetB.codex_thread_id ? targetB.session_id : targetA.session_id}` as AbsoluteCwd,
         runtime_model: this.current.runtime_model,
         reasoning_effort: this.current.reasoning_effort
       };
@@ -571,7 +640,18 @@ function planTurn(planRevision: number, modelRevision: number | null) {
   } as const;
 }
 
-function selectedState(sessionId: string, threadId: string, turnState = "idle", archived = false): SelectedSessionState {
+function selectedState(
+  sessionId: string,
+  threadId: string,
+  turnState = "idle",
+  archived = false,
+  settings: {
+    readonly collaboration_mode: "default" | "plan";
+    readonly runtime_model: string;
+    readonly reasoning_effort: string | null;
+    readonly observed_at: string;
+  } | null = null
+): SelectedSessionState {
   const archivedAt = archived ? observedAt : null;
   const mapping = selectedSessionMappingRecordSchema.parse({
     id: sessionId,
@@ -604,6 +684,7 @@ function selectedState(sessionId: string, threadId: string, turnState = "idle", 
       last_activity_at: observedAt,
       branch: "main",
       model: "runtime-a",
+      settings,
       goal: null,
       recent_summary: "Managed Codex Plan session ready.",
       last_event_cursor: null

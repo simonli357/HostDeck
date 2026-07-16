@@ -75,17 +75,24 @@ export {
   hostDeckSelectedPairingClaimMigration,
   hostDeckSelectedRetentionIndexesMigration,
   hostDeckSelectedRuntimeStateMigration,
+  hostDeckSelectedSessionSettingsProjectionMigration,
   hostDeckSessionMetadataFailedStatusMigration,
+  hostDeckSessionStartAuditCatalogMigration,
   type StorageMigration
 } from "./migrations.js";
 export {
   type CommittedProjectionAppend,
   createProductionProjectionAppendPort,
+  createProductionProjectionContinuityPort,
   HostDeckProjectionPublicationError,
   type ProductionProjectionAppendInput,
   type ProductionProjectionAppendPort,
   type ProductionProjectionAppendPortOptions,
+  type ProductionProjectionContinuityInput,
+  type ProductionProjectionContinuityPort,
+  type ProductionProjectionContinuityPortOptions,
   type ProjectionAppendPublisher,
+  type ProjectionContinuityBoundaryReason,
   type UncommittedManagedSessionProjection,
   type UncommittedSelectedProjectionEvent
 } from "./projection-append-port.js";

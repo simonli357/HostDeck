@@ -72,7 +72,7 @@ describe("Codex runtime reconnect controller", () => {
     await controller.close();
   });
 
-  it("drains callbacks that arrive while the final ready publication is pending", async () => {
+  it("delivers callbacks into the final ready barrier before admission", async () => {
     const readyGate = deferred<void>();
     const delivered: string[] = [];
     let readyEntered = false;
@@ -92,7 +92,14 @@ describe("Codex runtime reconnect controller", () => {
     expect(controller.snapshot()).toMatchObject({ phase: "resubscribing", admitted_generation: null });
 
     transport.receive('{"method":"turn/started","params":{}}');
-    expect(controller.snapshot().held_notifications).toBe(1);
+    expect(delivered).toEqual(["turn/started"]);
+    expect(controller.snapshot().held_notifications).toBe(0);
+    await expectAdapterError(
+      controller.request({ method: "turn/start", params: {}, kind: "mutation" }),
+      "transport_not_open",
+      "not_sent",
+      true
+    );
     readyGate.resolve();
     await starting;
 

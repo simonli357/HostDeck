@@ -616,6 +616,7 @@ function selectedState(
         last_activity_at: null,
         branch: null,
         model: null,
+        settings: null,
         goal: null,
         recent_summary: "",
         last_event_cursor: null

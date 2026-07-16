@@ -70,7 +70,7 @@ const privateMaterial = "-----BEGIN PRIVATE KEY-----aggregate-private-material";
 const fullTranscript = "aggregate-full-transcript-must-never-become-hostdeck-durable-truth";
 const selectedDeviceId = `client_${"d".repeat(24)}`;
 const pairingSourceKey = `sha256:${"a".repeat(64)}`;
-const currentMigrationVersion = "202607150016_session_start_audit_catalog";
+const currentMigrationVersion = "202607160017_selected_session_settings_projection";
 
 afterEach(() => {
   for (const root of cleanup.splice(0).reverse()) {
@@ -707,6 +707,7 @@ function appendCandidate(
       last_activity_at: capturedAt,
       branch: session.branch,
       model: session.model,
+      settings: session.settings,
       goal: session.goal,
       recent_summary: `Projection for aggregate event ${index}.`
     }

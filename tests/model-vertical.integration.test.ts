@@ -10,6 +10,7 @@ import type {
   CodexModelTurnStartInput
 } from "../packages/codex-adapter/src/index.js";
 import {
+  absoluteCwdSchema,
   codexThreadIdSchema,
   defaultResourceBudget,
   defaultRetentionPolicy,
@@ -272,8 +273,12 @@ class VerticalModelClient implements CodexModelClient {
 
   async readCurrent(thread: string, _signal?: AbortSignal) {
     this.readCalls.push(thread);
+    const cwd = thread === threadId
+      ? "/tmp/hostdeck-model-vertical-one"
+      : "/tmp/hostdeck-model-vertical-two";
     return {
       thread_id: codexThreadIdSchema.parse(thread),
+      cwd: absoluteCwdSchema.parse(cwd),
       runtime_model: "runtime-a",
       reasoning_effort: "high"
     };

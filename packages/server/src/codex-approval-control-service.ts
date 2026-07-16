@@ -188,7 +188,7 @@ class DefaultCodexApprovalControlService implements CodexApprovalControlService 
     if (state === null) {
       throw approvalError("target_not_found", "session_not_found", "Codex approval targets no managed session.", "not_sent", false);
     }
-    this.requireUsableState(state, runtime.version);
+    this.requireUsableState(state, runtime.version, true);
     const now = this.timestamp();
     const startedMs = Date.parse(request.started_at);
     const nowMs = Date.parse(now);
@@ -680,7 +680,11 @@ class DefaultCodexApprovalControlService implements CodexApprovalControlService 
     return state;
   }
 
-  private requireUsableState(state: SelectedSessionState, runtimeVersion: string): void {
+  private requireUsableState(
+    state: SelectedSessionState,
+    runtimeVersion: string,
+    allowResubscriptionRegistration = false
+  ): void {
     if (state.mapping.disposition !== "selected") {
       throw approvalError(
         "target_stale",
@@ -709,10 +713,16 @@ class DefaultCodexApprovalControlService implements CodexApprovalControlService 
         false
       );
     }
-    if (state.projection.session.session_state !== "active" || state.projection.session.freshness !== "current") {
+    const session = state.projection.session;
+    const resubscriptionRegistration =
+      allowResubscriptionRegistration &&
+      session.session_state === "active" &&
+      session.freshness === "stale" &&
+      session.freshness_reason === "Runtime resubscription is required.";
+    if (!resubscriptionRegistration && (session.session_state !== "active" || session.freshness !== "current")) {
       throw approvalError(
-        state.projection.session.freshness === "current" ? "target_not_writable" : "target_stale",
-        state.projection.session.freshness === "current" ? "session_not_writable" : "stale_session",
+        session.freshness === "current" ? "target_not_writable" : "target_stale",
+        session.freshness === "current" ? "session_not_writable" : "stale_session",
         "The selected approval session is not currently writable.",
         "not_sent",
         true

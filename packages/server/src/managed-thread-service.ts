@@ -669,6 +669,7 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
           last_activity_at: thread.updated_at,
           branch,
           model,
+          settings: null,
           goal: null,
           recent_summary: thread.archived === true ? "Managed Codex session archived." : projectionState.summary,
           last_event_cursor: null

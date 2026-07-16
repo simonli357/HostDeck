@@ -100,6 +100,14 @@ export {
 } from "./plan-client.js";
 export type { CodexRequestId } from "./protocol.js";
 export {
+  type CodexReconciliationLatestTurn,
+  type CodexReconciliationReadClient,
+  type CodexReconciliationResubscribeClient,
+  type CodexReconciliationTurnFailureCode,
+  createCodexReconciliationReadClient,
+  createCodexReconciliationResubscribeClient
+} from "./reconciliation-client.js";
+export {
   type CodexReconnectClock,
   type CodexReconnectContinuity,
   type CodexReconnectDisconnectedInput,

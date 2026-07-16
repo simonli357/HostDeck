@@ -11,8 +11,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { openMigratedDatabase } from "./migration-runner.js";
 import {
   createProductionProjectionAppendPort,
+  createProductionProjectionContinuityPort,
   HostDeckProjectionPublicationError,
-  type ProductionProjectionAppendInput
+  type ProductionProjectionAppendInput,
+  type ProjectionContinuityBoundaryReason
 } from "./projection-append-port.js";
 import {
   createSelectedStateRepository,
@@ -51,6 +53,237 @@ describe("production projection append port", () => {
         retention: { ...defaultRetentionPolicy, output_event_limit: 1 }
       })
     ).toThrow("at least two output-event slots");
+  });
+
+  it("atomically replaces a populated retained window with one monotonic continuity boundary", async () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      let current = repository.create(stateCandidate());
+      const append = createProductionProjectionAppendPort({ repository, publish() {} });
+      for (let index = 1; index <= 3; index += 1) {
+        await append.append(appendCandidate(current, `upstream-before-gap-${index}`, eventAt(index)));
+        current = repository.require(current.mapping.id);
+      }
+
+      const publications: number[] = [];
+      const continuity = createProductionProjectionContinuityPort({
+        repository,
+        publish(committed) {
+          publications.push(committed.event.event.cursor);
+          expect(repository.require(current.mapping.id).projection).toEqual(committed.projection);
+        }
+      });
+      const committed = await continuity.replaceWithBoundary(
+        continuityCandidate(current, eventAt(4), "disconnect")
+      );
+
+      expect(committed.event.event).toMatchObject({
+        type: "replay_boundary",
+        cursor: 4,
+        after: 3,
+        next_cursor: 4,
+        reason: "disconnect"
+      });
+      expect(publications).toEqual([4]);
+      current = repository.require(current.mapping.id);
+      expect(current.projection).toMatchObject({
+        retained_event_count: 1,
+        earliest_retained_cursor: 4,
+        retention_boundary_cursor: 3,
+        session: { last_event_cursor: 4, freshness: "stale" }
+      });
+      expect(repository.listEvents(current.mapping.id, { after: 2 })).toMatchObject({
+        truncated: true,
+        events: [{ type: "replay_boundary", cursor: 4, after: 3 }]
+      });
+
+      await append.append(appendCandidate(current, "upstream-after-gap", eventAt(5)));
+      expect(repository.listEvents(current.mapping.id, { after: 2 })).toMatchObject({
+        truncated: true,
+        events: [
+          { type: "replay_boundary", cursor: 4, after: 3 },
+          { type: "message", cursor: 5, codex_event_id: "upstream-after-gap" }
+        ]
+      });
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("creates the first continuity boundary for an empty retained window", async () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      const current = repository.create(stateCandidate());
+      const continuity = createProductionProjectionContinuityPort({ repository, publish() {} });
+
+      const committed = await continuity.replaceWithBoundary(
+        continuityCandidate(current, firstEventAt, "restart")
+      );
+
+      expect(committed.event.event).toMatchObject({
+        type: "replay_boundary",
+        cursor: 1,
+        after: null,
+        next_cursor: 1,
+        reason: "restart"
+      });
+      expect(repository.require(current.mapping.id).projection).toMatchObject({
+        retained_event_count: 1,
+        retained_event_bytes: committed.event.byte_length,
+        earliest_retained_cursor: 1,
+        retention_boundary_cursor: null,
+        session: { last_event_cursor: 1 }
+      });
+      expect(repository.listEvents(current.mapping.id)).toMatchObject({
+        truncated: true,
+        events: [{ type: "replay_boundary", cursor: 1, after: null }]
+      });
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("replaces a committed restart boundary again after reopen without retaining duplicate history", async () => {
+    const path = tempDbPath();
+    const first = openMigratedDatabase(path, { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(first.db);
+      const initial = repository.create(stateCandidate());
+      const append = createProductionProjectionAppendPort({ repository, publish() {} });
+      await append.append(appendCandidate(initial, "upstream-before-restart", firstEventAt));
+      const current = repository.require(initial.mapping.id);
+      const continuity = createProductionProjectionContinuityPort({ repository, publish() {} });
+      await continuity.replaceWithBoundary(continuityCandidate(current, secondEventAt, "restart"));
+    } finally {
+      first.db.close();
+    }
+
+    const second = openMigratedDatabase(path, { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(second.db);
+      const current = repository.require("sess_projection_001");
+      const continuity = createProductionProjectionContinuityPort({ repository, publish() {} });
+      const committed = await continuity.replaceWithBoundary(
+        continuityCandidate(current, eventAt(3), "restart")
+      );
+
+      expect(committed.event.event).toMatchObject({ cursor: 3, after: 2, next_cursor: 3 });
+      expect(repository.listEvents(current.mapping.id).events).toMatchObject([
+        { type: "replay_boundary", cursor: 3, after: 2, reason: "restart" }
+      ]);
+      expect(repository.require(current.mapping.id).projection).toMatchObject({
+        retained_event_count: 1,
+        earliest_retained_cursor: 3,
+        retention_boundary_cursor: 2,
+        session: { last_event_cursor: 3 }
+      });
+    } finally {
+      second.db.close();
+    }
+  });
+
+  it("rejects exhausted continuity cursor space before deleting retained history", async () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      const initial = repository.create(stateCandidate());
+      const initialContinuity = createProductionProjectionContinuityPort({ repository, publish() {} });
+      await initialContinuity.replaceWithBoundary(continuityCandidate(initial, firstEventAt, "restart"));
+
+      const row = open.db
+        .prepare("SELECT event_json FROM selected_projected_events WHERE session_id = ?")
+        .get(initial.mapping.id) as { readonly event_json: string };
+      const exhaustedEvent = {
+        ...(JSON.parse(row.event_json) as Record<string, unknown>),
+        cursor: Number.MAX_SAFE_INTEGER,
+        after: Number.MAX_SAFE_INTEGER - 1,
+        next_cursor: Number.MAX_SAFE_INTEGER
+      };
+      const byteLength = selectedProjectedEventByteLength(exhaustedEvent);
+      open.db
+        .prepare(
+          "UPDATE selected_projected_events SET cursor = ?, byte_length = ?, event_json = ? WHERE session_id = ?"
+        )
+        .run(Number.MAX_SAFE_INTEGER, byteLength, JSON.stringify(exhaustedEvent), initial.mapping.id);
+      open.db
+        .prepare(
+          `
+            UPDATE selected_session_projections SET
+              last_event_cursor = ?, retained_event_count = 1, retained_event_bytes = ?,
+              earliest_retained_cursor = ?, retention_boundary_cursor = ?
+            WHERE session_id = ?
+          `
+        )
+        .run(
+          Number.MAX_SAFE_INTEGER,
+          byteLength,
+          Number.MAX_SAFE_INTEGER,
+          Number.MAX_SAFE_INTEGER - 1,
+          initial.mapping.id
+        );
+
+      const exhausted = repository.require(initial.mapping.id);
+      const before = repository.listEvents(initial.mapping.id);
+      const continuity = createProductionProjectionContinuityPort({ repository, publish() {} });
+      await expectRepositoryRejection(
+        continuity.replaceWithBoundary(continuityCandidate(exhausted, secondEventAt, "disconnect")),
+        "cursor_not_monotonic"
+      );
+      expect(repository.listEvents(initial.mapping.id)).toEqual(before);
+      expect(repository.require(initial.mapping.id)).toEqual(exhausted);
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("rolls back continuity replacement and reports publication uncertainty after commit", async () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      let current = repository.create(stateCandidate());
+      const append = createProductionProjectionAppendPort({ repository, publish() {} });
+      await append.append(appendCandidate(current, "upstream-before-gap", eventAt(1)));
+      current = repository.require(current.mapping.id);
+      const before = repository.listEvents(current.mapping.id);
+
+      open.db.exec(`
+        CREATE TRIGGER force_continuity_boundary_failure
+        BEFORE INSERT ON selected_projected_events
+        WHEN NEW.normalized_type = 'replay_boundary'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced continuity boundary failure');
+        END;
+      `);
+      const failed = createProductionProjectionContinuityPort({ repository, publish() {} });
+      await expectRepositoryRejection(
+        failed.replaceWithBoundary(continuityCandidate(current, eventAt(2), "restart")),
+        "projection_write_failed"
+      );
+      expect(repository.listEvents(current.mapping.id)).toEqual(before);
+      open.db.exec("DROP TRIGGER force_continuity_boundary_failure");
+
+      const uncertain = createProductionProjectionContinuityPort({
+        repository,
+        publish() {
+          throw new Error("injected publication failure");
+        }
+      });
+      let error: unknown;
+      try {
+        await uncertain.replaceWithBoundary(continuityCandidate(current, eventAt(2), "restart"));
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(HostDeckProjectionPublicationError);
+      expect(error).toMatchObject({ durability: "committed", publication_outcome: "unknown" });
+      expect(repository.listEvents(current.mapping.id).events).toMatchObject([
+        { type: "replay_boundary", cursor: 2, after: 1, reason: "restart" }
+      ]);
+    } finally {
+      open.db.close();
+    }
   });
 
   it("prunes repeated count overflow inside append and publishes only post-retention state", async () => {
@@ -852,8 +1085,46 @@ function appendCandidate(state: SelectedSessionState, eventId: string, capturedA
       last_activity_at: parsedCapturedAt,
       branch: session.branch,
       model: session.model,
+      settings: session.settings,
       goal: session.goal,
       recent_summary: `Projection for ${eventId}.`
+    }
+  };
+}
+
+function continuityCandidate(
+  state: SelectedSessionState,
+  capturedAt: string,
+  reason: ProjectionContinuityBoundaryReason
+) {
+  const session = state.projection.session;
+  const parsedCapturedAt = isoTimestampSchema.parse(capturedAt);
+  return {
+    session_id: state.mapping.id,
+    expected_revision: selectedStateRevision(state),
+    captured_at: parsedCapturedAt,
+    reason,
+    next_session: {
+      id: session.id,
+      name: session.name,
+      codex_thread_id: session.codex_thread_id,
+      cwd: session.cwd,
+      runtime_source: session.runtime_source,
+      runtime_version: session.runtime_version,
+      created_at: session.created_at,
+      archived_at: session.archived_at,
+      session_state: session.session_state,
+      turn_state: session.turn_state,
+      attention: "unknown" as const,
+      freshness: "stale" as const,
+      freshness_reason: "Runtime continuity requires reconciliation.",
+      updated_at: parsedCapturedAt,
+      last_activity_at: session.last_activity_at,
+      branch: session.branch,
+      model: session.model,
+      settings: session.settings,
+      goal: session.goal,
+      recent_summary: "Runtime continuity boundary committed."
     }
   };
 }

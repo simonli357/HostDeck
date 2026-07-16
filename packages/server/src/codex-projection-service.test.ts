@@ -205,6 +205,14 @@ describe("Codex ordered projection service", () => {
       const projected = repository.listEvents("sess_projector_a").events;
       expect(projected).toHaveLength(8);
       expect(projected[1]).toMatchObject({ type: "activity", activity: "settings" });
+      expect(repository.require("sess_projector_a").projection.session).toMatchObject({
+        model: "gpt-5.6-sol",
+        settings: {
+          collaboration_mode: "plan",
+          runtime_model: "gpt-5.6-sol",
+          reasoning_effort: "medium"
+        }
+      });
       expect(projected[2]).toMatchObject({ type: "control", control: "goal", state: "paused" });
       expect(projected[4]).toMatchObject({ type: "activity", activity: "usage" });
       expect(projected[5]).toMatchObject({

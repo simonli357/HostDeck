@@ -36,7 +36,8 @@ describe("session-start audit catalog migration", () => {
       const before = rawRows(open.db);
 
       expect(runMigrations(open.db, { migrations: defaultMigrations, now: fixedNow }).applied).toEqual([
-        "202607150016_session_start_audit_catalog"
+        "202607150016_session_start_audit_catalog",
+        "202607160017_selected_session_settings_projection"
       ]);
       expect(rawRows(open.db)).toEqual(before);
       expect(schemaObjects(open.db, "index")).toEqual([
@@ -202,7 +203,11 @@ describe("session-start audit catalog migration", () => {
 });
 
 function migrationsBeforeSessionStartAudit(): readonly StorageMigration[] {
-  const migrations = defaultMigrations.slice(0, -1);
+  const index = defaultMigrations.findIndex(
+    (migration) => migration.version === "202607150016_session_start_audit_catalog"
+  );
+  if (index < 0) throw new Error("Session-start audit migration is missing.");
+  const migrations = defaultMigrations.slice(0, index);
   if (migrations.at(-1)?.version !== "202607130015_remote_admission_proof") {
     throw new Error("Session-start audit migration is not the next forward-only migration.");
   }

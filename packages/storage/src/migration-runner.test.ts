@@ -6,6 +6,7 @@ import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 import { HostDeckMigrationError, openMigratedDatabase, runMigrations } from "./migration-runner.js";
 import { defaultMigrations, type StorageMigration } from "./migrations.js";
+import { createSelectedStateRepository, selectedStateRevision } from "./selected-state-repository.js";
 
 const tempDirs: string[] = [];
 
@@ -40,7 +41,8 @@ describe("SQLite migration runner", () => {
       "202607130013_remote_ingress_state": "342f963fc3fd349353ee2487346ec4862b2ec16e5b0275b49de3a577fc95258d",
       "202607130014_remote_audit_catalog": "c8c94dda5c2cf3a2af5a85e8ce58f53feadbfcccfcc84f3a57715415d78eaf65",
       "202607130015_remote_admission_proof": "7b080b4cb2054274001f8bbedb35a04b9f904b6b6bbf362c3ddd222382054d12",
-      "202607150016_session_start_audit_catalog": "4d6ebd8346b5e329cae5aa6e4f396eb130e73ccbf153388e0f1807821e5c806f"
+      "202607150016_session_start_audit_catalog": "4d6ebd8346b5e329cae5aa6e4f396eb130e73ccbf153388e0f1807821e5c806f",
+      "202607160017_selected_session_settings_projection": "c6382889bd40b65cf2f421c03bfb750588483edf47cacefacc5f0a910fa78ff7"
     });
   });
 
@@ -67,7 +69,8 @@ describe("SQLite migration runner", () => {
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
-        "202607150016_session_start_audit_catalog"
+        "202607150016_session_start_audit_catalog",
+        "202607160017_selected_session_settings_projection"
       ]);
       expect(tableNames(db)).toEqual([
         "audit_events",
@@ -92,7 +95,7 @@ describe("SQLite migration runner", () => {
         "sessions",
         "settings"
       ]);
-      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 16 });
+      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 17 });
       expect(
         db
           .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
@@ -103,6 +106,122 @@ describe("SQLite migration runner", () => {
       ).toEqual({ name: "auth_devices_csrf_token_hash_idx" });
     } finally {
       db.close();
+    }
+  });
+
+  it("adds nullable structured session settings without rewriting prior projection truth", () => {
+    const path = tempDbPath();
+    const prior = openMigratedDatabase(path, {
+      migrations: migrationsThrough("202607150016_session_start_audit_catalog"),
+      now: fixedNow
+    });
+    const createdAt = "2026-07-16T12:00:00.000Z";
+    prior.db
+      .prepare(
+        `
+          INSERT INTO selected_sessions (
+            id, name, codex_thread_id, cwd, runtime_source, runtime_version,
+            disposition, created_at, updated_at, archived_at
+          ) VALUES (?, ?, ?, ?, 'codex_app_server', '0.144.0', 'selected', ?, ?, NULL)
+        `
+      )
+      .run("sess_settings_migration", "settings-migration", "thread-settings-migration", "/tmp/settings-migration", createdAt, createdAt);
+    prior.db
+      .prepare(
+        `
+          INSERT INTO selected_session_projections (
+            session_id, session_state, turn_state, attention, freshness, freshness_reason,
+            updated_at, last_activity_at, branch, model, goal_json, recent_summary,
+            last_event_cursor, retained_event_count, retained_event_bytes,
+            earliest_retained_cursor, retention_boundary_cursor
+          ) VALUES (?, 'active', 'idle', 'none', 'current', NULL, ?, NULL, NULL, NULL, NULL, '', NULL, 0, 0, NULL, NULL)
+        `
+      )
+      .run("sess_settings_migration", createdAt);
+    const before = prior.db.prepare("SELECT * FROM selected_session_projections").get() as Record<string, unknown>;
+    prior.db.close();
+
+    const migrated = openMigratedDatabase(path, { now: fixedNow });
+    expect(migrated.result.applied).toEqual(["202607160017_selected_session_settings_projection"]);
+    const raw = migrated.db.prepare("SELECT * FROM selected_session_projections").get() as Record<string, unknown>;
+    expect(raw.settings_json).toBeNull();
+    expect(Object.fromEntries(Object.entries(raw).filter(([key]) => key !== "settings_json"))).toEqual(before);
+
+    const repository = createSelectedStateRepository(migrated.db);
+    const current = repository.require("sess_settings_migration");
+    expect(current.projection.session.settings).toBeNull();
+    const observedAt = "2026-07-16T12:00:01.000Z";
+    repository.replace(
+      {
+        mapping: { ...current.mapping, updated_at: observedAt },
+        projection: {
+          ...current.projection,
+          session: {
+            ...current.projection.session,
+            updated_at: observedAt,
+            model: "gpt-5.5-codex",
+            settings: {
+              collaboration_mode: "plan",
+              runtime_model: "gpt-5.5-codex",
+              reasoning_effort: "high",
+              observed_at: observedAt
+            }
+          }
+        }
+      },
+      selectedStateRevision(current)
+    );
+    migrated.db.close();
+
+    const reopened = openMigratedDatabase(path, { now: fixedNow });
+    try {
+      expect(createSelectedStateRepository(reopened.db).require("sess_settings_migration").projection.session.settings).toEqual({
+        collaboration_mode: "plan",
+        runtime_model: "gpt-5.5-codex",
+        reasoning_effort: "high",
+        observed_at: observedAt
+      });
+      reopened.db
+        .prepare("UPDATE selected_session_projections SET settings_json = '{}' WHERE session_id = ?")
+        .run("sess_settings_migration");
+      expect(() => createSelectedStateRepository(reopened.db).require("sess_settings_migration")).toThrow(
+        "Selected session projection is invalid"
+      );
+    } finally {
+      reopened.db.close();
+    }
+  });
+
+  it("rolls back the structured-settings column when its migration transaction fails", () => {
+    const path = tempDbPath();
+    const priorMigrations = migrationsThrough("202607150016_session_start_audit_catalog");
+    const prior = openMigratedDatabase(path, { migrations: priorMigrations, now: fixedNow });
+    prior.db.close();
+    const settingsMigration = defaultMigrations.at(-1);
+    if (settingsMigration?.version !== "202607160017_selected_session_settings_projection") {
+      throw new Error("Structured-settings migration is not the latest migration.");
+    }
+    const failingMigration: StorageMigration = {
+      ...settingsMigration,
+      sql: `${settingsMigration.sql}\nSELECT * FROM missing_settings_migration_dependency;`
+    };
+
+    expect(() =>
+      openMigratedDatabase(path, {
+        migrations: [...priorMigrations, failingMigration],
+        now: fixedNow
+      })
+    ).toThrow(HostDeckMigrationError);
+
+    const inspected = new Database(path);
+    try {
+      const columns = inspected
+        .prepare("PRAGMA table_info(selected_session_projections)")
+        .all() as Array<{ readonly name: string }>;
+      expect(columns.map((column) => column.name)).not.toContain("settings_json");
+      expect(inspected.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 16 });
+    } finally {
+      inspected.close();
     }
   });
 
@@ -136,7 +255,8 @@ describe("SQLite migration runner", () => {
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
-        "202607150016_session_start_audit_catalog"
+        "202607150016_session_start_audit_catalog",
+        "202607160017_selected_session_settings_projection"
       ]);
       expect(migrated.db.prepare("SELECT id FROM audit_events WHERE id = 'audit_legacy_preserved'").get()).toEqual({
         id: "audit_legacy_preserved"
@@ -200,7 +320,8 @@ describe("SQLite migration runner", () => {
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
-        "202607150016_session_start_audit_catalog"
+        "202607150016_session_start_audit_catalog",
+        "202607160017_selected_session_settings_projection"
       ]);
       expect(migrated.db.prepare("SELECT id FROM selected_audit_events WHERE operation_id = ?").get("op_index_preserved")).toEqual({
         id: "audit:index:preserved"
@@ -269,7 +390,8 @@ describe("SQLite migration runner", () => {
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
-        "202607150016_session_start_audit_catalog"
+        "202607150016_session_start_audit_catalog",
+        "202607160017_selected_session_settings_projection"
       ]);
       expect(migrated.db.prepare("SELECT * FROM auth_devices WHERE id = ?").get("client_csrf_migration")).toEqual({
         id: "client_csrf_migration",
@@ -360,7 +482,8 @@ describe("SQLite migration runner", () => {
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
-        "202607150016_session_start_audit_catalog"
+        "202607150016_session_start_audit_catalog",
+        "202607160017_selected_session_settings_projection"
       ]);
       expect(
         migrated.db
@@ -566,7 +689,8 @@ describe("SQLite migration runner", () => {
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
-        "202607150016_session_start_audit_catalog"
+        "202607150016_session_start_audit_catalog",
+        "202607160017_selected_session_settings_projection"
       ]);
       expect(
         migrated.db
@@ -792,7 +916,8 @@ describe("SQLite migration runner", () => {
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
-        "202607150016_session_start_audit_catalog"
+        "202607150016_session_start_audit_catalog",
+        "202607160017_selected_session_settings_projection"
       ]);
       expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM selected_sessions").get()).toEqual({ count: 0 });
       expect(migrated.db.prepare("SELECT * FROM legacy_session_dispositions").get()).toMatchObject({

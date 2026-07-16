@@ -6,7 +6,7 @@ import {
   type NormalizedCodexEvent
 } from "@hostdeck/codex-adapter";
 import type { ModelCatalogEntry } from "@hostdeck/contracts";
-import type { CodexThreadId } from "@hostdeck/core";
+import type { AbsoluteCwd, CodexThreadId } from "@hostdeck/core";
 import type { SelectedSessionState } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
 import {
@@ -443,6 +443,7 @@ function fakeModels(): FakeModels {
       this.readHook?.();
       return {
         thread_id: threadId as CodexThreadId,
+        cwd: `/tmp/${threadId === targetB.codex_thread_id ? targetB.session_id : targetA.session_id}` as AbsoluteCwd,
         runtime_model: this.current.runtime_model,
         reasoning_effort: this.current.reasoning_effort
       };
@@ -543,6 +544,7 @@ function selectedState(sessionId: string, threadId: string, turnState = "idle", 
         last_activity_at: null,
         branch: null,
         model: null,
+        settings: null,
         goal: null,
         recent_summary: "",
         last_event_cursor: null

@@ -14,6 +14,7 @@ import { type CodexProjectionResult, type CodexProjectionService, createCodexPro
 
 export type CodexEventPipelineErrorCode =
   | "invalid_connection_generation"
+  | "pipeline_barrier_aborted"
   | "pipeline_capacity_exceeded"
   | "pipeline_stopped"
   | "thread_scope_changed";
@@ -64,9 +65,14 @@ export interface CodexEventPipeline {
     notification: CodexConnectionNotification,
     connection_generation?: number
   ) => Promise<CodexEventPipelineResult>;
+  readonly barrier: (signal?: AbortSignal) => Promise<CodexEventPipelineBarrier>;
   readonly failure: Error | null;
   readonly last_sequence: number;
   readonly pending_count: number;
+}
+
+export interface CodexEventPipelineBarrier {
+  readonly last_sequence: number;
 }
 
 const defaultMaxPendingNotifications = defaultResourceBudget.protocol_max_pending_notifications;
@@ -133,6 +139,21 @@ class DefaultCodexEventPipeline implements CodexEventPipeline {
       }
     );
     return tracked;
+  }
+
+  async barrier(signal?: AbortSignal): Promise<CodexEventPipelineBarrier> {
+    if (signal !== undefined && !isAbortSignal(signal)) {
+      throw new TypeError("Codex event-pipeline barrier signal is invalid.");
+    }
+    while (true) {
+      if (this.currentFailure !== null) throw this.stoppedError();
+      const observedTail = this.tail;
+      await settleBarrier(observedTail, signal);
+      if (this.currentFailure !== null) throw this.stoppedError();
+      if (observedTail === this.tail) {
+        return Object.freeze({ last_sequence: this.normalizer.last_sequence });
+      }
+    }
   }
 
   private async consumeOne(
@@ -211,6 +232,7 @@ export function createCodexEventPipeline(options: CodexEventPipelineOptions): Co
   return Object.freeze({
     consume: (notification: CodexConnectionNotification, connectionGeneration?: number) =>
       pipeline.consume(notification, connectionGeneration),
+    barrier: (signal?: AbortSignal) => pipeline.barrier(signal),
     get failure() {
       return pipeline.failure;
     },
@@ -221,6 +243,37 @@ export function createCodexEventPipeline(options: CodexEventPipelineOptions): Co
       return pipeline.pending_count;
     }
   });
+}
+
+function settleBarrier(operation: Promise<void>, signal: AbortSignal | undefined): Promise<void> {
+  if (signal === undefined) return operation;
+  if (signal.aborted) return Promise.reject(barrierAborted(signal));
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      cleanup();
+      reject(barrierAborted(signal));
+    };
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    signal.addEventListener("abort", onAbort, { once: true });
+    operation.then(
+      () => {
+        cleanup();
+        resolve();
+      },
+      (error: unknown) => {
+        cleanup();
+        reject(error);
+      }
+    );
+  });
+}
+
+function barrierAborted(signal: AbortSignal): HostDeckCodexEventPipelineError {
+  return new HostDeckCodexEventPipelineError(
+    "pipeline_barrier_aborted",
+    "Codex event-pipeline barrier was aborted.",
+    { cause: signal.reason }
+  );
 }
 
 function identityGateObservation(observation: CodexUnmanagedThreadObservation): CodexEventPipelineResult {
@@ -244,4 +297,14 @@ function validCapacity(value: number): boolean {
 
 function validGeneration(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 1;
+}
+
+function isAbortSignal(candidate: unknown): candidate is AbortSignal {
+  return (
+    candidate !== null &&
+    typeof candidate === "object" &&
+    typeof (candidate as AbortSignal).aborted === "boolean" &&
+    typeof (candidate as AbortSignal).addEventListener === "function" &&
+    typeof (candidate as AbortSignal).removeEventListener === "function"
+  );
 }

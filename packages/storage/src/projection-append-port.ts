@@ -1,5 +1,6 @@
 import {
   defaultRetentionPolicy,
+  isoTimestampSchema,
   type ManagedSessionProjection,
   managedSessionProjectionSchema,
   outputCursorSchema,
@@ -41,10 +42,31 @@ export interface ProductionProjectionAppendPort {
   readonly append: (input: ProductionProjectionAppendInput) => Promise<CommittedProjectionAppend>;
 }
 
+export type ProjectionContinuityBoundaryReason = "disconnect" | "restart" | "schema_change";
+
+export interface ProductionProjectionContinuityInput {
+  readonly session_id: string;
+  readonly expected_revision: SelectedStateRevision;
+  readonly captured_at: string;
+  readonly reason: ProjectionContinuityBoundaryReason;
+  readonly next_session: UncommittedManagedSessionProjection;
+}
+
+export interface ProductionProjectionContinuityPort {
+  readonly replaceWithBoundary: (
+    input: ProductionProjectionContinuityInput
+  ) => Promise<CommittedProjectionAppend>;
+}
+
 export interface ProductionProjectionAppendPortOptions {
   readonly repository: SelectedStateRepository;
   readonly publish: ProjectionAppendPublisher;
   readonly retention?: RetentionPolicy;
+}
+
+export interface ProductionProjectionContinuityPortOptions {
+  readonly repository: SelectedStateRepository;
+  readonly publish: ProjectionAppendPublisher;
 }
 
 export class HostDeckProjectionPublicationError extends Error {
@@ -65,6 +87,14 @@ interface ParsedProductionProjectionAppendInput {
   readonly session_id: string;
   readonly expected_revision: SelectedStateRevision;
   readonly event: Readonly<Record<string, unknown>>;
+  readonly next_session: Readonly<Record<string, unknown>>;
+}
+
+interface ParsedProductionProjectionContinuityInput {
+  readonly session_id: string;
+  readonly expected_revision: SelectedStateRevision;
+  readonly captured_at: string;
+  readonly reason: ProjectionContinuityBoundaryReason;
   readonly next_session: Readonly<Record<string, unknown>>;
 }
 
@@ -104,6 +134,70 @@ export function createProductionProjectionAppendPort(
           event.type === "replay_boundary" ? event.after : current.projection.retention_boundary_cursor
       };
       const committed = deepFreeze(repository.appendEvent(record, nextProjection, parsed.expected_revision, retention));
+
+      try {
+        await publish(committed);
+      } catch (error) {
+        throw new HostDeckProjectionPublicationError(committed, { cause: error });
+      }
+      return committed;
+    }
+  });
+}
+
+export function createProductionProjectionContinuityPort(
+  options: ProductionProjectionContinuityPortOptions
+): ProductionProjectionContinuityPort {
+  if (
+    options === null ||
+    typeof options !== "object" ||
+    typeof options.repository?.require !== "function" ||
+    typeof options.repository.replaceEventsWithBoundary !== "function"
+  ) {
+    throw new TypeError("Production projection continuity requires a selected-state repository.");
+  }
+  if (typeof options.publish !== "function") {
+    throw new TypeError("Production projection continuity requires a post-commit publisher.");
+  }
+  const repository = options.repository;
+  const publish = options.publish;
+
+  return Object.freeze({
+    async replaceWithBoundary(input: ProductionProjectionContinuityInput) {
+      const parsed = parseContinuityInput(input);
+      const current = repository.require(parsed.session_id);
+      assertExpectedRevision(current, parsed.expected_revision);
+      const floor = Math.max(
+        current.projection.session.last_event_cursor ?? 0,
+        current.projection.retention_boundary_cursor ?? 0
+      );
+      const cursor = parseNextCursor(floor);
+      const event = selectedProjectionEventSchema.parse({
+        session_id: parsed.session_id,
+        cursor,
+        captured_at: parsed.captured_at,
+        upstream_at: null,
+        codex_event_id: null,
+        codex_event_type: null,
+        content_state: "complete",
+        content_notice: null,
+        type: "replay_boundary",
+        after: floor === 0 ? null : floor,
+        next_cursor: cursor,
+        reason: parsed.reason
+      });
+      const nextSession = parseAddressedSession(parsed.next_session, cursor);
+      const record = { event, byte_length: selectedProjectedEventByteLength(event) };
+      const nextProjection = {
+        session: nextSession,
+        retained_event_count: 1,
+        retained_event_bytes: record.byte_length,
+        earliest_retained_cursor: cursor,
+        retention_boundary_cursor: floor === 0 ? null : floor
+      };
+      const committed = deepFreeze(
+        repository.replaceEventsWithBoundary(record, nextProjection, parsed.expected_revision)
+      );
 
       try {
         await publish(committed);
@@ -178,8 +272,52 @@ function parseAppendInput(candidate: unknown): ParsedProductionProjectionAppendI
   };
 }
 
+function parseContinuityInput(candidate: unknown): ParsedProductionProjectionContinuityInput {
+  const value = requireRecord(candidate, "Production projection continuity input must be an object.", "invalid_event");
+  assertExactKeys(value, ["captured_at", "expected_revision", "next_session", "reason", "session_id"]);
+  const sessionId = sessionIdSchema.safeParse(value.session_id);
+  if (!sessionId.success) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "session_not_found",
+      "Production continuity target session id is invalid.",
+      { cause: sessionId.error }
+    );
+  }
+  const capturedAt = isoTimestampSchema.safeParse(value.captured_at);
+  if (!capturedAt.success) {
+    throw new HostDeckSelectedStateRepositoryError("invalid_event", "Production continuity capture time is invalid.", {
+      cause: capturedAt.error
+    });
+  }
+  if (!["disconnect", "restart", "schema_change"].includes(value.reason as string)) {
+    throw new HostDeckSelectedStateRepositoryError("invalid_event", "Production continuity reason is invalid.");
+  }
+  const nextSession = requireRecord(
+    value.next_session,
+    "Uncommitted continuity session projection must be an object.",
+    "invalid_projection"
+  );
+  if (Object.hasOwn(nextSession, "last_event_cursor")) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_projection",
+      "Continuity session projections cannot supply the storage-owned event cursor."
+    );
+  }
+  return {
+    session_id: sessionId.data,
+    expected_revision: parseSelectedStateRevision(value.expected_revision),
+    captured_at: capturedAt.data,
+    reason: value.reason as ProjectionContinuityBoundaryReason,
+    next_session: nextSession
+  };
+}
+
 function assignNextCursor(lastEventCursor: number | null, retentionBoundaryCursor: number | null): number {
-  const candidate = Math.max(lastEventCursor ?? 0, retentionBoundaryCursor ?? 0) + 1;
+  return parseNextCursor(Math.max(lastEventCursor ?? 0, retentionBoundaryCursor ?? 0));
+}
+
+function parseNextCursor(floor: number): number {
+  const candidate = floor + 1;
   const parsed = outputCursorSchema.safeParse(candidate);
   if (!parsed.success) {
     throw new HostDeckSelectedStateRepositoryError("cursor_not_monotonic", "Selected projection cursor space is exhausted.", {

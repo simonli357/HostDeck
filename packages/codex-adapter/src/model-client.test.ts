@@ -149,6 +149,7 @@ describe("normalized Codex model client", () => {
 
     await expect(createCodexModelClient(port).readCurrent("thread-a")).resolves.toEqual({
       thread_id: "thread-a",
+      cwd: "/tmp/project-a",
       runtime_model: "runtime-a",
       reasoning_effort: "high"
     });
@@ -164,6 +165,12 @@ describe("normalized Codex model client", () => {
     await expectAdapterError(
       createCodexModelClient(
         fakePort(() => rawResumeResult({ thread: rawThread({ turns: [rawTurn()] }) }))
+      ).readCurrent("thread-a"),
+      "invalid_protocol_message"
+    );
+    await expectAdapterError(
+      createCodexModelClient(
+        fakePort(() => rawResumeResult({ thread: rawThread({ cwd: "/tmp/other-project" }) }))
       ).readCurrent("thread-a"),
       "invalid_protocol_message"
     );
@@ -314,7 +321,7 @@ function rawResumeResult(overrides: Record<string, unknown> = {}): Record<string
 }
 
 function rawThread(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return { id: "thread-a", turns: [], ...overrides };
+  return { id: "thread-a", cwd: "/tmp/project-a", turns: [], ...overrides };
 }
 
 function rawTurn(overrides: Record<string, unknown> = {}): Record<string, unknown> {

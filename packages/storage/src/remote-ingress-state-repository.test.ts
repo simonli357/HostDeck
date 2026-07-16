@@ -35,7 +35,7 @@ afterEach(() => {
 describe("remote ingress state migration", () => {
   it("upgrades the prior schema without rewriting historical state", () => {
     const path = tempDbPath();
-    const priorMigrations = defaultMigrations.slice(0, -4);
+    const priorMigrations = migrationsBeforeRemoteIngressState();
     const prior = openMigratedDatabase(path, {
       migrations: priorMigrations,
       now: fixedNow
@@ -67,7 +67,8 @@ describe("remote ingress state migration", () => {
         "202607130013_remote_ingress_state",
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
-        "202607150016_session_start_audit_catalog"
+        "202607150016_session_start_audit_catalog",
+        "202607160017_selected_session_settings_projection"
       ]);
       expect(
         migrated.db.prepare("SELECT * FROM selected_lan_configuration").get()
@@ -96,7 +97,7 @@ describe("remote ingress state migration", () => {
 
   it("rolls back an interrupted upgrade and rejects a code downgrade", () => {
     const path = tempDbPath();
-    const priorMigrations = defaultMigrations.slice(0, -4);
+    const priorMigrations = migrationsBeforeRemoteIngressState();
     const prior = openMigratedDatabase(path, {
       migrations: priorMigrations,
       now: fixedNow
@@ -791,6 +792,14 @@ function parseState(input: unknown): RemoteIngressState {
 function timestamp(generation: number): string {
   const minute = Math.min(generation, 59);
   return new Date(Date.UTC(2026, 6, 13, 16, minute)).toISOString();
+}
+
+function migrationsBeforeRemoteIngressState(): readonly StorageMigration[] {
+  const index = defaultMigrations.findIndex(
+    (migration) => migration.version === "202607130013_remote_ingress_state"
+  );
+  if (index < 0) throw new Error("Remote ingress state migration is missing.");
+  return defaultMigrations.slice(0, index);
 }
 
 function fixedNow(): Date {

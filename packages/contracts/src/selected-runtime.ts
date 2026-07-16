@@ -184,6 +184,15 @@ export const goalCueSchema = z
   })
   .strict();
 
+export const managedSessionSettingsProjectionSchema = z
+  .object({
+    collaboration_mode: z.enum(["default", "plan"]),
+    runtime_model: z.string().min(1).max(selectedRuntimeLimits.modelLength),
+    reasoning_effort: z.string().min(1).max(codexModelContractLimits.reasoningEffortLength).nullable(),
+    observed_at: isoTimestampSchema
+  })
+  .strict();
+
 export const managedSessionIdentitySchema = z
   .object({
     id: sessionIdSchema,
@@ -208,6 +217,7 @@ export const managedSessionProjectionSchema = managedSessionIdentitySchema
     last_activity_at: isoTimestampSchema.nullable(),
     branch: z.string().min(1).max(selectedRuntimeLimits.branchLength).nullable(),
     model: z.string().min(1).max(selectedRuntimeLimits.modelLength).nullable(),
+    settings: managedSessionSettingsProjectionSchema.nullable().default(null),
     goal: goalCueSchema.nullable(),
     recent_summary: z.string().max(selectedRuntimeLimits.summaryLength),
     last_event_cursor: outputCursorSchema.nullable()
@@ -225,6 +235,12 @@ export const managedSessionProjectionSchema = managedSessionIdentitySchema
     }
     if ((value.session_state === "archived") !== (value.archived_at !== null)) {
       context.addIssue({ code: "custom", message: "Archived session state and archived_at must agree." });
+    }
+    if (value.settings !== null && value.model !== value.settings.runtime_model) {
+      context.addIssue({ code: "custom", message: "Structured settings model must match the session model cue." });
+    }
+    if (value.settings !== null && value.settings.observed_at > value.updated_at) {
+      context.addIssue({ code: "custom", message: "Structured settings observation cannot follow the projection revision." });
     }
   });
 
@@ -450,6 +466,7 @@ export const selectedSessionEventStreamSchema = z
 export type RuntimeCompatibility = z.infer<typeof runtimeCompatibilitySchema>;
 export type ManagedSessionIdentity = z.infer<typeof managedSessionIdentitySchema>;
 export type ManagedSessionProjection = z.infer<typeof managedSessionProjectionSchema>;
+export type ManagedSessionSettingsProjection = z.infer<typeof managedSessionSettingsProjectionSchema>;
 export type SelectedProjectionEvent = z.infer<typeof selectedProjectionEventSchema>;
 export type SelectedSessionEventStream = z.infer<typeof selectedSessionEventStreamSchema>;
 export type ApprovalProjectionEvent = z.infer<typeof approvalProjectionEventSchema>;

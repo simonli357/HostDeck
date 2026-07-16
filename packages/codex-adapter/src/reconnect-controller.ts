@@ -331,6 +331,7 @@ class DefaultCodexRuntimeReconnectController implements CodexRuntimeReconnectCon
   private readonly heldInbound: HeldInbound[] = [];
   private phase: CodexReconnectPhase = "idle";
   private admittedGeneration: number | null = null;
+  private lifecycleInboundGeneration: number | null = null;
   private previousAdmittedGeneration: number | null = null;
   private heldNotificationCount = 0;
   private heldServerRequestCount = 0;
@@ -579,7 +580,12 @@ class DefaultCodexRuntimeReconnectController implements CodexRuntimeReconnectCon
       this.drainHeldInbound(generation, deadline, "resubscribe");
       lifecycleStage = "ready";
       runtimeLease.stage = "ready";
-      await settleByDeadline(this.options.lifecycle.ready(shared), deadline, "ready");
+      this.lifecycleInboundGeneration = generation;
+      try {
+        await settleByDeadline(this.options.lifecycle.ready(shared), deadline, "ready");
+      } finally {
+        if (this.lifecycleInboundGeneration === generation) this.lifecycleInboundGeneration = null;
+      }
       this.assertCurrentGeneration(generation, deadline, "ready");
       this.drainHeldInbound(generation, deadline, "ready");
       this.assertCurrentGeneration(generation, deadline, "ready");
@@ -698,7 +704,10 @@ class DefaultCodexRuntimeReconnectController implements CodexRuntimeReconnectCon
   }
 
   private receiveInbound(inbound: HeldInbound): void {
-    if (this.isAdmitted() && inbound.generation === this.admittedGeneration) {
+    if (
+      (this.isAdmitted() && inbound.generation === this.admittedGeneration) ||
+      inbound.generation === this.lifecycleInboundGeneration
+    ) {
       this.deliverInbound(inbound);
       return;
     }
@@ -762,6 +771,7 @@ class DefaultCodexRuntimeReconnectController implements CodexRuntimeReconnectCon
     this.heldInbound.length = 0;
     this.heldNotificationCount = 0;
     this.heldServerRequestCount = 0;
+    this.lifecycleInboundGeneration = null;
     this.inboundCompatibilityGeneration = null;
   }
 

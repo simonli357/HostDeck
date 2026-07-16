@@ -94,6 +94,7 @@ export interface CodexPlanControlService extends PendingTurnSettingsReader {
     expectedPendingRevision: unknown,
     signal?: AbortSignal
   ) => Promise<PlanControlSnapshot>;
+  readonly rehydrate: (target: unknown) => Promise<PlanControlSnapshot["current"]>;
   readonly pending_count: number;
 }
 
@@ -133,6 +134,7 @@ export function createCodexPlanControlService(options: CodexPlanControlServiceOp
     observeEvent: (event: NormalizedCodexEvent) => implementation.observeEvent(event),
     reconcile: (target: unknown, expectedPendingRevision: unknown, signal?: AbortSignal) =>
       implementation.reconcile(target, expectedPendingRevision, signal),
+    rehydrate: (target: unknown) => implementation.rehydrate(target),
     readPendingSettings: (target: ManagedSessionTarget) => implementation.readPendingSettings(target),
     get pending_count() {
       return implementation.pending_count;
@@ -486,6 +488,57 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
     });
   }
 
+  async rehydrate(targetInput: unknown): Promise<PlanControlSnapshot["current"]> {
+    const target = parseTarget(targetInput);
+    return this.serialized(target.session_id, async () => {
+      const candidate = this.options.states.get(target.session_id);
+      if (candidate === null) {
+        this.clearSession(target.session_id);
+        throw planError("target_not_found", "session_not_found", "The selected managed session does not exist.", "not_sent", false);
+      }
+      const state = parseSelectedPlanState(candidate);
+      if (
+        state === null ||
+        state.mapping.id !== target.session_id ||
+        state.mapping.codex_thread_id !== target.codex_thread_id ||
+        !selectedIdentityMatches(state)
+      ) {
+        this.clearSession(target.session_id);
+        throw planError(
+          "target_mismatch",
+          "stale_session",
+          "The selected managed session identity requires reconciliation.",
+          "not_sent",
+          false
+        );
+      }
+
+      this.pendingBySession.delete(target.session_id);
+      this.dispatchConfirmationsBySession.delete(target.session_id);
+      this.executionBySession.delete(target.session_id);
+      const session = state.projection.session;
+      if (
+        state.mapping.disposition !== "selected" ||
+        state.mapping.archived_at !== null ||
+        session.session_state !== "active" ||
+        session.freshness !== "current" ||
+        session.settings === null
+      ) {
+        this.currentBySession.delete(target.session_id);
+        return unknownCurrent();
+      }
+      const current = Object.freeze({
+        state: "confirmed" as const,
+        mode: session.settings.collaboration_mode,
+        runtime_model: session.settings.runtime_model,
+        reasoning_effort: session.settings.reasoning_effort,
+        observed_at: session.settings.observed_at
+      });
+      this.currentBySession.set(target.session_id, current);
+      return current;
+    });
+  }
+
   private observePlanExecution(sessionId: string, event: NormalizedCodexEvent): void {
     if (event.method === "turn/plan/updated") {
       const summary = summarizePlanUpdate(event.explanation, event.plan);
@@ -763,13 +816,7 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
       catalog_revision: catalog.revision,
       catalog_observed_at: catalog.observed_at,
       current:
-        this.currentBySession.get(sessionId) ?? {
-          state: "unknown",
-          mode: null,
-          runtime_model: null,
-          reasoning_effort: null,
-          observed_at: null
-        },
+        this.currentBySession.get(sessionId) ?? unknownCurrent(),
       pending: publicPending(this.pendingBySession.get(sessionId)),
       execution: this.executionBySession.get(sessionId) ?? idleExecution,
       modes: catalog.modes
@@ -821,6 +868,16 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
         if (this.tails.get(sessionId) === tail) this.tails.delete(sessionId);
       });
   }
+}
+
+function unknownCurrent(): PlanControlSnapshot["current"] {
+  return Object.freeze({
+    state: "unknown",
+    mode: null,
+    runtime_model: null,
+    reasoning_effort: null,
+    observed_at: null
+  });
 }
 
 function parseSelectedPlanState(candidate: SelectedSessionState): SelectedSessionState | null {

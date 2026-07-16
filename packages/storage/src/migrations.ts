@@ -1231,6 +1231,18 @@ export const hostDeckSessionStartAuditCatalogMigration: StorageMigration = {
   `
 };
 
+export const hostDeckSelectedSessionSettingsProjectionMigration: StorageMigration = {
+  version: "202607160017_selected_session_settings_projection",
+  sql: `
+    ALTER TABLE selected_session_projections
+      ADD COLUMN settings_json TEXT
+      CHECK (
+        settings_json IS NULL OR
+        (json_valid(settings_json) AND length(CAST(settings_json AS BLOB)) BETWEEN 2 AND 1024)
+      );
+  `
+};
+
 export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckBaseSchemaMigration,
   hostDeckSessionMetadataFailedStatusMigration,
@@ -1247,5 +1259,6 @@ export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckRemoteIngressStateMigration,
   hostDeckRemoteAuditCatalogMigration,
   hostDeckRemoteAdmissionProofMigration,
-  hostDeckSessionStartAuditCatalogMigration
+  hostDeckSessionStartAuditCatalogMigration,
+  hostDeckSelectedSessionSettingsProjectionMigration
 ] as const;

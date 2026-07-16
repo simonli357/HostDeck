@@ -362,6 +362,28 @@ describe("Codex approval control", () => {
     expect(archivedAfterRegistration.service.pending_count).toBe(0);
   });
 
+  it("registers a same-generation request only in the exact post-resume pre-ready state", async () => {
+    const harness = createHarness();
+    const current = selectedState();
+    harness.states.set(target.session_id, {
+      ...current,
+      projection: selectedSessionProjectionRecordSchema.parse({
+        ...current.projection,
+        session: {
+          ...current.projection.session,
+          freshness: "stale",
+          freshness_reason: "Runtime resubscription is required."
+        }
+      })
+    });
+
+    expect(harness.service.register(approvalRequest("resubscribe"))).toMatchObject({
+      state: "pending",
+      decision: null
+    });
+    expect(harness.approvals.respondCalls).toEqual([]);
+  });
+
   it("does not evict closed history when a replacement registration is invalid", async () => {
     const harness = createHarness({ max_tracked_approvals: 1 });
     const registered = harness.service.register(approvalRequest("retained-history"));
