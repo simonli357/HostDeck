@@ -44,7 +44,7 @@ describe("owned lifecycle scenario process runner", () => {
       name: "CodexLifecycleScenarioError",
       code: "nonzero_exit",
       scenario: "fixture",
-      message: "Lifecycle scenario exited unsuccessfully."
+      message: "Lifecycle scenario exited unsuccessfully. [fixture]"
     });
   });
 

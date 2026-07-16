@@ -26,7 +26,7 @@ export class CodexLifecycleScenarioError extends Error {
     scenario: string,
     message: string
   ) {
-    super(message);
+    super(`${message} [${scenario}]`);
     this.name = "CodexLifecycleScenarioError";
     this.code = code;
     this.scenario = scenario;
