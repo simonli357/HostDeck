@@ -287,6 +287,77 @@ describe("selected projected event repository", () => {
     }
   });
 
+  it("rejects impossible projection chronology before appending any event state", () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      const current = repository.create(stateCandidate());
+      const record = messageEventRecord(current, 1, "event-invalid-chronology");
+      const nextProjection = advancedProjection(current, record);
+
+      expectRepositoryError(
+        () =>
+          repository.appendEvent(
+            record,
+            {
+              ...nextProjection,
+              session: {
+                ...nextProjection.session,
+                last_activity_at: "2026-07-09T19:59:59.999Z"
+              }
+            },
+            selectedStateRevision(current)
+          ),
+        "invalid_projection"
+      );
+      expect(repository.require(current.mapping.id)).toEqual(current);
+      expect(repository.listEvents(current.mapping.id).events).toEqual([]);
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("rejects impossible continuity chronology before replacing retained history", () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      const initial = repository.create(stateCandidate());
+      const first = messageEventRecord(initial, 1, "event-before-invalid-boundary");
+      repository.appendEvent(first, advancedProjection(initial, first), selectedStateRevision(initial));
+      const current = repository.require(initial.mapping.id);
+      const before = repository.listEvents(initial.mapping.id);
+      const candidate = replayBoundaryRecord(current, 2, 1);
+      const event = selectedProjectionEventSchema.parse({ ...candidate.event, reason: "restart" });
+      const boundary = { event, byte_length: selectedProjectedEventByteLength(event) };
+
+      expectRepositoryError(
+        () =>
+          repository.replaceEventsWithBoundary(
+            boundary,
+            {
+              ...current.projection,
+              session: {
+                ...current.projection.session,
+                updated_at: updatedAt,
+                last_activity_at: "2026-07-09T19:59:59.999Z",
+                last_event_cursor: 2
+              },
+              retained_event_count: 1,
+              retained_event_bytes: boundary.byte_length,
+              earliest_retained_cursor: 2,
+              retention_boundary_cursor: 1
+            },
+            selectedStateRevision(current)
+          ),
+        "invalid_projection"
+      );
+      expect(repository.require(current.mapping.id)).toEqual(current);
+      expect(repository.listEvents(current.mapping.id)).toEqual(before);
+    } finally {
+      open.db.close();
+    }
+  });
+
   it("rejects stale projection writers and duplicate upstream events without partial commits", () => {
     const path = tempDbPath();
     const open = openMigratedDatabase(path, { now: fixedNow });

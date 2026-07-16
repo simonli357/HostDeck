@@ -136,6 +136,7 @@ describe("selected runtime crash reconciliation integration", () => {
       },
       continuity,
       events: {
+        reconcile: (input) => pipeline.reconcile(input.threads, input.signal),
         async barrier(input) {
           if (input.generation < 1) throw new Error("Invalid integration generation.");
           if (input.generation === 2 && !injectedReadyNotification) {

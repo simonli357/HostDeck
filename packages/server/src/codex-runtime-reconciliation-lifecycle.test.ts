@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   assessCodexCompatibility,
+  type CodexEventNormalizerReconciliation,
   type CodexReconnectResubscribeRequestInput,
   HostDeckCodexAdapterError
 } from "@hostdeck/codex-adapter";
@@ -167,8 +168,76 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
         expect(snapshotJson).not.toContain(privateValue);
       }
       expect(harness.order[0]).toBe("audit");
+      expect(harness.reconciliations).toEqual([{
+        generation: 7,
+        threads: [
+          { thread_id: "thread-reconcile-a", active_turn_id: "turn-reconcile-a" },
+          { thread_id: "thread-reconcile-b", active_turn_id: null }
+        ]
+      }]);
       expect(harness.order.indexOf("barrier:7")).toBeGreaterThan(harness.order.lastIndexOf("boundary"));
       expect(harness.order.filter((entry) => entry === "plan")).toHaveLength(2);
+    } finally {
+      harness.close();
+    }
+  });
+
+  it("keeps coarse and skewed runtime activity inside monotonic durable chronology", async () => {
+    const harness = createHarness();
+    const coarseCreatedAt = "2026-07-16T12:40:00.335Z";
+    const existingActivityAt = "2026-07-16T12:40:00.750Z";
+    const futureActivityAt = "2026-07-16T14:00:00.000Z";
+    try {
+      harness.repository.create(stateCandidate("sess_coarse_activity", "thread-coarse-activity", {
+        created_at: coarseCreatedAt,
+        updated_at: coarseCreatedAt
+      }));
+      harness.repository.create(stateCandidate("sess_existing_activity", "thread-existing-activity", {
+        created_at: coarseCreatedAt,
+        updated_at: existingActivityAt,
+        last_activity_at: existingActivityAt
+      }));
+      harness.repository.create(stateCandidate("sess_future_activity", "thread-future-activity"));
+
+      const coarseTurn = {
+        ...rawTurn("turn-coarse-activity", "inProgress"),
+        startedAt: unixSeconds("2026-07-16T12:40:00.000Z")
+      };
+      const runtime = scriptedRuntime([
+        runtimeThread("thread-coarse-activity", "/tmp/sess_coarse_activity", {
+          status: { type: "active", activeFlags: [] },
+          latest: coarseTurn
+        }),
+        runtimeThread("thread-existing-activity", "/tmp/sess_existing_activity", {
+          status: { type: "active", activeFlags: [] },
+          latest: { ...coarseTurn, id: "turn-existing-activity" }
+        }),
+        runtimeThread("thread-future-activity", "/tmp/sess_future_activity", {
+          status: { type: "active", activeFlags: [] },
+          latest: {
+            ...rawTurn("turn-future-activity", "inProgress"),
+            startedAt: unixSeconds(futureActivityAt)
+          }
+        })
+      ], 17);
+      const deadline = testDeadline();
+      try {
+        const reconciliation = await reconcile(harness.lifecycle, runtime, deadline, 17, null);
+        await resubscribe(harness.lifecycle, runtime, deadline, reconciliation, 17, null);
+        await ready(harness.lifecycle, runtime, deadline, reconciliation, 17, null);
+      } finally {
+        deadline.dispose();
+      }
+
+      expect(harness.repository.require("sess_coarse_activity").projection.session.last_activity_at).toBe(
+        coarseCreatedAt
+      );
+      expect(harness.repository.require("sess_existing_activity").projection.session.last_activity_at).toBe(
+        existingActivityAt
+      );
+      const future = harness.repository.require("sess_future_activity").projection.session;
+      expect(future.last_activity_at).toBe(futureActivityAt);
+      expect(future.updated_at > futureActivityAt).toBe(true);
     } finally {
       harness.close();
     }
@@ -520,6 +589,34 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
       cutoffFailure.close();
     }
 
+    const eventFailure = createHarness({ failure: "event_reconcile" });
+    try {
+      eventFailure.repository.create(stateCandidate("sess_event_reconcile_fail", "thread-event-reconcile-fail"));
+      const deadline = testDeadline();
+      try {
+        await expect(
+          reconcile(
+            eventFailure.lifecycle,
+            scriptedRuntime([
+              runtimeThread("thread-event-reconcile-fail", "/tmp/sess_event_reconcile_fail")
+            ], 3),
+            deadline,
+            3,
+            null
+          )
+        ).rejects.toMatchObject({ code: "event_reconciliation_failed" });
+      } finally {
+        deadline.dispose();
+      }
+      expect(eventFailure.lifecycle.snapshot()).toMatchObject({
+        phase: "failed",
+        last_failure: "event_reconciliation_failed"
+      });
+      expect(eventFailure.reconciliations).toHaveLength(1);
+    } finally {
+      eventFailure.close();
+    }
+
     for (const failure of ["barrier", "plan", "final_barrier"] as const) {
       const harness = createHarness({ failure });
       try {
@@ -668,6 +765,10 @@ interface Harness {
   readonly repository: SelectedStateRepository;
   readonly lifecycle: CodexRuntimeReconciliationLifecycle;
   readonly order: string[];
+  readonly reconciliations: Array<{
+    readonly generation: number;
+    readonly threads: readonly CodexEventNormalizerReconciliation[];
+  }>;
   readonly options: CodexRuntimeReconciliationLifecycleOptions;
   readonly close: () => void;
 }
@@ -676,12 +777,13 @@ function createHarness(overrides: {
   readonly approvalsSuperseded?: number;
   readonly auditCutoffMismatch?: boolean;
   readonly auditStatus?: "complete" | "degraded";
-  readonly failure?: "barrier" | "final_barrier" | "plan";
+  readonly failure?: "barrier" | "event_reconcile" | "final_barrier" | "plan";
 } = {}): Harness {
   const path = tempDbPath();
   const open = openMigratedDatabase(path, { now: () => new Date(createdAt) });
   const repository = createSelectedStateRepository(open.db);
   const order: string[] = [];
+  const reconciliations: Harness["reconciliations"] = [];
   let barrierCount = 0;
   let clockMs = Date.parse("2026-07-16T13:00:00.000Z");
   const projection = createProductionProjectionAppendPort({
@@ -725,6 +827,16 @@ function createHarness(overrides: {
         ) {
           throw new Error("private barrier detail");
         }
+      },
+      async reconcile(input) {
+        order.push(`reconcile-events:${input.generation}`);
+        reconciliations.push({
+          generation: input.generation,
+          threads: Object.freeze(input.threads.map((entry) => Object.freeze({ ...entry })))
+        });
+        if (overrides.failure === "event_reconcile") {
+          throw new Error("private event reconciliation detail");
+        }
       }
     },
     now: () => {
@@ -746,6 +858,7 @@ function createHarness(overrides: {
     repository,
     lifecycle: createCodexRuntimeReconciliationLifecycle(options),
     order,
+    reconciliations,
     options,
     close: () => open.db.close()
   };
@@ -898,12 +1011,18 @@ function stateCandidate(
   overrides: {
     readonly archived_at?: string | null;
     readonly attention?: string;
+    readonly created_at?: string;
+    readonly last_activity_at?: string | null;
     readonly model?: string | null;
     readonly settings?: ReturnType<typeof settings> | null;
     readonly turn_state?: string;
+    readonly updated_at?: string;
   } = {}
 ) {
   const archivedAt = overrides.archived_at ?? null;
+  const durableCreatedAt = overrides.created_at ?? createdAt;
+  const durableUpdatedAt = overrides.updated_at ?? archivedAt ?? durableCreatedAt;
+  const lastActivityAt = overrides.last_activity_at === undefined ? null : overrides.last_activity_at;
   const mapping = {
     id: sessionId,
     name: sessionId.replace("sess_", "session-"),
@@ -912,8 +1031,8 @@ function stateCandidate(
     runtime_source: "codex_app_server",
     runtime_version: "0.144.0",
     disposition: "selected",
-    created_at: createdAt,
-    updated_at: archivedAt ?? createdAt,
+    created_at: durableCreatedAt,
+    updated_at: durableUpdatedAt,
     archived_at: archivedAt
   };
   return {
@@ -934,7 +1053,7 @@ function stateCandidate(
         freshness: "current",
         freshness_reason: null,
         updated_at: mapping.updated_at,
-        last_activity_at: null,
+        last_activity_at: lastActivityAt,
         branch: "main",
         model: overrides.model ?? null,
         settings: overrides.settings ?? null,

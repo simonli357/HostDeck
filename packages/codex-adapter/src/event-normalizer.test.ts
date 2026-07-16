@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { codexModelContractLimits } from "@hostdeck/contracts";
+import {
+  codexModelContractLimits,
+  codexThreadIdSchema,
+  codexTurnIdSchema
+} from "@hostdeck/contracts";
 import { describe, expect, it } from "vitest";
 import { codexBindingDescriptor } from "./binding.js";
 import type { CodexConnectionNotification } from "./connection.js";
@@ -12,10 +16,10 @@ import {
 import { decodeCodexInboundFrame } from "./protocol.js";
 
 const capturedAt = "2026-07-10T18:00:00.000Z";
-const threadA = "thread-normalizer-a";
-const threadB = "thread-normalizer-b";
-const turnA = "turn-normalizer-a";
-const turnB = "turn-normalizer-b";
+const threadA = codexThreadIdSchema.parse("thread-normalizer-a");
+const threadB = codexThreadIdSchema.parse("thread-normalizer-b");
+const turnA = codexTurnIdSchema.parse("turn-normalizer-a");
+const turnB = codexTurnIdSchema.parse("turn-normalizer-b");
 
 const requiredMethods = [
   "account/rateLimits/updated",
@@ -270,6 +274,200 @@ describe("exact Codex event normalizer", () => {
     );
     expect(normalizer.failure).toBeInstanceOf(HostDeckCodexEventNormalizationError);
     expect(normalizer.tracked_thread_count).toBe(2);
+  });
+
+  it("reconciles one surviving active turn before accepting post-gap usage and item evidence", () => {
+    const normalizer = createCodexEventNormalizer({ now: () => capturedAt });
+    normalizer.reconcile([{ thread_id: threadA, active_turn_id: turnA }]);
+
+    expect(normalizer.last_sequence).toBe(0);
+    expect(normalizer.tracked_thread_count).toBe(1);
+    expect(
+      normalizeEvent(
+        normalizer.normalize(
+          selected("thread/tokenUsage/updated", {
+            threadId: threadA,
+            turnId: turnA,
+            tokenUsage: rawTokenUsage(100, 10)
+          })
+        )
+      )
+    ).toMatchObject({ method: "thread/tokenUsage/updated", turn_id: turnA });
+    expect(
+      normalizeEvent(
+        normalizer.normalize(
+          selected("item/agentMessage/delta", {
+            threadId: threadA,
+            turnId: turnA,
+            itemId: "item-gap-agent",
+            delta: "continued"
+          })
+        )
+      )
+    ).toMatchObject({ method: "item/agentMessage/delta", item_id: "item-gap-agent" });
+    expect(
+      normalizeEvent(
+        normalizer.normalize(
+          selected(
+            "item/completed",
+            itemParams(
+              threadA,
+              turnA,
+              { type: "agentMessage", id: "item-gap-agent", text: "continued", phase: null, memoryCitation: null },
+              "completed"
+            )
+          )
+        )
+      )
+    ).toMatchObject({ method: "item/completed", item: { id: "item-gap-agent" } });
+    expect(
+      normalizeEvent(
+        normalizer.normalize(
+          selected("item/completed", itemParams(threadA, turnA, rawCommand("item-gap-command", "completed"), "completed"))
+        )
+      )
+    ).toMatchObject({ method: "item/completed", item: { id: "item-gap-command", state: "completed" } });
+    expect(
+      normalizeEvent(
+        normalizer.normalize(selected("turn/completed", { threadId: threadA, turn: rawTurn(turnA, "completed") }))
+      )
+    ).toMatchObject({ method: "turn/completed", turn_id: turnA, status: "completed" });
+    expect(normalizer.failure).toBeNull();
+  });
+
+  it("resets only reconciled gap state and preserves ordinary ordering failures", () => {
+    const reconciled = activeTurnNormalizer(threadA, turnA);
+    normalizeEvent(
+      reconciled.normalize(
+        selected("item/started", itemParams(threadA, turnA, rawCommand("item-before-gap", "inProgress"), "started"))
+      )
+    );
+    reconciled.reconcile([{ thread_id: threadA, active_turn_id: turnA }]);
+    reconciled.reconcile([{ thread_id: threadA, active_turn_id: turnA }]);
+    expect(
+      normalizeEvent(
+        reconciled.normalize(
+          selected("item/completed", itemParams(threadA, turnA, rawCommand("item-before-gap", "completed"), "completed"))
+        )
+      )
+    ).toMatchObject({ method: "item/completed", item: { id: "item-before-gap" } });
+
+    const ordinary = activeTurnNormalizer(threadB, turnB);
+    expectNormalizationError(
+      () =>
+        ordinary.normalize(
+          selected("item/completed", itemParams(threadB, turnB, rawCommand("item-never-started", "completed"), "completed"))
+        ),
+      "event_out_of_order"
+    );
+
+    const endedGapThread = codexThreadIdSchema.parse("thread-ended-gap");
+    const endedGap = activeTurnNormalizer(endedGapThread, "turn-ended-gap");
+    endedGap.reconcile([{ thread_id: endedGapThread, active_turn_id: null }]);
+    expect(
+      normalizeEvent(
+        endedGap.normalize(
+          selected("turn/started", {
+            threadId: "thread-ended-gap",
+            turn: rawTurn("turn-after-gap", "inProgress")
+          })
+        )
+      )
+    ).toMatchObject({ turn_id: "turn-after-gap" });
+  });
+
+  it("allows only one unexplained token reset for a turn that survived a gap", () => {
+    const normalizer = createCodexEventNormalizer({ now: () => capturedAt });
+    normalizer.reconcile([{ thread_id: threadA, active_turn_id: turnA }]);
+    expect(
+      normalizeEvent(
+        normalizer.normalize(
+          selected("thread/tokenUsage/updated", {
+            threadId: threadA,
+            turnId: turnA,
+            tokenUsage: rawTokenUsage(20, 21)
+          })
+        )
+      )
+    ).toMatchObject({ total: { total_tokens: 20 }, last: { total_tokens: 21 } });
+    expectNormalizationError(
+      () =>
+        normalizer.normalize(
+          selected("thread/tokenUsage/updated", {
+            threadId: threadA,
+            turnId: turnA,
+            tokenUsage: rawTokenUsage(19, 10)
+          })
+        ),
+      "event_out_of_order"
+    );
+
+    const validFirst = createCodexEventNormalizer({ now: () => capturedAt });
+    validFirst.reconcile([{ thread_id: threadA, active_turn_id: turnA }]);
+    normalizeEvent(
+      validFirst.normalize(
+        selected("thread/tokenUsage/updated", {
+          threadId: threadA,
+          turnId: turnA,
+          tokenUsage: rawTokenUsage(100, 10)
+        })
+      )
+    );
+    expectNormalizationError(
+      () =>
+        validFirst.normalize(
+          selected("thread/tokenUsage/updated", {
+            threadId: threadA,
+            turnId: turnA,
+            tokenUsage: rawTokenUsage(99, 9)
+          })
+        ),
+      "event_out_of_order"
+    );
+  });
+
+  it("fails reconciliation on duplicate, unmanaged, or terminal turn identity", () => {
+    const duplicate = createCodexEventNormalizer({ now: () => capturedAt });
+    expectNormalizationError(
+      () => duplicate.reconcile([
+        { thread_id: threadA, active_turn_id: turnA },
+        { thread_id: threadA, active_turn_id: turnA }
+      ]),
+      "malformed_required_event"
+    );
+    expectNormalizationError(
+      () => duplicate.reconcile([{ thread_id: threadA, active_turn_id: turnA }]),
+      "normalizer_stopped"
+    );
+
+    const hiddenField = {
+      thread_id: threadA,
+      active_turn_id: turnA
+    };
+    Object.defineProperty(hiddenField, "hidden", { value: true });
+    const strict = createCodexEventNormalizer({ now: () => capturedAt });
+    expectNormalizationError(
+      () => strict.reconcile([hiddenField]),
+      "malformed_required_event"
+    );
+
+    const unmanaged = createCodexEventNormalizer({
+      now: () => capturedAt,
+      is_managed_thread: () => false
+    });
+    expectNormalizationError(
+      () => unmanaged.reconcile([{ thread_id: threadA, active_turn_id: turnA }]),
+      "thread_scope_resolution_failed"
+    );
+
+    const terminal = activeTurnNormalizer(threadA, turnA);
+    normalizeEvent(
+      terminal.normalize(selected("turn/completed", { threadId: threadA, turn: rawTurn(turnA, "completed") }))
+    );
+    expectNormalizationError(
+      () => terminal.reconcile([{ thread_id: threadA, active_turn_id: turnA }]),
+      "event_out_of_order"
+    );
   });
 
   it("rejects duplicate, late, overlapping, and malformed required events", () => {

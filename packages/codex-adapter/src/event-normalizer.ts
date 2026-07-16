@@ -1,4 +1,8 @@
-import { isoTimestampSchema } from "@hostdeck/contracts";
+import {
+  codexThreadIdSchema,
+  codexTurnIdSchema,
+  isoTimestampSchema
+} from "@hostdeck/contracts";
 import type {
   CodexItemId,
   CodexThreadId,
@@ -9,7 +13,7 @@ import type {
 import type { z } from "zod";
 import { codexBindingDescriptor } from "./binding.js";
 import type { CodexConnectionNotification } from "./connection.js";
-import { normalizeCodexItem as normalizeItem, parseCodexItemId as parseItemId } from "./event-normalizer-items.js";
+import { normalizeCodexItem as normalizeItem } from "./event-normalizer-items.js";
 import {
   deltaParamsSchema,
   type goalSchema,
@@ -227,8 +231,14 @@ export interface CodexEventNormalizerOptions {
   readonly is_managed_thread?: (thread_id: CodexThreadId) => boolean;
 }
 
+export interface CodexEventNormalizerReconciliation {
+  readonly thread_id: CodexThreadId;
+  readonly active_turn_id: CodexTurnId | null;
+}
+
 export interface CodexEventNormalizer {
   readonly normalize: (notification: CodexConnectionNotification) => CodexNotificationNormalizationResult;
+  readonly reconcile: (threads: readonly CodexEventNormalizerReconciliation[]) => void;
   readonly optional_diagnostic_count: number;
   readonly redundant_observation_count: number;
   readonly unmanaged_observation_count: number;
@@ -249,6 +259,8 @@ interface ParsedNormalizerOptions {
 
 interface TrackedTurn {
   state: "active" | "terminal";
+  gap_reconciled: boolean;
+  gap_token_reset_available: boolean;
 }
 
 interface TrackedItem {
@@ -333,6 +345,67 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
     }
     try {
       return this.normalizeOne(notification);
+    } catch (error) {
+      this.currentFailure = asError(error);
+      throw error;
+    }
+  }
+
+  reconcile(threads: readonly CodexEventNormalizerReconciliation[]): void {
+    const method = "runtime/reconcile";
+    if (this.currentFailure !== null) {
+      throw normalizationError(
+        "normalizer_stopped",
+        "Codex event normalization stopped after an earlier fatal input or state failure.",
+        method,
+        this.currentFailure
+      );
+    }
+    try {
+      const parsed = parseReconciliation(threads, this.options.max_tracked_threads, method);
+      const newThreadCount = parsed.filter((entry) => !this.threads.has(entry.thread_id)).length;
+      if (this.threads.size + newThreadCount > this.options.max_tracked_threads) {
+        throw normalizationError(
+          "normalizer_capacity_exceeded",
+          "Codex event normalizer thread capacity is exhausted during reconciliation.",
+          method
+        );
+      }
+      for (const entry of parsed) {
+        if (!this.isManagedThread(entry.thread_id, method)) {
+          throw normalizationError(
+            "thread_scope_resolution_failed",
+            "Codex event reconciliation names an unmanaged thread.",
+            method
+          );
+        }
+        const state = this.threads.get(entry.thread_id);
+        if (state?.archived === true) {
+          throw normalizationError(
+            "event_out_of_order",
+            "Codex event reconciliation attempted to reopen an archived thread.",
+            method
+          );
+        }
+        if (entry.active_turn_id === null || state === undefined) continue;
+        const tracked = state.turns.get(entry.active_turn_id);
+        if (tracked?.state === "terminal") {
+          throw normalizationError(
+            "event_out_of_order",
+            "Codex event reconciliation attempted to reactivate a terminal turn.",
+            method
+          );
+        }
+        if (tracked === undefined && state.turns.size >= this.options.max_tracked_turns_per_thread) {
+          throw normalizationError(
+            "normalizer_capacity_exceeded",
+            "Codex event normalizer turn capacity is exhausted during reconciliation.",
+            method
+          );
+        }
+      }
+
+      for (const entry of parsed) this.applyReconciliation(entry, method);
     } catch (error) {
       this.currentFailure = asError(error);
       throw error;
@@ -492,7 +565,7 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
       case "thread/tokenUsage/updated": {
         const parsed = parseParams(threadTokenUsageParamsSchema, params, method);
         const state = this.thread(parsed.threadId, method);
-        this.requireActiveTurn(state, parsed.turnId, method);
+        const activeTurn = this.requireActiveTurn(state, parsed.turnId, method);
         const signature = JSON.stringify(parsed.tokenUsage);
         if (signature === state.last_token_signature) {
           throw normalizationError("duplicate_event", "Codex repeated an identical token usage update.", method);
@@ -502,18 +575,28 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
         const hasCompactionEvidence = [...state.items.values()].some(
           (item) => item.turn_id === parsed.turnId && item.category === "compaction"
         );
-        if (tokenUsageRegressed(total, state.last_token_usage)) {
-          if (!hasCompactionEvidence || state.token_reset_turn_id === parsed.turnId) {
+        const regressed = tokenUsageRegressed(total, state.last_token_usage);
+        const lastExceedsTotal = tokenUsageExceeds(last, total);
+        const gapResetAvailable =
+          activeTurn.gap_reconciled && activeTurn.gap_token_reset_available;
+        if (regressed) {
+          if (
+            (!hasCompactionEvidence && !gapResetAvailable) ||
+            (hasCompactionEvidence && state.token_reset_turn_id === parsed.turnId)
+          ) {
             throw normalizationError("event_out_of_order", "Cumulative token usage moved backward.", method);
           }
-          state.token_reset_turn_id = parsed.turnId;
+          if (hasCompactionEvidence) state.token_reset_turn_id = parsed.turnId;
         }
-        if (tokenUsageExceeds(last, total) && !hasCompactionEvidence) {
+        if (lastExceedsTotal && !hasCompactionEvidence && !gapResetAvailable) {
           throw normalizationError(
             "malformed_required_event",
             "Last-turn usage exceeded total usage outside a context-compaction turn.",
             method
           );
+        }
+        if (activeTurn.gap_reconciled) {
+          activeTurn.gap_token_reset_available = false;
         }
         state.last_token_signature = signature;
         state.last_token_usage = total;
@@ -539,7 +622,11 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
           throw normalizationError("event_out_of_order", "Codex started a different turn before the active turn completed.", method);
         }
         this.ensureTurnCapacity(state, method);
-        state.turns.set(parsed.turn.id, { state: "active" });
+        state.turns.set(parsed.turn.id, {
+          state: "active",
+          gap_reconciled: false,
+          gap_token_reset_available: false
+        });
         state.active_turn_id = parsed.turn.id;
         return {
           ...threadBase(sequence, method, capturedAt, nullableUnixSecondsToIso(parsed.turn.startedAt, method), `turn:${parsed.turn.id}:started`, parsed.threadId),
@@ -567,6 +654,7 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
         }
         for (const item of activeItems) item.state = "terminal";
         tracked.state = "terminal";
+        tracked.gap_token_reset_available = false;
         if (state.active_turn_id === parsed.turn.id) state.active_turn_id = null;
         if (state.token_reset_turn_id === parsed.turn.id) state.token_reset_turn_id = null;
         return {
@@ -614,12 +702,35 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
       case "item/completed": {
         const parsed = parseParams(itemCompletedParamsSchema, params, method);
         const state = this.thread(parsed.threadId, method);
-        this.requireActiveTurn(state, parsed.turnId, method);
-        const tracked = state.items.get(parseItemId(parsed.item, method));
-        if (tracked === undefined) throw normalizationError("event_out_of_order", "Codex completed an item before its start.", method);
+        const activeTurn = this.requireActiveTurn(state, parsed.turnId, method);
+        const item = normalizeItem(parsed.item, "completed", method);
+        const tracked = state.items.get(item.id);
+        if (tracked === undefined) {
+          if (!activeTurn.gap_reconciled) {
+            throw normalizationError("event_out_of_order", "Codex completed an item before its start.", method);
+          }
+          this.ensureItemCapacity(state, method);
+          state.items.set(item.id, {
+            turn_id: parsed.turnId,
+            category: item.category,
+            state: "terminal"
+          });
+          return {
+            ...threadBase(
+              sequence,
+              method,
+              capturedAt,
+              unixMillisecondsToIso(parsed.completedAtMs, method),
+              `item:${item.id}:completed`,
+              parsed.threadId
+            ),
+            method,
+            turn_id: parsed.turnId,
+            item
+          };
+        }
         if (tracked.turn_id !== parsed.turnId) throw normalizationError("event_out_of_order", "Completed item changed turn identity.", method);
         if (tracked.state === "terminal") throw normalizationError("duplicate_event", "Codex repeated item completion.", method);
-        const item = normalizeItem(parsed.item, "completed", method);
         if (tracked.category !== item.category) throw normalizationError("event_out_of_order", "Completed item changed category.", method);
         tracked.state = "terminal";
         return {
@@ -633,9 +744,14 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
       case "item/plan/delta": {
         const parsed = parseParams(deltaParamsSchema, params, method);
         const state = this.thread(parsed.threadId, method);
-        this.requireActiveTurn(state, parsed.turnId, method);
-        const tracked = state.items.get(parsed.itemId);
+        const activeTurn = this.requireActiveTurn(state, parsed.turnId, method);
+        let tracked = state.items.get(parsed.itemId);
         const category = method === "item/agentMessage/delta" ? "agent_message" : "plan";
+        if (tracked === undefined && activeTurn.gap_reconciled) {
+          this.ensureItemCapacity(state, method);
+          tracked = { turn_id: parsed.turnId, category, state: "active" };
+          state.items.set(parsed.itemId, tracked);
+        }
         if (tracked === undefined || tracked.turn_id !== parsed.turnId || tracked.category !== category || tracked.state !== "active") {
           throw normalizationError("event_out_of_order", "Codex emitted a delta outside its active item lifecycle.", method);
         }
@@ -715,6 +831,47 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
     };
     this.threads.set(threadId, created);
     return created;
+  }
+
+  private applyReconciliation(
+    entry: CodexEventNormalizerReconciliation,
+    method: string
+  ): void {
+    const state = this.thread(entry.thread_id, method);
+    const resetTurnIds = new Set<CodexTurnId>();
+    if (state.active_turn_id !== null) resetTurnIds.add(state.active_turn_id);
+    if (entry.active_turn_id !== null) resetTurnIds.add(entry.active_turn_id);
+    for (const [itemId, item] of state.items) {
+      if (resetTurnIds.has(item.turn_id)) state.items.delete(itemId);
+    }
+    for (const turn of state.turns.values()) {
+      if (turn.state === "active") {
+        turn.state = "terminal";
+        turn.gap_reconciled = false;
+        turn.gap_token_reset_available = false;
+      }
+    }
+    state.active_turn_id = null;
+    state.started = true;
+    state.last_token_signature = null;
+    state.last_token_usage = null;
+    state.token_reset_turn_id = null;
+    state.resolved_requests.clear();
+    if (entry.active_turn_id === null) return;
+
+    const existing = state.turns.get(entry.active_turn_id);
+    if (existing === undefined) {
+      state.turns.set(entry.active_turn_id, {
+        state: "active",
+        gap_reconciled: true,
+        gap_token_reset_available: true
+      });
+    } else {
+      existing.state = "active";
+      existing.gap_reconciled = true;
+      existing.gap_token_reset_available = true;
+    }
+    state.active_turn_id = entry.active_turn_id;
   }
 
   private requireKnownTurn(state: TrackedThread, turnId: CodexTurnId, method: string): TrackedTurn {
@@ -843,6 +1000,68 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
 
 export function createCodexEventNormalizer(options: CodexEventNormalizerOptions = {}): CodexEventNormalizer {
   return new DefaultCodexEventNormalizer(parseOptions(options));
+}
+
+function parseReconciliation(
+  candidate: readonly CodexEventNormalizerReconciliation[],
+  maximum: number,
+  method: string
+): readonly CodexEventNormalizerReconciliation[] {
+  if (!Array.isArray(candidate) || candidate.length > maximum) {
+    throw normalizationError(
+      "malformed_required_event",
+      "Codex event reconciliation input is invalid or exceeds its thread bound.",
+      method
+    );
+  }
+  const seen = new Set<CodexThreadId>();
+  const parsed: CodexEventNormalizerReconciliation[] = [];
+  for (const entry of candidate as readonly unknown[]) {
+    const keys =
+      entry !== null && typeof entry === "object"
+        ? Reflect.ownKeys(entry)
+        : [];
+    if (
+      entry === null ||
+      typeof entry !== "object" ||
+      Array.isArray(entry) ||
+      Object.getPrototypeOf(entry) !== Object.prototype ||
+      keys.some((key) => typeof key !== "string") ||
+      (keys as string[]).sort().join("\n") !==
+        "active_turn_id\nthread_id"
+    ) {
+      throw normalizationError(
+        "malformed_required_event",
+        "Codex event reconciliation entry is invalid.",
+        method
+      );
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(entry);
+    const threadCandidate = descriptors.thread_id?.value;
+    const turnCandidate = descriptors.active_turn_id?.value;
+    const thread = codexThreadIdSchema.safeParse(threadCandidate);
+    const turn = turnCandidate === null ? null : codexTurnIdSchema.safeParse(turnCandidate);
+    if (!thread.success || (turn !== null && !turn.success)) {
+      throw normalizationError(
+        "malformed_required_event",
+        "Codex event reconciliation identities are invalid.",
+        method
+      );
+    }
+    if (seen.has(thread.data)) {
+      throw normalizationError(
+        "malformed_required_event",
+        "Codex event reconciliation thread identity is duplicated.",
+        method
+      );
+    }
+    seen.add(thread.data);
+    parsed.push(Object.freeze({
+      thread_id: thread.data,
+      active_turn_id: turn === null ? null : turn.data
+    }));
+  }
+  return Object.freeze(parsed);
 }
 
 function parseOptions(options: CodexEventNormalizerOptions): ParsedNormalizerOptions {

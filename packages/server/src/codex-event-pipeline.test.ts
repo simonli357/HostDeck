@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CodexConnectionNotification } from "@hostdeck/codex-adapter";
+import { codexThreadIdSchema, codexTurnIdSchema } from "@hostdeck/contracts";
 import {
   createProductionProjectionAppendPort,
   createSelectedStateRepository,
@@ -13,10 +14,10 @@ import { createCodexEventPipeline, HostDeckCodexEventPipelineError } from "./cod
 
 const tempDirs: string[] = [];
 const createdAt = "2026-07-10T18:00:00.000Z";
-const threadA = "thread-pipeline-a";
+const threadA = codexThreadIdSchema.parse("thread-pipeline-a");
 const threadB = "thread-pipeline-b";
 const archivedThread = "thread-pipeline-archived";
-const turnA = "turn-pipeline-a";
+const turnA = codexTurnIdSchema.parse("turn-pipeline-a");
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true });
@@ -59,6 +60,55 @@ describe("ordered Codex event pipeline", () => {
       await expect(barrier).resolves.toEqual({ last_sequence: 2 });
       expect(repository.listEvents("sess_pipeline_a").events.map((event) => event.cursor)).toEqual([1, 2]);
       expect(pipeline.pending_count).toBe(0);
+      expect(pipeline.failure).toBeNull();
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("serializes active-turn reconciliation before post-gap notifications", async () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      const candidate = stateCandidate("sess_pipeline_a", threadA);
+      repository.create({
+        ...candidate,
+        projection: {
+          ...candidate.projection,
+          session: {
+            ...candidate.projection.session,
+            turn_state: "in_progress",
+            attention: "watch"
+          }
+        }
+      });
+      const pipeline = createCodexEventPipeline({
+        repository,
+        append_port: createProductionProjectionAppendPort({ repository, publish() {} }),
+        normalizer: { now: advancingClock() }
+      });
+
+      const aborted = new AbortController();
+      aborted.abort(new Error("reconciliation caller stopped"));
+      await expectPipelineError(
+        pipeline.reconcile([{ thread_id: threadA, active_turn_id: turnA }], aborted.signal),
+        "pipeline_barrier_aborted"
+      );
+      expect(pipeline.failure).toBeNull();
+      const reconciliation = pipeline.reconcile([{ thread_id: threadA, active_turn_id: turnA }]);
+      const usage = pipeline.consume(
+        selected("thread/tokenUsage/updated", {
+          threadId: threadA,
+          turnId: turnA,
+          tokenUsage: rawTokenUsage()
+        })
+      );
+
+      await expect(reconciliation).resolves.toEqual({ last_sequence: 0 });
+      await expect(usage).resolves.toMatchObject({ kind: "committed", sequence: 1 });
+      expect(repository.listEvents("sess_pipeline_a").events).toMatchObject([
+        { type: "activity", cursor: 1 }
+      ]);
       expect(pipeline.failure).toBeNull();
     } finally {
       open.db.close();
@@ -455,6 +505,21 @@ function rawTurn(turnId: string, status: "completed" | "failed" | "inProgress" |
     startedAt: 1_752_170_401,
     completedAt: status === "inProgress" ? null : 1_752_170_402,
     durationMs: status === "inProgress" ? null : 1_000
+  };
+}
+
+function rawTokenUsage() {
+  const usage = {
+    totalTokens: 10,
+    inputTokens: 4,
+    cachedInputTokens: 1,
+    outputTokens: 5,
+    reasoningOutputTokens: 2
+  };
+  return {
+    total: usage,
+    last: usage,
+    modelContextWindow: 200_000
   };
 }
 

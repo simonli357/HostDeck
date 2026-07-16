@@ -1,4 +1,5 @@
 import {
+  type CodexEventNormalizerReconciliation,
   type CodexReconciliationLatestTurn,
   type CodexReconnectDisconnectedInput,
   type CodexReconnectLifecyclePort,
@@ -40,6 +41,7 @@ export type CodexRuntimeReconciliationPhase =
 
 export type CodexRuntimeReconciliationFailureCode =
   | "audit_incomplete"
+  | "event_reconciliation_failed"
   | "invalid_contract"
   | "lifecycle_conflict"
   | "mapping_contradiction"
@@ -79,6 +81,11 @@ export interface CodexRuntimeApprovalDisconnectPort {
 export interface CodexRuntimeEventBarrierPort {
   readonly barrier: (input: {
     readonly generation: number;
+    readonly signal: AbortSignal;
+  }) => Promise<unknown>;
+  readonly reconcile: (input: {
+    readonly generation: number;
+    readonly threads: readonly CodexEventNormalizerReconciliation[];
     readonly signal: AbortSignal;
   }) => Promise<unknown>;
 }
@@ -156,6 +163,7 @@ interface SessionOutcome {
   readonly kind: SessionOutcomeKind;
   readonly issue: SessionIssue;
   readonly mapping_disposition: "recovery_required" | "selected";
+  readonly normalizer_state: CodexEventNormalizerReconciliation | null;
   readonly patch: Partial<ManagedSessionProjection>;
 }
 
@@ -328,6 +336,23 @@ class DefaultCodexRuntimeReconciliationLifecycle {
       const outcomes = observations
         .filter((observation) => observation.current.mapping.archived_at === null)
         .map((observation) => deriveOutcome(observation, reads.runtime_version));
+      const normalizerStates = Object.freeze(
+        outcomes.flatMap((outcome) => outcome.normalizer_state === null ? [] : [outcome.normalizer_state])
+      );
+      try {
+        await this.options.events.reconcile({
+          generation: input.generation,
+          threads: normalizerStates,
+          signal: input.deadline.signal
+        });
+      } catch (error) {
+        throw this.fail(
+          "event_reconciliation_failed",
+          "Codex event stream state could not be reconciled before admission.",
+          error
+        );
+      }
+      input.deadline.throwIfAborted();
 
       let boundaryCount = 0;
       const committedOutcomes: SessionOutcome[] = [];
@@ -673,12 +698,15 @@ class DefaultCodexRuntimeReconciliationLifecycle {
     deadline: OperationDeadline
   ): Promise<void> {
     let current = this.requireExactTarget(outcome.target, false, outcome.identity);
+    const activityAt = outcome.patch.last_activity_at;
+    const activityFloor = activityAt === null || activityAt === undefined ? [] : [activityAt];
     const needsArchive = outcome.kind === "archived" && current.mapping.archived_at === null;
     const needsDisposition = current.mapping.disposition !== outcome.mapping_disposition;
     if (needsArchive || needsDisposition) {
       const updatedAt = this.timestampAfter(
         current.mapping.updated_at,
-        current.projection.session.updated_at
+        current.projection.session.updated_at,
+        ...activityFloor
       );
       const archivedAt = needsArchive ? updatedAt : current.mapping.archived_at;
       const intermediateSession = {
@@ -703,7 +731,8 @@ class DefaultCodexRuntimeReconciliationLifecycle {
     deadline.throwIfAborted();
     const capturedAt = this.timestampAfter(
       current.mapping.updated_at,
-      current.projection.session.updated_at
+      current.projection.session.updated_at,
+      ...activityFloor
     );
     await this.options.continuity.replaceWithBoundary({
       session_id: outcome.target.session_id,
@@ -825,6 +854,7 @@ function deriveOutcome(observation: RuntimeObservation, runtimeVersion: string):
     kind: "stale",
     issue,
     mapping_disposition: disposition,
+    normalizer_state: null,
     patch: stalePatch(reason)
   });
 
@@ -860,6 +890,7 @@ function deriveOutcome(observation: RuntimeObservation, runtimeVersion: string):
       kind: "archived",
       issue: "none",
       mapping_disposition: "selected",
+      normalizer_state: null,
       patch: {
         session_state: "archived",
         turn_state: terminal.turn_state,
@@ -869,7 +900,7 @@ function deriveOutcome(observation: RuntimeObservation, runtimeVersion: string):
         model: null,
         settings: null,
         goal: archivedGoal === undefined ? current.projection.session.goal : archivedGoal,
-        last_activity_at: terminal.last_activity_at ?? current.projection.session.last_activity_at,
+        last_activity_at: reconciledActivityAt(current, terminal.last_activity_at),
         recent_summary: "Codex thread is archived."
       }
     };
@@ -902,6 +933,10 @@ function deriveOutcome(observation: RuntimeObservation, runtimeVersion: string):
       kind: "recoverable",
       issue: "none",
       mapping_disposition: "selected",
+      normalizer_state: {
+        thread_id: target.codex_thread_id,
+        active_turn_id: observation.latest_turn.turn_id
+      },
       patch: {
         session_state: "active",
         turn_state: waitingApproval ? "waiting_for_approval" : waitingInput ? "waiting_for_input" : "in_progress",
@@ -909,7 +944,7 @@ function deriveOutcome(observation: RuntimeObservation, runtimeVersion: string):
         freshness: "stale",
         freshness_reason: "Runtime resubscription is required.",
         goal,
-        last_activity_at: observation.latest_turn.started_at,
+        last_activity_at: reconciledActivityAt(current, observation.latest_turn.started_at),
         recent_summary: waitingApproval
           ? "Codex turn is waiting for approval after reconnect."
           : waitingInput
@@ -928,6 +963,10 @@ function deriveOutcome(observation: RuntimeObservation, runtimeVersion: string):
     kind: "recoverable",
     issue: "none",
     mapping_disposition: "selected",
+    normalizer_state: {
+      thread_id: target.codex_thread_id,
+      active_turn_id: null
+    },
     patch: {
       session_state: "active",
       turn_state: terminal.turn_state,
@@ -935,10 +974,20 @@ function deriveOutcome(observation: RuntimeObservation, runtimeVersion: string):
       freshness: "stale",
       freshness_reason: "Runtime resubscription is required.",
       goal,
-      last_activity_at: terminal.last_activity_at ?? current.projection.session.last_activity_at,
+      last_activity_at: reconciledActivityAt(current, terminal.last_activity_at),
       recent_summary: terminal.summary
     }
   };
+}
+
+function reconciledActivityAt(
+  current: SelectedSessionState,
+  observed: IsoTimestamp | null
+): IsoTimestamp | null {
+  const existing = current.projection.session.last_activity_at;
+  if (observed === null) return existing;
+  const floor = existing ?? current.projection.session.created_at;
+  return observed < floor ? floor : observed;
 }
 
 function terminalPatch(
@@ -1132,7 +1181,12 @@ function parseOptions(
   if (typeof options.approvals?.disconnect !== "function") throw new TypeError("Codex runtime reconciliation requires approval cleanup.");
   if (typeof options.audit?.reconcile !== "function") throw new TypeError("Codex runtime reconciliation requires audit cleanup.");
   if (typeof options.continuity?.replaceWithBoundary !== "function") throw new TypeError("Codex runtime reconciliation requires continuity storage.");
-  if (typeof options.events?.barrier !== "function") throw new TypeError("Codex runtime reconciliation requires an event barrier.");
+  if (
+    typeof options.events?.barrier !== "function" ||
+    typeof options.events.reconcile !== "function"
+  ) {
+    throw new TypeError("Codex runtime reconciliation requires event reconciliation and barrier ports.");
+  }
   if (typeof options.now !== "function") throw new TypeError("Codex runtime reconciliation requires a strict clock.");
   if (typeof options.plans?.rehydrate !== "function") throw new TypeError("Codex runtime reconciliation requires Plan rehydration.");
   if (typeof options.projection?.append !== "function") throw new TypeError("Codex runtime reconciliation requires projection append.");

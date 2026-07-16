@@ -253,6 +253,7 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
       assertPersistedEventProjection(db, current.projection);
       assertCurrentRevision(current, expectedRevision);
       assertProjectionIdentity(current.mapping, nextProjection);
+      assertStateChronology(current.mapping, nextProjection);
       assertEventAdvance(current.projection, event, nextProjection);
 
       let committedProjection = nextProjection;
@@ -290,6 +291,7 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
       assertPersistedEventProjection(db, current.projection);
       assertCurrentRevision(current, expectedRevision);
       assertProjectionIdentity(current.mapping, nextProjection);
+      assertStateChronology(current.mapping, nextProjection);
       assertContinuityBoundaryReplacement(current.projection, event, nextProjection);
 
       try {

@@ -53,6 +53,7 @@ export {
   type CodexEventNormalizationErrorCode,
   type CodexEventNormalizer,
   type CodexEventNormalizerOptions,
+  type CodexEventNormalizerReconciliation,
   type CodexNotificationNormalizationResult,
   type CodexOptionalNotificationDiagnostic,
   type CodexRedundantStateObservation,

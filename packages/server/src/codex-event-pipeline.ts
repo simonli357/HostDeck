@@ -1,6 +1,7 @@
 import {
   type CodexConnectionNotification,
   type CodexEventNormalizerOptions,
+  type CodexEventNormalizerReconciliation,
   type CodexOptionalNotificationDiagnostic,
   type CodexRedundantStateObservation,
   type CodexUnmanagedThreadObservation,
@@ -66,6 +67,10 @@ export interface CodexEventPipeline {
     connection_generation?: number
   ) => Promise<CodexEventPipelineResult>;
   readonly barrier: (signal?: AbortSignal) => Promise<CodexEventPipelineBarrier>;
+  readonly reconcile: (
+    threads: readonly CodexEventNormalizerReconciliation[],
+    signal?: AbortSignal
+  ) => Promise<CodexEventPipelineBarrier>;
   readonly failure: Error | null;
   readonly last_sequence: number;
   readonly pending_count: number;
@@ -156,6 +161,31 @@ class DefaultCodexEventPipeline implements CodexEventPipeline {
     }
   }
 
+  reconcile(
+    threads: readonly CodexEventNormalizerReconciliation[],
+    signal?: AbortSignal
+  ): Promise<CodexEventPipelineBarrier> {
+    if (this.currentFailure !== null) return Promise.reject(this.stoppedError());
+    if (signal !== undefined && !isAbortSignal(signal)) {
+      return Promise.reject(new TypeError("Codex event-pipeline reconciliation signal is invalid."));
+    }
+    const operation = this.tail.then(() => {
+      if (this.currentFailure !== null) throw this.stoppedError();
+      if (signal?.aborted === true) throw barrierAborted(signal);
+      this.normalizer.reconcile(threads);
+      return Object.freeze({ last_sequence: this.normalizer.last_sequence });
+    });
+    this.tail = operation.then(
+      () => undefined,
+      (error: unknown) => {
+        if (!isBarrierAbort(error) && this.currentFailure === null) {
+          this.currentFailure = asError(error);
+        }
+      }
+    );
+    return operation;
+  }
+
   private async consumeOne(
     notification: CodexConnectionNotification,
     connectionGeneration: number | undefined
@@ -233,6 +263,8 @@ export function createCodexEventPipeline(options: CodexEventPipelineOptions): Co
     consume: (notification: CodexConnectionNotification, connectionGeneration?: number) =>
       pipeline.consume(notification, connectionGeneration),
     barrier: (signal?: AbortSignal) => pipeline.barrier(signal),
+    reconcile: (threads: readonly CodexEventNormalizerReconciliation[], signal?: AbortSignal) =>
+      pipeline.reconcile(threads, signal),
     get failure() {
       return pipeline.failure;
     },
@@ -274,6 +306,10 @@ function barrierAborted(signal: AbortSignal): HostDeckCodexEventPipelineError {
     "Codex event-pipeline barrier was aborted.",
     { cause: signal.reason }
   );
+}
+
+function isBarrierAbort(error: unknown): boolean {
+  return error instanceof HostDeckCodexEventPipelineError && error.code === "pipeline_barrier_aborted";
 }
 
 function identityGateObservation(observation: CodexUnmanagedThreadObservation): CodexEventPipelineResult {
