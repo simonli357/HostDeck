@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: implementation pending.
+Status: complete.
 
 ## Scope
 
@@ -113,3 +113,14 @@ Implement the selected one-session compact progress read and confirmed compact-s
 - `FE-V1-029` owns the approved mobile confirmation and absent/accepted/running/completed/interrupted/failed/incomplete surface.
 - `IFC-V1-067` owns historical raw/slash/tmux surface disposition.
 - Packaging/release leaves own an installed `codexdeck` executable and clean-install command smoke.
+
+## Completion Evidence
+
+- Implemented the strict target-free compact-start request, nullable compact-only progress response, and exact selected manifest ownership. The production compact service now parses complete selected mapping/projection records and rejects malformed, contradictory, misplaced, or recovery-state identity before dispatch or event observation.
+- Added authenticated no-store GET and common-gate audited POST routes. Reads bracket one process-live snapshot with full target/runtime revalidation; starts require literal confirmation, idle/terminal turn admission, accepted audit, one receiverless service dispatch, accepted-only correlation, continuity recheck, and terminal audit proof.
+- Added the dedicated bounded direct-loopback compact client and exact `compact SESSION_ID [--json]` plus `compact SESSION_ID --confirm [--json]` parser, shell, help, JSON, and terminal-safe text mappings. The CLI generates operation ids internally, never retries, and distinguishes absent, accepted, running, completed, interrupted, failed, and incomplete truth without slash, target, thread, force, or retry input.
+- Route and service evidence covers local and paired private HTTPS authority, CSRF/lock ordering, malformed wire and selected state, capability/turn/runtime conflicts, pre/post-dispatch drift, every progress state, known rejection versus possible-send uncertainty, duplicate ids, raw response loss, terminal-audit failure, capacity, generation, archive, cross-session isolation, and bounded SQLite privacy.
+- Focused validation passes for 70 compact adapter/service/route/write-gate/client/CLI tests, 58 selected contract/manifest tests, 12 fixtures, and one real CLI -> loopback HTTP -> selected gate/audit -> production compact service -> SQLite vertical. The vertical proves explicit absence, accepted-only start, event-proven running/completed reads, duplicate rejection, one runtime call, and second-session isolation.
+- Workspace validation passes: unit 1,540 with 36 intentional external/device skips; contract 267; integration 23; web 33; root and all-package typechecks; lint/exports; scaffold; planning; frozen offline install; and diff checks. The reviewed Codex 0.144.0 binding verifies all 671 generated files, and the authenticated exact-runtime compact smoke passes twice after correcting its empty-thread usage assertion to require only actually observed token evidence.
+- `pnpm audit --prod --audit-level=high` could not produce advisory evidence because npm's retired audit endpoint returned HTTP 410. No dependency or lockfile changed in this leaf.
+- Criteria commit `73b2fc4`; implementation `163a129`.
