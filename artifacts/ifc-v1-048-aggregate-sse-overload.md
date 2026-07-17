@@ -1,7 +1,7 @@
 # IFC-V1-048 Aggregate SSE Overload Hardening
 
 Date: 2026-07-16
-Status: criteria frozen; implementation in progress
+Status: complete
 
 ## Objective
 
@@ -51,6 +51,23 @@ All products must remain safe integers under the accepted resource policy. Live 
 - Real transport matrix: paused raw client, simulated blocked heartbeat with no per-tick write/listener growth, drain recovery, disconnect, multi-stream paired-device revoke, and active service/application shutdown.
 - Leak inspection: exact handoff claim/ref release, remaining replay/live/combined counters, subscriber/device/session/source/authority registrations, abort/drain listeners, timers, in-flight requests, sockets, active handles, and process/temp residue.
 - Focused and adjacent tests, all workspace suites, root/package typechecks, lint/exports, scaffold/planning/runtime-boundary, exact Codex 0.144.0 binding, frozen offline install, production audit/license inventory, diff/privacy inspection, commit, and push.
+
+## Completion Evidence
+
+- The handoff exposes one exact one-time replay claim and releases its replay and validation references when claimed, failed, or closed. The subscriber validates immutable data without retaining Zod copies, builds a linked replay chain, and releases each consumed node immediately.
+- Service and stream snapshots expose exact current and peak replay, live-queue, and combined retained event/wire-byte counters. Configuration rejects unsafe derived global, device, or session products before opening a source.
+- Admission and teardown tests cover exact global/device/session limits, rejected paired authorization release, partial replay, mixed replay/live queues, pending reads, archive, revoke, source failure, and service shutdown. Every current counter and active bucket returns to zero.
+- Stress tests admit eight replay-heavy streams, reject 32 over-cap attempts without source work, reuse capacity through 64 replacement reconnect cycles, isolate simultaneous stalled readers across sessions, and preserve healthy contiguous delivery during burst overflow.
+- The exact pinned `@fastify/sse` 0.5.0 heartbeat is patched through pnpm. A direct transport regression proves one blocked write and one drain listener maximum, skipped ticks while blocked, one post-drain write, and timer/listener cleanup on close.
+- Criteria are committed as `a76bd67`; aggregate implementation as `a27c84e`; immutable no-copy replay validation hardening as `bebc679`. All three commits are pushed on `main`.
+
+## Validation Results
+
+- Focused and adjacent SSE, fanout, route, revoke, archive, host-lifecycle, and real-shutdown matrix: 12 files and 105 tests passed after final hardening.
+- Workspace suites: unit 1,790 passed with 27 explicit skips; contract 259; integration 18; web 33.
+- Root and all eight package typechecks pass. Lint/exports checks 507 files and eight packages; scaffold checks eight packages and 20 scripts; planning checks 212 tasks, 84 requirements, 649 dependencies, and four queued tasks before closure; runtime-boundary checks pass.
+- Frozen offline install and exact Codex 0.144.0 binding verification pass at 671 files and the reviewed tree hash. Production audit reports no known vulnerabilities; the production license inventory contains 155 permissive entries across 159 installed paths.
+- Final diff, ownership, privacy, process, listener, ADB, and temporary-test-residue inspections pass. The retained `/tmp/hostdeck-codex-0.144.0` directory is the deliberate exact-version validation toolchain, not runtime residue.
 
 ## Explicit Non-Goals
 
