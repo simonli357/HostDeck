@@ -164,7 +164,7 @@ describe("selected projection event-stream route", () => {
     }
   });
 
-  it("preserves authentication, missing, archived, future-cursor, and capacity errors", async () => {
+  it("preserves authentication, source, session, cursor, and capacity errors", async () => {
     const invalidAuth = createFixture();
     const invalidAuthApp = createApp(invalidAuth.subscribers, invalidAuth.failures);
     await invalidAuthApp.ready();
@@ -187,9 +187,12 @@ describe("selected projection event-stream route", () => {
     }
 
     for (const testCase of [
+      { code: "authorization_failed" as const, status: 403, publicCode: "permission_denied" },
       { code: "session_not_found" as const, status: 404, publicCode: "session_not_found" },
       { code: "session_archived" as const, status: 409, publicCode: "stale_session" },
-      { code: "future_cursor" as const, status: 409, publicCode: "stale_session" }
+      { code: "future_cursor" as const, status: 409, publicCode: "stale_session" },
+      { code: "replay_limit" as const, status: 503, publicCode: "service_overloaded" },
+      { code: "storage_unavailable" as const, status: 500, publicCode: "storage_error" }
     ]) {
       const fixture = createFixture();
       fixture.handoff.nextError = testCase.code;
@@ -340,7 +343,14 @@ describe("selected projection event-stream route", () => {
 
 class FakeHandoffService implements ProjectionReplayLiveHandoffService {
   readonly openInputs: OpenProjectionReplayLiveHandoffInput[] = [];
-  nextError: "future_cursor" | "session_archived" | "session_not_found" | null = null;
+  nextError:
+    | "authorization_failed"
+    | "future_cursor"
+    | "replay_limit"
+    | "session_archived"
+    | "session_not_found"
+    | "storage_unavailable"
+    | null = null;
   private liveSink: ((event: SelectedProjectionEvent) => void) | null = null;
 
   get activeSinkCount(): number {

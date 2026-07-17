@@ -22,7 +22,8 @@ import {
 } from "./projection-fanout-hub.js";
 import {
   createProjectionReplayLiveHandoffService,
-  type OpenProjectionReplayLiveHandoffInput
+  type OpenProjectionReplayLiveHandoffInput,
+  type ProjectionReplayLiveHandoff
 } from "./projection-replay-live-handoff.js";
 import {
   createProjectionSubscriberStreamService,
@@ -450,30 +451,12 @@ describe("bounded projection subscriber streams", () => {
 
   it("closes a noncooperative handoff returned after opening termination", () => {
     const close = vi.fn(() => true);
-    const lifecycle = new AbortController();
     let service!: ProjectionSubscriberStreamService;
     const handoff = Object.freeze({
       open(candidate: unknown) {
         const input = candidate as OpenProjectionReplayLiveHandoffInput;
         expect(service.archive_session(sessionA)).toBe(1);
-        return Object.freeze({
-          activate: () => Object.freeze({ drained_event_count: 0, live_after_cursor: null }),
-          after: input.after as OutputCursor | null,
-          close,
-          failure: null,
-          high_water_cursor: null,
-          observed_fanout_cursor: null,
-          paused_event_count: 0,
-          paused_wire_bytes: 0,
-          replay_event_count: 0,
-          replay_events: Object.freeze([]),
-          replay_wire_bytes: 0,
-          session_id: input.session_id,
-          signal: lifecycle.signal,
-          state: "paused",
-          subscriber_id: input.subscriber_id,
-          truncated: false
-        });
+        return fakePausedHandoff(input, close);
       }
     });
     service = createProjectionSubscriberStreamService({
@@ -492,6 +475,38 @@ describe("bounded projection subscriber streams", () => {
       archived_subscribers: 1,
       source_open_failures: 1
     });
+  });
+
+  it("releases owned state and reports a bounded failure when handoff close throws", () => {
+    const failures: ProjectionSubscriberFailure[] = [];
+    const close = vi.fn(() => {
+      throw new Error("private handoff close failure");
+    });
+    const service = createProjectionSubscriberStreamService({
+      handoff: Object.freeze({
+        open: (candidate: unknown) =>
+          fakePausedHandoff(
+            candidate as OpenProjectionReplayLiveHandoffInput,
+            close
+          )
+      }),
+      observe_failure: (failure) => failures.push(failure),
+      resource_budget: defaultResourceBudget
+    });
+    const stream = service.open(openInput(sessionA, "subscriber-close-failure"));
+
+    expect(stream.close()).toBe(true);
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(stream.state).toBe("closed");
+    expect(failures).toEqual([{ code: "source_failed", cursor: null }]);
+    expect(service.snapshot()).toMatchObject({
+      active_device_buckets: 0,
+      active_session_buckets: 0,
+      active_subscribers: 0,
+      explicit_closures: 1,
+      source_failed_subscribers: 1
+    });
+    expect(JSON.stringify(failures)).not.toContain("private");
   });
 
   it("contains hostile failure observers and concurrent iterator ownership", async () => {
@@ -651,6 +666,31 @@ function openInput(
     signal,
     subscriber_id: subscriberId
   };
+}
+
+function fakePausedHandoff(
+  input: OpenProjectionReplayLiveHandoffInput,
+  close: () => boolean
+): ProjectionReplayLiveHandoff {
+  return Object.freeze({
+    activate: () =>
+      Object.freeze({ drained_event_count: 0, live_after_cursor: null }),
+    after: input.after as OutputCursor | null,
+    close,
+    failure: null,
+    high_water_cursor: null,
+    observed_fanout_cursor: null,
+    paused_event_count: 0,
+    paused_wire_bytes: 0,
+    replay_event_count: 0,
+    replay_events: Object.freeze([]),
+    replay_wire_bytes: 0,
+    session_id: input.session_id,
+    signal: new AbortController().signal,
+    state: "paused",
+    subscriber_id: input.subscriber_id,
+    truncated: false
+  });
 }
 
 function activityEvent(sessionId: string, cursor: number): SelectedProjectionEvent {
