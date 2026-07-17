@@ -66,8 +66,13 @@ pnpm smoke:codex-threads
 
 ```bash
 pnpm smoke:pairing-android
+HOSTDECK_REMOTE_CONTROL_DEDICATED_PROFILE_ID=DEDICATED_ID \
+HOSTDECK_REMOTE_CONTROL_AWAY_PROFILE_ID=AWAY_ID \
+pnpm smoke:remote-android
 pnpm smoke:android-security
 ```
+
+`smoke:remote-android` is the strict `IFC-V1-079` no-retry device run. It requires one clean commit, exact Tailscale 1.98.8, two distinct authorized saved-profile ids, one unlocked authorized Android device, Android Tailscale and Chrome, and a cellular connection. The harness disables and restores phone Wi-Fi, uses USB only for guarded camera/Chrome inspection, requires the human to scan and open the in-memory QR, restores the dedicated profile, removes its exact Serve path, and publishes only sanitized evidence under `artifacts/ifc-v1-079-device/` after complete cleanup.
 
 ## Authenticated Exact-Codex Probe
 

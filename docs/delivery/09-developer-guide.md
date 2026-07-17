@@ -57,6 +57,7 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | Integration tests | `pnpm test:integration` | Runs cross-module failure-ordering tests. |
 | Web state tests | `pnpm test:web` | Runs view-model, selected mobile fixture, and headless pairing-bootstrap checks. |
 | Pairing browser tests | `pnpm test:browser:pairing` | Runs the real Chromium history/referrer/reload/two-tab/failure boundary; requires the Playwright Chromium bundle. |
+| Remote Android acceptance | `HOSTDECK_REMOTE_CONTROL_DEDICATED_PROFILE_ID=DEDICATED_ID HOSTDECK_REMOTE_CONTROL_AWAY_PROFILE_ID=AWAY_ID pnpm smoke:remote-android` | Strict no-retry `IFC-V1-079` run from a clean commit. Requires exact Tailscale 1.98.8, two distinct authorized saved profiles, and one unlocked authorized Android device with Tailscale, Chrome, USB debugging, and working cellular data. |
 | Later E2E tests | `pnpm test:e2e` | Placeholder; fails loudly until `REL-V1-007` implements it. |
 | Later build/package | `pnpm build` | Placeholder; fails loudly until `REL-V1-007` implements it. |
 | Later release smoke | `pnpm smoke:local` | Placeholder; fails loudly until `REL-V1-006` implements it. |
@@ -103,6 +104,9 @@ Long-running systemd user units and runnable packaging remain downstream. Do not
 - `remote status`, `remote enable`, and `remote disable` have source CLI and service contracts, but are not user-runnable until selected composition and CLI packaging exist.
 - `codexdeck unlock` is CLI-only in V1; dashboard unlock remains rejected.
 - Pairing codes, device tokens, and CSRF tokens are stored only as hashes in local SQLite.
+- The opt-in `smoke:remote-android` runner requires the dedicated HostDeck profile to be selected with its Serve root absent before startup. The away profile must be a distinct saved profile; the runner compares its Serve JSON byte-for-byte without publishing it, never asks HostDeck to switch profiles, and restores the dedicated selection before exit.
+- The physical runner disables and later restores Android Wi-Fi, requires active cellular plus Tailscale VPN transport, and rejects any pre-existing ADB forward or reverse. Its temporary DevTools forward inspects Chrome only; HostDeck requests continue through private Serve HTTPS and never through USB, LAN, a custom CA, Funnel, or a certificate bypass.
+- Keep the phone unlocked when starting the runner. It opens the default camera and waits up to five minutes for the in-memory QR to be scanned and opened. A failed row is terminal for that run; clean up fully and start a new evidence run rather than retrying an operation in place.
 
 ## Common Failures
 

@@ -1,9 +1,19 @@
-import { execFileSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { execFile, execFileSync } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
 import { createServer, type Server as HttpServer } from "node:http";
 import { request as httpsRequest } from "node:https";
-import type { AddressInfo } from "node:net";
+import { type AddressInfo, createConnection } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
@@ -16,38 +26,50 @@ import {
   remoteServeDescriptorSchema,
   selectedPairingFragmentPrefix,
   selectedPairingLinkSchema,
+  selectedProjectionEventSchema,
   selectedRequestAuthenticationContextSchema
 } from "@hostdeck/contracts";
 import {
   createHostDeckCsrfPolicy,
   createHostDeckCsrfRouteRegistration,
+  createHostDeckDeviceRevokeRouteRegistration,
+  createHostDeckHostHealthService,
+  createHostDeckHostLockPolicy,
+  createHostDeckHostLockRouteRegistration,
   createHostDeckPairingPolicy,
   createHostDeckPairingRouteRegistration,
-  createHostDeckRemoteIngressRequestAuthorityPolicy,
+  createHostDeckRemoteIngressLifecycle,
   createHostDeckRemoteIngressRouteRegistration,
   createHostDeckRequestAuthenticationPolicy,
-  createHostDeckTailscaleServeFastifyApp,
+  createHostDeckSelectedWriteAdmissionPolicy,
+  createHostDeckSseTransportRegistration,
   createRemoteIngressControlService,
   createSecurityMutationAuditExecutor,
   createTailscaleObserver,
   createTailscaleServeManager,
-  createTailscaleServeProxyTrustPolicy,
   type HostDeckFastifyInstance,
+  type HostDeckFastifyLifecycle,
+  type HostDeckRemoteIngressLifecycle,
   type HostDeckRoutePluginRegistration,
-  type RemoteIngressControlService,
+  hostDeckLocalAdminRequestHeaderName,
+  hostDeckLocalAdminRequestHeaderValue,
+  hostDeckNoStoreRouteConfig,
   requireHostDeckRequestAuthentication,
   resolveHostDeckRequestAuthentication,
+  startHostDeckTailscaleServeFastifyLifecycle,
   type TailscaleObserver,
   type TailscaleServeManager,
   tailscaleServeProxyTrustSnapshot
 } from "@hostdeck/server";
 import {
   createAuthDeviceRepository,
+  createDeviceRevocationRepository,
   createPairingCodeRepository,
   createRemoteIngressAdmissionProofRepository,
   createRemoteIngressStateRepository,
   createSelectedAuditRepository,
   createSelectedCsrfAuthorizationRepository,
+  createSettingsRepository,
   openMigratedDatabase
 } from "@hostdeck/storage";
 import { type Browser, type BrowserContext, chromium, type Page } from "@playwright/test";
@@ -57,19 +79,29 @@ import { describe, it } from "vitest";
 import { cliExitCodes } from "./exit-codes.js";
 import { runCli } from "./shell.js";
 
+const requireRemoteAndroidAcceptance =
+  process.env.HOSTDECK_REQUIRE_REMOTE_ANDROID_ACCEPTANCE === "1";
 const requirePhysicalPairing =
-  process.env.HOSTDECK_REQUIRE_PAIRING_ANDROID_SMOKE === "1";
+  process.env.HOSTDECK_REQUIRE_PAIRING_ANDROID_SMOKE === "1" ||
+  requireRemoteAndroidAcceptance;
 const describePhysical = requirePhysicalPairing ? describe : describe.skip;
-const overallTimeoutMs = 10 * 60_000;
+const overallTimeoutMs = requireRemoteAndroidAcceptance
+  ? 20 * 60_000
+  : 10 * 60_000;
 const claimTimeoutMs = 5 * 60_000;
 const tailscaleDnsServer = "100.100.100.100";
 const physicalPageMaxBytes = defaultResourceBudget.cli_response_max_bytes;
+const physicalEvidenceDirectory = join(
+  process.cwd(),
+  "artifacts",
+  "ifc-v1-079-device"
+);
 const deviceForbiddenValues = new Set<string>();
 let adbCommandCount = 0;
 
-describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
+describePhysical("selected remote-ingress physical Android acceptance", () => {
   it(
-    "scans one private QR, scrubs Chrome, claims once, reloads safely, and cleans up",
+    "pairs through private HTTPS and proves lifecycle authority, recovery, revocation, and cleanup",
     async () => {
       requireOneAuthorizedDevice();
       const controller = new AbortController();
@@ -87,25 +119,60 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
       const requestInspection: RequestInspection = {
         claimRequests: 0,
         csrfRequests: 0,
+        deletionCookieObserved: false,
         fragmentLeaks: 0,
+        hardenedCookieObserved: false,
         noReferrerApiRequests: 0,
-        hardenedCookieObserved: false
+        revokeRequests: 0
       };
-      let app: HostDeckFastifyInstance | null = null;
+      const sseRuntime: PhysicalSseRuntime = {
+        active: 0,
+        closed: 0,
+        maxActive: 0,
+        opened: 0
+      };
+      const profileSwitch = requireRemoteAndroidAcceptance
+        ? requireProfileSwitchInput()
+        : null;
+      const acceptanceStartedAt = requireRemoteAndroidAcceptance
+        ? new Date().toISOString()
+        : null;
+      const screenshotDirectory = join(directory, "device-evidence");
+      mkdirSync(screenshotDirectory, { mode: 0o700 });
+      let host: HostDeckFastifyLifecycle<PhysicalRuntimeContext> | null = null;
+      let lifecycleManager: TailscaleServeManager | null = null;
       let display: QrDisplay | null = null;
       let displayBrowser: Browser | null = null;
       let displayContext: BrowserContext | null = null;
       let displayPage: Page | null = null;
       let cdp: CdpClient | null = null;
       let forwardPort: number | null = null;
-      let leaseKeeper: AdmissionLeaseKeeper | null = null;
       let remoteEnabled = false;
       let fallbackCleanup: CleanupTarget | null = null;
       let externalOrigin: string | null = null;
       let localOrigin: string | null = null;
       let env: Readonly<Record<string, string>> | null = null;
+      let foreignServeBefore: ServeStatusFingerprint | null = null;
+      let environmentFacts: PhysicalEnvironmentFacts | null = null;
+      let fullResult: PhysicalSequenceResult | null = null;
+      let initialWifiEnabled: boolean | null = null;
+      let selectedProfile: "away" | "dedicated" = "dedicated";
+      let internalErrorCount = 0;
 
       try {
+        adbCommandCount = 0;
+        deviceForbiddenValues.clear();
+        if (requireRemoteAndroidAcceptance) {
+          requireCleanAcceptanceWorktree();
+          requireNoAdbApplicationTunnels();
+          initialWifiEnabled = await enforceUnrelatedAndroidNetwork();
+          environmentFacts = readPhysicalEnvironmentFacts();
+          await switchSavedProfile(profileSwitch?.awayProfileId as string);
+          selectedProfile = "away";
+          foreignServeBefore = await readServeStatusFingerprint();
+          await switchSavedProfile(profileSwitch?.dedicatedProfileId as string);
+          selectedProfile = "dedicated";
+        }
         const browserBundle = await buildPhysicalBrowserBundle();
         const candidate = requireDedicatedAbsentCandidate(
           await observer.observeCandidate()
@@ -114,6 +181,7 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
         externalOrigin = candidate.externalOrigin;
         const port = await reserveLoopbackPort();
         localOrigin = `http://127.0.0.1:${port}`;
+        const selectedLocalOrigin = localOrigin;
         fallbackCleanup = Object.freeze({
           expectedProfileKey: candidate.expectedProfileKey,
           expectedServe: remoteServeDescriptorSchema.parse({
@@ -131,23 +199,46 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
         const auditExecutor = createSecurityMutationAuditExecutor({
           repository: audit,
           now: () => now().toISOString(),
-          create_record_id: () => `audit:physical:pairing:${++auditIndex}`
+          create_record_id: () => `audit:physical:remote:${++auditIndex}`
         });
-        const service = createRemoteIngressControlService({
-          admissionProofs: proofs,
-          audit: auditExecutor,
-          localOrigin,
-          manager,
-          monotonicNow: () => performance.now(),
-          now,
-          observer,
-          states
+        const health = createHostDeckHostHealthService({ now });
+        const selectedRemote = createHostDeckRemoteIngressLifecycle({
+          createControl(input) {
+            const lifecycleObserver = createTailscaleObserver({
+              signal: input.signal
+            });
+            const selectedManager = createTailscaleServeManager({
+              observer: lifecycleObserver,
+              signal: input.signal
+            });
+            lifecycleManager = selectedManager;
+            return createRemoteIngressControlService({
+              admissionProofs: proofs,
+              audit: auditExecutor,
+              localOrigin: selectedLocalOrigin,
+              manager: selectedManager,
+              monotonicNow: input.monotonicNow,
+              now,
+              observer: lifecycleObserver,
+              states
+            });
+          },
+          health
         });
         const auth = createAuthDeviceRepository(opened.db);
+        const authenticationPolicy = createHostDeckRequestAuthenticationPolicy({
+          authenticateDeviceToken: (input) =>
+            auth.authenticateDeviceToken(input),
+          now
+        });
         const pairing = createPairingCodeRepository(opened.db, {
           policy: defaultResourceBudget,
           generatePairingCode: () => secrets.create(16),
-          generateDeviceId: () => `client_${createOpaqueIdentifier(18)}`,
+          generateDeviceId: () => {
+            const deviceId = `client_${createOpaqueIdentifier(18)}`;
+            deviceForbiddenValues.add(deviceId);
+            return deviceId;
+          },
           generateDeviceToken: () => secrets.create(32),
           generateCsrfToken: () => secrets.create(32)
         });
@@ -171,44 +262,127 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
           },
           now
         });
-        const remoteRequestAuthority =
-          createHostDeckRemoteIngressRequestAuthorityPolicy();
-
-        app = createHostDeckTailscaleServeFastifyApp({
-          observeInternalError: () => undefined,
-          requestAuthenticationPolicy: createHostDeckRequestAuthenticationPolicy({
-            authenticateDeviceToken: (input) =>
-              auth.authenticateDeviceToken(input),
+        const settings = createSettingsRepository(opened.db);
+        settings.getOrCreateDefault({
+          bindPort: port,
+          now,
+          stateDir: directory
+        });
+        const lock = createHostDeckHostLockPolicy({
+          settings: {
+            read: () => settings.require(),
+            transition: (input) => settings.transitionHostLock(input)
+          },
+          now
+        });
+        const writeAdmission = createHostDeckSelectedWriteAdmissionPolicy({
+          resourceBudget: defaultResourceBudget,
+          now: () => performance.now()
+        });
+        const revocations = createDeviceRevocationRepository(opened.db);
+        const apiRoutes = [
+          createHostDeckRemoteIngressRouteRegistration({
+            service: selectedRemote.control
+          }),
+          createHostDeckPairingRouteRegistration({
+            audit: auditExecutor,
+            pairing: pairingPolicy
+          }),
+          createHostDeckCsrfRouteRegistration({
+            audit: auditExecutor,
+            csrf: csrfPolicy
+          }),
+          createHostDeckHostLockRouteRegistration({
+            audit: auditExecutor,
+            csrf: csrfPolicy,
+            lock
+          }),
+          createHostDeckDeviceRevokeRouteRegistration({
+            activeDeviceAuthority:
+              authenticationPolicy.activeDeviceAuthority,
+            admission: writeAdmission,
+            audit: auditExecutor,
+            csrf: csrfPolicy,
+            devices: { revoke: (input) => revocations.revoke(input) },
+            lock,
             now
           }),
+          physicalProtectedRoute()
+        ];
+        const routePlugins = [
+          composePhysicalRouteRegistration(
+            "physical-remote-api",
+            "api",
+            apiRoutes,
+            requestInspection,
+            secrets
+          ),
+          composePhysicalRouteRegistration(
+            "physical-remote-sse",
+            "sse",
+            [physicalSseRoute(sseRuntime)],
+            requestInspection,
+            secrets
+          ),
+          composePhysicalRouteRegistration(
+            "physical-remote-page",
+            "static",
+            [physicalPageRoute(browserBundle)],
+            requestInspection,
+            secrets
+          )
+        ];
+        host = await startHostDeckTailscaleServeFastifyLifecycle({
+          createRequestAuthenticationPolicy: () => authenticationPolicy,
+          createRoutePlugins: () => routePlugins,
+          observeInternalError: () => {
+            internalErrorCount += 1;
+          },
           resourceBudget: defaultResourceBudget,
-          remoteIngressRequestAuthority: remoteRequestAuthority,
-          routePlugins: [
-            createHostDeckRemoteIngressRouteRegistration({ service }),
-            createHostDeckPairingRouteRegistration({
-              audit: auditExecutor,
-              pairing: pairingPolicy
-            }),
-            createHostDeckCsrfRouteRegistration({
-              audit: auditExecutor,
-              csrf: csrfPolicy
-            }),
-            physicalPageRoute(browserBundle),
-            physicalProtectedRoute()
-          ],
-          tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
-            localOrigin,
-            readRemoteAdmission: () =>
-              remoteRequestAuthority.synchronize(service.readAdmission())
-          })
+          runtime: {
+            beginDrain() {
+              // Remote authority owns this acceptance surface.
+            },
+            closeRuntime() {
+              // The acceptance route has no external runtime process.
+            },
+            closeSse() {
+              // Request/device authority closes each selected SSE source.
+            },
+            closeStartup() {
+              if (opened.db.open) opened.db.close();
+            },
+            start() {
+              return Object.freeze({
+                bind: Object.freeze({
+                  host: "127.0.0.1" as const,
+                  port,
+                  transport: "http" as const
+                }),
+                context: Object.freeze({ remote: selectedRemote })
+              });
+            }
+          },
+          selectRemoteIngressLifecycle: (context) => context.remote
         });
-        installRequestInspection(app, requestInspection, secrets);
-        await app.listen({ host: "127.0.0.1", port });
+        requireCondition(
+          host.baseUrl.origin === localOrigin &&
+            host.snapshot().configured.host === "127.0.0.1" &&
+            host.snapshot().listening,
+          "Physical acceptance did not start one exact loopback lifecycle."
+        );
         env = Object.freeze({
           HOME: directory,
           HOSTDECK_API_BASE_URL: localOrigin,
           HOSTDECK_STATE_DIR: directory
         });
+        await waitFor(
+          () =>
+            selectedRemote.snapshot().poll_cycles >= 1 &&
+            selectedRemote.snapshot().active_control_operations === 0,
+          15_000,
+          "Physical lifecycle did not settle its initial observation."
+        );
 
         assertRemoteCliResult(
           await runCli(["remote", "enable", "--json"], {
@@ -218,8 +392,15 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
           "ready"
         );
         remoteEnabled = true;
-        requireOpenAdmission(service.readAdmission(), candidate.externalOrigin);
+        requireOpenAdmission(
+          selectedRemote.readAdmission(),
+          candidate.externalOrigin
+        );
         await assertTrustedPhysicalPage(candidate.externalOrigin);
+        if (requireRemoteAndroidAcceptance) {
+          await assertUnpairedAndroidAccess(candidate.externalOrigin);
+          requireNoAdbApplicationTunnels();
+        }
 
         const rendered: PairingRenderCapture = {
           link: null,
@@ -267,10 +448,6 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
         );
         deviceForbiddenValues.add(pairingLink);
         pairResult = null;
-        leaseKeeper = await startAdmissionLeaseKeeper(
-          service,
-          Math.max(1_000, Math.floor(observer.poll_interval_ms / 3))
-        );
 
         display = await startQrDisplay(qrImage);
         rendered.link = null;
@@ -290,15 +467,18 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
         await waitFor(
           () =>
             countRows(opened.db, "auth_devices") === 1 ||
-            firstProxyRejection(app as HostDeckFastifyInstance) !== null ||
-            (leaseKeeper as AdmissionLeaseKeeper).failed,
+            firstProxyRejection(
+              (host as HostDeckFastifyLifecycle<PhysicalRuntimeContext>).app
+            ) !== null ||
+            selectedRemote.snapshot().phase !== "running",
           claimTimeoutMs,
           "The physical phone did not claim the private QR in time."
         );
-        const proxyRejection = firstProxyRejection(app);
+        const proxyRejection = firstProxyRejection(host.app);
         requireCondition(
-          !leaseKeeper.failed,
-          "The physical pairing admission lease could not be renewed."
+          selectedRemote.snapshot().phase === "running" &&
+            selectedRemote.readAdmission().admission === "open",
+          "The selected remote lifecycle closed during physical pairing."
         );
         requireCondition(
           proxyRejection === null,
@@ -359,6 +539,25 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
         );
         assertPairingRuntimeTruth(opened.db, requestInspection);
 
+        if (requireRemoteAndroidAcceptance) {
+          fullResult = await runPhysicalSecuritySequence({
+            cdp,
+            db: opened.db,
+            env,
+            foreignServeBefore: foreignServeBefore as ServeStatusFingerprint,
+            manager: requireLifecycleManager(lifecycleManager),
+            origin: candidate.externalOrigin,
+            profileSwitch: profileSwitch as ProfileSwitchInput,
+            remote: selectedRemote,
+            requestInspection,
+            screenshotDirectory,
+            setSelectedProfile(profile) {
+              selectedProfile = profile;
+            },
+            sseRuntime
+          });
+        }
+
         await cdp.send("Storage.clearDataForOrigin", {
           origin: candidate.externalOrigin,
           storageTypes:
@@ -368,19 +567,12 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
           (await cdp.evaluate<number>(protectedReadExpression)) === 401,
           "Physical HostDeck site-data cleanup did not remove device authority."
         );
-        await cdp.send("Page.close").catch(() => undefined);
-        cdp.close();
-        cdp = null;
-        adb(["forward", "--remove", `tcp:${forwardPort}`]);
-        forwardPort = null;
-        adb(["shell", "am", "force-stop", "com.android.chrome"]);
-        adb(["shell", "input", "keyevent", "KEYCODE_HOME"]);
-        await leaseKeeper.stop();
-        requireCondition(
-          leaseKeeper.renewals >= 1,
-          "Physical pairing did not prove a current remote observation lease."
+        await waitFor(
+          () => selectedRemote.snapshot().poll_cycles >= 2,
+          15_000,
+          "Physical pairing did not prove lifecycle-owned observation renewal."
         );
-        leaseKeeper = null;
+        await waitForFreshLifecycleIdle(selectedRemote);
 
         assertRemoteCliResult(
           await runCli(["remote", "disable", "--json"], {
@@ -390,16 +582,85 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
           "disabled"
         );
         remoteEnabled = false;
-        requireClosedAdmission(service.readAdmission());
+        requireClosedAdmission(selectedRemote.readAdmission());
         await requireConfiguredServeAbsent(
           observer,
           candidate.expectedProfileKey,
           fallbackCleanup.expectedServe
         );
+        if (requireRemoteAndroidAcceptance) {
+          await switchSavedProfile(profileSwitch?.awayProfileId as string);
+          selectedProfile = "away";
+          requireMatchingServeFingerprint(
+            foreignServeBefore as ServeStatusFingerprint,
+            await readServeStatusFingerprint()
+          );
+          await switchSavedProfile(profileSwitch?.dedicatedProfileId as string);
+          selectedProfile = "dedicated";
+          await requireConfiguredServeAbsent(
+            observer,
+            candidate.expectedProfileKey,
+            fallbackCleanup.expectedServe
+          );
+          await renderPhysicalState(cdp, {
+            detail: "Device authority removed. Private ingress is absent.",
+            state: "revoked_cleaned",
+            title: "Revoked and cleaned"
+          });
+          await capturePhysicalScreenshot(
+            cdp,
+            join(screenshotDirectory, "04-revoked-cleaned.png")
+          );
+          assertFullPhysicalAudit(opened.db);
+          assertSecretsAbsentFromDatabase(dbPath, secrets.values());
+        }
+        fallbackCleanup = null;
+        await cdp.send("Page.close").catch(() => undefined);
+        cdp.close();
+        cdp = null;
+        adb(["forward", "--remove", `tcp:${forwardPort}`]);
+        forwardPort = null;
+        adb(["shell", "am", "force-stop", "com.android.chrome"]);
+        adb(["shell", "input", "keyevent", "KEYCODE_HOME"]);
+        requireNoAdbApplicationTunnels();
         requireCondition(
-          adbCommandCount > 0,
-          "Physical pairing acceptance did not exercise guarded ADB control."
+          adbCommandCount > 0 &&
+            internalErrorCount === 0 &&
+            sseRuntime.active === 0,
+          "Physical acceptance retained an internal error or active device resource."
         );
+        const screenshotBytes = requireRemoteAndroidAcceptance
+          ? readPhysicalScreenshots(screenshotDirectory)
+          : null;
+        await host.close();
+        host = null;
+        requireCondition(
+          !(await canConnectLoopback(port)) && !opened.db.open,
+          "Physical lifecycle retained its listener or database after close."
+        );
+        controller.abort();
+        rmSync(directory, { force: true, recursive: true });
+        requireCondition(
+          !existsSync(directory),
+          "Physical acceptance retained its temporary state directory."
+        );
+        if (requireRemoteAndroidAcceptance) {
+          await restoreAndroidWifi(initialWifiEnabled as boolean);
+          initialWifiEnabled = null;
+          requireNoAdbApplicationTunnels();
+          publishPhysicalEvidence({
+            completedAt: new Date().toISOString(),
+            environment: environmentFacts as PhysicalEnvironmentFacts,
+            foreignServeBytes: (
+              foreignServeBefore as ServeStatusFingerprint
+            ).bytes,
+            managerAttempts: requireLifecycleManager(lifecycleManager)
+              .snapshot().command_attempts,
+            screenshots: screenshotBytes as readonly PhysicalScreenshot[],
+            sequence: fullResult as PhysicalSequenceResult,
+            startedAt: acceptanceStartedAt as string
+          });
+        }
       } finally {
         if (cdp !== null) cdp.close();
         if (forwardPort !== null) {
@@ -418,13 +679,25 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
         if (displayContext !== null) await displayContext.close().catch(() => undefined);
         if (displayBrowser !== null) await displayBrowser.close().catch(() => undefined);
         if (display !== null) await closeServer(display.server).catch(() => undefined);
-        if (leaseKeeper !== null) await leaseKeeper.stop().catch(() => undefined);
+        if (
+          requireRemoteAndroidAcceptance &&
+          profileSwitch !== null &&
+          selectedProfile === "away"
+        ) {
+          try {
+            await switchSavedProfile(profileSwitch.dedicatedProfileId);
+            selectedProfile = "dedicated";
+          } catch {
+            // The failed acceptance retains this cleanup uncertainty.
+          }
+        }
         if (
           remoteEnabled &&
           env !== null &&
-          app !== null &&
+          host !== null &&
           externalOrigin !== null &&
-          localOrigin !== null
+          localOrigin !== null &&
+          selectedProfile === "dedicated"
         ) {
           try {
             assertRemoteCliResult(
@@ -445,9 +718,12 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
           }
         } finally {
           controller.abort();
-          if (app !== null) await app.close().catch(() => undefined);
+          if (host !== null) await host.close().catch(() => undefined);
           if (opened.db.open) opened.db.close();
           rmSync(directory, { force: true, recursive: true });
+          if (initialWifiEnabled !== null) {
+            await restoreAndroidWifi(initialWifiEnabled).catch(() => undefined);
+          }
           deviceForbiddenValues.clear();
         }
       }
@@ -464,9 +740,11 @@ interface CleanupTarget {
 interface RequestInspection {
   claimRequests: number;
   csrfRequests: number;
+  deletionCookieObserved: boolean;
   fragmentLeaks: number;
-  noReferrerApiRequests: number;
   hardenedCookieObserved: boolean;
+  noReferrerApiRequests: number;
+  revokeRequests: number;
 }
 
 interface PairingRenderCapture {
@@ -474,10 +752,62 @@ interface PairingRenderCapture {
   qrImage: string | null;
 }
 
-interface AdmissionLeaseKeeper {
-  readonly failed: boolean;
-  readonly renewals: number;
-  readonly stop: () => Promise<void>;
+interface PhysicalRuntimeContext {
+  readonly remote: HostDeckRemoteIngressLifecycle;
+}
+
+interface PhysicalSseRuntime {
+  active: number;
+  closed: number;
+  maxActive: number;
+  opened: number;
+}
+
+interface ProfileSwitchInput {
+  readonly awayProfileId: string;
+  readonly dedicatedProfileId: string;
+}
+
+interface CommandObservation {
+  readonly exit_code: number;
+  readonly stderr: string;
+  readonly stdout: string;
+}
+
+interface ServeStatusFingerprint {
+  readonly bytes: number;
+  readonly sha256: string;
+}
+
+interface PhysicalEnvironmentFacts {
+  readonly android_api: string;
+  readonly android_model: string;
+  readonly android_release: string;
+  readonly chrome_version: string;
+  readonly commit: string;
+  readonly host_os: string;
+  readonly node_version: string;
+  readonly tailscale_version: string;
+}
+
+interface PhysicalSequenceResult {
+  readonly foreignServeUnchanged: true;
+  readonly lockPassed: true;
+  readonly managerAttemptsBeforeDisable: number;
+  readonly managerAttemptsDuringSwitch: 0;
+  readonly profileAwayClosedAuthority: true;
+  readonly profileReturnRecovered: true;
+  readonly protectedReads: number;
+  readonly remoteUnlockDenied: true;
+  readonly selfRevoked: true;
+  readonly sseEvents: number;
+  readonly sseHeartbeats: number;
+}
+
+interface PhysicalScreenshot {
+  readonly bytes: Buffer;
+  readonly name: string;
+  readonly sha256: string;
 }
 
 interface QrDisplay {
@@ -562,69 +892,6 @@ function increasingWallClock(): () => Date {
   };
 }
 
-async function startAdmissionLeaseKeeper(
-  service: RemoteIngressControlService,
-  intervalMs: number
-): Promise<AdmissionLeaseKeeper> {
-  requireCondition(
-    Number.isSafeInteger(intervalMs) && intervalMs >= 1_000,
-    "Physical admission lease interval was invalid."
-  );
-  const controller = new AbortController();
-  let failed = false;
-  let renewals = 0;
-
-  const renew = async () => {
-    const state = await service.readStatus();
-    const admission = service.readAdmission();
-    requireCondition(
-      state.availability === "ready" &&
-        admission.admission === "open" &&
-        state.generation === admission.generation,
-      "Physical admission lease renewal did not remain ready."
-    );
-    renewals += 1;
-  };
-
-  await renew();
-  const completion = (async () => {
-    while (!controller.signal.aborted) {
-      await abortableDelay(intervalMs, controller.signal);
-      if (controller.signal.aborted) return;
-      await renew();
-    }
-  })().catch(() => {
-    failed = true;
-  });
-
-  return Object.freeze({
-    get failed() {
-      return failed;
-    },
-    get renewals() {
-      return renewals;
-    },
-    async stop() {
-      controller.abort();
-      await completion;
-    }
-  });
-}
-
-function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.resolve();
-  return new Promise((resolve) => {
-    const timer = setTimeout(finish, milliseconds);
-    signal.addEventListener("abort", finish, { once: true });
-
-    function finish() {
-      clearTimeout(timer);
-      signal.removeEventListener("abort", finish);
-      resolve();
-    }
-  });
-}
-
 async function buildPhysicalBrowserBundle(): Promise<string> {
   const entry = fileURLToPath(
     new URL("../../../tests/browser/fixtures/physical-pairing-entry.ts", import.meta.url)
@@ -660,13 +927,42 @@ async function buildPhysicalBrowserBundle(): Promise<string> {
   return entries[0].code;
 }
 
+function composePhysicalRouteRegistration(
+  id: string,
+  surface: "api" | "sse" | "static",
+  registrations: readonly HostDeckRoutePluginRegistration[],
+  inspection: RequestInspection,
+  secrets: ReturnType<typeof createSecretRegistry>
+): HostDeckRoutePluginRegistration {
+  requireCondition(
+    registrations.length > 0 &&
+      registrations.every((registration) => registration.surface === surface),
+    "Physical route composition crossed a Fastify surface boundary."
+  );
+  const registration: HostDeckRoutePluginRegistration = {
+    id,
+    surface,
+    async register(app, context) {
+      installRequestInspection(app, inspection, secrets);
+      for (const registration of registrations) {
+        await registration.register(app, context);
+      }
+    }
+  };
+  return Object.freeze(registration);
+}
+
 function physicalPageRoute(bundle: string): HostDeckRoutePluginRegistration {
   const nonce = randomBytes(18).toString("base64url");
   const html =
     "<!doctype html><html lang=\"en\"><head>" +
     "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
-    "<title>HostDeck pairing acceptance</title></head>" +
-    "<body><main><h1>HostDeck</h1><p id=\"status\">starting</p></main>" +
+    "<title>HostDeck pairing acceptance</title>" +
+    `<style nonce="${nonce}">:root{font-family:Inter,system-ui,sans-serif;color:#17191c;background:#f4f5f6}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#f4f5f6}main{width:min(100%,420px);border-top:4px solid #167c5a;background:#fff;padding:30px 24px;box-shadow:0 10px 34px rgba(20,27,31,.12)}.brand{margin:0 0 26px;font-size:13px;font-weight:800;text-transform:uppercase;color:#525a61}.marker{width:44px;height:44px;display:grid;place-items:center;margin-bottom:22px;background:#e8f4ef;color:#116b4d;font-size:22px;font-weight:800;border-radius:6px}h1{margin:0;font-size:28px;line-height:1.15;letter-spacing:0}#status{margin:14px 0 0;font-size:17px;font-weight:700;color:#22272b}#detail{min-height:48px;margin:8px 0 0;color:#5b6268;font-size:15px;line-height:1.5}.rule{height:1px;margin:26px 0 18px;background:#dfe3e5}.foot{margin:0;font-size:12px;color:#747b81}</style></head>` +
+    "<body><main><p class=\"brand\">HostDeck</p><div class=\"marker\" aria-hidden=\"true\">H</div>" +
+    "<h1>Remote access check</h1><p id=\"status\">Starting</p>" +
+    "<p id=\"detail\">Preparing the private connection.</p><div class=\"rule\"></div>" +
+    "<p class=\"foot\">Private device acceptance</p></main>" +
     `<script type="module" nonce="${nonce}">${bundle}</script></body></html>`;
   const registration: HostDeckRoutePluginRegistration = {
     id: "physical-fragment-pairing-page",
@@ -675,7 +971,7 @@ function physicalPageRoute(bundle: string): HostDeckRoutePluginRegistration {
       app.get("/", async (_request, reply) => {
         reply.headers({
           "cache-control": "no-store",
-          "content-security-policy": `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'`,
+          "content-security-policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'`,
           "content-type": "text/html; charset=utf-8",
           "referrer-policy": "no-referrer",
           "x-content-type-options": "nosniff"
@@ -695,6 +991,8 @@ function physicalProtectedRoute(): HostDeckRoutePluginRegistration {
       app.get(
         "/__physical/protected",
         {
+          config: hostDeckNoStoreRouteConfig,
+          exposeHeadRoute: false,
           async preHandler(request) {
             requireHostDeckRequestAuthentication(request, "device_cookie");
           },
@@ -707,6 +1005,55 @@ function physicalProtectedRoute(): HostDeckRoutePluginRegistration {
     }
   };
   return Object.freeze(registration);
+}
+
+function physicalSseRoute(
+  runtime: PhysicalSseRuntime
+): HostDeckRoutePluginRegistration {
+  return createHostDeckSseTransportRegistration({
+    id: "physical-remote-events",
+    observeError: () => undefined,
+    path: "/__physical/events",
+    source: {
+      open({ after, request, signal }) {
+        requireHostDeckRequestAuthentication(request, "device_cookie");
+        const cursor = (after ?? 0) + 1;
+        runtime.opened += 1;
+        runtime.active += 1;
+        runtime.maxActive = Math.max(runtime.maxActive, runtime.active);
+        return (async function* () {
+          try {
+            yield selectedProjectionEventSchema.parse({
+              captured_at: new Date().toISOString(),
+              codex_event_id: `physical-remote-event-${cursor}`,
+              codex_event_type: "item/agentMessage/delta",
+              content_notice: null,
+              content_state: "complete",
+              cursor,
+              item_id: null,
+              phase: "delta",
+              role: "agent",
+              session_id: "sess_physical_remote_001",
+              text: "Remote acceptance event",
+              type: "message",
+              upstream_at: null
+            });
+            await waitForAbort(signal);
+          } finally {
+            runtime.active -= 1;
+            runtime.closed += 1;
+          }
+        })();
+      }
+    }
+  });
+}
+
+function waitForAbort(signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    signal.addEventListener("abort", () => resolve(), { once: true });
+  });
 }
 
 function installRequestInspection(
@@ -728,6 +1075,12 @@ function installRequestInspection(
       inspection.csrfRequests += 1;
       if (referrer === undefined) inspection.noReferrerApiRequests += 1;
     }
+    if (
+      request.url.startsWith("/api/v1/access/devices/") &&
+      request.url.endsWith("/revoke")
+    ) {
+      inspection.revokeRequests += 1;
+    }
   });
   app.addHook("onResponse", async (request, reply) => {
     if (
@@ -744,6 +1097,25 @@ function installRequestInspection(
         /;\s*SameSite=Strict(?:;|$)/iu.test(values[0] ?? "") &&
         /;\s*Path=\/(?:;|$)/iu.test(values[0] ?? "") &&
         !/;\s*Domain=/iu.test(values[0] ?? "");
+    }
+    if (
+      request.url.startsWith("/api/v1/access/devices/") &&
+      request.url.endsWith("/revoke") &&
+      reply.statusCode >= 200 &&
+      reply.statusCode < 300
+    ) {
+      const raw = reply.getHeader("set-cookie");
+      const values = Array.isArray(raw)
+        ? raw.map(String)
+        : raw === undefined
+          ? []
+          : [String(raw)];
+      inspection.deletionCookieObserved =
+        values.length === 1 &&
+        /Max-Age=0/iu.test(values[0] ?? "") &&
+        /;\s*Secure(?:;|$)/iu.test(values[0] ?? "") &&
+        /;\s*HttpOnly(?:;|$)/iu.test(values[0] ?? "") &&
+        /;\s*SameSite=Strict(?:;|$)/iu.test(values[0] ?? "");
     }
   });
 }
@@ -769,9 +1141,140 @@ function requireDedicatedAbsentCandidate(
   });
 }
 
+function requireProfileSwitchInput(): ProfileSwitchInput {
+  const awayProfileId =
+    process.env.HOSTDECK_REMOTE_CONTROL_AWAY_PROFILE_ID ?? null;
+  const dedicatedProfileId =
+    process.env.HOSTDECK_REMOTE_CONTROL_DEDICATED_PROFILE_ID ?? null;
+  requireCondition(
+    isBoundedProfileId(awayProfileId) &&
+      isBoundedProfileId(dedicatedProfileId) &&
+      awayProfileId !== dedicatedProfileId,
+    "Physical acceptance requires two distinct bounded saved-profile ids."
+  );
+  return Object.freeze({ awayProfileId, dedicatedProfileId });
+}
+
+function isBoundedProfileId(value: unknown): value is string {
+  return (
+    typeof value === "string" && /^[a-zA-Z0-9_-]{1,64}$/u.test(value)
+  );
+}
+
+async function switchSavedProfile(profileId: string): Promise<void> {
+  requireCondition(
+    isBoundedProfileId(profileId),
+    "Physical saved-profile id was invalid."
+  );
+  const observation = await runBoundedTailscaleCommand([
+    "switch",
+    profileId
+  ]);
+  requireCondition(
+    observation.exit_code === 0,
+    "Physical saved-profile switch failed."
+  );
+}
+
+async function readServeStatusFingerprint(): Promise<ServeStatusFingerprint> {
+  const observation = await runBoundedTailscaleCommand([
+    "serve",
+    "status",
+    "--json"
+  ]);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(observation.stdout) as unknown;
+  } catch {
+    throw new Error("Physical Serve status was invalid.");
+  }
+  requireCondition(
+    observation.exit_code === 0 &&
+      observation.stderr === "" &&
+      parsed !== null &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed),
+    "Physical Serve status was unavailable."
+  );
+  return Object.freeze({
+    bytes: Buffer.byteLength(observation.stdout, "utf8"),
+    sha256: createHash("sha256")
+      .update(observation.stdout, "utf8")
+      .digest("hex")
+  });
+}
+
+function requireMatchingServeFingerprint(
+  before: ServeStatusFingerprint,
+  after: ServeStatusFingerprint
+): void {
+  requireCondition(
+    before.bytes === after.bytes && before.sha256 === after.sha256,
+    "Physical acceptance changed foreign-profile Serve bytes."
+  );
+}
+
+function runBoundedTailscaleCommand(
+  args: readonly string[]
+): Promise<CommandObservation> {
+  requireCondition(
+    args.length >= 2 &&
+      args.length <= 3 &&
+      args.every(
+        (value) =>
+          typeof value === "string" &&
+          value.length >= 1 &&
+          value.length <= 64 &&
+          !hasControlCharacters(value)
+      ),
+    "Physical Tailscale command arguments were invalid."
+  );
+  return new Promise((resolve, reject) => {
+    execFile(
+      "/usr/bin/tailscale",
+      [...args],
+      {
+        encoding: "utf8",
+        env: {
+          LANG: "C.UTF-8",
+          LC_ALL: "C.UTF-8",
+          PATH: "/usr/bin:/bin"
+        },
+        maxBuffer: 64 * 1024,
+        timeout: 10_000,
+        windowsHide: true
+      },
+      (error, stdout, stderr) => {
+        const rawExitCode = error === null ? 0 : Reflect.get(error, "code");
+        if (typeof rawExitCode !== "number") {
+          reject(new Error("Physical Tailscale command failed."));
+          return;
+        }
+        resolve(
+          Object.freeze({
+            exit_code: rawExitCode,
+            stderr,
+            stdout
+          })
+        );
+      }
+    );
+  });
+}
+
+function requireLifecycleManager(
+  manager: TailscaleServeManager | null
+): TailscaleServeManager {
+  requireCondition(
+    manager !== null,
+    "Physical lifecycle did not create its Serve manager."
+  );
+  return manager as TailscaleServeManager;
+}
+
 function assertRemoteCliResult(
   result: Awaited<ReturnType<typeof runCli>>,
-  expected: "disabled" | "ready"
+  expected: "disabled" | "ready" | "unavailable"
 ): void {
   let parsed: unknown;
   try {
@@ -953,6 +1456,167 @@ function requireOneAuthorizedDevice(): void {
   );
 }
 
+function requireCleanAcceptanceWorktree(): void {
+  const status = execFileSync(
+    "git",
+    ["status", "--porcelain=v1", "--untracked-files=all"],
+    commandOptions()
+  );
+  requireCondition(
+    status === "",
+    "Physical acceptance must run from one clean committed worktree."
+  );
+}
+
+function requireNoAdbApplicationTunnels(): void {
+  const forwards = adb(["forward", "--list"]).trim();
+  const reverses = adb(["reverse", "--list"]).trim();
+  requireCondition(
+    forwards === "" && reverses === "",
+    "Physical acceptance found an ADB tunnel outside its bounded DevTools inspection."
+  );
+}
+
+async function enforceUnrelatedAndroidNetwork(): Promise<boolean> {
+  const initiallyEnabled = readAndroidWifiEnabled();
+  if (initiallyEnabled) {
+    adb(["shell", "svc", "wifi", "disable"]);
+  }
+  await waitFor(
+    () => !readAndroidWifiEnabled(),
+    15_000,
+    "Physical acceptance could not disable Android Wi-Fi."
+  );
+  const connectivity = adb(["shell", "dumpsys", "connectivity"]);
+  requireCondition(
+    Buffer.byteLength(connectivity, "utf8") <= 512 * 1024 &&
+      /(?:TRANSPORT_CELLULAR|\bCELLULAR\b)/iu.test(connectivity) &&
+      /(?:TRANSPORT_VPN|\bVPN\b)/iu.test(connectivity) &&
+      /tailscale/iu.test(connectivity),
+    "Physical acceptance requires active cellular and Tailscale VPN transport."
+  );
+  return initiallyEnabled;
+}
+
+function readAndroidWifiEnabled(): boolean {
+  const value = adb([
+    "shell",
+    "settings",
+    "get",
+    "global",
+    "wifi_on"
+  ]).trim();
+  requireCondition(
+    value === "0" || value === "1",
+    "Android Wi-Fi state was invalid."
+  );
+  return value === "1";
+}
+
+async function restoreAndroidWifi(initiallyEnabled: boolean): Promise<void> {
+  if (initiallyEnabled && !readAndroidWifiEnabled()) {
+    adb(["shell", "svc", "wifi", "enable"]);
+  }
+  await waitFor(
+    () => readAndroidWifiEnabled() === initiallyEnabled,
+    15_000,
+    "Physical acceptance could not restore Android Wi-Fi state."
+  );
+}
+
+function readPhysicalEnvironmentFacts(): PhysicalEnvironmentFacts {
+  const commit = execFileSync(
+    "git",
+    ["rev-parse", "HEAD"],
+    commandOptions()
+  ).trim();
+  const tailscaleVersion = execFileSync(
+    "/usr/bin/tailscale",
+    ["version"],
+    commandOptions()
+  )
+    .split(/\r?\n/u)[0]
+    ?.trim();
+  const osRelease = readFileSync("/etc/os-release", "utf8");
+  const hostOs = readOsReleaseName(osRelease);
+  const packageDump = adb([
+    "shell",
+    "dumpsys",
+    "package",
+    "com.android.chrome"
+  ]);
+  const chromeVersion = packageDump.match(
+    /^\s*versionName=([^\r\n]{1,80})$/mu
+  )?.[1];
+  const marketName = readOptionalAdbProperty("ro.product.marketname");
+  const model = marketName ?? readRequiredAdbProperty("ro.product.model");
+  const androidApi = readRequiredAdbProperty("ro.build.version.sdk");
+  const androidRelease = readRequiredAdbProperty("ro.build.version.release");
+  requireCondition(
+    /^[0-9a-f]{40}$/u.test(commit) &&
+      tailscaleVersion === "1.98.8" &&
+      typeof chromeVersion === "string" &&
+      /^[A-Za-z0-9._+-]{1,80}$/u.test(chromeVersion) &&
+      /^\d{1,3}$/u.test(androidApi) &&
+      /^[A-Za-z0-9._ -]{1,32}$/u.test(androidRelease) &&
+      model.length <= 80 &&
+      !hasControlCharacters(model),
+    "Physical environment versions did not match the acceptance contract."
+  );
+  return Object.freeze({
+    android_api: androidApi,
+    android_model: model,
+    android_release: androidRelease,
+    chrome_version: chromeVersion,
+    commit,
+    host_os: hostOs,
+    node_version: process.version,
+    tailscale_version: tailscaleVersion
+  });
+}
+
+function readOptionalAdbProperty(property: string): string | null {
+  requireCondition(
+    /^[a-z0-9._-]{1,80}$/u.test(property),
+    "Android property name was invalid."
+  );
+  const value = adb(["shell", "getprop", property]).trim();
+  if (value === "" || value.toLowerCase() === "unknown") return null;
+  requireCondition(
+    value.length <= 80 && !hasControlCharacters(value),
+    "Android property value was invalid."
+  );
+  return value;
+}
+
+function readRequiredAdbProperty(property: string): string {
+  const value = readOptionalAdbProperty(property);
+  requireCondition(value !== null, "Required Android property was absent.");
+  return value as string;
+}
+
+function readOsReleaseName(contents: string): string {
+  requireCondition(
+    Buffer.byteLength(contents, "utf8") <= 64 * 1024,
+    "Host OS release metadata exceeded its bound."
+  );
+  const raw = contents.match(/^PRETTY_NAME=(.+)$/mu)?.[1]?.trim();
+  requireCondition(
+    typeof raw === "string",
+    "Host OS release name was unavailable."
+  );
+  const value = raw.startsWith('"') && raw.endsWith('"')
+    ? raw.slice(1, -1)
+    : raw;
+  requireCondition(
+    value.length >= 1 &&
+      value.length <= 120 &&
+      !hasControlCharacters(value),
+    "Host OS release name was invalid."
+  );
+  return value;
+}
+
 function adb(args: readonly string[]): string {
   const serialized = args.join("\u0000");
   requireCondition(
@@ -1023,6 +1687,78 @@ function openChromeLauncher(): void {
     "-c",
     "android.intent.category.LAUNCHER"
   ]);
+}
+
+function openChromeUrl(origin: string): void {
+  const parsed = new URL(origin);
+  requireCondition(
+    parsed.origin === origin &&
+      parsed.protocol === "https:" &&
+      parsed.pathname === "/",
+    "Physical Chrome URL was not one canonical HTTPS origin."
+  );
+  adb([
+    "shell",
+    "am",
+    "start",
+    "-a",
+    "android.intent.action.VIEW",
+    "-d",
+    origin,
+    "-p",
+    "com.android.chrome"
+  ]);
+}
+
+async function assertUnpairedAndroidAccess(origin: string): Promise<void> {
+  let cdp: CdpClient | null = null;
+  let port: number | null = null;
+  try {
+    adb(["shell", "am", "force-stop", "com.android.chrome"]);
+    openChromeUrl(origin);
+    await waitFor(
+      () => {
+        requireChromeRunning();
+        return true;
+      },
+      15_000,
+      "Android Chrome did not start for the unpaired HTTPS check."
+    );
+    port = createChromeForward();
+    const target = await waitForChromeTarget(port, origin, 30_000);
+    cdp = await CdpClient.connect(
+      target.webSocketDebuggerUrl,
+      deviceForbiddenValues
+    );
+    await cdp.send("Runtime.enable");
+    await cdp.send("Page.enable");
+    await waitFor(
+      async () => (await readPhoneSnapshot(cdp as CdpClient)).state === "no_fragment",
+      30_000,
+      "Android Chrome did not load the trusted unpaired HTTPS page."
+    );
+    assertReloadedPhoneSnapshot(await readPhoneSnapshot(cdp));
+    requireCondition(
+      (await cdp.evaluate<number>(protectedReadExpression)) === 401,
+      "Unpaired Android Chrome reached protected HostDeck data."
+    );
+    await cdp.send("Storage.clearDataForOrigin", {
+      origin,
+      storageTypes:
+        "cookies,local_storage,session_storage,indexeddb,cache_storage,service_workers"
+    });
+    await cdp.send("Page.close").catch(() => undefined);
+  } finally {
+    cdp?.close();
+    if (port !== null) {
+      try {
+        adb(["forward", "--remove", `tcp:${port}`]);
+      } catch {
+        // The caller's tunnel assertion reports cleanup failure.
+      }
+    }
+    adb(["shell", "am", "force-stop", "com.android.chrome"]);
+  }
 }
 
 function requireChromeRunning(): void {
@@ -1326,6 +2062,423 @@ class CdpClient {
   }
 }
 
+async function runPhysicalSecuritySequence(input: {
+  readonly cdp: CdpClient;
+  readonly db: ReturnType<typeof openMigratedDatabase>["db"];
+  readonly env: Readonly<Record<string, string>>;
+  readonly foreignServeBefore: ServeStatusFingerprint;
+  readonly manager: TailscaleServeManager;
+  readonly origin: string;
+  readonly profileSwitch: ProfileSwitchInput;
+  readonly remote: HostDeckRemoteIngressLifecycle;
+  readonly requestInspection: RequestInspection;
+  readonly screenshotDirectory: string;
+  readonly setSelectedProfile: (profile: "away" | "dedicated") => void;
+  readonly sseRuntime: PhysicalSseRuntime;
+}): Promise<PhysicalSequenceResult> {
+  const managerAttemptsBeforeSwitch = input.manager.snapshot().command_attempts;
+  requireCondition(
+    managerAttemptsBeforeSwitch === 1,
+    "Physical acceptance expected exactly one explicit Serve enable command."
+  );
+
+  const lock = await input.cdp.evaluate<{
+    readonly bootstrap: number;
+    readonly lock: number;
+    readonly locked: boolean;
+    readonly protectedRead: number;
+    readonly unlock: number;
+  }>(physicalLockExpression);
+  requireCondition(
+    lock.bootstrap === 200 &&
+      lock.lock === 200 &&
+      lock.locked &&
+      lock.protectedRead === 200 &&
+      lock.unlock === 403,
+    "Physical writer lock or remote-unlock denial failed."
+  );
+  const localUnlock = await postLocalUnlock(input.env);
+  requireCondition(
+    localUnlock.status === 200 && localUnlock.locked === false,
+    "Physical local-admin unlock did not restore the host."
+  );
+  assertRemoteCliResult(
+    await runRemoteStatusWhenLifecycleIdle(input.remote, input.env),
+    "ready"
+  );
+  requireCondition(
+    input.manager.snapshot().command_attempts === managerAttemptsBeforeSwitch,
+    "Host lock or local unlock mutated Tailscale Serve state."
+  );
+
+  requireCondition(
+    await input.cdp.evaluate<boolean>(startPhysicalSseExpression),
+    "Physical Chrome did not start its authenticated EventSource."
+  );
+  await waitFor(
+    async () => {
+      const state = await readPhysicalSseState(input.cdp);
+      return (
+        state.events >= 1 &&
+        state.heartbeats >= 1 &&
+        !state.streamFailure &&
+        input.sseRuntime.active === 1 &&
+        input.sseRuntime.maxActive >= 2
+      );
+    },
+    defaultResourceBudget.sse_heartbeat_interval_ms + 20_000,
+    "Physical EventSource did not receive one event and transport heartbeat."
+  );
+  const beforeAwaySse = await readPhysicalSseState(input.cdp);
+  await renderPhysicalState(input.cdp, {
+    detail: "Writer authority, protected reads, and live updates are ready.",
+    state: "paired_ready",
+    title: "Paired and ready"
+  });
+  await capturePhysicalScreenshot(
+    input.cdp,
+    join(input.screenshotDirectory, "01-paired-ready.png")
+  );
+
+  await switchSavedProfile(input.profileSwitch.awayProfileId);
+  input.setSelectedProfile("away");
+  await waitFor(
+    () =>
+      input.remote.readAdmission().admission === "closed" &&
+      input.remote.snapshot().active_control_operations === 0,
+    15_000,
+    "Profile-away did not close selected remote authority."
+  );
+  assertRemoteCliResult(
+    await runRemoteStatusWhenLifecycleIdle(input.remote, input.env),
+    "unavailable"
+  );
+  await waitFor(
+    async () => {
+      const state = await readPhysicalSseState(input.cdp);
+      return input.sseRuntime.active === 0 && state.errors >= 1;
+    },
+    15_000,
+    "Profile-away did not close the active physical EventSource."
+  );
+  const awayRead = await input.cdp.evaluate<number>(unavailableReadExpression);
+  requireCondition(
+    awayRead !== 200,
+    "Android Chrome accepted protected data while the HostDeck profile was away."
+  );
+  const foreignServeAway = await readServeStatusFingerprint();
+  requireMatchingServeFingerprint(
+    input.foreignServeBefore,
+    foreignServeAway
+  );
+  requireCondition(
+    input.manager.snapshot().command_attempts === managerAttemptsBeforeSwitch,
+    "Profile-away triggered an automatic Serve mutation."
+  );
+  await renderPhysicalState(input.cdp, {
+    detail: "Private phone access is closed. Laptop-local control remains available.",
+    state: "profile_away",
+    title: "Saved profile away"
+  });
+  await capturePhysicalScreenshot(
+    input.cdp,
+    join(input.screenshotDirectory, "02-profile-away.png")
+  );
+
+  await switchSavedProfile(input.profileSwitch.dedicatedProfileId);
+  input.setSelectedProfile("dedicated");
+  await waitFor(
+    () =>
+      input.remote.readAdmission().admission === "open" &&
+      input.remote.snapshot().active_control_operations === 0,
+    15_000,
+    "Dedicated-profile return did not recover by observation."
+  );
+  assertRemoteCliResult(
+    await runRemoteStatusWhenLifecycleIdle(input.remote, input.env),
+    "ready"
+  );
+  await waitFor(
+    async () => {
+      const state = await readPhysicalSseState(input.cdp);
+      return (
+        state.events > beforeAwaySse.events &&
+        state.readyState === 1 &&
+        input.sseRuntime.active === 1
+      );
+    },
+    30_000,
+    "Physical EventSource did not reconnect after profile return."
+  );
+  requireCondition(
+    (await input.cdp.evaluate<number>(protectedReadExpression)) === 200,
+    "Profile return did not preserve the paired device cookie."
+  );
+  requireCondition(
+    input.manager.snapshot().command_attempts === managerAttemptsBeforeSwitch &&
+      input.requestInspection.claimRequests === 1,
+    "Profile return repaired Serve state or re-paired the device."
+  );
+  await renderPhysicalState(input.cdp, {
+    detail: "Private access and live updates recovered without another pairing.",
+    state: "recovered",
+    title: "Connection recovered"
+  });
+  await capturePhysicalScreenshot(
+    input.cdp,
+    join(input.screenshotDirectory, "03-recovered.png")
+  );
+
+  const revoked = await input.cdp.evaluate<{
+    readonly access: number;
+    readonly bootstrap: number;
+    readonly csrfAfter: number;
+    readonly protectedAfter: number;
+    readonly revoke: number;
+  }>(physicalSelfRevokeExpression);
+  requireCondition(
+    revoked.bootstrap === 200 &&
+      revoked.access === 200 &&
+      revoked.revoke === 200 &&
+      revoked.protectedAfter === 401 &&
+      revoked.csrfAfter === 401,
+    "Physical writer self-revocation did not close subsequent authority."
+  );
+  await waitFor(
+    () => input.sseRuntime.active === 0,
+    15_000,
+    "Self-revocation did not close the active physical EventSource."
+  );
+  requireCondition(
+    input.requestInspection.revokeRequests === 1 &&
+      input.requestInspection.deletionCookieObserved &&
+      countMatchingRows(
+        input.db,
+        "auth_devices",
+        "revoked_at IS NOT NULL"
+      ) === 1 &&
+      input.manager.snapshot().command_attempts === managerAttemptsBeforeSwitch,
+    "Physical self-revocation truth or cookie deletion was incomplete."
+  );
+  assertRemoteCliResult(
+    await runRemoteStatusWhenLifecycleIdle(input.remote, input.env),
+    "ready"
+  );
+  await input.cdp.evaluate<boolean>(closePhysicalSseExpression);
+  const finalSse = await readPhysicalSseState(input.cdp);
+  return Object.freeze({
+    foreignServeUnchanged: true,
+    lockPassed: true,
+    managerAttemptsBeforeDisable: managerAttemptsBeforeSwitch,
+    managerAttemptsDuringSwitch: 0,
+    profileAwayClosedAuthority: true,
+    profileReturnRecovered: true,
+    protectedReads: 4,
+    remoteUnlockDenied: true,
+    selfRevoked: true,
+    sseEvents: finalSse.events,
+    sseHeartbeats: finalSse.heartbeats
+  });
+}
+
+const physicalLockExpression = `(async()=>{
+  const base={credentials:'include',cache:'no-store',referrerPolicy:'no-referrer'};
+  const bootstrap=await fetch('/api/v1/access/csrf',{...base,method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({operation_id:'op_physical_lock_csrf_0001'})});
+  if(!bootstrap.ok)return{bootstrap:bootstrap.status,lock:0,locked:false,protectedRead:0,unlock:0};
+  const secret=await bootstrap.json();
+  const headers={'content-type':'application/json','x-hostdeck-csrf':secret.csrf_token,'x-hostdeck-csrf-generation':String(secret.csrf_generation)};
+  const lock=await fetch('/api/v1/access/lock',{...base,method:'POST',headers,body:JSON.stringify({operation_id:'op_physical_host_lock_0001',confirmed:true})});
+  const body=lock.ok?await lock.json():null;
+  const protectedRead=await fetch('/__physical/protected',base);
+  const unlock=await fetch('/api/v1/access/unlock',{...base,method:'POST',headers,body:JSON.stringify({operation_id:'op_physical_remote_unlock_0001',confirmed:true})});
+  return{bootstrap:bootstrap.status,lock:lock.status,locked:body?.locked===true,protectedRead:protectedRead.status,unlock:unlock.status};
+})()`;
+
+const startPhysicalSseExpression = `(()=>{
+  window.__hostDeckPhysicalEventSource?.close();
+  window.__hostDeckPhysicalHeartbeatAbort?.abort();
+  const state={errors:0,events:0,heartbeats:0,readyState:0,streamFailure:false};
+  const source=new EventSource('/__physical/events',{withCredentials:true});
+  window.__hostDeckPhysicalSse=state;
+  window.__hostDeckPhysicalEventSource=source;
+  source.onopen=()=>{state.readyState=source.readyState};
+  source.onmessage=()=>{state.events+=1;state.readyState=source.readyState};
+  source.onerror=()=>{state.errors+=1;state.readyState=source.readyState};
+  const controller=new AbortController();
+  window.__hostDeckPhysicalHeartbeatAbort=controller;
+  fetch('/__physical/events',{credentials:'include',cache:'no-store',headers:{accept:'text/event-stream'},referrerPolicy:'no-referrer',signal:controller.signal}).then(async(response)=>{
+    if(!response.ok||response.body===null){state.streamFailure=true;return;}
+    const reader=response.body.getReader();
+    const decoder=new TextDecoder();
+    let retained='';
+    while(true){
+      const next=await reader.read();
+      if(next.done)break;
+      retained=(retained+decoder.decode(next.value,{stream:true})).slice(-4096);
+      if(retained.includes(': heartbeat')){state.heartbeats+=1;controller.abort();return;}
+    }
+    state.streamFailure=state.heartbeats===0;
+  }).catch(()=>{if(state.heartbeats===0)state.streamFailure=true});
+  return true;
+})()`;
+
+const unavailableReadExpression =
+  "fetch('/__physical/protected',{credentials:'include',cache:'no-store',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(5000)}).then((response)=>response.status).catch(()=>-1)";
+
+const physicalSelfRevokeExpression = `(async()=>{
+  const base={credentials:'include',cache:'no-store',referrerPolicy:'no-referrer'};
+  const bootstrap=await fetch('/api/v1/access/csrf',{...base,method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({operation_id:'op_physical_revoke_csrf_0001'})});
+  if(!bootstrap.ok)return{bootstrap:bootstrap.status,access:0,revoke:0,protectedAfter:0,csrfAfter:0};
+  const secret=await bootstrap.json();
+  const access=await fetch('/api/v1/access',base);
+  if(!access.ok)return{bootstrap:bootstrap.status,access:access.status,revoke:0,protectedAfter:0,csrfAfter:0};
+  const authority=await access.json();
+  const headers={'content-type':'application/json','x-hostdeck-csrf':secret.csrf_token,'x-hostdeck-csrf-generation':String(secret.csrf_generation)};
+  const revoke=await fetch('/api/v1/access/devices/'+encodeURIComponent(authority.device_id)+'/revoke',{...base,method:'POST',headers,body:JSON.stringify({operation_id:'op_physical_self_revoke_0001',confirmed:true})});
+  const protectedAfter=await fetch('/__physical/protected',base);
+  const csrfAfter=await fetch('/api/v1/access/csrf',{...base,method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({operation_id:'op_physical_revoked_csrf_0001'})});
+  return{bootstrap:bootstrap.status,access:access.status,revoke:revoke.status,protectedAfter:protectedAfter.status,csrfAfter:csrfAfter.status};
+})()`;
+
+const closePhysicalSseExpression = `(()=>{
+  window.__hostDeckPhysicalEventSource?.close();
+  window.__hostDeckPhysicalHeartbeatAbort?.abort();
+  return true;
+})()`;
+
+function readPhysicalSseState(cdp: CdpClient): Promise<{
+  readonly errors: number;
+  readonly events: number;
+  readonly heartbeats: number;
+  readonly readyState: number;
+  readonly streamFailure: boolean;
+}> {
+  return cdp.evaluate(`(()=>{
+    const state=window.__hostDeckPhysicalSse??{};
+    return{
+      errors:Number.isSafeInteger(state.errors)?state.errors:0,
+      events:Number.isSafeInteger(state.events)?state.events:0,
+      heartbeats:Number.isSafeInteger(state.heartbeats)?state.heartbeats:0,
+      readyState:Number.isSafeInteger(state.readyState)?state.readyState:-1,
+      streamFailure:state.streamFailure===true
+    };
+  })()`);
+}
+
+async function postLocalUnlock(
+  env: Readonly<Record<string, string>>
+): Promise<Readonly<{ locked: boolean | null; status: number }>> {
+  const baseUrl = env.HOSTDECK_API_BASE_URL;
+  requireCondition(
+    typeof baseUrl === "string",
+    "Physical local-admin base URL was unavailable."
+  );
+  const response = await fetch(new URL("/api/v1/access/unlock", baseUrl), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      [hostDeckLocalAdminRequestHeaderName]:
+        hostDeckLocalAdminRequestHeaderValue
+    },
+    body: JSON.stringify({
+      operation_id: "op_physical_local_unlock_0001",
+      confirmed: true
+    }),
+    signal: AbortSignal.timeout(10_000)
+  });
+  const body = (await response.json()) as unknown;
+  return Object.freeze({
+    locked:
+      body !== null &&
+      typeof body === "object" &&
+      typeof (body as Record<string, unknown>).locked === "boolean"
+        ? ((body as Record<string, unknown>).locked as boolean)
+        : null,
+    status: response.status
+  });
+}
+
+async function runRemoteStatusWhenLifecycleIdle(
+  remote: HostDeckRemoteIngressLifecycle,
+  env: Readonly<Record<string, string>>
+): Promise<Awaited<ReturnType<typeof runCli>>> {
+  await waitForFreshLifecycleIdle(remote);
+  return runCli(["remote", "status", "--json"], { env });
+}
+
+async function waitForFreshLifecycleIdle(
+  remote: HostDeckRemoteIngressLifecycle
+): Promise<void> {
+  const initialCycles = remote.snapshot().poll_cycles;
+  await waitFor(
+    () => {
+      const snapshot = remote.snapshot();
+      return (
+        snapshot.poll_cycles > initialCycles &&
+        snapshot.active_control_operations === 0
+      );
+    },
+    remote.snapshot().observation_interval_ms + 5_000,
+    "Physical lifecycle did not settle one fresh observation cycle."
+  );
+}
+
+async function renderPhysicalState(
+  cdp: CdpClient,
+  state: Readonly<{ detail: string; state: string; title: string }>
+): Promise<void> {
+  requireCondition(
+    /^[a-z_]{1,32}$/u.test(state.state) &&
+      state.title.length <= 64 &&
+      state.detail.length <= 120,
+    "Physical screenshot state was invalid."
+  );
+  const candidate = JSON.stringify(state);
+  requireCondition(
+    [...deviceForbiddenValues].every((value) => !candidate.includes(value)),
+    "Physical screenshot state contained a protected value."
+  );
+  await cdp.evaluate(`(()=>{
+    const value=${candidate};
+    document.documentElement.dataset.acceptanceState=value.state;
+    document.querySelector('#status').textContent=value.title;
+    document.querySelector('#detail').textContent=value.detail;
+    return true;
+  })()`);
+}
+
+async function capturePhysicalScreenshot(
+  cdp: CdpClient,
+  path: string
+): Promise<void> {
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    deviceScaleFactor: 2,
+    height: 844,
+    mobile: true,
+    width: 390
+  });
+  const result = (await cdp.send("Page.captureScreenshot", {
+    captureBeyondViewport: false,
+    format: "png",
+    fromSurface: true
+  })) as { readonly data?: unknown };
+  requireCondition(
+    typeof result.data === "string" &&
+      /^[A-Za-z0-9+/=]+$/u.test(result.data),
+    "Physical screenshot capture was invalid."
+  );
+  const bytes = Buffer.from(result.data, "base64");
+  requireCondition(
+    bytes.length >= 1_024 &&
+      bytes.length <= 4 * 1024 * 1024 &&
+      bytes.subarray(0, 8).equals(
+        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+      ),
+    "Physical screenshot bytes were invalid."
+  );
+  writeFileSync(path, bytes, { flag: "wx", mode: 0o600 });
+}
+
 function readPhoneSnapshot(cdp: CdpClient): Promise<PhoneSnapshot> {
   return cdp.evaluate(`(async()=>{
     const summary=window.__hostDeckPhysicalPairing??{};
@@ -1447,6 +2600,253 @@ function assertPairingAudit(
   );
 }
 
+function assertFullPhysicalAudit(
+  db: ReturnType<typeof openMigratedDatabase>["db"]
+): void {
+  const rows = db
+    .prepare(
+      "SELECT action, phase, outcome, COUNT(*) AS count " +
+        "FROM selected_audit_events " +
+        "GROUP BY action, phase, outcome ORDER BY action, phase, outcome"
+    )
+    .all();
+  requireCondition(
+    JSON.stringify(rows) ===
+      JSON.stringify([
+        { action: "csrf_bootstrap", phase: "accepted", outcome: "accepted", count: 3 },
+        { action: "csrf_bootstrap", phase: "terminal", outcome: "succeeded", count: 3 },
+        { action: "device_revoke", phase: "accepted", outcome: "accepted", count: 1 },
+        { action: "device_revoke", phase: "terminal", outcome: "succeeded", count: 1 },
+        { action: "lock", phase: "accepted", outcome: "accepted", count: 1 },
+        { action: "lock", phase: "terminal", outcome: "succeeded", count: 1 },
+        { action: "pair_claim", phase: "accepted", outcome: "accepted", count: 1 },
+        { action: "pair_claim", phase: "terminal", outcome: "succeeded", count: 1 },
+        { action: "pair_request", phase: "accepted", outcome: "accepted", count: 1 },
+        { action: "pair_request", phase: "terminal", outcome: "succeeded", count: 1 },
+        { action: "remote_disable", phase: "accepted", outcome: "accepted", count: 1 },
+        { action: "remote_disable", phase: "terminal", outcome: "succeeded", count: 1 },
+        { action: "remote_enable", phase: "accepted", outcome: "accepted", count: 1 },
+        { action: "remote_enable", phase: "terminal", outcome: "succeeded", count: 1 },
+        { action: "unlock", phase: "accepted", outcome: "accepted", count: 1 },
+        { action: "unlock", phase: "terminal", outcome: "succeeded", count: 1 }
+      ]),
+    "Physical aggregate audit trail was invalid."
+  );
+}
+
+function readPhysicalScreenshots(
+  directory: string
+): readonly PhysicalScreenshot[] {
+  const expected = [
+    "01-paired-ready.png",
+    "02-profile-away.png",
+    "03-recovered.png",
+    "04-revoked-cleaned.png"
+  ] as const;
+  requireCondition(
+    JSON.stringify(readdirSync(directory).sort()) ===
+      JSON.stringify([...expected]),
+    "Physical screenshot inventory was incomplete."
+  );
+  return Object.freeze(
+    expected.map((name) => {
+      const bytes = readFileSync(join(directory, name));
+      requireCondition(
+        bytes.length >= 1_024 &&
+          bytes.length <= 4 * 1024 * 1024 &&
+          bytes.subarray(0, 8).equals(
+            Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+          ),
+        "Physical screenshot failed publication validation."
+      );
+      return Object.freeze({
+        bytes,
+        name,
+        sha256: createHash("sha256").update(bytes).digest("hex")
+      });
+    })
+  );
+}
+
+function publishPhysicalEvidence(input: {
+  readonly completedAt: string;
+  readonly environment: PhysicalEnvironmentFacts;
+  readonly foreignServeBytes: number;
+  readonly managerAttempts: number;
+  readonly screenshots: readonly PhysicalScreenshot[];
+  readonly sequence: PhysicalSequenceResult;
+  readonly startedAt: string;
+}): void {
+  requireCondition(
+    input.managerAttempts === 2 &&
+      input.sequence.managerAttemptsBeforeDisable === 1 &&
+      input.sequence.managerAttemptsDuringSwitch === 0 &&
+      input.screenshots.length === 4 &&
+      Number.isSafeInteger(input.foreignServeBytes) &&
+      input.foreignServeBytes >= 2 &&
+      input.foreignServeBytes <= 64 * 1024,
+    "Physical evidence inputs were incomplete."
+  );
+  const rowIds = Array.from(
+    { length: 12 },
+    (_value, index) => `PHONE-${String(index + 1).padStart(2, "0")}`
+  );
+  const evidence = Object.freeze({
+    schema_version: 1,
+    task: "IFC-V1-079",
+    commit: input.environment.commit,
+    command: "pnpm smoke:remote-android",
+    run: Object.freeze({
+      completed_at: input.completedAt,
+      retry_count: 0,
+      started_at: input.startedAt
+    }),
+    environment: Object.freeze({
+      android_api: input.environment.android_api,
+      android_model: input.environment.android_model,
+      android_release: input.environment.android_release,
+      chrome_version: input.environment.chrome_version,
+      host_os: input.environment.host_os,
+      node_version: input.environment.node_version,
+      tailscale_version: input.environment.tailscale_version
+    }),
+    network: Object.freeze({
+      adb_app_tunnel_count: 0,
+      adb_device_count: 1,
+      cellular_active: true,
+      custom_ca_used: false,
+      tailscale_vpn_active: true,
+      wifi_disabled_during_requests: true
+    }),
+    lifecycle: Object.freeze({
+      listener: "ipv4_loopback_http",
+      local_ready_first: true,
+      manager_attempts: input.managerAttempts,
+      manager_attempts_during_saved_profile_switch: 0,
+      private_serve_https: true,
+      recovery: "observation_only"
+    }),
+    sequence: input.sequence,
+    foreign_serve: Object.freeze({
+      byte_count: input.foreignServeBytes,
+      byte_identical: true
+    }),
+    operations: Object.freeze([
+      "remote_enable:succeeded",
+      "pair_claim:succeeded",
+      "csrf_lock:succeeded",
+      "host_lock:succeeded",
+      "local_unlock:succeeded",
+      "saved_profile_away:observed",
+      "saved_profile_return:observed",
+      "self_revoke:succeeded",
+      "remote_disable:succeeded"
+    ]),
+    rows: Object.freeze(
+      rowIds.map((id) => Object.freeze({ id, status: "passed" }))
+    ),
+    screenshots: Object.freeze(
+      input.screenshots.map((screenshot) =>
+        Object.freeze({
+          byte_count: screenshot.bytes.length,
+          file: screenshot.name,
+          sha256: screenshot.sha256
+        })
+      )
+    ),
+    cleanup: Object.freeze({
+      adb_forwards: 0,
+      adb_reverses: 0,
+      browser_closed: true,
+      database_open: false,
+      dedicated_serve_absent: true,
+      foreign_serve_unchanged: true,
+      listener_open: false,
+      saved_profile_restored: true,
+      sse_active: 0,
+      temporary_state_present: false
+    })
+  });
+  const serialized = `${JSON.stringify(evidence, null, 2)}\n`;
+  validatePhysicalEvidence(evidence, serialized);
+
+  const staging = mkdtempSync(
+    join(tmpdir(), "hostdeck-remote-android-evidence-")
+  );
+  let createdFinal = false;
+  try {
+    const evidencePath = join(staging, "evidence.json");
+    writeFileSync(evidencePath, serialized, { flag: "wx", mode: 0o600 });
+    for (const screenshot of input.screenshots) {
+      writeFileSync(join(staging, screenshot.name), screenshot.bytes, {
+        flag: "wx",
+        mode: 0o600
+      });
+    }
+    requireCondition(
+      readFileSync(evidencePath, "utf8") === serialized,
+      "Physical evidence changed during private staging."
+    );
+    mkdirSync(physicalEvidenceDirectory, { mode: 0o755 });
+    createdFinal = true;
+    copyFileSync(
+      evidencePath,
+      join(physicalEvidenceDirectory, "evidence.json")
+    );
+    chmodSync(join(physicalEvidenceDirectory, "evidence.json"), 0o644);
+    for (const screenshot of input.screenshots) {
+      const target = join(physicalEvidenceDirectory, screenshot.name);
+      copyFileSync(join(staging, screenshot.name), target);
+      chmodSync(target, 0o644);
+    }
+  } catch (error) {
+    if (createdFinal) {
+      rmSync(physicalEvidenceDirectory, { force: true, recursive: true });
+    }
+    throw error;
+  } finally {
+    rmSync(staging, { force: true, recursive: true });
+  }
+}
+
+function validatePhysicalEvidence(
+  evidence: Readonly<Record<string, unknown>>,
+  serialized: string
+): void {
+  requireCondition(
+    Object.keys(evidence).sort().join(",") ===
+      [
+        "cleanup",
+        "command",
+        "commit",
+        "environment",
+        "foreign_serve",
+        "lifecycle",
+        "network",
+        "operations",
+        "rows",
+        "run",
+        "schema_version",
+        "screenshots",
+        "sequence",
+        "task"
+      ].join(",") &&
+      Buffer.byteLength(serialized, "utf8") <= 32 * 1024 &&
+      !/https?:\/\//iu.test(serialized) &&
+      !/\.ts\.net/iu.test(serialized) &&
+      !/\b(?:10|100|127|169\.254|172|192)\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/u.test(
+        serialized
+      ) &&
+      !/\b(?:serial|profile[_ -]?id|device[_ -]?id|node[_ -]?key|raw[_ -]?output)\b/iu.test(
+        serialized
+      ) &&
+      [...deviceForbiddenValues].every(
+        (value) => !serialized.includes(value)
+      ),
+    "Physical evidence failed its privacy or schema validator."
+  );
+}
+
 function assertSecretsAbsentFromDatabase(
   dbPath: string,
   secrets: readonly string[]
@@ -1472,8 +2872,8 @@ function countRows(
 
 function countMatchingRows(
   db: ReturnType<typeof openMigratedDatabase>["db"],
-  table: "pairing_codes",
-  predicate: "used_at IS NOT NULL"
+  table: "auth_devices" | "pairing_codes",
+  predicate: "revoked_at IS NOT NULL" | "used_at IS NOT NULL"
 ): number {
   return (
     db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${predicate}`).get() as {
@@ -1545,6 +2945,20 @@ async function reserveLoopbackPort(): Promise<number> {
   return port;
 }
 
+function canConnectLoopback(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host: "127.0.0.1", port });
+    const finish = (connected: boolean) => {
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(connected);
+    };
+    socket.setTimeout(1_000, () => finish(false));
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+  });
+}
+
 function listen(server: HttpServer, port: number): Promise<void> {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -1591,6 +3005,14 @@ function commandOptions(): Readonly<{
     maxBuffer: 512 * 1024,
     timeout: 15_000
   };
+}
+
+function hasControlCharacters(value: string): boolean {
+  for (const character of value) {
+    const code = character.codePointAt(0) as number;
+    if (code < 32 || code === 127) return true;
+  }
+  return false;
 }
 
 function requireCondition(condition: unknown, message: string): asserts condition {
