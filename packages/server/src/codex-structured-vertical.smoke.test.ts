@@ -1,8 +1,14 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
+import {
+  accessSync,
+  constants,
+  lstatSync,
+  realpathSync
+} from "node:fs";
 import { access, chmod, copyFile, lstat, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, isAbsolute, join, resolve } from "node:path";
 import {
   buildCodexTuiResumeCommand,
   type CodexAppServerConnection,
@@ -55,12 +61,16 @@ import {
   readStructuredVerticalTurnTerminal,
   type StructuredVerticalTurnTerminalEvidence
 } from "./codex-structured-vertical-evidence.js";
+import {
+  createStructuredVerticalReport,
+  publishStructuredVerticalReport,
+  requireStructuredVerticalReportPath
+} from "./codex-structured-vertical-report.js";
 import { selectStructuredVerticalPlanModel } from "./codex-structured-vertical-selection.js";
 import { createCodexUsageControlService } from "./codex-usage-control-service.js";
 import { combinePendingTurnSettingsReaders } from "./pending-turn-settings.js";
 
 const requireSmoke = process.env.HOSTDECK_REQUIRE_CODEX_VERTICAL_SMOKE === "1";
-const codexBin = process.env.HOSTDECK_CODEX_BIN ?? "codex";
 const overallTimeoutMs = 360_000;
 const planPrompt = "Produce a concise two-step plan for inspecting README.md. Do not call tools or modify files.";
 const goalObjective = "Keep aggregate runtime evidence bounded.";
@@ -87,6 +97,17 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
     "proves one callback pipeline and all selected controls across two managed threads",
     async () => {
       const startedAt = Date.now();
+      const repositoryRoot = realpathSync(process.cwd());
+      const codexBin = requireExactCodexBinary(process.env.HOSTDECK_CODEX_BIN);
+      const reportPath =
+        process.env.HOSTDECK_CODEX_VERTICAL_REPORT === undefined
+          ? null
+          : requireStructuredVerticalReportPath(
+              process.env.HOSTDECK_CODEX_VERTICAL_REPORT,
+              tmpdir()
+            );
+      const hostdeckCommit =
+        reportPath === null ? null : currentCleanCommit(repositoryRoot);
       const version = parseCodexCliVersionOutput(
         execFileSync(codexBin, ["--version"], { encoding: "utf8", timeout: 10_000, maxBuffer: 64 * 1024 })
       );
@@ -729,29 +750,105 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
       }
       if (smokeError !== null) throw smokeError;
       if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, "Codex structured vertical cleanup failed.");
-      process.stdout.write(
-        `[structured-vertical-summary] ${JSON.stringify({
-          runtime_version: version,
-          duration_ms: Date.now() - startedAt,
-          request_count: requestRecords.length,
-          notification_count: sumCounts(notificationCounts),
-          observer_count: sumCounts(observerCounts),
-          durable_publication_count: sumCounts(publicationCounts),
-          durable_publication_sessions: publicationCounts.size,
-          turn_start_count: requestRecords.filter((request) => request.method === "turn/start").length,
-          compact_start_count: requestRecords.filter((request) => request.method === "thread/compact/start").length,
-          server_request_count: serverRequestMethods.length,
-          proof_count: proof.length,
-          proof_source_count: new Set(proof.map((entry) => entry.source)).size,
-          sandbox: "approved_side_effect_observed",
-          tui: "passed",
-          cleanup: "passed"
-        })}\n`
-      );
+      await expect(access(root)).rejects.toBeDefined();
+      const summary = {
+        runtime_version: version,
+        duration_ms: Date.now() - startedAt,
+        request_count: requestRecords.length,
+        notification_count: sumCounts(notificationCounts),
+        observer_count: sumCounts(observerCounts),
+        durable_publication_count: sumCounts(publicationCounts),
+        durable_publication_sessions: publicationCounts.size,
+        turn_start_count: requestRecords.filter((request) => request.method === "turn/start").length,
+        compact_start_count: requestRecords.filter((request) => request.method === "thread/compact/start").length,
+        server_request_count: serverRequestMethods.length,
+        proof_count: proof.length,
+        proof_source_count: new Set(proof.map((entry) => entry.source)).size,
+        sandbox: "approved_side_effect_observed",
+        tui: "passed",
+        cleanup: "passed"
+      } as const;
+      if (reportPath !== null && hostdeckCommit !== null) {
+        publishStructuredVerticalReport(
+          reportPath,
+          createStructuredVerticalReport({
+            observed_at: new Date().toISOString(),
+            hostdeck_commit: hostdeckCommit,
+            duration_ms: summary.duration_ms,
+            request_count: summary.request_count,
+            notification_count: summary.notification_count,
+            observer_count: summary.observer_count,
+            durable_publication_count: summary.durable_publication_count
+          })
+        );
+      }
+      process.stdout.write(`[structured-vertical-summary] ${JSON.stringify(summary)}\n`);
     },
     overallTimeoutMs
   );
 });
+
+function requireExactCodexBinary(candidate: string | undefined): string {
+  if (candidate === undefined || !isAbsolute(candidate)) {
+    throw new TypeError(
+      "Structured vertical requires an absolute Codex binary."
+    );
+  }
+  const path = resolve(candidate);
+  let metadata: ReturnType<typeof lstatSync>;
+  try {
+    metadata = lstatSync(path);
+    accessSync(path, constants.X_OK);
+  } catch {
+    throw new TypeError("Structured vertical Codex binary is unavailable.");
+  }
+  if (
+    realpathSync(path) !== path ||
+    !metadata.isFile() ||
+    metadata.isSymbolicLink() ||
+    metadata.nlink !== 1
+  ) {
+    throw new TypeError("Structured vertical Codex binary is insecure.");
+  }
+  const version = parseCodexCliVersionOutput(
+    execFileSync(path, ["--version"], {
+      cwd: "/",
+      encoding: "utf8",
+      timeout: 10_000,
+      maxBuffer: 64 * 1_024
+    })
+  );
+  if (version !== codexBindingDescriptor.codex_version) {
+    throw new TypeError("Structured vertical Codex version is unsupported.");
+  }
+  return path;
+}
+
+function currentCleanCommit(repositoryRoot: string): string {
+  const status = execFileSync(
+    "git",
+    ["status", "--porcelain", "--untracked-files=all"],
+    {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+      timeout: 10_000,
+      maxBuffer: 256 * 1_024
+    }
+  ).trim();
+  if (status !== "") {
+    throw new Error("Structured vertical report requires a clean worktree.");
+  }
+  const commit = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    timeout: 10_000,
+    maxBuffer: 64 * 1_024
+  }).trim();
+  if (!/^[0-9a-f]{40}$/u.test(commit)) {
+    throw new Error("Structured vertical commit is invalid.");
+  }
+  return commit;
+}
 
 function requestRecordingPort(
   connection: CodexAppServerConnection,

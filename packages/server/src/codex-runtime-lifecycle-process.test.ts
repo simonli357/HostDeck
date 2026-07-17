@@ -142,6 +142,23 @@ describe("owned lifecycle scenario process runner", () => {
       })
     ).rejects.toMatchObject({ code: "invalid_command" });
   });
+
+  it("accepts the aggregate deadline while rejecting an unbounded timeout", async () => {
+    const root = privateRoot();
+    await expect(
+      runOwnedLifecycleScenario({
+        ...command(root, ["-e", "process.exit(0)"]),
+        timeout_ms: 420_000
+      })
+    ).resolves.toMatchObject({ exit_code: 0 });
+
+    await expect(
+      runOwnedLifecycleScenario({
+        ...command(root, ["-e", "process.exit(0)"]),
+        timeout_ms: 600_001
+      })
+    ).rejects.toMatchObject({ code: "invalid_command" });
+  });
 });
 
 function command(root: string, args: readonly string[]) {

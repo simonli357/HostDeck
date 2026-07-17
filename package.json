@@ -20,6 +20,7 @@
     "test:unit": "vitest run",
     "test:contract": "vitest run --config vitest.contract.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:codex": "HOSTDECK_REQUIRE_CODEX_HARDENING=1 vitest run packages/server/src/codex-runtime-hardening.smoke.test.ts",
     "smoke:codex-compatibility": "HOSTDECK_REQUIRE_CODEX_COMPATIBILITY_SMOKE=1 vitest run packages/codex-adapter/src/installed-codex.smoke.test.ts",
     "smoke:codex-ipc": "HOSTDECK_REQUIRE_CODEX_IPC_SMOKE=1 vitest run packages/codex-adapter/src/codex-ipc.smoke.test.ts",
     "smoke:codex-lifecycle": "HOSTDECK_REQUIRE_CODEX_LIFECYCLE_ACCEPTANCE=1 vitest run packages/server/src/codex-runtime-lifecycle-acceptance.smoke.test.ts",

@@ -3,6 +3,6 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["packages/*/src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"],
+  "include": ["packages/*/src/**/*.ts", "tests/**/*.ts", "vitest.config.ts", "vitest.codex.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

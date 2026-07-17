@@ -56,6 +56,8 @@ interface ChildOutcome {
   readonly spawn_failed: boolean;
 }
 
+const maximumLifecycleScenarioTimeoutMs = 600_000;
+
 export async function runOwnedLifecycleScenario(
   input: OwnedLifecycleScenarioCommand
 ): Promise<OwnedLifecycleScenarioResult> {
@@ -245,7 +247,7 @@ function parseCommand(
   const timeoutMs = requireBoundedInteger(
     input.timeout_ms,
     100,
-    300_000,
+    maximumLifecycleScenarioTimeoutMs,
     scenario
   );
   const maxOutputBytes = requireBoundedInteger(

@@ -17,6 +17,7 @@ const rootFiles = [
   "pnpm-workspace.yaml",
   "tsconfig.base.json",
   "tsconfig.json",
+  "vitest.codex.config.ts",
   ".nvmrc"
 ];
 
@@ -32,6 +33,7 @@ const requiredScripts = [
   "test:unit",
   "test:contract",
   "test:integration",
+  "test:codex",
   "smoke:codex-compatibility",
   "smoke:codex-ipc",
   "smoke:codex-lifecycle",
