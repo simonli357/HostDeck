@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-036` Implement mutable local and remote health | ready | none | Runtime lifecycle acceptance and bounded subscriber ownership complete its dependencies; local readiness and independent Tailscale health can be composed. |
+| 1 | `IFC-V1-036` Implement mutable local and remote health | in_progress | none | Hard criteria are frozen; implement the seven-source reducer, mutation proof, startup maintenance mapping, and separate remote state. |
 | 2 | `IFC-V1-048` Enforce aggregate SSE subscriber and queue overload policy | ready | none | Bounded subscriber ownership now permits focused reconnect-storm, heap-counter, slow-reader, and leak hardening. |
 
 ## Intentional Blockers

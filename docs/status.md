@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `IFC-V1-036` mutable local/remote health is next and ready after bounded subscriber ownership completed; `IFC-V1-048` subscriber stress hardening is also ready.
+- Active task: `IFC-V1-036` mutable local/remote health is in progress with hard criteria frozen; `IFC-V1-048` subscriber stress hardening remains ready.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.5; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract plus 14 current Signal Ledger/Focus Rail visual targets are complete; both desktop-led boards remain rejected, and `FE-V1-003` is blocked only by human selection of exact assets/approved drift.
@@ -343,4 +343,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `INT-V1-008` frozen criteria are pushed as `2a16077`; implementation/removal is pushed as `d3d91c1`. Owner-doc closure advances the selected runtime queue to `INT-V1-091`.
 - `INT-V1-091` criteria are pushed as `e3e4e29`, aggregate implementation as `4e28e17`, and exact vertical tmux-owner correction as `b573521`; clean-commit exact evidence and all closure gates pass.
 - `IFC-V1-035` criteria are pushed as `5ff42b7`, implementation as `730bd73`, and failure-evidence hardening as `19df3aa`; focused/workspace, exact binding, install/supply-chain, privacy, and zero-residue evidence pass. This owner-doc closure advances the selected queue to `IFC-V1-036` while `IFC-V1-048` is independently ready.
-- Next action: harden and freeze `IFC-V1-036` mutable local/remote health criteria, then implement its bounded state machine and component/profile failure matrix. The phone may stay disconnected; React implementation independently waits for the `FE-V1-003` recorded visual selection.
+- Next action: implement the frozen `IFC-V1-036` seven-source reducer, generation-bound mutation proof, startup orphan-before-retention mapping, and independent remote health matrix, then run focused/workspace gates. The phone may stay disconnected; React implementation independently waits for the `FE-V1-003` recorded visual selection.

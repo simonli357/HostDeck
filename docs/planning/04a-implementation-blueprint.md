@@ -113,7 +113,15 @@ The composition root calls `resolveResourceBudget` once before lease, storage, r
 | Replay/fanout hub | Projection repo, per-session queues, abort signals. | Ordered replay/live SSE source. | No gap/duplicate at handoff; bounded slow-client queue. |
 | Trust service | Pairing/device repos, cookie/CSRF/origin/rate policy. | Read/write trust context. | Raw device token never enters JS-readable durable storage or database. |
 | Remote ingress service | Tailscale observer, persisted selected profile/external origin/Serve descriptor, bounded command runner, audit. | Disabled, ready, or unavailable remote state. | Wrong/unknown profile is observation-only; local HostDeck remains available and no company profile is changed. |
-| Host health | Storage, runtime, projector, fanout, listener, remote ingress, lease. | Bounded local readiness plus separately bounded remote-access state. | Remote degradation cannot falsely mark local runtime/storage unhealthy. |
+| Host health | Storage, runtime, compatibility, projector, fanout, listener, remote ingress, lease. | Bounded local readiness plus separately generated remote-access state and a generation-bound mutation proof. | Every required local source must be explicitly ready; remote degradation cannot alter local truth or local mutation admission. |
+
+### Mutable Host Health Boundary
+
+- The local reducer has exactly seven required sources: storage, runtime, compatibility, projector, fanout, listener, and daemon lease. Each source reports a fixed state/reason pair under its own positive sequence; out-of-order older completion cannot overwrite a newer result.
+- Local aggregate generation advances only for a material accepted observation. All seven sources must be ready before readiness and mutation admission open. A generation-bound proof is checked again immediately before dispatch so an intervening local failure cannot race a stale preflight.
+- Remote health has a separate generation and consumes only normalized remote public state or one bounded observation failure. Tailscale stop, sign-out, profile mismatch, Serve drift/conflict, stale state, or observer failure cannot change local generation/readiness or invalidate a local mutation proof.
+- Recovery is an explicit newer successful observation. No elapsed-time inference, retry, retained exception, or old ready field may clear failure. The reducer owns no timers, poller, restart, listener, command, storage, route, or shutdown side effect.
+- Startup captures one cutoff, reconciles accepted-only audit orphans before retention, and maps both bounded results into the first storage observation. Any degraded, incomplete, failed, or unknown maintenance result keeps storage non-ready.
 
 ### Production Projection Append Boundary
 
@@ -171,7 +179,7 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 8. Load managed mappings and reconcile each against `thread/read`/list.
 9. Mark uncertain prior active states interrupted/stale; never infer running from persistence alone.
 10. Subscribe to managed thread events and rebuild bounded projections where supported.
-11. Run due retention and initialize live health.
+11. Capture one startup cutoff, reconcile accepted-only audit orphans, then run due retention. Initialize storage health from both bounded results; degraded or incomplete maintenance cannot claim ready.
 12. Start the Fastify loopback HTTP listener, routes, SSE, and static assets.
 13. Mark local HostDeck ready, then observe the active Tailscale profile and exact HostDeck-owned Serve state without mutation. Only an explicit local `remote enable` or `remote disable` may invoke the ownership-safe manager.
 14. Report remote ready or a bounded remote-unavailable reason independently of local readiness. Every fatal local failure after lease acquisition closes mutable resources and releases the lease in reverse order.
