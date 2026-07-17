@@ -343,6 +343,7 @@ class DefaultHostDeckHostHealthService {
   private lastWallTime: number;
   private remoteFingerprint: RemoteObservationFingerprint | null = null;
   private highestRemoteStateGeneration = 0;
+  private highestRemoteState: RemoteIngressPublicState | null = null;
 
   constructor(
     private readonly now: () => Date,
@@ -520,6 +521,14 @@ class DefaultHostDeckHostHealthService {
     ) {
       throw healthError("source_regression");
     }
+    if (
+      fingerprint.kind === "observed" &&
+      fingerprint.state.generation === this.highestRemoteStateGeneration &&
+      this.highestRemoteState !== null &&
+      !isDeepStrictEqual(fingerprint.state, this.highestRemoteState)
+    ) {
+      throw healthError("source_conflict");
+    }
     const nextGeneration = incrementGeneration(this.remote.generation);
     const clock = this.readClock();
     this.remote = fingerprint.kind === "observed"
@@ -544,6 +553,7 @@ class DefaultHostDeckHostHealthService {
     this.remoteFingerprint = fingerprint;
     if (fingerprint.kind === "observed") {
       this.highestRemoteStateGeneration = fingerprint.state.generation;
+      this.highestRemoteState = fingerprint.state;
     }
     this.lastWallTime = clock.milliseconds;
     return this.remote;
@@ -684,6 +694,12 @@ function remoteSnapshotFromState(
     state.reason !== null &&
     state.reason !== "remote_disabled" &&
     !remoteUnavailableReasonSet.has(state.reason)
+  ) {
+    throw healthError("invalid_update");
+  }
+  if (
+    state.observed_at !== null &&
+    Date.parse(state.observed_at) > Date.parse(checkedAt)
   ) {
     throw healthError("invalid_update");
   }

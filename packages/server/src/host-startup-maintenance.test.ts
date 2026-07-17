@@ -10,6 +10,7 @@ import {
   type StartupRetentionMaintenanceResult
 } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
+import { createHostDeckHostHealthService } from "./host-health.js";
 import {
   assertHostDeckStartupMaintenancePorts,
   createHostDeckStartupMaintenancePorts,
@@ -194,6 +195,96 @@ describe("host startup maintenance health composition", () => {
     ).rejects.toMatchObject({ code: "retention_contract_invalid" });
   });
 
+  it("rejects impossible maintenance counters and oversized diagnostic arrays", async () => {
+    const invalidOrphan = Object.freeze({
+      ...completeOrphan(),
+      batch_count: 1_001
+    });
+    await expect(
+      runWithResults(invalidOrphan, completeRetention())
+    ).rejects.toMatchObject({ code: "orphan_contract_invalid" });
+
+    const complete = completeRetention();
+    const invalidCounters: readonly StartupRetentionMaintenanceResult[] = [
+      Object.freeze({ ...complete, duration_ms: Number.MAX_VALUE }),
+      Object.freeze({
+        ...complete,
+        audit: Object.freeze({ ...complete.audit, batch_count: 1_001 })
+      }),
+      Object.freeze({
+        ...complete,
+        audit: Object.freeze({
+          ...complete.audit,
+          deleted_operation_count: 1,
+          deleted_record_count: 0
+        })
+      }),
+      Object.freeze({
+        ...complete,
+        output: Object.freeze({ ...complete.output, batch_count: 1_001 })
+      }),
+      Object.freeze({
+        ...complete,
+        output: Object.freeze({
+          ...complete.output,
+          batch_count: 1,
+          boundary_write_count: 2
+        })
+      }),
+      Object.freeze({
+        ...complete,
+        output: Object.freeze({
+          ...complete.output,
+          batch_count: 1,
+          sessions_touched_count: 2
+        })
+      })
+    ];
+    for (const invalid of invalidCounters) {
+      await expect(
+        runWithResults(completeOrphan(), invalid)
+      ).rejects.toMatchObject({ code: "retention_contract_invalid" });
+    }
+
+    const inconsistentBase = degradedRetention(
+      "newest_output_event_oversize",
+      null,
+      ["sess_health_subset_01"]
+    );
+    const inconsistentDiagnostics = Object.freeze({
+      ...inconsistentBase,
+      output: Object.freeze({
+        ...inconsistentBase.output,
+        sessions_touched_count: 0
+      })
+    });
+    await expect(
+      runWithResults(completeOrphan(), inconsistentDiagnostics)
+    ).rejects.toMatchObject({ code: "retention_contract_invalid" });
+
+    const oversizedIds = Object.freeze(
+      Array.from({ length: 1_001 }, (_, index) =>
+        `sess_health_${index.toString().padStart(4, "0")}`
+      )
+    );
+    const oversizedBase = degradedRetention(
+      "newest_output_event_oversize",
+      null,
+      oversizedIds
+    );
+    const oversizedDiagnostics = Object.freeze({
+      ...oversizedBase,
+      output: Object.freeze({
+        ...oversizedBase.output,
+        batch_count: 1_000,
+        sessions_touched_count: 1_000
+      })
+    });
+    await expect(
+      runWithResults(completeOrphan(), oversizedDiagnostics)
+    ).rejects.toMatchObject({ code: "retention_contract_invalid" });
+  });
+
   it("wraps thrown ports with bounded cause-free stage errors and makes no retry", async () => {
     let orphanCalls = 0;
     const orphanError = await rejectedError(
@@ -250,7 +341,12 @@ describe("host startup maintenance health composition", () => {
       { now: () => new Date(cutoff), ports, signal: new AbortController().signal, extra: true },
       { now: 1, ports, signal: new AbortController().signal },
       { now: () => new Date(cutoff), ports: Object.freeze({ ...ports }), signal: new AbortController().signal },
-      { now: () => new Date(cutoff), ports, signal: {} }
+      { now: () => new Date(cutoff), ports, signal: {} },
+      {
+        now: () => new Date(cutoff),
+        ports,
+        signal: { aborted: false, addEventListener() {} }
+      }
     ];
     for (const candidate of invalid) {
       await expect(runHostDeckStartupMaintenance(candidate as never)).rejects.toMatchObject({
@@ -380,6 +476,24 @@ describe("host startup maintenance health composition", () => {
           audit_scan_complete: true
         },
         storage_observation: { state: "ready", reasons: [] }
+      });
+      const health = createHostDeckHostHealthService({
+        now: () => new Date(cutoff)
+      });
+      const local = health.updateLocal({
+        ...summary.storage_observation,
+        source_generation: 1
+      });
+      expect(local.components[0]).toMatchObject({
+        component: "storage",
+        state: "ready",
+        source_generation: 1,
+        reasons: []
+      });
+      expect(local).toMatchObject({
+        state: "unknown",
+        readiness: "not_ready",
+        mutation_admission: "closed"
       });
     } finally {
       opened.db.close();
@@ -534,7 +648,7 @@ function degradedRetention(
       policy_violation_session_count: newestOversizeSessionIds.length,
       pruned_event_count: 0,
       scan_complete: !outputDegraded && failure?.scope !== "output",
-      sessions_touched_count: 0
+      sessions_touched_count: newestOversizeSessionIds.length
     }),
     reasons: Object.freeze([reason]),
     status: "degraded"

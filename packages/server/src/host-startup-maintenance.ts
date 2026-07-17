@@ -131,6 +131,7 @@ const retentionReasons = new Set([
   "timeout"
 ]);
 const retentionFailureScopes = new Set(["audit", "output", "runner"]);
+const maximumStartupMaintenanceBatches = 1_000;
 
 const startupErrorMessages: Readonly<
   Record<HostDeckStartupMaintenanceErrorCode, string>
@@ -305,7 +306,7 @@ function parseOrphanResult(
     throw new TypeError();
   }
   requireNonnegativeNumber(values.duration_ms);
-  requireNonnegativeInteger(values.batch_count);
+  requireMaintenanceBatchCount(values.batch_count);
   requireNullableNonnegativeInteger(values.eligible_pending_operation_count);
   requireNullableNonnegativeInteger(values.protected_recent_operation_count);
   requireNullableNonnegativeInteger(values.total_pending_operation_count);
@@ -379,21 +380,37 @@ function parseRetentionResult(
   const outputScanComplete = requireBoolean(output.scan_complete);
   const auditActionable = requireNullableBoolean(audit.actionable_remaining);
   const outputActionable = requireNullableBoolean(output.actionable_remaining);
-  requireNonnegativeInteger(audit.batch_count);
+  requireMaintenanceBatchCount(audit.batch_count);
   const deletedOperationCount = requireNonnegativeInteger(
     audit.deleted_operation_count
   );
-  requireNonnegativeInteger(audit.deleted_record_count);
+  const deletedRecordCount = requireNonnegativeInteger(
+    audit.deleted_record_count
+  );
   requireNullableBoolean(audit.newest_trail_oversize);
   requireNullableBoolean(audit.pending_blocks_policy);
   requireNullableNonnegativeInteger(audit.protected_pending_operation_count);
   requireNullableNonnegativeInteger(audit.retained_record_count);
-  requireNonnegativeInteger(output.batch_count);
-  requireNonnegativeInteger(output.boundary_write_count);
+  const outputBatchCount = requireMaintenanceBatchCount(output.batch_count);
+  const boundaryWriteCount = requireNonnegativeInteger(
+    output.boundary_write_count
+  );
   requireNullableNonnegativeInteger(output.policy_violation_session_count);
   const prunedEventCount = requireNonnegativeInteger(output.pruned_event_count);
-  requireNonnegativeInteger(output.sessions_touched_count);
-  parseFrozenSessionIds(output.newest_oversize_session_ids);
+  const sessionsTouchedCount = requireNonnegativeInteger(
+    output.sessions_touched_count
+  );
+  const newestOversizeSessionIds = parseFrozenSessionIds(
+    output.newest_oversize_session_ids
+  );
+  if (
+    deletedOperationCount > deletedRecordCount ||
+    boundaryWriteCount > outputBatchCount ||
+    sessionsTouchedCount > outputBatchCount ||
+    newestOversizeSessionIds.length > sessionsTouchedCount
+  ) {
+    throw new TypeError();
+  }
   assertRetentionStatusCoherence(
     status,
     auditScanComplete,
@@ -504,6 +521,7 @@ function parseFrozenReasonArray(
 
 function parseFrozenSessionIds(candidate: unknown): readonly string[] {
   const values = readExactFrozenArray(candidate);
+  if (values.length > maximumStartupMaintenanceBatches) throw new TypeError();
   const seen = new Set<string>();
   for (const value of values) {
     const parsed = sessionIdSchema.safeParse(value);
@@ -511,6 +529,12 @@ function parseFrozenSessionIds(candidate: unknown): readonly string[] {
     seen.add(parsed.data);
   }
   return values as readonly string[];
+}
+
+function requireMaintenanceBatchCount(candidate: unknown): number {
+  const count = requireNonnegativeInteger(candidate);
+  if (count > maximumStartupMaintenanceBatches) throw new TypeError();
+  return count;
 }
 
 function freezeOrphanSummary(
@@ -573,7 +597,12 @@ function requireNullableNonnegativeInteger(candidate: unknown): number | null {
 }
 
 function requireNonnegativeNumber(candidate: unknown): number {
-  if (typeof candidate !== "number" || !Number.isFinite(candidate) || candidate < 0) {
+  if (
+    typeof candidate !== "number" ||
+    !Number.isFinite(candidate) ||
+    candidate < 0 ||
+    candidate > Number.MAX_SAFE_INTEGER
+  ) {
     throw new TypeError();
   }
   return candidate;
@@ -706,12 +735,7 @@ function readExactFrozenArray(candidate: unknown): readonly unknown[] {
 }
 
 function isAbortSignal(candidate: unknown): candidate is AbortSignal {
-  return (
-    candidate !== null &&
-    typeof candidate === "object" &&
-    typeof (candidate as AbortSignal).aborted === "boolean" &&
-    typeof (candidate as AbortSignal).addEventListener === "function"
-  );
+  return candidate instanceof AbortSignal;
 }
 
 function startupError(

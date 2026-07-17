@@ -446,6 +446,27 @@ describe("mutable host health", () => {
       service.updateRemote({ source_generation: 12, state: readyRemote(2) })
     ).toThrow(expect.objectContaining({ code: "source_regression" }));
     expect(service.remoteSnapshot()).toBe(beforeDurableRegression);
+    expect(() =>
+      service.updateRemote({
+        source_generation: 12,
+        state: unavailableRemote("client_stopped", 3)
+      })
+    ).toThrow(expect.objectContaining({ code: "source_conflict" }));
+    expect(service.remoteSnapshot()).toBe(beforeDurableRegression);
+    const observerFailure = service.failRemote({
+      source_generation: 12,
+      reason: "observation_failed"
+    });
+    expect(observerFailure).toMatchObject({
+      availability: "unavailable",
+      state_generation: null
+    });
+    expect(
+      service.updateRemote({ source_generation: 13, state: readyRemote(3) })
+    ).toMatchObject({
+      availability: "ready",
+      state_generation: 3
+    });
 
     let accessorCalls = 0;
     const hostile = Object.defineProperty(
@@ -467,9 +488,22 @@ describe("mutable host health", () => {
       }
     );
     expect(() =>
-      service.updateRemote({ source_generation: 12, state: hostile as never })
+      service.updateRemote({ source_generation: 14, state: hostile as never })
     ).toThrow(expect.objectContaining({ code: "invalid_update" }));
     expect(accessorCalls).toBe(0);
+
+    const future = createService().service;
+    const beforeFuture = future.remoteSnapshot();
+    expect(() =>
+      future.updateRemote({
+        source_generation: 1,
+        state: readyRemote(1, "2026-07-16T18:00:00.001Z")
+      })
+    ).toThrow(expect.objectContaining({ code: "invalid_update" }));
+    expect(future.remoteSnapshot()).toBe(beforeFuture);
+    expect(
+      future.updateRemote({ source_generation: 1, state: readyRemote(1) })
+    ).toMatchObject({ generation: 1, source_generation: 1 });
 
     const exhausted = createService().service;
     exhausted.updateRemote({
@@ -588,14 +622,17 @@ function disabledRemote(): RemoteIngressPublicState {
   });
 }
 
-function readyRemote(generation: number): RemoteIngressPublicState {
+function readyRemote(
+  generation: number,
+  observedAt = "2026-07-16T18:00:00.000Z"
+): RemoteIngressPublicState {
   return remoteIngressPublicStateSchema.parse({
     generation,
     availability: "ready",
     reason: null,
     external_origin: remoteOrigin,
     laptop_action_required: false,
-    observed_at: "2026-07-16T18:00:00.000Z"
+    observed_at: observedAt
   });
 }
 
@@ -603,10 +640,11 @@ function unavailableRemote(
   reason: Exclude<
     (typeof remoteIngressUnavailableReasons)[number],
     "cleanup_incomplete"
-  >
+  >,
+  generation = 2
 ): RemoteIngressPublicState {
   return remoteIngressPublicStateSchema.parse({
-    generation: 2,
+    generation,
     availability: "unavailable",
     reason,
     external_origin: null,
