@@ -184,7 +184,18 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 13. Mark local HostDeck ready, then observe the active Tailscale profile and exact HostDeck-owned Serve state without mutation. Only an explicit local `remote enable` or `remote disable` may invoke the ownership-safe manager.
 14. Report remote ready or a bounded remote-unavailable reason independently of local readiness. Every fatal local failure after lease acquisition closes mutable resources and releases the lease in reverse order.
 
-The selected listener implementation requires cleanup authority before runtime start: one exact runtime controller exposes `start`, `closeSse`, and `closeStartup`; `start` returns only typed context plus a validated loopback bind. Fastify registration/readiness completes while unbound, Node limits apply before listen, and the actual address must equal that bind. Assigned-private-IP, wildcard, and public binds fail before listen. Tailscale Serve owns external HTTPS and proxies to this loopback listener; HostDeck owns neither TLS private keys nor a second network listener. Close transitions to draining, initiates listener refusal, bounds SSE and newly idle connection settlement, closes Fastify, then storage/lease startup ownership. Failure or timeout at one step is aggregated but cannot skip later cleanup; complete mutation/projector/audit/runtime drain remains `IFC-V1-037`.
+The selected listener implementation requires cleanup authority before runtime start: one exact runtime controller exposes `start`, `beginDrain`, `closeSse`, `closeRuntime`, and `closeStartup`; `start` returns only typed context plus a validated loopback bind. Fastify registration/readiness completes while unbound, Node limits apply before listen, and the actual address must equal that bind. Assigned-private-IP, wildcard, and public binds fail before listen. Tailscale Serve owns external HTTPS and proxies to this loopback listener; HostDeck owns neither TLS private keys nor a second network listener. Close transitions to draining, closes mutation admission, initiates listener refusal, bounds SSE/runtime and newly idle connection settlement, closes Fastify, then storage/lease startup ownership. Failure or timeout at one step is aggregated but cannot skip later cleanup; the exact application-stage order is frozen by `IFC-V1-037` below.
+
+### Graceful Application Shutdown
+
+1. Set application phase to draining and synchronously close aggregate mutation admission before listener refusal. Publish listener-draining health from the same composition boundary.
+2. Begin listener refusal, then close all projection subscribers under the SSE shutdown deadline.
+3. Supersede pending approval waiters, cancel reconnect/backoff, and close the protocol connection. Sent mutation requests rejected by close retain unknown delivery and flow to durable incomplete outcomes without retry.
+4. Await zero active write owners, then run an authoritative audit barrier that appends incomplete only for accepted-only truth and succeeds only at zero pending operations.
+5. Run the projection barrier after runtime ingress is closed, then close the runtime supervisor according to foreground-child or service-owned semantics.
+6. Settle or force remaining owned HTTP sockets, close Fastify, close storage, and release the daemon lease last.
+
+The Fastify runtime owner therefore exposes exact `beginDrain`, `closeSse`, `closeRuntime`, `closeStartup`, and `start` callbacks. One outer shutdown deadline bounds all work; component caps remain narrower. Every failed or timed-out stage is aggregated while every later stage is still attempted. HostDeck never stops `tailscaled`, switches profiles, or terminates a service-owned sibling app-server during this sequence.
 
 ### Prompt Or Structured Control
 
