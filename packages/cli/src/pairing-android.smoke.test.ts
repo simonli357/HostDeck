@@ -165,7 +165,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         if (requireRemoteAndroidAcceptance) {
           requireCleanAcceptanceWorktree();
           requireNoAdbApplicationTunnels();
-          initialWifiEnabled = await enforceUnrelatedAndroidNetwork();
+          initialWifiEnabled = readAndroidWifiEnabled();
+          await enforceUnrelatedAndroidNetwork(initialWifiEnabled);
           environmentFacts = readPhysicalEnvironmentFacts();
           await switchSavedProfile(profileSwitch?.awayProfileId as string);
           selectedProfile = "away";
@@ -1477,8 +1478,9 @@ function requireNoAdbApplicationTunnels(): void {
   );
 }
 
-async function enforceUnrelatedAndroidNetwork(): Promise<boolean> {
-  const initiallyEnabled = readAndroidWifiEnabled();
+async function enforceUnrelatedAndroidNetwork(
+  initiallyEnabled: boolean
+): Promise<void> {
   if (initiallyEnabled) {
     adb(["shell", "svc", "wifi", "disable"]);
   }
@@ -1495,7 +1497,6 @@ async function enforceUnrelatedAndroidNetwork(): Promise<boolean> {
       /tailscale/iu.test(connectivity),
     "Physical acceptance requires active cellular and Tailscale VPN transport."
   );
-  return initiallyEnabled;
 }
 
 function readAndroidWifiEnabled(): boolean {
