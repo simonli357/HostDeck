@@ -1,7 +1,7 @@
 # IFC-V1-068 Managed-Session List And Detail Routes
 
 Date: 2026-07-16
-Status: in progress
+Status: complete
 
 ## Selected Boundary
 
@@ -47,6 +47,14 @@ The cursor carries one ordering-snapshot digest plus the final row's exact rank/
 - Repository tests use real migrated SQLite for empty/detail/archive/recovery, mixed attention, null/equal activity, 4,096-row traversal, snapshot mutation, cursor tampering, page lookahead, concurrent-connection commits, restart, missing/corrupt rows/JSON/counters, query bounds, receiver-independent calls, and raw-row privacy.
 - Route tests cover exact manifest/path/method/query/body behavior, auth-before-storage, all access modes, no-store headers, list/detail policy, response-size failure, hostile port results, no partial body, and paired/ingress invalidation before response publication.
 - Adjacent selected-state, request-authentication, Fastify error/resource, host-health, event, approval, archive, mobile-fixture, and manifest suites run with all workspace tests/typechecks plus lint/exports, scaffold, planning, runtime-boundary, frozen install, exact binding, supply-chain, privacy, diff, process/listener/temp cleanup, and manual source/output inspection before closure.
+
+## Completion Evidence
+
+- Criteria are committed as `5537562`; implementation and tests are committed as `851e573`. The implementation adds strict shared contracts, a dedicated one-transaction SQLite read repository, and one immutable exact-manifest Fastify registration for list and detail.
+- Direct evidence passes 13 contract tests plus 21 repository/route tests. It covers canonical cursors, every attention/activity/id tie, 4,096-row traversal and 4,097-row overload, same-snapshot pagination, archive/recovery/stale policy, retained-window holes and replay-boundary corruption, all access modes, auth ordering/currentness, exact HTTP surface, response bytes, real migrated SQLite, restart/read-only/closed handles, and hostile frozen-object boundaries.
+- Workspace evidence passes 1,825 unit tests with 27 intentional external/device skips, 277 contract tests, 18 integration tests, 33 web tests, and three Chromium pairing regressions. Typecheck, lint/exports over 518 files and eight packages, scaffold, planning (212 tasks, 84 requirements, 649 dependencies), runtime-boundary, and the exact Codex 0.144.0 binding gate all pass.
+- Frozen offline install passes. Production audit reports no known vulnerabilities; the production license inventory contains 155 permissive entries across 159 installed paths. No dependency, lockfile, setup command, migration, production composition, CLI, frontend, or phone behavior changed.
+- Manual SQL/import/body/error inspection confirms that the read path never selects `event_json`, calls Codex/runtime/write/audit services, fetches approvals, or exposes credentials, source/device identity, private causes, or partial pages. Diff checks pass; test-created ADB, Vitest, Playwright server, listener, socket, and temporary-log residue is absent. The physical phone is intentionally not required for this headless route leaf.
 
 ## Explicit Non-Goals
 
