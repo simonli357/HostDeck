@@ -1,7 +1,7 @@
 # IFC-V1-039 Health And Host-Status Routes
 
 Date: 2026-07-16
-Status: criteria frozen; implementation pending
+Status: complete
 
 ## Selected Boundary
 
@@ -20,7 +20,7 @@ Status: criteria frozen; implementation pending
 | Readiness | `generation`, aggregate `state`, binary `readiness`, `updated_at`, and exactly seven ordered component entries. Each component contains only `component`, `state`, nullable `checked_at`, and bounded `causes`. |
 | Host status | `local`, `remote`, and `access`. `local` adds `mutation_admission` to the readiness facts. `remote` contains health generation, nullable durable state generation, availability, one bounded cause, nullable canonical external origin, laptop-action flag, and observed/checked/updated timestamps. `access` contains request access mode, network mode, transport, and scoped write eligibility. |
 
-The exact local component order is storage, runtime, compatibility, projector, fanout, listener, and lease. Public component states and causes reuse the host-health vocabulary; internal source generations are not exposed. `not_observed` is valid only for an initial unknown component with no check time. Ready components have no causes; every non-ready component has one to four unique component-valid causes.
+The exact local component order is storage, runtime, compatibility, projector, fanout, listener, and lease. Public component states and causes reuse the host-health vocabulary; internal source generations are not exposed. `not_observed` is valid only for an initial unknown component with no check time. Ready components have no causes; every non-ready component has one to four unique, canonically ordered, component-valid causes.
 
 Access mode is one of `local_admin`, `loopback_read`, `paired_read`, or `paired_write`. Write eligibility has literal scope `host_health_and_authority`, one boolean, and the ordered bounded causes `read_only_access` and `host_not_ready`. It is eligible only when the caller has local-admin or paired-write authority and local mutation admission is open. This is deliberately not final mutation authorization: durable lock, CSRF, exact target, capability, session state, audit, and request deadline remain with their existing owner contracts and gates.
 
@@ -46,6 +46,15 @@ Access mode is one of `local_admin`, `loopback_read`, `paired_read`, or `paired_
 - Route injection tests cover exact paths/methods/query behavior, no-store headers, public zero-touch liveness, local browser/local-admin/paired read/paired write authority, rejected auth states, 200/503 mapping, revoke/ingress invalidation at delivery, malformed-boundary failure, and no health mutation.
 - Health-transition tests drive the real mutable service through initial, partial-ready, all-ready, failure, remote-only degradation, local recovery, and remote recovery while checking exact generations and response bodies.
 - Adjacent request-authentication, host-health, remote-ingress, Fastify error/resource, and selected-manifest suites; all workspace suites and typechecks; lint/exports, scaffold, planning, exact binding, frozen install, supply-chain, privacy, diff, and active-handle checks run before closure.
+
+## Completion Evidence
+
+- `b62744f` adds the shared strict host-health contracts, exact hostile-array handling, one immutable selected route registration, public zero-touch liveness, protected typed readiness, and independent bounded host status. The mutable health reducer now consumes the contract-owned vocabulary and aggregate rules.
+- Direct evidence passes 5 host-health contract tests and 75 route/reducer tests. It covers every aggregate state and local component, local/browser/admin/paired access, independent remote failure/recovery, generic projection failure, detached recursively frozen payloads, and paired-authority plus ingress-generation invalidation before delivery.
+- Workspace evidence passes 1,804 unit tests with 27 intentional device/external skips, 264 contract tests, 18 integration tests, and 33 web tests. Root and all eight package typechecks pass; lint/exports checks 512 files and eight packages; scaffold, planning (212 tasks, 84 requirements, 649 dependencies), and runtime-boundary gates pass.
+- Frozen offline install passes. The isolated exact Codex 0.144.0 binary verifies 671 binding files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`; the user's default 0.144.5 correctly remains ineligible and was not changed. Production audit reports zero vulnerabilities across 168 dependencies, and 155 permissively licensed production entries cover 159 installed paths.
+- Manual source/body/object-graph/error review finds no session, thread, device, credential, CSRF, profile-key, raw Tailscale, source-generation, process, or private exception data in the public health surfaces. No test-created HostDeck/Vitest/ADB process, listener, socket, or temporary root remains; the cached exact-version toolchain is deliberate.
+- Criteria are committed as `66d0144`; implementation as `b62744f`. No dependency, lockfile, setup command, production composition, frontend, Tailscale profile, Serve state, or physical-phone behavior changed.
 
 ## Explicit Non-Goals
 
