@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: criteria frozen before implementation.
+Status: complete.
 
 ## Hardening Target
 
@@ -85,3 +85,11 @@ The exact model budget is five turns total: three in the structured vertical and
 - Clean pushed commit `4e28e17` passed the exact 0.144.0 binding check and deterministic scenario, then failed closed in `exact_structured_vertical`: Vitest exited zero, but the outer owner still observed a member of that detached process group after the two-second grace period. No final evidence was published and the owner terminated the group.
 - Isolated exact vertical and detached-group diagnostics both passed with no retained exact-runtime process; the measured detached run had zero group members at child close and 100 ms later. This identifies a timing-dependent teardown gap rather than a persistent app-server leak.
 - Root cause in the reviewed path: the structured vertical issued `tmux kill-server` but did not capture, validate, or await the tmux daemon PID. The exact coexistence smoke already treats that daemon as an owned process. The fix applies the same identity-and-exit requirement before the vertical may report cleanup.
+
+## Completion Evidence
+
+- Criteria: `e3e4e29`. Aggregate implementation: `4e28e17`. Exact vertical tmux-owner correction: `b573521`.
+- `artifacts/int-v1-091-selected-runtime-hardening-evidence.json` is bound to clean commit `b573521c533efe6539724a111559387fbb8fdab7`. Its owner-only single-link file records six scenarios, 49 deterministic files, 530 deterministic tests, 55 total test files, seven exact app-server lifetimes, five model turns, one compact, no retry, all structured/lifecycle assertions true, and every residue count at zero.
+- Full validation passes: unit 1,674 with 27 intentional opt-in/device skips; contract 259; integration 18; web 33; root and all eight package typechecks; lint/exports over 495 files/eight packages; scaffold, planning, exact 671-file binding, selected-runtime boundary, frozen offline install, zero-vulnerability production audit over 168 dependencies, permissive license inventory, production dependency tree, and diff checks.
+- Manual inspection confirms no production entrypoint/export reaches the hardening harness, no terminal/tmux fallback is selected, the final artifact contains no path or credential-like string, and no exact-runtime, tmux, HostDeck socket/temp-root, or test-started ADB process remains.
+- This closes only `BLK-V1-03`. Fastify/SSE composition, health/shutdown, package/service, browser, remote phone, and release acceptance remain explicit downstream work.

@@ -55,7 +55,7 @@ No fake-Codex or fake-tmux test can satisfy these gates.
 | Crash reconciliation, HostDeck restart, and TUI coexistence | `INT-V1-029` to `INT-V1-031` | Done: durable crash recovery, exact multi-process HostDeck restart, and exact bidirectional HostDeck/TUI teardown evidence pass with private cleanup. |
 | Aggregate runtime lifecycle acceptance | `INT-V1-032` | Done: fixed deterministic plus exact 0.144.0 subprocess matrix passes ownership/reconnect/crash/restart/TUI/integrity/privacy/cleanup acceptance with no retry. |
 | Legacy tmux disposition | `INT-V1-008` | Done: package/runtime/CLI reachability is removed, migration data stays inert, and bounded confirmed local reset is proven. |
-| Reopened runtime hardening | `INT-V1-091` | Ready: selected lifecycle, data maintenance, and legacy disposition dependencies are complete. |
+| Reopened runtime hardening | `INT-V1-091` | Done: fixed deterministic and exact structured/lifecycle evidence is commit-bound, privacy-bounded, no-retry, and cleanup-complete. |
 
 Owning backlog: `docs/tracking/backlog/tmux-output.md` (filename retained to preserve historical links; title/scope are rebaselined).
 

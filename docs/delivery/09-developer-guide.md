@@ -49,6 +49,7 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | Codex Unix IPC smoke | `pnpm smoke:codex-ipc` | Starts installed app-server on a temporary private Unix socket and proves the production transport, broker, and compatibility handshake without a model call. |
 | Codex thread/TUI smoke | `pnpm smoke:codex-threads` | Requires authenticated Codex, Git, and tmux. Copies `auth.json` without parsing or logging it into a mode-`0600` private temporary home, proves loaded recovery/materialization/list/read/exact TUI resume/archive without a model turn, then removes the temporary tree. |
 | Codex structured vertical smoke | `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-vertical` | Requires authenticated turns, Git, tmux, and a working strict Linux command sandbox. It fails on any model, callback, projection, approval, command, interrupt, compact, TUI, disclosure, or cleanup gap. |
+| Selected runtime hardening | `HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm test:codex` | Requires Linux, a clean Git commit, authenticated exact 0.144.0 Codex, and tmux. Runs the fixed no-retry deterministic/structured/lifecycle aggregate and atomically publishes private commit-bound evidence only after complete cleanup. |
 | Typecheck | `pnpm typecheck` | Strict TypeScript no-emit check across workspace source. |
 | Lint | `pnpm lint` | Biome plus package export convention checks. |
 | Unit tests | `pnpm test` or `pnpm test:unit` | Runs Vitest unit tests. |

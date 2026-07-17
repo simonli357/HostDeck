@@ -10,7 +10,7 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | `pnpm-workspace.yaml` | Workspace package selection |
 | `tsconfig.base.json`, `tsconfig.json` | Shared strict TypeScript scaffold configuration |
 | `biome.json` | Shared lint configuration |
-| `vitest.config.ts`, `vitest.contract.config.ts`, `vitest.integration.config.ts`, `tests/` | Shared unit, contract, and integration test runners plus convention tests |
+| `vitest.config.ts`, `vitest.contract.config.ts`, `vitest.integration.config.ts`, `vitest.codex.config.ts`, `tests/` | Shared unit, contract, integration, and frozen selected-runtime test runners plus convention tests |
 | `scripts/` | Scaffold/planning/export/runtime-boundary checks, Codex binding generation, and validation/smoke entrypoints |
 | `packages/core/` | Domain/core package shell |
 | `packages/contracts/` | Shared contract package shell |
