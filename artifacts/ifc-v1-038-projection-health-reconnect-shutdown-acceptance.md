@@ -1,7 +1,7 @@
 # IFC-V1-038 Projection, Health, Reconnect, And Shutdown Acceptance
 
 Date: 2026-07-16
-Status: criteria frozen; implementation in progress
+Status: complete
 
 ## Objective
 
@@ -57,6 +57,26 @@ Run the real loopback Fastify lifecycle with migrated SQLite, daemon lease, sele
 - Keep the real listener/shutdown scenario independently bounded and include it in the fixed focused aggregate command.
 - Run adjacent fanout, handoff, subscriber, health, reconciliation, reconnect, and shutdown tests; all workspace suites; root/package typechecks; lint/exports; scaffold/planning/runtime-boundary; exact Codex 0.144.0 binding; frozen install; production audit/license inventory; and final diff/privacy/process/listener/temp inspection.
 - Record exact scenario, assertion, suite, resource, cleanup, commit, and push evidence here before closure.
+
+## Completion Evidence
+
+- `packages/server/src/projection-lifecycle-acceptance.test.ts` composes the migrated SQLite selected repository, production append and continuity ports, fanout, replay/live handoff, bounded subscriber service, host health, reconnect controller, and durable reconciliation lifecycle without adding a production orchestrator.
+- Generation one publishes exactly runtime-disconnected cursor 1, restart boundary cursor 2, and runtime-ready cursor 3. A live subscriber receives all three; a subscriber reconnecting after cursor 1 receives the exact durable boundary/ready suffix.
+- Remote ready-to-unavailable-to-ready changes leave the local snapshot and current mutation proof unchanged. A generation-one crash closes controller admission synchronously, settles one sent mutation as unknown, persists disconnected cursor 4, invalidates the old health proof, and enters held generation-two reconciliation.
+- Releasing the gate repeats compatibility, commits disconnect boundary cursor 5, resubscribes once, publishes runtime-ready cursor 6, and opens generation-two request and mutation-health admission. The original mutation has exactly one `turn/start` send.
+- Three later committed messages publish as cursors 7 to 9. Cursor 9 closes only the stalled queue at the exact eight-event cap; the healthy stream receives all nine publications, fanout remains healthy, and a replacement replay receives cursors 5 to 9.
+- Shared paired-authority abort closes two streams, request abort closes one, and archive closes the two remaining streams for that session while leaving another session open. Service close releases the unrelated stream; final subscriber/fanout/controller counters and registrations are zero.
+- A separate forced SQLite insert rollback leaves durable events and actual fanout delivery at zero. Every successful publication is deep-equal to the already committed durable event and agrees with the committed projection/revision at callback time.
+- The bounded real Fastify shutdown scenario retains one `turn/start` send, closes active SSE, records one accepted-to-incomplete audit trail, completes all ten application stages, closes SQLite, and proves lease/listener reuse.
+
+## Validation Results
+
+- Fixed aggregate pair: two files and three tests passed. Full adjacent reconnect/reconciliation/health/fanout/handoff/subscriber/route/transport/heartbeat/shutdown/lifecycle matrix: 13 files and 185 tests passed.
+- Workspace suites: unit 1,792 passed with 27 explicit skips across 181 passed and 26 skipped files; contract 259; integration 18; web 33.
+- Root and all eight package typechecks pass. Lint/exports checks 508 files and eight packages; scaffold checks eight packages and 20 scripts; planning checks 212 tasks, 84 requirements, 649 dependencies, and three queued tasks before closure; runtime-boundary passes.
+- Frozen offline install and exact Codex 0.144.0 binding verification pass at 671 files and SHA-256 `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. Production audit reports no known vulnerabilities; 155 permissive production license entries cover 159 installed paths.
+- Final diff/privacy review finds no credential, private key, real tailnet suffix, retained payload, or raw cause in the committed aggregate surface. No HostDeck/Vitest/Codex test process, listener, ADB daemon, or test-created temporary root remains; `/tmp/hostdeck-codex-0.144.0` is the deliberate exact-version toolchain.
+- Criteria are pushed as `e29173e`; aggregate implementation as `2016f70`.
 
 ## Explicit Non-Goals
 

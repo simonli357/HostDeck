@@ -16,9 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-038` Run aggregate fanout, health, reconnect, and shutdown acceptance | in_progress | none | Strict cross-module recovery, health-independence, stream-isolation, real-shutdown, and cleanup criteria are frozen. |
-| 2 | `IFC-V1-039` Implement liveness, readiness, and host status routes | ready | none | The selected manifest, read authority, and mutable health port are complete. |
-| 3 | `IFC-V1-068` Implement managed-session list and detail routes | ready | none | The selected manifest, read authority, projection repository, and health port are complete. |
+| 1 | `IFC-V1-039` Implement liveness, readiness, and host status routes | ready | none | The selected manifest, read authority, mutable health port, and aggregate lifecycle acceptance are complete. |
+| 2 | `IFC-V1-068` Implement managed-session list and detail routes | ready | none | The selected manifest, read authority, projection repository, and health port are complete. |
+| 3 | `IFC-V1-078` Compose remote ingress startup, health, SSE, reconnect, and shutdown lifecycle | ready | none | Generic host lifecycle, aggregate projection recovery, and all selected Tailscale ingress leaves are complete. |
 
 ## Intentional Blockers
 
