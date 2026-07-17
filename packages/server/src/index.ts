@@ -31,6 +31,7 @@ export * from "./fastify-sse-transport.js";
 export * from "./fastify-static-boundary.js";
 export * from "./fastify-zod.js";
 export * from "./goal-routes.js";
+export * from "./health-routes.js";
 export * from "./host-health.js";
 export * from "./host-lock-routes.js";
 export * from "./host-startup-maintenance.js";

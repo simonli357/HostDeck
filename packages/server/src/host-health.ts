@@ -1,82 +1,44 @@
 import { isDeepStrictEqual } from "node:util";
 import {
   isoTimestampSchema,
+  isSelectedHostLocalHealthCauseValid,
   type RemoteIngressPublicState,
-  remoteIngressPublicStateSchema
+  remoteIngressPublicStateSchema,
+  type SelectedHostLocalHealthCause,
+  type SelectedHostLocalHealthComponent,
+  type SelectedHostLocalHealthState,
+  type SelectedHostRemoteObservationFailureCause,
+  selectedHostAggregateLocalHealthState,
+  selectedHostLocalHealthCauses,
+  selectedHostLocalHealthComponents,
+  selectedHostLocalHealthStates,
+  selectedHostRemoteObservationFailureCauses
 } from "@hostdeck/contracts";
 import {
   type ErrorCode,
-  type RemoteIngressUnavailableReason,
   remoteIngressUnavailableReasons
 } from "@hostdeck/core";
 
-export const hostDeckLocalHealthComponents = [
-  "storage",
-  "runtime",
-  "compatibility",
-  "projector",
-  "fanout",
-  "listener",
-  "lease"
-] as const;
+export const hostDeckLocalHealthComponents = selectedHostLocalHealthComponents;
 export type HostDeckLocalHealthComponent =
-  (typeof hostDeckLocalHealthComponents)[number];
+  SelectedHostLocalHealthComponent;
 
-export const hostDeckLocalHealthStates = [
-  "unknown",
-  "ready",
-  "degraded",
-  "stale",
-  "failed"
-] as const;
+export const hostDeckLocalHealthStates = selectedHostLocalHealthStates;
 export type HostDeckLocalHealthState =
-  (typeof hostDeckLocalHealthStates)[number];
+  SelectedHostLocalHealthState;
 
-export const hostDeckLocalHealthReasons = [
-  "not_observed",
-  "source_unknown",
-  "source_stale",
-  "audit_reconciliation_degraded",
-  "retention_degraded",
-  "startup_maintenance_failed",
-  "storage_unavailable",
-  "runtime_starting",
-  "runtime_disconnected",
-  "runtime_reconciling",
-  "runtime_failed",
-  "compatibility_unchecked",
-  "compatibility_degraded",
-  "runtime_incompatible",
-  "projector_not_ready",
-  "projector_failed",
-  "fanout_not_ready",
-  "fanout_closed",
-  "fanout_failed",
-  "listener_not_ready",
-  "listener_draining",
-  "listener_closed",
-  "listener_failed",
-  "lease_not_held",
-  "lease_lost",
-  "lease_failed"
-] as const;
+export const hostDeckLocalHealthReasons = selectedHostLocalHealthCauses;
 export type HostDeckLocalHealthReason =
-  (typeof hostDeckLocalHealthReasons)[number];
+  SelectedHostLocalHealthCause;
 export type HostDeckReportedLocalHealthReason = Exclude<
   HostDeckLocalHealthReason,
   "not_observed"
 >;
 
-export const hostDeckRemoteHealthObservationFailureReasons = [
-  "command_failed",
-  "command_timeout",
-  "output_oversized",
-  "schema_invalid",
-  "profile_changed",
-  "observation_failed"
-] as const satisfies readonly RemoteIngressUnavailableReason[];
+export const hostDeckRemoteHealthObservationFailureReasons =
+  selectedHostRemoteObservationFailureCauses;
 export type HostDeckRemoteHealthObservationFailureReason =
-  (typeof hostDeckRemoteHealthObservationFailureReasons)[number];
+  SelectedHostRemoteObservationFailureCause;
 
 export const hostDeckHostHealthErrorCodes = [
   "clock_invalid",
@@ -209,12 +171,6 @@ interface MutationProofState {
   readonly owner: symbol;
 }
 
-interface ReasonRule {
-  readonly components: readonly HostDeckLocalHealthComponent[];
-  readonly states: readonly HostDeckLocalHealthState[];
-}
-
-const allComponents = hostDeckLocalHealthComponents;
 const acceptedServices = new WeakSet<object>();
 const acceptedErrors = new WeakSet<object>();
 const mutationProofStates = new WeakMap<object, MutationProofState>();
@@ -244,36 +200,6 @@ const healthErrorMessages: Readonly<
   source_conflict: "Host health source generation conflicts with current truth.",
   source_regression: "Host health source generation regressed."
 });
-
-const reasonRules: Readonly<Record<HostDeckLocalHealthReason, ReasonRule>> =
-  Object.freeze({
-    not_observed: rule(allComponents, ["unknown"]),
-    source_unknown: rule(allComponents, ["unknown"]),
-    source_stale: rule(allComponents, ["stale"]),
-    audit_reconciliation_degraded: rule(["storage"], ["degraded"]),
-    retention_degraded: rule(["storage"], ["degraded"]),
-    startup_maintenance_failed: rule(["storage"], ["failed"]),
-    storage_unavailable: rule(["storage"], ["failed"]),
-    runtime_starting: rule(["runtime"], ["degraded"]),
-    runtime_disconnected: rule(["runtime"], ["degraded"]),
-    runtime_reconciling: rule(["runtime"], ["degraded"]),
-    runtime_failed: rule(["runtime"], ["failed"]),
-    compatibility_unchecked: rule(["compatibility"], ["unknown"]),
-    compatibility_degraded: rule(["compatibility"], ["degraded"]),
-    runtime_incompatible: rule(["compatibility"], ["failed"]),
-    projector_not_ready: rule(["projector"], ["degraded"]),
-    projector_failed: rule(["projector"], ["failed"]),
-    fanout_not_ready: rule(["fanout"], ["degraded"]),
-    fanout_closed: rule(["fanout"], ["failed"]),
-    fanout_failed: rule(["fanout"], ["failed"]),
-    listener_not_ready: rule(["listener"], ["degraded"]),
-    listener_draining: rule(["listener"], ["degraded"]),
-    listener_closed: rule(["listener"], ["failed"]),
-    listener_failed: rule(["listener"], ["failed"]),
-    lease_not_held: rule(["lease"], ["failed"]),
-    lease_lost: rule(["lease"], ["failed"]),
-    lease_failed: rule(["lease"], ["failed"])
-  });
 
 export function createHostDeckHostHealthService(
   input: CreateHostDeckHostHealthServiceInput
@@ -583,7 +509,9 @@ class DefaultHostDeckHostHealthService {
         this.requireComponent(component)
       )
     );
-    const state = aggregateLocalState(components);
+    const state = selectedHostAggregateLocalHealthState(
+      components.map((component) => component.state)
+    );
     const ready = state === "ready";
     return Object.freeze({
       generation,
@@ -630,11 +558,7 @@ function parseLocalUpdate(input: unknown): ParsedLocalObservation {
     throw healthError("invalid_update");
   }
   for (const reason of reasons) {
-    const ruleForReason = reasonRules[reason];
-    if (
-      !ruleForReason.components.includes(component) ||
-      !ruleForReason.states.includes(state)
-    ) {
+    if (!isSelectedHostLocalHealthCauseValid(component, state, reason)) {
       throw healthError("invalid_update");
     }
   }
@@ -668,20 +592,6 @@ function parseReasons(
       hostDeckLocalHealthReasons.indexOf(right)
   );
   return Object.freeze(parsed);
-}
-
-function aggregateLocalState(
-  components: readonly HostDeckLocalComponentHealthSnapshot[]
-): HostDeckLocalHealthState {
-  for (const state of [
-    "failed",
-    "degraded",
-    "stale",
-    "unknown"
-  ] as const) {
-    if (components.some((component) => component.state === state)) return state;
-  }
-  return "ready";
 }
 
 function remoteSnapshotFromState(
@@ -1006,16 +916,6 @@ function apiCodeForHealthError(code: HostDeckHostHealthErrorCode): ErrorCode {
 
 function retryableHealthError(code: HostDeckHostHealthErrorCode): boolean {
   return code === "mutation_not_ready" || code === "mutation_state_changed";
-}
-
-function rule(
-  components: readonly HostDeckLocalHealthComponent[],
-  states: readonly HostDeckLocalHealthState[]
-): ReasonRule {
-  return Object.freeze({
-    components: Object.freeze([...components]),
-    states: Object.freeze([...states])
-  });
 }
 
 function deepFreeze<T>(candidate: T): T {
