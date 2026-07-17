@@ -81,6 +81,161 @@ describe("selected write admission policy", () => {
     expect(accessorCalls).toBe(0);
   });
 
+  it("closes empty admission idempotently and rejects post-drain work before reading it", async () => {
+    const clock = { value: 0 };
+    const invalidSignalPolicy = createPolicy(clock);
+    await expect(
+      invalidSignalPolicy.drain({} as AbortSignal)
+    ).rejects.toMatchObject({ reason: "input_invalid", api_code: "validation_error" });
+    expect(invalidSignalPolicy.snapshot().phase).toBe("open");
+
+    const policy = createPolicy(clock);
+    const first = policy.beginDrain();
+    const repeated = policy.beginDrain();
+    expect(first).toMatchObject({
+      phase: "closed",
+      active_owners: 0,
+      active_drain_waiters: 0
+    });
+    expect(repeated).toEqual(first);
+    await expect(policy.drain(new AbortController().signal)).resolves.toMatchObject({
+      phase: "closed",
+      active_owners: 0
+    });
+
+    let propertyReads = 0;
+    const hostile = Object.defineProperty({}, "operation_id", {
+      enumerable: true,
+      get() {
+        propertyReads += 1;
+        return "op_admission_drained_hostile";
+      }
+    });
+    expect(() => policy.begin(hostile as never)).toThrow(
+      expect.objectContaining({
+        reason: "service_draining",
+        api_code: "runtime_unavailable",
+        retry_safe: false
+      })
+    );
+    expect(propertyReads).toBe(0);
+    expect(policy.snapshot()).toMatchObject({
+      phase: "closed",
+      attempts: 1,
+      drain_rejections: 1,
+      owner_claims: 0
+    });
+  });
+
+  it("waits for all existing owners and settles concurrent drain observers once", async () => {
+    const clock = { value: 0 };
+    const policy = createPolicy(clock);
+    const first = owner(
+      begin(policy, {
+        operationId: "op_admission_drain_first_001",
+        actor: writerActor,
+        intent: { value: 1 }
+      })
+    );
+    const second = owner(
+      begin(policy, {
+        operationId: "op_admission_drain_second_001",
+        actor: secondWriterActor,
+        intent: { value: 2 }
+      })
+    );
+    first.bindTarget(target("drain_first"));
+    second.bindTarget(target("drain_second"));
+
+    expect(policy.beginDrain()).toMatchObject({
+      phase: "draining",
+      active_owners: 2
+    });
+    expect(() =>
+      begin(policy, {
+        operationId: "op_admission_drain_first_001",
+        actor: writerActor,
+        intent: { value: 1 }
+      })
+    ).toThrow(expect.objectContaining({ reason: "service_draining" }));
+
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const firstAdd = vi.spyOn(firstController.signal, "addEventListener");
+    const firstRemove = vi.spyOn(firstController.signal, "removeEventListener");
+    const secondAdd = vi.spyOn(secondController.signal, "addEventListener");
+    const secondRemove = vi.spyOn(secondController.signal, "removeEventListener");
+    const firstDrain = policy.drain(firstController.signal);
+    const secondDrain = policy.drain(secondController.signal);
+    expect(policy.snapshot()).toMatchObject({
+      phase: "draining",
+      active_owners: 2,
+      active_drain_waiters: 2,
+      peak_active_drain_waiters: 2
+    });
+
+    first.complete(result("op_admission_drain_first_001"));
+    expect(policy.snapshot()).toMatchObject({
+      phase: "draining",
+      active_owners: 1,
+      active_drain_waiters: 2
+    });
+    const retainedError = Object.freeze(new Error("bounded drain failure"));
+    expect(() => second.fail(retainedError)).toThrow(retainedError);
+
+    const [firstResult, secondResult] = await Promise.all([firstDrain, secondDrain]);
+    expect(firstResult).toEqual(secondResult);
+    expect(firstResult).toMatchObject({
+      phase: "closed",
+      active_owners: 0,
+      active_targets: 0,
+      active_drain_waiters: 0
+    });
+    expect(firstAdd).toHaveBeenCalledTimes(1);
+    expect(firstRemove).toHaveBeenCalledTimes(1);
+    expect(secondAdd).toHaveBeenCalledTimes(1);
+    expect(secondRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it("detaches an aborted drain observer without abandoning the active owner", async () => {
+    const clock = { value: 0 };
+    const policy = createPolicy(clock);
+    const claim = owner(
+      begin(policy, {
+        operationId: "op_admission_drain_abort_001",
+        actor: writerActor,
+        intent: { value: 1 }
+      })
+    );
+    claim.bindTarget(target("drain_abort"));
+    const controller = new AbortController();
+    const remove = vi.spyOn(controller.signal, "removeEventListener");
+    const draining = policy.drain(controller.signal);
+    controller.abort(new Error("private shutdown timeout"));
+    await expect(draining).rejects.toMatchObject({
+      reason: "request_aborted",
+      api_code: "operation_timeout"
+    });
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(policy.snapshot()).toMatchObject({
+      phase: "draining",
+      active_owners: 1,
+      active_drain_waiters: 0,
+      drain_aborts: 1
+    });
+
+    abandon(claim, "owner cleanup after drain observer abort");
+    expect(policy.snapshot()).toMatchObject({
+      phase: "closed",
+      active_owners: 0,
+      abandoned_owners: 1
+    });
+    await expect(policy.drain(new AbortController().signal)).resolves.toMatchObject({
+      phase: "closed",
+      active_owners: 0
+    });
+  });
+
   it("canonicalizes key order and replays one immutable terminal result", async () => {
     const clock = { value: 0 };
     const policy = createPolicy(clock);

@@ -893,6 +893,7 @@ function admissionFailureStatus(code: ErrorCode): number {
       return 429;
     case "operation_timeout":
       return 504;
+    case "runtime_unavailable":
     case "service_overloaded":
       return 503;
     default:
@@ -910,6 +911,8 @@ function admissionFailureMessage(code: ErrorCode): string {
       return "Selected mutation request rate is exhausted.";
     case "operation_timeout":
       return "Selected mutation replay deadline exceeded.";
+    case "runtime_unavailable":
+      return "Selected mutation admission is draining.";
     case "service_overloaded":
       return "Selected mutation admission capacity is exhausted.";
     default:

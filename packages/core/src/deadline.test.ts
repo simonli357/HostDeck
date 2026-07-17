@@ -41,6 +41,25 @@ describe("monotonic operation deadline", () => {
     expect(clock.pendingCount).toBe(0);
   });
 
+  it("never exposes a duration above its cap with fractional clock values", () => {
+    const clock = new FakeDeadlineClock(48.3);
+    const owner = new AbortController();
+    const deadline = createOperationDeadline({ timeoutMs: 2_000, clock });
+    const view = createOperationDeadlineView({
+      timeoutMs: 2_000,
+      signal: owner.signal,
+      clock
+    });
+
+    expect(deadline.remainingMs()).toBe(2_000);
+    expect(deadline.timeoutMs()).toBe(2_000);
+    expect(view.remainingMs()).toBe(2_000);
+    expect(view.timeoutMs()).toBe(2_000);
+
+    deadline.dispose();
+    view.dispose();
+  });
+
   it("propagates parent abort once with the original reason and clears its timer", () => {
     const clock = new FakeDeadlineClock();
     const parent = new AbortController();

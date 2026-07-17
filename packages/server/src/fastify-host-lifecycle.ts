@@ -74,6 +74,8 @@ export interface HostDeckFastifyStartedRuntime<TContext> {
 }
 
 export interface HostDeckFastifyRuntimeOwner<TContext> {
+  readonly beginDrain: () => void;
+  readonly closeRuntime: (deadline: OperationDeadline) => void | Promise<void>;
   readonly closeSse: (deadline: OperationDeadline) => void | Promise<void>;
   readonly closeStartup: (deadline: OperationDeadline) => void | Promise<void>;
   readonly start: (
@@ -159,6 +161,8 @@ type ParsedLifecycleInput<TContext> = StartHostDeckFastifyLifecycleInput<TContex
 type ParsedRuntimeOwner<TContext> = HostDeckFastifyRuntimeOwner<TContext>;
 
 interface CleanupRuntimeOwner {
+  readonly beginDrain: () => void;
+  readonly closeRuntime: (deadline: OperationDeadline) => void | Promise<void>;
   readonly closeSse: (deadline: OperationDeadline) => void | Promise<void>;
   readonly closeStartup: (deadline: OperationDeadline) => void | Promise<void>;
 }
@@ -171,7 +175,13 @@ interface HttpConnectionRuntime {
   forcedShutdownConnections: number;
 }
 
-type CleanupStep = "listener" | "sse" | "app" | "startup";
+type CleanupStep =
+  | "drain"
+  | "listener"
+  | "sse"
+  | "runtime"
+  | "app"
+  | "startup";
 
 class HostDeckFastifyCleanupError extends Error {
   readonly step: CleanupStep;
@@ -197,7 +207,13 @@ const inputKeys = [
   "resourceBudget",
   "runtime"
 ];
-const runtimeOwnerKeys = ["closeSse", "closeStartup", "start"];
+const runtimeOwnerKeys = [
+  "beginDrain",
+  "closeRuntime",
+  "closeSse",
+  "closeStartup",
+  "start"
+];
 const startedRuntimeKeys = ["bind", "context"];
 const startedHttpsRuntimeKeys = ["bind", "context", "tls"];
 const bindKeys = ["host", "port", "transport"];
@@ -349,13 +365,19 @@ function parseRuntimeOwner<TContext>(input: unknown): ParsedRuntimeOwner<TContex
   assertPlainExactObject(input, runtimeOwnerKeys, "HostDeck Fastify runtime owner");
   const value = input as Partial<HostDeckFastifyRuntimeOwner<TContext>>;
   if (
+    typeof value.beginDrain !== "function" ||
+    typeof value.closeRuntime !== "function" ||
     typeof value.closeSse !== "function" ||
     typeof value.closeStartup !== "function" ||
     typeof value.start !== "function"
   ) {
-    throw new TypeError("HostDeck Fastify runtime owner requires start, SSE-close, and startup-close functions.");
+    throw new TypeError(
+      "HostDeck Fastify runtime owner requires start, drain, SSE-close, runtime-close, and startup-close functions."
+    );
   }
   return Object.freeze({
+    beginDrain: value.beginDrain.bind(value),
+    closeRuntime: value.closeRuntime.bind(value),
     closeSse: value.closeSse.bind(value),
     closeStartup: value.closeStartup.bind(value),
     start: value.start.bind(value)
@@ -586,6 +608,9 @@ async function closeLifecycleResources(
   });
   let listenerClose: Promise<void> | null = null;
   try {
+    const drainError = runSynchronousCleanupStep("drain", owner.beginDrain);
+    if (drainError !== null) errors.push(drainError);
+
     if (app !== null) {
       try {
         listenerClose = beginListenerClose(app);
@@ -599,12 +624,17 @@ async function closeLifecycleResources(
       "sse",
       owner.closeSse,
       shutdownDeadline,
-      Math.min(
-        budget.lifecycle_cleanup_step_timeout_ms,
-        budget.sse_shutdown_timeout_ms
-      )
+      budget.sse_shutdown_timeout_ms
     );
     if (sseError !== null) errors.push(sseError);
+
+    const runtimeError = await runCleanupStep(
+      "runtime",
+      owner.closeRuntime,
+      shutdownDeadline,
+      budget.lifecycle_shutdown_timeout_ms
+    );
+    if (runtimeError !== null) errors.push(runtimeError);
 
     if (app !== null) {
       try {
@@ -645,13 +675,29 @@ async function closeLifecycleResources(
       "startup",
       owner.closeStartup,
       shutdownDeadline,
-      budget.lifecycle_cleanup_step_timeout_ms
+      budget.lifecycle_shutdown_timeout_ms
     );
     if (startupError !== null) errors.push(startupError);
   } finally {
     shutdownDeadline.dispose();
   }
   return errors;
+}
+
+function runSynchronousCleanupStep(
+  step: "drain",
+  operation: () => void
+): HostDeckFastifyCleanupError | null {
+  try {
+    const result: unknown = operation();
+    if (result !== undefined) {
+      void Promise.resolve(result).catch(() => undefined);
+      throw new TypeError("HostDeck drain cleanup must complete synchronously.");
+    }
+    return null;
+  } catch (cause) {
+    return new HostDeckFastifyCleanupError(step, false, cause);
+  }
 }
 
 function beginListenerClose(app: HostDeckFastifyInstance): Promise<void> {
@@ -788,7 +834,11 @@ async function runCleanupStep(
     try {
       result = operation(stepDeadline);
     } catch (cause) {
-      return new HostDeckFastifyCleanupError(step, false, cause);
+      return new HostDeckFastifyCleanupError(
+        step,
+        isCleanupTimeout(cause, stepDeadline),
+        cause
+      );
     }
     try {
       await awaitWithSignal(Promise.resolve(result), stepDeadline.signal);
@@ -796,7 +846,7 @@ async function runCleanupStep(
     } catch (cause) {
       return new HostDeckFastifyCleanupError(
         step,
-        stepDeadline.signal.aborted || cause instanceof OperationDeadlineExceededError,
+        isCleanupTimeout(cause, stepDeadline),
         cause
       );
     }
@@ -806,7 +856,10 @@ async function runCleanupStep(
 }
 
 function awaitWithSignal<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) return Promise.reject(signal.reason);
+  if (signal.aborted) {
+    void promise.catch(() => undefined);
+    return Promise.reject(signal.reason);
+  }
   return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (callback: () => void) => {
@@ -821,7 +874,18 @@ function awaitWithSignal<T>(promise: Promise<T>, signal: AbortSignal): Promise<T
       (value) => finish(() => resolve(value)),
       (cause) => finish(() => reject(cause))
     );
+    if (signal.aborted) onAbort();
   });
+}
+
+function isCleanupTimeout(
+  cause: unknown,
+  deadline: OperationDeadline
+): boolean {
+  return (
+    cause instanceof OperationDeadlineExceededError ||
+    deadline.signal.reason instanceof OperationDeadlineExceededError
+  );
 }
 
 function createStartupError(

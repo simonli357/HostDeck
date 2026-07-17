@@ -104,6 +104,8 @@ describe("historical LAN network real HTTPS restart", () => {
       observeInternalError: () => undefined,
       resourceBudget: defaultResourceBudget,
       runtime: {
+        beginDrain() {},
+        closeRuntime() {},
         closeSse() {},
         closeStartup() {},
         start() {
@@ -209,6 +211,8 @@ describe("historical LAN network real HTTPS restart", () => {
       observeInternalError: () => undefined,
       resourceBudget: defaultResourceBudget,
       runtime: {
+        beginDrain() {},
+        closeRuntime() {},
         closeSse() {},
         closeStartup() {},
         start() {

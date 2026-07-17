@@ -94,7 +94,12 @@ describe("selected Fastify host lifecycle", () => {
       stage: "routes"
     });
     expect(forgedPolicyRouteCalls).toBe(0);
-    expect(forgedPolicyCleanup).toEqual(["close-sse", "close-startup"]);
+    expect(forgedPolicyCleanup).toEqual([
+      "begin-drain",
+      "close-sse",
+      "close-runtime",
+      "close-startup"
+    ]);
 
     const invalidCases: readonly [unknown, string][] = [
       [
@@ -137,6 +142,12 @@ describe("selected Fastify host lifecycle", () => {
           observeInternalError: () => undefined,
           resourceBudget: defaultResourceBudget,
           runtime: {
+            beginDrain() {
+              cleanupEvents.push("drain");
+            },
+            closeRuntime() {
+              cleanupEvents.push("runtime");
+            },
             closeSse() {
               cleanupEvents.push("sse");
             },
@@ -151,7 +162,7 @@ describe("selected Fastify host lifecycle", () => {
       );
       expect(error).toMatchObject({ code: "runtime_contract_invalid", stage: "runtime_contract" });
       expect(errorCauseMessages(error)).toContain(message);
-      expect(cleanupEvents).toEqual(["sse", "startup"]);
+      expect(cleanupEvents).toEqual(["drain", "sse", "runtime", "startup"]);
     }
 
     const startupTimeoutBudget = resolveResourceBudget({
@@ -167,6 +178,12 @@ describe("selected Fastify host lifecycle", () => {
         observeInternalError: () => undefined,
         resourceBudget: startupTimeoutBudget,
         runtime: {
+          beginDrain() {
+            timeoutCleanup.push("drain");
+          },
+          closeRuntime() {
+            timeoutCleanup.push("runtime");
+          },
           closeSse() {
             timeoutCleanup.push("sse");
           },
@@ -187,7 +204,7 @@ describe("selected Fastify host lifecycle", () => {
       })
     );
     expect(timeoutError).toMatchObject({ code: "startup_timeout", stage: "runtime" });
-    expect(timeoutCleanup).toEqual(["sse", "startup"]);
+    expect(timeoutCleanup).toEqual(["drain", "sse", "runtime", "startup"]);
   });
 
   it("readies before exact loopback bind, applies Node limits, and closes idempotently in order", async () => {
@@ -278,9 +295,11 @@ describe("selected Fastify host lifecycle", () => {
     const secondClose = service.close();
     expect(secondClose).toBe(firstClose);
     await firstClose;
-    expect(events.slice(-4)).toEqual([
+    expect(events.slice(-6)).toEqual([
+      "begin-drain",
       "sse-state:draining:false",
       "close-sse",
+      "close-runtime",
       "app-close",
       "close-startup"
     ]);
@@ -307,7 +326,12 @@ describe("selected Fastify host lifecycle", () => {
       })
     );
     expect(routeError).toMatchObject({ code: "route_composition_failed", stage: "routes" });
-    expect(routeEvents).toEqual(["close-sse", "close-startup"]);
+    expect(routeEvents).toEqual([
+      "begin-drain",
+      "close-sse",
+      "close-runtime",
+      "close-startup"
+    ]);
 
     const readyEvents: string[] = [];
     const readyPort = await getAvailablePort();
@@ -321,7 +345,14 @@ describe("selected Fastify host lifecycle", () => {
       })
     );
     expect(readyError).toMatchObject({ code: "app_ready_failed", stage: "ready" });
-    expect(readyEvents).toEqual(["plugin-register", "close-sse", "app-close", "close-startup"]);
+    expect(readyEvents).toEqual([
+      "plugin-register",
+      "begin-drain",
+      "close-sse",
+      "close-runtime",
+      "app-close",
+      "close-startup"
+    ]);
 
     const blocker = await listenOn(0);
     const blockedAddress = requireAddress(blocker);
@@ -340,7 +371,9 @@ describe("selected Fastify host lifecycle", () => {
       expect(listenEvents).toEqual([
         "plugin-register",
         "app-ready:false",
+        "begin-drain",
         "close-sse",
+        "close-runtime",
         "app-close",
         "close-startup"
       ]);
@@ -356,6 +389,14 @@ describe("selected Fastify host lifecycle", () => {
       observeInternalError: () => undefined,
       resourceBudget: defaultResourceBudget,
       runtime: {
+        beginDrain() {
+          closeEvents.push("begin-drain");
+          throw new Error("drain-close-secret");
+        },
+        closeRuntime() {
+          closeEvents.push("close-runtime");
+          throw new Error("runtime-close-secret");
+        },
         closeSse() {
           closeEvents.push("close-sse");
           throw new Error("sse-close-secret");
@@ -376,8 +417,73 @@ describe("selected Fastify host lifecycle", () => {
     expect(closeService.close()).toBe(rejectedClose);
     const closeError = await expectLifecycleFailure(rejectedClose);
     expect(closeError).toMatchObject({ code: "shutdown_failed", stage: "shutdown" });
-    expect(closeEvents).toEqual(["close-sse", "app-close", "close-startup"]);
+    expect(closeError.cause).toBeInstanceOf(AggregateError);
+    expect(
+      (closeError.cause as AggregateError).errors.map(
+        (error: { readonly step?: unknown }) => error.step
+      )
+    ).toEqual(["drain", "sse", "runtime", "app", "startup"]);
+    expect(closeEvents).toEqual([
+      "begin-drain",
+      "close-sse",
+      "close-runtime",
+      "app-close",
+      "close-startup"
+    ]);
     expect(closeService.snapshot()).toMatchObject({ listening: false, phase: "failed" });
+
+    const asyncDrainEvents: string[] = [];
+    const asyncDrainPort = await getAvailablePort();
+    const asyncDrainOwner = {
+      beginDrain() {
+        asyncDrainEvents.push("begin-drain");
+        return Promise.reject(new Error("private async drain rejection"));
+      },
+      closeRuntime() {
+        asyncDrainEvents.push("close-runtime");
+      },
+      closeSse() {
+        asyncDrainEvents.push("close-sse");
+      },
+      closeStartup() {
+        asyncDrainEvents.push("close-startup");
+      },
+      start() {
+        return {
+          bind: {
+            host: "127.0.0.1",
+            port: asyncDrainPort,
+            transport: "http"
+          },
+          context: {}
+        } as const;
+      }
+    } as unknown as HostDeckFastifyRuntimeOwner<object>;
+    const asyncDrainService = await startHostDeckFastifyLifecycle({
+      createRequestAuthenticationPolicy,
+      createRoutePlugins: () => [closeProbeRegistration(asyncDrainEvents)],
+      observeInternalError: () => undefined,
+      resourceBudget: defaultResourceBudget,
+      runtime: asyncDrainOwner
+    });
+    const asyncDrainError = await expectLifecycleFailure(
+      asyncDrainService.close()
+    );
+    expect(asyncDrainError).toMatchObject({
+      code: "shutdown_failed",
+      stage: "shutdown"
+    });
+    expect(asyncDrainEvents).toEqual([
+      "begin-drain",
+      "close-sse",
+      "close-runtime",
+      "app-close",
+      "close-startup"
+    ]);
+    expect(asyncDrainService.snapshot()).toMatchObject({
+      listening: false,
+      phase: "failed"
+    });
 
     const timeoutEvents: string[] = [];
     const timeoutBudget = resolveResourceBudget({
@@ -392,6 +498,12 @@ describe("selected Fastify host lifecycle", () => {
       observeInternalError: () => undefined,
       resourceBudget: timeoutBudget,
       runtime: {
+        beginDrain() {
+          timeoutEvents.push("begin-drain");
+        },
+        closeRuntime() {
+          timeoutEvents.push("close-runtime");
+        },
         closeSse() {
           timeoutEvents.push("close-sse-pending");
           return new Promise<void>(() => undefined);
@@ -411,7 +523,13 @@ describe("selected Fastify host lifecycle", () => {
     const timeoutError = await expectLifecycleFailure(timeoutService.close());
     expect(timeoutError).toMatchObject({ code: "shutdown_failed", stage: "shutdown" });
     expect(Date.now() - timeoutStarted).toBeLessThan(1_000);
-    expect(timeoutEvents.slice(-3)).toEqual(["close-sse-pending", "app-close", "close-startup"]);
+    expect(timeoutEvents.slice(-5)).toEqual([
+      "begin-drain",
+      "close-sse-pending",
+      "close-runtime",
+      "app-close",
+      "close-startup"
+    ]);
   });
 
   it("releases the real secure startup lease after registration/listen failures and clean restart", async () => {
@@ -464,6 +582,84 @@ describe("selected Fastify host lifecycle", () => {
     await bindRecovered.close();
   });
 
+  it("closes admission before refusal and runtime before an active request settles", async () => {
+    const port = await getAvailablePort();
+    const entered = deferred<void>();
+    const release = deferred<void>();
+    const events: string[] = [];
+    let requestSettled = false;
+    let runtimeBudgetMs = 0;
+    let startupBudgetMs = 0;
+    let service: Awaited<ReturnType<typeof startHostDeckFastifyLifecycle<object>>>;
+    service = await startHostDeckFastifyLifecycle({
+      createRequestAuthenticationPolicy,
+      createRoutePlugins: () => [
+        blockingRequestRegistration(entered, release, events, () => {
+          requestSettled = true;
+        }),
+        closeProbeRegistration(events)
+      ],
+      observeInternalError: () => undefined,
+      resourceBudget: defaultResourceBudget,
+      runtime: {
+        beginDrain() {
+          events.push(
+            `begin-drain:${service.snapshot().phase}:${service.app.server.listening}`
+          );
+        },
+        closeRuntime(deadline) {
+          runtimeBudgetMs = deadline.remainingMs();
+          events.push(
+            `close-runtime:${service.app.server.listening}:${requestSettled}`
+          );
+          release.resolve();
+        },
+        closeSse() {
+          events.push("close-sse");
+        },
+        closeStartup(deadline) {
+          startupBudgetMs = deadline.remainingMs();
+          events.push("close-startup");
+        },
+        start() {
+          return {
+            bind: { host: "127.0.0.1", port, transport: "http" },
+            context: {}
+          } as const;
+        }
+      }
+    });
+
+    const response = fetch(new URL("/api/blocking", service.baseUrl));
+    await entered.promise;
+    const closing = service.close();
+    expect(service.snapshot()).toMatchObject({ phase: "draining", listening: false });
+    await expect(fetch(new URL("/api/lifecycle", service.baseUrl))).rejects.toThrow();
+    await expect(response).resolves.toMatchObject({ status: 200 });
+    await closing;
+
+    expect(runtimeBudgetMs).toBeGreaterThan(
+      defaultResourceBudget.lifecycle_cleanup_step_timeout_ms
+    );
+    expect(startupBudgetMs).toBeGreaterThan(
+      defaultResourceBudget.lifecycle_cleanup_step_timeout_ms
+    );
+    expect(events).toEqual([
+      "request-entered",
+      "begin-drain:draining:true",
+      "close-sse",
+      "close-runtime:false:false",
+      "request-settled",
+      "app-close",
+      "close-startup"
+    ]);
+    expect(service.snapshot()).toMatchObject({
+      connections: { active_connections: 0, forced_shutdown_connections: 0 },
+      listening: false,
+      phase: "closed"
+    });
+  });
+
   it("stops accepting, closes an active finite SSE source, and restarts on the same port", async () => {
     const port = await getAvailablePort();
     const release = deferred<void>();
@@ -496,6 +692,14 @@ describe("selected Fastify host lifecycle", () => {
       observeInternalError: () => undefined,
       resourceBudget: defaultResourceBudget,
       runtime: {
+        beginDrain() {
+          events.push(
+            `begin-drain:${service.snapshot().phase}:${service.app.server.listening}`
+          );
+        },
+        closeRuntime() {
+          events.push("close-runtime");
+        },
         closeSse(deadline) {
           events.push(`close-sse:${service.snapshot().phase}:${service.app.server.listening}`);
           deadline.throwIfAborted();
@@ -520,8 +724,10 @@ describe("selected Fastify host lifecycle", () => {
     await closePromise;
     await client.ended;
     expect(events).toEqual([
+      "begin-drain:draining:true",
       "close-sse:draining:false",
       "source-finally",
+      "close-runtime",
       "app-close",
       "close-startup"
     ]);
@@ -546,6 +752,12 @@ function syntheticOwner<TContext>(
   onStart: (input: HostDeckFastifyRuntimeStartInput) => void = () => undefined
 ): HostDeckFastifyRuntimeOwner<TContext> {
   return {
+    beginDrain() {
+      events.push("begin-drain");
+    },
+    closeRuntime() {
+      events.push("close-runtime");
+    },
     closeSse() {
       beforeSseClose();
       events.push("close-sse");
@@ -623,6 +835,32 @@ function closeProbeRegistration(events: string[]): HostDeckRoutePluginRegistrati
   };
 }
 
+function blockingRequestRegistration(
+  entered: Deferred<void>,
+  release: Deferred<void>,
+  events: string[],
+  settle: () => void
+): HostDeckRoutePluginRegistration {
+  return {
+    id: "blocking-request",
+    surface: "api",
+    register(app) {
+      app.get(
+        "/api/blocking",
+        { schema: { response: { 200: z.strictObject({ ok: z.literal(true) }) } } },
+        async () => {
+          events.push("request-entered");
+          entered.resolve();
+          await release.promise;
+          settle();
+          events.push("request-settled");
+          return { ok: true as const };
+        }
+      );
+    }
+  };
+}
+
 interface SecureLocalPaths {
   readonly configDir: string;
   readonly runtimeDir: string;
@@ -652,6 +890,8 @@ function startSecureLifecycle(
     observeInternalError: () => undefined,
     resourceBudget: defaultResourceBudget,
     runtime: {
+      beginDrain() {},
+      closeRuntime() {},
       closeSse: () => undefined,
       closeStartup() {
         const owned = startup;

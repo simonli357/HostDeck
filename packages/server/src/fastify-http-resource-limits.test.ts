@@ -217,7 +217,12 @@ describe("real HostDeck HTTP resource limits", () => {
       in_flight_requests: 0
     });
     expect(first.handlerCalls).toBe(0);
-    expect(events).toEqual(["close-sse", "close-startup"]);
+    expect(events).toEqual([
+      "begin-drain",
+      "close-sse",
+      "close-runtime",
+      "close-startup"
+    ]);
     expect(first.service.app.server.address()).toBeNull();
     expect(first.service.app.server.listening).toBe(false);
 
@@ -266,6 +271,12 @@ async function startProbe(budget: ResourceBudget, options: ProbeOptions = {}): P
     observeInternalError: () => undefined,
     resourceBudget: budget,
     runtime: {
+      beginDrain() {
+        options.events?.push("begin-drain");
+      },
+      closeRuntime() {
+        options.events?.push("close-runtime");
+      },
       closeSse() {
         options.events?.push("close-sse");
       },

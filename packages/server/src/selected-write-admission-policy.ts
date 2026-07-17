@@ -23,7 +23,16 @@ export type HostDeckSelectedWriteAdmissionErrorReason =
   | "operation_conflict"
   | "rate_limit"
   | "request_aborted"
+  | "service_draining"
   | "target_limit";
+
+export const hostDeckSelectedWriteAdmissionPhases = [
+  "open",
+  "draining",
+  "closed"
+] as const;
+export type HostDeckSelectedWriteAdmissionPhase =
+  (typeof hostDeckSelectedWriteAdmissionPhases)[number];
 
 export class HostDeckSelectedWriteAdmissionError extends Error {
   constructor(
@@ -65,6 +74,7 @@ export type HostDeckSelectedWriteAdmissionDecision<T> =
   | HostDeckSelectedWriteAdmissionReplay<T>;
 
 export interface HostDeckSelectedWriteAdmissionSnapshot {
+  readonly phase: HostDeckSelectedWriteAdmissionPhase;
   readonly attempts: number;
   readonly owner_claims: number;
   readonly in_flight_replays: number;
@@ -79,16 +89,20 @@ export interface HostDeckSelectedWriteAdmissionSnapshot {
   readonly error_settlements: number;
   readonly abandoned_owners: number;
   readonly replay_aborts: number;
+  readonly drain_rejections: number;
+  readonly drain_aborts: number;
   readonly contract_failures: number;
   readonly clock_failures: number;
   readonly active_owners: number;
   readonly active_targets: number;
   readonly active_waiters: number;
+  readonly active_drain_waiters: number;
   readonly tracked_operations: number;
   readonly tracked_rate_buckets: number;
   readonly peak_active_owners: number;
   readonly peak_active_targets: number;
   readonly peak_active_waiters: number;
+  readonly peak_active_drain_waiters: number;
   readonly peak_tracked_keys: number;
 }
 
@@ -96,6 +110,10 @@ export interface HostDeckSelectedWriteAdmissionPolicy {
   readonly begin: <T>(
     input: BeginHostDeckSelectedWriteAdmissionInput
   ) => HostDeckSelectedWriteAdmissionDecision<T>;
+  readonly beginDrain: () => HostDeckSelectedWriteAdmissionSnapshot;
+  readonly drain: (
+    signal: AbortSignal
+  ) => Promise<HostDeckSelectedWriteAdmissionSnapshot>;
   readonly snapshot: () => HostDeckSelectedWriteAdmissionSnapshot;
 }
 
@@ -130,6 +148,13 @@ interface AdmissionWaiter {
   readonly onAbort: () => void;
 }
 
+interface DrainWaiter {
+  readonly signal: AbortSignal;
+  readonly resolve: (snapshot: HostDeckSelectedWriteAdmissionSnapshot) => void;
+  readonly reject: (error: Error) => void;
+  readonly onAbort: () => void;
+}
+
 type AdmissionSettlement =
   | Readonly<{ readonly type: "value"; readonly value: unknown }>
   | Readonly<{ readonly type: "error"; readonly error: Error }>;
@@ -158,11 +183,14 @@ interface MutableAdmissionCounters {
   errorSettlements: number;
   abandonedOwners: number;
   replayAborts: number;
+  drainRejections: number;
+  drainAborts: number;
   contractFailures: number;
   clockFailures: number;
   peakActiveOwners: number;
   peakActiveTargets: number;
   peakActiveWaiters: number;
+  peakActiveDrainWaiters: number;
   peakTrackedKeys: number;
 }
 
@@ -202,7 +230,8 @@ const admissionErrorMessages: Record<
   input_invalid: "Selected mutation admission input is invalid.",
   operation_conflict: "Selected mutation operation conflicts with retained state.",
   rate_limit: "Selected mutation request rate is exhausted.",
-  request_aborted: "Selected mutation replay request was aborted.",
+  request_aborted: "Selected mutation admission wait was aborted.",
+  service_draining: "Selected mutation admission is draining.",
   target_limit: "Selected mutation target concurrency is exhausted."
 });
 const routeIdPattern = /^[a-z][a-z0-9_]{0,119}$/u;
@@ -217,6 +246,8 @@ export function createHostDeckSelectedWriteAdmissionPolicy(
   const policy: HostDeckSelectedWriteAdmissionPolicy = Object.freeze({
     begin: <T>(execution: BeginHostDeckSelectedWriteAdmissionInput) =>
       implementation.begin<T>(execution),
+    beginDrain: () => implementation.beginDrain(),
+    drain: (signal: AbortSignal) => implementation.drain(signal),
     snapshot: () => implementation.snapshot()
   });
   acceptedAdmissionPolicies.add(policy);
@@ -252,7 +283,9 @@ class DefaultHostDeckSelectedWriteAdmissionPolicy {
   private readonly rateBuckets = new Map<string, RateBucket>();
   private readonly activeActors = new Map<string, number>();
   private readonly activeTargets = new Map<string, number>();
+  private readonly drainWaiters = new Set<DrainWaiter>();
   private readonly limits: CanonicalLimits;
+  private phase: HostDeckSelectedWriteAdmissionPhase = "open";
   private activeGlobal = 0;
   private activeTargetClaims = 0;
   private lastNow: number;
@@ -271,11 +304,14 @@ class DefaultHostDeckSelectedWriteAdmissionPolicy {
     errorSettlements: 0,
     abandonedOwners: 0,
     replayAborts: 0,
+    drainRejections: 0,
+    drainAborts: 0,
     contractFailures: 0,
     clockFailures: 0,
     peakActiveOwners: 0,
     peakActiveTargets: 0,
     peakActiveWaiters: 0,
+    peakActiveDrainWaiters: 0,
     peakTrackedKeys: 0
   };
 
@@ -288,6 +324,10 @@ class DefaultHostDeckSelectedWriteAdmissionPolicy {
     input: BeginHostDeckSelectedWriteAdmissionInput
   ): HostDeckSelectedWriteAdmissionDecision<T> {
     increment(this.counters, "attempts");
+    if (this.phase !== "open") {
+      increment(this.counters, "drainRejections");
+      throw admissionError("service_draining", "runtime_unavailable", false);
+    }
     let parsed: ParsedAdmissionInput;
     try {
       parsed = parseAdmissionInput(input, this.limits);
@@ -346,8 +386,46 @@ class DefaultHostDeckSelectedWriteAdmissionPolicy {
     return this.createOwnerDecision<T>(parsed.operationId, entry);
   }
 
+  beginDrain(): HostDeckSelectedWriteAdmissionSnapshot {
+    if (this.phase === "open") this.phase = "draining";
+    this.closeIfDrained();
+    return this.snapshot();
+  }
+
+  drain(signal: AbortSignal): Promise<HostDeckSelectedWriteAdmissionSnapshot> {
+    if (!isAbortSignal(signal)) {
+      return Promise.reject(admissionError("input_invalid", "validation_error", true));
+    }
+    const snapshot = this.beginDrain();
+    if (snapshot.phase === "closed") return Promise.resolve(snapshot);
+    if (signal.aborted) {
+      increment(this.counters, "drainAborts");
+      return Promise.reject(admissionError("request_aborted", "operation_timeout", false));
+    }
+    return new Promise((resolve, reject) => {
+      const waiter: DrainWaiter = {
+        signal,
+        resolve,
+        reject,
+        onAbort: () => {
+          if (!this.drainWaiters.delete(waiter)) return;
+          signal.removeEventListener("abort", waiter.onAbort);
+          increment(this.counters, "drainAborts");
+          reject(admissionError("request_aborted", "operation_timeout", false));
+        }
+      };
+      this.drainWaiters.add(waiter);
+      signal.addEventListener("abort", waiter.onAbort, { once: true });
+      if (this.drainWaiters.size > this.counters.peakActiveDrainWaiters) {
+        this.counters.peakActiveDrainWaiters = this.drainWaiters.size;
+      }
+      this.closeIfDrained();
+    });
+  }
+
   snapshot(): HostDeckSelectedWriteAdmissionSnapshot {
     return Object.freeze({
+      phase: this.phase,
       attempts: this.counters.attempts,
       owner_claims: this.counters.ownerClaims,
       in_flight_replays: this.counters.inFlightReplays,
@@ -362,16 +440,20 @@ class DefaultHostDeckSelectedWriteAdmissionPolicy {
       error_settlements: this.counters.errorSettlements,
       abandoned_owners: this.counters.abandonedOwners,
       replay_aborts: this.counters.replayAborts,
+      drain_rejections: this.counters.drainRejections,
+      drain_aborts: this.counters.drainAborts,
       contract_failures: this.counters.contractFailures,
       clock_failures: this.counters.clockFailures,
       active_owners: this.activeGlobal,
       active_targets: this.activeTargetClaims,
       active_waiters: this.activeWaiterCount(),
+      active_drain_waiters: this.drainWaiters.size,
       tracked_operations: this.operations.size,
       tracked_rate_buckets: this.rateBuckets.size,
       peak_active_owners: this.counters.peakActiveOwners,
       peak_active_targets: this.counters.peakActiveTargets,
       peak_active_waiters: this.counters.peakActiveWaiters,
+      peak_active_drain_waiters: this.counters.peakActiveDrainWaiters,
       peak_tracked_keys: this.counters.peakTrackedKeys
     });
   }
@@ -623,6 +705,19 @@ class DefaultHostDeckSelectedWriteAdmissionPolicy {
       else this.activeTargets.set(targetKey, targetCount - 1);
       this.activeTargetClaims -= 1;
     }
+    this.closeIfDrained();
+  }
+
+  private closeIfDrained(): void {
+    if (this.phase !== "draining" || this.activeGlobal !== 0) return;
+    this.phase = "closed";
+    const waiters = [...this.drainWaiters];
+    this.drainWaiters.clear();
+    for (const waiter of waiters) {
+      waiter.signal.removeEventListener("abort", waiter.onAbort);
+    }
+    const snapshot = this.snapshot();
+    for (const waiter of waiters) waiter.resolve(snapshot);
   }
 
   private settleWaiters(entry: AdmissionEntry): void {
@@ -762,7 +857,7 @@ function parseAdmissionInput(
   if (
     typeof values.route_id !== "string" ||
     !routeIdPattern.test(values.route_id) ||
-    !(values.signal instanceof AbortSignal)
+    !isAbortSignal(values.signal)
   ) {
     throw new TypeError();
   }
@@ -1056,4 +1151,14 @@ function increment(
   key: keyof MutableAdmissionCounters
 ): void {
   if (counters[key] < maximumCounter) counters[key] += 1;
+}
+
+function isAbortSignal(candidate: unknown): candidate is AbortSignal {
+  if (!(candidate instanceof AbortSignal)) return false;
+  try {
+    AbortSignal.any([candidate]);
+    return true;
+  } catch {
+    return false;
+  }
 }

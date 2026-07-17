@@ -82,6 +82,8 @@ describe("selected Fastify HTTPS lifecycle", () => {
         observeInternalError: () => undefined,
         resourceBudget: defaultResourceBudget,
         runtime: {
+          beginDrain() {},
+          closeRuntime() {},
           closeSse() {},
           closeStartup() {},
           start() {
@@ -159,6 +161,8 @@ describe("selected Fastify HTTPS lifecycle", () => {
           observeInternalError: () => undefined,
           resourceBudget: defaultResourceBudget,
           runtime: {
+            beginDrain() {},
+            closeRuntime() {},
             closeSse() {},
             closeStartup() {},
             start() {

@@ -128,7 +128,7 @@ export function createOperationDeadlineView(input: CreateOperationDeadlineViewIn
     if (input.signal.aborted) return 0;
     const now = readMonotonicNow(clock, lastNowMs);
     lastNowMs = now;
-    return Math.max(0, expiresAtMs - now);
+    return Math.min(timeoutMs, Math.max(0, expiresAtMs - now));
   };
   const throwIfAborted = (): void => {
     assertUsable();
@@ -169,6 +169,7 @@ class DefaultOperationDeadline implements OperationDeadline {
   private readonly controller = new AbortController();
   private readonly clock: MonotonicDeadlineClock;
   private readonly parentSignal: AbortSignal | undefined;
+  private readonly timeoutMsLimit: number;
   private timer: unknown = noDeadlineTimer;
   private lastNowMs: number;
   private disposed = false;
@@ -176,6 +177,7 @@ class DefaultOperationDeadline implements OperationDeadline {
   constructor(input: DefaultOperationDeadlineInput) {
     this.clock = input.clock;
     this.parentSignal = input.parentSignal;
+    this.timeoutMsLimit = input.timeoutMs;
     this.startedAtMs = input.startedAtMs;
     this.expiresAtMs = input.expiresAtMs;
     this.lastNowMs = input.startedAtMs;
@@ -215,7 +217,7 @@ class DefaultOperationDeadline implements OperationDeadline {
       this.expire();
       return 0;
     }
-    return this.expiresAtMs - now;
+    return Math.min(this.timeoutMsLimit, this.expiresAtMs - now);
   };
 
   timeoutMs = (maximumMs?: number): number => {
