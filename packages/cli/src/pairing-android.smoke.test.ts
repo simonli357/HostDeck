@@ -24,6 +24,7 @@ import {
   type RemoteServeDescriptor,
   remoteProxyTrustRejectionReasons,
   remoteServeDescriptorSchema,
+  selectedHostLockStateResponseSchema,
   selectedPairingFragmentPrefix,
   selectedPairingLinkSchema,
   selectedProjectionEventSchema,
@@ -51,8 +52,6 @@ import {
   type HostDeckFastifyLifecycle,
   type HostDeckRemoteIngressLifecycle,
   type HostDeckRoutePluginRegistration,
-  hostDeckLocalAdminRequestHeaderName,
-  hostDeckLocalAdminRequestHeaderValue,
   hostDeckNoStoreRouteConfig,
   requireHostDeckRequestAuthentication,
   resolveHostDeckRequestAuthentication,
@@ -77,6 +76,7 @@ import QRCode from "qrcode";
 import { build as viteBuild } from "vite";
 import { describe, it } from "vitest";
 import { cliExitCodes } from "./exit-codes.js";
+import { createBoundedLoopbackFetch } from "./loopback-http.js";
 import { runCli } from "./shell.js";
 
 const requireRemoteAndroidAcceptance =
@@ -2533,27 +2533,25 @@ async function postLocalUnlock(
     typeof baseUrl === "string",
     "Physical local-admin base URL was unavailable."
   );
-  const response = await fetch(new URL("/api/v1/access/unlock", baseUrl), {
+  const response = await createBoundedLoopbackFetch()(
+    new URL("/api/v1/access/unlock", baseUrl).toString(),
+    {
     method: "POST",
     headers: {
+      accept: "application/json",
+      "cache-control": "no-store",
       "content-type": "application/json",
-      [hostDeckLocalAdminRequestHeaderName]:
-        hostDeckLocalAdminRequestHeaderValue
     },
     body: JSON.stringify({
       operation_id: "op_physical_local_unlock_0001",
       confirmed: true
-    }),
-    signal: AbortSignal.timeout(10_000)
+    })
   });
-  const body = (await response.json()) as unknown;
+  const parsed = selectedHostLockStateResponseSchema.safeParse(
+    await response.json()
+  );
   return Object.freeze({
-    locked:
-      body !== null &&
-      typeof body === "object" &&
-      typeof (body as Record<string, unknown>).locked === "boolean"
-        ? ((body as Record<string, unknown>).locked as boolean)
-        : null,
+    locked: parsed.success ? parsed.data.locked : null,
     status: response.status
   });
 }
