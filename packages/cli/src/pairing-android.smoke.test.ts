@@ -168,6 +168,11 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           initialWifiEnabled = readAndroidWifiEnabled();
           await enforceUnrelatedAndroidNetwork(initialWifiEnabled);
           environmentFacts = readPhysicalEnvironmentFacts();
+          requireCondition(
+            (await readSelectedSavedProfileId()) ===
+              profileSwitch?.dedicatedProfileId,
+            "Physical acceptance must start on the dedicated saved profile."
+          );
           await switchSavedProfile(profileSwitch?.awayProfileId as string);
           selectedProfile = "away";
           foreignServeBefore = await readServeStatusFingerprint();
@@ -680,13 +685,14 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         if (displayContext !== null) await displayContext.close().catch(() => undefined);
         if (displayBrowser !== null) await displayBrowser.close().catch(() => undefined);
         if (display !== null) await closeServer(display.server).catch(() => undefined);
-        if (
-          requireRemoteAndroidAcceptance &&
-          profileSwitch !== null &&
-          selectedProfile === "away"
-        ) {
+        if (requireRemoteAndroidAcceptance && profileSwitch !== null) {
           try {
-            await switchSavedProfile(profileSwitch.dedicatedProfileId);
+            if (
+              (await readSelectedSavedProfileId()) !==
+              profileSwitch.dedicatedProfileId
+            ) {
+              await switchSavedProfile(profileSwitch.dedicatedProfileId);
+            }
             selectedProfile = "dedicated";
           } catch {
             // The failed acceptance retains this cleanup uncertainty.
@@ -1171,10 +1177,71 @@ async function switchSavedProfile(profileId: string): Promise<void> {
     "switch",
     profileId
   ]);
+  await waitFor(
+    async () => (await readSelectedSavedProfileId()) === profileId,
+    10_000,
+    "Physical saved-profile selection did not converge."
+  );
   requireCondition(
-    observation.exit_code === 0,
+    isAcceptedProfileSwitchObservation(observation),
     "Physical saved-profile switch failed."
   );
+}
+
+function isAcceptedProfileSwitchObservation(
+  observation: CommandObservation
+): boolean {
+  if (observation.stderr !== "") return false;
+  const switchingLine =
+    "Switching to account [^\\u0000-\\u001f\\u007f]{1,128}";
+  if (observation.exit_code === 0) {
+    return new RegExp(`^${switchingLine}\\r?\\n$`, "u").test(
+      observation.stdout
+    );
+  }
+  return (
+    observation.exit_code === 1 &&
+    new RegExp(
+      `^${switchingLine}\\r?\\nTailscale is stopped\\.\\r?\\n$`,
+      "u"
+    ).test(observation.stdout)
+  );
+}
+
+async function readSelectedSavedProfileId(): Promise<string> {
+  const observation = await runBoundedTailscaleCommand([
+    "switch",
+    "--list",
+    "--json"
+  ]);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(observation.stdout) as unknown;
+  } catch {
+    throw new Error("Physical saved-profile inventory was invalid.");
+  }
+  requireCondition(
+    observation.exit_code === 0 &&
+      observation.stderr === "" &&
+      Array.isArray(parsed) &&
+      parsed.length === 2 &&
+      parsed.every(
+        (profile) =>
+          profile !== null &&
+          typeof profile === "object" &&
+          isBoundedProfileId((profile as Record<string, unknown>).id) &&
+          typeof (profile as Record<string, unknown>).selected === "boolean"
+      ),
+    "Physical saved-profile inventory was unavailable."
+  );
+  const profiles = parsed as readonly Readonly<Record<string, unknown>>[];
+  const selected = profiles.filter((profile) => profile.selected === true);
+  requireCondition(
+    new Set(profiles.map((profile) => profile.id)).size === 2 &&
+      selected.length === 1,
+    "Physical saved-profile inventory was ambiguous."
+  );
+  return selected[0]?.id as string;
 }
 
 async function readServeStatusFingerprint(): Promise<ServeStatusFingerprint> {
