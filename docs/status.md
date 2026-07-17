@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `IFC-V1-035` bounded subscriber ownership is the next ready leaf; `IFC-V1-036` mutable local/remote health is also ready.
+- Active task: `IFC-V1-035` bounded subscriber ownership is in progress with hard criteria frozen; `IFC-V1-036` mutable local/remote health remains ready.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.5; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract plus 14 current Signal Ledger/Focus Rail visual targets are complete; both desktop-led boards remain rejected, and `FE-V1-003` is blocked only by human selection of exact assets/approved drift.
@@ -340,4 +340,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `INT-V1-032` aggregate implementation is pushed through `27e8ea9`, `a8bee14`, `31df836`, `b0cf5a2`, and `e67e263`; `BUG-011` coexistence repeatability correction is pushed as `7584321`. Exact aggregate evidence is bound to that clean commit.
 - `INT-V1-008` frozen criteria are pushed as `2a16077`; implementation/removal is pushed as `d3d91c1`. Owner-doc closure advances the selected runtime queue to `INT-V1-091`.
 - `INT-V1-091` criteria are pushed as `e3e4e29`, aggregate implementation as `4e28e17`, and exact vertical tmux-owner correction as `b573521`; clean-commit exact evidence and all closure gates pass.
-- Next action: freeze harsh criteria for ready leaf `IFC-V1-035`, then implement bounded subscriber queues and exact disconnect/revoke/archive cleanup. The phone may stay disconnected; React implementation independently waits for the `FE-V1-003` recorded visual selection.
+- Next action: implement the frozen `IFC-V1-035` subscriber service, selected stream route, source-owned backpressure termination, and exact disconnect/revoke/archive cleanup, then run its focused and workspace gates. The phone may stay disconnected; React implementation independently waits for the `FE-V1-003` recorded visual selection.
