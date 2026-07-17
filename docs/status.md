@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `IFC-V1-039` liveness, readiness, and host status routes is ready and next; `IFC-V1-068` remains ready, and `IFC-V1-078` is newly ready after aggregate lifecycle acceptance.
+- Active task: `IFC-V1-039` liveness, readiness, and host status route criteria are frozen; selected contracts, registration, and transition/privacy evidence are in progress. `IFC-V1-068` and `IFC-V1-078` remain ready.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.5; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract plus 14 current Signal Ledger/Focus Rail visual targets are complete; both desktop-led boards remain rejected, and `FE-V1-003` is blocked only by human selection of exact assets/approved drift.
@@ -352,4 +352,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-037` criteria are pushed as `2efe6ba` and implementation as `d475545`; selected admission, application controller, listener lifecycle, active request/SSE, real reconnect/SQLite/lease, adjacent ownership, all workspace/static/install/supply-chain, exact binding, privacy, and zero-residue evidence pass.
 - `IFC-V1-048` criteria are pushed as `a76bd67`, aggregate implementation as `a27c84e`, and immutable no-copy replay hardening as `bebc679`; focused/adjacent/workspace/static/install/supply-chain/privacy and zero-residue evidence pass.
 - `IFC-V1-038` criteria are pushed as `e29173e` and aggregate implementation as `2016f70`; deterministic/real/adjacent/workspace/static/install/supply-chain/privacy and zero-residue evidence pass.
-- Next action: implement `IFC-V1-039` liveness, readiness, and bounded host-status routes over the accepted mutable health boundary. The phone may stay disconnected; React implementation independently waits for the `FE-V1-003` recorded visual selection.
+- `IFC-V1-039` criteria are frozen in `artifacts/ifc-v1-039-health-status-routes.md`; next action is to implement the exact selected schemas and no-store route registration, then run the health/auth/privacy matrix. The phone may stay disconnected; React implementation independently waits for the `FE-V1-003` recorded visual selection.
