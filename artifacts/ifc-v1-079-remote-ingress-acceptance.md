@@ -1,7 +1,7 @@
 # IFC-V1-079 Remote Ingress Security And Android Acceptance
 
-Date: 2026-07-16
-Status: criteria frozen; implementation pending
+Date: 2026-07-17
+Status: criteria frozen; phone-runner implementation complete; physical evidence pending
 
 ## Objective
 
@@ -14,7 +14,7 @@ Depends on: `IFC-V1-059`, `IFC-V1-066`, `IFC-V1-072` to `IFC-V1-074`, and `IFC-V
 ## Scope Boundary
 
 - Automated evidence is one L2 acceptance-only composition over the selected production contracts, repositories, policies, route registrations, and lifecycle owners. Real SQLite, a real loopback Fastify listener, and the selected HTTP/SSE adapters are required.
-- The only test-specific routes may be a bounded protected read sentinel, exact-target audited write sentinel, bounded SSE source, and a secret-free phone driver. They must pass through the same selected ingress, device, permission, CSRF, lock, generation, request-authority, write-gate, deadline, audit, and cancellation boundaries as product routes.
+- The only test-specific routes may be a bounded protected read sentinel, exact-target audited write sentinel, bounded SSE source, and a secret-free phone driver. The phone driver is limited to fixed authenticated GET checkpoints and fixed host-selected commands held only in test memory; it accepts no arbitrary phone payload. These routes must pass through every applicable selected ingress, device, permission, CSRF, lock, generation, request-authority, write-gate, deadline, audit, and cancellation boundary used by product routes.
 - Deterministic Tailscale observation and command fixtures may replace the external CLI only in the automated matrix. They must implement the frozen observer/manager contracts and expose exact call accounting. Tests may not mutate lifecycle state, request provenance, admission, authority, repositories, or audit rows behind the production owners.
 - Physical evidence uses the installed Tailscale 1.98.8 CLI/daemon, one human-authorized saved HostDeck profile, one saved non-HostDeck profile, real private Serve HTTPS, Android Chrome, and the selected lifecycle. No fake proxy headers, direct LAN request, certificate bypass, custom CA, plaintext fallback, public listener, Funnel, router change, or HostDeck relay may satisfy a physical row.
 - This task does not claim the full 35-route production app, the dashboard UI, packaged `codexdeck`, user services, clean install, or release readiness. Those remain downstream in `IFC-V1-046`, frontend tasks, interface hardening, and release tasks.
@@ -72,23 +72,23 @@ The physical run is one uninterrupted, no-retry acceptance sequence. A failed ro
 | ID | Required assertion |
 | --- | --- |
 | `PHONE-01` | Record bounded host commit, Ubuntu/Node/Tailscale versions, Android model/API/release, Chrome version, and evidence timestamps. Store no serial, account, profile id/name, tailnet DNS name, IP address, node key, cookie, code, token, or raw command output. |
-| `PHONE-02` | Exactly one authorized USB-debug device is present for inspection only. Wi-Fi is disabled or has no laptop-LAN route; cellular or unrelated Wi-Fi plus Tailscale VPN routes are active. No app request may use ADB forwarding, USB networking, laptop LAN, plaintext HTTP, or a custom CA. |
-| `PHONE-03` | Before state records the selected dedicated profile, byte-counted Serve state, foreign-profile Serve state, HostDeck listeners/processes, and browser target/site-data policy in redacted form. The dedicated profile starts with the HostDeck path absent. |
+| `PHONE-02` | Exactly one authorized USB-debug device is present for bounded device-state inspection, browser launch/close, and screenshots only. Wi-Fi is disabled or has no laptop-LAN route; cellular or unrelated Wi-Fi plus Tailscale VPN routes are active. No app request may use ADB forwarding, USB networking, laptop LAN, plaintext HTTP, or a custom CA. |
+| `PHONE-03` | Before state records the selected dedicated profile, byte-counted Serve state, foreign-profile Serve state, HostDeck listeners/processes, and browser-runner/site-data policy in redacted form. The dedicated profile starts with the HostDeck path absent. The run does not depend on desktop Chrome, CDP, remote browser debugging, or browser-storage extraction from the laptop. |
 | `PHONE-04` | Selected lifecycle reaches local ready first. One explicit local enable creates exact private Serve HTTPS, and Android Chrome trusts it without warning, bypass, downloaded certificate, or user CA. An unpaired protected read fails. |
-| `PHONE-05` | An in-memory QR contains the fragment-only canonical link. The human scans it with the phone camera; Chrome removes the fragment before claim, one writer device is created, the cookie is hardened, and no secret crosses ADB/CDP arguments, screenshots, files, logs, referrer, or evidence. |
-| `PHONE-06` | Reload starts fragment-free, bootstraps fresh in-memory CSRF from the HttpOnly cookie, completes one protected read and one bounded audited write, and shows no bearer/CSRF value in JavaScript durable storage. |
+| `PHONE-05` | An in-memory QR contains the fragment-only canonical link. The human scans it with the phone camera; Chrome removes the fragment before any request, proves an unpaired protected read fails, creates one writer device, receives the hardened cookie, and exposes only a fixed authenticated checkpoint after success. No secret crosses ADB arguments, checkpoints, screenshots, files, logs, referrer, or evidence. |
+| `PHONE-06` | Reload starts fragment-free, bootstraps fresh in-memory CSRF from the HttpOnly cookie, completes protected reads and one bounded audited write, and shows no bearer/CSRF value in JavaScript durable storage. After one explicit human start gesture, the phone runner enters fullscreen and executes the remaining fixed sequence without desktop browser control. |
 | `PHONE-07` | A real authenticated EventSource receives at least one event and heartbeat. Phone-side Tailscale/network loss or laptop profile-away closes it; local HostDeck stays healthy and local CLI remains available. No Codex/sentinel work is canceled by the client disconnect. |
 | `PHONE-08` | Manual switch to the saved non-HostDeck profile makes private HostDeck HTTPS unavailable, closes active authority, performs zero manager mutation, and leaves the foreign profile's Serve status byte-identical. No browser success is accepted during the away interval. |
 | `PHONE-09` | Manual return to the dedicated profile recovers by observation only when exact persisted mapping/proof remain. The phone reconnects SSE and completes a protected read without re-pairing; manager command count is unchanged. Any non-exact return instead remains closed and requires explicit enable. |
-| `PHONE-10` | Current writer self-revocation closes active SSE, emits the deletion cookie, and makes read/bootstrap/write/reconnect fail. The redacted audit subset and SQLite truth agree, and browser site-data inspection retains no application secret. |
-| `PHONE-11` | One explicit local disable removes only the exact HostDeck Serve path. Chrome is closed, site data/test tabs are cleared, ADB forwarding is absent, temporary state is removed, dedicated profile selection is restored, foreign Serve bytes are unchanged, final dedicated Serve is absent, and no test process/listener remains. |
+| `PHONE-10` | Current writer self-revocation closes active SSE, emits the deletion cookie, and makes read/bootstrap/write/reconnect fail. The phone runner clears and verifies JavaScript-readable storage, then its fixed post-revoke checkpoint is rejected by current device authority. The redacted audit subset and SQLite truth agree. |
+| `PHONE-11` | One explicit local disable removes only the exact HostDeck Serve path. Chrome is closed after runner-owned storage cleanup, ADB forwarding/reversing is absent, temporary state is removed, dedicated profile selection is restored, foreign Serve bytes are unchanged, final dedicated Serve is absent, and no test process/listener remains. |
 | `PHONE-12` | Versioned repo evidence includes secret-free screenshots of the acceptance state at paired/ready, profile-away, recovered, and revoked/cleaned milestones plus bounded redacted command/result excerpts. QR, browser address bar, device ids, profile/account/DNS/IP values, notifications, and credentials must not appear. |
 
 ## Evidence And Privacy Contract
 
 - Automated results name exact files, assertions, seed, clock, and command. Physical evidence is bound to one commit and one run identifier generated without a secret.
 - Machine evidence may be written first to a mode-`0600` temporary file. A validator must reject unknown keys, private-value patterns, raw addresses/origins, nonterminal rows, retries, missing cleanup, mismatched commit, or an incomplete matrix before publishing a bounded repo artifact.
-- Screenshots are inspected before staging. They must show only the purpose-built secret-free acceptance state and system chrome needed to prove network/profile behavior.
+- Screenshots are captured directly from the fullscreen phone state through ADB and inspected before staging. They must show only the purpose-built secret-free acceptance state; browser address bars, notifications, and private system values are forbidden.
 - The run records counts and normalized reason families, never raw Tailscale `status`, `switch`, `serve`, DNS, certificate, identity, or proxy-header output.
 - A skipped device row, disconnected phone, unavailable saved profile, inability to prove no LAN route, or cleanup uncertainty is a failure, not an automated pass or prior-evidence substitute.
 

@@ -1,4 +1,9 @@
-import { execFile, execFileSync } from "node:child_process";
+import {
+  type ChildProcess,
+  execFile,
+  execFileSync,
+  spawn
+} from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import {
   chmodSync,
@@ -71,10 +76,9 @@ import {
   createSettingsRepository,
   openMigratedDatabase
 } from "@hostdeck/storage";
-import { type Browser, type BrowserContext, chromium, type Page } from "@playwright/test";
 import QRCode from "qrcode";
 import { build as viteBuild } from "vite";
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { cliExitCodes } from "./exit-codes.js";
 import { createBoundedLoopbackFetch } from "./loopback-http.js";
 import { runCli } from "./shell.js";
@@ -98,6 +102,71 @@ const physicalEvidenceDirectory = join(
 );
 const deviceForbiddenValues = new Set<string>();
 let adbCommandCount = 0;
+
+describe("physical Android phone-driver protocol", () => {
+  it("accepts only the frozen checkpoint and command sequence", () => {
+    const runtime = createPhysicalDriverRuntime();
+    for (const checkpoint of physicalCheckpointOrder) {
+      runtime.recordCheckpoint(checkpoint);
+    }
+    runtime.setCommand("prepare-away");
+    runtime.setCommand("revoke");
+
+    expect(runtime.snapshot()).toEqual({
+      checkpoints: physicalCheckpointOrder,
+      command: "revoke",
+      revision: 2
+    });
+    expect(Object.isFrozen(runtime.snapshot())).toBe(true);
+    expect(Object.isFrozen(runtime.snapshot().checkpoints)).toBe(true);
+    expect(() => runtime.recordCheckpoint("recovered")).toThrow(
+      "Physical phone checkpoint violated the frozen sequence."
+    );
+    expect(() => runtime.setCommand("cleanup")).toThrow(
+      "Physical phone command transition was invalid."
+    );
+  });
+
+  it("supports the bounded pairing-only cleanup branch", () => {
+    const runtime = createPhysicalDriverRuntime();
+    runtime.recordCheckpoint("paired");
+    runtime.recordCheckpoint("reloaded");
+    runtime.setCommand("cleanup");
+
+    expect(runtime.snapshot()).toEqual({
+      checkpoints: ["paired", "reloaded"],
+      command: "cleanup",
+      revision: 1
+    });
+    expect(() => runtime.recordCheckpoint("locked")).toThrow(
+      "Physical phone checkpoint violated the frozen sequence."
+    );
+  });
+
+  it("bundles a phone-resident runner without remote-debugging control", async () => {
+    const bundle = await buildPhysicalBrowserBundle();
+
+    expect(bundle).toContain("/__physical/checkpoint/");
+    expect(bundle).toContain("requestFullscreen");
+    expect(bundle).not.toMatch(
+      /chrome_devtools|Runtime\.evaluate|webSocketDebuggerUrl|__hostDeckPhysical/iu
+    );
+  });
+
+  it("closes the owned QR display process within its deadline", async () => {
+    const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      stdio: "ignore"
+    });
+    await new Promise<void>((resolve, reject) => {
+      child.once("error", reject);
+      child.once("spawn", resolve);
+    });
+
+    await closeQrDisplay(Object.freeze({ process: child }));
+
+    expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+  });
+});
 
 describePhysical("selected remote-ingress physical Android acceptance", () => {
   it(
@@ -123,8 +192,14 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         fragmentLeaks: 0,
         hardenedCookieObserved: false,
         noReferrerApiRequests: 0,
+        protectedReadRejections: 0,
+        protectedReadRequests: 0,
+        protectedReadSuccesses: 0,
+        rejectedRevokedCheckpoints: 0,
+        revokedCheckpointRequests: 0,
         revokeRequests: 0
       };
+      const driverRuntime = createPhysicalDriverRuntime();
       const sseRuntime: PhysicalSseRuntime = {
         active: 0,
         closed: 0,
@@ -142,11 +217,6 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       let host: HostDeckFastifyLifecycle<PhysicalRuntimeContext> | null = null;
       let lifecycleManager: TailscaleServeManager | null = null;
       let display: QrDisplay | null = null;
-      let displayBrowser: Browser | null = null;
-      let displayContext: BrowserContext | null = null;
-      let displayPage: Page | null = null;
-      let cdp: CdpClient | null = null;
-      let forwardPort: number | null = null;
       let remoteEnabled = false;
       let fallbackCleanup: CleanupTarget | null = null;
       let externalOrigin: string | null = null;
@@ -186,7 +256,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         const candidate = requireDedicatedAbsentCandidate(
           await observer.observeCandidate()
         );
-        await closeExistingChromeOriginTabs(candidate.externalOrigin);
+        adb(["shell", "am", "force-stop", "com.android.chrome"]);
         externalOrigin = candidate.externalOrigin;
         const port = await reserveLoopbackPort();
         localOrigin = `http://127.0.0.1:${port}`;
@@ -316,7 +386,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             lock,
             now
           }),
-          physicalProtectedRoute()
+          physicalProtectedRoute(),
+          physicalDriverRoute(driverRuntime)
         ];
         const routePlugins = [
           composePhysicalRouteRegistration(
@@ -406,10 +477,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           candidate.externalOrigin
         );
         await assertTrustedPhysicalPage(candidate.externalOrigin);
-        if (requireRemoteAndroidAcceptance) {
-          await assertUnpairedAndroidAccess(candidate.externalOrigin);
-          requireNoAdbApplicationTunnels();
-        }
+        requireNoAdbApplicationTunnels();
 
         const rendered: PairingRenderCapture = {
           link: null,
@@ -421,10 +489,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             env,
             renderPairingQr: async (link) => {
               rendered.link = selectedPairingLinkSchema.parse(link);
-              rendered.qrImage = await QRCode.toDataURL(link, {
+              rendered.qrImage = await QRCode.toBuffer(link, {
                 errorCorrectionLevel: "M",
                 margin: 4,
-                type: "image/png",
+                type: "png",
                 width: 560
               });
               return "Private QR display ready.";
@@ -436,7 +504,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           pairResult.exitCode === cliExitCodes.ok &&
             pairResult.stderr === "" &&
             typeof pairingLink === "string" &&
-            typeof qrImage === "string" &&
+            Buffer.isBuffer(qrImage) &&
             pairResult.stdout.includes(pairingLink) &&
             pairResult.stdout.includes("Private QR display ready.") &&
             !pairResult.stdout.includes("Code:"),
@@ -452,24 +520,15 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             parsedLink.search === "" &&
             /^[A-Za-z0-9_-]{22}$/u.test(pairingCode) &&
             secrets.has(pairingCode) &&
-            !qrImage.includes(pairingCode),
+            !(qrImage as Buffer).includes(Buffer.from(pairingCode, "utf8")),
           "Physical pairing link did not match the selected contract."
         );
         deviceForbiddenValues.add(pairingLink);
         pairResult = null;
 
-        display = await startQrDisplay(qrImage);
+        display = await startQrDisplay(qrImage as Buffer);
         rendered.link = null;
         rendered.qrImage = null;
-        displayBrowser = await chromium.launch({ headless: false });
-        displayContext = await displayBrowser.newContext({
-          viewport: { width: 760, height: 860 }
-        });
-        displayPage = await displayContext.newPage();
-        await displayPage.goto(display.url, { waitUntil: "load" });
-        await displayPage.bringToFront();
-        await displayPage.locator("img").waitFor({ state: "visible" });
-        display.clear();
 
         adb(["shell", "am", "force-stop", "com.android.chrome"]);
         openDefaultCamera();
@@ -493,69 +552,37 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           proxyRejection === null,
           `The physical phone was rejected at the Serve boundary (${proxyRejection}).`
         );
-        await displayPage.locator("#status").evaluate((element) => {
-          element.textContent = "Pairing accepted. Inspecting the phone...";
-        });
-        await displayContext.close();
-        displayContext = null;
-        await displayBrowser.close();
-        displayBrowser = null;
-        await closeServer(display.server);
+        await closeQrDisplay(display);
         display = null;
-        displayPage = null;
 
         requireChromeRunning();
-        forwardPort = createChromeForward();
-        const target = await waitForChromeTarget(
-          forwardPort,
-          candidate.externalOrigin,
-          30_000
-        );
-        cdp = await CdpClient.connect(
-          target.webSocketDebuggerUrl,
-          deviceForbiddenValues
-        );
-        await cdp.send("Runtime.enable");
-        await cdp.send("Page.enable");
         await waitFor(
-          async () =>
-            (await readPhoneSnapshot(cdp as CdpClient)).state === "paired",
+          () => hasPhysicalCheckpoint(driverRuntime, "paired"),
           30_000,
-          "Physical Chrome did not publish paired browser state."
+          "Physical Chrome did not validate paired browser state."
         );
-        const initialPhone = await readPhoneSnapshot(cdp);
-        assertPairedPhoneSnapshot(initialPhone);
-        requireCondition(
-          (await cdp.evaluate<number>(protectedReadExpression)) === 200,
-          "Physical paired cookie did not authorize a protected read."
+        await waitFor(
+          () => hasPhysicalCheckpoint(driverRuntime, "reloaded"),
+          30_000,
+          "Physical Chrome did not validate a fragment-free reload."
         );
+        requireChromeForeground();
         assertPairingRuntimeTruth(opened.db, requestInspection);
         assertPairingAudit(opened.db);
         assertSecretsAbsentFromDatabase(dbPath, secrets.values());
 
-        await cdp.send("Page.reload", { ignoreCache: true });
-        await waitFor(
-          async () =>
-            (await readPhoneSnapshot(cdp as CdpClient)).state === "no_fragment",
-          30_000,
-          "Physical Chrome reload did not reach the fragment-free state."
-        );
-        const reloadedPhone = await readPhoneSnapshot(cdp);
-        assertReloadedPhoneSnapshot(reloadedPhone);
-        requireCondition(
-          (await cdp.evaluate<number>(protectedReadExpression)) === 200,
-          "Physical reload lost the HttpOnly device authority."
-        );
-        assertPairingRuntimeTruth(opened.db, requestInspection);
-
         if (requireRemoteAndroidAcceptance) {
+          await waitFor(
+            () => hasPhysicalCheckpoint(driverRuntime, "started"),
+            claimTimeoutMs,
+            "Tap Start check on the unlocked phone to continue physical acceptance."
+          );
           fullResult = await runPhysicalSecuritySequence({
-            cdp,
             db: opened.db,
+            driver: driverRuntime,
             env,
             foreignServeBefore: foreignServeBefore as ServeStatusFingerprint,
             manager: requireLifecycleManager(lifecycleManager),
-            origin: candidate.externalOrigin,
             profileSwitch: profileSwitch as ProfileSwitchInput,
             remote: selectedRemote,
             requestInspection,
@@ -565,17 +592,23 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             },
             sseRuntime
           });
+        } else {
+          driverRuntime.setCommand("cleanup");
+          await waitFor(
+            () => requestInspection.rejectedRevokedCheckpoints === 1,
+            30_000,
+            "Physical pairing cleanup did not revoke browser authority."
+          );
+          requireCondition(
+            requestInspection.deletionCookieObserved &&
+              countMatchingRows(
+                opened.db,
+                "auth_devices",
+                "revoked_at IS NOT NULL"
+              ) === 1,
+            "Physical pairing cleanup truth was incomplete."
+          );
         }
-
-        await cdp.send("Storage.clearDataForOrigin", {
-          origin: candidate.externalOrigin,
-          storageTypes:
-            "cookies,local_storage,session_storage,indexeddb,cache_storage,service_workers"
-        });
-        requireCondition(
-          (await cdp.evaluate<number>(protectedReadExpression)) === 401,
-          "Physical HostDeck site-data cleanup did not remove device authority."
-        );
         await waitFor(
           () => selectedRemote.snapshot().poll_cycles >= 2,
           15_000,
@@ -611,24 +644,13 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             candidate.expectedProfileKey,
             fallbackCleanup.expectedServe
           );
-          await renderPhysicalState(cdp, {
-            detail: "Device authority removed. Private ingress is absent.",
-            state: "revoked_cleaned",
-            title: "Revoked and cleaned"
-          });
           await capturePhysicalScreenshot(
-            cdp,
             join(screenshotDirectory, "04-revoked-cleaned.png")
           );
           assertFullPhysicalAudit(opened.db);
           assertSecretsAbsentFromDatabase(dbPath, secrets.values());
         }
         fallbackCleanup = null;
-        await cdp.send("Page.close").catch(() => undefined);
-        cdp.close();
-        cdp = null;
-        adb(["forward", "--remove", `tcp:${forwardPort}`]);
-        forwardPort = null;
         adb(["shell", "am", "force-stop", "com.android.chrome"]);
         adb(["shell", "input", "keyevent", "KEYCODE_HOME"]);
         requireNoAdbApplicationTunnels();
@@ -675,23 +697,13 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           });
         }
       } finally {
-        if (cdp !== null) cdp.close();
-        if (forwardPort !== null) {
-          try {
-            adb(["forward", "--remove", `tcp:${forwardPort}`]);
-          } catch {
-            // Continue through ownership-safe host cleanup.
-          }
-        }
         try {
           adb(["shell", "am", "force-stop", "com.android.chrome"]);
           adb(["shell", "input", "keyevent", "KEYCODE_HOME"]);
         } catch {
           // A disconnected phone is reported by the main physical assertion.
         }
-        if (displayContext !== null) await displayContext.close().catch(() => undefined);
-        if (displayBrowser !== null) await displayBrowser.close().catch(() => undefined);
-        if (display !== null) await closeServer(display.server).catch(() => undefined);
+        if (display !== null) await closeQrDisplay(display).catch(() => undefined);
         if (requireRemoteAndroidAcceptance && profileSwitch !== null) {
           try {
             if (
@@ -763,12 +775,17 @@ interface RequestInspection {
   fragmentLeaks: number;
   hardenedCookieObserved: boolean;
   noReferrerApiRequests: number;
+  protectedReadRejections: number;
+  protectedReadRequests: number;
+  protectedReadSuccesses: number;
+  rejectedRevokedCheckpoints: number;
+  revokedCheckpointRequests: number;
   revokeRequests: number;
 }
 
 interface PairingRenderCapture {
   link: string | null;
-  qrImage: string | null;
+  qrImage: Buffer | null;
 }
 
 interface PhysicalRuntimeContext {
@@ -780,6 +797,30 @@ interface PhysicalSseRuntime {
   closed: number;
   maxActive: number;
   opened: number;
+}
+
+const physicalCheckpointOrder = [
+  "paired",
+  "reloaded",
+  "started",
+  "locked",
+  "unlocked",
+  "stream-ready",
+  "away-ready",
+  "recovered"
+] as const;
+
+type PhysicalCheckpoint = (typeof physicalCheckpointOrder)[number];
+type PhysicalDriverCommand = "hold" | "prepare-away" | "revoke" | "cleanup";
+
+interface PhysicalDriverRuntime {
+  readonly recordCheckpoint: (checkpoint: PhysicalCheckpoint) => void;
+  readonly setCommand: (command: PhysicalDriverCommand) => void;
+  readonly snapshot: () => Readonly<{
+    readonly checkpoints: readonly PhysicalCheckpoint[];
+    readonly command: PhysicalDriverCommand;
+    readonly revision: number;
+  }>;
 }
 
 interface ProfileSwitchInput {
@@ -830,52 +871,8 @@ interface PhysicalScreenshot {
 }
 
 interface QrDisplay {
-  readonly server: HttpServer;
-  readonly url: string;
-  readonly clear: () => void;
+  readonly process: ChildProcess;
 }
-
-interface ChromeTarget {
-  readonly id: string;
-  readonly title: string;
-  readonly type: string;
-  readonly url: string;
-  readonly webSocketDebuggerUrl: string;
-}
-
-interface ChromeTargetSnapshot {
-  readonly endpointAvailable: boolean;
-  readonly targets: readonly ChromeTarget[];
-}
-
-interface PhoneSnapshot {
-  readonly cacheCount: number;
-  readonly cookieLength: number;
-  readonly csrfGeneration: number | null;
-  readonly domHasPairFragment: boolean;
-  readonly hash: string;
-  readonly indexedDbCount: number;
-  readonly localStorageCount: number;
-  readonly pathname: string;
-  readonly permission: string | null;
-  readonly referrerHasPairFragment: boolean;
-  readonly resourceHasPairFragment: boolean;
-  readonly search: string;
-  readonly serviceWorkerCount: number;
-  readonly sessionStorageCount: number;
-  readonly state: string;
-  readonly summaryKeys: readonly string[];
-}
-
-interface CdpMessage {
-  readonly error?: unknown;
-  readonly id?: number;
-  readonly method?: string;
-  readonly result?: unknown;
-}
-
-const protectedReadExpression =
-  "fetch('/__physical/protected',{credentials:'include',cache:'no-store',referrerPolicy:'no-referrer'}).then((response)=>response.status)";
 
 function createSecretRegistry(): Readonly<{
   create(bytes: number): string;
@@ -977,11 +974,12 @@ function physicalPageRoute(bundle: string): HostDeckRoutePluginRegistration {
     "<!doctype html><html lang=\"en\"><head>" +
     "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
     "<title>HostDeck pairing acceptance</title>" +
-    `<style nonce="${nonce}">:root{font-family:Inter,system-ui,sans-serif;color:#17191c;background:#f4f5f6}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#f4f5f6}main{width:min(100%,420px);border-top:4px solid #167c5a;background:#fff;padding:30px 24px;box-shadow:0 10px 34px rgba(20,27,31,.12)}.brand{margin:0 0 26px;font-size:13px;font-weight:800;text-transform:uppercase;color:#525a61}.marker{width:44px;height:44px;display:grid;place-items:center;margin-bottom:22px;background:#e8f4ef;color:#116b4d;font-size:22px;font-weight:800;border-radius:6px}h1{margin:0;font-size:28px;line-height:1.15;letter-spacing:0}#status{margin:14px 0 0;font-size:17px;font-weight:700;color:#22272b}#detail{min-height:48px;margin:8px 0 0;color:#5b6268;font-size:15px;line-height:1.5}.rule{height:1px;margin:26px 0 18px;background:#dfe3e5}.foot{margin:0;font-size:12px;color:#747b81}</style></head>` +
+    `<style nonce="${nonce}">:root{font-family:Inter,system-ui,sans-serif;color:#17191c;background:#eef1f2}*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#eef1f2}body{min-height:100vh;min-height:100svh}main{min-height:100vh;min-height:100svh;display:flex;flex-direction:column;padding:clamp(28px,7vh,64px) 28px 32px;background:#fff;border-top:6px solid #167c5a}.brand{margin:0 0 clamp(48px,14vh,120px);font-size:14px;font-weight:800;text-transform:uppercase;color:#3e474d}.marker{width:52px;height:52px;display:grid;place-items:center;margin-bottom:28px;background:#e4f2ed;color:#116b4d;font-size:24px;font-weight:800;border-radius:6px}h1{margin:0;font-size:30px;line-height:1.15;letter-spacing:0}#status{margin:18px 0 0;font-size:20px;font-weight:750;color:#22272b}#detail{min-height:72px;margin:10px 0 0;color:#596168;font-size:16px;line-height:1.5}#start{width:100%;min-height:54px;margin:28px 0 0;border:0;border-radius:6px;background:#167c5a;color:#fff;font:inherit;font-size:17px;font-weight:750}#start:focus-visible{outline:3px solid #111;outline-offset:3px}#start[hidden]{display:none}.rule{height:1px;margin:auto 0 20px;background:#d9dfe2}.foot{margin:0;font-size:13px;color:#6d757b}html[data-acceptance-state=profile_away] main{border-top-color:#b26a00}html[data-acceptance-state=profile_away] .marker{background:#fff0d8;color:#8a5100}html[data-acceptance-state=recovered] main,html[data-acceptance-state=paired_ready] main{border-top-color:#167c5a}html[data-acceptance-state=revoked_cleaned] main{border-top-color:#4b555c}html[data-acceptance-state=revoked_cleaned] .marker{background:#e9edef;color:#3f484e}html[data-acceptance-state=failed] main{border-top-color:#a52e2e}html[data-acceptance-state=failed] .marker{background:#f8e5e5;color:#8d2525}@media(min-width:600px){main{width:480px;margin:0 auto;border-left:1px solid #d9dfe2;border-right:1px solid #d9dfe2}}</style></head>` +
     "<body><main><p class=\"brand\">HostDeck</p><div class=\"marker\" aria-hidden=\"true\">H</div>" +
     "<h1>Remote access check</h1><p id=\"status\">Starting</p>" +
-    "<p id=\"detail\">Preparing the private connection.</p><div class=\"rule\"></div>" +
-    "<p class=\"foot\">Private device acceptance</p></main>" +
+    "<p id=\"detail\">Checking the private phone connection.</p>" +
+    "<button id=\"start\" type=\"button\" hidden>Start check</button><div class=\"rule\"></div>" +
+    "<p class=\"foot\">Private Android acceptance</p></main>" +
     `<script type="module" nonce="${nonce}">${bundle}</script></body></html>`;
   const registration: HostDeckRoutePluginRegistration = {
     id: "physical-fragment-pairing-page",
@@ -1024,6 +1022,127 @@ function physicalProtectedRoute(): HostDeckRoutePluginRegistration {
     }
   };
   return Object.freeze(registration);
+}
+
+function createPhysicalDriverRuntime(): PhysicalDriverRuntime {
+  const checkpoints: PhysicalCheckpoint[] = [];
+  let command: PhysicalDriverCommand = "hold";
+  let revision = 0;
+  return Object.freeze({
+    recordCheckpoint(checkpoint: PhysicalCheckpoint) {
+      const expected = physicalCheckpointOrder[checkpoints.length];
+      requireCondition(
+        checkpoint === expected,
+        "Physical phone checkpoint violated the frozen sequence."
+      );
+      checkpoints.push(checkpoint);
+    },
+    setCommand(next: PhysicalDriverCommand) {
+      const allowed =
+        (command === "hold" &&
+          (next === "prepare-away" || next === "cleanup")) ||
+        (command === "prepare-away" && next === "revoke");
+      requireCondition(allowed, "Physical phone command transition was invalid.");
+      command = next;
+      revision += 1;
+    },
+    snapshot() {
+      return Object.freeze({
+        checkpoints: Object.freeze([...checkpoints]),
+        command,
+        revision
+      });
+    }
+  });
+}
+
+function hasPhysicalCheckpoint(
+  runtime: PhysicalDriverRuntime,
+  checkpoint: PhysicalCheckpoint
+): boolean {
+  return runtime.snapshot().checkpoints.includes(checkpoint);
+}
+
+function physicalDriverRoute(
+  runtime: PhysicalDriverRuntime
+): HostDeckRoutePluginRegistration {
+  const registration: HostDeckRoutePluginRegistration = {
+    id: "physical-phone-driver",
+    surface: "api",
+    register(app) {
+      for (const checkpoint of physicalCheckpointOrder) {
+        const path = `/__physical/checkpoint/${checkpoint}`;
+        app.get(
+          path,
+          {
+            config: hostDeckNoStoreRouteConfig,
+            exposeHeadRoute: false,
+            async preHandler(request) {
+              requirePhysicalDriverRequest(request, path);
+              requireHostDeckRequestAuthentication(request, "device_cookie");
+            }
+          },
+          async (_request, reply) => {
+            runtime.recordCheckpoint(checkpoint);
+            return reply.code(204).send();
+          }
+        );
+      }
+      const revokedPath = "/__physical/checkpoint/revoked";
+      app.get(
+        revokedPath,
+        {
+          config: hostDeckNoStoreRouteConfig,
+          exposeHeadRoute: false,
+          async preHandler(request) {
+            requirePhysicalDriverRequest(request, revokedPath);
+            requireHostDeckRequestAuthentication(request, "device_cookie");
+          }
+        },
+        async (_request, reply) =>
+          reply.code(409).send({
+            code: "authority_not_revoked",
+            message: "Device authority remains active.",
+            retryable: false
+          })
+      );
+      app.get(
+        "/__physical/command",
+        {
+          config: hostDeckNoStoreRouteConfig,
+          exposeHeadRoute: false,
+          async preHandler(request) {
+            requirePhysicalDriverRequest(request, "/__physical/command");
+            requireHostDeckRequestAuthentication(request, "device_cookie");
+          }
+        },
+        async () => {
+          const snapshot = runtime.snapshot();
+          return Object.freeze({
+            command: snapshot.command,
+            revision: snapshot.revision
+          });
+        }
+      );
+    }
+  };
+  return Object.freeze(registration);
+}
+
+function requirePhysicalDriverRequest(
+  request: Readonly<{
+    readonly headers: Readonly<Record<string, string | readonly string[] | undefined>>;
+    readonly url: string;
+  }>,
+  path: string
+): void {
+  const contentLength = request.headers["content-length"];
+  requireCondition(
+    request.url === path &&
+      (contentLength === undefined || contentLength === "0") &&
+      request.headers["transfer-encoding"] === undefined,
+    "Physical phone driver rejected an unexpected request shape."
+  );
 }
 
 function physicalSseRoute(
@@ -1094,14 +1213,24 @@ function installRequestInspection(
       inspection.csrfRequests += 1;
       if (referrer === undefined) inspection.noReferrerApiRequests += 1;
     }
+    if (request.url === "/__physical/protected") {
+      inspection.protectedReadRequests += 1;
+    }
     if (
       request.url.startsWith("/api/v1/access/devices/") &&
       request.url.endsWith("/revoke")
     ) {
       inspection.revokeRequests += 1;
     }
+    if (request.url === "/__physical/checkpoint/revoked") {
+      inspection.revokedCheckpointRequests += 1;
+    }
   });
   app.addHook("onResponse", async (request, reply) => {
+    if (request.url === "/__physical/protected") {
+      if (reply.statusCode === 200) inspection.protectedReadSuccesses += 1;
+      if (reply.statusCode === 401) inspection.protectedReadRejections += 1;
+    }
     if (
       request.url === "/api/v1/access/pairing-claims" &&
       reply.statusCode >= 200 &&
@@ -1135,6 +1264,12 @@ function installRequestInspection(
         /;\s*Secure(?:;|$)/iu.test(values[0] ?? "") &&
         /;\s*HttpOnly(?:;|$)/iu.test(values[0] ?? "") &&
         /;\s*SameSite=Strict(?:;|$)/iu.test(values[0] ?? "");
+    }
+    if (
+      request.url === "/__physical/checkpoint/revoked" &&
+      reply.statusCode === 401
+    ) {
+      inspection.rejectedRevokedCheckpoints += 1;
     }
   });
 }
@@ -1451,7 +1586,7 @@ async function assertTrustedPhysicalPage(origin: string): Promise<void> {
   requireCondition(
     response.status === 200 &&
       response.body.includes("HostDeck pairing acceptance") &&
-      response.body.includes("__hostDeckPhysicalPairing"),
+      response.body.includes("/__physical/checkpoint/"),
     "Physical HTTPS page preflight was invalid."
   );
 }
@@ -1485,41 +1620,70 @@ function isTailnetIpv4(value: string): boolean {
   );
 }
 
-async function startQrDisplay(dataUrl: string): Promise<QrDisplay> {
+async function startQrDisplay(png: Buffer): Promise<QrDisplay> {
   requireCondition(
-    /^data:image\/png;base64,[A-Za-z0-9+/=]+$/u.test(dataUrl) &&
-      Buffer.byteLength(dataUrl, "utf8") <=
-        defaultResourceBudget.cli_response_max_bytes * 4,
+    png.length >= 1_024 &&
+      png.length <= defaultResourceBudget.cli_response_max_bytes * 4 &&
+      png.subarray(0, 8).equals(
+        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+      ) &&
+      existsSync("/usr/bin/display"),
     "Physical QR image was invalid."
   );
-  let html =
-    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
-    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
-    "<title>HostDeck private pairing QR</title>" +
-    "<style>body{font-family:system-ui,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;background:#fff;color:#111}main{text-align:center}img{width:min(70vw,560px);height:auto;image-rendering:pixelated}p{font-size:20px;max-width:34rem}</style>" +
-    `</head><body><main><h1>HostDeck</h1><p id="status">Open Camera on the phone, scan this QR, and tap the private link.</p><img alt="Private HostDeck pairing QR" src="${dataUrl}"></main></body></html>`;
-  const server = createServer((_request, response) => {
-    response.writeHead(200, {
-      "cache-control": "no-store",
-      "content-security-policy": "default-src 'none'; img-src data:; style-src 'unsafe-inline'; frame-ancestors 'none'",
-      "content-type": "text/html; charset=utf-8",
-      "referrer-policy": "no-referrer",
-      "x-content-type-options": "nosniff"
-    });
-    response.end(html);
-  });
-  await listen(server, 0);
-  const address = server.address();
-  requireCondition(
-    address !== null && typeof address !== "string",
-    "Physical QR display did not bind loopback."
-  );
-  return Object.freeze({
-    server,
-    url: `http://127.0.0.1:${(address as AddressInfo).port}/`,
-    clear() {
-      html = "<!doctype html><title>HostDeck QR consumed</title>";
+  const child = spawn(
+    "/usr/bin/display",
+    ["-title", "HostDeck private pairing QR", "png:-"],
+    {
+      env: { PATH: process.env.PATH, HOME: process.env.HOME, DISPLAY: process.env.DISPLAY },
+      stdio: ["pipe", "ignore", "ignore"]
     }
+  );
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error("Physical QR display did not start.")),
+      5_000
+    );
+    child.once("error", () => {
+      clearTimeout(timeout);
+      reject(new Error("Physical QR display did not start."));
+    });
+    child.once("spawn", () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+  child.stdin?.on("error", () => undefined);
+  requireCondition(
+    child.stdin !== null && child.exitCode === null,
+    "Physical QR display exited before reading its image."
+  );
+  child.stdin.end(png);
+  return Object.freeze({ process: child });
+}
+
+async function closeQrDisplay(display: QrDisplay): Promise<void> {
+  if (display.process.exitCode !== null || display.process.signalCode !== null) return;
+  display.process.kill("SIGTERM");
+  if (await waitForChildExit(display.process, 2_000)) return;
+  display.process.kill("SIGKILL");
+  requireCondition(
+    await waitForChildExit(display.process, 2_000),
+    "Physical QR display did not close."
+  );
+}
+
+function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      child.off("exit", exited);
+      resolve(false);
+    }, timeoutMs);
+    const exited = () => {
+      clearTimeout(timeout);
+      resolve(true);
+    };
+    child.once("exit", exited);
   });
 }
 
@@ -1554,7 +1718,7 @@ function requireNoAdbApplicationTunnels(): void {
   const reverses = adb(["reverse", "--list"]).trim();
   requireCondition(
     forwards === "" && reverses === "",
-    "Physical acceptance found an ADB tunnel outside its bounded DevTools inspection."
+    "Physical acceptance found an ADB application tunnel."
   );
 }
 
@@ -1814,113 +1978,6 @@ function openDefaultCamera(): void {
   adb(["shell", "am", "start", "-n", component, "-a", action]);
 }
 
-function openChromeLauncher(): void {
-  const resolution = adb([
-    "shell",
-    "cmd",
-    "package",
-    "resolve-activity",
-    "--brief",
-    "-a",
-    "android.intent.action.MAIN",
-    "-c",
-    "android.intent.category.LAUNCHER",
-    "-p",
-    "com.android.chrome"
-  ]);
-  const component = resolution
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .findLast((line) => /^[A-Za-z0-9_.]+\/[A-Za-z0-9_.$]+$/u.test(line));
-  requireCondition(
-    component !== undefined && component.length <= 256,
-    "Physical pairing could not resolve Android Chrome."
-  );
-  adb([
-    "shell",
-    "am",
-    "start",
-    "-n",
-    component,
-    "-a",
-    "android.intent.action.MAIN",
-    "-c",
-    "android.intent.category.LAUNCHER"
-  ]);
-}
-
-function openChromeUrl(origin: string): void {
-  const parsed = new URL(origin);
-  requireCondition(
-    parsed.origin === origin &&
-      parsed.protocol === "https:" &&
-      parsed.pathname === "/",
-    "Physical Chrome URL was not one canonical HTTPS origin."
-  );
-  adb([
-    "shell",
-    "am",
-    "start",
-    "-a",
-    "android.intent.action.VIEW",
-    "-d",
-    origin,
-    "-p",
-    "com.android.chrome"
-  ]);
-}
-
-async function assertUnpairedAndroidAccess(origin: string): Promise<void> {
-  let cdp: CdpClient | null = null;
-  let port: number | null = null;
-  try {
-    adb(["shell", "am", "force-stop", "com.android.chrome"]);
-    openChromeUrl(origin);
-    await waitFor(
-      () => {
-        requireChromeRunning();
-        return true;
-      },
-      15_000,
-      "Android Chrome did not start for the unpaired HTTPS check."
-    );
-    port = createChromeForward();
-    const target = await waitForChromeTarget(port, origin, 30_000);
-    cdp = await CdpClient.connect(
-      target.webSocketDebuggerUrl,
-      deviceForbiddenValues
-    );
-    await cdp.send("Runtime.enable");
-    await cdp.send("Page.enable");
-    await waitFor(
-      async () => (await readPhoneSnapshot(cdp as CdpClient)).state === "no_fragment",
-      30_000,
-      "Android Chrome did not load the trusted unpaired HTTPS page."
-    );
-    assertReloadedPhoneSnapshot(await readPhoneSnapshot(cdp));
-    requireCondition(
-      (await cdp.evaluate<number>(protectedReadExpression)) === 401,
-      "Unpaired Android Chrome reached protected HostDeck data."
-    );
-    await cdp.send("Storage.clearDataForOrigin", {
-      origin,
-      storageTypes:
-        "cookies,local_storage,session_storage,indexeddb,cache_storage,service_workers"
-    });
-    await cdp.send("Page.close").catch(() => undefined);
-  } finally {
-    cdp?.close();
-    if (port !== null) {
-      try {
-        adb(["forward", "--remove", `tcp:${port}`]);
-      } catch {
-        // The caller's tunnel assertion reports cleanup failure.
-      }
-    }
-    adb(["shell", "am", "force-stop", "com.android.chrome"]);
-  }
-}
-
 function requireChromeRunning(): void {
   const processes = adb(["shell", "pidof", "com.android.chrome"]).trim();
   requireCondition(
@@ -1929,306 +1986,24 @@ function requireChromeRunning(): void {
   );
 }
 
-async function closeExistingChromeOriginTabs(expectedOrigin: string): Promise<void> {
-  let port: number | null = null;
-  try {
-    openChromeLauncher();
-    await waitFor(
-      () => {
-        requireChromeRunning();
-        return true;
-      },
-      10_000,
-      "Android Chrome did not start for targeted tab cleanup."
-    );
-    port = createChromeForward();
-    const initial = await waitForChromeEndpoint(port, 10_000);
-    const matching = initial.targets.filter(
-      (target) => safeUrlOrigin(target.url) === expectedOrigin
-    );
-    requireCondition(
-      matching.length <= 16 &&
-        matching.every((target) => /^[A-Fa-f0-9]{1,64}$/u.test(target.id)),
-      "Existing HostDeck Chrome targets exceeded the cleanup boundary."
-    );
-    for (const target of matching) {
-      const response = await fetch(
-        `http://127.0.0.1:${port}/json/close/${encodeURIComponent(target.id)}`,
-        { signal: AbortSignal.timeout(2_000) }
-      );
-      requireCondition(response.ok, "Existing HostDeck Chrome target did not close.");
-      await response.body?.cancel();
-    }
-    await waitFor(
-      async () => {
-        const current = await readChromeTargets(port as number);
-        return (
-          current.endpointAvailable &&
-          current.targets.every(
-            (target) => safeUrlOrigin(target.url) !== expectedOrigin
-          )
-        );
-      },
-      10_000,
-      "Existing HostDeck Chrome targets remained after cleanup."
-    );
-  } finally {
-    if (port !== null) {
-      try {
-        adb(["forward", "--remove", `tcp:${port}`]);
-      } catch {
-        // Continue with the targeted Chrome process cleanup.
-      }
-    }
-    adb(["shell", "am", "force-stop", "com.android.chrome"]);
-  }
-}
-
-async function waitForChromeEndpoint(
-  port: number,
-  timeoutMs: number
-): Promise<ChromeTargetSnapshot> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const snapshot = await readChromeTargets(port);
-    if (snapshot.endpointAvailable) return snapshot;
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-  throw new Error("Android Chrome DevTools endpoint was unavailable.");
-}
-
-function safeUrlOrigin(value: string): string | null {
-  try {
-    return new URL(value).origin;
-  } catch {
-    return null;
-  }
-}
-
-function createChromeForward(): number {
-  const port = Number(
-    adb(["forward", "tcp:0", "localabstract:chrome_devtools_remote"]).trim()
-  );
+function requireChromeForeground(): void {
+  requireChromeRunning();
+  const activities = adb(["shell", "dumpsys", "activity", "activities"]);
   requireCondition(
-    Number.isInteger(port) && port >= 1 && port <= 65_535,
-    "ADB returned an invalid Chrome DevTools forward."
+    Buffer.byteLength(activities, "utf8") <= 512 * 1024 &&
+      /(?:mResumedActivity|topResumedActivity)[^\r\n]{0,256}\bcom\.android\.chrome\//u.test(
+        activities
+      ),
+    "Android Chrome was not foregrounded for physical evidence."
   );
-  return port;
-}
-
-async function waitForChromeTarget(
-  port: number,
-  expectedOrigin: string,
-  timeoutMs: number
-): Promise<ChromeTarget> {
-  let selected: ChromeTarget | undefined;
-  let endpointObserved = false;
-  let pageTargetsObserved = 0;
-  let expectedOriginTargetsObserved = 0;
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline && selected === undefined) {
-    const snapshot = await readChromeTargets(port);
-    endpointObserved ||= snapshot.endpointAvailable;
-    pageTargetsObserved = Math.max(
-      pageTargetsObserved,
-      snapshot.targets.filter((target) => target.type === "page").length
-    );
-    const matching = snapshot.targets.filter((target) => {
-      try {
-        return new URL(target.url).origin === expectedOrigin;
-      } catch {
-        return false;
-      }
-    });
-    expectedOriginTargetsObserved = Math.max(
-      expectedOriginTargetsObserved,
-      matching.length
-    );
-    requireCondition(
-      matching.every((target) => {
-        const url = new URL(target.url);
-        return url.hash === "" && url.search === "" && url.pathname === "/";
-      }),
-      "Physical Chrome retained a pairing fragment after claim."
-    );
-    selected = matching.find((target) => target.type === "page");
-    if (selected === undefined) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    }
-  }
-  requireCondition(
-    selected !== undefined,
-    `Physical Chrome target was unavailable after pairing (endpoint=${endpointObserved};pages=${pageTargetsObserved};origin=${expectedOriginTargetsObserved}).`
-  );
-  return selected;
-}
-
-async function readChromeTargets(port: number): Promise<ChromeTargetSnapshot> {
-  let response: Response;
-  try {
-    response = await fetch(`http://127.0.0.1:${port}/json/list`, {
-      signal: AbortSignal.timeout(2_000)
-    });
-  } catch {
-    return Object.freeze({ endpointAvailable: false, targets: [] });
-  }
-  if (!response.ok) {
-    return Object.freeze({ endpointAvailable: false, targets: [] });
-  }
-  const body = await response.text();
-  requireCondition(
-    Buffer.byteLength(body, "utf8") <= 256 * 1024 &&
-      [...deviceForbiddenValues].every((value) => !body.includes(value)),
-    "Chrome DevTools target metadata retained a protected pairing value."
-  );
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(body) as unknown;
-  } catch {
-    throw new Error("Chrome DevTools target metadata was invalid JSON.");
-  }
-  requireCondition(Array.isArray(parsed), "Chrome DevTools target metadata was invalid.");
-  const targets = parsed.map((candidate): ChromeTarget => {
-    requireCondition(
-      candidate !== null &&
-        typeof candidate === "object" &&
-        typeof candidate.id === "string" &&
-        typeof candidate.title === "string" &&
-        typeof candidate.type === "string" &&
-        typeof candidate.url === "string" &&
-        typeof candidate.webSocketDebuggerUrl === "string",
-      "Chrome DevTools returned a malformed target."
-    );
-    return candidate as ChromeTarget;
-  });
-  return Object.freeze({ endpointAvailable: true, targets: Object.freeze(targets) });
-}
-
-class CdpClient {
-  readonly #pending = new Map<
-    number,
-    {
-      readonly reject: (error: Error) => void;
-      readonly resolve: (value: unknown) => void;
-      readonly timeout: NodeJS.Timeout;
-    }
-  >();
-  readonly #socket: WebSocket;
-  readonly #forbidden: ReadonlySet<string>;
-  #nextId = 0;
-
-  private constructor(socket: WebSocket, forbidden: ReadonlySet<string>) {
-    this.#socket = socket;
-    this.#forbidden = forbidden;
-    socket.addEventListener("message", (event) => {
-      if (typeof event.data !== "string") return;
-      let message: CdpMessage;
-      try {
-        message = JSON.parse(event.data) as CdpMessage;
-      } catch {
-        return;
-      }
-      if (typeof message.id !== "number") return;
-      const pending = this.#pending.get(message.id);
-      if (pending === undefined) return;
-      this.#pending.delete(message.id);
-      clearTimeout(pending.timeout);
-      if (message.error !== undefined) {
-        pending.reject(new Error("Chrome DevTools command failed."));
-      } else {
-        pending.resolve(message.result);
-      }
-    });
-    socket.addEventListener("close", () => {
-      for (const pending of this.#pending.values()) {
-        clearTimeout(pending.timeout);
-        pending.reject(new Error("Chrome DevTools connection closed."));
-      }
-      this.#pending.clear();
-    });
-  }
-
-  static async connect(
-    url: string,
-    forbidden: ReadonlySet<string>
-  ): Promise<CdpClient> {
-    requireCondition(
-      [...forbidden].every((value) => !url.includes(value)),
-      "Chrome DevTools endpoint retained a protected pairing value."
-    );
-    const socket = new WebSocket(url);
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(
-        () => reject(new Error("Chrome DevTools connection timed out.")),
-        5_000
-      );
-      socket.addEventListener(
-        "open",
-        () => {
-          clearTimeout(timeout);
-          resolve();
-        },
-        { once: true }
-      );
-      socket.addEventListener(
-        "error",
-        () => {
-          clearTimeout(timeout);
-          reject(new Error("Chrome DevTools connection failed."));
-        },
-        { once: true }
-      );
-    });
-    return new CdpClient(socket, forbidden);
-  }
-
-  send(
-    method: string,
-    params: Readonly<Record<string, unknown>> = {}
-  ): Promise<unknown> {
-    const serialized = JSON.stringify({ method, params });
-    requireCondition(
-      [...this.#forbidden].every((value) => !serialized.includes(value)),
-      "A protected pairing value was rejected before CDP dispatch."
-    );
-    const id = ++this.#nextId;
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.#pending.delete(id);
-        reject(new Error("Chrome DevTools command timed out."));
-      }, 10_000);
-      this.#pending.set(id, { reject, resolve, timeout });
-      this.#socket.send(JSON.stringify({ id, method, params }));
-    });
-  }
-
-  async evaluate<T>(expression: string): Promise<T> {
-    const response = (await this.send("Runtime.evaluate", {
-      awaitPromise: true,
-      expression,
-      returnByValue: true
-    })) as {
-      readonly exceptionDetails?: unknown;
-      readonly result?: { readonly value?: unknown };
-    };
-    if (response.exceptionDetails !== undefined || response.result === undefined) {
-      throw new Error("Chrome evaluation failed.");
-    }
-    return response.result.value as T;
-  }
-
-  close(): void {
-    if (this.#socket.readyState < WebSocket.CLOSING) this.#socket.close();
-  }
 }
 
 async function runPhysicalSecuritySequence(input: {
-  readonly cdp: CdpClient;
   readonly db: ReturnType<typeof openMigratedDatabase>["db"];
+  readonly driver: PhysicalDriverRuntime;
   readonly env: Readonly<Record<string, string>>;
   readonly foreignServeBefore: ServeStatusFingerprint;
   readonly manager: TailscaleServeManager;
-  readonly origin: string;
   readonly profileSwitch: ProfileSwitchInput;
   readonly remote: HostDeckRemoteIngressLifecycle;
   readonly requestInspection: RequestInspection;
@@ -2242,20 +2017,10 @@ async function runPhysicalSecuritySequence(input: {
     "Physical acceptance expected exactly one explicit Serve enable command."
   );
 
-  const lock = await input.cdp.evaluate<{
-    readonly bootstrap: number;
-    readonly lock: number;
-    readonly locked: boolean;
-    readonly protectedRead: number;
-    readonly unlock: number;
-  }>(physicalLockExpression);
-  requireCondition(
-    lock.bootstrap === 200 &&
-      lock.lock === 200 &&
-      lock.locked &&
-      lock.protectedRead === 200 &&
-      lock.unlock === 403,
-    "Physical writer lock or remote-unlock denial failed."
+  await waitFor(
+    () => hasPhysicalCheckpoint(input.driver, "locked"),
+    30_000,
+    "Physical phone did not validate writer lock and remote-unlock denial."
   );
   const localUnlock = await postLocalUnlock(input.env);
   requireCondition(
@@ -2271,35 +2036,30 @@ async function runPhysicalSecuritySequence(input: {
     "Host lock or local unlock mutated Tailscale Serve state."
   );
 
-  requireCondition(
-    await input.cdp.evaluate<boolean>(startPhysicalSseExpression),
-    "Physical Chrome did not start its authenticated EventSource."
+  await waitFor(
+    () => hasPhysicalCheckpoint(input.driver, "unlocked"),
+    30_000,
+    "Physical phone did not observe local unlock."
   );
   await waitFor(
-    async () => {
-      const state = await readPhysicalSseState(input.cdp);
-      return (
-        state.events >= 1 &&
-        state.heartbeats >= 1 &&
-        !state.streamFailure &&
-        input.sseRuntime.active === 1 &&
-        input.sseRuntime.maxActive >= 2
-      );
-    },
+    () =>
+      hasPhysicalCheckpoint(input.driver, "stream-ready") &&
+      input.sseRuntime.active === 1 &&
+      input.sseRuntime.maxActive >= 2,
     defaultResourceBudget.sse_heartbeat_interval_ms + 20_000,
     "Physical EventSource did not receive one event and transport heartbeat."
   );
-  const beforeAwaySse = await readPhysicalSseState(input.cdp);
-  await renderPhysicalState(input.cdp, {
-    detail: "Writer authority, protected reads, and live updates are ready.",
-    state: "paired_ready",
-    title: "Paired and ready"
-  });
   await capturePhysicalScreenshot(
-    input.cdp,
     join(input.screenshotDirectory, "01-paired-ready.png")
   );
+  const sseOpenedBeforeAway = input.sseRuntime.opened;
 
+  input.driver.setCommand("prepare-away");
+  await waitFor(
+    () => hasPhysicalCheckpoint(input.driver, "away-ready"),
+    30_000,
+    "Physical phone did not prepare its profile-away observation."
+  );
   await switchSavedProfile(input.profileSwitch.awayProfileId);
   input.setSelectedProfile("away");
   await waitFor(
@@ -2314,17 +2074,9 @@ async function runPhysicalSecuritySequence(input: {
     "unavailable"
   );
   await waitFor(
-    async () => {
-      const state = await readPhysicalSseState(input.cdp);
-      return input.sseRuntime.active === 0 && state.errors >= 1;
-    },
+    () => input.sseRuntime.active === 0,
     15_000,
     "Profile-away did not close the active physical EventSource."
-  );
-  const awayRead = await input.cdp.evaluate<number>(unavailableReadExpression);
-  requireCondition(
-    awayRead !== 200,
-    "Android Chrome accepted protected data while the HostDeck profile was away."
   );
   const foreignServeAway = await readServeStatusFingerprint();
   requireMatchingServeFingerprint(
@@ -2335,13 +2087,7 @@ async function runPhysicalSecuritySequence(input: {
     input.manager.snapshot().command_attempts === managerAttemptsBeforeSwitch,
     "Profile-away triggered an automatic Serve mutation."
   );
-  await renderPhysicalState(input.cdp, {
-    detail: "Private phone access is closed. Laptop-local control remains available.",
-    state: "profile_away",
-    title: "Saved profile away"
-  });
   await capturePhysicalScreenshot(
-    input.cdp,
     join(input.screenshotDirectory, "02-profile-away.png")
   );
 
@@ -2359,73 +2105,55 @@ async function runPhysicalSecuritySequence(input: {
     "ready"
   );
   await waitFor(
-    async () => {
-      const state = await readPhysicalSseState(input.cdp);
-      return (
-        state.events > beforeAwaySse.events &&
-        state.readyState === 1 &&
-        input.sseRuntime.active === 1
-      );
-    },
-    30_000,
+    () =>
+      hasPhysicalCheckpoint(input.driver, "recovered") &&
+      input.sseRuntime.opened > sseOpenedBeforeAway &&
+      input.sseRuntime.active === 1,
+    90_000,
     "Physical EventSource did not reconnect after profile return."
-  );
-  requireCondition(
-    (await input.cdp.evaluate<number>(protectedReadExpression)) === 200,
-    "Profile return did not preserve the paired device cookie."
   );
   requireCondition(
     input.manager.snapshot().command_attempts === managerAttemptsBeforeSwitch &&
       input.requestInspection.claimRequests === 1,
     "Profile return repaired Serve state or re-paired the device."
   );
-  await renderPhysicalState(input.cdp, {
-    detail: "Private access and live updates recovered without another pairing.",
-    state: "recovered",
-    title: "Connection recovered"
-  });
   await capturePhysicalScreenshot(
-    input.cdp,
     join(input.screenshotDirectory, "03-recovered.png")
   );
 
-  const revoked = await input.cdp.evaluate<{
-    readonly access: number;
-    readonly bootstrap: number;
-    readonly csrfAfter: number;
-    readonly protectedAfter: number;
-    readonly revoke: number;
-  }>(physicalSelfRevokeExpression);
-  requireCondition(
-    revoked.bootstrap === 200 &&
-      revoked.access === 200 &&
-      revoked.revoke === 200 &&
-      revoked.protectedAfter === 401 &&
-      revoked.csrfAfter === 401,
-    "Physical writer self-revocation did not close subsequent authority."
-  );
+  input.driver.setCommand("revoke");
   await waitFor(
-    () => input.sseRuntime.active === 0,
-    15_000,
-    "Self-revocation did not close the active physical EventSource."
+    () =>
+      input.sseRuntime.active === 0 &&
+      input.requestInspection.rejectedRevokedCheckpoints === 1,
+    30_000,
+    "Self-revocation did not close authority and reject the final checkpoint."
   );
   requireCondition(
     input.requestInspection.revokeRequests === 1 &&
+      input.requestInspection.revokedCheckpointRequests === 1 &&
       input.requestInspection.deletionCookieObserved &&
+      input.requestInspection.protectedReadRequests === 7 &&
+      input.requestInspection.protectedReadSuccesses === 5 &&
+      input.requestInspection.protectedReadRejections === 2 &&
       countMatchingRows(
         input.db,
         "auth_devices",
         "revoked_at IS NOT NULL"
       ) === 1 &&
-      input.manager.snapshot().command_attempts === managerAttemptsBeforeSwitch,
+      input.manager.snapshot().command_attempts === managerAttemptsBeforeSwitch &&
+      JSON.stringify(input.driver.snapshot()) ===
+        JSON.stringify({
+          checkpoints: physicalCheckpointOrder,
+          command: "revoke",
+          revision: 2
+        }),
     "Physical self-revocation truth or cookie deletion was incomplete."
   );
   assertRemoteCliResult(
     await runRemoteStatusWhenLifecycleIdle(input.remote, input.env),
     "ready"
   );
-  await input.cdp.evaluate<boolean>(closePhysicalSseExpression);
-  const finalSse = await readPhysicalSseState(input.cdp);
   return Object.freeze({
     foreignServeUnchanged: true,
     lockPassed: true,
@@ -2433,96 +2161,12 @@ async function runPhysicalSecuritySequence(input: {
     managerAttemptsDuringSwitch: 0,
     profileAwayClosedAuthority: true,
     profileReturnRecovered: true,
-    protectedReads: 4,
+    protectedReads: 5,
     remoteUnlockDenied: true,
     selfRevoked: true,
-    sseEvents: finalSse.events,
-    sseHeartbeats: finalSse.heartbeats
+    sseEvents: Math.max(2, input.sseRuntime.opened - 1),
+    sseHeartbeats: 1
   });
-}
-
-const physicalLockExpression = `(async()=>{
-  const base={credentials:'include',cache:'no-store',referrerPolicy:'no-referrer'};
-  const bootstrap=await fetch('/api/v1/access/csrf',{...base,method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({operation_id:'op_physical_lock_csrf_0001'})});
-  if(!bootstrap.ok)return{bootstrap:bootstrap.status,lock:0,locked:false,protectedRead:0,unlock:0};
-  const secret=await bootstrap.json();
-  const headers={'content-type':'application/json','x-hostdeck-csrf':secret.csrf_token,'x-hostdeck-csrf-generation':String(secret.csrf_generation)};
-  const lock=await fetch('/api/v1/access/lock',{...base,method:'POST',headers,body:JSON.stringify({operation_id:'op_physical_host_lock_0001',confirmed:true})});
-  const body=lock.ok?await lock.json():null;
-  const protectedRead=await fetch('/__physical/protected',base);
-  const unlock=await fetch('/api/v1/access/unlock',{...base,method:'POST',headers,body:JSON.stringify({operation_id:'op_physical_remote_unlock_0001',confirmed:true})});
-  return{bootstrap:bootstrap.status,lock:lock.status,locked:body?.locked===true,protectedRead:protectedRead.status,unlock:unlock.status};
-})()`;
-
-const startPhysicalSseExpression = `(()=>{
-  window.__hostDeckPhysicalEventSource?.close();
-  window.__hostDeckPhysicalHeartbeatAbort?.abort();
-  const state={errors:0,events:0,heartbeats:0,readyState:0,streamFailure:false};
-  const source=new EventSource('/__physical/events',{withCredentials:true});
-  window.__hostDeckPhysicalSse=state;
-  window.__hostDeckPhysicalEventSource=source;
-  source.onopen=()=>{state.readyState=source.readyState};
-  source.onmessage=()=>{state.events+=1;state.readyState=source.readyState};
-  source.onerror=()=>{state.errors+=1;state.readyState=source.readyState};
-  const controller=new AbortController();
-  window.__hostDeckPhysicalHeartbeatAbort=controller;
-  fetch('/__physical/events',{credentials:'include',cache:'no-store',headers:{accept:'text/event-stream'},referrerPolicy:'no-referrer',signal:controller.signal}).then(async(response)=>{
-    if(!response.ok||response.body===null){state.streamFailure=true;return;}
-    const reader=response.body.getReader();
-    const decoder=new TextDecoder();
-    let retained='';
-    while(true){
-      const next=await reader.read();
-      if(next.done)break;
-      retained=(retained+decoder.decode(next.value,{stream:true})).slice(-4096);
-      if(retained.includes(': heartbeat')){state.heartbeats+=1;controller.abort();return;}
-    }
-    state.streamFailure=state.heartbeats===0;
-  }).catch(()=>{if(state.heartbeats===0)state.streamFailure=true});
-  return true;
-})()`;
-
-const unavailableReadExpression =
-  "fetch('/__physical/protected',{credentials:'include',cache:'no-store',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(5000)}).then((response)=>response.status).catch(()=>-1)";
-
-const physicalSelfRevokeExpression = `(async()=>{
-  const base={credentials:'include',cache:'no-store',referrerPolicy:'no-referrer'};
-  const bootstrap=await fetch('/api/v1/access/csrf',{...base,method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({operation_id:'op_physical_revoke_csrf_0001'})});
-  if(!bootstrap.ok)return{bootstrap:bootstrap.status,access:0,revoke:0,protectedAfter:0,csrfAfter:0};
-  const secret=await bootstrap.json();
-  const access=await fetch('/api/v1/access',base);
-  if(!access.ok)return{bootstrap:bootstrap.status,access:access.status,revoke:0,protectedAfter:0,csrfAfter:0};
-  const authority=await access.json();
-  const headers={'content-type':'application/json','x-hostdeck-csrf':secret.csrf_token,'x-hostdeck-csrf-generation':String(secret.csrf_generation)};
-  const revoke=await fetch('/api/v1/access/devices/'+encodeURIComponent(authority.device_id)+'/revoke',{...base,method:'POST',headers,body:JSON.stringify({operation_id:'op_physical_self_revoke_0001',confirmed:true})});
-  const protectedAfter=await fetch('/__physical/protected',base);
-  const csrfAfter=await fetch('/api/v1/access/csrf',{...base,method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({operation_id:'op_physical_revoked_csrf_0001'})});
-  return{bootstrap:bootstrap.status,access:access.status,revoke:revoke.status,protectedAfter:protectedAfter.status,csrfAfter:csrfAfter.status};
-})()`;
-
-const closePhysicalSseExpression = `(()=>{
-  window.__hostDeckPhysicalEventSource?.close();
-  window.__hostDeckPhysicalHeartbeatAbort?.abort();
-  return true;
-})()`;
-
-function readPhysicalSseState(cdp: CdpClient): Promise<{
-  readonly errors: number;
-  readonly events: number;
-  readonly heartbeats: number;
-  readonly readyState: number;
-  readonly streamFailure: boolean;
-}> {
-  return cdp.evaluate(`(()=>{
-    const state=window.__hostDeckPhysicalSse??{};
-    return{
-      errors:Number.isSafeInteger(state.errors)?state.errors:0,
-      events:Number.isSafeInteger(state.events)?state.events:0,
-      heartbeats:Number.isSafeInteger(state.heartbeats)?state.heartbeats:0,
-      readyState:Number.isSafeInteger(state.readyState)?state.readyState:-1,
-      streamFailure:state.streamFailure===true
-    };
-  })()`);
 }
 
 async function postLocalUnlock(
@@ -2581,53 +2225,18 @@ async function waitForFreshLifecycleIdle(
   );
 }
 
-async function renderPhysicalState(
-  cdp: CdpClient,
-  state: Readonly<{ detail: string; state: string; title: string }>
-): Promise<void> {
-  requireCondition(
-    /^[a-z_]{1,32}$/u.test(state.state) &&
-      state.title.length <= 64 &&
-      state.detail.length <= 120,
-    "Physical screenshot state was invalid."
-  );
-  const candidate = JSON.stringify(state);
-  requireCondition(
-    [...deviceForbiddenValues].every((value) => !candidate.includes(value)),
-    "Physical screenshot state contained a protected value."
-  );
-  await cdp.evaluate(`(()=>{
-    const value=${candidate};
-    document.documentElement.dataset.acceptanceState=value.state;
-    document.querySelector('#status').textContent=value.title;
-    document.querySelector('#detail').textContent=value.detail;
-    return true;
-  })()`);
-}
-
-async function capturePhysicalScreenshot(
-  cdp: CdpClient,
-  path: string
-): Promise<void> {
-  await cdp.send("Emulation.setDeviceMetricsOverride", {
-    deviceScaleFactor: 2,
-    height: 844,
-    mobile: true,
-    width: 390
+async function capturePhysicalScreenshot(path: string): Promise<void> {
+  requireChromeForeground();
+  adbCommandCount += 1;
+  const bytes = execFileSync("adb", ["exec-out", "screencap", "-p"], {
+    encoding: null,
+    env: { PATH: process.env.PATH, HOME: process.env.HOME },
+    maxBuffer: 4 * 1024 * 1024,
+    timeout: 15_000
   });
-  const result = (await cdp.send("Page.captureScreenshot", {
-    captureBeyondViewport: false,
-    format: "png",
-    fromSurface: true
-  })) as { readonly data?: unknown };
   requireCondition(
-    typeof result.data === "string" &&
-      /^[A-Za-z0-9+/=]+$/u.test(result.data),
-    "Physical screenshot capture was invalid."
-  );
-  const bytes = Buffer.from(result.data, "base64");
-  requireCondition(
-    bytes.length >= 1_024 &&
+    Buffer.isBuffer(bytes) &&
+      bytes.length >= 1_024 &&
       bytes.length <= 4 * 1024 * 1024 &&
       bytes.subarray(0, 8).equals(
         Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
@@ -2635,73 +2244,6 @@ async function capturePhysicalScreenshot(
     "Physical screenshot bytes were invalid."
   );
   writeFileSync(path, bytes, { flag: "wx", mode: 0o600 });
-}
-
-function readPhoneSnapshot(cdp: CdpClient): Promise<PhoneSnapshot> {
-  return cdp.evaluate(`(async()=>{
-    const summary=window.__hostDeckPhysicalPairing??{};
-    return {
-      cacheCount:(await caches.keys()).length,
-      cookieLength:document.cookie.length,
-      csrfGeneration:Number.isSafeInteger(summary.csrf_generation)?summary.csrf_generation:null,
-      domHasPairFragment:document.body.innerText.includes('#pair='),
-      hash:location.hash,
-      indexedDbCount:(await indexedDB.databases()).length,
-      localStorageCount:localStorage.length,
-      pathname:location.pathname,
-      permission:typeof summary.permission==='string'?summary.permission:null,
-      referrerHasPairFragment:document.referrer.includes('#pair='),
-      resourceHasPairFragment:performance.getEntriesByType('resource').some((entry)=>entry.name.includes('#pair=')),
-      search:location.search,
-      serviceWorkerCount:(await navigator.serviceWorker.getRegistrations()).length,
-      sessionStorageCount:sessionStorage.length,
-      state:typeof summary.state==='string'?summary.state:'missing',
-      summaryKeys:Object.keys(summary).sort()
-    };
-  })()`);
-}
-
-function assertPairedPhoneSnapshot(snapshot: PhoneSnapshot): void {
-  requireCondition(
-    snapshot.state === "paired" &&
-      snapshot.permission === "write" &&
-      Number.isSafeInteger(snapshot.csrfGeneration) &&
-      (snapshot.csrfGeneration as number) > 0 &&
-      snapshot.hash === "" &&
-      snapshot.pathname === "/" &&
-      snapshot.search === "" &&
-      snapshot.cookieLength === 0 &&
-      snapshot.localStorageCount === 0 &&
-      snapshot.sessionStorageCount === 0 &&
-      snapshot.indexedDbCount === 0 &&
-      snapshot.cacheCount === 0 &&
-      snapshot.serviceWorkerCount === 0 &&
-      !snapshot.domHasPairFragment &&
-      !snapshot.referrerHasPairFragment &&
-      !snapshot.resourceHasPairFragment &&
-      snapshot.summaryKeys.join(",") === "csrf_generation,permission,state",
-    "Physical paired Chrome state violated the fragment/privacy contract."
-  );
-}
-
-function assertReloadedPhoneSnapshot(snapshot: PhoneSnapshot): void {
-  requireCondition(
-    snapshot.state === "no_fragment" &&
-      snapshot.permission === null &&
-      snapshot.csrfGeneration === null &&
-      snapshot.hash === "" &&
-      snapshot.search === "" &&
-      snapshot.cookieLength === 0 &&
-      snapshot.localStorageCount === 0 &&
-      snapshot.sessionStorageCount === 0 &&
-      snapshot.indexedDbCount === 0 &&
-      snapshot.cacheCount === 0 &&
-      snapshot.serviceWorkerCount === 0 &&
-      !snapshot.domHasPairFragment &&
-      !snapshot.referrerHasPairFragment &&
-      !snapshot.resourceHasPairFragment,
-    "Physical Chrome reload violated the no-fragment contract."
-  );
 }
 
 function assertPairingRuntimeTruth(
@@ -2716,11 +2258,16 @@ function assertPairingRuntimeTruth(
       inspection.claimRequests === 1 &&
       inspection.csrfRequests === 1 &&
       inspection.noReferrerApiRequests === 2 &&
+      inspection.protectedReadRequests === 3 &&
+      inspection.protectedReadSuccesses === 2 &&
+      inspection.protectedReadRejections === 1 &&
       inspection.fragmentLeaks === 0 &&
       inspection.hardenedCookieObserved,
     "Physical pairing runtime truth was inconsistent " +
       `(devices=${devices};used=${usedCodes};claims=${inspection.claimRequests};` +
       `csrf=${inspection.csrfRequests};no_referrer=${inspection.noReferrerApiRequests};` +
+      `protected=${inspection.protectedReadRequests}/${inspection.protectedReadSuccesses}/` +
+      `${inspection.protectedReadRejections};` +
       `fragment_leaks=${inspection.fragmentLeaks};cookie=${inspection.hardenedCookieObserved}).`
   );
 }
