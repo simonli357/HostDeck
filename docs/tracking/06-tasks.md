@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-048` Enforce aggregate SSE subscriber and queue overload policy | ready | none | Bounded subscriber ownership now permits focused reconnect-storm, heap-counter, slow-reader, and leak hardening. |
+| 1 | `IFC-V1-048` Enforce aggregate SSE subscriber and queue overload policy | in_progress | none | Strict replay-retention, heartbeat-write, reconnect-storm, slow-reader, and leak criteria are frozen. |
 | 2 | `IFC-V1-038` Run aggregate fanout, health, reconnect, and shutdown acceptance | ready | none | All four fanout/health/shutdown leaves are complete; run the aggregate only after focused SSE overload hardening. |
 | 3 | `IFC-V1-039` Implement liveness, readiness, and host status routes | ready | none | The selected manifest, read authority, and mutable health port are complete. |
 | 4 | `IFC-V1-068` Implement managed-session list and detail routes | ready | none | The selected manifest, read authority, projection repository, and health port are complete. |
