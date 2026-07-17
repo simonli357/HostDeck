@@ -1,7 +1,7 @@
 # IFC-V1-037 Graceful Application Shutdown
 
 Date: 2026-07-16
-Status: criteria frozen; implementation in progress
+Status: complete; implementation `d475545`
 
 ## Objective
 
@@ -64,6 +64,14 @@ The Fastify lifecycle owns steps 1 to 3 and 9 around the injected application sh
 - Fastify matrix: drain callback before listener refusal, active finite/noncooperative request, active SSE, runtime close before app close, storage/lease after app, startup-failure cleanup, same-port/lease restart, and aggregate errors with all later callbacks observed.
 - Real integration: SQLite selected audit accepted-to-incomplete, projection barrier, reconnect pending request cancellation, foreground and service-owned supervisor behavior, active real HTTP/SSE, storage close, lease reacquisition, and residue inspection.
 - Focused and adjacent tests, all workspace suites, root/package typechecks, lint/exports, scaffold/planning/runtime-boundary, exact Codex 0.144.0 binding, frozen install, production audit/license inventory, diff/privacy/process/temp inspection, commit, and push.
+
+## Completion Evidence
+
+- `d475545` adds one exact headless application-shutdown controller, selected-write `open`/`draining`/`closed` admission, zero-owner drain waiters, strict frozen barrier acknowledgements, ordered bounded failure continuation, immutable privacy-safe snapshots, and the five-callback Fastify runtime owner.
+- The lifecycle now closes mutation admission while the listener still reports listening, begins refusal, closes SSE then runtime, settles or forces HTTP/Fastify, closes storage, and releases the lease. Repeated close returns one promise; asynchronous drain callbacks are rejected as invalid contracts; late timed-out promises are observed.
+- Real composed evidence uses a migrated SQLite database, daemon lease, deterministic real reconnect controller, active selected mutation, and live SSE client. Protocol close yields one durable `accepted` to `incomplete` trail, sends `turn/start` once without replay, closes all ten application stages, closes SQLite, and reacquires the lease and listener port without residue.
+- Focused and adjacent shutdown/ownership evidence passes 17 files and 199 tests. Workspace evidence passes 1,782 unit tests with 27 intentional gated skips, 259 contract tests, 18 integration tests, and 33 web tests, plus typecheck, lint/exports over 506 files, scaffold, planning, runtime-boundary, exact reviewed Codex 0.144.0 binding, frozen offline install, zero-known-vulnerability production audit, permissive license inventory, diff/privacy/process/listener/temp inspection, commit, and push.
+- Existing supervisor evidence proves foreground-child cleanup and service-owned sibling survival. This leaf adds no Tailscale command, profile/Serve mutation, production route assembly, UI behavior, or physical-phone requirement.
 
 ## Explicit Non-Goals
 
