@@ -1489,12 +1489,21 @@ async function enforceUnrelatedAndroidNetwork(
     15_000,
     "Physical acceptance could not disable Android Wi-Fi."
   );
-  const connectivity = adb(["shell", "dumpsys", "connectivity"]);
-  requireCondition(
-    Buffer.byteLength(connectivity, "utf8") <= 512 * 1024 &&
-      /(?:TRANSPORT_CELLULAR|\bCELLULAR\b)/iu.test(connectivity) &&
-      /(?:TRANSPORT_VPN|\bVPN\b)/iu.test(connectivity) &&
-      /tailscale/iu.test(connectivity),
+  await waitFor(
+    () => {
+      const connectivity = adb(["shell", "dumpsys", "connectivity"]);
+      if (Buffer.byteLength(connectivity, "utf8") > 512 * 1024) return false;
+      return connectivity.split(/\r?\n/u).some(
+        (line) =>
+          line.includes("NetworkAgentInfo") &&
+          /\bVPN CONNECTED\b/iu.test(line) &&
+          /\bVPN:com\.tailscale\.ipn\b/iu.test(line) &&
+          /Transports:[^\]]*\bCELLULAR\b/iu.test(line) &&
+          /Transports:[^\]]*\bVPN\b/iu.test(line) &&
+          /\bVALIDATED\b/iu.test(line)
+      );
+    },
+    30_000,
     "Physical acceptance requires active cellular and Tailscale VPN transport."
   );
 }
