@@ -156,6 +156,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       let environmentFacts: PhysicalEnvironmentFacts | null = null;
       let fullResult: PhysicalSequenceResult | null = null;
       let initialWifiEnabled: boolean | null = null;
+      let initialStayAwakeSetting: number | null = null;
       let selectedProfile: "away" | "dedicated" = "dedicated";
       let internalErrorCount = 0;
 
@@ -165,6 +166,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         if (requireRemoteAndroidAcceptance) {
           requireCleanAcceptanceWorktree();
           requireNoAdbApplicationTunnels();
+          initialStayAwakeSetting = readAndroidStayAwakeSetting();
+          await enforceAndroidAwakeAndUnlocked(initialStayAwakeSetting);
           initialWifiEnabled = readAndroidWifiEnabled();
           await enforceUnrelatedAndroidNetwork(initialWifiEnabled);
           environmentFacts = readPhysicalEnvironmentFacts();
@@ -653,6 +656,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         if (requireRemoteAndroidAcceptance) {
           await restoreAndroidWifi(initialWifiEnabled as boolean);
           initialWifiEnabled = null;
+          await restoreAndroidStayAwake(
+            initialStayAwakeSetting as number
+          );
+          initialStayAwakeSetting = null;
           requireNoAdbApplicationTunnels();
           publishPhysicalEvidence({
             completedAt: new Date().toISOString(),
@@ -730,6 +737,11 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           rmSync(directory, { force: true, recursive: true });
           if (initialWifiEnabled !== null) {
             await restoreAndroidWifi(initialWifiEnabled).catch(() => undefined);
+          }
+          if (initialStayAwakeSetting !== null) {
+            await restoreAndroidStayAwake(initialStayAwakeSetting).catch(
+              () => undefined
+            );
           }
           deviceForbiddenValues.clear();
         }
@@ -1573,6 +1585,74 @@ async function enforceUnrelatedAndroidNetwork(
     },
     30_000,
     "Physical acceptance requires active cellular and Tailscale VPN transport."
+  );
+}
+
+function readAndroidStayAwakeSetting(): number {
+  const value = adb([
+    "shell",
+    "settings",
+    "get",
+    "global",
+    "stay_on_while_plugged_in"
+  ]).trim();
+  requireCondition(
+    /^[0-7]$/u.test(value),
+    "Android stay-awake setting was invalid."
+  );
+  return Number(value);
+}
+
+async function enforceAndroidAwakeAndUnlocked(
+  initialSetting: number
+): Promise<void> {
+  const requiredSetting = initialSetting | 2;
+  if (requiredSetting !== initialSetting) {
+    adb([
+      "shell",
+      "settings",
+      "put",
+      "global",
+      "stay_on_while_plugged_in",
+      String(requiredSetting)
+    ]);
+  }
+  adb(["shell", "input", "keyevent", "KEYCODE_WAKEUP"]);
+  await waitFor(
+    () =>
+      readAndroidStayAwakeSetting() === requiredSetting &&
+      isAndroidAwakeAndUnlocked(),
+    10_000,
+    "Physical acceptance requires one awake and unlocked Android device."
+  );
+}
+
+function isAndroidAwakeAndUnlocked(): boolean {
+  const power = adb(["shell", "dumpsys", "power"]);
+  const trust = adb(["shell", "dumpsys", "trust"]);
+  return (
+    Buffer.byteLength(power, "utf8") <= 512 * 1024 &&
+    Buffer.byteLength(trust, "utf8") <= 512 * 1024 &&
+    /\bmWakefulness=Awake\b/u.test(power) &&
+    /\(current\):[^\r\n]{0,512}\bdeviceLocked=0\b/u.test(trust)
+  );
+}
+
+async function restoreAndroidStayAwake(initialSetting: number): Promise<void> {
+  if (readAndroidStayAwakeSetting() !== initialSetting) {
+    adb([
+      "shell",
+      "settings",
+      "put",
+      "global",
+      "stay_on_while_plugged_in",
+      String(initialSetting)
+    ]);
+  }
+  await waitFor(
+    () => readAndroidStayAwakeSetting() === initialSetting,
+    10_000,
+    "Physical acceptance could not restore Android stay-awake state."
   );
 }
 
