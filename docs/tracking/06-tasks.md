@@ -16,8 +16,10 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-036` Implement mutable local and remote health | in_progress | none | Hard criteria are frozen; implement the seven-source reducer, mutation proof, startup maintenance mapping, and separate remote state. |
+| 1 | `IFC-V1-037` Implement graceful application shutdown orchestration | ready | none | Health, bounded subscribers, resource policy, and accepted runtime reconnect are complete; freeze drain ownership and ordering next. |
 | 2 | `IFC-V1-048` Enforce aggregate SSE subscriber and queue overload policy | ready | none | Bounded subscriber ownership now permits focused reconnect-storm, heap-counter, slow-reader, and leak hardening. |
+| 3 | `IFC-V1-039` Implement liveness, readiness, and host status routes | ready | none | The selected manifest, read authority, and mutable health port are complete. |
+| 4 | `IFC-V1-068` Implement managed-session list and detail routes | ready | none | The selected manifest, read authority, projection repository, and health port are complete. |
 
 ## Intentional Blockers
 

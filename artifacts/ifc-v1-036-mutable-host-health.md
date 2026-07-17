@@ -1,7 +1,7 @@
 # IFC-V1-036 Mutable Host Health
 
 Date: 2026-07-16
-Status: hard criteria frozen; implementation not yet complete
+Status: complete
 
 ## Selected Boundary
 
@@ -52,3 +52,22 @@ Status: hard criteria frozen; implementation not yet complete
 - `IFC-V1-078` owns actual runtime/storage/listener/Tailscale polling and lifecycle composition, including observer scheduling and process cleanup.
 - Existing route-level runtime/compatibility checks remain until downstream composition consumes the mutation-health proof; this leaf adds no parallel dispatch path and weakens no existing gate.
 - Frontend state coordination and physical-phone/profile acceptance remain downstream.
+
+## Implementation
+
+- `packages/server/src/host-health.ts` implements the exact seven-component local reducer, independent remote snapshot, source and durable-generation ordering, fixed reasons, aggregate precedence, fail-closed mutation admission, and branded generation-bound mutation proofs.
+- `packages/server/src/host-startup-maintenance.ts` implements accepted-port-only orphan-before-retention startup composition, one shared cutoff, strict frozen-result validation, bounded counters and diagnostics, and storage-health reduction.
+- Public exports are present through `@hostdeck/server`. The implementation adds no timer, process, listener, database owner, route, Tailscale mutation, retry, shutdown, or log path.
+- Criteria commit: `7b9f6e6`. Initial implementation: `e221cb3`. Remote durable-generation, future-observation, real-signal, and startup-result hardening: `d7556c5`.
+
+## Validation Evidence
+
+- Direct health/startup matrix: 2 files, 74 tests. Adjacent real producer matrix: 8 files, 109 tests across runtime reconciliation, compatibility, SSE/fanout, remote control, retention, and orphan reconciliation.
+- Workspace: unit 1,768 passed with 27 intentional opt-in skips; contract 259; integration 18; web 33. Root and all eight package typechecks pass.
+- Static/repository: lint 503 files plus eight package exports; scaffold eight packages and 20 root scripts; runtime-boundary and planning checks pass.
+- Environment/supply chain: reviewed Codex 0.144.0 verifies 671 generated files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`; the default 0.144.5 correctly rejects the pinned gate. Frozen offline install passes, production audit reports zero vulnerabilities across 168 dependencies, and 155 production license entries are permissive.
+- Manual inspection confirms rejection is atomic, remote failure clears ready-only fields, local mutation proofs ignore remote-only changes, startup summaries retain no session identifiers or failure causes, and no Vitest/HostDeck/ADB process, listener, or recent test temp root remains. The pushed worktree is clean at `d7556c5`.
+
+## Remaining Ownership
+
+- No IFC-V1-036 gap remains. `IFC-V1-037` owns complete application drain, `IFC-V1-039` owns health/status HTTP contracts and authorization, and `IFC-V1-078` owns runtime observation and lifecycle composition. Physical-phone acceptance remains `IFC-V1-079`; this headless leaf did not require the phone.
