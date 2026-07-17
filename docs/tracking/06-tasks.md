@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-079` Run aggregate remote-ingress security and physical Android acceptance | ready | none | Every selected remote transport, control, pairing, authorization, lifecycle, revoke, and write-gate dependency is complete; close the hostile aggregate and unrelated-network phone matrix before production composition. |
+| 1 | `IFC-V1-079` Run aggregate remote-ingress security and physical Android acceptance | in_progress | none | Strict automated/physical criteria are frozen in `artifacts/ifc-v1-079-remote-ingress-acceptance.md`; implement and harden the selected aggregate before the unrelated-network phone run. |
 
 ## Intentional Blockers
 
