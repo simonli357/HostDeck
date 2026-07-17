@@ -79,3 +79,9 @@ The exact model budget is five turns total: three in the structured vertical and
 - Exact vertical and lifecycle scenario counts, five-turn budget, privacy declarations, and zero-resource cleanup.
 - Full unit/contract/integration/web/type/lint/scaffold/planning/binding/runtime-boundary/install/dependency/license/audit/diff results.
 - Manual import/export/fallback/privacy/process/socket/temp inspection and explicit downstream exclusions.
+
+## First Exact-Run Finding
+
+- Clean pushed commit `4e28e17` passed the exact 0.144.0 binding check and deterministic scenario, then failed closed in `exact_structured_vertical`: Vitest exited zero, but the outer owner still observed a member of that detached process group after the two-second grace period. No final evidence was published and the owner terminated the group.
+- Isolated exact vertical and detached-group diagnostics both passed with no retained exact-runtime process; the measured detached run had zero group members at child close and 100 ms later. This identifies a timing-dependent teardown gap rather than a persistent app-server leak.
+- Root cause in the reviewed path: the structured vertical issued `tmux kill-server` but did not capture, validate, or await the tmux daemon PID. The exact coexistence smoke already treats that daemon as an owned process. The fix applies the same identity-and-exit requirement before the vertical may report cleanup.

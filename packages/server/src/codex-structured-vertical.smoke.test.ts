@@ -52,6 +52,10 @@ import { createCodexCompactControlService } from "./codex-compact-control-servic
 import { createCodexControlEventObserver } from "./codex-control-event-observer.js";
 import { type CodexEventPipeline, createCodexEventPipeline } from "./codex-event-pipeline.js";
 import { createCodexGoalControlService } from "./codex-goal-control-service.js";
+import {
+  isProcessAlive,
+  readBoundedProcessCommandLine
+} from "./codex-hostdeck-restart-smoke-support.js";
 import { createCodexInterruptControlService } from "./codex-interrupt-control-service.js";
 import { createCodexModelControlService } from "./codex-model-control-service.js";
 import { createCodexPlanControlService } from "./codex-plan-control-service.js";
@@ -1098,6 +1102,7 @@ async function startAndInspectTui(
   const environment = { ...process.env, CODEX_HOME: codexHome, TERM: "xterm-256color" };
   let output = "";
   let running = false;
+  let tmuxServerPid: number | null = null;
   try {
     await runFile(
       "tmux",
@@ -1105,6 +1110,17 @@ async function startAndInspectTui(
       { cwd: projectDirectory, env: environment }
     );
     running = true;
+    tmuxServerPid = parseProcessId(
+      (
+        await runFile(
+          "tmux",
+          ["-S", tmuxSocketPath, "display-message", "-p", "#{pid}"],
+          { env: environment }
+        )
+      ).stdout,
+      "tmux server"
+    );
+    assertTmuxServerIdentity(tmuxServerPid, tmuxSocketPath);
     await runFile("tmux", ["-S", tmuxSocketPath, "set-option", "-g", "remain-on-exit", "on"], { env: environment });
     await runFile(
       "tmux",
@@ -1135,17 +1151,31 @@ async function startAndInspectTui(
       output,
       async close() {
         if (!running) return;
-        await runFile("tmux", ["-S", tmuxSocketPath, "kill-server"], { env: environment });
+        if (tmuxServerPid === null) {
+          throw new Error("Structured vertical tmux server identity is missing.");
+        }
+        await stopTuiTmuxServer(
+          tmuxSocketPath,
+          tmuxServerPid,
+          environment
+        );
         running = false;
       }
     };
   } catch (error) {
     const cleanupErrors: unknown[] = [];
     if (running) {
-      await collectCleanupError(
-        runFile("tmux", ["-S", tmuxSocketPath, "kill-server"], { env: environment }),
-        cleanupErrors
-      );
+      const stopTmux =
+        tmuxServerPid === null
+          ? runFile("tmux", ["-S", tmuxSocketPath, "kill-server"], {
+              env: environment
+            }).then(() => undefined)
+          : stopTuiTmuxServer(
+              tmuxSocketPath,
+              tmuxServerPid,
+              environment
+            );
+      await collectCleanupError(stopTmux, cleanupErrors);
     }
     if (cleanupErrors.length > 0) {
       throw new AggregateError([error, ...cleanupErrors], "Codex TUI inspection and cleanup failed.");
@@ -1157,6 +1187,40 @@ async function startAndInspectTui(
 interface TuiProbe {
   readonly output: string;
   readonly close: () => Promise<void>;
+}
+
+async function stopTuiTmuxServer(
+  socketPath: string,
+  serverPid: number,
+  environment: NodeJS.ProcessEnv
+): Promise<void> {
+  assertTmuxServerIdentity(serverPid, socketPath);
+  await runFile("tmux", ["-S", socketPath, "kill-server"], {
+    env: environment
+  });
+  await waitFor(
+    () => !isProcessAlive(serverPid),
+    5_000,
+    () => "Structured vertical tmux server remained after owner teardown."
+  );
+}
+
+function assertTmuxServerIdentity(serverPid: number, socketPath: string): void {
+  if (!readBoundedProcessCommandLine(serverPid).includes(socketPath)) {
+    throw new Error("Structured vertical tmux server identity is invalid.");
+  }
+}
+
+function parseProcessId(candidate: string, label: string): number {
+  const value = candidate.trim();
+  if (!/^\d+$/u.test(value)) {
+    throw new Error(`Structured vertical ${label} pid is invalid.`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new Error(`Structured vertical ${label} pid is invalid.`);
+  }
+  return parsed;
 }
 
 async function runFile(
