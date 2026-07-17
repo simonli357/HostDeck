@@ -1628,12 +1628,14 @@ async function enforceAndroidAwakeAndUnlocked(
 }
 
 function isAndroidAwakeAndUnlocked(): boolean {
-  const power = adb(["shell", "dumpsys", "power"]);
+  const policy = adb(["shell", "dumpsys", "window", "policy"]);
   const trust = adb(["shell", "dumpsys", "trust"]);
   return (
-    Buffer.byteLength(power, "utf8") <= 512 * 1024 &&
+    Buffer.byteLength(policy, "utf8") <= 512 * 1024 &&
     Buffer.byteLength(trust, "utf8") <= 512 * 1024 &&
-    /\bmWakefulness=Awake\b/u.test(power) &&
+    /^\s*interactiveState=INTERACTIVE_STATE_AWAKE\s*$/mu.test(policy) &&
+    /^\s*mIsShowing=false\s*$/mu.test(policy) &&
+    /^\s*mIsScreenOn = true\s*$/mu.test(policy) &&
     /\(current\):[^\r\n]{0,512}\bdeviceLocked=0\b/u.test(trust)
   );
 }
