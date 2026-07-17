@@ -12,7 +12,7 @@ Owns setup context, environment policy, services, and operational notes.
 | Native build | `@hostdeck/storage` uses `better-sqlite3` and exact `fs-ext` 2.1.1; `pnpm-workspace.yaml` allows both native build scripts through `onlyBuiltDependencies`. A normal Ubuntu C/C++/Python `node-gyp` toolchain may be required when cached binaries are unavailable. |
 | Required Codex for selected adapter work | Exact `codex-cli 0.144.0` must be on `PATH`; `HOSTDECK_CODEX_BIN` may name another executable for binding/smoke commands. The reviewed V1 binding uses experimental API for `/plan`. |
 | Linux command sandbox | Command-backed exact-Codex smokes require Bubblewrap to create an unprivileged user namespace. Ubuntu 24.04 hosts with `kernel.apparmor_restrict_unprivileged_userns=1` require the packaged `bwrap-userns-restrict` AppArmor profile to be installed and loaded. Do not replace this prerequisite with a sandbox or approval downgrade. |
-| Tmux | `tmux 3.4` is required for historical smoke and as a test-only terminal emulator for the real exact-thread TUI smoke; it is not the selected production runtime. |
+| Tmux | Optional and test-only. Exact thread/TUI smokes use `tmux 3.4` as an isolated terminal emulator; no HostDeck production package, service, or command depends on it. |
 | Browser validation | Playwright 1.61.1 with its Chromium 1228 bundle is required for the fragment/history pairing suite. |
 | Hosted services | None. HostDeck is local-first and stores state locally. |
 
@@ -42,6 +42,7 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | --- | --- | --- |
 | Install | `pnpm install --frozen-lockfile` | Uses the committed `pnpm-lock.yaml`. |
 | Scaffold check | `pnpm check:scaffold` | Verifies root files, package directories, and root script names. |
+| Selected runtime boundary | `pnpm check:runtime-boundary` | Rejects tmux package/dependency/export/source/CLI reachability and requires the bounded legacy reset repository. |
 | Codex binding check | `pnpm check:codex-bindings` | Regenerates 0.144.0 experimental bindings in a temporary directory and rejects drift. |
 | Codex binding update | `pnpm generate:codex-bindings` | Replaces committed generated files and identity; use only during an explicit compatibility review. |
 | Codex compatibility smoke | `pnpm smoke:codex-compatibility` | Starts installed app-server over stdio, initializes experimental API, and verifies Plan/Default without a model call. |
@@ -53,8 +54,6 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | Unit tests | `pnpm test` or `pnpm test:unit` | Runs Vitest unit tests. |
 | Contract tests | `pnpm test:contract` | Runs shared schema/API/CLI/storage/UI contract tests. |
 | Integration tests | `pnpm test:integration` | Runs cross-module failure-ordering tests. |
-| Service smoke | `pnpm exec vitest run tests/service-mode-smoke.test.ts` | Proves foreground HTTP service status/restart and CLI start/list/send/stop through the service with fake tmux. |
-| Tmux smoke | `pnpm test:tmux` | Requires `tmux` and `codex` on `PATH`; runs required real managed-session smoke. |
 | Web state tests | `pnpm test:web` | Runs view-model, selected mobile fixture, and headless pairing-bootstrap checks. |
 | Pairing browser tests | `pnpm test:browser:pairing` | Runs the real Chromium history/referrer/reload/two-tab/failure boundary; requires the Playwright Chromium bundle. |
 | Later E2E tests | `pnpm test:e2e` | Placeholder; fails loudly until `REL-V1-007` implements it. |
@@ -63,7 +62,9 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 
 ## CLI And Service State
 
-The CLI shell and service entrypoints are implemented in `packages/cli/src/` and `packages/server/src/`, but a packaged runnable `codexdeck` binary is not installed yet. `REL-V1-003` verified this gap and keeps `codexdeck ...` examples out of the copy-paste command reference until build/package or clean install smoke provides a runnable executable path.
+Selected CLI parsers, local-admin operations, and loopback HTTP clients are implemented as source contracts in `packages/cli/src/`, and selected server services/routes/lifecycle primitives live in `packages/server/src/`. A production composition entrypoint and packaged runnable `codexdeck` binary do not exist yet. `INT-V1-008` deliberately removed the historical tmux/custom-listener `serve` path; `IFC-V1-046` owns selected composition, and build/package or clean-install evidence must exist before `codexdeck ...` becomes a copy-paste command.
+
+Local `legacy status [--json]` reports only the `legacy_unmigrated` disposition and a bounded row count. `legacy reset --confirm [--json]` opens the local SQLite database, runs one immediate transaction, removes only inert legacy session state through declared foreign keys, preserves selected sessions/projections/security/global audit state, and performs no process or tmux action. Both remain source contracts until CLI packaging.
 
 Default local configuration:
 
@@ -73,7 +74,7 @@ Default local configuration:
 | API port | `3777` |
 | State directory | `${XDG_STATE_HOME}/hostdeck` when `XDG_STATE_HOME` is set, otherwise `~/.local/state/hostdeck` |
 | SQLite database | `hostdeck.sqlite` inside the state directory |
-| Runtime directory | `$XDG_RUNTIME_DIR/hostdeck`; `serve` rejects when `XDG_RUNTIME_DIR` is missing, relative, non-canonical, wrongly owned, or not mode `0700` |
+| Runtime directory | `$XDG_RUNTIME_DIR/hostdeck`; the config/path contracts reserve it for selected composition, which remains `IFC-V1-046` work |
 | Config directory | `${XDG_CONFIG_HOME}/hostdeck` when set, otherwise `~/.config/hostdeck` |
 | Daemon lease | `hostdeck.lock` inside the state directory; one nonblocking Linux owner per state directory |
 | Config file | Optional JSON file passed with `--config` |
@@ -88,27 +89,17 @@ Supported config inputs:
 | State directory | `--state-dir` | `HOSTDECK_STATE_DIR` | `state_dir` or `stateDir` |
 | Database path | `--database` or `--database-path` | `HOSTDECK_DATABASE_PATH` | `database_path` or `databasePath` |
 
-## Foreground Service Behavior
+## Production Composition Gap
 
-`codexdeck serve` is the intended foreground daemon command once the runnable binary path exists. The existing source service is the historical custom-listener composition pending `IFC-V1-067`, not the selected production composition. It currently:
+`codexdeck serve` is the intended foreground command, but no source `serve` command or production assembly exists after legacy-runtime removal. `IFC-V1-046` must compose the proven pieces into one loopback-only Fastify process that acquires the state lease, prepares owner-only paths and SQLite, starts or connects to the selected Codex runtime according to ownership mode, runs maintenance/reconciliation, registers only selected routes/static/SSE, and drains every owned resource on shutdown. It must not restore the old custom listener, tmux discovery, direct-LAN TLS, or historical route fallback.
 
-- opens the configured local SQLite database and runs migrations;
-- resolves absolute non-overlapping local paths, acquires the state lease before config/runtime/database mutation, and enforces `0700` directories plus `0600` database/lease files;
-- validates settings, network bind, tmux discovery, and restart reconciliation before reporting ready;
-- binds localhost by default on port `3777`;
-- exposes historical custom-listener route families, including direct-LAN network state; those registrations are excluded from the selected server package-root surface and are not selected V1 behavior;
-- keeps local-admin CLI writes limited to loopback non-browser requests;
-- requires browser writes to use the paired device cookie plus `X-HostDeck-CSRF`;
-- keeps dashboard unlock rejected; historical LAN mutation code remains isolated for disposition rather than selected use;
-- closes the HTTP listener and storage handle on service shutdown.
-
-Long-running service wrapping is not implemented yet. Use foreground mode during development and keep OS service wrapper instructions out of release docs until `REL-V1-006` validates them.
+Long-running systemd user units and runnable packaging remain downstream. Do not publish foreground or service-wrapper instructions until composition, build/package, and `REL-V1-006` clean-install evidence pass.
 
 ## Remote And Safety Notes
 
 - The selected production listener boundary is localhost-only; Tailscale Serve will proxy private HTTPS to that loopback listener.
 - The selected source CLI rejects `codexdeck lan`; direct-LAN/custom-CA commands are historical and unsupported for remote V1.
-- `codexdeck remote status`, `remote enable`, and `remote disable` remain unimplemented until `IFC-V1-076`; do not infer availability from the manifest alone.
+- `remote status`, `remote enable`, and `remote disable` have source CLI and service contracts, but are not user-runnable until selected composition and CLI packaging exist.
 - `codexdeck unlock` is CLI-only in V1; dashboard unlock remains rejected.
 - Pairing codes, device tokens, and CSRF tokens are stored only as hashes in local SQLite.
 
@@ -116,22 +107,23 @@ Long-running service wrapping is not implemented yet. Use foreground mode during
 
 | Symptom | Likely cause | Current behavior |
 | --- | --- | --- |
-| `daemon_unavailable` from normal CLI commands | Foreground service is not running or the configured URL is wrong. | CLI exits nonzero and tells the user to start `codexdeck serve`. |
-| `tmux_unavailable` / missing binary | `tmux` is not on `PATH` or cannot be queried. | Startup fails before ready status. |
+| `daemon_unavailable` from source client tests or future packaged commands | No selected server is listening or the configured loopback URL is wrong. | Request fails nonzero; there is no legacy source `serve` fallback. |
+| Exact thread/TUI smoke cannot start | Optional test dependency `tmux` is absent or unusable. | Only the opt-in TUI smoke fails; production code and ordinary validation do not require tmux. |
 | `missing_binary` during session start | External Codex CLI is not on `PATH`. | Session start fails before durable success is recorded. |
 | Thread/TUI smoke stops at authentication | Installed Codex has no private regular `auth.json` or its login is stale. | Smoke fails before claiming exact TUI evidence and removes its temporary state. |
 | Command-backed Codex turn fails before approval | Bubblewrap cannot create a user namespace, commonly because the Ubuntu AppArmor profile is absent. | Aggregate acceptance remains failed. Install/load the packaged profile; do not disable sandbox or lower approval policy. |
 | Invalid state directory or database path | Path is missing, unreadable, or migration fails. | Startup or local-admin command fails loudly with typed config/storage errors. |
-| `XDG_RUNTIME_DIR is required` | Service mode has no secure per-user runtime directory. | `serve` exits with the config error family before service startup. |
-| Another daemon owns the state directory | A HostDeck process already holds `hostdeck.lock`. | The second process exits before creating config/runtime paths, opening SQLite, or binding a listener. |
-| Duplicate bind port | Another process already owns the configured port. | Startup fails before reporting ready. |
+| `XDG_RUNTIME_DIR is required` | A runtime-owning source contract is exercised without a secure per-user runtime directory. | Config/path validation fails before runtime side effects. |
+| Another owner holds the state directory lease | A HostDeck process/test already holds `hostdeck.lock`. | Lease acquisition fails before protected mutation; full production startup ordering remains `IFC-V1-046` work. |
+| Duplicate loopback bind port | Another process already owns the configured port. | Fastify lifecycle startup fails before reporting ready; production composition remains downstream. |
 | Placeholder scripts fail | E2E, build, or release smoke is not implemented yet. | Script exits nonzero with the owning future task ID. |
 
 ## Evidence
 
 - Service/API hardening: `artifacts/ifc-v1-090-api-cli-hardening.md`.
-- Foreground service smoke: `artifacts/ifc-v1-012-service-mode-smoke.md`.
-- Network bind smoke: `artifacts/ifc-v1-011-network-smoke.md`.
+- Historical foreground service smoke, superseded and no longer runnable: `artifacts/ifc-v1-012-service-mode-smoke.md`.
+- Historical network bind smoke, superseded by the selected Fastify/Tailscale boundary: `artifacts/ifc-v1-011-network-smoke.md`.
 - Owner-only paths and daemon lease: `artifacts/dat-v1-019-secure-paths-daemon-lease.md`.
-- Real tmux smoke: `artifacts/int-v1-016-real-tmux-smoke.md`.
+- Historical tmux runtime smoke: `artifacts/int-v1-016-real-tmux-smoke.md`.
+- Legacy runtime removal and retained-data administration: `artifacts/int-v1-008-legacy-tmux-disposition.md`.
 - Release validation wiring: `artifacts/rel-v1-001-validation-wiring.md`.

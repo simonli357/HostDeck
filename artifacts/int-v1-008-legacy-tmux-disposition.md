@@ -44,11 +44,47 @@
 - Full automated validation and selected no-model smokes.
 - Manual inspection of package roots, CLI help/failure output, migration behavior, production dependency tree, process/listener inventory, and privacy-sensitive output.
 
-## Current Gaps Before Implementation
+## Implementation Outcome
 
-- `@hostdeck/server` directly depends on and exports the tmux runtime.
-- `codexdeck serve` defaults to the historical custom listener and tmux adapter.
-- CLI status/list/attach/stop still consume tmux-shaped contracts.
-- The workspace and command reference still require the historical adapter package and `pnpm test:tmux`.
-- Legacy rows are classified safely, but there is no explicit local status/reset operation.
-- Fastify lifecycle lease coverage borrows the historical startup and must own a selected-neutral secure lease fixture before that startup is removed.
+- Criteria commit: `2a16077`.
+- Implementation commit: `d3d91c1`.
+- Deleted the complete `packages/tmux-adapter` workspace package and its lockfile/server/scaffold/export wiring.
+- Deleted the executable historical server path: `startup`, `host-service`, `output-reader`, `restart-reconciler`, read/write/session-control/stream routes, and their direct smoke/unit/integration tests.
+- Deleted historical CLI/API-client service behavior and source commands `serve`, standalone `status`, `list`, `attach`, and `stop`. Parser/help/failure tests prove they reject before config, network, storage, or process construction.
+- Replaced the Fastify lifecycle test's borrowed historical startup with a direct selected-neutral secure lease fixture.
+- Added `packages/storage/src/legacy-session-repository.ts` and local CLI administration for exact `legacy status` and confirmed `legacy reset --confirm` forms.
+- Added `scripts/check-selected-runtime-boundary.mjs` and root `pnpm check:runtime-boundary`; it rejects package, lockfile, dependency, export, source-import, production spawn, CLI-surface, and reset-repository drift.
+
+## Retained Surfaces
+
+- Published migration SQL, checksums, legacy tables/columns, contracts needed to decode those rows, and historical audit records remain unchanged. Existing rows stay `legacy_unmigrated` and cannot enter selected listings.
+- Confirmed reset runs in one immediate SQLite transaction, verifies session/disposition count agreement before and after deletion, relies on declared foreign-key cascades for legacy child rows, preserves selected sessions/projections/security/global audit data, and is idempotent.
+- Reset has no process port, shell call, adapter import, or target identifier. Status/reset rendering accepts exact keys and emits only disposition plus bounded counts; injected names, cwd, pane, output, commands, or private fields fail validation.
+- Tmux remains only in opt-in exact Codex TUI/lifecycle test harnesses as a terminal emulator. It is absent from production packages, dependencies, exports, scripts, configuration, and source command behavior.
+- Retained direct-LAN/schema contracts are separate historical migration surfaces. Their reviewed final retirement remains `IFC-V1-067`; selected server composition remains `IFC-V1-046`.
+
+## Validation
+
+| Scope | Result |
+| --- | --- |
+| Focused CLI contract | 6 passed. |
+| Focused storage/local-admin/Fastify/archive regression | 18 passed; standalone Fastify lifecycle 5, local admin 7, archive 6. |
+| Root and all-package typecheck | Passed across all 8 workspace packages. |
+| Lint/exports and scaffold | Passed: 486 files, 8 package exports, 8 packages, 19 scripts. |
+| Static/planning gates | `pnpm check:runtime-boundary` passed; planning passed with 212 tasks, 84 requirements, and 649 dependencies. |
+| Unit | 1,664 passed, 26 explicit skips, 0 failed. |
+| Contract | 33 files, 259 passed. |
+| Integration | 14 files, 18 passed. |
+| Web | 3 files, 33 passed. |
+| Install/dependencies | Frozen offline install passed for the root plus 8 packages; server production tree contains no tmux adapter. |
+| Production audit/licenses | `pnpm audit --prod` reported no known vulnerabilities; production licenses are permissive (`MIT`, `BSD-3-Clause`, `ISC`, `Apache-2.0`, `0BSD`, `BlueOak-1.0.0`, and permissive alternatives). |
+| Exact Codex binding | The default 0.144.5 binary correctly failed the 0.144.0 gate; isolated exact 0.144.0 passed 671-file identity hash `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. |
+| Selected no-model smokes | Exact 0.144.0 compatibility, Unix IPC, supervisor, and thread/TUI smokes each passed once. |
+
+## Manual Inspection And Cleanup
+
+- Package manifests, lockfile, package-root exports, root scripts, and production source have no executable tmux runtime path. The retained string occurrences are migration/history or isolated TUI test ownership.
+- Legacy status/reset output and malformed-input tests expose no legacy identity, path, terminal content, command text, or selected-state detail.
+- Process inspection after validation found zero tmux and zero ADB processes, no tmux sockets, and no HostDeck test temp roots. The only retained temp root is the intentional isolated Codex 0.144.0 toolchain.
+- Two live `codex app-server` processes are children of active VS Code sessions, not HostDeck test children; they were not touched.
+- No external tmux process existed during cleanup. The implementation has no capability to inspect, signal, attach to, or terminate one.

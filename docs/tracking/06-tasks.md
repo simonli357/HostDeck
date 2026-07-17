@@ -16,9 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-008` Remove or isolate the legacy tmux runtime | in_progress | none | Selected app-server lifecycle acceptance and historical tmux hardening are complete; one production runtime and explicit retained-evidence boundaries are now required. |
+| 1 | `INT-V1-091` Harden the selected Codex runtime module | ready | none | Runtime lifecycle acceptance, maintenance, and legacy removal are complete; close the selected runtime against the aggregate strict matrix. |
 | 2 | `IFC-V1-035` Add bounded subscriber queues and revoke/disconnect/archive cleanup | ready | none | Exact active/opening-stream revoke is complete; bounded subscriber ownership can progress independently. |
-| 3 | `IFC-V1-036` Implement mutable local and remote health | ready | none | Runtime lifecycle acceptance now completes its final dependency; local readiness and independent Tailscale health can be composed. |
+| 3 | `IFC-V1-036` Implement mutable local and remote health | ready | none | Runtime lifecycle acceptance completes its final dependency; local readiness and independent Tailscale health can be composed. |
 
 ## Intentional Blockers
 

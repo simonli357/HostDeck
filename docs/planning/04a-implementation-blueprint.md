@@ -137,12 +137,12 @@ The selected runtime requires a new migration, not in-place reinterpretation of 
 
 1. Add app-server compatibility and normalized projected-event tables/columns.
 2. Add `codex_thread_id`, runtime source/version, projection freshness, and archive semantics to managed sessions.
-3. Preserve old tmux fields as nullable legacy columns until migration disposition is complete.
+3. Preserve old tmux fields as nullable legacy columns after executable-runtime removal so published migrations remain forward-compatible.
 4. Mark pre-release tmux records `legacy_unmigrated`; do not expose them as live app-server sessions.
-5. Provide a local reset/archive path for pre-release data if thread identity cannot be proven.
+5. Provide bounded local `legacy status` plus immediate transactional `legacy reset --confirm`; never inspect or mutate a tmux process or selected session state.
 6. Add durable remote-ingress settings for the selected profile identity, canonical external origin, HostDeck-owned Serve descriptor, enablement state, and last known observation without storing Tailscale credentials.
 7. Replace selected LAN/certificate audit actions with exact remote-enable and remote-disable contracts. Reuse the existing pair-request action for QR/link issuance, keep status read-only, represent profile/ownership failures as truthful operation outcomes, and preserve historical LAN diagnostic rows unchanged.
-8. Remove legacy columns only in a later reviewed migration after `INT-V1-008`.
+8. Remove legacy columns/contracts only in a later reviewed migration with `IFC-V1-067`; `INT-V1-008` intentionally preserves inert rows and published SQL.
 
 Session start uses a recoverable saga because Codex thread creation and SQLite cannot share a transaction:
 
@@ -346,10 +346,10 @@ Tasks may overlap only when dependencies and shared contracts make the work inde
 ## Rollout And Rollback
 
 - All app-server behavior is behind the new adapter and selected-runtime configuration during migration.
-- Before pre-release migration, current tmux tests remain runnable to prevent accidental loss of evidence.
+- Historical tmux implementation evidence remains in artifacts and Git history; current tmux use is limited to isolated exact-Codex TUI test harnesses.
 - If the real structured vertical fails a required semantic, V1 returns to planning. It does not silently ship both runtimes or resume TUI scraping.
 - If Tailscale ingress cannot meet the pinned remote/security/profile-isolation contract, V1 returns to planning. It does not fall back to a LAN listener, custom CA, public port forwarding, or silent company-profile mutation.
-- Database migrations are forward-only and tested on a copy; destructive pre-release reset requires explicit CLI confirmation and preserves an exportable diagnostic.
+- Database migrations are forward-only and tested on a copy; destructive pre-release legacy reset requires explicit CLI confirmation and preserves bounded global audit history while removing only inert legacy session state.
 - Dependency additions are committed separately from UI work and include license/version rationale in the owning task.
 - A completed block is reopened whenever its production outcome changes, even if historical package tests still pass.
 

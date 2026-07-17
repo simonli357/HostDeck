@@ -48,7 +48,7 @@ The `tmux-output.md` filename is retained temporarily so historical artifact lin
 | `INT-V1-007` supervisor | `INT-V1-028` to `INT-V1-031` | Reconnect, crash, HostDeck restart, and TUI coexistence consume explicit process ownership. |
 | `DAT-V1-030`, `INT-V1-028` to `INT-V1-031` | `INT-V1-032` | Aggregate lifecycle acceptance includes durable incomplete/boundary recovery. |
 | `INT-V1-032` lifecycle acceptance | `INT-V1-008`, `IFC-V1-036`, `IFC-V1-037` | Legacy disposition and mutable host lifecycle wait for accepted restart behavior. |
-| `INT-V1-008`, `INT-V1-091` | Selected integration completion | One production runtime remains with strict evidence. |
+| `INT-V1-008` legacy removal | `INT-V1-091` selected-runtime hardening | The executable tmux path is gone; aggregate hardening now closes the only production runtime. |
 | `IFC-V1-016` Fastify stack spike | `IFC-V1-020`, then `IFC-V1-022` to `IFC-V1-025` | Exact dependencies are selected first; resource units/defaults/deadline ownership freeze before server implementation. |
 | `IFC-V1-020` resource contract | App/SSE/lifecycle implementations and `IFC-V1-047` to `IFC-V1-052` | No transport or client invents its own larger limit, unit, timeout, or cancellation extension. |
 | `IFC-V1-022` typed app factory | `IFC-V1-017`, `IFC-V1-019`, `IFC-V1-023` to `IFC-V1-025`, `IFC-V1-032` | Security, route manifest, SSE, static, lifecycle, and audit ports share one validation/error policy. |

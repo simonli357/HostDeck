@@ -8,7 +8,7 @@ Owns the selected Codex boundary: dedicated app-server process, private Unix tra
 - One dedicated runtime supports multiple managed threads plus a normal laptop TUI client.
 - Real events drive durable projections, attention, controls, approvals, and replay.
 - HostDeck/app-server restart and uncertain outcomes are honest and recoverable.
-- Legacy tmux runtime code is removed or explicitly deferred after the structured path passes.
+- The executable legacy tmux runtime is removed after structured-path acceptance; published legacy data remains inert and explicitly administrable.
 
 Requirement refs: `FR-001`, `FR-003` to `FR-009`, `FR-013` to `FR-018`, `NFR-002`, `NFR-005` to `NFR-007`, `NFR-010`, `NFR-012`, `PR-001`, `PR-006`, `PR-007`, `PR-010`, `SFR-010`, `SFR-011`.
 
@@ -54,8 +54,8 @@ No fake-Codex or fake-tmux test can satisfy these gates.
 | Bounded reconnect controller | `INT-V1-028` | Done: generation-gated lifecycle, compatibility, backoff, held inbound, cleanup, cancellation, and no-mutation-replay evidence pass. |
 | Crash reconciliation, HostDeck restart, and TUI coexistence | `INT-V1-029` to `INT-V1-031` | Done: durable crash recovery, exact multi-process HostDeck restart, and exact bidirectional HostDeck/TUI teardown evidence pass with private cleanup. |
 | Aggregate runtime lifecycle acceptance | `INT-V1-032` | Done: fixed deterministic plus exact 0.144.0 subprocess matrix passes ownership/reconnect/crash/restart/TUI/integrity/privacy/cleanup acceptance with no retry. |
-| Legacy tmux disposition | `INT-V1-008` | In progress: lifecycle acceptance and historical evidence review are complete. |
-| Reopened runtime hardening | `INT-V1-091` | Blocked by selected lifecycle, data maintenance, and legacy disposition. |
+| Legacy tmux disposition | `INT-V1-008` | Done: package/runtime/CLI reachability is removed, migration data stays inert, and bounded confirmed local reset is proven. |
+| Reopened runtime hardening | `INT-V1-091` | Ready: selected lifecycle, data maintenance, and legacy disposition dependencies are complete. |
 
 Owning backlog: `docs/tracking/backlog/tmux-output.md` (filename retained to preserve historical links; title/scope are rebaselined).
 

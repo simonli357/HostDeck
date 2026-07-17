@@ -6,7 +6,7 @@ Owns the active-version architecture, process and trust boundaries, selected dep
 
 - Direction: app-server-first runtime under `DEC-018` plus Tailscale-first remote ingress under `DEC-027`.
 - Release state: no-go. Existing packages prove reusable foundations, not the selected production vertical.
-- Legacy state: tmux/TUI adapter and capture evidence remain in the repo until `INT-V1-008` decides removal after the structured vertical passes.
+- Legacy state: `INT-V1-008` removed the tmux adapter and executable runtime after structured acceptance. Published migration data remains inert as `legacy_unmigrated`; tmux is test-only for exact Codex TUI evidence.
 - Remote boundary: the phone reaches HostDeck only through private Tailscale Serve HTTPS. HostDeck itself remains loopback-only; Codex app-server remains on a user-private Unix socket.
 - Compatibility baseline: exact `codex-cli 0.144.0`, reviewed experimental binding identity, and `DEC-021`; upgrades fail closed pending regeneration and review.
 
@@ -80,11 +80,12 @@ Exact defaults, cross-field invariants, and downstream consumers are recorded in
 | `@hostdeck/cli` | Packaged commands, local API client, local-admin bootstrap/security/service operations. | Hidden direct session mutation that bypasses application services. |
 | `@hostdeck/web` | Mission Control, Session Detail, sheets/dialogs, API/SSE clients, UI state. | Codex protocol, filesystem, storage, terminal input. |
 | `@hostdeck/test-fixtures` | Normalized Codex event fixtures, fake adapters, API/UI fixtures, and redacted remote-ingress/profile states. | Production secrets, Tailscale node keys, company profile metadata, or model-dependent fixtures. |
-| `@hostdeck/tmux-adapter` | Legacy evidence only until `INT-V1-008`. | New selected-runtime behavior. |
 
 ## Process Topology
 
 ### Foreground Development
+
+This is the target production sequence. Source `serve` composition is intentionally absent until `IFC-V1-046`; `INT-V1-008` removed the historical tmux/custom-listener implementation with no fallback.
 
 1. `codexdeck serve` acquires the state-directory lease.
 2. It creates a `0700` runtime directory below `$XDG_RUNTIME_DIR/hostdeck`.
@@ -199,7 +200,7 @@ Every route has schema validation, request/body limits, stable errors, explicit 
 
 The selected base is `createHostDeckFastifyApp`: an unbound Fastify instance built only from one complete frozen resource policy, a required internal-error observer, and uniquely named explicit route registrations. Registrations declare `api`, `sse`, or `static`; API routes require at least one local-Zod response schema, while streaming/static exceptions remain named surfaces. Incoming request ids are ignored in favor of generated correlation ids. Root error handling plus `frameworkErrors` normalize pre-routing and route errors into the same bounded envelopes, including `route_not_found`, `method_not_allowed`, and `unsupported_media_type`.
 
-`startHostDeckFastifyLifecycle` is the selected listener owner. It receives a runtime controller with start/SSE-close/startup-close authority before the first side effect, applies constructor and mutable Node HTTP limits, completes Fastify readiness while unbound, then binds and verifies only the runtime-approved loopback address. V1 production admits no HostDeck TLS, private-IP, wildcard, LAN, or public bind. Tailscale Serve terminates external HTTPS and proxies to this loopback listener through a separately validated ingress context. Close initiates listener refusal, bounds SSE/listener/Fastify/startup cleanup under the lifecycle policy, reaps newly idle sockets during the listener grace period, then force-closes any tracked HTTP sockets that outlive that grace and waits for their close events. It aggregates every failure and exposes frozen `ready`/`draining`/`closed`/`failed` snapshots. The historical custom listener and direct-LAN TLS path remain outside selected composition.
+`startHostDeckFastifyLifecycle` is the selected listener owner. It receives a runtime controller with start/SSE-close/startup-close authority before the first side effect, applies constructor and mutable Node HTTP limits, completes Fastify readiness while unbound, then binds and verifies only the runtime-approved loopback address. V1 production admits no HostDeck TLS, private-IP, wildcard, LAN, or public bind. Tailscale Serve terminates external HTTPS and proxies to this loopback listener through a separately validated ingress context. Close initiates listener refusal, bounds SSE/listener/Fastify/startup cleanup under the lifecycle policy, reaps newly idle sockets during the listener grace period, then force-closes any tracked HTTP sockets that outlive that grace and waits for their close events. It aggregates every failure and exposes frozen `ready`/`draining`/`closed`/`failed` snapshots. `INT-V1-008` removed the executable historical custom listener; retained direct-LAN contracts/data modules remain outside selected composition pending `IFC-V1-067`.
 
 One admitted request remains counted until both its original handler lifecycle and response/abort lifecycle finish. Fastify handler timeout aborts the unchanged request signal but cannot forcibly stop ignored JavaScript work, so a timed-out noncooperative handler retains its slot until it actually settles. Handler instrumentation preserves sync and `FastifyReply` returns and attaches settlement only to actual Promises; it must not convert plugin handlers to async.
 
@@ -317,9 +318,9 @@ The lease prevents cooperating HostDeck daemons from sharing one state directory
 3. Migrate session storage from tmux target ownership to Codex thread mapping with an explicit schema migration.
 4. Run one real vertical: start thread, prompt, events, status, approval, control, interrupt, restart, TUI resume.
 5. Integrate Fastify/SSE/auth plus the Tailscale Serve adapter and prove the different-network production path.
-6. Only then remove or formally defer tmux runtime code and update dependencies/docs.
+6. Remove the tmux runtime package, service, routes, CLI reachability, and dependencies while retaining only required migration data and test-only TUI terminal use. Complete under `INT-V1-008`.
 
-No stored tmux session is silently converted to a Codex thread. V1 pre-release data can require an explicit reset/migration command if conversion cannot be proven.
+No stored tmux session is silently converted to a Codex thread. Existing rows remain `legacy_unmigrated`; local `legacy status` reports only bounded disposition/count truth, and `legacy reset --confirm` transactionally removes only legacy session state without process action or selected-state mutation. Final legacy schema/export retirement remains a later reviewed migration under `IFC-V1-067`.
 
 ## Blocking Spikes And Gates
 

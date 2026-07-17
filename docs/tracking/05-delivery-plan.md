@@ -7,7 +7,7 @@ Owns milestone, module maturity, production passes, and release truth.
 - Current pass: selected runtime integration plus Tailscale-first remote-access foundation and production host interface.
 - Current milestone: M1 selected foundation is complete; M2 real structured vertical and M3 remote host interface are in progress.
 - Release state: no-go; selected production path is not implemented.
-- Next exit: `IFC-V1-072` implements ownership-safe Serve enable/disable after the bounded observer, followed by proxy trust and remote application composition against the completed contracts/storage and 35-route manifest.
+- Next exit: `INT-V1-091` closes the only production runtime against the strict aggregate hardening matrix; interface queue leaves continue independently where their dependencies are complete.
 
 ## Milestones
 
@@ -26,7 +26,7 @@ Owns milestone, module maturity, production passes, and release truth.
 | --- | --- | --- | --- |
 | `BLK-V1-01` Contracts/core/fixtures | Structured-runtime and remote-ingress/access contracts, invariants, fixtures, generated/normalized adapter boundaries, planning checker, executable-leaf audit, and focused hardening pass. | None; block complete. | `FND-V1-018`, `FND-V1-092` |
 | `BLK-V1-02` State/auth/audit | Mapping/recovery/projection/runtime compatibility, remote-ingress config/profile/Serve/observation durability, exact remote enable/disable audit with historical preservation, retention, pairing/CSRF/device authority, secure paths/lease, and combined aggregate migration/restart/conflict/query-plan/privacy hardening pass. | None; block complete. | `DAT-V1-092` |
-| `BLK-V1-03` Codex runtime/events | Exact binding, private IPC/handshake, corrected no-model thread lifecycle, ordered projection, all selected structured controls, strict real approval/interrupt routing, and the four-run two-thread assembled vertical pass; tmux mechanics are legacy. | Production supervision, restart/reconciliation acceptance, multi-client completion, legacy disposition, and module hardening remain. | `INT-V1-005` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
+| `BLK-V1-03` Codex runtime/events | Exact binding, private IPC/handshake, no-model thread lifecycle, ordered projections and controls, production supervision, restart/reconciliation, multi-client lifecycle acceptance, and executable tmux-runtime removal pass. | Selected-runtime module hardening remains. | `INT-V1-005` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
 | `BLK-V1-04` API/CLI/security/service | Typed loopback Fastify/SSE/static/lifecycle boundaries, app-auth primitives, bounded commit-only fanout, retention-safe headless replay-to-live continuity, exact Tailscale spike, read-only observer, and selected 35-route manifest pass. | Serve ownership, proxy/source trust, QR/lifecycle/physical acceptance, remaining routes/queues/bounds, legacy isolation, build, and services remain. | `IFC-V1-070` to `IFC-V1-079`, remaining interface leaves, `IFC-V1-091` |
 | `BLK-V1-05` Mobile dashboard | View-model helpers only; old boards rejected. | Remote state/visual gate and all product UI/device evidence remain. | `FE-V1-004`, reopened `FE-V1-002`, `FE-V1-003`, `FE-V1-010` to `FE-V1-040`, `FE-V1-090` |
 | `BLK-V1-06` Release | Baseline commands/historical docs and both rebaseline decisions exist. | Selected remote-path clean install/security/device/profile/aggregate/docs/go-no-go absent. | `REL-V1-004` to `REL-V1-010`, `REL-V1-012` |
