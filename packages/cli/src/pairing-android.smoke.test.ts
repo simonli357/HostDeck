@@ -1195,9 +1195,10 @@ function isAcceptedProfileSwitchObservation(
   const switchingLine =
     "Switching to account [^\\u0000-\\u001f\\u007f]{1,128}";
   if (observation.exit_code === 0) {
-    return new RegExp(`^${switchingLine}\\r?\\n$`, "u").test(
-      observation.stdout
-    );
+    return new RegExp(
+      `^${switchingLine}\\r?\\nSuccess\\.\\r?\\n$`,
+      "u"
+    ).test(observation.stdout);
   }
   return (
     observation.exit_code === 1 &&
