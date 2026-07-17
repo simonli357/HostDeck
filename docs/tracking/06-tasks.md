@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-068` Implement managed-session list and detail routes | ready | none | The selected manifest, read authority, projection repository, and health routes are complete. |
+| 1 | `IFC-V1-068` Implement managed-session list and detail routes | in_progress | none | Strict active/archive/stale policy, snapshot-keyset pagination, durable boundary projection, and auth-lifetime criteria are frozen in `artifacts/ifc-v1-068-managed-session-list-detail-routes.md`. |
 | 2 | `IFC-V1-078` Compose remote ingress startup, health, SSE, reconnect, and shutdown lifecycle | ready | none | Generic host lifecycle, aggregate projection recovery, and all selected Tailscale ingress leaves are complete. |
 
 ## Intentional Blockers

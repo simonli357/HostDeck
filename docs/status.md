@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `IFC-V1-068` managed-session list/detail route hardening is next. `IFC-V1-039` is complete and `IFC-V1-078` remains ready.
+- Active task: `IFC-V1-068` managed-session list/detail route hardening is in progress with strict active/archive/stale, snapshot-pagination, durable-boundary, and response-authority criteria frozen. `IFC-V1-078` remains ready.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.5; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract plus 14 current Signal Ledger/Focus Rail visual targets are complete; both desktop-led boards remain rejected, and `FE-V1-003` is blocked only by human selection of exact assets/approved drift.
@@ -353,3 +353,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-048` criteria are pushed as `a76bd67`, aggregate implementation as `a27c84e`, and immutable no-copy replay hardening as `bebc679`; focused/adjacent/workspace/static/install/supply-chain/privacy and zero-residue evidence pass.
 - `IFC-V1-038` criteria are pushed as `e29173e` and aggregate implementation as `2016f70`; deterministic/real/adjacent/workspace/static/install/supply-chain/privacy and zero-residue evidence pass.
 - `IFC-V1-039` criteria are pushed as `66d0144` and implementation as `b62744f`; exact contracts/routes plus focused, workspace, static, install, supply-chain, privacy, and zero-residue evidence pass. This owner-doc closure advances the queue to `IFC-V1-068`; the phone may stay disconnected.
+- `IFC-V1-068` hardening is active. Its frozen criteria separate readable explicit stale/unknown projection truth from invalid identity/storage state, require active-only snapshot-keyset pagination and exact archive/recovery policy, and keep transcript/events/approvals/runtime reads outside the list/detail boundary.
