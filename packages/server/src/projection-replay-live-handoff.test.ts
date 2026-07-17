@@ -162,18 +162,23 @@ describe("projection replay-to-live handoff", () => {
         const hub = createProjectionFanoutHub();
         const service = handoffService(state, hub);
         const handoff = service.open(openInput(sessionA, after, new AbortController().signal, `sub-${highWater}-${after}`));
+        const replay = handoff.claim_replay();
         const expectedStart = after === null ? 1 : after + 1;
         const expected = Array.from(
           { length: Math.max(0, highWater - expectedStart + 1) },
           (_unused, index) => expectedStart + index
         );
 
-        expect(handoff.replay_events.map((event) => event.cursor)).toEqual(expected);
+        expect(replay.events.map((event) => event.cursor)).toEqual(expected);
+        expect(replay.event_count).toBe(expected.length);
+        expect(replay.wire_bytes).toBe(handoff.replay_wire_bytes);
         expect(handoff.high_water_cursor).toBe(highWater === 0 ? null : highWater);
         expect(handoff.truncated).toBe(false);
         expect(Object.isFrozen(handoff)).toBe(true);
-        expect(Object.isFrozen(handoff.replay_events)).toBe(true);
-        expect(handoff.replay_events.every((event) => Object.isFrozen(event))).toBe(true);
+        expect(Object.isFrozen(replay)).toBe(true);
+        expect(Object.isFrozen(replay.events)).toBe(true);
+        expect(replay.events.every((event) => Object.isFrozen(event))).toBe(true);
+        expectHandoffError(() => handoff.claim_replay(), "replay_already_claimed");
         expect(handoff.signal.aborted).toBe(false);
         expect(handoff.close()).toBe(true);
         expect(handoff.signal.aborted).toBe(true);
@@ -280,18 +285,19 @@ describe("projection replay-to-live handoff", () => {
     };
     const hub = createProjectionFanoutHub();
     const handoff = handoffService(state, hub).open(openInput(sessionA, 0));
+    const replay = handoff.claim_replay();
 
     expect(handoff.truncated).toBe(true);
-    expect(handoff.replay_events.map((event) => [event.type, event.cursor])).toEqual([
+    expect(replay.events.map((event) => [event.type, event.cursor])).toEqual([
       ["replay_boundary", 4],
       ["activity", 5],
       ["activity", 6],
       ["activity", 7],
       ["activity", 8]
     ]);
-    expect(handoff.replay_events.filter((event) => event.type === "replay_boundary")).toHaveLength(1);
+    expect(replay.events.filter((event) => event.type === "replay_boundary")).toHaveLength(1);
     expect(handoff.replay_wire_bytes).toBe(
-      handoff.replay_events.reduce((sum, event) => sum + selectedProjectionSseWireByteLength(event), 0)
+      replay.events.reduce((sum, event) => sum + selectedProjectionSseWireByteLength(event), 0)
     );
     expect(state.listCalls).toBeGreaterThan(6);
     handoff.close();
@@ -309,8 +315,9 @@ describe("projection replay-to-live handoff", () => {
     };
 
     const handoff = handoffService(state, hub).open(openInput(sessionA, 1));
+    const replay = handoff.claim_replay();
     expect(handoff.high_water_cursor).toBe(3);
-    expect(handoff.replay_events.map((event) => event.cursor)).toEqual([2, 3]);
+    expect(replay.events.map((event) => event.cursor)).toEqual([2, 3]);
     expect(handoff.paused_event_count).toBe(1);
     appendAndPublish(state, hub, activityEvent(sessionA, 5));
     expect(handoff.paused_event_count).toBe(2);
@@ -481,6 +488,7 @@ describe("projection replay-to-live handoff", () => {
     const handoff = handoffService(openState, openHub).open(openInput(sessionA, null, afterOpen.signal));
     afterOpen.abort();
     expect(handoff.state).toBe("closed");
+    expectHandoffError(() => handoff.claim_replay(), "handoff_closed");
     expect(handoff.close()).toBe(false);
     expect(openHub.subscriber_count).toBe(0);
   });
@@ -516,6 +524,7 @@ describe("projection replay-to-live handoff", () => {
       state.addSession(sessionA, events(sessionA, 1));
       const hub = createProjectionFanoutHub();
       const handoff = handoffService(state, hub).open(openInput(sessionA, 1, new AbortController().signal, `sink-${index}`));
+      handoff.claim_replay();
       appendAndPublish(state, hub, activityEvent(sessionA, 2));
       expectHandoffError(
         () => handoff.activate({ on_event: testCase.sink as (event: SelectedProjectionEvent) => void }),
@@ -534,6 +543,12 @@ describe("projection replay-to-live handoff", () => {
     state.addSession(sessionA, events(sessionA, 1));
     const hub = createProjectionFanoutHub();
     const handoff = handoffService(state, hub).open(openInput(sessionA, 1));
+    expectHandoffError(
+      () => handoff.activate({ on_event: () => undefined }),
+      "replay_not_claimed"
+    );
+    handoff.claim_replay();
+    expectHandoffError(() => handoff.claim_replay(), "replay_already_claimed");
     expectHandoffError(() => handoff.activate(null), "invalid_live_sink");
     expect(handoff.state).toBe("paused");
     expect(handoff.activate({ on_event: () => undefined })).toEqual({
@@ -551,6 +566,7 @@ describe("projection replay-to-live handoff", () => {
       openInput(sessionA, 1, new AbortController().signal, "closing")
     );
     appendAndPublish(closingState, closingHub, activityEvent(sessionA, 2));
+    closing.claim_replay();
     expectHandoffError(
       () =>
         closing.activate({
@@ -574,6 +590,7 @@ describe("projection replay-to-live handoff", () => {
     state.addSession(sessionA, events(sessionA, 1));
     const hub = createProjectionFanoutHub({ max_subscribers: 3, max_subscribers_per_session: 3 });
     const handoff = handoffService(state, hub).open(openInput(sessionA, 1));
+    handoff.claim_replay();
     handoff.activate({
       on_event() {
         throw new Error("direct live sink failed");
@@ -613,6 +630,9 @@ describe("projection replay-to-live handoff", () => {
     const deliveredA1: number[] = [];
     const deliveredA2: number[] = [];
     const deliveredB: number[] = [];
+    firstA.claim_replay();
+    secondA.claim_replay();
+    firstB.claim_replay();
     firstA.activate({ on_event: (event: SelectedProjectionEvent) => void deliveredA1.push(event.cursor) });
     secondA.activate({ on_event: (event: SelectedProjectionEvent) => void deliveredA2.push(event.cursor) });
     firstB.activate({ on_event: (event: SelectedProjectionEvent) => void deliveredB.push(event.cursor) });
@@ -647,7 +667,8 @@ describe("projection replay-to-live handoff", () => {
       current = appendStoredProjection(repository, hub, current, activityEvent(sessionA, 1));
       current = appendStoredProjection(repository, hub, current, activityEvent(sessionA, 2));
       const handoff = handoffService(repository, hub).open(openInput(sessionA, 1));
-      expect(handoff.replay_events.map((event) => event.cursor)).toEqual([2]);
+      const replay = handoff.claim_replay();
+      expect(replay.events.map((event) => event.cursor)).toEqual([2]);
 
       const delivered: number[] = [];
       handoff.activate({ on_event: (event: SelectedProjectionEvent) => void delivered.push(event.cursor) });

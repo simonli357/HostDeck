@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
+  '@fastify/sse@0.5.0':
+    hash: 038f83ce80cb814dad30ec4913dc01f6e038ba06572aa6ee45f30d1297f4f062
+    path: patches/@fastify__sse@0.5.0.patch
   fastify@5.10.0:
     hash: 2714166e819688e6a7c985e36f170ee52d6a47cd3739429fdb7de0ccd023ded2
     path: patches/fastify@5.10.0.patch
@@ -85,7 +88,7 @@ importers:
     dependencies:
       '@fastify/sse':
         specifier: 0.5.0
-        version: 0.5.0(fastify@5.10.0(patch_hash=2714166e819688e6a7c985e36f170ee52d6a47cd3739429fdb7de0ccd023ded2))
+        version: 0.5.0(patch_hash=038f83ce80cb814dad30ec4913dc01f6e038ba06572aa6ee45f30d1297f4f062)(fastify@5.10.0(patch_hash=2714166e819688e6a7c985e36f170ee52d6a47cd3739429fdb7de0ccd023ded2))
       '@fastify/static':
         specifier: 9.3.0
         version: 9.3.0
@@ -1462,7 +1465,7 @@ snapshots:
       http-errors: 2.0.1
       mime: 3.0.0
 
-  '@fastify/sse@0.5.0(fastify@5.10.0(patch_hash=2714166e819688e6a7c985e36f170ee52d6a47cd3739429fdb7de0ccd023ded2))':
+  '@fastify/sse@0.5.0(patch_hash=038f83ce80cb814dad30ec4913dc01f6e038ba06572aa6ee45f30d1297f4f062)(fastify@5.10.0(patch_hash=2714166e819688e6a7c985e36f170ee52d6a47cd3739429fdb7de0ccd023ded2))':
     dependencies:
       '@fastify/error': 4.2.0
       fastify: 5.10.0(patch_hash=2714166e819688e6a7c985e36f170ee52d6a47cd3739429fdb7de0ccd023ded2)

@@ -38,8 +38,10 @@ export type ProjectionHandoffErrorCode =
   | "invalid_live_sink"
   | "live_delivery_failed"
   | "paused_queue_overflow"
+  | "replay_already_claimed"
   | "replay_inconsistent"
   | "replay_limit"
+  | "replay_not_claimed"
   | "session_archived"
   | "session_not_found"
   | "storage_unavailable";
@@ -88,6 +90,7 @@ export type ProjectionHandoffState = "closed" | "failed" | "live" | "paused";
 export interface ProjectionReplayLiveHandoff {
   readonly activate: (input: unknown) => ProjectionHandoffActivationResult;
   readonly after: OutputCursor | null;
+  readonly claim_replay: () => ProjectionReplayClaim;
   readonly close: () => boolean;
   readonly failure: ProjectionHandoffFailure | null;
   readonly high_water_cursor: OutputCursor | null;
@@ -95,13 +98,18 @@ export interface ProjectionReplayLiveHandoff {
   readonly paused_event_count: number;
   readonly paused_wire_bytes: number;
   readonly replay_event_count: number;
-  readonly replay_events: readonly SelectedProjectionEvent[];
   readonly replay_wire_bytes: number;
   readonly session_id: string;
   readonly signal: AbortSignal;
   readonly state: ProjectionHandoffState;
   readonly subscriber_id: string;
   readonly truncated: boolean;
+}
+
+export interface ProjectionReplayClaim {
+  readonly event_count: number;
+  readonly events: readonly SelectedProjectionEvent[];
+  readonly wire_bytes: number;
 }
 
 export interface OpenProjectionReplayLiveHandoffInput {
@@ -164,6 +172,10 @@ type HandoffFailureCode = ProjectionHandoffFailure["code"];
 type InternalHandoffState = "activating" | "closed" | "failed" | "live" | "opening" | "paused";
 
 const maximumRetentionReplayAttempts = 32;
+const noReplayValidation: ReplayValidation = Object.freeze({
+  boundary_cursor: null,
+  events_by_cursor: new Map<OutputCursor, SelectedProjectionEvent>()
+});
 const replayPageLimit = 500;
 const subscriberIdPattern = /^[a-zA-Z0-9_.:-]{1,120}$/u;
 
@@ -197,6 +209,8 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
   let liveSink: ProjectionHandoffLiveSink | null = null;
   let deliveringLive = false;
   let pausedWireBytes = 0;
+  let replay: ReplaySnapshot | null = null;
+  let replayClaimed = false;
   let replayValidation: ReplayValidation | null = null;
   const lifecycleController = new AbortController();
   const paused: BufferedLiveEvent[] = [];
@@ -209,6 +223,10 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
   const clearPaused = (): void => {
     paused.length = 0;
     pausedWireBytes = 0;
+  };
+  const clearReplay = (): void => {
+    replay = null;
+    replayValidation = null;
   };
   const removeSubscriptionAbortListener = (): void => {
     if (!subscriptionAbortListenerAttached || subscription === null) return;
@@ -232,6 +250,7 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
     liveSink = null;
     deliveringLive = false;
     clearPaused();
+    clearReplay();
     detachSubscription();
     removeAbortListener();
     lifecycleController.abort(
@@ -247,6 +266,7 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
     liveSink = null;
     deliveringLive = false;
     clearPaused();
+    clearReplay();
     detachSubscription();
     removeAbortListener();
     lifecycleController.abort(
@@ -346,7 +366,6 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
 
   input.signal.addEventListener("abort", onAbort, { once: true });
   abortListenerAttached = true;
-  let replay: ReplaySnapshot;
   let observedFanoutCursor: OutputCursor | null = null;
   try {
     subscription = subscribePaused(service.fanout, input, onCommitted);
@@ -400,6 +419,16 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
     }
   };
   const readInternalState = (): InternalHandoffState => internalState;
+  if (replay === null) {
+    close();
+    throw new HostDeckProjectionHandoffError(
+      "handoff_failed",
+      "Projection handoff replay was not initialized."
+    );
+  }
+  const replayEventCount = replay.events.length;
+  const replayWireBytes = replay.wire_bytes;
+  const replayTruncated = replay.truncated;
   const handoff = Object.freeze({
     activate(candidate: unknown): ProjectionHandoffActivationResult {
       if (internalState === "activating") {
@@ -412,6 +441,12 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
         throw new HostDeckProjectionHandoffError("handoff_closed", "Projection handoff is closed.");
       }
       if (internalState === "failed") throw handoffFailureError(failure);
+      if (!replayClaimed) {
+        throw new HostDeckProjectionHandoffError(
+          "replay_not_claimed",
+          "Projection replay must be claimed before activation."
+        );
+      }
       refreshFanoutAvailability();
       if (readInternalState() === "failed") throw handoffFailureError(failure);
       const sink = parseLiveSink(candidate);
@@ -442,20 +477,49 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
         fail("replay_inconsistent", acceptedLiveCursor);
         throw new HostDeckProjectionHandoffError("replay_inconsistent", "Projection handoff did not drain its accepted live cursor.");
       }
+      replayValidation = emptyReplayValidation();
       internalState = "live";
       return Object.freeze({ drained_event_count: drained, live_after_cursor: liveCursor });
     },
     after: input.after,
+    claim_replay(): ProjectionReplayClaim {
+      if (replayClaimed) {
+        throw new HostDeckProjectionHandoffError(
+          "replay_already_claimed",
+          "Projection replay was already claimed."
+        );
+      }
+      if (internalState === "closed") {
+        throw new HostDeckProjectionHandoffError(
+          "handoff_closed",
+          "Projection handoff is closed."
+        );
+      }
+      if (internalState === "failed") throw handoffFailureError(failure);
+      if (internalState !== "paused" || replay === null) {
+        throw new HostDeckProjectionHandoffError(
+          "handoff_failed",
+          "Projection replay is unavailable in the current handoff state."
+        );
+      }
+      const claimed = replay;
+      replayClaimed = true;
+      replay = null;
+      return Object.freeze({
+        event_count: claimed.events.length,
+        events: claimed.events,
+        wire_bytes: claimed.wire_bytes
+      });
+    },
     close,
     high_water_cursor: highWaterCursor,
     observed_fanout_cursor: observedFanoutCursor,
-    replay_event_count: replay.events.length,
-    replay_events: replay.events,
-    replay_wire_bytes: replay.wire_bytes,
+    replay_event_count: replayEventCount,
+    replay_wire_bytes: replayWireBytes,
     session_id: input.session_id,
     signal: lifecycleController.signal,
     subscriber_id: input.subscriber_id,
-    truncated: replay.truncated,
+    truncated: replayTruncated,
     get failure() {
       refreshFanoutAvailability();
       return failure;
@@ -616,6 +680,10 @@ function createReplayValidation(events: readonly SelectedProjectionEvent[]): Rep
   for (const event of events) eventsByCursor.set(event.cursor, event);
   const boundary = events[0]?.type === "replay_boundary" ? events[0].cursor : null;
   return Object.freeze({ boundary_cursor: boundary, events_by_cursor: eventsByCursor });
+}
+
+function emptyReplayValidation(): ReplayValidation {
+  return noReplayValidation;
 }
 
 function isValidatedDuplicate(

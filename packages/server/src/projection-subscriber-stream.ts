@@ -62,6 +62,8 @@ export interface ProjectionSubscriberStream
   readonly failure: ProjectionSubscriberFailure | null;
   readonly queued_event_count: number;
   readonly queued_wire_bytes: number;
+  readonly remaining_replay_event_count: number;
+  readonly remaining_replay_wire_bytes: number;
   readonly replay_event_count: number;
   readonly session_id: string;
   readonly state: ProjectionSubscriberStreamState;
@@ -97,8 +99,16 @@ export interface ProjectionSubscriberStreamSnapshot {
   readonly overflowed_subscribers: number;
   readonly peak_queued_events: number;
   readonly peak_queued_wire_bytes: number;
+  readonly peak_replay_events: number;
+  readonly peak_replay_wire_bytes: number;
+  readonly peak_retained_events: number;
+  readonly peak_retained_wire_bytes: number;
   readonly queued_events: number;
   readonly queued_wire_bytes: number;
+  readonly replay_events: number;
+  readonly replay_wire_bytes: number;
+  readonly retained_events: number;
+  readonly retained_wire_bytes: number;
   readonly service_closed_subscribers: number;
   readonly source_failed_subscribers: number;
   readonly source_open_failures: number;
@@ -131,6 +141,21 @@ interface QueuedEvent {
   readonly wireBytes: number;
 }
 
+interface ReplayEventNode extends QueuedEvent {
+  readonly next: ReplayEventNode | null;
+}
+
+interface ValidatedReplayClaim {
+  readonly eventCount: number;
+  readonly head: ReplayEventNode | null;
+  readonly wireBytes: number;
+}
+
+interface ValidatedOpenedHandoff {
+  readonly handoff: ProjectionReplayLiveHandoff;
+  readonly replay: ValidatedReplayClaim;
+}
+
 interface PendingRead {
   readonly reject: (reason: HostDeckProjectionSubscriberError) => void;
   readonly resolve: (result: IteratorResult<SelectedProjectionEvent>) => void;
@@ -146,8 +171,14 @@ interface MutableCounters {
   overflowedSubscribers: number;
   peakQueuedEvents: number;
   peakQueuedWireBytes: number;
+  peakReplayEvents: number;
+  peakReplayWireBytes: number;
+  peakRetainedEvents: number;
+  peakRetainedWireBytes: number;
   queuedEvents: number;
   queuedWireBytes: number;
+  replayEvents: number;
+  replayWireBytes: number;
   serviceClosedSubscribers: number;
   sourceFailedSubscribers: number;
   sourceOpenFailures: number;
@@ -215,8 +246,14 @@ export function createProjectionSubscriberStreamService(
       overflowedSubscribers: 0,
       peakQueuedEvents: 0,
       peakQueuedWireBytes: 0,
+      peakReplayEvents: 0,
+      peakReplayWireBytes: 0,
+      peakRetainedEvents: 0,
+      peakRetainedWireBytes: 0,
       queuedEvents: 0,
       queuedWireBytes: 0,
+      replayEvents: 0,
+      replayWireBytes: 0,
       serviceClosedSubscribers: 0,
       sourceFailedSubscribers: 0,
       sourceOpenFailures: 0
@@ -316,6 +353,7 @@ function openStream(
   const handoffSignal = AbortSignal.any([input.signal, controller.signal]);
 
   let handoff: ProjectionReplayLiveHandoff;
+  let replay: ValidatedReplayClaim;
   try {
     const candidate = runtime.parsed.handoff.open({
       after: input.after,
@@ -325,7 +363,9 @@ function openStream(
       subscriber_id: input.subscriberId
     });
     try {
-      handoff = requireOpenedHandoff(candidate, input);
+      const opened = requireOpenedHandoff(candidate, input, runtime.parsed.resourceBudget);
+      handoff = opened.handoff;
+      replay = opened.replay;
     } catch (error) {
       closeUnownedHandoff(candidate);
       throw error;
@@ -380,7 +420,7 @@ function openStream(
 
   let stream: ReturnType<typeof createStream>;
   try {
-    stream = createStream(runtime, record, handoff, input.after);
+    stream = createStream(runtime, record, handoff, replay, input.after);
   } catch {
     runtime.counters.sourceOpenFailures = increment(
       runtime.counters.sourceOpenFailures
@@ -419,6 +459,7 @@ function createStream(
   runtime: ServiceRuntime,
   record: SubscriberRecord,
   handoff: ProjectionReplayLiveHandoff,
+  replay: ValidatedReplayClaim,
   after: OutputCursor | null
 ): {
   readonly accept: (event: SelectedProjectionEvent) => void;
@@ -428,8 +469,10 @@ function createStream(
   let iteratorClaimed = false;
   let pending: PendingRead | null = null;
   let queuedWireBytes = 0;
-  let replayEvents: readonly SelectedProjectionEvent[] = handoff.replay_events;
-  let replayIndex = 0;
+  let replayHead = replay.head;
+  let replayWireBytes = replay.wireBytes;
+  const initialReplayEventCount = replay.eventCount;
+  let remainingReplayEvents = initialReplayEventCount;
   const queue: QueuedEvent[] = [];
 
   const settlePending = (terminal: TerminalState): void => {
@@ -448,11 +491,16 @@ function createStream(
     }
     queue.length = 0;
     queuedWireBytes = 0;
-    replayEvents = Object.freeze([]);
-    replayIndex = 0;
+    if (remainingReplayEvents > 0 || replayWireBytes > 0) {
+      removeReplayTotals(runtime, remainingReplayEvents, replayWireBytes);
+    }
+    replayHead = null;
+    remainingReplayEvents = 0;
+    replayWireBytes = 0;
   };
   record.clearBuffered = clearBuffered;
   record.settlePending = settlePending;
+  addReplayTotals(runtime, initialReplayEventCount, replayWireBytes);
 
   const failStream = (
     code: ProjectionSubscriberFailureCode,
@@ -511,10 +559,22 @@ function createStream(
     next(): Promise<IteratorResult<SelectedProjectionEvent>> {
       const terminal = record.terminal;
       if (terminal !== null) return terminalResult(terminal);
-      const replay = replayEvents[replayIndex];
-      if (replay !== undefined) {
-        replayIndex += 1;
-        return Promise.resolve({ done: false, value: replay });
+      const replayEntry = replayHead;
+      if (replayEntry !== null) {
+        if (replayEntry.wireBytes > replayWireBytes) {
+          throw new Error("Projection subscriber replay accounting is inconsistent.");
+        }
+        replayHead = replayEntry.next;
+        remainingReplayEvents -= 1;
+        replayWireBytes -= replayEntry.wireBytes;
+        removeReplayTotals(runtime, 1, replayEntry.wireBytes);
+        if (remainingReplayEvents === 0) {
+          if (replayWireBytes !== 0) {
+            throw new Error("Projection subscriber replay accounting is inconsistent.");
+          }
+          replayHead = null;
+        }
+        return Promise.resolve({ done: false, value: replayEntry.event });
       }
       const queued = queue.shift();
       if (queued !== undefined) {
@@ -573,7 +633,13 @@ function createStream(
     get queued_wire_bytes() {
       return queuedWireBytes;
     },
-    replay_event_count: replayEvents.length,
+    get remaining_replay_event_count() {
+      return remainingReplayEvents;
+    },
+    get remaining_replay_wire_bytes() {
+      return replayWireBytes;
+    },
+    replay_event_count: initialReplayEventCount,
     session_id: record.sessionId,
     get state(): ProjectionSubscriberStreamState {
       if (record.terminal === null) return "open";
@@ -750,8 +816,11 @@ function observeFailure(
 }
 
 function addQueuedTotals(runtime: ServiceRuntime, wireBytes: number): void {
-  runtime.counters.queuedEvents += 1;
-  runtime.counters.queuedWireBytes += wireBytes;
+  const events = checkedTotal(runtime.counters.queuedEvents, 1);
+  const bytes = checkedTotal(runtime.counters.queuedWireBytes, wireBytes);
+  assertAggregateRetention(runtime, events, bytes, runtime.counters.replayEvents, runtime.counters.replayWireBytes);
+  runtime.counters.queuedEvents = events;
+  runtime.counters.queuedWireBytes = bytes;
   runtime.counters.peakQueuedEvents = Math.max(
     runtime.counters.peakQueuedEvents,
     runtime.counters.queuedEvents
@@ -760,6 +829,7 @@ function addQueuedTotals(runtime: ServiceRuntime, wireBytes: number): void {
     runtime.counters.peakQueuedWireBytes,
     runtime.counters.queuedWireBytes
   );
+  updateRetainedPeaks(runtime);
 }
 
 function removeQueuedTotals(
@@ -779,6 +849,116 @@ function removeQueuedTotals(
   runtime.counters.queuedWireBytes -= wireBytes;
 }
 
+function addReplayTotals(
+  runtime: ServiceRuntime,
+  events: number,
+  wireBytes: number
+): void {
+  const totalEvents = checkedTotal(runtime.counters.replayEvents, events);
+  const totalBytes = checkedTotal(runtime.counters.replayWireBytes, wireBytes);
+  assertAggregateRetention(
+    runtime,
+    runtime.counters.queuedEvents,
+    runtime.counters.queuedWireBytes,
+    totalEvents,
+    totalBytes
+  );
+  runtime.counters.replayEvents = totalEvents;
+  runtime.counters.replayWireBytes = totalBytes;
+  runtime.counters.peakReplayEvents = Math.max(
+    runtime.counters.peakReplayEvents,
+    totalEvents
+  );
+  runtime.counters.peakReplayWireBytes = Math.max(
+    runtime.counters.peakReplayWireBytes,
+    totalBytes
+  );
+  updateRetainedPeaks(runtime);
+}
+
+function removeReplayTotals(
+  runtime: ServiceRuntime,
+  events: number,
+  wireBytes: number
+): void {
+  if (
+    events < 0 ||
+    wireBytes < 0 ||
+    events > runtime.counters.replayEvents ||
+    wireBytes > runtime.counters.replayWireBytes
+  ) {
+    throw new Error("Projection subscriber replay accounting is inconsistent.");
+  }
+  runtime.counters.replayEvents -= events;
+  runtime.counters.replayWireBytes -= wireBytes;
+}
+
+function updateRetainedPeaks(runtime: ServiceRuntime): void {
+  const events = checkedTotal(
+    runtime.counters.queuedEvents,
+    runtime.counters.replayEvents
+  );
+  const bytes = checkedTotal(
+    runtime.counters.queuedWireBytes,
+    runtime.counters.replayWireBytes
+  );
+  runtime.counters.peakRetainedEvents = Math.max(
+    runtime.counters.peakRetainedEvents,
+    events
+  );
+  runtime.counters.peakRetainedWireBytes = Math.max(
+    runtime.counters.peakRetainedWireBytes,
+    bytes
+  );
+}
+
+function assertAggregateRetention(
+  runtime: ServiceRuntime,
+  queuedEvents: number,
+  queuedWireBytes: number,
+  replayEvents: number,
+  replayWireBytes: number
+): void {
+  const budget = runtime.parsed.resourceBudget;
+  const maximumSubscribers = budget.sse_max_subscribers;
+  const retainedEvents = checkedTotal(queuedEvents, replayEvents);
+  const retainedWireBytes = checkedTotal(queuedWireBytes, replayWireBytes);
+  if (
+    queuedEvents > checkedProduct(maximumSubscribers, budget.sse_queue_max_events) ||
+    queuedWireBytes > checkedProduct(maximumSubscribers, budget.sse_queue_max_bytes) ||
+    replayEvents > checkedProduct(maximumSubscribers, budget.sse_replay_max_events) ||
+    replayWireBytes > checkedProduct(maximumSubscribers, budget.sse_replay_max_bytes) ||
+    retainedEvents >
+      checkedProduct(
+        maximumSubscribers,
+        checkedTotal(budget.sse_queue_max_events, budget.sse_replay_max_events)
+      ) ||
+    retainedWireBytes >
+      checkedProduct(
+        maximumSubscribers,
+        checkedTotal(budget.sse_queue_max_bytes, budget.sse_replay_max_bytes)
+      )
+  ) {
+    throw new Error("Projection subscriber aggregate retention exceeded its policy.");
+  }
+}
+
+function checkedTotal(left: number, right: number): number {
+  const total = left + right;
+  if (!Number.isSafeInteger(left) || left < 0 || !Number.isSafeInteger(right) || right < 0 || !Number.isSafeInteger(total)) {
+    throw new Error("Projection subscriber accounting exceeded safe integer bounds.");
+  }
+  return total;
+}
+
+function checkedProduct(left: number, right: number): number {
+  const product = left * right;
+  if (!Number.isSafeInteger(product) || product < 0) {
+    throw new Error("Projection subscriber policy product exceeded safe integer bounds.");
+  }
+  return product;
+}
+
 function snapshot(runtime: ServiceRuntime): ProjectionSubscriberStreamSnapshot {
   return Object.freeze({
     aborted_subscribers: runtime.counters.abortedSubscribers,
@@ -794,8 +974,22 @@ function snapshot(runtime: ServiceRuntime): ProjectionSubscriberStreamSnapshot {
     overflowed_subscribers: runtime.counters.overflowedSubscribers,
     peak_queued_events: runtime.counters.peakQueuedEvents,
     peak_queued_wire_bytes: runtime.counters.peakQueuedWireBytes,
+    peak_replay_events: runtime.counters.peakReplayEvents,
+    peak_replay_wire_bytes: runtime.counters.peakReplayWireBytes,
+    peak_retained_events: runtime.counters.peakRetainedEvents,
+    peak_retained_wire_bytes: runtime.counters.peakRetainedWireBytes,
     queued_events: runtime.counters.queuedEvents,
     queued_wire_bytes: runtime.counters.queuedWireBytes,
+    replay_events: runtime.counters.replayEvents,
+    replay_wire_bytes: runtime.counters.replayWireBytes,
+    retained_events: checkedTotal(
+      runtime.counters.queuedEvents,
+      runtime.counters.replayEvents
+    ),
+    retained_wire_bytes: checkedTotal(
+      runtime.counters.queuedWireBytes,
+      runtime.counters.replayWireBytes
+    ),
     service_closed_subscribers: runtime.counters.serviceClosedSubscribers,
     source_failed_subscribers: runtime.counters.sourceFailedSubscribers,
     source_open_failures: runtime.counters.sourceOpenFailures
@@ -818,6 +1012,7 @@ function parseServiceInput(candidate: unknown): ParsedServiceInput {
   }
   try {
     assertResolvedResourceBudget(value.resource_budget);
+    assertSafeRetentionProducts(value.resource_budget);
   } catch {
     throw new HostDeckProjectionSubscriberError("invalid_config");
   }
@@ -826,6 +1021,25 @@ function parseServiceInput(candidate: unknown): ParsedServiceInput {
     observeFailure: value.observe_failure as ProjectionSubscriberFailureObserver,
     resourceBudget: value.resource_budget
   });
+}
+
+function assertSafeRetentionProducts(resourceBudget: ResourceBudget): void {
+  const eventCapacity = checkedTotal(
+    resourceBudget.sse_queue_max_events,
+    resourceBudget.sse_replay_max_events
+  );
+  const byteCapacity = checkedTotal(
+    resourceBudget.sse_queue_max_bytes,
+    resourceBudget.sse_replay_max_bytes
+  );
+  for (const subscribers of [
+    resourceBudget.sse_max_subscribers,
+    resourceBudget.sse_max_subscribers_per_device,
+    resourceBudget.sse_max_subscribers_per_session
+  ]) {
+    checkedProduct(subscribers, eventCapacity);
+    checkedProduct(subscribers, byteCapacity);
+  }
 }
 
 function parseOpenInput(candidate: unknown): ParsedOpenInput {
@@ -867,19 +1081,23 @@ function parseOpenInput(candidate: unknown): ParsedOpenInput {
 
 function requireOpenedHandoff(
   candidate: unknown,
-  input: ParsedOpenInput
-): ProjectionReplayLiveHandoff {
+  input: ParsedOpenInput,
+  resourceBudget: ResourceBudget
+): ValidatedOpenedHandoff {
   if (
     candidate === null ||
     typeof candidate !== "object" ||
     Array.isArray(candidate) ||
-    !Object.isFrozen(candidate)
+    !Object.isFrozen(candidate) ||
+    (Object.getPrototypeOf(candidate) !== Object.prototype &&
+      Object.getPrototypeOf(candidate) !== null)
   ) {
     throw new HostDeckProjectionSubscriberError("source_failed");
   }
   const expectedKeys = [
     "activate",
     "after",
+    "claim_replay",
     "close",
     "failure",
     "high_water_cursor",
@@ -887,7 +1105,6 @@ function requireOpenedHandoff(
     "paused_event_count",
     "paused_wire_bytes",
     "replay_event_count",
-    "replay_events",
     "replay_wire_bytes",
     "session_id",
     "signal",
@@ -895,7 +1112,8 @@ function requireOpenedHandoff(
     "subscriber_id",
     "truncated"
   ];
-  const keys = Reflect.ownKeys(candidate);
+  const descriptors = Object.getOwnPropertyDescriptors(candidate);
+  const keys = Reflect.ownKeys(descriptors);
   if (
     keys.length !== expectedKeys.length ||
     keys.some(
@@ -904,55 +1122,242 @@ function requireOpenedHandoff(
   ) {
     throw new HostDeckProjectionSubscriberError("source_failed");
   }
-  let value: ProjectionReplayLiveHandoff;
   try {
-    value = candidate as ProjectionReplayLiveHandoff;
+    const data = (key: string): unknown =>
+      readFrozenHandoffData(descriptors[key]);
+    const accessor = (key: string): unknown =>
+      readFrozenHandoffAccessor(candidate, descriptors[key]);
+    const activate = data("activate");
+    const claimReplay = data("claim_replay");
+    const close = data("close");
+    const after = data("after");
+    const sessionId = data("session_id");
+    const subscriberId = data("subscriber_id");
+    const signal = data("signal");
+    const highWaterValue = data("high_water_cursor");
+    const observedValue = data("observed_fanout_cursor");
+    const replayEventCount = data("replay_event_count");
+    const replayWireBytes = data("replay_wire_bytes");
+    const truncated = data("truncated");
+    const failureValue = accessor("failure");
+    const pausedEventCount = accessor("paused_event_count");
+    const pausedWireBytes = accessor("paused_wire_bytes");
+    const state = accessor("state");
     const highWater =
-      value.high_water_cursor === null
+      highWaterValue === null
         ? null
-        : outputCursorSchema.safeParse(value.high_water_cursor);
+        : outputCursorSchema.safeParse(highWaterValue);
     const observed =
-      value.observed_fanout_cursor === null
+      observedValue === null
         ? null
-        : outputCursorSchema.safeParse(value.observed_fanout_cursor);
+        : outputCursorSchema.safeParse(observedValue);
     if (
-      typeof value.activate !== "function" ||
-      typeof value.close !== "function" ||
-      value.after !== input.after ||
-      value.session_id !== input.sessionId ||
-      value.subscriber_id !== input.subscriberId ||
-      !(value.signal instanceof AbortSignal) ||
-      value.signal.aborted ||
-      value.state !== "paused" ||
-      value.failure !== null ||
+      typeof activate !== "function" ||
+      typeof claimReplay !== "function" ||
+      typeof close !== "function" ||
+      after !== input.after ||
+      sessionId !== input.sessionId ||
+      subscriberId !== input.subscriberId ||
+      !(signal instanceof AbortSignal) ||
+      signal.aborted ||
+      state !== "paused" ||
+      failureValue !== null ||
       (highWater !== null && !highWater.success) ||
       (observed !== null && !observed.success) ||
-      !Array.isArray(value.replay_events) ||
-      !Object.isFrozen(value.replay_events) ||
-      !Number.isSafeInteger(value.replay_event_count) ||
-      value.replay_event_count < 0 ||
-      value.replay_event_count !== value.replay_events.length ||
-      !Number.isSafeInteger(value.replay_wire_bytes) ||
-      value.replay_wire_bytes < 0 ||
-      !Number.isSafeInteger(value.paused_event_count) ||
-      value.paused_event_count < 0 ||
-      !Number.isSafeInteger(value.paused_wire_bytes) ||
-      value.paused_wire_bytes < 0 ||
-      typeof value.truncated !== "boolean" ||
-      value.replay_events.some(
-        (event) =>
-          !Object.isFrozen(event) ||
-          !selectedProjectionEventSchema.safeParse(event).success ||
-          event.session_id !== input.sessionId
-      )
+      !Number.isSafeInteger(replayEventCount) ||
+      (replayEventCount as number) < 0 ||
+      (replayEventCount as number) > resourceBudget.sse_replay_max_events ||
+      !Number.isSafeInteger(replayWireBytes) ||
+      (replayWireBytes as number) < 0 ||
+      (replayWireBytes as number) > resourceBudget.sse_replay_max_bytes ||
+      ((replayEventCount as number) === 0) !== ((replayWireBytes as number) === 0) ||
+      !Number.isSafeInteger(pausedEventCount) ||
+      (pausedEventCount as number) < 0 ||
+      (pausedEventCount as number) > resourceBudget.sse_queue_max_events ||
+      !Number.isSafeInteger(pausedWireBytes) ||
+      (pausedWireBytes as number) < 0 ||
+      (pausedWireBytes as number) > resourceBudget.sse_queue_max_bytes ||
+      ((pausedEventCount as number) === 0) !== ((pausedWireBytes as number) === 0) ||
+      typeof truncated !== "boolean" ||
+      (observed?.success === true &&
+        (highWater === null || !highWater.success || observed.data > highWater.data))
     ) {
       throw new HostDeckProjectionSubscriberError("source_failed");
     }
+    const highWaterCursor = highWater === null ? null : highWater.data;
+    if (
+      input.after !== null &&
+      (highWaterCursor === null
+        ? input.after > 0
+        : input.after > highWaterCursor)
+    ) {
+      throw new HostDeckProjectionSubscriberError("source_failed");
+    }
+    const claim = requireReplayClaim(
+      Reflect.apply(claimReplay, candidate, []),
+      input,
+      resourceBudget,
+      highWaterCursor,
+      replayEventCount as number,
+      replayWireBytes as number,
+      truncated as boolean
+    );
+    if (
+      signal.aborted ||
+      accessor("state") !== "paused" ||
+      accessor("failure") !== null
+    ) {
+      throw new HostDeckProjectionSubscriberError("source_failed");
+    }
+    return Object.freeze({
+      handoff: candidate as ProjectionReplayLiveHandoff,
+      replay: claim
+    });
   } catch (error) {
     if (error instanceof HostDeckProjectionSubscriberError) throw error;
     throw new HostDeckProjectionSubscriberError("source_failed");
   }
-  return value;
+}
+
+function requireReplayClaim(
+  candidate: unknown,
+  input: ParsedOpenInput,
+  resourceBudget: ResourceBudget,
+  highWaterCursor: OutputCursor | null,
+  expectedEventCount: number,
+  expectedWireBytes: number,
+  truncated: boolean
+): ValidatedReplayClaim {
+  const value = readExactFrozenDataObject(candidate, [
+    "event_count",
+    "events",
+    "wire_bytes"
+  ]);
+  if (
+    value.event_count !== expectedEventCount ||
+    value.wire_bytes !== expectedWireBytes ||
+    !Array.isArray(value.events) ||
+    !Object.isFrozen(value.events) ||
+    value.events.length !== expectedEventCount
+  ) {
+    throw new HostDeckProjectionSubscriberError("source_failed");
+  }
+  const entries: QueuedEvent[] = [];
+  let wireBytes = 0;
+  let previousCursor: OutputCursor | null = input.after;
+  for (const [index, candidateEvent] of value.events.entries()) {
+    const parsed = selectedProjectionEventSchema.safeParse(candidateEvent);
+    if (
+      !Object.isFrozen(candidateEvent) ||
+      !parsed.success ||
+      parsed.data.session_id !== input.sessionId
+    ) {
+      throw new HostDeckProjectionSubscriberError("source_failed");
+    }
+    const event = deepFreeze(parsed.data);
+    const firstBoundary = index === 0 && event.type === "replay_boundary";
+    if (
+      event.cursor <= (previousCursor ?? 0) ||
+      (!firstBoundary && event.cursor !== (previousCursor ?? 0) + 1) ||
+      (event.type === "replay_boundary" && !firstBoundary)
+    ) {
+      throw new HostDeckProjectionSubscriberError("source_failed");
+    }
+    const eventWireBytes = selectedProjectionSseWireByteLength(event);
+    if (eventWireBytes > resourceBudget.sse_event_max_bytes) {
+      throw new HostDeckProjectionSubscriberError("source_failed");
+    }
+    wireBytes = checkedTotal(wireBytes, eventWireBytes);
+    entries.push(Object.freeze({ event, wireBytes: eventWireBytes }));
+    previousCursor = event.cursor;
+  }
+  const firstIsBoundary = entries[0]?.event.type === "replay_boundary";
+  if (
+    wireBytes !== expectedWireBytes ||
+    wireBytes > resourceBudget.sse_replay_max_bytes ||
+    entries.length > resourceBudget.sse_replay_max_events ||
+    truncated !== firstIsBoundary ||
+    (entries.length === 0
+      ? highWaterCursor !== null && input.after !== highWaterCursor
+      : entries.at(-1)?.event.cursor !== highWaterCursor)
+  ) {
+    throw new HostDeckProjectionSubscriberError("source_failed");
+  }
+  let head: ReplayEventNode | null = null;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (entry === undefined) {
+      throw new Error("Projection subscriber replay construction is inconsistent.");
+    }
+    head = Object.freeze({
+      event: entry.event,
+      next: head,
+      wireBytes: entry.wireBytes
+    });
+  }
+  return Object.freeze({ eventCount: entries.length, head, wireBytes });
+}
+
+function readFrozenHandoffData(
+  descriptor: PropertyDescriptor | undefined
+): unknown {
+  if (
+    descriptor === undefined ||
+    !("value" in descriptor) ||
+    !descriptor.enumerable ||
+    descriptor.configurable ||
+    descriptor.writable
+  ) {
+    throw new HostDeckProjectionSubscriberError("source_failed");
+  }
+  return descriptor.value;
+}
+
+function readFrozenHandoffAccessor(
+  receiver: object,
+  descriptor: PropertyDescriptor | undefined
+): unknown {
+  if (
+    descriptor === undefined ||
+    !("get" in descriptor) ||
+    typeof descriptor.get !== "function" ||
+    descriptor.set !== undefined ||
+    !descriptor.enumerable ||
+    descriptor.configurable
+  ) {
+    throw new HostDeckProjectionSubscriberError("source_failed");
+  }
+  return Reflect.apply(descriptor.get, receiver, []);
+}
+
+function readExactFrozenDataObject(
+  candidate: unknown,
+  expectedKeys: readonly string[]
+): Readonly<Record<string, unknown>> {
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    Array.isArray(candidate) ||
+    !Object.isFrozen(candidate) ||
+    (Object.getPrototypeOf(candidate) !== Object.prototype &&
+      Object.getPrototypeOf(candidate) !== null)
+  ) {
+    throw new HostDeckProjectionSubscriberError("source_failed");
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(candidate);
+  const keys = Reflect.ownKeys(descriptors);
+  const expected = new Set(expectedKeys);
+  if (
+    keys.length !== expectedKeys.length ||
+    keys.some((key) => typeof key !== "string" || !expected.has(key))
+  ) {
+    throw new HostDeckProjectionSubscriberError("source_failed");
+  }
+  const values: Record<string, unknown> = {};
+  for (const key of expectedKeys) {
+    values[key] = readFrozenHandoffData(descriptors[key]);
+  }
+  return Object.freeze(values);
 }
 
 function closeUnownedHandoff(candidate: unknown): void {

@@ -1,0 +1,51 @@
+diff --git a/index.js b/index.js
+index b9db72f9cd5915dc4de44b1107beef1cf4a4b467..10b84b1051e00990826fbbe7217a80d9c8fd7c00 100644
+--- a/index.js
++++ b/index.js
+@@ -316,6 +316,8 @@ class SSEContext {
+   #isConnected
+   #keepAlive
+   #headersSent
++  #heartbeatBlocked
++  #onHeartbeatDrain
+
+   constructor (options) {
+     this.reply = options.reply
+@@ -323,6 +325,10 @@ class SSEContext {
+     this.#isConnected = true
+     this.#keepAlive = false
+     this.#headersSent = false
++    this.#heartbeatBlocked = false
++    this.#onHeartbeatDrain = () => {
++      this.#heartbeatBlocked = false
++    }
+     this.heartbeatTimer = null
+     this.heartbeatInterval = options.heartbeatInterval
+     this.closeCallbacks = []
+@@ -574,11 +580,14 @@ class SSEContext {
+    */
+   startHeartbeat (interval) {
+     this.heartbeatTimer = setInterval(() => {
+-      if (this.#isConnected) {
++      if (this.#isConnected && !this.#heartbeatBlocked) {
+         this.sendHeaders()
+-        this.reply.raw.write(': heartbeat\n\n')
++        if (!this.reply.raw.write(': heartbeat\n\n')) {
++          this.#heartbeatBlocked = true
++          this.reply.raw.once('drain', this.#onHeartbeatDrain)
++        }
+       } else {
+-        this.stopHeartbeat()
++        if (!this.#isConnected) this.stopHeartbeat()
+       }
+     }, interval)
+
+@@ -595,6 +604,8 @@ class SSEContext {
+       clearInterval(this.heartbeatTimer)
+       this.heartbeatTimer = null
+     }
++    this.reply.raw.off('drain', this.#onHeartbeatDrain)
++    this.#heartbeatBlocked = false
+   }
+
+   /**

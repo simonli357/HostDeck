@@ -17,6 +17,7 @@ import {
   hostDeckDeviceCookieName
 } from "./fastify-request-authentication.js";
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
+import { selectedProjectionSseWireByteLength } from "./fastify-sse-source.js";
 import type { HostDeckSseFailureObservation } from "./fastify-sse-transport.js";
 import {
   HostDeckProjectionHandoffError,
@@ -164,6 +165,90 @@ describe("selected projection event-stream route", () => {
     }
   });
 
+  it("revokes every stream for one paired device without closing an unrelated local stream", async () => {
+    const budget = resolveResourceBudget({
+      sse_max_subscribers: 4,
+      sse_max_subscribers_per_device: 3,
+      sse_max_subscribers_per_session: 4
+    });
+    const fixture = createFixture([], budget);
+    let authenticationPolicy: HostDeckRequestAuthenticationPolicy | undefined;
+    const app = createApp(
+      fixture.subscribers,
+      fixture.failures,
+      true,
+      budget,
+      (policy) => {
+        authenticationPolicy = policy;
+      }
+    );
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+    const clients = [
+      ...Array.from({ length: 3 }, () =>
+        openPausedResponse(
+          `${address}/api/v1/sessions/${sessionId}/events/stream`,
+          { cookie: `${hostDeckDeviceCookieName}=${deviceToken}` }
+        )
+      ),
+      openPausedResponse(
+        `${address}/api/v1/sessions/${sessionId}/events/stream`
+      )
+    ];
+    const responses: IncomingMessage[] = [];
+    try {
+      await waitUntil(() => fixture.subscribers.snapshot().active_subscribers === 4);
+      fixture.handoff.publish(projectionEvent(1, "open-multi-client-response"));
+      responses.push(...(await Promise.all(clients.map((client) => client.response))));
+      expect(fixture.subscribers.snapshot()).toMatchObject({
+        active_device_buckets: 1,
+        active_session_buckets: 1,
+        active_subscribers: 4
+      });
+      expect(authenticationPolicy?.activeDeviceAuthority.snapshot()).toMatchObject({
+        active_leases: 3,
+        signaled_leases: 0
+      });
+
+      expect(
+        authenticationPolicy?.activeDeviceAuthority.invalidate(deviceId)
+      ).toMatchObject({ closedLeases: 3 });
+      await waitUntil(() => fixture.subscribers.snapshot().active_subscribers === 1);
+      expect(fixture.subscribers.snapshot()).toMatchObject({
+        aborted_subscribers: 3,
+        active_device_buckets: 0,
+        active_session_buckets: 1,
+        active_subscribers: 1,
+        queued_events: 0,
+        replay_events: 0,
+        retained_events: 0
+      });
+      expect(authenticationPolicy?.activeDeviceAuthority.snapshot()).toMatchObject({
+        active_leases: 0,
+        signaled_leases: 3,
+        tracked_revocations: 1
+      });
+      expect(fixture.handoff.activeSinkCount).toBe(1);
+
+      expect(fixture.subscribers.close()).toBe(1);
+      await waitUntil(() => fixture.subscribers.snapshot().active_subscribers === 0);
+      await waitUntil(() => hostDeckFastifyResourceSnapshot(app).in_flight_requests === 0);
+      expect(fixture.subscribers.snapshot()).toMatchObject({
+        active_device_buckets: 0,
+        active_session_buckets: 0,
+        active_subscribers: 0,
+        replay_events: 0,
+        retained_events: 0,
+        service_closed_subscribers: 1
+      });
+      expect(fixture.handoff.activeSinkCount).toBe(0);
+      expect(fixture.failures).toEqual([]);
+    } finally {
+      for (const response of responses) response.destroy();
+      for (const client of clients) client.request.destroy();
+      await app.close();
+    }
+  });
+
   it("preserves authentication, source, session, cursor, and capacity errors", async () => {
     const invalidAuth = createFixture();
     const invalidAuthApp = createApp(invalidAuth.subscribers, invalidAuth.failures);
@@ -227,17 +312,32 @@ describe("selected projection event-stream route", () => {
       sse_max_subscribers_per_session: 1
     });
     const capacity = createFixture([], budget);
-    const capacityApp = createApp(capacity.subscribers, capacity.failures, false, budget);
+    let capacityAuthenticationPolicy: HostDeckRequestAuthenticationPolicy | undefined;
+    const capacityApp = createApp(
+      capacity.subscribers,
+      capacity.failures,
+      true,
+      budget,
+      (policy) => {
+        capacityAuthenticationPolicy = policy;
+      }
+    );
     await capacityApp.ready();
     try {
       const first = capacityApp.inject({
-        headers: { accept: "text/event-stream" },
+        headers: {
+          accept: "text/event-stream",
+          cookie: `${hostDeckDeviceCookieName}=${deviceToken}`
+        },
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/events/stream`
       });
       await waitUntil(() => capacity.subscribers.snapshot().active_subscribers === 1);
       const second = await capacityApp.inject({
-        headers: { accept: "text/event-stream" },
+        headers: {
+          accept: "text/event-stream",
+          cookie: `${hostDeckDeviceCookieName}=${deviceToken}`
+        },
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/events/stream`
       });
@@ -245,8 +345,14 @@ describe("selected projection event-stream route", () => {
       expect(second.json()).toMatchObject({
         error: { code: "service_overloaded" }
       });
+      expect(capacityAuthenticationPolicy?.activeDeviceAuthority.snapshot()).toMatchObject({
+        active_leases: 1
+      });
       capacity.subscribers.close();
       expect((await first).statusCode).toBe(200);
+      expect(capacityAuthenticationPolicy?.activeDeviceAuthority.snapshot()).toMatchObject({
+        active_leases: 0
+      });
     } finally {
       await capacityApp.close();
     }
@@ -351,16 +457,19 @@ class FakeHandoffService implements ProjectionReplayLiveHandoffService {
     | "session_not_found"
     | "storage_unavailable"
     | null = null;
-  private liveSink: ((event: SelectedProjectionEvent) => void) | null = null;
+  private readonly liveSinks = new Map<
+    string,
+    (event: SelectedProjectionEvent) => void
+  >();
 
   get activeSinkCount(): number {
-    return this.liveSink === null ? 0 : 1;
+    return this.liveSinks.size;
   }
 
   constructor(private readonly replayEvents: readonly SelectedProjectionEvent[]) {}
 
   publish(event: SelectedProjectionEvent): void {
-    this.liveSink?.(event);
+    for (const sink of [...this.liveSinks.values()]) sink(event);
   }
 
   open(candidate: unknown): ProjectionReplayLiveHandoff {
@@ -376,14 +485,21 @@ class FakeHandoffService implements ProjectionReplayLiveHandoffService {
     let sink: ((event: SelectedProjectionEvent) => void) | null = null;
     const thisService = this;
     const lifecycleController = new AbortController();
-    const replayEvents = Object.freeze([...this.replayEvents]);
+    let replayEvents: readonly SelectedProjectionEvent[] | null = Object.freeze([
+      ...this.replayEvents
+    ]);
+    const replayEventCount = replayEvents.length;
+    const replayWireBytes = replayEvents.reduce(
+      (sum, event) => sum + selectedProjectionSseWireByteLength(event),
+      0
+    );
     const highWater = (replayEvents.at(-1)?.cursor ?? input.after) as
       | OutputCursor
       | null;
     return Object.freeze({
       activate(activation: unknown) {
         sink = (activation as { on_event: (event: SelectedProjectionEvent) => void }).on_event;
-        thisService.liveSink = sink;
+        thisService.liveSinks.set(input.subscriber_id, sink);
         live = true;
         return Object.freeze({
           drained_event_count: 0,
@@ -391,22 +507,37 @@ class FakeHandoffService implements ProjectionReplayLiveHandoffService {
         });
       },
       after: input.after as OutputCursor | null,
+      claim_replay() {
+        if (replayEvents === null) throw new Error("Fake replay was already claimed.");
+        const events = replayEvents;
+        replayEvents = null;
+        return Object.freeze({
+          event_count: replayEventCount,
+          events,
+          wire_bytes: replayWireBytes
+        });
+      },
       close() {
         if (closed) return false;
         closed = true;
         sink = null;
-        thisService.liveSink = null;
+        thisService.liveSinks.delete(input.subscriber_id);
         lifecycleController.abort(new Error("Fake handoff closed."));
         return true;
       },
-      failure: null as ProjectionHandoffFailure | null,
+      get failure(): ProjectionHandoffFailure | null {
+        return null;
+      },
       high_water_cursor: highWater,
       observed_fanout_cursor: null,
-      paused_event_count: 0,
-      paused_wire_bytes: 0,
-      replay_event_count: replayEvents.length,
-      replay_events: replayEvents,
-      replay_wire_bytes: 0,
+      get paused_event_count() {
+        return 0;
+      },
+      get paused_wire_bytes() {
+        return 0;
+      },
+      replay_event_count: replayEventCount,
+      replay_wire_bytes: replayWireBytes,
       session_id: input.session_id,
       signal: lifecycleController.signal,
       get state() {
@@ -512,7 +643,10 @@ async function waitUntil(predicate: () => boolean): Promise<void> {
   }
 }
 
-function openPausedResponse(url: string): {
+function openPausedResponse(
+  url: string,
+  headers: Readonly<Record<string, string>> = {}
+): {
   readonly request: ClientRequest;
   readonly response: Promise<IncomingMessage>;
 } {
@@ -523,7 +657,7 @@ function openPausedResponse(url: string): {
     rejectResponse = reject;
   });
   const request = httpGet(url, {
-    headers: { accept: "text/event-stream", host: "localhost" }
+    headers: { accept: "text/event-stream", host: "localhost", ...headers }
   });
   request.once("error", rejectResponse);
   request.once("response", (incoming) => {

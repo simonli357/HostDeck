@@ -119,6 +119,90 @@ describe("bounded projection subscriber streams", () => {
     expect(closeMalformedSource).toHaveBeenCalledTimes(1);
   });
 
+  it("rejects malformed replay claims without invoking claim accessors or retaining totals", () => {
+    const event = activityEvent(sessionA, 1);
+    const eventWireBytes = selectedProjectionSseWireByteLength(event);
+    let accessorCalls = 0;
+    const accessorClaim = Object.freeze(
+      Object.defineProperty({}, "event_count", {
+        enumerable: true,
+        get() {
+          accessorCalls += 1;
+          return 1;
+        }
+      })
+    );
+    const cases = [
+      {
+        claim: accessorClaim,
+        eventCount: 1,
+        highWater: 1 as OutputCursor,
+        wireBytes: eventWireBytes
+      },
+      {
+        claim: Object.freeze({
+          event_count: 1,
+          events: Object.freeze([event]),
+          wire_bytes: eventWireBytes - 1
+        }),
+        eventCount: 1,
+        highWater: 1 as OutputCursor,
+        wireBytes: eventWireBytes - 1
+      },
+      {
+        claim: Object.freeze({
+          event_count: 1,
+          events: Object.freeze([activityEvent(sessionA, 2)]),
+          wire_bytes: selectedProjectionSseWireByteLength(
+            activityEvent(sessionA, 2)
+          )
+        }),
+        eventCount: 1,
+        highWater: 2 as OutputCursor,
+        wireBytes: selectedProjectionSseWireByteLength(
+          activityEvent(sessionA, 2)
+        )
+      }
+    ];
+
+    for (const [index, testCase] of cases.entries()) {
+      const close = vi.fn(() => true);
+      const service = createProjectionSubscriberStreamService({
+        handoff: Object.freeze({
+          open: (candidate: unknown) =>
+            fakePausedHandoff(
+              candidate as OpenProjectionReplayLiveHandoffInput,
+              close,
+              {
+                claim: testCase.claim,
+                highWater: testCase.highWater,
+                replayEventCount: testCase.eventCount,
+                replayWireBytes: testCase.wireBytes
+              }
+            )
+        }),
+        observe_failure: () => undefined,
+        resource_budget: defaultResourceBudget
+      });
+      expectSubscriberError(
+        () => service.open(openInput(sessionA, `malformed-claim-${index}`)),
+        "source_failed"
+      );
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(service.snapshot()).toMatchObject({
+        active_device_buckets: 0,
+        active_session_buckets: 0,
+        active_subscribers: 0,
+        queued_events: 0,
+        replay_events: 0,
+        retained_events: 0,
+        source_failed_subscribers: 1,
+        source_open_failures: 1
+      });
+    }
+    expect(accessorCalls).toBe(0);
+  });
+
   it("composes real replay and live handoff without a gap or duplicate", async () => {
     const harness = createHarness();
     harness.state.add(sessionA, [activityEvent(sessionA, 1)]);
@@ -154,6 +238,93 @@ describe("bounded projection subscriber streams", () => {
     expect(stream.state).toBe("closed");
     expect(harness.hub.subscriber_count).toBe(0);
     expect(harness.service.snapshot().active_subscribers).toBe(0);
+  });
+
+  it("accounts for replay plus live retention and releases each reference as consumed", async () => {
+    const harness = createHarness();
+    const replayEvents = [
+      activityEvent(sessionA, 1),
+      activityEvent(sessionA, 2),
+      activityEvent(sessionA, 3)
+    ];
+    harness.state.add(sessionA, replayEvents);
+    const replayWireBytes = replayEvents.reduce(
+      (sum, event) => sum + selectedProjectionSseWireByteLength(event),
+      0
+    );
+    const stream = harness.service.open(
+      openInput(sessionA, "subscriber-retained-accounting")
+    );
+
+    expect(stream).toMatchObject({
+      remaining_replay_event_count: 3,
+      remaining_replay_wire_bytes: replayWireBytes,
+      replay_event_count: 3
+    });
+    expect(harness.service.snapshot()).toMatchObject({
+      peak_replay_events: 3,
+      peak_replay_wire_bytes: replayWireBytes,
+      peak_retained_events: 3,
+      peak_retained_wire_bytes: replayWireBytes,
+      replay_events: 3,
+      replay_wire_bytes: replayWireBytes,
+      retained_events: 3,
+      retained_wire_bytes: replayWireBytes
+    });
+
+    const live = activityEvent(sessionA, 4);
+    const liveWireBytes = selectedProjectionSseWireByteLength(live);
+    harness.publish(live);
+    expect(harness.service.snapshot()).toMatchObject({
+      peak_retained_events: 4,
+      peak_retained_wire_bytes: replayWireBytes + liveWireBytes,
+      queued_events: 1,
+      queued_wire_bytes: liveWireBytes,
+      replay_events: 3,
+      replay_wire_bytes: replayWireBytes,
+      retained_events: 4,
+      retained_wire_bytes: replayWireBytes + liveWireBytes
+    });
+
+    const iterator = stream[Symbol.asyncIterator]();
+    let remainingReplayBytes = replayWireBytes;
+    for (const event of replayEvents) {
+      await expect(iterator.next()).resolves.toMatchObject({
+        done: false,
+        value: { cursor: event.cursor }
+      });
+      remainingReplayBytes -= selectedProjectionSseWireByteLength(event);
+      expect(stream).toMatchObject({
+        remaining_replay_event_count: replayEvents.length - event.cursor,
+        remaining_replay_wire_bytes: remainingReplayBytes
+      });
+      expect(harness.service.snapshot()).toMatchObject({
+        replay_events: replayEvents.length - event.cursor,
+        replay_wire_bytes: remainingReplayBytes,
+        retained_events: replayEvents.length - event.cursor + 1,
+        retained_wire_bytes: remainingReplayBytes + liveWireBytes
+      });
+    }
+    await expect(iterator.next()).resolves.toMatchObject({
+      done: false,
+      value: { cursor: 4 }
+    });
+    expect(harness.service.snapshot()).toMatchObject({
+      queued_events: 0,
+      queued_wire_bytes: 0,
+      replay_events: 0,
+      replay_wire_bytes: 0,
+      retained_events: 0,
+      retained_wire_bytes: 0
+    });
+    await iterator.return?.();
+    expect(harness.service.snapshot()).toMatchObject({
+      active_subscribers: 0,
+      peak_retained_events: 4,
+      peak_retained_wire_bytes: replayWireBytes + liveWireBytes,
+      retained_events: 0,
+      retained_wire_bytes: 0
+    });
   });
 
   it("closes one count-overflowed slow subscriber without blocking a healthy peer", async () => {
@@ -212,6 +383,93 @@ describe("bounded projection subscriber streams", () => {
     await expect(tenth).resolves.toMatchObject({ value: { cursor: 10 } });
     await healthyIterator.return?.();
     expect(harness.hub.subscriber_count).toBe(0);
+  });
+
+  it("isolates simultaneous stalled subscribers across sessions during a burst", async () => {
+    const budget = resolveResourceBudget({
+      sse_max_subscribers: 4,
+      sse_max_subscribers_per_device: 1,
+      sse_max_subscribers_per_session: 2,
+      sse_queue_max_events: 8,
+      sse_replay_max_events: 8
+    });
+    const harness = createHarness(budget);
+    harness.state.add(sessionA, []);
+    harness.state.add(sessionB, []);
+    const slowA = harness.service.open(
+      openInput(sessionA, "burst-slow-a", "client_burst_slow_a")
+    );
+    const healthyA = harness.service.open(
+      openInput(sessionA, "burst-healthy-a", "client_burst_healthy_a")
+    );
+    const slowB = harness.service.open(
+      openInput(sessionB, "burst-slow-b", "client_burst_slow_b")
+    );
+    const healthyB = harness.service.open(
+      openInput(sessionB, "burst-healthy-b", "client_burst_healthy_b")
+    );
+    const iteratorA = healthyA[Symbol.asyncIterator]();
+    const iteratorB = healthyB[Symbol.asyncIterator]();
+
+    for (let cursor = 1; cursor <= 8; cursor += 1) {
+      const nextA = iteratorA.next();
+      const nextB = iteratorB.next();
+      const startedAt = performance.now();
+      harness.publish(activityEvent(sessionA, cursor));
+      harness.publish(activityEvent(sessionB, cursor));
+      expect(performance.now() - startedAt).toBeLessThan(50);
+      await expect(nextA).resolves.toMatchObject({ value: { cursor } });
+      await expect(nextB).resolves.toMatchObject({ value: { cursor } });
+    }
+    expect(slowA.queued_event_count).toBe(8);
+    expect(slowB.queued_event_count).toBe(8);
+    expect(harness.service.snapshot()).toMatchObject({
+      active_subscribers: 4,
+      queued_events: 16,
+      retained_events: 16
+    });
+
+    const ninthA = iteratorA.next();
+    const ninthB = iteratorB.next();
+    harness.publish(activityEvent(sessionA, 9));
+    harness.publish(activityEvent(sessionB, 9));
+    await expect(ninthA).resolves.toMatchObject({ value: { cursor: 9 } });
+    await expect(ninthB).resolves.toMatchObject({ value: { cursor: 9 } });
+    expect(slowA.failure).toEqual({ code: "queue_overflow", cursor: 9 });
+    expect(slowB.failure).toEqual({ code: "queue_overflow", cursor: 9 });
+    expect(healthyA.state).toBe("open");
+    expect(healthyB.state).toBe("open");
+    expect(harness.failures).toEqual([
+      { code: "queue_overflow", cursor: 9 },
+      { code: "queue_overflow", cursor: 9 }
+    ]);
+    expect(harness.service.snapshot()).toMatchObject({
+      active_subscribers: 2,
+      overflowed_subscribers: 2,
+      peak_queued_events: 16,
+      peak_retained_events: 16,
+      queued_events: 0,
+      retained_events: 0
+    });
+    expect(harness.hub.failure).toBeNull();
+
+    const tenthA = iteratorA.next();
+    const tenthB = iteratorB.next();
+    harness.publish(activityEvent(sessionA, 10));
+    harness.publish(activityEvent(sessionB, 10));
+    await expect(tenthA).resolves.toMatchObject({ value: { cursor: 10 } });
+    await expect(tenthB).resolves.toMatchObject({ value: { cursor: 10 } });
+    await iteratorA.return?.();
+    await iteratorB.return?.();
+    expect(harness.hub.subscriber_count).toBe(0);
+    expect(harness.service.snapshot()).toMatchObject({
+      active_device_buckets: 0,
+      active_session_buckets: 0,
+      active_subscribers: 0,
+      queued_events: 0,
+      replay_events: 0,
+      retained_events: 0
+    });
   });
 
   it("accepts the exact queue-byte boundary and rejects the first aggregate byte overage", () => {
@@ -341,6 +599,112 @@ describe("bounded projection subscriber streams", () => {
     });
   });
 
+  it("bounds replay-heavy reconnect storms and reuses every released bucket", async () => {
+    const budget = resolveResourceBudget({
+      sse_max_subscribers: 8,
+      sse_max_subscribers_per_device: 2,
+      sse_max_subscribers_per_session: 4,
+      sse_queue_max_events: 8,
+      sse_replay_max_events: 8
+    });
+    const harness = createHarness(budget);
+    const eventsA = Array.from({ length: 8 }, (_unused, index) =>
+      activityEvent(sessionA, index + 1)
+    );
+    const eventsB = Array.from({ length: 8 }, (_unused, index) =>
+      activityEvent(sessionB, index + 1)
+    );
+    harness.state.add(sessionA, eventsA);
+    harness.state.add(sessionB, eventsB);
+    const admitted = Array.from({ length: 8 }, (_unused, index) =>
+      harness.service.open(
+        openInput(
+          index < 4 ? sessionA : sessionB,
+          `storm-admitted-${index}`,
+          `client_storm_${Math.floor(index / 2)}`
+        )
+      )
+    );
+    const expectedReplayBytes =
+      4 *
+      [...eventsA, ...eventsB].reduce(
+        (sum, event) => sum + selectedProjectionSseWireByteLength(event),
+        0
+      );
+    expect(harness.service.snapshot()).toMatchObject({
+      active_device_buckets: 4,
+      active_session_buckets: 2,
+      active_subscribers: 8,
+      replay_events: 64,
+      replay_wire_bytes: expectedReplayBytes,
+      retained_events: 64,
+      retained_wire_bytes: expectedReplayBytes
+    });
+
+    for (let attempt = 0; attempt < 32; attempt += 1) {
+      expectSubscriberError(
+        () =>
+          harness.service.open(
+            openInput(sessionA, `storm-rejected-${attempt}`)
+          ),
+        "subscriber_global_limit"
+      );
+    }
+    expect(harness.service.snapshot()).toMatchObject({
+      active_subscribers: 8,
+      admission_rejections: 32,
+      replay_events: 64,
+      retained_events: 64
+    });
+
+    for (const stream of admitted) expect(stream.close()).toBe(true);
+    expect(harness.service.snapshot()).toMatchObject({
+      active_device_buckets: 0,
+      active_session_buckets: 0,
+      active_subscribers: 0,
+      replay_events: 0,
+      replay_wire_bytes: 0,
+      retained_events: 0,
+      retained_wire_bytes: 0
+    });
+    expect(harness.hub.subscriber_count).toBe(0);
+
+    for (let attempt = 0; attempt < 64; attempt += 1) {
+      const stream = harness.service.open({
+        ...openInput(
+          attempt % 2 === 0 ? sessionA : sessionB,
+          `storm-replacement-${attempt}`,
+          `client_replacement_${attempt % 4}`
+        ),
+        after: 4
+      });
+      const iterator = stream[Symbol.asyncIterator]();
+      for (let consumed = 0; consumed < attempt % 5; consumed += 1) {
+        await expect(iterator.next()).resolves.toMatchObject({ done: false });
+      }
+      expect(stream.close()).toBe(true);
+      expect(harness.service.snapshot()).toMatchObject({
+        active_device_buckets: 0,
+        active_session_buckets: 0,
+        active_subscribers: 0,
+        queued_events: 0,
+        queued_wire_bytes: 0,
+        replay_events: 0,
+        replay_wire_bytes: 0,
+        retained_events: 0,
+        retained_wire_bytes: 0
+      });
+      expect(harness.hub.subscriber_count).toBe(0);
+    }
+    expect(harness.service.snapshot()).toMatchObject({
+      opened_subscribers: 72,
+      peak_replay_events: 64,
+      peak_replay_wire_bytes: expectedReplayBytes,
+      peak_retained_events: 64,
+      peak_retained_wire_bytes: expectedReplayBytes
+    });
+  });
+
   it("cleans pending readers exactly once on abort, archive, source error, and service close", async () => {
     const harness = createHarness(
       resolveResourceBudget({
@@ -407,6 +771,88 @@ describe("bounded projection subscriber streams", () => {
     expect(harness.hub.subscriber_count).toBe(0);
     addAbortListener.mockRestore();
     removeAbortListener.mockRestore();
+  });
+
+  it("clears mixed replay, queue, pending-read, and device ownership on aggregate close", async () => {
+    const budget = resolveResourceBudget({
+      sse_max_subscribers: 6,
+      sse_max_subscribers_per_device: 2,
+      sse_max_subscribers_per_session: 3,
+      sse_queue_max_events: 8,
+      sse_replay_max_events: 8
+    });
+    const harness = createHarness(budget);
+    harness.state.add(
+      sessionA,
+      Array.from({ length: 4 }, (_unused, index) =>
+        activityEvent(sessionA, index + 1)
+      )
+    );
+    harness.state.add(
+      sessionB,
+      Array.from({ length: 4 }, (_unused, index) =>
+        activityEvent(sessionB, index + 1)
+      )
+    );
+    const controllers = Array.from({ length: 6 }, () => new AbortController());
+    const streams = controllers.map((controller, index) =>
+      harness.service.open(
+        openInput(
+          index < 3 ? sessionA : sessionB,
+          `shutdown-mixed-${index}`,
+          `client_shutdown_${index % 3}`,
+          controller.signal
+        )
+      )
+    );
+    const iterators = streams.map((stream) => stream[Symbol.asyncIterator]());
+
+    await iterators[1]?.next();
+    await iterators[4]?.next();
+    for (const index of [2, 5]) {
+      for (let replay = 0; replay < 4; replay += 1) {
+        await iterators[index]?.next();
+      }
+    }
+    const pendingA = iterators[2]?.next();
+    const pendingB = iterators[5]?.next();
+    harness.publish(activityEvent(sessionA, 5));
+    harness.publish(activityEvent(sessionB, 5));
+    await expect(pendingA).resolves.toMatchObject({ value: { cursor: 5 } });
+    await expect(pendingB).resolves.toMatchObject({ value: { cursor: 5 } });
+    const closingPendingA = iterators[2]?.next();
+    const closingPendingB = iterators[5]?.next();
+    expect(harness.service.snapshot()).toMatchObject({
+      active_device_buckets: 3,
+      active_session_buckets: 2,
+      active_subscribers: 6,
+      queued_events: 4,
+      replay_events: 14,
+      retained_events: 18
+    });
+
+    controllers[1]?.abort(new Error("private revoke A"));
+    controllers[4]?.abort(new Error("private revoke B"));
+    expect(harness.service.close()).toBe(4);
+    await expect(closingPendingA).resolves.toEqual({ done: true, value: undefined });
+    await expect(closingPendingB).resolves.toEqual({ done: true, value: undefined });
+    expect(harness.service.close()).toBe(0);
+    expect(harness.service.snapshot()).toMatchObject({
+      aborted_subscribers: 2,
+      active_device_buckets: 0,
+      active_session_buckets: 0,
+      active_subscribers: 0,
+      closed: true,
+      queued_events: 0,
+      queued_wire_bytes: 0,
+      replay_events: 0,
+      replay_wire_bytes: 0,
+      retained_events: 0,
+      retained_wire_bytes: 0,
+      service_closed_subscribers: 4
+    });
+    expect(harness.hub.subscriber_count).toBe(0);
+    expect(harness.failures).toEqual([]);
   });
 
   it("wakes and fails a pending reader when the shared fanout source stops", async () => {
@@ -670,24 +1116,48 @@ function openInput(
 
 function fakePausedHandoff(
   input: OpenProjectionReplayLiveHandoffInput,
-  close: () => boolean
+  close: () => boolean,
+  options: {
+    readonly claim?: unknown;
+    readonly highWater?: OutputCursor | null;
+    readonly replayEventCount?: number;
+    readonly replayWireBytes?: number;
+  } = {}
 ): ProjectionReplayLiveHandoff {
+  let claimed = false;
   return Object.freeze({
     activate: () =>
       Object.freeze({ drained_event_count: 0, live_after_cursor: null }),
     after: input.after as OutputCursor | null,
+    claim_replay: () => {
+      if (claimed) throw new Error("Replay already claimed.");
+      claimed = true;
+      if (options.claim !== undefined) return options.claim as never;
+      return Object.freeze({
+        event_count: 0,
+        events: Object.freeze([]),
+        wire_bytes: 0
+      });
+    },
     close,
-    failure: null,
-    high_water_cursor: null,
+    get failure() {
+      return null;
+    },
+    high_water_cursor: options.highWater ?? null,
     observed_fanout_cursor: null,
-    paused_event_count: 0,
-    paused_wire_bytes: 0,
-    replay_event_count: 0,
-    replay_events: Object.freeze([]),
-    replay_wire_bytes: 0,
+    get paused_event_count() {
+      return 0;
+    },
+    get paused_wire_bytes() {
+      return 0;
+    },
+    replay_event_count: options.replayEventCount ?? 0,
+    replay_wire_bytes: options.replayWireBytes ?? 0,
     session_id: input.session_id,
     signal: new AbortController().signal,
-    state: "paused",
+    get state() {
+      return "paused" as const;
+    },
     subscriber_id: input.subscriber_id,
     truncated: false
   });

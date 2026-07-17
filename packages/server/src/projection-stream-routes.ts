@@ -211,7 +211,9 @@ function mapStreamOpenFailure(error: unknown, sessionId: SessionId): Error {
       case "invalid_input":
       case "invalid_live_sink":
       case "live_delivery_failed":
+      case "replay_already_claimed":
       case "replay_inconsistent":
+      case "replay_not_claimed":
         return internalStreamFailure();
     }
   }

@@ -6,4 +6,5 @@ onlyBuiltDependencies:
   - fs-ext
 
 patchedDependencies:
+  '@fastify/sse@0.5.0': patches/@fastify__sse@0.5.0.patch
   fastify@5.10.0: patches/fastify@5.10.0.patch
