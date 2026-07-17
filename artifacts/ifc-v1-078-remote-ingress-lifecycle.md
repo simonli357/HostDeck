@@ -1,7 +1,7 @@
 # IFC-V1-078 Remote Ingress Lifecycle
 
 Date: 2026-07-16
-Status: in progress
+Status: complete
 
 ## Objective
 
@@ -92,6 +92,31 @@ Repeated/concurrent drain and close calls reuse one transition and one promise. 
 - Real loopback Fastify/SQLite integration with active local and admitted remote HTTP/SSE, profile-generation invalidation, one irreversible selected mutation, shutdown, storage/lease reuse, and zero retained request authority.
 - Exact Tailscale 1.98.8 smoke on the saved dedicated HostDeck profile: capture redacted before state, explicit local enable, private HTTPS status/SSE, profile-away/return observation only, explicit disable, process shutdown/restart, authoritative final profile/Serve/listener inspection, and zero test residue. Physical cellular Android acceptance remains `IFC-V1-079`.
 - Focused and adjacent authorization/control/observer/health/SSE/lifecycle/shutdown tests; all workspace suites; typecheck; lint/exports; scaffold/planning/runtime-boundary; exact Codex 0.144.0 binding; frozen install; production audit/license inventory; diff/privacy/no-auto-mutation/process/listener/timer/temp inspection; commit; and push.
+
+## Implementation
+
+- `remote-ingress-request-authority.ts` owns one generation/origin scope and one abortable lease per active remote request. Same-generation renewal preserves leases; closure, regression, conflict, replacement, expiry, disable, failure, or shutdown invalidates them once. A generation's origin binding survives temporary closure.
+- `remote-ingress-lifecycle.ts` owns the root signal, one-third-cadence status loop, exact prior-lease guard, remote-health source generation, lifecycle-wrapped control routes, effective admission, bounded close, and permanent clock/scheduler/contract failure state. It receives the control service through a signal/clock factory and has no manager or Tailscale command path.
+- Selected request authentication composes raw request disconnect, remote generation, and device authority into one cancellation signal. It acquires authority only after proxy admission and never reopens authority from request provenance; local requests acquire no remote lease.
+- `startHostDeckTailscaleServeFastifyLifecycle` reuses the accepted listener/resource cleanup owner, requires IPv4 loopback HTTP, starts observation only after exact listener verification, and closes remote authority/work before application storage. Remote cleanup failure does not skip storage cleanup.
+- The selected control routes accept only an accepted raw control service or lifecycle-owned control wrapper. Existing direct selected-app tests and smokes explicitly model lifecycle authority instead of relying on request-driven admission.
+
+Implementation: `1584eb7`.
+
+## Validation Evidence
+
+| Layer | Result |
+| --- | --- |
+| Direct lifecycle/authority/selected Fastify | 4 files, 30 tests pass. Coverage includes pre-start close, no-command construction, early renewal, exact old-lease expiry during a slow poll, observer failure/recovery, profile-generation invalidation, clock/scheduler terminal failure, mutation shutdown, local/remote HTTP isolation, active SSE cancellation, client disconnect, route-wrapper composition, selected-bind startup failure, shutdown order, and noncooperative timeout. |
+| Affected selected routes/auth | 7 files, 60 tests pass after direct-app harnesses were corrected to model lifecycle-owned authority. A dedicated regression proves stale proxy provenance cannot reopen closed authority. |
+| Workspace | Unit 1,848 passed with 27 intentional external/device skips; contract 277; integration 18; web 33; Chromium pairing 3. |
+| Static/repository | Typecheck; lint/exports over 523 files and 8 packages; scaffold; planning graph at 212 tasks, 84 requirements, 649 dependencies; runtime-boundary; staged diff checks; and exact reviewed Codex 0.144.0 binding over 671 files pass. The default 0.144.5 binary correctly refuses the pinned binding. |
+| Supply chain | Frozen install is unchanged. Production audit reports zero known vulnerabilities across 168 dependencies. The 155-entry/159-path production license inventory contains only MIT, BSD, ISC, Apache-2.0, BlueOak, 0BSD, or permissive-choice categories. |
+| Real Tailscale 1.98.8 | The selected lifecycle smoke passes explicit local enable, proof/open admission, certificate-verified private HTTPS denial before app pairing, zero retained request leases, explicit saved-profile away observation, active-authority invalidation, local CLI continuity, byte-identical foreign-profile Serve state, observation-only dedicated-profile recovery with no manager call, explicit disable, ordered lifecycle close, restored dedicated selection, and final empty ServeConfig. |
+| Manual hardening/privacy | Review found and removed a request-self-reopen authority defect before commit, retained generation/origin binding across temporary closure, and made clock/scheduler failures terminal and health-visible. Production lifecycle sources contain no manager, profile-switch, login/logout, service-control, Serve-repair, retry, or fallback path. Snapshots/errors retain no origin, profile, identity, source, command output, raw cause, credential, or payload. |
+| Residue | Final inspection finds no HostDeck/Vitest/Playwright/ADB test process, HostDeck listener, Serve handler, or test-created temporary root. The deliberate cached exact-Codex 0.144.0 toolchain remains. |
+
+Physical cellular/unrelated-network Android security acceptance, full selected route registration, browser reconnect UI behavior, and aggregate hostile security proof remain owned by `IFC-V1-079` and downstream production composition.
 
 ## Explicit Non-Goals
 
