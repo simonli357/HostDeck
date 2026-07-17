@@ -123,12 +123,23 @@ describe("bounded projection subscriber streams", () => {
     const event = activityEvent(sessionA, 1);
     const eventWireBytes = selectedProjectionSseWireByteLength(event);
     let accessorCalls = 0;
+    let eventAccessorCalls = 0;
     const accessorClaim = Object.freeze(
       Object.defineProperty({}, "event_count", {
         enumerable: true,
         get() {
           accessorCalls += 1;
           return 1;
+        }
+      })
+    );
+    const accessorEvent = Object.freeze(
+      Object.defineProperty({ ...event }, "title", {
+        configurable: false,
+        enumerable: true,
+        get() {
+          eventAccessorCalls += 1;
+          throw new Error("private replay event accessor");
         }
       })
     );
@@ -162,6 +173,16 @@ describe("bounded projection subscriber streams", () => {
         wireBytes: selectedProjectionSseWireByteLength(
           activityEvent(sessionA, 2)
         )
+      },
+      {
+        claim: Object.freeze({
+          event_count: 1,
+          events: Object.freeze([accessorEvent]),
+          wire_bytes: eventWireBytes
+        }),
+        eventCount: 1,
+        highWater: 1 as OutputCursor,
+        wireBytes: eventWireBytes
       }
     ];
 
@@ -201,6 +222,48 @@ describe("bounded projection subscriber streams", () => {
       });
     }
     expect(accessorCalls).toBe(0);
+    expect(eventAccessorCalls).toBe(0);
+  });
+
+  it("retains one immutable replay payload without cloning it", async () => {
+    const event = deepFreeze(activityEvent(sessionA, 1));
+    const wireBytes = selectedProjectionSseWireByteLength(event);
+    const close = vi.fn(() => true);
+    const service = createProjectionSubscriberStreamService({
+      handoff: Object.freeze({
+        open: (candidate: unknown) =>
+          fakePausedHandoff(
+            candidate as OpenProjectionReplayLiveHandoffInput,
+            close,
+            {
+              claim: Object.freeze({
+                event_count: 1,
+                events: Object.freeze([event]),
+                wire_bytes: wireBytes
+              }),
+              highWater: 1 as OutputCursor,
+              replayEventCount: 1,
+              replayWireBytes: wireBytes
+            }
+          )
+      }),
+      observe_failure: () => undefined,
+      resource_budget: defaultResourceBudget
+    });
+
+    const stream = service.open(openInput(sessionA, "single-replay-payload"));
+    const iterator = stream[Symbol.asyncIterator]();
+    const replay = await iterator.next();
+    expect(replay).toMatchObject({ done: false, value: { cursor: 1 } });
+    expect(replay.value).toBe(event);
+    expect(stream.remaining_replay_event_count).toBe(0);
+    expect(service.snapshot()).toMatchObject({
+      replay_events: 0,
+      retained_events: 0
+    });
+
+    await iterator.return?.();
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
   it("composes real replay and live handoff without a gap or duplicate", async () => {

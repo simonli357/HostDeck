@@ -1246,15 +1246,17 @@ function requireReplayClaim(
   let wireBytes = 0;
   let previousCursor: OutputCursor | null = input.after;
   for (const [index, candidateEvent] of value.events.entries()) {
+    if (!isDeepFrozenData(candidateEvent)) {
+      throw new HostDeckProjectionSubscriberError("source_failed");
+    }
     const parsed = selectedProjectionEventSchema.safeParse(candidateEvent);
     if (
-      !Object.isFrozen(candidateEvent) ||
       !parsed.success ||
       parsed.data.session_id !== input.sessionId
     ) {
       throw new HostDeckProjectionSubscriberError("source_failed");
     }
-    const event = deepFreeze(parsed.data);
+    const event = candidateEvent as SelectedProjectionEvent;
     const firstBoundary = index === 0 && event.type === "replay_boundary";
     if (
       event.cursor <= (previousCursor ?? 0) ||
@@ -1499,4 +1501,36 @@ function deepFreeze<T>(value: T): T {
     deepFreeze(child);
   }
   return Object.freeze(value);
+}
+
+function isDeepFrozenData(
+  candidate: unknown,
+  seen: WeakSet<object> = new WeakSet()
+): boolean {
+  if (candidate === null || typeof candidate !== "object") return true;
+  if (seen.has(candidate)) return true;
+  if (!Object.isFrozen(candidate)) return false;
+  const isArray = Array.isArray(candidate);
+  const prototype = Object.getPrototypeOf(candidate);
+  if (
+    (isArray && prototype !== Array.prototype) ||
+    (!isArray && prototype !== Object.prototype && prototype !== null)
+  ) {
+    return false;
+  }
+  seen.add(candidate);
+  const descriptors = Object.getOwnPropertyDescriptors(candidate);
+  for (const key of Reflect.ownKeys(descriptors)) {
+    if (typeof key !== "string") return false;
+    const descriptor = descriptors[key];
+    if (
+      descriptor === undefined ||
+      !("value" in descriptor) ||
+      (!descriptor.enumerable && !(isArray && key === "length")) ||
+      !isDeepFrozenData(descriptor.value, seen)
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
