@@ -98,6 +98,7 @@ export interface ProjectionReplayLiveHandoff {
   readonly replay_events: readonly SelectedProjectionEvent[];
   readonly replay_wire_bytes: number;
   readonly session_id: string;
+  readonly signal: AbortSignal;
   readonly state: ProjectionHandoffState;
   readonly subscriber_id: string;
   readonly truncated: boolean;
@@ -186,6 +187,7 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
   let failure: ProjectionHandoffFailure | null = null;
   let subscription: ProjectionFanoutSubscription | null = null;
   let subscriptionDetached = false;
+  let subscriptionAbortListenerAttached = false;
   let abortListenerAttached = false;
   let highWaterCaptured = false;
   let highWaterCursor: OutputCursor | null = null;
@@ -196,6 +198,7 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
   let deliveringLive = false;
   let pausedWireBytes = 0;
   let replayValidation: ReplayValidation | null = null;
+  const lifecycleController = new AbortController();
   const paused: BufferedLiveEvent[] = [];
 
   const removeAbortListener = (): void => {
@@ -207,9 +210,15 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
     paused.length = 0;
     pausedWireBytes = 0;
   };
+  const removeSubscriptionAbortListener = (): void => {
+    if (!subscriptionAbortListenerAttached || subscription === null) return;
+    subscriptionAbortListenerAttached = false;
+    subscription.signal.removeEventListener("abort", onSubscriptionAbort);
+  };
   const detachSubscription = (): boolean => {
     if (subscription === null || subscriptionDetached) return false;
     subscriptionDetached = true;
+    removeSubscriptionAbortListener();
     try {
       return subscription.unsubscribe();
     } catch {
@@ -225,6 +234,12 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
     clearPaused();
     detachSubscription();
     removeAbortListener();
+    lifecycleController.abort(
+      new HostDeckProjectionHandoffError(
+        code,
+        `Projection handoff failed with ${code}.`
+      )
+    );
   };
   const close = (): boolean => {
     const changed = internalState !== "closed" && internalState !== "failed";
@@ -234,11 +249,28 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
     clearPaused();
     detachSubscription();
     removeAbortListener();
+    lifecycleController.abort(
+      new HostDeckProjectionHandoffError(
+        "handoff_closed",
+        "Projection handoff is closed."
+      )
+    );
     return changed;
   };
   function onAbort(): void {
     close();
   }
+  function onSubscriptionAbort(): void {
+    fail("fanout_unavailable", liveCursor);
+  }
+  const attachSubscriptionAbortListener = (): void => {
+    if (subscription === null || subscriptionAbortListenerAttached) return;
+    subscription.signal.addEventListener("abort", onSubscriptionAbort, {
+      once: true
+    });
+    subscriptionAbortListenerAttached = true;
+    if (subscription.signal.aborted) onSubscriptionAbort();
+  };
   const enqueue = (event: SelectedProjectionEvent, wireBytes: number): boolean => {
     if (
       paused.length >= service.resourceBudget.sse_queue_max_events ||
@@ -318,6 +350,7 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
   let observedFanoutCursor: OutputCursor | null = null;
   try {
     subscription = subscribePaused(service.fanout, input, onCommitted);
+    attachSubscriptionAbortListener();
     observedFanoutCursor = subscription.observed_high_water_cursor;
     assertOpeningAvailable(internalState, failure, input.signal, service.fanout, subscription);
 
@@ -420,6 +453,7 @@ function openHandoff(service: ParsedServiceInput, input: ParsedOpenInput): Proje
     replay_events: replay.events,
     replay_wire_bytes: replay.wire_bytes,
     session_id: input.session_id,
+    signal: lifecycleController.signal,
     subscriber_id: input.subscriber_id,
     truncated: replay.truncated,
     get failure() {
@@ -720,6 +754,7 @@ function parseFanoutSubscription(candidate: unknown, input: ParsedOpenInput): Pr
     typeof value.active !== "boolean" ||
     !value.active ||
     typeof value.unsubscribe !== "function" ||
+    !(value.signal instanceof AbortSignal) ||
     (parsedObserved !== null && !parsedObserved.success)
   ) {
     throw new HostDeckProjectionHandoffError("fanout_unavailable", "Projection fanout returned an invalid subscription.");

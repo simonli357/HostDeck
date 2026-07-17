@@ -11,6 +11,7 @@ import {
   HostDeckSseAbortError,
   type HostDeckSseFailureObserver,
   HostDeckSseTransportError,
+  hostDeckSseSourceLifecycleSignal,
   normalizeSseTransportError,
   observeSseFailure,
   serializeSseJson
@@ -96,7 +97,7 @@ export function createHostDeckSseTransportRegistration(
         },
         async (request, reply) => {
           const after = resolveRequestedCursor(request);
-          const streamSignal = AbortSignal.any([
+          const requestSignal = AbortSignal.any([
             request.signal,
             hostDeckRequestDeviceAuthoritySignal(request)
           ]);
@@ -108,14 +109,15 @@ export function createHostDeckSseTransportRegistration(
                   after,
                   params: request.params,
                   request,
-                  signal: streamSignal
+                  signal: requestSignal
                 }))
               ),
-              streamSignal
+              requestSignal
             );
             assertAsyncIterable(iterable);
           } catch (cause) {
-            if (streamSignal.aborted || cause instanceof HostDeckSseAbortError) return;
+            if (requestSignal.aborted || cause instanceof HostDeckSseAbortError) return;
+            if (cause instanceof HostDeckHttpError) throw cause;
             const error = normalizeSseTransportError(
               cause,
               "source_open_failed",
@@ -129,6 +131,12 @@ export function createHostDeckSseTransportRegistration(
             });
           }
 
+          const sourceSignal = hostDeckSseSourceLifecycleSignal(iterable);
+          const deliverySignal =
+            sourceSignal === null
+              ? requestSignal
+              : AbortSignal.any([requestSignal, sourceSignal]);
+
           const readable = createHostDeckSseReadable({
             after,
             cleanupTimeoutMs: context.resourceBudget.sse_disconnect_cleanup_timeout_ms,
@@ -136,10 +144,12 @@ export function createHostDeckSseTransportRegistration(
             expectedSessionId: optionalSessionId(request.params),
             iterable,
             onCleanupFailure: (error) => observeSseFailure(parsed.observeError, request, error),
-            signal: streamSignal
+            signal: deliverySignal
           });
           const destroyReadable = () => {
-            readable.destroy(new HostDeckSseAbortError(streamSignal.reason));
+            if (!readable.destroyed) {
+              readable.destroy(new HostDeckSseAbortError(deliverySignal.reason));
+            }
             if (reply.sse.isConnected) reply.sse.close();
           };
           let readableFailure: Error | undefined;
@@ -151,13 +161,14 @@ export function createHostDeckSseTransportRegistration(
           };
           readable.once("error", captureReadableFailure);
           readable.once("end", finishFiniteResponse);
-          streamSignal.addEventListener("abort", destroyReadable, { once: true });
+          deliverySignal.addEventListener("abort", destroyReadable, { once: true });
           reply.sse.onClose(destroyReadable);
+          if (deliverySignal.aborted) destroyReadable();
 
           try {
             await reply.sse.send(readable);
             if (readableFailure !== undefined) {
-              if (!streamSignal.aborted && !(readableFailure instanceof HostDeckSseAbortError)) {
+              if (!deliverySignal.aborted && !(readableFailure instanceof HostDeckSseAbortError)) {
                 const error = normalizeSseTransportError(
                   readableFailure,
                   "transport_send_failed",
@@ -170,7 +181,7 @@ export function createHostDeckSseTransportRegistration(
               reply.sse.close();
             }
           } catch (cause) {
-            if (!streamSignal.aborted && !(cause instanceof HostDeckSseAbortError)) {
+            if (!deliverySignal.aborted && !(cause instanceof HostDeckSseAbortError)) {
               const error = normalizeSseTransportError(
                 cause,
                 "transport_send_failed",
@@ -187,7 +198,7 @@ export function createHostDeckSseTransportRegistration(
             }
             if (reply.sse.isConnected) reply.sse.close();
           } finally {
-            streamSignal.removeEventListener("abort", destroyReadable);
+            deliverySignal.removeEventListener("abort", destroyReadable);
             readable.removeListener("error", captureReadableFailure);
             readable.removeListener("end", finishFiniteResponse);
             readable.destroy();

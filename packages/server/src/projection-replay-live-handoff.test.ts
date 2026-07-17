@@ -174,7 +174,9 @@ describe("projection replay-to-live handoff", () => {
         expect(Object.isFrozen(handoff)).toBe(true);
         expect(Object.isFrozen(handoff.replay_events)).toBe(true);
         expect(handoff.replay_events.every((event) => Object.isFrozen(event))).toBe(true);
+        expect(handoff.signal.aborted).toBe(false);
         expect(handoff.close()).toBe(true);
+        expect(handoff.signal.aborted).toBe(true);
         expect(handoff.close()).toBe(false);
         expect(hub.subscriber_count).toBe(0);
       }
@@ -491,6 +493,7 @@ describe("projection replay-to-live handoff", () => {
 
     expect(hub.close()).toBe(1);
     expect(handoff.state).toBe("failed");
+    expect(handoff.signal.aborted).toBe(true);
     expect(handoff.failure).toEqual({ code: "fanout_unavailable", cursor: 1 });
     expectHandoffError(() => handoff.activate({ on_event: () => undefined }), "fanout_unavailable");
   });

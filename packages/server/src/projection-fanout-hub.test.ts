@@ -102,6 +102,7 @@ describe("commit-only projection fanout hub", () => {
       expect(hub.subscriber_count).toBe(0);
       expect(hub.tracked_session_count).toBe(0);
       expect(subscription.active).toBe(false);
+      expect(subscription.signal.aborted).toBe(true);
       expectFanoutError(() => hub.publish(committedCandidate({ cursor: 6 })), "fanout_stopped");
       expectFanoutError(
         () => hub.subscribe(subscriptionInput(`subscriber:${code}:late`, "sess_fanout_a", () => undefined)),
@@ -154,6 +155,7 @@ describe("commit-only projection fanout hub", () => {
     expect(hub.failure).toBeNull();
 
     expect(first.unsubscribe()).toBe(true);
+    expect(first.signal.aborted).toBe(true);
     expect(first.unsubscribe()).toBe(false);
     const replacement = hub.subscribe(subscriptionInput("subscriber:one", "sess_fanout_c", () => undefined));
     expect(first.active).toBe(false);
@@ -252,6 +254,8 @@ describe("commit-only projection fanout hub", () => {
     expect(hub).toMatchObject({ closed: true, subscriber_count: 0, tracked_session_count: 0 });
     expect(first.active).toBe(false);
     expect(second.active).toBe(false);
+    expect(first.signal.aborted).toBe(true);
+    expect(second.signal.aborted).toBe(true);
     expect(first.unsubscribe()).toBe(false);
     expectFanoutError(() => hub.publish(committedCandidate({ cursor: 1 })), "fanout_closed");
     expectFanoutError(

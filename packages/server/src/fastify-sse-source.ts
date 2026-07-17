@@ -55,6 +55,38 @@ export interface CreateHostDeckSseReadableInput {
   readonly signal: AbortSignal;
 }
 
+export interface RegisterHostDeckSseSourceLifecycleInput<
+  T extends AsyncIterable<unknown> = AsyncIterable<unknown>
+> {
+  readonly iterable: T;
+  readonly signal: AbortSignal;
+}
+
+const sourceLifecycleSignals = new WeakMap<object, AbortSignal>();
+
+export function registerHostDeckSseSourceLifecycle<T extends AsyncIterable<unknown>>(
+  input: RegisterHostDeckSseSourceLifecycleInput<T>
+): T {
+  const values = readExactLifecycleInput(input);
+  if (!isAsyncIterable(values.iterable)) {
+    throw new TypeError("HostDeck SSE source lifecycle iterable is invalid.");
+  }
+  if (!(values.signal instanceof AbortSignal)) {
+    throw new TypeError("HostDeck SSE source lifecycle signal is invalid.");
+  }
+  if (sourceLifecycleSignals.has(values.iterable)) {
+    throw new TypeError("HostDeck SSE source lifecycle is already registered.");
+  }
+  sourceLifecycleSignals.set(values.iterable, values.signal);
+  return values.iterable as T;
+}
+
+export function hostDeckSseSourceLifecycleSignal(
+  iterable: AsyncIterable<unknown>
+): AbortSignal | null {
+  return sourceLifecycleSignals.get(iterable as object) ?? null;
+}
+
 export function createHostDeckSseReadable(input: CreateHostDeckSseReadableInput): Readable {
   return Readable.from(managedSseMessages(input), { highWaterMark: 1, objectMode: true });
 }
@@ -281,5 +313,46 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
     typeof value === "object" &&
     "then" in value &&
     typeof (value as { then?: unknown }).then === "function"
+  );
+}
+
+function readExactLifecycleInput(
+  candidate: unknown
+): Readonly<Record<"iterable" | "signal", unknown>> {
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    Array.isArray(candidate) ||
+    (Object.getPrototypeOf(candidate) !== Object.prototype &&
+      Object.getPrototypeOf(candidate) !== null)
+  ) {
+    throw new TypeError("HostDeck SSE source lifecycle input must be a plain object.");
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(candidate);
+  const keys = Reflect.ownKeys(descriptors);
+  const iterableDescriptor = descriptors.iterable;
+  const signalDescriptor = descriptors.signal;
+  if (
+    keys.length !== 2 ||
+    iterableDescriptor === undefined ||
+    signalDescriptor === undefined ||
+    !("value" in iterableDescriptor) ||
+    !("value" in signalDescriptor)
+  ) {
+    throw new TypeError("HostDeck SSE source lifecycle fields are invalid.");
+  }
+  return Object.freeze({
+    iterable: iterableDescriptor.value,
+    signal: signalDescriptor.value
+  });
+}
+
+function isAsyncIterable(candidate: unknown): candidate is AsyncIterable<unknown> {
+  return (
+    candidate !== null &&
+    (typeof candidate === "object" || typeof candidate === "function") &&
+    typeof (candidate as { readonly [Symbol.asyncIterator]?: unknown })[
+      Symbol.asyncIterator
+    ] === "function"
   );
 }

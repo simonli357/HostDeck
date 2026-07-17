@@ -15,6 +15,10 @@ import { createHostDeckFastifyApp, hostDeckFastifyResourceSnapshot } from "./fas
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import {
+  hostDeckSseSourceLifecycleSignal,
+  registerHostDeckSseSourceLifecycle
+} from "./fastify-sse-source.js";
+import {
   createHostDeckSseTransportRegistration,
   type HostDeckSseFailureObservation,
   type HostDeckSseSourceInput
@@ -30,6 +34,41 @@ const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
 const sessionId = "sess_sse_transport_01";
 
 describe("bounded Fastify SSE transport", () => {
+  it("brands exact source-owned lifecycle signals without invoking accessors", () => {
+    const controller = new AbortController();
+    const iterable = finiteEvents([]);
+    const registered = registerHostDeckSseSourceLifecycle({
+      iterable,
+      signal: controller.signal
+    });
+    expect(registered).toBe(iterable);
+    expect(hostDeckSseSourceLifecycleSignal(registered)).toBe(controller.signal);
+    expect(() =>
+      registerHostDeckSseSourceLifecycle({ iterable, signal: controller.signal })
+    ).toThrow("already registered");
+
+    let accessorCalls = 0;
+    const accessor = Object.defineProperty({}, "iterable", {
+      enumerable: true,
+      get() {
+        accessorCalls += 1;
+        throw new Error("private lifecycle accessor");
+      }
+    });
+    for (const candidate of [
+      null,
+      {},
+      { iterable: finiteEvents([]), signal: controller.signal, extra: true },
+      { iterable: {}, signal: controller.signal },
+      { iterable: finiteEvents([]), signal: {} },
+      accessor
+    ]) {
+      expect(() => registerHostDeckSseSourceLifecycle(candidate as never)).toThrow();
+    }
+    expect(accessorCalls).toBe(0);
+    expect(hostDeckSseSourceLifecycleSignal(finiteEvents([]))).toBeNull();
+  });
+
   it("fails composition for missing source/observer, invalid paths, or unvalidated route parameters", () => {
     const base = {
       id: "strict-events",
@@ -473,6 +512,74 @@ describe("bounded Fastify SSE transport", () => {
       expect(requestSignal?.aborted).toBe(true);
       expect(returnCalls).toBe(1);
       expect(failures.map((failure) => failure.code)).toEqual(["source_cleanup_timeout"]);
+    } finally {
+      response?.destroy();
+      request?.destroy();
+      await app.close();
+    }
+  });
+
+  it("actively closes a real paused response from a source-owned lifecycle signal", async () => {
+    const sourceController = new AbortController();
+    let requestSignal: AbortSignal | undefined;
+    let returnCalls = 0;
+    const app = createSseApp(
+      {
+        open(input) {
+          requestSignal = input.signal;
+          let first = true;
+          const iterator: AsyncIterableIterator<unknown> = {
+            [Symbol.asyncIterator]() {
+              return iterator;
+            },
+            next() {
+              if (first) {
+                first = false;
+                return Promise.resolve({
+                  done: false as const,
+                  value: projectionEvent(1, "source-owned-close")
+                });
+              }
+              return new Promise<IteratorResult<unknown>>(() => undefined);
+            },
+            return() {
+              returnCalls += 1;
+              return Promise.resolve({ done: true as const, value: undefined });
+            }
+          };
+          return registerHostDeckSseSourceLifecycle({
+            iterable: iterator,
+            signal: sourceController.signal
+          });
+        }
+      },
+      [],
+      []
+    );
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+    let request: ClientRequest | undefined;
+    let response: IncomingMessage | undefined;
+
+    try {
+      ({ request, response } = await openPausedResponse(
+        `${address}/api/sessions/${sessionId}/events`
+      ));
+      const closed = new Promise<void>((resolve) => {
+        response?.once("end", resolve);
+        response?.once("close", resolve);
+      });
+      sourceController.abort(new Error("bounded source termination"));
+      await withTestTimeout(
+        waitUntil(() => hostDeckFastifyResourceSnapshot(app).in_flight_requests === 0),
+        1_000,
+        "source-owned handler settlement"
+      );
+
+      expect(requestSignal?.aborted).toBe(false);
+      expect(returnCalls).toBe(1);
+      expect(hostDeckFastifyResourceSnapshot(app).in_flight_requests).toBe(0);
+      response.resume();
+      await withTestTimeout(closed, 1_000, "source-owned response close");
     } finally {
       response?.destroy();
       request?.destroy();

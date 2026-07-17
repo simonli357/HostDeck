@@ -193,7 +193,10 @@ describe("selected write admission cross-route vertical", () => {
       csrf,
       lock,
       runtime,
-      sessions
+      sessions,
+      subscribers: {
+        archive_session: () => 0
+      }
     });
     const internalErrors: unknown[] = [];
     const app = createHostDeckFastifyApp({

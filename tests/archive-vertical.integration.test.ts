@@ -116,6 +116,9 @@ describe("managed-session archive selected vertical", () => {
       sessions: {
         read: (candidate) => sessions.read(candidate),
         archive: (candidate) => sessions.archive(candidate)
+      },
+      subscribers: {
+        archive_session: () => 0
       }
     });
     const port = await availableLoopbackPort();

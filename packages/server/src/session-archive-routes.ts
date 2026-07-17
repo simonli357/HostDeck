@@ -65,14 +65,21 @@ export interface CreateHostDeckSessionArchiveRouteRegistrationInput {
   readonly lock: HostDeckHostLockPolicy;
   readonly runtime: HostDeckSessionArchiveRuntimePort;
   readonly sessions: Pick<ManagedCodexThreadService, "archive" | "read">;
+  readonly subscribers: HostDeckSessionArchiveSubscriberPort;
+}
+
+export interface HostDeckSessionArchiveSubscriberPort {
+  readonly archive_session: (sessionId: string) => unknown;
 }
 
 type ArchiveSession = ManagedCodexThreadService["archive"];
 type ReadSession = ManagedCodexThreadService["read"];
 type ReadRuntime = HostDeckSessionArchiveRuntimePort["read"];
+type ArchiveSubscribers = HostDeckSessionArchiveSubscriberPort["archive_session"];
 type SessionArchiveParams = z.infer<typeof sessionIdParamsSchema>;
 
 interface ParsedRoutePorts {
+  readonly archiveSubscribers: ArchiveSubscribers;
   readonly archiveSession: ArchiveSession;
   readonly readRuntime: ReadRuntime;
   readonly readSession: ReadSession;
@@ -87,9 +94,10 @@ interface ResolvedManagedTarget {
   readonly runtime_version: string;
 }
 
-const routeInputKeys = ["admission", "audit", "csrf", "lock", "runtime", "sessions"] as const;
+const routeInputKeys = ["admission", "audit", "csrf", "lock", "runtime", "sessions", "subscribers"] as const;
 const runtimePortKeys = ["read"] as const;
 const sessionPortKeys = ["archive", "read"] as const;
+const subscriberPortKeys = ["archive_session"] as const;
 const routeCandidateKeys = ["body", "params"] as const;
 const selectedStateKeys = ["mapping", "projection"] as const;
 const noQuerySchema = z.object({}).strict();
@@ -106,7 +114,7 @@ export function createHostDeckSessionArchiveRouteRegistration(
   assertHostDeckSelectedWriteAuditExecutor(values.audit);
   assertHostDeckCsrfPolicy(values.csrf);
   assertHostDeckHostLockPolicy(values.lock);
-  const ports = parseRoutePorts(values.runtime, values.sessions);
+  const ports = parseRoutePorts(values.runtime, values.sessions, values.subscribers);
   const manifest = requireSessionArchiveManifestEntry();
   const audit = createHostDeckSelectedWriteAuditPort<"archive">({
     executor: "selected_write_gate",
@@ -229,6 +237,19 @@ export function createHostDeckSessionArchiveRouteRegistration(
                   target,
                   context.resolution.value.runtime_version
                 );
+                const closedSubscribers = Reflect.apply(
+                  ports.archiveSubscribers,
+                  undefined,
+                  [target.session_id]
+                );
+                if (
+                  !Number.isSafeInteger(closedSubscribers) ||
+                  (closedSubscribers as number) < 0
+                ) {
+                  throw new TypeError(
+                    "Session-archive subscriber cleanup returned invalid state."
+                  );
+                }
                 response = parseResponse({
                   operation_id: requestBody.operation_id,
                   kind: "archive",
@@ -267,7 +288,11 @@ export function createHostDeckSessionArchiveRouteRegistration(
   });
 }
 
-function parseRoutePorts(runtimeCandidate: unknown, sessionsCandidate: unknown): ParsedRoutePorts {
+function parseRoutePorts(
+  runtimeCandidate: unknown,
+  sessionsCandidate: unknown,
+  subscribersCandidate: unknown
+): ParsedRoutePorts {
   const runtime = readExactDataObject(
     runtimeCandidate,
     runtimePortKeys,
@@ -278,14 +303,21 @@ function parseRoutePorts(runtimeCandidate: unknown, sessionsCandidate: unknown):
     sessionPortKeys,
     "HostDeck session-archive service port is invalid."
   );
+  const subscribers = readExactDataObject(
+    subscribersCandidate,
+    subscriberPortKeys,
+    "HostDeck session-archive subscriber port is invalid."
+  );
   if (
     typeof runtime.read !== "function" ||
     typeof sessions.archive !== "function" ||
-    typeof sessions.read !== "function"
+    typeof sessions.read !== "function" ||
+    typeof subscribers.archive_session !== "function"
   ) {
     throw new TypeError("HostDeck session-archive route ports are invalid.");
   }
   return Object.freeze({
+    archiveSubscribers: subscribers.archive_session as ArchiveSubscribers,
     archiveSession: sessions.archive as ArchiveSession,
     readRuntime: runtime.read as ReadRuntime,
     readSession: sessions.read as ReadSession

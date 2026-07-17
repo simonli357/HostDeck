@@ -112,6 +112,14 @@ describe("selected managed-session archive route", () => {
             extra: true
           }
         },
+        { ...harness.routeInput, subscribers: {} },
+        {
+          ...harness.routeInput,
+          subscribers: {
+            archive_session: harness.routeInput.subscribers.archive_session,
+            extra: true
+          }
+        },
         accessor
       ]) {
         expect(() =>
@@ -149,6 +157,7 @@ describe("selected managed-session archive route", () => {
       expect(harness.readCalls()).toEqual([sessionId]);
       expect(harness.runtimeReads()).toBe(1);
       expect(harness.archiveCalls()).toEqual([sessionId]);
+      expect(harness.subscriberArchiveCalls()).toEqual([sessionId]);
       expect(trail).toMatchObject({
         state: "terminal",
         records: [
@@ -391,6 +400,42 @@ describe("selected managed-session archive route", () => {
     }
   });
 
+  it("records post-commit subscriber cleanup failure as incomplete without redispatch", async () => {
+    for (const [label, options] of [
+      [
+        "throw",
+        { subscriberArchiveError: new Error("private subscriber cleanup failure") }
+      ],
+      ["malformed", { subscriberArchiveResult: -1 }]
+    ] as const) {
+      const operationId = `op_session_archive_subscribers_${label}`;
+      const harness = await createHarness(options);
+      try {
+        const response = await archive(harness, {
+          ...archiveRequest,
+          operation_id: operationId
+        });
+        expectStableError(response, 500, "internal_error");
+        expect(response.body).not.toContain("private subscriber");
+        expect(harness.archiveCalls()).toEqual([sessionId]);
+        expect(harness.subscriberArchiveCalls()).toEqual([sessionId]);
+        expect(harness.auditRepository.require(operationId)).toMatchObject({
+          state: "terminal",
+          records: [
+            { phase: "accepted", outcome: "accepted" },
+            {
+              phase: "terminal",
+              outcome: "incomplete",
+              error_code: "internal_error"
+            }
+          ]
+        });
+      } finally {
+        await harness.close();
+      }
+    }
+  });
+
   it("records a proven not-sent timeout as failed without retry", async () => {
     const operationId = "op_session_archive_known_timeout";
     const harness = await createHarness({
@@ -509,6 +554,8 @@ interface HarnessOptions {
   readonly readError?: Error;
   readonly readResult?: unknown;
   readonly runtime?: unknown;
+  readonly subscriberArchiveError?: Error;
+  readonly subscriberArchiveResult?: unknown;
 }
 
 interface RouteInputFixture {
@@ -521,6 +568,9 @@ interface RouteInputFixture {
     readonly archive: (sessionId: string) => Promise<SelectedSessionState>;
     readonly read: (sessionId: string) => SelectedSessionState;
   };
+  readonly subscribers: {
+    readonly archive_session: (sessionId: string) => number;
+  };
 }
 
 interface Harness {
@@ -531,12 +581,13 @@ interface Harness {
   readonly archiveCalls: () => readonly string[];
   readonly readCalls: () => readonly string[];
   readonly runtimeReads: () => number;
+  readonly subscriberArchiveCalls: () => readonly string[];
   readonly close: () => Promise<void>;
 }
 
 interface PairedHarness extends Pick<
   Harness,
-  "app" | "archiveCalls" | "auditRepository" | "close" | "readCalls" | "runtimeReads"
+  "app" | "archiveCalls" | "auditRepository" | "close" | "readCalls" | "runtimeReads" | "subscriberArchiveCalls"
 > {}
 
 async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
@@ -576,6 +627,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   });
   const readCalls: string[] = [];
   const archiveCalls: string[] = [];
+  const subscriberArchiveCalls: string[] = [];
   let runtimeReads = 0;
   const routeInput: RouteInputFixture = {
     admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
@@ -599,6 +651,15 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
         await options.archiveBarrier;
         if (options.archiveError !== undefined) throw options.archiveError;
         return (options.archiveResult ?? selectedState("archived")) as SelectedSessionState;
+      }
+    },
+    subscribers: {
+      archive_session(candidate) {
+        subscriberArchiveCalls.push(candidate);
+        if (options.subscriberArchiveError !== undefined) {
+          throw options.subscriberArchiveError;
+        }
+        return (options.subscriberArchiveResult ?? 0) as number;
       }
     }
   };
@@ -629,6 +690,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
     archiveCalls: () => [...archiveCalls],
     readCalls: () => [...readCalls],
     runtimeReads: () => runtimeReads,
+    subscriberArchiveCalls: () => [...subscriberArchiveCalls],
     async close() {
       if (closed) return;
       closed = true;
@@ -685,6 +747,7 @@ async function createPairedHarness(
   });
   const readCalls: string[] = [];
   const archiveCalls: string[] = [];
+  const subscriberArchiveCalls: string[] = [];
   let runtimeReads = 0;
   const registration = createHostDeckSessionArchiveRouteRegistration({
     admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
@@ -705,6 +768,12 @@ async function createPairedHarness(
       async archive(candidate) {
         archiveCalls.push(candidate);
         return selectedState("archived");
+      }
+    },
+    subscribers: {
+      archive_session(candidate) {
+        subscriberArchiveCalls.push(candidate);
+        return 0;
       }
     }
   });
@@ -747,6 +816,7 @@ async function createPairedHarness(
     archiveCalls: () => [...archiveCalls],
     readCalls: () => [...readCalls],
     runtimeReads: () => runtimeReads,
+    subscriberArchiveCalls: () => [...subscriberArchiveCalls],
     async close() {
       if (closed) return;
       closed = true;

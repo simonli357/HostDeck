@@ -65,6 +65,7 @@ export interface ProjectionFanoutSubscription {
   readonly id: string;
   readonly observed_high_water_cursor: OutputCursor | null;
   readonly session_id: string;
+  readonly signal: AbortSignal;
   readonly unsubscribe: () => boolean;
 }
 
@@ -84,6 +85,7 @@ export interface ProjectionFanoutHub {
 }
 
 interface SubscriberRecord {
+  readonly controller: AbortController;
   readonly id: string;
   readonly on_event: ProjectionFanoutSubscriber;
   readonly session_id: string;
@@ -98,6 +100,9 @@ interface SessionFanoutState {
 const subscriberIdPattern = /^[a-zA-Z0-9_.:-]{1,120}$/u;
 const globalSubscriberDefinition = resourceBudgetDefinitionByKey.sse_max_subscribers;
 const sessionSubscriberDefinition = resourceBudgetDefinitionByKey.sse_max_subscribers_per_session;
+const subscriptionClosedReason = Object.freeze(
+  new Error("Projection fanout subscription closed.")
+);
 
 export function createProjectionFanoutHub(options: ProjectionFanoutHubOptions = {}): ProjectionFanoutHub {
   const parsedOptions = parseOptions(options);
@@ -171,7 +176,11 @@ class DefaultProjectionFanoutHub implements ProjectionFanoutHub {
     }
     const session = currentSession ?? { last_cursor: null, subscribers: new Map<string, SubscriberRecord>() };
     const token = Symbol(parsed.id);
-    const record: SubscriberRecord = { ...parsed, token };
+    const record: SubscriberRecord = {
+      ...parsed,
+      controller: new AbortController(),
+      token
+    };
     session.subscribers.set(record.id, record);
     this.sessions.set(record.session_id, session);
     this.subscribers.set(record.id, record);
@@ -182,6 +191,7 @@ class DefaultProjectionFanoutHub implements ProjectionFanoutHub {
       id: record.id,
       observed_high_water_cursor: observedHighWaterCursor,
       session_id: record.session_id,
+      signal: record.controller.signal,
       unsubscribe: () => this.unsubscribe(record.id, token),
       get active() {
         return implementation.hasSubscription(record.id, token);
@@ -281,7 +291,12 @@ class DefaultProjectionFanoutHub implements ProjectionFanoutHub {
     if (this.isClosed) return 0;
     this.isClosed = true;
     const removed = this.subscribers.size;
-    this.clearSubscribers();
+    this.clearSubscribers(
+      new HostDeckProjectionFanoutError(
+        "fanout_closed",
+        "Projection fanout hub is closed."
+      )
+    );
     return removed;
   }
 
@@ -298,6 +313,7 @@ class DefaultProjectionFanoutHub implements ProjectionFanoutHub {
       session.subscribers.delete(id);
       if (session.subscribers.size === 0) this.sessions.delete(record.session_id);
     }
+    record.controller.abort(subscriptionClosedReason);
     return true;
   }
 
@@ -329,13 +345,20 @@ class DefaultProjectionFanoutHub implements ProjectionFanoutHub {
         session_id: sessionId
       });
     }
-    this.clearSubscribers();
+    this.clearSubscribers(
+      new HostDeckProjectionFanoutError(
+        "fanout_stopped",
+        "Projection fanout stopped after a fatal publication failure."
+      )
+    );
     throw error;
   }
 
-  private clearSubscribers(): void {
+  private clearSubscribers(reason: Error): void {
+    const records = [...this.subscribers.values()];
     this.subscribers.clear();
     this.sessions.clear();
+    for (const record of records) record.controller.abort(reason);
   }
 }
 
@@ -380,7 +403,9 @@ function parseLimit(
   return value as number;
 }
 
-function parseSubscription(candidate: unknown): Omit<SubscriberRecord, "token"> {
+function parseSubscription(
+  candidate: unknown
+): Omit<SubscriberRecord, "controller" | "token"> {
   const value = requirePlainRecord(candidate, "Projection fanout subscription must be a plain object.", "invalid_subscription");
   assertExactKeys(value, ["id", "on_event", "session_id"], false, "invalid_subscription");
   const sessionId = sessionIdSchema.safeParse(value.session_id);
