@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M2/M3 selected runtime and remote host-interface integration after the approved cross-network V1 rebaseline.
-- Active task: `INT-V1-091` selected Codex runtime module hardening is next; all dependencies are complete after legacy-runtime removal.
+- Active task: `INT-V1-091` selected Codex runtime module hardening is in progress with strict aggregate criteria frozen.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.5; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract plus 14 current Signal Ledger/Focus Rail visual targets are complete; both desktop-led boards remain rejected, and `FE-V1-003` is blocked only by human selection of exact assets/approved drift.
@@ -338,4 +338,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `INT-V1-029` criteria are pushed as `5ddde3e` and implementation as `7f829cc`; `INT-V1-030` criteria are pushed as `5740b68` and implementation as `c4244b9`. Exact restart evidence is bound to that clean implementation commit.
 - `INT-V1-032` aggregate implementation is pushed through `27e8ea9`, `a8bee14`, `31df836`, `b0cf5a2`, and `e67e263`; `BUG-011` coexistence repeatability correction is pushed as `7584321`. Exact aggregate evidence is bound to that clean commit.
 - `INT-V1-008` frozen criteria are pushed as `2a16077`; implementation/removal is pushed as `d3d91c1`. Owner-doc closure advances the selected runtime queue to `INT-V1-091`.
-- Next action: run the `production-hardening` criteria checkpoint for `INT-V1-091`, map the strict aggregate runtime matrix to existing evidence and concrete gaps, then implement and validate the uncovered leaves. The phone may stay disconnected; React implementation independently waits for the `FE-V1-003` recorded visual selection.
+- Next action: implement the frozen `INT-V1-091` deterministic inventory, structured-vertical report, and six-scenario clean-commit aggregate; then run exact 0.144.0 evidence and full workspace gates. The phone may stay disconnected; React implementation independently waits for the `FE-V1-003` recorded visual selection.

@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-091` Harden the selected Codex runtime module | ready | none | Runtime lifecycle acceptance, maintenance, and legacy removal are complete; close the selected runtime against the aggregate strict matrix. |
+| 1 | `INT-V1-091` Harden the selected Codex runtime module | in_progress | none | Criteria freeze a fixed deterministic plus exact structured/lifecycle aggregate; implementation and clean-commit evidence are in progress. |
 | 2 | `IFC-V1-035` Add bounded subscriber queues and revoke/disconnect/archive cleanup | ready | none | Exact active/opening-stream revoke is complete; bounded subscriber ownership can progress independently. |
 | 3 | `IFC-V1-036` Implement mutable local and remote health | ready | none | Runtime lifecycle acceptance completes its final dependency; local readiness and independent Tailscale health can be composed. |
 

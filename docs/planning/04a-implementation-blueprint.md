@@ -292,6 +292,14 @@ The selected listener implementation requires cleanup authority before runtime s
 7. Terminate app-server only when foreground ownership says HostDeck owns it.
 8. Release socket/runtime files and daemon lease.
 
+### Selected Runtime Module Hardening
+
+1. Run one frozen non-smoke adapter/server test inventory through a dedicated Vitest config and require exact JSON file/assertion truth with zero skips.
+2. Harden the assembled structured vertical to require one canonical exact-version binary and emit one strict private report only after app-server, TUI, threads, database, sockets, and temp roots are cleaned.
+3. Execute that vertical and the accepted reconnect/crash/supervisor/restart/coexistence lifecycle scenarios from one clean-commit outer harness. Every child has a distinct private root, detached owned process group, bounded output/deadline, and no retry.
+4. Cross-validate exact runtime/commit, deterministic inventory, five model turns, one compact, structured control coverage, lifecycle ownership, event integrity, privacy declarations, and zero-resource cleanup before atomically publishing `INT-V1-091` evidence.
+5. Keep binding regeneration and the static app-server-only production boundary as required adjacent gates. Passing this aggregate does not compose Fastify, SSE, service packaging, or remote-phone behavior.
+
 ## Failure And Concurrency Matrix
 
 | Case | Required behavior | Test owner |

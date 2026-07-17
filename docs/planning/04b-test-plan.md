@@ -33,7 +33,7 @@ Task and block evidence names its level. "Complete for package scope" cannot sat
 | `pnpm test:contract` | Contracts/interfaces | L1 normalized API/storage/UI/Codex-adapter contracts. | Pass. |
 | `pnpm test:integration` | Storage/runtime/server | L2 SQLite/process/IPC/Fastify/SSE/auth/concurrency. | Pass. |
 | `pnpm test:web` | Web | Component/state/API-client tests. | Pass. |
-| `pnpm test:codex` | `INT-V1-027` | Opt-in L3 real app-server thread/turn/control/approval/TUI/reconnect suite assembled from the semantic and operation leaves. | Pass on release host with recorded version; may be excluded from ordinary CI when credentials/model use are required. |
+| `pnpm test:codex` | `INT-V1-091` | From a clean commit and exact binary, run the frozen deterministic runtime inventory plus strict structured-control and lifecycle/restart/TUI scenarios, then publish one machine-validated private aggregate. | Pass on release host with exact commit/version, five bounded model turns, no skip/retry/fallback, and zero process/socket/temp residue; may be excluded from ordinary CI because credentials/model use are required. |
 | `pnpm test:e2e` | `IFC-V1-046`, `FE-V1-040` | Packaged browser workflow against isolated fixture runtime and the supported browser matrix. | Pass. |
 | `pnpm build` | `IFC-V1-053`, `IFC-V1-054` | Production server/web assets and runnable CLI artifacts. | Pass from clean checkout. |
 | `pnpm smoke:local` | `REL-V1-006` | Installed user service, real Codex, local browser, and remote-phone workflow through the selected Tailscale profile. | Pass with artifact; the artifact also records manual device/profile evidence the command cannot automate. |
