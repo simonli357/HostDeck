@@ -14,6 +14,7 @@ import {
   runtimeCompatibilitySchema,
   selectedSessionEventStreamSchema
 } from "./selected-runtime.js";
+import { compareSelectedSessionListOrder } from "./selected-session-read.js";
 
 const mobileLimits = {
   originLength: 2_048,
@@ -265,22 +266,10 @@ export const selectedMissionControlViewModelSchema = z
       const current = value.sessions[index];
       if (previous === undefined || current === undefined) continue;
 
-      if (previous.attention_rank < current.attention_rank) {
+      if (compareSelectedSessionListOrder(previous.session, current.session) > 0) {
         context.addIssue({
           code: "custom",
-          message: "Mission Control sessions must be ordered by descending selected attention priority.",
-          path: ["sessions", index]
-        });
-      }
-      if (
-        previous.attention_rank === current.attention_rank &&
-        previous.session.last_activity_at !== null &&
-        current.session.last_activity_at !== null &&
-        previous.session.last_activity_at < current.session.last_activity_at
-      ) {
-        context.addIssue({
-          code: "custom",
-          message: "Mission Control sessions with equal attention must be ordered by newest activity.",
+          message: "Mission Control sessions must use selected attention, activity, and id order.",
           path: ["sessions", index]
         });
       }

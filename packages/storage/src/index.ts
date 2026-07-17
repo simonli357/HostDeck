@@ -194,6 +194,12 @@ export {
   type SelectedPairingClaim
 } from "./selected-pairing-repository.js";
 export {
+  createSelectedSessionReadRepository,
+  HostDeckSelectedSessionReadRepositoryError,
+  type SelectedSessionReadRepository,
+  type SelectedSessionReadRepositoryErrorCode
+} from "./selected-session-read-repository.js";
+export {
   type AppendSelectedEventResult,
   createSelectedStateRepository,
   HostDeckSelectedStateRepositoryError,

@@ -2,6 +2,9 @@ import { z } from "zod";
 
 const invalidDataObject = Symbol("invalid-data-object");
 const invalidDataArray = Symbol("invalid-data-array");
+const invalidDataTree = Symbol("invalid-data-tree");
+const maximumDataTreeDepth = 64;
+const maximumDataTreeNodes = 8_192;
 
 export function exactDataObject<const Schema extends z.ZodType>(schema: Schema) {
   return z.preprocess((input) => copyExactDataObject(input), schema);
@@ -9,6 +12,13 @@ export function exactDataObject<const Schema extends z.ZodType>(schema: Schema) 
 
 export function exactDataArray<const Schema extends z.ZodType>(schema: Schema) {
   return z.preprocess((input) => copyExactDataArray(input), schema);
+}
+
+export function exactDataTree<const Schema extends z.ZodType>(schema: Schema) {
+  return z.preprocess(
+    (input) => copyExactDataTree(input, { active: new WeakSet<object>(), nodes: 0 }, 0),
+    schema
+  );
 }
 
 function copyExactDataObject(input: unknown): unknown {
@@ -77,4 +87,93 @@ function copyExactDataArray(input: unknown): unknown {
   } catch {
     return invalidDataArray;
   }
+}
+
+interface DataTreeCopyState {
+  readonly active: WeakSet<object>;
+  nodes: number;
+}
+
+function copyExactDataTree(input: unknown, state: DataTreeCopyState, depth: number): unknown {
+  if (input === null || typeof input !== "object") return input;
+  if (depth > maximumDataTreeDepth || state.nodes >= maximumDataTreeNodes || state.active.has(input)) {
+    return invalidDataTree;
+  }
+
+  state.nodes += 1;
+  state.active.add(input);
+  try {
+    return Array.isArray(input)
+      ? copyExactDataTreeArray(input, state, depth)
+      : copyExactDataTreeObject(input, state, depth);
+  } catch {
+    return invalidDataTree;
+  } finally {
+    state.active.delete(input);
+  }
+}
+
+function copyExactDataTreeObject(input: object, state: DataTreeCopyState, depth: number): unknown {
+  const prototype: unknown = Object.getPrototypeOf(input);
+  if (!isExactDataTreePrototype(prototype)) return invalidDataTree;
+
+  const descriptors = Object.getOwnPropertyDescriptors(input);
+  const copy = Object.create(null) as Record<string, unknown>;
+  for (const key of Reflect.ownKeys(descriptors)) {
+    const descriptor = descriptors[key as keyof typeof descriptors];
+    if (typeof key !== "string" || descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) {
+      return invalidDataTree;
+    }
+    const value = copyExactDataTree(descriptor.value, state, depth + 1);
+    if (value === invalidDataTree) return invalidDataTree;
+    Object.defineProperty(copy, key, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true
+    });
+  }
+  return copy;
+}
+
+function isExactDataTreePrototype(prototype: unknown): boolean {
+  if (prototype === Object.prototype || prototype === null) return true;
+  if (typeof prototype !== "object") return false;
+  return Object.getPrototypeOf(prototype) === null && Reflect.ownKeys(Object.getOwnPropertyDescriptors(prototype)).length === 0;
+}
+
+function copyExactDataTreeArray(input: unknown[], state: DataTreeCopyState, depth: number): unknown {
+  if (Object.getPrototypeOf(input) !== Array.prototype) return invalidDataTree;
+  const descriptors = Object.getOwnPropertyDescriptors(input) as Record<string, PropertyDescriptor | undefined>;
+  const lengthDescriptor = descriptors.length;
+  const length = lengthDescriptor?.value;
+  if (
+    typeof length !== "number" ||
+    !Number.isSafeInteger(length) ||
+    length < 0 ||
+    Reflect.ownKeys(descriptors).length !== length + 1 ||
+    lengthDescriptor === undefined ||
+    !("value" in lengthDescriptor) ||
+    lengthDescriptor.enumerable
+  ) {
+    return invalidDataTree;
+  }
+
+  const copy: unknown[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (
+      descriptor === undefined ||
+      !("value" in descriptor) ||
+      !descriptor.enumerable ||
+      descriptor.get !== undefined ||
+      descriptor.set !== undefined
+    ) {
+      return invalidDataTree;
+    }
+    const value = copyExactDataTree(descriptor.value, state, depth + 1);
+    if (value === invalidDataTree) return invalidDataTree;
+    copy.push(value);
+  }
+  return copy;
 }

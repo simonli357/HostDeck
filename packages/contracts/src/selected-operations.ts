@@ -1147,30 +1147,6 @@ export const selectedSessionStartResponseSchema = z
   })
   .strict();
 
-export const selectedSessionListResponseSchema = z
-  .object({
-    sessions: z.array(managedSessionProjectionSchema)
-  })
-  .strict();
-
-export const selectedSessionDetailResponseSchema = z
-  .object({
-    session: managedSessionProjectionSchema,
-    pending_approvals: z.array(pendingApprovalSchema).max(64)
-  })
-  .strict()
-  .superRefine((value, context) => {
-    for (const [index, approval] of value.pending_approvals.entries()) {
-      if (approval.target.session_id !== value.session.id || approval.target.codex_thread_id !== value.session.codex_thread_id) {
-        context.addIssue({
-          code: "custom",
-          message: "Session detail approvals must target the selected session and thread.",
-          path: ["pending_approvals", index, "target"]
-        });
-      }
-    }
-  });
-
 export const selectedEventQuerySchema = z
   .object({
     after: outputCursorSchema.optional(),

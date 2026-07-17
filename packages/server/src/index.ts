@@ -58,6 +58,7 @@ export * from "./selected-write-admission-policy.js";
 export * from "./selected-write-audit-executor.js";
 export * from "./selected-write-gate.js";
 export * from "./session-archive-routes.js";
+export * from "./session-read-routes.js";
 export * from "./session-start-routes.js";
 export * from "./skills-routes.js";
 export * from "./tailscale-observer.js";

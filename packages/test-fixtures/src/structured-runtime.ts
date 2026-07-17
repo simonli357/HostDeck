@@ -558,7 +558,7 @@ export const selectedMobileStateFixtures: readonly SelectedMobileFixture[] = [
     "mission_control_all_quiet",
     "ready",
     readyHostAccess,
-    [mobileRow(completedSession, "quiet"), mobileRow(boundarySession, "quiet")],
+    [mobileRow(boundarySession, "quiet"), mobileRow(completedSession, "quiet")],
     null
   ),
   missionFixture("mission_control_read_only", "ready", readOnlyHostAccess, missionRows, null),
