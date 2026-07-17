@@ -48,6 +48,8 @@ export * from "./projection-stream-routes.js";
 export * from "./projection-subscriber-stream.js";
 export * from "./prompt-routes.js";
 export * from "./remote-ingress-control-service.js";
+export * from "./remote-ingress-lifecycle.js";
+export * from "./remote-ingress-request-authority.js";
 export * from "./remote-ingress-routes.js";
 export * from "./resume-metadata.js";
 export * from "./resume-routes.js";

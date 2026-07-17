@@ -44,6 +44,10 @@ import {
   type HostDeckLanTlsInput
 } from "./lan-certificate-policy.js";
 import {
+  assertHostDeckRemoteIngressRequestAuthorityPolicy,
+  type HostDeckRemoteIngressRequestAuthorityPolicy
+} from "./remote-ingress-request-authority.js";
+import {
   assertTailscaleServeProxyTrustPolicy,
   type TailscaleServeProxyTrustPolicy
 } from "./tailscale-serve-proxy-trust.js";
@@ -92,6 +96,7 @@ export interface CreateHostDeckTailscaleServeFastifyAppInput {
   readonly requestAuthenticationPolicy: HostDeckRequestAuthenticationPolicy;
   readonly routePlugins: readonly HostDeckRoutePluginRegistration[];
   readonly observeInternalError: HostDeckInternalErrorObserver;
+  readonly remoteIngressRequestAuthority: HostDeckRemoteIngressRequestAuthorityPolicy;
   readonly tailscaleServeProxyTrustPolicy: TailscaleServeProxyTrustPolicy;
 }
 
@@ -160,6 +165,7 @@ export function createHostDeckTailscaleServeFastifyApp(
       app,
       input.tailscaleServeProxyTrustPolicy,
       input.requestAuthenticationPolicy,
+      input.remoteIngressRequestAuthority,
       input.observeInternalError
     );
   });
@@ -470,6 +476,7 @@ function assertTailscaleServeFactoryInput(
 ): asserts input is CreateHostDeckTailscaleServeFastifyAppInput {
   const expected = [
     "observeInternalError",
+    "remoteIngressRequestAuthority",
     "requestAuthenticationPolicy",
     "resourceBudget",
     "routePlugins",
@@ -510,6 +517,9 @@ function assertTailscaleServeFactoryInput(
   if (typeof candidate.observeInternalError !== "function") {
     throw new TypeError("HostDeck observeInternalError must be a function.");
   }
+  assertHostDeckRemoteIngressRequestAuthorityPolicy(
+    candidate.remoteIngressRequestAuthority
+  );
 }
 
 function parseRoutePluginRegistrations(

@@ -24,6 +24,11 @@ import {
   type RemoteIngressControlService
 } from "./remote-ingress-control-service.js";
 import {
+  assertHostDeckRemoteIngressLifecycleControl,
+  type HostDeckRemoteIngressLifecycleControl,
+  HostDeckRemoteIngressLifecycleError
+} from "./remote-ingress-lifecycle.js";
+import {
   type SelectedApiRouteManifestEntry,
   selectedApiRouteManifest
 } from "./selected-api-route-manifest.js";
@@ -32,14 +37,16 @@ export const hostDeckRemoteIngressRouteRegistrationId =
   "selected-remote-ingress-control";
 
 export interface CreateHostDeckRemoteIngressRouteRegistrationInput {
-  readonly service: RemoteIngressControlService;
+  readonly service:
+    | HostDeckRemoteIngressLifecycleControl
+    | RemoteIngressControlService;
 }
 
 type RemoteOperation = "disable" | "enable" | "status";
 type RemoteServiceMethod =
-  | RemoteIngressControlService["disable"]
-  | RemoteIngressControlService["enable"]
-  | RemoteIngressControlService["readStatus"];
+  | HostDeckRemoteIngressLifecycleControl["disable"]
+  | HostDeckRemoteIngressLifecycleControl["enable"]
+  | HostDeckRemoteIngressLifecycleControl["readStatus"];
 
 const registrationInputKeys = ["service"] as const;
 const noQuerySchema = z.object({}).strict();
@@ -53,7 +60,7 @@ export function createHostDeckRemoteIngressRouteRegistration(
     registrationInputKeys,
     "HostDeck remote-ingress route input is invalid."
   );
-  assertRemoteIngressControlService(values.service);
+  assertRouteService(values.service);
   const service = values.service;
   if (registeredServices.has(service)) {
     throw new TypeError(
@@ -178,6 +185,14 @@ async function dispatchRemoteOperation(
 }
 
 function mapServiceFailure(error: unknown): HostDeckHttpError {
+  if (error instanceof HostDeckRemoteIngressLifecycleError) {
+    return new HostDeckHttpError({
+      code: "runtime_unavailable",
+      message: "Remote ingress lifecycle is unavailable.",
+      retryable: error.code === "lifecycle_closed",
+      status: 503
+    });
+  }
   if (!(error instanceof HostDeckRemoteIngressControlServiceError)) {
     return contractFailure();
   }
@@ -187,6 +202,19 @@ function mapServiceFailure(error: unknown): HostDeckHttpError {
     retryable: error.retryable,
     status: publicFailureStatus(error.api_code)
   });
+}
+
+function assertRouteService(
+  candidate: unknown
+): asserts candidate is
+  | HostDeckRemoteIngressLifecycleControl
+  | RemoteIngressControlService {
+  try {
+    assertRemoteIngressControlService(candidate);
+    return;
+  } catch {
+    assertHostDeckRemoteIngressLifecycleControl(candidate);
+  }
 }
 
 function publicFailureStatus(code: ErrorCode): number {

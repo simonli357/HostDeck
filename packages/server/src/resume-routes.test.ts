@@ -21,6 +21,7 @@ import {
   createHostDeckRequestTrustPolicy,
   type HostDeckRequestTrustPolicy
 } from "./fastify-request-trust.js";
+import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
 import {
   HostDeckResumeMetadataError,
   type HostDeckResumeMetadataReader
@@ -327,6 +328,8 @@ describe("selected managed-thread resume route", () => {
 
   it("requires HostDeck pairing inside admitted Tailscale Serve context", async () => {
     let readCalls = 0;
+    const remoteRequestAuthority =
+      createHostDeckRemoteIngressRequestAuthorityPolicy();
     const app = createHostDeckTailscaleServeFastifyApp({
       observeInternalError: () => undefined,
       requestAuthenticationPolicy: createHostDeckRequestAuthenticationPolicy({
@@ -355,13 +358,15 @@ describe("selected managed-thread resume route", () => {
           }
         })
       ],
+      remoteIngressRequestAuthority: remoteRequestAuthority,
       tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
         localOrigin: remoteLocalOrigin,
-        readRemoteAdmission: () => ({
-          admission: "open",
-          external_origin: externalOrigin,
-          generation: 7
-        })
+        readRemoteAdmission: () =>
+          remoteRequestAuthority.synchronize({
+            admission: "open",
+            external_origin: externalOrigin,
+            generation: 7
+          })
       })
     });
     apps.push(app);

@@ -34,6 +34,7 @@ import {
   createRemoteIngressControlService,
   type RemoteIngressControlService
 } from "./remote-ingress-control-service.js";
+import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
 import {
   createHostDeckRemoteIngressRouteRegistration,
   hostDeckRemoteIngressRouteRegistrationId
@@ -593,16 +594,20 @@ function createHarness(options: HarnessOptions = {}): Harness {
     resourceBudget: defaultResourceBudget,
     routePlugins: [registration]
   } as const;
+  const remoteRequestAuthority =
+    createHostDeckRemoteIngressRequestAuthorityPolicy();
   const app = options.selectedRemote
     ? createHostDeckTailscaleServeFastifyApp({
         ...commonAppInput,
+        remoteIngressRequestAuthority: remoteRequestAuthority,
         tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
           localOrigin,
-          readRemoteAdmission: () => ({
-            admission: "open" as const,
-            external_origin: externalOrigin,
-            generation: remoteAdmissionGeneration
-          })
+          readRemoteAdmission: () =>
+            remoteRequestAuthority.synchronize({
+              admission: "open" as const,
+              external_origin: externalOrigin,
+              generation: remoteAdmissionGeneration
+            })
         })
       })
     : createHostDeckFastifyApp({

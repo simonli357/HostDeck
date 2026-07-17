@@ -66,6 +66,13 @@ describe("remote ingress control service", () => {
       external_origin: null,
       generation: 0
     });
+    expect(harness.service.readAdmissionLease()).toEqual({
+      admission: "closed",
+      external_origin: null,
+      generation: 0,
+      valid_until: null
+    });
+    expect(harness.service.observation_interval_ms).toBe(5_000);
     await expect(harness.service.readStatus()).resolves.toEqual({
       generation: 0,
       availability: "disabled",
@@ -133,6 +140,12 @@ describe("remote ingress control service", () => {
       external_origin: origin,
       generation: 2
     });
+    expect(harness.service.readAdmissionLease()).toEqual({
+      admission: "open",
+      external_origin: origin,
+      generation: 2,
+      valid_until: 5_000
+    });
 
     const restarted = harness.restart();
     expect(restarted.readAdmission()).toEqual({
@@ -160,6 +173,10 @@ describe("remote ingress control service", () => {
 
     harness.setMonotonic(5_000);
     expect(harness.service.readAdmission()).toMatchObject({ admission: "closed" });
+    expect(harness.service.readAdmissionLease()).toMatchObject({
+      admission: "closed",
+      valid_until: null
+    });
     await expect(harness.service.readStatus()).resolves.toMatchObject({
       availability: "ready",
       generation
@@ -169,6 +186,10 @@ describe("remote ingress control service", () => {
     expect(harness.service.readAdmission()).toMatchObject({
       admission: "open",
       generation
+    });
+    expect(harness.service.readAdmissionLease()).toMatchObject({
+      admission: "open",
+      valid_until: 10_000
     });
   });
 

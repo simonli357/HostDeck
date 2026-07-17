@@ -37,6 +37,7 @@ import {
   createHostDeckHostLockRouteRegistration,
   hostDeckHostLockPolicySnapshot
 } from "./host-lock-routes.js";
+import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
 import {
   createSecurityMutationAuditExecutor,
   HostDeckSecurityMutationAuditExecutorError
@@ -635,14 +636,18 @@ function createHarness(options: HarnessOptions = {}): Harness {
       writeGate
     })
   ];
+  const remoteRequestAuthority =
+    createHostDeckRemoteIngressRequestAuthorityPolicy();
   const app = createHostDeckTailscaleServeFastifyApp({
     observeInternalError: () => undefined,
     requestAuthenticationPolicy: authenticationPolicy,
     resourceBudget: defaultResourceBudget,
     routePlugins,
+    remoteIngressRequestAuthority: remoteRequestAuthority,
     tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
       localOrigin,
-      readRemoteAdmission: () => admission
+      readRemoteAdmission: () =>
+        remoteRequestAuthority.synchronize(admission)
     })
   });
   openApps.push(app);

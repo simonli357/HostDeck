@@ -105,6 +105,11 @@ export interface RemoteIngressControlServiceSnapshot {
   readonly storage_failures: number;
 }
 
+export interface RemoteIngressControlAdmissionLeaseSnapshot
+  extends TailscaleServeRemoteAdmissionSnapshot {
+  readonly valid_until: number | null;
+}
+
 export interface RemoteIngressControlService {
   readonly disable: (
     request: RemoteDisableRequest
@@ -112,7 +117,9 @@ export interface RemoteIngressControlService {
   readonly enable: (
     request: RemoteEnableRequest
   ) => Promise<RemoteIngressPublicState>;
+  readonly observation_interval_ms: number;
   readonly readAdmission: () => TailscaleServeRemoteAdmissionSnapshot;
+  readonly readAdmissionLease: () => RemoteIngressControlAdmissionLeaseSnapshot;
   readonly readStatus: () => Promise<RemoteIngressPublicState>;
   readonly snapshot: () => RemoteIngressControlServiceSnapshot;
 }
@@ -199,6 +206,11 @@ const closedAdmission: TailscaleServeRemoteAdmissionSnapshot = Object.freeze({
   external_origin: null,
   generation: 0
 });
+const closedAdmissionLease: RemoteIngressControlAdmissionLeaseSnapshot =
+  Object.freeze({
+    ...closedAdmission,
+    valid_until: null
+  });
 
 export function createRemoteIngressControlService(
   rawOptions: CreateRemoteIngressControlServiceOptions
@@ -351,7 +363,7 @@ export function createRemoteIngressControlService(
     }
   }
 
-  function readAdmission(): TailscaleServeRemoteAdmissionSnapshot {
+  function readAdmissionLease(): RemoteIngressControlAdmissionLeaseSnapshot {
     counters.admissionReads = increment(counters.admissionReads);
     let generation = 0;
     try {
@@ -379,18 +391,31 @@ export function createRemoteIngressControlService(
         if (lease !== null && lease.generation !== stateAfter?.generation) {
           clearLease();
         }
-        return closedSnapshot(generation);
+        return closedLeaseSnapshot(generation);
       }
       counters.admissionOpenReads = increment(counters.admissionOpenReads);
       return Object.freeze({
         admission: "open",
         external_origin: stateAfter.external_origin,
-        generation: stateAfter.generation
+        generation: stateAfter.generation,
+        valid_until: lease.valid_until
       });
     } catch {
       clearLease();
-      return closedSnapshot(generation);
+      return closedLeaseSnapshot(generation);
     }
+  }
+
+  function readAdmission(): TailscaleServeRemoteAdmissionSnapshot {
+    const admission = readAdmissionLease();
+    if (admission.admission === "closed") {
+      return closedSnapshot(admission.generation);
+    }
+    return Object.freeze({
+      admission: "open",
+      external_origin: admission.external_origin,
+      generation: admission.generation
+    });
   }
 
   async function performStatus(): Promise<RemoteIngressPublicState> {
@@ -1096,7 +1121,9 @@ export function createRemoteIngressControlService(
       if (!parsed.success) return Promise.reject(serviceError("invalid_input"));
       return startMutation("enable", () => performEnable(parsed.data));
     },
+    observation_interval_ms: observer.poll_interval_ms,
     readAdmission,
+    readAdmissionLease,
     readStatus: startStatus,
     snapshot() {
       return Object.freeze({
@@ -1265,6 +1292,16 @@ function closedSnapshot(generation: number): TailscaleServeRemoteAdmissionSnapsh
     external_origin: null,
     generation:
       Number.isSafeInteger(generation) && generation >= 0 ? generation : 0
+  });
+}
+
+function closedLeaseSnapshot(
+  generation: number
+): RemoteIngressControlAdmissionLeaseSnapshot {
+  if (generation === 0) return closedAdmissionLease;
+  return Object.freeze({
+    ...closedSnapshot(generation),
+    valid_until: null
   });
 }
 

@@ -30,6 +30,7 @@ import {
   type HostDeckLocalHealthComponent,
   type HostDeckReportedLocalHealthReason
 } from "./host-health.js";
+import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
 import { createTailscaleServeProxyTrustPolicy } from "./tailscale-serve-proxy-trust.js";
 
 const apps: HostDeckFastifyInstance[] = [];
@@ -697,18 +698,22 @@ describe("selected health and host-status routes", () => {
     const health = healthHarness();
     const observations: HostDeckInternalErrorObservation[] = [];
     let ingressGeneration = 7;
+    const remoteRequestAuthority =
+      createHostDeckRemoteIngressRequestAuthorityPolicy();
     const app = createHostDeckTailscaleServeFastifyApp({
       observeInternalError: (observation) => observations.push(observation),
       requestAuthenticationPolicy: authenticationPolicy(),
       resourceBudget: defaultResourceBudget,
       routePlugins: [createHostDeckHealthRouteRegistration({ health: health.service })],
+      remoteIngressRequestAuthority: remoteRequestAuthority,
       tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
         localOrigin: remoteLocalOrigin,
-        readRemoteAdmission: () => ({
-          admission: "open",
-          external_origin: externalOrigin,
-          generation: ingressGeneration
-        })
+        readRemoteAdmission: () =>
+          remoteRequestAuthority.synchronize({
+            admission: "open",
+            external_origin: externalOrigin,
+            generation: ingressGeneration
+          })
       })
     });
     apps.push(app);
@@ -860,18 +865,22 @@ function createLoopbackApp(
 function createRemoteApp(health: HostDeckHostHealthService): {
   readonly app: HostDeckFastifyInstance;
 } {
+  const remoteRequestAuthority =
+    createHostDeckRemoteIngressRequestAuthorityPolicy();
   const app = createHostDeckTailscaleServeFastifyApp({
     observeInternalError: () => undefined,
     requestAuthenticationPolicy: authenticationPolicy(),
     resourceBudget: defaultResourceBudget,
     routePlugins: [createHostDeckHealthRouteRegistration({ health })],
+    remoteIngressRequestAuthority: remoteRequestAuthority,
     tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
       localOrigin: remoteLocalOrigin,
-      readRemoteAdmission: () => ({
-        admission: "open",
-        external_origin: externalOrigin,
-        generation: 7
-      })
+      readRemoteAdmission: () =>
+        remoteRequestAuthority.synchronize({
+          admission: "open",
+          external_origin: externalOrigin,
+          generation: 7
+        })
     })
   });
   apps.push(app);

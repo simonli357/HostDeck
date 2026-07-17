@@ -45,6 +45,7 @@ import {
   type HostDeckProjectedEventStatePort,
   hostDeckProjectedEventRouteRegistrationId
 } from "./projected-event-routes.js";
+import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
 import { createTailscaleServeProxyTrustPolicy } from "./tailscale-serve-proxy-trust.js";
 
 const roots: string[] = [];
@@ -373,6 +374,8 @@ describe("selected projected-event diagnostic read route", () => {
         requireCalls += 1;
       }
     });
+    const remoteRequestAuthority =
+      createHostDeckRemoteIngressRequestAuthorityPolicy();
     const app = createHostDeckTailscaleServeFastifyApp({
       observeInternalError: () => undefined,
       requestAuthenticationPolicy: createHostDeckRequestAuthenticationPolicy({
@@ -389,13 +392,15 @@ describe("selected projected-event diagnostic read route", () => {
       }),
       resourceBudget: defaultResourceBudget,
       routePlugins: [createHostDeckProjectedEventRouteRegistration({ state })],
+      remoteIngressRequestAuthority: remoteRequestAuthority,
       tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
         localOrigin: remoteLocalOrigin,
-        readRemoteAdmission: () => ({
-          admission: "open",
-          external_origin: externalOrigin,
-          generation: 7
-        })
+        readRemoteAdmission: () =>
+          remoteRequestAuthority.synchronize({
+            admission: "open",
+            external_origin: externalOrigin,
+            generation: 7
+          })
       })
     });
     apps.push(app);

@@ -52,11 +52,23 @@ export interface HostDeckRequestAuthenticationPolicy {
 }
 
 export interface CreateHostDeckRequestAuthenticationIngressPolicyInput {
+  readonly acquireAuthority: (
+    request: FastifyRequest
+  ) => HostDeckRequestAuthenticationIngressAuthority | null;
   readonly assertCurrent: (request: FastifyRequest) => void;
   readonly resolve: (request: FastifyRequest) => unknown;
 }
 
+export interface HostDeckRequestAuthenticationIngressAuthority {
+  readonly assertCurrent: (this: void) => void;
+  readonly release: (this: void) => void;
+  readonly signal: AbortSignal;
+}
+
 export interface HostDeckRequestAuthenticationIngressPolicy {
+  readonly acquireAuthority: (
+    request: FastifyRequest
+  ) => HostDeckRequestAuthenticationIngressAuthority | null;
   readonly assertCurrent: (request: FastifyRequest) => void;
   readonly resolve: (request: FastifyRequest) => unknown;
 }
@@ -100,9 +112,12 @@ interface PendingAuthenticationState {
   readonly activeDeviceAuthority: HostDeckActiveDeviceAuthorityPolicy;
   readonly authorityController: AbortController;
   readonly ingress: SelectedRequestAuthenticationIngressContext;
+  ingressAuthority: HostDeckRequestAuthenticationIngressAuthority | null;
+  ingressAuthorityAbortForwarder: (() => void) | null;
   readonly ingressPolicy: HostDeckRequestAuthenticationIngressPolicy;
   readonly observation: DeviceCookieObservation;
   readonly policy: HostDeckRequestAuthenticationPolicy;
+  requestAbortForwarder: (() => void) | null;
   readonly runtime: AuthenticationRuntime;
   activeLease: HostDeckActiveDeviceAuthorityLease | null;
   activeLeaseAbortForwarder: (() => void) | null;
@@ -117,13 +132,21 @@ interface ParsedDeviceAuthentication {
 }
 
 const policyKeys = ["authenticateDeviceToken", "now"] as const;
-const ingressPolicyKeys = ["assertCurrent", "resolve"] as const;
+const ingressPolicyKeys = [
+  "acquireAuthority",
+  "assertCurrent",
+  "resolve"
+] as const;
+const ingressAuthorityKeys = ["assertCurrent", "release", "signal"] as const;
 const acceptedPolicies = new WeakSet<object>();
 const acceptedIngressPolicies = new WeakSet<object>();
 const authenticationRuntimes = new WeakMap<FastifyInstance, AuthenticationRuntime>();
 const pendingAuthenticationStates = new WeakMap<FastifyRequest, PendingAuthenticationState>();
 const legacyRequestAuthenticationIngressPolicy =
   createHostDeckRequestAuthenticationIngressPolicy({
+    acquireAuthority() {
+      return null;
+    },
     assertCurrent() {
       // Historical direct trust is immutable for the lifetime of one request.
     },
@@ -184,10 +207,15 @@ export function createHostDeckRequestAuthenticationIngressPolicy(
   input: CreateHostDeckRequestAuthenticationIngressPolicyInput
 ): HostDeckRequestAuthenticationIngressPolicy {
   const values = readExactIngressPolicyInput(input);
-  if (typeof values.assertCurrent !== "function" || typeof values.resolve !== "function") {
+  if (
+    typeof values.acquireAuthority !== "function" ||
+    typeof values.assertCurrent !== "function" ||
+    typeof values.resolve !== "function"
+  ) {
     throw new TypeError("HostDeck request authentication ingress callbacks must be functions.");
   }
   const policy = Object.freeze({
+    acquireAuthority: values.acquireAuthority as HostDeckRequestAuthenticationIngressPolicy["acquireAuthority"],
     assertCurrent: values.assertCurrent as (request: FastifyRequest) => void,
     resolve: values.resolve as (request: FastifyRequest) => unknown
   });
@@ -234,7 +262,7 @@ export function installHostDeckRequestAuthentication(
   };
   authenticationRuntimes.set(app, runtime);
 
-  app.addHook("onRequest", async (request) => {
+  app.addHook("onRequest", async (request, reply) => {
     const ingress = resolveAuthenticationIngress(ingressPolicy, request);
     const observation = parseDeviceCookie(request.raw.rawHeaders);
     const pending: PendingAuthenticationState = {
@@ -244,15 +272,36 @@ export function installHostDeckRequestAuthentication(
       allowInvalidatedSuccess: false,
       authorityController: new AbortController(),
       ingress,
+      ingressAuthority: null,
+      ingressAuthorityAbortForwarder: null,
       ingressPolicy,
       ingressRejected: false,
       observation,
       policy,
+      requestAbortForwarder: null,
       resolution: null,
       runtime
     };
     pendingAuthenticationStates.set(request, pending);
-    assertAuthenticationIngressCurrent(request, pending);
+    try {
+      attachRequestSignal(pending, request.signal);
+      const authority = acquireAuthenticationIngressAuthority(
+        ingressPolicy,
+        request
+      );
+      if (authority !== null) attachIngressAuthority(pending, authority);
+      assertAuthenticationIngressCurrent(request, pending);
+    } catch {
+      if (!pending.ingressRejected) {
+        pending.ingressRejected = true;
+        pending.runtime.ingressRejections = incrementCounter(
+          pending.runtime.ingressRejections
+        );
+      }
+      reply.header("connection", "close");
+      clearPendingAuthentication(request);
+      throw ingressFailure();
+    }
   });
   app.addHook("onSend", async (request, reply, payload) => {
     const pending = pendingAuthenticationStates.get(request);
@@ -639,6 +688,19 @@ function assertAuthenticationIngressCurrent(
   try {
     const result = Reflect.apply(pending.ingressPolicy.assertCurrent, undefined, [request]);
     if (result !== undefined) throw new TypeError();
+    if (pending.ingressAuthority !== null) {
+      const authorityResult = Reflect.apply(
+        pending.ingressAuthority.assertCurrent,
+        undefined,
+        []
+      );
+      if (
+        authorityResult !== undefined ||
+        pending.ingressAuthority.signal.aborted
+      ) {
+        throw new TypeError();
+      }
+    }
   } catch {
     if (!pending.ingressRejected) {
       pending.ingressRejected = true;
@@ -694,21 +756,142 @@ function identityDecode(value: string): string {
 
 function clearPendingAuthentication(request: FastifyRequest): void {
   const pending = pendingAuthenticationStates.get(request);
+  pendingAuthenticationStates.delete(request);
   if (pending?.observation.kind === "token") {
     pending.observation.rawDeviceToken = null;
   }
-  if (pending?.activeLease !== null && pending?.activeLease !== undefined) {
-    if (pending.activeLeaseAbortForwarder !== null) {
-      pending.activeLease.signal.removeEventListener(
+  const releaseErrors: unknown[] = [];
+  if (pending !== undefined) {
+    if (pending.requestAbortForwarder !== null) {
+      request.signal.removeEventListener(
         "abort",
-        pending.activeLeaseAbortForwarder
+        pending.requestAbortForwarder
       );
-      pending.activeLeaseAbortForwarder = null;
+      pending.requestAbortForwarder = null;
     }
-    pending.activeDeviceAuthority.release(pending.activeLease);
-    pending.activeLease = null;
+    if (pending.ingressAuthority !== null) {
+      const authority = pending.ingressAuthority;
+      pending.ingressAuthority = null;
+      if (pending.ingressAuthorityAbortForwarder !== null) {
+        authority.signal.removeEventListener(
+          "abort",
+          pending.ingressAuthorityAbortForwarder
+        );
+        pending.ingressAuthorityAbortForwarder = null;
+      }
+      try {
+        Reflect.apply(authority.release, undefined, []);
+      } catch (error) {
+        releaseErrors.push(error);
+      }
+    }
+    if (pending.activeLease !== null) {
+      if (pending.activeLeaseAbortForwarder !== null) {
+        pending.activeLease.signal.removeEventListener(
+          "abort",
+          pending.activeLeaseAbortForwarder
+        );
+        pending.activeLeaseAbortForwarder = null;
+      }
+      try {
+        pending.activeDeviceAuthority.release(pending.activeLease);
+      } catch (error) {
+        releaseErrors.push(error);
+      }
+      pending.activeLease = null;
+    }
   }
-  pendingAuthenticationStates.delete(request);
+  if (releaseErrors.length > 0) {
+    throw new AggregateError(
+      releaseErrors,
+      "HostDeck request authority release failed."
+    );
+  }
+}
+
+function attachRequestSignal(
+  pending: PendingAuthenticationState,
+  signal: AbortSignal
+): void {
+  if (pending.requestAbortForwarder !== null || !isAbortSignal(signal)) {
+    throw new TypeError("HostDeck request cancellation signal is invalid.");
+  }
+  const forwardAbort = () => {
+    if (!pending.authorityController.signal.aborted) {
+      pending.authorityController.abort(signal.reason);
+    }
+  };
+  pending.requestAbortForwarder = forwardAbort;
+  signal.addEventListener("abort", forwardAbort, { once: true });
+  if (signal.aborted) forwardAbort();
+}
+
+function acquireAuthenticationIngressAuthority(
+  policy: HostDeckRequestAuthenticationIngressPolicy,
+  request: FastifyRequest
+): HostDeckRequestAuthenticationIngressAuthority | null {
+  const candidate = Reflect.apply(policy.acquireAuthority, undefined, [request]);
+  if (candidate === null) return null;
+  if (
+    candidate === undefined ||
+    typeof candidate !== "object" ||
+    !Object.isFrozen(candidate)
+  ) {
+    throw new TypeError("HostDeck request ingress authority is invalid.");
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(candidate);
+  const keys = Reflect.ownKeys(descriptors);
+  if (
+    keys.length !== ingressAuthorityKeys.length ||
+    keys.some(
+      (key) =>
+        typeof key !== "string" ||
+        !(ingressAuthorityKeys as readonly string[]).includes(key)
+    )
+  ) {
+    throw new TypeError("HostDeck request ingress authority is invalid.");
+  }
+  for (const key of ingressAuthorityKeys) {
+    const descriptor = descriptors[key];
+    if (
+      descriptor === undefined ||
+      !("value" in descriptor) ||
+      descriptor.enumerable !== true
+    ) {
+      throw new TypeError("HostDeck request ingress authority is invalid.");
+    }
+  }
+  if (
+    typeof candidate.assertCurrent !== "function" ||
+    typeof candidate.release !== "function" ||
+    !isAbortSignal(candidate.signal)
+  ) {
+    throw new TypeError("HostDeck request ingress authority is invalid.");
+  }
+  return candidate;
+}
+
+function attachIngressAuthority(
+  pending: PendingAuthenticationState,
+  authority: HostDeckRequestAuthenticationIngressAuthority
+): void {
+  if (
+    pending.ingressAuthority !== null ||
+    pending.ingressAuthorityAbortForwarder !== null
+  ) {
+    throw new TypeError("HostDeck request already owns ingress authority.");
+  }
+  const forwardInvalidation = () => {
+    if (!pending.authorityController.signal.aborted) {
+      pending.authorityController.abort(authority.signal.reason);
+    }
+  };
+  pending.ingressAuthority = authority;
+  pending.ingressAuthorityAbortForwarder = forwardInvalidation;
+  authority.signal.addEventListener("abort", forwardInvalidation, {
+    once: true
+  });
+  if (authority.signal.aborted) forwardInvalidation();
 }
 
 function attachActiveLease(
@@ -945,6 +1128,17 @@ function readExactIngressPolicyInput(
   } catch {
     throw new TypeError("HostDeck request authentication ingress policy input is invalid.");
   }
+}
+
+function isAbortSignal(candidate: unknown): candidate is AbortSignal {
+  return (
+    candidate instanceof AbortSignal ||
+    (candidate !== null &&
+      typeof candidate === "object" &&
+      typeof (candidate as AbortSignal).aborted === "boolean" &&
+      typeof (candidate as AbortSignal).addEventListener === "function" &&
+      typeof (candidate as AbortSignal).removeEventListener === "function")
+  );
 }
 
 function incrementCounter(value: number): number {

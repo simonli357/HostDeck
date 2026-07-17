@@ -35,6 +35,7 @@ import {
   hostDeckLocalAdminRequestHeaderName,
   hostDeckLocalAdminRequestHeaderValue
 } from "./fastify-request-trust.js";
+import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
 import {
   createHostDeckSessionReadRouteRegistration,
   hostDeckSessionReadRouteRegistrationId
@@ -582,6 +583,8 @@ function createRemoteApp(
   readonly observations: HostDeckInternalErrorObservation[];
 } {
   const observations: HostDeckInternalErrorObservation[] = [];
+  const remoteRequestAuthority =
+    createHostDeckRemoteIngressRequestAuthorityPolicy();
   const app = createHostDeckTailscaleServeFastifyApp({
     observeInternalError: (observation) => observations.push(observation),
     requestAuthenticationPolicy: createHostDeckRequestAuthenticationPolicy({
@@ -590,13 +593,15 @@ function createRemoteApp(
     }),
     resourceBudget: defaultResourceBudget,
     routePlugins: [createHostDeckSessionReadRouteRegistration({ sessions })],
+    remoteIngressRequestAuthority: remoteRequestAuthority,
     tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
       localOrigin: remoteLocalOrigin,
-      readRemoteAdmission: () => ({
-        admission: "open",
-        external_origin: externalOrigin,
-        generation: generation()
-      })
+      readRemoteAdmission: () =>
+        remoteRequestAuthority.synchronize({
+          admission: "open",
+          external_origin: externalOrigin,
+          generation: generation()
+        })
     })
   });
   apps.push(app);

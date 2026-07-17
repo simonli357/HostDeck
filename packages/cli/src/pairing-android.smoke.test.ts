@@ -23,6 +23,7 @@ import {
   createHostDeckCsrfRouteRegistration,
   createHostDeckPairingPolicy,
   createHostDeckPairingRouteRegistration,
+  createHostDeckRemoteIngressRequestAuthorityPolicy,
   createHostDeckRemoteIngressRouteRegistration,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckTailscaleServeFastifyApp,
@@ -170,6 +171,8 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
           },
           now
         });
+        const remoteRequestAuthority =
+          createHostDeckRemoteIngressRequestAuthorityPolicy();
 
         app = createHostDeckTailscaleServeFastifyApp({
           observeInternalError: () => undefined,
@@ -179,6 +182,7 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
             now
           }),
           resourceBudget: defaultResourceBudget,
+          remoteIngressRequestAuthority: remoteRequestAuthority,
           routePlugins: [
             createHostDeckRemoteIngressRouteRegistration({ service }),
             createHostDeckPairingRouteRegistration({
@@ -194,7 +198,8 @@ describePhysical("IFC-V1-077 physical fragment-safe Android pairing", () => {
           ],
           tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
             localOrigin,
-            readRemoteAdmission: service.readAdmission
+            readRemoteAdmission: () =>
+              remoteRequestAuthority.synchronize(service.readAdmission())
           })
         });
         installRequestInspection(app, requestInspection, secrets);

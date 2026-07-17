@@ -10,6 +10,7 @@ import {
 } from "@hostdeck/core";
 import {
   createHostDeckFastifyApp,
+  createHostDeckTailscaleServeFastifyApp,
   type HostDeckFastifyInstance,
   type HostDeckRoutePluginRegistration
 } from "./fastify-app.js";
@@ -25,6 +26,11 @@ import {
   type HostDeckLanTlsInput,
   isHostDeckPrivateLanAddress
 } from "./lan-certificate-policy.js";
+import {
+  assertHostDeckRemoteIngressLifecycle,
+  type HostDeckRemoteIngressLifecycle
+} from "./remote-ingress-lifecycle.js";
+import { createTailscaleServeProxyTrustPolicy } from "./tailscale-serve-proxy-trust.js";
 
 export const hostDeckFastifyLifecyclePhases = [
   "ready",
@@ -42,6 +48,7 @@ export const hostDeckFastifyLifecycleErrorCodes = [
   "app_ready_failed",
   "listener_bind_failed",
   "listener_mismatch",
+  "remote_start_failed",
   "startup_timeout",
   "shutdown_failed"
 ] as const;
@@ -56,6 +63,7 @@ export const hostDeckFastifyLifecycleStages = [
   "ready",
   "listen",
   "verify",
+  "remote",
   "shutdown"
 ] as const;
 export type HostDeckFastifyLifecycleStage =
@@ -98,6 +106,13 @@ export interface StartHostDeckFastifyLifecycleInput<TContext> {
   readonly observeInternalError: HostDeckInternalErrorObserver;
   readonly resourceBudget: ResourceBudget;
   readonly runtime: HostDeckFastifyRuntimeOwner<TContext>;
+}
+
+export interface StartHostDeckTailscaleServeFastifyLifecycleInput<TContext>
+  extends StartHostDeckFastifyLifecycleInput<TContext> {
+  readonly selectRemoteIngressLifecycle: (
+    context: TContext
+  ) => HostDeckRemoteIngressLifecycle;
 }
 
 export interface HostDeckFastifyNodeLimitSnapshot {
@@ -158,6 +173,9 @@ export class HostDeckFastifyLifecycleError extends Error {
 
 type ParsedLifecycleInput<TContext> = StartHostDeckFastifyLifecycleInput<TContext>;
 
+type ParsedTailscaleServeLifecycleInput<TContext> =
+  StartHostDeckTailscaleServeFastifyLifecycleInput<TContext>;
+
 type ParsedRuntimeOwner<TContext> = HostDeckFastifyRuntimeOwner<TContext>;
 
 interface CleanupRuntimeOwner {
@@ -165,6 +183,21 @@ interface CleanupRuntimeOwner {
   readonly closeRuntime: (deadline: OperationDeadline) => void | Promise<void>;
   readonly closeSse: (deadline: OperationDeadline) => void | Promise<void>;
   readonly closeStartup: (deadline: OperationDeadline) => void | Promise<void>;
+}
+
+interface PreparedLifecycleBoundary {
+  readonly cleanupOwner: CleanupRuntimeOwner;
+  readonly createApp: (
+    requestAuthenticationPolicy: HostDeckRequestAuthenticationPolicy,
+    routePlugins: readonly HostDeckRoutePluginRegistration[]
+  ) => HostDeckFastifyInstance;
+  readonly startAfterListen: () => void;
+}
+
+interface LifecycleBoundary<TContext> {
+  readonly prepare: (
+    owner: HostDeckFastifyStartedRuntime<TContext>
+  ) => PreparedLifecycleBoundary;
 }
 
 interface HttpConnectionRuntime {
@@ -207,6 +240,10 @@ const inputKeys = [
   "resourceBudget",
   "runtime"
 ];
+const tailscaleServeInputKeys = [
+  ...inputKeys,
+  "selectRemoteIngressLifecycle"
+];
 const runtimeOwnerKeys = [
   "beginDrain",
   "closeRuntime",
@@ -222,13 +259,96 @@ const httpConnectionRuntimes = new WeakMap<HostDeckFastifyInstance, HttpConnecti
 export async function startHostDeckFastifyLifecycle<TContext>(
   input: StartHostDeckFastifyLifecycleInput<TContext>
 ): Promise<HostDeckFastifyLifecycle<TContext>> {
-  const parsed = parseLifecycleInput(input);
+  const parsed = parseLifecycleInput<TContext>(input);
+  return startParsedLifecycle<TContext>(parsed, {
+    prepare(owner: HostDeckFastifyStartedRuntime<TContext>) {
+      return Object.freeze({
+        cleanupOwner: parsed.runtime,
+        createApp(
+          requestAuthenticationPolicy: HostDeckRequestAuthenticationPolicy,
+          routePlugins: readonly HostDeckRoutePluginRegistration[]
+        ) {
+          return createHostDeckFastifyApp({
+            observeInternalError: parsed.observeInternalError,
+            requestAuthenticationPolicy,
+            requestTrustPolicy: createHostDeckRequestTrustPolicy({
+              allowedOrigins: [baseUrlForBind(owner.bind).origin],
+              mode: owner.bind.transport === "https" ? "lan" : "loopback",
+              transport: owner.bind.transport
+            }),
+            resourceBudget: parsed.resourceBudget,
+            routePlugins,
+            ...(owner.tls === undefined ? {} : { tls: owner.tls })
+          });
+        },
+        startAfterListen() {
+          // The historical request-trust lifecycle has no post-listen owner.
+        }
+      });
+    }
+  });
+}
+
+export async function startHostDeckTailscaleServeFastifyLifecycle<TContext>(
+  input: StartHostDeckTailscaleServeFastifyLifecycleInput<TContext>
+): Promise<HostDeckFastifyLifecycle<TContext>> {
+  const parsed = parseTailscaleServeLifecycleInput<TContext>(input);
+  return startParsedLifecycle<TContext>(parsed, {
+    prepare(owner: HostDeckFastifyStartedRuntime<TContext>) {
+      const remote = parsed.selectRemoteIngressLifecycle(owner.context);
+      assertHostDeckRemoteIngressLifecycle(remote);
+      const cleanupOwner = composeRemoteCleanupOwner(
+        parsed.runtime,
+        remote,
+        parsed.resourceBudget
+      );
+      return Object.freeze({
+        cleanupOwner,
+        createApp(
+          requestAuthenticationPolicy: HostDeckRequestAuthenticationPolicy,
+          routePlugins: readonly HostDeckRoutePluginRegistration[]
+        ) {
+          if (
+            owner.bind.host !== "127.0.0.1" ||
+            owner.bind.transport !== "http" ||
+            owner.tls !== undefined
+          ) {
+            throw new TypeError(
+              "HostDeck Tailscale Serve lifecycle requires IPv4 loopback HTTP."
+            );
+          }
+          return createHostDeckTailscaleServeFastifyApp({
+            observeInternalError: parsed.observeInternalError,
+            remoteIngressRequestAuthority: remote.requestAuthority,
+            requestAuthenticationPolicy,
+            resourceBudget: parsed.resourceBudget,
+            routePlugins,
+            tailscaleServeProxyTrustPolicy:
+              createTailscaleServeProxyTrustPolicy({
+                localOrigin: baseUrlForBind(owner.bind).origin,
+                readRemoteAdmission: remote.readAdmission
+              })
+          });
+        },
+        startAfterListen() {
+          remote.start();
+        }
+      });
+    }
+  });
+}
+
+async function startParsedLifecycle<TContext>(
+  parsed: ParsedLifecycleInput<TContext>,
+  boundary: LifecycleBoundary<TContext>
+): Promise<HostDeckFastifyLifecycle<TContext>> {
   assertResolvedResourceBudget(parsed.resourceBudget);
   const startupDeadline = createOperationDeadline({
     timeoutMs: parsed.resourceBudget.lifecycle_startup_timeout_ms
   });
   let stage: HostDeckFastifyLifecycleStage = "runtime";
   let app: HostDeckFastifyInstance | null = null;
+  let cleanupOwner: CleanupRuntimeOwner = parsed.runtime;
 
   try {
     const runtimePromise = Promise.resolve().then(() =>
@@ -242,6 +362,8 @@ export async function startHostDeckFastifyLifecycle<TContext>(
     const rawOwner = await awaitWithSignal(runtimePromise, startupDeadline.signal);
     stage = "runtime_contract";
     const owner = parseStartedRuntime<TContext>(rawOwner);
+    const preparedBoundary = boundary.prepare(owner);
+    cleanupOwner = preparedBoundary.cleanupOwner;
 
     startupDeadline.throwIfAborted();
     stage = "routes";
@@ -253,18 +375,10 @@ export async function startHostDeckFastifyLifecycle<TContext>(
 
     startupDeadline.throwIfAborted();
     stage = "app";
-    app = createHostDeckFastifyApp({
-      observeInternalError: parsed.observeInternalError,
+    app = preparedBoundary.createApp(
       requestAuthenticationPolicy,
-      requestTrustPolicy: createHostDeckRequestTrustPolicy({
-        allowedOrigins: [baseUrlForBind(owner.bind).origin],
-        mode: owner.bind.transport === "https" ? "lan" : "loopback",
-        transport: owner.bind.transport
-      }),
-      resourceBudget: parsed.resourceBudget,
-      routePlugins,
-      ...(owner.tls === undefined ? {} : { tls: owner.tls })
-    });
+      routePlugins
+    );
     installHttpConnectionRuntime(app);
     applyNodeServerLimits(app, parsed.resourceBudget);
 
@@ -289,6 +403,9 @@ export async function startHostDeckFastifyLifecycle<TContext>(
 
     stage = "verify";
     const bound = requireMatchingBoundAddress(app, owner.bind);
+    startupDeadline.throwIfAborted();
+    stage = "remote";
+    preparedBoundary.startAfterListen();
     const readyApp = app;
     let phase: HostDeckFastifyLifecyclePhase = "ready";
     let closePromise: Promise<void> | null = null;
@@ -300,7 +417,7 @@ export async function startHostDeckFastifyLifecycle<TContext>(
       closePromise = (async () => {
         const errors = await closeLifecycleResources(
           readyApp,
-          parsed.runtime,
+          cleanupOwner,
           parsed.resourceBudget
         );
         if (errors.length > 0) {
@@ -327,7 +444,7 @@ export async function startHostDeckFastifyLifecycle<TContext>(
   } catch (cause) {
     const cleanupErrors = await closeLifecycleResources(
       app,
-      parsed.runtime,
+      cleanupOwner,
       parsed.resourceBudget
     );
     throw createStartupError(stage, cause, startupDeadline.signal.aborted, cleanupErrors);
@@ -358,6 +475,101 @@ function parseLifecycleInput<TContext>(input: unknown): ParsedLifecycleInput<TCo
     observeInternalError: value.observeInternalError,
     resourceBudget: value.resourceBudget as ResourceBudget,
     runtime
+  });
+}
+
+function parseTailscaleServeLifecycleInput<TContext>(
+  input: unknown
+): ParsedTailscaleServeLifecycleInput<TContext> {
+  assertPlainExactObject(
+    input,
+    tailscaleServeInputKeys,
+    "HostDeck Tailscale Serve Fastify lifecycle input"
+  );
+  const value = input as Partial<
+    StartHostDeckTailscaleServeFastifyLifecycleInput<TContext>
+  >;
+  if (typeof value.createRequestAuthenticationPolicy !== "function") {
+    throw new TypeError(
+      "HostDeck Fastify createRequestAuthenticationPolicy must be a function."
+    );
+  }
+  if (typeof value.createRoutePlugins !== "function") {
+    throw new TypeError("HostDeck Fastify createRoutePlugins must be a function.");
+  }
+  if (typeof value.observeInternalError !== "function") {
+    throw new TypeError("HostDeck Fastify observeInternalError must be a function.");
+  }
+  if (typeof value.selectRemoteIngressLifecycle !== "function") {
+    throw new TypeError(
+      "HostDeck Tailscale Serve remote lifecycle selector must be a function."
+    );
+  }
+  const runtime = parseRuntimeOwner<TContext>(value.runtime);
+  return Object.freeze({
+    createRequestAuthenticationPolicy:
+      value.createRequestAuthenticationPolicy.bind(value),
+    createRoutePlugins: value.createRoutePlugins.bind(value),
+    observeInternalError: value.observeInternalError,
+    resourceBudget: value.resourceBudget as ResourceBudget,
+    runtime,
+    selectRemoteIngressLifecycle:
+      value.selectRemoteIngressLifecycle.bind(value)
+  });
+}
+
+function composeRemoteCleanupOwner(
+  runtime: CleanupRuntimeOwner,
+  remote: HostDeckRemoteIngressLifecycle,
+  budget: ResourceBudget
+): CleanupRuntimeOwner {
+  return Object.freeze({
+    beginDrain() {
+      const errors: unknown[] = [];
+      try {
+        remote.beginDrain();
+      } catch (error) {
+        errors.push(error);
+      }
+      try {
+        runtime.beginDrain();
+      } catch (error) {
+        errors.push(error);
+      }
+      if (errors.length > 0) {
+        throw new AggregateError(
+          errors,
+          "HostDeck remote and application admission drain failed."
+        );
+      }
+    },
+    closeRuntime: runtime.closeRuntime,
+    closeSse: runtime.closeSse,
+    async closeStartup(deadline: OperationDeadline) {
+      const errors: unknown[] = [];
+      const remoteDeadline = createOperationDeadline({
+        timeoutMs: budget.lifecycle_cleanup_step_timeout_ms,
+        parentSignal: deadline.signal
+      });
+      try {
+        await remote.close(remoteDeadline);
+      } catch (error) {
+        errors.push(error);
+      } finally {
+        remoteDeadline.dispose();
+      }
+      try {
+        await runtime.closeStartup(deadline);
+      } catch (error) {
+        errors.push(error);
+      }
+      if (errors.length > 0) {
+        throw new AggregateError(
+          errors,
+          "HostDeck remote and startup cleanup failed."
+        );
+      }
+    }
   });
 }
 
@@ -923,6 +1135,8 @@ function errorCodeForStage(
       return "listener_bind_failed";
     case "verify":
       return "listener_mismatch";
+    case "remote":
+      return "remote_start_failed";
     case "shutdown":
       return "shutdown_failed";
   }
@@ -944,6 +1158,8 @@ function startupMessageForStage(stage: HostDeckFastifyLifecycleStage): string {
       return "HostDeck Fastify listener failed to bind.";
     case "verify":
       return "HostDeck Fastify listener bound outside validated startup policy.";
+    case "remote":
+      return "HostDeck remote ingress lifecycle failed to start.";
     case "shutdown":
       return "HostDeck Fastify shutdown failed.";
   }

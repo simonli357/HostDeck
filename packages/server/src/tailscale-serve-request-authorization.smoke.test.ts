@@ -30,6 +30,7 @@ import {
   createHostDeckPairingPolicy,
   createHostDeckPairingRouteRegistration
 } from "./pairing-routes.js";
+import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
 import { createSecurityMutationAuditExecutor } from "./security-mutation-audit-executor.js";
 import { createTailscaleObserver } from "./tailscale-observer.js";
 import { createTailscaleServeManager } from "./tailscale-serve-manager.js";
@@ -78,6 +79,8 @@ describeSmoke("real Tailscale Serve request authorization", () => {
       now: () => new Date(now),
       createPairingId: () => "pair_ABCDEFGHIJKLMNOPQRSTUVWX"
     });
+    const remoteRequestAuthority =
+      createHostDeckRemoteIngressRequestAuthorityPolicy();
     const app = createHostDeckTailscaleServeFastifyApp({
       observeInternalError: () => undefined,
       requestAuthenticationPolicy: createHostDeckRequestAuthenticationPolicy({
@@ -92,9 +95,11 @@ describeSmoke("real Tailscale Serve request authorization", () => {
         }),
         protectedRoute()
       ],
+      remoteIngressRequestAuthority: remoteRequestAuthority,
       tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
         localOrigin,
-        readRemoteAdmission: () => admission
+        readRemoteAdmission: () =>
+          remoteRequestAuthority.synchronize(admission)
       })
     });
     await app.listen({ host: "127.0.0.1", port: 0 });

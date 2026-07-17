@@ -45,6 +45,7 @@ import {
   type HostDeckPairingPolicy,
   hostDeckPairingPolicySnapshot
 } from "./pairing-routes.js";
+import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
 import {
   createSecurityMutationAuditExecutor,
   type SecurityMutationAuditExecutor
@@ -727,6 +728,8 @@ function createHarness(options: HarnessOptions = {}): Harness {
     },
     now: () => new Date(baseTime.getTime() + 1_000)
   });
+  const remoteRequestAuthority =
+    createHostDeckRemoteIngressRequestAuthorityPolicy();
   const app = createHostDeckTailscaleServeFastifyApp({
     observeInternalError: () => undefined,
     requestAuthenticationPolicy: createHostDeckRequestAuthenticationPolicy({
@@ -739,11 +742,12 @@ function createHarness(options: HarnessOptions = {}): Harness {
       createHostDeckCsrfRouteRegistration({ audit: executor, csrf: csrfPolicy }),
       protectedRoute()
     ],
+    remoteIngressRequestAuthority: remoteRequestAuthority,
     tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
       localOrigin,
       readRemoteAdmission() {
         admissionReadCount += 1;
-        return admission;
+        return remoteRequestAuthority.synchronize(admission);
       }
     })
   });

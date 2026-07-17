@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { execFile } from "node:child_process";
 import { Resolver } from "node:dns/promises";
 import { mkdtempSync, rmSync } from "node:fs";
 import {
@@ -10,7 +11,6 @@ import { request as httpsRequest } from "node:https";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { performance } from "node:perf_hooks";
 import {
   defaultResourceBudget,
   type RemoteIngressAdmissionProof,
@@ -20,15 +20,16 @@ import {
   remoteServeDescriptorSchema
 } from "@hostdeck/contracts";
 import {
+  createHostDeckHostHealthService,
+  createHostDeckRemoteIngressLifecycle,
   createHostDeckRemoteIngressRouteRegistration,
   createHostDeckRequestAuthenticationPolicy,
-  createHostDeckTailscaleServeFastifyApp,
   createRemoteIngressControlService,
   createSecurityMutationAuditExecutor,
   createTailscaleObserver,
   createTailscaleServeManager,
-  createTailscaleServeProxyTrustPolicy,
-  type HostDeckFastifyInstance,
+  type HostDeckFastifyLifecycle,
+  startHostDeckTailscaleServeFastifyLifecycle,
   type TailscaleObserver,
   type TailscaleServeManager
 } from "@hostdeck/server";
@@ -49,6 +50,7 @@ const remoteResponseMaxBytes = defaultResourceBudget.cli_response_max_bytes;
 
 describeSmoke("real dedicated-profile remote control vertical", () => {
   it("enables, reads, proxies, disables, and proves exact cleanup", async () => {
+    const profileSwitch = readProfileSwitchInput();
     const controller = new AbortController();
     const directory = mkdtempSync(join(tmpdir(), "hostdeck-remote-control-smoke-"));
     const opened = openMigratedDatabase(join(directory, "hostdeck.sqlite"));
@@ -59,7 +61,7 @@ describeSmoke("real dedicated-profile remote control vertical", () => {
       observer,
       signal: controller.signal
     });
-    let app: HostDeckFastifyInstance | null = null;
+    let host: HostDeckFastifyLifecycle<unknown> | null = null;
     let fallbackCleanup: CleanupTarget | null = null;
 
     try {
@@ -85,40 +87,80 @@ describeSmoke("real dedicated-profile remote control vertical", () => {
         wallTime = Math.max(wallTime + 1, Date.now());
         return new Date(wallTime);
       };
-      const service = createRemoteIngressControlService({
-        admissionProofs: proofs,
-        audit: createSecurityMutationAuditExecutor({
-          repository: createSelectedAuditRepository(opened.db),
-          now: () => now().toISOString(),
-          create_record_id: () =>
-            `audit:real:remote-control:${++auditIndex}`
-        }),
-        localOrigin,
-        manager,
-        monotonicNow: () => performance.now(),
-        now,
-        observer,
-        states
+      const audit = createSecurityMutationAuditExecutor({
+        repository: createSelectedAuditRepository(opened.db),
+        now: () => now().toISOString(),
+        create_record_id: () =>
+          `audit:real:remote-control:${++auditIndex}`
       });
-      app = createHostDeckTailscaleServeFastifyApp({
+      let lifecycleManager: TailscaleServeManager | null = null;
+      const health = createHostDeckHostHealthService({ now });
+      const remote = createHostDeckRemoteIngressLifecycle({
+        createControl(input) {
+          const lifecycleObserver = createTailscaleObserver({
+            signal: input.signal
+          });
+          lifecycleManager = createTailscaleServeManager({
+            observer: lifecycleObserver,
+            signal: input.signal
+          });
+          return createRemoteIngressControlService({
+            admissionProofs: proofs,
+            audit,
+            localOrigin,
+            manager: lifecycleManager,
+            monotonicNow: input.monotonicNow,
+            now,
+            observer: lifecycleObserver,
+            states
+          });
+        },
+        health
+      });
+      host = await startHostDeckTailscaleServeFastifyLifecycle({
         observeInternalError: () => undefined,
-        requestAuthenticationPolicy: createHostDeckRequestAuthenticationPolicy({
-          authenticateDeviceToken() {
-            throw new Error("Unexpected device authentication in remote-control smoke.");
-          },
-          now
-        }),
-        resourceBudget: defaultResourceBudget,
-        routePlugins: [
-          createHostDeckRemoteIngressRouteRegistration({ service })
+        createRequestAuthenticationPolicy: () =>
+          createHostDeckRequestAuthenticationPolicy({
+            authenticateDeviceToken() {
+              throw new Error(
+                "Unexpected device authentication in remote-control smoke."
+              );
+            },
+            now
+          }),
+        createRoutePlugins: () => [
+          createHostDeckRemoteIngressRouteRegistration({
+            service: remote.control
+          })
         ],
-        tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
-          localOrigin,
-          readRemoteAdmission: service.readAdmission
-        })
+        resourceBudget: defaultResourceBudget,
+        runtime: {
+          beginDrain() {
+            // This smoke has no additional write-admission owner.
+          },
+          closeRuntime() {
+            // This smoke has no Codex runtime owner.
+          },
+          closeSse() {
+            // This smoke installs no SSE routes.
+          },
+          closeStartup() {
+            // Storage remains open for final state and audit inspection below.
+          },
+          start() {
+            return Object.freeze({
+              bind: Object.freeze({
+                host: "127.0.0.1" as const,
+                port,
+                transport: "http" as const
+              }),
+              context: Object.freeze({ remote })
+            });
+          }
+        },
+        selectRemoteIngressLifecycle: (context) =>
+          (context as { readonly remote: typeof remote }).remote
       });
-      await app.listen({ host: "127.0.0.1", port });
-
       const env = Object.freeze({
         HOME: directory,
         HOSTDECK_API_BASE_URL: localOrigin,
@@ -139,7 +181,7 @@ describeSmoke("real dedicated-profile remote control vertical", () => {
         "disabled",
         privateValues
       );
-      assertClosedAdmission(service.readAdmission());
+      assertClosedAdmission(remote.readAdmission());
 
       assertCliState(
         await runCli(["remote", "enable", "--json"], {
@@ -150,7 +192,7 @@ describeSmoke("real dedicated-profile remote control vertical", () => {
         privateValues
       );
       assertOpenAdmission(
-        service.readAdmission(),
+        remote.readAdmission(),
         candidate.externalOrigin
       );
       assertCliState(
@@ -159,6 +201,60 @@ describeSmoke("real dedicated-profile remote control vertical", () => {
         privateValues
       );
       await assertUnpairedRemoteBoundary(candidate.externalOrigin);
+      requireCondition(
+        remote.requestAuthority.snapshot().active_leases === 0,
+        "Remote-control smoke retained request authority."
+      );
+
+      if (profileSwitch !== null) {
+        const admissionBeforeSwitch = remote.readAdmission();
+        assertOpenAdmission(
+          admissionBeforeSwitch,
+          candidate.externalOrigin
+        );
+        const lease = remote.requestAuthority.acquire({
+          external_origin: candidate.externalOrigin,
+          generation: admissionBeforeSwitch.generation
+        });
+        await switchSavedProfile(profileSwitch.awayProfileId);
+        const foreignServeBefore = await readServeStatusObservation();
+        const awayState = await remote.control.readStatus();
+        const awayReason = awayState.reason;
+        requireCondition(
+          awayState.availability === "unavailable" &&
+            (awayReason === "profile_other" ||
+              awayReason === "client_stopped" ||
+              awayReason === "client_signed_out") &&
+            remote.readAdmission().admission === "closed" &&
+            lease.signal.aborted &&
+            health.remoteSnapshot().reason === awayReason &&
+            requireLifecycleManager(lifecycleManager).snapshot()
+              .command_attempts === 1,
+          "Remote-control smoke did not fail closed on profile change."
+        );
+        assertCliState(
+          await runCli(["remote", "status", "--json"], { env }),
+          "unavailable",
+          privateValues
+        );
+        const foreignServeAfter = await readServeStatusObservation();
+        requireCondition(
+          JSON.stringify(foreignServeAfter) ===
+            JSON.stringify(foreignServeBefore),
+          "Remote-control smoke changed foreign-profile Serve state."
+        );
+
+        await switchSavedProfile(profileSwitch.dedicatedProfileId);
+        const returnedState = await remote.control.readStatus();
+        requireCondition(
+          returnedState.availability === "ready" &&
+            remote.readAdmission().admission === "open" &&
+            health.remoteSnapshot().availability === "ready" &&
+            requireLifecycleManager(lifecycleManager).snapshot()
+              .command_attempts === 1,
+          "Remote-control smoke did not recover by observation only."
+        );
+      }
 
       assertCliState(
         await runCli(["remote", "disable", "--json"], {
@@ -168,7 +264,7 @@ describeSmoke("real dedicated-profile remote control vertical", () => {
         "disabled",
         privateValues
       );
-      assertClosedAdmission(service.readAdmission());
+      assertClosedAdmission(remote.readAdmission());
       assertCliState(
         await runCli(["remote", "status", "--json"], { env }),
         "disabled",
@@ -181,7 +277,9 @@ describeSmoke("real dedicated-profile remote control vertical", () => {
       );
       assertFinalStorage(states.read(), proofs.read());
       assertAuditTrail(opened.db);
-      const managerState = manager.snapshot();
+      const managerState = requireLifecycleManager(
+        lifecycleManager
+      ).snapshot();
       requireCondition(
         managerState.active === false &&
           managerState.command_attempts === 2 &&
@@ -189,15 +287,37 @@ describeSmoke("real dedicated-profile remote control vertical", () => {
         "Remote-control smoke manager accounting is invalid."
       );
     } finally {
+      let cleanupFailed = false;
+      if (profileSwitch !== null) {
+        try {
+          await switchSavedProfile(profileSwitch.dedicatedProfileId);
+        } catch {
+          cleanupFailed = true;
+        }
+      }
+      try {
+        if (host !== null) await host.close();
+      } catch {
+        cleanupFailed = true;
+      }
       try {
         const cleanup = cleanupTarget(states.read(), fallbackCleanup);
         if (cleanup !== null) {
           await proveOrRestoreAbsent(observer, manager, cleanup);
         }
-      } finally {
-        controller.abort();
-        await closeSmokeResources(app, opened.db, directory);
+      } catch {
+        cleanupFailed = true;
       }
+      controller.abort();
+      try {
+        await closeSmokeResources(opened.db, directory);
+      } catch {
+        cleanupFailed = true;
+      }
+      requireCondition(
+        !cleanupFailed,
+        "Remote-control smoke lifecycle cleanup failed."
+      );
     }
   });
 });
@@ -211,6 +331,116 @@ interface CliResult {
   readonly exitCode: number;
   readonly stderr: string;
   readonly stdout: string;
+}
+
+interface ProfileSwitchInput {
+  readonly awayProfileId: string;
+  readonly dedicatedProfileId: string;
+}
+
+interface CommandObservation {
+  readonly exit_code: number;
+  readonly stderr: string;
+  readonly stdout: string;
+}
+
+function readProfileSwitchInput(): ProfileSwitchInput | null {
+  const awayProfileId =
+    process.env.HOSTDECK_REMOTE_CONTROL_AWAY_PROFILE_ID ?? null;
+  const dedicatedProfileId =
+    process.env.HOSTDECK_REMOTE_CONTROL_DEDICATED_PROFILE_ID ?? null;
+  if (awayProfileId === null && dedicatedProfileId === null) return null;
+  if (
+    !isBoundedProfileId(awayProfileId) ||
+    !isBoundedProfileId(dedicatedProfileId) ||
+    awayProfileId === dedicatedProfileId
+  ) {
+    throw new TypeError(
+      "Remote-control profile-switch smoke input is invalid."
+    );
+  }
+  return Object.freeze({ awayProfileId, dedicatedProfileId });
+}
+
+function isBoundedProfileId(value: unknown): value is string {
+  return typeof value === "string" && /^[a-zA-Z0-9_-]{1,64}$/u.test(value);
+}
+
+async function switchSavedProfile(profileId: string): Promise<void> {
+  const observation = await runBoundedTailscaleCommand(["switch", profileId]);
+  requireCondition(
+    observation.exit_code === 0 || observation.exit_code === 1,
+    "Remote-control smoke profile switch failed."
+  );
+}
+
+async function readServeStatusObservation(): Promise<CommandObservation> {
+  const observation = await runBoundedTailscaleCommand([
+    "serve",
+    "status",
+    "--json"
+  ]);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(observation.stdout);
+  } catch {
+    throw new Error("Remote-control smoke Serve status was invalid.");
+  }
+  requireCondition(
+    observation.exit_code === 0 &&
+      observation.stderr === "" &&
+      parsed !== null &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed),
+    "Remote-control smoke Serve status was unavailable."
+  );
+  return observation;
+}
+
+function runBoundedTailscaleCommand(
+  args: readonly string[]
+): Promise<CommandObservation> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      "/usr/bin/tailscale",
+      [...args],
+      {
+        encoding: "utf8",
+        env: {
+          LANG: "C.UTF-8",
+          LC_ALL: "C.UTF-8",
+          PATH: "/usr/bin:/bin"
+        },
+        maxBuffer: 64 * 1024,
+        timeout: 10_000,
+        windowsHide: true
+      },
+      (error, stdout, stderr) => {
+        const rawExitCode = error === null ? 0 : Reflect.get(error, "code");
+        if (typeof rawExitCode !== "number") {
+          reject(new Error("Remote-control smoke Tailscale command failed."));
+          return;
+        }
+        resolve(
+          Object.freeze({
+            exit_code: rawExitCode,
+            stderr,
+            stdout
+          })
+        );
+      }
+    );
+  });
+}
+
+function requireLifecycleManager(
+  manager: TailscaleServeManager | null
+): TailscaleServeManager {
+  requireCondition(
+    manager !== null,
+    "Remote-control smoke did not create its lifecycle manager."
+  );
+  return manager as TailscaleServeManager;
 }
 
 function requireDedicatedAbsentCandidate(
@@ -239,7 +469,7 @@ function requireDedicatedAbsentCandidate(
 
 function assertCliState(
   result: CliResult,
-  availability: "disabled" | "ready",
+  availability: "disabled" | "ready" | "unavailable",
   privateValues: readonly string[]
 ): void {
   requireCondition(
@@ -617,16 +847,10 @@ function close(server: Server): Promise<void> {
 }
 
 async function closeSmokeResources(
-  app: HostDeckFastifyInstance | null,
   db: ReturnType<typeof openMigratedDatabase>["db"],
   directory: string
 ): Promise<void> {
   let failed = false;
-  try {
-    if (app !== null) await app.close();
-  } catch {
-    failed = true;
-  }
   try {
     db.close();
   } catch {

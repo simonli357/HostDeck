@@ -18,6 +18,7 @@ import {
   hostDeckDeviceCookieName,
   hostDeckRequestAuthenticationIngressContext,
   hostDeckRequestAuthenticationSnapshot,
+  hostDeckRequestDeviceAuthoritySignal,
   requireHostDeckRequestAuthentication,
   requireHostDeckRequestWritePermission,
   resolveHostDeckRequestAuthentication
@@ -26,6 +27,10 @@ import {
   hostDeckLocalAdminRequestHeaderName,
   hostDeckLocalAdminRequestHeaderValue
 } from "./fastify-request-trust.js";
+import {
+  createHostDeckRemoteIngressRequestAuthorityPolicy,
+  type HostDeckRemoteIngressRequestAuthorityPolicy
+} from "./remote-ingress-request-authority.js";
 import {
   createTailscaleServeProxyTrustPolicy,
   type TailscaleServeRemoteAdmissionSnapshot,
@@ -48,6 +53,7 @@ afterEach(async () => {
 
 describe("Tailscale Serve request authorization composition", () => {
   it("brands immutable authentication-ingress adapters from exact data inputs", () => {
+    const acquireAuthority = () => null;
     const assertCurrent = () => undefined;
     const resolve = () => ({
       configured_origin: localOrigin,
@@ -57,36 +63,49 @@ describe("Tailscale Serve request authorization composition", () => {
       source_key: null,
       remote_generation: null
     });
-    const input = { assertCurrent, resolve };
+    const input = { acquireAuthority, assertCurrent, resolve };
     const policy = createHostDeckRequestAuthenticationIngressPolicy(input);
     input.resolve = () => {
       throw new Error("mutated ingress resolver must not run");
     };
-    expect(policy).toMatchObject({ assertCurrent, resolve });
-    expect(Object.keys(policy).sort()).toEqual(["assertCurrent", "resolve"]);
+    expect(policy).toMatchObject({ acquireAuthority, assertCurrent, resolve });
+    expect(Object.keys(policy).sort()).toEqual([
+      "acquireAuthority",
+      "assertCurrent",
+      "resolve"
+    ]);
     expect(Object.isFrozen(policy)).toBe(true);
     expect(() => assertHostDeckRequestAuthenticationIngressPolicy(policy)).not.toThrow();
     expect(() =>
       assertHostDeckRequestAuthenticationIngressPolicy(
-        Object.freeze({ assertCurrent, resolve })
+        Object.freeze({ acquireAuthority, assertCurrent, resolve })
       )
     ).toThrow("must be created by createHostDeckRequestAuthenticationIngressPolicy");
 
     let accessorCalls = 0;
-    const accessor = Object.defineProperty({ resolve }, "assertCurrent", {
+    const accessor = Object.defineProperty(
+      { acquireAuthority, resolve },
+      "assertCurrent",
+      {
       enumerable: true,
       get() {
         accessorCalls += 1;
         throw new Error("ingress-policy-accessor-private-sentinel");
       }
-    });
+      }
+    );
     for (const candidate of [
       null,
       {},
-      { assertCurrent, resolve, extra: true },
-      Object.assign(Object.create({ inherited: true }), { assertCurrent, resolve }),
-      { assertCurrent: null, resolve },
-      { assertCurrent, resolve: null },
+      { acquireAuthority, assertCurrent, resolve, extra: true },
+      Object.assign(Object.create({ inherited: true }), {
+        acquireAuthority,
+        assertCurrent,
+        resolve
+      }),
+      { acquireAuthority: null, assertCurrent, resolve },
+      { acquireAuthority, assertCurrent: null, resolve },
+      { acquireAuthority, assertCurrent, resolve: null },
       accessor
     ]) {
       expect(() =>
@@ -396,6 +415,97 @@ describe("Tailscale Serve request authorization composition", () => {
     );
   });
 
+  it("forwards generation invalidation into active remote request cancellation and releases it", async () => {
+    let admission: TailscaleServeRemoteAdmissionSnapshot = openAdmission(30);
+    const authority = createHostDeckRemoteIngressRequestAuthorityPolicy();
+    const started = createDeferred<void>();
+    let observedSignal: AbortSignal | null = null;
+    const app = createSelectedApp({
+      authenticateDeviceToken: () => authenticatedDevice("read"),
+      readAdmission: () => admission,
+      requestAuthority: authority,
+      async waitForAuthorityAbort(signal) {
+        observedSignal = signal;
+        started.resolve();
+        if (signal.aborted) return;
+        await new Promise<void>((resolve) => {
+          signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+      }
+    });
+    await app.ready();
+
+    const responsePromise = app.inject({
+      headers: remoteHeaders({ cookie: rawDeviceToken }),
+      method: "GET",
+      url: "/hold-authority"
+    });
+    await started.promise;
+    expect(observedSignal).toBeInstanceOf(AbortSignal);
+    expect(authority.snapshot()).toMatchObject({
+      acquired_leases: 1,
+      active_leases: 1,
+      phase: "open"
+    });
+
+    admission = Object.freeze({
+      admission: "closed",
+      external_origin: null,
+      generation: 30
+    });
+    authority.synchronize(admission);
+    const response = await responsePromise;
+    expect(response.statusCode, response.body).toBe(403);
+    expect(response.headers.connection).toBe("close");
+    expect(response.json()).toMatchObject({ error: { code: "invalid_origin" } });
+    expect((observedSignal as unknown as AbortSignal).aborted).toBe(true);
+    expect(authority.snapshot()).toMatchObject({
+      active_leases: 0,
+      invalidations: 1,
+      signaled_leases: 1
+    });
+  });
+
+  it("does not reopen closed lifecycle authority from stale proxy provenance", async () => {
+    const authority = createHostDeckRemoteIngressRequestAuthorityPolicy();
+    authority.synchronize(openAdmission(31));
+    authority.synchronize({
+      admission: "closed",
+      external_origin: null,
+      generation: 31
+    });
+    let handlerCalls = 0;
+    const app = createSelectedApp({
+      authenticateDeviceToken: () => authenticatedDevice("read"),
+      handlerCall: () => {
+        handlerCalls += 1;
+      },
+      readAdmission: () => openAdmission(31),
+      requestAuthority: authority,
+      synchronizeRequestAuthority: false
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      headers: remoteHeaders({ cookie: rawDeviceToken }),
+      method: "GET",
+      url: "/protected"
+    });
+
+    expect(response.statusCode, response.body).toBe(403);
+    expect(response.headers.connection).toBe("close");
+    expect(response.json()).toMatchObject({
+      error: { code: "invalid_origin" }
+    });
+    expect(handlerCalls).toBe(0);
+    expect(authority.snapshot()).toMatchObject({
+      active_leases: 0,
+      phase: "closed",
+      refreshes: 2,
+      rejected_acquisitions: 1
+    });
+  });
+
   it("keeps selected factory inputs exclusive from historical trust and TLS fields", () => {
     const common = {
       observeInternalError: () => undefined,
@@ -404,6 +514,7 @@ describe("Tailscale Serve request authorization composition", () => {
         now: () => new Date(now)
       }),
       resourceBudget: defaultResourceBudget,
+      remoteIngressRequestAuthority: createHostDeckRemoteIngressRequestAuthorityPolicy(),
       routePlugins: [],
       tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
         localOrigin,
@@ -459,9 +570,15 @@ interface SelectedAppOptions {
   readonly handlerCall?: (path: string) => void;
   readonly ingress?: SelectedRequestAuthenticationIngressContext[];
   readonly readAdmission: () => unknown;
+  readonly requestAuthority?: HostDeckRemoteIngressRequestAuthorityPolicy;
+  readonly synchronizeRequestAuthority?: boolean;
+  readonly waitForAuthorityAbort?: (signal: AbortSignal) => Promise<void>;
 }
 
 function createSelectedApp(options: SelectedAppOptions): HostDeckFastifyInstance {
+  const requestAuthority =
+    options.requestAuthority ??
+    createHostDeckRemoteIngressRequestAuthorityPolicy();
   const app = createHostDeckTailscaleServeFastifyApp({
     observeInternalError: () => undefined,
     requestAuthenticationPolicy: createHostDeckRequestAuthenticationPolicy({
@@ -469,10 +586,16 @@ function createSelectedApp(options: SelectedAppOptions): HostDeckFastifyInstance
       now: () => new Date(now)
     }),
     resourceBudget: defaultResourceBudget,
+    remoteIngressRequestAuthority: requestAuthority,
     routePlugins: [authorizationRoutes(options)],
     tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
       localOrigin,
-      readRemoteAdmission: options.readAdmission
+      readRemoteAdmission() {
+        const admission = options.readAdmission();
+        return options.synchronizeRequestAuthority === false
+          ? admission
+          : requestAuthority.synchronize(admission);
+      }
     })
   });
   openApps.push(app);
@@ -508,6 +631,25 @@ function authorizationRoutes(
           },
           async (request) => {
             options.handlerCall?.(path);
+            return resolveHostDeckRequestAuthentication(request);
+          }
+        );
+      }
+      if (options.waitForAuthorityAbort !== undefined) {
+        app.get(
+          "/hold-authority",
+          {
+            async preHandler(request) {
+              requireHostDeckRequestAuthentication(request, "device_cookie");
+            },
+            schema: {
+              response: { 200: selectedRequestAuthenticationContextSchema }
+            }
+          },
+          async (request) => {
+            await options.waitForAuthorityAbort?.(
+              hostDeckRequestDeviceAuthoritySignal(request)
+            );
             return resolveHostDeckRequestAuthentication(request);
           }
         );
@@ -602,4 +744,15 @@ function authenticatedDevice(permission: "read" | "write") {
       revoked_at: null
     }
   };
+}
+
+function createDeferred<Value>(): {
+  readonly promise: Promise<Value>;
+  readonly resolve: (value: Value) => void;
+} {
+  let resolve!: (value: Value) => void;
+  const promise = new Promise<Value>((fulfill) => {
+    resolve = fulfill;
+  });
+  return { promise, resolve };
 }
