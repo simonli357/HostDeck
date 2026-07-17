@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-079` Run aggregate remote-ingress security and physical Android acceptance | in_progress | none | Strict automated/physical criteria are frozen in `artifacts/ifc-v1-079-remote-ingress-acceptance.md`; implement and harden the selected aggregate before the unrelated-network phone run. |
+| 1 | `IFC-V1-079` Run aggregate remote-ingress security and physical Android acceptance | in_progress | none | The automated aggregate and strict runner are pushed; reconnect and unlock the target phone, run `pnpm smoke:remote-android` over cellular plus Tailscale, inspect the four screenshots, then validate and publish closure evidence. |
 
 ## Intentional Blockers
 
