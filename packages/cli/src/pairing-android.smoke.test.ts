@@ -79,6 +79,7 @@ import {
 import QRCode from "qrcode";
 import { build as viteBuild } from "vite";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { cliExitCodes } from "./exit-codes.js";
 import { createBoundedLoopbackFetch } from "./loopback-http.js";
 import { runCli } from "./shell.js";
@@ -165,6 +166,57 @@ describe("physical Android phone-driver protocol", () => {
     await closeQrDisplay(Object.freeze({ process: child }));
 
     expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+  });
+
+  it("declares strict response schemas for every fixed driver route", async () => {
+    const routes = new Map<string, Readonly<Record<number, z.ZodType>>>();
+    const app = {
+      get(path: string, options: unknown) {
+        const response = (
+          options as {
+            readonly schema?: {
+              readonly response?: Readonly<Record<number, z.ZodType>>;
+            };
+          }
+        ).schema?.response;
+        expect(response).toBeDefined();
+        routes.set(path, response ?? {});
+        return app;
+      }
+    } as unknown as HostDeckFastifyInstance;
+
+    await physicalDriverRoute(createPhysicalDriverRuntime()).register(
+      app,
+      Object.freeze({ resourceBudget: defaultResourceBudget, surface: "api" })
+    );
+
+    const checkpointPaths = physicalCheckpointOrder.map(
+      (checkpoint) => `/__physical/checkpoint/${checkpoint}`
+    );
+    expect([...routes.keys()]).toEqual([
+      ...checkpointPaths,
+      "/__physical/checkpoint/revoked",
+      "/__physical/command"
+    ]);
+    for (const path of checkpointPaths) {
+      const response = routes.get(path);
+      expect(Object.keys(response ?? {})).toEqual(["204"]);
+      expect(response?.[204]?.parse(undefined)).toBeUndefined();
+      expect(() => response?.[204]?.parse(null)).toThrow();
+    }
+    const revoked = routes.get("/__physical/checkpoint/revoked")?.[409];
+    expect(revoked?.parse(physicalAuthorityNotRevokedResponse)).toEqual(
+      physicalAuthorityNotRevokedResponse
+    );
+    expect(() =>
+      revoked?.parse({ ...physicalAuthorityNotRevokedResponse, extra: true })
+    ).toThrow();
+    const command = routes.get("/__physical/command")?.[200];
+    expect(command?.parse({ command: "prepare-away", revision: 1 })).toEqual({
+      command: "prepare-away",
+      revision: 1
+    });
+    expect(() => command?.parse({ command: "hold", revision: 3 })).toThrow();
   });
 });
 
@@ -810,8 +862,30 @@ const physicalCheckpointOrder = [
   "recovered"
 ] as const;
 
+const physicalDriverCommands = [
+  "hold",
+  "prepare-away",
+  "revoke",
+  "cleanup"
+] as const;
+const physicalCheckpointResponseSchema = z.undefined();
+const physicalAuthorityNotRevokedResponse = Object.freeze({
+  code: "authority_not_revoked" as const,
+  message: "Device authority remains active." as const,
+  retryable: false as const
+});
+const physicalAuthorityNotRevokedResponseSchema = z.strictObject({
+  code: z.literal(physicalAuthorityNotRevokedResponse.code),
+  message: z.literal(physicalAuthorityNotRevokedResponse.message),
+  retryable: z.literal(physicalAuthorityNotRevokedResponse.retryable)
+});
+const physicalDriverCommandResponseSchema = z.strictObject({
+  command: z.enum(physicalDriverCommands),
+  revision: z.number().int().min(0).max(2)
+});
+
 type PhysicalCheckpoint = (typeof physicalCheckpointOrder)[number];
-type PhysicalDriverCommand = "hold" | "prepare-away" | "revoke" | "cleanup";
+type PhysicalDriverCommand = (typeof physicalDriverCommands)[number];
 
 interface PhysicalDriverRuntime {
   readonly recordCheckpoint: (checkpoint: PhysicalCheckpoint) => void;
@@ -1080,7 +1154,8 @@ function physicalDriverRoute(
             async preHandler(request) {
               requirePhysicalDriverRequest(request, path);
               requireHostDeckRequestAuthentication(request, "device_cookie");
-            }
+            },
+            schema: { response: { 204: physicalCheckpointResponseSchema } }
           },
           async (_request, reply) => {
             runtime.recordCheckpoint(checkpoint);
@@ -1097,14 +1172,13 @@ function physicalDriverRoute(
           async preHandler(request) {
             requirePhysicalDriverRequest(request, revokedPath);
             requireHostDeckRequestAuthentication(request, "device_cookie");
+          },
+          schema: {
+            response: { 409: physicalAuthorityNotRevokedResponseSchema }
           }
         },
         async (_request, reply) =>
-          reply.code(409).send({
-            code: "authority_not_revoked",
-            message: "Device authority remains active.",
-            retryable: false
-          })
+          reply.code(409).send(physicalAuthorityNotRevokedResponse)
       );
       app.get(
         "/__physical/command",
@@ -1114,7 +1188,8 @@ function physicalDriverRoute(
           async preHandler(request) {
             requirePhysicalDriverRequest(request, "/__physical/command");
             requireHostDeckRequestAuthentication(request, "device_cookie");
-          }
+          },
+          schema: { response: { 200: physicalDriverCommandResponseSchema } }
         },
         async () => {
           const snapshot = runtime.snapshot();

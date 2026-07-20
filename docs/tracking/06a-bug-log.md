@@ -17,6 +17,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-009 | Proxy-decision invariants reject truthful combined hostile-header assessments unless lower-priority forwarding and identity evidence is falsely normalized. | High | Backlog bugfix | Closed | `FND-V1-018` / `IFC-V1-073` | Precedence-aware schema plus combined lookalike/unknown/identity/forwarding contract regressions. |
 | BUG-010 | The exact Codex thread lifecycle smoke can fail cleanup when the native app-server outlives its npm launcher while settling its temporary plugin cache. | Low | Small bugfix | Closed | Validation harness / `IFC-V1-061` | Owned-socket shutdown wait, bounded recursive-remove retries, and consecutive exact 0.144.0 lifecycle smokes. |
 | BUG-011 | The exact HostDeck/TUI coexistence smoke can leave its marker command unfinished or pause TUI B before the product view, despite healthy completed runtime state. | Medium | Small bugfix | Closed | Validation harness / `INT-V1-031` / `INT-V1-032` | Bounded prompt/tool timing, direct second-TUI identity proof, isolated update-check suppression, sanitized diagnostics, and clean exact standalone/aggregate passes. |
+| BUG-012 | The strict Android runner fails Fastify readiness because its fixed authenticated driver routes omit required API response schemas. | High | Small bugfix | In progress | Validation harness / `IFC-V1-079` | Exact route-schema inventory and static gates pass; clean committed physical rerun remains. |
 
 ## Routing
 
@@ -171,3 +172,16 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Fix: use an eight-second marker interval with an explicit 15-second initial tool wait, prove TUI B by exact resume thread id plus managed cwd and HostDeck read-back, set only `check_for_update_on_startup = false` in the private test home, allow a bounded 30-second history-view readiness window, and emit classifications rather than terminal content on readiness failure.
 - Validation: dirty-worktree diagnostics complete both teardown directions and stop only at the intentional clean-commit publication guard. The clean exact coexistence smoke then passed in 24.29 seconds, and the no-retry four-scenario aggregate passed in 91.01 seconds with zero resource residue; full workspace and supply-chain gates also pass.
 - Closed by: corrective harness commit `7584321`; aggregate evidence in `artifacts/int-v1-032-runtime-lifecycle-acceptance-evidence.json`.
+
+### BUG-012 Physical Driver Routes Omit Response Schemas
+
+- Symptom: `pnpm smoke:remote-android` fails during Fastify readiness before Serve mutation, QR generation, or phone interaction because `physical-phone-driver` registers API routes without response schemas.
+- Impact: the selected physical Android acceptance cannot start, while cleanup correctly leaves the dedicated Serve state absent and the phone unchanged.
+- Route: small bugfix; the production app boundary and frozen `IFC-V1-079` composition contract already require normal API plugin registration.
+- Related requirements: `NFR-005`, `PR-007`, `SFR-005`, `SFR-018`.
+- Affected / owning task: validation harness in `IFC-V1-079`.
+- Blocks: clean committed physical Android acceptance rerun.
+- Root cause: the phone-driver routes were added without the strict Zod response maps required by the API surface hook, while ordinary tests covered driver state and browser bundle behavior but never enumerated route registration.
+- Fix: declare exact empty-checkpoint, bounded pre-revocation, and command/revision schemas for all ten fixed routes; add direct pinned Zod ownership to the CLI package; and enumerate every route/schema in the ordinary test gate.
+- Validation: focused driver suite passes 5 with the physical case explicitly skipped; CLI/root typecheck, lint/exports, planning, scaffold, and frozen offline install pass. The full unit gate had two unrelated load failures; both exact files pass in isolation. Clean committed physical validation remains required before closure.
+- Closed by: pending the clean physical rerun.
