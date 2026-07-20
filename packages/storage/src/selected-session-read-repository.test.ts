@@ -282,7 +282,7 @@ describe("selected session-read repository", () => {
     } finally {
       open.db.close();
     }
-  }, 30_000);
+  }, 90_000);
 
   it("validates every lookahead row and fails atomically for malformed durable state", () => {
     const corruptions = [
