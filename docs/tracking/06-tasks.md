@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-046` Compose and prove the selected API/CLI production manifest | ready | none | Every selected route-family dependency and `IFC-V1-079` now pass; assemble each operation exactly once through the loopback Fastify production composition and admitted Tailscale boundary. |
+| 1 | `IFC-V1-046` Compose and prove the selected API/CLI production manifest | in_progress | none | Strict aggregate composition, manifest-inventory, shared-policy, local/remote authority, CLI-only-contract, failure, privacy, and cleanup criteria are frozen; implement the production composition and direct aggregate tests. |
 
 ## Intentional Blockers
 
