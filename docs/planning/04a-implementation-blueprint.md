@@ -152,7 +152,7 @@ The selected runtime requires a new migration, not in-place reinterpretation of 
 5. Provide bounded local `legacy status` plus immediate transactional `legacy reset --confirm`; never inspect or mutate a tmux process or selected session state.
 6. Add durable remote-ingress settings for the selected profile identity, canonical external origin, HostDeck-owned Serve descriptor, enablement state, and last known observation without storing Tailscale credentials.
 7. Replace selected LAN/certificate audit actions with exact remote-enable and remote-disable contracts. Reuse the existing pair-request action for QR/link issuance, keep status read-only, represent profile/ownership failures as truthful operation outcomes, and preserve historical LAN diagnostic rows unchanged.
-8. Remove legacy columns/contracts only in a later reviewed migration with `IFC-V1-067`; `INT-V1-008` intentionally preserves inert rows and published SQL.
+8. `IFC-V1-067` owns the reviewed retirement boundary after the selected composition is accepted: keep published migrations 1-17 unchanged; add one migration that rebuilds settings without direct-LAN host/mode/enablement fields and drops obsolete LAN configuration storage; remove legacy runtime/interface contracts from production package roots; preserve historical session rows behind bounded confirmed reset and preserve historical audit decoding required by `DR-010`.
 
 Session start uses a recoverable saga because Codex thread creation and SQLite cannot share a transaction:
 

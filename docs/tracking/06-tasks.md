@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-067` Isolate every legacy production interface path | ready | none | The selected 22-registration/35-route production composition is accepted, so legacy custom-listener, direct-LAN/certificate, raw, tmux, config, export, and fallback reachability can now be removed or isolated without losing the selected behavior oracle. |
+| 1 | `IFC-V1-067` Isolate every legacy production interface path | in_progress | none | Criteria `ISO-01` to `ISO-08` now freeze the exact production-root, listener, authority, CLI, migration, dependency, coverage, and residue boundary before implementation. |
 | 2 | `IFC-V1-050` Propagate end-to-end deadlines and cancellation | ready | none | The resource contract, reconnect controller, selected operations, and assembled HTTP handlers are complete; this leaf closes HTTP-to-service-to-protocol deadline truth before aggregate stress. |
 | 3 | `IFC-V1-051` Bound selected CLI API transports and errors | ready | none | The exact production manifest and 21-operation source-client inventory are accepted; shared connect/request/body/stream limits can now replace client-local assumptions before packaging. |
 
