@@ -96,6 +96,13 @@ const overallTimeoutMs = requireRemoteAndroidAcceptance
 const claimTimeoutMs = 5 * 60_000;
 const tailscaleDnsServer = "100.100.100.100";
 const physicalPageMaxBytes = defaultResourceBudget.cli_response_max_bytes;
+const chromeForegroundAdbArgs = [
+  "shell",
+  "dumpsys",
+  "window",
+  "displays"
+] as const;
+const chromeForegroundMaxBytes = 128 * 1024;
 const physicalEvidenceDirectory = join(
   process.cwd(),
   "artifacts",
@@ -217,6 +224,36 @@ describe("physical Android phone-driver protocol", () => {
       revision: 1
     });
     expect(() => command?.parse({ command: "hold", revision: 3 })).toThrow();
+  });
+
+  it("checks Chrome foreground state without reading activity intents", () => {
+    const chromeDisplay = [
+      "WINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)",
+      "  Display: mDisplayId=0 (organized)",
+      "  mCurrentFocus=Window{afa5077 u0 com.android.chrome/com.google.android.apps.chrome.Main}",
+      "  mFocusedApp=ActivityRecord{148943046 u0 com.android.chrome/com.google.android.apps.chrome.Main t2525}"
+    ].join("\n");
+
+    expect(chromeForegroundAdbArgs).toEqual([
+      "shell",
+      "dumpsys",
+      "window",
+      "displays"
+    ]);
+    expect(chromeForegroundAdbArgs).not.toContain("activity");
+    expect(isChromeForegroundWindowDisplay(chromeDisplay)).toBe(true);
+    for (const candidate of [
+      chromeDisplay.replace("com.android.chrome", "com.android.camera"),
+      chromeDisplay.replace(
+        "mCurrentFocus=Window{afa5077 u0 com.android.chrome/com.google.android.apps.chrome.Main}",
+        "mCurrentFocus=null"
+      ),
+      `${chromeDisplay}\n  mCurrentFocus=Window{bbb123 u0 com.android.chrome/com.google.android.apps.chrome.Main}`,
+      `${chromeDisplay}\nhttps://private.invalid/#hostdeck-pair=protected`,
+      "x".repeat(chromeForegroundMaxBytes + 1)
+    ]) {
+      expect(isChromeForegroundWindowDisplay(candidate)).toBe(false);
+    }
   });
 });
 
@@ -2063,13 +2100,30 @@ function requireChromeRunning(): void {
 
 function requireChromeForeground(): void {
   requireChromeRunning();
-  const activities = adb(["shell", "dumpsys", "activity", "activities"]);
+  const displayState = adb(chromeForegroundAdbArgs);
   requireCondition(
-    Buffer.byteLength(activities, "utf8") <= 512 * 1024 &&
-      /(?:mResumedActivity|topResumedActivity)[^\r\n]{0,256}\bcom\.android\.chrome\//u.test(
-        activities
-      ),
+    isChromeForegroundWindowDisplay(displayState),
     "Android Chrome was not foregrounded for physical evidence."
+  );
+}
+
+function isChromeForegroundWindowDisplay(output: string): boolean {
+  if (
+    Buffer.byteLength(output, "utf8") > chromeForegroundMaxBytes ||
+    output.includes("\u0000") ||
+    output.includes("://") ||
+    output.includes(selectedPairingFragmentPrefix)
+  ) {
+    return false;
+  }
+  const focusLines = output
+    .split(/\r?\n/u)
+    .filter((line) => line.includes("mCurrentFocus="));
+  return (
+    focusLines.length === 1 &&
+    /^\s{0,8}mCurrentFocus=Window\{[0-9a-f]{1,16} u\d{1,4} com\.android\.chrome\/[A-Za-z0-9_.$]{1,192}\}\s*$/u.test(
+      focusLines[0] ?? ""
+    )
   );
 }
 

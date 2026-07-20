@@ -89,6 +89,7 @@ The physical run is one uninterrupted, no-retry acceptance sequence. A failed ro
 - Automated results name exact files, assertions, seed, clock, and command. Physical evidence is bound to one commit and one run identifier generated without a secret.
 - Machine evidence may be written first to a mode-`0600` temporary file. A validator must reject unknown keys, private-value patterns, raw addresses/origins, nonterminal rows, retries, missing cleanup, mismatched commit, or an incomplete matrix before publishing a bounded repo artifact.
 - Screenshots are captured directly from the fullscreen phone state through ADB and inspected before staging. They must show only the purpose-built secret-free acceptance state; browser address bars, notifications, and private system values are forbidden.
+- After QR creation, browser foreground checks may read only bounded WindowManager display state with an exact Chrome component match. ActivityManager task/activity/intent dumps are forbidden because they can serialize the fragment-bearing launch intent even after page history is scrubbed.
 - The run records counts and normalized reason families, never raw Tailscale `status`, `switch`, `serve`, DNS, certificate, identity, or proxy-header output.
 - A skipped device row, disconnected phone, unavailable saved profile, inability to prove no LAN route, or cleanup uncertainty is a failure, not an automated pass or prior-evidence substitute.
 

@@ -17,7 +17,8 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-009 | Proxy-decision invariants reject truthful combined hostile-header assessments unless lower-priority forwarding and identity evidence is falsely normalized. | High | Backlog bugfix | Closed | `FND-V1-018` / `IFC-V1-073` | Precedence-aware schema plus combined lookalike/unknown/identity/forwarding contract regressions. |
 | BUG-010 | The exact Codex thread lifecycle smoke can fail cleanup when the native app-server outlives its npm launcher while settling its temporary plugin cache. | Low | Small bugfix | Closed | Validation harness / `IFC-V1-061` | Owned-socket shutdown wait, bounded recursive-remove retries, and consecutive exact 0.144.0 lifecycle smokes. |
 | BUG-011 | The exact HostDeck/TUI coexistence smoke can leave its marker command unfinished or pause TUI B before the product view, despite healthy completed runtime state. | Medium | Small bugfix | Closed | Validation harness / `INT-V1-031` / `INT-V1-032` | Bounded prompt/tool timing, direct second-TUI identity proof, isolated update-check suppression, sanitized diagnostics, and clean exact standalone/aggregate passes. |
-| BUG-012 | The strict Android runner fails Fastify readiness because its fixed authenticated driver routes omit required API response schemas. | High | Small bugfix | In progress | Validation harness / `IFC-V1-079` | Exact route-schema inventory and static gates pass; clean committed physical rerun remains. |
+| BUG-012 | The strict Android runner fails Fastify readiness because its fixed authenticated driver routes omit required API response schemas. | High | Small bugfix | Closed | Validation harness / `IFC-V1-079` | Commit `3528c6c`; route-schema inventory/static gates plus clean physical Fastify/start/pair/reload progression pass. |
+| BUG-013 | Post-pairing Chrome foreground inspection reads ActivityManager intent state containing the protected QR fragment and correctly aborts on its own privacy guard. | High | Small bugfix | In progress | Validation harness / `IFC-V1-079` | Bounded WindowManager-only foreground check and clean physical rerun required. |
 
 ## Routing
 
@@ -183,5 +184,18 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Blocks: clean committed physical Android acceptance rerun.
 - Root cause: the phone-driver routes were added without the strict Zod response maps required by the API surface hook, while ordinary tests covered driver state and browser bundle behavior but never enumerated route registration.
 - Fix: declare exact empty-checkpoint, bounded pre-revocation, and command/revision schemas for all ten fixed routes; add direct pinned Zod ownership to the CLI package; and enumerate every route/schema in the ordinary test gate.
-- Validation: focused driver suite passes 5 with the physical case explicitly skipped; CLI/root typecheck, lint/exports, planning, scaffold, and frozen offline install pass. The full unit gate had two unrelated load failures; both exact files pass in isolation. Clean committed physical validation remains required before closure.
-- Closed by: pending the clean physical rerun.
+- Validation: focused driver suite passes 5 with the physical case explicitly skipped; CLI/root typecheck, lint/exports, planning, scaffold, and frozen offline install pass. The full unit gate had two unrelated load failures; both exact files pass in isolation. The clean committed run passed Fastify registration, remote enable, private QR claim, paired checkpoint, and fragment-free reload before stopping at the independent `BUG-013` privacy guard.
+- Closed by: commit `3528c6c`; physical progression evidence from the subsequent clean run.
+
+### BUG-013 Activity Inspection Exposes Pairing Fragment
+
+- Symptom: the phone successfully pairs and reloads fragment-free, then `requireChromeForeground` reads `dumpsys activity activities`; ActivityManager includes Chrome's original fragment-bearing launch intent, and the harness's protected-value guard aborts before retaining or logging it.
+- Impact: the strict run cannot continue after a valid scan, and repeated runs unnecessarily require another human pairing action.
+- Route: small bugfix; the frozen privacy contract already forbids the fragment in ADB output and evidence.
+- Related requirements: `NFR-005`, `NFR-013`, `SFR-006`, `SFR-007`.
+- Affected / owning task: validation harness in `IFC-V1-079`.
+- Blocks: clean committed physical Android acceptance rerun.
+- Root cause: ActivityManager task inspection was chosen to prove Chrome foreground state without accounting for retained launch intents. Scrubbing browser history prevents network/history leakage but does not rewrite Android's task intent record.
+- Fix: replace ActivityManager inspection with the fixed `dumpsys window displays` argv, accept exactly one bounded Chrome `mCurrentFocus` component, and reject URI-bearing, oversized, null, duplicate, or non-Chrome output.
+- Validation: the ordinary driver suite passes 6 with the physical case explicitly skipped; root typecheck, lint/exports, planning, scaffold, live bounded URI-free WindowManager output, and the full unit gate (1,858 passed, 27 explicit skips) pass. One clean physical run remains.
+- Closed by: pending implementation and physical evidence.
