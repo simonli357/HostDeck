@@ -11,7 +11,11 @@ import {
 } from "@hostdeck/contracts";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createHostDeckFastifyApp, hostDeckFastifyResourceSnapshot } from "./fastify-app.js";
+import {
+  createHostDeckFastifyApp,
+  hostDeckFastifyResourceSnapshot,
+  hostDeckFastifyRouteInventory
+} from "./fastify-app.js";
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import {
@@ -121,6 +125,9 @@ describe("bounded Fastify SSE transport", () => {
     await app.ready();
 
     try {
+      expect(hostDeckFastifyRouteInventory(app)).toEqual([
+        { method: "GET", path: "/api/sessions/:session_id/events" }
+      ]);
       const query = await app.inject({
         method: "GET",
         url: `/api/sessions/${sessionId}/events?after=1`,

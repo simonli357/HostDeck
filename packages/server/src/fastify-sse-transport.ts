@@ -89,6 +89,7 @@ export function createHostDeckSseTransportRegistration(
       app.get(
         parsed.path,
         {
+          exposeHeadRoute: false,
           sse: "only",
           schema: {
             querystring: cursorQuerySchema,

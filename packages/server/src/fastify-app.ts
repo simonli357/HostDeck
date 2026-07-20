@@ -109,8 +109,14 @@ export interface HostDeckFastifyResourceSnapshot {
   readonly timed_out_requests: number;
 }
 
+export interface HostDeckFastifyRouteInventoryEntry {
+  readonly method: string;
+  readonly path: string;
+}
+
 interface AppRuntimeState {
   readonly registeredMethods: Set<string>;
+  readonly registeredRoutes: Map<string, HostDeckFastifyRouteInventoryEntry>;
   readonly resourceBudget: ResourceBudget;
   abortedRequests: number;
   inFlightRequests: number;
@@ -221,6 +227,7 @@ function createHostDeckFastifyAppWithRequestBoundary(
     abortedRequests: 0,
     inFlightRequests: 0,
     registeredMethods: new Set<string>(),
+    registeredRoutes: new Map<string, HostDeckFastifyRouteInventoryEntry>(),
     rejectedHeaderCountRequests: 0,
     rejectedOverloadRequests: 0,
     resourceBudget: input.resourceBudget,
@@ -274,6 +281,16 @@ export function hostDeckFastifyResourceSnapshot(app: FastifyInstance): HostDeckF
   });
 }
 
+export function hostDeckFastifyRouteInventory(
+  app: FastifyInstance
+): readonly HostDeckFastifyRouteInventoryEntry[] {
+  const runtime = appRuntimeStates.get(app);
+  if (runtime === undefined) {
+    throw new TypeError("Fastify instance is not owned by the HostDeck app factory.");
+  }
+  return Object.freeze([...runtime.registeredRoutes.values()]);
+}
+
 function installRoutePolicy(app: HostDeckFastifyInstance, runtime: AppRuntimeState): void {
   app.addHook("onRoute", (routeOptions) => {
     assertHostDeckRouteSchemas(routeOptions.schema);
@@ -287,7 +304,13 @@ function installRoutePolicy(app: HostDeckFastifyInstance, runtime: AppRuntimeSta
       runtime.resourceBudget.http_request_deadline_ms
     );
     for (const method of Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method]) {
-      runtime.registeredMethods.add(method.toUpperCase());
+      const normalizedMethod = method.toUpperCase();
+      runtime.registeredMethods.add(normalizedMethod);
+      const key = `${normalizedMethod} ${routeOptions.url}`;
+      runtime.registeredRoutes.set(
+        key,
+        Object.freeze({ method: normalizedMethod, path: routeOptions.url })
+      );
     }
 
     const originalHandler = routeOptions.handler;
