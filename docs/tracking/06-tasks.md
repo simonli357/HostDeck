@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-079` Run aggregate remote-ingress security and physical Android acceptance | in_progress | none | The automated aggregate and strict runner are pushed; reconnect and unlock the target phone, run `pnpm smoke:remote-android` over cellular plus Tailscale, inspect the four screenshots, then validate and publish closure evidence. |
+| 1 | `IFC-V1-046` Compose and prove the selected API/CLI production manifest | ready | none | Every selected route-family dependency and `IFC-V1-079` now pass; assemble each operation exactly once through the loopback Fastify production composition and admitted Tailscale boundary. |
 
 ## Intentional Blockers
 

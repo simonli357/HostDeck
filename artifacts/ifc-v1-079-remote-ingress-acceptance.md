@@ -1,7 +1,7 @@
 # IFC-V1-079 Remote Ingress Security And Android Acceptance
 
-Date: 2026-07-17
-Status: criteria frozen; phone-runner implementation complete; physical evidence pending
+Date: 2026-07-20
+Status: complete; automated and strict physical Android acceptance pass
 
 ## Objective
 
@@ -101,6 +101,17 @@ The physical run is one uninterrupted, no-retry acceptance sequence. A failed ro
 4. Frozen install, production dependency audit, production license inventory, diff/privacy review, process/listener/socket/timer/temp inspection, and Tailscale/Serve/profile cleanup pass.
 5. The physical matrix passes on the target Android over an unrelated network and its sanitized evidence validates against the exact committed implementation.
 6. Implementation and evidence are committed and pushed. Only then may `IFC-V1-079` become `done` and unblock production composition, interface hardening, frontend remote-access work, and release acceptance.
+
+## Final Evidence
+
+- Implementation under test: clean pushed commit `b4078b6d411267dec9701ed5ae67037567a9dee9`, including the response-schema correction in `3528c6c` and the WindowManager-only foreground correction in `b4078b6`.
+- Physical command: `pnpm smoke:remote-android`; one uninterrupted no-retry run passed all seven test cases in 126.08 seconds. The published machine evidence records all `PHONE-01` to `PHONE-12` rows as `passed`, zero retries, cellular plus Tailscale VPN transport with phone Wi-Fi disabled during requests, no custom CA, and no ADB application tunnel.
+- Sanitized evidence: `artifacts/ifc-v1-079-device/evidence.json` plus four 1080x2400 screenshots. Recorded SHA-256 values reproduce exactly. Manual visual inspection confirms fullscreen mobile states, readable unclipped text, and no browser chrome, notification, QR, device id, account/profile/tailnet name, DNS/IP value, credential, or protected value. PNG metadata contains only standard image and Skia color-profile fields.
+- Runtime sequence: pair/reload, protected reads, bounded audited write, real SSE event and heartbeat, host lock plus local unlock, saved-profile away closure, observation-only profile return without re-pairing, self-revoke, and remote disable all pass. Foreign Serve state remains byte-identical.
+- Cleanup: dedicated Serve state is absent, the selected saved profile and phone Wi-Fi are restored, browser/test database and temporary state are closed, and no HostDeck listener/process, SSE owner, ADB forward, or ADB reverse remains.
+- Final automated gates: focused aggregate/ordinary Android regressions pass 10 with one physical opt-in skip; unit passes 1,858 with 27 explicit skips; contract passes 277; integration passes 18; web passes 33; Chromium pairing passes 3. The first final unit rerun had one load-sensitive 4,096-row test timeout; that file passed 11 in isolation and the canonical full rerun then passed cleanly.
+- Static/reproducibility gates: root typecheck, lint/exports, scaffold, runtime-boundary, frozen offline install, exact Codex 0.144.0 binding regeneration check (671 files), production audit (zero known vulnerabilities), permissive production-license inventory (155 entries across eight expressions), planning check, evidence hash/privacy review, and final Tailscale/Serve/process/tunnel cleanup pass.
+- Detailed physical evidence is deliberately bounded to machine facts and screenshots. Raw command output, pairing material, browser state, device serials, accounts, profile identifiers, network addresses, and tailnet origin are not retained.
 
 ## Explicit Non-Goals
 

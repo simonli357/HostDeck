@@ -7,7 +7,7 @@ Owns milestone, module maturity, production passes, and release truth.
 - Current pass: Tailscale-first production host interface after completing selected runtime integration.
 - Current milestone: M1 selected foundation and M2 real structured vertical are complete; M3 remote host interface is in progress.
 - Release state: no-go; selected production path is not implemented.
-- Next exit: `IFC-V1-037` freezes and implements complete application drain after the completed mutable-health leaf; `IFC-V1-048` subscriber stress hardening remains independently ready.
+- Next exit: `IFC-V1-046` composes every proven selected route and CLI operation through the production loopback Fastify and admitted Tailscale boundaries after `IFC-V1-079` closed aggregate hostile and physical Android acceptance.
 
 ## Milestones
 
@@ -27,7 +27,7 @@ Owns milestone, module maturity, production passes, and release truth.
 | `BLK-V1-01` Contracts/core/fixtures | Structured-runtime and remote-ingress/access contracts, invariants, fixtures, generated/normalized adapter boundaries, planning checker, executable-leaf audit, and focused hardening pass. | None; block complete. | `FND-V1-018`, `FND-V1-092` |
 | `BLK-V1-02` State/auth/audit | Mapping/recovery/projection/runtime compatibility, remote-ingress config/profile/Serve/observation durability, exact remote enable/disable audit with historical preservation, retention, pairing/CSRF/device authority, secure paths/lease, and combined aggregate migration/restart/conflict/query-plan/privacy hardening pass. | None; block complete. | `DAT-V1-092` |
 | `BLK-V1-03` Codex runtime/events | Exact binding, private IPC/handshake, thread/control/event vertical, production supervision, restart/reconciliation, multi-client lifecycle, executable tmux-runtime removal, and clean-commit aggregate hardening pass. | None; block complete. | `INT-V1-005` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
-| `BLK-V1-04` API/CLI/security/service | Typed loopback Fastify/SSE/static boundaries, app-auth primitives, bounded fanout, retention-safe replay/live handoff, bounded selected SSE route/subscribers, and independent seven-source local/remote health plus startup maintenance pass. Exact Tailscale observation, Serve ownership, proxy/source trust, application authorization, remote control, and fragment-safe Android pairing also pass. | Complete application drain, production lifecycle/SSE composition, aggregate remote/physical acceptance, remaining routes/bounds, legacy isolation, build, and services remain. | `IFC-V1-070` to `IFC-V1-079`, remaining interface leaves, `IFC-V1-091` |
+| `BLK-V1-04` API/CLI/security/service | Typed loopback Fastify/SSE/static boundaries, app-auth primitives, bounded fanout, retention-safe replay/live handoff, complete drain, independent local/remote health, exact Tailscale observation/Serve ownership/proxy trust/application authorization, remote control, production remote lifecycle, and aggregate hostile plus physical Android acceptance pass. | Full selected route/SSE composition, remaining bounds, legacy isolation, build/user services, and interface hardening remain. | `IFC-V1-046`, remaining interface leaves, `IFC-V1-091` |
 | `BLK-V1-05` Mobile dashboard | View-model helpers only; old boards rejected. | Remote state/visual gate and all product UI/device evidence remain. | `FE-V1-004`, reopened `FE-V1-002`, `FE-V1-003`, `FE-V1-010` to `FE-V1-040`, `FE-V1-090` |
 | `BLK-V1-06` Release | Baseline commands/historical docs and both rebaseline decisions exist. | Selected remote-path clean install/security/device/profile/aggregate/docs/go-no-go absent. | `REL-V1-004` to `REL-V1-010`, `REL-V1-012` |
 
@@ -44,7 +44,7 @@ Owns milestone, module maturity, production passes, and release truth.
 | Planning/trace/dependency integrity | Complete | `REL-V1-011`, `REL-V1-012`, `FND-V1-014`, `FND-V1-017` |
 | Remote contracts and durable state | Complete | `IFC-V1-070`, `FND-V1-018`, `FND-V1-092`, `DAT-V1-031`, `DAT-V1-032`, `DAT-V1-092` |
 | Real Codex compatibility and vertical | Complete | `INT-V1-003` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
-| Remote HTTPS/app-auth/security boundary | Blocked | `IFC-V1-070` to `IFC-V1-079`, reusable auth/storage leaves, `IFC-V1-059`, `IFC-V1-066`, `IFC-V1-091` |
+| Remote HTTPS/app-auth/security boundary | In progress | Aggregate hostile and physical acceptance passes through `IFC-V1-079`; full production composition and module hardening remain `IFC-V1-046` and `IFC-V1-091`. |
 | Build/package/user services | Blocked | `IFC-V1-021`, `IFC-V1-053` to `IFC-V1-058` |
 | Mobile visual selection/UI/device | Blocked | `FE-V1-004`, `FE-V1-002`, human `FE-V1-003`, `FE-V1-010` to `FE-V1-040`, `FE-V1-090` |
 | Security/privacy | Blocked | `REL-V1-005` |

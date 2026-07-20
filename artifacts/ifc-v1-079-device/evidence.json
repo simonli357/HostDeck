@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "task": "IFC-V1-079",
+  "commit": "b4078b6d411267dec9701ed5ae67037567a9dee9",
+  "command": "pnpm smoke:remote-android",
+  "run": {
+    "completed_at": "2026-07-20T19:05:53.556Z",
+    "retry_count": 0,
+    "started_at": "2026-07-20T19:03:57.646Z"
+  },
+  "environment": {
+    "android_api": "36",
+    "android_model": "Xiaomi 15 Pro",
+    "android_release": "16",
+    "chrome_version": "150.0.7871.124",
+    "host_os": "Ubuntu 24.04.4 LTS",
+    "node_version": "v22.22.2",
+    "tailscale_version": "1.98.8"
+  },
+  "network": {
+    "adb_app_tunnel_count": 0,
+    "adb_device_count": 1,
+    "cellular_active": true,
+    "custom_ca_used": false,
+    "tailscale_vpn_active": true,
+    "wifi_disabled_during_requests": true
+  },
+  "lifecycle": {
+    "listener": "ipv4_loopback_http",
+    "local_ready_first": true,
+    "manager_attempts": 2,
+    "manager_attempts_during_saved_profile_switch": 0,
+    "private_serve_https": true,
+    "recovery": "observation_only"
+  },
+  "sequence": {
+    "foreignServeUnchanged": true,
+    "lockPassed": true,
+    "managerAttemptsBeforeDisable": 1,
+    "managerAttemptsDuringSwitch": 0,
+    "profileAwayClosedAuthority": true,
+    "profileReturnRecovered": true,
+    "protectedReads": 5,
+    "remoteUnlockDenied": true,
+    "selfRevoked": true,
+    "sseEvents": 2,
+    "sseHeartbeats": 1
+  },
+  "foreign_serve": {
+    "byte_count": 3,
+    "byte_identical": true
+  },
+  "operations": [
+    "remote_enable:succeeded",
+    "pair_claim:succeeded",
+    "csrf_lock:succeeded",
+    "host_lock:succeeded",
+    "local_unlock:succeeded",
+    "saved_profile_away:observed",
+    "saved_profile_return:observed",
+    "self_revoke:succeeded",
+    "remote_disable:succeeded"
+  ],
+  "rows": [
+    {
+      "id": "PHONE-01",
+      "status": "passed"
+    },
+    {
+      "id": "PHONE-02",
+      "status": "passed"
+    },
+    {
+      "id": "PHONE-03",
+      "status": "passed"
+    },
+    {
+      "id": "PHONE-04",
+      "status": "passed"
+    },
+    {
+      "id": "PHONE-05",
+      "status": "passed"
+    },
+    {
+      "id": "PHONE-06",
+      "status": "passed"
+    },
+    {
+      "id": "PHONE-07",
+      "status": "passed"
+    },
+    {
+      "id": "PHONE-08",
+      "status": "passed"
+    },
+    {
+      "id": "PHONE-09",
+      "status": "passed"
+    },
+    {
+      "id": "PHONE-10",
+      "status": "passed"
+    },
+    {
+      "id": "PHONE-11",
+      "status": "passed"
+    },
+    {
+      "id": "PHONE-12",
+      "status": "passed"
+    }
+  ],
+  "screenshots": [
+    {
+      "byte_count": 83998,
+      "file": "01-paired-ready.png",
+      "sha256": "dd9ce2529cae6a936a6bc6bfa1c137348278ee0fca167ac1cd528dc20f902d36"
+    },
+    {
+      "byte_count": 89218,
+      "file": "02-profile-away.png",
+      "sha256": "c9b10b823df7e47979d8cf14476a537b7bbe2de80a537423d95e2c37097ef3e6"
+    },
+    {
+      "byte_count": 86679,
+      "file": "03-recovered.png",
+      "sha256": "dd2a2deb3dba8dd27b9eaf83b095b668c18abe775ecc713b35bfcda2f142f351"
+    },
+    {
+      "byte_count": 86584,
+      "file": "04-revoked-cleaned.png",
+      "sha256": "2146395f13339331177234b0948023ae195055a0434a01a5d797778f0782e617"
+    }
+  ],
+  "cleanup": {
+    "adb_forwards": 0,
+    "adb_reverses": 0,
+    "browser_closed": true,
+    "database_open": false,
+    "dedicated_serve_absent": true,
+    "foreign_serve_unchanged": true,
+    "listener_open": false,
+    "saved_profile_restored": true,
+    "sse_active": 0,
+    "temporary_state_present": false
+  }
+}
