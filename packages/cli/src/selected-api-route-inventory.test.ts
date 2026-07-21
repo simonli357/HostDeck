@@ -19,10 +19,15 @@ import {
   type HostDeckCompactClientStartRequest
 } from "./compact-client.js";
 import {
+  createHostDeckDeviceRevokeClient,
+  type HostDeckDeviceRevokeClientRequest
+} from "./device-revoke-client.js";
+import {
   createHostDeckGoalClient,
   type HostDeckGoalClientMutationRequest
 } from "./goal-client.js";
 import { createHostDeckHostLockClient } from "./host-lock-client.js";
+import { createHostDeckHostStatusClient } from "./host-status-client.js";
 import {
   createHostDeckInterruptClient,
   type HostDeckInterruptClientRequest
@@ -42,6 +47,7 @@ import {
 } from "./prompt-client.js";
 import { createHostDeckRemoteControlClient } from "./remote-control-client.js";
 import { createHostDeckResumeClient } from "./resume-client.js";
+import { createHostDeckSessionListClient } from "./session-list-client.js";
 import { createHostDeckSkillsClient } from "./skills-client.js";
 import { createHostDeckStartClient } from "./start-client.js";
 import { createHostDeckUsageClient } from "./usage-client.js";
@@ -61,9 +67,11 @@ const expectedManifestIds = [
   "approval_respond",
   "compact_read",
   "compact_start",
+  "device_revoke",
   "goal_mutate",
   "goal_read",
   "host_lock",
+  "host_status",
   "host_unlock",
   "model_read",
   "model_select",
@@ -75,6 +83,7 @@ const expectedManifestIds = [
   "remote_enable",
   "remote_status",
   "session_archive",
+  "session_list",
   "session_resume_metadata",
   "session_start",
   "skills_read",
@@ -102,6 +111,12 @@ const selectedClientContracts = [
     operations: ["read", "start"]
   },
   {
+    factory: "createHostDeckDeviceRevokeClient",
+    file: "device-revoke-client.ts",
+    interface: "HostDeckDeviceRevokeClient",
+    operations: ["revoke"]
+  },
+  {
     factory: "createHostDeckGoalClient",
     file: "goal-client.ts",
     interface: "HostDeckGoalClient",
@@ -112,6 +127,12 @@ const selectedClientContracts = [
     file: "host-lock-client.ts",
     interface: "HostDeckHostLockClient",
     operations: ["lock", "unlock"]
+  },
+  {
+    factory: "createHostDeckHostStatusClient",
+    file: "host-status-client.ts",
+    interface: "HostDeckHostStatusClient",
+    operations: ["read"]
   },
   {
     factory: "createHostDeckInterruptClient",
@@ -156,6 +177,12 @@ const selectedClientContracts = [
     operations: ["read"]
   },
   {
+    factory: "createHostDeckSessionListClient",
+    file: "session-list-client.ts",
+    interface: "HostDeckSessionListClient",
+    operations: ["list"]
+  },
+  {
     factory: "createHostDeckSkillsClient",
     file: "skills-client.ts",
     interface: "HostDeckSkillsClient",
@@ -179,8 +206,10 @@ const expectedStatusSourceByFile = Object.freeze({
   "approval-client.ts": "expectedStatus: 200",
   "archive-client.ts": "expectedStatus: 202",
   "compact-client.ts": "expectedStatus: request === null ? 200 : 202",
+  "device-revoke-client.ts": "expectedStatus: 200",
   "goal-client.ts": "expectedStatus: 200",
   "host-lock-client.ts": "expectedStatus: 200",
+  "host-status-client.ts": "expectedStatus: 200",
   "interrupt-client.ts": "expectedStatus: 200",
   "model-client.ts": "expectedStatus: 200",
   "pairing-link-client.ts": "expectedStatus: 200",
@@ -188,6 +217,7 @@ const expectedStatusSourceByFile = Object.freeze({
   "prompt-client.ts": "expectedStatus: 202",
   "remote-control-client.ts": "expectedStatus: 200",
   "resume-client.ts": "expectedStatus: 200",
+  "session-list-client.ts": "expectedStatus: 200",
   "skills-client.ts": "expectedStatus: 200",
   "start-client.ts": "expectedStatus: 201",
   "usage-client.ts": "expectedStatus: 200"
@@ -202,13 +232,13 @@ describe("CLI selected-route inventory", () => {
     expect(actualClientFiles).toEqual(
       selectedClientContracts.map((entry) => entry.file).sort()
     );
-    expect(selectedClientContracts).toHaveLength(15);
+    expect(selectedClientContracts).toHaveLength(18);
     expect(
       selectedClientContracts.reduce(
         (count, entry) => count + entry.operations.length,
         0
       )
-    ).toBe(23);
+    ).toBe(26);
 
     for (const entry of selectedClientContracts) {
       const source = await readFile(new URL(entry.file, sourceDirectory), "utf8");
@@ -402,14 +432,28 @@ describe("CLI selected-route inventory", () => {
     await observe(() =>
       hostLock.unlock({ confirmed: true, operation_id: operationId })
     );
+    await observe(() => createHostDeckHostStatusClient(options).read());
+    await observe(() =>
+      createHostDeckSessionListClient(options).list({
+        limit: null,
+        cursor: null
+      })
+    );
+    await observe(() =>
+      createHostDeckDeviceRevokeClient(options).revoke({
+        device_id: "client_cli_inventory_001",
+        operation_id: operationId,
+        confirmed: true
+      } satisfies HostDeckDeviceRevokeClientRequest)
+    );
 
     const observedManifestIds = observed.map((request) => requireManifestMatch(request));
     const matchedIds = new Set(observedManifestIds);
     expect([...matchedIds].sort()).toEqual([...expectedManifestIds].sort());
     expect(matchedIds.size).toBe(expectedManifestIds.length);
-    expect(observed).toHaveLength(25);
-    expect(observed.filter((request) => request.method === "GET")).toHaveLength(11);
-    expect(observed.filter((request) => request.method === "POST")).toHaveLength(14);
+    expect(observed).toHaveLength(28);
+    expect(observed.filter((request) => request.method === "GET")).toHaveLength(13);
+    expect(observed.filter((request) => request.method === "POST")).toHaveLength(15);
     expect(
       observed.every(
         (request) =>
@@ -433,14 +477,14 @@ describe("CLI selected-route inventory", () => {
           .filter((request) => request.method === "GET")
           .map((request) => requireManifestMatch(request))
       ).size
-    ).toBe(9);
+    ).toBe(11);
     expect(
       new Set(
         observed
           .filter((request) => request.method === "POST")
           .map((request) => requireManifestMatch(request))
       ).size
-    ).toBe(14);
+    ).toBe(15);
     expect(
       observedManifestIds.filter((manifestId) => manifestId === "remote_status")
     ).toHaveLength(3);

@@ -28,14 +28,20 @@ import {
   type RemoteIngressPublicState,
   type ResolvedPlanSettings,
   remoteIngressPublicStateSchema,
+  type SelectedDeviceRevokeResponse,
   type SelectedHostLockStateResponse,
+  type SelectedHostStatusResponse,
   type SelectedOperationDispatch,
+  type SelectedSessionListResponse,
   type SelectedSessionStartResponse,
   type SkillsSnapshot,
+  selectedDeviceRevokeResponseSchema,
   selectedHostLockStateResponseSchema,
+  selectedHostStatusResponseSchema,
   selectedOperationDispatchSchema,
   selectedPairingLinkSchema,
   selectedPairingPermissionSchema,
+  selectedSessionListResponseSchema,
   selectedSessionStartResponseSchema,
   sessionIdParamsSchema,
   skillsSnapshotSchema,
@@ -354,6 +360,87 @@ export function renderHostLockState(
   return `HostDeck is now ${parsed.data.locked ? "locked" : "unlocked"}.\n`;
 }
 
+export function renderHostStatus(
+  candidate: SelectedHostStatusResponse,
+  json: boolean
+): string {
+  let parsed: ReturnType<typeof selectedHostStatusResponseSchema.safeParse>;
+  try {
+    parsed = selectedHostStatusResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Host-status rendering input is invalid.");
+  }
+  if (!parsed.success) {
+    throw internalFailure("Host-status rendering input is invalid.");
+  }
+  const status = parsed.data;
+  const publicStatus = Object.freeze({
+    local: status.local,
+    remote: Object.freeze({
+      generation: status.remote.generation,
+      state_generation: status.remote.state_generation,
+      availability: status.remote.availability,
+      cause: status.remote.cause,
+      laptop_action_required: status.remote.laptop_action_required,
+      observed_at: status.remote.observed_at,
+      checked_at: status.remote.checked_at,
+      updated_at: status.remote.updated_at
+    }),
+    access: status.access
+  });
+  const output = json
+    ? `${JSON.stringify(publicStatus, null, 2)}\n`
+    : renderHostStatusText(status);
+  requireBoundedRender(output, "Host-status");
+  return output;
+}
+
+export function renderSessionList(
+  candidate: SelectedSessionListResponse,
+  json: boolean
+): string {
+  let parsed: ReturnType<typeof selectedSessionListResponseSchema.safeParse>;
+  try {
+    parsed = selectedSessionListResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Session-list rendering input is invalid.");
+  }
+  if (!parsed.success) {
+    throw internalFailure("Session-list rendering input is invalid.");
+  }
+  const output = json
+    ? `${JSON.stringify(parsed.data, null, 2)}\n`
+    : renderSessionListText(parsed.data);
+  requireBoundedRender(output, "Session-list");
+  return output;
+}
+
+export function renderDeviceRevoke(
+  candidate: SelectedDeviceRevokeResponse,
+  json: boolean
+): string {
+  let parsed: ReturnType<typeof selectedDeviceRevokeResponseSchema.safeParse>;
+  try {
+    parsed = selectedDeviceRevokeResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Device-revoke rendering input is invalid.");
+  }
+  if (!parsed.success) {
+    throw internalFailure("Device-revoke rendering input is invalid.");
+  }
+  const response = parsed.data;
+  const output = json
+    ? `${JSON.stringify(response, null, 2)}\n`
+    : [
+        `Revoked device: ${escapeTerminalText(response.device_id)}`,
+        `Revoked: ${response.revoked_at}`,
+        `Authority invalidated: ${response.authority_invalidated ? "yes" : "no"}`,
+        ""
+      ].join("\n");
+  requireBoundedRender(output, "Device-revoke");
+  return output;
+}
+
 export function renderLegacySessionStatus(candidate: unknown, json: boolean): string {
   const response = parseLegacySessionSummary(candidate);
   if (json) return `${JSON.stringify(response, null, 2)}\n`;
@@ -573,6 +660,70 @@ function renderApprovalListText(response: PendingApprovalListResponse): string {
     );
   }
   lines.push("");
+  return lines.join("\n");
+}
+
+function renderHostStatusText(status: SelectedHostStatusResponse): string {
+  const lines = [
+    `Local host: ${status.local.state}`,
+    `Readiness: ${status.local.readiness}`,
+    `Mutation admission: ${status.local.mutation_admission}`,
+    `Local generation: ${status.local.generation}`,
+    `Local updated: ${status.local.updated_at}`,
+    "",
+    "Components"
+  ];
+  for (const component of status.local.components) {
+    lines.push(
+      `- ${component.component}: ${component.state}; causes=${component.causes.length === 0 ? "none" : component.causes.join(",")}; checked=${component.checked_at ?? "not observed"}`
+    );
+  }
+  lines.push(
+    "",
+    `Remote access: ${status.remote.availability}`,
+    `Remote cause: ${status.remote.cause ?? "none"}`,
+    `Laptop action required: ${status.remote.laptop_action_required ? "yes" : "no"}`,
+    `Remote generation: ${status.remote.generation}`,
+    `Remote state generation: ${status.remote.state_generation ?? "none"}`,
+    `Remote observed: ${status.remote.observed_at ?? "not observed"}`,
+    `Remote checked: ${status.remote.checked_at ?? "not checked"}`,
+    `Remote updated: ${status.remote.updated_at}`,
+    "",
+    `Status access: ${status.access.mode} (${status.access.network_mode}/${status.access.transport})`,
+    `Status request write eligible: ${status.access.write_eligibility.eligible ? "yes" : "no"}`,
+    `Status request write causes: ${status.access.write_eligibility.causes.length === 0 ? "none" : status.access.write_eligibility.causes.join(",")}`,
+    ""
+  );
+  return lines.join("\n");
+}
+
+function renderSessionListText(response: SelectedSessionListResponse): string {
+  const lines = [
+    `Managed sessions: ${response.sessions.length}`,
+    `Access: ${response.access.mode} (${response.access.network_mode}/${response.access.transport})`,
+    `Has more: ${response.has_more ? "yes" : "no"}`
+  ];
+  if (response.sessions.length === 0) {
+    lines.push("", "No managed sessions.");
+  } else {
+    for (const item of response.sessions) {
+      const session = item.session;
+      lines.push(
+        "",
+        `[${session.attention}] ${escapeTerminalText(session.name)}`,
+        `ID: ${escapeTerminalText(session.id)}`,
+        `Session: ${session.session_state}`,
+        `Turn: ${session.turn_state}`,
+        `Freshness: ${session.freshness}`,
+        `Last activity: ${session.last_activity_at ?? "none"}`
+      );
+    }
+  }
+  lines.push(
+    "",
+    `Next cursor: ${response.next_cursor === null ? "none" : escapeTerminalText(response.next_cursor)}`,
+    ""
+  );
   return lines.join("\n");
 }
 

@@ -287,10 +287,7 @@ describe("selected CLI shell contract", () => {
   it("reports staged commands unavailable without config, filesystem, network, or process work", async () => {
     for (const args of [
       ["serve"],
-      ["status"],
-      ["list", "--limit=25", "--cursor", sessionListCursor],
       ["devices", "--limit=10", "--cursor", deviceListCursor],
-      ["revoke", "client_contract_01", "--confirm"],
       ["service", "install"],
       ["service", "upgrade"],
       ["service", "status"],

@@ -13,10 +13,13 @@ import type {
   PlanControlSnapshot,
   PlanSelectionRequest,
   PromptDispatchResponse,
+  SelectedDeviceRevokeResponse,
   SelectedHostLockRequest,
+  SelectedHostStatusResponse,
   SelectedHostUnlockRequest,
   SelectedOperationDispatch,
   SelectedResumeMetadataResponse,
+  SelectedSessionListResponse,
   SelectedSessionStartResponse,
   SelectedStartSessionRequest,
   SkillsSnapshot,
@@ -28,6 +31,8 @@ import {
   clientOperationIdSchema,
   compactProgressResponseSchema,
   compactStartRequestSchema,
+  compareSelectedSessionListSortKeys,
+  decodeSelectedSessionListCursor,
   defaultResourceBudget,
   goalControlSnapshotSchema,
   goalMutationRequestSchema,
@@ -46,12 +51,19 @@ import {
   remoteDisableRequestSchema,
   remoteEnableRequestSchema,
   type SelectedPairRequest,
+  selectedDeviceRevokeParamsSchema,
+  selectedDeviceRevokeRequestSchema,
+  selectedDeviceRevokeResponseSchema,
   selectedHostLockRequestSchema,
+  selectedHostStatusResponseSchema,
   selectedHostUnlockRequestSchema,
   selectedOperationDispatchSchema,
   selectedPairRequestSchema,
   selectedResumeMetadataResponseSchema,
   selectedResumeParamsSchema,
+  selectedSessionListDefaultPageSize,
+  selectedSessionListResponseSchema,
+  selectedSessionListSortKey,
   selectedSessionStartResponseSchema,
   selectedStartSessionRequestSchema,
   sessionApprovalParamsSchema,
@@ -78,6 +90,11 @@ import {
 } from "./compact-client.js";
 import { type LoadCliConfigOptions, loadCliConfig } from "./config.js";
 import {
+  createHostDeckDeviceRevokeClient,
+  type HostDeckDeviceRevokeClient,
+  type HostDeckDeviceRevokeClientRequest
+} from "./device-revoke-client.js";
+import {
   clientOperationFailure,
   internalFailure,
   toCliFailure,
@@ -93,6 +110,10 @@ import {
   createHostDeckHostLockClient,
   type HostDeckHostLockClient
 } from "./host-lock-client.js";
+import {
+  createHostDeckHostStatusClient,
+  type HostDeckHostStatusClient
+} from "./host-status-client.js";
 import {
   createHostDeckInterruptClient,
   type HostDeckInterruptClient,
@@ -132,10 +153,12 @@ import {
   renderApprovalResponse,
   renderArchiveSession,
   renderCompactProgress,
+  renderDeviceRevoke,
   renderFailure,
   renderGoalSnapshot,
   renderHelp,
   renderHostLockState,
+  renderHostStatus,
   renderInterruptResponse,
   renderLegacySessionReset,
   renderLegacySessionStatus,
@@ -144,6 +167,7 @@ import {
   renderPlanSnapshot,
   renderPromptDispatch,
   renderRemoteState,
+  renderSessionList,
   renderSkillsSnapshot,
   renderStartSession,
   renderUsageSnapshot,
@@ -158,6 +182,11 @@ import {
   createHostDeckResumeLauncher,
   type HostDeckResumeLauncher
 } from "./resume-launcher.js";
+import {
+  createHostDeckSessionListClient,
+  type HostDeckSessionListClient,
+  type HostDeckSessionListClientInput
+} from "./session-list-client.js";
 import {
   createHostDeckSkillsClient,
   type HostDeckSkillsClient
@@ -184,7 +213,9 @@ export interface CliRunOptions {
   readonly fetch?: HttpFetch;
   readonly signal?: AbortSignal;
   readonly legacyAdmin?: LegacySessionAdmin;
+  readonly deviceRevokeClient?: HostDeckDeviceRevokeClient;
   readonly hostLockClient?: HostDeckHostLockClient;
+  readonly hostStatusClient?: HostDeckHostStatusClient;
   readonly goalClient?: HostDeckGoalClient;
   readonly compactClient?: HostDeckCompactClient;
   readonly approvalClient?: HostDeckApprovalClient;
@@ -197,6 +228,7 @@ export interface CliRunOptions {
   readonly remoteClient?: HostDeckRemoteControlClient;
   readonly resumeClient?: HostDeckResumeClient;
   readonly resumeLauncher?: HostDeckResumeLauncher;
+  readonly sessionListClient?: HostDeckSessionListClient;
   readonly skillsClient?: HostDeckSkillsClient;
   readonly startClient?: HostDeckStartClient;
   readonly usageClient?: HostDeckUsageClient;
@@ -207,6 +239,7 @@ export interface CliRunOptions {
   readonly createHostLockOperationId?: (
     action: "lock" | "unlock"
   ) => string;
+  readonly createDeviceRevokeOperationId?: () => string;
   readonly createArchiveOperationId?: () => string;
   readonly createCompactOperationId?: () => string;
   readonly createApprovalOperationId?: () => string;
@@ -248,15 +281,10 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
       );
     }
 
-    if (
-      parsed.command.kind === "status" ||
-      parsed.command.kind === "list" ||
-      parsed.command.kind === "devices" ||
-      parsed.command.kind === "revoke"
-    ) {
+    if (parsed.command.kind === "devices") {
       throw clientOperationFailure(
         "capability_unavailable",
-        `The ${parsed.command.kind} command is not available in this build.`
+        "The devices command is not available in this build."
       );
     }
 
@@ -286,6 +314,47 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
       baseUrl: config.baseUrl,
       fetch: selectedFetch
     });
+
+    if (parsed.command.kind === "status") {
+      const client =
+        options.hostStatusClient ??
+        createHostDeckHostStatusClient(selectedClientOptions);
+      const response = parseHostStatusResponse(
+        await Reflect.apply(client.read, undefined, [])
+      );
+      return success(renderHostStatus(response, parsed.command.json));
+    }
+
+    if (parsed.command.kind === "list") {
+      const client =
+        options.sessionListClient ??
+        createHostDeckSessionListClient(selectedClientOptions);
+      const request = Object.freeze({
+        limit: parsed.command.limit,
+        cursor: parsed.command.cursor
+      }) satisfies HostDeckSessionListClientInput;
+      const response = parseSessionListResponse(
+        await Reflect.apply(client.list, undefined, [request]),
+        request
+      );
+      return success(renderSessionList(response, parsed.command.json));
+    }
+
+    if (parsed.command.kind === "revoke") {
+      const client =
+        options.deviceRevokeClient ??
+        createHostDeckDeviceRevokeClient(selectedClientOptions);
+      const request = createDeviceRevokeRequest(
+        parsed.command,
+        options.createDeviceRevokeOperationId ??
+          createDeviceRevokeOperationId
+      );
+      const response = parseDeviceRevokeResponse(
+        await Reflect.apply(client.revoke, undefined, [request]),
+        request
+      );
+      return success(renderDeviceRevoke(response, parsed.command.json));
+    }
 
     if (parsed.command.kind === "remote") {
       const remoteClient =
@@ -567,6 +636,92 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
   }
 }
 
+function parseHostStatusResponse(
+  candidate: unknown
+): SelectedHostStatusResponse {
+  let parsed: ReturnType<typeof selectedHostStatusResponseSchema.safeParse>;
+  try {
+    parsed = selectedHostStatusResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Host-status client returned invalid data.");
+  }
+  if (
+    !parsed.success ||
+    parsed.data.access.mode !== "loopback_read" ||
+    parsed.data.access.network_mode !== "loopback" ||
+    parsed.data.access.transport !== "http"
+  ) {
+    throw internalFailure("Host-status client returned invalid data.");
+  }
+  return parsed.data;
+}
+
+function parseSessionListResponse(
+  candidate: unknown,
+  request: HostDeckSessionListClientInput
+): SelectedSessionListResponse {
+  let parsed: ReturnType<typeof selectedSessionListResponseSchema.safeParse>;
+  try {
+    parsed = selectedSessionListResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Session-list client returned invalid data.");
+  }
+  if (
+    !parsed.success ||
+    parsed.data.access.mode !== "loopback_read" ||
+    parsed.data.access.network_mode !== "loopback" ||
+    parsed.data.access.transport !== "http" ||
+    parsed.data.sessions.length >
+      (request.limit ?? selectedSessionListDefaultPageSize)
+  ) {
+    throw internalFailure("Session-list client returned invalid data.");
+  }
+  if (request.cursor !== null) {
+    let continuationMatches = false;
+    try {
+      const inputCursor = decodeSelectedSessionListCursor(request.cursor);
+      continuationMatches =
+        !parsed.data.sessions.some(
+          (item) =>
+            compareSelectedSessionListSortKeys(
+              inputCursor.after,
+              selectedSessionListSortKey(item.session)
+            ) >= 0
+        ) &&
+        (parsed.data.next_cursor === null ||
+          decodeSelectedSessionListCursor(parsed.data.next_cursor)
+            .order_snapshot === inputCursor.order_snapshot);
+    } catch {
+      continuationMatches = false;
+    }
+    if (!continuationMatches) {
+      throw internalFailure("Session-list client returned invalid data.");
+    }
+  }
+  return parsed.data;
+}
+
+function parseDeviceRevokeResponse(
+  candidate: unknown,
+  request: HostDeckDeviceRevokeClientRequest
+): SelectedDeviceRevokeResponse {
+  let parsed: ReturnType<typeof selectedDeviceRevokeResponseSchema.safeParse>;
+  try {
+    parsed = selectedDeviceRevokeResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Device-revoke client returned invalid data.");
+  }
+  if (
+    !parsed.success ||
+    parsed.data.operation_id !== request.operation_id ||
+    parsed.data.device_id !== request.device_id ||
+    parsed.data.self_revoked
+  ) {
+    throw internalFailure("Device-revoke client returned invalid data.");
+  }
+  return parsed.data;
+}
+
 function createRemoteMutationRequest(
   action: "disable" | "enable",
   createOperationId: (action: "disable" | "enable") => string
@@ -647,6 +802,36 @@ function createHostLockMutationRequest(
   return parsed.data;
 }
 
+function createDeviceRevokeRequest(
+  command: Extract<
+    ReturnType<typeof parseCliArgs>["command"],
+    { readonly kind: "revoke" }
+  >,
+  createOperationId: () => string
+): HostDeckDeviceRevokeClientRequest {
+  let operationId: unknown;
+  try {
+    operationId = Reflect.apply(createOperationId, undefined, []);
+  } catch (error) {
+    throw internalFailure("Device-revoke operation id generation failed.", error);
+  }
+  const params = selectedDeviceRevokeParamsSchema.safeParse({
+    device_id: command.deviceId
+  });
+  const request = selectedDeviceRevokeRequestSchema.safeParse({
+    operation_id: operationId,
+    confirmed: command.confirm
+  });
+  if (!params.success || !request.success) {
+    throw internalFailure("Device-revoke operation id generation failed.");
+  }
+  return Object.freeze({
+    device_id: params.data.device_id,
+    operation_id: request.data.operation_id,
+    confirmed: request.data.confirmed
+  });
+}
+
 function createRemoteOperationId(action: "disable" | "enable"): string {
   return `op_remote_${action}_${randomUUID().replaceAll("-", "")}`;
 }
@@ -657,6 +842,10 @@ function createPairOperationId(): string {
 
 function createHostLockOperationId(action: "lock" | "unlock"): string {
   return `op_host_${action}_${randomUUID().replaceAll("-", "")}`;
+}
+
+function createDeviceRevokeOperationId(): string {
+  return `op_device_revoke_${randomUUID().replaceAll("-", "")}`;
 }
 
 function createStartOperationId(): string {

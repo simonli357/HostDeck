@@ -62,8 +62,8 @@ export function selectedProductionSources(repositoryRoot = defaultRepositoryRoot
     throw new Error(`Selected runtime boundary failed:\n- ${result.failures.join("\n- ")}`);
   }
   const sources = result.closureFiles.filter((path) => !path.startsWith("packages/web/"));
-  if (sources.length !== 600) {
-    throw new Error(`Selected server/CLI closure contains ${sources.length} sources; expected exactly 600.`);
+  if (sources.length !== 603) {
+    throw new Error(`Selected server/CLI closure contains ${sources.length} sources; expected exactly 603.`);
   }
   const selectedPackages = new Set(sources.map((path) => path.split("/")[1]));
   if (selectedPackages.size !== packageNames.length || packageNames.some((name) => !selectedPackages.has(name))) {
