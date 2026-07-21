@@ -16,8 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-050` Propagate end-to-end deadlines and cancellation | in_progress | none | Criteria `DLC-01` to `DLC-10` freeze exact request ownership, decreasing protocol budgets, multi-step ordering, no-send/possible-send truth, public errors/audit, queue/waiter cleanup, late reconciliation, structural coverage, and aggregate evidence. |
-| 2 | `IFC-V1-051` Bound selected CLI API transports and errors | ready | none | The exact selected-only production manifest and 21-operation source-client inventory are accepted; shared connect/request/body/stream limits can now replace client-local assumptions before packaging. |
+| 1 | `IFC-V1-051` Bound selected CLI API transports and errors | in_progress | none | Freeze one shared connect/request/body/stream timeout, size, abort, cleanup, and stable-error contract across the exact selected-only 21-operation source-client inventory before implementation. |
 
 ## Intentional Blockers
 

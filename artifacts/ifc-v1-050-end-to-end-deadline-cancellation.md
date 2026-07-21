@@ -36,7 +36,7 @@ There are currently eleven direct `request.signal` call sites across nine select
 | Goal | `thread/goal/get`, `thread/goal/set`, and `thread/goal/clear`; read-before-write expiry prevents the write. |
 | Plan | `collaborationMode/list` and a later prompt's collaboration-bearing `turn/start`; nested model catalog work shares the same deadline. |
 | Usage | `account/usage/read`. |
-| Compact | `thread/compact/start` plus local matching item/turn terminal wait. |
+| Compact | `thread/compact/start`; accepted work remains tracked asynchronously through matching item/turn lifecycle events. |
 | Skills | `skills/list`. |
 | Approval | Exact app-server server-response write plus local matching approval/item terminal wait. |
 | Interrupt | `turn/interrupt` plus local matching turn-terminal wait. |
@@ -47,8 +47,8 @@ Health, projected session/event reads, SSE delivery, resume metadata, pairing/ac
 
 | Boundary reached when deadline/abort wins | Required truth |
 | --- | --- |
-| Before a protocol send is invoked | No frame is submitted. Mutation outcome is `not_sent`; selected audit terminates as failed `operation_timeout`; no unknown latch or automatic retry is created. |
-| After protocol send is invoked but before a validated response | Delivery is possible. Mutation outcome is `unknown`; selected audit terminates as incomplete `operation_timeout`; idempotency and service reconciliation state prevent unsafe redispatch. |
+| Before protocol frame submission is proven | No frame is submitted. Mutation outcome is `not_sent`; selected audit terminates as failed `operation_timeout`; no unknown latch or automatic retry is created. This includes deadline rejection before the broker and a transport rejection that explicitly proves no submission. |
+| After protocol frame submission is possible but before a validated response | Delivery is possible. Mutation outcome is `unknown`; selected audit terminates as incomplete `operation_timeout`; idempotency and service reconciliation state prevent unsafe redispatch. |
 | Read request after possible send | The HTTP operation fails as 504 `operation_timeout`; the read remains retry-safe internally but HostDeck performs no automatic retry. A late response is retired and cannot complete the old HTTP request. |
 | Client disconnect | The same request signal stops local queue/terminal waiting and protocol response waiting. No second response is attempted. Mutation send-state truth remains `not_sent` or `unknown`; disconnect never means Codex cancellation succeeded. |
 | Matching late event after an incomplete mutation | Projection/control reconciliation may advance from authoritative event evidence. The old response and immutable accepted/incomplete audit history are not rewritten into client success. |
@@ -80,7 +80,7 @@ Health, projected session/event reads, SSE delivery, resume metadata, pairing/ac
 ### DLC-04 Mutation Send Truth
 
 - Broker and transport boundaries preserve `not_sent`, `remote_rejected`, and possible-send `unknown` without inference from elapsed time alone.
-- Prompt/start/archive/model/goal/plan/compact/approval/interrupt route mappings produce failed `operation_timeout` only when no protocol mutation was submitted, and incomplete `operation_timeout` after possible send.
+- Prompt/start/archive/goal/compact/approval/interrupt route mappings produce failed `operation_timeout` only when no protocol mutation was submitted, and incomplete `operation_timeout` after possible send. Model and Plan selection routes perform protocol reads before changing local pending state, so a timed-out read leaves the selected write failed; the later prompt owns the actual model/Plan-bearing mutation and its incomplete outcome when dispatch may have occurred.
 - Timeout, client abort, transport close, response loss, and simultaneous late response/event races cause no automatic retry, duplicate protocol request, duplicate terminal audit, or contradictory success body.
 - Idempotency/admission ownership releases on proven no-send and retains the documented result/unknown guard after possible send.
 
@@ -93,7 +93,7 @@ Health, projected session/event reads, SSE delivery, resume metadata, pairing/ac
 ### DLC-06 Abortable Local Waits
 
 - Per-target serialized request work rejects promptly when its deadline aborts before callback execution, never runs that callback later, and preserves ordering for already-running and subsequent work.
-- Compact, approval, and interrupt terminal waiters remove their exact abort listener and waiter entry on terminal event, abort, timeout, service close, generation loss, and synchronous setup failure.
+- Approval and interrupt terminal waiters remove their exact abort listener and waiter entry on terminal event, abort, timeout, service close, generation loss, and synchronous setup failure. Compact has no HTTP terminal waiter; its bounded request ends at accepted dispatch while tracked lifecycle state reconciles asynchronously.
 - Request abort does not cancel durable Codex work or claim a remote interrupt. Background projection/event observation remains independent and can reconcile later proof.
 - Every timer, listener, pending broker request, server-response claim, waiter, and serialization reservation has one terminal cleanup path and idempotent repeated cleanup.
 
@@ -139,3 +139,41 @@ Health, projected session/event reads, SSE delivery, resume metadata, pairing/ac
 - Per-operation service matrices plus a real selected Fastify/broker/audit aggregate.
 - Full workspace, clean install/supply chain, privacy/manual inspection, and zero-residue validation.
 - Owning task, blueprint, test plan, block maturity, queue/status, and final artifact synchronized only where their facts change.
+
+## Implemented Surface
+
+- `packages/codex-adapter/src/request-deadline.ts` is the single final-boundary derivation helper. Thread, turn, model, goal, Plan, usage, compact, and skills clients derive a positive decreasing child timeout immediately before every broker request; approval responses use the same helper for request-owned writes and the configured mutation cap for background expiry.
+- `packages/codex-adapter/src/broker.ts`, connection, and reconnect ports now bound app-server responses, accept a valid final 1 ms child budget, preserve transport-proven `not_sent` versus possible-send `unknown`, retire late ids, and clear pending entries, timers, and abort listeners on every terminal path.
+- `packages/server/src/operation-deadline-serialization.ts` validates the exact request deadline and makes per-target queued work abortable before callback entry. The 11 selected protocol-bearing route modules pass `context.deadline` or `hostDeckRequestDeadline(request)` unchanged into ten request-facing services and the managed-thread lifecycle.
+- Session start/archive and model, goal, Plan, prompt, usage, compact, skills, approval, and interrupt services check the shared deadline between local/protocol stages. Approval and interrupt terminal waiters use the same signal; compact remains accepted-only over HTTP and reconciles tracked lifecycle state asynchronously.
+- `packages/server/src/codex-request-deadline-coverage.test.ts` freezes the route/service/client inventory. `packages/server/src/codex-request-deadline-aggregate.test.ts` traverses real loopback and admitted-Tailscale Fastify composition, production services, connection/broker, controlled transport, and SQLite audit for read timeout, proven no-submit, possible send, replay guard, late response, late event reconciliation, and immutable audit truth.
+- Integration fixtures in `tests/approval-vertical.integration.test.ts`, `archive-vertical.integration.test.ts`, `codex-runtime-crash-reconciliation.integration.test.ts`, `compact-vertical.integration.test.ts`, `goal-vertical.integration.test.ts`, `interrupt-vertical.integration.test.ts`, `model-vertical.integration.test.ts`, `plan-vertical.integration.test.ts`, `prompt-vertical.integration.test.ts`, `selected-write-admission.integration.test.ts`, and `session-start.integration.test.ts` now exercise or preserve the exact deadline contract. Commit `08b9aa1` records the complete 88-file implementation/test set.
+
+## Validation Evidence
+
+| Gate | Result |
+| --- | --- |
+| Focused deadline evidence | Structural, aggregate, and prompt identity files: 26 passed. Adapter package: 274 passed, 8 opt-in skips. Server package: 903 passed, 16 opt-in skips. |
+| Workspace suites | Unit: 1,755 passed, 26 opt-in skips across 205 files. Contract: 235 passed. Integration: 19 passed across 15 files. Web: 20 passed. |
+| Static and repository policy | Root and all eight package typechecks pass. Biome checked 504 files; all eight package exports pass. Scaffold reports 8 packages/20 scripts. Planning and selected-runtime boundary checks pass; the boundary contains 602 production modules and 21 external modules. |
+| Exact runtime binding | Isolated Codex 0.144.0 verifies 671 generated files at SHA-256 `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. The user's default 0.144.5 installation was not changed or accepted as evidence. |
+| Install and supply chain | Offline frozen install passes for all nine workspace projects. Production audit reports zero vulnerabilities across 149 dependencies. The production license inventory has 137 permissive package entries across 140 paths: MIT, ISC, Apache-2.0, BSD-3-Clause, BlueOak-1.0.0, and permissive choice expressions. No dependency, lockfile, workspace manifest, setup, or command changed. |
+| Diff and residue | Working and staged diff checks pass. No HostDeck/test listener, task Codex process/socket, Vitest worker, ADB process, or IFC-V1-050 temp path remains; Tailscale Serve status is `{}`. Existing VS Code-owned Codex app-server processes/sockets and pre-existing phone/exact-binding temp artifacts were identified as foreign to this task and left untouched. |
+
+## Manual Inspection
+
+- The real Fastify handler-timeout test proves the one request signal aborts while request capacity stays owned until cooperative handler settlement; terminal waiters therefore receive timeout/disconnect cancellation without a replacement route timer.
+- Source inventory contains no selected route `request.signal` protocol call, request-local `AbortSignal.timeout`, replacement `AbortController`, or child deadline owner. Background reconnect/process owners remain separate by design.
+- Multi-stage fake-clock tests prove decreasing pagination, read-before-write expiry, post-reservation/pre-dispatch start failure, possible-send latching, queued abort, waiter cleanup, late-response retirement, and authoritative late-event reconciliation.
+- Public 504 envelopes, selected audit rows, aggregate transport frames, raw response bodies, and stored audit JSON were inspected for bounded diagnostics and absence of prompt, goal, path, cookie, header, protocol-frame, and private-cause content.
+
+## Remaining Scope
+
+- `IFC-V1-051` still owns shared CLI connect/request/body/stream/error bounds. `IFC-V1-052` still owns aggregate resource stress, and `IFC-V1-021` still owns compiled package output. This task makes no package, UI, phone, or release-readiness claim.
+- No block-completion-matrix maturity changed: `BLK-V1-04` remains incomplete until its downstream CLI/resource/package leaves finish. Planning, architecture, test-strategy, setup, dependency, and command owners therefore required no update.
+
+## Commits And Push
+
+- Frozen criteria: `74d7764`.
+- Implementation and tests: `08b9aa1`.
+- Push state: all IFC-V1-050 task commits, including the owner-doc closure containing this evidence, are pushed to `origin/main` with a clean task staging boundary.
