@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { cliExitCodes } from "./exit-codes.js";
-import type { LegacySessionAdmin } from "./local-admin.js";
+import type { LegacySessionAdmin } from "./legacy-session-admin.js";
 import { parseCliArgs } from "./parser.js";
 import { renderLegacySessionReset, renderLegacySessionStatus } from "./render.js";
 import { runCli } from "./shell.js";
 
 describe("selected CLI shell contract", () => {
-  it("parses selected commands, local administration, and config flags", () => {
+  it("parses selected commands, legacy administration, and config flags", () => {
     const cases = [
       {
         label: "help",
@@ -61,10 +61,10 @@ describe("selected CLI shell contract", () => {
       },
       {
         label: "lock",
-        args: ["--state-dir", "state", "--database-path=db.sqlite", "lock", "--reason=maintenance", "--json"],
+        args: ["--port", "4888", "lock", "--json"],
         expected: {
-          command: { kind: "lock", reason: "maintenance", json: true },
-          configFlags: { stateDir: "state", databasePath: "db.sqlite" }
+          command: { kind: "lock", json: true },
+          configFlags: { port: "4888" }
         }
       },
       {
@@ -95,6 +95,22 @@ describe("selected CLI shell contract", () => {
 
     for (const scenario of cases) {
       expect(parseCliArgs(scenario.args), scenario.label).toEqual(scenario.expected);
+    }
+  });
+
+  it("rejects the retired host selector before configuration loading", async () => {
+    for (const args of [
+      ["--host", "127.0.0.1", "lock"],
+      ["--host=127.0.0.1", "unlock"]
+    ]) {
+      const result = await runCli(args, {
+        env: {},
+        readFile: () => {
+          throw new Error("retired host option must fail before config");
+        }
+      });
+      expect(result.exitCode, args.join(" ")).toBe(cliExitCodes.usage);
+      expect(result.stderr).toContain("Unknown option: --host");
     }
   });
 

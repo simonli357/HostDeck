@@ -112,7 +112,7 @@ describe("managed-session Plan CLI command", () => {
             throw new Error("plan-operation-private");
           }
         },
-        localAdmin: {
+        hostLockClient: {
           enumerable: true,
           get() {
             unrelatedAccesses += 1;

@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { hostDeckLoopbackOriginSchema } from "@hostdeck/contracts";
 import { configFailure } from "./errors.js";
 
 export interface CliConfigFlags {
   readonly apiUrl?: string;
-  readonly host?: string;
   readonly port?: string;
   readonly configPath?: string;
   readonly stateDir?: string;
@@ -31,7 +31,6 @@ export interface LoadCliConfigOptions {
 type RawConfigFile = {
   readonly api_url?: unknown;
   readonly apiUrl?: unknown;
-  readonly host?: unknown;
   readonly port?: unknown;
   readonly state_dir?: unknown;
   readonly stateDir?: unknown;
@@ -39,17 +38,32 @@ type RawConfigFile = {
   readonly databasePath?: unknown;
 };
 
-const defaultHost = "127.0.0.1";
 const defaultPort = 3777;
 const defaultDatabaseFileName = "hostdeck.sqlite";
+const rawConfigKeys = [
+  "api_url",
+  "apiUrl",
+  "port",
+  "state_dir",
+  "stateDir",
+  "database_path",
+  "databasePath"
+] as const;
 
 export function loadCliConfig(options: LoadCliConfigOptions = {}): CliConfig {
   const flags = options.flags ?? {};
   const env = options.env ?? process.env;
   const configFile = loadConfigFile(flags.configPath, options);
-  const envBaseUrl = readString(env.HOSTDECK_API_BASE_URL, "HOSTDECK_API_BASE_URL");
-  const fileBaseUrl = readString(configFile.api_url ?? configFile.apiUrl, "api_url");
-  const flagBaseUrl = readString(flags.apiUrl, "--api-url");
+  rejectRetiredHostConfiguration(flags, env);
+  const envBaseUrl = readOriginString(
+    env.HOSTDECK_API_BASE_URL,
+    "HOSTDECK_API_BASE_URL"
+  );
+  const fileBaseUrl = readOriginString(
+    configFile.api_url ?? configFile.apiUrl,
+    "api_url"
+  );
+  const flagBaseUrl = readOriginString(flags.apiUrl, "--api-url");
   const baseUrl = flagBaseUrl ?? envBaseUrl ?? fileBaseUrl;
   const stateDir = resolveStoragePath(
     readString(flags.stateDir, "--state-dir") ??
@@ -72,9 +86,14 @@ export function loadCliConfig(options: LoadCliConfigOptions = {}): CliConfig {
   const runtimeDir = defaultRuntimeDir(env);
 
   if (baseUrl !== undefined) {
+    const source = sourceOf(
+      ["--api-url", flagBaseUrl],
+      ["HOSTDECK_API_BASE_URL", envBaseUrl],
+      ["config api_url", fileBaseUrl]
+    );
     return {
-      baseUrl: normalizeBaseUrl(parseBaseUrl(baseUrl, sourceOf(["--api-url", flagBaseUrl], ["HOSTDECK_API_BASE_URL", envBaseUrl], ["config api_url", fileBaseUrl]))),
-      source: sourceOf(["--api-url", flagBaseUrl], ["HOSTDECK_API_BASE_URL", envBaseUrl], ["config api_url", fileBaseUrl]),
+      baseUrl: parseBaseUrl(baseUrl, source),
+      source,
       configDir,
       stateDir,
       runtimeDir,
@@ -82,14 +101,11 @@ export function loadCliConfig(options: LoadCliConfigOptions = {}): CliConfig {
     };
   }
 
-  const host = readString(flags.host, "--host") ?? readString(env.HOSTDECK_HOST, "HOSTDECK_HOST") ?? readString(configFile.host, "host") ?? defaultHost;
   const portValue = flags.port ?? env.HOSTDECK_PORT ?? configFile.port ?? defaultPort;
   const port = parsePort(portValue, sourceOf(["--port", flags.port], ["HOSTDECK_PORT", env.HOSTDECK_PORT], ["config port", configFile.port], ["default", String(defaultPort)]));
 
-  validateHost(host, sourceOf(["--host", flags.host], ["HOSTDECK_HOST", env.HOSTDECK_HOST], ["config host", configFile.host], ["default", host]));
-
   return {
-    baseUrl: new URL(`http://${host}:${port}`),
+    baseUrl: new URL(`http://127.0.0.1:${port}`),
     source: flags.configPath === undefined ? "defaults/env/flags" : resolveConfigPath(flags.configPath, options.cwd),
     configDir,
     stateDir,
@@ -125,67 +141,63 @@ function loadConfigFile(configPath: string | undefined, options: LoadCliConfigOp
     throw configFailure(`HostDeck config file ${path} must be a JSON object.`, "--config");
   }
 
-  return parsed as RawConfigFile;
+  const record = parsed as Record<string, unknown>;
+  const unknownKey = Object.keys(record).find(
+    (key) => !rawConfigKeys.includes(key as (typeof rawConfigKeys)[number])
+  );
+  if (unknownKey !== undefined) {
+    throw configFailure(
+      `HostDeck config file ${path} contains unsupported field ${unknownKey}.`,
+      "--config"
+    );
+  }
+  for (const [snakeCase, camelCase] of [
+    ["api_url", "apiUrl"],
+    ["state_dir", "stateDir"],
+    ["database_path", "databasePath"]
+  ] as const) {
+    if (Object.hasOwn(record, snakeCase) && Object.hasOwn(record, camelCase)) {
+      throw configFailure(
+        `HostDeck config file ${path} must not define both ${snakeCase} and ${camelCase}.`,
+        "--config"
+      );
+    }
+  }
+  return record;
 }
 
 function parseBaseUrl(value: string, source: string): URL {
-  let url: URL;
-
-  try {
-    url = new URL(value);
-  } catch {
-    throw configFailure(`${source} must be an absolute http(s) URL.`, source);
+  const parsed = hostDeckLoopbackOriginSchema.safeParse(value);
+  if (!parsed.success) {
+    throw configFailure(
+      `${source} must use the direct loopback origin http://127.0.0.1 with an explicit port.`,
+      source
+    );
   }
-
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw configFailure(`${source} must use http or https.`, source);
+  const port = Number(new URL(parsed.data).port);
+  if (!Number.isSafeInteger(port) || port < 1024 || port > 65_535) {
+    throw configFailure(
+      `${source} port must be an integer from 1024 through 65535.`,
+      source
+    );
   }
-
-  if (url.hostname.length === 0) {
-    throw configFailure(`${source} must include a host.`, source);
-  }
-
-  if (url.username.length > 0 || url.password.length > 0) {
-    throw configFailure(`${source} must not include credentials.`, source);
-  }
-
-  if (url.search.length > 0 || url.hash.length > 0) {
-    throw configFailure(`${source} must not include query or fragment components.`, source);
-  }
-
-  if (url.pathname !== "/" && url.pathname !== "") {
-    throw configFailure(`${source} must not include a path.`, source);
-  }
-
-  return url;
-}
-
-function normalizeBaseUrl(url: URL): URL {
-  const normalized = new URL(url.toString());
-  normalized.pathname = normalized.pathname.replace(/\/+$/u, "");
-  return normalized;
+  return new URL(parsed.data);
 }
 
 function parsePort(value: unknown, source: string): number {
   const raw = typeof value === "number" ? String(value) : readString(value, source);
 
   if (raw === undefined || !/^\d+$/u.test(raw)) {
-    throw configFailure(`${source} must be an integer port from 1 to 65535.`, source);
+    throw configFailure(`${source} must be an integer port from 1024 through 65535.`, source);
   }
 
   const port = Number(raw);
 
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-    throw configFailure(`${source} must be an integer port from 1 to 65535.`, source);
+  if (!Number.isInteger(port) || port < 1024 || port > 65_535) {
+    throw configFailure(`${source} must be an integer port from 1024 through 65535.`, source);
   }
 
   return port;
-}
-
-function validateHost(host: string, source: string): void {
-  if (host.trim().length === 0 || /[\s/?#@]/u.test(host)) {
-    throw configFailure(`${source} must be a host name or IP address without spaces, path, credentials, query, or fragment.`, source);
-  }
 }
 
 function readString(value: unknown, source: string): string | undefined {
@@ -204,6 +216,32 @@ function readString(value: unknown, source: string): string | undefined {
   }
 
   return trimmed;
+}
+
+function readOriginString(value: unknown, source: string): string | undefined {
+  const parsed = readString(value, source);
+  if (parsed !== undefined && parsed !== value) {
+    throw configFailure(`${source} must not contain surrounding whitespace.`, source);
+  }
+  return parsed;
+}
+
+function rejectRetiredHostConfiguration(
+  flags: CliConfigFlags,
+  env: Readonly<Record<string, string | undefined>>
+): void {
+  if (Object.hasOwn(flags, "host")) {
+    throw configFailure(
+      "--host is not supported; HostDeck local control is fixed to 127.0.0.1.",
+      "--host"
+    );
+  }
+  if (env.HOSTDECK_HOST !== undefined) {
+    throw configFailure(
+      "HOSTDECK_HOST is not supported; HostDeck local control is fixed to 127.0.0.1.",
+      "HOSTDECK_HOST"
+    );
+  }
 }
 
 function resolveConfigPath(configPath: string, cwd = process.cwd()): string {

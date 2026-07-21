@@ -1,6 +1,5 @@
 import { Buffer } from "node:buffer";
 import { request as httpRequest } from "node:http";
-import { isIP } from "node:net";
 import { defaultResourceBudget } from "@hostdeck/contracts";
 import type { HttpFetch, HttpRequestInit, HttpResponse } from "./api-client.js";
 import {
@@ -11,7 +10,6 @@ import {
   internalFailure
 } from "./errors.js";
 
-const loopbackHostnames = new Set(["::1"]);
 const limits = Object.freeze({
   connectTimeoutMs: defaultResourceBudget.cli_connect_timeout_ms,
   maxInFlight: defaultResourceBudget.cli_max_in_flight_requests,
@@ -40,14 +38,13 @@ export function createBoundedLoopbackFetch(): HttpFetch {
 }
 
 export function requireLoopbackBaseUrl(url: URL): void {
-  const hostname = stripIpv6Brackets(url.hostname);
-  const ipv4 = isIP(hostname) === 4 ? hostname.split(".").map(Number) : null;
-  const loopback =
-    loopbackHostnames.has(hostname) ||
-    (ipv4 !== null && ipv4.length === 4 && ipv4[0] === 127);
+  const port = Number(url.port);
   if (
     url.protocol !== "http:" ||
-    !loopback ||
+    url.hostname !== "127.0.0.1" ||
+    !Number.isSafeInteger(port) ||
+    port < 1024 ||
+    port > 65_535 ||
     url.username.length !== 0 ||
     url.password.length !== 0 ||
     (url.pathname !== "" && url.pathname !== "/") ||
@@ -251,12 +248,6 @@ function requireLoopbackRequestUrl(url: URL): void {
       "--api-url"
     );
   }
-}
-
-function stripIpv6Brackets(hostname: string): string {
-  return hostname.startsWith("[") && hostname.endsWith("]")
-    ? hostname.slice(1, -1)
-    : hostname;
 }
 
 function incompleteResponseFailure(): CliFailure {

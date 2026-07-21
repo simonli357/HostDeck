@@ -21,6 +21,7 @@ import {
   createHostDeckGoalClient,
   type HostDeckGoalClientMutationRequest
 } from "./goal-client.js";
+import { createHostDeckHostLockClient } from "./host-lock-client.js";
 import {
   createHostDeckInterruptClient,
   type HostDeckInterruptClientRequest
@@ -59,6 +60,8 @@ const expectedManifestIds = [
   "compact_start",
   "goal_mutate",
   "goal_read",
+  "host_lock",
+  "host_unlock",
   "model_read",
   "model_select",
   "pair_request",
@@ -214,6 +217,14 @@ describe("IFC-V1-046 source CLI selected-route inventory", () => {
         operation_id: operationId,
         permission: "write"
       })
+    );
+
+    const hostLock = createHostDeckHostLockClient(options);
+    await observe(() =>
+      hostLock.lock({ confirmed: true, operation_id: operationId })
+    );
+    await observe(() =>
+      hostLock.unlock({ confirmed: true, operation_id: operationId })
     );
 
     const matchedIds = new Set(

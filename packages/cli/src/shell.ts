@@ -12,6 +12,8 @@ import type {
   PlanControlSnapshot,
   PlanSelectionRequest,
   PromptDispatchResponse,
+  SelectedHostLockRequest,
+  SelectedHostUnlockRequest,
   SelectedOperationDispatch,
   SelectedResumeMetadataResponse,
   SelectedSessionStartResponse,
@@ -42,6 +44,8 @@ import {
   remoteDisableRequestSchema,
   remoteEnableRequestSchema,
   type SelectedPairRequest,
+  selectedHostLockRequestSchema,
+  selectedHostUnlockRequestSchema,
   selectedOperationDispatchSchema,
   selectedPairRequestSchema,
   selectedResumeMetadataResponseSchema,
@@ -84,11 +88,18 @@ import {
   type HostDeckGoalClientMutationRequest
 } from "./goal-client.js";
 import {
+  createHostDeckHostLockClient,
+  type HostDeckHostLockClient
+} from "./host-lock-client.js";
+import {
   createHostDeckInterruptClient,
   type HostDeckInterruptClient,
   type HostDeckInterruptClientRequest
 } from "./interrupt-client.js";
-import { createLocalAdmin, type LegacySessionAdmin, type LocalAdmin } from "./local-admin.js";
+import {
+  createLegacySessionAdmin,
+  type LegacySessionAdmin
+} from "./legacy-session-admin.js";
 import {
   createHostDeckModelClient,
   type HostDeckModelClient,
@@ -121,10 +132,10 @@ import {
   renderFailure,
   renderGoalSnapshot,
   renderHelp,
+  renderHostLockState,
   renderInterruptResponse,
   renderLegacySessionReset,
   renderLegacySessionStatus,
-  renderLockCommand,
   renderModelSnapshot,
   renderPairingLink,
   renderPlanSnapshot,
@@ -168,8 +179,8 @@ export interface CliRunOptions {
   readonly cwd?: string;
   readonly readFile?: LoadCliConfigOptions["readFile"];
   readonly fetch?: HttpFetch;
-  readonly localAdmin?: LocalAdmin;
   readonly legacyAdmin?: LegacySessionAdmin;
+  readonly hostLockClient?: HostDeckHostLockClient;
   readonly goalClient?: HostDeckGoalClient;
   readonly compactClient?: HostDeckCompactClient;
   readonly approvalClient?: HostDeckApprovalClient;
@@ -189,6 +200,9 @@ export interface CliRunOptions {
     action: "disable" | "enable"
   ) => string;
   readonly createPairOperationId?: () => string;
+  readonly createHostLockOperationId?: (
+    action: "lock" | "unlock"
+  ) => string;
   readonly createArchiveOperationId?: () => string;
   readonly createCompactOperationId?: () => string;
   readonly createApprovalOperationId?: () => string;
@@ -279,6 +293,25 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
           options.renderPairingQr
         )
       );
+    }
+
+    if (parsed.command.kind === "lock" || parsed.command.kind === "unlock") {
+      const hostLockClientOptions = { baseUrl: config.baseUrl };
+      if (options.fetch !== undefined) {
+        Object.assign(hostLockClientOptions, { fetch: options.fetch });
+      }
+      const client =
+        options.hostLockClient ??
+        createHostDeckHostLockClient(hostLockClientOptions);
+      const request = createHostLockMutationRequest(
+        parsed.command.kind,
+        options.createHostLockOperationId ?? createHostLockOperationId
+      );
+      const response =
+        parsed.command.kind === "lock"
+          ? await Reflect.apply(client.lock, undefined, [request])
+          : await Reflect.apply(client.unlock, undefined, [request]);
+      return success(renderHostLockState(response, parsed.command.json));
     }
 
     if (parsed.command.kind === "resume") {
@@ -547,7 +580,7 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     if (parsed.command.kind === "legacy") {
       const legacyAdmin =
         options.legacyAdmin ??
-        createLocalAdmin({
+        createLegacySessionAdmin({
           stateDir: config.stateDir,
           databasePath: config.databasePath
         });
@@ -559,29 +592,6 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
               parsed.command.json
             )
       );
-    }
-
-    const localAdmin =
-      options.localAdmin ??
-      createLocalAdmin({
-        stateDir: config.stateDir,
-        databasePath: config.databasePath
-      });
-
-    if (parsed.command.kind === "lock") {
-      return success(
-        renderLockCommand(
-          localAdmin.setLock({
-            locked: true,
-            ...(parsed.command.reason !== undefined ? { reason: parsed.command.reason } : {})
-          }),
-          parsed.command.json
-        )
-      );
-    }
-
-    if (parsed.command.kind === "unlock") {
-      return success(renderLockCommand(localAdmin.setLock({ locked: false }), parsed.command.json));
     }
 
     return failure(toCliFailure(new Error("Unsupported HostDeck CLI command.")));
@@ -649,12 +659,37 @@ function createPairingRequest(
   return parsed.data;
 }
 
+function createHostLockMutationRequest(
+  action: "lock" | "unlock",
+  createOperationId: (action: "lock" | "unlock") => string
+): SelectedHostLockRequest | SelectedHostUnlockRequest {
+  let operationId: unknown;
+  try {
+    operationId = Reflect.apply(createOperationId, undefined, [action]);
+  } catch (error) {
+    throw internalFailure("Host-lock operation id generation failed.", error);
+  }
+  const candidate = { operation_id: operationId, confirmed: true };
+  const parsed =
+    action === "lock"
+      ? selectedHostLockRequestSchema.safeParse(candidate)
+      : selectedHostUnlockRequestSchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw internalFailure("Host-lock operation id generation failed.");
+  }
+  return parsed.data;
+}
+
 function createRemoteOperationId(action: "disable" | "enable"): string {
   return `op_remote_${action}_${randomUUID().replaceAll("-", "")}`;
 }
 
 function createPairOperationId(): string {
   return `op_pair_request_${randomUUID().replaceAll("-", "")}`;
+}
+
+function createHostLockOperationId(action: "lock" | "unlock"): string {
+  return `op_host_${action}_${randomUUID().replaceAll("-", "")}`;
 }
 
 function createStartOperationId(): string {

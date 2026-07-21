@@ -28,9 +28,11 @@ import {
   type RemoteIngressPublicState,
   type ResolvedPlanSettings,
   remoteIngressPublicStateSchema,
+  type SelectedHostLockStateResponse,
   type SelectedOperationDispatch,
   type SelectedSessionStartResponse,
   type SkillsSnapshot,
+  selectedHostLockStateResponseSchema,
   selectedOperationDispatchSchema,
   selectedPairingLinkSchema,
   selectedPairingPermissionSchema,
@@ -46,7 +48,6 @@ import type { LegacySessionResetResult, LegacySessionSummary } from "@hostdeck/s
 import QRCode from "qrcode";
 import type { CliFailure } from "./errors.js";
 import { internalFailure } from "./errors.js";
-import type { LockCommandResult } from "./local-admin.js";
 import type { PairingLinkCommandResult } from "./pairing-link-client.js";
 
 export type TerminalQrRenderer = (link: string) => Promise<string>;
@@ -75,19 +76,18 @@ export function renderHelp(): string {
     "  codexdeck legacy status [--json]",
     "  codexdeck legacy reset --confirm [--json]",
     "  codexdeck pair [--label LABEL] [--read-only | --write]",
-    "  codexdeck lock [--reason TEXT] [--json]",
+    "  codexdeck lock [--json]",
     "  codexdeck unlock [--json]",
     "  codexdeck remote status|enable|disable [--json]",
     "  codexdeck help",
     "  codexdeck version",
     "",
     "Options:",
-    "  --api-url URL      HostDeck daemon base URL.",
-    "  --host HOST        HostDeck daemon host. Defaults to 127.0.0.1.",
-    "  --port PORT        HostDeck daemon port. Defaults to 3777.",
-    "  --state-dir PATH   Local HostDeck state directory for admin commands.",
-    "  --database PATH    SQLite database path for local admin commands.",
-    "  --config PATH      JSON config file with api_url, host/port, or state paths.",
+    "  --api-url URL      Canonical http://127.0.0.1 daemon origin.",
+    "  --port PORT        Loopback daemon port. Defaults to 3777.",
+    "  --state-dir PATH   Local HostDeck state directory for legacy commands.",
+    "  --database PATH    SQLite database path for legacy commands.",
+    "  --config PATH      JSON config file with api_url, port, or state paths.",
     "  --json             Print machine-readable output for supported commands.",
     "",
     "Global connection and state options must appear before the command.",
@@ -330,16 +330,22 @@ async function renderTerminalQr(link: string): Promise<string> {
   }
 }
 
-export function renderLockCommand(response: LockCommandResult, json: boolean): string {
-  if (json) {
-    return `${JSON.stringify(response, null, 2)}\n`;
+export function renderHostLockState(
+  candidate: SelectedHostLockStateResponse,
+  json: boolean
+): string {
+  const parsed = selectedHostLockStateResponseSchema.safeParse(candidate);
+  if (
+    !parsed.success ||
+    parsed.data.authentication_state !== "local_admin" ||
+    parsed.data.permission !== "local_admin" ||
+    parsed.data.network_mode !== "loopback" ||
+    parsed.data.transport !== "http"
+  ) {
+    throw internalFailure("Host-lock rendering input is invalid.");
   }
-
-  return [
-    `HostDeck is now ${response.locked ? "locked" : "unlocked"}.`,
-    `Audit event: ${response.audit_event_id}`,
-    ""
-  ].join("\n");
+  if (json) return `${JSON.stringify(parsed.data, null, 2)}\n`;
+  return `HostDeck is now ${parsed.data.locked ? "locked" : "unlocked"}.\n`;
 }
 
 export function renderLegacySessionStatus(candidate: unknown, json: boolean): string {

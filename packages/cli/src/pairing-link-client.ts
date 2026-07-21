@@ -8,6 +8,10 @@ import {
   selectedPairRequestResponseSchema,
   selectedPairRequestSchema
 } from "@hostdeck/contracts";
+import {
+  hostDeckLocalAdminRequestHeaderName,
+  hostDeckLocalAdminRequestHeaderValue
+} from "@hostdeck/server";
 import type { HttpFetch, HttpResponse } from "./api-client.js";
 import {
   apiFailure,
@@ -119,7 +123,9 @@ async function issuePairingCode(input: {
       headers: Object.freeze({
         accept: "application/json",
         "cache-control": "no-store",
-        "content-type": "application/json"
+        "content-type": "application/json",
+        [hostDeckLocalAdminRequestHeaderName]:
+          hostDeckLocalAdminRequestHeaderValue
       }),
       body
     });

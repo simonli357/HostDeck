@@ -93,7 +93,7 @@ describe("approval CLI command", () => {
         client: unrelatedAccessor(() => {
           unrelatedAccesses += 1;
         }),
-        localAdmin: unrelatedAccessor(() => {
+        hostLockClient: unrelatedAccessor(() => {
           unrelatedAccesses += 1;
         }),
         compactClient: unrelatedAccessor(() => {

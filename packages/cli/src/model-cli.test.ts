@@ -116,7 +116,7 @@ describe("managed-session model CLI command", () => {
             throw new Error("model-operation-private");
           }
         },
-        localAdmin: {
+        hostLockClient: {
           enumerable: true,
           get() {
             unrelatedAccesses += 1;

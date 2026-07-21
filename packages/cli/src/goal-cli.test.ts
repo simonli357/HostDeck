@@ -145,7 +145,7 @@ describe("managed-session goal CLI command", () => {
             throw new Error("goal-operation-private");
           }
         },
-        localAdmin: {
+        hostLockClient: {
           enumerable: true,
           get() {
             unrelatedAccesses += 1;

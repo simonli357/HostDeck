@@ -76,7 +76,7 @@ describe("managed-session compact CLI command", () => {
         client: unrelatedAccessor(() => {
           unrelatedAccesses += 1;
         }),
-        localAdmin: unrelatedAccessor(() => {
+        hostLockClient: unrelatedAccessor(() => {
           unrelatedAccesses += 1;
         }),
         usageClient: unrelatedAccessor(() => {

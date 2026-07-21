@@ -4,12 +4,8 @@ import { CliFailure } from "./errors.js";
 import { cliExitCodes } from "./exit-codes.js";
 
 describe("CLI config loading", () => {
-  it("uses safe localhost defaults", () => {
-    expect(loadCliConfig({ env: {} }).baseUrl.toString()).toBe("http://127.0.0.1:3777/");
-  });
-
-  it("uses XDG or home state defaults and lets flags override storage paths", () => {
-    const defaultConfig = loadCliConfig({
+  it("uses the fixed loopback origin and safe storage defaults", () => {
+    const config = loadCliConfig({
       env: {
         HOME: "/home/simonli",
         XDG_CONFIG_HOME: "/tmp/config",
@@ -17,86 +13,184 @@ describe("CLI config loading", () => {
         XDG_STATE_HOME: "/tmp/state"
       }
     });
-
-    expect(defaultConfig.stateDir).toBe("/tmp/state/hostdeck");
-    expect(defaultConfig.configDir).toBe("/tmp/config/hostdeck");
-    expect(defaultConfig.runtimeDir).toBe("/tmp/runtime/hostdeck");
-    expect(defaultConfig.databasePath).toBe("/tmp/state/hostdeck/hostdeck.sqlite");
-
-    const flagConfig = loadCliConfig({
-      cwd: "/tmp/project",
-      env: {
-        HOME: "/home/simonli"
-      },
-      flags: {
-        stateDir: "state",
-        databasePath: "state/hostdeck.db"
-      }
-    });
-
-    expect(flagConfig.stateDir).toBe("/tmp/project/state");
-    expect(flagConfig.databasePath).toBe("/tmp/project/state/hostdeck.db");
+    expect(config.baseUrl.toString()).toBe("http://127.0.0.1:3777/");
+    expect(config.stateDir).toBe("/tmp/state/hostdeck");
+    expect(config.configDir).toBe("/tmp/config/hostdeck");
+    expect(config.runtimeDir).toBe("/tmp/runtime/hostdeck");
+    expect(config.databasePath).toBe(
+      "/tmp/state/hostdeck/hostdeck.sqlite"
+    );
   });
 
-  it("loads an explicit config file and lets flags override it", () => {
+  it("accepts exact loopback origins from flag, environment, or config", () => {
+    const scenarios = [
+      loadCliConfig({
+        env: { HOME: "/home/simonli" },
+        flags: { apiUrl: "http://127.0.0.1:4101" }
+      }),
+      loadCliConfig({
+        env: {
+          HOME: "/home/simonli",
+          HOSTDECK_API_BASE_URL: "http://127.0.0.1:4102"
+        }
+      }),
+      loadCliConfig({
+        cwd: "/tmp",
+        env: { HOME: "/home/simonli" },
+        flags: { configPath: "hostdeck.json" },
+        readFile: () => JSON.stringify({ api_url: "http://127.0.0.1:4103" })
+      })
+    ];
+    expect(scenarios.map((config) => config.baseUrl.toString())).toEqual([
+      "http://127.0.0.1:4101/",
+      "http://127.0.0.1:4102/",
+      "http://127.0.0.1:4103/"
+    ]);
+  });
+
+  it("loads an exact config file and lets flags override port and storage paths", () => {
     const config = loadCliConfig({
       cwd: "/tmp",
-      env: {},
+      env: { HOME: "/home/simonli" },
       flags: {
         configPath: "hostdeck.json",
-        port: "4888"
+        port: "4888",
+        stateDir: "selected-state",
+        databasePath: "selected-state/selected.sqlite"
       },
       readFile: (path) => {
         expect(path).toBe("/tmp/hostdeck.json");
-        return JSON.stringify({ host: "localhost", port: 4555, state_dir: "state", database_path: "state/db.sqlite" });
+        return JSON.stringify({
+          port: 4555,
+          state_dir: "ignored-state",
+          database_path: "ignored-state/ignored.sqlite"
+        });
       }
     });
-
-    expect(config.baseUrl.toString()).toBe("http://localhost:4888/");
-    expect(config.stateDir).toBe("/tmp/state");
-    expect(config.databasePath).toBe("/tmp/state/db.sqlite");
-    expect(config.runtimeDir).toBeNull();
+    expect(config.baseUrl.toString()).toBe("http://127.0.0.1:4888/");
+    expect(config.stateDir).toBe("/tmp/selected-state");
+    expect(config.databasePath).toBe(
+      "/tmp/selected-state/selected.sqlite"
+    );
   });
 
-  it("rejects invalid config with the stable config exit family", () => {
-    expect(() =>
+  it("rejects every retired host selector even when another origin wins", () => {
+    expectConfigFailure(() =>
+      loadCliConfig({
+        env: { HOME: "/home/simonli" },
+        flags: {
+          apiUrl: "http://127.0.0.1:4101",
+          host: "127.0.0.1"
+        } as never
+      })
+    );
+    expectConfigFailure(() =>
       loadCliConfig({
         env: {
-          HOSTDECK_API_BASE_URL: "file:///tmp/hostdeck.sock"
+          HOME: "/home/simonli",
+          HOSTDECK_API_BASE_URL: "http://127.0.0.1:4101",
+          HOSTDECK_HOST: "127.0.0.1"
         }
       })
-    ).toThrow(CliFailure);
-
-    try {
+    );
+    expectConfigFailure(() =>
       loadCliConfig({
-        env: {
-          HOSTDECK_API_BASE_URL: "file:///tmp/hostdeck.sock"
-        }
-      });
-    } catch (error) {
-      expect(error).toBeInstanceOf(CliFailure);
-      expect((error as CliFailure).exitCode).toBe(cliExitCodes.config);
+        cwd: "/tmp",
+        env: { HOME: "/home/simonli" },
+        flags: { configPath: "hostdeck.json" },
+        readFile: () =>
+          JSON.stringify({
+            api_url: "http://127.0.0.1:4101",
+            host: "127.0.0.1"
+          })
+      })
+    );
+  });
+
+  it("rejects noncanonical, secure, non-loopback, or decorated API origins", () => {
+    for (const apiUrl of [
+      "https://127.0.0.1:4101",
+      "http://localhost:4101",
+      "http://127.0.0.2:4101",
+      "http://127.1:4101",
+      "http://[::1]:4101",
+      "http://0.0.0.0:4101",
+      "http://127.0.0.1",
+      "http://127.0.0.1:80",
+      "http://127.0.0.1:1023",
+      "http://user:pass@127.0.0.1:4101",
+      "http://127.0.0.1:4101/",
+      "http://127.0.0.1:4101/nested",
+      "http://127.0.0.1:4101?query=1",
+      "http://127.0.0.1:4101#fragment"
+    ]) {
+      expectConfigFailure(() =>
+        loadCliConfig({
+          env: { HOME: "/home/simonli" },
+          flags: { apiUrl }
+        })
+      );
     }
   });
 
-  it("rejects API URLs with path components before they can be ignored", () => {
-    expect(() =>
+  it("enforces the nonprivileged loopback port range", () => {
+    for (const port of ["", "1", "1023", "65536", "4101.5", "not-a-port"]) {
+      expectConfigFailure(() =>
+        loadCliConfig({
+          env: { HOME: "/home/simonli" },
+          flags: { port }
+        })
+      );
+    }
+    expect(
       loadCliConfig({
-        env: {
-          HOSTDECK_API_BASE_URL: "http://127.0.0.1:3777/nested"
-        }
-      })
-    ).toThrow(CliFailure);
+        env: { HOME: "/home/simonli" },
+        flags: { port: "1024" }
+      }).baseUrl.origin
+    ).toBe("http://127.0.0.1:1024");
+  });
+
+  it("rejects unknown or conflicting config fields", () => {
+    for (const value of [
+      { unknown: true },
+      { host: "127.0.0.1" },
+      {
+        api_url: "http://127.0.0.1:4101",
+        apiUrl: "http://127.0.0.1:4102"
+      }
+    ]) {
+      expectConfigFailure(() =>
+        loadCliConfig({
+          cwd: "/tmp",
+          env: { HOME: "/home/simonli" },
+          flags: { configPath: "hostdeck.json" },
+          readFile: () => JSON.stringify(value)
+        })
+      );
+    }
   });
 
   it("rejects relative XDG bases and database paths outside state", () => {
-    expect(() => loadCliConfig({ env: { XDG_RUNTIME_DIR: "runtime" } })).toThrow(CliFailure);
-    expect(() =>
+    expectConfigFailure(() =>
+      loadCliConfig({ env: { XDG_RUNTIME_DIR: "runtime" } })
+    );
+    expectConfigFailure(() =>
       loadCliConfig({
         cwd: "/tmp/project",
         env: { HOME: "/home/simonli" },
         flags: { stateDir: "state", databasePath: "outside.sqlite" }
       })
-    ).toThrow(CliFailure);
+    );
   });
 });
+
+function expectConfigFailure(action: () => unknown): void {
+  let failure: unknown;
+  try {
+    action();
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toBeInstanceOf(CliFailure);
+  expect(failure).toMatchObject({ exitCode: cliExitCodes.config });
+}

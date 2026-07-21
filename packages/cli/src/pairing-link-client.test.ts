@@ -88,7 +88,9 @@ describe("selected pairing-link CLI client", () => {
       headers: {
         accept: "application/json",
         "cache-control": "no-store",
-        "content-type": "application/json"
+        "content-type": "application/json",
+        [hostDeckLocalAdminRequestHeaderName]:
+          hostDeckLocalAdminRequestHeaderValue
       },
       body: JSON.stringify(request)
     });
@@ -229,6 +231,9 @@ describe("selected pairing-link CLI client", () => {
 
     for (const value of [
       "http://localhost:3777",
+      "http://127.9.8.7:3777",
+      "http://[::1]:3777",
+      "http://127.0.0.1:1023",
       "https://127.0.0.1:3777",
       "http://192.168.1.8:3777",
       "http://127.0.0.1:3777/base",
@@ -247,7 +252,7 @@ describe("selected pairing-link CLI client", () => {
     }
   });
 
-  it("uses bounded raw HTTP with local-admin status headers only", async () => {
+  it("uses bounded raw HTTP with explicit local-admin authority", async () => {
     const exchanges: Array<{
       readonly body: string;
       readonly headers: Readonly<Record<string, string | string[] | undefined>>;
@@ -283,7 +288,9 @@ describe("selected pairing-link CLI client", () => {
     expect(exchanges[0]?.headers[hostDeckLocalAdminRequestHeaderName]).toBe(
       hostDeckLocalAdminRequestHeaderValue
     );
-    expect(exchanges[1]?.headers[hostDeckLocalAdminRequestHeaderName]).toBeUndefined();
+    expect(exchanges[1]?.headers[hostDeckLocalAdminRequestHeaderName]).toBe(
+      hostDeckLocalAdminRequestHeaderValue
+    );
     expect(exchanges[2]?.headers[hostDeckLocalAdminRequestHeaderName]).toBe(
       hostDeckLocalAdminRequestHeaderValue
     );

@@ -80,7 +80,7 @@ describe("managed-session usage CLI command", () => {
             throw new Error("legacy-client-private-sentinel");
           }
         },
-        localAdmin: {
+        hostLockClient: {
           enumerable: true,
           get() {
             unrelatedAccesses += 1;

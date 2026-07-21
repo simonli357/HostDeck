@@ -129,10 +129,13 @@ describe("selected remote-control CLI client", () => {
 
     for (const value of [
       "http://localhost:3777",
+      "http://[::1]:3777",
+      "http://127.9.8.7:3777",
       "http://0.0.0.0:3777",
       "http://192.168.1.20:3777",
       "https://127.0.0.1:3777",
       "https://private-laptop.fixture-tailnet.ts.net",
+      "http://127.0.0.1:1023",
       "http://127.0.0.1:3777/base",
       "http://127.0.0.1:3777/?query=1",
       "http://user@127.0.0.1:3777"
@@ -148,17 +151,6 @@ describe("selected remote-control CLI client", () => {
         })
       );
     }
-    expect(() =>
-      createHostDeckRemoteControlClient({
-        baseUrl: new URL("http://[::1]:3777")
-      })
-    ).not.toThrow();
-    expect(() =>
-      createHostDeckRemoteControlClient({
-        baseUrl: new URL("http://127.9.8.7:3777")
-      })
-    ).not.toThrow();
-
     let accessorCalls = 0;
     const accessor = Object.defineProperty({}, "baseUrl", {
       enumerable: true,

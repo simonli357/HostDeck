@@ -53,7 +53,7 @@ export type ParsedCliCommand =
       readonly label?: string;
       readonly permission: "read" | "write";
     }
-  | { readonly kind: "lock"; readonly reason?: string; readonly json: boolean }
+  | { readonly kind: "lock"; readonly json: boolean }
   | { readonly kind: "unlock"; readonly json: boolean }
   | {
       readonly kind: "legacy";
@@ -71,7 +71,6 @@ export interface ParsedCliArgs {
   readonly command: ParsedCliCommand;
   readonly configFlags: {
     readonly apiUrl?: string;
-    readonly host?: string;
     readonly port?: string;
     readonly configPath?: string;
     readonly stateDir?: string;
@@ -81,7 +80,6 @@ export interface ParsedCliArgs {
 
 type MutableConfigFlags = {
   apiUrl?: string;
-  host?: string;
   port?: string;
   configPath?: string;
   stateDir?: string;
@@ -121,17 +119,6 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
 
     if (token.startsWith("--api-url=")) {
       configFlags.apiUrl = readInlineOptionValue(token, "--api-url");
-      continue;
-    }
-
-    if (token === "--host") {
-      configFlags.host = readOptionValue(args, index, "--host");
-      index += 1;
-      continue;
-    }
-
-    if (token.startsWith("--host=")) {
-      configFlags.host = readInlineOptionValue(token, "--host");
       continue;
     }
 
@@ -399,13 +386,10 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
   }
 
   if (command === "lock") {
-    const parsed = parseLockOptions(rest, json);
-
     return {
       command: {
         kind: "lock",
-        ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}),
-        json: parsed.json
+        json: parseNoArgJsonOptions("lock", rest, json)
       },
       configFlags
     };
@@ -891,46 +875,6 @@ function parsePairOptions(args: readonly string[], globalJson: boolean): {
   return {
     ...(label !== undefined ? { label } : {}),
     permission
-  };
-}
-
-function parseLockOptions(args: readonly string[], globalJson: boolean): { readonly reason?: string; readonly json: boolean } {
-  let reason: string | undefined;
-  let json = globalJson;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const token = args[index];
-
-    if (token === undefined) {
-      continue;
-    }
-
-    if (token === "--json") {
-      json = true;
-      continue;
-    }
-
-    if (token === "--reason") {
-      reason = readOptionValue(args, index, "--reason");
-      index += 1;
-      continue;
-    }
-
-    if (token.startsWith("--reason=")) {
-      reason = readInlineOptionValue(token, "--reason");
-      continue;
-    }
-
-    if (token.startsWith("-")) {
-      throw usageFailure(`Unknown lock option: ${token}`);
-    }
-
-    throw usageFailure(`Unexpected lock argument: ${token}`);
-  }
-
-  return {
-    ...(reason !== undefined ? { reason } : {}),
-    json
   };
 }
 
