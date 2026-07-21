@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-021` Implement deterministic compiled server/CLI package outputs and owned runtime layout | ready | none | Produce and relocate the first selected package artifact without source TypeScript execution, using only the accepted selected composition, static boundary, and bounded CLI transport. |
+| 1 | `IFC-V1-021` Implement deterministic compiled server/CLI package outputs and owned runtime layout | in_progress | none | Frozen criteria now require the exact 600-module selected closure, offline self-contained dependencies, deterministic identity, strict content/modes, and unrelated-path read-only relocation without absorbing web/bin/service work. |
 
 ## Intentional Blockers
 

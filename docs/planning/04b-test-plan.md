@@ -33,9 +33,10 @@ Task and block evidence names its level. "Complete for package scope" cannot sat
 | `pnpm test:contract` | Contracts/interfaces | L1 normalized API/storage/UI/Codex-adapter contracts. | Pass. |
 | `pnpm test:integration` | Storage/runtime/server | L2 SQLite/process/IPC/Fastify/SSE/auth/concurrency. | Pass. |
 | `pnpm test:web` | Web | Component/state/API-client tests. | Pass. |
+| `pnpm test:package` | `IFC-V1-021` | Build twice, inspect and verify the production tree, then run unrelated-path read-only import/native/loopback lifecycle and failure-injection checks. | Pass on the exact supported Node/pnpm Linux build target without network or source TypeScript execution. |
 | `pnpm test:codex` | `INT-V1-091` | From a clean commit and exact binary, run the frozen deterministic runtime inventory plus strict structured-control and lifecycle/restart/TUI scenarios, then publish one machine-validated private aggregate. | Pass on release host with exact commit/version, five bounded model turns, no skip/retry/fallback, and zero process/socket/temp residue; may be excluded from ordinary CI because credentials/model use are required. |
 | `pnpm test:e2e` | `IFC-V1-046`, `FE-V1-040` | Packaged browser workflow against isolated fixture runtime and the supported browser matrix. | Pass. |
-| `pnpm build` | `IFC-V1-053`, `IFC-V1-054` | Production server/web assets and runnable CLI artifacts. | Pass from clean checkout. |
+| `pnpm build` | `IFC-V1-021`, extended by `IFC-V1-053` and `IFC-V1-054` | Emit the deterministic self-contained compiled server/CLI foundation; later owners add real web assets and the runnable CLI entry. | Pass after frozen install; no network, source TypeScript runtime, stale output, or partial publication. |
 | `pnpm smoke:local` | `REL-V1-006` | Installed user service, real Codex, local browser, and remote-phone workflow through the selected Tailscale profile. | Pass with artifact; the artifact also records manual device/profile evidence the command cannot automate. |
 
 Unavailable commands fail loudly with owning task id. No placeholder command may exit zero.
@@ -180,6 +181,19 @@ Every row is tested at 390 x 844; marked stress states also run at 360 x 800 and
 | Recovery | Reboot/login or documented service lifecycle, stopped Tailscale, wrong/returned profile, removed/drifted Serve state, stale runtime files, incompatible Codex update, DB backup/recovery policy. |
 | Documentation | User/developer/command/repo docs contain only verified commands and behavior. |
 | Go/no-go | Block completion matrix links L1-L4 evidence and lists zero hidden blockers. |
+
+## Production Package Matrix
+
+| Case | Required assertion |
+| --- | --- |
+| Exact closure | 600 selected server/CLI sources produce only six HostDeck runtime package roots; web, test fixtures, tests, smokes, maps, historical interfaces, and dev dependencies are absent. |
+| Determinism | Two unchanged offline builds have identical source/output inventories and content digest; an undeclared stale sentinel is removed. |
+| Metadata/dependencies | Runtime manifests use emitted exports and exact internal/external identities; manifest records Node/pnpm/platform/architecture/ABI, Codex binding, native modules, and downstream deferrals without time/private paths. |
+| Permissions/links | Directories and regular files follow the frozen mode policy; HostDeck has no executable; every symlink is relative, contained, and valid after relocation. |
+| Integrity/runtime drift | Missing/modified output, manifest drift, wrong Node/platform/architecture/ABI, missing native binary, or escaping link fails nonzero before load. |
+| Relocation/read-only | From unrelated cwd and read-only relocated tree, all six package roots import, native SQLite/flock operations pass, the 22/35 descriptor holds, and a real loopback lifecycle request/close/same-port restart succeeds. |
+| Required failures | Missing explicit config, missing/noncanonical static assets, missing/corrupt native module, and package-integrity drift fail loudly with no source/global/dev fallback. |
+| Residue/privacy | No listener/process/socket/database/temp root remains; output and diagnostics contain no checkout/home/staging path, `.env`, token, credential, prompt, transcript, or Tailscale identity. |
 
 ## Requirement And Block Coverage
 

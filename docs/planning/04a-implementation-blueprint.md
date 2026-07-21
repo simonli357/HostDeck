@@ -106,6 +106,17 @@ The composition root calls `resolveResourceBudget` once before lease, storage, r
 
 `IFC-V1-052` freezes the cross-owner production resource aggregate. One coherent reduced budget feeds the real loopback Fastify lifecycle, exact 22-registration/35-route selected composition, projection subscribers, shared write admission, controlled Codex connection/broker, SQLite audit, and one shared bounded source-CLI transport. Synchronized HTTP/SSE/read/mutation pressure, oversize and slow input, duplicate/conflict, no-send versus possible-send timeout, client response loss, late protocol/event evidence, active-work shutdown, same-port restart, repeated counters, privacy, and process-resource cleanup must preserve each leaf's existing owner and precedence. The aggregate adds no alternate production composition, diagnostics endpoint, retry, Tailscale mutation, package, UI, or phone claim. Exact criteria are in `artifacts/ifc-v1-052-production-resource-stress.md`.
 
+`IFC-V1-021` packages those accepted owners in this order:
+
+1. Re-run the selected runtime-boundary graph and reject any source/import/dependency drift before emit.
+2. Emit ESM JavaScript and declarations for only the 600-module server/CLI closure with source and declaration maps disabled.
+3. Resolve the production dependency tree offline from the frozen lockfile, replace every HostDeck source package with emitted content and exact runtime-only metadata, and remove package-manager state that contains absolute store/build paths.
+4. Normalize permissions, reject escaping links and undeclared HostDeck content, then write a timestamp-free manifest over source/runtime/Codex/native identities and the final content digest.
+5. Publish the completed sibling staging tree as `dist/hostdeck`; failed construction removes staging and cannot leave a partial current package.
+6. Build twice, relocate to an unrelated read-only path, verify/import all package roots, load both native modules, and run a real loopback lifecycle/restart plus config/asset/native/runtime/integrity rejection probes.
+
+This foundation exposes compiled library entrypoints only. `IFC-V1-053` adds the approved Vite dashboard, `IFC-V1-054` adds the HostDeck executable and command dispatch, and later leaves own user units, installation, uninstall, clean Ubuntu parity, and module/release hardening.
+
 ## Application Services
 
 | Service | Inputs | Outputs | Key invariant |
