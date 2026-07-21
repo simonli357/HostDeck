@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-050` Propagate end-to-end deadlines and cancellation | ready | none | The selected-only production boundary, resource contract, reconnect controller, selected operations, and assembled HTTP handlers are complete; this leaf closes HTTP-to-service-to-protocol deadline truth before aggregate stress. |
+| 1 | `IFC-V1-050` Propagate end-to-end deadlines and cancellation | in_progress | none | Criteria `DLC-01` to `DLC-10` freeze exact request ownership, decreasing protocol budgets, multi-step ordering, no-send/possible-send truth, public errors/audit, queue/waiter cleanup, late reconciliation, structural coverage, and aggregate evidence. |
 | 2 | `IFC-V1-051` Bound selected CLI API transports and errors | ready | none | The exact selected-only production manifest and 21-operation source-client inventory are accepted; shared connect/request/body/stream limits can now replace client-local assumptions before packaging. |
 
 ## Intentional Blockers
