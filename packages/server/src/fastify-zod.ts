@@ -26,7 +26,9 @@ export function installHostDeckZodCompilers(app: FastifyInstance): void {
     const field = normalizeValidationField(httpPart);
 
     return (data) => {
-      const result = zodSchema.safeParse(data);
+      const result = zodSchema.safeParse(
+        field === "params" ? normalizeFastifyRouteParams(data) : data
+      );
       return result.success
         ? { value: result.data }
         : { error: new HostDeckRequestValidationError(field, result.error) };
@@ -37,6 +39,26 @@ export function installHostDeckZodCompilers(app: FastifyInstance): void {
     const zodSchema = requireZodSchema(schema);
     return (data) => JSON.stringify(zodSchema.parse(data));
   });
+}
+
+function normalizeFastifyRouteParams(input: unknown): unknown {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) return input;
+  try {
+    const copy = Object.create(null) as Record<string, unknown>;
+    for (const key of Object.keys(input)) {
+      const descriptor = Object.getOwnPropertyDescriptor(input, key);
+      if (descriptor === undefined || !("value" in descriptor)) return input;
+      Object.defineProperty(copy, key, {
+        configurable: true,
+        enumerable: true,
+        value: descriptor.value,
+        writable: true
+      });
+    }
+    return copy;
+  } catch {
+    return input;
+  }
 }
 
 export function assertHostDeckRouteSchemas(schema: unknown): void {

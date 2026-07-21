@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   type AuthRepositoryErrorCode,
   createAuthDeviceRepository,
-  createLegacyPairingCodeRepository,
+  createSelectedCsrfAuthorizationRepository,
   HostDeckAuthRepositoryError,
   hashSecret
 } from "./auth-repository.js";
@@ -293,7 +293,14 @@ describe("selected pairing claim and rate state", () => {
       });
       const auth = createAuthDeviceRepository(open.db);
       expect(auth.authenticateDeviceToken({ rawDeviceToken, now: claimAt }).device.id).toBe(selectedDeviceId);
-      expect(auth.authorizeBrowserWrite({ rawDeviceToken, rawCsrfToken, now: claimAt }).id).toBe(selectedDeviceId);
+      expect(
+        createSelectedCsrfAuthorizationRepository(open.db).authorizeBrowserWrite({
+          deviceId: selectedDeviceId,
+          expectedCsrfGeneration: 1,
+          rawCsrfToken,
+          now: claimAt
+        }).device.id
+      ).toBe(selectedDeviceId);
     } finally {
       open.db.close();
     }
@@ -308,13 +315,13 @@ describe("selected pairing claim and rate state", () => {
       repository.issue(issueInput("pair_used", plus(baseTime(), 240_000)));
       repository.issue(issueInput("pair_expired", baseTime()));
       repository.issue(issueInput("pair_revoked", plus(baseTime(), 240_000)));
-      createLegacyPairingCodeRepository(open.db).createLegacy({
-        id: "pair_legacy",
-        rawCode: rawCodeD,
-        permission: "write",
-        createdAt: plus(baseTime(), 240_000),
-        expiresAt: plus(baseTime(), 600_000)
-      });
+      insertHistoricalPairingCode(
+        open.db,
+        "pair_legacy",
+        rawCodeD,
+        plus(baseTime(), 240_000),
+        plus(baseTime(), 600_000)
+      );
 
       const firstUseAt = plus(baseTime(), 285_000);
       repository.claim(claimInput(rawCodeA, sourceKey(10), firstUseAt));
@@ -836,41 +843,17 @@ describe("selected pairing rollback, corruption, and privacy", () => {
         () => repository.revoke("pair_used_before_revoke", { now: plus(baseTime(), 3_000) }),
         "pairing_code_used"
       );
-      const legacyRepository = createLegacyPairingCodeRepository(open.db);
-      legacyRepository.createLegacy({
-        id: "pair_legacy_revoke",
-        rawCode: rawCodeC,
-        permission: "write",
-        createdAt: baseTime(),
-        expiresAt: plus(baseTime(), 60_000)
-      });
+      insertHistoricalPairingCode(
+        open.db,
+        "pair_legacy_revoke",
+        rawCodeC,
+        baseTime(),
+        plus(baseTime(), 60_000)
+      );
       expectAuthError(
         () => repository.revoke("pair_legacy_revoke", { now: plus(baseTime(), 1_000) }),
         "pairing_code_legacy"
       );
-      fixedRepository(open.db, { generatePairingCode: () => rawCodeD }).issue(
-        issueInput("pair_selected_legacy_boundary")
-      );
-      expectAuthError(
-        () =>
-          legacyRepository.claimLegacy({
-            rawCode: rawCodeD,
-            deviceId: `client_${"l".repeat(24)}`,
-            rawDeviceToken: "L".repeat(43),
-            rawCsrfToken: "M".repeat(43),
-            now: plus(baseTime(), 1_000)
-          }),
-        "pairing_code_legacy"
-      );
-      expectAuthError(
-        () => legacyRepository.revokeLegacy("pair_selected_legacy_boundary", { now: plus(baseTime(), 1_000) }),
-        "pairing_code_legacy"
-      );
-      expect(rawPairingRow(open.db, "pair_selected_legacy_boundary")).toMatchObject({
-        used_at: null,
-        revoked_at: null,
-        claimed_device_id: null
-      });
 
       const hostileInput = Object.defineProperty({}, "now", {
         enumerable: true,
@@ -1235,6 +1218,28 @@ function expectErrorIsCauseFree(error: HostDeckAuthRepositoryError, ...sentinels
   expect(error.cause).toBeUndefined();
   const serialized = `${error.name}:${error.code}:${error.message}:${error.retryAt ?? ""}:${JSON.stringify(error)}`;
   for (const sentinel of sentinels) expect(serialized).not.toContain(sentinel);
+}
+
+function insertHistoricalPairingCode(
+  db: Database.Database,
+  id: string,
+  rawCode: string,
+  createdAt: Date,
+  expiresAt: Date
+): void {
+  db.prepare(
+    `
+      INSERT INTO pairing_codes (
+        id, code_hash, permission, client_label, created_at, expires_at,
+        used_at, revoked_at, claim_contract_version, claimed_device_id
+      ) VALUES (?, ?, 'write', NULL, ?, ?, NULL, NULL, NULL, NULL)
+    `
+  ).run(
+    id,
+    hashSecret(rawCode, { label: "Historical pairing code", minLength: 22 }),
+    createdAt.toISOString(),
+    expiresAt.toISOString()
+  );
 }
 
 function rawPairingRow(db: Database.Database, id: string): Readonly<Record<string, unknown>> {

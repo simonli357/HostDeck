@@ -1,4 +1,15 @@
-import type { ValidationIssueCode, ValidationResult } from "./session.js";
+import type { ValidationIssueCode, ValidationResult } from "./identifiers.js";
+
+export const attentionLevels = [
+  "none",
+  "watch",
+  "needs_input",
+  "needs_approval",
+  "failed",
+  "stuck",
+  "unknown"
+] as const;
+export type AttentionLevel = (typeof attentionLevels)[number];
 
 const codexThreadIdBrand: unique symbol = Symbol("CodexThreadId");
 const codexTurnIdBrand: unique symbol = Symbol("CodexTurnId");

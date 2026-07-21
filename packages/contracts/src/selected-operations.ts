@@ -8,7 +8,7 @@ import {
   structuredControlKinds
 } from "@hostdeck/core";
 import { z } from "zod";
-import { apiErrorEnvelopeSchema } from "./api.js";
+import { apiErrorEnvelopeSchema } from "./api-error.js";
 import {
   absoluteCwdSchema,
   isoTimestampSchema,

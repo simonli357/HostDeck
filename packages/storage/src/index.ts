@@ -1,27 +1,17 @@
 export {
-  type AuditEventRepository,
-  createAuditEventRepository,
-  HostDeckAuditRepositoryError,
-  type ListAuditEventsInput
-} from "./audit-repository.js";
-export {
   type AuthDeviceAuthentication,
   type AuthDeviceRepository,
-  type AuthDeviceRepositoryOptions,
   type AuthorizeSelectedBrowserWriteInput,
   type AuthRepositoryErrorCode,
   type CsrfBootstrapRotation,
   createAuthDeviceRepository,
-  createLegacyPairingCodeRepository,
   createSelectedCsrfAuthorizationRepository,
   type HashSecretOptions,
   HostDeckAuthRepositoryError,
   hashSecret,
-  type LegacyPairingClaim,
-  type LegacyPairingCodeRepository,
-  type RotateCsrfBootstrapInput,
   type RotateSelectedCsrfBootstrapInput,
-  type SelectedCsrfAuthorizationRepository
+  type SelectedCsrfAuthorizationRepository,
+  type SelectedCsrfAuthorizationRepositoryOptions
 } from "./auth-repository.js";
 export {
   type CaptureGitBranchMetadataInput,
@@ -56,21 +46,6 @@ export {
 } from "./migration-runner.js";
 export {
   defaultMigrations,
-  hostDeckAuthDeviceCsrfRotationMigration,
-  hostDeckBaseSchemaMigration,
-  hostDeckRemoteAdmissionProofMigration,
-  hostDeckRemoteAuditCatalogMigration,
-  hostDeckRemoteIngressStateMigration,
-  hostDeckRetentionBoundaryScopeChecksMigration,
-  hostDeckSelectedAuditStateMigration,
-  hostDeckSelectedLanConfigurationMigration,
-  hostDeckSelectedNetworkRetirementMigration,
-  hostDeckSelectedPairingClaimMigration,
-  hostDeckSelectedRetentionIndexesMigration,
-  hostDeckSelectedRuntimeStateMigration,
-  hostDeckSelectedSessionSettingsProjectionMigration,
-  hostDeckSessionMetadataFailedStatusMigration,
-  hostDeckSessionStartAuditCatalogMigration,
   type StorageMigration
 } from "./migrations.js";
 export {
@@ -108,17 +83,6 @@ export {
   type RemoteIngressStateRepositoryErrorCode,
   type RemoteIngressStateWriteReceipt
 } from "./remote-ingress-state-repository.js";
-export {
-  type AppendOutputEventInput,
-  type AppendOutputEventResult,
-  type CleanupRetentionInput,
-  createRetentionRepository,
-  type GetLatestBoundaryInput,
-  HostDeckRetentionRepositoryError,
-  type ListOutputReplayInput,
-  type OutputReplayResult,
-  type RetentionRepository
-} from "./retention-repository.js";
 export {
   createRuntimeCompatibilityRepository,
   HostDeckRuntimeCompatibilityRepositoryError,
@@ -199,13 +163,6 @@ export {
   selectedProjectedEventByteLength,
   selectedStateRevision
 } from "./selected-state-repository.js";
-export {
-  createSessionMetadataRepository,
-  createSessionRepository,
-  HostDeckSessionRepositoryError,
-  type SessionMetadataRepository,
-  type SessionRepository
-} from "./session-repository.js";
 export {
   type CreateDefaultSettingsInput,
   createDefaultSettings,

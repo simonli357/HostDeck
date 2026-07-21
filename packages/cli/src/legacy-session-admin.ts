@@ -2,13 +2,22 @@ import { closeSync } from "node:fs";
 import {
   createLegacySessionRepository,
   HostDeckLocalPathError,
-  type LegacySessionResetResult,
-  type LegacySessionSummary,
   openMigratedDatabase,
   openSecureHostDeckRegularFile,
   prepareHostDeckStatePaths
 } from "@hostdeck/storage";
 import { configFailure } from "./errors.js";
+
+export interface LegacySessionSummary {
+  readonly disposition: "legacy_unmigrated";
+  readonly legacy_session_count: number;
+}
+
+export interface LegacySessionResetResult {
+  readonly disposition: "legacy_unmigrated";
+  readonly removed_session_count: number;
+  readonly remaining_session_count: 0;
+}
 
 export interface CreateLegacySessionAdminOptions {
   readonly stateDir: string;

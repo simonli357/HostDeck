@@ -8,7 +8,6 @@ import {
 import { z } from "zod";
 
 export const detailValueSchema = z.union([z.string(), z.number().finite(), z.boolean(), z.null()]);
-export const bindModeSchema = z.enum(["localhost", "lan"]);
 export const nonNegativeSafeIntegerSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export const positiveSafeIntegerSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 

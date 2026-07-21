@@ -19,7 +19,8 @@ import type Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createAuthDeviceRepository,
-  HostDeckAuthRepositoryError, 
+  createSelectedCsrfAuthorizationRepository,
+  HostDeckAuthRepositoryError,
   hashSecret
 } from "./auth-repository.js";
 import {
@@ -190,11 +191,13 @@ describe("selected local-state/auth/audit aggregate hardening", () => {
           device: { id: selectedDeviceId, permission: "write", csrf_generation: 1 }
         });
 
-        const auth = createAuthDeviceRepository(first.db, {
+        const auth = createAuthDeviceRepository(first.db);
+        const csrfAuthorization = createSelectedCsrfAuthorizationRepository(first.db, {
           generateCsrfToken: () => rotatedCsrfToken
         });
-        const rotation = auth.rotateCsrfBootstrap({
-          rawDeviceToken,
+        const rotation = csrfAuthorization.rotateBootstrap({
+          deviceId: selectedDeviceId,
+          expectedCsrfGeneration: 1,
           now: at("2026-07-12T12:00:02.000Z")
         });
         expect(rotation).toMatchObject({
@@ -203,8 +206,9 @@ describe("selected local-state/auth/audit aggregate hardening", () => {
           csrfGeneration: 2
         });
         const staleCsrfError = captureError(() =>
-          auth.authorizeBrowserWrite({
-            rawDeviceToken,
+          csrfAuthorization.authorizeBrowserWrite({
+            deviceId: selectedDeviceId,
+            expectedCsrfGeneration: 2,
             rawCsrfToken: initialCsrfToken,
             now: at("2026-07-12T12:00:03.000Z")
           })
@@ -219,11 +223,12 @@ describe("selected local-state/auth/audit aggregate hardening", () => {
           }).device.last_used_at
         ).toBe("2026-07-12T12:00:03.000Z");
         expect(
-          auth.authorizeBrowserWrite({
-            rawDeviceToken,
+          csrfAuthorization.authorizeBrowserWrite({
+            deviceId: selectedDeviceId,
+            expectedCsrfGeneration: 2,
             rawCsrfToken: rotatedCsrfToken,
             now: at("2026-07-12T12:00:04.000Z")
-          }).last_used_at
+          }).device.last_used_at
         ).toBe("2026-07-12T12:00:04.000Z");
         expect(
           createDeviceListingRepository(first.db).list({
@@ -385,11 +390,7 @@ describe("selected local-state/auth/audit aggregate hardening", () => {
           compatibilityRecord()
         );
 
-        const restartedAuth = createAuthDeviceRepository(restarted.db, {
-          generateCsrfToken: () => {
-            throw new Error("revoked authority must reject before entropy");
-          }
-        });
+        const restartedAuth = createAuthDeviceRepository(restarted.db);
         const restartAuthError = captureError(() =>
           restartedAuth.authenticateDeviceToken({
             rawDeviceToken,

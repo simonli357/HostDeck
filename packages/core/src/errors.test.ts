@@ -6,7 +6,7 @@ import {
   isErrorCode,
   parseErrorEnvelope
 } from "./errors.js";
-import { parseSessionId } from "./session.js";
+import { parseSessionId } from "./identifiers.js";
 
 function validSessionId() {
   const result = parseSessionId("sess_errors_01");

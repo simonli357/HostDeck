@@ -7,7 +7,8 @@ import {
   resolveResourceBudget,
   type SelectedProjectionEvent,
   selectedProjectionEventSchema,
-  sessionIdParamsSchema
+  sessionIdParamsSchema,
+  sessionIdSchema
 } from "@hostdeck/contracts";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -352,9 +353,10 @@ describe("bounded Fastify SSE transport", () => {
         createHostDeckSseTransportRegistration({
           id: "failure-events",
           observeError: (failure) => failures.push(failure),
-          paramsSchema: sessionIdParamsSchema.extend({
+          paramsSchema: z.object({
+            session_id: sessionIdSchema,
             mode: z.enum(["open", "invalid", "wrong_session", "order", "oversized", "source"])
-          }),
+          }).strict(),
           path: "/api/sessions/:session_id/events/:mode",
           source
         })

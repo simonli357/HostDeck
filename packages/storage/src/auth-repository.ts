@@ -2,8 +2,6 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import {
   type AuthDeviceRecord,
   authDeviceRecordSchema,
-  type PairingCodeRecord,
-  pairingCodeRecordSchema,
   positiveSafeIntegerSchema,
   selectedDeviceIdSchema,
   selectedRawCsrfTokenSchema
@@ -77,31 +75,10 @@ export interface CreateAuthDeviceInput {
   readonly expiresAt?: Date | null;
 }
 
-export interface CreatePairingCodeInput {
-  readonly id: string;
-  readonly rawCode: string;
-  readonly permission: PairingCodeRecord["permission"];
-  readonly clientLabel?: string | null;
-  readonly createdAt: Date;
-  readonly expiresAt: Date;
-}
-
-export interface ClaimPairingCodeInput {
-  readonly rawCode: string;
-  readonly deviceId: string;
-  readonly rawDeviceToken: string;
-  readonly rawCsrfToken: string;
-  readonly now: Date;
-  readonly clientLabel?: string | null;
-  readonly deviceExpiresAt?: Date | null;
-}
-
 export interface AuthenticateDeviceInput {
   readonly rawDeviceToken: string;
   readonly now: Date;
 }
-
-export type RotateCsrfBootstrapInput = AuthenticateDeviceInput;
 
 export interface CsrfBootstrapRotation {
   readonly deviceId: string;
@@ -110,7 +87,7 @@ export interface CsrfBootstrapRotation {
   readonly rotatedAt: string;
 }
 
-export interface AuthDeviceRepositoryOptions {
+export interface SelectedCsrfAuthorizationRepositoryOptions {
   readonly generateCsrfToken?: () => string;
 }
 
@@ -134,43 +111,17 @@ export interface SelectedCsrfAuthorizationRepository {
   ) => AuthDeviceAuthentication;
 }
 
-export interface AuthorizeBrowserWriteInput extends AuthenticateDeviceInput {
-  readonly rawCsrfToken: string;
-}
-
 export interface AuthDeviceAuthentication {
   readonly trusted: true;
   readonly readOnly: boolean;
   readonly device: AuthDeviceRecord;
 }
 
-export interface LegacyPairingClaim {
-  readonly pairingCode: PairingCodeRecord;
-  readonly device: AuthDeviceRecord;
-}
-
 export interface AuthDeviceRepository {
   readonly get: (deviceId: string) => AuthDeviceRecord | null;
   readonly require: (deviceId: string) => AuthDeviceRecord;
-  /** @deprecated Historical unbounded hash-bearing list. Use createDeviceListingRepository. */
-  readonly listLegacy: () => readonly AuthDeviceRecord[];
   readonly create: (input: CreateAuthDeviceInput) => AuthDeviceRecord;
   readonly authenticateDeviceToken: (input: AuthenticateDeviceInput) => AuthDeviceAuthentication;
-  readonly rotateCsrfBootstrap: (input: RotateCsrfBootstrapInput) => CsrfBootstrapRotation;
-  readonly authorizeBrowserWrite: (input: AuthorizeBrowserWriteInput) => AuthDeviceRecord;
-  /** @deprecated Historical non-selected revoke path. Use createDeviceRevocationRepository. */
-  readonly revokeLegacy: (deviceId: string, input: { readonly now: Date }) => AuthDeviceRecord;
-}
-
-export interface LegacyPairingCodeRepository {
-  readonly get: (pairingId: string) => PairingCodeRecord | null;
-  readonly require: (pairingId: string) => PairingCodeRecord;
-  /** @deprecated Historical caller-supplied pairing path. */
-  readonly createLegacy: (input: CreatePairingCodeInput) => PairingCodeRecord;
-  /** @deprecated Historical caller-supplied pairing path. */
-  readonly claimLegacy: (input: ClaimPairingCodeInput) => LegacyPairingClaim;
-  /** @deprecated Historical caller-supplied pairing path. */
-  readonly revokeLegacy: (pairingId: string, input: { readonly now: Date }) => PairingCodeRecord;
 }
 
 interface AuthDeviceRow {
@@ -198,33 +149,15 @@ interface PreparedSelectedBrowserWrite extends PreparedSelectedCsrfAuthority {
   readonly rawCsrfToken: string;
 }
 
-interface PairingCodeRow {
-  readonly id: string;
-  readonly code_hash: string;
-  readonly permission: PairingCodeRecord["permission"];
-  readonly client_label: string | null;
-  readonly created_at: string;
-  readonly expires_at: string;
-  readonly used_at: string | null;
-  readonly revoked_at: string | null;
-  readonly claim_contract_version: 1 | null;
-  readonly claimed_device_id: string | null;
-}
-
-const pairingCodeMinLength = 6;
+const defaultSecretMinLength = 6;
 const deviceSecretMinLength = 24;
 const rawSecretMaxLength = 512;
 const csrfTokenBytes = 32;
 
 export function createAuthDeviceRepository(
-  db: Database.Database,
-  options: AuthDeviceRepositoryOptions = {}
+  db: Database.Database
 ): AuthDeviceRepository {
-  const generateCsrfToken = options.generateCsrfToken ?? defaultCsrfTokenGenerator;
   const authenticateDeviceToken = createDeviceAuthenticationTransaction(db);
-  const authorizeBrowserWrite = createBrowserWriteAuthorizationTransaction(db);
-  const rotateCsrfBootstrap = createCsrfBootstrapTransaction(db, generateCsrfToken);
-  const revokeLegacy = createLegacyDeviceRevocationTransaction(db);
 
   return {
     get(deviceId) {
@@ -240,9 +173,6 @@ export function createAuthDeviceRepository(
 
       return device;
     },
-    listLegacy() {
-      return (db.prepare("SELECT * FROM auth_devices ORDER BY created_at ASC, id ASC").all() as AuthDeviceRow[]).map(parseAuthDeviceRow);
-    },
     create(input) {
       return insertAuthDevice(db, authDeviceFromInput(input));
     },
@@ -254,30 +184,13 @@ export function createAuthDeviceRepository(
         readOnly: touched.permission === "read",
         device: touched
       };
-    },
-    rotateCsrfBootstrap(input) {
-      try {
-        return rotateCsrfBootstrap(input);
-      } catch (error) {
-        if (error instanceof HostDeckAuthRepositoryError) {
-          throw error;
-        }
-
-        throw new HostDeckAuthRepositoryError("csrf_rotation_failed", "CSRF bootstrap rotation failed.");
-      }
-    },
-    authorizeBrowserWrite(input) {
-      return runAuthenticationTransaction(() => authorizeBrowserWrite(input));
-    },
-    revokeLegacy(deviceId, input) {
-      return revokeLegacy(deviceId, input.now);
     }
   };
 }
 
 export function createSelectedCsrfAuthorizationRepository(
   db: Database.Database,
-  options: AuthDeviceRepositoryOptions = {}
+  options: SelectedCsrfAuthorizationRepositoryOptions = {}
 ): SelectedCsrfAuthorizationRepository {
   const generateCsrfToken = readSelectedCsrfRepositoryOptions(options);
   const rotate = createSelectedCsrfRotationTransaction(db, generateCsrfToken);
@@ -315,70 +228,12 @@ export function createSelectedCsrfAuthorizationRepository(
   });
 }
 
-function createLegacyDeviceRevocationTransaction(
-  db: Database.Database
-): (deviceId: string, now: Date) => AuthDeviceRecord {
-  return db.transaction((deviceId: string, now: Date): AuthDeviceRecord => {
-    const row = db.prepare("SELECT * FROM auth_devices WHERE id = ?").get(deviceId) as AuthDeviceRow | undefined;
-    if (row === undefined) {
-      throw new HostDeckAuthRepositoryError("device_not_found", `Auth device ${deviceId} does not exist.`);
-    }
-    const current = parseAuthDeviceRow(row);
-    const revokedAt = nowIso(now);
-    if (current.revoked_at !== null) return current;
-    const minimum = Math.max(
-      Date.parse(current.created_at),
-      Date.parse(current.csrf_rotated_at),
-      current.last_used_at === null ? Number.NEGATIVE_INFINITY : Date.parse(current.last_used_at)
-    );
-    if (Date.parse(revokedAt) < minimum) {
-      throw new HostDeckAuthRepositoryError(
-        "device_revoke_time_conflict",
-        "Device revocation time regressed behind durable authority."
-      );
-    }
-    const update = db
-      .prepare("UPDATE auth_devices SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
-      .run(revokedAt, deviceId);
-    if (update.changes !== 1) {
-      throw new HostDeckAuthRepositoryError(
-        "device_revoke_failed",
-        "Device authority changed before legacy revocation committed."
-      );
-    }
-    const revoked = db.prepare("SELECT * FROM auth_devices WHERE id = ?").get(deviceId) as AuthDeviceRow | undefined;
-    if (revoked === undefined) {
-      throw new HostDeckAuthRepositoryError("device_revoke_failed", "Auth device disappeared during revocation.");
-    }
-    return parseAuthDeviceRow(revoked);
-  }).immediate;
-}
-
 function createDeviceAuthenticationTransaction(
   db: Database.Database
 ): (input: AuthenticateDeviceInput) => AuthDeviceRecord {
   return db.transaction((input: AuthenticateDeviceInput): AuthDeviceRecord => {
     const observedAt = nowIso(input.now);
     const current = requireUsableDeviceByToken(db, input.rawDeviceToken, input.now);
-    return advanceLastUsedAt(db, current, observedAt);
-  }).immediate;
-}
-
-function createBrowserWriteAuthorizationTransaction(
-  db: Database.Database
-): (input: AuthorizeBrowserWriteInput) => AuthDeviceRecord {
-  return db.transaction((input: AuthorizeBrowserWriteInput): AuthDeviceRecord => {
-    const observedAt = nowIso(input.now);
-    const current = requireUsableDeviceByToken(db, input.rawDeviceToken, input.now);
-
-    if (current.permission === "read") {
-      throw new HostDeckAuthRepositoryError("read_only", "Read-only auth devices cannot write.");
-    }
-
-    if (!hashMatches(current.csrf_token_hash, input.rawCsrfToken)) {
-      throw new HostDeckAuthRepositoryError("csrf_mismatch", "Browser write rejected because the CSRF token does not match.");
-    }
-
     return advanceLastUsedAt(db, current, observedAt);
   }).immediate;
 }
@@ -451,17 +306,6 @@ function runAuthenticationTransaction<T>(operation: () => T): T {
     if (error instanceof HostDeckAuthRepositoryError) throw error;
     throw new HostDeckAuthRepositoryError("authentication_failed", "Auth device authentication failed.");
   }
-}
-
-function createCsrfBootstrapTransaction(
-  db: Database.Database,
-  generateCsrfToken: () => string
-): (input: RotateCsrfBootstrapInput) => CsrfBootstrapRotation {
-  return db.transaction((input: RotateCsrfBootstrapInput): CsrfBootstrapRotation => {
-    const rotatedAt = nowIso(input.now);
-    const current = requireUsableDeviceByToken(db, input.rawDeviceToken, input.now);
-    return rotateCurrentCsrf(db, current, rotatedAt, generateCsrfToken);
-  }).immediate;
 }
 
 function createSelectedCsrfRotationTransaction(
@@ -563,117 +407,6 @@ function rotateCurrentCsrf(
       csrfGeneration,
       rotatedAt
     });
-}
-
-/** @deprecated Historical caller-supplied pairing path. Use createPairingCodeRepository from selected-pairing-repository. */
-export function createLegacyPairingCodeRepository(db: Database.Database): LegacyPairingCodeRepository {
-  return {
-    get(pairingId) {
-      const row = db.prepare("SELECT * FROM pairing_codes WHERE id = ?").get(pairingId) as PairingCodeRow | undefined;
-      return row === undefined ? null : parsePairingCodeRow(row);
-    },
-    require(pairingId) {
-      const pairingCode = this.get(pairingId);
-
-      if (pairingCode === null) {
-        throw new HostDeckAuthRepositoryError("pairing_code_not_found", `Pairing code ${pairingId} does not exist.`);
-      }
-
-      return pairingCode;
-    },
-    createLegacy(input) {
-      const pairingCode = parsePairingCode({
-        id: input.id,
-        code_hash: hashPairingCode(input.rawCode),
-        permission: input.permission,
-        client_label: input.clientLabel ?? null,
-        created_at: nowIso(input.createdAt),
-        expires_at: nowIso(input.expiresAt),
-        used_at: null,
-        revoked_at: null,
-        claim_contract_version: null,
-        claimed_device_id: null
-      });
-
-      try {
-        db.prepare(`
-          INSERT INTO pairing_codes (
-            id,
-            code_hash,
-            permission,
-            client_label,
-            created_at,
-            expires_at,
-            used_at,
-            revoked_at,
-            claim_contract_version,
-            claimed_device_id
-          ) VALUES (
-            @id,
-            @code_hash,
-            @permission,
-            @client_label,
-            @created_at,
-            @expires_at,
-            @used_at,
-            @revoked_at,
-            @claim_contract_version,
-            @claimed_device_id
-          )
-        `).run(pairingCodeToRow(pairingCode));
-      } catch (error) {
-        throw mapPairingConstraint(error);
-      }
-
-      return pairingCode;
-    },
-    claimLegacy(input) {
-      const claimPairing = db.transaction(() => {
-        const pairingCode = requireClaimablePairingCode(db, input.rawCode, input.now);
-        const device = insertAuthDevice(
-          db,
-          authDeviceFromInput({
-            id: input.deviceId,
-            rawDeviceToken: input.rawDeviceToken,
-            rawCsrfToken: input.rawCsrfToken,
-            permission: pairingCode.permission,
-            clientLabel: input.clientLabel ?? pairingCode.client_label,
-            createdAt: input.now,
-            expiresAt: input.deviceExpiresAt ?? null
-          })
-        );
-
-        db.prepare("UPDATE pairing_codes SET used_at = ? WHERE id = ?").run(nowIso(input.now), pairingCode.id);
-
-        return {
-          pairingCode: parsePairingCode({
-            ...pairingCode,
-            used_at: nowIso(input.now)
-          }),
-          device
-        };
-      });
-
-      return claimPairing();
-    },
-    revokeLegacy(pairingId, input) {
-      const current = this.require(pairingId);
-
-      if (current.claim_contract_version !== null) {
-        throw new HostDeckAuthRepositoryError(
-          "pairing_code_legacy",
-          "Selected pairing codes cannot use the legacy revoke path."
-        );
-      }
-
-      if (current.revoked_at !== null) {
-        return current;
-      }
-
-      db.prepare("UPDATE pairing_codes SET revoked_at = ? WHERE id = ?").run(nowIso(input.now), pairingId);
-      return this.require(pairingId);
-    }
-  };
 }
 
 function authDeviceFromInput(input: CreateAuthDeviceInput): AuthDeviceRecord {
@@ -780,37 +513,6 @@ function requireUsableDeviceById(
   return device;
 }
 
-function requireClaimablePairingCode(db: Database.Database, rawCode: string, now: Date): PairingCodeRecord {
-  const row = db.prepare("SELECT * FROM pairing_codes WHERE code_hash = ?").get(hashPairingCode(rawCode)) as PairingCodeRow | undefined;
-
-  if (row === undefined) {
-    throw new HostDeckAuthRepositoryError("pairing_code_not_found", "Pairing code is not recognized.");
-  }
-
-  const pairingCode = parsePairingCodeRow(row);
-
-  if (pairingCode.claim_contract_version !== null) {
-    throw new HostDeckAuthRepositoryError(
-      "pairing_code_legacy",
-      "Selected pairing codes cannot use the legacy claim path."
-    );
-  }
-
-  if (pairingCode.revoked_at !== null) {
-    throw new HostDeckAuthRepositoryError("pairing_code_revoked", "Pairing code has been revoked.");
-  }
-
-  if (pairingCode.used_at !== null) {
-    throw new HostDeckAuthRepositoryError("pairing_code_used", "Pairing code has already been used.");
-  }
-
-  if (Date.parse(pairingCode.expires_at) <= now.getTime()) {
-    throw new HostDeckAuthRepositoryError("pairing_code_expired", "Pairing code has expired.");
-  }
-
-  return pairingCode;
-}
-
 function parseAuthDeviceRow(row: AuthDeviceRow): AuthDeviceRecord {
   return parseAuthDevice({
     id: row.id,
@@ -827,36 +529,11 @@ function parseAuthDeviceRow(row: AuthDeviceRow): AuthDeviceRecord {
   });
 }
 
-function parsePairingCodeRow(row: PairingCodeRow): PairingCodeRecord {
-  return parsePairingCode({
-    id: row.id,
-    code_hash: row.code_hash,
-    permission: row.permission,
-    client_label: row.client_label,
-    created_at: row.created_at,
-    expires_at: row.expires_at,
-    used_at: row.used_at,
-    revoked_at: row.revoked_at,
-    claim_contract_version: row.claim_contract_version,
-    claimed_device_id: row.claimed_device_id
-  });
-}
-
 function parseAuthDevice(candidate: unknown): AuthDeviceRecord {
   const result = authDeviceRecordSchema.safeParse(candidate);
 
   if (!result.success) {
     throw new HostDeckAuthRepositoryError("invalid_auth_device", "Auth device record is invalid.", { cause: result.error });
-  }
-
-  return result.data;
-}
-
-function parsePairingCode(candidate: unknown): PairingCodeRecord {
-  const result = pairingCodeRecordSchema.safeParse(candidate);
-
-  if (!result.success) {
-    throw new HostDeckAuthRepositoryError("invalid_pairing_code", "Pairing code record is invalid.", { cause: result.error });
   }
 
   return result.data;
@@ -878,21 +555,6 @@ function authDeviceToRow(device: AuthDeviceRecord): AuthDeviceRow {
   };
 }
 
-function pairingCodeToRow(pairingCode: PairingCodeRecord): PairingCodeRow {
-  return {
-    id: pairingCode.id,
-    code_hash: pairingCode.code_hash,
-    permission: pairingCode.permission,
-    client_label: pairingCode.client_label,
-    created_at: pairingCode.created_at,
-    expires_at: pairingCode.expires_at,
-    used_at: pairingCode.used_at,
-    revoked_at: pairingCode.revoked_at,
-    claim_contract_version: pairingCode.claim_contract_version,
-    claimed_device_id: pairingCode.claimed_device_id
-  };
-}
-
 function mapAuthDeviceConstraint(error: unknown): HostDeckAuthRepositoryError {
   const message = error instanceof Error ? error.message : String(error);
 
@@ -905,16 +567,6 @@ function mapAuthDeviceConstraint(error: unknown): HostDeckAuthRepositoryError {
   }
 
   return new HostDeckAuthRepositoryError("invalid_auth_device", "Auth device record violates SQLite constraints.", { cause: error });
-}
-
-function mapPairingConstraint(error: unknown): HostDeckAuthRepositoryError {
-  const message = error instanceof Error ? error.message : String(error);
-
-  if (message.includes("pairing_codes.id") || message.includes("pairing_codes.code_hash")) {
-    return new HostDeckAuthRepositoryError("pairing_code_exists", "Pairing code already exists.", { cause: error });
-  }
-
-  return new HostDeckAuthRepositoryError("invalid_pairing_code", "Pairing code record violates SQLite constraints.", { cause: error });
 }
 
 function readSelectedCsrfRepositoryOptions(
@@ -1071,13 +723,6 @@ function hashMatches(expectedHash: string, secret: string): boolean {
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
-function hashPairingCode(rawCode: string): string {
-  return hashSecret(rawCode, {
-    label: "Pairing code",
-    minLength: pairingCodeMinLength
-  });
-}
-
 function hashDeviceToken(rawDeviceToken: string): string {
   return hashSecret(rawDeviceToken, {
     label: "Device token",
@@ -1094,7 +739,7 @@ function hashCsrfToken(rawCsrfToken: string): string {
 
 function assertRawSecret(secret: string, options: HashSecretOptions): void {
   const label = options.label ?? "Secret";
-  const minLength = options.minLength ?? pairingCodeMinLength;
+  const minLength = options.minLength ?? defaultSecretMinLength;
 
   if (typeof secret !== "string" || secret.length < minLength || secret.length > rawSecretMaxLength || /\s/u.test(secret)) {
     throw new HostDeckAuthRepositoryError(

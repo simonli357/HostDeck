@@ -44,10 +44,10 @@ import {
   type UsageTokenBreakdown,
   usageSnapshotSchema,
 } from "@hostdeck/contracts";
-import type { LegacySessionResetResult, LegacySessionSummary } from "@hostdeck/storage";
 import QRCode from "qrcode";
 import type { CliFailure } from "./errors.js";
 import { internalFailure } from "./errors.js";
+import type { LegacySessionResetResult, LegacySessionSummary } from "./legacy-session-admin.js";
 import type { PairingLinkCommandResult } from "./pairing-link-client.js";
 
 export type TerminalQrRenderer = (link: string) => Promise<string>;

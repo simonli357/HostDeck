@@ -8,16 +8,20 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   type AuthRepositoryErrorCode,
   createAuthDeviceRepository,
+  createSelectedCsrfAuthorizationRepository,
   HostDeckAuthRepositoryError,
   hashSecret
 } from "./auth-repository.js";
 import { openMigratedDatabase } from "./migration-runner.js";
+import { createDeviceRevocationRepository } from "./selected-device-revocation-repository.js";
 
 const tempDirs: string[] = [];
 const require = createRequire(import.meta.url);
 const betterSqlite3Path = require.resolve("better-sqlite3");
 const rawDeviceToken = "device_token_for_monotonic_auth_123456";
-const rawCsrfToken = "csrf_token_for_monotonic_auth_123456";
+const rawCsrfToken = "C".repeat(43);
+const readRawCsrfToken = "R".repeat(43);
+const wrongRawCsrfToken = "W".repeat(43);
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true });
@@ -28,11 +32,12 @@ describe("monotonic auth-device last-used repository", () => {
     const open = openMigratedDatabase(tempDbPath(), { now: createdAt });
     try {
       const repository = createAuthDeviceRepository(open.db);
+      const csrfAuthorization = createSelectedCsrfAuthorizationRepository(open.db);
       createDevice(repository);
       createDevice(repository, {
         id: "client_read_auth",
         rawDeviceToken: "device_token_for_read_monotonic_123456",
-        rawCsrfToken: "csrf_token_for_read_monotonic_123456",
+        rawCsrfToken: readRawCsrfToken,
         permission: "read"
       });
       const writeBefore = rawDeviceRow(open.db, "client_monotonic_auth");
@@ -52,7 +57,12 @@ describe("monotonic auth-device last-used repository", () => {
         last_used_at: firstUseAt().toISOString()
       });
 
-      const write = repository.authorizeBrowserWrite({ rawDeviceToken, rawCsrfToken, now: laterUseAt() });
+      const write = csrfAuthorization.authorizeBrowserWrite({
+        deviceId: "client_monotonic_auth",
+        expectedCsrfGeneration: 1,
+        rawCsrfToken,
+        now: laterUseAt()
+      }).device;
       expect(write.last_used_at).toBe(laterUseAt().toISOString());
       expect(rawDeviceRow(open.db, "client_monotonic_auth")).toEqual({
         ...writeBefore,
@@ -74,6 +84,7 @@ describe("monotonic auth-device last-used repository", () => {
     const open = openMigratedDatabase(tempDbPath(), { now: createdAt });
     try {
       const repository = createAuthDeviceRepository(open.db);
+      const csrfAuthorization = createSelectedCsrfAuthorizationRepository(open.db);
       createDevice(repository);
       const initial = rawDeviceRow(open.db, "client_monotonic_auth");
 
@@ -90,7 +101,13 @@ describe("monotonic auth-device last-used repository", () => {
         "authentication_conflict"
       );
       expectAuthError(
-        () => repository.authorizeBrowserWrite({ rawDeviceToken, rawCsrfToken, now: firstUseAt() }),
+        () =>
+          csrfAuthorization.authorizeBrowserWrite({
+            deviceId: "client_monotonic_auth",
+            expectedCsrfGeneration: 1,
+            rawCsrfToken,
+            now: firstUseAt()
+          }),
         "authentication_conflict"
       );
       expect(rawDeviceRow(open.db, "client_monotonic_auth")).toEqual(greatest);
@@ -103,11 +120,12 @@ describe("monotonic auth-device last-used repository", () => {
     const open = openMigratedDatabase(tempDbPath(), { now: createdAt });
     try {
       const repository = createAuthDeviceRepository(open.db);
+      const csrfAuthorization = createSelectedCsrfAuthorizationRepository(open.db);
       createDevice(repository);
       createDevice(repository, {
         id: "client_read_auth",
         rawDeviceToken: "device_token_for_read_monotonic_123456",
-        rawCsrfToken: "csrf_token_for_read_monotonic_123456",
+        rawCsrfToken: readRawCsrfToken,
         permission: "read"
       });
       createDevice(repository, {
@@ -121,7 +139,10 @@ describe("monotonic auth-device last-used repository", () => {
         rawDeviceToken: "device_token_for_revoked_monotonic_123",
         rawCsrfToken: "csrf_token_for_revoked_monotonic_123"
       });
-      repository.revokeLegacy("client_revoked_auth", { now: firstUseAt() });
+      createDeviceRevocationRepository(open.db).revoke({
+        deviceId: "client_revoked_auth",
+        now: firstUseAt()
+      });
       const before = allDeviceRows(open.db);
 
       expectAuthError(
@@ -135,18 +156,20 @@ describe("monotonic auth-device last-used repository", () => {
       );
       expectAuthError(
         () =>
-          repository.authorizeBrowserWrite({
-            rawDeviceToken: "device_token_for_read_monotonic_123456",
-            rawCsrfToken: "csrf_token_for_read_monotonic_123456",
+          csrfAuthorization.authorizeBrowserWrite({
+            deviceId: "client_read_auth",
+            expectedCsrfGeneration: 1,
+            rawCsrfToken: readRawCsrfToken,
             now: firstUseAt()
           }),
         "read_only"
       );
       expectAuthError(
         () =>
-          repository.authorizeBrowserWrite({
-            rawDeviceToken,
-            rawCsrfToken: "wrong_csrf_token_for_monotonic_12345",
+          csrfAuthorization.authorizeBrowserWrite({
+            deviceId: "client_monotonic_auth",
+            expectedCsrfGeneration: 1,
+            rawCsrfToken: wrongRawCsrfToken,
             now: firstUseAt()
           }),
         "csrf_mismatch"
@@ -346,11 +369,16 @@ describe("monotonic auth-device last-used repository", () => {
       const worker = startAuthWriter(path, "touch", firstUseAt().toISOString());
       await worker.updated;
 
-      const revoked = repository.revokeLegacy("client_monotonic_auth", { now: laterUseAt() });
+      const revoked = createDeviceRevocationRepository(open.db).revoke({
+        deviceId: "client_monotonic_auth",
+        now: laterUseAt()
+      });
       await worker.completed;
-      expect(revoked).toMatchObject({
-        last_used_at: firstUseAt().toISOString(),
-        revoked_at: laterUseAt().toISOString()
+      expect(revoked).toEqual({
+        authorityInvalidated: true,
+        deviceId: "client_monotonic_auth",
+        previouslyRevoked: false,
+        revokedAt: laterUseAt().toISOString()
       });
       expect(rawDeviceRow(open.db, "client_monotonic_auth")).toMatchObject({
         last_used_at: firstUseAt().toISOString(),

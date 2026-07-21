@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   type AuthRepositoryErrorCode,
   createAuthDeviceRepository,
+  createSelectedCsrfAuthorizationRepository,
   HostDeckAuthRepositoryError,
   hashSecret
 } from "./auth-repository.js";
@@ -30,10 +31,13 @@ describe("selected device revocation repository", () => {
     const open = openMigratedDatabase(tempDbPath(), { now: createdAt });
     let bootstrapEntropyCalls = 0;
     try {
-      const auth = createAuthDeviceRepository(open.db, { generateCsrfToken: () => rotatedCsrfToken });
+      const auth = createAuthDeviceRepository(open.db);
+      const csrf = createSelectedCsrfAuthorizationRepository(open.db, {
+        generateCsrfToken: () => rotatedCsrfToken
+      });
       createDevice(auth);
       auth.authenticateDeviceToken({ rawDeviceToken, now: firstUseAt() });
-      auth.rotateCsrfBootstrap({ rawDeviceToken, now: rotationAt() });
+      csrf.rotateBootstrap({ deviceId, expectedCsrfGeneration: 1, now: rotationAt() });
       const before = rawDeviceRow(open.db, deviceId);
       const unrelatedBefore = unrelatedTableCounts(open.db);
 
@@ -56,7 +60,8 @@ describe("selected device revocation repository", () => {
       expect(rawDeviceRow(open.db, deviceId)).toEqual({ ...before, revoked_at: revokeAt().toISOString() });
       expect(unrelatedTableCounts(open.db)).toEqual(unrelatedBefore);
 
-      const revokedAuth = createAuthDeviceRepository(open.db, {
+      const revokedAuth = createAuthDeviceRepository(open.db);
+      const revokedCsrf = createSelectedCsrfAuthorizationRepository(open.db, {
         generateCsrfToken: () => {
           bootstrapEntropyCalls += 1;
           return "N".repeat(43);
@@ -68,15 +73,16 @@ describe("selected device revocation repository", () => {
       );
       expectAuthError(
         () =>
-          revokedAuth.authorizeBrowserWrite({
-            rawDeviceToken,
+          revokedCsrf.authorizeBrowserWrite({
+            deviceId,
+            expectedCsrfGeneration: 2,
             rawCsrfToken: rotatedCsrfToken,
             now: afterRevokeAt()
           }),
         "device_revoked"
       );
       expectAuthError(
-        () => revokedAuth.rotateCsrfBootstrap({ rawDeviceToken, now: afterRevokeAt() }),
+        () => revokedCsrf.rotateBootstrap({ deviceId, expectedCsrfGeneration: 2, now: afterRevokeAt() }),
         "device_revoked"
       );
       expect(bootstrapEntropyCalls).toBe(0);
@@ -160,10 +166,13 @@ describe("selected device revocation repository", () => {
   it("rejects an observation behind current use or CSRF rotation without changing the row", () => {
     const open = openMigratedDatabase(tempDbPath(), { now: createdAt });
     try {
-      const auth = createAuthDeviceRepository(open.db, { generateCsrfToken: () => rotatedCsrfToken });
+      const auth = createAuthDeviceRepository(open.db);
+      const csrf = createSelectedCsrfAuthorizationRepository(open.db, {
+        generateCsrfToken: () => rotatedCsrfToken
+      });
       createDevice(auth);
       auth.authenticateDeviceToken({ rawDeviceToken, now: firstUseAt() });
-      auth.rotateCsrfBootstrap({ rawDeviceToken, now: rotationAt() });
+      csrf.rotateBootstrap({ deviceId, expectedCsrfGeneration: 1, now: rotationAt() });
       const before = rawDeviceRow(open.db, deviceId);
 
       expectAuthError(
@@ -382,9 +391,12 @@ describe("selected device revocation repository", () => {
     first.db.pragma("journal_mode = WAL");
     first.db.pragma("wal_autocheckpoint = 0");
     try {
-      const auth = createAuthDeviceRepository(first.db, { generateCsrfToken: () => rotatedCsrfToken });
+      const auth = createAuthDeviceRepository(first.db);
+      const csrf = createSelectedCsrfAuthorizationRepository(first.db, {
+        generateCsrfToken: () => rotatedCsrfToken
+      });
       createDevice(auth);
-      auth.rotateCsrfBootstrap({ rawDeviceToken, now: rotationAt() });
+      csrf.rotateBootstrap({ deviceId, expectedCsrfGeneration: 1, now: rotationAt() });
       const repository = createDeviceRevocationRepository(first.db);
       repository.revoke({ deviceId, now: revokeAt() });
       const hostile = Object.defineProperty({}, "now", {
@@ -462,7 +474,8 @@ describe("selected device revocation real SQLite ordering", () => {
         createDevice(createAuthDeviceRepository(open.db));
         const worker = startAuthorityWriter(path, "revoke", firstUseAt().toISOString());
         await worker.updated;
-        const auth = createAuthDeviceRepository(open.db, {
+        const auth = createAuthDeviceRepository(open.db);
+        const csrf = createSelectedCsrfAuthorizationRepository(open.db, {
           generateCsrfToken: () => {
             entropyCalls += 1;
             return rotatedCsrfToken;
@@ -475,7 +488,7 @@ describe("selected device revocation real SQLite ordering", () => {
           );
         } else {
           expectAuthError(
-            () => auth.rotateCsrfBootstrap({ rawDeviceToken, now: rotationAt() }),
+            () => csrf.rotateBootstrap({ deviceId, expectedCsrfGeneration: 1, now: rotationAt() }),
             "device_revoked"
           );
         }

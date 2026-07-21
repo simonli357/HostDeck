@@ -1,4 +1,4 @@
-import type { SessionId } from "./session.js";
+import type { SessionId } from "./identifiers.js";
 
 export const errorCodes = [
   "malformed_request",
@@ -19,9 +19,7 @@ export const errorCodes = [
   "host_locked",
   "permission_denied",
   "read_only",
-  "unsupported_slash",
   "audit_unavailable",
-  "tmux_error",
   "storage_error",
   "daemon_unavailable",
   "runtime_unavailable",

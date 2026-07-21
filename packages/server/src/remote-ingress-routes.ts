@@ -220,7 +220,6 @@ function assertRouteService(
 function publicFailureStatus(code: ErrorCode): number {
   switch (code) {
     case "malformed_request":
-    case "unsupported_slash":
     case "validation_error":
       return 400;
     case "request_too_large":
@@ -257,7 +256,6 @@ function publicFailureStatus(code: ErrorCode): number {
     case "service_overloaded":
       return 503;
     case "protocol_error":
-    case "tmux_error":
       return 502;
     case "operation_timeout":
       return 504;
