@@ -331,6 +331,11 @@ describe("IFC-V1-052 selected production resource stress", () => {
     expectFrozenSafeIntegerSnapshot(admissionSnapshot);
     expect(harness.prompt.dispatches).toBe(2);
     expect(harness.compact.active_count).toBe(0);
+    expect(harness.subscriberFailures).toEqual([
+      { code: "queue_overflow", cursor: 9 },
+      { code: "queue_overflow", cursor: 9 },
+    ]);
+    expect(harness.hub.failure).toBeNull();
     expect(harness.auditRows()).toHaveLength(8);
     expect(harness.rawAudit()).not.toContain(privatePrompt);
     expect(harness.internalErrors).toEqual([]);
@@ -727,6 +732,10 @@ interface StressHarness {
   readonly rawAudit: () => string;
   readonly service: HostDeckFastifyLifecycle<StressContext>;
   readonly startedBudget: ResourceBudget;
+  readonly subscriberFailures: readonly Readonly<{
+    code: string;
+    cursor: number | null;
+  }>[];
   readonly subscribers: ProjectionSubscriberStreamService;
   readonly transport: ControlledCodexTransport;
   readonly usageCli: () => ReturnType<typeof createHostDeckUsageClient>;
@@ -769,7 +778,9 @@ async function createStressHarness(options: { readonly port?: number } = {}): Pr
       resource_budget: budget,
       state,
     });
-    const subscriberFailures: unknown[] = [];
+    const subscriberFailures: Array<
+      Readonly<{ code: string; cursor: number | null }>
+    > = [];
     const subscribers = createProjectionSubscriberStreamService({
       handoff,
       observe_failure: (failure) => subscriberFailures.push(failure),
@@ -1068,6 +1079,7 @@ async function createStressHarness(options: { readonly port?: number } = {}): Pr
       rawAudit: () => auditRows().join("\n"),
       service,
       startedBudget,
+      subscriberFailures,
       subscribers,
       transport,
       usageCli: () =>
