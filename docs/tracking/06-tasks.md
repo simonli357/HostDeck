@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-052` Run aggregate production resource, overload, deadline, and idempotency matrix | ready | none | All five enforcement leaves are complete; freeze and execute the cross-boundary stress matrix before deterministic production outputs and interface hardening. |
+| 1 | `IFC-V1-052` Run aggregate production resource, overload, deadline, and idempotency matrix | in_progress | none | Execute frozen `RAG-01` to `RAG-10` through one selected real-listener budget and prove cross-owner precedence, truth, repeatability, shutdown/restart, privacy, and zero residue. |
 
 ## Intentional Blockers
 
