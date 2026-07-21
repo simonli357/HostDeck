@@ -288,7 +288,7 @@ function validateManifest(manifest) {
   }
 
   validateIdentity(value.source, "Source identity", "count");
-  if (value.source.count !== 603) throw new TypeError("Selected source count must be exactly 603.");
+  if (value.source.count !== 605) throw new TypeError("Selected source count must be exactly 605.");
   validateIdentity(value.output, "Owned output identity", "count");
   validateIdentity(value.content, "Package content identity", "entryCount");
   if (!Number.isSafeInteger(value.content.bytes) || value.content.bytes < 1) {
@@ -359,7 +359,7 @@ function validatePackages(packages, packageVersion, outputIdentity) {
     sourceCount += descriptor.sourceCount;
     compiledCount += descriptor.outputCount;
   }
-  if (sourceCount !== 603 || outputIdentity.count !== compiledCount + packages.length + 1) {
+  if (sourceCount !== 605 || outputIdentity.count !== compiledCount + packages.length + 1) {
     throw new TypeError("Owned source/output aggregate is inconsistent.");
   }
 }

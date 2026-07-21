@@ -11,6 +11,7 @@ export * from "./host-lock-client.js";
 export * from "./host-status-client.js";
 export * from "./interrupt-client.js";
 export * from "./legacy-session-admin.js";
+export * from "./local-device-list.js";
 export * from "./model-client.js";
 export * from "./pairing-link-client.js";
 export * from "./parser.js";

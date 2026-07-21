@@ -13,6 +13,7 @@ import type {
   PlanControlSnapshot,
   PlanSelectionRequest,
   PromptDispatchResponse,
+  SelectedDeviceListResponse,
   SelectedDeviceRevokeResponse,
   SelectedHostLockRequest,
   SelectedHostStatusResponse,
@@ -32,6 +33,7 @@ import {
   compactProgressResponseSchema,
   compactStartRequestSchema,
   compareSelectedSessionListSortKeys,
+  decodeSelectedDeviceListCursor,
   decodeSelectedSessionListCursor,
   defaultResourceBudget,
   goalControlSnapshotSchema,
@@ -51,6 +53,8 @@ import {
   remoteDisableRequestSchema,
   remoteEnableRequestSchema,
   type SelectedPairRequest,
+  selectedDeviceListDefaultPageSize,
+  selectedDeviceListResponseSchema,
   selectedDeviceRevokeParamsSchema,
   selectedDeviceRevokeRequestSchema,
   selectedDeviceRevokeResponseSchema,
@@ -123,6 +127,11 @@ import {
   createLegacySessionAdmin,
   type LegacySessionAdmin
 } from "./legacy-session-admin.js";
+import {
+  createHostDeckLocalDeviceList,
+  type HostDeckLocalDeviceList,
+  type HostDeckLocalDeviceListInput
+} from "./local-device-list.js";
 import { createBoundedLoopbackFetch } from "./loopback-http.js";
 import {
   createHostDeckModelClient,
@@ -153,6 +162,7 @@ import {
   renderApprovalResponse,
   renderArchiveSession,
   renderCompactProgress,
+  renderDeviceList,
   renderDeviceRevoke,
   renderFailure,
   renderGoalSnapshot,
@@ -213,6 +223,7 @@ export interface CliRunOptions {
   readonly fetch?: HttpFetch;
   readonly signal?: AbortSignal;
   readonly legacyAdmin?: LegacySessionAdmin;
+  readonly localDeviceList?: HostDeckLocalDeviceList;
   readonly deviceRevokeClient?: HostDeckDeviceRevokeClient;
   readonly hostLockClient?: HostDeckHostLockClient;
   readonly hostStatusClient?: HostDeckHostStatusClient;
@@ -281,13 +292,6 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
       );
     }
 
-    if (parsed.command.kind === "devices") {
-      throw clientOperationFailure(
-        "capability_unavailable",
-        "The devices command is not available in this build."
-      );
-    }
-
     const configOptions: LoadCliConfigOptions = {
       flags: parsed.configFlags
     };
@@ -305,6 +309,23 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     const config = loadCliConfig(configOptions);
+    if (parsed.command.kind === "devices") {
+      const deviceList =
+        options.localDeviceList ??
+        createHostDeckLocalDeviceList({
+          stateDir: config.stateDir,
+          databasePath: config.databasePath
+        });
+      const request = Object.freeze({
+        limit: parsed.command.limit,
+        cursor: parsed.command.cursor
+      }) satisfies HostDeckLocalDeviceListInput;
+      const response = parseLocalDeviceListResponse(
+        await Reflect.apply(deviceList.list, undefined, [request]),
+        request
+      );
+      return success(renderDeviceList(response, parsed.command.json));
+    }
     const selectedFetch =
       options.fetch ??
       createBoundedLoopbackFetch(
@@ -652,6 +673,42 @@ function parseHostStatusResponse(
     parsed.data.access.transport !== "http"
   ) {
     throw internalFailure("Host-status client returned invalid data.");
+  }
+  return parsed.data;
+}
+
+function parseLocalDeviceListResponse(
+  candidate: unknown,
+  request: HostDeckLocalDeviceListInput
+): SelectedDeviceListResponse {
+  let parsed: ReturnType<typeof selectedDeviceListResponseSchema.safeParse>;
+  try {
+    parsed = selectedDeviceListResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Local device-list client returned invalid data.");
+  }
+  if (!parsed.success) {
+    throw internalFailure("Local device-list client returned invalid data.");
+  }
+  const limit = request.limit ?? selectedDeviceListDefaultPageSize;
+  let afterDeviceId: string | null = null;
+  try {
+    afterDeviceId =
+      request.cursor === null
+        ? null
+        : decodeSelectedDeviceListCursor(request.cursor);
+  } catch {
+    throw internalFailure("Local device-list client returned invalid data.");
+  }
+  if (
+    parsed.data.devices.length > limit ||
+    (parsed.data.has_more && parsed.data.devices.length !== limit) ||
+    (afterDeviceId !== null &&
+      parsed.data.devices.some(
+        (device) => device.device_id <= afterDeviceId
+      ))
+  ) {
+    throw internalFailure("Local device-list client returned invalid data.");
   }
   return parsed.data;
 }

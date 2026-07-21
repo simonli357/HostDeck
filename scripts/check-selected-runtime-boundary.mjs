@@ -204,6 +204,35 @@ const historicalExceptionImports = new Map([
   ["packages/cli/src/legacy-session-admin.ts", ["./errors.js", "@hostdeck/storage", "node:fs"]]
 ]);
 
+const cliLocalStorageOwners = new Map([
+  [
+    "packages/cli/src/legacy-session-admin.ts",
+    {
+      modules: ["./errors.js", "@hostdeck/storage", "node:fs"],
+      storageSymbols: [
+        "HostDeckLocalPathError",
+        "createLegacySessionRepository",
+        "openMigratedDatabase",
+        "openSecureHostDeckRegularFile",
+        "prepareHostDeckStatePaths"
+      ]
+    }
+  ],
+  [
+    "packages/cli/src/local-device-list.ts",
+    {
+      modules: ["./errors.js", "@hostdeck/contracts", "@hostdeck/storage"],
+      storageSymbols: [
+        "HostDeckAuthRepositoryError",
+        "HostDeckLocalPathError",
+        "HostDeckMigrationError",
+        "createDeviceListingRepository",
+        "openExistingHostDeckReadOnlyDatabase"
+      ]
+    }
+  ]
+]);
+
 const legacyTokenPattern = /\b(?:bind_host|bind_mode|certificate(?:s|_[A-Za-z0-9_]+)?|lan|lan_configure|lan_disable|lan_enable|lan_enabled|raw_input|selected_lan_configuration|tmux_error|unsupported_slash)\b/giu;
 const forbiddenLegacySymbolPattern = /\b(?:createLegacyPairingCodeRepository|createLocalAdmin|revokeLegacy|rotateCsrfBootstrap|setLanEnabled)\b/gu;
 const forbiddenTmuxInvocationPattern = /\b(?:execFile|execFileSync|spawn|spawnSync)\s*\([\s\S]{0,160}?["'`]tmux["'`]/gu;
@@ -491,13 +520,58 @@ function validateCliBoundary(root, failures) {
     if (path !== configPath && /HOSTDECK_HOST|--host/gu.test(source)) {
       failures.push(`${path} exposes retired arbitrary-host configuration`);
     }
-    if (
-      path !== "packages/cli/src/legacy-session-admin.ts" &&
-      /@hostdeck\/storage|better-sqlite3|openMigratedDatabase|createLegacySessionRepository|createPairingCodeRepository|createSettingsRepository/gu.test(source)
-    ) {
-      failures.push(`${path} crosses the CLI local-storage administration boundary`);
-    }
+    failures.push(...findCliLocalStorageBoundaryViolations(path, source));
   }
+}
+
+export function findCliLocalStorageBoundaryViolations(path, source) {
+  const touchesStorage = /@hostdeck\/storage|better-sqlite3|openMigratedDatabase|createLegacySessionRepository|createPairingCodeRepository|createSettingsRepository/gu.test(
+    source
+  );
+  if (!touchesStorage) return [];
+  const owner = cliLocalStorageOwners.get(path);
+  if (owner === undefined) {
+    return [`${path} crosses the CLI local-storage administration boundary`];
+  }
+
+  const failures = compareExactModuleSet(
+    `${path} local-storage owner`,
+    collectModuleSpecifiers(source),
+    owner.modules
+  );
+  const storageSymbols = readNamedImportNames(source, "@hostdeck/storage");
+  if (
+    storageSymbols === null ||
+    JSON.stringify(storageSymbols) !== JSON.stringify(owner.storageSymbols)
+  ) {
+    failures.push(`${path} local-storage imports drifted from its exact owner symbols`);
+  }
+  return failures;
+}
+
+export function readNamedImportNames(source, moduleSpecifier) {
+  const escapedSpecifier = moduleSpecifier.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const pattern = new RegExp(
+    `import\\s*\\{([^{};]*)\\}\\s*from\\s*["']${escapedSpecifier}["']\\s*;`,
+    "gu"
+  );
+  const matches = [...source.matchAll(pattern)];
+  if (matches.length !== 1 || matches[0]?.[1] === undefined) return null;
+  const names = matches[0][1].split(",").map((segment) => {
+    const normalized = segment.trim().replace(/^type\s+/u, "");
+    const [name, alias, extra] = normalized.split(/\s+as\s+/u);
+    if (
+      name === undefined ||
+      extra !== undefined ||
+      !/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name) ||
+      (alias !== undefined && !/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(alias))
+    ) {
+      return null;
+    }
+    return name;
+  });
+  if (names.some((name) => name === null)) return null;
+  return [...new Set(names)].sort();
 }
 
 function validateHistoricalExceptions(root, failures) {

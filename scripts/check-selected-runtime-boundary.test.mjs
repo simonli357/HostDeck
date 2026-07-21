@@ -4,9 +4,11 @@ import test from "node:test";
 import {
   collectModuleSpecifiers,
   compareExactModuleSet,
+  findCliLocalStorageBoundaryViolations,
   findLegacyInterfaceTokens,
   readConstStringArray,
-  readInterfacePropertyNames
+  readInterfacePropertyNames,
+  readNamedImportNames
 } from "./check-selected-runtime-boundary.mjs";
 
 test("collects static imports, exports, and import types exactly", () => {
@@ -50,4 +52,56 @@ test("reads interface properties without accepting methods or computed keys", ()
     ["apiUrl", "port"]
   );
   assert.equal(readInterfacePropertyNames("interface Config { load(): void }", "Config"), null);
+});
+
+test("allows only the exact local device-list storage owner", () => {
+  const source = `
+    import { Value } from "@hostdeck/contracts";
+    import {
+      createDeviceListingRepository,
+      HostDeckAuthRepositoryError,
+      HostDeckLocalPathError,
+      HostDeckMigrationError,
+      openExistingHostDeckReadOnlyDatabase
+    } from "@hostdeck/storage";
+    import { internalFailure } from "./errors.js";
+  `;
+  assert.deepEqual(
+    readNamedImportNames(source, "@hostdeck/storage"),
+    [
+      "HostDeckAuthRepositoryError",
+      "HostDeckLocalPathError",
+      "HostDeckMigrationError",
+      "createDeviceListingRepository",
+      "openExistingHostDeckReadOnlyDatabase"
+    ]
+  );
+  assert.deepEqual(
+    findCliLocalStorageBoundaryViolations(
+      "packages/cli/src/local-device-list.ts",
+      source
+    ),
+    []
+  );
+  assert.deepEqual(
+    findCliLocalStorageBoundaryViolations(
+      "packages/cli/src/unowned-storage.ts",
+      source
+    ),
+    [
+      "packages/cli/src/unowned-storage.ts crosses the CLI local-storage administration boundary"
+    ]
+  );
+  assert.deepEqual(
+    findCliLocalStorageBoundaryViolations(
+      "packages/cli/src/local-device-list.ts",
+      source.replace(
+        "createDeviceListingRepository,",
+        "createDeviceListingRepository, createSettingsRepository,"
+      )
+    ),
+    [
+      "packages/cli/src/local-device-list.ts local-storage imports drifted from its exact owner symbols"
+    ]
+  );
 });

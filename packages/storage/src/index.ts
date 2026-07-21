@@ -65,6 +65,11 @@ export {
   type UncommittedSelectedProjectionEvent
 } from "./projection-append-port.js";
 export {
+  type ExistingHostDeckReadOnlyDatabase,
+  type OpenExistingHostDeckReadOnlyDatabaseInput,
+  openExistingHostDeckReadOnlyDatabase
+} from "./read-only-database.js";
+export {
   assertRemoteIngressAdmissionProofRepository,
   createRemoteIngressAdmissionProofRepository,
   HostDeckRemoteIngressAdmissionProofRepositoryError,
@@ -90,9 +95,11 @@ export {
   type RuntimeCompatibilityRepositoryErrorCode
 } from "./runtime-compatibility-repository.js";
 export {
+  type ExistingHostDeckStatePaths,
   HostDeckLocalPathError,
   type HostDeckLocalPathErrorCode,
   type HostDeckPathModeRepair,
+  inspectExistingHostDeckStatePaths,
   type OpenedSecureHostDeckRegularFile,
   type OpenSecureHostDeckRegularFileOptions,
   openSecureHostDeckRegularFile,

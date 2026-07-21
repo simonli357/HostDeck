@@ -69,6 +69,11 @@ export interface PreparedHostDeckStatePaths {
   readonly repairs: readonly HostDeckPathModeRepair[];
 }
 
+export interface ExistingHostDeckStatePaths {
+  readonly state_dir: string;
+  readonly database_path: string;
+}
+
 export interface SecureHostDeckRegularFileOptions {
   readonly label: string;
   readonly mode?: number;
@@ -205,6 +210,36 @@ export function prepareHostDeckStatePaths(input: {
     state_dir: stateDir,
     database_path: databasePath,
     repairs: freezeRepairs(repairs)
+  });
+}
+
+export function inspectExistingHostDeckStatePaths(input: {
+  readonly state_dir: string;
+  readonly database_path: string;
+}): ExistingHostDeckStatePaths {
+  const uid = requireLinuxUid();
+  const stateDir = parseAbsolutePath(input.state_dir, "state_dir");
+  const databasePath = parseAbsolutePath(input.database_path, "database_path");
+  assertDescendant(
+    databasePath,
+    stateDir,
+    "database_path must be inside state_dir."
+  );
+
+  let directory = stateDir;
+  inspectExistingSecureDirectory(directory, "state_dir", uid);
+  const databaseParent = dirname(databasePath);
+  const descendants = relative(stateDir, databaseParent);
+  if (descendants.length > 0) {
+    for (const segment of descendants.split(sep)) {
+      directory = join(directory, segment);
+      inspectExistingSecureDirectory(directory, "database parent", uid);
+    }
+  }
+
+  return Object.freeze({
+    state_dir: stateDir,
+    database_path: databasePath
   });
 }
 
@@ -501,6 +536,53 @@ function ensureSecureDirectory(
   const repair = enforcePathMode(path, metadata.mode, "directory", label, directoryMode, true);
   assertPathIdentity(path, identity, label);
   if (repair !== null) repairs.push(repair);
+}
+
+function inspectExistingSecureDirectory(
+  path: string,
+  label: string,
+  uid: number
+): void {
+  let metadata: ReturnType<typeof lstatSync>;
+  try {
+    metadata = lstatSync(path);
+  } catch (error) {
+    throw pathError(
+      "invalid_path",
+      `${label} could not be inspected.`,
+      path,
+      error
+    );
+  }
+  if (metadata.isSymbolicLink()) {
+    throw pathError(
+      "symlink_rejected",
+      `${label} must not be a symlink.`,
+      path
+    );
+  }
+  if (!metadata.isDirectory()) {
+    throw pathError(
+      "path_type_mismatch",
+      `${label} must be a directory.`,
+      path
+    );
+  }
+  if (metadata.uid !== uid) {
+    throw pathError(
+      "wrong_owner",
+      `${label} must be owned by the current user.`,
+      path
+    );
+  }
+  if ((metadata.mode & 0o7777) !== directoryMode) {
+    throw pathError(
+      "permission_update_failed",
+      `${label} must have mode ${formatMode(directoryMode)}.`,
+      path
+    );
+  }
+  assertCanonical(path, label);
 }
 
 function assertSecureRuntimeParent(path: string, uid: number): void {

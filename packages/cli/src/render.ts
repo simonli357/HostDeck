@@ -28,6 +28,7 @@ import {
   type RemoteIngressPublicState,
   type ResolvedPlanSettings,
   remoteIngressPublicStateSchema,
+  type SelectedDeviceListResponse,
   type SelectedDeviceRevokeResponse,
   type SelectedHostLockStateResponse,
   type SelectedHostStatusResponse,
@@ -35,6 +36,7 @@ import {
   type SelectedSessionListResponse,
   type SelectedSessionStartResponse,
   type SkillsSnapshot,
+  selectedDeviceListResponseSchema,
   selectedDeviceRevokeResponseSchema,
   selectedHostLockStateResponseSchema,
   selectedHostStatusResponseSchema,
@@ -441,6 +443,26 @@ export function renderDeviceRevoke(
   return output;
 }
 
+export function renderDeviceList(
+  candidate: SelectedDeviceListResponse,
+  json: boolean
+): string {
+  let parsed: ReturnType<typeof selectedDeviceListResponseSchema.safeParse>;
+  try {
+    parsed = selectedDeviceListResponseSchema.safeParse(candidate);
+  } catch {
+    throw internalFailure("Device-list rendering input is invalid.");
+  }
+  if (!parsed.success) {
+    throw internalFailure("Device-list rendering input is invalid.");
+  }
+  const output = json
+    ? `${JSON.stringify(parsed.data, null, 2)}\n`
+    : renderDeviceListText(parsed.data);
+  requireBoundedRender(output, "Device-list");
+  return output;
+}
+
 export function renderLegacySessionStatus(candidate: unknown, json: boolean): string {
   const response = parseLegacySessionSummary(candidate);
   if (json) return `${JSON.stringify(response, null, 2)}\n`;
@@ -716,6 +738,35 @@ function renderSessionListText(response: SelectedSessionListResponse): string {
         `Turn: ${session.turn_state}`,
         `Freshness: ${session.freshness}`,
         `Last activity: ${session.last_activity_at ?? "none"}`
+      );
+    }
+  }
+  lines.push(
+    "",
+    `Next cursor: ${response.next_cursor === null ? "none" : escapeTerminalText(response.next_cursor)}`,
+    ""
+  );
+  return lines.join("\n");
+}
+
+function renderDeviceListText(response: SelectedDeviceListResponse): string {
+  const lines = [
+    `Paired devices: ${response.devices.length}`,
+    `Has more: ${response.has_more ? "yes" : "no"}`
+  ];
+  if (response.devices.length === 0) {
+    lines.push("", "No paired devices.");
+  } else {
+    for (const device of response.devices) {
+      lines.push(
+        "",
+        escapeTerminalText(device.client_label ?? "Unnamed device"),
+        `ID: ${escapeTerminalText(device.device_id)}`,
+        `Permission: ${device.permission}`,
+        `Created: ${device.created_at}`,
+        `Last used: ${device.last_used_at ?? "never"}`,
+        `Expires: ${device.expires_at ?? "never"}`,
+        `Revoked: ${device.revoked_at ?? "no"}`
       );
     }
   }
