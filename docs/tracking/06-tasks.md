@@ -16,8 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-054` Produce the runnable `codexdeck` bin and selected command/help/version/config surface | ready | none | The deterministic compiled package and bounded source clients are complete; add one exact executable/foreground dispatch without absorbing web assets, units, or install lifecycle. |
-| 2 | `IFC-V1-055` Generate versioned unprivileged systemd user units with explicit ownership/dependencies | ready | none | The compiled package and accepted runtime lifecycle are complete; units can be specified and implemented while executable work remains ordered first. |
+| 1 | `IFC-V1-080` Complete required CLI parser/client/render/source dispatch contracts | ready | none | The executable audit found four missing selected-route clients plus six required top-level command families; freeze this side-effect-free contract before process or package wiring. |
+| 2 | `IFC-V1-081` Implement the foreground resource bootstrap and rollback owner | ready | none | Secure paths/lease, migrated storage, exact runtime supervision, and compiled libraries are complete inputs; build the real resource owner before application composition. |
+| 3 | `IFC-V1-055` Generate versioned unprivileged systemd user units with explicit ownership/dependencies | ready | none | The compiled package and accepted runtime lifecycle are complete; units remain independent, but command/bootstrap work is ordered first. |
 
 ## Intentional Blockers
 

@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `IFC-V1-054` runnable `codexdeck` executable and foreground command dispatch is ready and first; `IFC-V1-055` user-unit generation is also ready. Both consume the completed deterministic package foundation without absorbing blocked web assets or later install lifecycle.
+- Active task: the executable audit split the over-broad `IFC-V1-054` card into dependency-ordered leaves. `IFC-V1-080` required CLI contracts is ready and first, `IFC-V1-081` foreground resource bootstrap is ready and second, and `IFC-V1-055` user-unit generation remains independently ready. Application composition, serve lifecycle, and final bin integration follow as `IFC-V1-082`, `IFC-V1-083`, and `IFC-V1-054` without absorbing blocked web assets or later install lifecycle.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.5; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract plus 14 current Signal Ledger/Focus Rail visual targets are complete; both desktop-led boards remain rejected, and `FE-V1-003` is blocked only by human selection of exact assets/approved drift.
@@ -119,7 +119,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Not Proven
 
-- Executable startup/package output remains unproven: `IFC-V1-021` is ready, while built assets, executable CLI/service packaging, uninstall, and clean-machine parity remain downstream through `IFC-V1-058`.
+- Executable startup remains unproven: `IFC-V1-021` completed the deterministic package foundation, while command completion, resource/application/serve composition, built assets, executable/service packaging, uninstall, and clean-machine parity remain downstream through `IFC-V1-080` to `IFC-V1-083` and `IFC-V1-053` to `IFC-V1-058`.
 - Selected interface module hardening and release acceptance remain downstream. The exact HostDeck/TUI lifecycle, remote physical path, and selected route composition are proven inputs, not a packaged release claim.
 - Physical paired-device revocation through the production UI and sustained trusted-source rate limits remain downstream; the `IFC-V1-079` acceptance surface does not substitute for the production dashboard or full route assembly.
 - Runnable packaged CLI, built dashboard, user services, clean Ubuntu/Tailscale setup, real remote-phone workflow, or release readiness.
