@@ -66,7 +66,7 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 
 ## CLI And Service State
 
-Selected CLI parsers and loopback HTTP clients are implemented in `packages/cli/src/`; pair, lock, and unlock use selected HTTP routes. Only `legacy status/reset` enters the bounded local SQLite administration module. `pnpm build` compiles those accepted CLI/server/library roots into a self-contained `dist/hostdeck`, but the package deliberately has no `bin`, shebang, startup entrypoint, web assets, or runnable `codexdeck` command. `IFC-V1-054` owns executable composition and command dispatch. `INT-V1-008` removed the historical tmux path and `IFC-V1-067` removed direct-LAN/TLS/raw/desktop production interfaces; executable-package and clean-install evidence must exist before `codexdeck ...` becomes a copy-paste command.
+The required source grammar is complete in `packages/cli/src/`: `serve`, host `status`, paginated session `list`, paginated `devices`, confirmed `revoke`, and all reserved service actions now parse strictly alongside the accepted session/control/pair/lock/remote/legacy commands. Newly staged operations fail explicitly without configuration, filesystem, network, or process work. `IFC-V1-084` owns API-backed status/list/revoke; `IFC-V1-085` owns secure read-only local device listing under `DEC-024`. Existing pair, lock, unlock, remote, and session/control commands use selected HTTP routes, while only `legacy status/reset` currently enters local SQLite administration. `pnpm build` compiles the accepted roots into `dist/hostdeck`, but the package still has no `bin`, shebang, startup entrypoint, web assets, or runnable `codexdeck` command.
 
 Local `legacy status [--json]` reports only the `legacy_unmigrated` disposition and a bounded row count. `legacy reset --confirm [--json]` opens the local SQLite database, runs one immediate transaction, removes only inert legacy session state through declared foreign keys, preserves selected sessions/projections/security/global audit state, and performs no process or tmux action. Both remain source contracts until CLI packaging.
 
@@ -95,7 +95,7 @@ Supported config inputs:
 
 ## Executable Composition Gap
 
-`IFC-V1-046` accepts the selected 22-registration/35-route production factory, and `IFC-V1-021` now compiles its server/CLI dependency closure. `codexdeck serve` is still not runnable because `IFC-V1-054` must add the foreground entry and complete command dispatch that acquire the state lease, prepare owner-only paths and SQLite, start or connect to the selected Codex runtime according to ownership mode, run maintenance/reconciliation, register only selected routes/static/SSE, and drain every owned resource on shutdown. It must not restore the old custom listener, tmux discovery, direct-LAN TLS, or historical route fallback.
+`IFC-V1-046` accepts the selected 22-registration/35-route production factory, and `IFC-V1-021` compiles its server/CLI dependency closure. `codexdeck serve` is still not runnable: `IFC-V1-081` owns secure foreground resources and rollback, `IFC-V1-082` owns the real application graph, `IFC-V1-083` owns the listener/Tailscale/shutdown lifecycle, and `IFC-V1-054` owns the compiled process entry and bin integration. None may restore the old custom listener, tmux discovery, direct-LAN TLS, or historical route fallback.
 
 Long-running systemd user units and runnable packaging remain downstream. Do not publish foreground or service-wrapper instructions until composition, build/package, and `REL-V1-006` clean-install evidence pass.
 

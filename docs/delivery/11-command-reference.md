@@ -27,6 +27,7 @@ pnpm lint
 pnpm test
 pnpm test:unit
 pnpm test:contract
+pnpm exec vitest run --config vitest.contract.config.ts packages/cli/src/cli.contract.test.ts
 pnpm test:integration
 pnpm test:web
 pnpm build
@@ -105,6 +106,6 @@ pnpm generate:codex-bindings
 
 ## Explicit Gaps
 
-- CLI binary: the source command contract includes `start --name NAME --cwd PATH [--json]`, `send SESSION_ID TEXT... [--json]`, the selected `model` read/select forms, the selected `goal` read/set/pause/resume/complete/clear forms, the selected `plan` read/enter/exit forms, `compact SESSION_ID [--json]`, `compact SESSION_ID --confirm [--json]`, `approvals SESSION_ID [--json]`, `approvals SESSION_ID REQUEST_ID approve|deny --confirm [--json]`, `interrupt SESSION_ID TURN_ID --confirm [--json]`, `remote status`, `remote enable`, `remote disable`, `resume SESSION_ID`, `archive SESSION_ID [--json]`, `usage SESSION_ID [--json]`, `skills SESSION_ID [--json]`, `legacy status [--json]`, and `legacy reset --confirm [--json]`. `pnpm build` now emits the compiled six-package library foundation, but `codexdeck` is not installed as a workspace or packaged executable; `pnpm exec codexdeck --help` still fails with command not found. Compiled `serve`, command dispatch, help, and version remain `IFC-V1-054`. Keep `codexdeck ...` examples out of copy-paste command blocks until executable-package and clean-install smoke provide a runnable path.
+- CLI binary: the source grammar now includes required `serve`, `status`, paginated `list`, paginated `devices`, confirmed `revoke`, and all reserved `service` actions alongside the accepted session/control/pair/lock/remote/legacy operations. Status/list/revoke implementation remains `IFC-V1-084`, secure local device listing remains `IFC-V1-085`, and staged operations fail explicitly without side effects. `pnpm build` emits the compiled six-package library foundation, but `codexdeck` is not installed as a workspace or packaged executable; `pnpm exec codexdeck --help` still fails with command not found. Foreground composition and final compiled bin integration remain `IFC-V1-081` to `IFC-V1-083` and `IFC-V1-054`. Keep `codexdeck ...` examples out of copy-paste command blocks until executable-package and clean-install smoke provide a runnable path.
 - E2E validation: `pnpm test:e2e` intentionally exits nonzero until `REL-V1-007` implements it.
 - Local release smoke: `pnpm smoke:local` intentionally exits nonzero until `REL-V1-006` implements it.
