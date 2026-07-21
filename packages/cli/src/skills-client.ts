@@ -1,23 +1,16 @@
 import {
   type ApiErrorEnvelope,
-  apiRouteErrorBodySchema,
   type SkillsSnapshot,
   sessionIdParamsSchema,
   skillsSnapshotSchema
 } from "@hostdeck/contracts";
-import type { HttpFetch, HttpResponse } from "./api-client.js";
+import type { HttpFetch } from "./api-client.js";
+import { internalFailure, usageFailure } from "./errors.js";
 import {
-  apiFailure,
-  CliFailure,
-  daemonUnavailableFailure,
-  internalFailure,
-  usageFailure
-} from "./errors.js";
-import {
-  assertCliHttpResponse,
   createBoundedLoopbackFetch,
-  readCliJsonPayload,
-  requireLoopbackBaseUrl
+  requestCliJson,
+  requireLoopbackBaseUrl,
+  throwCliApiFailure
 } from "./loopback-http.js";
 
 export interface HostDeckSkillsClient {
@@ -74,40 +67,29 @@ async function requestSkills(
     `/api/v1/sessions/${encodeURIComponent(sessionId)}/skills`,
     baseUrl
   );
-  let response: HttpResponse;
-  try {
-    response = await Reflect.apply(fetchPort, undefined, [url.toString(), {
+  const { payload, response } = await requestCliJson({
+    baseUrl,
+    context: "HostDeck skills-client",
+    expectedStatus: 200,
+    invalidSuccessStatusMessage:
+      "HostDeck daemon returned invalid managed-session skills data.",
+    fetch: fetchPort,
+    init: {
       method: "GET",
       headers: Object.freeze({
         accept: "application/json",
         "cache-control": "no-store"
       })
-    }]);
-  } catch (error) {
-    if (error instanceof CliFailure) throw error;
-    throw daemonUnavailableFailure(baseUrl, error);
-  }
-
-  assertCliHttpResponse(response, "HostDeck skills-client");
-  const payload = await readCliJsonPayload(response);
+    },
+    url
+  });
   if (!response.ok) {
-    let parsedError: ReturnType<typeof apiRouteErrorBodySchema.safeParse>;
-    try {
-      parsedError = apiRouteErrorBodySchema.safeParse(payload);
-    } catch {
-      throw internalFailure(
-        `HostDeck daemon returned an untyped HTTP ${response.status} skills error.`
-      );
-    }
-    if (!parsedError.success) {
-      throw internalFailure(
-        `HostDeck daemon returned an untyped HTTP ${response.status} skills error.`
-      );
-    }
-    throw apiFailure(
-      response.status,
-      sanitizeSkillsApiError(parsedError.data.error)
-    );
+    throwCliApiFailure({
+      context: "skills",
+      payload,
+      sanitize: sanitizeSkillsApiError,
+      status: response.status
+    });
   }
 
   let parsed: ReturnType<typeof skillsSnapshotSchema.safeParse>;

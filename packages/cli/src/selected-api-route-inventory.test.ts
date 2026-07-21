@@ -1,3 +1,4 @@
+import { readdir, readFile } from "node:fs/promises";
 import {
   clientOperationIdSchema,
   selectedStartSessionRequestSchema
@@ -46,6 +47,8 @@ import { createHostDeckStartClient } from "./start-client.js";
 import { createHostDeckUsageClient } from "./usage-client.js";
 
 interface ObservedRequest {
+  readonly body: string | undefined;
+  readonly headers: Readonly<Record<string, string>>;
   readonly method: "GET" | "POST";
   readonly path: string;
 }
@@ -79,12 +82,175 @@ const expectedManifestIds = [
   "usage_read"
 ] as const;
 
-describe("IFC-V1-046 source CLI selected-route inventory", () => {
+const selectedClientContracts = [
+  {
+    factory: "createHostDeckApprovalClient",
+    file: "approval-client.ts",
+    interface: "HostDeckApprovalClient",
+    operations: ["list", "respond"]
+  },
+  {
+    factory: "createHostDeckArchiveClient",
+    file: "archive-client.ts",
+    interface: "HostDeckArchiveClient",
+    operations: ["archive"]
+  },
+  {
+    factory: "createHostDeckCompactClient",
+    file: "compact-client.ts",
+    interface: "HostDeckCompactClient",
+    operations: ["read", "start"]
+  },
+  {
+    factory: "createHostDeckGoalClient",
+    file: "goal-client.ts",
+    interface: "HostDeckGoalClient",
+    operations: ["mutate", "read"]
+  },
+  {
+    factory: "createHostDeckHostLockClient",
+    file: "host-lock-client.ts",
+    interface: "HostDeckHostLockClient",
+    operations: ["lock", "unlock"]
+  },
+  {
+    factory: "createHostDeckInterruptClient",
+    file: "interrupt-client.ts",
+    interface: "HostDeckInterruptClient",
+    operations: ["interrupt"]
+  },
+  {
+    factory: "createHostDeckModelClient",
+    file: "model-client.ts",
+    interface: "HostDeckModelClient",
+    operations: ["read", "select"]
+  },
+  {
+    factory: "createHostDeckPairingLinkClient",
+    file: "pairing-link-client.ts",
+    interface: "HostDeckPairingLinkClient",
+    operations: ["issue"]
+  },
+  {
+    factory: "createHostDeckPlanClient",
+    file: "plan-client.ts",
+    interface: "HostDeckPlanClient",
+    operations: ["read", "select"]
+  },
+  {
+    factory: "createHostDeckPromptClient",
+    file: "prompt-client.ts",
+    interface: "HostDeckPromptClient",
+    operations: ["send"]
+  },
+  {
+    factory: "createHostDeckRemoteControlClient",
+    file: "remote-control-client.ts",
+    interface: "HostDeckRemoteControlClient",
+    operations: ["disable", "enable", "status"]
+  },
+  {
+    factory: "createHostDeckResumeClient",
+    file: "resume-client.ts",
+    interface: "HostDeckResumeClient",
+    operations: ["read"]
+  },
+  {
+    factory: "createHostDeckSkillsClient",
+    file: "skills-client.ts",
+    interface: "HostDeckSkillsClient",
+    operations: ["list"]
+  },
+  {
+    factory: "createHostDeckStartClient",
+    file: "start-client.ts",
+    interface: "HostDeckStartClient",
+    operations: ["start"]
+  },
+  {
+    factory: "createHostDeckUsageClient",
+    file: "usage-client.ts",
+    interface: "HostDeckUsageClient",
+    operations: ["read"]
+  }
+] as const;
+
+const expectedStatusSourceByFile = Object.freeze({
+  "approval-client.ts": "expectedStatus: 200",
+  "archive-client.ts": "expectedStatus: 202",
+  "compact-client.ts": "expectedStatus: request === null ? 200 : 202",
+  "goal-client.ts": "expectedStatus: 200",
+  "host-lock-client.ts": "expectedStatus: 200",
+  "interrupt-client.ts": "expectedStatus: 200",
+  "model-client.ts": "expectedStatus: 200",
+  "pairing-link-client.ts": "expectedStatus: 200",
+  "plan-client.ts": "expectedStatus: 200",
+  "prompt-client.ts": "expectedStatus: 202",
+  "remote-control-client.ts": "expectedStatus: 200",
+  "resume-client.ts": "expectedStatus: 200",
+  "skills-client.ts": "expectedStatus: 200",
+  "start-client.ts": "expectedStatus: 201",
+  "usage-client.ts": "expectedStatus: 200"
+});
+
+describe("CLI selected-route inventory", () => {
+  it("keeps the exact client factory and public-operation inventory on the shared transport", async () => {
+    const sourceDirectory = new URL("./", import.meta.url);
+    const actualClientFiles = (await readdir(sourceDirectory))
+      .filter((file) => file.endsWith("-client.ts") && file !== "api-client.ts")
+      .sort();
+    expect(actualClientFiles).toEqual(
+      selectedClientContracts.map((entry) => entry.file).sort()
+    );
+    expect(selectedClientContracts).toHaveLength(15);
+    expect(
+      selectedClientContracts.reduce(
+        (count, entry) => count + entry.operations.length,
+        0
+      )
+    ).toBe(23);
+
+    for (const entry of selectedClientContracts) {
+      const source = await readFile(new URL(entry.file, sourceDirectory), "utf8");
+      const factoryNames = [...source.matchAll(/export function (createHostDeck\w+Client)\s*\(/g)]
+        .map((match) => match[1]);
+      expect(factoryNames, entry.file).toEqual([entry.factory]);
+
+      const interfaceBody = source.match(
+        new RegExp(`export interface ${entry.interface} \\{([\\s\\S]*?)\\n\\}`)
+      )?.[1];
+      expect(interfaceBody, entry.file).toBeDefined();
+      const operationNames = [...(interfaceBody ?? "").matchAll(/readonly\s+(\w+):/g)]
+        .map((match) => match[1])
+        .sort();
+      expect(operationNames, entry.file).toEqual([...entry.operations].sort());
+
+      expect(source.match(/await requestCliJson\(\{/g), entry.file).toHaveLength(1);
+      expect(source, entry.file).toContain(
+        expectedStatusSourceByFile[entry.file]
+      );
+      expect(source, entry.file).toContain("throwCliApiFailure");
+      expect(source, entry.file).toMatch(/sanitize:\s*sanitize\w+ApiError/);
+      expect(source, entry.file).toMatch(/function sanitize\w+ApiError\s*\(/);
+      expect(source, entry.file).toContain("createBoundedLoopbackFetch");
+      expect(source, entry.file).not.toMatch(
+        /\b(?:assertCliHttpResponse|daemonUnavailableFailure|readCliJsonPayload)\b/
+      );
+      expect(source, entry.file).not.toMatch(/(?:globalThis\.)?fetch\s*\(/);
+      expect(source, entry.file).not.toMatch(/node:https?/);
+    }
+  });
+
   it("keeps every source client operation inside the production manifest", async () => {
     const observed: ObservedRequest[] = [];
     const fetch: HttpFetch = async (rawUrl, init) => {
       const url = new URL(rawUrl);
-      observed.push({ method: init.method, path: url.pathname });
+      observed.push({
+        body: init.body,
+        headers: init.headers,
+        method: init.method,
+        path: url.pathname
+      });
       if (url.pathname === "/api/v1/remote/status") {
         return jsonResponse(200, {
           availability: "ready",
@@ -93,6 +259,16 @@ describe("IFC-V1-046 source CLI selected-route inventory", () => {
           laptop_action_required: false,
           observed_at: "2026-07-20T12:00:00.000Z",
           reason: null
+        });
+      }
+      if (url.pathname === "/api/v1/access/pairing-codes") {
+        return jsonResponse(200, {
+          pairing_id: "pair_abcdefghijklmnopqrstuvwx",
+          code: "AbCdEfGhIjKlMnOpQrSt_1",
+          permission: "write",
+          client_label: "CLI inventory fixture",
+          created_at: "2026-07-20T12:00:00.000Z",
+          expires_at: "2026-07-20T12:05:00.000Z"
         });
       }
       throw new Error("Stop after recording the selected CLI route.");
@@ -227,11 +403,50 @@ describe("IFC-V1-046 source CLI selected-route inventory", () => {
       hostLock.unlock({ confirmed: true, operation_id: operationId })
     );
 
-    const matchedIds = new Set(
-      observed.map((request) => requireManifestMatch(request))
-    );
+    const observedManifestIds = observed.map((request) => requireManifestMatch(request));
+    const matchedIds = new Set(observedManifestIds);
     expect([...matchedIds].sort()).toEqual([...expectedManifestIds].sort());
     expect(matchedIds.size).toBe(expectedManifestIds.length);
+    expect(observed).toHaveLength(25);
+    expect(observed.filter((request) => request.method === "GET")).toHaveLength(11);
+    expect(observed.filter((request) => request.method === "POST")).toHaveLength(14);
+    expect(
+      observed.every(
+        (request) =>
+          request.method !== "GET" ||
+          (request.body === undefined &&
+            request.headers["content-type"] === undefined)
+      )
+    ).toBe(true);
+    expect(
+      observed.every(
+        (request) =>
+          request.method !== "POST" ||
+          (typeof request.body === "string" &&
+            request.body.length > 0 &&
+            request.headers["content-type"] === "application/json")
+      )
+    ).toBe(true);
+    expect(
+      new Set(
+        observed
+          .filter((request) => request.method === "GET")
+          .map((request) => requireManifestMatch(request))
+      ).size
+    ).toBe(9);
+    expect(
+      new Set(
+        observed
+          .filter((request) => request.method === "POST")
+          .map((request) => requireManifestMatch(request))
+      ).size
+    ).toBe(14);
+    expect(
+      observedManifestIds.filter((manifestId) => manifestId === "remote_status")
+    ).toHaveLength(3);
+    expect(
+      observedManifestIds.filter((manifestId) => manifestId !== "remote_status")
+    ).toHaveLength(expectedManifestIds.length - 1);
     expect(observed.every((request) => request.path.startsWith("/api/v1/"))).toBe(
       true
     );

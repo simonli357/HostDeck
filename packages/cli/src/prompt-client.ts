@@ -1,25 +1,18 @@
 import {
   type ApiErrorEnvelope,
-  apiRouteErrorBodySchema,
   type PromptDispatchResponse,
   type PromptSessionRequest,
   promptDispatchResponseSchema,
   promptSessionRequestSchema,
   sessionIdSchema
 } from "@hostdeck/contracts";
-import type { HttpFetch, HttpResponse } from "./api-client.js";
+import type { HttpFetch } from "./api-client.js";
+import { type CliFailure, internalFailure, usageFailure } from "./errors.js";
 import {
-  apiFailure,
-  CliFailure,
-  daemonUnavailableFailure,
-  internalFailure,
-  usageFailure
-} from "./errors.js";
-import {
-  assertCliHttpResponse,
   createBoundedLoopbackFetch,
-  readCliJsonPayload,
-  requireLoopbackBaseUrl
+  requestCliJson,
+  requireLoopbackBaseUrl,
+  throwCliApiFailure
 } from "./loopback-http.js";
 
 const promptClientRequestSchema = promptSessionRequestSchema.extend({
@@ -88,9 +81,14 @@ async function requestPrompt(
     kind: request.kind,
     text: request.text
   });
-  let response: HttpResponse;
-  try {
-    response = await Reflect.apply(fetchPort, undefined, [url.toString(), {
+  const { payload, response } = await requestCliJson({
+    baseUrl,
+    context: "HostDeck prompt-client",
+    expectedStatus: 202,
+    invalidSuccessStatusMessage:
+      "HostDeck daemon returned invalid managed-session prompt data.",
+    fetch: fetchPort,
+    init: {
       method: "POST",
       headers: Object.freeze({
         accept: "application/json",
@@ -98,29 +96,17 @@ async function requestPrompt(
         "content-type": "application/json"
       }),
       body: JSON.stringify(body)
-    }]);
-  } catch (error) {
-    if (error instanceof CliFailure) throw error;
-    throw daemonUnavailableFailure(baseUrl, error);
-  }
-
-  assertCliHttpResponse(response, "HostDeck prompt-client");
-  const payload = await readCliJsonPayload(response);
+    },
+    url
+  });
   if (!response.ok) {
-    let parsedError: ReturnType<typeof apiRouteErrorBodySchema.safeParse>;
-    try {
-      parsedError = apiRouteErrorBodySchema.safeParse(payload);
-    } catch {
-      throw untypedError(response.status);
-    }
-    if (!parsedError.success) throw untypedError(response.status);
-    throw apiFailure(
-      response.status,
-      sanitizePromptApiError(parsedError.data.error)
-    );
+    throwCliApiFailure({
+      context: "prompt",
+      payload,
+      sanitize: sanitizePromptApiError,
+      status: response.status
+    });
   }
-  if (response.status !== 202) throw invalidResponse();
-
   let parsed: ReturnType<typeof promptDispatchResponseSchema.safeParse>;
   try {
     parsed = promptDispatchResponseSchema.safeParse(payload);
@@ -189,12 +175,6 @@ function promptErrorMessage(code: ApiErrorEnvelope["code"]): string {
 function invalidResponse(): CliFailure {
   return internalFailure(
     "HostDeck daemon returned invalid managed-session prompt data."
-  );
-}
-
-function untypedError(status: number): CliFailure {
-  return internalFailure(
-    `HostDeck daemon returned an untyped HTTP ${status} prompt error.`
   );
 }
 

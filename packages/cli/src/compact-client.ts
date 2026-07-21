@@ -1,6 +1,5 @@
 import {
   type ApiErrorEnvelope,
-  apiRouteErrorBodySchema,
   type CompactProgressResponse,
   type CompactStartRequest,
   compactProgressResponseSchema,
@@ -8,19 +7,13 @@ import {
   sessionIdParamsSchema,
   sessionIdSchema
 } from "@hostdeck/contracts";
-import type { HttpFetch, HttpResponse } from "./api-client.js";
+import type { HttpFetch, HttpRequestInit } from "./api-client.js";
+import { type CliFailure, internalFailure, usageFailure } from "./errors.js";
 import {
-  apiFailure,
-  CliFailure,
-  daemonUnavailableFailure,
-  internalFailure,
-  usageFailure
-} from "./errors.js";
-import {
-  assertCliHttpResponse,
   createBoundedLoopbackFetch,
-  readCliJsonPayload,
-  requireLoopbackBaseUrl
+  requestCliJson,
+  requireLoopbackBaseUrl,
+  throwCliApiFailure
 } from "./loopback-http.js";
 
 const compactClientStartRequestSchema = compactStartRequestSchema.extend({
@@ -76,7 +69,7 @@ async function requestCompact(
   request: HostDeckCompactClientStartRequest | null
 ): Promise<CompactProgressResponse> {
   const url = new URL(`/api/v1/sessions/${encodeURIComponent(sessionId)}/compact`, baseUrl);
-  const init =
+  const init: HttpRequestInit =
     request === null
       ? {
           method: "GET",
@@ -100,29 +93,24 @@ async function requestCompact(
             })
           )
         };
-  let response: HttpResponse;
-  try {
-    response = await Reflect.apply(fetchPort, undefined, [url.toString(), init]);
-  } catch (error) {
-    if (error instanceof CliFailure) throw error;
-    throw daemonUnavailableFailure(baseUrl, error);
-  }
-
-  assertCliHttpResponse(response, "HostDeck compact-client");
-  const payload = await readCliJsonPayload(response);
+  const { payload, response } = await requestCliJson({
+    baseUrl,
+    context: "HostDeck compact-client",
+    expectedStatus: request === null ? 200 : 202,
+    invalidSuccessStatusMessage:
+      "HostDeck daemon returned invalid managed-session compact data.",
+    fetch: fetchPort,
+    init,
+    url
+  });
   if (!response.ok) {
-    let parsedError: ReturnType<typeof apiRouteErrorBodySchema.safeParse>;
-    try {
-      parsedError = apiRouteErrorBodySchema.safeParse(payload);
-    } catch {
-      throw untypedError(response.status);
-    }
-    if (!parsedError.success) throw untypedError(response.status);
-    throw apiFailure(response.status, sanitizeCompactApiError(parsedError.data.error));
+    throwCliApiFailure({
+      context: "compact",
+      payload,
+      sanitize: sanitizeCompactApiError,
+      status: response.status
+    });
   }
-  const expectedStatus = request === null ? 200 : 202;
-  if (response.status !== expectedStatus) throw invalidResponse();
-
   let parsed: ReturnType<typeof compactProgressResponseSchema.safeParse>;
   try {
     parsed = compactProgressResponseSchema.safeParse(payload);
@@ -230,10 +218,6 @@ function compactProgressErrorMessage(code: ApiErrorEnvelope["code"]): string {
 
 function invalidResponse(): CliFailure {
   return internalFailure("HostDeck daemon returned invalid managed-session compact data.");
-}
-
-function untypedError(status: number): CliFailure {
-  return internalFailure(`HostDeck daemon returned an untyped HTTP ${status} compact error.`);
 }
 
 function deepFreeze<T>(value: T): T {

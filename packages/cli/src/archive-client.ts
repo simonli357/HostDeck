@@ -1,25 +1,18 @@
 import {
   type ApiErrorEnvelope,
   type ArchiveSessionRequest,
-  apiRouteErrorBodySchema,
   archiveSessionRequestSchema,
   type SelectedOperationDispatch,
   selectedOperationDispatchSchema,
   sessionIdSchema
 } from "@hostdeck/contracts";
-import type { HttpFetch, HttpResponse } from "./api-client.js";
+import type { HttpFetch } from "./api-client.js";
+import { type CliFailure, internalFailure, usageFailure } from "./errors.js";
 import {
-  apiFailure,
-  CliFailure,
-  daemonUnavailableFailure,
-  internalFailure,
-  usageFailure
-} from "./errors.js";
-import {
-  assertCliHttpResponse,
   createBoundedLoopbackFetch,
-  readCliJsonPayload,
-  requireLoopbackBaseUrl
+  requestCliJson,
+  requireLoopbackBaseUrl,
+  throwCliApiFailure
 } from "./loopback-http.js";
 
 const archiveClientRequestSchema = archiveSessionRequestSchema.extend({
@@ -88,9 +81,14 @@ async function requestArchive(
     kind: request.kind,
     confirm: request.confirm
   });
-  let response: HttpResponse;
-  try {
-    response = await Reflect.apply(fetchPort, undefined, [url.toString(), {
+  const { payload, response } = await requestCliJson({
+    baseUrl,
+    context: "HostDeck archive-client",
+    expectedStatus: 202,
+    invalidSuccessStatusMessage:
+      "HostDeck daemon returned invalid managed-session archive data.",
+    fetch: fetchPort,
+    init: {
       method: "POST",
       headers: Object.freeze({
         accept: "application/json",
@@ -98,29 +96,17 @@ async function requestArchive(
         "content-type": "application/json"
       }),
       body: JSON.stringify(body)
-    }]);
-  } catch (error) {
-    if (error instanceof CliFailure) throw error;
-    throw daemonUnavailableFailure(baseUrl, error);
-  }
-
-  assertCliHttpResponse(response, "HostDeck archive-client");
-  const payload = await readCliJsonPayload(response);
+    },
+    url
+  });
   if (!response.ok) {
-    let parsedError: ReturnType<typeof apiRouteErrorBodySchema.safeParse>;
-    try {
-      parsedError = apiRouteErrorBodySchema.safeParse(payload);
-    } catch {
-      throw untypedError(response.status);
-    }
-    if (!parsedError.success) throw untypedError(response.status);
-    throw apiFailure(
-      response.status,
-      sanitizeArchiveApiError(parsedError.data.error)
-    );
+    throwCliApiFailure({
+      context: "session-archive",
+      payload,
+      sanitize: sanitizeArchiveApiError,
+      status: response.status
+    });
   }
-  if (response.status !== 202) throw invalidResponse();
-
   let parsed: ReturnType<typeof selectedOperationDispatchSchema.safeParse>;
   try {
     parsed = selectedOperationDispatchSchema.safeParse(payload);
@@ -187,12 +173,6 @@ function archiveErrorMessage(code: ApiErrorEnvelope["code"]): string {
 function invalidResponse(): CliFailure {
   return internalFailure(
     "HostDeck daemon returned invalid managed-session archive data."
-  );
-}
-
-function untypedError(status: number): CliFailure {
-  return internalFailure(
-    `HostDeck daemon returned an untyped HTTP ${status} session-archive error.`
   );
 }
 

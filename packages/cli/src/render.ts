@@ -954,14 +954,16 @@ function formatRateLimitWindow(
 }
 
 export function renderFailure(error: CliFailure): string {
-  const lines = [`HostDeck CLI error (${error.code}): ${error.message}`];
+  const lines = [
+    `HostDeck CLI error (${escapeTerminalText(error.code)}): ${escapeTerminalText(error.message)}`
+  ];
 
   if (error.status !== undefined) {
     lines.push(`HTTP status: ${error.status}`);
   }
 
   if (error.field !== undefined) {
-    lines.push(`Field: ${error.field}`);
+    lines.push(`Field: ${escapeTerminalText(error.field)}`);
   }
 
   if (error.kind === "daemon_unavailable") {

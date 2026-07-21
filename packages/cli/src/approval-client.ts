@@ -1,7 +1,6 @@
 import {
   type ApiErrorEnvelope,
   type ApprovalResponseRequest,
-  apiRouteErrorBodySchema,
   approvalResponseRequestSchema,
   type PendingApprovalListResponse,
   type PendingApprovalResponse,
@@ -11,19 +10,13 @@ import {
   sessionIdParamsSchema,
   sessionIdSchema
 } from "@hostdeck/contracts";
-import type { HttpFetch, HttpResponse } from "./api-client.js";
+import type { HttpFetch, HttpRequestInit } from "./api-client.js";
+import { CliFailure, internalFailure, usageFailure } from "./errors.js";
 import {
-  apiFailure,
-  CliFailure,
-  daemonUnavailableFailure,
-  internalFailure,
-  usageFailure
-} from "./errors.js";
-import {
-  assertCliHttpResponse,
   createBoundedLoopbackFetch,
-  readCliJsonPayload,
-  requireLoopbackBaseUrl
+  requestCliJson,
+  requireLoopbackBaseUrl,
+  throwCliApiFailure
 } from "./loopback-http.js";
 
 const approvalClientResponseRequestSchema = approvalResponseRequestSchema.extend({
@@ -96,7 +89,7 @@ async function requestApprovals(
       ? `/api/v1/sessions/${encodeURIComponent(sessionId)}/approvals`
       : `/api/v1/sessions/${encodeURIComponent(sessionId)}/approvals/${encodeURIComponent(request.request_id)}/respond`;
   const url = new URL(path, baseUrl);
-  const init =
+  const init: HttpRequestInit =
     request === null
       ? {
           method: "GET",
@@ -118,28 +111,24 @@ async function requestApprovals(
             })
           )
         };
-  let response: HttpResponse;
-  try {
-    response = await Reflect.apply(fetchPort, undefined, [url.toString(), init]);
-  } catch (error) {
-    if (error instanceof CliFailure) throw error;
-    throw daemonUnavailableFailure(baseUrl, error);
-  }
-
-  assertCliHttpResponse(response, "HostDeck approval-client");
-  const payload = await readCliJsonPayload(response);
+  const { payload, response } = await requestCliJson({
+    baseUrl,
+    context: "HostDeck approval-client",
+    expectedStatus: 200,
+    invalidSuccessStatusMessage:
+      "HostDeck daemon returned invalid managed-session approval data.",
+    fetch: fetchPort,
+    init,
+    url
+  });
   if (!response.ok) {
-    let parsedError: ReturnType<typeof apiRouteErrorBodySchema.safeParse>;
-    try {
-      parsedError = apiRouteErrorBodySchema.safeParse(payload);
-    } catch {
-      throw untypedError(response.status);
-    }
-    if (!parsedError.success) throw untypedError(response.status);
-    throw apiFailure(response.status, sanitizeApprovalApiError(parsedError.data.error));
+    throwCliApiFailure({
+      context: "approval",
+      payload,
+      sanitize: sanitizeApprovalApiError,
+      status: response.status
+    });
   }
-  if (response.status !== 200) throw invalidResponse();
-
   try {
     if (request === null) {
       const parsed = pendingApprovalListResponseSchema.safeParse(payload);
@@ -212,10 +201,6 @@ function approvalErrorMessage(code: ApiErrorEnvelope["code"]): string {
 
 function invalidResponse(): CliFailure {
   return internalFailure("HostDeck daemon returned invalid managed-session approval data.");
-}
-
-function untypedError(status: number): CliFailure {
-  return internalFailure(`HostDeck daemon returned an untyped HTTP ${status} approval error.`);
 }
 
 function deepFreeze<T>(value: T): T {

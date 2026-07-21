@@ -1,6 +1,5 @@
 import {
   type ApiErrorEnvelope,
-  apiRouteErrorBodySchema,
   type ModelControlSnapshot,
   type ModelSelectionRequest,
   modelControlSnapshotSchema,
@@ -8,19 +7,13 @@ import {
   sessionIdParamsSchema,
   sessionIdSchema
 } from "@hostdeck/contracts";
-import type { HttpFetch, HttpResponse } from "./api-client.js";
+import type { HttpFetch, HttpRequestInit } from "./api-client.js";
+import { type CliFailure, internalFailure, usageFailure } from "./errors.js";
 import {
-  apiFailure,
-  CliFailure,
-  daemonUnavailableFailure,
-  internalFailure,
-  usageFailure
-} from "./errors.js";
-import {
-  assertCliHttpResponse,
   createBoundedLoopbackFetch,
-  readCliJsonPayload,
-  requireLoopbackBaseUrl
+  requestCliJson,
+  requireLoopbackBaseUrl,
+  throwCliApiFailure
 } from "./loopback-http.js";
 
 const modelClientSelectionRequestSchema = modelSelectionRequestSchema.extend({
@@ -79,7 +72,7 @@ async function requestModel(
   request: HostDeckModelClientSelectionRequest | null
 ): Promise<ModelControlSnapshot> {
   const url = new URL(`/api/v1/sessions/${encodeURIComponent(sessionId)}/model`, baseUrl);
-  const init =
+  const init: HttpRequestInit =
     request === null
       ? {
           method: "GET",
@@ -105,28 +98,24 @@ async function requestModel(
             })
           )
         };
-  let response: HttpResponse;
-  try {
-    response = await Reflect.apply(fetchPort, undefined, [url.toString(), init]);
-  } catch (error) {
-    if (error instanceof CliFailure) throw error;
-    throw daemonUnavailableFailure(baseUrl, error);
-  }
-
-  assertCliHttpResponse(response, "HostDeck model-client");
-  const payload = await readCliJsonPayload(response);
+  const { payload, response } = await requestCliJson({
+    baseUrl,
+    context: "HostDeck model-client",
+    expectedStatus: 200,
+    invalidSuccessStatusMessage:
+      "HostDeck daemon returned invalid managed-session model data.",
+    fetch: fetchPort,
+    init,
+    url
+  });
   if (!response.ok) {
-    let parsedError: ReturnType<typeof apiRouteErrorBodySchema.safeParse>;
-    try {
-      parsedError = apiRouteErrorBodySchema.safeParse(payload);
-    } catch {
-      throw untypedError(response.status);
-    }
-    if (!parsedError.success) throw untypedError(response.status);
-    throw apiFailure(response.status, sanitizeModelApiError(parsedError.data.error));
+    throwCliApiFailure({
+      context: "model",
+      payload,
+      sanitize: sanitizeModelApiError,
+      status: response.status
+    });
   }
-  if (response.status !== 200) throw invalidResponse();
-
   let parsed: ReturnType<typeof modelControlSnapshotSchema.safeParse>;
   try {
     parsed = modelControlSnapshotSchema.safeParse(payload);
@@ -223,10 +212,6 @@ function modelErrorMessage(code: ApiErrorEnvelope["code"]): string {
 
 function invalidResponse(): CliFailure {
   return internalFailure("HostDeck daemon returned invalid managed-session model data.");
-}
-
-function untypedError(status: number): CliFailure {
-  return internalFailure(`HostDeck daemon returned an untyped HTTP ${status} model error.`);
 }
 
 function deepFreeze<T>(value: T): T {

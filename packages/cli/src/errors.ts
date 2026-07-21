@@ -72,14 +72,13 @@ export function configFailure(message: string, field = "config", cause?: unknown
   });
 }
 
-export function daemonUnavailableFailure(baseUrl: URL, cause: unknown): CliFailure {
+export function daemonUnavailableFailure(baseUrl: URL, _cause: unknown): CliFailure {
   return new CliFailure({
     kind: "daemon_unavailable",
     code: "daemon_unavailable",
     message: `Unable to reach HostDeck daemon at ${formatBaseUrl(baseUrl)}.`,
     exitCode: cliExitCodes.daemonUnavailable,
-    retryable: true,
-    cause
+    retryable: true
   });
 }
 
@@ -134,7 +133,7 @@ export function toCliFailure(error: unknown): CliFailure {
   }
 
   if (error instanceof Error) {
-    return internalFailure(error.message, error);
+    return internalFailure("HostDeck CLI failed unexpectedly.");
   }
 
   return internalFailure("Unknown HostDeck CLI failure.", error);

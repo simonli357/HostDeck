@@ -1,24 +1,17 @@
 import {
   type ApiErrorEnvelope,
-  apiRouteErrorBodySchema,
   type SelectedSessionStartResponse,
   type SelectedStartSessionRequest,
   selectedSessionStartResponseSchema,
   selectedStartSessionRequestSchema
 } from "@hostdeck/contracts";
-import type { HttpFetch, HttpResponse } from "./api-client.js";
+import type { HttpFetch } from "./api-client.js";
+import { type CliFailure, internalFailure, usageFailure } from "./errors.js";
 import {
-  apiFailure,
-  CliFailure,
-  daemonUnavailableFailure,
-  internalFailure,
-  usageFailure
-} from "./errors.js";
-import {
-  assertCliHttpResponse,
   createBoundedLoopbackFetch,
-  readCliJsonPayload,
-  requireLoopbackBaseUrl
+  requestCliJson,
+  requireLoopbackBaseUrl,
+  throwCliApiFailure
 } from "./loopback-http.js";
 
 export interface HostDeckStartClient {
@@ -71,9 +64,14 @@ async function requestStart(
   request: SelectedStartSessionRequest
 ): Promise<SelectedSessionStartResponse> {
   const url = new URL("/api/v1/sessions", baseUrl);
-  let response: HttpResponse;
-  try {
-    response = await Reflect.apply(fetchPort, undefined, [url.toString(), {
+  const { payload, response } = await requestCliJson({
+    baseUrl,
+    context: "HostDeck start-client",
+    expectedStatus: 201,
+    invalidSuccessStatusMessage:
+      "HostDeck daemon returned invalid managed-session start data.",
+    fetch: fetchPort,
+    init: {
       method: "POST",
       headers: Object.freeze({
         accept: "application/json",
@@ -81,29 +79,17 @@ async function requestStart(
         "content-type": "application/json"
       }),
       body: JSON.stringify(request)
-    }]);
-  } catch (error) {
-    if (error instanceof CliFailure) throw error;
-    throw daemonUnavailableFailure(baseUrl, error);
-  }
-
-  assertCliHttpResponse(response, "HostDeck start-client");
-  const payload = await readCliJsonPayload(response);
+    },
+    url
+  });
   if (!response.ok) {
-    let parsedError: ReturnType<typeof apiRouteErrorBodySchema.safeParse>;
-    try {
-      parsedError = apiRouteErrorBodySchema.safeParse(payload);
-    } catch {
-      throw untypedError(response.status);
-    }
-    if (!parsedError.success) throw untypedError(response.status);
-    throw apiFailure(
-      response.status,
-      sanitizeStartApiError(parsedError.data.error)
-    );
+    throwCliApiFailure({
+      context: "session-start",
+      payload,
+      sanitize: sanitizeStartApiError,
+      status: response.status
+    });
   }
-  if (response.status !== 201) throw invalidResponse();
-
   let parsed: ReturnType<typeof selectedSessionStartResponseSchema.safeParse>;
   try {
     parsed = selectedSessionStartResponseSchema.safeParse(payload);
@@ -166,12 +152,6 @@ function startErrorMessage(code: ApiErrorEnvelope["code"]): string {
 function invalidResponse(): CliFailure {
   return internalFailure(
     "HostDeck daemon returned invalid managed-session start data."
-  );
-}
-
-function untypedError(status: number): CliFailure {
-  return internalFailure(
-    `HostDeck daemon returned an untyped HTTP ${status} session-start error.`
   );
 }
 

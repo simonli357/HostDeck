@@ -1,23 +1,16 @@
 import {
   type ApiErrorEnvelope,
-  apiRouteErrorBodySchema,
   sessionIdParamsSchema,
   type UsageSnapshot,
   usageSnapshotSchema
 } from "@hostdeck/contracts";
-import type { HttpFetch, HttpResponse } from "./api-client.js";
+import type { HttpFetch } from "./api-client.js";
+import { internalFailure, usageFailure } from "./errors.js";
 import {
-  apiFailure,
-  CliFailure,
-  daemonUnavailableFailure,
-  internalFailure,
-  usageFailure
-} from "./errors.js";
-import {
-  assertCliHttpResponse,
   createBoundedLoopbackFetch,
-  readCliJsonPayload,
-  requireLoopbackBaseUrl
+  requestCliJson,
+  requireLoopbackBaseUrl,
+  throwCliApiFailure
 } from "./loopback-http.js";
 
 export interface HostDeckUsageClient {
@@ -74,40 +67,29 @@ async function requestUsage(
     `/api/v1/sessions/${encodeURIComponent(sessionId)}/usage`,
     baseUrl
   );
-  let response: HttpResponse;
-  try {
-    response = await fetchPort(url.toString(), {
+  const { payload, response } = await requestCliJson({
+    baseUrl,
+    context: "HostDeck usage-client",
+    expectedStatus: 200,
+    invalidSuccessStatusMessage:
+      "HostDeck daemon returned invalid managed-session usage data.",
+    fetch: fetchPort,
+    init: {
       method: "GET",
       headers: Object.freeze({
         accept: "application/json",
         "cache-control": "no-store"
       })
-    });
-  } catch (error) {
-    if (error instanceof CliFailure) throw error;
-    throw daemonUnavailableFailure(baseUrl, error);
-  }
-
-  assertCliHttpResponse(response, "HostDeck usage-client");
-  const payload = await readCliJsonPayload(response);
+    },
+    url
+  });
   if (!response.ok) {
-    let parsedError: ReturnType<typeof apiRouteErrorBodySchema.safeParse>;
-    try {
-      parsedError = apiRouteErrorBodySchema.safeParse(payload);
-    } catch {
-      throw internalFailure(
-        `HostDeck daemon returned an untyped HTTP ${response.status} usage error.`
-      );
-    }
-    if (!parsedError.success) {
-      throw internalFailure(
-        `HostDeck daemon returned an untyped HTTP ${response.status} usage error.`
-      );
-    }
-    throw apiFailure(
-      response.status,
-      sanitizeUsageApiError(parsedError.data.error)
-    );
+    throwCliApiFailure({
+      context: "usage",
+      payload,
+      sanitize: sanitizeUsageApiError,
+      status: response.status
+    });
   }
 
   let parsed: ReturnType<typeof usageSnapshotSchema.safeParse>;

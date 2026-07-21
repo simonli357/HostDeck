@@ -1,8 +1,15 @@
+import { Buffer } from "node:buffer";
+import { defaultResourceBudget } from "@hostdeck/contracts";
 import { describe, expect, it } from "vitest";
+import { CliFailure, internalFailure } from "./errors.js";
 import { cliExitCodes } from "./exit-codes.js";
 import type { LegacySessionAdmin } from "./legacy-session-admin.js";
 import { parseCliArgs } from "./parser.js";
-import { renderLegacySessionReset, renderLegacySessionStatus } from "./render.js";
+import {
+  renderFailure,
+  renderLegacySessionReset,
+  renderLegacySessionStatus
+} from "./render.js";
 import { runCli } from "./shell.js";
 
 describe("selected CLI shell contract", () => {
@@ -212,6 +219,120 @@ describe("selected CLI shell contract", () => {
       stdout: "codexdeck 1.2.3-contract\n",
       stderr: ""
     });
+  });
+
+  it("propagates a pre-aborted shell signal into the shared selected transport", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const result = await runCli(
+      [
+        "--api-url=http://127.0.0.1:3777",
+        "remote",
+        "status"
+      ],
+      { env: {}, signal: controller.signal }
+    );
+
+    expect(result).toMatchObject({
+      exitCode: cliExitCodes.apiError,
+      stdout: ""
+    });
+    expect(result.stderr).toContain("unknown_error");
+    expect(result.stderr).toContain("request was cancelled");
+    expect(result.stderr).not.toContain("daemon_unavailable");
+  });
+
+  it("accepts exact-limit stdout and converts one-byte overflow to a bounded internal failure", async () => {
+    const framingBytes = Buffer.byteLength("codexdeck \n", "utf8");
+    const exactVersion = "x".repeat(
+      defaultResourceBudget.cli_response_max_bytes - framingBytes
+    );
+    const exact = await runCli(["version"], { version: exactVersion });
+    expect(exact.exitCode).toBe(cliExitCodes.ok);
+    expect(Buffer.byteLength(exact.stdout, "utf8")).toBe(
+      defaultResourceBudget.cli_response_max_bytes
+    );
+
+    const overflow = await runCli(["version"], {
+      version: `${exactVersion}x`
+    });
+    expect(overflow).toMatchObject({
+      exitCode: cliExitCodes.internal,
+      stdout: ""
+    });
+    expect(overflow.stderr).toContain("stdout exceeds its selected limit");
+    expect(Buffer.byteLength(overflow.stderr, "utf8")).toBeLessThanOrEqual(
+      defaultResourceBudget.cli_response_max_bytes
+    );
+  });
+
+  it("escapes hostile failure text and replaces oversized stderr without partial output", async () => {
+    const rendered = renderFailure(
+      new CliFailure({
+        code: "malformed_request",
+        exitCode: cliExitCodes.usage,
+        field: "args\n\u001b[31m",
+        kind: "usage",
+        message: "private\n\u001b[31m"
+      })
+    );
+    expect(rendered).toContain("private\\n\\u001b[31m");
+    expect(rendered).toContain("args\\n\\u001b[31m");
+    expect(rendered).not.toContain("\u001b");
+
+    const privateSentinel = "private-cli-overflow-sentinel";
+    const rawFailure = await runCli(["remote", "status"], {
+      env: {},
+      remoteClient: {
+        async disable(): Promise<never> {
+          throw new Error(privateSentinel);
+        },
+        async enable(): Promise<never> {
+          throw new Error(privateSentinel);
+        },
+        async status(): Promise<never> {
+          throw new Error(`${privateSentinel}\n\u001b[31m`);
+        }
+      }
+    });
+    expect(rawFailure).toMatchObject({
+      exitCode: cliExitCodes.internal,
+      stdout: ""
+    });
+    expect(rawFailure.stderr).toContain("HostDeck CLI failed unexpectedly");
+    expect(rawFailure.stderr).not.toContain(privateSentinel);
+    expect(rawFailure.stderr).not.toContain("\u001b");
+
+    const remoteClient = {
+      async disable(): Promise<never> {
+        throw internalFailure("unused");
+      },
+      async enable(): Promise<never> {
+        throw internalFailure("unused");
+      },
+      async status(): Promise<never> {
+        throw internalFailure(
+          `${privateSentinel}${"x".repeat(
+            defaultResourceBudget.cli_response_max_bytes
+          )}`
+        );
+      }
+    };
+    const overflow = await runCli(["remote", "status"], {
+      env: {},
+      remoteClient
+    });
+    expect(overflow).toMatchObject({
+      exitCode: cliExitCodes.internal,
+      stdout: ""
+    });
+    expect(overflow.stderr).toContain(
+      "failure output exceeded its selected limit"
+    );
+    expect(overflow.stderr).not.toContain(privateSentinel);
+    expect(Buffer.byteLength(overflow.stderr, "utf8")).toBeLessThanOrEqual(
+      defaultResourceBudget.cli_response_max_bytes
+    );
   });
 });
 

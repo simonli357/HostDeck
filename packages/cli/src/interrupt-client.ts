@@ -1,19 +1,18 @@
 import {
   type ApiErrorEnvelope,
-  apiRouteErrorBodySchema,
   type InterruptRequest,
   type InterruptResponse,
   interruptRequestSchema,
   interruptResponseSchema,
   sessionTurnParamsSchema
 } from "@hostdeck/contracts";
-import type { HttpFetch, HttpResponse } from "./api-client.js";
-import { apiFailure, CliFailure, daemonUnavailableFailure, internalFailure, usageFailure } from "./errors.js";
+import type { HttpFetch } from "./api-client.js";
+import { CliFailure, internalFailure, usageFailure } from "./errors.js";
 import {
-  assertCliHttpResponse,
   createBoundedLoopbackFetch,
-  readCliJsonPayload,
-  requireLoopbackBaseUrl
+  requestCliJson,
+  requireLoopbackBaseUrl,
+  throwCliApiFailure
 } from "./loopback-http.js";
 
 const interruptClientRequestSchema = sessionTurnParamsSchema.extend(interruptRequestSchema.shape);
@@ -63,9 +62,14 @@ async function requestInterrupt(
     `/api/v1/sessions/${encodeURIComponent(request.session_id)}/turns/${encodeURIComponent(request.turn_id)}/interrupt`,
     baseUrl
   );
-  let response: HttpResponse;
-  try {
-    response = await Reflect.apply(fetchPort, undefined, [url.toString(), {
+  const { payload, response } = await requestCliJson({
+    baseUrl,
+    context: "HostDeck interrupt-client",
+    expectedStatus: 200,
+    invalidSuccessStatusMessage:
+      "HostDeck daemon returned invalid managed-session interrupt data.",
+    fetch: fetchPort,
+    init: {
       method: "POST",
       headers: Object.freeze({
         accept: "application/json",
@@ -79,26 +83,17 @@ async function requestInterrupt(
           confirm: request.confirm
         })
       )
-    }]);
-  } catch (error) {
-    if (error instanceof CliFailure) throw error;
-    throw daemonUnavailableFailure(baseUrl, error);
-  }
-
-  assertCliHttpResponse(response, "HostDeck interrupt-client");
-  const payload = await readCliJsonPayload(response);
+    },
+    url
+  });
   if (!response.ok) {
-    let parsedError: ReturnType<typeof apiRouteErrorBodySchema.safeParse>;
-    try {
-      parsedError = apiRouteErrorBodySchema.safeParse(payload);
-    } catch {
-      throw untypedError(response.status);
-    }
-    if (!parsedError.success) throw untypedError(response.status);
-    throw apiFailure(response.status, sanitizeInterruptApiError(parsedError.data.error));
+    throwCliApiFailure({
+      context: "interrupt",
+      payload,
+      sanitize: sanitizeInterruptApiError,
+      status: response.status
+    });
   }
-  if (response.status !== 200) throw invalidResponse();
-
   try {
     const parsed = interruptResponseSchema.safeParse(payload);
     if (
@@ -164,10 +159,6 @@ function interruptErrorMessage(code: ApiErrorEnvelope["code"]): string {
 
 function invalidResponse(): CliFailure {
   return internalFailure("HostDeck daemon returned invalid managed-session interrupt data.");
-}
-
-function untypedError(status: number): CliFailure {
-  return internalFailure(`HostDeck daemon returned an untyped HTTP ${status} interrupt error.`);
 }
 
 function deepFreeze<T>(value: T): T {

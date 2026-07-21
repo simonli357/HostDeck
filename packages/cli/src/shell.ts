@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import type {
   ApiErrorEnvelope,
@@ -27,6 +28,7 @@ import {
   clientOperationIdSchema,
   compactProgressResponseSchema,
   compactStartRequestSchema,
+  defaultResourceBudget,
   goalControlSnapshotSchema,
   goalMutationRequestSchema,
   interruptRequestSchema,
@@ -100,6 +102,7 @@ import {
   createLegacySessionAdmin,
   type LegacySessionAdmin
 } from "./legacy-session-admin.js";
+import { createBoundedLoopbackFetch } from "./loopback-http.js";
 import {
   createHostDeckModelClient,
   type HostDeckModelClient,
@@ -179,6 +182,7 @@ export interface CliRunOptions {
   readonly cwd?: string;
   readonly readFile?: LoadCliConfigOptions["readFile"];
   readonly fetch?: HttpFetch;
+  readonly signal?: AbortSignal;
   readonly legacyAdmin?: LegacySessionAdmin;
   readonly hostLockClient?: HostDeckHostLockClient;
   readonly goalClient?: HostDeckGoalClient;
@@ -247,15 +251,20 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     const config = loadCliConfig(configOptions);
+    const selectedFetch =
+      options.fetch ??
+      createBoundedLoopbackFetch(
+        options.signal === undefined ? {} : { signal: options.signal }
+      );
+    const selectedClientOptions = Object.freeze({
+      baseUrl: config.baseUrl,
+      fetch: selectedFetch
+    });
 
     if (parsed.command.kind === "remote") {
-      const remoteClientOptions = { baseUrl: config.baseUrl };
-      if (options.fetch !== undefined) {
-        Object.assign(remoteClientOptions, { fetch: options.fetch });
-      }
       const remoteClient =
         options.remoteClient ??
-        createHostDeckRemoteControlClient(remoteClientOptions);
+        createHostDeckRemoteControlClient(selectedClientOptions);
       if (parsed.command.action === "status") {
         return success(
           renderRemoteState(
@@ -276,13 +285,9 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     if (parsed.command.kind === "pair") {
-      const pairingClientOptions = { baseUrl: config.baseUrl };
-      if (options.fetch !== undefined) {
-        Object.assign(pairingClientOptions, { fetch: options.fetch });
-      }
       const pairingClient =
         options.pairingClient ??
-        createHostDeckPairingLinkClient(pairingClientOptions);
+        createHostDeckPairingLinkClient(selectedClientOptions);
       const request = createPairingRequest(
         parsed.command,
         options.createPairOperationId ?? createPairOperationId
@@ -296,13 +301,9 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     if (parsed.command.kind === "lock" || parsed.command.kind === "unlock") {
-      const hostLockClientOptions = { baseUrl: config.baseUrl };
-      if (options.fetch !== undefined) {
-        Object.assign(hostLockClientOptions, { fetch: options.fetch });
-      }
       const client =
         options.hostLockClient ??
-        createHostDeckHostLockClient(hostLockClientOptions);
+        createHostDeckHostLockClient(selectedClientOptions);
       const request = createHostLockMutationRequest(
         parsed.command.kind,
         options.createHostLockOperationId ?? createHostLockOperationId
@@ -316,14 +317,8 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
 
     if (parsed.command.kind === "resume") {
       const target = parseResumeTarget(parsed.command.session);
-      let resumeClient = options.resumeClient;
-      if (resumeClient === undefined) {
-        const resumeClientOptions = { baseUrl: config.baseUrl };
-        if (options.fetch !== undefined) {
-          Object.assign(resumeClientOptions, { fetch: options.fetch });
-        }
-        resumeClient = createHostDeckResumeClient(resumeClientOptions);
-      }
+      const resumeClient =
+        options.resumeClient ?? createHostDeckResumeClient(selectedClientOptions);
       const metadata = parseResumeMetadata(
         await Reflect.apply(resumeClient.read, undefined, [target]),
         target
@@ -342,12 +337,8 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
 
     if (parsed.command.kind === "model") {
       const target = parseModelTarget(parsed.command.session);
-      let modelClient = options.modelClient;
-      if (modelClient === undefined) {
-        const modelClientOptions = { baseUrl: config.baseUrl };
-        if (options.fetch !== undefined) Object.assign(modelClientOptions, { fetch: options.fetch });
-        modelClient = createHostDeckModelClient(modelClientOptions);
-      }
+      const modelClient =
+        options.modelClient ?? createHostDeckModelClient(selectedClientOptions);
       if (parsed.command.model === null) {
         const snapshot = parseModelSnapshot(
           await Reflect.apply(modelClient.read, undefined, [target])
@@ -367,12 +358,8 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
 
     if (parsed.command.kind === "goal") {
       const target = parseGoalTarget(parsed.command.session);
-      let goalClient = options.goalClient;
-      if (goalClient === undefined) {
-        const goalClientOptions = { baseUrl: config.baseUrl };
-        if (options.fetch !== undefined) Object.assign(goalClientOptions, { fetch: options.fetch });
-        goalClient = createHostDeckGoalClient(goalClientOptions);
-      }
+      const goalClient =
+        options.goalClient ?? createHostDeckGoalClient(selectedClientOptions);
       if (parsed.command.action === null) {
         const snapshot = parseGoalSnapshot(await Reflect.apply(goalClient.read, undefined, [target]));
         return success(renderGoalSnapshot(snapshot, parsed.command.json));
@@ -390,12 +377,8 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
 
     if (parsed.command.kind === "plan") {
       const target = parsePlanTarget(parsed.command.session);
-      let planClient = options.planClient;
-      if (planClient === undefined) {
-        const planClientOptions = { baseUrl: config.baseUrl };
-        if (options.fetch !== undefined) Object.assign(planClientOptions, { fetch: options.fetch });
-        planClient = createHostDeckPlanClient(planClientOptions);
-      }
+      const planClient =
+        options.planClient ?? createHostDeckPlanClient(selectedClientOptions);
       if (parsed.command.action === null) {
         const snapshot = parsePlanSnapshot(await Reflect.apply(planClient.read, undefined, [target]));
         return success(renderPlanSnapshot(snapshot, parsed.command.json));
@@ -413,14 +396,8 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
 
     if (parsed.command.kind === "usage") {
       const target = parseUsageTarget(parsed.command.session);
-      let usageClient = options.usageClient;
-      if (usageClient === undefined) {
-        const usageClientOptions = { baseUrl: config.baseUrl };
-        if (options.fetch !== undefined) {
-          Object.assign(usageClientOptions, { fetch: options.fetch });
-        }
-        usageClient = createHostDeckUsageClient(usageClientOptions);
-      }
+      const usageClient =
+        options.usageClient ?? createHostDeckUsageClient(selectedClientOptions);
       const snapshot = parseUsageSnapshot(
         await Reflect.apply(usageClient.read, undefined, [target]),
         target
@@ -430,12 +407,8 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
 
     if (parsed.command.kind === "compact") {
       const target = parseCompactTarget(parsed.command.session);
-      let compactClient = options.compactClient;
-      if (compactClient === undefined) {
-        const compactClientOptions = { baseUrl: config.baseUrl };
-        if (options.fetch !== undefined) Object.assign(compactClientOptions, { fetch: options.fetch });
-        compactClient = createHostDeckCompactClient(compactClientOptions);
-      }
+      const compactClient =
+        options.compactClient ?? createHostDeckCompactClient(selectedClientOptions);
       if (!parsed.command.confirm) {
         const response = parseCompactResponse(
           await Reflect.apply(compactClient.read, undefined, [target]),
@@ -458,14 +431,8 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
 
     if (parsed.command.kind === "skills") {
       const target = parseSkillsTarget(parsed.command.session);
-      let skillsClient = options.skillsClient;
-      if (skillsClient === undefined) {
-        const skillsClientOptions = { baseUrl: config.baseUrl };
-        if (options.fetch !== undefined) {
-          Object.assign(skillsClientOptions, { fetch: options.fetch });
-        }
-        skillsClient = createHostDeckSkillsClient(skillsClientOptions);
-      }
+      const skillsClient =
+        options.skillsClient ?? createHostDeckSkillsClient(selectedClientOptions);
       const snapshot = parseSkillsSnapshot(
         await Reflect.apply(skillsClient.list, undefined, [target]),
         target
@@ -475,12 +442,8 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
 
     if (parsed.command.kind === "approvals") {
       const target = parseApprovalTarget(parsed.command.session);
-      let approvalClient = options.approvalClient;
-      if (approvalClient === undefined) {
-        const approvalClientOptions = { baseUrl: config.baseUrl };
-        if (options.fetch !== undefined) Object.assign(approvalClientOptions, { fetch: options.fetch });
-        approvalClient = createHostDeckApprovalClient(approvalClientOptions);
-      }
+      const approvalClient =
+        options.approvalClient ?? createHostDeckApprovalClient(selectedClientOptions);
       if (parsed.command.request === null) {
         const response = parseApprovalList(
           await Reflect.apply(approvalClient.list, undefined, [target]),
@@ -500,12 +463,8 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     if (parsed.command.kind === "interrupt") {
-      let interruptClient = options.interruptClient;
-      if (interruptClient === undefined) {
-        const interruptClientOptions = { baseUrl: config.baseUrl };
-        if (options.fetch !== undefined) Object.assign(interruptClientOptions, { fetch: options.fetch });
-        interruptClient = createHostDeckInterruptClient(interruptClientOptions);
-      }
+      const interruptClient =
+        options.interruptClient ?? createHostDeckInterruptClient(selectedClientOptions);
       const request = createInterruptRequest(
         parsed.command,
         options.createInterruptOperationId ?? createInterruptOperationId
@@ -518,14 +477,8 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     if (parsed.command.kind === "start") {
-      let startClient = options.startClient;
-      if (startClient === undefined) {
-        const startClientOptions = { baseUrl: config.baseUrl };
-        if (options.fetch !== undefined) {
-          Object.assign(startClientOptions, { fetch: options.fetch });
-        }
-        startClient = createHostDeckStartClient(startClientOptions);
-      }
+      const startClient =
+        options.startClient ?? createHostDeckStartClient(selectedClientOptions);
       const startRequest = createSessionStartRequest(
         parsed.command,
         options.createStartOperationId ?? createStartOperationId
@@ -538,14 +491,8 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     if (parsed.command.kind === "archive") {
-      let archiveClient = options.archiveClient;
-      if (archiveClient === undefined) {
-        const archiveClientOptions = { baseUrl: config.baseUrl };
-        if (options.fetch !== undefined) {
-          Object.assign(archiveClientOptions, { fetch: options.fetch });
-        }
-        archiveClient = createHostDeckArchiveClient(archiveClientOptions);
-      }
+      const archiveClient =
+        options.archiveClient ?? createHostDeckArchiveClient(selectedClientOptions);
       const archiveRequest = createSessionArchiveRequest(
         parsed.command,
         options.createArchiveOperationId ?? createArchiveOperationId
@@ -558,14 +505,8 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     if (parsed.command.kind === "send") {
-      let promptClient = options.promptClient;
-      if (promptClient === undefined) {
-        const promptClientOptions = { baseUrl: config.baseUrl };
-        if (options.fetch !== undefined) {
-          Object.assign(promptClientOptions, { fetch: options.fetch });
-        }
-        promptClient = createHostDeckPromptClient(promptClientOptions);
-      }
+      const promptClient =
+        options.promptClient ?? createHostDeckPromptClient(selectedClientOptions);
       const promptRequest = createPromptRequest(
         parsed.command,
         options.createPromptOperationId ?? createPromptOperationId
@@ -1409,6 +1350,7 @@ export async function main(args = process.argv.slice(2), options: CliRunOptions 
 }
 
 function success(stdout: string): CliRunResult {
+  assertCliOutput(stdout, "stdout");
   return {
     exitCode: cliExitCodes.ok,
     stdout,
@@ -1417,9 +1359,30 @@ function success(stdout: string): CliRunResult {
 }
 
 function failure(error: ReturnType<typeof toCliFailure>): CliRunResult {
+  let selectedError = error;
+  let stderr: string;
+  try {
+    stderr = renderFailure(selectedError);
+    assertCliOutput(stderr, "stderr");
+  } catch {
+    selectedError = internalFailure(
+      "HostDeck CLI failure output exceeded its selected limit."
+    );
+    stderr = renderFailure(selectedError);
+  }
   return {
-    exitCode: error.exitCode,
+    exitCode: selectedError.exitCode,
     stdout: "",
-    stderr: renderFailure(error)
+    stderr
   };
+}
+
+function assertCliOutput(output: string, stream: "stderr" | "stdout"): void {
+  if (
+    output.includes("\0") ||
+    Buffer.byteLength(output, "utf8") >
+      defaultResourceBudget.cli_response_max_bytes
+  ) {
+    throw internalFailure(`HostDeck CLI ${stream} exceeds its selected limit.`);
+  }
 }

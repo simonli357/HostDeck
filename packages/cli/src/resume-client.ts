@@ -1,23 +1,16 @@
 import {
   type ApiErrorEnvelope,
-  apiRouteErrorBodySchema,
   type SelectedResumeMetadataResponse,
   selectedResumeMetadataResponseSchema,
   selectedResumeParamsSchema
 } from "@hostdeck/contracts";
-import type { HttpFetch, HttpResponse } from "./api-client.js";
+import type { HttpFetch } from "./api-client.js";
+import { internalFailure, usageFailure } from "./errors.js";
 import {
-  apiFailure,
-  CliFailure,
-  daemonUnavailableFailure,
-  internalFailure,
-  usageFailure
-} from "./errors.js";
-import {
-  assertCliHttpResponse,
   createBoundedLoopbackFetch,
-  readCliJsonPayload,
-  requireLoopbackBaseUrl
+  requestCliJson,
+  requireLoopbackBaseUrl,
+  throwCliApiFailure
 } from "./loopback-http.js";
 
 export interface HostDeckResumeClient {
@@ -78,33 +71,29 @@ async function requestResumeMetadata(
     `/api/v1/sessions/${encodeURIComponent(sessionId)}/resume`,
     baseUrl
   );
-  let response: HttpResponse;
-  try {
-    response = await fetchPort(url.toString(), {
+  const { payload, response } = await requestCliJson({
+    baseUrl,
+    context: "HostDeck resume-client",
+    expectedStatus: 200,
+    invalidSuccessStatusMessage:
+      "HostDeck daemon returned invalid managed-thread resume metadata.",
+    fetch: fetchPort,
+    init: {
       method: "GET",
       headers: Object.freeze({
         accept: "application/json",
         "cache-control": "no-store"
       })
-    });
-  } catch (error) {
-    if (error instanceof CliFailure) throw error;
-    throw daemonUnavailableFailure(baseUrl, error);
-  }
-
-  assertCliHttpResponse(response, "HostDeck resume-client");
-  const payload = await readCliJsonPayload(response);
+    },
+    url
+  });
   if (!response.ok) {
-    const parsedError = apiRouteErrorBodySchema.safeParse(payload);
-    if (!parsedError.success) {
-      throw internalFailure(
-        `HostDeck daemon returned an untyped HTTP ${response.status} resume error.`
-      );
-    }
-    throw apiFailure(
-      response.status,
-      sanitizeResumeApiError(parsedError.data.error)
-    );
+    throwCliApiFailure({
+      context: "resume",
+      payload,
+      sanitize: sanitizeResumeApiError,
+      status: response.status
+    });
   }
 
   const parsed = selectedResumeMetadataResponseSchema.safeParse(payload);

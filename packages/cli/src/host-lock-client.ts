@@ -1,6 +1,5 @@
 import {
   type ApiErrorEnvelope,
-  apiRouteErrorBodySchema,
   type SelectedHostLockRequest,
   type SelectedHostLockStateResponse,
   type SelectedHostUnlockRequest,
@@ -12,18 +11,13 @@ import {
   hostDeckLocalAdminRequestHeaderName,
   hostDeckLocalAdminRequestHeaderValue
 } from "@hostdeck/server";
-import type { HttpFetch, HttpResponse } from "./api-client.js";
+import type { HttpFetch } from "./api-client.js";
+import { internalFailure } from "./errors.js";
 import {
-  apiFailure,
-  CliFailure,
-  daemonUnavailableFailure,
-  internalFailure
-} from "./errors.js";
-import {
-  assertCliHttpResponse,
   createBoundedLoopbackFetch,
-  readCliJsonPayload,
-  requireLoopbackBaseUrl
+  requestCliJson,
+  requireLoopbackBaseUrl,
+  throwCliApiFailure
 } from "./loopback-http.js";
 
 export interface HostDeckHostLockClient {
@@ -91,9 +85,14 @@ async function mutateHostLock(input: {
   readonly request: SelectedHostLockRequest | SelectedHostUnlockRequest;
 }): Promise<SelectedHostLockStateResponse> {
   const url = new URL(input.path, input.baseUrl);
-  let response: HttpResponse;
-  try {
-    response = await input.fetch(url.toString(), {
+  const { payload, response } = await requestCliJson({
+    baseUrl: input.baseUrl,
+    context: "HostDeck host-lock",
+    expectedStatus: 200,
+    invalidSuccessStatusMessage:
+      "HostDeck daemon returned an invalid or uncorrelated host-lock response.",
+    fetch: input.fetch,
+    init: {
       method: "POST",
       headers: Object.freeze({
         accept: "application/json",
@@ -103,22 +102,16 @@ async function mutateHostLock(input: {
           hostDeckLocalAdminRequestHeaderValue
       }),
       body: JSON.stringify(input.request)
-    });
-  } catch (error) {
-    if (error instanceof CliFailure) throw error;
-    throw daemonUnavailableFailure(input.baseUrl, error);
-  }
-
-  assertCliHttpResponse(response, "HostDeck host-lock");
-  const payload = await readCliJsonPayload(response);
+    },
+    url
+  });
   if (!response.ok) {
-    const parsed = apiRouteErrorBodySchema.safeParse(payload);
-    if (!parsed.success) {
-      throw internalFailure(
-        `HostDeck daemon returned an untyped HTTP ${response.status} host-lock error.`
-      );
-    }
-    throw apiFailure(response.status, sanitizeHostLockApiError(parsed.data.error));
+    throwCliApiFailure({
+      context: "host-lock",
+      payload,
+      sanitize: sanitizeHostLockApiError,
+      status: response.status
+    });
   }
 
   const parsed = selectedHostLockStateResponseSchema.safeParse(payload);

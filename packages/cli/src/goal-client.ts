@@ -1,6 +1,5 @@
 import {
   type ApiErrorEnvelope,
-  apiRouteErrorBodySchema,
   type GoalControlSnapshot,
   type GoalMutationRequest,
   goalControlSnapshotSchema,
@@ -8,13 +7,13 @@ import {
   sessionIdParamsSchema,
   sessionIdSchema
 } from "@hostdeck/contracts";
-import type { HttpFetch, HttpResponse } from "./api-client.js";
-import { apiFailure, CliFailure, daemonUnavailableFailure, internalFailure, usageFailure } from "./errors.js";
+import type { HttpFetch, HttpRequestInit } from "./api-client.js";
+import { type CliFailure, internalFailure, usageFailure } from "./errors.js";
 import {
-  assertCliHttpResponse,
   createBoundedLoopbackFetch,
-  readCliJsonPayload,
-  requireLoopbackBaseUrl
+  requestCliJson,
+  requireLoopbackBaseUrl,
+  throwCliApiFailure
 } from "./loopback-http.js";
 
 const goalClientMutationRequestSchema = goalMutationRequestSchema.extend({
@@ -73,7 +72,7 @@ async function requestGoal(
   request: HostDeckGoalClientMutationRequest | null
 ): Promise<GoalControlSnapshot> {
   const url = new URL(`/api/v1/sessions/${encodeURIComponent(sessionId)}/goal`, baseUrl);
-  const init =
+  const init: HttpRequestInit =
     request === null
       ? {
           method: "GET",
@@ -99,28 +98,24 @@ async function requestGoal(
             })
           )
         };
-  let response: HttpResponse;
-  try {
-    response = await Reflect.apply(fetchPort, undefined, [url.toString(), init]);
-  } catch (error) {
-    if (error instanceof CliFailure) throw error;
-    throw daemonUnavailableFailure(baseUrl, error);
-  }
-
-  assertCliHttpResponse(response, "HostDeck goal-client");
-  const payload = await readCliJsonPayload(response);
+  const { payload, response } = await requestCliJson({
+    baseUrl,
+    context: "HostDeck goal-client",
+    expectedStatus: 200,
+    invalidSuccessStatusMessage:
+      "HostDeck daemon returned invalid managed-session goal data.",
+    fetch: fetchPort,
+    init,
+    url
+  });
   if (!response.ok) {
-    let parsedError: ReturnType<typeof apiRouteErrorBodySchema.safeParse>;
-    try {
-      parsedError = apiRouteErrorBodySchema.safeParse(payload);
-    } catch {
-      throw untypedError(response.status);
-    }
-    if (!parsedError.success) throw untypedError(response.status);
-    throw apiFailure(response.status, sanitizeGoalApiError(parsedError.data.error));
+    throwCliApiFailure({
+      context: "goal",
+      payload,
+      sanitize: sanitizeGoalApiError,
+      status: response.status
+    });
   }
-  if (response.status !== 200) throw invalidResponse();
-
   let parsed: ReturnType<typeof goalControlSnapshotSchema.safeParse>;
   try {
     parsed = goalControlSnapshotSchema.safeParse(payload);
@@ -206,10 +201,6 @@ function goalErrorMessage(code: ApiErrorEnvelope["code"]): string {
 
 function invalidResponse(): CliFailure {
   return internalFailure("HostDeck daemon returned invalid managed-session goal data.");
-}
-
-function untypedError(status: number): CliFailure {
-  return internalFailure(`HostDeck daemon returned an untyped HTTP ${status} goal error.`);
 }
 
 function deepFreeze<T>(value: T): T {

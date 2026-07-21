@@ -1,6 +1,5 @@
 import {
   type ApiErrorEnvelope,
-  apiRouteErrorBodySchema,
   type RemoteDisableRequest,
   type RemoteEnableRequest,
   type RemoteIngressPublicState,
@@ -12,18 +11,13 @@ import {
   hostDeckLocalAdminRequestHeaderName,
   hostDeckLocalAdminRequestHeaderValue
 } from "@hostdeck/server";
-import type { HttpFetch, HttpResponse } from "./api-client.js";
+import type { HttpFetch } from "./api-client.js";
+import { internalFailure } from "./errors.js";
 import {
-  apiFailure,
-  CliFailure,
-  daemonUnavailableFailure,
-  internalFailure
-} from "./errors.js";
-import {
-  assertCliHttpResponse,
   createBoundedLoopbackFetch,
-  readCliJsonPayload,
-  requireLoopbackBaseUrl
+  requestCliJson,
+  requireLoopbackBaseUrl,
+  throwCliApiFailure
 } from "./loopback-http.js";
 
 export interface HostDeckRemoteControlClient {
@@ -109,9 +103,13 @@ async function requestRemoteState(input: {
 }): Promise<RemoteIngressPublicState> {
   const url = new URL(input.path, input.baseUrl);
   const body = input.body === undefined ? undefined : JSON.stringify(input.body);
-  let response: HttpResponse;
-  try {
-    response = await input.fetch(url.toString(), {
+  const { payload, response } = await requestCliJson({
+    baseUrl: input.baseUrl,
+    context: "HostDeck remote-control",
+    expectedStatus: 200,
+    invalidSuccessStatusMessage: "HostDeck daemon returned an invalid remote-control state.",
+    fetch: input.fetch,
+    init: {
       method: input.method,
       headers: Object.freeze({
         accept: "application/json",
@@ -120,22 +118,16 @@ async function requestRemoteState(input: {
         ...input.headers
       }),
       ...(body === undefined ? {} : { body })
-    });
-  } catch (error) {
-    if (error instanceof CliFailure) throw error;
-    throw daemonUnavailableFailure(input.baseUrl, error);
-  }
-
-  assertCliHttpResponse(response, "HostDeck remote-control");
-  const payload = await readCliJsonPayload(response);
+    },
+    url
+  });
   if (!response.ok) {
-    const parsed = apiRouteErrorBodySchema.safeParse(payload);
-    if (!parsed.success) {
-      throw internalFailure(
-        `HostDeck daemon returned an untyped HTTP ${response.status} remote-control error.`
-      );
-    }
-    throw apiFailure(response.status, sanitizeRemoteApiError(parsed.data.error));
+    throwCliApiFailure({
+      context: "remote-control",
+      payload,
+      sanitize: sanitizeRemoteApiError,
+      status: response.status
+    });
   }
 
   const parsed = remoteIngressPublicStateSchema.safeParse(payload);

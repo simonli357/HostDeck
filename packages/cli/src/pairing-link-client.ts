@@ -1,6 +1,5 @@
 import {
   type ApiErrorEnvelope,
-  apiRouteErrorBodySchema,
   createSelectedPairingLink,
   type SelectedPairingLink,
   type SelectedPairRequest,
@@ -12,19 +11,16 @@ import {
   hostDeckLocalAdminRequestHeaderName,
   hostDeckLocalAdminRequestHeaderValue
 } from "@hostdeck/server";
-import type { HttpFetch, HttpResponse } from "./api-client.js";
+import type { HttpFetch } from "./api-client.js";
 import {
-  apiFailure,
-  CliFailure,
   clientOperationFailure,
-  daemonUnavailableFailure,
   internalFailure
 } from "./errors.js";
 import {
-  assertCliHttpResponse,
   createBoundedLoopbackFetch,
-  readCliJsonPayload,
-  requireLoopbackBaseUrl
+  requestCliJson,
+  requireLoopbackBaseUrl,
+  throwCliApiFailure
 } from "./loopback-http.js";
 import { createHostDeckRemoteControlClient } from "./remote-control-client.js";
 
@@ -116,9 +112,13 @@ async function issuePairingCode(input: {
 }): Promise<SelectedPairRequestResponse> {
   const url = new URL("/api/v1/access/pairing-codes", input.baseUrl);
   const body = JSON.stringify(input.request);
-  let response: HttpResponse;
-  try {
-    response = await input.fetch(url.toString(), {
+  const { payload, response } = await requestCliJson({
+    baseUrl: input.baseUrl,
+    context: "HostDeck pairing-link",
+    expectedStatus: 200,
+    invalidSuccessStatusMessage: "HostDeck daemon returned an invalid pairing-code response.",
+    fetch: input.fetch,
+    init: {
       method: "POST",
       headers: Object.freeze({
         accept: "application/json",
@@ -128,22 +128,16 @@ async function issuePairingCode(input: {
           hostDeckLocalAdminRequestHeaderValue
       }),
       body
-    });
-  } catch (error) {
-    if (error instanceof CliFailure) throw error;
-    throw daemonUnavailableFailure(input.baseUrl, error);
-  }
-
-  assertCliHttpResponse(response, "HostDeck pairing-link");
-  const payload = await readCliJsonPayload(response);
+    },
+    url
+  });
   if (!response.ok) {
-    const parsed = apiRouteErrorBodySchema.safeParse(payload);
-    if (!parsed.success) {
-      throw internalFailure(
-        `HostDeck daemon returned an untyped HTTP ${response.status} pairing-link error.`
-      );
-    }
-    throw apiFailure(response.status, sanitizePairingApiError(parsed.data.error));
+    throwCliApiFailure({
+      context: "pairing-link",
+      payload,
+      sanitize: sanitizePairingApiError,
+      status: response.status
+    });
   }
 
   const parsed = selectedPairRequestResponseSchema.safeParse(payload);
