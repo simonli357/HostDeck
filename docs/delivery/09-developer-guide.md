@@ -56,15 +56,17 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | Contract tests | `pnpm test:contract` | Runs selected schema/API/CLI/storage contract tests. |
 | Integration tests | `pnpm test:integration` | Runs cross-module failure-ordering tests. |
 | Web state tests | `pnpm test:web` | Runs selected mobile fixture and headless pairing-bootstrap checks. |
+| Production package build | `pnpm build` | Offline frozen-lock build of `dist/hostdeck` from the exact 600-source server/CLI closure. Emits six compiled library packages plus production dependencies, identity manifest, and dependency-free verifier; it intentionally emits no web assets or HostDeck executable. |
+| Production package acceptance | `pnpm test:package` | Builds twice, proves rollback/stale replacement and deterministic identity, relocates the tree read-only, imports all six roots, exercises SQLite/flock and Fastify close/restart, and runs config/static/native/runtime/integrity/link failure probes. |
+| Production package verify | `node dist/hostdeck/verify.mjs dist/hostdeck` | Checks manifest/runtime/native/content identity, runtime manifests, modes, and contained relative links without workspace dependencies. |
 | Pairing browser tests | `pnpm test:browser:pairing` | Runs the real Chromium history/referrer/reload/two-tab/failure boundary; requires the Playwright Chromium bundle. |
 | Remote Android acceptance | `HOSTDECK_REMOTE_CONTROL_DEDICATED_PROFILE_ID=DEDICATED_ID HOSTDECK_REMOTE_CONTROL_AWAY_PROFILE_ID=AWAY_ID pnpm smoke:remote-android` | Strict no-retry `IFC-V1-079` run from a clean commit. Requires exact Tailscale 1.98.8, two distinct authorized saved profiles, and one unlocked authorized Android device with Tailscale, Chrome, USB debugging, and working cellular data. |
 | Later E2E tests | `pnpm test:e2e` | Placeholder; fails loudly until `REL-V1-007` implements it. |
-| Later build/package | `pnpm build` | Placeholder; fails loudly until `REL-V1-007` implements it. |
 | Later release smoke | `pnpm smoke:local` | Placeholder; fails loudly until `REL-V1-006` implements it. |
 
 ## CLI And Service State
 
-Selected CLI parsers and loopback HTTP clients are implemented as source contracts in `packages/cli/src/`; pair, lock, and unlock use selected HTTP routes. Only `legacy status/reset` enters the bounded local SQLite administration module. Selected server services/routes/lifecycle primitives and the accepted production registration factory live in `packages/server/src/`, but a compiled startup entrypoint and packaged runnable `codexdeck` binary do not exist yet. `INT-V1-008` removed the historical tmux path and `IFC-V1-067` removed direct-LAN/TLS/raw/desktop production interfaces; build/package or clean-install evidence must exist before `codexdeck ...` becomes a copy-paste command.
+Selected CLI parsers and loopback HTTP clients are implemented in `packages/cli/src/`; pair, lock, and unlock use selected HTTP routes. Only `legacy status/reset` enters the bounded local SQLite administration module. `pnpm build` compiles those accepted CLI/server/library roots into a self-contained `dist/hostdeck`, but the package deliberately has no `bin`, shebang, startup entrypoint, web assets, or runnable `codexdeck` command. `IFC-V1-054` owns executable composition and command dispatch. `INT-V1-008` removed the historical tmux path and `IFC-V1-067` removed direct-LAN/TLS/raw/desktop production interfaces; executable-package and clean-install evidence must exist before `codexdeck ...` becomes a copy-paste command.
 
 Local `legacy status [--json]` reports only the `legacy_unmigrated` disposition and a bounded row count. `legacy reset --confirm [--json]` opens the local SQLite database, runs one immediate transaction, removes only inert legacy session state through declared foreign keys, preserves selected sessions/projections/security/global audit state, and performs no process or tmux action. Both remain source contracts until CLI packaging.
 
@@ -76,7 +78,7 @@ Default local configuration:
 | API port | `3777` |
 | State directory | `${XDG_STATE_HOME}/hostdeck` when `XDG_STATE_HOME` is set, otherwise `~/.local/state/hostdeck` |
 | SQLite database | `hostdeck.sqlite` inside the state directory |
-| Runtime directory | `$XDG_RUNTIME_DIR/hostdeck`; selected runtime/socket and composition contracts use it, while compiled startup/package ownership remains `IFC-V1-021` work |
+| Runtime directory | `$XDG_RUNTIME_DIR/hostdeck`; selected runtime/socket and composition contracts use it, while the compiled foreground startup owner remains `IFC-V1-054` work |
 | Config directory | `${XDG_CONFIG_HOME}/hostdeck` when set, otherwise `~/.config/hostdeck` |
 | Daemon lease | `hostdeck.lock` inside the state directory; one nonblocking Linux owner per state directory |
 | Config file | Optional JSON file passed with `--config` |
@@ -91,9 +93,9 @@ Supported config inputs:
 | State directory | `--state-dir` | `HOSTDECK_STATE_DIR` | `state_dir` or `stateDir` |
 | Database path | `--database` or `--database-path` | `HOSTDECK_DATABASE_PATH` | `database_path` or `databasePath` |
 
-## Production Composition Gap
+## Executable Composition Gap
 
-`codexdeck serve` is the intended foreground command, but no source `serve` command or production assembly exists after legacy-runtime removal. `IFC-V1-046` must compose the proven pieces into one loopback-only Fastify process that acquires the state lease, prepares owner-only paths and SQLite, starts or connects to the selected Codex runtime according to ownership mode, runs maintenance/reconciliation, registers only selected routes/static/SSE, and drains every owned resource on shutdown. It must not restore the old custom listener, tmux discovery, direct-LAN TLS, or historical route fallback.
+`IFC-V1-046` accepts the selected 22-registration/35-route production factory, and `IFC-V1-021` now compiles its server/CLI dependency closure. `codexdeck serve` is still not runnable because `IFC-V1-054` must add the foreground entry and complete command dispatch that acquire the state lease, prepare owner-only paths and SQLite, start or connect to the selected Codex runtime according to ownership mode, run maintenance/reconciliation, register only selected routes/static/SSE, and drain every owned resource on shutdown. It must not restore the old custom listener, tmux discovery, direct-LAN TLS, or historical route fallback.
 
 Long-running systemd user units and runnable packaging remain downstream. Do not publish foreground or service-wrapper instructions until composition, build/package, and `REL-V1-006` clean-install evidence pass.
 

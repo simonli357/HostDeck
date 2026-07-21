@@ -33,6 +33,7 @@ const requiredScripts = [
   "test:unit",
   "test:contract",
   "test:integration",
+  "test:package",
   "test:codex",
   "smoke:codex-compatibility",
   "smoke:codex-ipc",

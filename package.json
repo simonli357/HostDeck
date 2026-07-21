@@ -20,6 +20,7 @@
     "test:unit": "vitest run",
     "test:contract": "vitest run --config vitest.contract.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:package": "node --test scripts/production-package.test.mjs && node scripts/test-production-package.mjs",
     "test:codex": "HOSTDECK_REQUIRE_CODEX_HARDENING=1 vitest run packages/server/src/codex-runtime-hardening.smoke.test.ts",
     "smoke:codex-compatibility": "HOSTDECK_REQUIRE_CODEX_COMPATIBILITY_SMOKE=1 vitest run packages/codex-adapter/src/installed-codex.smoke.test.ts",
     "smoke:codex-ipc": "HOSTDECK_REQUIRE_CODEX_IPC_SMOKE=1 vitest run packages/codex-adapter/src/codex-ipc.smoke.test.ts",
@@ -45,7 +46,7 @@
     "test:web": "vitest run packages/web/src/pairing-bootstrap.test.ts packages/test-fixtures/src/fixtures.test.ts",
     "test:browser:pairing": "playwright test --config playwright.pairing.config.ts",
     "test:e2e": "node scripts/not-implemented.mjs test:e2e REL-V1-007",
-    "build": "node scripts/not-implemented.mjs build REL-V1-007",
+    "build": "node scripts/build-production-package.mjs",
     "smoke:local": "node scripts/not-implemented.mjs smoke:local REL-V1-006"
   },
   "devDependencies": {

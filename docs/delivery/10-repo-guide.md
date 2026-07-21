@@ -11,14 +11,14 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | `tsconfig.base.json`, `tsconfig.json` | Shared strict TypeScript scaffold configuration |
 | `biome.json` | Shared lint configuration |
 | `vitest.config.ts`, `vitest.contract.config.ts`, `vitest.integration.config.ts`, `vitest.codex.config.ts`, `tests/` | Shared unit, contract, integration, and frozen selected-runtime test runners plus convention tests |
-| `scripts/` | Scaffold/planning/export/runtime-boundary checks, Codex binding generation, and validation/smoke entrypoints |
+| `scripts/` | Scaffold/planning/export/runtime-boundary checks, Codex binding generation, deterministic package build/verifier/acceptance, and validation/smoke entrypoints |
 | `packages/core/` | Selected identifiers, errors, deadlines, remote ingress, and runtime invariants |
 | `packages/contracts/` | Selected API, authentication, operation, storage, and mobile runtime contracts |
 | `packages/test-fixtures/` | Selected mobile, remote-ingress, and structured-runtime fixtures |
 | `packages/storage/` | Selected local-state repositories plus exact bounded historical migration/session-reset compatibility |
 | `packages/codex-adapter/` | Generated Codex binding, compatibility, private IPC, normalized thread lifecycle, and TUI resume command |
 | `packages/server/` | Selected application services, accepted Fastify route composition/lifecycle, Codex integration, and Tailscale ingress boundaries; compiled startup remains downstream |
-| `packages/cli/` | `codexdeck` source command contracts, selected loopback clients, local legacy administration, config loading, and error rendering; packaging remains downstream |
+| `packages/cli/` | `codexdeck` source command contracts, selected loopback clients, local legacy administration, config loading, and error rendering; the compiled library package exists, while executable dispatch remains downstream |
 | `packages/web/` | Headless pairing bootstrap boundary; production dashboard implementation remains downstream |
 | `docs/` | Planning, tracking, delivery docs |
 | `assets/` | UI concepts and product assets |
@@ -45,7 +45,8 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | Owner-only local paths and daemon lease | `packages/storage/src/secure-local-paths.ts`, `packages/storage/src/daemon-lease.ts` | Storage unit tests plus `tests/daemon-lease.integration.test.ts` |
 | Inert legacy-session status/reset | `packages/storage/src/legacy-session-repository.ts`, `packages/cli/src/legacy-session-admin.ts` | Repository/admin tests plus `pnpm check:runtime-boundary` |
 | Legacy production-interface isolation | `scripts/check-selected-runtime-boundary.mjs` | Mutation tests plus `pnpm check:runtime-boundary` |
-| Remaining later validation layers | `scripts/not-implemented.mjs` placeholders | E2E, build, and local smoke placeholders fail loudly with owning task IDs |
+| Deterministic production package | `scripts/build-production-package.mjs`, `scripts/verify-production-package.mjs` | `pnpm build`, `pnpm test:package`, relocated `dist/hostdeck/verify.mjs` |
+| Remaining later validation layers | `scripts/not-implemented.mjs` placeholders | E2E and local release-smoke placeholders fail loudly with owning task IDs |
 
 ## Boundaries
 
