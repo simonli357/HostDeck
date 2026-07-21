@@ -1,10 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { request as httpsRequest, type RequestOptions } from "node:https";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   defaultResourceBudget,
-  defaultRetentionPolicy,
   type RuntimeCompatibility,
   runtimeCompatibilitySchema,
   type SelectedOperationProgress,
@@ -14,9 +12,7 @@ import {
 } from "@hostdeck/contracts";
 import { runtimeCapabilities } from "@hostdeck/core";
 import {
-  createAuthDeviceRepository,
   createSelectedAuditRepository,
-  createSelectedCsrfAuthorizationRepository,
   openMigratedDatabase,
   type SelectedAuditRepository,
   type SelectedSessionState
@@ -33,10 +29,8 @@ import {
   type HostDeckFastifyInstance,
   type HostDeckRoutePluginRegistration
 } from "./fastify-app.js";
-import {
-  createHostDeckRequestAuthenticationPolicy,
-  hostDeckDeviceCookieName
-} from "./fastify-request-authentication.js";
+import { hostDeckLoopbackTestOrigin, injectHostDeckLoopback } from "./fastify-loopback-test-request.js";
+import { createHostDeckRequestAuthenticationPolicy } from "./fastify-request-authentication.js";
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import { createHostDeckHostLockPolicy } from "./host-lock-routes.js";
 import {
@@ -44,7 +38,6 @@ import {
   createHostDeckInterruptRouteRegistration,
   hostDeckInterruptRouteRegistrationId
 } from "./interrupt-routes.js";
-import { createHostDeckLanCertificatePolicy } from "./lan-certificate-policy.js";
 import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
 import { createHostDeckSelectedWriteAuditExecutor } from "./selected-write-audit-executor.js";
 
@@ -55,13 +48,6 @@ const sessionId = "sess_interrupt_route_001";
 const threadId = "thread-interrupt-route-001";
 const turnId = "turn-interrupt-route-001";
 const operationId = "op_interrupt_route_0001";
-const secureOrigin = "https://192.168.0.31:3777";
-const pairedWriterId = "client_interrupt_route_writer";
-const pairedWriterToken = "W".repeat(43);
-const pairedWriterCsrf = "C".repeat(43);
-const pairedReaderId = "client_interrupt_route_reader";
-const pairedReaderToken = "R".repeat(43);
-const pairedReaderCsrf = "D".repeat(43);
 const interruptRequest = Object.freeze({
   operation_id: operationId,
   kind: "interrupt" as const,
@@ -167,49 +153,6 @@ describe("selected interrupt route", () => {
     }
   });
 
-  it("admits only a CSRF-authorized paired writer over private HTTPS", async () => {
-    const harness = await createPairedHarness();
-    try {
-      const writerOperation = "op_interrupt_route_paired_writer";
-      const writer = await secureInterrupt(harness, "writer", {
-        ...interruptRequest,
-        operation_id: writerOperation
-      });
-      expect(writer.statusCode, writer.body).toBe(200);
-      expect(harness.interruptCalls()).toHaveLength(1);
-      expect(harness.auditRepository.require(writerOperation).records[0]).toMatchObject({
-        actor: {
-          type: "dashboard",
-          device_id: pairedWriterId,
-          permission: "write",
-          origin: secureOrigin
-        }
-      });
-
-      const readerOperation = "op_interrupt_route_paired_reader";
-      const reader = await secureInterrupt(harness, "reader", {
-        ...interruptRequest,
-        operation_id: readerOperation
-      });
-      expectStableError(reader, 403, "read_only");
-      expect(harness.interruptCalls()).toHaveLength(1);
-      expect(harness.auditRepository.get(readerOperation)).toBeNull();
-
-      const csrfOperation = "op_interrupt_route_paired_no_csrf";
-      const missingCsrf = await secureInterrupt(
-        harness,
-        "writer",
-        { ...interruptRequest, operation_id: csrfOperation },
-        false
-      );
-      expect(missingCsrf.statusCode, missingCsrf.body).toBe(403);
-      expect(harness.interruptCalls()).toHaveLength(1);
-      expect(harness.auditRepository.get(csrfOperation)).toBeNull();
-    } finally {
-      await harness.close();
-    }
-  });
-
   it("rejects malformed wire input and adjacent methods before state, audit, or service access", async () => {
     const harness = await createHarness();
     try {
@@ -223,13 +166,13 @@ describe("selected interrupt route", () => {
         expectStableError(await interruptTurn(harness, candidate), 400, "validation_error");
       }
       expectStableError(
-        await harness.app.inject({ method: "POST", url: `${interruptPath()}?force=true`, payload: interruptRequest }),
+        await injectHostDeckLoopback(harness.app, { method: "POST", url: `${interruptPath()}?force=true`, payload: interruptRequest }),
         400,
         "validation_error"
       );
-      expect((await harness.app.inject({ method: "GET", url: interruptPath() })).statusCode).toBe(405);
-      expect((await harness.app.inject({ method: "HEAD", url: interruptPath() })).statusCode).toBe(405);
-      expect((await harness.app.inject({ method: "PUT", url: interruptPath(), payload: interruptRequest })).statusCode).toBe(405);
+      expect((await injectHostDeckLoopback(harness.app, { method: "GET", url: interruptPath() })).statusCode).toBe(405);
+      expect((await injectHostDeckLoopback(harness.app, { method: "HEAD", url: interruptPath() })).statusCode).toBe(405);
+      expect((await injectHostDeckLoopback(harness.app, { method: "PUT", url: interruptPath(), payload: interruptRequest })).statusCode).toBe(405);
       expect(harness.stateReads()).toBe(0);
       expect(harness.requireCalls()).toHaveLength(0);
       expect(harness.interruptCalls()).toHaveLength(0);
@@ -466,13 +409,6 @@ interface Harness {
   readonly waitThis: () => unknown;
 }
 
-interface PairedHarness {
-  readonly app: HostDeckFastifyInstance;
-  readonly auditRepository: SelectedAuditRepository;
-  readonly close: () => Promise<void>;
-  readonly interruptCalls: () => readonly Record<string, unknown>[];
-}
-
 async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   const directory = mkdtempSync(join(tmpdir(), "hostdeck-interrupt-route-"));
   temporaryDirectories.push(directory);
@@ -573,9 +509,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
       now: nextDate
     }),
     requestTrustPolicy: createHostDeckRequestTrustPolicy({
-      allowedOrigins: ["http://localhost"],
-      mode: "loopback",
-      transport: "http"
+      allowedOrigin: hostDeckLoopbackTestOrigin
     }),
     resourceBudget: defaultResourceBudget,
     routePlugins: [registration]
@@ -614,113 +548,6 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
         END;
       `);
     },
-    async close() {
-      if (closed) return;
-      closed = true;
-      await app.close();
-      if (open.db.open) open.db.close();
-    }
-  };
-}
-
-async function createPairedHarness(): Promise<PairedHarness> {
-  const directory = mkdtempSync(join(tmpdir(), "hostdeck-interrupt-route-paired-"));
-  temporaryDirectories.push(directory);
-  const open = openMigratedDatabase(join(directory, "hostdeck.sqlite"), { now: () => new Date(timestamp) });
-  let clock = new Date(timestamp).getTime();
-  const nextDate = () => new Date(clock++);
-  const auth = createAuthDeviceRepository(open.db);
-  auth.create({
-    id: pairedWriterId,
-    rawDeviceToken: pairedWriterToken,
-    rawCsrfToken: pairedWriterCsrf,
-    permission: "write",
-    clientLabel: "Interrupt route writer",
-    createdAt: new Date(timestamp)
-  });
-  auth.create({
-    id: pairedReaderId,
-    rawDeviceToken: pairedReaderToken,
-    rawCsrfToken: pairedReaderCsrf,
-    permission: "read",
-    clientLabel: "Interrupt route reader",
-    createdAt: new Date(timestamp)
-  });
-  const csrfRepository = createSelectedCsrfAuthorizationRepository(open.db, {
-    generateCsrfToken: () => "N".repeat(43)
-  });
-  const csrf = createHostDeckCsrfPolicy({
-    csrf: {
-      authorizeBrowserWrite: (input) => csrfRepository.authorizeBrowserWrite(input),
-      rotateBootstrap: (input) => csrfRepository.rotateBootstrap(input)
-    },
-    now: nextDate
-  });
-  const lock = createHostDeckHostLockPolicy({
-    settings: {
-      read: () => settings(false),
-      transition() {
-        throw new Error("Interrupt route must not transition host lock.");
-      }
-    },
-    now: nextDate
-  });
-  const auditRepository = createSelectedAuditRepository(open.db);
-  let auditId = 0;
-  const audit = createHostDeckSelectedWriteAuditExecutor({
-    repository: auditRepository,
-    now: () => nextDate().toISOString(),
-    create_record_id: () => `audit_interrupt_route_paired_${++auditId}`
-  });
-  const interruptCalls: Record<string, unknown>[] = [];
-  const registration = createHostDeckInterruptRouteRegistration({
-    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
-    interrupts: {
-      async requireInterruptible() {},
-      async interrupt(intent: unknown) {
-        interruptCalls.push({ ...(intent as Record<string, unknown>) });
-        return progress("accepted", null, String((intent as Record<string, unknown>).operation_id));
-      },
-      async waitForTerminal(_target: unknown) {
-        const operation = String(interruptCalls.at(-1)?.operation_id);
-        return progress("interrupted", null, operation);
-      }
-    } as CreateHostDeckInterruptRouteRegistrationInput["interrupts"],
-    audit,
-    csrf,
-    lock,
-    runtime: { read: () => runtimeCandidate() },
-    state: { get: () => selectedState("active") }
-  });
-  const certificateDirectory = join(directory, "certificates");
-  mkdirSync(certificateDirectory, { mode: 0o700 });
-  const certificates = createHostDeckLanCertificatePolicy({
-    assignedAddresses: () => ["192.168.0.31"],
-    certificateDirectory,
-    now: () => new Date(timestamp)
-  });
-  await certificates.configure({ bind_host: "192.168.0.31", bind_port: 3777, certificate_action: "issue_leaf" });
-  const app = createHostDeckFastifyApp({
-    observeInternalError: () => undefined,
-    requestAuthenticationPolicy: createHostDeckRequestAuthenticationPolicy({
-      authenticateDeviceToken: (input) => auth.authenticateDeviceToken(input),
-      now: nextDate
-    }),
-    requestTrustPolicy: createHostDeckRequestTrustPolicy({
-      allowedOrigins: [secureOrigin],
-      mode: "lan",
-      transport: "https"
-    }),
-    resourceBudget: defaultResourceBudget,
-    routePlugins: [registration],
-    tls: certificates.loadTls({ bind_host: "192.168.0.31", bind_port: 3777 })
-  });
-  await app.listen({ host: "127.0.0.1", port: 0, listenTextResolver: () => "" });
-  let closed = false;
-  return {
-    app,
-    auditRepository,
-    interruptCalls: () => [...interruptCalls],
     async close() {
       if (closed) return;
       closed = true;
@@ -827,18 +654,10 @@ function runtimeCandidate(
 }
 
 function settings(locked: boolean) {
-  return {
-    id: "hostdeck_settings" as const,
-    schema_version: 1,
-    state_dir: "/tmp/hostdeck-interrupt-route-state",
-    bind_mode: "localhost" as const,
-    bind_host: "127.0.0.1",
-    bind_port: 3210,
-    lan_enabled: false,
+  return Object.freeze({
     locked,
-    retention: { ...defaultRetentionPolicy },
-    updated_at: timestamp
-  };
+    settings_updated_at: timestamp
+  });
 }
 
 function interruptServiceError(
@@ -860,71 +679,7 @@ function interruptPath() {
 }
 
 async function interruptTurn(harness: Pick<Harness, "app">, payload: Readonly<Record<string, unknown>>) {
-  return await harness.app.inject({ method: "POST", url: interruptPath(), payload });
-}
-
-async function secureInterrupt(
-  harness: PairedHarness,
-  actor: "reader" | "writer",
-  payload: Readonly<Record<string, unknown>>,
-  includeCsrf = true
-): Promise<HttpResult> {
-  const body = JSON.stringify(payload);
-  const writer = actor === "writer";
-  return await httpsExchange(
-    harness,
-    {
-      method: "POST",
-      path: interruptPath(),
-      headers: {
-        host: "192.168.0.31:3777",
-        origin: secureOrigin,
-        accept: "application/json",
-        cookie: `${hostDeckDeviceCookieName}=${writer ? pairedWriterToken : pairedReaderToken}`,
-        "content-type": "application/json",
-        "content-length": Buffer.byteLength(body),
-        ...(includeCsrf
-          ? {
-              "x-hostdeck-csrf": writer ? pairedWriterCsrf : pairedReaderCsrf,
-              "x-hostdeck-csrf-generation": "1"
-            }
-          : {})
-      }
-    },
-    body
-  );
-}
-
-interface HttpResult {
-  readonly statusCode: number;
-  readonly body: string;
-  readonly headers: import("node:http").IncomingHttpHeaders;
-  readonly json: () => Record<string, unknown>;
-}
-
-function httpsExchange(harness: PairedHarness, options: RequestOptions, body: string): Promise<HttpResult> {
-  const address = harness.app.server.address();
-  if (address === null || typeof address === "string") throw new Error("Interrupt HTTPS listener is unavailable.");
-  return new Promise((resolve, reject) => {
-    const outgoing = httpsRequest(
-      { host: "127.0.0.1", port: address.port, rejectUnauthorized: false, ...options },
-      (response) => {
-        const chunks: Buffer[] = [];
-        response.on("data", (chunk: Buffer) => chunks.push(chunk));
-        response.on("end", () => {
-          const responseBody = Buffer.concat(chunks).toString("utf8");
-          resolve({
-            statusCode: response.statusCode ?? 0,
-            body: responseBody,
-            headers: response.headers,
-            json: () => JSON.parse(responseBody) as Record<string, unknown>
-          });
-        });
-      }
-    );
-    outgoing.once("error", reject);
-    outgoing.end(body);
-  });
+  return await injectHostDeckLoopback(harness.app, { method: "POST", url: interruptPath(), payload });
 }
 
 function expectStableError(

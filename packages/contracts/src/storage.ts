@@ -2,7 +2,6 @@ import { attentionLevels, commandIntents, errorCodes, lifecycleStates, sessionSt
 import { z } from "zod";
 import {
   absoluteCwdSchema,
-  bindModeSchema,
   isoTimestampSchema,
   nonNegativeSafeIntegerSchema,
   outputCursorSchema,
@@ -106,23 +105,12 @@ export const settingsRecordSchema = z
     id: z.literal("hostdeck_settings"),
     schema_version: positiveSafeIntegerSchema,
     state_dir: absoluteCwdSchema,
-    bind_mode: bindModeSchema,
-    bind_host: z.string().min(1).max(253),
     bind_port: z.number().int().min(1).max(65_535),
-    lan_enabled: z.boolean(),
     locked: z.boolean(),
     retention: retentionPolicySchema,
     updated_at: isoTimestampSchema
   })
-  .strict()
-  .superRefine((value, context) => {
-    if ((value.bind_mode === "lan") !== value.lan_enabled) {
-      context.addIssue({
-        code: "custom",
-        message: "Stored bind mode and LAN flag must describe the same configured network state."
-      });
-    }
-  });
+  .strict();
 
 /** @deprecated Legacy tmux mapping retained until the selected storage migration and INT-V1-008. */
 export const storageSessionRecordSchema = z

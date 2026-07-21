@@ -10,6 +10,7 @@ import {
   type HostDeckFastifyInstance
 } from "./fastify-app.js";
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import { hostDeckLoopbackTestOrigin, injectHostDeckLoopback } from "./fastify-loopback-test-request.js";
 import {
   createHostDeckRequestAuthenticationPolicy,
   type HostDeckRequestAuthenticationPolicy,
@@ -36,7 +37,7 @@ import { createTailscaleServeProxyTrustPolicy } from "./tailscale-serve-proxy-tr
 const apps: HostDeckFastifyInstance[] = [];
 const initialTime = Date.parse("2026-07-16T21:00:00.000Z");
 const createdAt = "2026-07-16T20:00:00.000Z";
-const loopbackOrigin = "http://localhost";
+const loopbackOrigin = hostDeckLoopbackTestOrigin;
 const remoteLocalOrigin = "http://127.0.0.1:3777";
 const externalOrigin = "https://hostdeck-health-route.fixture-tailnet.ts.net";
 const remoteSource = "100.91.82.73";
@@ -48,9 +49,7 @@ const storageToken = "S".repeat(43);
 const readDeviceId = "client_health_reader";
 const writeDeviceId = "client_health_writer";
 const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
-  allowedOrigins: [loopbackOrigin],
-  mode: "loopback",
-  transport: "http"
+  allowedOrigin: loopbackOrigin
 });
 
 afterEach(async () => {
@@ -107,7 +106,7 @@ describe("selected health and host-status routes", () => {
     const localBefore = health.service.localSnapshot();
     const remoteBefore = health.service.remoteSnapshot();
 
-    const live = await harness.app.inject({
+    const live = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/health/live",
       headers: deviceCookie(invalidToken)
@@ -122,7 +121,7 @@ describe("selected health and host-status routes", () => {
     expect(health.service.remoteSnapshot()).toBe(remoteBefore);
 
     expectStableError(
-      await harness.app.inject({
+      await injectHostDeckLoopback(harness.app, {
         method: "GET",
         url: "/api/v1/health/live?extra=true"
       }),
@@ -130,17 +129,17 @@ describe("selected health and host-status routes", () => {
       "validation_error"
     );
     expectStableError(
-      await harness.app.inject({ method: "HEAD", url: "/api/v1/health/live" }),
+      await injectHostDeckLoopback(harness.app, { method: "HEAD", url: "/api/v1/health/live" }),
       405,
       "method_not_allowed"
     );
     expectStableError(
-      await harness.app.inject({ method: "POST", url: "/api/v1/health/live" }),
+      await injectHostDeckLoopback(harness.app, { method: "POST", url: "/api/v1/health/live" }),
       405,
       "method_not_allowed"
     );
     expectStableError(
-      await harness.app.inject({ method: "GET", url: "/api/v1/health/live/" }),
+      await injectHostDeckLoopback(harness.app, { method: "GET", url: "/api/v1/health/live/" }),
       404,
       "route_not_found"
     );
@@ -175,7 +174,7 @@ describe("selected health and host-status routes", () => {
       ["/api/v1/health/ready", {}],
       ["/api/v1/host/status", localAdminHeaders()]
     ] as const) {
-      const response = await harness.app.inject({ method: "GET", url, headers });
+      const response = await injectHostDeckLoopback(harness.app, { method: "GET", url, headers });
       expect(response.statusCode, response.body).toBe(200);
     }
 
@@ -205,7 +204,7 @@ describe("selected health and host-status routes", () => {
     const harness = createLoopbackApp(health.service);
     await harness.app.ready();
 
-    const initial = await harness.app.inject({
+    const initial = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/health/ready",
       headers: { origin: loopbackOrigin }
@@ -223,7 +222,7 @@ describe("selected health and host-status routes", () => {
     );
 
     makeReady(health);
-    const ready = await harness.app.inject({
+    const ready = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/health/ready"
     });
@@ -249,7 +248,7 @@ describe("selected health and host-status routes", () => {
       state: unavailableRemote(1, "client_stopped")
     });
     expect(health.service.assertMutation(proof).generation).toBe(7);
-    const remoteOnly = await harness.app.inject({
+    const remoteOnly = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/health/ready"
     });
@@ -263,7 +262,7 @@ describe("selected health and host-status routes", () => {
       state: "degraded",
       reasons: ["runtime_disconnected"]
     });
-    const degraded = await harness.app.inject({
+    const degraded = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/health/ready"
     });
@@ -291,7 +290,7 @@ describe("selected health and host-status routes", () => {
         state,
         reasons: [reason]
       });
-      const response = await harness.app.inject({
+      const response = await injectHostDeckLoopback(harness.app, {
         method: "GET",
         url: "/api/v1/health/ready"
       });
@@ -310,7 +309,7 @@ describe("selected health and host-status routes", () => {
       state: "ready",
       reasons: []
     });
-    const recovered = await harness.app.inject({
+    const recovered = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/health/ready"
     });
@@ -350,7 +349,7 @@ describe("selected health and host-status routes", () => {
         state: "failed",
         reasons: [reason]
       });
-      const failed = await harness.app.inject({
+      const failed = await injectHostDeckLoopback(harness.app, {
         method: "GET",
         url: "/api/v1/health/ready"
       });
@@ -375,7 +374,7 @@ describe("selected health and host-status routes", () => {
       });
     }
 
-    const recovered = await harness.app.inject({
+    const recovered = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/health/ready"
     });
@@ -398,7 +397,7 @@ describe("selected health and host-status routes", () => {
       source_generation: 1,
       reason: "observation_failed"
     });
-    const failedRemote = await harness.app.inject({
+    const failedRemote = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/host/status",
       headers: localAdminHeaders()
@@ -447,7 +446,7 @@ describe("selected health and host-status routes", () => {
       source_generation: 2,
       state: readyRemote(2)
     });
-    const recovered = await harness.app.inject({
+    const recovered = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/host/status"
     });
@@ -498,7 +497,7 @@ describe("selected health and host-status routes", () => {
 
     let response: Awaited<ReturnType<HostDeckFastifyInstance["inject"]>>;
     try {
-      response = await harness.app.inject({
+      response = await injectHostDeckLoopback(harness.app, {
         method: "GET",
         url: "/api/v1/host/status",
         headers: localAdminHeaders()
@@ -542,7 +541,7 @@ describe("selected health and host-status routes", () => {
       [deviceCookie(writeToken), "paired_write", ["host_not_ready"]]
     ] as const;
     for (const [headers, mode, causes] of initialCases) {
-      const response = await harness.app.inject({
+      const response = await injectHostDeckLoopback(harness.app, {
         method: "GET",
         url: "/api/v1/host/status",
         headers
@@ -563,7 +562,7 @@ describe("selected health and host-status routes", () => {
       [deviceCookie(readToken), "paired_read", false, ["read_only_access"]],
       [deviceCookie(writeToken), "paired_write", true, []]
     ] as const) {
-      const response = await harness.app.inject({
+      const response = await injectHostDeckLoopback(harness.app, {
         method: "GET",
         url: "/api/v1/host/status",
         headers
@@ -594,7 +593,7 @@ describe("selected health and host-status routes", () => {
       [expiredToken, 401, "permission_denied"],
       [storageToken, 500, "storage_error"]
     ] as const) {
-      const response = await loopback.app.inject({
+      const response = await injectHostDeckLoopback(loopback.app, {
         method: "GET",
         url: "/api/v1/host/status",
         headers: deviceCookie(token)
@@ -616,7 +615,7 @@ describe("selected health and host-status routes", () => {
     });
     const remote = createRemoteApp(remoteHealth.service);
     await remote.app.ready();
-    const unpaired = await remote.app.inject({
+    const unpaired = await injectHostDeckLoopback(remote.app, {
       method: "GET",
       url: "/api/v1/host/status",
       headers: remoteHeaders({ identity: true })
@@ -626,7 +625,7 @@ describe("selected health and host-status routes", () => {
       /components|runtime|fixture-tailnet|identity-does-not-authorize/iu
     );
 
-    const paired = await remote.app.inject({
+    const paired = await injectHostDeckLoopback(remote.app, {
       method: "GET",
       url: "/api/v1/host/status",
       headers: remoteHeaders({ cookie: readToken, identity: true })
@@ -676,7 +675,7 @@ describe("selected health and host-status routes", () => {
     });
     await app.ready();
 
-    const response = await app.inject({
+    const response = await injectHostDeckLoopback(app, {
       method: "GET",
       url: "/api/v1/health/ready",
       headers: deviceCookie(writeToken)
@@ -731,7 +730,7 @@ describe("selected health and host-status routes", () => {
     });
     await app.ready();
 
-    const response = await app.inject({
+    const response = await injectHostDeckLoopback(app, {
       method: "GET",
       url: "/api/v1/health/ready",
       headers: remoteHeaders({ cookie: writeToken, identity: true })
@@ -757,7 +756,7 @@ describe("selected health and host-status routes", () => {
       "/api/v1/host/status?after=1",
       "/api/v1/host/status?session_id=sess_private"
     ]) {
-      const response = await harness.app.inject({ method: "GET", url: path });
+      const response = await injectHostDeckLoopback(harness.app, { method: "GET", url: path });
       expectStableError(response, 400, "validation_error");
     }
     expect(health.service.localSnapshot()).toBe(local);

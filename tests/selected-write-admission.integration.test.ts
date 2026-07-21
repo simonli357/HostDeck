@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   codexTurnIdSchema,
-  defaultRetentionPolicy,
   promptOperationIntentSchema,
   resolveResourceBudget,
   runtimeCompatibilitySchema,
@@ -35,7 +34,8 @@ const directories: string[] = [];
 const timestamp = "2026-07-16T10:00:00.000Z";
 const archivedAt = "2026-07-16T10:00:01.000Z";
 const runtimeVersion = "0.144.0";
-const localOrigin = "http://localhost";
+const localOrigin = "http://127.0.0.1:3777";
+const localHeaders = Object.freeze({ host: new URL(localOrigin).host });
 const alphaSessionId = "sess_admission_cross_alpha";
 const alphaThreadId = "thread-admission-cross-alpha";
 const betaSessionId = "sess_admission_cross_beta";
@@ -208,9 +208,7 @@ describe("selected write admission cross-route vertical", () => {
         now: () => new Date(timestamp)
       }),
       requestTrustPolicy: createHostDeckRequestTrustPolicy({
-        allowedOrigins: [localOrigin],
-        mode: "loopback",
-        transport: "http"
+        allowedOrigin: localOrigin
       }),
       resourceBudget,
       routePlugins: [promptRegistration, archiveRegistration]
@@ -239,7 +237,7 @@ describe("selected write admission cross-route vertical", () => {
         method: "POST",
         path: `/api/v1/sessions/${alphaSessionId}/prompts`,
         headers: {
-          host: "localhost",
+          host: localHeaders.host,
           accept: "application/json",
           "content-type": "application/json",
           "content-length": Buffer.byteLength(body),
@@ -266,6 +264,7 @@ describe("selected write admission cross-route vertical", () => {
       const inFlightReplay = app.inject({
         method: "POST",
         url: `/api/v1/sessions/${alphaSessionId}/prompts`,
+        headers: localHeaders,
         payload: promptPayload
       });
       await waitFor(() => admission.snapshot().in_flight_replays === 1);
@@ -273,6 +272,7 @@ describe("selected write admission cross-route vertical", () => {
       const crossRouteConflict = await app.inject({
         method: "POST",
         url: `/api/v1/sessions/${alphaSessionId}/archive`,
+        headers: localHeaders,
         payload: {
           operation_id: promptOperationId,
           kind: "archive",
@@ -287,6 +287,7 @@ describe("selected write admission cross-route vertical", () => {
       const targetContender = await app.inject({
         method: "POST",
         url: `/api/v1/sessions/${alphaSessionId}/archive`,
+        headers: localHeaders,
         payload: {
           operation_id: contendedArchiveOperationId,
           kind: "archive",
@@ -302,6 +303,7 @@ describe("selected write admission cross-route vertical", () => {
       const isolated = await app.inject({
         method: "POST",
         url: `/api/v1/sessions/${betaSessionId}/archive`,
+        headers: localHeaders,
         payload: {
           operation_id: isolatedArchiveOperationId,
           kind: "archive",
@@ -332,6 +334,7 @@ describe("selected write admission cross-route vertical", () => {
       const terminalReplay = await app.inject({
         method: "POST",
         url: `/api/v1/sessions/${alphaSessionId}/prompts`,
+        headers: localHeaders,
         payload: promptPayload
       });
       expect(terminalReplay.statusCode, terminalReplay.body).toBe(202);
@@ -340,6 +343,7 @@ describe("selected write admission cross-route vertical", () => {
       const changedPayload = await app.inject({
         method: "POST",
         url: `/api/v1/sessions/${alphaSessionId}/prompts`,
+        headers: localHeaders,
         payload: { ...promptPayload, text: `${privatePrompt} changed` }
       });
       expect(changedPayload.statusCode, changedPayload.body).toBe(409);
@@ -359,6 +363,7 @@ describe("selected write admission cross-route vertical", () => {
       const targetRetry = await app.inject({
         method: "POST",
         url: `/api/v1/sessions/${alphaSessionId}/archive`,
+        headers: localHeaders,
         payload: {
           operation_id: contendedArchiveOperationId,
           kind: "archive",
@@ -397,6 +402,7 @@ describe("selected write admission cross-route vertical", () => {
       const postTtlRetry = await app.inject({
         method: "POST",
         url: `/api/v1/sessions/${alphaSessionId}/prompts`,
+        headers: localHeaders,
         payload: promptPayload
       });
       expect(postTtlRetry.statusCode, postTtlRetry.body).toBe(409);
@@ -509,18 +515,10 @@ function runtimeCompatibility() {
 }
 
 function settings() {
-  return {
-    id: "hostdeck_settings" as const,
-    schema_version: 1,
-    state_dir: "/tmp/hostdeck-admission-cross-state",
-    bind_mode: "localhost" as const,
-    bind_host: "127.0.0.1",
-    bind_port: 3777,
-    lan_enabled: false,
+  return Object.freeze({
     locked: false,
-    retention: { ...defaultRetentionPolicy },
-    updated_at: timestamp
-  };
+    settings_updated_at: timestamp
+  });
 }
 
 function deferred<T>(): {

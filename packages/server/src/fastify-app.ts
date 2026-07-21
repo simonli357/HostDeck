@@ -40,10 +40,6 @@ import {
   installHostDeckZodCompilers
 } from "./fastify-zod.js";
 import {
-  assertHostDeckLanTlsInput,
-  type HostDeckLanTlsInput
-} from "./lan-certificate-policy.js";
-import {
   assertHostDeckRemoteIngressRequestAuthorityPolicy,
   type HostDeckRemoteIngressRequestAuthorityPolicy
 } from "./remote-ingress-request-authority.js";
@@ -88,7 +84,6 @@ export interface CreateHostDeckFastifyAppInput {
   readonly requestTrustPolicy: HostDeckRequestTrustPolicy;
   readonly routePlugins: readonly HostDeckRoutePluginRegistration[];
   readonly observeInternalError: HostDeckInternalErrorObserver;
-  readonly tls?: HostDeckLanTlsInput;
 }
 
 export interface CreateHostDeckTailscaleServeFastifyAppInput {
@@ -210,18 +205,7 @@ function createHostDeckFastifyAppWithRequestBoundary(
     keepAliveTimeoutBuffer: resourceOptions.node.keepAliveTimeoutBuffer,
     maxHeaderSize: resourceOptions.node.parserMaxHeaderSize
   } as const;
-  const rawApp =
-    input.tls === undefined
-      ? Fastify({ ...commonOptions, http: nodeOptions })
-      : Fastify({
-          ...commonOptions,
-          https: {
-            ...nodeOptions,
-            cert: input.tls.tls.certificate_chain_pem,
-            key: input.tls.tls.private_key_pem,
-            minVersion: "TLSv1.2"
-          }
-        });
+  const rawApp = Fastify({ ...commonOptions, http: nodeOptions });
   const app = rawApp.withTypeProvider<HostDeckZodTypeProvider>() as HostDeckFastifyInstance;
   const runtime: AppRuntimeState = {
     abortedRequests: 0,
@@ -477,17 +461,13 @@ function assertFactoryInput(input: unknown): asserts input is CreateHostDeckFast
     "resourceBudget",
     "routePlugins"
   ];
-  const expectedWithTls = [...expected, "tls"].sort();
   if (
-    (keys.length !== expected.length ||
-      keys.some((key, index) => key !== expected[index])) &&
-    (keys.length !== expectedWithTls.length ||
-      keys.some((key, index) => key !== expectedWithTls[index]))
+    keys.length !== expected.length ||
+    keys.some((key, index) => key !== expected[index])
   ) {
     throw new TypeError("HostDeck Fastify app input fields are invalid.");
   }
   const candidate = input as Partial<CreateHostDeckFastifyAppInput>;
-  if (candidate.tls !== undefined) assertHostDeckLanTlsInput(candidate.tls);
   if (!Array.isArray(candidate.routePlugins)) throw new TypeError("HostDeck routePlugins must be an array.");
   if (typeof candidate.observeInternalError !== "function") {
     throw new TypeError("HostDeck observeInternalError must be a function.");

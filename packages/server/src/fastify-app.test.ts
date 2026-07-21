@@ -21,13 +21,16 @@ import {
   hostDeckRequestDeadline
 } from "./fastify-app.js";
 import { HostDeckHttpError, type HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import {
+  hostDeckLoopbackTestAuthority,
+  hostDeckLoopbackTestOrigin,
+  injectHostDeckLoopback
+} from "./fastify-loopback-test-request.js";
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import { testRequestAuthenticationPolicy } from "./test-request-authentication.js";
 
 const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
-  allowedOrigins: ["http://localhost"],
-  mode: "loopback",
-  transport: "http"
+  allowedOrigin: hostDeckLoopbackTestOrigin
 });
 
 describe("side-effect-free HostDeck Fastify app factory", () => {
@@ -120,7 +123,7 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
     expect(app.server.listening).toBe(false);
 
     try {
-      const valid = await app.inject({
+      const valid = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/echo",
         headers: { "content-type": "application/json; charset=UTF-8", "x-request-id": "attacker-selected" },
@@ -131,7 +134,7 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
       expect(valid.headers["x-request-id"]).toMatch(/^req_[0-9a-f-]{36}$/u);
       expect(valid.headers["x-request-id"]).not.toBe("attacker-selected");
 
-      const deadline = await app.inject({ method: "GET", url: "/deadline" });
+      const deadline = await injectHostDeckLoopback(app, { method: "GET", url: "/deadline" });
       expect(deadline.statusCode, deadline.body).toBe(200);
       const deadlineBody = deadline.json<{ duration_ms: number; remaining_ms: number; same_signal: boolean }>();
       expect(deadlineBody).toMatchObject({ same_signal: true });
@@ -139,14 +142,14 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
       expect(deadlineBody.remaining_ms).toBeGreaterThan(0);
       expect(deadlineBody.remaining_ms).toBeLessThanOrEqual(20_000);
 
-      const invalid = await app.inject({
+      const invalid = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/echo",
         payload: { value: "", unexpected: "rejected" }
       });
       expectStableError(invalid, 400, "validation_error", "body");
 
-      const malformed = await app.inject({
+      const malformed = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/echo",
         headers: { "content-type": "application/json" },
@@ -154,7 +157,7 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
       });
       expectStableError(malformed, 400, "malformed_request");
 
-      const unsupported = await app.inject({
+      const unsupported = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/echo",
         headers: { "content-type": "text/plain" },
@@ -164,7 +167,7 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
 
       const exactBody = JSON.stringify("x".repeat(defaultResourceBudget.http_body_max_bytes - 2));
       expect(Buffer.byteLength(exactBody, "utf8")).toBe(defaultResourceBudget.http_body_max_bytes);
-      const exactBodyResponse = await app.inject({
+      const exactBodyResponse = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/body-boundary",
         headers: { "content-type": "application/json" },
@@ -173,7 +176,7 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
       expect(exactBodyResponse.statusCode, exactBodyResponse.body).toBe(200);
       expect(exactBodyResponse.json()).toEqual({ bytes: defaultResourceBudget.http_body_max_bytes });
 
-      const overBody = await app.inject({
+      const overBody = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/body-boundary",
         headers: { "content-type": "application/json" },
@@ -181,33 +184,33 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
       });
       expectStableError(overBody, 413, "request_too_large");
 
-      const oversized = await app.inject({
+      const oversized = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/echo",
         payload: { value: "x".repeat(defaultResourceBudget.http_body_max_bytes) }
       });
       expectStableError(oversized, 413, "request_too_large");
 
-      const missing = await app.inject({ method: "GET", url: "/missing" });
+      const missing = await injectHostDeckLoopback(app, { method: "GET", url: "/missing" });
       expectStableError(missing, 404, "route_not_found");
-      expect((await app.inject({ method: "GET", url: "/api/host/status" })).json()).toMatchObject({
+      expect((await injectHostDeckLoopback(app, { method: "GET", url: "/api/host/status" })).json()).toMatchObject({
         error: { code: "route_not_found" }
       });
 
-      const wrongMethod = await app.inject({ method: "POST", url: "/get-only" });
+      const wrongMethod = await injectHostDeckLoopback(app, { method: "POST", url: "/get-only" });
       expectStableError(wrongMethod, 405, "method_not_allowed");
       expect(wrongMethod.headers.allow).toBe("GET, HEAD");
 
-      const conflict = await app.inject({ method: "GET", url: "/conflict" });
+      const conflict = await injectHostDeckLoopback(app, { method: "GET", url: "/conflict" });
       expectStableError(conflict, 409, "operation_conflict");
       expect(conflict.json()).toMatchObject({ error: { details: { reason: "busy" } } });
 
-      const broken = await app.inject({ method: "GET", url: "/broken-response" });
+      const broken = await injectHostDeckLoopback(app, { method: "GET", url: "/broken-response" });
       expectStableError(broken, 500, "internal_error");
       expect(broken.body).not.toContain("ZodError");
       expect(broken.body).not.toContain("broken-response");
 
-      const thrown = await app.inject({ method: "GET", url: "/throw" });
+      const thrown = await injectHostDeckLoopback(app, { method: "GET", url: "/throw" });
       expectStableError(thrown, 500, "internal_error");
       expect(thrown.body).not.toContain("super-secret-handler-detail");
       expect(thrown.body).not.toContain("stack");
@@ -257,25 +260,25 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
     await app.ready();
 
     try {
-      expect((await app.inject(`/items/${"a".repeat(64)}`)).statusCode).toBe(200);
+      expect((await injectHostDeckLoopback(app, `/items/${"a".repeat(64)}`)).statusCode).toBe(200);
 
-      const routerRejected = await app.inject(`/items/${"a".repeat(65)}`);
+      const routerRejected = await injectHostDeckLoopback(app, `/items/${"a".repeat(65)}`);
       expectStableError(routerRejected, 414, "validation_error", "params");
       expect(routerRejected.body).not.toContain("/items/");
 
-      const byteRejected = await app.inject(
+      const byteRejected = await injectHostDeckLoopback(app,
         `/items/${encodeURIComponent("x".repeat(48) + "\u00e9".repeat(9))}`
       );
       expectStableError(byteRejected, 414, "validation_error", "params");
 
-      const malformedUrl = await app.inject("/items/%E0%A4%A");
+      const malformedUrl = await injectHostDeckLoopback(app, "/items/%E0%A4%A");
       expectStableError(malformedUrl, 400, "malformed_request");
       expect(malformedUrl.body).not.toContain("%E0%A4%A");
 
-      const longQuery = await app.inject(`/items/ok?value=${"q".repeat(300)}`);
+      const longQuery = await injectHostDeckLoopback(app, `/items/ok?value=${"q".repeat(300)}`);
       expectStableError(longQuery, 414, "malformed_request");
 
-      const longMissing = await app.inject(`/${"m".repeat(300)}`);
+      const longMissing = await injectHostDeckLoopback(app, `/${"m".repeat(300)}`);
       expectStableError(longMissing, 414, "malformed_request");
     } finally {
       await app.close();
@@ -319,12 +322,12 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
 
     try {
       expect(contextBudget).toBe(budget);
-      const first = app.inject({ method: "GET", url: "/hold" });
+      const first = injectHostDeckLoopback(app, { method: "GET", url: "/hold" });
       await entered.promise;
       expect(deadline?.signal).toBeDefined();
       expect(hostDeckFastifyResourceSnapshot(app)).toMatchObject({ in_flight_requests: 1 });
 
-      const rejected = await app.inject({ method: "GET", url: "/hold" });
+      const rejected = await injectHostDeckLoopback(app, { method: "GET", url: "/hold" });
       expectStableError(rejected, 503, "service_overloaded");
       expect(hostDeckFastifyResourceSnapshot(app)).toEqual({
         aborted_requests: 0,
@@ -338,7 +341,7 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
       release.resolve();
       await responseEntered.promise;
       expect(hostDeckFastifyResourceSnapshot(app).in_flight_requests).toBe(1);
-      const responsePhaseRejected = await app.inject({ method: "GET", url: "/hold" });
+      const responsePhaseRejected = await injectHostDeckLoopback(app, { method: "GET", url: "/hold" });
       expectStableError(responsePhaseRejected, 503, "service_overloaded");
       expect(hostDeckFastifyResourceSnapshot(app).rejected_overload_requests).toBe(2);
 
@@ -379,7 +382,7 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
     await app.ready();
 
     try {
-      const response = await app.inject({ method: "GET", url: "/timeout" });
+      const response = await injectHostDeckLoopback(app, { method: "GET", url: "/timeout" });
       expectStableError(response, 504, "operation_timeout");
       expect(deadline?.signal.aborted).toBe(true);
       expect(hostDeckFastifyResourceSnapshot(app).in_flight_requests).toBe(1);
@@ -591,12 +594,12 @@ describe("side-effect-free HostDeck Fastify app factory", () => {
 
     try {
       await app.ready();
-      const asset = await app.inject({ method: "GET", url: "/assets/probe.txt" });
+      const asset = await injectHostDeckLoopback(app, { method: "GET", url: "/assets/probe.txt" });
       expect(asset.statusCode).toBe(200);
       expect(asset.body).toBe("factory-compatible");
-      expectStableError(await app.inject({ method: "GET", url: "/assets/missing.txt" }), 404, "route_not_found");
+      expectStableError(await injectHostDeckLoopback(app, { method: "GET", url: "/assets/missing.txt" }), 404, "route_not_found");
 
-      const events = await app.inject({
+      const events = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/events",
         headers: { accept: "text/event-stream" }
@@ -716,7 +719,7 @@ function rawHttpPost(port: number, path: string, payload: unknown): Promise<RawH
         headers: {
           "content-length": Buffer.byteLength(body),
           "content-type": "application/json",
-          host: "localhost"
+          host: hostDeckLoopbackTestAuthority
         },
         host: "127.0.0.1",
         method: "POST",

@@ -12,6 +12,11 @@ import {
   hostDeckFastifyResourceSnapshot
 } from "./fastify-app.js";
 import {
+  hostDeckLoopbackTestAuthority,
+  hostDeckLoopbackTestOrigin,
+  injectHostDeckLoopback
+} from "./fastify-loopback-test-request.js";
+import {
   createHostDeckRequestAuthenticationPolicy,
   type HostDeckRequestAuthenticationPolicy,
   hostDeckDeviceCookieName
@@ -42,9 +47,7 @@ const deviceToken = "D".repeat(43);
 const deviceId = "client_projection_stream_route";
 
 const loopbackTrust = createHostDeckRequestTrustPolicy({
-  allowedOrigins: ["http://localhost"],
-  mode: "loopback",
-  transport: "http"
+  allowedOrigin: hostDeckLoopbackTestOrigin
 });
 
 describe("selected projection event-stream route", () => {
@@ -86,7 +89,7 @@ describe("selected projection event-stream route", () => {
     const app = createApp(fixture.subscribers, fixture.failures);
     await app.ready();
     try {
-      const pending = app.inject({
+      const pending = injectHostDeckLoopback(app, {
         headers: { accept: "text/event-stream" },
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/events/stream`
@@ -134,7 +137,7 @@ describe("selected projection event-stream route", () => {
     );
     await app.ready();
     try {
-      const pending = app.inject({
+      const pending = injectHostDeckLoopback(app, {
         headers: {
           accept: "text/event-stream",
           cookie: `${hostDeckDeviceCookieName}=${deviceToken}`
@@ -254,7 +257,7 @@ describe("selected projection event-stream route", () => {
     const invalidAuthApp = createApp(invalidAuth.subscribers, invalidAuth.failures);
     await invalidAuthApp.ready();
     try {
-      const response = await invalidAuthApp.inject({
+      const response = await injectHostDeckLoopback(invalidAuthApp, {
         headers: {
           accept: "text/event-stream",
           cookie: `${hostDeckDeviceCookieName}=invalid`
@@ -284,7 +287,7 @@ describe("selected projection event-stream route", () => {
       const app = createApp(fixture.subscribers, fixture.failures);
       await app.ready();
       try {
-        const response = await app.inject({
+        const response = await injectHostDeckLoopback(app, {
           headers: { accept: "text/event-stream" },
           method: "GET",
           url: `/api/v1/sessions/${sessionId}/events/stream${
@@ -324,7 +327,7 @@ describe("selected projection event-stream route", () => {
     );
     await capacityApp.ready();
     try {
-      const first = capacityApp.inject({
+      const first = injectHostDeckLoopback(capacityApp, {
         headers: {
           accept: "text/event-stream",
           cookie: `${hostDeckDeviceCookieName}=${deviceToken}`
@@ -333,7 +336,7 @@ describe("selected projection event-stream route", () => {
         url: `/api/v1/sessions/${sessionId}/events/stream`
       });
       await waitUntil(() => capacity.subscribers.snapshot().active_subscribers === 1);
-      const second = await capacityApp.inject({
+      const second = await injectHostDeckLoopback(capacityApp, {
         headers: {
           accept: "text/event-stream",
           cookie: `${hostDeckDeviceCookieName}=${deviceToken}`
@@ -657,7 +660,7 @@ function openPausedResponse(
     rejectResponse = reject;
   });
   const request = httpGet(url, {
-    headers: { accept: "text/event-stream", host: "localhost", ...headers }
+    headers: { accept: "text/event-stream", host: hostDeckLoopbackTestAuthority, ...headers }
   });
   request.once("error", rejectResponse);
   request.once("response", (incoming) => {

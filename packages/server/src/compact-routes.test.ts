@@ -1,11 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { request as httpRequest } from "node:http";
-import { request as httpsRequest, type RequestOptions } from "node:https";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   defaultResourceBudget,
-  defaultRetentionPolicy,
   type RuntimeCompatibility,
   runtimeCompatibilitySchema,
   type SelectedOperationProgress,
@@ -15,9 +13,7 @@ import {
 } from "@hostdeck/contracts";
 import { runtimeCapabilities } from "@hostdeck/core";
 import {
-  createAuthDeviceRepository,
   createSelectedAuditRepository,
-  createSelectedCsrfAuthorizationRepository,
   openMigratedDatabase,
   type SelectedAuditRepository,
   type SelectedSessionState
@@ -40,12 +36,13 @@ import {
   type HostDeckRoutePluginRegistration
 } from "./fastify-app.js";
 import {
-  createHostDeckRequestAuthenticationPolicy,
-  hostDeckDeviceCookieName
-} from "./fastify-request-authentication.js";
+  hostDeckLoopbackTestAuthority,
+  hostDeckLoopbackTestOrigin,
+  injectHostDeckLoopback
+} from "./fastify-loopback-test-request.js";
+import { createHostDeckRequestAuthenticationPolicy } from "./fastify-request-authentication.js";
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import { createHostDeckHostLockPolicy } from "./host-lock-routes.js";
-import { createHostDeckLanCertificatePolicy } from "./lan-certificate-policy.js";
 import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
 import { createHostDeckSelectedWriteAuditExecutor } from "./selected-write-audit-executor.js";
 
@@ -56,10 +53,6 @@ const runtimeVersion = "0.144.0";
 const sessionId = "sess_compact_route_001";
 const threadId = "thread-compact-route-001";
 const turnId = "turn-compact-route-001";
-const secureOrigin = "https://192.168.0.29:3777";
-const pairedDeviceId = "client_compact_route_writer";
-const pairedDeviceToken = "W".repeat(43);
-const pairedCsrfToken = "C".repeat(43);
 const startRequest = Object.freeze({
   operation_id: "op_compact_route_001",
   kind: "compact" as const,
@@ -217,12 +210,12 @@ describe("selected managed-session compact routes", () => {
         expectStableError(await startCompact(harness, candidate), 400, "validation_error");
       }
       expectStableError(
-        await harness.app.inject({ method: "GET", url: `/api/v1/sessions/${sessionId}/compact?x=1` }),
+        await injectHostDeckLoopback(harness.app, { method: "GET", url: `/api/v1/sessions/${sessionId}/compact?x=1` }),
         400,
         "validation_error"
       );
       expectStableError(
-        await harness.app.inject({
+        await injectHostDeckLoopback(harness.app, {
           method: "GET",
           url: `/api/v1/sessions/${sessionId}/compact`,
           headers: { "content-length": "19", "content-type": "application/json" },
@@ -232,17 +225,17 @@ describe("selected managed-session compact routes", () => {
         "validation_error"
       );
       expectStableError(
-        await harness.app.inject({ method: "HEAD", url: `/api/v1/sessions/${sessionId}/compact` }),
+        await injectHostDeckLoopback(harness.app, { method: "HEAD", url: `/api/v1/sessions/${sessionId}/compact` }),
         405,
         "method_not_allowed"
       );
       expectStableError(
-        await harness.app.inject({ method: "PUT", url: `/api/v1/sessions/${sessionId}/compact` }),
+        await injectHostDeckLoopback(harness.app, { method: "PUT", url: `/api/v1/sessions/${sessionId}/compact` }),
         405,
         "method_not_allowed"
       );
       expectStableError(
-        await harness.app.inject({ method: "GET", url: `/api/v1/sessions/${sessionId}/compact/extra` }),
+        await injectHostDeckLoopback(harness.app, { method: "GET", url: `/api/v1/sessions/${sessionId}/compact/extra` }),
         404,
         "route_not_found"
       );
@@ -495,7 +488,7 @@ describe("selected managed-session compact routes", () => {
         method: "POST",
         path: `/api/v1/sessions/${sessionId}/compact`,
         headers: {
-          host: "localhost",
+          host: hostDeckLoopbackTestAuthority,
           accept: "application/json",
           "content-type": "application/json",
           "content-length": Buffer.byteLength(body),
@@ -542,42 +535,6 @@ describe("selected managed-session compact routes", () => {
     }
   });
 
-  it("supports paired HTTPS reads and writer starts while rejecting read-only mutation before state", async () => {
-    const writer = await createPairedHarness("write");
-    try {
-      expect((await secureCompact(writer, "GET")).statusCode).toBe(200);
-      const operationId = "op_compact_route_paired_writer";
-      const response = await secureCompact(writer, "POST", { ...startRequest, operation_id: operationId });
-      expect(response.statusCode, response.body).toBe(202);
-      expect(writer.startCalls()).toHaveLength(1);
-      expect(writer.auditRepository.require(operationId).records[0]).toMatchObject({
-        actor: {
-          type: "dashboard",
-          device_id: pairedDeviceId,
-          permission: "write",
-          origin: secureOrigin
-        }
-      });
-    } finally {
-      await writer.close();
-    }
-
-    const reader = await createPairedHarness("read");
-    try {
-      expect((await secureCompact(reader, "GET")).statusCode).toBe(200);
-      const operationId = "op_compact_route_paired_reader";
-      expectStableError(
-        await secureCompact(reader, "POST", { ...startRequest, operation_id: operationId }),
-        403,
-        "read_only"
-      );
-      expect(reader.startCalls()).toEqual([]);
-      expect(reader.stateReads()).toBe(2);
-      expect(reader.auditRepository.get(operationId)).toBeNull();
-    } finally {
-      await reader.close();
-    }
-  });
 });
 
 interface HarnessOptions {
@@ -617,8 +574,6 @@ interface Harness {
   readonly startThis: () => unknown;
   readonly stateReads: () => number;
 }
-
-interface PairedHarness extends Pick<Harness, "app" | "auditRepository" | "close" | "startCalls" | "stateReads"> {}
 
 async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   const directory = mkdtempSync(join(tmpdir(), "hostdeck-compact-route-"));
@@ -710,9 +665,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
       now: nextDate
     }),
     requestTrustPolicy: createHostDeckRequestTrustPolicy({
-      allowedOrigins: ["http://localhost"],
-      mode: "loopback",
-      transport: "http"
+      allowedOrigin: hostDeckLoopbackTestOrigin
     }),
     resourceBudget: defaultResourceBudget,
     routePlugins: [registration]
@@ -746,111 +699,6 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
         END;
       `);
     },
-    async close() {
-      if (closed) return;
-      closed = true;
-      await app.close();
-      if (open.db.open) open.db.close();
-    }
-  };
-}
-
-async function createPairedHarness(permission: "read" | "write"): Promise<PairedHarness> {
-  const directory = mkdtempSync(join(tmpdir(), "hostdeck-compact-route-paired-"));
-  temporaryDirectories.push(directory);
-  const open = openMigratedDatabase(join(directory, "hostdeck.sqlite"), { now: () => new Date(timestamp) });
-  let clock = new Date(timestamp).getTime();
-  const nextDate = () => new Date(clock++);
-  const auth = createAuthDeviceRepository(open.db);
-  auth.create({
-    id: pairedDeviceId,
-    rawDeviceToken: pairedDeviceToken,
-    rawCsrfToken: pairedCsrfToken,
-    permission,
-    clientLabel: "Compact route client",
-    createdAt: new Date(timestamp)
-  });
-  const csrfRepository = createSelectedCsrfAuthorizationRepository(open.db, {
-    generateCsrfToken: () => "N".repeat(43)
-  });
-  const csrf = createHostDeckCsrfPolicy({
-    csrf: {
-      authorizeBrowserWrite: (input) => csrfRepository.authorizeBrowserWrite(input),
-      rotateBootstrap: (input) => csrfRepository.rotateBootstrap(input)
-    },
-    now: nextDate
-  });
-  const lock = createHostDeckHostLockPolicy({
-    settings: {
-      read: () => settings(false),
-      transition() {
-        throw new Error("Compact route must not transition host lock.");
-      }
-    },
-    now: nextDate
-  });
-  const auditRepository = createSelectedAuditRepository(open.db);
-  let auditId = 0;
-  const audit = createHostDeckSelectedWriteAuditExecutor({
-    repository: auditRepository,
-    now: () => nextDate().toISOString(),
-    create_record_id: () => `audit_compact_route_paired_${++auditId}`
-  });
-  const startCalls: Record<string, unknown>[] = [];
-  let stateReads = 0;
-  const registration = createHostDeckCompactRouteRegistration({
-    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
-    audit,
-    compact: {
-      async snapshot() {
-        return null;
-      },
-      async compact(intent: unknown) {
-        const captured = { ...(intent as Record<string, unknown>) };
-        startCalls.push(captured);
-        return acceptedProgress(String(captured.operation_id ?? ""));
-      }
-    } as unknown as CreateHostDeckCompactRouteRegistrationInput["compact"],
-    csrf,
-    lock,
-    runtime: { read: () => runtimeCandidate() },
-    state: {
-      get() {
-        stateReads += 1;
-        return selectedState("idle");
-      }
-    }
-  });
-  const certificateDirectory = join(directory, "certificates");
-  mkdirSync(certificateDirectory, { mode: 0o700 });
-  const certificates = createHostDeckLanCertificatePolicy({
-    assignedAddresses: () => ["192.168.0.29"],
-    certificateDirectory,
-    now: () => new Date(timestamp)
-  });
-  await certificates.configure({ bind_host: "192.168.0.29", bind_port: 3777, certificate_action: "issue_leaf" });
-  const app = createHostDeckFastifyApp({
-    observeInternalError: () => undefined,
-    requestAuthenticationPolicy: createHostDeckRequestAuthenticationPolicy({
-      authenticateDeviceToken: (input) => auth.authenticateDeviceToken(input),
-      now: nextDate
-    }),
-    requestTrustPolicy: createHostDeckRequestTrustPolicy({
-      allowedOrigins: [secureOrigin],
-      mode: "lan",
-      transport: "https"
-    }),
-    resourceBudget: defaultResourceBudget,
-    routePlugins: [registration],
-    tls: certificates.loadTls({ bind_host: "192.168.0.29", bind_port: 3777 })
-  });
-  await app.listen({ host: "127.0.0.1", port: 0, listenTextResolver: () => "" });
-  let closed = false;
-  return {
-    app,
-    auditRepository,
-    startCalls: () => [...startCalls],
-    stateReads: () => stateReads,
     async close() {
       if (closed) return;
       closed = true;
@@ -970,18 +818,10 @@ function runtimeCandidate(
 }
 
 function settings(locked: boolean) {
-  return {
-    id: "hostdeck_settings" as const,
-    schema_version: 1,
-    state_dir: "/tmp/hostdeck-compact-route-state",
-    bind_mode: "localhost" as const,
-    bind_host: "127.0.0.1",
-    bind_port: 3210,
-    lan_enabled: false,
+  return Object.freeze({
     locked,
-    retention: { ...defaultRetentionPolicy },
-    updated_at: timestamp
-  };
+    settings_updated_at: timestamp
+  });
 }
 
 function compactServiceError(
@@ -999,73 +839,11 @@ function sequenceValue(values: readonly unknown[], index: number): unknown {
 }
 
 async function readCompact(harness: Pick<Harness, "app">) {
-  return await harness.app.inject({ method: "GET", url: `/api/v1/sessions/${sessionId}/compact` });
+  return await injectHostDeckLoopback(harness.app, { method: "GET", url: `/api/v1/sessions/${sessionId}/compact` });
 }
 
 async function startCompact(harness: Pick<Harness, "app">, payload: Readonly<Record<string, unknown>>) {
-  return await harness.app.inject({ method: "POST", url: `/api/v1/sessions/${sessionId}/compact`, payload });
-}
-
-async function secureCompact(
-  harness: PairedHarness,
-  method: "GET" | "POST",
-  payload?: Readonly<Record<string, unknown>>
-): Promise<HttpResult> {
-  const body = payload === undefined ? "" : JSON.stringify(payload);
-  return await httpsExchange(
-    harness,
-    {
-      method,
-      path: `/api/v1/sessions/${sessionId}/compact`,
-      headers: {
-        host: "192.168.0.29:3777",
-        origin: secureOrigin,
-        accept: "application/json",
-        cookie: `${hostDeckDeviceCookieName}=${pairedDeviceToken}`,
-        ...(payload === undefined
-          ? {}
-          : {
-              "content-type": "application/json",
-              "content-length": Buffer.byteLength(body),
-              "x-hostdeck-csrf": pairedCsrfToken,
-              "x-hostdeck-csrf-generation": "1"
-            })
-      }
-    },
-    body
-  );
-}
-
-interface HttpResult {
-  readonly statusCode: number;
-  readonly body: string;
-  readonly headers: import("node:http").IncomingHttpHeaders;
-  readonly json: () => Record<string, unknown>;
-}
-
-function httpsExchange(harness: PairedHarness, options: RequestOptions, body: string): Promise<HttpResult> {
-  const address = harness.app.server.address();
-  if (address === null || typeof address === "string") throw new Error("Compact HTTPS listener is unavailable.");
-  return new Promise((resolve, reject) => {
-    const outgoing = httpsRequest(
-      { host: "127.0.0.1", port: address.port, rejectUnauthorized: false, ...options },
-      (response) => {
-        const chunks: Buffer[] = [];
-        response.on("data", (chunk: Buffer) => chunks.push(chunk));
-        response.on("end", () => {
-          const responseBody = Buffer.concat(chunks).toString("utf8");
-          resolve({
-            statusCode: response.statusCode ?? 0,
-            body: responseBody,
-            headers: response.headers,
-            json: () => JSON.parse(responseBody) as Record<string, unknown>
-          });
-        });
-      }
-    );
-    outgoing.once("error", reject);
-    outgoing.end(body);
-  });
+  return await injectHostDeckLoopback(harness.app, { method: "POST", url: `/api/v1/sessions/${sessionId}/compact`, payload });
 }
 
 function expectStableError(

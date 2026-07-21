@@ -317,11 +317,14 @@ export const selectedHostAccessStatusSchema = exactDataObject(
           "Local host access modes require loopback request provenance."
         );
       }
-      if (value.network_mode !== "loopback" && value.transport !== "https") {
+      if (
+        (value.network_mode === "loopback" && value.transport !== "http") ||
+        (value.network_mode === "remote" && value.transport !== "https")
+      ) {
         addIssue(
           context,
           ["transport"],
-          "Non-loopback host access requires HTTPS."
+          "Host access transport must match selected loopback or remote provenance."
         );
       }
     })

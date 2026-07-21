@@ -44,9 +44,7 @@ describe("storage restart persistence", () => {
       const settings = createSettingsRepository(secondOpen.db).require();
       expect(settings).toMatchObject({
         state_dir: stateDir,
-        bind_mode: "lan",
-        bind_host: "0.0.0.0",
-        lan_enabled: true,
+        bind_port: 3777,
         locked: true
       });
 
@@ -99,7 +97,6 @@ function seedDurableState(db: Database.Database, stateDir: string, cwd: string):
   const settings = createSettingsRepository(db);
   settings.getOrCreateDefault({ stateDir, now: fixedNow });
   settings.setLocked(true, { now: laterNow });
-  settings.setLanEnabled(true, { bindHost: "0.0.0.0", now: laterNow });
 
   createSessionRepository(db).create(sessionRecord(cwd));
   createSessionMetadataRepository(db).upsert(metadataRecord());

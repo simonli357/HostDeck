@@ -1,4 +1,3 @@
-import { isIP } from "node:net";
 import { defaultRetentionPolicy, type SettingsRecord, settingsRecordSchema } from "@hostdeck/contracts";
 import type Database from "better-sqlite3";
 
@@ -31,12 +30,12 @@ export interface SettingsRepository {
   readonly get: () => SettingsRecord | null;
   readonly require: () => SettingsRecord;
   readonly getOrCreateDefault: (input: CreateDefaultSettingsInput) => SettingsRecord;
+  readonly readHostLock: () => HostDeckLockState;
   readonly save: (settings: unknown) => SettingsRecord;
   readonly transitionHostLock: (
     input: TransitionHostDeckLockInput
   ) => HostDeckLockTransitionReceipt;
   readonly setLocked: (locked: boolean, input?: { readonly now?: () => Date }) => SettingsRecord;
-  readonly setLanEnabled: (enabled: boolean, input?: { readonly bindHost?: string; readonly now?: () => Date }) => SettingsRecord;
 }
 
 export interface TransitionHostDeckLockInput {
@@ -59,10 +58,7 @@ interface SettingsRow {
   readonly id: string;
   readonly schema_version: number;
   readonly state_dir: string;
-  readonly bind_mode: "localhost" | "lan";
-  readonly bind_host: string;
   readonly bind_port: number;
-  readonly lan_enabled: 0 | 1;
   readonly locked: 0 | 1;
   readonly output_event_limit: number;
   readonly output_byte_limit: number;
@@ -139,6 +135,9 @@ export function createSettingsRepository(db: Database.Database): SettingsReposit
 
       return this.save(createDefaultSettings(input));
     },
+    readHostLock() {
+      return lockState(this.require());
+    },
     save(settings) {
       const parsed = parseSettings(settings);
       const row = settingsToRow(parsed);
@@ -148,10 +147,7 @@ export function createSettingsRepository(db: Database.Database): SettingsReposit
           id,
           schema_version,
           state_dir,
-          bind_mode,
-          bind_host,
           bind_port,
-          lan_enabled,
           locked,
           output_event_limit,
           output_byte_limit,
@@ -162,10 +158,7 @@ export function createSettingsRepository(db: Database.Database): SettingsReposit
           @id,
           @schema_version,
           @state_dir,
-          @bind_mode,
-          @bind_host,
           @bind_port,
-          @lan_enabled,
           @locked,
           @output_event_limit,
           @output_byte_limit,
@@ -176,10 +169,7 @@ export function createSettingsRepository(db: Database.Database): SettingsReposit
         ON CONFLICT(id) DO UPDATE SET
           schema_version = excluded.schema_version,
           state_dir = excluded.state_dir,
-          bind_mode = excluded.bind_mode,
-          bind_host = excluded.bind_host,
           bind_port = excluded.bind_port,
-          lan_enabled = excluded.lan_enabled,
           locked = excluded.locked,
           output_event_limit = excluded.output_event_limit,
           output_byte_limit = excluded.output_byte_limit,
@@ -208,16 +198,6 @@ export function createSettingsRepository(db: Database.Database): SettingsReposit
       const now = readNow(input.now);
       this.transitionHostLock({ locked, now });
       return this.require();
-    },
-    setLanEnabled(enabled, input = {}) {
-      const current = this.require();
-      return this.save({
-        ...current,
-        bind_mode: enabled ? "lan" : "localhost",
-        bind_host: enabled ? (input.bindHost ?? "0.0.0.0") : "127.0.0.1",
-        lan_enabled: enabled,
-        updated_at: nowIso(input.now)
-      });
     }
   };
 }
@@ -358,10 +338,7 @@ function assertOnlyHostLockChanged(
     before.id !== after.id ||
     before.schema_version !== after.schema_version ||
     before.state_dir !== after.state_dir ||
-    before.bind_mode !== after.bind_mode ||
-    before.bind_host !== after.bind_host ||
     before.bind_port !== after.bind_port ||
-    before.lan_enabled !== after.lan_enabled ||
     before.retention.output_event_limit !==
       after.retention.output_event_limit ||
     before.retention.output_byte_limit !== after.retention.output_byte_limit ||
@@ -402,10 +379,7 @@ export function createDefaultSettings(input: CreateDefaultSettingsInput): Settin
     id: "hostdeck_settings",
     schema_version: 1,
     state_dir: input.stateDir,
-    bind_mode: "localhost",
-    bind_host: "127.0.0.1",
     bind_port: input.bindPort ?? 3777,
-    lan_enabled: false,
     locked: false,
     retention: defaultRetentionPolicy,
     updated_at: nowIso(input.now)
@@ -417,10 +391,7 @@ function parseSettingsRow(row: SettingsRow): SettingsRecord {
     id: row.id,
     schema_version: row.schema_version,
     state_dir: row.state_dir,
-    bind_mode: row.bind_mode,
-    bind_host: row.bind_host,
     bind_port: row.bind_port,
-    lan_enabled: row.lan_enabled === 1,
     locked: row.locked === 1,
     retention: {
       output_event_limit: row.output_event_limit,
@@ -439,42 +410,7 @@ function parseSettings(candidate: unknown): SettingsRecord {
     throw new HostDeckSettingsError("invalid_settings", "HostDeck settings are invalid.", { cause: result.error });
   }
 
-  assertBindableHost(result.data);
-
   return result.data;
-}
-
-function assertBindableHost(settings: SettingsRecord): void {
-  if (!isValidBindHost(settings.bind_host)) {
-    throw new HostDeckSettingsError("invalid_settings", `HostDeck bind host "${settings.bind_host}" is not a valid IP bind address.`);
-  }
-
-  const isLoopback = isLoopbackBindHost(settings.bind_host);
-
-  if (settings.bind_mode === "localhost" && !isLoopback) {
-    throw new HostDeckSettingsError("invalid_settings", "Localhost mode must bind to a loopback address.");
-  }
-
-  if (settings.bind_mode === "lan" && isLoopback) {
-    throw new HostDeckSettingsError("invalid_settings", "LAN mode must not bind to a loopback address.");
-  }
-}
-
-function isValidBindHost(host: string): boolean {
-  return host === "localhost" || isIP(host) !== 0;
-}
-
-function isLoopbackBindHost(host: string): boolean {
-  if (host === "localhost" || host === "::1") {
-    return true;
-  }
-
-  if (isIP(host) !== 4) {
-    return false;
-  }
-
-  const [firstOctet] = host.split(".");
-  return firstOctet === "127";
 }
 
 function settingsToRow(settings: SettingsRecord): SettingsRow {
@@ -482,10 +418,7 @@ function settingsToRow(settings: SettingsRecord): SettingsRow {
     id: settings.id,
     schema_version: settings.schema_version,
     state_dir: settings.state_dir,
-    bind_mode: settings.bind_mode,
-    bind_host: settings.bind_host,
     bind_port: settings.bind_port,
-    lan_enabled: settings.lan_enabled ? 1 : 0,
     locked: settings.locked ? 1 : 0,
     output_event_limit: settings.retention.output_event_limit,
     output_byte_limit: settings.retention.output_byte_limit,

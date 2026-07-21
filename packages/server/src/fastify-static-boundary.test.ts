@@ -15,6 +15,11 @@ import { defaultResourceBudget } from "@hostdeck/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { createHostDeckFastifyApp, hostDeckFastifyResourceSnapshot } from "./fastify-app.js";
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import {
+  hostDeckLoopbackTestAuthority,
+  hostDeckLoopbackTestOrigin,
+  injectHostDeckLoopback
+} from "./fastify-loopback-test-request.js";
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import {
   type CreateHostDeckStaticBoundaryRegistrationInput,
@@ -24,9 +29,7 @@ import {
 import { testRequestAuthenticationPolicy } from "./test-request-authentication.js";
 
 const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
-  allowedOrigins: ["http://localhost"],
-  mode: "loopback",
-  transport: "http"
+  allowedOrigin: hostDeckLoopbackTestOrigin
 });
 
 const indexBody = "<!doctype html><html><body>HOSTDECK_STATIC_INDEX_SENTINEL</body></html>";
@@ -56,8 +59,8 @@ describe("explicit Fastify static-dashboard boundary", () => {
     const app = createStaticApp(registration);
     await app.ready();
     try {
-      expect((await app.inject("/settings")).statusCode).toBe(200);
-      expectJsonError(await app.inject("/late-mutation"), 404, "route_not_found");
+      expect((await injectHostDeckLoopback(app, "/settings")).statusCode).toBe(200);
+      expectJsonError(await injectHostDeckLoopback(app, "/late-mutation"), 404, "route_not_found");
     } finally {
       await app.close();
     }
@@ -143,7 +146,7 @@ describe("explicit Fastify static-dashboard boundary", () => {
 
     try {
       for (const url of ["/", "/sessions/sess_mobile_01", "/settings?tab=general"]) {
-        const response = await app.inject({ method: "GET", url });
+        const response = await injectHostDeckLoopback(app, { method: "GET", url });
         expect(response.statusCode).toBe(200);
         expect(response.body).toBe(indexBody);
         expect(response.headers["content-type"]).toContain("text/html");
@@ -151,52 +154,52 @@ describe("explicit Fastify static-dashboard boundary", () => {
         expect(response.headers["x-content-type-options"]).toBe("nosniff");
       }
 
-      const browserHead = await app.inject({ method: "HEAD", url: "/settings" });
+      const browserHead = await injectHostDeckLoopback(app, { method: "HEAD", url: "/settings" });
       expect(browserHead.statusCode).toBe(200);
       expect(browserHead.body).toBe("");
       expect(browserHead.headers["content-length"]).toBe(String(Buffer.byteLength(indexBody)));
       expect(browserHead.headers["cache-control"]).toBe("no-store");
 
-      const javascript = await app.inject("/assets/app-ABC123xy.js?v=1");
+      const javascript = await injectHostDeckLoopback(app, "/assets/app-ABC123xy.js?v=1");
       expect(javascript.statusCode).toBe(200);
       expect(javascript.body).toBe(javascriptBody);
       expect(javascript.headers["content-type"]).toContain("javascript");
       expect(javascript.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
       expect(javascript.headers["x-content-type-options"]).toBe("nosniff");
 
-      const stylesheet = await app.inject("/assets/styles-12345678.css");
+      const stylesheet = await injectHostDeckLoopback(app, "/assets/styles-12345678.css");
       expect(stylesheet.statusCode).toBe(200);
       expect(stylesheet.headers["content-type"]).toContain("text/css");
       expect(stylesheet.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
 
-      const unhashed = await app.inject("/assets/plain.txt");
+      const unhashed = await injectHostDeckLoopback(app, "/assets/plain.txt");
       expect(unhashed.statusCode).toBe(200);
       expect(unhashed.body).toBe("plain-static-fixture\n");
       expect(unhashed.headers["content-type"]).toContain("text/plain");
       expect(unhashed.headers["cache-control"]).toBe("no-store");
 
-      const nested = await app.inject("/assets/nested/manifest.json");
+      const nested = await injectHostDeckLoopback(app, "/assets/nested/manifest.json");
       expect(nested.statusCode).toBe(200);
       expect(nested.json()).toEqual({ fixture: true });
       expect(nested.headers["cache-control"]).toBe("no-store");
 
-      const hashedHtml = await app.inject("/assets/fragment-12345678.html");
+      const hashedHtml = await injectHostDeckLoopback(app, "/assets/fragment-12345678.html");
       expect(hashedHtml.statusCode).toBe(200);
       expect(hashedHtml.headers["content-type"]).toContain("text/html");
       expect(hashedHtml.headers["cache-control"]).toBe("no-store");
 
-      const assetHead = await app.inject({ method: "HEAD", url: "/assets/app-ABC123xy.js" });
+      const assetHead = await injectHostDeckLoopback(app, { method: "HEAD", url: "/assets/app-ABC123xy.js" });
       expect(assetHead.statusCode).toBe(200);
       expect(assetHead.body).toBe("");
       expect(assetHead.headers["content-length"]).toBe(String(Buffer.byteLength(javascriptBody)));
       expect(assetHead.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
 
-      expectJsonError(await app.inject("/api/missing"), 404, "route_not_found");
-      expectJsonError(await app.inject("/dashboard"), 404, "route_not_found");
-      expectJsonError(await app.inject("/settings/"), 404, "route_not_found");
-      expectJsonError(await app.inject("/assets/index.html"), 404, "route_not_found");
-      expectJsonError(await app.inject("/assets/missing.js"), 404, "route_not_found");
-      const wrongMethod = await app.inject({ method: "POST", url: "/settings" });
+      expectJsonError(await injectHostDeckLoopback(app, "/api/missing"), 404, "route_not_found");
+      expectJsonError(await injectHostDeckLoopback(app, "/dashboard"), 404, "route_not_found");
+      expectJsonError(await injectHostDeckLoopback(app, "/settings/"), 404, "route_not_found");
+      expectJsonError(await injectHostDeckLoopback(app, "/assets/index.html"), 404, "route_not_found");
+      expectJsonError(await injectHostDeckLoopback(app, "/assets/missing.js"), 404, "route_not_found");
+      const wrongMethod = await injectHostDeckLoopback(app, { method: "POST", url: "/settings" });
       expectJsonError(wrongMethod, 405, "method_not_allowed");
       expect(wrongMethod.headers.allow).toBe("GET, HEAD");
       expect(observations).toEqual([]);
@@ -232,7 +235,7 @@ describe("explicit Fastify static-dashboard boundary", () => {
     symlinkSync("outside.txt", join(buildRoot, "index.html"));
 
     try {
-      expectJsonError(await app.inject("/"), 404, "route_not_found");
+      expectJsonError(await injectHostDeckLoopback(app, "/"), 404, "route_not_found");
       const deniedTargets = [
         "/assets",
         "/assets/",
@@ -250,7 +253,7 @@ describe("explicit Fastify static-dashboard boundary", () => {
         "/assets/%25/anything"
       ];
       for (const url of deniedTargets) {
-        const response = await app.inject({ method: "GET", url });
+        const response = await injectHostDeckLoopback(app, { method: "GET", url });
         expect([400, 403, 404], `${url} returned ${response.statusCode}`).toContain(response.statusCode);
         expect(response.headers["content-type"], url).toContain("application/json");
         expect(response.body, url).not.toContain(indexBody);
@@ -463,7 +466,13 @@ interface RawHttpResponse {
 async function rawHttpGet(port: number, path: string): Promise<RawHttpResponse> {
   return new Promise((resolve, reject) => {
     const request = httpRequest(
-      { headers: { host: "localhost" }, host: "127.0.0.1", method: "GET", path, port },
+      {
+        headers: { host: hostDeckLoopbackTestAuthority },
+        host: "127.0.0.1",
+        method: "GET",
+        path,
+        port
+      },
       (response) => {
         const chunks: Buffer[] = [];
         response.on("data", (chunk: Buffer) => chunks.push(chunk));

@@ -1,9 +1,5 @@
-import "reflect-metadata";
-
 import { Buffer } from "node:buffer";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { request as httpsRequest } from "node:https";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defaultResourceBudget, resolveResourceBudget } from "@hostdeck/contracts";
@@ -16,34 +12,20 @@ import {
   openMigratedDatabase,
   type SelectedAuditRepository
 } from "@hostdeck/storage";
-import {
-  BasicConstraintsExtension,
-  cryptoProvider,
-  ExtendedKeyUsage,
-  ExtendedKeyUsageExtension,
-  KeyUsageFlags,
-  KeyUsagesExtension,
-  SubjectAlternativeNameExtension,
-  X509CertificateGenerator
-} from "@peculiar/x509";
-import Fastify from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createHostDeckCsrfPolicy,
   createHostDeckCsrfRouteRegistration
 } from "./csrf-routes.js";
-import type { HostDeckFastifyInstance } from "./fastify-app.js";
-import { installHostDeckErrorPolicy } from "./fastify-error-policy.js";
+import {
+  createHostDeckTailscaleServeFastifyApp,
+  type HostDeckFastifyInstance,
+  type HostDeckRoutePluginRegistration
+} from "./fastify-app.js";
 import {
   createHostDeckRequestAuthenticationPolicy,
-  hostDeckDeviceCookieName,
-  installHostDeckRequestAuthentication
+  hostDeckDeviceCookieName
 } from "./fastify-request-authentication.js";
-import {
-  createHostDeckRequestTrustPolicy,
-  installHostDeckRequestTrustGate
-} from "./fastify-request-trust.js";
-import { installHostDeckZodCompilers } from "./fastify-zod.js";
 import {
   createHostDeckPairingPolicy,
   createHostDeckPairingRouteRegistration,
@@ -51,21 +33,23 @@ import {
   hostDeckPairingPolicySnapshot,
   hostDeckPairingRouteRegistrationId
 } from "./pairing-routes.js";
+import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
 import {
   createSecurityMutationAuditExecutor,
   type SecurityMutationAuditExecutor
 } from "./security-mutation-audit-executor.js";
+import { createTailscaleServeProxyTrustPolicy } from "./tailscale-serve-proxy-trust.js";
 
 const baseTime = new Date("2026-07-12T20:00:00.000Z");
-const httpsOrigin = "https://localhost";
+const localOrigin = "http://127.0.0.1:3777";
+const httpsOrigin = "https://hostdeck-pairing.fixture-tailnet.ts.net";
+const remoteSource = "100.90.80.70";
 const rawPairingCode = "abcdefghijklmnopqrstuv";
 const rawDeviceToken = "D".repeat(43);
 const rawCsrfToken = "C".repeat(43);
 const tempDirs: string[] = [];
 const openApps: HostDeckFastifyInstance[] = [];
 const openDatabases: Array<ReturnType<typeof openMigratedDatabase>["db"]> = [];
-
-cryptoProvider.set(globalThis.crypto);
 
 afterEach(async () => {
   for (const app of openApps.splice(0)) await app.close();
@@ -141,7 +125,7 @@ describe("selected pairing route", () => {
     const issue = await harness.app.inject({
       method: "POST",
       url: "/api/v1/access/pairing-codes",
-      headers: { host: "localhost", "content-type": "application/json" },
+      headers: localJsonHeaders(),
       payload: {
         operation_id: "op_pair_issue_0001",
         permission: "write",
@@ -165,8 +149,7 @@ describe("selected pairing route", () => {
       method: "POST",
       url: "/api/v1/access/pairing-claims",
       headers: {
-        host: "localhost",
-        origin: httpsOrigin,
+        ...remoteHeaders(),
         cookie: `${hostDeckDeviceCookieName}=${"O".repeat(43)}`,
         "content-type": "application/json"
       },
@@ -199,8 +182,7 @@ describe("selected pairing route", () => {
       method: "POST",
       url: "/api/v1/access/csrf",
       headers: {
-        host: "localhost",
-        origin: httpsOrigin,
+        ...remoteHeaders(),
         cookie,
         "content-type": "application/json"
       },
@@ -287,7 +269,12 @@ describe("selected pairing route", () => {
     });
     expect(first.headers["set-cookie"]).toBeUndefined();
     expect(limited.headers["set-cookie"]).toBeUndefined();
-    expect(harness.pairing.getRateSnapshot("sha256:d7cfc2cf0f158c30d50ca26c1e99a4cb15d692907d12fb69e2a18f93ea6e1adb")).toMatchObject({
+    const sourceRow = harness.db
+      .prepare("SELECT source_key FROM pairing_claim_rate_sources")
+      .get() as { readonly source_key: string };
+    expect(sourceRow.source_key).toMatch(/^sha256:[a-f0-9]{64}$/u);
+    expect(sourceRow.source_key).not.toContain(remoteSource);
+    expect(harness.pairing.getRateSnapshot(sourceRow.source_key)).toMatchObject({
       source: { attempt_count: 2 },
       global: { attempt_count: 2 }
     });
@@ -374,7 +361,7 @@ describe("selected pairing route", () => {
       const response = await harness.app.inject({
         method: "POST",
         url: "/api/v1/access/pairing-codes",
-        headers: { host: "localhost", "content-type": "application/json" },
+        headers: localJsonHeaders(),
         payload: {
           operation_id: `op_pair_${name}_issue_01`,
           permission: "write"
@@ -394,16 +381,12 @@ describe("selected pairing route", () => {
     }
   });
 
-  it("rejects plaintext, foreign origin, malformed bodies, and browser pair issuance before side effects", async () => {
+  it("rejects foreign origin, malformed bodies, and remote pair issuance before side effects", async () => {
     const secure = await createHarness();
     const browserIssue = await secure.app.inject({
       method: "POST",
       url: "/api/v1/access/pairing-codes",
-      headers: {
-        host: "localhost",
-        origin: httpsOrigin,
-        "content-type": "application/json"
-      },
+      headers: remoteJsonHeaders(),
       payload: { operation_id: "op_pair_browser_0001", permission: "write" }
     });
     expect(browserIssue.statusCode, browserIssue.body).toBe(403);
@@ -411,11 +394,7 @@ describe("selected pairing route", () => {
     const malformed = await secure.app.inject({
       method: "POST",
       url: "/api/v1/access/pairing-claims",
-      headers: {
-        host: "localhost",
-        origin: httpsOrigin,
-        "content-type": "application/json"
-      },
+      headers: remoteJsonHeaders(),
       payload: { operation_id: "op_pair_malformed_01", code: "123456" }
     });
     expect(malformed.statusCode, malformed.body).toBe(400);
@@ -424,33 +403,14 @@ describe("selected pairing route", () => {
     const foreign = await secure.app.inject({
       method: "POST",
       url: "/api/v1/access/pairing-claims",
-      headers: {
-        host: "localhost",
-        origin: "https://foreign.test",
-        "content-type": "application/json"
-      },
+      headers: remoteJsonHeaders("https://foreign.test"),
       payload: { operation_id: "op_pair_foreign_0001", code: rawPairingCode }
     });
     expect(foreign.statusCode, foreign.body).toBe(403);
     expect(foreign.body).not.toContain("foreign.test");
 
-    const plaintext = await createHarness({ secure: false });
-    const plainClaim = await plaintext.app.inject({
-      method: "POST",
-      url: "/api/v1/access/pairing-claims",
-      headers: {
-        host: "localhost",
-        origin: "http://localhost",
-        "content-type": "application/json"
-      },
-      payload: { operation_id: "op_pair_plain_0001", code: rawPairingCode }
-    });
-    expect(plainClaim.statusCode, plainClaim.body).toBe(426);
-    expect(plainClaim.headers["set-cookie"]).toBeUndefined();
-
     expect(secure.db.prepare("SELECT COUNT(*) AS count FROM pairing_codes").get()).toEqual({ count: 0 });
     expect(secure.db.prepare("SELECT COUNT(*) AS count FROM selected_audit_events").get()).toEqual({ count: 0 });
-    expect(plaintext.db.prepare("SELECT COUNT(*) AS count FROM selected_audit_events").get()).toEqual({ count: 0 });
   });
 
   it("suppresses the cookie when terminal audit fails after a durable claim", async () => {
@@ -487,7 +447,7 @@ describe("selected pairing route", () => {
     const issue = await harness.app.inject({
       method: "POST",
       url: "/api/v1/access/pairing-codes",
-      headers: { host: "localhost", "content-type": "application/json" },
+      headers: localJsonHeaders(),
       payload: {
         operation_id: "op_pair_audit_pre_issue",
         permission: "write"
@@ -529,7 +489,7 @@ describe("selected pairing route", () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/access/pairing-codes",
-      headers: { host: "localhost", "content-type": "application/json" },
+      headers: localJsonHeaders(),
       payload: {
         operation_id: "op_pair_issue_terminal",
         permission: "read"
@@ -553,7 +513,7 @@ describe("selected pairing route", () => {
     const issue = await issueHarness.app.inject({
       method: "POST",
       url: "/api/v1/access/pairing-codes",
-      headers: { host: "localhost", "content-type": "application/json" },
+      headers: localJsonHeaders(),
       payload: {
         operation_id: "op_pair_corrupt_issue",
         permission: "write"
@@ -692,14 +652,14 @@ describe("selected pairing route", () => {
       harness.app,
       "op_pair_global_0001",
       first.rawCode,
-      "127.0.0.1"
+      "100.90.80.70"
     );
     await harness.claimStarted;
     const rejected = await injectClaim(
       harness.app,
       "op_pair_global_0002",
       second.rawCode,
-      "127.0.0.2"
+      "100.90.80.71"
     );
     harness.releaseClaim();
     const accepted = await firstPromise;
@@ -713,30 +673,32 @@ describe("selected pairing route", () => {
     });
   });
 
-  it("emits the selected cookie over a real TLS listener with exact Host and Origin", async () => {
-    const port = await getAvailablePort();
-    const origin = `https://localhost:${port}`;
-    const harness = await createHarness({ origin, realTls: true });
+  it("emits the selected cookie through admitted Serve authority with exact Host and Origin", async () => {
+    const harness = await createHarness();
     const issued = harness.pairing.issue({
       id: "pair_ABCDEFGHIJKLMNOPQRSTUVWX",
       permission: "read",
-      clientLabel: "TLS phone",
+      clientLabel: "Remote phone",
       createdAt: baseTime
     });
-    await harness.app.listen({ host: "127.0.0.1", port });
-    const response = await realTlsJsonRequest(port, origin, {
-      operation_id: "op_pair_real_tls_01",
-      code: issued.rawCode
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/access/pairing-claims",
+      headers: remoteJsonHeaders(),
+      payload: {
+        operation_id: "op_pair_remote_01",
+        code: issued.rawCode
+      }
     });
-    expect(response.status).toBe(200);
+    expect(response.statusCode, response.body).toBe(200);
     expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.headers["access-control-allow-origin"]).toBeUndefined();
-    expect(response.headers["set-cookie"]).toEqual([
+    expect(response.headers["set-cookie"]).toBe(
       `${hostDeckDeviceCookieName}=${rawDeviceToken}; Path=/; Expires=Sat, 10 Oct 2026 20:00:00 GMT; HttpOnly; Secure; SameSite=Strict`
-    ]);
-    expect(JSON.parse(response.body)).toMatchObject({
+    );
+    expect(response.json()).toMatchObject({
       permission: "read",
-      client_label: "TLS phone",
+      client_label: "Remote phone",
       expires_at: "2026-10-10T20:00:00.000Z"
     });
     expect(response.body).not.toContain(rawDeviceToken);
@@ -745,11 +707,11 @@ describe("selected pairing route", () => {
 
   it("reopens claimed authority while raw credentials and peer identity stay out of SQLite bytes", async () => {
     const harness = await createHarness();
-    const peerAddress = "127.0.0.42";
+    const peerAddress = "100.90.80.72";
     const issue = await harness.app.inject({
       method: "POST",
       url: "/api/v1/access/pairing-codes",
-      headers: { host: "localhost", "content-type": "application/json" },
+      headers: localJsonHeaders(),
       payload: {
         operation_id: "op_pair_restart_issue",
         permission: "write"
@@ -826,10 +788,7 @@ interface HarnessOptions {
   readonly corruptIssueResult?: boolean;
   readonly deferFirstClaim?: boolean;
   readonly failPairClaimOnSend?: boolean;
-  readonly origin?: string;
   readonly pairingNow?: () => Date;
-  readonly realTls?: boolean;
-  readonly secure?: boolean;
   readonly terminalAuditFailure?: boolean;
 }
 
@@ -939,63 +898,41 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
     audit: executor,
     pairing: policy
   });
-  const secure = options.secure ?? true;
-  const origin = options.origin ?? (secure ? httpsOrigin : "http://localhost");
-  const tls = options.realTls ? await generateTestTlsMaterial() : null;
-  const app = Fastify({
-    logger: false,
-    ...(tls === null ? {} : { https: { cert: tls.certificate, key: tls.privateKey } })
-  }).withTypeProvider() as HostDeckFastifyInstance;
-  openApps.push(app);
-  installHostDeckZodCompilers(app);
-  installHostDeckErrorPolicy(app, () => undefined);
-  if (secure && !options.realTls) {
-    app.addHook("onRequest", async (request) => {
-      Object.defineProperty(request.raw.socket, "encrypted", {
-        configurable: true,
-        value: true
-      });
-    });
-  }
-  installHostDeckRequestTrustGate(
-    app,
-    createHostDeckRequestTrustPolicy({
-      allowedOrigins: [origin],
-      mode: "loopback",
-      transport: secure ? "https" : "http"
-    }),
-    () => undefined
-  );
-  installHostDeckRequestAuthentication(
-    app,
-    createHostDeckRequestAuthenticationPolicy({
+  const requestAuthenticationPolicy = createHostDeckRequestAuthenticationPolicy({
       authenticateDeviceToken: (input) => auth.authenticateDeviceToken(input),
       now: () => new Date(baseTime)
-    })
-  );
-  if (options.failPairClaimOnSend) {
-    app.addHook("onSend", async (request, reply, payload) => {
-      if (
-        request.url === "/api/v1/access/pairing-claims" &&
-        reply.statusCode >= 200 &&
-        reply.statusCode < 300
-      ) {
-        throw new Error("pair-claim-on-send-private-sentinel");
-      }
-      return payload;
     });
-  }
-  await registration.register(
-    app,
-    Object.freeze({ resourceBudget: budget, surface: "api" })
-  );
-  await createHostDeckCsrfRouteRegistration({
+  const csrfRegistration = createHostDeckCsrfRouteRegistration({
     audit: executor,
     csrf: createHostDeckCsrfPolicy({
       csrf,
       now: () => new Date(baseTime.getTime() + 1_000)
     })
-  }).register(app, Object.freeze({ resourceBudget: budget, surface: "api" }));
+  });
+  const routePlugins: HostDeckRoutePluginRegistration[] = [
+    options.failPairClaimOnSend
+      ? withPairClaimResponseFailure(registration)
+      : registration,
+    csrfRegistration
+  ];
+  const remoteRequestAuthority = createHostDeckRemoteIngressRequestAuthorityPolicy();
+  const app = createHostDeckTailscaleServeFastifyApp({
+    observeInternalError: () => undefined,
+    requestAuthenticationPolicy,
+    resourceBudget: budget,
+    routePlugins,
+    remoteIngressRequestAuthority: remoteRequestAuthority,
+    tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
+      localOrigin,
+      readRemoteAdmission: () =>
+        remoteRequestAuthority.synchronize({
+          admission: "open",
+          external_origin: httpsOrigin,
+          generation: 1
+        })
+    })
+  });
+  openApps.push(app);
   await app.ready();
   return {
     app,
@@ -1048,23 +985,74 @@ function repositoryWith(
   };
 }
 
+function withPairClaimResponseFailure(
+  registration: HostDeckRoutePluginRegistration
+): HostDeckRoutePluginRegistration {
+  return Object.freeze({
+    id: "pair-claim-response-failure-fixture",
+    surface: "api" as const,
+    async register(
+      app: HostDeckFastifyInstance,
+      context: Parameters<HostDeckRoutePluginRegistration["register"]>[1]
+    ) {
+      app.addHook("onSend", async (request, reply, payload) => {
+        if (
+          request.url === "/api/v1/access/pairing-claims" &&
+          reply.statusCode >= 200 &&
+          reply.statusCode < 300
+        ) {
+          throw new Error("pair-claim-on-send-private-sentinel");
+        }
+        return payload;
+      });
+      await registration.register(app, context);
+    }
+  });
+}
+
 function injectClaim(
   app: HostDeckFastifyInstance,
   operationId: string,
   code: string,
-  remoteAddress = "127.0.0.1"
+  sourceAddress = remoteSource
 ) {
   return app.inject({
     method: "POST",
     url: "/api/v1/access/pairing-claims",
-    headers: {
-      host: "localhost",
-      origin: httpsOrigin,
-      "content-type": "application/json"
-    },
-    payload: { operation_id: operationId, code },
-    remoteAddress
+    headers: remoteJsonHeaders(httpsOrigin, sourceAddress),
+    payload: { operation_id: operationId, code }
   });
+}
+
+function localJsonHeaders() {
+  return {
+    host: new URL(localOrigin).host,
+    "content-type": "application/json"
+  };
+}
+
+function remoteHeaders(
+  requestOrigin = httpsOrigin,
+  sourceAddress = remoteSource
+) {
+  const authority = new URL(httpsOrigin).host;
+  return {
+    host: authority,
+    origin: requestOrigin,
+    "x-forwarded-for": sourceAddress,
+    "x-forwarded-host": authority,
+    "x-forwarded-proto": "https"
+  };
+}
+
+function remoteJsonHeaders(
+  requestOrigin = httpsOrigin,
+  sourceAddress = remoteSource
+) {
+  return {
+    ...remoteHeaders(requestOrigin, sourceAddress),
+    "content-type": "application/json"
+  };
 }
 
 function requireSingleHeader(value: string | string[] | undefined): string {
@@ -1083,114 +1071,4 @@ function assertSecretsAbsentFromSqlite(
       expect(bytes.includes(Buffer.from(secret, "utf8")), `${path} contains ${secret.length}-byte sentinel`).toBe(false);
     }
   }
-}
-
-async function generateTestTlsMaterial(): Promise<{
-  readonly certificate: string;
-  readonly privateKey: string;
-}> {
-  const algorithm = {
-    hash: "SHA-256",
-    modulusLength: 2_048,
-    name: "RSASSA-PKCS1-v1_5",
-    publicExponent: new Uint8Array([1, 0, 1])
-  } as const;
-  const keys = await globalThis.crypto.subtle.generateKey(algorithm, true, [
-    "sign",
-    "verify"
-  ]);
-  const certificate = await X509CertificateGenerator.createSelfSigned({
-    extensions: [
-      new BasicConstraintsExtension(false, undefined, true),
-      new KeyUsagesExtension(
-        KeyUsageFlags.digitalSignature | KeyUsageFlags.keyEncipherment,
-        true
-      ),
-      new ExtendedKeyUsageExtension([ExtendedKeyUsage.serverAuth]),
-      new SubjectAlternativeNameExtension([{ type: "dns", value: "localhost" }])
-    ],
-    keys,
-    name: "CN=HostDeck Pairing Test",
-    notAfter: new Date(baseTime.getTime() + 86_400_000),
-    notBefore: new Date(baseTime.getTime() - 86_400_000),
-    serialNumber: "0123456789abcdef",
-    signingAlgorithm: { hash: "SHA-256", name: "RSASSA-PKCS1-v1_5" }
-  });
-  const der = Buffer.from(
-    await globalThis.crypto.subtle.exportKey("pkcs8", keys.privateKey)
-  );
-  const body = der.toString("base64").match(/.{1,64}/gu)?.join("\n");
-  if (body === undefined) throw new TypeError("Test TLS private key did not encode.");
-  return Object.freeze({
-    certificate: certificate.toString("pem"),
-    privateKey: `-----BEGIN PRIVATE KEY-----\n${body}\n-----END PRIVATE KEY-----\n`
-  });
-}
-
-async function getAvailablePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer();
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (address === null || typeof address === "string") {
-        server.close();
-        reject(new TypeError("Unable to reserve pairing TLS port."));
-        return;
-      }
-      server.close((error) => {
-        if (error !== undefined) reject(error);
-        else resolve(address.port);
-      });
-    });
-  });
-}
-
-function realTlsJsonRequest(
-  port: number,
-  origin: string,
-  payload: Readonly<Record<string, unknown>>
-): Promise<{
-  readonly body: string;
-  readonly headers: import("node:http").IncomingHttpHeaders;
-  readonly status: number;
-}> {
-  const body = JSON.stringify(payload);
-  return new Promise((resolve, reject) => {
-    const request = httpsRequest(
-      {
-        host: "127.0.0.1",
-        port,
-        method: "POST",
-        path: "/api/v1/access/pairing-claims",
-        rejectUnauthorized: false,
-        servername: "localhost",
-        headers: {
-          host: `localhost:${port}`,
-          origin,
-          "content-type": "application/json",
-          "content-length": Buffer.byteLength(body, "utf8"),
-          connection: "close"
-        }
-      },
-      (response) => {
-        let output = "";
-        response.setEncoding("utf8");
-        response.on("data", (chunk: string) => {
-          output += chunk;
-          if (output.length > 65_536) request.destroy(new Error("TLS response exceeded its bound."));
-        });
-        response.once("end", () => {
-          resolve({
-            body: output,
-            headers: response.headers,
-            status: response.statusCode ?? 0
-          });
-        });
-      }
-    );
-    request.setTimeout(5_000, () => request.destroy(new Error("TLS pairing request timed out.")));
-    request.once("error", reject);
-    request.end(body);
-  });
 }

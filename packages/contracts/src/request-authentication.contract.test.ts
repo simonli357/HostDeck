@@ -3,10 +3,11 @@ import { selectedRawDeviceSecretSchema } from "./pairing.js";
 import {
   selectedRequestAuthenticationContextSchema,
   selectedRequestAuthenticationIngressContextSchema,
-  selectedRequestAuthenticationStates
+  selectedRequestAuthenticationStates,
+  selectedRequestNetworkModes
 } from "./request-authentication.js";
 
-const origin = "https://192.168.0.29:8443";
+const origin = "http://127.0.0.1:3777";
 const remoteOrigin = "https://hostdeck-fixture.fixture-tailnet.ts.net";
 const sourceKey = `sha256:${"a".repeat(64)}`;
 
@@ -39,6 +40,7 @@ describe("selected request authentication contracts", () => {
       "revoked_device",
       "paired_device"
     ]);
+    expect(selectedRequestNetworkModes).toEqual(["loopback", "remote"]);
     expect(
       selectedRequestAuthenticationContextSchema.parse({
         ...emptyContext("local_admin"),
@@ -119,6 +121,10 @@ describe("selected request authentication contracts", () => {
       { ...remoteIngress, remote_generation: null },
       { ...remoteIngress, remote_generation: -1 },
       { ...localIngress, remote_generation: 1 },
+      { ...localIngress, source_key: sourceKey },
+      { ...localIngress, transport: "https" },
+      { ...localIngress, configured_origin: "http://localhost:3777" },
+      { ...localIngress, network_mode: "lan" },
       { ...remoteIngress, tailnet_identity_present: true }
     ]) {
       expect(
@@ -130,7 +136,8 @@ describe("selected request authentication contracts", () => {
       ...emptyContext("unpaired"),
       configured_origin: remoteOrigin,
       network_mode: "remote",
-      origin_kind: "safe_no_origin"
+      origin_kind: "safe_no_origin",
+      transport: "https"
     } as const;
     expect(selectedRequestAuthenticationContextSchema.parse(remoteAuthentication)).toEqual(
       remoteAuthentication
@@ -184,8 +191,9 @@ describe("selected request authentication contracts", () => {
       { ...paired, state: "unknown" },
       { ...paired, configured_origin: "not-an-origin" },
       { ...paired, configured_origin: `${origin}/path` },
-      { ...paired, configured_origin: origin.replace("https:", "http:") },
-      { ...paired, transport: "http" }
+      { ...paired, configured_origin: origin.replace("http:", "https:") },
+      { ...paired, transport: "https" },
+      { ...paired, network_mode: "lan" }
     ];
     for (const candidate of invalid) {
       expect(() => selectedRequestAuthenticationContextSchema.parse(candidate)).toThrow();
@@ -205,9 +213,9 @@ function emptyContext(
   return {
     state,
     configured_origin: origin,
-    network_mode: "lan" as const,
+    network_mode: "loopback" as const,
     origin_kind: "same_origin" as const,
-    transport: "https" as const,
+    transport: "http" as const,
     device_id: null,
     permission: null,
     csrf_generation: null,

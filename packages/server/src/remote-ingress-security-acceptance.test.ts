@@ -777,7 +777,7 @@ async function createHarness(
   });
   const lock = createHostDeckHostLockPolicy({
     settings: {
-      read: () => settings.require(),
+      read: () => settings.readHostLock(),
       transition: (input) => settings.transitionHostLock(input)
     },
     now

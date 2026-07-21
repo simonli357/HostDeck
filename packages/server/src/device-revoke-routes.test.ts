@@ -1,5 +1,5 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { request as httpsRequest, type RequestOptions } from "node:https";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { request as httpRequest, type RequestOptions } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -28,6 +28,7 @@ import {
 } from "./device-revoke-routes.js";
 import {
   createHostDeckFastifyApp,
+  createHostDeckTailscaleServeFastifyApp,
   type HostDeckFastifyInstance,
   type HostDeckRoutePluginRegistration
 } from "./fastify-app.js";
@@ -40,13 +41,16 @@ import {
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import { createHostDeckSseTransportRegistration } from "./fastify-sse-transport.js";
 import { createHostDeckHostLockPolicy } from "./host-lock-routes.js";
-import { createHostDeckLanCertificatePolicy } from "./lan-certificate-policy.js";
+import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
 import { createSecurityMutationAuditExecutor } from "./security-mutation-audit-executor.js";
 import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
+import { createTailscaleServeProxyTrustPolicy } from "./tailscale-serve-proxy-trust.js";
 
 const tempDirectories: string[] = [];
 const createdAt = new Date("2026-07-13T12:00:00.000Z");
-const secureOrigin = "https://192.168.0.29:3777";
+const localOrigin = "http://127.0.0.1:3777";
+const secureOrigin = "https://hostdeck-device-revoke.fixture-tailnet.ts.net";
+const remoteSource = "100.90.80.70";
 const actorId = "client_revoke_actor";
 const targetId = "client_revoke_target";
 const actorToken = "A".repeat(43);
@@ -117,7 +121,7 @@ describe("selected paired-device revoke route", () => {
     }
   });
 
-  it("revokes one other device through real HTTPS, SQLite, CSRF, audit, and live authority", async () => {
+  it("revokes one other device through admitted Serve authority, SQLite, CSRF, audit, and live authority", async () => {
     const harness = await createHarness({ includeProtectedRoute: true });
     const targetBefore = rawDevice(harness, targetId);
     const sessionBefore = rawSession(harness);
@@ -260,6 +264,7 @@ describe("selected paired-device revoke route", () => {
         const conflict = await loopback.inject({
           method: "POST",
           url: `/api/v1/access/devices/${actorId}/revoke`,
+          headers: { host: new URL(localOrigin).host },
           payload: {
             operation_id: "op_device_revoke_self_conflict_001",
             confirmed: true
@@ -730,30 +735,23 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
     );
   }
 
-  const certificateDirectory = join(directory, "certificates");
-  mkdirSync(certificateDirectory, { mode: 0o700 });
-  const certificates = createHostDeckLanCertificatePolicy({
-    assignedAddresses: () => ["192.168.0.29"],
-    certificateDirectory,
-    now: () => createdAt
-  });
-  await certificates.configure({
-    bind_host: "192.168.0.29",
-    bind_port: 3777,
-    certificate_action: "issue_leaf"
-  });
   const internalObservations: HostDeckInternalErrorObservation[] = [];
-  const app = createHostDeckFastifyApp({
+  const remoteRequestAuthority = createHostDeckRemoteIngressRequestAuthorityPolicy();
+  const app = createHostDeckTailscaleServeFastifyApp({
     observeInternalError: (observation) => internalObservations.push(observation),
     requestAuthenticationPolicy: authenticationPolicy,
-    requestTrustPolicy: createHostDeckRequestTrustPolicy({
-      allowedOrigins: [secureOrigin],
-      mode: "lan",
-      transport: "https"
-    }),
     resourceBudget: defaultResourceBudget,
     routePlugins,
-    tls: certificates.loadTls({ bind_host: "192.168.0.29", bind_port: 3777 })
+    remoteIngressRequestAuthority: remoteRequestAuthority,
+    tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
+      localOrigin,
+      readRemoteAdmission: () =>
+        remoteRequestAuthority.synchronize({
+          admission: "open",
+          external_origin: secureOrigin,
+          generation: 1
+        })
+    })
   });
   await app.listen({ host: "127.0.0.1", port: 0, listenTextResolver: () => "" });
   let closed = false;
@@ -797,9 +795,7 @@ function createLoopbackRevokeApp(harness: Harness): HostDeckFastifyInstance {
     observeInternalError: () => undefined,
     requestAuthenticationPolicy: authenticationPolicy,
     requestTrustPolicy: createHostDeckRequestTrustPolicy({
-      allowedOrigins: ["http://localhost"],
-      mode: "loopback",
-      transport: "http"
+      allowedOrigin: localOrigin
     }),
     resourceBudget: defaultResourceBudget,
     routePlugins: [registration]
@@ -933,11 +929,15 @@ async function secureJsonRequest(
   input: SecureJsonRequestInput
 ): Promise<HttpResult> {
   const payload = input.payload === undefined ? null : JSON.stringify(input.payload);
+  const authority = new URL(secureOrigin).host;
   const headers: Record<string, string | number> = {
-    host: "192.168.0.29:3777",
-    origin: secureOrigin,
-    accept: "application/json"
+    host: authority,
+    accept: "application/json",
+    "x-forwarded-for": remoteSource,
+    "x-forwarded-host": authority,
+    "x-forwarded-proto": "https"
   };
+  if (input.method === "POST") headers.origin = secureOrigin;
   if (input.token !== undefined) {
     headers.cookie = `${hostDeckDeviceCookieName}=${input.token}`;
   }
@@ -949,28 +949,27 @@ async function secureJsonRequest(
     headers["content-type"] = "application/json";
     headers["content-length"] = Buffer.byteLength(payload);
   }
-  return httpsExchange(harness, {
+  return httpExchange(harness, {
     method: input.method,
     path: input.path,
     headers
   }, payload);
 }
 
-function httpsExchange(
+function httpExchange(
   harness: Harness,
   options: RequestOptions,
   payload: string | null
 ): Promise<HttpResult> {
   const address = harness.app.server.address();
   if (address === null || typeof address === "string") {
-    throw new Error("Device-revoke HTTPS listener is unavailable.");
+    throw new Error("Device-revoke loopback listener is unavailable.");
   }
   return new Promise((resolve, reject) => {
-    const request = httpsRequest(
+    const request = httpRequest(
       {
         host: "127.0.0.1",
         port: address.port,
-        rejectUnauthorized: false,
         ...options
       },
       (response) => {
@@ -1000,22 +999,24 @@ function openSecureStream(harness: Harness, token: string): {
 } {
   const address = harness.app.server.address();
   if (address === null || typeof address === "string") {
-    throw new Error("Device-revoke HTTPS listener is unavailable.");
+    throw new Error("Device-revoke loopback listener is unavailable.");
   }
   const firstEvent = deferred<void>();
   const closed = deferred<void>();
   const chunks: Buffer[] = [];
-  const request = httpsRequest({
+  const authority = new URL(secureOrigin).host;
+  const request = httpRequest({
     host: "127.0.0.1",
     port: address.port,
     method: "GET",
     path: "/fixture/events",
-    rejectUnauthorized: false,
     headers: {
-      host: "192.168.0.29:3777",
-      origin: secureOrigin,
+      host: authority,
       accept: "text/event-stream",
-      cookie: `${hostDeckDeviceCookieName}=${token}`
+      cookie: `${hostDeckDeviceCookieName}=${token}`,
+      "x-forwarded-for": remoteSource,
+      "x-forwarded-host": authority,
+      "x-forwarded-proto": "https"
     }
   });
   request.on("response", (response) => {

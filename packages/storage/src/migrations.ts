@@ -1243,6 +1243,53 @@ export const hostDeckSelectedSessionSettingsProjectionMigration: StorageMigratio
   `
 };
 
+export const hostDeckSelectedNetworkRetirementMigration: StorageMigration = {
+  version: "202607200018_selected_network_retirement",
+  sql: `
+    CREATE TABLE settings_next (
+      id TEXT PRIMARY KEY CHECK (id = 'hostdeck_settings'),
+      schema_version INTEGER NOT NULL CHECK (schema_version > 0),
+      state_dir TEXT NOT NULL,
+      bind_port INTEGER NOT NULL CHECK (bind_port BETWEEN 1 AND 65535),
+      locked INTEGER NOT NULL CHECK (locked IN (0, 1)),
+      output_event_limit INTEGER NOT NULL CHECK (output_event_limit > 0),
+      output_byte_limit INTEGER NOT NULL CHECK (output_byte_limit > 0),
+      audit_event_limit INTEGER NOT NULL CHECK (audit_event_limit > 0),
+      audit_retention_days INTEGER NOT NULL CHECK (audit_retention_days > 0),
+      updated_at TEXT NOT NULL
+    );
+
+    INSERT INTO settings_next (
+      id,
+      schema_version,
+      state_dir,
+      bind_port,
+      locked,
+      output_event_limit,
+      output_byte_limit,
+      audit_event_limit,
+      audit_retention_days,
+      updated_at
+    )
+    SELECT
+      id,
+      schema_version,
+      state_dir,
+      bind_port,
+      locked,
+      output_event_limit,
+      output_byte_limit,
+      audit_event_limit,
+      audit_retention_days,
+      updated_at
+    FROM settings;
+
+    DROP TABLE settings;
+    ALTER TABLE settings_next RENAME TO settings;
+    DROP TABLE selected_lan_configuration;
+  `
+};
+
 export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckBaseSchemaMigration,
   hostDeckSessionMetadataFailedStatusMigration,
@@ -1260,5 +1307,6 @@ export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckRemoteAuditCatalogMigration,
   hostDeckRemoteAdmissionProofMigration,
   hostDeckSessionStartAuditCatalogMigration,
-  hostDeckSelectedSessionSettingsProjectionMigration
+  hostDeckSelectedSessionSettingsProjectionMigration,
+  hostDeckSelectedNetworkRetirementMigration
 ] as const;

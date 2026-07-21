@@ -19,14 +19,14 @@ import {
   createHostDeckFastifyApp,
   type HostDeckRoutePluginRegistration
 } from "./fastify-app.js";
-import { HostDeckHttpError, type HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import { hostDeckLoopbackTestOrigin, injectHostDeckLoopback } from "./fastify-loopback-test-request.js";
 import {
   assertHostDeckRequestAuthenticationPolicy,
   createHostDeckRequestAuthenticationPolicy,
   type HostDeckRequestAuthenticationPolicy,
   hostDeckDeviceCookieName,
   hostDeckRequestAuthenticationSnapshot,
-  requireHostDeckAuthenticationContext,
   requireHostDeckRequestAuthentication,
   requireHostDeckRequestWritePermission,
   resolveHostDeckRequestAuthentication
@@ -48,11 +48,9 @@ const revokedToken = "R".repeat(43);
 const unknownToken = "U".repeat(43);
 const csrfToken = "C".repeat(43);
 
-const loopbackOrigin = "http://localhost";
+const loopbackOrigin = hostDeckLoopbackTestOrigin;
 const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
-  allowedOrigins: [loopbackOrigin],
-  mode: "loopback",
-  transport: "http"
+  allowedOrigin: loopbackOrigin
 });
 
 afterEach(() => {
@@ -133,12 +131,12 @@ describe("selected Fastify request authentication policy", () => {
     );
     await app.ready();
     try {
-      expect((await app.inject({ method: "GET", url: "/public" })).statusCode).toBe(200);
-      expect((await app.inject({ method: "GET", url: "/missing" })).statusCode).toBe(404);
+      expect((await injectHostDeckLoopback(app, { method: "GET", url: "/public" })).statusCode).toBe(200);
+      expect((await injectHostDeckLoopback(app, { method: "GET", url: "/missing" })).statusCode).toBe(404);
       expect(authCalls).toBe(0);
       expect(clockCalls).toBe(0);
 
-      const unpaired = await app.inject({ method: "GET", url: "/optional" });
+      const unpaired = await injectHostDeckLoopback(app, { method: "GET", url: "/optional" });
       expect(unpaired.statusCode, unpaired.body).toBe(200);
       expect(unpaired.json()).toMatchObject({
         state: "unpaired",
@@ -148,7 +146,7 @@ describe("selected Fastify request authentication policy", () => {
       expect(authCalls).toBe(0);
       expect(clockCalls).toBe(0);
 
-      const paired = await app.inject({
+      const paired = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/twice",
         headers: deviceCookie(writeToken)
@@ -216,7 +214,7 @@ describe("selected Fastify request authentication policy", () => {
         `${hostDeckDeviceCookieName}=${writeToken}; ${hostDeckDeviceCookieName}=${writeToken}`
       ];
       for (const cookie of malformed) {
-        const response = await app.inject({
+        const response = await injectHostDeckLoopback(app, {
           method: "GET",
           url: "/optional",
           headers: { cookie }
@@ -231,7 +229,7 @@ describe("selected Fastify request authentication policy", () => {
         "other=value",
         `${hostDeckDeviceCookieName.toUpperCase()}=${writeToken}`
       ]) {
-        const response = await app.inject({
+        const response = await injectHostDeckLoopback(app, {
           method: "POST",
           url: "/optional",
           headers: { cookie }
@@ -239,20 +237,20 @@ describe("selected Fastify request authentication policy", () => {
         expect(response.json()).toMatchObject({ state: "unpaired" });
       }
 
-      const localAdmin = await app.inject({ method: "POST", url: "/optional" });
+      const localAdmin = await injectHostDeckLoopback(app, { method: "POST", url: "/optional" });
       expect(localAdmin.json()).toMatchObject({
         state: "local_admin",
         permission: "local_admin",
         origin_kind: "local_non_browser"
       });
-      const sameOrigin = await app.inject({
+      const sameOrigin = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/optional",
         headers: { origin: loopbackOrigin }
       });
       expect(sameOrigin.json()).toMatchObject({ state: "unpaired" });
 
-      const paired = await app.inject({
+      const paired = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/optional",
         headers: {
@@ -260,7 +258,7 @@ describe("selected Fastify request authentication policy", () => {
         }
       });
       expect(paired.json()).toMatchObject({ state: "paired_device" });
-      const unknown = await app.inject({
+      const unknown = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/optional",
         headers: deviceCookie(unknownToken)
@@ -269,7 +267,7 @@ describe("selected Fastify request authentication policy", () => {
       expect(authCalls).toBe(2);
       expect(clockCalls).toBe(2);
 
-      const browserLike = await app.inject({
+      const browserLike = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/optional",
         headers: { "sec-fetch-site": "same-origin" }
@@ -314,7 +312,7 @@ describe("selected Fastify request authentication policy", () => {
           [writeToken, "paired_device", "write"]
         ] as const;
         for (const [token, state, permission] of cases) {
-          const response = await app.inject({
+          const response = await injectHostDeckLoopback(app, {
             method: "GET",
             url: "/optional",
             headers: deviceCookie(token)
@@ -386,7 +384,7 @@ describe("selected Fastify request authentication policy", () => {
     );
     await app.ready();
     try {
-      expect((await app.inject({ method: "GET", url: "/loopback" })).statusCode).toBe(
+      expect((await injectHostDeckLoopback(app, { method: "GET", url: "/loopback" })).statusCode).toBe(
         200
       );
       for (const [token, message] of [
@@ -395,7 +393,7 @@ describe("selected Fastify request authentication policy", () => {
         [expiredToken, "has expired"],
         [revokedToken, "has been revoked"]
       ] as const) {
-        const response = await app.inject({
+        const response = await injectHostDeckLoopback(app, {
           method: "GET",
           url: "/device",
           ...(token === null ? {} : { headers: deviceCookie(token) })
@@ -404,7 +402,7 @@ describe("selected Fastify request authentication policy", () => {
       }
       expect(
         (
-          await app.inject({
+          await injectHostDeckLoopback(app, {
             method: "GET",
             url: "/device",
             headers: deviceCookie(readToken)
@@ -412,11 +410,11 @@ describe("selected Fastify request authentication policy", () => {
         ).statusCode
       ).toBe(200);
 
-      expect((await app.inject({ method: "POST", url: "/admin" })).statusCode).toBe(
+      expect((await injectHostDeckLoopback(app, { method: "POST", url: "/admin" })).statusCode).toBe(
         200
       );
       expectAuthError(
-        await app.inject({
+        await injectHostDeckLoopback(app, {
           method: "POST",
           url: "/admin",
           headers: { origin: loopbackOrigin }
@@ -427,7 +425,7 @@ describe("selected Fastify request authentication policy", () => {
       );
       expect(
         (
-          await app.inject({
+          await injectHostDeckLoopback(app, {
             method: "POST",
             url: "/either",
             headers: { ...deviceCookie(readToken), origin: loopbackOrigin }
@@ -436,7 +434,7 @@ describe("selected Fastify request authentication policy", () => {
       ).toBe(200);
 
       expectAuthError(
-        await app.inject({
+        await injectHostDeckLoopback(app, {
           method: "POST",
           url: "/write",
           headers: { ...deviceCookie(readToken), origin: loopbackOrigin }
@@ -447,14 +445,14 @@ describe("selected Fastify request authentication policy", () => {
       );
       expect(
         (
-          await app.inject({
+          await injectHostDeckLoopback(app, {
             method: "POST",
             url: "/write",
             headers: { ...deviceCookie(writeToken), origin: loopbackOrigin }
           })
         ).statusCode
       ).toBe(200);
-      expect((await app.inject({ method: "POST", url: "/write" })).statusCode).toBe(
+      expect((await injectHostDeckLoopback(app, { method: "POST", url: "/write" })).statusCode).toBe(
         200
       );
       expect(calls).toMatchObject({
@@ -465,27 +463,20 @@ describe("selected Fastify request authentication policy", () => {
         write: 2
       });
 
-      const lanUnpaired = selectedRequestAuthenticationContextSchema.parse({
-        state: "unpaired",
-        configured_origin: "https://192.168.0.29:8443",
-        network_mode: "lan",
-        origin_kind: "safe_no_origin",
-        transport: "https",
-        device_id: null,
-        permission: null,
-        csrf_generation: null,
-        last_used_at: null,
-        expires_at: null
-      });
-      expectHttpError(
-        () =>
-          requireHostDeckAuthenticationContext(
-            lanUnpaired,
-            "loopback_or_device_cookie"
-          ),
-        401,
-        "permission_denied"
-      );
+      expect(() =>
+        selectedRequestAuthenticationContextSchema.parse({
+          state: "unpaired",
+          configured_origin: "https://192.168.0.29:8443",
+          network_mode: "lan",
+          origin_kind: "safe_no_origin",
+          transport: "https",
+          device_id: null,
+          permission: null,
+          csrf_generation: null,
+          last_used_at: null,
+          expires_at: null
+        })
+      ).toThrow();
     } finally {
       await app.close();
     }
@@ -526,7 +517,7 @@ describe("selected Fastify request authentication policy", () => {
         ["F".repeat(43), 500, "storage_error"]
       ] as const;
       for (const [token, status, code] of cases) {
-        const response = await app.inject({
+        const response = await injectHostDeckLoopback(app, {
           method: "GET",
           url: "/device",
           headers: deviceCookie(token)
@@ -558,7 +549,7 @@ describe("selected Fastify request authentication policy", () => {
     );
     await clockApp.ready();
     try {
-      const response = await clockApp.inject({
+      const response = await injectHostDeckLoopback(clockApp, {
         method: "GET",
         url: "/device",
         headers: deviceCookie(writeToken)
@@ -599,7 +590,7 @@ describe("selected Fastify request authentication policy", () => {
       );
       await conflictApp.ready();
       try {
-        const response = await conflictApp.inject({
+        const response = await injectHostDeckLoopback(conflictApp, {
           method: "GET",
           url: "/device",
           headers: deviceCookie(conflictToken)
@@ -620,7 +611,7 @@ describe("selected Fastify request authentication policy", () => {
       );
       await equalApp.ready();
       try {
-        const response = await equalApp.inject({
+        const response = await injectHostDeckLoopback(equalApp, {
           method: "GET",
           url: "/device",
           headers: deviceCookie(conflictToken)
@@ -647,7 +638,7 @@ describe("selected Fastify request authentication policy", () => {
       );
       await unavailableApp.ready();
       try {
-        const corrupt = await unavailableApp.inject({
+        const corrupt = await injectHostDeckLoopback(unavailableApp, {
           method: "GET",
           url: "/device",
           headers: deviceCookie(corruptToken)
@@ -656,7 +647,7 @@ describe("selected Fastify request authentication policy", () => {
         expect(corrupt.body).not.toMatch(/client_auth_corrupt|token_hash|zod|client_label/iu);
 
         open.db.close();
-        const closed = await unavailableApp.inject({
+        const closed = await injectHostDeckLoopback(unavailableApp, {
           method: "GET",
           url: "/device",
           headers: deviceCookie(closedToken)
@@ -697,7 +688,7 @@ describe("selected Fastify request authentication policy", () => {
       );
       await revokedApp.ready();
       try {
-        const response = await revokedApp.inject({
+        const response = await injectHostDeckLoopback(revokedApp, {
           method: "GET",
           url: "/device-after-prevalidation",
           headers: deviceCookie(writeToken)
@@ -741,7 +732,7 @@ describe("selected Fastify request authentication policy", () => {
         );
         await cachedApp.ready();
         try {
-          const response = await cachedApp.inject({
+          const response = await injectHostDeckLoopback(cachedApp, {
             method: "GET",
             url: "/resolve-return-after-revoke",
             headers: deviceCookie(writeToken)
@@ -788,7 +779,7 @@ describe("selected Fastify request authentication policy", () => {
       );
       await app.ready();
       try {
-        const response = await app.inject({
+        const response = await injectHostDeckLoopback(app, {
           method: "GET",
           url: "/device",
           headers: deviceCookie(rawToken)
@@ -818,7 +809,7 @@ describe("selected Fastify request authentication policy", () => {
       );
       await app.ready();
       try {
-        const response = await app.inject({
+        const response = await injectHostDeckLoopback(app, {
           method: "GET",
           url: "/device",
           headers: deviceCookie(rawToken)
@@ -857,9 +848,7 @@ describe("selected Fastify request authentication policy", () => {
       {
         handlerCalls,
         trustPolicy: createHostDeckRequestTrustPolicy({
-          allowedOrigins: [origin],
-          mode: "loopback",
-          transport: "http"
+          allowedOrigin: origin
         })
       }
     );
@@ -1151,23 +1140,6 @@ function expectAuthError(
   expect(response.json()).toMatchObject({
     error: { code, message: expect.stringContaining(message) }
   });
-}
-
-function expectHttpError(
-  fn: () => unknown,
-  status: number,
-  code: string
-): HostDeckHttpError {
-  let caught: unknown;
-  try {
-    fn();
-  } catch (error) {
-    caught = error;
-  }
-  expect(caught).toBeInstanceOf(HostDeckHttpError);
-  expect(caught).toMatchObject({ code, statusCode: status });
-  expect((caught as HostDeckHttpError).cause).toBeUndefined();
-  return caught as HostDeckHttpError;
 }
 
 function assertSecretsAbsent(path: string, secrets: readonly string[]): void {

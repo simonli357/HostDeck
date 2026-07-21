@@ -1,14 +1,9 @@
 import { createHash } from "node:crypto";
 import { isIP, SocketAddress } from "node:net";
+import { hostDeckLoopbackOriginSchema } from "@hostdeck/contracts";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { installHostDeckCorsResponseGuard } from "./fastify-cors-response-guard.js";
 import { type HostDeckInternalErrorObserver, sendHostDeckError } from "./fastify-error-policy.js";
-
-export const hostDeckRequestTrustModes = ["loopback", "lan"] as const;
-export type HostDeckRequestTrustMode = (typeof hostDeckRequestTrustModes)[number];
-
-export const hostDeckRequestTransports = ["http", "https"] as const;
-export type HostDeckRequestTransport = (typeof hostDeckRequestTransports)[number];
 
 export const hostDeckRequestOriginKinds = ["same_origin", "safe_no_origin", "local_non_browser"] as const;
 export type HostDeckRequestOriginKind = (typeof hostDeckRequestOriginKinds)[number];
@@ -17,23 +12,19 @@ export const hostDeckLocalAdminRequestHeaderName = "x-hostdeck-local-admin";
 export const hostDeckLocalAdminRequestHeaderValue = "cli-v1";
 
 export interface CreateHostDeckRequestTrustPolicyInput {
-  readonly allowedOrigins: readonly string[];
-  readonly mode: HostDeckRequestTrustMode;
-  readonly transport: HostDeckRequestTransport;
+  readonly allowedOrigin: string;
 }
 
 export interface HostDeckRequestTrustPolicy {
-  readonly allowedOrigins: readonly string[];
-  readonly mode: HostDeckRequestTrustMode;
-  readonly transport: HostDeckRequestTransport;
+  readonly allowedOrigin: string;
 }
 
 export interface HostDeckRequestTrustContext {
   readonly authority: string;
   readonly configured_origin: string;
-  readonly network_mode: HostDeckRequestTrustMode;
+  readonly network_mode: "loopback";
   readonly origin_kind: HostDeckRequestOriginKind;
-  readonly transport: HostDeckRequestTransport;
+  readonly transport: "http";
 }
 
 export interface HostDeckRequestTrustProbe {
@@ -83,8 +74,7 @@ interface AdmittedRequestTrust {
   readonly pairClaimSourceKey: string | null;
 }
 
-const policyKeys = ["allowedOrigins", "mode", "transport"];
-const maxAllowedOrigins = 8;
+const policyKeys = ["allowedOrigin"];
 const maxOriginBytes = 512;
 const maxAuthorityBytes = 512;
 const acceptedPolicies = new WeakSet<object>();
@@ -95,28 +85,10 @@ export function createHostDeckRequestTrustPolicy(
   input: CreateHostDeckRequestTrustPolicyInput
 ): HostDeckRequestTrustPolicy {
   assertPlainExactObject(input, policyKeys, "HostDeck request trust policy input");
-  if (!(hostDeckRequestTrustModes as readonly unknown[]).includes(input.mode)) {
-    throw new TypeError("HostDeck request trust mode is invalid.");
-  }
-  if (!(hostDeckRequestTransports as readonly unknown[]).includes(input.transport)) {
-    throw new TypeError("HostDeck request transport is invalid.");
-  }
-  if (input.mode === "lan" && input.transport !== "https") {
-    throw new TypeError("HostDeck LAN request trust requires HTTPS.");
-  }
-  if (!Array.isArray(input.allowedOrigins) || input.allowedOrigins.length < 1 || input.allowedOrigins.length > maxAllowedOrigins) {
-    throw new TypeError(`HostDeck request trust requires 1 to ${maxAllowedOrigins} allowed origins.`);
-  }
-
-  const origins = input.allowedOrigins.map((origin) => parseConfiguredOrigin(origin, input.mode, input.transport));
-  if (new Set(origins).size !== origins.length) {
-    throw new TypeError("HostDeck request trust allowed origins must be unique.");
-  }
+  const allowedOrigin = parseConfiguredOrigin(input.allowedOrigin);
 
   const policy: HostDeckRequestTrustPolicy = Object.freeze({
-    allowedOrigins: Object.freeze(origins),
-    mode: input.mode,
-    transport: input.transport
+    allowedOrigin
   });
   acceptedPolicies.add(policy);
   return policy;
@@ -129,8 +101,7 @@ export function assertHostDeckRequestTrustPolicy(
     policy === null ||
     typeof policy !== "object" ||
     !acceptedPolicies.has(policy) ||
-    !Object.isFrozen(policy) ||
-    !Object.isFrozen((policy as Partial<HostDeckRequestTrustPolicy>).allowedOrigins)
+    !Object.isFrozen(policy)
   ) {
     throw new TypeError("HostDeck request trust policy must be created by createHostDeckRequestTrustPolicy.");
   }
@@ -145,18 +116,20 @@ export function evaluateHostDeckRequestTrust(
   if (hasForbiddenForwardingHeader(probe.rawHeaders)) throw new HostDeckRequestTrustError("invalid_origin");
   if (!isOriginFormTarget(probe.requestTarget)) throw new HostDeckRequestTrustError("invalid_origin");
 
-  const transport: HostDeckRequestTransport = probe.secure ? "https" : "http";
-  if (transport !== policy.transport) throw new HostDeckRequestTrustError("insecure_transport");
+  if (probe.secure) throw new HostDeckRequestTrustError("insecure_transport");
+  const transport = "http" as const;
   const loopbackPeer = isLoopbackAddress(probe.remoteAddress);
-  if (policy.mode === "loopback" && !loopbackPeer) throw new HostDeckRequestTrustError("invalid_origin");
+  if (!loopbackPeer) throw new HostDeckRequestTrustError("invalid_origin");
 
   const hostValues = rawHeaderValues(probe.rawHeaders, "host");
   if (hostValues.length !== 1) throw new HostDeckRequestTrustError("invalid_origin");
   const authority = parseRequestAuthority(hostValues[0], transport);
   if (authority === null) throw new HostDeckRequestTrustError("invalid_origin");
 
-  const configuredOrigin = policy.allowedOrigins.find((origin) => new URL(origin).host === authority);
-  if (configuredOrigin === undefined) throw new HostDeckRequestTrustError("invalid_origin");
+  const configuredOrigin = policy.allowedOrigin;
+  if (new URL(configuredOrigin).host !== authority) {
+    throw new HostDeckRequestTrustError("invalid_origin");
+  }
 
   const originValues = rawHeaderValues(probe.rawHeaders, "origin");
   const localAdminValues = rawHeaderValues(
@@ -170,9 +143,7 @@ export function evaluateHostDeckRequestTrust(
     if (
       localAdminValues.length !== 1 ||
       localAdminValues[0] !== hostDeckLocalAdminRequestHeaderValue ||
-      policy.mode !== "loopback" ||
       !loopbackPeer ||
-      probe.method.toUpperCase() !== "GET" ||
       originValues.length !== 0 ||
       rawHeaderValues(probe.rawHeaders, "cookie").length !== 0 ||
       hasHeaderPrefix(probe.rawHeaders, "sec-fetch-")
@@ -200,7 +171,7 @@ export function evaluateHostDeckRequestTrust(
   return Object.freeze({
     authority,
     configured_origin: configuredOrigin,
-    network_mode: policy.mode,
+    network_mode: "loopback",
     origin_kind: originKind,
     transport
   });
@@ -303,42 +274,22 @@ export function hostDeckRequestTrustSnapshot(app: FastifyInstance): HostDeckRequ
 }
 
 function parseConfiguredOrigin(
-  candidate: unknown,
-  mode: HostDeckRequestTrustMode,
-  transport: HostDeckRequestTransport
+  candidate: unknown
 ): string {
   if (typeof candidate !== "string" || !isBoundedVisibleAscii(candidate, maxOriginBytes)) {
     throw new TypeError("HostDeck request trust origin must be bounded visible ASCII.");
   }
-  let parsed: URL;
-  try {
-    parsed = new URL(candidate);
-  } catch {
-    throw new TypeError("HostDeck request trust origin is malformed.");
+  const parsed = hostDeckLoopbackOriginSchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw new TypeError(
+      "HostDeck request trust origin must be canonical IPv4 loopback HTTP with a port."
+    );
   }
-  if (
-    parsed.origin === "null" ||
-    parsed.origin !== candidate ||
-    parsed.username !== "" ||
-    parsed.password !== "" ||
-    parsed.pathname !== "/" ||
-    parsed.search !== "" ||
-    parsed.hash !== "" ||
-    parsed.port === "0" ||
-    parsed.protocol !== `${transport}:` ||
-    parsed.hostname.includes("*") ||
-    unwrapIpv6Hostname(parsed.hostname).length > 253
-  ) {
-    throw new TypeError("HostDeck request trust origin must be one canonical bare configured origin.");
+  const port = Number(new URL(parsed.data).port);
+  if (!Number.isSafeInteger(port) || port < 1024 || port > 65_535) {
+    throw new TypeError("HostDeck request trust port must be an integer from 1024 through 65535.");
   }
-  const loopbackHost = isLoopbackHostname(parsed.hostname);
-  if (mode === "loopback" && !loopbackHost) {
-    throw new TypeError("HostDeck loopback request trust origins must use a loopback host.");
-  }
-  if (mode === "lan" && (loopbackHost || isUnspecifiedHostname(parsed.hostname))) {
-    throw new TypeError("HostDeck LAN request trust origins must use a non-loopback configured host.");
-  }
-  return parsed.origin;
+  return parsed.data;
 }
 
 function assertRequestTrustProbe(probe: unknown): asserts probe is HostDeckRequestTrustProbe {
@@ -368,7 +319,7 @@ function assertRequestTrustProbe(probe: unknown): asserts probe is HostDeckReque
   }
 }
 
-function parseRequestAuthority(candidate: string | undefined, transport: HostDeckRequestTransport): string | null {
+function parseRequestAuthority(candidate: string | undefined, transport: "http"): string | null {
   if (candidate === undefined || !isBoundedVisibleAscii(candidate, maxAuthorityBytes)) return null;
   if (["/", "\\", "@", "#", "?", ",", "%", "*"].some((character) => candidate.includes(character))) return null;
   try {
@@ -513,20 +464,6 @@ function canonicalPairClaimPeer(
   }
 }
 
-function isLoopbackHostname(hostname: string): boolean {
-  const unwrapped = unwrapIpv6Hostname(hostname).toLowerCase();
-  return unwrapped === "localhost" || isLoopbackAddress(unwrapped);
-}
-
-function isUnspecifiedHostname(hostname: string): boolean {
-  const unwrapped = unwrapIpv6Hostname(hostname).toLowerCase();
-  return unwrapped === "0.0.0.0" || unwrapped === "::";
-}
-
-function unwrapIpv6Hostname(hostname: string): string {
-  return hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
-}
-
 function isBoundedVisibleAscii(value: string, maximumBytes: number): boolean {
   if (value.length < 1 || value.length > maximumBytes) return false;
   for (const character of value) {
@@ -544,7 +481,22 @@ function assertPlainExactObject(value: unknown, keys: readonly string[], label: 
   if (value === null || typeof value !== "object" || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) {
     throw new TypeError(`${label} must be a plain object.`);
   }
-  const actual = Object.keys(value).sort();
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const ownKeys = Reflect.ownKeys(descriptors);
+  if (
+    ownKeys.some((key) => {
+      if (typeof key !== "string") return true;
+      const descriptor = descriptors[key];
+      return (
+        descriptor === undefined ||
+        !descriptor.enumerable ||
+        !("value" in descriptor)
+      );
+    })
+  ) {
+    throw new TypeError(`${label} fields are invalid.`);
+  }
+  const actual = (ownKeys as string[]).sort();
   const expected = [...keys].sort();
   if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
     throw new TypeError(`${label} fields are invalid.`);

@@ -12,6 +12,7 @@ import {
   type HostDeckFastifyInstance
 } from "./fastify-app.js";
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import { hostDeckLoopbackTestOrigin, injectHostDeckLoopback } from "./fastify-loopback-test-request.js";
 import {
   createHostDeckRequestAuthenticationPolicy,
   type HostDeckDeviceAuthenticationPort,
@@ -42,14 +43,12 @@ const writeToken = "W".repeat(43);
 const expiredToken = "E".repeat(43);
 const revokedToken = "V".repeat(43);
 const storageToken = "S".repeat(43);
-const loopbackOrigin = "http://localhost";
+const loopbackOrigin = hostDeckLoopbackTestOrigin;
 const remoteLocalOrigin = "http://127.0.0.1:3777";
 const externalOrigin = "https://hostdeck-resume.fixture-tailnet.ts.net";
 const remoteSource = "100.90.80.70";
 const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
-  allowedOrigins: [loopbackOrigin],
-  mode: "loopback",
-  transport: "http"
+  allowedOrigin: loopbackOrigin
 });
 
 afterEach(async () => {
@@ -80,7 +79,7 @@ describe("selected managed-thread resume route", () => {
     await app.ready();
     expect(
       (
-        await app.inject({
+        await injectHostDeckLoopback(app, {
           method: "GET",
           url: `/api/v1/sessions/${sessionId}/resume`
         })
@@ -154,7 +153,7 @@ describe("selected managed-thread resume route", () => {
     });
     await app.ready();
 
-    const response = await app.inject({
+    const response = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/resume`
     });
@@ -179,7 +178,7 @@ describe("selected managed-thread resume route", () => {
       read: () => unavailableResponse()
     });
     await unavailableApp.ready();
-    const unavailable = await unavailableApp.inject({
+    const unavailable = await injectHostDeckLoopback(unavailableApp, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/resume`
     });
@@ -187,7 +186,7 @@ describe("selected managed-thread resume route", () => {
     expect(unavailable.json()).toEqual(unavailableResponse());
 
     expectStableError(
-      await app.inject({
+      await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/resume?thread_id=${threadId}`
       }),
@@ -196,7 +195,7 @@ describe("selected managed-thread resume route", () => {
       "query"
     );
     expectStableError(
-      await app.inject({
+      await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/sessions/session%20with%20spaces/resume"
       }),
@@ -205,7 +204,7 @@ describe("selected managed-thread resume route", () => {
       "params"
     );
     expectStableError(
-      await app.inject({
+      await injectHostDeckLoopback(app, {
         method: "HEAD",
         url: `/api/v1/sessions/${sessionId}/resume`
       }),
@@ -213,7 +212,7 @@ describe("selected managed-thread resume route", () => {
       "method_not_allowed"
     );
     expectStableError(
-      await app.inject({
+      await injectHostDeckLoopback(app, {
         method: "POST",
         url: `/api/v1/sessions/${sessionId}/resume`
       }),
@@ -221,7 +220,7 @@ describe("selected managed-thread resume route", () => {
       "method_not_allowed"
     );
     expectStableError(
-      await app.inject({
+      await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/resume/`
       }),
@@ -229,7 +228,7 @@ describe("selected managed-thread resume route", () => {
       "route_not_found"
     );
     expectStableError(
-      await app.inject({
+      await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/Resume`
       }),
@@ -282,14 +281,14 @@ describe("selected managed-thread resume route", () => {
 
     expect(
       (
-        await app.inject({
+        await injectHostDeckLoopback(app, {
           method: "GET",
           url: `/api/v1/sessions/${sessionId}/resume`
         })
       ).statusCode
     ).toBe(200);
     for (const token of [readToken, writeToken]) {
-      const paired = await app.inject({
+      const paired = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/resume`,
         headers: deviceCookie(token)
@@ -299,7 +298,7 @@ describe("selected managed-thread resume route", () => {
     expect(readCalls).toBe(3);
 
     for (const token of [expiredToken, revokedToken, "U".repeat(43)]) {
-      const denied = await app.inject({
+      const denied = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/sessions/bad%20target/resume?thread_id=private",
         headers: deviceCookie(token)
@@ -307,7 +306,7 @@ describe("selected managed-thread resume route", () => {
       expectStableError(denied, 401, "permission_denied");
       expect(denied.body).not.toMatch(/private|auth|cookie|token/iu);
     }
-    const storage = await app.inject({
+    const storage = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/resume`,
       headers: deviceCookie(storageToken)
@@ -315,7 +314,7 @@ describe("selected managed-thread resume route", () => {
     expectStableError(storage, 500, "storage_error");
     expect(storage.body).not.toContain("auth-storage-private-sentinel");
 
-    const duplicate = await app.inject({
+    const duplicate = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/resume`,
       headers: {
@@ -372,7 +371,7 @@ describe("selected managed-thread resume route", () => {
     apps.push(app);
     await app.ready();
 
-    const identityOnly = await app.inject({
+    const identityOnly = await injectHostDeckLoopback(app, {
       method: "GET",
       url: "/api/v1/sessions/bad%20target/resume?thread_id=private",
       headers: remoteHeaders({ identity: true })
@@ -390,7 +389,7 @@ describe("selected managed-thread resume route", () => {
     }
 
     for (const token of [readToken, writeToken]) {
-      const paired = await app.inject({
+      const paired = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/resume`,
         headers: remoteHeaders({ cookie: token, identity: true })
@@ -452,7 +451,7 @@ describe("selected managed-thread resume route", () => {
         }
       });
       await app.ready();
-      const response = await app.inject({
+      const response = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/resume`
       });
@@ -487,7 +486,7 @@ describe("selected managed-thread resume route", () => {
         { observations }
       );
       await app.ready();
-      const response = await app.inject({
+      const response = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/resume`
       });
@@ -512,9 +511,7 @@ describe("selected managed-thread resume route", () => {
       },
       {
         trustPolicy: createHostDeckRequestTrustPolicy({
-          allowedOrigins: [origin],
-          mode: "loopback",
-          transport: "http"
+          allowedOrigin: origin
         })
       }
     );

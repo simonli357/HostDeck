@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   defaultResourceBudget,
-  defaultRetentionPolicy,
   runtimeCompatibilitySchema,
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
@@ -157,9 +156,7 @@ describe("IFC-V1-046 selected API production route composition", () => {
       observeInternalError: () => undefined,
       requestAuthenticationPolicy: fixture.authentication,
       requestTrustPolicy: createHostDeckRequestTrustPolicy({
-        allowedOrigins: ["http://127.0.0.1:48765"],
-        mode: "loopback",
-        transport: "http"
+        allowedOrigin: "http://127.0.0.1:48765"
       }),
       resourceBudget: defaultResourceBudget,
       routePlugins: createHostDeckSelectedApiRouteComposition(fixture.input)
@@ -207,9 +204,7 @@ describe("IFC-V1-046 selected API production route composition", () => {
       observeInternalError: () => undefined,
       requestAuthenticationPolicy: local.authentication,
       requestTrustPolicy: createHostDeckRequestTrustPolicy({
-        allowedOrigins: ["http://127.0.0.1:48765"],
-        mode: "loopback",
-        transport: "http"
+        allowedOrigin: "http://127.0.0.1:48765"
       }),
       resourceBudget: defaultResourceBudget,
       routePlugins: createHostDeckSelectedApiRouteComposition(local.input)
@@ -937,16 +932,8 @@ function selectedProbeRuntime() {
 
 function selectedProbeSettings() {
   return Object.freeze({
-    id: "hostdeck_settings" as const,
-    schema_version: 1,
-    state_dir: "/tmp/hostdeck-composition-probe-state",
-    bind_mode: "localhost" as const,
-    bind_host: "127.0.0.1",
-    bind_port: 48765,
-    lan_enabled: false,
     locked: false,
-    retention: { ...defaultRetentionPolicy },
-    updated_at: fixedTime
+    settings_updated_at: fixedTime
   });
 }
 

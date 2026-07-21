@@ -158,9 +158,7 @@ export function createTailscaleServeProxyTrustPolicy(
     local_origin: localOriginResult.data
   });
   const localPolicy = createHostDeckRequestTrustPolicy({
-    allowedOrigins: [localOriginResult.data],
-    mode: "loopback",
-    transport: "http"
+    allowedOrigin: localOriginResult.data
   });
   acceptedPolicies.add(policy);
   policyRuntimes.set(policy, Object.freeze({ localPolicy, readRemoteAdmission: input.readRemoteAdmission }));

@@ -27,6 +27,7 @@ import {
   type HostDeckFastifyInstance
 } from "./fastify-app.js";
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import { hostDeckLoopbackTestOrigin, injectHostDeckLoopback } from "./fastify-loopback-test-request.js";
 import {
   createHostDeckRequestAuthenticationPolicy,
   type HostDeckDeviceAuthenticationPort,
@@ -54,14 +55,12 @@ const readToken = "R".repeat(43);
 const writeToken = "W".repeat(43);
 const expiredToken = "E".repeat(43);
 const storageToken = "S".repeat(43);
-const loopbackOrigin = "http://localhost";
+const loopbackOrigin = hostDeckLoopbackTestOrigin;
 const remoteLocalOrigin = "http://127.0.0.1:3777";
 const externalOrigin = "https://hostdeck-usage.fixture-tailnet.ts.net";
 const remoteSource = "100.90.80.70";
 const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
-  allowedOrigins: [loopbackOrigin],
-  mode: "loopback",
-  transport: "http"
+  allowedOrigin: loopbackOrigin
 });
 
 afterEach(async () => {
@@ -105,7 +104,7 @@ describe("selected usage read route", () => {
     };
     const app = createUsageAppFromRegistration(registration);
     await app.ready();
-    const response = await app.inject({
+    const response = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/usage`
     });
@@ -229,7 +228,7 @@ describe("selected usage read route", () => {
     );
     await app.ready();
 
-    const response = await app.inject({
+    const response = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/usage`
     });
@@ -250,7 +249,7 @@ describe("selected usage read route", () => {
       { method: "GET", url: `/api/v1/sessions/${sessionId}/usage/`, status: 404, code: "route_not_found" },
       { method: "GET", url: `/api/v1/sessions/${sessionId}/Usage`, status: 404, code: "route_not_found" }
     ] as const) {
-      const invalid = await app.inject(request);
+      const invalid = await injectHostDeckLoopback(app, request);
       expectStableError(
         invalid,
         request.status,
@@ -306,14 +305,14 @@ describe("selected usage read route", () => {
 
     expect(
       (
-        await app.inject({
+        await injectHostDeckLoopback(app, {
           method: "GET",
           url: `/api/v1/sessions/${sessionId}/usage`
         })
       ).statusCode
     ).toBe(200);
     for (const token of [readToken, writeToken]) {
-      const paired = await app.inject({
+      const paired = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/usage`,
         headers: deviceCookie(token)
@@ -324,7 +323,7 @@ describe("selected usage read route", () => {
     expect(usageReads).toBe(3);
 
     for (const token of [expiredToken, "U".repeat(43)]) {
-      const denied = await app.inject({
+      const denied = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/sessions/bad%20target/usage?thread_id=private",
         headers: deviceCookie(token)
@@ -332,14 +331,14 @@ describe("selected usage read route", () => {
       expectStableError(denied, 401, "permission_denied");
       expect(denied.body).not.toMatch(/private|auth|cookie|token/iu);
     }
-    const storage = await app.inject({
+    const storage = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/usage`,
       headers: deviceCookie(storageToken)
     });
     expectStableError(storage, 500, "storage_error");
     expect(storage.body).not.toContain("auth-storage-private-sentinel");
-    const duplicate = await app.inject({
+    const duplicate = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/usage`,
       headers: {
@@ -404,7 +403,7 @@ describe("selected usage read route", () => {
     apps.push(app);
     await app.ready();
 
-    const identityOnly = await app.inject({
+    const identityOnly = await injectHostDeckLoopback(app, {
       method: "GET",
       url: "/api/v1/sessions/bad%20target/usage?thread_id=private",
       headers: remoteHeaders({ identity: true })
@@ -417,7 +416,7 @@ describe("selected usage read route", () => {
     );
 
     for (const token of [readToken, writeToken]) {
-      const paired = await app.inject({
+      const paired = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/usage`,
         headers: remoteHeaders({ cookie: token, identity: true })
@@ -486,7 +485,7 @@ describe("selected usage read route", () => {
         }
       );
       await app.ready();
-      const response = await app.inject({
+      const response = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/usage`
       });
@@ -532,7 +531,7 @@ describe("selected usage read route", () => {
         }
       );
       await app.ready();
-      const response = await app.inject({
+      const response = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/usage`
       });
@@ -588,7 +587,7 @@ describe("selected usage read route", () => {
         { observations }
       );
       await app.ready();
-      const response = await app.inject({
+      const response = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/usage`
       });

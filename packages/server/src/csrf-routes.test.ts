@@ -31,6 +31,7 @@ import {
   type HostDeckRoutePluginRegistration
 } from "./fastify-app.js";
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import { hostDeckLoopbackTestOrigin, injectHostDeckLoopback } from "./fastify-loopback-test-request.js";
 import {
   createHostDeckRequestAuthenticationPolicy,
   type HostDeckDeviceAuthenticationPort,
@@ -61,11 +62,9 @@ const createdAt = "2026-07-12T15:00:00.000Z";
 const authenticatedAt = "2026-07-12T15:01:00.000Z";
 const rotatedAt = "2026-07-12T15:02:00.000Z";
 const writeAuthorizedAt = "2026-07-12T15:03:00.000Z";
-const loopbackOrigin = "http://localhost";
+const loopbackOrigin = hostDeckLoopbackTestOrigin;
 const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
-  allowedOrigins: [loopbackOrigin],
-  mode: "loopback",
-  transport: "http"
+  allowedOrigin: loopbackOrigin
 });
 
 afterEach(() => {
@@ -263,7 +262,7 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
     });
     await app.ready();
     try {
-      const response = await app.inject({
+      const response = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/fixture/write",
         headers: {
@@ -314,7 +313,7 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
     const localApp = createWriteFixtureApp(localPolicy);
     await localApp.ready();
     try {
-      const local = await localApp.inject({ method: "POST", url: "/fixture/write" });
+      const local = await injectHostDeckLoopback(localApp, { method: "POST", url: "/fixture/write" });
       expect(local.statusCode, local.body).toBe(200);
       expect(local.json()).toEqual({
         authority: "local_admin",
@@ -331,7 +330,7 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
       await deviceOnly.ready();
       try {
         expectStableError(
-          await deviceOnly.inject({ method: "POST", url: "/fixture/write" }),
+          await injectHostDeckLoopback(deviceOnly, { method: "POST", url: "/fixture/write" }),
           401,
           "permission_denied"
         );
@@ -362,7 +361,7 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
     await readApp.ready();
     try {
       expectStableError(
-        await readApp.inject({
+        await injectHostDeckLoopback(readApp, {
           method: "POST",
           url: "/fixture/write",
           headers: validWriteHeaders(readDeviceToken)
@@ -423,7 +422,7 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
         }
       ];
       for (const headers of malformedHeaders) {
-        const response = await app.inject({
+        const response = await injectHostDeckLoopback(app, {
           method: "POST",
           url: "/fixture/write",
           headers
@@ -447,7 +446,7 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
     await staleContext.ready();
     try {
       expectStableError(
-        await staleContext.inject({
+        await injectHostDeckLoopback(staleContext, {
           method: "POST",
           url: "/fixture/write",
           headers: validWriteHeaders(rawDeviceToken)
@@ -549,19 +548,19 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
       ]);
 
       const beforeMalformed = { authentications, rotations };
-      const unknownBody = await app.inject({
+      const unknownBody = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/api/v1/access/csrf",
         headers: deviceCookie(rawDeviceToken),
         payload: { operation_id: "op_csrf_unknown", extra: true }
       });
-      const unknownQuery = await app.inject({
+      const unknownQuery = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/api/v1/access/csrf?extra=1",
         headers: deviceCookie(rawDeviceToken),
         payload: { operation_id: "op_csrf_query" }
       });
-      const malformedJson = await app.inject({
+      const malformedJson = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/api/v1/access/csrf",
         headers: {
@@ -570,7 +569,7 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
         },
         payload: "{"
       });
-      const unsupportedMedia = await app.inject({
+      const unsupportedMedia = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/api/v1/access/csrf",
         headers: {
@@ -595,21 +594,21 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
       expect(rotations).toBe(beforeMalformed.rotations);
       expect(authentications).toBe(beforeMalformed.authentications + 3);
 
-      const wrongMethod = await app.inject({
+      const wrongMethod = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/access/csrf"
       });
-      const implicitHead = await app.inject({
+      const implicitHead = await injectHostDeckLoopback(app, {
         method: "HEAD",
         url: "/api/v1/access/csrf"
       });
-      const trailingSlash = await app.inject({
+      const trailingSlash = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/api/v1/access/csrf/",
         headers: deviceCookie(rawDeviceToken),
         payload: { operation_id: "op_csrf_slash" }
       });
-      const wrongCase = await app.inject({
+      const wrongCase = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/api/v1/access/CSRF",
         headers: deviceCookie(rawDeviceToken),
@@ -634,7 +633,7 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
         expect(response.headers.pragma).toBe("no-cache");
         expect(response.body).not.toMatch(/private|cookie|bearer/iu);
       }
-      const unpaired = await app.inject({
+      const unpaired = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/api/v1/access/csrf",
         payload: { operation_id: "op_csrf_unpaired" }
@@ -751,7 +750,7 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
         ]
       });
 
-      const write = await app.inject({
+      const write = await injectHostDeckLoopback(app, {
         method: "POST",
         url: "/fixture/write",
         headers: {
@@ -1202,7 +1201,7 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
       });
       await app.ready();
       try {
-        const response = await app.inject({
+        const response = await injectHostDeckLoopback(app, {
           method: "POST",
           url: "/fixture/write",
           headers: validWriteHeaders(rawDeviceToken)
@@ -1234,9 +1233,7 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
     const origin = `http://127.0.0.1:${port}`;
     const app = createWriteFixtureApp(policy, {
       trustPolicy: createHostDeckRequestTrustPolicy({
-        allowedOrigins: [origin],
-        mode: "loopback",
-        transport: "http"
+        allowedOrigin: origin
       })
     });
     await app.listen({ host: "127.0.0.1", port, listenTextResolver: () => "" });
@@ -1304,9 +1301,7 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
       },
       {
         trustPolicy: createHostDeckRequestTrustPolicy({
-          allowedOrigins: [bootstrapOrigin],
-          mode: "loopback",
-          transport: "http"
+          allowedOrigin: bootstrapOrigin
         })
       }
     );
@@ -1359,7 +1354,7 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
       const hostileApp = createWriteFixtureApp(policy, { rawHeaders });
       await hostileApp.ready();
       try {
-        const response = await hostileApp.inject({
+        const response = await injectHostDeckLoopback(hostileApp, {
           method: "POST",
           url: "/fixture/write",
           headers: validWriteHeaders(rawDeviceToken)
@@ -1418,7 +1413,7 @@ describe("selected CSRF bootstrap and browser-write boundary", () => {
       const app = createWriteFixtureApp(policy, { observations });
       await app.ready();
       try {
-        const response = await app.inject({
+        const response = await injectHostDeckLoopback(app, {
           method: "POST",
           url: "/fixture/write",
           headers: validWriteHeaders(rawDeviceToken)
@@ -1758,7 +1753,7 @@ function injectBootstrap(
   token: string,
   payload: Readonly<Record<string, unknown>>
 ) {
-  return app.inject({
+  return injectHostDeckLoopback(app, {
     method: "POST",
     url: "/api/v1/access/csrf",
     headers: deviceCookie(token),

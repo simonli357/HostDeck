@@ -18,8 +18,6 @@ import {
 } from "./device-authority-lifecycle.js";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import {
-  HostDeckRequestTrustError,
-  hostDeckPairClaimSourceKey,
   hostDeckRequestTrustContext
 } from "./fastify-request-trust.js";
 import type { SelectedApiAuthMechanism } from "./selected-api-route-manifest.js";
@@ -142,7 +140,7 @@ const acceptedPolicies = new WeakSet<object>();
 const acceptedIngressPolicies = new WeakSet<object>();
 const authenticationRuntimes = new WeakMap<FastifyInstance, AuthenticationRuntime>();
 const pendingAuthenticationStates = new WeakMap<FastifyRequest, PendingAuthenticationState>();
-const legacyRequestAuthenticationIngressPolicy =
+const localRequestAuthenticationIngressPolicy =
   createHostDeckRequestAuthenticationIngressPolicy({
     acquireAuthority() {
       return null;
@@ -152,18 +150,12 @@ const legacyRequestAuthenticationIngressPolicy =
     },
     resolve(request) {
       const trust = hostDeckRequestTrustContext(request);
-      let sourceKey: string | null = null;
-      try {
-        sourceKey = hostDeckPairClaimSourceKey(request);
-      } catch (error) {
-        if (!(error instanceof HostDeckRequestTrustError)) throw error;
-      }
       return {
         configured_origin: trust.configured_origin,
         network_mode: trust.network_mode,
         origin_kind: trust.origin_kind,
         transport: trust.transport,
-        source_key: sourceKey,
+        source_key: null,
         remote_generation: null
       };
     }
@@ -241,7 +233,7 @@ export function assertHostDeckRequestAuthenticationIngressPolicy(
 export function installHostDeckRequestAuthentication(
   app: FastifyInstance,
   policy: HostDeckRequestAuthenticationPolicy,
-  ingressPolicy: HostDeckRequestAuthenticationIngressPolicy = legacyRequestAuthenticationIngressPolicy
+  ingressPolicy: HostDeckRequestAuthenticationIngressPolicy = localRequestAuthenticationIngressPolicy
 ): void {
   assertHostDeckRequestAuthenticationPolicy(policy);
   assertHostDeckRequestAuthenticationIngressPolicy(ingressPolicy);

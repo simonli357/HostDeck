@@ -15,7 +15,6 @@ import type {
 } from "../packages/codex-adapter/src/index.js";
 import {
   defaultResourceBudget,
-  defaultRetentionPolicy,
   managedSessionTargetSchema,
   runtimeCompatibilitySchema,
   type SelectedSessionProjectionRecord,
@@ -154,9 +153,7 @@ describe("managed-session Plan selected vertical", () => {
         now: () => new Date(auditTimestamp)
       }),
       requestTrustPolicy: createHostDeckRequestTrustPolicy({
-        allowedOrigins: [`http://127.0.0.1:${port}`],
-        mode: "loopback",
-        transport: "http"
+        allowedOrigin: `http://127.0.0.1:${port}`
       }),
       resourceBudget: defaultResourceBudget,
       routePlugins: [registration]
@@ -443,18 +440,10 @@ function runtime() {
 }
 
 function settings() {
-  return {
-    id: "hostdeck_settings" as const,
-    schema_version: 1,
-    state_dir: "/tmp/hostdeck-plan-vertical-state",
-    bind_mode: "localhost" as const,
-    bind_host: "127.0.0.1",
-    bind_port: 3777,
-    lan_enabled: false,
+  return Object.freeze({
     locked: false,
-    retention: { ...defaultRetentionPolicy },
-    updated_at: timestamp
-  };
+    settings_updated_at: timestamp
+  });
 }
 
 function availableLoopbackPort(): Promise<number> {

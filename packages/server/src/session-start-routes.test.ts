@@ -1,10 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { request as httpsRequest, type RequestOptions } from "node:https";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   defaultResourceBudget,
-  defaultRetentionPolicy,
   type RuntimeCompatibility,
   runtimeCompatibilitySchema,
   selectedSessionMappingRecordSchema,
@@ -12,9 +10,7 @@ import {
 } from "@hostdeck/contracts";
 import { runtimeCapabilities } from "@hostdeck/core";
 import {
-  createAuthDeviceRepository,
   createSelectedAuditRepository,
-  createSelectedCsrfAuthorizationRepository,
   HostDeckSelectedAuditRepositoryError,
   openMigratedDatabase,
   type SelectedAuditRepository,
@@ -27,13 +23,10 @@ import {
   type HostDeckFastifyInstance,
   type HostDeckRoutePluginRegistration
 } from "./fastify-app.js";
-import {
-  createHostDeckRequestAuthenticationPolicy,
-  hostDeckDeviceCookieName
-} from "./fastify-request-authentication.js";
+import { hostDeckLoopbackTestOrigin, injectHostDeckLoopback } from "./fastify-loopback-test-request.js";
+import { createHostDeckRequestAuthenticationPolicy } from "./fastify-request-authentication.js";
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import { createHostDeckHostLockPolicy } from "./host-lock-routes.js";
-import { createHostDeckLanCertificatePolicy } from "./lan-certificate-policy.js";
 import {
   HostDeckManagedCodexThreadServiceError,
   type ManagedCodexThreadServiceOutcome
@@ -48,10 +41,6 @@ import {
 const temporaryDirectories: string[] = [];
 const timestamp = "2026-07-15T18:00:00.000Z";
 const runtimeVersion = "0.144.0";
-const secureOrigin = "https://192.168.0.29:3777";
-const pairedDeviceId = "client_session_start_writer";
-const pairedDeviceToken = "W".repeat(43);
-const pairedCsrfToken = "C".repeat(43);
 const request = Object.freeze({
   operation_id: "op_session_start_route_001",
   name: "route-session",
@@ -158,64 +147,6 @@ describe("selected managed-session start route", () => {
           }
         ]
       });
-    } finally {
-      await harness.close();
-    }
-  });
-
-  it("starts through one paired HTTPS writer with real CSRF and rejects a stale CSRF before audit", async () => {
-    const harness = await createPairedHarness();
-    const operationId = "op_session_start_paired_001";
-    try {
-      const response = await secureStart(harness, {
-        ...request,
-        operation_id: operationId
-      });
-      expect(response.statusCode, response.body).toBe(201);
-      expect(response.json()).toMatchObject({ operation_id: operationId });
-      expect(response.headers["cache-control"]).toBe("no-store");
-      expect(harness.startCalls()).toHaveLength(1);
-      expect(harness.auditRepository.require(operationId)).toMatchObject({
-        state: "terminal",
-        records: [
-          {
-            phase: "accepted",
-            actor: {
-              type: "dashboard",
-              device_id: pairedDeviceId,
-              permission: "write",
-              origin: secureOrigin
-            }
-          },
-          { phase: "terminal", outcome: "succeeded" }
-        ]
-      });
-
-      const staleOperation = "op_session_start_paired_stale_csrf";
-      const stale = await secureStart(
-        harness,
-        { ...request, operation_id: staleOperation },
-        "S".repeat(43)
-      );
-      expectStableError(stale, 403, "permission_denied");
-      expect(harness.startCalls()).toHaveLength(1);
-      expect(harness.auditRepository.get(staleOperation)).toBeNull();
-    } finally {
-      await harness.close();
-    }
-  });
-
-  it("rejects a paired HTTPS read-only device before runtime proof, audit, or dispatch", async () => {
-    const harness = await createPairedHarness("read");
-    const operationId = "op_session_start_paired_read_only";
-    try {
-      const response = await secureStart(harness, {
-        ...request,
-        operation_id: operationId
-      });
-      expectStableError(response, 403, "read_only");
-      expect(harness.startCalls()).toEqual([]);
-      expect(harness.auditRepository.get(operationId)).toBeNull();
     } finally {
       await harness.close();
     }
@@ -560,13 +491,6 @@ interface Harness {
   readonly close: () => Promise<void>;
 }
 
-interface PairedHarness {
-  readonly app: HostDeckFastifyInstance;
-  readonly auditRepository: SelectedAuditRepository;
-  readonly startCalls: () => readonly unknown[];
-  readonly close: () => Promise<void>;
-}
-
 async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   const directory = mkdtempSync(join(tmpdir(), "hostdeck-session-start-route-"));
   temporaryDirectories.push(directory);
@@ -665,9 +589,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
     observeInternalError: () => undefined,
     requestAuthenticationPolicy: authenticationPolicy,
     requestTrustPolicy: createHostDeckRequestTrustPolicy({
-      allowedOrigins: ["http://localhost"],
-      mode: "loopback",
-      transport: "http"
+      allowedOrigin: hostDeckLoopbackTestOrigin
     }),
     resourceBudget: defaultResourceBudget,
     routePlugins: [registration]
@@ -680,116 +602,6 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
     registration,
     routeInput,
     runtimeReads: () => runtimeReadCount,
-    startCalls: () => [...calls],
-    async close() {
-      if (closed) return;
-      closed = true;
-      await app.close();
-      if (open.db.open) open.db.close();
-    }
-  };
-}
-
-async function createPairedHarness(
-  permission: "read" | "write" = "write"
-): Promise<PairedHarness> {
-  const directory = mkdtempSync(join(tmpdir(), "hostdeck-session-start-paired-"));
-  temporaryDirectories.push(directory);
-  const open = openMigratedDatabase(join(directory, "hostdeck.sqlite"), {
-    now: () => new Date(timestamp)
-  });
-  let clock = new Date(timestamp).getTime();
-  const nextDate = () => new Date(clock++);
-  const auth = createAuthDeviceRepository(open.db);
-  auth.create({
-    id: pairedDeviceId,
-    rawDeviceToken: pairedDeviceToken,
-    rawCsrfToken: pairedCsrfToken,
-    permission,
-    clientLabel: "Session start writer",
-    createdAt: new Date(timestamp)
-  });
-  const authenticationPolicy = createHostDeckRequestAuthenticationPolicy({
-    authenticateDeviceToken: (input) => auth.authenticateDeviceToken(input),
-    now: nextDate
-  });
-  const csrfRepository = createSelectedCsrfAuthorizationRepository(open.db, {
-    generateCsrfToken: () => "N".repeat(43)
-  });
-  const csrf = createHostDeckCsrfPolicy({
-    csrf: {
-      authorizeBrowserWrite: (input) =>
-        csrfRepository.authorizeBrowserWrite(input),
-      rotateBootstrap: (input) => csrfRepository.rotateBootstrap(input)
-    },
-    now: nextDate
-  });
-  const lock = createHostDeckHostLockPolicy({
-    settings: {
-      read: () => settings(false),
-      transition() {
-        throw new Error("Session-start route must not transition host lock.");
-      }
-    },
-    now: nextDate
-  });
-  const auditRepository = createSelectedAuditRepository(open.db);
-  let auditId = 0;
-  const audit = createHostDeckSelectedWriteAuditExecutor({
-    repository: auditRepository,
-    now: () => nextDate().toISOString(),
-    create_record_id: () => `audit_session_start_paired_${++auditId}`
-  });
-  const calls: unknown[] = [];
-  const registration = createHostDeckSessionStartRouteRegistration({
-    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
-    audit,
-    csrf,
-    lock,
-    runtime: { read: () => runtimeCandidate() },
-    sessions: {
-      async start(candidate) {
-        calls.push(candidate);
-        return selectedState();
-      }
-    }
-  });
-  const certificateDirectory = join(directory, "certificates");
-  mkdirSync(certificateDirectory, { mode: 0o700 });
-  const certificates = createHostDeckLanCertificatePolicy({
-    assignedAddresses: () => ["192.168.0.29"],
-    certificateDirectory,
-    now: () => new Date(timestamp)
-  });
-  await certificates.configure({
-    bind_host: "192.168.0.29",
-    bind_port: 3777,
-    certificate_action: "issue_leaf"
-  });
-  const app = createHostDeckFastifyApp({
-    observeInternalError: () => undefined,
-    requestAuthenticationPolicy: authenticationPolicy,
-    requestTrustPolicy: createHostDeckRequestTrustPolicy({
-      allowedOrigins: [secureOrigin],
-      mode: "lan",
-      transport: "https"
-    }),
-    resourceBudget: defaultResourceBudget,
-    routePlugins: [registration],
-    tls: certificates.loadTls({
-      bind_host: "192.168.0.29",
-      bind_port: 3777
-    })
-  });
-  await app.listen({
-    host: "127.0.0.1",
-    port: 0,
-    listenTextResolver: () => ""
-  });
-  let closed = false;
-  return {
-    app,
-    auditRepository,
     startCalls: () => [...calls],
     async close() {
       if (closed) return;
@@ -889,18 +701,10 @@ function selectedState() {
 }
 
 function settings(locked: boolean) {
-  return {
-    id: "hostdeck_settings" as const,
-    schema_version: 1,
-    state_dir: "/tmp/hostdeck-route-state",
-    bind_mode: "localhost" as const,
-    bind_host: "127.0.0.1",
-    bind_port: 3210,
-    lan_enabled: false,
+  return Object.freeze({
     locked,
-    retention: { ...defaultRetentionPolicy },
-    updated_at: timestamp
-  };
+    settings_updated_at: timestamp
+  });
 }
 
 function serviceError(
@@ -921,79 +725,10 @@ async function start(
   harness: Harness,
   payload: Readonly<Record<string, unknown>>
 ) {
-  return await harness.app.inject({
+  return await injectHostDeckLoopback(harness.app, {
     method: "POST",
     url: "/api/v1/sessions",
     payload
-  });
-}
-
-async function secureStart(
-  harness: PairedHarness,
-  payload: Readonly<Record<string, unknown>>,
-  csrf = pairedCsrfToken
-): Promise<HttpResult> {
-  const body = JSON.stringify(payload);
-  return await httpsExchange(
-    harness,
-    {
-      method: "POST",
-      path: "/api/v1/sessions",
-      headers: {
-        host: "192.168.0.29:3777",
-        origin: secureOrigin,
-        accept: "application/json",
-        "content-type": "application/json",
-        "content-length": Buffer.byteLength(body),
-        cookie: `${hostDeckDeviceCookieName}=${pairedDeviceToken}`,
-        "x-hostdeck-csrf": csrf,
-        "x-hostdeck-csrf-generation": "1"
-      }
-    },
-    body
-  );
-}
-
-interface HttpResult {
-  readonly statusCode: number;
-  readonly body: string;
-  readonly headers: import("node:http").IncomingHttpHeaders;
-  readonly json: () => Record<string, unknown>;
-}
-
-function httpsExchange(
-  harness: PairedHarness,
-  options: RequestOptions,
-  body: string
-): Promise<HttpResult> {
-  const address = harness.app.server.address();
-  if (address === null || typeof address === "string") {
-    throw new Error("Session-start HTTPS listener is unavailable.");
-  }
-  return new Promise((resolve, reject) => {
-    const outgoing = httpsRequest(
-      {
-        host: "127.0.0.1",
-        port: address.port,
-        rejectUnauthorized: false,
-        ...options
-      },
-      (response) => {
-        const chunks: Buffer[] = [];
-        response.on("data", (chunk: Buffer) => chunks.push(chunk));
-        response.on("end", () => {
-          const responseBody = Buffer.concat(chunks).toString("utf8");
-          resolve({
-            statusCode: response.statusCode ?? 0,
-            body: responseBody,
-            headers: response.headers,
-            json: () => JSON.parse(responseBody) as Record<string, unknown>
-          });
-        });
-      }
-    );
-    outgoing.once("error", reject);
-    outgoing.end(body);
   });
 }
 

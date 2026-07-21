@@ -4,9 +4,7 @@ import {
   selectedOperationKinds
 } from "@hostdeck/core";
 import { describe, expect, it } from "vitest";
-import { apiRouteContracts } from "./api-route-contracts.js";
 import * as serverPackage from "./index.js";
-import { historicalLanRouteInventory } from "./lan-network-routes.js";
 import {
   selectedApiAuditActions,
   selectedApiAuthMechanisms,
@@ -382,48 +380,28 @@ describe("selected API route manifest", () => {
     expect(selectedApiRouteOwnerTasks).not.toContain("IFC-V1-031");
   });
 
-  it("isolates the frozen LAN route inventory outside the selected manifest and package exports", () => {
-    expect(historicalLanRouteInventory).toEqual([
-      { id: "network_state", method: "GET", path: "/api/v1/network" },
-      { id: "network_configure", method: "POST", path: "/api/v1/network/configure" },
-      { id: "network_enable", method: "POST", path: "/api/v1/network/enable" },
-      { id: "network_disable", method: "POST", path: "/api/v1/network/disable" }
-    ]);
-    expectRecursivelyFrozen(historicalLanRouteInventory);
-
-    const selectedRoutes = new Set(
-      selectedApiRouteManifest.map((route) => `${route.method} ${route.path}`)
-    );
-    expect(
-      historicalLanRouteInventory.every(
-        (route) => !selectedRoutes.has(`${route.method} ${route.path}`)
-      )
-    ).toBe(true);
+  it("exports no retired LAN or certificate production interface", () => {
     for (const exportName of [
       "createHostDeckLanCertificatePolicy",
       "createHostDeckLanNetworkRouteRegistration",
       "createHostDeckLanNetworkService",
       "historicalLanRouteInventory",
-      "hostDeckLanNetworkRouteRegistrationId"
+      "hostDeckLanNetworkRouteRegistrationId",
+      "createSecurityRouteHandlers",
+      "apiRouteContracts"
     ]) {
       expect(Reflect.has(serverPackage, exportName), exportName).toBe(false);
     }
   });
 
-  it("excludes the historical terminal surface and keeps it explicitly separate", () => {
+  it("excludes the historical terminal surface from selected routes and package exports", () => {
     const forbiddenSegments = new Set(["output", "raw-input", "slash", "stop", "delete", "import", "bulk", "tmux"]);
     for (const route of selectedApiRouteManifest) {
       expect(route.path.startsWith("/api/v1/")).toBe(true);
       expect(route.path.split("/").some((segment) => forbiddenSegments.has(segment))).toBe(false);
       expect(JSON.stringify(route)).not.toMatch(/tmux|raw_input|slash_command|terminal_output/iu);
     }
-
-    expect(apiRouteContracts).toHaveLength(17);
-    expect(apiRouteContracts.some((route) => route.path.endsWith("/raw-input"))).toBe(true);
-    expect(apiRouteContracts.some((route) => route.path.endsWith("/slash"))).toBe(true);
-    expect(apiRouteContracts.every((route) => !route.path.startsWith("/api/v1/"))).toBe(true);
-    const selectedRoutes = new Set(selectedApiRouteManifest.map((route) => `${route.method} ${route.path}`));
-    expect(apiRouteContracts.every((route) => !selectedRoutes.has(`${route.method} ${route.path}`))).toBe(true);
+    expect(Reflect.has(serverPackage, "apiRouteContracts")).toBe(false);
   });
 });
 

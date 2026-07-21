@@ -1,11 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { request as httpRequest } from "node:http";
-import { request as httpsRequest, type RequestOptions } from "node:https";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   defaultResourceBudget,
-  defaultRetentionPolicy,
   type PlanControlSnapshot,
   planControlSnapshotSchema,
   type RuntimeCompatibility,
@@ -15,9 +13,7 @@ import {
 } from "@hostdeck/contracts";
 import { runtimeCapabilities } from "@hostdeck/core";
 import {
-  createAuthDeviceRepository,
   createSelectedAuditRepository,
-  createSelectedCsrfAuthorizationRepository,
   openMigratedDatabase,
   type SelectedAuditRepository,
   type SelectedSessionState
@@ -35,12 +31,13 @@ import {
   type HostDeckRoutePluginRegistration
 } from "./fastify-app.js";
 import {
-  createHostDeckRequestAuthenticationPolicy,
-  hostDeckDeviceCookieName
-} from "./fastify-request-authentication.js";
+  hostDeckLoopbackTestAuthority,
+  hostDeckLoopbackTestOrigin,
+  injectHostDeckLoopback
+} from "./fastify-loopback-test-request.js";
+import { createHostDeckRequestAuthenticationPolicy } from "./fastify-request-authentication.js";
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import { createHostDeckHostLockPolicy } from "./host-lock-routes.js";
-import { createHostDeckLanCertificatePolicy } from "./lan-certificate-policy.js";
 import {
   type CreateHostDeckPlanRouteRegistrationInput,
   createHostDeckPlanRouteRegistration,
@@ -54,10 +51,6 @@ const timestamp = "2026-07-16T06:00:00.000Z";
 const runtimeVersion = "0.144.0";
 const sessionId = "sess_plan_route_001";
 const threadId = "thread-plan-route-001";
-const secureOrigin = "https://192.168.0.29:3777";
-const pairedDeviceId = "client_plan_route_writer";
-const pairedDeviceToken = "W".repeat(43);
-const pairedCsrfToken = "C".repeat(43);
 const enterRequest = Object.freeze({
   operation_id: "op_plan_route_001",
   kind: "plan" as const,
@@ -224,39 +217,6 @@ describe("selected managed-session Plan routes", () => {
     }
   });
 
-  it("supports paired HTTPS reads and writer selections while rejecting read-only selection before state", async () => {
-    const writer = await createPairedHarness("write");
-    try {
-      expect((await securePlan(writer, "GET")).statusCode).toBe(200);
-      const operationId = "op_plan_route_paired_writer";
-      const write = await securePlan(writer, "POST", { ...enterRequest, operation_id: operationId });
-      expect(write.statusCode, write.body).toBe(200);
-      expect(writer.selectCalls()).toHaveLength(1);
-      expect(writer.auditRepository.require(operationId).records[0]).toMatchObject({
-        actor: {
-          type: "dashboard",
-          device_id: pairedDeviceId,
-          permission: "write",
-          origin: secureOrigin
-        }
-      });
-    } finally {
-      await writer.close();
-    }
-
-    const reader = await createPairedHarness("read");
-    try {
-      expect((await securePlan(reader, "GET")).statusCode).toBe(200);
-      const operationId = "op_plan_route_paired_reader";
-      const denied = await securePlan(reader, "POST", { ...enterRequest, operation_id: operationId });
-      expectStableError(denied, 403, "read_only");
-      expect(reader.selectCalls()).toEqual([]);
-      expect(reader.auditRepository.get(operationId)).toBeNull();
-    } finally {
-      await reader.close();
-    }
-  });
-
   it("rejects malformed input, adjacent methods and paths, query, and lock before Plan access", async () => {
     const harness = await createHarness();
     try {
@@ -271,12 +231,12 @@ describe("selected managed-session Plan routes", () => {
         expectStableError(await selectPlan(harness, candidate), 400, "validation_error");
       }
       expectStableError(
-        await harness.app.inject({ method: "GET", url: `/api/v1/sessions/${sessionId}/plan?target=other` }),
+        await injectHostDeckLoopback(harness.app, { method: "GET", url: `/api/v1/sessions/${sessionId}/plan?target=other` }),
         400,
         "validation_error"
       );
       expectStableError(
-        await harness.app.inject({
+        await injectHostDeckLoopback(harness.app, {
           method: "GET",
           url: `/api/v1/sessions/${sessionId}/plan`,
           headers: { "content-length": "19", "content-type": "application/json" },
@@ -286,22 +246,22 @@ describe("selected managed-session Plan routes", () => {
         "validation_error"
       );
       expectStableError(
-        await harness.app.inject({ method: "POST", url: `/api/v1/sessions/${sessionId}/plan?x=1`, payload: enterRequest }),
+        await injectHostDeckLoopback(harness.app, { method: "POST", url: `/api/v1/sessions/${sessionId}/plan?x=1`, payload: enterRequest }),
         400,
         "validation_error"
       );
       expectStableError(
-        await harness.app.inject({ method: "HEAD", url: `/api/v1/sessions/${sessionId}/plan` }),
+        await injectHostDeckLoopback(harness.app, { method: "HEAD", url: `/api/v1/sessions/${sessionId}/plan` }),
         405,
         "method_not_allowed"
       );
       expectStableError(
-        await harness.app.inject({ method: "PUT", url: `/api/v1/sessions/${sessionId}/plan` }),
+        await injectHostDeckLoopback(harness.app, { method: "PUT", url: `/api/v1/sessions/${sessionId}/plan` }),
         405,
         "method_not_allowed"
       );
       expectStableError(
-        await harness.app.inject({ method: "GET", url: `/api/v1/sessions/${sessionId}/plan/extra` }),
+        await injectHostDeckLoopback(harness.app, { method: "GET", url: `/api/v1/sessions/${sessionId}/plan/extra` }),
         404,
         "route_not_found"
       );
@@ -543,7 +503,7 @@ describe("selected managed-session Plan routes", () => {
         method: "POST",
         path: `/api/v1/sessions/${sessionId}/plan`,
         headers: {
-          host: "localhost",
+          host: hostDeckLoopbackTestAuthority,
           accept: "application/json",
           "content-type": "application/json",
           "content-length": Buffer.byteLength(body),
@@ -635,8 +595,6 @@ interface Harness {
   readonly snapshotSignalObserved: () => boolean;
   readonly stateReads: () => number;
 }
-
-interface PairedHarness extends Pick<Harness, "app" | "auditRepository" | "close" | "selectCalls"> {}
 
 async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   const directory = mkdtempSync(join(tmpdir(), "hostdeck-plan-route-"));
@@ -734,9 +692,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
       now: nextDate
     }),
     requestTrustPolicy: createHostDeckRequestTrustPolicy({
-      allowedOrigins: ["http://localhost"],
-      mode: "loopback",
-      transport: "http"
+      allowedOrigin: hostDeckLoopbackTestOrigin
     }),
     resourceBudget: defaultResourceBudget,
     routePlugins: [registration]
@@ -771,104 +727,6 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
         END;
       `);
     },
-    async close() {
-      if (closed) return;
-      closed = true;
-      await app.close();
-      if (open.db.open) open.db.close();
-    }
-  };
-}
-
-async function createPairedHarness(permission: "read" | "write"): Promise<PairedHarness> {
-  const directory = mkdtempSync(join(tmpdir(), "hostdeck-plan-route-paired-"));
-  temporaryDirectories.push(directory);
-  const open = openMigratedDatabase(join(directory, "hostdeck.sqlite"), { now: () => new Date(timestamp) });
-  let clock = new Date(timestamp).getTime();
-  const nextDate = () => new Date(clock++);
-  const auth = createAuthDeviceRepository(open.db);
-  auth.create({
-    id: pairedDeviceId,
-    rawDeviceToken: pairedDeviceToken,
-    rawCsrfToken: pairedCsrfToken,
-    permission,
-    clientLabel: "Plan route client",
-    createdAt: new Date(timestamp)
-  });
-  const csrfRepository = createSelectedCsrfAuthorizationRepository(open.db, {
-    generateCsrfToken: () => "N".repeat(43)
-  });
-  const csrf = createHostDeckCsrfPolicy({
-    csrf: {
-      authorizeBrowserWrite: (input) => csrfRepository.authorizeBrowserWrite(input),
-      rotateBootstrap: (input) => csrfRepository.rotateBootstrap(input)
-    },
-    now: nextDate
-  });
-  const lock = createHostDeckHostLockPolicy({
-    settings: {
-      read: () => settings(false),
-      transition() {
-        throw new Error("Plan route must not transition host lock.");
-      }
-    },
-    now: nextDate
-  });
-  const auditRepository = createSelectedAuditRepository(open.db);
-  let auditId = 0;
-  const audit = createHostDeckSelectedWriteAuditExecutor({
-    repository: auditRepository,
-    now: () => nextDate().toISOString(),
-    create_record_id: () => `audit_plan_route_paired_${++auditId}`
-  });
-  const selectCalls: Record<string, unknown>[] = [];
-  const registration = createHostDeckPlanRouteRegistration({
-    admission: createHostDeckSelectedWriteAdmissionPolicy({ resourceBudget: defaultResourceBudget, now: () => performance.now() }),
-    audit,
-    csrf,
-    lock,
-    plans: {
-      async snapshot() {
-        return planSnapshot();
-      },
-      async select(intent: unknown) {
-        const captured = { ...(intent as Record<string, unknown>) };
-        selectCalls.push(captured);
-        return stagedSnapshot(String(captured.operation_id ?? ""), "enter", 1);
-      }
-    } as unknown as CreateHostDeckPlanRouteRegistrationInput["plans"],
-    runtime: { read: () => runtimeCandidate() },
-    state: { get: () => selectedState("active") }
-  });
-  const certificateDirectory = join(directory, "certificates");
-  mkdirSync(certificateDirectory, { mode: 0o700 });
-  const certificates = createHostDeckLanCertificatePolicy({
-    assignedAddresses: () => ["192.168.0.29"],
-    certificateDirectory,
-    now: () => new Date(timestamp)
-  });
-  await certificates.configure({ bind_host: "192.168.0.29", bind_port: 3777, certificate_action: "issue_leaf" });
-  const app = createHostDeckFastifyApp({
-    observeInternalError: () => undefined,
-    requestAuthenticationPolicy: createHostDeckRequestAuthenticationPolicy({
-      authenticateDeviceToken: (input) => auth.authenticateDeviceToken(input),
-      now: nextDate
-    }),
-    requestTrustPolicy: createHostDeckRequestTrustPolicy({
-      allowedOrigins: [secureOrigin],
-      mode: "lan",
-      transport: "https"
-    }),
-    resourceBudget: defaultResourceBudget,
-    routePlugins: [registration],
-    tls: certificates.loadTls({ bind_host: "192.168.0.29", bind_port: 3777 })
-  });
-  await app.listen({ host: "127.0.0.1", port: 0, listenTextResolver: () => "" });
-  let closed = false;
-  return {
-    app,
-    auditRepository,
-    selectCalls: () => [...selectCalls],
     async close() {
       if (closed) return;
       closed = true;
@@ -1032,18 +890,10 @@ function runtimeCandidate(
 }
 
 function settings(locked: boolean) {
-  return {
-    id: "hostdeck_settings" as const,
-    schema_version: 1,
-    state_dir: "/tmp/hostdeck-plan-route-state",
-    bind_mode: "localhost" as const,
-    bind_host: "127.0.0.1",
-    bind_port: 3210,
-    lan_enabled: false,
+  return Object.freeze({
     locked,
-    retention: { ...defaultRetentionPolicy },
-    updated_at: timestamp
-  };
+    settings_updated_at: timestamp
+  });
 }
 
 function planServiceError(
@@ -1061,73 +911,11 @@ function sequenceValue(values: readonly unknown[], index: number): unknown {
 }
 
 async function readPlan(harness: Pick<Harness, "app">) {
-  return await harness.app.inject({ method: "GET", url: `/api/v1/sessions/${sessionId}/plan` });
+  return await injectHostDeckLoopback(harness.app, { method: "GET", url: `/api/v1/sessions/${sessionId}/plan` });
 }
 
 async function selectPlan(harness: Pick<Harness, "app">, payload: Readonly<Record<string, unknown>>) {
-  return await harness.app.inject({ method: "POST", url: `/api/v1/sessions/${sessionId}/plan`, payload });
-}
-
-async function securePlan(
-  harness: PairedHarness,
-  method: "GET" | "POST",
-  payload?: Readonly<Record<string, unknown>>
-): Promise<HttpResult> {
-  const body = payload === undefined ? "" : JSON.stringify(payload);
-  return await httpsExchange(
-    harness,
-    {
-      method,
-      path: `/api/v1/sessions/${sessionId}/plan`,
-      headers: {
-        host: "192.168.0.29:3777",
-        origin: secureOrigin,
-        accept: "application/json",
-        cookie: `${hostDeckDeviceCookieName}=${pairedDeviceToken}`,
-        ...(payload === undefined
-          ? {}
-          : {
-              "content-type": "application/json",
-              "content-length": Buffer.byteLength(body),
-              "x-hostdeck-csrf": pairedCsrfToken,
-              "x-hostdeck-csrf-generation": "1"
-            })
-      }
-    },
-    body
-  );
-}
-
-interface HttpResult {
-  readonly statusCode: number;
-  readonly body: string;
-  readonly headers: import("node:http").IncomingHttpHeaders;
-  readonly json: () => Record<string, unknown>;
-}
-
-function httpsExchange(harness: PairedHarness, options: RequestOptions, body: string): Promise<HttpResult> {
-  const address = harness.app.server.address();
-  if (address === null || typeof address === "string") throw new Error("Plan HTTPS listener is unavailable.");
-  return new Promise((resolve, reject) => {
-    const outgoing = httpsRequest(
-      { host: "127.0.0.1", port: address.port, rejectUnauthorized: false, ...options },
-      (response) => {
-        const chunks: Buffer[] = [];
-        response.on("data", (chunk: Buffer) => chunks.push(chunk));
-        response.on("end", () => {
-          const responseBody = Buffer.concat(chunks).toString("utf8");
-          resolve({
-            statusCode: response.statusCode ?? 0,
-            body: responseBody,
-            headers: response.headers,
-            json: () => JSON.parse(responseBody) as Record<string, unknown>
-          });
-        });
-      }
-    );
-    outgoing.once("error", reject);
-    outgoing.end(body);
-  });
+  return await injectHostDeckLoopback(harness.app, { method: "POST", url: `/api/v1/sessions/${sessionId}/plan`, payload });
 }
 
 function expectStableError(

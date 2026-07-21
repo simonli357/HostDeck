@@ -1,12 +1,8 @@
-import "reflect-metadata";
-
 import { mkdtempSync, rmSync } from "node:fs";
-import { request as httpsRequest } from "node:https";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   defaultResourceBudget,
-  defaultRetentionPolicy,
   managedSessionTargetSchema,
   promptOperationIntentSchema,
   type ResourceBudget,
@@ -24,6 +20,7 @@ import { z } from "zod";
 import { createHostDeckCsrfPolicy } from "./csrf-routes.js";
 import {
   createHostDeckFastifyApp,
+  createHostDeckTailscaleServeFastifyApp,
   type HostDeckFastifyInstance,
   type HostDeckRoutePluginRegistration,
   hostDeckNoStoreRouteConfig
@@ -38,7 +35,7 @@ import {
   createHostDeckHostLockPolicy,
   hostDeckHostLockPolicySnapshot
 } from "./host-lock-routes.js";
-import { createHostDeckLanCertificatePolicy } from "./lan-certificate-policy.js";
+import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
 import {
   createSecurityMutationAuditExecutor
 } from "./security-mutation-audit-executor.js";
@@ -60,11 +57,13 @@ import {
   HostDeckSelectedWriteGateError,
   parseSelectedWriteAuditSummary
 } from "./selected-write-gate.js";
+import { createTailscaleServeProxyTrustPolicy } from "./tailscale-serve-proxy-trust.js";
 
 const tempDirectories: string[] = [];
 const openDatabases: Array<{ readonly close: () => unknown }> = [];
-const localOrigin = "http://localhost";
-const secureOrigin = "https://192.168.0.29:3777";
+const localOrigin = "http://127.0.0.1:3777";
+const secureOrigin = "https://hostdeck-write-gate.fixture-tailnet.ts.net";
+const remoteSource = "100.90.80.70";
 const rawDeviceToken = "D".repeat(43);
 const rawCsrfToken = "C".repeat(43);
 const createdAt = "2026-07-13T14:00:00.000Z";
@@ -502,6 +501,7 @@ describe("selected exact-target write gate", () => {
       const response = await harness.app.inject({
         method: "POST",
         url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+        headers: localHeaders(),
         payload: promptRequest("op_gate_order_0001", promptTarget, "hello")
       });
       expect(response.statusCode, response.body).toBe(200);
@@ -544,6 +544,7 @@ describe("selected exact-target write gate", () => {
       const first = await harness.app.inject({
         method: "POST",
         url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+        headers: localHeaders(),
         payload: promptRequest("op_gate_rate_0001", promptTarget, "first")
       });
       expect(first.statusCode, first.body).toBe(200);
@@ -551,6 +552,7 @@ describe("selected exact-target write gate", () => {
       const rejected = await harness.app.inject({
         method: "POST",
         url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+        headers: localHeaders(),
         payload: promptRequest("op_gate_rate_0002", promptTarget, "second")
       });
       expect(rejected.statusCode, rejected.body).toBe(429);
@@ -648,6 +650,7 @@ describe("selected exact-target write gate", () => {
         const response = await harness.app.inject({
           method: "POST",
           url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+          headers: localHeaders(),
           payload: promptRequest(
             `op_gate_failure_${fixtureCase.name.replaceAll(" ", "_")}`,
             promptTarget,
@@ -699,6 +702,7 @@ describe("selected exact-target write gate", () => {
         const response = await harness.app.inject({
           method: "POST",
           url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+          headers: localHeaders(),
           payload: promptRequest(`op_gate_private_http_${fixtureCase.stage}`, promptTarget, "hello")
         });
         expect(response.statusCode, response.body).toBe(fixtureCase.expectedStatus);
@@ -719,19 +723,7 @@ describe("selected exact-target write gate", () => {
     }
   });
 
-  it("rejects paired plaintext, read-only, and invalid-CSRF requests before lock, target, audit, or dispatch", async () => {
-    const plaintext = createPromptHarness({ paired: true });
-    await plaintext.app.ready();
-    try {
-      const response = await injectPairedPrompt(plaintext.app, localOrigin, rawCsrfToken);
-      expect(response.statusCode, response.body).toBe(426);
-      expect(response.json()).toMatchObject({ error: { code: "insecure_transport" } });
-      expect(plaintext.events).toEqual(["parse", "auth:device"]);
-      expect(plaintext.csrfCalls()).toBe(0);
-    } finally {
-      await plaintext.app.close();
-    }
-
+  it("rejects admitted-Serve read-only and invalid-CSRF requests before lock, target, audit, or dispatch", async () => {
     const secureReadOnly = await createSecurePromptHarness({ permission: "read" });
     try {
       const response = await securePromptRequest(secureReadOnly.app, rawCsrfToken);
@@ -758,7 +750,7 @@ describe("selected exact-target write gate", () => {
     }
   }, 30_000);
 
-  it("composes paired HTTPS authentication and current CSRF before one lock read and exact dispatch", async () => {
+  it("composes admitted-Serve authentication and current CSRF before one lock read and exact dispatch", async () => {
     const harness = await createSecurePromptHarness();
     try {
       const response = await securePromptRequest(harness.app, rawCsrfToken);
@@ -819,10 +811,9 @@ describe("selected exact-target write gate", () => {
 
   it("keeps revoked, expired, stale, and incompatible states explicit before audit or dispatch", async () => {
     for (const authError of ["device_revoked", "device_expired"] as const) {
-      const harness = createPromptHarness({ authError, paired: true });
-      await harness.app.ready();
+      const harness = await createSecurePromptHarness({ authError });
       try {
-        const response = await injectPairedPrompt(harness.app, localOrigin, rawCsrfToken);
+        const response = await securePromptRequest(harness.app, rawCsrfToken);
         expect(response.statusCode, `${authError}: ${response.body}`).toBe(401);
         expect(response.json()).toMatchObject({ error: { code: "permission_denied" } });
         expect(harness.events).toEqual(["parse", "auth:device"]);
@@ -838,6 +829,7 @@ describe("selected exact-target write gate", () => {
         const response = await harness.app.inject({
           method: "POST",
           url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+          headers: localHeaders(),
           payload: promptRequest(
             `op_gate_target_${targetHttpError}`,
             promptTarget,
@@ -925,6 +917,7 @@ describe("selected exact-target write gate", () => {
         const response = await harness.app.inject({
           method: "POST",
           url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+          headers: localHeaders(),
           payload: promptRequest(`op_gate_forged_000${index + 1}`, promptTarget, "hello")
         });
         expect(response.statusCode, response.body).toBe(500);
@@ -948,6 +941,7 @@ describe("selected exact-target write gate", () => {
       const response = await beforeDispatch.app.inject({
         method: "POST",
         url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+        headers: localHeaders(),
         payload: promptRequest("op_gate_timeout_0001", promptTarget, "hello")
       });
       expect(response.statusCode, response.body).toBe(504);
@@ -979,6 +973,7 @@ describe("selected exact-target write gate", () => {
       const response = await afterDispatch.app.inject({
         method: "POST",
         url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+        headers: localHeaders(),
         payload: promptRequest("op_gate_timeout_0002", promptTarget, "hello")
       });
       expect(response.statusCode, response.body).toBe(504);
@@ -1024,6 +1019,7 @@ describe("selected exact-target write gate", () => {
         const response = await harness.app.inject({
           method: "POST",
           url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+          headers: localHeaders(),
           payload: promptRequest(fixtureCase.operationId, promptTarget, "hello")
         });
         expect(response.statusCode, response.body).toBe(409);
@@ -1056,6 +1052,7 @@ describe("selected exact-target write gate", () => {
       const response = await duplicate.app.inject({
         method: "POST",
         url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+        headers: localHeaders(),
         payload: promptRequest("op_gate_hostile_0001", promptTarget, "hello")
       });
       expect(response.statusCode, response.body).toBe(500);
@@ -1078,6 +1075,7 @@ describe("selected exact-target write gate", () => {
       const response = await duplicatePreparation.app.inject({
         method: "POST",
         url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+        headers: localHeaders(),
         payload: promptRequest("op_gate_hostile_0003", promptTarget, "hello")
       });
       expect(response.statusCode, response.body).toBe(500);
@@ -1100,6 +1098,7 @@ describe("selected exact-target write gate", () => {
       const response = await contradictory.app.inject({
         method: "POST",
         url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+        headers: localHeaders(),
         payload: promptRequest("op_gate_hostile_0002", promptTarget, "hello")
       });
       expect(response.statusCode, response.body).toBe(500);
@@ -1139,6 +1138,7 @@ describe("selected exact-target write gate", () => {
         const response = await harness.app.inject({
           method: "POST",
           url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+          headers: localHeaders(),
           payload: promptRequest(fixtureCase.operationId, promptTarget, "hello")
         });
         expect(response.statusCode, response.body).toBe(500);
@@ -1169,12 +1169,14 @@ describe("selected exact-target write gate", () => {
       const first = harness.app.inject({
         method: "POST",
         url: "/api/v1/access/devices/client_target_alpha/revoke",
+        headers: localHeaders(),
         payload: { operation_id: "op_gate_revoke_0001", confirmed: true }
       });
       await harness.dispatchStarted.promise;
       const second = harness.app.inject({
         method: "POST",
         url: "/api/v1/access/devices/client_target_alpha/revoke",
+        headers: localHeaders(),
         payload: { operation_id: "op_gate_revoke_0001", confirmed: true }
       });
       await waitFor(() => harness.gate.snapshot().attempts === 2);
@@ -1252,6 +1254,7 @@ describe("selected exact-target write gate", () => {
           harness.app.inject({
             method: "POST",
             url: "/api/v1/access/devices/client_target_truth/revoke",
+            headers: localHeaders(),
             payload: { operation_id: fixtureCase.operationId, confirmed: true }
           });
         const response = await request();
@@ -1299,11 +1302,13 @@ describe("selected exact-target write gate", () => {
         harness.app.inject({
           method: "POST",
           url: "/api/v1/access/devices/client_target_alpha/revoke",
+          headers: localHeaders(),
           payload: { operation_id: "op_gate_revoke_0002", confirmed: true }
         }),
         harness.app.inject({
           method: "POST",
           url: "/api/v1/access/devices/client_target_bravo/revoke",
+          headers: localHeaders(),
           payload: { operation_id: "op_gate_revoke_0003", confirmed: true }
         })
       ]);
@@ -1340,14 +1345,12 @@ interface PromptHarnessOptions {
   readonly lateTransition?: boolean;
   readonly locked?: boolean;
   readonly malformedDispatchSummary?: boolean;
-  readonly paired?: boolean;
   readonly parseFailure?: boolean;
   readonly permission?: "read" | "write";
   readonly prepareFailure?: boolean;
   readonly privateHttpErrorStage?: "audit" | "parse" | "target";
   readonly rejectCsrf?: boolean;
   readonly resourceBudget?: ResourceBudget;
-  readonly secure?: boolean;
   readonly shortDeadline?: boolean;
   readonly targetFailure?: boolean;
   readonly targetHttpError?: "incompatible_runtime" | "stale_session";
@@ -1388,7 +1391,6 @@ function createPromptHarness(options: PromptHarnessOptions = {}): PromptHarness 
   const resourceBudget =
     options.resourceBudget ??
     (options.shortDeadline ? shortRequestBudget : defaultResourceBudget);
-  const authentication = frozenAuthentication(permission, authenticatedAt);
   const csrfAuthentication = frozenAuthentication(permission, authorizedAt);
   const audit = createHostDeckSelectedWriteAuditPort<"prompt">({
     executor: "selected_write_gate",
@@ -1437,16 +1439,10 @@ function createPromptHarness(options: PromptHarnessOptions = {}): PromptHarness 
     lock
   });
   const registration = promptRegistration(gate, events, options);
-  const transport = options.secure ? "https" : "http";
-  const origin = options.secure ? secureOrigin : localOrigin;
   const requestAuthenticationPolicy = createHostDeckRequestAuthenticationPolicy({
     authenticateDeviceToken: () => {
       authenticationCalls += 1;
       events.push("auth:device");
-      if (options.authError !== undefined) {
-        throw new HostDeckAuthRepositoryError(options.authError, "private-stage-cause");
-      }
-      if (options.paired || options.secure) return authentication;
       throw new HostDeckAuthRepositoryError("device_not_found", "Device unavailable.");
     },
     now: () => new Date(authenticatedAt)
@@ -1455,9 +1451,7 @@ function createPromptHarness(options: PromptHarnessOptions = {}): PromptHarness 
     observeInternalError: () => undefined,
     requestAuthenticationPolicy,
     requestTrustPolicy: createHostDeckRequestTrustPolicy({
-      allowedOrigins: [origin],
-      mode: options.secure ? "lan" : "loopback",
-      transport
+      allowedOrigin: localOrigin
     }),
     resourceBudget,
     routePlugins: [registration]
@@ -1476,17 +1470,6 @@ function createPromptHarness(options: PromptHarnessOptions = {}): PromptHarness 
 async function createSecurePromptHarness(
   options: PromptHarnessOptions = {}
 ): Promise<PromptHarness> {
-  const directory = tempDirectory("hostdeck-write-gate-certificate-");
-  const certificates = createHostDeckLanCertificatePolicy({
-    assignedAddresses: () => ["192.168.0.29"],
-    certificateDirectory: directory,
-    now: () => new Date(createdAt)
-  });
-  await certificates.configure({
-    bind_host: "192.168.0.29",
-    bind_port: 3777,
-    certificate_action: "issue_leaf"
-  });
   const events: string[] = [];
   let authenticationCalls = 0;
   let csrfCalls = 0;
@@ -1540,23 +1523,30 @@ async function createSecurePromptHarness(
     authenticateDeviceToken: () => {
       authenticationCalls += 1;
       events.push("auth:device");
+      if (options.authError !== undefined) {
+        throw new HostDeckAuthRepositoryError(options.authError, "private-stage-cause");
+      }
       return authentication;
     },
     now: () => new Date(authenticatedAt)
   });
-  const app = createHostDeckFastifyApp({
+  const remoteRequestAuthority = createHostDeckRemoteIngressRequestAuthorityPolicy();
+  const app = createHostDeckTailscaleServeFastifyApp({
     observeInternalError: () => undefined,
     requestAuthenticationPolicy,
-    requestTrustPolicy: createHostDeckRequestTrustPolicy({
-      allowedOrigins: [secureOrigin],
-      mode: "lan",
-      transport: "https"
-    }),
     resourceBudget,
-    routePlugins: [promptRegistration(gate, events, { ...options, secure: true })],
-    tls: certificates.loadTls({ bind_host: "192.168.0.29", bind_port: 3777 })
+    routePlugins: [promptRegistration(gate, events, options)],
+    remoteIngressRequestAuthority: remoteRequestAuthority,
+    tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
+      localOrigin,
+      readRemoteAdmission: () =>
+        remoteRequestAuthority.synchronize({
+          admission: "open",
+          external_origin: secureOrigin,
+          generation: 1
+        })
+    })
   });
-  await app.listen({ host: "127.0.0.1", port: 0, listenTextResolver: () => "" });
   return {
     admission,
     activeDeviceAuthority: requestAuthenticationPolicy.activeDeviceAuthority,
@@ -2033,9 +2023,7 @@ function createDeviceRevokeHarness(
       now: () => new Date(authenticatedAt)
     }),
     requestTrustPolicy: createHostDeckRequestTrustPolicy({
-      allowedOrigins: [localOrigin],
-      mode: "loopback",
-      transport: "http"
+      allowedOrigin: localOrigin
     }),
     resourceBudget: defaultResourceBudget,
     routePlugins: [registration]
@@ -2078,71 +2066,34 @@ function promptRequest(
   };
 }
 
-function injectPairedPrompt(
-  app: HostDeckFastifyInstance,
-  origin: string,
-  csrfToken: string
-) {
-  return app.inject({
-    method: "POST",
-    url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
-    headers: pairedHeaders(origin, csrfToken),
-    payload: promptRequest("op_gate_paired_0001", promptTarget, "hello")
-  });
-}
-
 async function securePromptRequest(
   app: HostDeckFastifyInstance,
   csrfToken: string
 ): Promise<{ readonly statusCode: number; readonly body: string; readonly json: () => unknown }> {
-  const address = app.server.address();
-  if (address === null || typeof address === "string") {
-    throw new Error("Secure gate listener is unavailable.");
-  }
-  const payload = JSON.stringify(
-    promptRequest("op_gate_secure_0001", promptTarget, "hello")
-  );
-  return new Promise((resolve, reject) => {
-    const request = httpsRequest(
-      {
-        host: "127.0.0.1",
-        port: address.port,
-        method: "POST",
-        path: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
-        rejectUnauthorized: false,
-        headers: {
-          ...pairedHeaders(secureOrigin, csrfToken),
-          host: "192.168.0.29:3777",
-          "content-type": "application/json",
-          "content-length": Buffer.byteLength(payload)
-        }
-      },
-      (response) => {
-        const chunks: Buffer[] = [];
-        response.on("data", (chunk: Buffer) => chunks.push(chunk));
-        response.on("end", () => {
-          const body = Buffer.concat(chunks).toString("utf8");
-          resolve({
-            statusCode: response.statusCode ?? 0,
-            body,
-            json: () => JSON.parse(body) as unknown
-          });
-        });
-      }
-    );
-    request.once("error", reject);
-    request.end(payload);
+  return app.inject({
+    method: "POST",
+    url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+    headers: remoteHeaders(csrfToken),
+    payload: promptRequest("op_gate_secure_0001", promptTarget, "hello")
   });
 }
 
-function pairedHeaders(origin: string, csrfToken: string) {
+function remoteHeaders(csrfToken: string) {
+  const authority = new URL(secureOrigin).host;
   return {
-    host: new URL(origin).host,
-    origin,
+    host: authority,
+    origin: secureOrigin,
     cookie: `${hostDeckDeviceCookieName}=${rawDeviceToken}`,
+    "x-forwarded-for": remoteSource,
+    "x-forwarded-host": authority,
+    "x-forwarded-proto": "https",
     "x-hostdeck-csrf": csrfToken,
     "x-hostdeck-csrf-generation": "1"
   };
+}
+
+function localHeaders() {
+  return { host: new URL(localOrigin).host };
 }
 
 function privateCallbackHttpError(stage: "audit" | "parse" | "target"): HostDeckHttpError {
@@ -2181,18 +2132,10 @@ function frozenAuthentication(permission: "read" | "write", lastUsedAt: string) 
 }
 
 function settings(locked: boolean) {
-  return {
-    id: "hostdeck_settings" as const,
-    schema_version: 1,
-    state_dir: "/home/hostdeck/state",
-    bind_mode: "localhost" as const,
-    bind_host: "127.0.0.1",
-    bind_port: 3210,
-    lan_enabled: false,
+  return Object.freeze({
     locked,
-    retention: { ...defaultRetentionPolicy },
-    updated_at: createdAt
-  };
+    settings_updated_at: createdAt
+  });
 }
 
 function manifest(id: string): SelectedApiRouteManifestEntry {

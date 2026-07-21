@@ -56,9 +56,9 @@ describe("selected host lock contracts", () => {
       device_id: "client_ABCDEFGHIJKLMNOPQRSTUVWX",
       permission: "write",
       device_expires_at: "2026-10-10T20:00:00.000Z",
-      configured_origin: "https://192.168.1.25:3777",
-      network_mode: "lan",
-      transport: "https",
+      configured_origin: "http://127.0.0.1:3777",
+      network_mode: "loopback",
+      transport: "http",
       can_unlock: false
     } as const;
     const lockedWriter = {
@@ -75,7 +75,8 @@ describe("selected host lock contracts", () => {
     const remoteWriter = {
       ...pairedWriter,
       configured_origin: "https://hostdeck-fixture.fixture-tailnet.ts.net",
-      network_mode: "remote"
+      network_mode: "remote",
+      transport: "https"
     } as const;
     const unpairedLoopback = {
       ...localAdminState,
@@ -135,8 +136,10 @@ describe("selected host lock contracts", () => {
         ...localAdminState,
         configured_origin: "https://example.test",
         network_mode: "lan",
-        transport: "http"
+        transport: "https"
       },
+      { ...localAdminState, transport: "https" },
+      { ...localAdminState, configured_origin: "http://localhost:3777" },
       {
         ...localAdminState,
         configured_origin: "https://hostdeck-fixture.fixture-tailnet.ts.net",

@@ -5,8 +5,7 @@ import {
   selectedAccessStateResponseSchema,
   selectedHostLockRequestSchema,
   selectedHostLockStateResponseSchema,
-  selectedHostUnlockRequestSchema,
-  settingsRecordSchema
+  selectedHostUnlockRequestSchema
 } from "@hostdeck/contracts";
 import { type ErrorCode, isErrorCode } from "@hostdeck/core";
 import {
@@ -42,7 +41,7 @@ import {
 export const hostDeckHostLockRouteRegistrationId = "selected-host-lock";
 
 export interface HostDeckHostLockPort {
-  readonly read: () => unknown;
+  readonly read: () => HostDeckDurableLockState;
   readonly transition: (input: TransitionHostDeckLockInput) => unknown;
 }
 export interface CreateHostDeckHostLockPolicyInput {
@@ -93,11 +92,6 @@ const policyInputKeys = ["settings", "now"] as const;
 const policyPortKeys = ["read", "transition"] as const;
 const routeInputKeys = ["audit", "csrf", "lock"] as const;
 const auditPortKeys = ["execute", "reject", "snapshot"] as const;
-const settingsKeys = [
-  "id", "schema_version", "state_dir", "bind_mode", "bind_host", "bind_port",
-  "lan_enabled", "locked", "retention", "updated_at"
-] as const;
-const retentionKeys = ["output_event_limit", "output_byte_limit", "audit_event_limit", "audit_retention_days"] as const;
 const lockStateKeys = ["locked", "settings_updated_at"] as const;
 const transitionReceiptKeys = ["before", "after", "changed"] as const;
 const responseKeys = [
@@ -375,12 +369,9 @@ function readDurableLockState(policy: HostDeckHostLockPolicy): HostDeckDurableLo
   const counters = requireCounters(policy);
   try {
     const raw = Reflect.apply(policy.read, undefined, []);
-    const values = readExactDataObject(raw, settingsKeys, "HostDeck durable settings snapshot is invalid.");
-    const retention = readExactDataObject(values.retention, retentionKeys, "HostDeck durable retention snapshot is invalid.");
-    const parsed = settingsRecordSchema.safeParse({ ...values, retention });
-    if (!parsed.success) throw new TypeError();
+    const state = parseLockState(raw);
     counters.accessReads = increment(counters.accessReads);
-    return Object.freeze({ locked: parsed.data.locked, settings_updated_at: parsed.data.updated_at });
+    return state;
   } catch {
     counters.storageFailures = increment(counters.storageFailures);
     throw new HostDeckHttpError({

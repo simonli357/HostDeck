@@ -22,6 +22,7 @@ import {
 } from "./device-list-routes.js";
 import { createHostDeckFastifyApp } from "./fastify-app.js";
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import { hostDeckLoopbackTestOrigin, injectHostDeckLoopback } from "./fastify-loopback-test-request.js";
 import {
   createHostDeckRequestAuthenticationPolicy,
   type HostDeckDeviceAuthenticationPort,
@@ -44,11 +45,9 @@ const unknownToken = "U".repeat(43);
 const conflictToken = "C".repeat(43);
 const storageToken = "S".repeat(43);
 const csrfToken = "F".repeat(43);
-const loopbackOrigin = "http://localhost";
+const loopbackOrigin = hostDeckLoopbackTestOrigin;
 const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
-  allowedOrigins: [loopbackOrigin],
-  mode: "loopback",
-  transport: "http"
+  allowedOrigin: loopbackOrigin
 });
 
 afterEach(() => {
@@ -251,18 +250,18 @@ describe("selected paired-device list route", () => {
     );
     await app.ready();
     try {
-      const safeLoopback = await app.inject({
+      const safeLoopback = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/access/devices"
       });
       expectStableError(safeLoopback, 401, "permission_denied");
-      const read = await app.inject({
+      const read = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/access/devices",
         headers: deviceCookie(readToken)
       });
       expect(read.statusCode, read.body).toBe(200);
-      const write = await app.inject({
+      const write = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/access/devices",
         headers: deviceCookie(writeToken)
@@ -271,39 +270,39 @@ describe("selected paired-device list route", () => {
       expect(listCalls).toBe(2);
 
       const rejections = [
-        await app.inject({
+        await injectHostDeckLoopback(app, {
           method: "GET",
           url: "/api/v1/access/devices",
           headers: { origin: loopbackOrigin }
         }),
-        await app.inject({
+        await injectHostDeckLoopback(app, {
           method: "GET",
           url: "/api/v1/access/devices",
           headers: { cookie: "other=value" }
         }),
-        await app.inject({
+        await injectHostDeckLoopback(app, {
           method: "GET",
           url: "/api/v1/access/devices",
           headers: { cookie: `${hostDeckDeviceCookieName}=short` }
         }),
-        await app.inject({
+        await injectHostDeckLoopback(app, {
           method: "GET",
           url: "/api/v1/access/devices",
           headers: {
             cookie: `${hostDeckDeviceCookieName}=${readToken}; ${hostDeckDeviceCookieName}=${readToken}`
           }
         }),
-        await app.inject({
+        await injectHostDeckLoopback(app, {
           method: "GET",
           url: "/api/v1/access/devices",
           headers: deviceCookie(expiredToken)
         }),
-        await app.inject({
+        await injectHostDeckLoopback(app, {
           method: "GET",
           url: "/api/v1/access/devices",
           headers: deviceCookie(revokedToken)
         }),
-        await app.inject({
+        await injectHostDeckLoopback(app, {
           method: "GET",
           url: "/api/v1/access/devices",
           headers: deviceCookie(unknownToken)
@@ -315,13 +314,13 @@ describe("selected paired-device list route", () => {
         expect(response.body).not.toMatch(/private|token|cookie/iu);
       }
 
-      const conflict = await app.inject({
+      const conflict = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/access/devices",
         headers: deviceCookie(conflictToken)
       });
       expectStableError(conflict, 409, "operation_conflict");
-      const storage = await app.inject({
+      const storage = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/access/devices",
         headers: deviceCookie(storageToken)
@@ -329,13 +328,13 @@ describe("selected paired-device list route", () => {
       expectStableError(storage, 500, "storage_error");
       expect(storage.body).not.toContain("auth-storage-private-sentinel");
 
-      const unpairedMalformed = await app.inject({
+      const unpairedMalformed = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/access/devices?limit=0",
         headers: { origin: loopbackOrigin }
       });
       expectStableError(unpairedMalformed, 401, "permission_denied");
-      const pairedMalformed = await app.inject({
+      const pairedMalformed = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/access/devices?limit=0",
         headers: deviceCookie(readToken)
@@ -648,7 +647,7 @@ describe("selected paired-device list route", () => {
     );
     await app.ready();
     try {
-      const response = await app.inject({
+      const response = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/access/devices",
         headers: deviceCookie(readToken)
@@ -666,7 +665,7 @@ describe("selected paired-device list route", () => {
         deviceId: "client_actual_read",
         now: revokedAt
       });
-      const revoked = await app.inject({
+      const revoked = await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/access/devices",
         headers: deviceCookie(readToken)
@@ -719,9 +718,7 @@ describe("selected paired-device list route", () => {
       authenticateDeviceToken: (input) => auth.authenticateDeviceToken(input),
       now: () => usedAt,
       trustPolicy: createHostDeckRequestTrustPolicy({
-        allowedOrigins: [origin],
-        mode: "loopback",
-        transport: "http"
+        allowedOrigin: origin
       })
     });
     await app.listen({ host: "127.0.0.1", port, listenTextResolver: () => "" });
@@ -876,7 +873,7 @@ function injectPaired(
     readonly headers?: Readonly<Record<string, string>>;
   }
 ) {
-  return app.inject({
+  return injectHostDeckLoopback(app, {
     method: input.method,
     url: input.url,
     headers: { ...deviceCookie(readToken), ...input.headers }

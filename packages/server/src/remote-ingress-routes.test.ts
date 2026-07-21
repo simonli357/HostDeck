@@ -20,6 +20,7 @@ import {
   createHostDeckTailscaleServeFastifyApp,
   type HostDeckFastifyInstance
 } from "./fastify-app.js";
+import { hostDeckLoopbackTestOrigin, injectHostDeckLoopback } from "./fastify-loopback-test-request.js";
 import {
   createHostDeckRequestAuthenticationPolicy,
   type HostDeckRequestAuthenticationPolicy,
@@ -51,7 +52,7 @@ import { createTailscaleServeProxyTrustPolicy } from "./tailscale-serve-proxy-tr
 const roots: string[] = [];
 const apps: HostDeckFastifyInstance[] = [];
 const databases: Array<{ close: () => unknown }> = [];
-const loopbackOrigin = "http://localhost";
+const loopbackOrigin = hostDeckLoopbackTestOrigin;
 const localOrigin = "http://127.0.0.1:3777";
 const externalOrigin = "https://hostdeck-route.fixture-tailnet.ts.net";
 const profileKey = `sha256:${"1".repeat(64)}`;
@@ -112,7 +113,7 @@ describe("selected remote-ingress API routes", () => {
     const harness = createHarness();
     await harness.app.ready();
 
-    const initial = await harness.app.inject({
+    const initial = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/remote/status",
       headers: localAdminHeaders()
@@ -135,7 +136,7 @@ describe("selected remote-ingress API routes", () => {
     });
     expect(harness.auditCount()).toBe(0);
 
-    const enabled = await harness.app.inject({
+    const enabled = await injectHostDeckLoopback(harness.app, {
       method: "POST",
       url: "/api/v1/remote/enable",
       payload: mutation("op_remote_route_enable_001")
@@ -152,7 +153,7 @@ describe("selected remote-ingress API routes", () => {
     expect(harness.calls).toMatchObject({ candidate: 1, enable: 1 });
     expect(harness.auditCount()).toBe(2);
 
-    const refreshed = await harness.app.inject({
+    const refreshed = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/remote/status",
       headers: localAdminHeaders()
@@ -166,7 +167,7 @@ describe("selected remote-ingress API routes", () => {
     expect(harness.calls.configured).toBe(1);
     expect(harness.auditCount()).toBe(2);
 
-    const disabled = await harness.app.inject({
+    const disabled = await injectHostDeckLoopback(harness.app, {
       method: "POST",
       url: "/api/v1/remote/disable",
       payload: mutation("op_remote_route_disable_001")
@@ -183,7 +184,7 @@ describe("selected remote-ingress API routes", () => {
     expect(harness.auditCount()).toBe(4);
 
     expectStableError(
-      await harness.app.inject({
+      await injectHostDeckLoopback(harness.app, {
         method: "HEAD",
         url: "/api/v1/remote/status"
       }),
@@ -191,7 +192,7 @@ describe("selected remote-ingress API routes", () => {
       "method_not_allowed"
     );
     expectStableError(
-      await harness.app.inject({
+      await injectHostDeckLoopback(harness.app, {
         method: "GET",
         url: "/api/v1/remote/status/"
       }),
@@ -199,7 +200,7 @@ describe("selected remote-ingress API routes", () => {
       "route_not_found"
     );
     expectStableError(
-      await harness.app.inject({
+      await injectHostDeckLoopback(harness.app, {
         method: "GET",
         url: "/api/v1/remote/enable"
       }),
@@ -212,21 +213,21 @@ describe("selected remote-ingress API routes", () => {
     const harness = createHarness();
     await harness.app.ready();
 
-    const localStatus = await harness.app.inject({
+    const localStatus = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/remote/status",
       headers: localAdminHeaders()
     });
     expect(localStatus.statusCode, localStatus.body).toBe(200);
 
-    const unpaired = await harness.app.inject({
+    const unpaired = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/remote/status",
       headers: { origin: loopbackOrigin }
     });
     expectStableError(unpaired, 401, "permission_denied");
 
-    const paired = await harness.app.inject({
+    const paired = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/remote/status",
       headers: pairedHeaders()
@@ -238,7 +239,7 @@ describe("selected remote-ingress API routes", () => {
       "/api/v1/remote/enable",
       "/api/v1/remote/disable"
     ]) {
-      const denied = await harness.app.inject({
+      const denied = await injectHostDeckLoopback(harness.app, {
         method: "POST",
         url: path,
         headers: pairedHeaders(),
@@ -251,7 +252,7 @@ describe("selected remote-ingress API routes", () => {
     expect(harness.calls.disable).toBe(0);
     expect(harness.auditCount()).toBe(0);
 
-    const expired = await harness.app.inject({
+    const expired = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/remote/status",
       headers: {
@@ -272,7 +273,7 @@ describe("selected remote-ingress API routes", () => {
       { operation_id: "op_remote_route_bad_extra", confirmed: true, extra: true },
       { operation_id: "bad", confirmed: true }
     ]) {
-      const response = await harness.app.inject({
+      const response = await injectHostDeckLoopback(harness.app, {
         method: "POST",
         url: "/api/v1/remote/enable",
         payload
@@ -288,7 +289,7 @@ describe("selected remote-ingress API routes", () => {
         payload: mutation("op_remote_route_query_reject")
       }
     ]) {
-      const response = await harness.app.inject(request);
+      const response = await injectHostDeckLoopback(harness.app, request);
       expectStableError(response, 400, "validation_error");
       expectNoStore(response.headers);
     }
@@ -307,13 +308,13 @@ describe("selected remote-ingress API routes", () => {
     await enable(busy, "op_remote_route_busy_seed");
     const observation = deferred<RemoteIngressObservationSnapshot>();
     busy.setConfiguredHandler(() => observation.promise);
-    const pendingStatus = busy.app.inject({
+    const pendingStatus = injectHostDeckLoopback(busy.app, {
       method: "GET",
       url: "/api/v1/remote/status",
       headers: localAdminHeaders()
     });
     await eventually(() => expect(busy.calls.configured).toBe(1));
-    const rejected = await busy.app.inject({
+    const rejected = await injectHostDeckLoopback(busy.app, {
       method: "POST",
       url: "/api/v1/remote/enable",
       payload: mutation("op_remote_route_busy_reject")
@@ -330,7 +331,7 @@ describe("selected remote-ingress API routes", () => {
     observer.setConfiguredHandler(() =>
       Promise.reject(new Error("private-observer-profile-and-command-output"))
     );
-    const unavailable = await observer.app.inject({
+    const unavailable = await injectHostDeckLoopback(observer.app, {
       method: "GET",
       url: "/api/v1/remote/status",
       headers: localAdminHeaders()
@@ -342,7 +343,7 @@ describe("selected remote-ingress API routes", () => {
     const conflict = createHarness();
     await conflict.app.ready();
     conflict.queueCandidate(snapshot("foreign"));
-    const denied = await conflict.app.inject({
+    const denied = await injectHostDeckLoopback(conflict.app, {
       method: "POST",
       url: "/api/v1/remote/enable",
       payload: mutation("op_remote_route_foreign")
@@ -359,7 +360,7 @@ describe("selected remote-ingress API routes", () => {
     const observation = deferred<RemoteIngressObservationSnapshot>();
     harness.setConfiguredHandler(() => observation.promise);
 
-    const responsePromise = harness.app.inject({
+    const responsePromise = injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/remote/status",
       headers: pairedHeaders()
@@ -380,7 +381,7 @@ describe("selected remote-ingress API routes", () => {
     const harness = createHarness({ selectedRemote: true });
     await harness.app.ready();
 
-    const localStatus = await harness.app.inject({
+    const localStatus = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/remote/status",
       headers: { ...localSelectedHeaders(), ...localAdminHeaders() }
@@ -388,14 +389,14 @@ describe("selected remote-ingress API routes", () => {
     expect(localStatus.statusCode, localStatus.body).toBe(200);
     expectNoStore(localStatus.headers);
 
-    const unpaired = await harness.app.inject({
+    const unpaired = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/remote/status",
       headers: remoteHeaders(false)
     });
     expectStableError(unpaired, 401, "permission_denied");
 
-    const paired = await harness.app.inject({
+    const paired = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/remote/status",
       headers: remoteHeaders(true)
@@ -403,7 +404,7 @@ describe("selected remote-ingress API routes", () => {
     expect(paired.statusCode, paired.body).toBe(200);
     expectNoStore(paired.headers);
 
-    const signaledRemote = await harness.app.inject({
+    const signaledRemote = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/remote/status",
       headers: {
@@ -413,7 +414,7 @@ describe("selected remote-ingress API routes", () => {
     });
     expectStableError(signaledRemote, 403, "invalid_origin");
 
-    const remoteMutation = await harness.app.inject({
+    const remoteMutation = await injectHostDeckLoopback(harness.app, {
       method: "POST",
       url: "/api/v1/remote/enable",
       headers: { ...remoteHeaders(true), origin: externalOrigin },
@@ -423,7 +424,7 @@ describe("selected remote-ingress API routes", () => {
     expect(harness.calls.enable).toBe(0);
     expect(harness.auditCount()).toBe(0);
 
-    const enabled = await harness.app.inject({
+    const enabled = await injectHostDeckLoopback(harness.app, {
       method: "POST",
       url: "/api/v1/remote/enable",
       headers: localSelectedHeaders(),
@@ -433,7 +434,7 @@ describe("selected remote-ingress API routes", () => {
 
     const observation = deferred<RemoteIngressObservationSnapshot>();
     harness.setConfiguredHandler(() => observation.promise);
-    const pending = harness.app.inject({
+    const pending = injectHostDeckLoopback(harness.app, {
       method: "GET",
       url: "/api/v1/remote/status",
       headers: remoteHeaders(true)
@@ -613,9 +614,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
     : createHostDeckFastifyApp({
         ...commonAppInput,
         requestTrustPolicy: createHostDeckRequestTrustPolicy({
-          allowedOrigins: [loopbackOrigin],
-          mode: "loopback",
-          transport: "http"
+          allowedOrigin: loopbackOrigin
         })
       });
   apps.push(app);
@@ -723,7 +722,7 @@ function remoteHeaders(paired: boolean): Readonly<Record<string, string>> {
 }
 
 async function enable(harness: Harness, operationId: string): Promise<void> {
-  const response = await harness.app.inject({
+  const response = await injectHostDeckLoopback(harness.app, {
     method: "POST",
     url: "/api/v1/remote/enable",
     payload: mutation(operationId)

@@ -214,7 +214,7 @@ export const selectedSessionReadAccessSchema = frozenExactData(
         });
       }
       if (
-        ["lan", "remote"].includes(value.network_mode) &&
+        value.network_mode === "remote" &&
         (value.transport !== "https" || !["paired_read", "paired_write"].includes(value.mode))
       ) {
         context.addIssue({
@@ -226,6 +226,12 @@ export const selectedSessionReadAccessSchema = frozenExactData(
         context.addIssue({
           code: "custom",
           message: "Remote session reads cannot acquire local-admin authority."
+        });
+      }
+      if (value.network_mode === "loopback" && value.transport !== "http") {
+        context.addIssue({
+          code: "custom",
+          message: "Loopback session access requires HTTP transport."
         });
       }
     })

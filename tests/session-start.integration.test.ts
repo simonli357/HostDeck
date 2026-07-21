@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cliExitCodes, runCli } from "../packages/cli/src/index.js";
 import {
   defaultResourceBudget,
-  defaultRetentionPolicy,
   runtimeCompatibilitySchema,
   sessionIdSchema
 } from "../packages/contracts/src/index.js";
@@ -122,9 +121,7 @@ describe("managed-session start vertical", () => {
       observeInternalError: () => undefined,
       requestAuthenticationPolicy: authentication,
       requestTrustPolicy: createHostDeckRequestTrustPolicy({
-        allowedOrigins: [`http://127.0.0.1:${port}`],
-        mode: "loopback",
-        transport: "http"
+        allowedOrigin: `http://127.0.0.1:${port}`
       }),
       resourceBudget: defaultResourceBudget,
       routePlugins: [route]
@@ -309,18 +306,10 @@ function runtimeCompatibility() {
 }
 
 function settings() {
-  return {
-    id: "hostdeck_settings" as const,
-    schema_version: 1,
-    state_dir: "/tmp/hostdeck-vertical-state",
-    bind_mode: "localhost" as const,
-    bind_host: "127.0.0.1",
-    bind_port: 3777,
-    lan_enabled: false,
+  return Object.freeze({
     locked: false,
-    retention: { ...defaultRetentionPolicy },
-    updated_at: at
-  };
+    settings_updated_at: at
+  });
 }
 
 function availableLoopbackPort(): Promise<number> {

@@ -42,7 +42,8 @@ describe("SQLite migration runner", () => {
       "202607130014_remote_audit_catalog": "c8c94dda5c2cf3a2af5a85e8ce58f53feadbfcccfcc84f3a57715415d78eaf65",
       "202607130015_remote_admission_proof": "7b080b4cb2054274001f8bbedb35a04b9f904b6b6bbf362c3ddd222382054d12",
       "202607150016_session_start_audit_catalog": "4d6ebd8346b5e329cae5aa6e4f396eb130e73ccbf153388e0f1807821e5c806f",
-      "202607160017_selected_session_settings_projection": "c6382889bd40b65cf2f421c03bfb750588483edf47cacefacc5f0a910fa78ff7"
+      "202607160017_selected_session_settings_projection": "c6382889bd40b65cf2f421c03bfb750588483edf47cacefacc5f0a910fa78ff7",
+      "202607200018_selected_network_retirement": "d9b24e5918b7e50448a5ebe9c4e64138b8328e9772985506b9bc7a1667189732"
     });
   });
 
@@ -70,7 +71,8 @@ describe("SQLite migration runner", () => {
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
         "202607150016_session_start_audit_catalog",
-        "202607160017_selected_session_settings_projection"
+        "202607160017_selected_session_settings_projection",
+        "202607200018_selected_network_retirement"
       ]);
       expect(tableNames(db)).toEqual([
         "audit_events",
@@ -83,7 +85,6 @@ describe("SQLite migration runner", () => {
         "retention_boundaries",
         "schema_migrations",
         "selected_audit_events",
-        "selected_lan_configuration",
         "selected_projected_events",
         "selected_remote_ingress_admission_proof",
         "selected_remote_ingress_state",
@@ -95,7 +96,7 @@ describe("SQLite migration runner", () => {
         "sessions",
         "settings"
       ]);
-      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 17 });
+      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 18 });
       expect(
         db
           .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
@@ -141,7 +142,13 @@ describe("SQLite migration runner", () => {
     const before = prior.db.prepare("SELECT * FROM selected_session_projections").get() as Record<string, unknown>;
     prior.db.close();
 
-    const migrated = openMigratedDatabase(path, { now: fixedNow });
+    const structuredSettingsMigrations = migrationsThrough(
+      "202607160017_selected_session_settings_projection"
+    );
+    const migrated = openMigratedDatabase(path, {
+      migrations: structuredSettingsMigrations,
+      now: fixedNow
+    });
     expect(migrated.result.applied).toEqual(["202607160017_selected_session_settings_projection"]);
     const raw = migrated.db.prepare("SELECT * FROM selected_session_projections").get() as Record<string, unknown>;
     expect(raw.settings_json).toBeNull();
@@ -173,7 +180,10 @@ describe("SQLite migration runner", () => {
     );
     migrated.db.close();
 
-    const reopened = openMigratedDatabase(path, { now: fixedNow });
+    const reopened = openMigratedDatabase(path, {
+      migrations: structuredSettingsMigrations,
+      now: fixedNow
+    });
     try {
       expect(createSelectedStateRepository(reopened.db).require("sess_settings_migration").projection.session.settings).toEqual({
         collaboration_mode: "plan",
@@ -197,7 +207,9 @@ describe("SQLite migration runner", () => {
     const priorMigrations = migrationsThrough("202607150016_session_start_audit_catalog");
     const prior = openMigratedDatabase(path, { migrations: priorMigrations, now: fixedNow });
     prior.db.close();
-    const settingsMigration = defaultMigrations.at(-1);
+    const settingsMigration = migrationsThrough(
+      "202607160017_selected_session_settings_projection"
+    ).at(-1);
     if (settingsMigration?.version !== "202607160017_selected_session_settings_projection") {
       throw new Error("Structured-settings migration is not the latest migration.");
     }
@@ -256,7 +268,8 @@ describe("SQLite migration runner", () => {
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
         "202607150016_session_start_audit_catalog",
-        "202607160017_selected_session_settings_projection"
+        "202607160017_selected_session_settings_projection",
+        "202607200018_selected_network_retirement"
       ]);
       expect(migrated.db.prepare("SELECT id FROM audit_events WHERE id = 'audit_legacy_preserved'").get()).toEqual({
         id: "audit_legacy_preserved"
@@ -321,7 +334,8 @@ describe("SQLite migration runner", () => {
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
         "202607150016_session_start_audit_catalog",
-        "202607160017_selected_session_settings_projection"
+        "202607160017_selected_session_settings_projection",
+        "202607200018_selected_network_retirement"
       ]);
       expect(migrated.db.prepare("SELECT id FROM selected_audit_events WHERE operation_id = ?").get("op_index_preserved")).toEqual({
         id: "audit:index:preserved"
@@ -391,7 +405,8 @@ describe("SQLite migration runner", () => {
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
         "202607150016_session_start_audit_catalog",
-        "202607160017_selected_session_settings_projection"
+        "202607160017_selected_session_settings_projection",
+        "202607200018_selected_network_retirement"
       ]);
       expect(migrated.db.prepare("SELECT * FROM auth_devices WHERE id = ?").get("client_csrf_migration")).toEqual({
         id: "client_csrf_migration",
@@ -483,7 +498,8 @@ describe("SQLite migration runner", () => {
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
         "202607150016_session_start_audit_catalog",
-        "202607160017_selected_session_settings_projection"
+        "202607160017_selected_session_settings_projection",
+        "202607200018_selected_network_retirement"
       ]);
       expect(
         migrated.db
@@ -690,7 +706,8 @@ describe("SQLite migration runner", () => {
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
         "202607150016_session_start_audit_catalog",
-        "202607160017_selected_session_settings_projection"
+        "202607160017_selected_session_settings_projection",
+        "202607200018_selected_network_retirement"
       ]);
       expect(
         migrated.db
@@ -917,7 +934,8 @@ describe("SQLite migration runner", () => {
         "202607130014_remote_audit_catalog",
         "202607130015_remote_admission_proof",
         "202607150016_session_start_audit_catalog",
-        "202607160017_selected_session_settings_projection"
+        "202607160017_selected_session_settings_projection",
+        "202607200018_selected_network_retirement"
       ]);
       expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM selected_sessions").get()).toEqual({ count: 0 });
       expect(migrated.db.prepare("SELECT * FROM legacy_session_dispositions").get()).toMatchObject({

@@ -39,22 +39,6 @@ export {
   type HostDeckDaemonLeaseErrorCode
 } from "./daemon-lease.js";
 export {
-  assertHostDeckLanConfigurationRepository,
-  type ConfigureHostDeckLanInput,
-  createHostDeckLanConfigurationRepository,
-  type HostDeckLanCertificateDescriptor,
-  HostDeckLanConfigurationError,
-  type HostDeckLanConfigurationErrorCode,
-  type HostDeckLanConfigurationReceipt,
-  type HostDeckLanConfigurationRecord,
-  type HostDeckLanConfigurationRepository,
-  type HostDeckLanDesiredState,
-  type HostDeckLanModeTransitionReceipt,
-  type HostDeckLanStateSnapshot,
-  hostDeckLanConfigurationId,
-  type TransitionHostDeckLanModeInput
-} from "./lan-configuration-repository.js";
-export {
   createLegacySessionRepository,
   HostDeckLegacySessionRepositoryError,
   type LegacySessionRepository,
@@ -80,6 +64,7 @@ export {
   hostDeckRetentionBoundaryScopeChecksMigration,
   hostDeckSelectedAuditStateMigration,
   hostDeckSelectedLanConfigurationMigration,
+  hostDeckSelectedNetworkRetirementMigration,
   hostDeckSelectedPairingClaimMigration,
   hostDeckSelectedRetentionIndexesMigration,
   hostDeckSelectedRuntimeStateMigration,

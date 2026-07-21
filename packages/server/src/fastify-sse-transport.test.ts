@@ -17,6 +17,11 @@ import {
   hostDeckFastifyRouteInventory
 } from "./fastify-app.js";
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import {
+  hostDeckLoopbackTestAuthority,
+  hostDeckLoopbackTestOrigin,
+  injectHostDeckLoopback
+} from "./fastify-loopback-test-request.js";
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import {
   hostDeckSseSourceLifecycleSignal,
@@ -30,9 +35,7 @@ import {
 import { testRequestAuthenticationPolicy } from "./test-request-authentication.js";
 
 const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
-  allowedOrigins: ["http://localhost"],
-  mode: "loopback",
-  transport: "http"
+  allowedOrigin: hostDeckLoopbackTestOrigin
 });
 
 const sessionId = "sess_sse_transport_01";
@@ -128,7 +131,7 @@ describe("bounded Fastify SSE transport", () => {
       expect(hostDeckFastifyRouteInventory(app)).toEqual([
         { method: "GET", path: "/api/sessions/:session_id/events" }
       ]);
-      const query = await app.inject({
+      const query = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/sessions/${sessionId}/events?after=1`,
         headers: { accept: "text/event-stream" }
@@ -144,7 +147,7 @@ describe("bounded Fastify SSE transport", () => {
       expect(opened[0]?.signal).not.toBe(opened[0]?.request.signal);
       expect(opened[0]?.signal.aborted).toBe(false);
 
-      const header = await app.inject({
+      const header = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/sessions/${sessionId}/events`,
         headers: { accept: "text/event-stream", "last-event-id": "2" }
@@ -154,7 +157,7 @@ describe("bounded Fastify SSE transport", () => {
       expect(header.body).not.toContain("id: 2\n");
       expect(opened[1]?.after).toBe(2);
 
-      const identical = await app.inject({
+      const identical = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/sessions/${sessionId}/events?after=2`,
         headers: { accept: "text/event-stream", "last-event-id": "2" }
@@ -162,7 +165,7 @@ describe("bounded Fastify SSE transport", () => {
       expect(identical.statusCode).toBe(200);
       expect(opened[2]?.after).toBe(2);
 
-      const empty = await app.inject({
+      const empty = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/sessions/${sessionId}/events?after=3`,
         headers: { accept: "text/event-stream" }
@@ -172,7 +175,7 @@ describe("bounded Fastify SSE transport", () => {
       expect(empty.body).toBe("");
       expect(opened[3]?.after).toBe(3);
 
-      const conflicting = await app.inject({
+      const conflicting = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/sessions/${sessionId}/events?after=1`,
         headers: { accept: "text/event-stream", "last-event-id": "2" }
@@ -180,28 +183,28 @@ describe("bounded Fastify SSE transport", () => {
       expectError(conflicting, 400, "validation_error", "after");
       expect(opened).toHaveLength(4);
 
-      const malformedHeader = await app.inject({
+      const malformedHeader = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/sessions/${sessionId}/events`,
         headers: { accept: "text/event-stream", "last-event-id": "01" }
       });
       expectError(malformedHeader, 400, "validation_error", "last-event-id");
 
-      const malformedQuery = await app.inject({
+      const malformedQuery = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/sessions/${sessionId}/events?after=01`,
         headers: { accept: "text/event-stream" }
       });
       expectError(malformedQuery, 400, "validation_error", "query");
 
-      const unknownQuery = await app.inject({
+      const unknownQuery = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/sessions/${sessionId}/events?cursor=1`,
         headers: { accept: "text/event-stream" }
       });
       expectError(unknownQuery, 400, "validation_error", "query");
 
-      const refused = await app.inject({
+      const refused = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/sessions/${sessionId}/events`,
         headers: { accept: "application/json" }
@@ -209,7 +212,7 @@ describe("bounded Fastify SSE transport", () => {
       expectError(refused, 406, "not_acceptable");
       expect(opened).toHaveLength(4);
 
-      const explicitlyRefused = await app.inject({
+      const explicitlyRefused = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/sessions/${sessionId}/events`,
         headers: { accept: "*/*, text/event-stream;q=0" }
@@ -217,14 +220,14 @@ describe("bounded Fastify SSE transport", () => {
       expectError(explicitlyRefused, 406, "not_acceptable");
       expect(opened).toHaveLength(4);
 
-      const wildcard = await app.inject({
+      const wildcard = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/sessions/${sessionId}/events`
       });
       expect(wildcard.statusCode).toBe(200);
       expect(opened.at(-1)?.after).toBeNull();
 
-      const weighted = await app.inject({
+      const weighted = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/sessions/${sessionId}/events?after=2`,
         headers: { accept: "application/json, text/event-stream;q=0.5" }
@@ -259,7 +262,7 @@ describe("bounded Fastify SSE transport", () => {
     await app.ready();
 
     try {
-      const response = await app.inject({
+      const response = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/sessions/${sessionId}/events`,
         headers: { accept: "text/event-stream" }
@@ -667,7 +670,7 @@ async function eventRequest(
   app: ReturnType<typeof createSseApp>,
   mode: string
 ) {
-  return app.inject({
+  return injectHostDeckLoopback(app, {
     method: "GET",
     url: `/api/sessions/${sessionId}/events/${mode}`,
     headers: { accept: "text/event-stream" }
@@ -698,7 +701,9 @@ async function openPausedResponse(url: string): Promise<{
   response: IncomingMessage;
 }> {
   return new Promise((resolve, reject) => {
-    const request = httpGet(url, { headers: { accept: "text/event-stream", host: "localhost" } });
+    const request = httpGet(url, {
+      headers: { accept: "text/event-stream", host: hostDeckLoopbackTestAuthority }
+    });
     request.once("error", reject);
     request.once("response", (response) => {
       response.pause();
@@ -709,7 +714,9 @@ async function openPausedResponse(url: string): Promise<{
 
 function readSseResponse(url: string): Promise<{ readonly body: string; readonly status: number }> {
   return new Promise((resolve, reject) => {
-    const request = httpGet(url, { headers: { accept: "text/event-stream", host: "localhost" } });
+    const request = httpGet(url, {
+      headers: { accept: "text/event-stream", host: hostDeckLoopbackTestAuthority }
+    });
     request.once("error", reject);
     request.once("response", (response) => {
       let body = "";

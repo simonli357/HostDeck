@@ -1,5 +1,3 @@
-import "reflect-metadata";
-
 import { Buffer } from "node:buffer";
 import {
   existsSync,
@@ -7,11 +5,9 @@ import {
   readFileSync,
   rmSync
 } from "node:fs";
-import { request as httpsRequest } from "node:https";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defaultResourceBudget, defaultRetentionPolicy } from "@hostdeck/contracts";
+import { defaultResourceBudget, } from "@hostdeck/contracts";
 import {
   createSelectedAuditRepository,
   createSettingsRepository,
@@ -20,57 +16,41 @@ import {
   openMigratedDatabase,
   type SelectedAuditRepository
 } from "@hostdeck/storage";
-import {
-  BasicConstraintsExtension,
-  cryptoProvider,
-  ExtendedKeyUsage,
-  ExtendedKeyUsageExtension,
-  KeyUsageFlags,
-  KeyUsagesExtension,
-  SubjectAlternativeNameExtension,
-  X509CertificateGenerator
-} from "@peculiar/x509";
-import Fastify from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
 import { createHostDeckCsrfPolicy } from "./csrf-routes.js";
 import {
   createHostDeckFastifyApp,
-  type HostDeckFastifyInstance
+  createHostDeckTailscaleServeFastifyApp,
+  type HostDeckFastifyInstance,
+  type HostDeckRoutePluginRegistration
 } from "./fastify-app.js";
-import {
-  HostDeckHttpError,
-  installHostDeckErrorPolicy
-} from "./fastify-error-policy.js";
+import { HostDeckHttpError } from "./fastify-error-policy.js";
 import {
   createHostDeckRequestAuthenticationPolicy,
-  hostDeckDeviceCookieName,
-  installHostDeckRequestAuthentication
+  hostDeckDeviceCookieName
 } from "./fastify-request-authentication.js";
-import {
-  createHostDeckRequestTrustPolicy,
-  installHostDeckRequestTrustGate
-} from "./fastify-request-trust.js";
-import { installHostDeckZodCompilers } from "./fastify-zod.js";
+import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import {
   createHostDeckHostLockPolicy,
   createHostDeckHostLockRouteRegistration,
   hostDeckHostLockPolicySnapshot,
   requireHostDeckHostUnlocked
 } from "./host-lock-routes.js";
+import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
 import { createSecurityMutationAuditExecutor } from "./security-mutation-audit-executor.js";
+import { createTailscaleServeProxyTrustPolicy } from "./tailscale-serve-proxy-trust.js";
 
 const dirs: string[] = [];
 const databases: Array<{ close: () => unknown }> = [];
-const origin = "http://localhost";
-const secureOrigin = "https://localhost";
+const origin = "http://127.0.0.1:3777";
+const secureOrigin = "https://hostdeck-lock.fixture-tailnet.ts.net";
+const remoteSource = "100.90.80.70";
 const rawDeviceToken = "D".repeat(43);
 const rawCsrfToken = "C".repeat(43);
 const createdAt = "2026-07-12T12:00:00.000Z";
 const authenticatedAt = "2026-07-12T12:01:00.000Z";
 const csrfAt = "2026-07-12T12:02:00.000Z";
 const transitionAt = "2026-07-12T12:03:00.000Z";
-
-cryptoProvider.set(globalThis.crypto);
 
 afterEach(() => {
   for (const database of databases.splice(0)) database.close();
@@ -163,7 +143,7 @@ describe("selected host-lock authority boundary", () => {
     const app = fixture.app;
     await app.ready();
     try {
-      const browserRead = await app.inject({ method: "GET", url: "/api/v1/access", headers: { origin } });
+      const browserRead = await app.inject({ method: "GET", url: "/api/v1/access", headers: { ...localHeaders(), origin } });
       expect(browserRead.statusCode, browserRead.body).toBe(200);
       expect(browserRead.headers["cache-control"]).toBe("no-store");
       expect(browserRead.headers.pragma).toBe("no-cache");
@@ -182,13 +162,13 @@ describe("selected host-lock authority boundary", () => {
         can_unlock: false
       });
 
-      const locked = await app.inject({ method: "POST", url: "/api/v1/access/lock", payload: request("op_lock_local") });
+      const locked = await app.inject({ method: "POST", url: "/api/v1/access/lock", headers: localHeaders(), payload: request("op_lock_local") });
       expect(locked.statusCode, locked.body).toBe(200);
       expect(locked.json()).toMatchObject({ authentication_state: "local_admin", locked: true, can_lock: true, can_unlock: true });
-      const noOp = await app.inject({ method: "POST", url: "/api/v1/access/lock", payload: request("op_lock_noop") });
+      const noOp = await app.inject({ method: "POST", url: "/api/v1/access/lock", headers: localHeaders(), payload: request("op_lock_noop") });
       expect(noOp.statusCode, noOp.body).toBe(200);
       expect(noOp.json().locked).toBe(true);
-      const unlocked = await app.inject({ method: "POST", url: "/api/v1/access/unlock", payload: request("op_unlock_local") });
+      const unlocked = await app.inject({ method: "POST", url: "/api/v1/access/unlock", headers: localHeaders(), payload: request("op_unlock_local") });
       expect(unlocked.statusCode, unlocked.body).toBe(200);
       expect(unlocked.json()).toMatchObject({ locked: false, can_write_sessions: true });
 
@@ -199,12 +179,12 @@ describe("selected host-lock authority boundary", () => {
       expect(fixture.repository.require("op_unlock_local").records[1]).toMatchObject({ action: "unlock", outcome: "succeeded" });
       expect(hostDeckHostLockPolicySnapshot(fixture.lock)).toMatchObject({ transitions: 3, lock_changes: 2, lock_noops: 1 });
 
-      const malformed = await app.inject({ method: "POST", url: "/api/v1/access/lock", payload: { operation_id: "op_malformed_request", confirmed: false } });
+      const malformed = await app.inject({ method: "POST", url: "/api/v1/access/lock", headers: localHeaders(), payload: { operation_id: "op_malformed_request", confirmed: false } });
       expect(malformed.statusCode).toBe(400);
       expect(fixture.repository.get("op_malformed_request")).toBeNull();
-      expect((await app.inject({ method: "HEAD", url: "/api/v1/access" })).statusCode).toBe(405);
-      expect((await app.inject({ method: "GET", url: "/api/v1/access?extra=true" })).statusCode).toBe(400);
-      expect((await app.inject({ method: "DELETE", url: "/api/v1/access/lock" })).statusCode).toBe(405);
+      expect((await app.inject({ method: "HEAD", url: "/api/v1/access", headers: localHeaders() })).statusCode).toBe(405);
+      expect((await app.inject({ method: "GET", url: "/api/v1/access?extra=true", headers: localHeaders() })).statusCode).toBe(400);
+      expect((await app.inject({ method: "DELETE", url: "/api/v1/access/lock", headers: localHeaders() })).statusCode).toBe(405);
     } finally {
       await app.close();
     }
@@ -217,6 +197,7 @@ describe("selected host-lock authority boundary", () => {
       const first = await fixture.app.inject({
         method: "POST",
         url: "/api/v1/access/lock",
+        headers: localHeaders(),
         payload: request("op_sqlite_lock_once")
       });
       expect(first.statusCode, first.body).toBe(200);
@@ -228,6 +209,7 @@ describe("selected host-lock authority boundary", () => {
       const duplicate = await fixture.app.inject({
         method: "POST",
         url: "/api/v1/access/lock",
+        headers: localHeaders(),
         payload: request("op_sqlite_lock_once")
       });
       expect(duplicate.statusCode, duplicate.body).toBe(409);
@@ -247,31 +229,14 @@ describe("selected host-lock authority boundary", () => {
   });
 
   it("requires paired-writer CSRF, denies read-only lock and every paired unlock, and exposes no credential material", async () => {
-    const plaintext = createFixture({ paired: true });
-    await plaintext.app.ready();
-    try {
-      const denied = await plaintext.app.inject({
-        method: "POST",
-        url: "/api/v1/access/lock",
-        headers: pairedHeaders(origin),
-        payload: request("op_plaintext_pair_lock")
-      });
-      expect(denied.statusCode).toBe(426);
-      expect(plaintext.repository.get("op_plaintext_pair_lock")).toBeNull();
-      expect(plaintext.authenticationCalls()).toBe(0);
-      expect(hostDeckHostLockPolicySnapshot(plaintext.lock).transitions).toBe(0);
-    } finally {
-      await plaintext.app.close();
-    }
-
-    const fixture = createFixture({ paired: true, secure: true });
+    const fixture = createFixture({ paired: true, remote: true });
     await fixture.app.ready();
     try {
       const headers = pairedHeaders(secureOrigin);
       const deniedCsrf = await fixture.app.inject({
         method: "POST",
         url: "/api/v1/access/lock",
-        headers: { host: "localhost", origin: secureOrigin, cookie: headers.cookie },
+        headers: { ...remoteHeaders(secureOrigin), cookie: headers.cookie },
         payload: request("op_missing_csrf")
       });
       expect(deniedCsrf.statusCode).toBe(403);
@@ -302,7 +267,7 @@ describe("selected host-lock authority boundary", () => {
       await fixture.app.close();
     }
 
-    const readOnly = createFixture({ paired: true, permission: "read", secure: true });
+    const readOnly = createFixture({ paired: true, permission: "read", remote: true });
     await readOnly.app.ready();
     try {
       const denied = await readOnly.app.inject({ method: "POST", url: "/api/v1/access/lock", headers: pairedHeaders(secureOrigin), payload: request("op_read_lock") });
@@ -318,14 +283,14 @@ describe("selected host-lock authority boundary", () => {
     const fixture = createFixture({ failAudit: true });
     await fixture.app.ready();
     try {
-      const response = await fixture.app.inject({ method: "POST", url: "/api/v1/access/lock", payload: request("op_emergency_lock") });
+      const response = await fixture.app.inject({ method: "POST", url: "/api/v1/access/lock", headers: localHeaders(), payload: request("op_emergency_lock") });
       expect(response.statusCode, response.body).toBe(503);
       expect(response.json()).toMatchObject({ error: { code: "audit_unavailable", retryable: false } });
       expect(response.body).toContain("Refresh access state");
       expect(fixture.current().locked).toBe(true);
       expect(hostDeckHostLockPolicySnapshot(fixture.lock)).toMatchObject({ transitions: 1, lock_changes: 1, audit_failures: 1 });
 
-      const unlock = await fixture.app.inject({ method: "POST", url: "/api/v1/access/unlock", payload: request("op_failed_unlock") });
+      const unlock = await fixture.app.inject({ method: "POST", url: "/api/v1/access/unlock", headers: localHeaders(), payload: request("op_failed_unlock") });
       expect(unlock.statusCode).toBe(503);
       expect(fixture.current().locked).toBe(true);
       expect(hostDeckHostLockPolicySnapshot(fixture.lock).transitions).toBe(1);
@@ -341,6 +306,7 @@ describe("selected host-lock authority boundary", () => {
       const response = await fixture.app.inject({
         method: "POST",
         url: "/api/v1/access/lock",
+        headers: localHeaders(),
         payload: request("op_emergency_failed_lock")
       });
       expect(response.statusCode).toBe(503);
@@ -362,6 +328,7 @@ describe("selected host-lock authority boundary", () => {
       const response = await fixture.app.inject({
         method: "POST",
         url: "/api/v1/access/lock",
+        headers: localHeaders(),
         payload: request("op_terminal_audit_lock")
       });
       expect(response.statusCode).toBe(503);
@@ -382,15 +349,14 @@ describe("selected host-lock authority boundary", () => {
   it("preserves durable lock and terminal audit when response delivery fails", async () => {
     const fixture = createFixture({
       failOnSend: true,
-      realSettings: true,
-      secure: true
+      realSettings: true
     });
     await fixture.app.ready();
     try {
       const response = await fixture.app.inject({
         method: "POST",
         url: "/api/v1/access/lock",
-        headers: { host: "localhost" },
+        headers: localHeaders(),
         payload: request("op_lock_send_failure")
       });
       expect(response.statusCode).toBe(500);
@@ -410,7 +376,7 @@ describe("selected host-lock authority boundary", () => {
   });
 
   it("validates route input before authentication and rejects duplicate policy registration", async () => {
-    const fixture = createFixture({ paired: true, secure: true });
+    const fixture = createFixture({ paired: true, remote: true });
     await fixture.app.ready();
     try {
       const malformedLock = await fixture.app.inject({
@@ -426,8 +392,7 @@ describe("selected host-lock authority boundary", () => {
         method: "GET",
         url: "/api/v1/access?extra=true",
         headers: {
-          host: "localhost",
-          origin: secureOrigin,
+          ...remoteHeaders(secureOrigin),
           cookie: `${hostDeckDeviceCookieName}=${rawDeviceToken}`
         }
       });
@@ -459,15 +424,14 @@ describe("selected host-lock authority boundary", () => {
       { authError: "device_revoked", state: "revoked_device" }
     ] as const;
     for (const item of cases) {
-      const fixture = createFixture({ authError: item.authError, secure: true });
+      const fixture = createFixture({ authError: item.authError, remote: true });
       await fixture.app.ready();
       try {
         const response = await fixture.app.inject({
           method: "GET",
           url: "/api/v1/access",
           headers: {
-            host: "localhost",
-            origin: secureOrigin,
+            ...remoteHeaders(secureOrigin),
             cookie: `${hostDeckDeviceCookieName}=${rawDeviceToken}`
           }
         });
@@ -487,15 +451,14 @@ describe("selected host-lock authority boundary", () => {
     }
 
     for (const permission of ["read", "write"] as const) {
-      const fixture = createFixture({ paired: true, permission, secure: true });
+      const fixture = createFixture({ paired: true, permission, remote: true });
       await fixture.app.ready();
       try {
         const response = await fixture.app.inject({
           method: "GET",
           url: "/api/v1/access",
           headers: {
-            host: "localhost",
-            origin: secureOrigin,
+            ...remoteHeaders(secureOrigin),
             cookie: `${hostDeckDeviceCookieName}=${rawDeviceToken}`
           }
         });
@@ -526,7 +489,7 @@ describe("selected host-lock authority boundary", () => {
       const fixture = createFixture({
         ...(item.authError === undefined ? {} : { authError: item.authError }),
         paired: item.paired,
-        secure: true
+        remote: true
       });
       await fixture.app.ready();
       try {
@@ -536,7 +499,7 @@ describe("selected host-lock authority boundary", () => {
           url: "/api/v1/access/lock",
           headers:
             index === 0
-              ? { host: "localhost", origin: secureOrigin }
+              ? remoteHeaders(secureOrigin)
               : pairedHeaders(secureOrigin),
           payload: request(operationId)
         });
@@ -551,7 +514,7 @@ describe("selected host-lock authority boundary", () => {
       }
     }
 
-    const crossOrigin = createFixture({ paired: true, secure: true });
+    const crossOrigin = createFixture({ paired: true, remote: true });
     await crossOrigin.app.ready();
     try {
       const response = await crossOrigin.app.inject({
@@ -571,43 +534,24 @@ describe("selected host-lock authority boundary", () => {
     }
   });
 
-  it("rejects LAN plaintext at policy construction and before route settings on an HTTPS-only LAN policy", async () => {
-    expect(() => createHostDeckRequestTrustPolicy({ allowedOrigins: ["http://hostdeck.test"], mode: "lan", transport: "http" })).toThrow("requires HTTPS");
+  it("locks a paired writer through admitted Serve authority with exact wire policy", async () => {
     const fixture = createFixture({
-      trust: createHostDeckRequestTrustPolicy({ allowedOrigins: ["https://hostdeck.test"], mode: "lan", transport: "https" })
-    });
-    await fixture.app.ready();
-    try {
-      const response = await fixture.app.inject({ method: "GET", url: "/api/v1/access", headers: { host: "hostdeck.test" } });
-      expect(response.statusCode).toBe(426);
-      expect(hostDeckHostLockPolicySnapshot(fixture.lock).access_reads).toBe(0);
-    } finally {
-      await fixture.app.close();
-    }
-  });
-
-  it("locks a paired writer over a real TLS listener with exact wire policy", async () => {
-    const tls = await generateTestTlsMaterial();
-    const port = await getAvailablePort();
-    const requestOrigin = `https://localhost:${port}`;
-    const fixture = createFixture({
-      configuredOrigin: requestOrigin,
       paired: true,
       realSettings: true,
-      tls
+      remote: true
     });
     try {
-      await fixture.app.listen({ host: "127.0.0.1", port });
-      const response = await realTlsLockRequest(
-        port,
-        requestOrigin,
-        request("op_real_tls_host_lock")
-      );
-      expect(response.status, response.body).toBe(200);
+      const response = await fixture.app.inject({
+        method: "POST",
+        url: "/api/v1/access/lock",
+        headers: pairedHeaders(secureOrigin),
+        payload: request("op_remote_host_lock")
+      });
+      expect(response.statusCode, response.body).toBe(200);
       expect(response.headers["cache-control"]).toBe("no-store");
       expect(response.headers.pragma).toBe("no-cache");
       expect(response.headers["access-control-allow-origin"]).toBeUndefined();
-      expect(JSON.parse(response.body)).toMatchObject({
+      expect(response.json()).toMatchObject({
         authentication_state: "paired_device",
         permission: "write",
         transport: "https",
@@ -632,7 +576,6 @@ interface FixtureOptions {
     | "device_expired"
     | "device_not_found"
     | "device_revoked";
-  readonly configuredOrigin?: string;
   readonly failAudit?: boolean;
   readonly failOnSend?: boolean;
   readonly failTerminalAudit?: boolean;
@@ -640,12 +583,7 @@ interface FixtureOptions {
   readonly paired?: boolean;
   readonly permission?: "read" | "write";
   readonly realSettings?: boolean;
-  readonly secure?: boolean;
-  readonly tls?: {
-    readonly certificate: string;
-    readonly privateKey: string;
-  };
-  readonly trust?: ReturnType<typeof createHostDeckRequestTrustPolicy>;
+  readonly remote?: boolean;
 }
 
 function createFixture(options: FixtureOptions = {}) {
@@ -669,19 +607,19 @@ function createFixture(options: FixtureOptions = {}) {
             }
             const before = Object.freeze({
               locked: current.locked,
-              settings_updated_at: current.updated_at
+              settings_updated_at: current.settings_updated_at
             });
             const changed = before.locked !== input.locked;
             if (changed) current = settings(input.locked, input.now.toISOString());
             const after = Object.freeze({
               locked: current.locked,
-              settings_updated_at: current.updated_at
+              settings_updated_at: current.settings_updated_at
             });
             return Object.freeze({ before, after, changed });
           }
         }
       : {
-          read: () => settingsRepository.require(),
+          read: () => settingsRepository.readHostLock(),
           transition: (input: { readonly locked: boolean; readonly now: Date }) =>
             settingsRepository.transitionHostLock(input)
         };
@@ -738,72 +676,45 @@ function createFixture(options: FixtureOptions = {}) {
     },
     now: () => new Date(authenticatedAt)
   });
-  const secure = options.secure || options.tls !== undefined;
-  const configuredOrigin =
-    options.configuredOrigin ?? (secure ? secureOrigin : origin);
-  const requestTrustPolicy =
-    options.trust ??
-    createHostDeckRequestTrustPolicy({
-      allowedOrigins: [configuredOrigin],
-      mode: "loopback",
-      transport: secure ? "https" : "http"
-    });
-  let app: HostDeckFastifyInstance;
-  if (secure) {
-    app = Fastify({
-      logger: false,
-      ...(options.tls === undefined
-        ? {}
-        : {
-            https: {
-              cert: options.tls.certificate,
-              key: options.tls.privateKey
-            }
+  const routePlugins: HostDeckRoutePluginRegistration[] = [
+    options.failOnSend ? withLockResponseFailure(registration) : registration
+  ];
+  const app = options.remote
+    ? (() => {
+        const remoteRequestAuthority = createHostDeckRemoteIngressRequestAuthorityPolicy();
+        return createHostDeckTailscaleServeFastifyApp({
+          observeInternalError: () => undefined,
+          requestAuthenticationPolicy,
+          resourceBudget: defaultResourceBudget,
+          routePlugins,
+          remoteIngressRequestAuthority: remoteRequestAuthority,
+          tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
+            localOrigin: origin,
+            readRemoteAdmission: () =>
+              remoteRequestAuthority.synchronize({
+                admission: "open",
+                external_origin: secureOrigin,
+                generation: 1
+              })
           })
-    }).withTypeProvider() as HostDeckFastifyInstance;
-    installHostDeckZodCompilers(app);
-    installHostDeckErrorPolicy(app, () => undefined);
-    if (options.tls === undefined) {
-      app.addHook("onRequest", async (request) => {
-        Object.defineProperty(request.raw.socket, "encrypted", {
-          configurable: true,
-          value: true
         });
-      });
-    }
-    installHostDeckRequestTrustGate(app, requestTrustPolicy, () => undefined);
-    installHostDeckRequestAuthentication(app, requestAuthenticationPolicy);
-    if (options.failOnSend) {
-      app.addHook("onSend", async (request, reply, payload) => {
-        if (
-          request.url === "/api/v1/access/lock" &&
-          reply.statusCode >= 200 &&
-          reply.statusCode < 300
-        ) {
-          throw new Error("private lock send failure");
-        }
-        return payload;
-      });
-    }
-    registration.register(
-      app,
-      Object.freeze({ resourceBudget: defaultResourceBudget, surface: "api" })
-    );
-  } else {
-    app = createHostDeckFastifyApp({
+      })()
+    : createHostDeckFastifyApp({
       observeInternalError: () => undefined,
       requestAuthenticationPolicy,
-      requestTrustPolicy,
+      requestTrustPolicy: createHostDeckRequestTrustPolicy({ allowedOrigin: origin }),
       resourceBudget: defaultResourceBudget,
-      routePlugins: [registration]
+      routePlugins
     });
-  }
   return {
     app,
     audit,
     authenticationCalls: () => authenticationCalls,
     csrf,
-    current: () => settingsRepository?.require() ?? current,
+    current: () => {
+      const value = settingsRepository?.readHostLock() ?? current;
+      return Object.freeze({ locked: value.locked, updated_at: value.settings_updated_at });
+    },
     dbPath: open.path,
     lock,
     registration,
@@ -820,19 +731,36 @@ function fixtureDatabase() {
   return { ...open, path };
 }
 
+function withLockResponseFailure(
+  registration: HostDeckRoutePluginRegistration
+): HostDeckRoutePluginRegistration {
+  return Object.freeze({
+    id: "host-lock-response-failure-fixture",
+    surface: "api" as const,
+    async register(
+      app: HostDeckFastifyInstance,
+      context: Parameters<HostDeckRoutePluginRegistration["register"]>[1]
+    ) {
+      app.addHook("onSend", async (request, reply, payload) => {
+        if (
+          request.url === "/api/v1/access/lock" &&
+          reply.statusCode >= 200 &&
+          reply.statusCode < 300
+        ) {
+          throw new Error("private lock send failure");
+        }
+        return payload;
+      });
+      await registration.register(app, context);
+    }
+  });
+}
+
 function settings(locked: boolean, updatedAt: string) {
-  return {
-    id: "hostdeck_settings" as const,
-    schema_version: 1,
-    state_dir: "/home/hostdeck/state",
-    bind_mode: "localhost" as const,
-    bind_host: "127.0.0.1",
-    bind_port: 3210,
-    lan_enabled: false,
+  return Object.freeze({
     locked,
-    retention: { ...defaultRetentionPolicy },
-    updated_at: updatedAt
-  };
+    settings_updated_at: updatedAt
+  });
 }
 
 function frozenAuthentication(permission: "read" | "write", lastUsedAt: string) {
@@ -857,12 +785,26 @@ function frozenAuthentication(permission: "read" | "write", lastUsedAt: string) 
 
 function pairedHeaders(requestOrigin: string) {
   return {
-    host: "localhost",
-    origin: requestOrigin,
+    ...remoteHeaders(requestOrigin),
     cookie: `${hostDeckDeviceCookieName}=${rawDeviceToken}`,
     "x-hostdeck-csrf": rawCsrfToken,
     "x-hostdeck-csrf-generation": "1"
   };
+}
+
+function remoteHeaders(requestOrigin: string) {
+  const authority = new URL(secureOrigin).host;
+  return {
+    host: authority,
+    origin: requestOrigin,
+    "x-forwarded-for": remoteSource,
+    "x-forwarded-host": authority,
+    "x-forwarded-proto": "https"
+  };
+}
+
+function localHeaders() {
+  return { host: new URL(origin).host };
 }
 
 function request(operationId: string) {
@@ -880,123 +822,4 @@ function assertSecretsAbsentFromSqlite(
       expect(bytes.includes(Buffer.from(secret, "utf8"))).toBe(false);
     }
   }
-}
-
-async function generateTestTlsMaterial(): Promise<{
-  readonly certificate: string;
-  readonly privateKey: string;
-}> {
-  const algorithm = {
-    hash: "SHA-256",
-    modulusLength: 2_048,
-    name: "RSASSA-PKCS1-v1_5",
-    publicExponent: new Uint8Array([1, 0, 1])
-  } as const;
-  const keys = await globalThis.crypto.subtle.generateKey(algorithm, true, [
-    "sign",
-    "verify"
-  ]);
-  const certificate = await X509CertificateGenerator.createSelfSigned({
-    extensions: [
-      new BasicConstraintsExtension(false, undefined, true),
-      new KeyUsagesExtension(
-        KeyUsageFlags.digitalSignature | KeyUsageFlags.keyEncipherment,
-        true
-      ),
-      new ExtendedKeyUsageExtension([ExtendedKeyUsage.serverAuth]),
-      new SubjectAlternativeNameExtension([{ type: "dns", value: "localhost" }])
-    ],
-    keys,
-    name: "CN=HostDeck Lock Test",
-    notAfter: new Date(Date.parse(createdAt) + 86_400_000),
-    notBefore: new Date(Date.parse(createdAt) - 86_400_000),
-    serialNumber: "1234567890abcdef",
-    signingAlgorithm: { hash: "SHA-256", name: "RSASSA-PKCS1-v1_5" }
-  });
-  const der = Buffer.from(
-    await globalThis.crypto.subtle.exportKey("pkcs8", keys.privateKey)
-  );
-  const body = der.toString("base64").match(/.{1,64}/gu)?.join("\n");
-  if (body === undefined) throw new TypeError("Test TLS private key did not encode.");
-  return Object.freeze({
-    certificate: certificate.toString("pem"),
-    privateKey: `-----BEGIN PRIVATE KEY-----\n${body}\n-----END PRIVATE KEY-----\n`
-  });
-}
-
-async function getAvailablePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer();
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (address === null || typeof address === "string") {
-        server.close();
-        reject(new TypeError("Unable to reserve host-lock TLS port."));
-        return;
-      }
-      server.close((error) => {
-        if (error !== undefined) reject(error);
-        else resolve(address.port);
-      });
-    });
-  });
-}
-
-function realTlsLockRequest(
-  port: number,
-  requestOrigin: string,
-  payload: Readonly<Record<string, unknown>>
-): Promise<{
-  readonly body: string;
-  readonly headers: import("node:http").IncomingHttpHeaders;
-  readonly status: number;
-}> {
-  const body = JSON.stringify(payload);
-  return new Promise((resolve, reject) => {
-    const clientRequest = httpsRequest(
-      {
-        host: "127.0.0.1",
-        port,
-        method: "POST",
-        path: "/api/v1/access/lock",
-        rejectUnauthorized: false,
-        servername: "localhost",
-        headers: {
-          host: `localhost:${port}`,
-          origin: requestOrigin,
-          cookie: `${hostDeckDeviceCookieName}=${rawDeviceToken}`,
-          "x-hostdeck-csrf": rawCsrfToken,
-          "x-hostdeck-csrf-generation": "1",
-          "content-type": "application/json",
-          "content-length": Buffer.byteLength(body, "utf8"),
-          connection: "close"
-        }
-      },
-      (response) => {
-        let output = "";
-        response.setEncoding("utf8");
-        response.on("data", (chunk: string) => {
-          output += chunk;
-          if (output.length > 65_536) {
-            clientRequest.destroy(
-              new Error("TLS host-lock response exceeded its bound.")
-            );
-          }
-        });
-        response.once("end", () => {
-          resolve({
-            body: output,
-            headers: response.headers,
-            status: response.statusCode ?? 0
-          });
-        });
-      }
-    );
-    clientRequest.setTimeout(5_000, () => {
-      clientRequest.destroy(new Error("TLS host-lock request timed out."));
-    });
-    clientRequest.once("error", reject);
-    clientRequest.end(body);
-  });
 }

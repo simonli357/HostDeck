@@ -24,10 +24,7 @@ describe("settings repository", () => {
       const repo = createSettingsRepository(firstOpen.db);
       const settings = repo.getOrCreateDefault({ stateDir, now: fixedNow });
 
-      expect(settings.bind_mode).toBe("localhost");
-      expect(settings.bind_host).toBe("127.0.0.1");
       expect(settings.bind_port).toBe(3777);
-      expect(settings.lan_enabled).toBe(false);
       expect(settings.locked).toBe(false);
       expect(settings.retention.output_event_limit).toBe(10_000);
     } finally {
@@ -43,19 +40,19 @@ describe("settings repository", () => {
     }
   });
 
-  it("persists lock and LAN changes", () => {
+  it("persists only selected listener port and lock settings", () => {
     const path = tempDbPath();
     const firstOpen = openMigratedDatabase(path, { now: fixedNow });
 
     try {
       const repo = createSettingsRepository(firstOpen.db);
-      repo.getOrCreateDefault({ stateDir: tempStateDir(), now: fixedNow });
+      repo.getOrCreateDefault({
+        stateDir: tempStateDir(),
+        bindPort: 4111,
+        now: fixedNow
+      });
 
       expect(repo.setLocked(true, { now: laterNow }).locked).toBe(true);
-      const lan = repo.setLanEnabled(true, { bindHost: "0.0.0.0", now: laterNow });
-      expect(lan.bind_mode).toBe("lan");
-      expect(lan.bind_host).toBe("0.0.0.0");
-      expect(lan.lan_enabled).toBe(true);
     } finally {
       firstOpen.db.close();
     }
@@ -67,14 +64,16 @@ describe("settings repository", () => {
       const persisted = repo.require();
 
       expect(persisted.locked).toBe(true);
-      expect(persisted.bind_mode).toBe("lan");
-      expect(persisted.bind_host).toBe("0.0.0.0");
-      expect(persisted.lan_enabled).toBe(true);
-
-      const localhost = repo.setLanEnabled(false, { now: laterNow });
-      expect(localhost.bind_mode).toBe("localhost");
-      expect(localhost.bind_host).toBe("127.0.0.1");
-      expect(localhost.lan_enabled).toBe(false);
+      expect(persisted.bind_port).toBe(4111);
+      expect(Object.keys(persisted).sort()).toEqual([
+        "bind_port",
+        "id",
+        "locked",
+        "retention",
+        "schema_version",
+        "state_dir",
+        "updated_at"
+      ]);
     } finally {
       secondOpen.db.close();
     }
@@ -109,6 +108,7 @@ describe("settings repository", () => {
       expect(Object.isFrozen(receipt)).toBe(true);
       expect(Object.isFrozen(receipt.before)).toBe(true);
       expect(Object.isFrozen(receipt.after)).toBe(true);
+      expect(repo.readHostLock()).toEqual(receipt.after);
       expect(repo.require()).toEqual({
         ...beforeSettings,
         locked: true,
@@ -327,8 +327,7 @@ describe("settings repository", () => {
       expect(() =>
         repo.save({
           ...defaults,
-          bind_mode: "lan",
-          lan_enabled: false
+          bind_host: "127.0.0.1"
         })
       ).toThrow(HostDeckSettingsError);
     } finally {
@@ -336,7 +335,7 @@ describe("settings repository", () => {
     }
   });
 
-  it("rejects invalid bind hosts and LAN loopback writes", () => {
+  it("rejects retired network fields and invalid ports", () => {
     const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
 
     try {
@@ -353,9 +352,7 @@ describe("settings repository", () => {
       expect(() =>
         repo.save({
           ...defaults,
-          bind_mode: "lan",
-          bind_host: "127.0.0.1",
-          lan_enabled: true
+          bind_port: 0
         })
       ).toThrow(HostDeckSettingsError);
     } finally {
@@ -375,10 +372,7 @@ describe("settings repository", () => {
               id,
               schema_version,
               state_dir,
-              bind_mode,
-              bind_host,
               bind_port,
-              lan_enabled,
               locked,
               output_event_limit,
               output_byte_limit,
@@ -389,9 +383,6 @@ describe("settings repository", () => {
               'hostdeck_settings',
               1,
               '/tmp/hostdeck-state',
-              'localhost',
-              '127.0.0.1',
-              0,
               0,
               0,
               10000,
@@ -411,51 +402,6 @@ describe("settings repository", () => {
     }
   });
 
-  it("blocks startup on invalid persisted bind host", () => {
-    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
-
-    try {
-      open.db
-        .prepare(
-          `
-            INSERT INTO settings (
-              id,
-              schema_version,
-              state_dir,
-              bind_mode,
-              bind_host,
-              bind_port,
-              lan_enabled,
-              locked,
-              output_event_limit,
-              output_byte_limit,
-              audit_event_limit,
-              audit_retention_days,
-              updated_at
-            ) VALUES (
-              'hostdeck_settings',
-              1,
-              '/tmp/hostdeck-state',
-              'localhost',
-              'not a host',
-              3777,
-              0,
-              0,
-              10000,
-              10000000,
-              5000,
-              30,
-              '2026-07-08T22:00:00.000Z'
-            )
-          `
-        )
-        .run();
-
-      expect(() => createSettingsRepository(open.db).require()).toThrow(HostDeckSettingsError);
-    } finally {
-      open.db.close();
-    }
-  });
 });
 
 function tempDbPath(): string {

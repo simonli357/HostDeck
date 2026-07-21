@@ -26,6 +26,7 @@ import {
   type HostDeckFastifyInstance
 } from "./fastify-app.js";
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import { hostDeckLoopbackTestOrigin, injectHostDeckLoopback } from "./fastify-loopback-test-request.js";
 import {
   createHostDeckRequestAuthenticationPolicy,
   hostDeckDeviceCookieName
@@ -48,7 +49,7 @@ const timestamp = "2026-07-16T12:00:00.000Z";
 const updatedAt = "2026-07-16T12:01:00.000Z";
 const now = new Date("2026-07-16T12:10:00.000Z");
 const snapshot = "b".repeat(64);
-const loopbackOrigin = "http://localhost";
+const loopbackOrigin = hostDeckLoopbackTestOrigin;
 const externalOrigin = "https://hostdeck-session-read.fixture-tailnet.ts.net";
 const remoteLocalOrigin = "http://127.0.0.1:3777";
 const remoteSource = "100.91.82.73";
@@ -120,7 +121,7 @@ describe("selected session list/detail routes", () => {
       [deviceCookie(readToken), "paired_read"],
       [deviceCookie(writeToken), "paired_write"]
     ] as const) {
-      const response = await harness.app.inject({
+      const response = await injectHostDeckLoopback(harness.app, {
         headers,
         method: "GET",
         url: "/api/v1/sessions?limit=1"
@@ -141,7 +142,7 @@ describe("selected session list/detail routes", () => {
       ]);
     }
 
-    const detail = await harness.app.inject({
+    const detail = await injectHostDeckLoopback(harness.app, {
       headers: deviceCookie(readToken),
       method: "GET",
       url: "/api/v1/sessions/sess_access_01"
@@ -170,7 +171,7 @@ describe("selected session list/detail routes", () => {
       [readToken, "paired_read"],
       [writeToken, "paired_write"]
     ] as const) {
-      const response = await harness.app.inject({
+      const response = await injectHostDeckLoopback(harness.app, {
         headers: remoteHeaders({ cookie: token, identity: true }),
         method: "GET",
         url: "/api/v1/sessions?limit=1"
@@ -183,7 +184,7 @@ describe("selected session list/detail routes", () => {
       });
     }
 
-    const unpaired = await harness.app.inject({
+    const unpaired = await injectHostDeckLoopback(harness.app, {
       headers: remoteHeaders({ identity: true }),
       method: "GET",
       url: "/api/v1/sessions?limit=1"
@@ -202,7 +203,7 @@ describe("selected session list/detail routes", () => {
       [invalidToken, 401, "permission_denied"],
       [storageToken, 500, "storage_error"]
     ] as const) {
-      const response = await harness.app.inject({
+      const response = await injectHostDeckLoopback(harness.app, {
         headers: deviceCookie(token),
         method: "GET",
         url: "/api/v1/sessions?limit=00&private=sentinel"
@@ -210,7 +211,7 @@ describe("selected session list/detail routes", () => {
       expectStableError(response, expectedStatus, expectedCode);
       expect(response.body).not.toMatch(/sess_auth_01|sentinel/iu);
     }
-    const invalidDetail = await harness.app.inject({
+    const invalidDetail = await injectHostDeckLoopback(harness.app, {
       headers: deviceCookie(invalidToken),
       method: "GET",
       url: "/api/v1/sessions/not-a-session?private=sentinel"
@@ -236,13 +237,13 @@ describe("selected session list/detail routes", () => {
       "/api/v1/sessions/not-valid"
     ]) {
       expectStableError(
-        await harness.app.inject({ method: "GET", url }),
+        await injectHostDeckLoopback(harness.app, { method: "GET", url }),
         400,
         "validation_error"
       );
     }
 
-    const body = await harness.app.inject({
+    const body = await injectHostDeckLoopback(harness.app, {
       method: "GET",
       payload: { private: true },
       url: "/api/v1/sessions"
@@ -257,7 +258,7 @@ describe("selected session list/detail routes", () => {
       ["GET", "/api/v1/sessions/sess_http_01/", 404, "route_not_found"]
     ] as const) {
       expectStableError(
-        await harness.app.inject({ method, url }),
+        await injectHostDeckLoopback(harness.app, { method, url }),
         status,
         code
       );
@@ -291,7 +292,7 @@ describe("selected session list/detail routes", () => {
       const port = failingPort(testCase.target, testCase.code);
       const harness = createLoopbackApp(port);
       await harness.app.ready();
-      const response = await harness.app.inject({
+      const response = await injectHostDeckLoopback(harness.app, {
         method: "GET",
         url:
           testCase.target === "list"
@@ -358,7 +359,7 @@ describe("selected session list/detail routes", () => {
       });
       const harness = createLoopbackApp(port);
       await harness.app.ready();
-      const response = await harness.app.inject({ method: "GET", url: candidate.url });
+      const response = await injectHostDeckLoopback(harness.app, { method: "GET", url: candidate.url });
       expectStableError(response, 500, "internal_error");
       expect(response.body).not.toMatch(/sentinel|sess_hostile_other|accessor/iu);
       expect(harness.observations).toHaveLength(1);
@@ -385,7 +386,7 @@ describe("selected session list/detail routes", () => {
     await harness.app.ready();
 
     for (const url of ["/api/v1/sessions?limit=1", "/api/v1/sessions/sess_bytes_01"]) {
-      const response = await harness.app.inject({ method: "GET", url });
+      const response = await injectHostDeckLoopback(harness.app, { method: "GET", url });
       expectStableError(response, 503, "service_overloaded");
       expect(response.body).not.toMatch(/sess_bytes_01|aaaaa/iu);
     }
@@ -405,7 +406,7 @@ describe("selected session list/detail routes", () => {
         return payload;
       });
       await harness.app.ready();
-      const response = await harness.app.inject({
+      const response = await injectHostDeckLoopback(harness.app, {
         headers: remoteHeaders({ cookie: readToken, identity: true }),
         method: "GET",
         url:
@@ -431,10 +432,10 @@ describe("selected session list/detail routes", () => {
       const harness = createLoopbackApp(repository);
       await harness.app.ready();
 
-      const list = await harness.app.inject({ method: "GET", url: "/api/v1/sessions?limit=1" });
+      const list = await injectHostDeckLoopback(harness.app, { method: "GET", url: "/api/v1/sessions?limit=1" });
       expect(list.statusCode, list.body).toBe(200);
       expect(list.json().sessions).toMatchObject([{ session: { id: "sess_sqlite_01" } }]);
-      const detail = await harness.app.inject({
+      const detail = await injectHostDeckLoopback(harness.app, {
         method: "GET",
         url: "/api/v1/sessions/sess_sqlite_01"
       });
@@ -564,9 +565,7 @@ function createLoopbackApp(
       now: () => now
     }),
     requestTrustPolicy: createHostDeckRequestTrustPolicy({
-      allowedOrigins: [loopbackOrigin],
-      mode: "loopback",
-      transport: "http"
+      allowedOrigin: loopbackOrigin
     }),
     resourceBudget,
     routePlugins: [createHostDeckSessionReadRouteRegistration({ sessions })]

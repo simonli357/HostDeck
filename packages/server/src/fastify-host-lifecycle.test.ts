@@ -107,21 +107,21 @@ describe("selected Fastify host lifecycle", () => {
           bind: { host: "0.0.0.0", port: 37_771, transport: "http" },
           context: {}
         },
-        "explicit loopback"
+        "exact IPv4 loopback HTTP"
       ],
       [
         {
           bind: { host: "127.0.0.1", port: 37_771, transport: "https" },
           context: {}
         },
-        "explicit private LAN address"
+        "exact IPv4 loopback HTTP"
       ],
       [
         {
           bind: { host: "127.0.0.1", port: 0, transport: "http" },
           context: {}
         },
-        "integer from 1"
+        "integer from 1024"
       ],
       [
         {

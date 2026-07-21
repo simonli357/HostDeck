@@ -438,7 +438,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         });
         const lock = createHostDeckHostLockPolicy({
           settings: {
-            read: () => settings.require(),
+            read: () => settings.readHostLock(),
             transition: (input) => settings.transitionHostLock(input)
           },
           now

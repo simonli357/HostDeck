@@ -338,7 +338,7 @@ describe("selected session-read contracts", () => {
       localAccess(),
       { mode: "local_admin", network_mode: "loopback", transport: "http" },
       { mode: "paired_read", network_mode: "loopback", transport: "http" },
-      { mode: "paired_write", network_mode: "lan", transport: "https" },
+      { mode: "paired_write", network_mode: "remote", transport: "https" },
       { mode: "paired_read", network_mode: "remote", transport: "https" }
     ]) {
       expect(selectedSessionReadAccessSchema.parse(access)).toEqual(access);
@@ -348,6 +348,7 @@ describe("selected session-read contracts", () => {
       { mode: "local_admin", network_mode: "lan", transport: "https" },
       { mode: "paired_read", network_mode: "remote", transport: "http" },
       { mode: "paired_write", network_mode: "lan", transport: "http" },
+      { mode: "paired_write", network_mode: "loopback", transport: "https" },
       { mode: "paired_read", network_mode: "remote", transport: "https", device_id: "secret" }
     ]) {
       expect(selectedSessionReadAccessSchema.safeParse(access).success).toBe(false);

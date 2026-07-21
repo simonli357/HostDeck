@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { selectedDeviceIdSchema } from "./device-revocation.js";
 import {
+  hostDeckLoopbackOriginSchema,
   remoteExternalOriginSchema,
   remoteSourceKeySchema
 } from "./remote-ingress.js";
@@ -19,7 +20,7 @@ export const selectedRequestAuthenticationStates = [
   "paired_device"
 ] as const;
 
-export const selectedRequestNetworkModes = ["loopback", "lan", "remote"] as const;
+export const selectedRequestNetworkModes = ["loopback", "remote"] as const;
 export const selectedRequestOriginKinds = [
   "same_origin",
   "safe_no_origin",
@@ -38,13 +39,6 @@ export const selectedRequestAuthenticationIngressContextSchema = z
   .strict()
   .superRefine((value, context) => {
     validateCanonicalOrigin(value.configured_origin, value.transport, context);
-    if (value.network_mode === "lan" && value.transport !== "https") {
-      context.addIssue({
-        code: "custom",
-        message: "LAN request authentication ingress requires HTTPS.",
-        path: ["transport"]
-      });
-    }
     if (value.network_mode === "remote") {
       if (
         value.transport !== "https" ||
@@ -60,11 +54,15 @@ export const selectedRequestAuthenticationIngressContextSchema = z
       }
       return;
     }
-    if (value.remote_generation !== null) {
+    if (
+      value.transport !== "http" ||
+      value.source_key !== null ||
+      value.remote_generation !== null ||
+      !hostDeckLoopbackOriginSchema.safeParse(value.configured_origin).success
+    ) {
       context.addIssue({
         code: "custom",
-        message: "Non-remote request authentication ingress cannot contain a remote generation.",
-        path: ["remote_generation"]
+        message: "Loopback request authentication ingress requires canonical IPv4 loopback HTTP without remote provenance."
       });
     }
   });
@@ -85,13 +83,6 @@ export const selectedRequestAuthenticationContextSchema = z
   .strict()
   .superRefine((value, context) => {
     validateCanonicalOrigin(value.configured_origin, value.transport, context);
-    if (value.network_mode === "lan" && value.transport !== "https") {
-      context.addIssue({
-        code: "custom",
-        message: "LAN request authentication requires HTTPS.",
-        path: ["transport"]
-      });
-    }
     if (
       value.network_mode === "remote" &&
       (value.transport !== "https" ||
@@ -101,6 +92,16 @@ export const selectedRequestAuthenticationContextSchema = z
       context.addIssue({
         code: "custom",
         message: "Remote request authentication requires canonical browser HTTPS trust."
+      });
+    }
+    if (
+      value.network_mode === "loopback" &&
+      (value.transport !== "http" ||
+        !hostDeckLoopbackOriginSchema.safeParse(value.configured_origin).success)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Loopback request authentication requires canonical IPv4 loopback HTTP."
       });
     }
     const deviceFieldsAreNull =
@@ -123,10 +124,10 @@ export const selectedRequestAuthenticationContextSchema = z
           path: ["origin_kind"]
         });
       }
-      if (value.network_mode === "remote") {
+      if (value.network_mode !== "loopback") {
         context.addIssue({
           code: "custom",
-          message: "Remote request authentication cannot grant local-admin authority.",
+          message: "Only loopback request authentication can grant local-admin authority.",
           path: ["network_mode"]
         });
       }

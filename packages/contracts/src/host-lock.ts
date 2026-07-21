@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { selectedDeviceIdSchema } from "./device-revocation.js";
-import { remoteExternalOriginSchema } from "./remote-ingress.js";
+import {
+  hostDeckLoopbackOriginSchema,
+  remoteExternalOriginSchema
+} from "./remote-ingress.js";
 import {
   type SelectedRequestAuthenticationState,
   selectedRequestAuthenticationStates,
@@ -57,18 +60,21 @@ function createHostAccessStateResponseSchema() {
           path: ["configured_origin"]
         });
       }
-      if (value.network_mode === "lan" && value.transport !== "https") {
-        context.addIssue({
-          code: "custom",
-          message: "LAN access state requires HTTPS.",
-          path: ["transport"]
-        });
-      }
       if (value.network_mode === "remote" && value.transport !== "https") {
         context.addIssue({
           code: "custom",
           message: "Remote access state requires HTTPS.",
           path: ["transport"]
+        });
+      }
+      if (
+        value.network_mode === "loopback" &&
+        (value.transport !== "http" ||
+          !hostDeckLoopbackOriginSchema.safeParse(value.configured_origin).success)
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Loopback access state requires canonical IPv4 loopback HTTP."
         });
       }
       if (

@@ -11,6 +11,7 @@ import {
   remoteIngressObservationSnapshotSchema,
   resolveResourceBudget
 } from "@hostdeck/contracts";
+import { createOperationDeadline } from "@hostdeck/core";
 import {
   createRemoteIngressAdmissionProofRepository,
   createRemoteIngressStateRepository,
@@ -308,8 +309,8 @@ describe("selected Tailscale Serve Fastify lifecycle", () => {
         selectRemoteIngressLifecycle: (context) => context.remote
       })
     ).rejects.toMatchObject({
-      code: "app_creation_failed",
-      stage: "app"
+      code: "runtime_contract_invalid",
+      stage: "runtime_contract"
     });
 
     expect(harness.rootSignal.aborted).toBe(true);
@@ -475,9 +476,13 @@ async function createHarness(
 
   const runtime: HostDeckFastifyRuntimeOwner<RuntimeContext> = {
     beginDrain() {
+      if (options.bindHost === "::1") remote.beginDrain();
       events.push("runtime_drain");
     },
     async closeRuntime() {
+      if (options.bindHost === "::1") {
+        await remote.close(createOperationDeadline({ timeoutMs: 1_000 }));
+      }
       events.push("runtime_close");
     },
     async closeSse() {
@@ -489,9 +494,15 @@ async function createHarness(
       if (opened.db.open) opened.db.close();
     },
     start() {
+      if (options.bindHost === "::1") {
+        return Object.freeze({
+          bind: Object.freeze({ host: "::1", port, transport: "http" as const }),
+          context: Object.freeze({ remote })
+        }) as never;
+      }
       return Object.freeze({
         bind: Object.freeze({
-          host: options.bindHost ?? ("127.0.0.1" as const),
+          host: "127.0.0.1" as const,
           port,
           transport: "http" as const
         }),

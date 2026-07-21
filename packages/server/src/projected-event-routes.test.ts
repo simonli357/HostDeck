@@ -31,6 +31,7 @@ import {
   type HostDeckFastifyInstance
 } from "./fastify-app.js";
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
+import { hostDeckLoopbackTestOrigin, injectHostDeckLoopback } from "./fastify-loopback-test-request.js";
 import {
   createHostDeckRequestAuthenticationPolicy,
   type HostDeckDeviceAuthenticationPort,
@@ -57,14 +58,12 @@ const readToken = "R".repeat(43);
 const writeToken = "W".repeat(43);
 const expiredToken = "E".repeat(43);
 const storageToken = "S".repeat(43);
-const loopbackOrigin = "http://localhost";
+const loopbackOrigin = hostDeckLoopbackTestOrigin;
 const remoteLocalOrigin = "http://127.0.0.1:3777";
 const externalOrigin = "https://hostdeck-events.fixture-tailnet.ts.net";
 const remoteSource = "100.90.80.70";
 const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
-  allowedOrigins: [loopbackOrigin],
-  mode: "loopback",
-  transport: "http"
+  allowedOrigin: loopbackOrigin
 });
 
 afterEach(async () => {
@@ -106,7 +105,7 @@ describe("selected projected-event diagnostic read route", () => {
     };
     const app = createEventAppFromRegistration(snapshotted);
     await app.ready();
-    const response = await app.inject({
+    const response = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events`
     });
@@ -189,7 +188,7 @@ describe("selected projected-event diagnostic read route", () => {
     const app = createEventApp(state);
     await app.ready();
 
-    const first = await app.inject({
+    const first = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events`
     });
@@ -200,7 +199,7 @@ describe("selected projected-event diagnostic read route", () => {
     expect(calls[0]).toEqual({ after: null, limit: 100 });
     expect(Object.isFrozen(calls[0])).toBe(true);
 
-    const second = await app.inject({
+    const second = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events?after=1&limit=1`
     });
@@ -220,7 +219,7 @@ describe("selected projected-event diagnostic read route", () => {
       "?limit=1&limit=2",
       "?cursor=1"
     ]) {
-      const response = await app.inject({
+      const response = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/events${suffix}`
       });
@@ -235,7 +234,7 @@ describe("selected projected-event diagnostic read route", () => {
     expect(calls).toHaveLength(callsBeforeMalformed);
 
     expectStableError(
-      await app.inject({
+      await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/sessions/session%20with%20spaces/events"
       }),
@@ -244,7 +243,7 @@ describe("selected projected-event diagnostic read route", () => {
       "params"
     );
     expectStableError(
-      await app.inject({
+      await injectHostDeckLoopback(app, {
         method: "HEAD",
         url: `/api/v1/sessions/${sessionId}/events`
       }),
@@ -252,7 +251,7 @@ describe("selected projected-event diagnostic read route", () => {
       "method_not_allowed"
     );
     expectStableError(
-      await app.inject({
+      await injectHostDeckLoopback(app, {
         method: "POST",
         url: `/api/v1/sessions/${sessionId}/events`
       }),
@@ -260,7 +259,7 @@ describe("selected projected-event diagnostic read route", () => {
       "method_not_allowed"
     );
     expectStableError(
-      await app.inject({
+      await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/events/`
       }),
@@ -268,7 +267,7 @@ describe("selected projected-event diagnostic read route", () => {
       "route_not_found"
     );
     expectStableError(
-      await app.inject({
+      await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/Events`
       }),
@@ -316,13 +315,13 @@ describe("selected projected-event diagnostic read route", () => {
     });
     await app.ready();
 
-    const local = await app.inject({
+    const local = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events`
     });
     expect(local.statusCode, local.body).toBe(200);
     for (const token of [readToken, writeToken]) {
-      const paired = await app.inject({
+      const paired = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/events`,
         headers: deviceCookie(token)
@@ -333,7 +332,7 @@ describe("selected projected-event diagnostic read route", () => {
     expect(requireCalls).toBe(6);
 
     for (const token of [expiredToken, "U".repeat(43)]) {
-      const denied = await app.inject({
+      const denied = await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/events?limit=0`,
         headers: deviceCookie(token)
@@ -341,7 +340,7 @@ describe("selected projected-event diagnostic read route", () => {
       expectStableError(denied, 401, "permission_denied");
       expect(denied.body).not.toMatch(/private|auth|cookie|token/iu);
     }
-    const storage = await app.inject({
+    const storage = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events`,
       headers: deviceCookie(storageToken)
@@ -349,7 +348,7 @@ describe("selected projected-event diagnostic read route", () => {
     expectStableError(storage, 500, "storage_error");
     expect(storage.body).not.toContain("auth-storage-private-sentinel");
 
-    const duplicate = await app.inject({
+    const duplicate = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events`,
       headers: {
@@ -406,7 +405,7 @@ describe("selected projected-event diagnostic read route", () => {
     apps.push(app);
     await app.ready();
 
-    const unpaired = await app.inject({
+    const unpaired = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events?limit=0`,
       headers: remoteHeaders({ identity: true })
@@ -424,7 +423,7 @@ describe("selected projected-event diagnostic read route", () => {
     expect(listCalls).toBe(0);
     expect(requireCalls).toBe(0);
 
-    const paired = await app.inject({
+    const paired = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events`,
       headers: remoteHeaders({ cookie: readToken, identity: true })
@@ -441,7 +440,7 @@ describe("selected projected-event diagnostic read route", () => {
     const app = createEventApp(selectedStatePort(harness.repository));
     await app.ready();
 
-    const first = await app.inject({
+    const first = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events?limit=2`
     });
@@ -455,7 +454,7 @@ describe("selected projected-event diagnostic read route", () => {
       1, 2
     ]);
 
-    const second = await app.inject({
+    const second = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events?after=2&limit=2`
     });
@@ -465,7 +464,7 @@ describe("selected projected-event diagnostic read route", () => {
     ]);
     expect(second.json().next_cursor).toBe(3);
 
-    const current = await app.inject({
+    const current = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events?after=3`
     });
@@ -478,7 +477,7 @@ describe("selected projected-event diagnostic read route", () => {
     });
 
     expectStableError(
-      await app.inject({
+      await injectHostDeckLoopback(app, {
         method: "GET",
         url: "/api/v1/sessions/sess_event_route_missing/events"
       }),
@@ -486,7 +485,7 @@ describe("selected projected-event diagnostic read route", () => {
       "session_not_found"
     );
     expectStableError(
-      await app.inject({
+      await injectHostDeckLoopback(app, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/events?after=4`
       }),
@@ -509,7 +508,7 @@ describe("selected projected-event diagnostic read route", () => {
       };
       const guardedApp = createEventApp(guarded);
       await guardedApp.ready();
-      const response = await guardedApp.inject({
+      const response = await injectHostDeckLoopback(guardedApp, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/events`
       });
@@ -523,7 +522,7 @@ describe("selected projected-event diagnostic read route", () => {
       fakeStatePort({ events: [replayBoundaryEvent(1, null, "disconnect")] })
     );
     await initialBoundaryApp.ready();
-    const fromZero = await initialBoundaryApp.inject({
+    const fromZero = await injectHostDeckLoopback(initialBoundaryApp, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events?after=0`
     });
@@ -549,7 +548,7 @@ describe("selected projected-event diagnostic read route", () => {
 
     const app = createEventApp(selectedStatePort(harness.repository));
     await app.ready();
-    const crossed = await app.inject({
+    const crossed = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events?after=0&limit=1`
     });
@@ -569,7 +568,7 @@ describe("selected projected-event diagnostic read route", () => {
       ]
     });
 
-    const continued = await app.inject({
+    const continued = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events?after=${boundaryAfter + 1}`
     });
@@ -582,7 +581,7 @@ describe("selected projected-event diagnostic read route", () => {
     ).toBe(false);
     expect(continued.json().events[0]?.cursor).toBe(boundaryAfter + 2);
 
-    const crossedAgain = await app.inject({
+    const crossedAgain = await injectHostDeckLoopback(app, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events?after=${boundaryAfter}`
     });
@@ -603,7 +602,7 @@ describe("selected projected-event diagnostic read route", () => {
       })
     );
     await throwingApp.ready();
-    const throwing = await throwingApp.inject({
+    const throwing = await injectHostDeckLoopback(throwingApp, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events`
     });
@@ -623,7 +622,7 @@ describe("selected projected-event diagnostic read route", () => {
       })
     );
     await impossibleApp.ready();
-    const impossible = await impossibleApp.inject({
+    const impossible = await injectHostDeckLoopback(impossibleApp, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events`
     });
@@ -653,7 +652,7 @@ describe("selected projected-event diagnostic read route", () => {
         }
       });
       await corruptStateApp.ready();
-      const corruptState = await corruptStateApp.inject({
+      const corruptState = await injectHostDeckLoopback(corruptStateApp, {
         method: "GET",
         url: `/api/v1/sessions/${sessionId}/events`
       });
@@ -684,7 +683,7 @@ describe("selected projected-event diagnostic read route", () => {
       }
     });
     await contradictoryRetentionApp.ready();
-    const contradictoryRetention = await contradictoryRetentionApp.inject({
+    const contradictoryRetention = await injectHostDeckLoopback(contradictoryRetentionApp, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events`
     });
@@ -701,7 +700,7 @@ describe("selected projected-event diagnostic read route", () => {
       .run(JSON.stringify({ raw_shell: corruptSentinel }), sessionId);
     const corruptApp = createEventApp(selectedStatePort(harness.repository));
     await corruptApp.ready();
-    const corrupt = await corruptApp.inject({
+    const corrupt = await injectHostDeckLoopback(corruptApp, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events`
     });
@@ -725,7 +724,7 @@ describe("selected projected-event diagnostic read route", () => {
     };
     const unstableApp = createEventApp(unstablePort);
     await unstableApp.ready();
-    const changed = await unstableApp.inject({
+    const changed = await injectHostDeckLoopback(unstableApp, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events`
     });
@@ -747,7 +746,7 @@ describe("selected projected-event diagnostic read route", () => {
       { resourceBudget: budgetWithResponseBytes(exactBytes) }
     );
     await exactApp.ready();
-    const exact = await exactApp.inject({
+    const exact = await injectHostDeckLoopback(exactApp, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events`
     });
@@ -759,7 +758,7 @@ describe("selected projected-event diagnostic read route", () => {
       { resourceBudget: budgetWithResponseBytes(exactBytes - 1) }
     );
     await overApp.ready();
-    const over = await overApp.inject({
+    const over = await injectHostDeckLoopback(overApp, {
       method: "GET",
       url: `/api/v1/sessions/${sessionId}/events`
     });
@@ -775,9 +774,7 @@ describe("selected projected-event diagnostic read route", () => {
       fakeStatePort({ events: [messageEvent(1)] }),
       {
         trustPolicy: createHostDeckRequestTrustPolicy({
-          allowedOrigins: [origin],
-          mode: "loopback",
-          transport: "http"
+          allowedOrigin: origin
         })
       }
     );
