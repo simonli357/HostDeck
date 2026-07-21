@@ -56,7 +56,7 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | Contract tests | `pnpm test:contract` | Runs selected schema/API/CLI/storage contract tests. |
 | Integration tests | `pnpm test:integration` | Runs cross-module failure-ordering tests. |
 | Web state tests | `pnpm test:web` | Runs selected mobile fixture and headless pairing-bootstrap checks. |
-| Production package build | `pnpm build` | Offline frozen-lock build of `dist/hostdeck` from the exact 605-source server/CLI closure. Emits six compiled library packages plus production dependencies, identity manifest, and dependency-free verifier; it intentionally emits no web assets or HostDeck executable. |
+| Production package build | `pnpm build` | Offline frozen-lock build of `dist/hostdeck` from the exact 606-source server/CLI closure. Emits six compiled library packages plus production dependencies, identity manifest, and dependency-free verifier; it intentionally emits no web assets or HostDeck executable. |
 | Production package acceptance | `pnpm test:package` | Builds twice, proves rollback/stale replacement and deterministic identity, relocates the tree read-only, imports all six roots, exercises SQLite/flock and Fastify close/restart, and runs config/static/native/runtime/integrity/link failure probes. |
 | Production package verify | `node dist/hostdeck/verify.mjs dist/hostdeck` | Checks manifest/runtime/native/content identity, runtime manifests, modes, and contained relative links without workspace dependencies. |
 | Pairing browser tests | `pnpm test:browser:pairing` | Runs the real Chromium history/referrer/reload/two-tab/failure boundary; requires the Playwright Chromium bundle. |
@@ -78,7 +78,7 @@ Default local configuration:
 | API port | `3777` |
 | State directory | `${XDG_STATE_HOME}/hostdeck` when `XDG_STATE_HOME` is set, otherwise `~/.local/state/hostdeck` |
 | SQLite database | `hostdeck.sqlite` inside the state directory |
-| Runtime directory | `$XDG_RUNTIME_DIR/hostdeck`; selected runtime/socket and composition contracts use it, while the compiled foreground startup owner remains `IFC-V1-054` work |
+| Runtime directory | `$XDG_RUNTIME_DIR/hostdeck`; the selected foreground resource bootstrap owns its private socket path, while runnable application/serve/bin integration remains downstream |
 | Config directory | `${XDG_CONFIG_HOME}/hostdeck` when set, otherwise `~/.config/hostdeck` |
 | Daemon lease | `hostdeck.lock` inside the state directory; one nonblocking Linux owner per state directory |
 | Config file | Optional JSON file passed with `--config` |
@@ -95,7 +95,7 @@ Supported config inputs:
 
 ## Executable Composition Gap
 
-`IFC-V1-046` accepts the selected 22-registration/35-route production factory, and `IFC-V1-021` compiles its server/CLI dependency closure. `codexdeck serve` is still not runnable: `IFC-V1-081` owns secure foreground resources and rollback, `IFC-V1-082` owns the real application graph, `IFC-V1-083` owns the listener/Tailscale/shutdown lifecycle, and `IFC-V1-054` owns the compiled process entry and bin integration. None may restore the old custom listener, tmux discovery, direct-LAN TLS, or historical route fallback.
+`IFC-V1-046` accepts the selected 22-registration/35-route production factory, `IFC-V1-021` compiles its server/CLI dependency closure, and `IFC-V1-081` now owns secure foreground resources and rollback. `codexdeck serve` is still not runnable: `IFC-V1-082` owns the real application graph, `IFC-V1-083` owns the listener/Tailscale/shutdown lifecycle, and `IFC-V1-054` owns the compiled process entry and bin integration. None may restore the old custom listener, tmux discovery, direct-LAN TLS, or historical route fallback.
 
 Long-running systemd user units and runnable packaging remain downstream. Do not publish foreground or service-wrapper instructions until composition, build/package, and `REL-V1-006` clean-install evidence pass.
 
