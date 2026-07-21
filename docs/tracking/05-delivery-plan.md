@@ -45,7 +45,7 @@ Owns milestone, module maturity, production passes, and release truth.
 | Remote contracts and durable state | Complete | `IFC-V1-070`, `FND-V1-018`, `FND-V1-092`, `DAT-V1-031`, `DAT-V1-032`, `DAT-V1-092` |
 | Real Codex compatibility and vertical | Complete | `INT-V1-003` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
 | Remote HTTPS/app-auth/security boundary | In progress | Aggregate hostile/physical acceptance, full selected composition, legacy isolation, and aggregate resource stress pass; packaged-path module hardening remains `IFC-V1-091`. |
-| Build/package/user services | In progress | `IFC-V1-021` has frozen deterministic package criteria in implementation; `IFC-V1-053` to `IFC-V1-058` follow its compiled output. |
+| Build/package/user services | In progress | `IFC-V1-021` deterministic compiled package is complete; `IFC-V1-054` executable dispatch and `IFC-V1-055` user units are ready, while web assets and lifecycle/install parity remain `IFC-V1-053` to `IFC-V1-058`. |
 | Mobile visual selection/UI/device | Blocked | `FE-V1-004`, `FE-V1-002`, human `FE-V1-003`, `FE-V1-010` to `FE-V1-040`, `FE-V1-090` |
 | Security/privacy | Blocked | `REL-V1-005` |
 | Clean Ubuntu/aggregate/docs | Blocked | `REL-V1-004`, `REL-V1-006`, `REL-V1-007` |

@@ -16,7 +16,8 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-021` Implement deterministic compiled server/CLI package outputs and owned runtime layout | in_progress | none | Frozen criteria now require the exact 600-module selected closure, offline self-contained dependencies, deterministic identity, strict content/modes, and unrelated-path read-only relocation without absorbing web/bin/service work. |
+| 1 | `IFC-V1-054` Produce the runnable `codexdeck` bin and selected command/help/version/config surface | ready | none | The deterministic compiled package and bounded source clients are complete; add one exact executable/foreground dispatch without absorbing web assets, units, or install lifecycle. |
+| 2 | `IFC-V1-055` Generate versioned unprivileged systemd user units with explicit ownership/dependencies | ready | none | The compiled package and accepted runtime lifecycle are complete; units can be specified and implemented while executable work remains ordered first. |
 
 ## Intentional Blockers
 
