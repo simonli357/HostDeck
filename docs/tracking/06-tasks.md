@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-051` Bound selected CLI API transports and errors | in_progress | none | Freeze one shared connect/request/body/stream timeout, size, abort, cleanup, and stable-error contract across the exact selected-only 21-operation source-client inventory before implementation. |
+| 1 | `IFC-V1-051` Bound selected CLI API transports and errors | in_progress | none | Implement frozen `CLT-01` to `CLT-10` across 15 factories, 22 public operations, and the corrected 23-route selected-only inventory, then prove hostile real-loopback behavior and zero residue. |
 
 ## Intentional Blockers
 
