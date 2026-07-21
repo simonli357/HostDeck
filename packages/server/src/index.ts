@@ -29,6 +29,7 @@ export * from "./fastify-resource-options.js";
 export * from "./fastify-sse-transport.js";
 export * from "./fastify-static-boundary.js";
 export * from "./fastify-zod.js";
+export * from "./foreground-resource-bootstrap.js";
 export * from "./goal-routes.js";
 export * from "./health-routes.js";
 export * from "./host-health.js";
