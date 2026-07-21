@@ -13,7 +13,7 @@ Date: 2026-07-20
 
 | Boundary | Current behavior | Required correction |
 | --- | --- | --- |
-| Inventory | The accepted `IFC-V1-046` artifact records 21 selected method/path pairs. Later selected lock/unlock work added two routes, while task and queue wording retained the old count. | Freeze the current 15 factories, 22 public client operations, and 23 distinct selected manifest route ids: 9 GET and 14 POST. Fail structural validation on drift. |
+| Inventory | The accepted `IFC-V1-046` artifact records 21 selected method/path pairs. Later selected lock/unlock work added two routes, while task and queue wording retained the old count. | Freeze the current 15 factories, 23 public client operations, and 23 distinct selected manifest route ids: 9 GET and 14 POST. Exercising every operation once makes 25 requests because pairing performs status/issue/status. Fail structural validation on drift. |
 | Default transport | `loopback-http.ts` enforces exact IPv4 loopback, no agent reuse, a request-body cap, connect/request timers, response byte counting, and a per-factory in-flight cap. It has no dedicated test file. | Make the transport the tested shared owner for all selected clients and process-local capacity; retain direct `http://127.0.0.1:PORT` only. |
 | Time and cancellation | Connect and whole-request timers exist, but the selected stream-idle budget is unused and callers cannot provide an abort signal. | Enforce three distinct monotonic bounds and one optional caller signal from before allocation through complete response consumption. |
 | Response framing | Declared and observed oversize bodies reject, but declared/observed length mismatch, unsupported encoding/media type, fatal UTF-8 decoding, empty JSON, and incremental idle behavior are not owned together. | Validate framing before parsing, count wire bytes incrementally, decode UTF-8 fatally, and parse once only after a complete bounded body. |
@@ -65,7 +65,7 @@ Legacy local database administration and the post-metadata `codex resume` launch
 
 ### CLT-01 Exact Selected Coverage
 
-- A single structural inventory proves all 15 selected client factories and 22 public operations traverse the shared transport/error reader and exactly the 23 current selected manifest ids above.
+- A single structural inventory proves all 15 selected client factories and 23 public operations traverse the shared transport/error reader and exactly the 23 current selected manifest ids above.
 - The inventory asserts method/path, GET/POST class, expected success status, request-body presence, and local canonical error sanitizer ownership. Pairing alone owns the fixed three-request status/issue/status sequence.
 - Selected clients import no global `fetch`, `https`, TLS, proxy, redirect, DNS-selected host, Tailscale CLI, SQLite, server service, or alternate transport path. Historical local-only administration stays isolated.
 - Adding/removing a selected client, method, route id, or direct request call without updating this task's explicit inventory fails tests.
@@ -123,7 +123,7 @@ Legacy local database administration and the post-metadata `codex resume` launch
 
 - Direct transport tests cover hostile options/init, exact/over request bytes, capacity, pre-abort, connect refusal/timeout, header stall, body stall/dribble, exact/over response bytes, fixed/chunked framing, length mismatch, invalid status/media/encoding/UTF-8/JSON, early close, response error, and all event-order races.
 - A real Node loopback server drives complete success/error and hostile response cases. Fake request/timer ports cover otherwise nondeterministic connect and simultaneous-event boundaries without substituting for real socket evidence.
-- The aggregate invokes all 22 public operations, records all 23 selected method/path pairs, proves exact request counts and no mutation retry, and checks valid success, typed error, malformed error, timeout, abort, and remote-state distinctions.
+- The aggregate invokes all 23 public operations, records all 25 requests and 23 selected method/path pairs, proves no mutation retry, and checks valid success, typed error, malformed error, timeout, abort, and remote-state distinctions.
 - Cleanup evidence compares active resources/listeners before and after repeated sequential/concurrent matrices and confirms the test server itself is closed separately from client ownership.
 
 ### CLT-10 Validation And Scope Truth
@@ -144,7 +144,7 @@ Legacy local database administration and the post-metadata `codex resume` launch
 
 ## Required Evidence
 
-- Exact 15-factory/22-operation/23-route selected inventory and structural no-bypass gate.
+- Exact 15-factory/23-operation/23-route selected inventory and structural no-bypass gate.
 - Deterministic transport state/race tests plus real-loopback hostile framing, timeout, byte, abort, and cleanup tests.
 - Shared error-envelope/output tests and operation aggregate proving request counts, stable exits, privacy, and remote distinction.
 - Full repository/static/install/supply-chain validation and zero task-owned process/socket/timer/temp residue.
