@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-080` Complete required CLI parser/client/render/source dispatch contracts | ready | none | The executable audit found four missing selected-route clients plus six required top-level command families; freeze this side-effect-free contract before process or package wiring. |
+| 1 | `IFC-V1-080` Freeze required CLI grammar, help, and reserved behavior | ready | none | Freeze all missing command forms and strict parse-before-side-effect behavior before API-backed or local-admin dispatch. |
 | 2 | `IFC-V1-081` Implement the foreground resource bootstrap and rollback owner | ready | none | Secure paths/lease, migrated storage, exact runtime supervision, and compiled libraries are complete inputs; build the real resource owner before application composition. |
 | 3 | `IFC-V1-055` Generate versioned unprivileged systemd user units with explicit ownership/dependencies | ready | none | The compiled package and accepted runtime lifecycle are complete; units remain independent, but command/bootstrap work is ordered first. |
 

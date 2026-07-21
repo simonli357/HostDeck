@@ -10,7 +10,7 @@
 ## Current Truth
 
 - `packages/cli/src/parser.ts` has no `serve`, `status`, `list`, `devices`, `revoke`, or `service` command.
-- The source CLI has 15 bounded client factories and 23 public operations. It does not call selected manifest routes `host_status`, `session_list`, `device_list`, or `device_revoke`.
+- The source CLI has 15 bounded client factories and 23 public operations. It does not call selected manifest routes `host_status`, `session_list`, or `device_revoke`. `DEC-024` intentionally keeps local CLI device listing off the paired-cookie-only `device_list` route and assigns it to an explicit local application path.
 - `packages/cli/src/shell.ts` exports a source-level `main`, but no production entry file invokes it.
 - The compiled package deliberately has no HostDeck `bin`, executable file, generated command shim, or executable identity in its verifier manifest.
 - The accepted 22-registration/35-route factory has no non-test production caller.
@@ -23,7 +23,9 @@ The prior `IFC-V1-054` row combined independently verifiable outcomes and was no
 
 | Task | Single outcome |
 | --- | --- |
-| `IFC-V1-080` | Complete required parser/client/render/source-dispatch contracts. |
+| `IFC-V1-080` | Freeze the complete required CLI grammar, help, and side-effect-free reserved behavior. |
+| `IFC-V1-084` | Add bounded host-status, session-list, and confirmed device-revoke API clients, rendering, and source dispatch. |
+| `IFC-V1-085` | Add secure read-only local device listing, rendering, and source dispatch under `DEC-024`. |
 | `IFC-V1-081` | Own secure foreground resource bootstrap and rollback. |
 | `IFC-V1-082` | Compose the real selected application graph over bootstrapped resources. |
 | `IFC-V1-083` | Run and drain the foreground Fastify/Tailscale lifecycle. |
@@ -34,7 +36,9 @@ The prior `IFC-V1-054` row combined independently verifiable outcomes and was no
 ### Command Contract
 
 - Parse every `FR-011` top-level command and required subcommand before reading config, touching files, opening a socket, spawning a process, or invoking a client.
-- Add bounded clients for host status, session list, device list, and confirmed device revoke through the existing direct-loopback transport and shared response/error reader.
+- Add bounded clients for host status, session list, and confirmed device revoke through the existing direct-loopback transport and shared response/error reader.
+- Implement `devices` through a separate secure read-only local application path over the selected device-list repository. It must reject insecure, substituted, missing, unmigrated, or corrupt state without creating, repairing, migrating, or partially returning it; it must never weaken the paired-cookie-only HTTP route frozen by `DEC-024`.
+- Keep confirmed `revoke` on the selected audited HTTP mutation route so durable revocation, live authority invalidation, terminal proof, and local-admin recovery remain intact.
 - Keep `model`, `goal`, and `plan` as first-class commands and preserve all accepted operation commands and stable exit/output bounds.
 - Reject duplicate/conflicting options, missing confirmations, unknown commands, unsupported `lan`, option injection, and extra arguments with usage failure and zero side effects.
 - `help` and `version` work with an empty environment, inaccessible cwd/config/state paths, and an unavailable daemon.
@@ -82,7 +86,7 @@ The prior `IFC-V1-054` row combined independently verifiable outcomes and was no
 
 ## Required Evidence
 
-- Focused parser/client/render and no-side-effect tests.
+- Focused parser/help/no-side-effect tests, bounded API-client/render/dispatch tests, and secure read-only local device-list path tests.
 - Bootstrap rollback/ownership/path/runtime tests using real Linux files, flock, SQLite, sockets, and child processes.
 - Exact-Codex no-model foreground lifecycle with selected route/static fixture, local HTTP checks, signal shutdown, restart, and residue inspection.
 - Two-build package determinism, verifier negatives, packed/local/global-style invocation, unrelated-cwd/read-only execution, and command matrix.
