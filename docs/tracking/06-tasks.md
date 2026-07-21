@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-051` Bound selected CLI API transports and errors | in_progress | none | Implement frozen `CLT-01` to `CLT-10` across 15 factories, 23 public operations, and the corrected 23-route/25-request selected-only inventory, then prove hostile real-loopback behavior and zero residue. |
+| 1 | `IFC-V1-052` Run aggregate production resource, overload, deadline, and idempotency matrix | ready | none | All five enforcement leaves are complete; freeze and execute the cross-boundary stress matrix before deterministic production outputs and interface hardening. |
 
 ## Intentional Blockers
 
