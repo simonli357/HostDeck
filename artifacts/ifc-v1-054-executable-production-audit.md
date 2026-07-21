@@ -5,12 +5,12 @@
 - Target: runnable packaged `codexdeck`, complete required CLI surface, and selected foreground `serve` composition.
 - Refs: `BLK-V1-04`, `FR-011`, `PR-009`, `PR-012`, `DEC-027`.
 - Audit date: 2026-07-20.
-- Current package input: completed `IFC-V1-021` deterministic six-package compiled runtime.
+- Current package input: the `IFC-V1-021` deterministic six-package runtime layout, mechanically expanded by `IFC-V1-084` to 603 sources and 1,213 owned outputs.
 
 ## Current Truth
 
-- `packages/cli/src/parser.ts` has no `serve`, `status`, `list`, `devices`, `revoke`, or `service` command.
-- The source CLI has 15 bounded client factories and 23 public operations. It does not call selected manifest routes `host_status`, `session_list`, or `device_revoke`. `DEC-024` intentionally keeps local CLI device listing off the paired-cookie-only `device_list` route and assigns it to an explicit local application path.
+- `IFC-V1-080` completes the exact required source grammar, help, duplicate/conflict rejection, and side-effect-free staging for commands without an implementation owner.
+- The source CLI has 18 bounded client factories and 26 public operations. `IFC-V1-084` calls selected manifest routes `host_status`, `session_list`, and `device_revoke`; only secure local `devices` remains staged in this command cluster. `DEC-024` intentionally keeps local CLI device listing off the paired-cookie-only `device_list` route and assigns it to `IFC-V1-085` through an explicit local application path.
 - `packages/cli/src/shell.ts` exports a source-level `main`, but no production entry file invokes it.
 - The compiled package deliberately has no HostDeck `bin`, executable file, generated command shim, or executable identity in its verifier manifest.
 - The accepted 22-registration/35-route factory has no non-test production caller.
@@ -91,3 +91,11 @@ The prior `IFC-V1-054` row combined independently verifiable outcomes and was no
 - Exact-Codex no-model foreground lifecycle with selected route/static fixture, local HTTP checks, signal shutdown, restart, and residue inspection.
 - Two-build package determinism, verifier negatives, packed/local/global-style invocation, unrelated-cwd/read-only execution, and command matrix.
 - Root/package typechecks, lint/exports, unit, contract, integration, web, scaffold, planning, runtime-boundary, frozen install, binding, supply-chain, privacy, diff, and residue gates appropriate to each leaf.
+
+## IFC-V1-084 Evidence
+
+- Implementation `6ae4f96` adds strict direct-loopback clients for `GET /api/v1/host/status`, canonical `GET /api/v1/sessions`, and audited local-admin `POST /api/v1/access/devices/:device_id/revoke`. The reads send no local-admin header; revoke requires exact confirmation, a generated operation id, correlated terminal response, and no retry.
+- Client and shell boundaries reject accessors, extra keys, alternate authorities, malformed responses, wrong status, cross-operation/device data, invalid pagination continuation, and local-admin self-revoke success. Shared bounded transport, error sanitization, response freezing, and one-dispatch behavior remain enforced.
+- Both human and JSON host-status output omit the private external origin. Human session output omits cwd, runtime thread id, objective, and summary, while session-list JSON preserves the selected response contract. Device-revoke output contains only the selected public receipt fields. The paired-cookie-only `device_list` HTTP route and all Tailscale, Serve, browser, and phone behavior are unchanged.
+- The aggregate source inventory is exact at 18 factories, 26 public operations, 26 selected route ids, and 28 requests. Focused client/render/dispatch/inventory tests pass 19/19 and the focused CLI contract passes 12/12; full gates pass 1,790 unit tests with 26 intentional external skips, 240 contract, 25 integration, and 20 web tests, plus root/package typechecks, lint/exports over 518 files and 8 packages, scaffold, planning, runtime-boundary, and diff checks.
+- Deterministic package acceptance passes twice with 603 source modules, 1,213 owned outputs, and 6,415 entries, including relocated read-only runtime and verifier/config/static/integrity rejection. Source identity is `dcaf0d41bf18d4bf1b9acac49ef8f86278a5afe671c11b842d12a290f2b3b956`; output identity is `9b1c2c62fad91486879dbd90565aedd3d809531a210f42d26a37671814f0b864`; content identity is `5e34ab4abe966b605768db224c6a1fa01e17d95452366e8cabb4bcf8bce4e7de`; manifest identity is `1cb11d8c5c0bb0c6447c391e457ec93426d992f44e2fcbe166989edabd6edf47`. No dependency or lockfile changed.

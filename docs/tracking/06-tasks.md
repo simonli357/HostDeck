@@ -16,10 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-084` Implement API-backed status, session-list, and confirmed device-revoke CLI operations | ready | none | Required grammar and bounded transport are complete; finish selected HTTP operations before process/bin integration. |
-| 2 | `IFC-V1-085` Implement secure read-only local CLI device listing | ready | none | Required grammar, secure paths, and bounded listing storage are complete; preserve the paired-cookie-only HTTP route under `DEC-024`. |
-| 3 | `IFC-V1-081` Implement the foreground resource bootstrap and rollback owner | ready | none | Secure paths/lease, migrated storage, exact runtime supervision, and compiled libraries are complete inputs; build the real resource owner before application composition. |
-| 4 | `IFC-V1-055` Generate versioned unprivileged systemd user units with explicit ownership/dependencies | ready | none | The compiled package and accepted runtime lifecycle are complete; units remain independent, but command/bootstrap work is ordered first. |
+| 1 | `IFC-V1-085` Implement secure read-only local CLI device listing | ready | none | Required grammar, secure paths, and bounded listing storage are complete; preserve the paired-cookie-only HTTP route under `DEC-024`. |
+| 2 | `IFC-V1-081` Implement the foreground resource bootstrap and rollback owner | ready | none | Secure paths/lease, migrated storage, exact runtime supervision, and compiled libraries are complete inputs; build the real resource owner before application composition. |
+| 3 | `IFC-V1-055` Generate versioned unprivileged systemd user units with explicit ownership/dependencies | ready | none | The compiled package and accepted runtime lifecycle are complete; units remain independent, but command/bootstrap work is ordered first. |
 
 ## Intentional Blockers
 
