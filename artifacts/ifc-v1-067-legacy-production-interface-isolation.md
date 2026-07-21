@@ -127,3 +127,30 @@ The accepted selected composition exists, but the production boundary is not yet
 - Candidate emitted production-root closure and production dependency inspection.
 - Full workspace validation plus manual listener/process/temp/privacy inspection.
 - Owning task, queue/status handoff, command reference, developer guide, block maturity, and artifact synchronized only where their owned facts change.
+
+## Completion
+
+`IFC-V1-067` is complete. Criteria were frozen in `a72e65c`; listener, TLS, LAN, storage, and migration retirement landed in `a037ba5`; pair/lock/unlock became HTTP-only in `fec797b`; and selected public-interface closure plus the static gate landed in `dcd5fcb`. All four commits are pushed to `origin/main`.
+
+### Final Inventory
+
+- The canonical exact removed-file inventory is the `removedPaths` array in `scripts/check-selected-runtime-boundary.mjs`. It covers the retired tmux package manifest; legacy CLI administrator; generic API/UI/LAN contracts; desktop session/classifier/command core; legacy listener, LAN certificate/configuration, raw/slash/tmux routes and harnesses; superseded storage repositories; desktop fixtures/view models; and every direct test named by those surfaces. The gate fails if any exact path returns.
+- The only exact historical-token/import exceptions are `packages/storage/src/migrations.ts`, `packages/contracts/src/security-audit.ts`, `packages/contracts/src/selected-storage.ts`, `packages/core/src/selected-runtime.ts`, `packages/storage/src/legacy-session-repository.ts`, and `packages/cli/src/legacy-session-admin.ts`. Their allowed imports are exact and machine checked; none can import a network, listener, process, or runtime adapter.
+- Removed dependencies are exactly `@hostdeck/tmux-adapter`, `@peculiar/x509`, and `reflect-metadata`. Removed scripts are exactly `smoke:android-security`, `smoke:lan-android`, and `test:tmux`.
+- Selected production roots are exactly server, CLI, web, contracts, core, and storage. The exact public module sets for core, contracts, web, and test fixtures are frozen by the same gate; the resulting transitive production closure contains 600 source modules and 21 external modules.
+- Published migrations 1-17 and checksums are unchanged. Migration 18 removes obsolete LAN settings/table state while preserving selected settings and historical session/audit truth. Only confirmed `legacy status/reset` retains local SQLite access.
+
+### Validation Evidence
+
+| Boundary | Result |
+| --- | --- |
+| Focused behavior | Migration/history/reset: 38 passed; documented CLI/config/inventory/admin: 36 passed; SSE regression: 10 passed. |
+| Workspace | Unit: 1,730 passed and 26 intentional skips across 176 files; contract: 235 passed; integration: 19 passed; web: 20 passed; root and all-package typechecks passed. |
+| Static structure | Lint/export checks passed across 497 files and 8 packages; scaffold and planning checks passed; mutation-tested runtime boundary passed with the 600-module/21-external closure. |
+| Binding and build closure | Exact isolated Codex 0.144.0 binding passed across 671 files with hash `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`; emitted candidate closure contained the same 600 modules with zero missing or forbidden modules. The installed default 0.144.5 binary correctly remains ineligible as exact evidence. |
+| Install and supply chain | Frozen offline install passed; production audit reported zero known vulnerabilities; dependency inventory contained 9 workspaces and 146 unique named nodes; all 137 production package records across 140 paths had allowlisted permissive licenses. |
+| Manual and residue | Package roots, CLI/config failures, migration/history behavior, dependency tree, emitted closure, listener/config state, diffs, and sanitized output were inspected. No port 3777 listener, HostDeck/test/Codex/tmux/ADB task process, task build directory, certificate directory, or Tailscale Serve handler remained. |
+
+### Residual Scope
+
+This task proves interface isolation, not an executable package or release. `IFC-V1-050` to `IFC-V1-052` own aggregate deadline, CLI transport, and resource closure; `IFC-V1-021` owns compiled startup/package composition; `IFC-V1-053` to `IFC-V1-058` and `IFC-V1-091` own downstream module and release hardening. Production UI implementation still requires the recorded human visual-direction selection.

@@ -32,7 +32,7 @@ pnpm test:web
 pnpm test:browser:pairing
 pnpm exec vitest run packages/cli/src/remote-control-client.test.ts packages/cli/src/remote-cli.test.ts
 pnpm exec vitest run packages/cli/src/start-client.test.ts packages/cli/src/start-cli.test.ts packages/server/src/selected-write-audit-executor.test.ts packages/server/src/session-start-routes.test.ts packages/server/src/managed-thread-service.test.ts packages/storage/src/session-start-audit-catalog-migration.test.ts
-pnpm exec vitest run packages/cli/src/cli.contract.test.ts packages/cli/src/local-admin.test.ts packages/storage/src/legacy-session-repository.test.ts
+pnpm exec vitest run packages/cli/src/config.test.ts packages/cli/src/host-lock-client.test.ts packages/cli/src/host-lock-cli.test.ts packages/cli/src/pairing-link-client.test.ts packages/cli/src/selected-api-route-inventory.test.ts packages/cli/src/legacy-session-admin.test.ts packages/storage/src/legacy-session-repository.test.ts
 pnpm exec vitest run packages/cli/src/archive-client.test.ts packages/cli/src/archive-cli.test.ts packages/server/src/selected-write-audit-executor.test.ts packages/server/src/selected-write-gate.test.ts packages/server/src/session-archive-routes.test.ts packages/server/src/managed-thread-service.test.ts
 pnpm exec vitest run --config vitest.integration.config.ts tests/archive-vertical.integration.test.ts
 pnpm exec vitest run packages/cli/src/prompt-client.test.ts packages/cli/src/prompt-cli.test.ts packages/server/src/codex-prompt-control-service.test.ts packages/server/src/prompt-routes.test.ts packages/server/src/selected-write-audit-executor.test.ts packages/server/src/selected-write-gate.test.ts
@@ -69,7 +69,6 @@ pnpm smoke:pairing-android
 HOSTDECK_REMOTE_CONTROL_DEDICATED_PROFILE_ID=DEDICATED_ID \
 HOSTDECK_REMOTE_CONTROL_AWAY_PROFILE_ID=AWAY_ID \
 pnpm smoke:remote-android
-pnpm smoke:android-security
 ```
 
 `smoke:remote-android` is the strict `IFC-V1-079` no-retry device run. It requires one clean commit, exact Tailscale 1.98.8, two distinct authorized saved-profile ids, one unlocked authorized Android device, Android Tailscale and Chrome, and a cellular connection. The harness disables and restores phone Wi-Fi, uses USB only for guarded camera/Chrome inspection, requires the human to scan and open the in-memory QR, restores the dedicated profile, removes its exact Serve path, and publishes only sanitized evidence under `artifacts/ifc-v1-079-device/` after complete cleanup.

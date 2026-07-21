@@ -42,7 +42,7 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | --- | --- | --- |
 | Install | `pnpm install --frozen-lockfile` | Uses the committed `pnpm-lock.yaml`. |
 | Scaffold check | `pnpm check:scaffold` | Verifies root files, package directories, and root script names. |
-| Selected runtime boundary | `pnpm check:runtime-boundary` | Rejects tmux package/dependency/export/source/CLI reachability and requires the bounded legacy reset repository. |
+| Selected runtime boundary | `pnpm check:runtime-boundary` | Runs mutation tests plus an exact removed-file/root-export/import/dependency/config/script and transitive production-closure audit. Only exact historical migration/audit decoders and bounded legacy-session reset are allowed. |
 | Codex binding check | `pnpm check:codex-bindings` | Regenerates 0.144.0 experimental bindings in a temporary directory and rejects drift. |
 | Codex binding update | `pnpm generate:codex-bindings` | Replaces committed generated files and identity; use only during an explicit compatibility review. |
 | Codex compatibility smoke | `pnpm smoke:codex-compatibility` | Starts installed app-server over stdio, initializes experimental API, and verifies Plan/Default without a model call. |
@@ -53,9 +53,9 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | Typecheck | `pnpm typecheck` | Strict TypeScript no-emit check across workspace source. |
 | Lint | `pnpm lint` | Biome plus package export convention checks. |
 | Unit tests | `pnpm test` or `pnpm test:unit` | Runs Vitest unit tests. |
-| Contract tests | `pnpm test:contract` | Runs shared schema/API/CLI/storage/UI contract tests. |
+| Contract tests | `pnpm test:contract` | Runs selected schema/API/CLI/storage contract tests. |
 | Integration tests | `pnpm test:integration` | Runs cross-module failure-ordering tests. |
-| Web state tests | `pnpm test:web` | Runs view-model, selected mobile fixture, and headless pairing-bootstrap checks. |
+| Web state tests | `pnpm test:web` | Runs selected mobile fixture and headless pairing-bootstrap checks. |
 | Pairing browser tests | `pnpm test:browser:pairing` | Runs the real Chromium history/referrer/reload/two-tab/failure boundary; requires the Playwright Chromium bundle. |
 | Remote Android acceptance | `HOSTDECK_REMOTE_CONTROL_DEDICATED_PROFILE_ID=DEDICATED_ID HOSTDECK_REMOTE_CONTROL_AWAY_PROFILE_ID=AWAY_ID pnpm smoke:remote-android` | Strict no-retry `IFC-V1-079` run from a clean commit. Requires exact Tailscale 1.98.8, two distinct authorized saved profiles, and one unlocked authorized Android device with Tailscale, Chrome, USB debugging, and working cellular data. |
 | Later E2E tests | `pnpm test:e2e` | Placeholder; fails loudly until `REL-V1-007` implements it. |
@@ -64,7 +64,7 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 
 ## CLI And Service State
 
-Selected CLI parsers, local-admin operations, and loopback HTTP clients are implemented as source contracts in `packages/cli/src/`, and selected server services/routes/lifecycle primitives live in `packages/server/src/`. A production composition entrypoint and packaged runnable `codexdeck` binary do not exist yet. `INT-V1-008` deliberately removed the historical tmux/custom-listener `serve` path; `IFC-V1-046` owns selected composition, and build/package or clean-install evidence must exist before `codexdeck ...` becomes a copy-paste command.
+Selected CLI parsers and loopback HTTP clients are implemented as source contracts in `packages/cli/src/`; pair, lock, and unlock use selected HTTP routes. Only `legacy status/reset` enters the bounded local SQLite administration module. Selected server services/routes/lifecycle primitives and the accepted production registration factory live in `packages/server/src/`, but a compiled startup entrypoint and packaged runnable `codexdeck` binary do not exist yet. `INT-V1-008` removed the historical tmux path and `IFC-V1-067` removed direct-LAN/TLS/raw/desktop production interfaces; build/package or clean-install evidence must exist before `codexdeck ...` becomes a copy-paste command.
 
 Local `legacy status [--json]` reports only the `legacy_unmigrated` disposition and a bounded row count. `legacy reset --confirm [--json]` opens the local SQLite database, runs one immediate transaction, removes only inert legacy session state through declared foreign keys, preserves selected sessions/projections/security/global audit state, and performs no process or tmux action. Both remain source contracts until CLI packaging.
 
@@ -76,7 +76,7 @@ Default local configuration:
 | API port | `3777` |
 | State directory | `${XDG_STATE_HOME}/hostdeck` when `XDG_STATE_HOME` is set, otherwise `~/.local/state/hostdeck` |
 | SQLite database | `hostdeck.sqlite` inside the state directory |
-| Runtime directory | `$XDG_RUNTIME_DIR/hostdeck`; the config/path contracts reserve it for selected composition, which remains `IFC-V1-046` work |
+| Runtime directory | `$XDG_RUNTIME_DIR/hostdeck`; selected runtime/socket and composition contracts use it, while compiled startup/package ownership remains `IFC-V1-021` work |
 | Config directory | `${XDG_CONFIG_HOME}/hostdeck` when set, otherwise `~/.config/hostdeck` |
 | Daemon lease | `hostdeck.lock` inside the state directory; one nonblocking Linux owner per state directory |
 | Config file | Optional JSON file passed with `--config` |
@@ -117,10 +117,10 @@ Long-running systemd user units and runnable packaging remain downstream. Do not
 | `missing_binary` during session start | External Codex CLI is not on `PATH`. | Session start fails before durable success is recorded. |
 | Thread/TUI smoke stops at authentication | Installed Codex has no private regular `auth.json` or its login is stale. | Smoke fails before claiming exact TUI evidence and removes its temporary state. |
 | Command-backed Codex turn fails before approval | Bubblewrap cannot create a user namespace, commonly because the Ubuntu AppArmor profile is absent. | Aggregate acceptance remains failed. Install/load the packaged profile; do not disable sandbox or lower approval policy. |
-| Invalid state directory or database path | Path is missing, unreadable, or migration fails. | Startup or local-admin command fails loudly with typed config/storage errors. |
+| Invalid state directory or database path | Path is missing, unreadable, or migration fails. | Startup or bounded legacy-admin command fails loudly with typed config/storage errors. |
 | `XDG_RUNTIME_DIR is required` | A runtime-owning source contract is exercised without a secure per-user runtime directory. | Config/path validation fails before runtime side effects. |
-| Another owner holds the state directory lease | A HostDeck process/test already holds `hostdeck.lock`. | Lease acquisition fails before protected mutation; full production startup ordering remains `IFC-V1-046` work. |
-| Duplicate loopback bind port | Another process already owns the configured port. | Fastify lifecycle startup fails before reporting ready; production composition remains downstream. |
+| Another owner holds the state directory lease | A HostDeck process/test already holds `hostdeck.lock`. | Lease acquisition fails before protected mutation; compiled startup/service ownership remains downstream. |
+| Duplicate loopback bind port | Another process already owns the configured port. | Fastify lifecycle startup fails before reporting ready; no alternate host, HTTPS, or LAN bind fallback exists. |
 | Placeholder scripts fail | E2E, build, or release smoke is not implemented yet. | Script exits nonzero with the owning future task ID. |
 
 ## Evidence
