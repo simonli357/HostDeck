@@ -234,6 +234,32 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
       return success(renderVersion(options.version ?? defaultVersion));
     }
 
+    if (parsed.command.kind === "serve") {
+      throw clientOperationFailure(
+        "capability_unavailable",
+        "Foreground serve is not available in this build."
+      );
+    }
+
+    if (parsed.command.kind === "service") {
+      throw clientOperationFailure(
+        "capability_unavailable",
+        "Service lifecycle commands are not available in this build."
+      );
+    }
+
+    if (
+      parsed.command.kind === "status" ||
+      parsed.command.kind === "list" ||
+      parsed.command.kind === "devices" ||
+      parsed.command.kind === "revoke"
+    ) {
+      throw clientOperationFailure(
+        "capability_unavailable",
+        `The ${parsed.command.kind} command is not available in this build.`
+      );
+    }
+
     const configOptions: LoadCliConfigOptions = {
       flags: parsed.configFlags
     };

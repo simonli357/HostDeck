@@ -1,5 +1,10 @@
 import { Buffer } from "node:buffer";
-import { defaultResourceBudget } from "@hostdeck/contracts";
+import {
+  defaultResourceBudget,
+  encodeSelectedDeviceListCursor,
+  encodeSelectedSessionListCursor,
+  sessionIdSchema
+} from "@hostdeck/contracts";
 import { describe, expect, it } from "vitest";
 import { CliFailure, internalFailure } from "./errors.js";
 import { cliExitCodes } from "./exit-codes.js";
@@ -11,6 +16,16 @@ import {
   renderLegacySessionStatus
 } from "./render.js";
 import { runCli } from "./shell.js";
+
+const sessionListCursor = encodeSelectedSessionListCursor({
+  order_snapshot: "a".repeat(64),
+  after: {
+    attention_rank: 20,
+    last_activity_at: null,
+    session_id: sessionIdSchema.parse("sess_cli_contract_01")
+  }
+});
+const deviceListCursor = encodeSelectedDeviceListCursor("client_contract_01");
 
 describe("selected CLI shell contract", () => {
   it("parses selected commands, legacy administration, and config flags", () => {
@@ -24,6 +39,63 @@ describe("selected CLI shell contract", () => {
         label: "version",
         args: ["version"],
         expected: { command: { kind: "version" }, configFlags: {} }
+      },
+      {
+        label: "serve",
+        args: ["serve"],
+        expected: { command: { kind: "serve" }, configFlags: {} }
+      },
+      {
+        label: "status",
+        args: ["status", "--json"],
+        expected: { command: { kind: "status", json: true }, configFlags: {} }
+      },
+      {
+        label: "list",
+        args: ["list", "--limit=25", "--cursor", sessionListCursor, "--json"],
+        expected: {
+          command: {
+            kind: "list",
+            limit: 25,
+            cursor: sessionListCursor,
+            json: true
+          },
+          configFlags: {}
+        }
+      },
+      {
+        label: "devices",
+        args: ["devices", "--limit", "10", `--cursor=${deviceListCursor}`],
+        expected: {
+          command: {
+            kind: "devices",
+            limit: 10,
+            cursor: deviceListCursor,
+            json: false
+          },
+          configFlags: {}
+        }
+      },
+      {
+        label: "revoke",
+        args: ["revoke", "client_contract_01", "--confirm", "--json"],
+        expected: {
+          command: {
+            kind: "revoke",
+            deviceId: "client_contract_01",
+            confirm: true,
+            json: true
+          },
+          configFlags: {}
+        }
+      },
+      {
+        label: "service",
+        args: ["service", "upgrade", "--json"],
+        expected: {
+          command: { kind: "service", action: "upgrade", json: true },
+          configFlags: {}
+        }
       },
       {
         label: "start",
@@ -103,6 +175,21 @@ describe("selected CLI shell contract", () => {
     for (const scenario of cases) {
       expect(parseCliArgs(scenario.args), scenario.label).toEqual(scenario.expected);
     }
+
+    for (const action of [
+      "install",
+      "upgrade",
+      "status",
+      "start",
+      "stop",
+      "restart",
+      "uninstall"
+    ] as const) {
+      expect(parseCliArgs(["service", action])).toEqual({
+        command: { kind: "service", action, json: false },
+        configFlags: {}
+      });
+    }
   });
 
   it("rejects the retired host selector before configuration loading", async () => {
@@ -121,7 +208,7 @@ describe("selected CLI shell contract", () => {
     }
   });
 
-  it("omits and rejects every removed historical runtime command", async () => {
+  it("advertises required commands and rejects removed historical runtime commands", async () => {
     const help = await runCli(["help"], {
       env: {},
       readFile: () => {
@@ -131,9 +218,17 @@ describe("selected CLI shell contract", () => {
     expect(help.exitCode).toBe(cliExitCodes.ok);
     expect(help.stdout).toContain("codexdeck resume SESSION_ID");
     expect(help.stdout).toContain("codexdeck legacy reset --confirm [--json]");
+    expect(help.stdout).toContain("codexdeck serve");
+    expect(help.stdout).toContain("codexdeck status [--json]");
+    expect(help.stdout).toContain("codexdeck list [--limit N] [--cursor CURSOR] [--json]");
+    expect(help.stdout).toContain("codexdeck devices [--limit N] [--cursor CURSOR] [--json]");
+    expect(help.stdout).toContain("codexdeck revoke DEVICE_ID --confirm [--json]");
+    expect(help.stdout).toContain(
+      "codexdeck service install|upgrade|status|start|stop|restart|uninstall [--json]"
+    );
     const helpCommands = help.stdout.split("\n").map((line) => line.trim());
 
-    for (const command of ["serve", "status", "list", "attach", "stop"]) {
+    for (const command of ["attach", "stop", "lan"]) {
       expect(helpCommands.some((line) => line === `codexdeck ${command}` || line.startsWith(`codexdeck ${command} `))).toBe(false);
       let configReads = 0;
       const result = await runCli([command], {
@@ -146,6 +241,81 @@ describe("selected CLI shell contract", () => {
       expect(result.exitCode, command).toBe(cliExitCodes.usage);
       expect(result.stderr, command).toContain(`Unknown command: ${command}`);
       expect(configReads, command).toBe(0);
+    }
+  });
+
+  it("rejects ambiguous and invalid command input before configuration or other side effects", async () => {
+    const cases = [
+      ["--port", "4888", "--port=4889", "status"],
+      ["--database", "/tmp/a", "--database-path=/tmp/b", "devices"],
+      ["status", "--port", "4888"],
+      ["start", "--name=first", "--name=second", "--cwd=/tmp"],
+      ["start", "--name=first", "--cwd=/tmp/a", "--cwd=/tmp/b"],
+      ["list", "--limit=0"],
+      ["list", "--limit=01"],
+      ["list", "--limit=101"],
+      ["list", "--limit=1", "--limit=2"],
+      ["list", "--cursor=invalid"],
+      ["devices", "--cursor=invalid"],
+      ["devices", "unexpected"],
+      ["revoke", "client_contract_01"],
+      ["revoke", "invalid device", "--confirm"],
+      ["revoke", "client_contract_01", "--confirm", "--confirm"],
+      ["service"],
+      ["service", "unknown"],
+      ["service", "status", "extra"],
+      ["serve", "extra"],
+      ["serve", "--json"],
+      ["--json", "--json", "status"],
+      ["status", "--help"]
+    ] as const;
+
+    for (const args of cases) {
+      let configReads = 0;
+      const result = await runCli(args, {
+        env: {},
+        readFile: () => {
+          configReads += 1;
+          throw new Error("invalid input must fail before config");
+        }
+      });
+      expect(result.exitCode, args.join(" ")).toBe(cliExitCodes.usage);
+      expect(configReads, args.join(" ")).toBe(0);
+    }
+  });
+
+  it("reports staged commands unavailable without config, filesystem, network, or process work", async () => {
+    for (const args of [
+      ["serve"],
+      ["status"],
+      ["list", "--limit=25", "--cursor", sessionListCursor],
+      ["devices", "--limit=10", "--cursor", deviceListCursor],
+      ["revoke", "client_contract_01", "--confirm"],
+      ["service", "install"],
+      ["service", "upgrade"],
+      ["service", "status"],
+      ["service", "start"],
+      ["service", "stop"],
+      ["service", "restart"],
+      ["service", "uninstall"]
+    ] as const) {
+      let configReads = 0;
+      let fetchCalls = 0;
+      const result = await runCli(args, {
+        env: {},
+        readFile: () => {
+          configReads += 1;
+          throw new Error("reserved command must not load config");
+        },
+        fetch: async () => {
+          fetchCalls += 1;
+          throw new Error("reserved command must not use the network");
+        }
+      });
+      expect(result.exitCode, args.join(" ")).toBe(cliExitCodes.apiError);
+      expect(result.stderr, args.join(" ")).toContain("capability_unavailable");
+      expect(configReads, args.join(" ")).toBe(0);
+      expect(fetchCalls, args.join(" ")).toBe(0);
     }
   });
 
