@@ -209,6 +209,7 @@ export interface HostDeckSelectedWriteGateSnapshot {
   readonly lock_failures: number;
   readonly parse_failures: number;
   readonly pre_dispatch_timeouts: number;
+  readonly readiness_rejections: number;
   readonly response_preparations: number;
   readonly succeeded_results: number;
   readonly target_failures: number;
@@ -254,6 +255,7 @@ interface MutableCounters {
   lockFailures: number;
   parseFailures: number;
   preDispatchTimeouts: number;
+  readinessRejections: number;
   responsePreparations: number;
   succeededResults: number;
   targetFailures: number;
@@ -387,6 +389,7 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
     lockFailures: 0,
     parseFailures: 0,
     preDispatchTimeouts: 0,
+    readinessRejections: 0,
     responsePreparations: 0,
     succeededResults: 0,
     targetFailures: 0
@@ -412,6 +415,7 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
       lock_failures: this.counters.lockFailures,
       parse_failures: this.counters.parseFailures,
       pre_dispatch_timeouts: this.counters.preDispatchTimeouts,
+      readiness_rejections: this.counters.readinessRejections,
       response_preparations: this.counters.responsePreparations,
       succeeded_results: this.counters.succeededResults,
       target_failures: this.counters.targetFailures
@@ -694,6 +698,20 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
         }
         throw error;
       }
+      try {
+        admissionOwner.assertReady();
+      } catch (error) {
+        const readinessCode = mutationReadinessFailureCode(error);
+        if (readinessCode === null) throw admissionBoundaryFailure(error);
+        increment(this.counters, "readinessRejections");
+        observation.transitionOutcome = "failed";
+        observation.transitionErrorCode = readinessCode;
+        return Object.freeze({
+          outcome: "failed" as const,
+          error_code: readinessCode,
+          payload_summary: timeoutSummary
+        });
+      }
       increment(this.counters, "dispatches");
       const dispatchContext: HostDeckSelectedWriteDispatchContext<
         TAction,
@@ -881,6 +899,17 @@ function admissionBoundaryFailure(error: unknown): Error {
     retryable: error.retry_safe,
     status: admissionFailureStatus(error.api_code)
   });
+}
+
+function mutationReadinessFailureCode(error: unknown): ErrorCode | null {
+  if (
+    !isHostDeckSelectedWriteAdmissionError(error) ||
+    (error.reason !== "host_not_ready" &&
+      error.reason !== "host_state_changed")
+  ) {
+    return null;
+  }
+  return error.api_code;
 }
 
 function admissionFailureStatus(code: ErrorCode): number {

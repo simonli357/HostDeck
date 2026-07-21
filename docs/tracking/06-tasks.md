@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-082` Compose the real production application graph over foreground resources | ready | none | The secure foreground owner now supplies the lease, migrated database, and exact runtime process/socket; compose the accepted repositories, lifecycle, controls, routes, static boundary, and reconciliation before listening. |
+| 1 | `IFC-V1-082` Compose the real production application graph over foreground resources | in_progress | none | The secure foreground owner now supplies the lease, migrated database, and exact runtime process/socket; compose the accepted repositories, lifecycle, controls, routes, static boundary, and reconciliation before listening. |
 | 2 | `IFC-V1-055` Generate versioned unprivileged systemd user units with explicit ownership/dependencies | ready | none | The compiled package and accepted runtime lifecycle are complete; units remain independent, but production application composition is ordered first. |
 
 ## Intentional Blockers

@@ -32,6 +32,11 @@ import {
 } from "./fastify-request-authentication.js";
 import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import {
+  createHostDeckHostHealthService,
+  type HostDeckHostHealthService,
+  hostDeckLocalHealthComponents
+} from "./host-health.js";
+import {
   createHostDeckHostLockPolicy,
   hostDeckHostLockPolicySnapshot
 } from "./host-lock-routes.js";
@@ -527,6 +532,58 @@ describe("selected exact-target write gate", () => {
         dispatches: 1,
         response_preparations: 1,
         succeeded_results: 1
+      });
+    } finally {
+      await harness.app.close();
+    }
+  });
+
+  it("records a terminal no-dispatch failure when host health changes after accepted audit", async () => {
+    const health = createReadyHealth();
+    const harness = createPromptHarness({
+      health,
+      beforeTransition() {
+        health.updateLocal({
+          component: "runtime",
+          state: "degraded",
+          reasons: ["runtime_disconnected"],
+          source_generation: 2
+        });
+      }
+    });
+    await harness.app.ready();
+    try {
+      const response = await harness.app.inject({
+        method: "POST",
+        url: `/api/v1/sessions/${promptTarget.session_id}/prompts`,
+        headers: localHeaders(),
+        payload: promptRequest(
+          "op_gate_health_race_001",
+          promptTarget,
+          "hello"
+        )
+      });
+      expect(response.statusCode, response.body).toBe(409);
+      expect(response.json()).toMatchObject({
+        error: { code: "runtime_unavailable" }
+      });
+      expect(harness.events).toEqual([
+        "parse",
+        "lock:read",
+        "target:resolve",
+        "audit:accepted",
+        "audit:failed"
+      ]);
+      expect(harness.gate.snapshot()).toMatchObject({
+        attempts: 1,
+        dispatches: 0,
+        readiness_rejections: 1,
+        failed_results: 1
+      });
+      expect(harness.admission.snapshot()).toMatchObject({
+        owner_claims: 1,
+        readiness_rejections: 1,
+        active_owners: 0
       });
     } finally {
       await harness.app.close();
@@ -1332,6 +1389,7 @@ interface PromptHarnessOptions {
   readonly accessorDispatchResult?: boolean;
   readonly auditDelayMs?: number;
   readonly auditFailure?: boolean;
+  readonly beforeTransition?: () => void;
   readonly authError?: "device_expired" | "device_revoked";
   readonly contradictoryAuditResult?: boolean;
   readonly dispatchDelayThenThrowMs?: number;
@@ -1340,6 +1398,7 @@ interface PromptHarnessOptions {
   readonly duplicateTransition?: boolean;
   readonly forgedMutation?: boolean;
   readonly forgedResolution?: boolean;
+  readonly health?: HostDeckHostHealthService;
   readonly invalidAcceptedContext?: boolean;
   readonly latePreparation?: boolean;
   readonly lateTransition?: boolean;
@@ -1429,7 +1488,8 @@ function createPromptHarness(options: PromptHarnessOptions = {}): PromptHarness 
   });
   const admission = createHostDeckSelectedWriteAdmissionPolicy({
     resourceBudget,
-    now: () => performance.now()
+    now: () => performance.now(),
+    ...(options.health === undefined ? {} : { health: options.health })
   });
   const gate = createHostDeckSelectedWriteGate({
     admission,
@@ -1507,7 +1567,8 @@ async function createSecurePromptHarness(
   });
   const admission = createHostDeckSelectedWriteAdmissionPolicy({
     resourceBudget,
-    now: () => performance.now()
+    now: () => performance.now(),
+    ...(options.health === undefined ? {} : { health: options.health })
   });
   const gate = createHostDeckSelectedWriteGate({
     admission,
@@ -1734,6 +1795,7 @@ function createPassThroughAuditExecute(
     }
     if (options.auditFailure) throw new Error("private-stage-cause");
     if (options.auditDelayMs !== undefined) await sleep(options.auditDelayMs);
+    options.beforeTransition?.();
     if (options.lateTransition) {
       setImmediate(() => {
         void Promise.resolve(input.transition(acceptedAuditContext)).then(
@@ -2199,8 +2261,24 @@ function emptyGateSnapshot() {
     lock_failures: 0,
     parse_failures: 0,
     pre_dispatch_timeouts: 0,
+    readiness_rejections: 0,
     response_preparations: 0,
     succeeded_results: 0,
     target_failures: 0
   };
+}
+
+function createReadyHealth(): HostDeckHostHealthService {
+  const health = createHostDeckHostHealthService({
+    now: () => new Date("2026-07-20T18:00:00.000Z")
+  });
+  for (const component of hostDeckLocalHealthComponents) {
+    health.updateLocal({
+      component,
+      state: "ready",
+      reasons: [],
+      source_generation: 1
+    });
+  }
+  return health;
 }

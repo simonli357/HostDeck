@@ -6,6 +6,11 @@ import {
 } from "@hostdeck/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
+  createHostDeckHostHealthService,
+  type HostDeckHostHealthService,
+  hostDeckLocalHealthComponents
+} from "./host-health.js";
+import {
   assertHostDeckSelectedWriteAdmissionPolicy,
   createHostDeckSelectedWriteAdmissionPolicy,
   type HostDeckSelectedWriteAdmissionDecision,
@@ -47,7 +52,7 @@ describe("selected write admission policy", () => {
     ).toThrow(TypeError);
     expect(Object.isFrozen(policy.snapshot())).toBe(true);
 
-    const invalid = [
+    const invalid: unknown[] = [
       null,
       {},
       { resourceBudget: defaultResourceBudget, now: () => 0, extra: true },
@@ -56,6 +61,12 @@ describe("selected write admission policy", () => {
       { resourceBudget: defaultResourceBudget, now: () => -1 },
       { resourceBudget: defaultResourceBudget, now: () => Number.NaN }
     ];
+    const health = createHealth();
+    invalid.push({
+      resourceBudget: defaultResourceBudget,
+      now: () => 0,
+      health: Object.freeze({ ...health })
+    });
     for (const candidate of invalid) {
       expect(() => createHostDeckSelectedWriteAdmissionPolicy(candidate as never)).toThrow(
         expect.objectContaining({ reason: "configuration_invalid" })
@@ -79,6 +90,77 @@ describe("selected write admission policy", () => {
       expect.objectContaining({ reason: "configuration_invalid" })
     );
     expect(accessorCalls).toBe(0);
+  });
+
+  it("admits only healthy new owners and revalidates the same health generation before dispatch", async () => {
+    const clock = { value: 0 };
+    const health = createHealth();
+    const policy = createHostDeckSelectedWriteAdmissionPolicy({
+      resourceBudget: defaultResourceBudget,
+      now: () => clock.value,
+      health
+    });
+    const input = {
+      operationId: "op_admission_health_001",
+      actor: writerActor,
+      intent: { value: 1 }
+    };
+
+    expect(() => begin(policy, input)).toThrow(
+      expect.objectContaining({
+        reason: "host_not_ready",
+        api_code: "storage_error",
+        retry_safe: true
+      })
+    );
+    makeHealthReady(health);
+
+    const claim = owner<unknown>(begin<unknown>(policy, input));
+    claim.bindTarget(target("health_race"));
+    health.updateLocal({
+      component: "runtime",
+      state: "degraded",
+      reasons: ["runtime_disconnected"],
+      source_generation: 2
+    });
+    expect(() => claim.assertReady()).toThrow(
+      expect.objectContaining({
+        reason: "host_state_changed",
+        api_code: "runtime_unavailable",
+        retry_safe: true
+      })
+    );
+    const failed = Object.freeze({
+      outcome: "failed" as const,
+      error_code: "runtime_unavailable" as const
+    });
+    expect(claim.complete(failed)).toEqual(failed);
+
+    const replay = replayDecision<unknown>(begin<unknown>(policy, input));
+    await expect(replay.replay()).resolves.toEqual(failed);
+    health.updateLocal({
+      component: "runtime",
+      state: "ready",
+      reasons: [],
+      source_generation: 3
+    });
+    const recovered = owner<unknown>(
+      begin<unknown>(policy, {
+        ...input,
+        operationId: "op_admission_health_002"
+      })
+    );
+    recovered.bindTarget(target("health_recovered"));
+    expect(() => recovered.assertReady()).not.toThrow();
+    recovered.complete(
+      Object.freeze({ outcome: "succeeded", response: { accepted: true } })
+    );
+
+    expect(policy.snapshot()).toMatchObject({
+      owner_claims: 2,
+      readiness_rejections: 2,
+      active_owners: 0
+    });
   });
 
   it("closes empty admission idempotently and rejects post-drain work before reading it", async () => {
@@ -869,6 +951,23 @@ function createPolicy(
     resourceBudget: resolveResourceBudget(overrides),
     now: () => clock.value
   });
+}
+
+function createHealth(): HostDeckHostHealthService {
+  return createHostDeckHostHealthService({
+    now: () => new Date("2026-07-20T18:00:00.000Z")
+  });
+}
+
+function makeHealthReady(health: HostDeckHostHealthService): void {
+  for (const component of hostDeckLocalHealthComponents) {
+    health.updateLocal({
+      component,
+      state: "ready",
+      reasons: [],
+      source_generation: 1
+    });
+  }
 }
 
 function begin<T = TestResult>(

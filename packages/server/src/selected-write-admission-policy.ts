@@ -10,6 +10,12 @@ import {
   selectedAuditTargetSchema
 } from "@hostdeck/contracts";
 import type { ErrorCode } from "@hostdeck/core";
+import {
+  assertHostDeckHostHealthService,
+  type HostDeckHostHealthService,
+  type HostDeckLocalMutationHealthProof,
+  isHostDeckHostHealthError
+} from "./host-health.js";
 import { readExactDataObject } from "./selected-write-gate-contracts.js";
 
 export type HostDeckSelectedWriteAdmissionErrorReason =
@@ -19,6 +25,8 @@ export type HostDeckSelectedWriteAdmissionErrorReason =
   | "contract_invalid"
   | "device_limit"
   | "global_limit"
+  | "host_not_ready"
+  | "host_state_changed"
   | "input_invalid"
   | "operation_conflict"
   | "rate_limit"
@@ -59,6 +67,7 @@ export interface BeginHostDeckSelectedWriteAdmissionInput {
 export interface HostDeckSelectedWriteAdmissionOwner<T> {
   readonly state: "owner";
   readonly bindTarget: (target: SelectedAuditTarget) => void;
+  readonly assertReady: () => void;
   readonly complete: (value: T) => T;
   readonly fail: (error: Error) => never;
   readonly abandon: (error: Error) => never;
@@ -84,6 +93,7 @@ export interface HostDeckSelectedWriteAdmissionSnapshot {
   readonly device_rejections: number;
   readonly target_rejections: number;
   readonly global_rejections: number;
+  readonly readiness_rejections: number;
   readonly capacity_rejections: number;
   readonly value_settlements: number;
   readonly error_settlements: number;
@@ -120,12 +130,14 @@ export interface HostDeckSelectedWriteAdmissionPolicy {
 export interface CreateHostDeckSelectedWriteAdmissionPolicyInput {
   readonly resourceBudget: ResourceBudget;
   readonly now: () => number;
+  readonly health?: HostDeckHostHealthService;
 }
 
 interface ParsedAdmissionOptions {
   readonly budget: ResourceBudget;
   readonly now: () => number;
   readonly initialNow: number;
+  readonly health: HostDeckHostHealthService | null;
 }
 
 interface ParsedAdmissionInput {
@@ -178,6 +190,7 @@ interface MutableAdmissionCounters {
   deviceRejections: number;
   targetRejections: number;
   globalRejections: number;
+  readinessRejections: number;
   capacityRejections: number;
   valueSettlements: number;
   errorSettlements: number;
@@ -227,6 +240,8 @@ const admissionErrorMessages: Record<
   contract_invalid: "Selected mutation admission contract is invalid.",
   device_limit: "Selected mutation device concurrency is exhausted.",
   global_limit: "Selected mutation global concurrency is exhausted.",
+  host_not_ready: "Selected mutation host health is not ready.",
+  host_state_changed: "Selected mutation host health changed before dispatch.",
   input_invalid: "Selected mutation admission input is invalid.",
   operation_conflict: "Selected mutation operation conflicts with retained state.",
   rate_limit: "Selected mutation request rate is exhausted.",
@@ -299,6 +314,7 @@ class DefaultHostDeckSelectedWriteAdmissionPolicy {
     deviceRejections: 0,
     targetRejections: 0,
     globalRejections: 0,
+    readinessRejections: 0,
     capacityRejections: 0,
     valueSettlements: 0,
     errorSettlements: 0,
@@ -370,6 +386,8 @@ class DefaultHostDeckSelectedWriteAdmissionPolicy {
       throw admissionError("global_limit", "service_overloaded", true);
     }
 
+    const healthProof = this.admitHealth();
+
     const entry: AdmissionEntry = {
       actorKey: parsed.actorKey,
       fingerprint: parsed.fingerprint,
@@ -383,7 +401,7 @@ class DefaultHostDeckSelectedWriteAdmissionPolicy {
     this.activeGlobal += 1;
     increment(this.counters, "ownerClaims");
     this.updatePeaks();
-    return this.createOwnerDecision<T>(parsed.operationId, entry);
+    return this.createOwnerDecision<T>(parsed.operationId, entry, healthProof);
   }
 
   beginDrain(): HostDeckSelectedWriteAdmissionSnapshot {
@@ -435,6 +453,7 @@ class DefaultHostDeckSelectedWriteAdmissionPolicy {
       device_rejections: this.counters.deviceRejections,
       target_rejections: this.counters.targetRejections,
       global_rejections: this.counters.globalRejections,
+      readiness_rejections: this.counters.readinessRejections,
       capacity_rejections: this.counters.capacityRejections,
       value_settlements: this.counters.valueSettlements,
       error_settlements: this.counters.errorSettlements,
@@ -460,9 +479,11 @@ class DefaultHostDeckSelectedWriteAdmissionPolicy {
 
   private createOwnerDecision<T>(
     operationId: string,
-    entry: AdmissionEntry
+    entry: AdmissionEntry,
+    healthProof: HostDeckLocalMutationHealthProof | null
   ): HostDeckSelectedWriteAdmissionOwner<T> {
     let open = true;
+    let readinessChecked = false;
     const requireOpen = (): void => {
       if (!open || entry.settlement !== null) {
         increment(this.counters, "contractFailures");
@@ -504,6 +525,21 @@ class DefaultHostDeckSelectedWriteAdmissionPolicy {
         this.activeTargets.set(targetKey, count + 1);
         this.activeTargetClaims += 1;
         this.updatePeaks();
+      },
+      assertReady: (): void => {
+        requireOpen();
+        if (readinessChecked) {
+          increment(this.counters, "contractFailures");
+          throw admissionError("contract_invalid", "internal_error", false);
+        }
+        readinessChecked = true;
+        if (this.options.health === null || healthProof === null) return;
+        try {
+          this.options.health.assertMutation(healthProof);
+        } catch (error) {
+          increment(this.counters, "readinessRejections");
+          throw this.healthFailure(error, "host_state_changed");
+        }
       },
       complete: (value: T): T => {
         requireOpen();
@@ -611,6 +647,27 @@ class DefaultHostDeckSelectedWriteAdmissionPolicy {
       throw admissionError("rate_limit", "rate_limited", true);
     }
     bucket.count += 1;
+  }
+
+  private admitHealth(): HostDeckLocalMutationHealthProof | null {
+    if (this.options.health === null) return null;
+    try {
+      return this.options.health.admitMutation();
+    } catch (error) {
+      increment(this.counters, "readinessRejections");
+      throw this.healthFailure(error, "host_not_ready");
+    }
+  }
+
+  private healthFailure(
+    error: unknown,
+    reason: "host_not_ready" | "host_state_changed"
+  ): HostDeckSelectedWriteAdmissionError {
+    if (isHostDeckHostHealthError(error)) {
+      return admissionError(reason, error.api_code, error.retryable);
+    }
+    increment(this.counters, "contractFailures");
+    return admissionError("contract_invalid", "internal_error", false);
   }
 
   private retainError(
@@ -822,11 +879,21 @@ function canonicalLimits(budget: ResourceBudget): CanonicalLimits {
 
 function parseAdmissionOptions(input: unknown): ParsedAdmissionOptions {
   try {
-    const values = readExactDataObject(
-      input,
-      ["now", "resourceBudget"],
-      "HostDeck selected-write admission options are invalid."
-    );
+    let values: Readonly<Record<string, unknown>>;
+    try {
+      values = readExactDataObject(
+        input,
+        ["health", "now", "resourceBudget"],
+        "HostDeck selected-write admission options are invalid."
+      );
+      assertHostDeckHostHealthService(values.health);
+    } catch {
+      values = readExactDataObject(
+        input,
+        ["now", "resourceBudget"],
+        "HostDeck selected-write admission options are invalid."
+      );
+    }
     assertDescriptorSafeResourceBudget(values.resourceBudget);
     assertResolvedResourceBudget(values.resourceBudget);
     if (typeof values.now !== "function") throw new TypeError();
@@ -836,6 +903,7 @@ function parseAdmissionOptions(input: unknown): ParsedAdmissionOptions {
     }
     return Object.freeze({
       budget: values.resourceBudget,
+      health: (values.health as HostDeckHostHealthService | undefined) ?? null,
       now: values.now as () => number,
       initialNow
     });

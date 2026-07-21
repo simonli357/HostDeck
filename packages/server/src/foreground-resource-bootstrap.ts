@@ -10,7 +10,10 @@ import {
   assertResolvedResourceBudget,
   type ResourceBudget
 } from "@hostdeck/contracts";
-import { createOperationDeadline } from "@hostdeck/core";
+import {
+  createOperationDeadline,
+  type OperationDeadline
+} from "@hostdeck/core";
 import {
   acquireHostDeckDaemonLease,
   type HostDeckDaemonLease,
@@ -93,14 +96,28 @@ export interface HostDeckForegroundResourceSnapshot {
   readonly runtime: CodexRuntimeSupervisorSnapshot;
 }
 
+export interface HostDeckForegroundResourceShutdownPorts {
+  readonly supervisor: Readonly<{
+    readonly close: (deadline: OperationDeadline) => Promise<void>;
+  }>;
+  readonly storage: Readonly<{
+    readonly close: (deadline: OperationDeadline) => Promise<void>;
+  }>;
+  readonly lease: Readonly<{
+    readonly release: (deadline: OperationDeadline) => Promise<void>;
+  }>;
+}
+
 export interface HostDeckForegroundResources {
   readonly bind: HostDeckForegroundBind;
   readonly paths: ResolvedHostDeckLocalPaths;
+  readonly codex_bin: string;
   readonly resource_budget: ResourceBudget;
   readonly database: ReturnType<typeof openMigratedDatabase>["db"];
   readonly migration: ReturnType<typeof openMigratedDatabase>["result"];
   readonly runtime: StartedCodexRuntime;
   readonly path_repairs: readonly HostDeckPathModeRepair[];
+  readonly shutdown: HostDeckForegroundResourceShutdownPorts;
   readonly snapshot: () => HostDeckForegroundResourceSnapshot;
   readonly close: () => Promise<void>;
 }
@@ -152,6 +169,7 @@ const requiredStartInputKeys = startInputKeys.filter(
 const dependencyKeys = ["now", "pid", "runtimeSupervisorFactory"] as const;
 const maxExecutablePathBytes = 4_096;
 const defaultNow = () => new Date();
+const acceptedForegroundResources = new WeakSet<object>();
 
 export async function startHostDeckForegroundResources(
   input: StartHostDeckForegroundResourcesInput,
@@ -253,6 +271,21 @@ export async function startHostDeckForegroundResources(
   }
 }
 
+export function assertHostDeckForegroundResources(
+  candidate: unknown
+): asserts candidate is HostDeckForegroundResources {
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    !acceptedForegroundResources.has(candidate) ||
+    !Object.isFrozen(candidate)
+  ) {
+    throw new TypeError(
+      "HostDeck foreground resources must be created by their bootstrap factory."
+    );
+  }
+}
+
 function createResourceHandle(input: {
   readonly lease: HostDeckDaemonLease;
   readonly opened: OpenedGuardedDatabase;
@@ -263,6 +296,13 @@ function createResourceHandle(input: {
 }): HostDeckForegroundResources {
   let phase: HostDeckForegroundResourcePhase = "ready";
   let closePromise: Promise<void> | null = null;
+  let supervisorPromise: Promise<void> | null = null;
+  let storagePromise: Promise<void> | null = null;
+  let leasePromise: Promise<void> | null = null;
+  let supervisorSettled = false;
+  let storageSettled = false;
+  let supervisorFailed = false;
+  let storageFailed = false;
   const bind = Object.freeze({
     host: "127.0.0.1" as const,
     port: input.parsed.loopbackPort,
@@ -284,10 +324,85 @@ function createResourceHandle(input: {
       runtime: input.supervisor.snapshot()
     });
 
+  const closeSupervisor = (deadline: OperationDeadline): Promise<void> => {
+    if (supervisorPromise !== null) return supervisorPromise;
+    assertOperationDeadline(deadline);
+    phase = "closing";
+    supervisorPromise = input.supervisor
+      .close({ deadline })
+      .catch((cause: unknown) => {
+        supervisorFailed = true;
+        throw cause;
+      })
+      .finally(() => {
+        supervisorSettled = true;
+      });
+    return supervisorPromise;
+  };
+
+  const closeStorage = (deadline: OperationDeadline): Promise<void> => {
+    if (storagePromise !== null) return storagePromise;
+    assertOperationDeadline(deadline);
+    if (!supervisorSettled) {
+      return Promise.reject(
+        new TypeError(
+          "HostDeck foreground storage cannot close before the runtime supervisor settles."
+        )
+      );
+    }
+    phase = "closing";
+    storagePromise = Promise.resolve()
+      .then(() => {
+        if (input.opened.database.db.open) input.opened.database.db.close();
+      })
+      .catch((cause: unknown) => {
+        storageFailed = true;
+        throw cause;
+      })
+      .finally(() => {
+        storageSettled = true;
+      });
+    return storagePromise;
+  };
+
+  const releaseOwnedLease = (deadline: OperationDeadline): Promise<void> => {
+    if (leasePromise !== null) return leasePromise;
+    assertOperationDeadline(deadline);
+    if (!storageSettled) {
+      return Promise.reject(
+        new TypeError(
+          "HostDeck foreground lease cannot release before storage settles."
+        )
+      );
+    }
+    phase = "closing";
+    leasePromise = Promise.resolve().then(() => input.lease.release()).then(
+      () => {
+        phase = supervisorFailed || storageFailed ? "failed" : "closed";
+      },
+      (cause: unknown) => {
+        phase = "failed";
+        throw cause;
+      }
+    );
+    return leasePromise;
+  };
+
+  const shutdown: HostDeckForegroundResourceShutdownPorts = Object.freeze({
+    supervisor: Object.freeze({ close: closeSupervisor }),
+    storage: Object.freeze({ close: closeStorage }),
+    lease: Object.freeze({ release: releaseOwnedLease })
+  });
+
   const close = (): Promise<void> => {
     if (closePromise !== null) return closePromise;
     phase = "closing";
-    closePromise = closeResourceHandle(input).then(
+    closePromise = closeResourceHandle({
+      closeSupervisor,
+      closeStorage,
+      releaseLease: releaseOwnedLease,
+      resourceBudget: input.parsed.resourceBudget
+    }).then(
       () => {
         phase = "closed";
       },
@@ -299,34 +414,37 @@ function createResourceHandle(input: {
     return closePromise;
   };
 
-  return Object.freeze({
+  const resources: HostDeckForegroundResources = Object.freeze({
     bind,
     paths: input.parsed.paths,
+    codex_bin: input.parsed.codexBin,
     resource_budget: input.parsed.resourceBudget,
     database: input.opened.database.db,
     migration,
     runtime: input.runtime,
     path_repairs: pathRepairs,
+    shutdown,
     snapshot,
     close
   });
+  acceptedForegroundResources.add(resources);
+  return resources;
 }
 
 async function closeResourceHandle(input: {
-  readonly lease: HostDeckDaemonLease;
-  readonly opened: OpenedGuardedDatabase;
-  readonly parsed: ParsedStartInput;
-  readonly supervisor: HostDeckCodexRuntimeSupervisor;
+  readonly closeSupervisor: (deadline: OperationDeadline) => Promise<void>;
+  readonly closeStorage: (deadline: OperationDeadline) => Promise<void>;
+  readonly releaseLease: (deadline: OperationDeadline) => Promise<void>;
+  readonly resourceBudget: ResourceBudget;
 }): Promise<void> {
   const errors: unknown[] = [];
-  errors.push(
-    ...(await closeRuntimeSupervisor(
-      input.supervisor,
-      input.parsed.resourceBudget
-    ))
+  await runOwnedCleanupStage(
+    input.closeSupervisor,
+    input.resourceBudget,
+    errors
   );
-  closeDatabase(input.opened.database, errors);
-  releaseLease(input.lease, errors);
+  await runOwnedCleanupStage(input.closeStorage, input.resourceBudget, errors);
+  await runOwnedCleanupStage(input.releaseLease, input.resourceBudget, errors);
   if (errors.length === 0) return;
   throw foregroundError(
     "cleanup_failed",
@@ -334,6 +452,28 @@ async function closeResourceHandle(input: {
     "HostDeck foreground resources did not close cleanly.",
     new AggregateError(errors, "HostDeck foreground resource cleanup failed.")
   );
+}
+
+async function runOwnedCleanupStage(
+  stage: (deadline: OperationDeadline) => Promise<void>,
+  resourceBudget: ResourceBudget,
+  errors: unknown[]
+): Promise<void> {
+  let deadline: OperationDeadline | null = null;
+  try {
+    deadline = createOperationDeadline({
+      timeoutMs: resourceBudget.lifecycle_cleanup_step_timeout_ms
+    });
+    await stage(deadline);
+  } catch (error) {
+    errors.push(error);
+  } finally {
+    try {
+      deadline?.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
 }
 
 async function rollbackStartup(input: {
@@ -816,4 +956,51 @@ function containsControl(value: string): boolean {
     if (code <= 31 || code === 127) return true;
   }
   return false;
+}
+
+function assertOperationDeadline(
+  candidate: unknown
+): asserts candidate is OperationDeadline {
+  try {
+    const values = readExactDataObject(
+      candidate,
+      [
+        "dispose",
+        "expiresAtMs",
+        "remainingMs",
+        "signal",
+        "startedAtMs",
+        "throwIfAborted",
+        "timeoutMs"
+      ],
+      [
+        "dispose",
+        "expiresAtMs",
+        "remainingMs",
+        "signal",
+        "startedAtMs",
+        "throwIfAborted",
+        "timeoutMs"
+      ],
+      "HostDeck foreground shutdown deadline is invalid."
+    );
+    if (
+      !Object.isFrozen(candidate) ||
+      typeof values.startedAtMs !== "number" ||
+      !Number.isFinite(values.startedAtMs) ||
+      values.startedAtMs < 0 ||
+      typeof values.expiresAtMs !== "number" ||
+      !Number.isFinite(values.expiresAtMs) ||
+      values.expiresAtMs < values.startedAtMs ||
+      !isAbortSignal(values.signal) ||
+      typeof values.remainingMs !== "function" ||
+      typeof values.timeoutMs !== "function" ||
+      typeof values.throwIfAborted !== "function" ||
+      typeof values.dispose !== "function"
+    ) {
+      throw new TypeError();
+    }
+  } catch {
+    throw new TypeError("HostDeck foreground shutdown deadline is invalid.");
+  }
 }

@@ -13,6 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defaultResourceBudget } from "@hostdeck/contracts";
+import { createOperationDeadline } from "@hostdeck/core";
 import {
   acquireHostDeckDaemonLease,
   defaultMigrations,
@@ -31,6 +32,7 @@ import type {
   StartedCodexRuntime
 } from "./codex-runtime-supervisor.js";
 import {
+  assertHostDeckForegroundResources,
   HostDeckForegroundResourceError,
   type StartHostDeckForegroundResourcesInput,
   startHostDeckForegroundResources
@@ -156,6 +158,7 @@ describe("HostDeck foreground resource bootstrap", () => {
       transport: "http"
     });
     expect(resources.paths.database_path).toBe(layout.databasePath);
+    expect(resources.codex_bin).toBe(layout.executable);
     expect(resources.resource_budget).toBe(defaultResourceBudget);
     expect(resources.database.open).toBe(true);
     expect(resources.database.readonly).toBe(false);
@@ -167,6 +170,14 @@ describe("HostDeck foreground resource bootstrap", () => {
     expect(Object.isFrozen(resources)).toBe(true);
     expect(Object.isFrozen(resources.bind)).toBe(true);
     expect(Object.isFrozen(resources.path_repairs)).toBe(true);
+    expect(Object.isFrozen(resources.shutdown)).toBe(true);
+    expect(Object.isFrozen(resources.shutdown.supervisor)).toBe(true);
+    expect(Object.isFrozen(resources.shutdown.storage)).toBe(true);
+    expect(Object.isFrozen(resources.shutdown.lease)).toBe(true);
+    expect(() => assertHostDeckForegroundResources(resources)).not.toThrow();
+    expect(() =>
+      assertHostDeckForegroundResources(Object.freeze({ ...resources }))
+    ).toThrow(TypeError);
     expect(lstatSync(layout.configDir).mode & 0o7777).toBe(0o700);
     expect(lstatSync(layout.stateDir).mode & 0o7777).toBe(0o700);
     expect(lstatSync(layout.runtimeDir).mode & 0o7777).toBe(0o700);
@@ -196,6 +207,71 @@ describe("HostDeck foreground resource bootstrap", () => {
       database_open: false,
       lease_held: false
     });
+    acquireAndRelease(layout.leasePath);
+  });
+
+  it("exposes ordered idempotent shutdown ports without releasing a later owner early", async () => {
+    const layout = fixtureLayout("staged-shutdown");
+    const events: string[] = [];
+    const runtime = fakeRuntime({
+      onClose() {
+        events.push("runtime:close");
+        expect(existsSync(layout.databasePath)).toBe(true);
+        expectLeaseHeld(layout.leasePath);
+      }
+    });
+    const resources = await startHostDeckForegroundResources(layout.input, {
+      runtimeSupervisorFactory: runtime.factory
+    });
+    const earlyStorageDeadline = cleanupDeadline();
+    await expect(
+      resources.shutdown.storage.close(earlyStorageDeadline)
+    ).rejects.toThrow("cannot close before");
+    earlyStorageDeadline.dispose();
+    expect(resources.database.open).toBe(true);
+    expectLeaseHeld(layout.leasePath);
+
+    const supervisorDeadline = cleanupDeadline();
+    const supervisorClose = resources.shutdown.supervisor.close(
+      supervisorDeadline
+    );
+    expect(resources.shutdown.supervisor.close(supervisorDeadline)).toBe(
+      supervisorClose
+    );
+    await supervisorClose;
+    supervisorDeadline.dispose();
+    expect(events).toEqual(["runtime:close"]);
+    expect(resources.database.open).toBe(true);
+    expectLeaseHeld(layout.leasePath);
+
+    const earlyLeaseDeadline = cleanupDeadline();
+    await expect(
+      resources.shutdown.lease.release(earlyLeaseDeadline)
+    ).rejects.toThrow("cannot release before");
+    earlyLeaseDeadline.dispose();
+    expectLeaseHeld(layout.leasePath);
+
+    const storageDeadline = cleanupDeadline();
+    const storageClose = resources.shutdown.storage.close(storageDeadline);
+    expect(resources.shutdown.storage.close(storageDeadline)).toBe(storageClose);
+    await storageClose;
+    storageDeadline.dispose();
+    expect(resources.database.open).toBe(false);
+    expectLeaseHeld(layout.leasePath);
+
+    const leaseDeadline = cleanupDeadline();
+    const leaseRelease = resources.shutdown.lease.release(leaseDeadline);
+    expect(resources.shutdown.lease.release(leaseDeadline)).toBe(leaseRelease);
+    await leaseRelease;
+    leaseDeadline.dispose();
+    expect(resources.snapshot()).toMatchObject({
+      phase: "closed",
+      database_open: false,
+      lease_held: false
+    });
+    expect(runtime.closeCalls).toBe(1);
+    await resources.close();
+    expect(runtime.closeCalls).toBe(1);
     acquireAndRelease(layout.leasePath);
   });
 
@@ -560,4 +636,10 @@ function expectLeaseHeld(leasePath: string): void {
 function acquireAndRelease(leasePath: string): void {
   const lease = acquireHostDeckDaemonLease({ lease_path: leasePath });
   lease.release();
+}
+
+function cleanupDeadline(): ReturnType<typeof createOperationDeadline> {
+  return createOperationDeadline({
+    timeoutMs: defaultResourceBudget.lifecycle_cleanup_step_timeout_ms
+  });
 }
