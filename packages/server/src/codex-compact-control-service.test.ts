@@ -17,6 +17,10 @@ import {
   createCodexCompactControlService,
   HostDeckCodexCompactControlError
 } from "./codex-compact-control-service.js";
+import {
+  testOperationDeadline,
+  withTestOperationDeadlines
+} from "./test-operation-deadline.js";
 
 const requestedAt = "2026-07-11T18:00:00.000Z";
 const acceptedAt = "2026-07-11T18:00:01.000Z";
@@ -44,8 +48,12 @@ describe("Codex compact control service", () => {
   it("returns accepted-only, then requires the exact item/turn conjunction for completion", async () => {
     const harness = createHarness();
     harness.states.put(selectedState(targetA));
+    const controller = new AbortController();
 
-    const accepted = await harness.service.compact(compactIntent(targetA, "op_compact_control_accept_0001"));
+    const accepted = await harness.service.compact(
+      compactIntent(targetA, "op_compact_control_accept_0001"),
+      controller.signal
+    );
     expect(accepted).toEqual({
       operation_id: "op_compact_control_accept_0001",
       kind: "compact",
@@ -57,12 +65,12 @@ describe("Codex compact control service", () => {
     });
     expect(Object.isFrozen(harness.service)).toBe(true);
     expect(Object.isFrozen(accepted)).toBe(true);
-    expect(harness.compact.calls).toEqual([
-      {
-        operation_id: "op_compact_control_accept_0001",
-        thread_id: targetA.codex_thread_id
-      }
-    ]);
+    expect(harness.compact.calls).toHaveLength(1);
+    expect(harness.compact.calls[0]).toMatchObject({
+      operation_id: "op_compact_control_accept_0001",
+      thread_id: targetA.codex_thread_id
+    });
+    expect(harness.compact.calls[0]?.deadline?.signal).toBe(controller.signal);
 
     await harness.service.observe(turnStarted(targetA, turnA, 1), 3);
     expect(await harness.service.snapshot(targetA)).toMatchObject({ state: "accepted", turn_id: null });
@@ -143,12 +151,12 @@ describe("Codex compact control service", () => {
 
     await expectCompactError(
       harness.service.compact(compactIntent(targetA, "op_compact_control_unknown_0001")),
-      "unknown_outcome"
+      "operation_timeout"
     );
     expect(await harness.service.snapshot(targetA)).toMatchObject({
       state: "incomplete",
       turn_id: null,
-      error: { code: "unknown_error", retryable: false }
+      error: { code: "operation_timeout", retryable: false }
     });
     harness.compact.error = null;
     await expectCompactError(
@@ -354,7 +362,8 @@ describe("Codex compact control service", () => {
     };
     await expectCompactError(
       createCodexCompactControlService({ compact: harness.compact, states: brokenStates }).compact(
-        compactIntent(targetA, "op_compact_control_storage_0001")
+        compactIntent(targetA, "op_compact_control_storage_0001"),
+        testOperationDeadline()
       ),
       "state_unavailable"
     );
@@ -477,12 +486,12 @@ class MemoryCompactStates implements CodexCompactControlStatePort {
 function createHarness(options: { readonly max_tracked_operations?: number } = {}) {
   const compact = new FakeCompactClient();
   const states = new MemoryCompactStates();
-  const service = createCodexCompactControlService({
+  const service = withTestOperationDeadlines(createCodexCompactControlService({
     compact,
     states,
     now: () => requestedAt,
     ...options
-  });
+  }), ["compact"]);
   return { compact, states, service };
 }
 

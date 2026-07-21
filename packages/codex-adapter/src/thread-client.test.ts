@@ -1,4 +1,5 @@
 import type { RuntimeCompatibility } from "@hostdeck/contracts";
+import { createOperationDeadlineView } from "@hostdeck/core";
 import { describe, expect, it } from "vitest";
 import type { CodexRequestInput } from "./broker.js";
 import { assessCodexCompatibility } from "./compatibility.js";
@@ -94,6 +95,39 @@ describe("normalized Codex thread client", () => {
       expect.objectContaining({ archived: false, cursor: "active-next", limit: 2 }),
       expect.objectContaining({ archived: true, cursor: null, limit: 2 })
     ]);
+  });
+
+  it("derives a decreasing timeout from one deadline for every active and archived page", async () => {
+    let now = 0;
+    let page = 0;
+    const controller = new AbortController();
+    const deadline = createOperationDeadlineView({
+      timeoutMs: 1_000,
+      signal: controller.signal,
+      clock: { now: () => now }
+    });
+    const port = fakePort((request) => {
+      expect(request.signal).toBe(controller.signal);
+      page += 1;
+      if (page === 1) {
+        now = 100;
+        return { data: [rawThread({ id: "thread-a" })], nextCursor: "active-next" };
+      }
+      if (page === 2) {
+        now = 250;
+        return { data: [rawThread({ id: "thread-b" })], nextCursor: null };
+      }
+      now = 600;
+      return { data: [rawThread({ id: "thread-c" })], nextCursor: null };
+    });
+
+    await createCodexThreadClient(port, {
+      page_size: 1,
+      max_pages: 2,
+      read_timeout_ms: 1_000
+    }).listAll(deadline);
+
+    expect(port.requests.map((request) => request.timeout_ms)).toEqual([1_000, 900, 750]);
   });
 
   it("rejects cursor cycles, duplicate ids, and page-count overflow", async () => {

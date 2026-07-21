@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type CodexProtocolIssue, createCodexRequestBroker } from "./broker.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
 import { ScriptedCodexTransport } from "./testing.js";
@@ -36,9 +36,57 @@ describe("Codex request broker correlation and bounds", () => {
     const broker = createCodexRequestBroker(transport);
     let request: Promise<unknown> | undefined;
     expect(() => {
-      request = broker.request({ method: "thread/list", params: {}, kind: "read", timeout_ms: 49 });
+      request = broker.request({ method: "thread/list", params: {}, kind: "read", timeout_ms: 0 });
     }).not.toThrow();
     await expectBrokerError(request as Promise<unknown>, "protocol_violation", { outcome: "not_sent" });
+  });
+
+  it("accepts a final one-millisecond child deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      const transport = await openTransport();
+      const broker = createCodexRequestBroker(transport);
+      const timedOut = expectBrokerError(
+        broker.request({ method: "thread/list", params: {}, kind: "read", timeout_ms: 1 }),
+        "request_timeout",
+        { outcome: "unknown", retry_safe: true }
+      );
+      await vi.advanceTimersByTimeAsync(1);
+      await timedOut;
+      expect(transport.sent_frames).toHaveLength(1);
+      expect(broker.pending_request_count).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("cleans a synchronously rejected transport send without leaking pending ownership", async () => {
+    const transport = await openTransport();
+    const broker = createCodexRequestBroker(transport);
+    const controller = new AbortController();
+    const removeListener = vi.spyOn(controller.signal, "removeEventListener");
+    Object.defineProperty(transport, "sendText", {
+      configurable: true,
+      value() {
+        throw new HostDeckCodexAdapterError("transport_overloaded", "test queue full", {
+          outcome: "not_sent",
+          retry_safe: true
+        });
+      }
+    });
+
+    await expectBrokerError(
+      broker.request({
+        method: "thread/list",
+        params: {},
+        kind: "read",
+        signal: controller.signal
+      }),
+      "transport_overloaded",
+      { outcome: "not_sent", retry_safe: true }
+    );
+    expect(broker.pending_request_count).toBe(0);
+    expect(removeListener).toHaveBeenCalledWith("abort", expect.any(Function));
   });
 
   it("times out and aborts dispatched mutations with unknown non-retryable outcome", async () => {
@@ -218,6 +266,102 @@ describe("Codex request broker hostile inbound handling", () => {
     expect(broker.pending_server_request_count).toBe(1);
     rejectWrite = false;
     await broker.respondToServerRequest("approval-1", { decision: "decline" });
+    expect(broker.pending_server_request_count).toBe(0);
+  });
+
+  it("rejects a pre-aborted server response without sending and preserves one retry", async () => {
+    const transport = await openTransport();
+    const broker = createCodexRequestBroker(transport);
+    transport.receive('{"method":"item/fileChange/requestApproval","id":"approval-abort","params":{}}');
+    const sentBefore = transport.sent_frames.length;
+    const controller = new AbortController();
+    controller.abort(new Error("client disconnected"));
+
+    await expectBrokerError(
+      broker.respondToServerRequest(
+        "approval-abort",
+        { decision: "decline" },
+        { signal: controller.signal, timeout_ms: 50 }
+      ),
+      "request_aborted",
+      { outcome: "not_sent", retry_safe: true }
+    );
+    expect(transport.sent_frames).toHaveLength(sentBefore);
+    expect(broker.pending_server_request_count).toBe(1);
+
+    await broker.respondToServerRequest("approval-abort", { decision: "decline" });
+    expect(broker.pending_server_request_count).toBe(0);
+  });
+
+  it("bounds a possible server-response send and never permits a second decision", async () => {
+    vi.useFakeTimers();
+    let release: (() => void) | undefined;
+    try {
+      const transport = new ScriptedCodexTransport({
+        async on_send(text) {
+          const message = JSON.parse(text) as { readonly result?: unknown };
+          if (message.result !== undefined) {
+            await new Promise<void>((resolve) => {
+              release = resolve;
+            });
+          }
+        }
+      });
+      await transport.connect();
+      const broker = createCodexRequestBroker(transport);
+      transport.receive('{"method":"item/fileChange/requestApproval","id":"approval-timeout","params":{}}');
+      const controller = new AbortController();
+      const removeListener = vi.spyOn(controller.signal, "removeEventListener");
+      const timedOut = expectBrokerError(
+        broker.respondToServerRequest(
+          "approval-timeout",
+          { decision: "decline" },
+          { signal: controller.signal, timeout_ms: 5 }
+        ),
+        "request_timeout",
+        { outcome: "unknown", retry_safe: false }
+      );
+      expect(release).toBeTypeOf("function");
+      await vi.advanceTimersByTimeAsync(5);
+      await timedOut;
+      expect(removeListener).toHaveBeenCalledWith("abort", expect.any(Function));
+      expect(broker.pending_server_request_count).toBe(0);
+      await expectBrokerError(
+        broker.respondToServerRequest("approval-timeout", { decision: "accept" }),
+        "protocol_violation",
+        { outcome: "not_sent" }
+      );
+      release?.();
+      await Promise.resolve();
+    } finally {
+      release?.();
+      vi.useRealTimers();
+    }
+  });
+
+  it("normalizes a synchronous server-response send throw and restores only proven no-send state", async () => {
+    const transport = await openTransport();
+    const broker = createCodexRequestBroker(transport);
+    transport.receive('{"method":"item/fileChange/requestApproval","id":"approval-sync","params":{}}');
+    const sendText = transport.sendText.bind(transport);
+    Object.defineProperty(transport, "sendText", {
+      configurable: true,
+      value() {
+        throw new HostDeckCodexAdapterError("transport_overloaded", "test queue full", {
+          outcome: "not_sent",
+          retry_safe: true
+        });
+      }
+    });
+
+    await expectBrokerError(
+      broker.respondToServerRequest("approval-sync", { decision: "decline" }, { timeout_ms: 50 }),
+      "transport_overloaded",
+      { outcome: "not_sent", retry_safe: true }
+    );
+    expect(broker.pending_server_request_count).toBe(1);
+    Object.defineProperty(transport, "sendText", { configurable: true, value: sendText });
+    await broker.respondToServerRequest("approval-sync", { decision: "decline" });
     expect(broker.pending_server_request_count).toBe(0);
   });
 

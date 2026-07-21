@@ -15,7 +15,7 @@ import {
   selectedStartSessionRequestSchema,
   sessionIdSchema
 } from "@hostdeck/contracts";
-import type { ErrorCode, IsoTimestamp, SessionId } from "@hostdeck/core";
+import type { ErrorCode, IsoTimestamp, OperationDeadline, SessionId } from "@hostdeck/core";
 import { parseSessionId } from "@hostdeck/core";
 import {
   captureGitBranchMetadata,
@@ -24,6 +24,7 @@ import {
   type SelectedStateRepository,
   selectedStateRevision
 } from "@hostdeck/storage";
+import { requireOpenOperationDeadline } from "./operation-deadline-serialization.js";
 
 export type ManagedCodexThreadServiceErrorCode =
   | "duplicate_session_name"
@@ -82,10 +83,10 @@ export interface ManagedCodexThreadServiceOptions {
 }
 
 export interface ManagedCodexThreadService {
-  readonly start: (input: unknown) => Promise<SelectedSessionState>;
+  readonly start: (input: unknown, deadline: OperationDeadline) => Promise<SelectedSessionState>;
   readonly list: () => readonly SelectedSessionState[];
   readonly read: (sessionId: string) => SelectedSessionState;
-  readonly archive: (sessionId: string) => Promise<SelectedSessionState>;
+  readonly archive: (sessionId: string, deadline: OperationDeadline) => Promise<SelectedSessionState>;
   readonly reconcile: () => Promise<ManagedThreadReconciliationResult>;
   readonly clearFailedStartRecovery: (operationId: string) => boolean;
 }
@@ -109,17 +110,21 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
     this.captureBranch = options.capture_branch ?? captureGitBranchMetadata;
   }
 
-  async start(input: unknown): Promise<SelectedSessionState> {
+  async start(input: unknown, deadlineInput: OperationDeadline): Promise<SelectedSessionState> {
+    const deadline = requireManagedThreadDeadline(deadlineInput);
     const request = parseStartRequest(input);
+    requireManagedThreadDeadline(deadline);
     await this.validateStartCwd(request.cwd);
+    requireManagedThreadDeadline(deadline);
     const existing = this.getRecovery(request.operation_id);
     if (existing !== null) {
       assertRecoveryRequest(existing, request);
       if (existing.state === "failed") {
         throw serviceError("recovery_required", existing.error_message ?? "Prior session start failed and awaits explicit cleanup.", "not_sent", true);
       }
-      return this.resumeRecovery(existing);
+      return this.resumeRecovery(existing, deadline);
     }
+    requireManagedThreadDeadline(deadline);
     try {
       if (this.options.states.list().some((state) => state.mapping.name === request.name)) {
         throw serviceError("duplicate_session_name", `Managed session name ${request.name} already exists.`, "not_sent", false);
@@ -128,6 +133,7 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
       if (error instanceof HostDeckManagedCodexThreadServiceError) throw error;
       throw mapStorageError(error, "Managed session names could not be checked before start.");
     }
+    requireManagedThreadDeadline(deadline);
 
     const timestamp = this.timestamp();
     const reserved = selectedSessionStartRecoveryRecordSchema.parse({
@@ -147,10 +153,19 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
     } catch (error) {
       throw mapStorageError(error, "Session start identity could not be reserved.");
     }
+    try {
+      requireManagedThreadDeadline(deadline);
+    } catch (error) {
+      this.recordFailedStartTimeout(reserved, error);
+      throw error;
+    }
 
     let started: CodexThreadStartResult;
     try {
-      started = await this.options.threads.start({ operation_id: request.operation_id, cwd: request.cwd });
+      started = await this.options.threads.start(
+        { operation_id: request.operation_id, cwd: request.cwd },
+        deadline
+      );
     } catch (error) {
       if (isKnownNoThreadOutcome(error)) this.recordFailedStart(reserved, error);
       throw mapAdapterError(error, "Codex thread start failed.");
@@ -174,7 +189,7 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
         error
       );
     }
-    return this.materializeRecovery(threadCreated, started.model);
+    return this.materializeRecovery(threadCreated, started.model, deadline);
   }
 
   list(): readonly SelectedSessionState[] {
@@ -197,7 +212,8 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
     }
   }
 
-  async archive(sessionId: string): Promise<SelectedSessionState> {
+  async archive(sessionId: string, deadlineInput: OperationDeadline): Promise<SelectedSessionState> {
+    const deadline = requireManagedThreadDeadline(deadlineInput);
     const parsedSessionId = parseSelectedSessionId(sessionId);
     if (this.archiveInFlight.has(parsedSessionId)) {
       throw serviceError("thread_conflict", "Managed session archive is already in flight.", "not_sent", false);
@@ -207,8 +223,10 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
     }
     this.archiveInFlight.add(parsedSessionId);
     try {
+      requireManagedThreadDeadline(deadline);
       const current = this.read(parsedSessionId);
       assertArchivableState(current);
+      requireManagedThreadDeadline(deadline);
       let runtimeVersion: string;
       try {
         runtimeVersion = this.options.threads.runtime_version;
@@ -230,10 +248,11 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
 
       let listedThreads: readonly CodexThreadRecord[];
       try {
-        listedThreads = await this.options.threads.listAll();
+        listedThreads = await this.options.threads.listAll(deadline);
       } catch (error) {
         throw mapAdapterError(error, "Codex thread disposition could not be verified before archive.");
       }
+      requireManagedThreadDeadline(deadline);
       const listedMatches = listedThreads.filter(
         (thread) => thread.id === current.mapping.codex_thread_id
       );
@@ -269,16 +288,18 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
 
       let runtimeThread: CodexThreadRecord;
       try {
-        runtimeThread = await this.options.threads.read(current.mapping.codex_thread_id);
+        runtimeThread = await this.options.threads.read(current.mapping.codex_thread_id, deadline);
       } catch (error) {
         throw mapAdapterError(error, "Codex thread could not be verified before archive.");
       }
       assertRuntimeThreadArchivable(runtimeThread, current);
+      requireManagedThreadDeadline(deadline);
 
       const dispatchState = this.read(parsedSessionId);
       assertSameArchiveCandidate(current, dispatchState);
+      requireManagedThreadDeadline(deadline);
       try {
-        await this.options.threads.archive(current.mapping.codex_thread_id);
+        await this.options.threads.archive(current.mapping.codex_thread_id, deadline);
       } catch (error) {
         const mapped = mapAdapterError(error, "Codex thread archive failed.");
         if (mapped.outcome === "unknown") {
@@ -431,16 +452,20 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
     }
   }
 
-  private async resumeRecovery(recovery: SelectedSessionStartRecoveryRecord): Promise<SelectedSessionState> {
+  private async resumeRecovery(
+    recovery: SelectedSessionStartRecoveryRecord,
+    deadline?: OperationDeadline
+  ): Promise<SelectedSessionState> {
+    if (deadline !== undefined) requireManagedThreadDeadline(deadline);
     if (recovery.state === "persisted") return this.finishPersistedRecovery(recovery);
-    if (recovery.state === "thread_created") return this.materializeRecovery(recovery, null);
+    if (recovery.state === "thread_created") return this.materializeRecovery(recovery, null, deadline);
     if (recovery.state !== "reserved") {
       throw serviceError("recovery_required", "Session start recovery is terminal and cannot resume.", "not_sent", false);
     }
 
     let matches: readonly CodexThreadRecord[];
     try {
-      matches = await this.options.threads.findByOperationId(recovery.operation_id);
+      matches = await this.options.threads.findByOperationId(recovery.operation_id, deadline);
     } catch (error) {
       throw mapAdapterError(error, "Reserved session start could not be reconciled against Codex.");
     }
@@ -484,12 +509,13 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
     } catch (error) {
       throw mapStorageError(error, "Recovered Codex thread identity could not be persisted.", thread.id, "remote_succeeded");
     }
-    return this.materializeRecovery(threadCreated, null);
+    return this.materializeRecovery(threadCreated, null, deadline);
   }
 
   private async materializeRecovery(
     recovery: SelectedSessionStartRecoveryRecord,
-    model: string | null
+    model: string | null,
+    deadline?: OperationDeadline
   ): Promise<SelectedSessionState> {
     if (recovery.codex_thread_id === null) {
       throw serviceError(
@@ -506,7 +532,7 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
         operation_id: recovery.operation_id,
         cwd: recovery.cwd,
         name: recovery.name
-      });
+      }, deadline);
     } catch (error) {
       throw mapMaterializationError(error, recovery.codex_thread_id);
     }
@@ -768,6 +794,32 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
     }
   }
 
+  private recordFailedStartTimeout(
+    recovery: SelectedSessionStartRecoveryRecord,
+    error: unknown
+  ): void {
+    try {
+      this.options.states.putRecovery({
+        ...recovery,
+        state: "failed",
+        updated_at: this.advanceTimestamp(recovery.updated_at),
+        error_code: "operation_timeout",
+        error_message: bounded(
+          error instanceof Error ? error.message : "Session start deadline expired before dispatch."
+        )
+      });
+    } catch (storageError) {
+      throw serviceError(
+        "storage_error",
+        "Session start timed out before dispatch and its terminal recovery state could not be persisted.",
+        "not_sent",
+        false,
+        null,
+        new AggregateError([error, storageError])
+      );
+    }
+  }
+
   private getRecovery(operationId: string): SelectedSessionStartRecoveryRecord | null {
     try {
       return this.options.states.getRecovery(operationId);
@@ -1022,6 +1074,7 @@ function isKnownNoThreadOutcome(error: unknown): error is HostDeckCodexAdapterEr
 }
 
 function recoveryErrorCode(error: HostDeckCodexAdapterError): ErrorCode {
+  if (["request_aborted", "request_timeout"].includes(error.code)) return "operation_timeout";
   if (error.code === "remote_error") return "runtime_unavailable";
   if (error.code === "invalid_protocol_message" || error.code === "protocol_violation") return "protocol_error";
   return "runtime_unavailable";
@@ -1031,23 +1084,51 @@ function mapAdapterError(error: unknown, fallback: string): HostDeckManagedCodex
   if (!(error instanceof HostDeckCodexAdapterError)) {
     return serviceError("runtime_unavailable", fallback, "unknown", false, null, error);
   }
-  if (error.outcome === "unknown" || error.code === "unknown_outcome") {
-    return serviceError("unknown_outcome", error.message, "unknown", false, null, error);
-  }
   if (["request_aborted", "request_timeout"].includes(error.code)) {
     return serviceError(
       "operation_timeout",
       error.message,
-      error.outcome === "remote_rejected" ? "remote_rejected" : "not_sent",
-      error.retry_safe,
+      error.outcome === "unknown"
+        ? "unknown"
+        : error.outcome === "remote_rejected"
+          ? "remote_rejected"
+          : "not_sent",
+      error.outcome === "unknown" ? false : error.retry_safe,
       null,
       error
     );
+  }
+  if (error.outcome === "unknown" || error.code === "unknown_outcome") {
+    return serviceError("unknown_outcome", error.message, "unknown", false, null, error);
   }
   if (error.outcome === "remote_rejected") {
     return serviceError("runtime_unavailable", error.message, "remote_rejected", error.retry_safe, null, error);
   }
   return serviceError("runtime_unavailable", error.message, "not_sent", error.retry_safe, null, error);
+}
+
+function requireManagedThreadDeadline(candidate: unknown): OperationDeadline {
+  return requireOpenOperationDeadline(
+    candidate,
+    (cause) =>
+      serviceError(
+        "operation_timeout",
+        "Managed Codex thread operation exceeded its request deadline.",
+        "not_sent",
+        true,
+        null,
+        cause
+      ),
+    (cause) =>
+      serviceError(
+        "invalid_request",
+        "Managed Codex thread request deadline is invalid.",
+        "not_sent",
+        false,
+        null,
+        cause
+      )
+  );
 }
 
 function mapMaterializationError(error: unknown, threadId: string): HostDeckManagedCodexThreadServiceError {

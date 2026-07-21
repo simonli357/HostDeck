@@ -1,4 +1,5 @@
 import type { RuntimeCompatibility } from "@hostdeck/contracts";
+import { createOperationDeadlineView } from "@hostdeck/core";
 import { describe, expect, it } from "vitest";
 import type { CodexRequestInput } from "./broker.js";
 import { assessCodexCompatibility } from "./compatibility.js";
@@ -14,6 +15,11 @@ const observedAt = "2026-07-11T19:15:00.000Z";
 describe("Codex skills client", () => {
   it("sends one exact selected-cwd read and returns sorted path-redacted summaries", async () => {
     const controller = new AbortController();
+    const deadline = createOperationDeadlineView({
+      timeoutMs: 4_000,
+      signal: controller.signal,
+      clock: { now: () => 0 }
+    });
     const response = rawResponse({ skills: [rawSkill("beta"), rawSkill("alpha", { enabled: false, scope: "system" })] });
     const port = fakePort((request) => {
       expect(request).toEqual({
@@ -27,7 +33,7 @@ describe("Codex skills client", () => {
     });
     const client = createCodexSkillsClient(port, { read_timeout_ms: 4_000, now: () => observedAt });
 
-    const result = await client.listForCwd({ cwd, signal: controller.signal });
+    const result = await client.listForCwd({ cwd, deadline });
     expect(result).toEqual({
       runtime_version: "0.144.0",
       connection_generation: 3,

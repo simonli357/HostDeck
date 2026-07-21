@@ -9,6 +9,7 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
+import { createOperationDeadlineView, type OperationDeadline } from "@hostdeck/core";
 import type { SelectedSessionState } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
 import {
@@ -17,6 +18,7 @@ import {
   HostDeckCodexGoalControlError
 } from "./codex-goal-control-service.js";
 import type { PendingTurnSetting, PendingTurnSettingsReader } from "./pending-turn-settings.js";
+import { withTestOperationDeadlines } from "./test-operation-deadline.js";
 
 const now = "2026-07-10T19:00:00.000Z";
 const targetA = {
@@ -190,13 +192,13 @@ describe("Codex structured goal control", () => {
       outcome: "unknown",
       retry_safe: false
     });
-    await expectGoalError(uncertain.service.mutate(goalIntent("resume", "a".repeat(64))), "unknown_outcome");
+    await expectGoalError(uncertain.service.mutate(goalIntent("resume", "a".repeat(64))), "operation_timeout");
     expect((await uncertain.service.snapshot(targetA)).uncertain_mutation).toMatchObject({
       action: "resume",
       phase: "unknown",
       baseline_revision: "a".repeat(64),
       requested_status: "active",
-      error: { code: "unknown_error" }
+      error: { code: "operation_timeout" }
     });
     await expectGoalError(uncertain.service.mutate(goalIntent("pause", "a".repeat(64))), "operation_conflict");
 
@@ -230,7 +232,7 @@ describe("Codex structured goal control", () => {
     harness.goals.mutationError = new HostDeckCodexAdapterError("request_timeout", "Goal response timed out.", {
       outcome: "unknown"
     });
-    await expectGoalError(harness.service.mutate(goalIntent("resume", "a".repeat(64))), "unknown_outcome");
+    await expectGoalError(harness.service.mutate(goalIntent("resume", "a".repeat(64))), "operation_timeout");
     harness.goals.mutationError = null;
     harness.goals.current = goalA({ revision: "c".repeat(64), objective: "Different goal.", status: "paused" });
     expect((await harness.service.reconcile(targetA)).uncertain_mutation).toMatchObject({
@@ -242,7 +244,7 @@ describe("Codex structured goal control", () => {
     eventConflict.goals.mutationError = new HostDeckCodexAdapterError("request_timeout", "Goal response timed out.", {
       outcome: "unknown"
     });
-    await expectGoalError(eventConflict.service.mutate(goalIntent("resume", "a".repeat(64))), "unknown_outcome");
+    await expectGoalError(eventConflict.service.mutate(goalIntent("resume", "a".repeat(64))), "operation_timeout");
     await eventConflict.service.observeGoal(goalUpdatedEvent("paused", "Different goal.", "2026-07-10T18:59:59.000Z"));
     expect((await eventConflict.service.snapshot(targetA)).uncertain_mutation).toMatchObject({ phase: "unknown" });
     await eventConflict.service.observeGoal(goalUpdatedEvent("paused", "Different goal."));
@@ -254,7 +256,7 @@ describe("Codex structured goal control", () => {
     harness.goals.mutationError = new HostDeckCodexAdapterError("request_timeout", "Goal response timed out.", {
       outcome: "unknown"
     });
-    await expectGoalError(harness.service.mutate(goalIntent("resume", "a".repeat(64))), "unknown_outcome");
+    await expectGoalError(harness.service.mutate(goalIntent("resume", "a".repeat(64))), "operation_timeout");
 
     harness.goals.current = goalA({ thread_id: targetB.codex_thread_id as never, revision: "d".repeat(64) });
     await expectGoalError(
@@ -282,7 +284,7 @@ describe("Codex structured goal control", () => {
       "service_overloaded"
     );
     deferred.resolve();
-    await expectGoalError(first, "unknown_outcome");
+    await expectGoalError(first, "operation_timeout");
     expect(harness.service.uncertain_count).toBe(1);
   });
 
@@ -307,13 +309,34 @@ describe("Codex structured goal control", () => {
     );
     expect(turnRace.goals.mutations).toHaveLength(0);
   });
+
+  it("stops after the baseline read when the shared deadline expires before mutation", async () => {
+    let clockNow = 0;
+    const deadline = createOperationDeadlineView({
+      timeoutMs: 10,
+      signal: new AbortController().signal,
+      clock: { now: () => clockNow }
+    });
+    const harness = createHarness({ goal: null });
+    harness.goals.readHook = (observedDeadline) => {
+      expect(observedDeadline).toBe(deadline);
+      clockNow = 10;
+    };
+
+    await expectGoalError(
+      harness.service.mutate(goalIntent("set", null, { objective: "Ship V1." }), deadline),
+      "operation_timeout"
+    );
+    expect(harness.goals.mutations).toHaveLength(0);
+    expect(harness.service.uncertain_count).toBe(0);
+  });
 });
 
 interface FakeGoals extends CodexGoalClient {
   current: CodexThreadGoal | null;
   mutationError: Error | null;
   mutationGate: Promise<void> | null;
-  readHook: (() => void) | null;
+  readHook: ((deadline: OperationDeadline | undefined) => void) | null;
   readonly readQueue: Array<CodexThreadGoal | null | Error>;
   readonly mutations: Array<Record<string, unknown>>;
 }
@@ -338,13 +361,13 @@ function createHarness(
     readPendingSettings: () => options.pending ?? []
   };
   const goals = fakeGoals(options.goal === undefined ? goalA() : options.goal);
-  const service = createCodexGoalControlService({
+  const service = withTestOperationDeadlines(createCodexGoalControlService({
     goals,
     states: statePort,
     pending_settings: pendingSettings,
     ...(options.maxUncertain === undefined ? {} : { max_uncertain_mutations: options.maxUncertain }),
     now: () => now
-  });
+  }), ["mutate", "snapshot"]);
   return { service, goals, states };
 }
 
@@ -358,8 +381,8 @@ function fakeGoals(initial: CodexThreadGoal | null): FakeGoals {
     readHook: null,
     readQueue: [],
     mutations,
-    async read(threadId) {
-      this.readHook?.();
+    async read(threadId, deadline) {
+      this.readHook?.(deadline);
       const queued = this.readQueue.shift();
       if (queued instanceof Error) throw queued;
       const value = queued === undefined ? this.current : queued;

@@ -11,7 +11,7 @@ import {
   selectedSessionProjectionRecordSchema,
   sessionIdParamsSchema
 } from "@hostdeck/contracts";
-import type { ErrorCode } from "@hostdeck/core";
+import type { ErrorCode, OperationDeadline } from "@hostdeck/core";
 import type { SelectedStateRepository } from "@hostdeck/storage";
 import type { FastifyReply } from "fastify";
 import { z } from "zod";
@@ -23,7 +23,8 @@ import { assertHostDeckCsrfPolicy, type HostDeckCsrfPolicy } from "./csrf-routes
 import {
   type HostDeckFastifyInstance,
   type HostDeckRoutePluginRegistration,
-  hostDeckNoStoreRouteConfig
+  hostDeckNoStoreRouteConfig,
+  hostDeckRequestDeadline
 } from "./fastify-app.js";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import { requireHostDeckRequestAuthentication } from "./fastify-request-authentication.js";
@@ -154,7 +155,11 @@ export function createHostDeckModelRouteRegistration(
           }
           const params = sessionIdParamsSchema.parse(request.params);
           const admitted = resolveModelAdmission(ports, params.session_id, false);
-          const snapshot = await readModelSnapshot(ports.readModelSnapshot, admitted.target, request.signal);
+          const snapshot = await readModelSnapshot(
+            ports.readModelSnapshot,
+            admitted.target,
+            hostDeckRequestDeadline(request)
+          );
           const verified = resolveModelAdmission(ports, params.session_id, false);
           requireSameAdmission(admitted, verified, "read");
           return snapshot;
@@ -249,7 +254,7 @@ export function createHostDeckModelRouteRegistration(
                     reasoning_effort: body.reasoning_effort,
                     expected_pending_revision: body.expected_pending_revision
                   },
-                  request.signal
+                  context.deadline
                 ]);
               } catch (error) {
                 if (error instanceof HostDeckCodexModelControlError) {
@@ -506,11 +511,11 @@ function resolveRuntime(
 async function readModelSnapshot(
   readSnapshot: ReadModelSnapshot,
   target: ManagedSessionTarget,
-  signal: AbortSignal
+  deadline: OperationDeadline
 ): Promise<ModelControlSnapshot> {
   let candidate: unknown;
   try {
-    candidate = await Reflect.apply(readSnapshot, undefined, [target, signal]);
+    candidate = await Reflect.apply(readSnapshot, undefined, [target, deadline]);
   } catch (error) {
     if (error instanceof HostDeckCodexModelControlError) throw publicModelFailure(mapModelErrorCode(error));
     throw modelHttpError(500, "internal_error", "Model state could not be read.", false);
@@ -616,6 +621,8 @@ function mapModelErrorCode(error: HostDeckCodexModelControlError): ErrorCode {
       return "service_overloaded";
     case "unknown_outcome":
       return "unknown_error";
+    case "operation_timeout":
+      return "operation_timeout";
     case "invalid_request":
       return "internal_error";
   }

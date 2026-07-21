@@ -9,6 +9,7 @@ import {
   skillsOperationIntentSchema,
   skillsSnapshotSchema
 } from "@hostdeck/contracts";
+import type { OperationDeadline } from "@hostdeck/core";
 import type { SelectedStateRepository } from "@hostdeck/storage";
 import { z } from "zod";
 import {
@@ -17,7 +18,8 @@ import {
 } from "./codex-skills-control-service.js";
 import {
   type HostDeckRoutePluginRegistration,
-  hostDeckNoStoreRouteConfig
+  hostDeckNoStoreRouteConfig,
+  hostDeckRequestDeadline
 } from "./fastify-app.js";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import { requireHostDeckRequestAuthentication } from "./fastify-request-authentication.js";
@@ -91,7 +93,7 @@ export function createHostDeckSkillsRouteRegistration(
           return await invokeSkillsList(
             ports.listSkills,
             target,
-            request.signal
+            hostDeckRequestDeadline(request)
           );
         }
       );
@@ -234,7 +236,7 @@ function resolveManagedTarget(
 async function invokeSkillsList(
   listSkills: ListSkillsFunction,
   target: ManagedSessionTarget,
-  signal: AbortSignal
+  deadline: OperationDeadline
 ): Promise<SkillsSnapshot> {
   const intent = skillsOperationIntentSchema.parse({
     operation_id: `op_skills_read_${randomUUID().replaceAll("-", "")}`,
@@ -243,7 +245,7 @@ async function invokeSkillsList(
   });
   let candidate: unknown;
   try {
-    candidate = await Reflect.apply(listSkills, undefined, [intent, signal]);
+    candidate = await Reflect.apply(listSkills, undefined, [intent, deadline]);
   } catch (error) {
     if (error instanceof HostDeckCodexSkillsControlError) {
       throw mapSkillsFailure(error, target.session_id);
@@ -290,6 +292,14 @@ function mapSkillsFailure(
         "Codex skills data failed protocol validation.",
         sessionId,
         false
+      );
+    case "operation_timeout":
+      return skillsHttpError(
+        504,
+        "operation_timeout",
+        "Codex skills read exceeded its request deadline.",
+        sessionId,
+        error.retry_safe
       );
     case "runtime_unavailable":
       return skillsHttpError(

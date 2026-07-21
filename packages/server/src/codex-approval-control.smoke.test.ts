@@ -33,6 +33,15 @@ import {
   createCodexApprovalControlService,
   HostDeckCodexApprovalControlError
 } from "./codex-approval-control-service.js";
+import {
+  type WithTestOperationDeadlines,
+  withTestOperationDeadlines
+} from "./test-operation-deadline.js";
+
+type TestApprovalControlService = WithTestOperationDeadlines<
+  CodexApprovalControlService,
+  "respond" | "waitForTerminal"
+>;
 
 const requireSmoke = process.env.HOSTDECK_REQUIRE_CODEX_APPROVAL_SMOKE === "1";
 const codexBin = process.env.HOSTDECK_CODEX_BIN ?? "codex";
@@ -96,7 +105,7 @@ describe.skipIf(!requireSmoke)("installed Codex approval-control smoke", () => {
       const requestTargets: Array<{ readonly thread_id: string; readonly turn_id: string; readonly item_id: string }> = [];
       const protocolIssues: CodexProtocolIssue[] = [];
       const registrationErrors: string[] = [];
-      let service: CodexApprovalControlService | null = null;
+      let service: TestApprovalControlService | null = null;
       const connection = createCodexAppServerConnection({
         transport: createCodexUnixWebSocketTransport({ socket_path: socketPath }),
         observed_version: version,
@@ -129,7 +138,7 @@ describe.skipIf(!requireSmoke)("installed Codex approval-control smoke", () => {
         const target = managedTarget("sess_approval_smoke", threadId);
         const states = new Map<string, SelectedSessionState>([[target.session_id, selectedState(target, project)]]);
         const backgroundErrors: Error[] = [];
-        service = createCodexApprovalControlService({
+        service = withTestOperationDeadlines(createCodexApprovalControlService({
           approvals: createCodexApprovalClient(connection),
           states: {
             get: (sessionId) => states.get(sessionId) ?? null,
@@ -137,7 +146,7 @@ describe.skipIf(!requireSmoke)("installed Codex approval-control smoke", () => {
           },
           expiry_ms: 1_000,
           on_background_error: (error) => backgroundErrors.push(error)
-        });
+        }), ["respond", "waitForTerminal"]);
         const normalizer = createCodexEventNormalizer({ is_managed_thread: (candidate) => candidate === threadId });
         const cursor = { value: notifications.length };
         const selection = selectBoundedSmokeModel((await createCodexModelClient(connection).listCatalog()).models);
@@ -310,7 +319,7 @@ async function processNotificationsThrough(
   cursor: { value: number },
   endIndex: number,
   normalizer: CodexEventNormalizer,
-  service: CodexApprovalControlService
+  service: TestApprovalControlService
 ): Promise<void> {
   for (let index = cursor.value; index <= endIndex; index += 1) {
     const notification = notifications[index];

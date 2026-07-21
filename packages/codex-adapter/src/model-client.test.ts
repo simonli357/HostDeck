@@ -1,4 +1,5 @@
 import type { RuntimeCompatibility } from "@hostdeck/contracts";
+import { createOperationDeadlineView } from "@hostdeck/core";
 import { describe, expect, it } from "vitest";
 import type { CodexRequestInput } from "./broker.js";
 import { assessCodexCompatibility } from "./compatibility.js";
@@ -50,6 +51,41 @@ describe("normalized Codex model client", () => {
       { cursor: null, limit: 1, includeHidden: false },
       { cursor: "page-2", limit: 1, includeHidden: false }
     ]);
+  });
+
+  it("decreases the shared deadline budget across catalog pages", async () => {
+    let now = 0;
+    const controller = new AbortController();
+    const deadline = createOperationDeadlineView({
+      timeoutMs: 1_000,
+      signal: controller.signal,
+      clock: { now: () => now }
+    });
+    const port = fakePort((request) => {
+      expect(request.signal).toBe(controller.signal);
+      const cursor = (request.params as { readonly cursor: string | null }).cursor;
+      if (cursor === null) {
+        now = 200;
+        return {
+          data: [rawModel({ id: "model-a", model: "runtime-a", isDefault: true })],
+          nextCursor: "page-2"
+        };
+      }
+      return {
+        data: [rawModel({ id: "model-b", model: "runtime-b", isDefault: false })],
+        nextCursor: null
+      };
+    });
+
+    await createCodexModelClient(port, {
+      page_size: 1,
+      max_pages: 2,
+      max_entries: 2,
+      read_timeout_ms: 1_000,
+      now: () => checkedAt
+    }).listCatalog(deadline);
+
+    expect(port.requests.map((request) => request.timeout_ms)).toEqual([1_000, 800]);
   });
 
   it("rejects hidden entries, duplicate identities, ambiguous defaults, and pagination overflow", async () => {

@@ -7,12 +7,13 @@ import {
   type RuntimeCompatibility,
   resourceBudgetDefinitionByKey
 } from "@hostdeck/contracts";
-import type { CodexThreadId, IsoTimestamp } from "@hostdeck/core";
+import type { CodexThreadId, IsoTimestamp, OperationDeadline } from "@hostdeck/core";
 import type { CodexRequestInput } from "./broker.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
 import type { ThreadGoalClearParams } from "./generated/v2/ThreadGoalClearParams.js";
 import type { ThreadGoalGetParams } from "./generated/v2/ThreadGoalGetParams.js";
 import type { ThreadGoalSetParams } from "./generated/v2/ThreadGoalSetParams.js";
+import { codexRequestOptionsFromDeadline } from "./request-deadline.js";
 
 export type CodexGoalMutationStatus = "active" | "complete" | "paused";
 
@@ -32,18 +33,24 @@ export interface CodexGoalClientOptions {
 
 export interface CodexGoalClient {
   readonly runtime_version: string;
-  readonly read: (threadId: CodexThreadId | string, signal?: AbortSignal) => Promise<CodexThreadGoal | null>;
+  readonly read: (
+    threadId: CodexThreadId | string,
+    deadline?: OperationDeadline
+  ) => Promise<CodexThreadGoal | null>;
   readonly setPaused: (
     threadId: CodexThreadId | string,
     objective: string,
-    signal?: AbortSignal
+    deadline?: OperationDeadline
   ) => Promise<CodexThreadGoal>;
   readonly setStatus: (
     threadId: CodexThreadId | string,
     status: CodexGoalMutationStatus,
-    signal?: AbortSignal
+    deadline?: OperationDeadline
   ) => Promise<CodexThreadGoal>;
-  readonly clear: (threadId: CodexThreadId | string, signal?: AbortSignal) => Promise<boolean>;
+  readonly clear: (
+    threadId: CodexThreadId | string,
+    deadline?: OperationDeadline
+  ) => Promise<boolean>;
 }
 
 interface ParsedGoalClientOptions {
@@ -83,7 +90,10 @@ class DefaultCodexGoalClient implements CodexGoalClient {
     return compatibility.observed_version;
   }
 
-  async read(threadId: CodexThreadId | string, signal?: AbortSignal): Promise<CodexThreadGoal | null> {
+  async read(
+    threadId: CodexThreadId | string,
+    deadline?: OperationDeadline
+  ): Promise<CodexThreadGoal | null> {
     void this.runtime_version;
     const parsedThreadId = parseInputThreadId(threadId);
     const params = { threadId: parsedThreadId } satisfies ThreadGoalGetParams;
@@ -92,8 +102,7 @@ class DefaultCodexGoalClient implements CodexGoalClient {
         method: "thread/goal/get",
         params,
         kind: "read",
-        timeout_ms: this.options.read_timeout_ms,
-        ...(signal === undefined ? {} : { signal })
+        ...codexRequestOptionsFromDeadline(deadline, this.options.read_timeout_ms)
       }),
       "Codex thread/goal/get result must be an object."
     );
@@ -104,12 +113,12 @@ class DefaultCodexGoalClient implements CodexGoalClient {
   async setPaused(
     threadId: CodexThreadId | string,
     objective: string,
-    signal?: AbortSignal
+    deadline?: OperationDeadline
   ): Promise<CodexThreadGoal> {
     const parsedThreadId = parseInputThreadId(threadId);
     const parsedObjective = parseObjectiveInput(objective);
     const params = { threadId: parsedThreadId, objective: parsedObjective, status: "paused" } satisfies ThreadGoalSetParams;
-    const goal = await this.set(params, signal);
+    const goal = await this.set(params, deadline);
     if (goal.status !== "paused" || goal.objective !== parsedObjective) {
       throw invalidPayload("Codex thread/goal/set did not preserve the paused objective.");
     }
@@ -119,17 +128,20 @@ class DefaultCodexGoalClient implements CodexGoalClient {
   async setStatus(
     threadId: CodexThreadId | string,
     status: CodexGoalMutationStatus,
-    signal?: AbortSignal
+    deadline?: OperationDeadline
   ): Promise<CodexThreadGoal> {
     const parsedThreadId = parseInputThreadId(threadId);
     if (!["active", "complete", "paused"].includes(status)) throw invalidInput("Codex goal mutation status is unsupported.");
     const params = { threadId: parsedThreadId, status } satisfies ThreadGoalSetParams;
-    const goal = await this.set(params, signal);
+    const goal = await this.set(params, deadline);
     if (goal.status !== status) throw invalidPayload("Codex thread/goal/set returned a different goal status.");
     return goal;
   }
 
-  async clear(threadId: CodexThreadId | string, signal?: AbortSignal): Promise<boolean> {
+  async clear(
+    threadId: CodexThreadId | string,
+    deadline?: OperationDeadline
+  ): Promise<boolean> {
     void this.runtime_version;
     const params = { threadId: parseInputThreadId(threadId) } satisfies ThreadGoalClearParams;
     const result = requireRecord(
@@ -137,8 +149,7 @@ class DefaultCodexGoalClient implements CodexGoalClient {
         method: "thread/goal/clear",
         params,
         kind: "mutation",
-        timeout_ms: this.options.mutation_timeout_ms,
-        ...(signal === undefined ? {} : { signal })
+        ...codexRequestOptionsFromDeadline(deadline, this.options.mutation_timeout_ms)
       }),
       "Codex thread/goal/clear result must be an object."
     );
@@ -147,15 +158,17 @@ class DefaultCodexGoalClient implements CodexGoalClient {
     return result.cleared;
   }
 
-  private async set(params: ThreadGoalSetParams, signal?: AbortSignal): Promise<CodexThreadGoal> {
+  private async set(
+    params: ThreadGoalSetParams,
+    deadline?: OperationDeadline
+  ): Promise<CodexThreadGoal> {
     void this.runtime_version;
     const result = requireRecord(
       await this.port.request({
         method: "thread/goal/set",
         params,
         kind: "mutation",
-        timeout_ms: this.options.mutation_timeout_ms,
-        ...(signal === undefined ? {} : { signal })
+        ...codexRequestOptionsFromDeadline(deadline, this.options.mutation_timeout_ms)
       }),
       "Codex thread/goal/set result must be an object."
     );

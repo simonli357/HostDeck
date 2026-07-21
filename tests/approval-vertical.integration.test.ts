@@ -242,7 +242,12 @@ describe("managed-session approval selected vertical", () => {
         responseSettled = true;
       });
       await adapter.responseStarted;
-      expect(adapter.responses).toEqual([{ request: firstRequest, decision: "approve" }]);
+      expect(adapter.responses).toHaveLength(1);
+      expect(adapter.responses[0]).toMatchObject({
+        request: firstRequest,
+        decision: "approve",
+        deadline: { signal: expect.any(AbortSignal) }
+      });
 
       const inFlight = await runCli(listArgs, { env: {} });
       expect(inFlight).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });

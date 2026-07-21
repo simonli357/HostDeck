@@ -22,6 +22,7 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "../packages/contracts/src/index.js";
+import type { OperationDeadline } from "../packages/core/src/index.js";
 import {
   createCodexModelControlService,
   createHostDeckCsrfPolicy,
@@ -255,12 +256,12 @@ describe("managed-session model selected vertical", () => {
 
 class VerticalModelClient implements CodexModelClient {
   readonly runtime_version = runtimeVersion;
-  readonly listCalls: Array<AbortSignal | undefined> = [];
+  readonly listCalls: Array<OperationDeadline | undefined> = [];
   readonly readCalls: string[] = [];
   readonly startCalls: CodexModelTurnStartInput[] = [];
 
-  async listCatalog(signal?: AbortSignal): Promise<CodexModelCatalog> {
-    this.listCalls.push(signal);
+  async listCatalog(deadline?: OperationDeadline): Promise<CodexModelCatalog> {
+    this.listCalls.push(deadline);
     return {
       revision: "a".repeat(64),
       observed_at: isoTimestampSchema.parse(timestamp),
@@ -268,7 +269,7 @@ class VerticalModelClient implements CodexModelClient {
     };
   }
 
-  async readCurrent(thread: string, _signal?: AbortSignal) {
+  async readCurrent(thread: string, _deadline?: OperationDeadline) {
     this.readCalls.push(thread);
     const cwd = thread === threadId
       ? "/tmp/hostdeck-model-vertical-one"

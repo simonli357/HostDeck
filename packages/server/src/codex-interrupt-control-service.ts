@@ -17,8 +17,13 @@ import {
   type TurnOperationTarget,
   turnOperationTargetSchema
 } from "@hostdeck/contracts";
-import type { ErrorCode, IsoTimestamp } from "@hostdeck/core";
+import type { ErrorCode, IsoTimestamp, OperationDeadline } from "@hostdeck/core";
 import type { SelectedSessionState, SelectedStateRepository } from "@hostdeck/storage";
+import {
+  type OperationDeadlineFailureFactory,
+  requireOpenOperationDeadline,
+  runSerializedWithDeadline
+} from "./operation-deadline-serialization.js";
 
 type InterruptIntent = Extract<SelectedOperationIntent, { readonly kind: "interrupt" }>;
 type TurnCompletedEvent = Extract<NormalizedCodexEvent, { readonly method: "turn/completed" }>;
@@ -27,6 +32,7 @@ export type CodexInterruptControlErrorCode =
   | "capability_unsupported"
   | "invalid_request"
   | "operation_conflict"
+  | "operation_timeout"
   | "runtime_protocol_error"
   | "runtime_unavailable"
   | "service_overloaded"
@@ -68,8 +74,8 @@ export interface CodexInterruptControlServiceOptions {
 export interface CodexInterruptControlService {
   readonly requireInterruptible: (target: unknown) => Promise<void>;
   readonly snapshot: (target: unknown) => Promise<SelectedOperationProgress | null>;
-  readonly interrupt: (intent: unknown, signal?: AbortSignal) => Promise<SelectedOperationProgress>;
-  readonly waitForTerminal: (target: unknown, signal: AbortSignal) => Promise<SelectedOperationProgress>;
+  readonly interrupt: (intent: unknown, deadline: OperationDeadline) => Promise<SelectedOperationProgress>;
+  readonly waitForTerminal: (target: unknown, deadline: OperationDeadline) => Promise<SelectedOperationProgress>;
   readonly observeEvent: (event: NormalizedCodexEvent) => Promise<void>;
   readonly active_count: number;
   readonly pending_count: number;
@@ -112,8 +118,8 @@ export function createCodexInterruptControlService(
   return Object.freeze({
     requireInterruptible: (target: unknown) => implementation.requireInterruptible(target),
     snapshot: (target: unknown) => implementation.snapshot(target),
-    interrupt: (intent: unknown, signal?: AbortSignal) => implementation.interrupt(intent, signal),
-    waitForTerminal: (target: unknown, signal: AbortSignal) => implementation.waitForTerminal(target, signal),
+    interrupt: (intent: unknown, deadline: OperationDeadline) => implementation.interrupt(intent, deadline),
+    waitForTerminal: (target: unknown, deadline: OperationDeadline) => implementation.waitForTerminal(target, deadline),
     observeEvent: (event: NormalizedCodexEvent) => implementation.observeEvent(event),
     get active_count() {
       return implementation.active_count;
@@ -168,11 +174,8 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
     });
   }
 
-  async interrupt(input: unknown, signal?: AbortSignal): Promise<SelectedOperationProgress> {
+  async interrupt(input: unknown, deadline: OperationDeadline): Promise<SelectedOperationProgress> {
     const intent = parseIntent(input);
-    if (signal !== undefined && !(signal instanceof AbortSignal)) {
-      throw interruptError("invalid_request", "validation_error", "The interrupt request signal is invalid.", "not_sent", true);
-    }
     return this.serialized(intent.target.session_id, async () => {
       this.requireInterruptibleTarget(intent.target);
 
@@ -186,11 +189,12 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
       };
       this.interruptsBySession.set(intent.target.session_id, record);
       try {
+        requireInterruptDeadline(deadline);
         const accepted = await this.options.turns.interruptTurn({
           operation_id: intent.operation_id,
           thread_id: intent.target.codex_thread_id,
           turn_id: intent.target.turn_id,
-          ...(signal === undefined ? {} : { signal })
+          deadline
         });
         if (accepted.thread_id !== intent.target.codex_thread_id || accepted.turn_id !== intent.target.turn_id) {
           throw interruptError(
@@ -237,21 +241,19 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
         }
         throw mapped;
       }
-    });
+    }, deadline);
   }
 
-  async waitForTerminal(targetInput: unknown, signal: AbortSignal): Promise<SelectedOperationProgress> {
+  async waitForTerminal(
+    targetInput: unknown,
+    deadline: OperationDeadline
+  ): Promise<SelectedOperationProgress> {
     const target = parseTarget(targetInput);
-    if (!(signal instanceof AbortSignal)) {
-      throw interruptError(
-        "invalid_request",
-        "validation_error",
-        "The interrupt terminal-wait signal is invalid.",
-        "not_sent",
-        true
-      );
-    }
-    if (signal.aborted) throw terminalWaitAborted();
+    requireOpenOperationDeadline(
+      deadline,
+      terminalWaitAborted,
+      interruptInvalidDeadlineError
+    );
 
     const outcome = await this.serialized(target.session_id, async () => {
       this.requireIdentity(target);
@@ -286,8 +288,8 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
           false
         );
       }
-      return Object.freeze({ waiting: this.createTerminalWaiter(target, signal) });
-    });
+      return Object.freeze({ waiting: this.createTerminalWaiter(target, deadline.signal) });
+    }, deadline, terminalWaitAborted);
     if ("terminal" in outcome) return outcome.terminal;
     return await outcome.waiting;
   }
@@ -627,7 +629,7 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
         if (settled) return;
         settled = true;
         cleanup();
-        reject(terminalWaitAborted());
+        reject(terminalWaitAborted(signal.reason));
       };
       const waiter: TerminalWaiter = {
         signal,
@@ -686,7 +688,22 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
     return parsed.data;
   }
 
-  private serialized<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
+  private serialized<T>(
+    sessionId: string,
+    operation: () => Promise<T>,
+    deadline?: OperationDeadline,
+    failure: OperationDeadlineFailureFactory = interruptDeadlineError
+  ): Promise<T> {
+    if (deadline !== undefined) {
+      return runSerializedWithDeadline(
+        this.tails,
+        sessionId,
+        deadline,
+        failure,
+        operation,
+        interruptInvalidDeadlineError
+      );
+    }
     const prior = this.tails.get(sessionId) ?? Promise.resolve();
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
@@ -884,13 +901,14 @@ function readExactDataObject<const Keys extends readonly string[]>(
   >;
 }
 
-function terminalWaitAborted(): HostDeckCodexInterruptControlError {
+function terminalWaitAborted(cause?: unknown): HostDeckCodexInterruptControlError {
   return interruptError(
-    "unknown_outcome",
+    "operation_timeout",
     "operation_timeout",
     "Interrupt terminal proof was interrupted before an authoritative outcome.",
     "unknown",
-    false
+    false,
+    cause
   );
 }
 
@@ -911,6 +929,16 @@ function mapAdapterError(error: unknown, fallback: string): HostDeckCodexInterru
   if (error.code === "unsupported_method") {
     return interruptError("capability_unsupported", "capability_unavailable", error.message, "not_sent", false, error);
   }
+  if (["request_aborted", "request_timeout"].includes(error.code)) {
+    return interruptError(
+      "operation_timeout",
+      "operation_timeout",
+      error.message,
+      error.outcome === "unknown" ? "unknown" : "not_sent",
+      error.outcome === "unknown" ? false : error.retry_safe,
+      error
+    );
+  }
   if (error.outcome === "unknown" || error.outcome === "not_applicable") {
     return interruptError("unknown_outcome", "unknown_error", error.message, "unknown", false, error);
   }
@@ -924,6 +952,36 @@ function mapAdapterError(error: unknown, fallback: string): HostDeckCodexInterru
     return interruptError("service_overloaded", "service_overloaded", error.message, "not_sent", error.retry_safe, error);
   }
   return interruptError("runtime_unavailable", "runtime_unavailable", error.message || fallback, "not_sent", error.retry_safe, error);
+}
+
+function requireInterruptDeadline(candidate: unknown): OperationDeadline {
+  return requireOpenOperationDeadline(
+    candidate,
+    interruptDeadlineError,
+    interruptInvalidDeadlineError
+  );
+}
+
+function interruptInvalidDeadlineError(cause: unknown): HostDeckCodexInterruptControlError {
+  return interruptError(
+    "invalid_request",
+    "validation_error",
+    "The interrupt request deadline is invalid.",
+    "not_sent",
+    false,
+    cause
+  );
+}
+
+function interruptDeadlineError(cause: unknown): HostDeckCodexInterruptControlError {
+  return interruptError(
+    "operation_timeout",
+    "operation_timeout",
+    "Codex interrupt operation exceeded its request deadline.",
+    "not_sent",
+    true,
+    cause
+  );
 }
 
 function errorEnvelope(error: HostDeckCodexInterruptControlError): NonNullable<SelectedOperationProgress["error"]> {

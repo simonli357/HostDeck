@@ -1,5 +1,6 @@
 export {
   type CodexApprovalClient,
+  type CodexApprovalClientOptions,
   type CodexApprovalMethod,
   type CodexApprovalRequest,
   type CodexApprovalRequestPort,
@@ -17,7 +18,8 @@ export type {
   CodexProtocolIssue,
   CodexProtocolIssueSeverity,
   CodexRequestInput,
-  CodexRequestKind
+  CodexRequestKind,
+  CodexServerResponseOptions
 } from "./broker.js";
 export {
   type CodexCompactAccepted,
@@ -141,6 +143,11 @@ export {
   HostDeckCodexReconnectError
 } from "./reconnect-controller.js";
 export {
+  type CodexRequestDeadlineOptions,
+  codexRequestOptionsFromDeadline
+} from "./request-deadline.js";
+export {
+  type CodexApprovalResourceOptions,
   type CodexCompactResourceOptions,
   type CodexConnectionResourceOptions,
   type CodexEventPipelineResourceOptions,

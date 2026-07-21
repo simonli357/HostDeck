@@ -10,7 +10,7 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
-import { runtimeCapabilities } from "@hostdeck/core";
+import { type OperationDeadline, runtimeCapabilities } from "@hostdeck/core";
 import {
   createSelectedAuditRepository,
   openMigratedDatabase,
@@ -485,18 +485,19 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
         snapshotCalls.push(target);
         return sequenceValue(options.snapshotResults ?? [approval("pending", null)], snapshotIndex++) as PendingApproval;
       },
-      async respond(this: void, intent: unknown) {
+      async respond(this: void, intent: unknown, deadline: OperationDeadline) {
         respondThis = this;
+        expect(deadline.signal).toBeInstanceOf(AbortSignal);
         const captured = { ...(intent as Record<string, unknown>) };
         respondCalls.push(captured);
         acceptedBeforeRespond = auditRepository.get(String(captured.operation_id ?? ""))?.records[0]?.phase === "accepted";
         if (options.respondError !== undefined) throw options.respondError;
         return sequenceValue(options.respondResults ?? [approval("responding", null)], respondIndex++) as PendingApproval;
       },
-      async waitForTerminal(this: void, target: unknown, signal: AbortSignal) {
+      async waitForTerminal(this: void, target: unknown, deadline: OperationDeadline) {
         waitThis = this;
         waitCalls.push(target);
-        waitAfterRespond = respondCalls.length === 1 && signal instanceof AbortSignal;
+        waitAfterRespond = respondCalls.length === 1 && deadline.signal instanceof AbortSignal;
         if (options.waitError !== undefined) throw options.waitError;
         return sequenceValue(options.terminalResults ?? [approval("approved", "approve")], terminalIndex++) as PendingApproval;
       }

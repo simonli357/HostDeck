@@ -18,8 +18,12 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
-import type { ErrorCode, IsoTimestamp } from "@hostdeck/core";
+import type { ErrorCode, IsoTimestamp, OperationDeadline } from "@hostdeck/core";
 import type { SelectedSessionState, SelectedStateRepository } from "@hostdeck/storage";
+import {
+  requireOpenOperationDeadline,
+  runSerializedWithDeadline
+} from "./operation-deadline-serialization.js";
 
 type CompactIntent = Extract<SelectedOperationIntent, { readonly kind: "compact" }>;
 type CompactItemEvent = Extract<
@@ -43,6 +47,7 @@ export type CodexCompactControlErrorCode =
   | "invalid_request"
   | "observation_conflict"
   | "operation_conflict"
+  | "operation_timeout"
   | "runtime_protocol_error"
   | "runtime_unavailable"
   | "service_overloaded"
@@ -82,7 +87,7 @@ export interface CodexCompactControlServiceOptions {
 }
 
 export interface CodexCompactControlService {
-  readonly compact: (intent: unknown, signal?: AbortSignal) => Promise<SelectedOperationProgress>;
+  readonly compact: (intent: unknown, deadline: OperationDeadline) => Promise<SelectedOperationProgress>;
   readonly snapshot: (target: unknown) => Promise<SelectedOperationProgress | null>;
   readonly observe: (event: NormalizedCodexEvent, generation: unknown) => Promise<boolean>;
   readonly active_count: number;
@@ -132,7 +137,7 @@ export function createCodexCompactControlService(
 ): CodexCompactControlService {
   const implementation = new DefaultCodexCompactControlService(parseOptions(options));
   return Object.freeze({
-    compact: (intent: unknown, signal?: AbortSignal) => implementation.compact(intent, signal),
+    compact: (intent: unknown, deadline: OperationDeadline) => implementation.compact(intent, deadline),
     snapshot: (target: unknown) => implementation.snapshot(target),
     observe: (event: NormalizedCodexEvent, generation: unknown) => implementation.observe(event, generation),
     get active_count() {
@@ -166,17 +171,8 @@ class DefaultCodexCompactControlService implements CodexCompactControlService {
     return this.bySession.size;
   }
 
-  async compact(candidate: unknown, signal?: AbortSignal): Promise<SelectedOperationProgress> {
+  async compact(candidate: unknown, deadline: OperationDeadline): Promise<SelectedOperationProgress> {
     const intent = parseIntent(candidate);
-    if (signal !== undefined && !(signal instanceof AbortSignal)) {
-      throw compactError(
-        "invalid_request",
-        "validation_error",
-        "The compact request signal is invalid.",
-        "not_sent",
-        true
-      );
-    }
     return this.serialized(intent.target.session_id, async () => {
       const state = this.requireCurrentTarget(intent.target, true);
       const runtime = this.readCurrentRuntime();
@@ -215,10 +211,11 @@ class DefaultCodexCompactControlService implements CodexCompactControlService {
       this.bySession.set(intent.target.session_id, record);
 
       try {
+        requireCompactDeadline(deadline);
         const accepted = await this.options.compact.compactThread({
           operation_id: intent.operation_id,
           thread_id: intent.target.codex_thread_id,
-          ...(signal === undefined ? {} : { signal })
+          deadline
         });
         const acceptedAt = this.validateAcceptance(record, accepted, runtime);
         record.phase = "accepted";
@@ -246,7 +243,7 @@ class DefaultCodexCompactControlService implements CodexCompactControlService {
         }
         throw mapped;
       }
-    });
+    }, deadline);
   }
 
   async snapshot(candidate: unknown): Promise<SelectedOperationProgress | null> {
@@ -764,7 +761,21 @@ class DefaultCodexCompactControlService implements CodexCompactControlService {
     return record.progress?.updated_at ?? record.accepted_at ?? record.requested_at;
   }
 
-  private serialized<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
+  private serialized<T>(
+    sessionId: string,
+    operation: () => Promise<T>,
+    deadline?: OperationDeadline
+  ): Promise<T> {
+    if (deadline !== undefined) {
+      return runSerializedWithDeadline(
+        this.tails,
+        sessionId,
+        deadline,
+        compactDeadlineError,
+        operation,
+        compactInvalidDeadlineError
+      );
+    }
     const prior = this.tails.get(sessionId) ?? Promise.resolve();
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
@@ -957,6 +968,16 @@ function mapAdapterError(error: unknown, fallback: string): HostDeckCodexCompact
       error
     );
   }
+  if (["request_aborted", "request_timeout"].includes(error.code)) {
+    return compactError(
+      "operation_timeout",
+      "operation_timeout",
+      error.message,
+      error.outcome === "unknown" ? "unknown" : "not_sent",
+      error.outcome === "unknown" ? false : error.retry_safe,
+      error
+    );
+  }
   if (error.outcome === "unknown" || error.outcome === "not_applicable") {
     return compactError("unknown_outcome", "unknown_error", error.message, "unknown", false, error);
   }
@@ -997,6 +1018,36 @@ function mapAdapterError(error: unknown, fallback: string): HostDeckCodexCompact
     "not_sent",
     error.retry_safe,
     error
+  );
+}
+
+function requireCompactDeadline(candidate: unknown): OperationDeadline {
+  return requireOpenOperationDeadline(
+    candidate,
+    compactDeadlineError,
+    compactInvalidDeadlineError
+  );
+}
+
+function compactInvalidDeadlineError(cause: unknown): HostDeckCodexCompactControlError {
+  return compactError(
+    "invalid_request",
+    "validation_error",
+    "The compact request deadline is invalid.",
+    "not_sent",
+    false,
+    cause
+  );
+}
+
+function compactDeadlineError(cause: unknown): HostDeckCodexCompactControlError {
+  return compactError(
+    "operation_timeout",
+    "operation_timeout",
+    "Codex compact operation exceeded its request deadline.",
+    "not_sent",
+    true,
+    cause
   );
 }
 

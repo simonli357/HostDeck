@@ -35,6 +35,15 @@ import {
   type CodexPromptPlanPort,
   createCodexPromptControlService
 } from "./codex-prompt-control-service.js";
+import {
+  type WithTestOperationDeadlines,
+  withTestOperationDeadlines
+} from "./test-operation-deadline.js";
+
+type TestPromptControlService = WithTestOperationDeadlines<
+  CodexPromptControlService,
+  "dispatch"
+>;
 
 const requireSmoke = process.env.HOSTDECK_REQUIRE_CODEX_PROMPT_SMOKE === "1";
 const codexBin = process.env.HOSTDECK_CODEX_BIN ?? "codex";
@@ -242,7 +251,7 @@ function createPromptService(
   turns: CodexTurnClient,
   states: Map<string, SelectedSessionState>,
   modelSelection: SmokeModelSelection
-): CodexPromptControlService {
+): TestPromptControlService {
   const statePort: CodexPromptControlStatePort = {
     get: (sessionId) => states.get(sessionId) ?? null,
     getByThreadId: (threadId) => [...states.values()].find((state) => state.mapping.codex_thread_id === threadId) ?? null
@@ -279,7 +288,10 @@ function createPromptService(
       throw new Error("Prompt smoke unexpectedly selected the Plan pending-turn path.");
     }
   };
-  return createCodexPromptControlService({ turns, models, plans, states: statePort });
+  return withTestOperationDeadlines(
+    createCodexPromptControlService({ turns, models, plans, states: statePort }),
+    ["dispatch"]
+  );
 }
 
 interface SmokeModelSelection {
@@ -310,7 +322,7 @@ async function processNotificationsThrough(
   cursor: { value: number },
   endIndex: number,
   normalizer: CodexEventNormalizer,
-  service: CodexPromptControlService,
+  service: TestPromptControlService,
   states: Map<string, SelectedSessionState>
 ): Promise<void> {
   for (let index = cursor.value; index <= endIndex; index += 1) {

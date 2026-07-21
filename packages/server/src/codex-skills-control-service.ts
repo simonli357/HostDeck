@@ -10,14 +10,16 @@ import {
   skillsOperationIntentSchema,
   skillsSnapshotSchema
 } from "@hostdeck/contracts";
-import type { ErrorCode } from "@hostdeck/core";
+import type { ErrorCode, OperationDeadline } from "@hostdeck/core";
 import type { SelectedSessionState, SelectedStateRepository } from "@hostdeck/storage";
+import { requireOpenOperationDeadline } from "./operation-deadline-serialization.js";
 
 type SkillsIntent = Extract<SelectedOperationIntent, { readonly kind: "skills" }>;
 
 export type CodexSkillsControlErrorCode =
   | "capability_unsupported"
   | "invalid_request"
+  | "operation_timeout"
   | "runtime_protocol_error"
   | "runtime_unavailable"
   | "service_overloaded"
@@ -50,7 +52,7 @@ export interface CodexSkillsControlServiceOptions {
 }
 
 export interface CodexSkillsControlService {
-  readonly list: (intent: unknown, signal?: AbortSignal) => Promise<SkillsSnapshot>;
+  readonly list: (intent: unknown, deadline: OperationDeadline) => Promise<SkillsSnapshot>;
 }
 
 export function createCodexSkillsControlService(
@@ -58,24 +60,17 @@ export function createCodexSkillsControlService(
 ): CodexSkillsControlService {
   const parsed = parseOptions(options);
   return Object.freeze({
-    list: (intent: unknown, signal?: AbortSignal) => listSkills(parsed, intent, signal)
+    list: (intent: unknown, deadline: OperationDeadline) => listSkills(parsed, intent, deadline)
   });
 }
 
 async function listSkills(
   options: CodexSkillsControlServiceOptions,
   candidate: unknown,
-  signal?: AbortSignal
+  deadline: OperationDeadline
 ): Promise<SkillsSnapshot> {
+  requireSkillsDeadline(deadline);
   const intent = parseIntent(candidate);
-  if (signal !== undefined && !(signal instanceof AbortSignal)) {
-    throw controlError(
-      "invalid_request",
-      "validation_error",
-      "The skills request signal is invalid.",
-      true
-    );
-  }
   const initial = requireReadableTarget(options.states, intent.target);
   const runtimeBefore = readCurrentRuntime(options.skills);
   requireRuntimeMatch(initial, runtimeBefore.version);
@@ -84,11 +79,12 @@ async function listSkills(
   try {
     listing = await options.skills.listForCwd({
       cwd: initialCwd,
-      ...(signal === undefined ? {} : { signal })
+      deadline
     });
   } catch (error) {
     throw mapAdapterError(error);
   }
+  requireSkillsDeadline(deadline);
   assertExactListing(listing);
   const parsed = skillsSnapshotSchema.safeParse({
     target: intent.target,
@@ -329,6 +325,15 @@ function mapAdapterError(error: unknown): HostDeckCodexSkillsControlError {
       error
     );
   }
+  if (["request_aborted", "request_timeout"].includes(error.code)) {
+    return controlError(
+      "operation_timeout",
+      "operation_timeout",
+      error.message,
+      true,
+      error
+    );
+  }
   if (["invalid_protocol_message", "protocol_violation"].includes(error.code)) {
     return controlError(
       "runtime_protocol_error",
@@ -353,6 +358,28 @@ function mapAdapterError(error: unknown): HostDeckCodexSkillsControlError {
     error.message,
     error.retry_safe,
     error
+  );
+}
+
+function requireSkillsDeadline(candidate: unknown): OperationDeadline {
+  return requireOpenOperationDeadline(
+    candidate,
+    (cause) =>
+      controlError(
+        "operation_timeout",
+        "operation_timeout",
+        "Codex skills read exceeded its request deadline.",
+        true,
+        cause
+      ),
+    (cause) =>
+      controlError(
+        "invalid_request",
+        "validation_error",
+        "The skills request deadline is invalid.",
+        false,
+        cause
+      )
   );
 }
 

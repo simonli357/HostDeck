@@ -108,7 +108,7 @@ describe("managed-session start vertical", () => {
       csrf,
       lock,
       runtime: { read: () => runtimeCompatibility() },
-      sessions: { start: (candidate) => managed.start(candidate) }
+      sessions: { start: (candidate, deadline) => managed.start(candidate, deadline) }
     });
     const authentication = createHostDeckRequestAuthenticationPolicy({
       authenticateDeviceToken: () => {

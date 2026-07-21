@@ -207,7 +207,7 @@ export function createHostDeckInterruptRouteRegistration(
                     kind: "interrupt",
                     confirm: true
                   },
-                  request.signal
+                  context.deadline
                 ]);
                 progress = parseInterruptProgress(candidate, body, target);
                 waitForProof = progress.state === "accepted";
@@ -227,7 +227,10 @@ export function createHostDeckInterruptRouteRegistration(
               if (waitForProof) {
                 let terminalCandidate: unknown;
                 try {
-                  terminalCandidate = await Reflect.apply(ports.waitForTerminal, undefined, [target, request.signal]);
+                  terminalCandidate = await Reflect.apply(ports.waitForTerminal, undefined, [
+                    target,
+                    context.deadline
+                  ]);
                 } catch (error) {
                   if (error instanceof HostDeckCodexInterruptControlError) {
                     return incompleteTransition(mapInterruptErrorCode(error));
@@ -572,6 +575,8 @@ function mapInterruptErrorCode(error: HostDeckCodexInterruptControlError): Error
       return "storage_error";
     case "unknown_outcome":
       return error.api_code === "operation_timeout" ? "operation_timeout" : "unknown_error";
+    case "operation_timeout":
+      return "operation_timeout";
     case "invalid_request":
       return "internal_error";
   }

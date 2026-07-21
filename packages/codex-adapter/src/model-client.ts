@@ -10,11 +10,18 @@ import {
   type RuntimeCompatibility,
   resourceBudgetDefinitionByKey
 } from "@hostdeck/contracts";
-import type { AbsoluteCwd, ClientOperationId, CodexThreadId, IsoTimestamp } from "@hostdeck/core";
+import type {
+  AbsoluteCwd,
+  ClientOperationId,
+  CodexThreadId,
+  IsoTimestamp,
+  OperationDeadline
+} from "@hostdeck/core";
 import type { CodexRequestInput } from "./broker.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
 import type { ModelListParams } from "./generated/v2/ModelListParams.js";
 import type { ThreadResumeParams } from "./generated/v2/ThreadResumeParams.js";
+import { codexRequestOptionsFromDeadline } from "./request-deadline.js";
 import { type CodexTurnAccepted, type CodexTurnClient, createCodexTurnClient } from "./turn-client.js";
 
 export interface CodexModelCatalog {
@@ -36,7 +43,7 @@ export interface CodexModelTurnStartInput {
   readonly text: string;
   readonly runtime_model: string;
   readonly reasoning_effort: string;
-  readonly signal?: AbortSignal;
+  readonly deadline?: OperationDeadline;
 }
 
 export interface CodexModelTurnAccepted extends CodexTurnAccepted {}
@@ -57,8 +64,11 @@ export interface CodexModelClientOptions {
 
 export interface CodexModelClient {
   readonly runtime_version: string;
-  readonly listCatalog: (signal?: AbortSignal) => Promise<CodexModelCatalog>;
-  readonly readCurrent: (threadId: CodexThreadId | string, signal?: AbortSignal) => Promise<CodexThreadModelState>;
+  readonly listCatalog: (deadline?: OperationDeadline) => Promise<CodexModelCatalog>;
+  readonly readCurrent: (
+    threadId: CodexThreadId | string,
+    deadline?: OperationDeadline
+  ) => Promise<CodexThreadModelState>;
   readonly startTurn: (input: CodexModelTurnStartInput) => Promise<CodexModelTurnAccepted>;
 }
 
@@ -151,7 +161,7 @@ class DefaultCodexModelClient implements CodexModelClient {
     return compatibility.observed_version;
   }
 
-  async listCatalog(signal?: AbortSignal): Promise<CodexModelCatalog> {
+  async listCatalog(deadline?: OperationDeadline): Promise<CodexModelCatalog> {
     void this.runtime_version;
     const models: ModelCatalogEntry[] = [];
     let cursor: string | null = null;
@@ -164,8 +174,7 @@ class DefaultCodexModelClient implements CodexModelClient {
           method: "model/list",
           params,
           kind: "read",
-          timeout_ms: this.options.read_timeout_ms,
-          ...(signal === undefined ? {} : { signal })
+          ...codexRequestOptionsFromDeadline(deadline, this.options.read_timeout_ms)
         }),
         "Codex model/list result must be an object."
       );
@@ -203,7 +212,10 @@ class DefaultCodexModelClient implements CodexModelClient {
     });
   }
 
-  async readCurrent(threadId: CodexThreadId | string, signal?: AbortSignal): Promise<CodexThreadModelState> {
+  async readCurrent(
+    threadId: CodexThreadId | string,
+    deadline?: OperationDeadline
+  ): Promise<CodexThreadModelState> {
     void this.runtime_version;
     const parsedThreadId = parseInputThreadId(threadId);
     const params = { threadId: parsedThreadId, excludeTurns: true } satisfies ThreadResumeParams;
@@ -212,8 +224,7 @@ class DefaultCodexModelClient implements CodexModelClient {
         method: "thread/resume",
         params,
         kind: "read",
-        timeout_ms: this.options.read_timeout_ms,
-        ...(signal === undefined ? {} : { signal })
+        ...codexRequestOptionsFromDeadline(deadline, this.options.read_timeout_ms)
       }),
       "Codex thread/resume result must be an object."
     );
@@ -254,7 +265,7 @@ class DefaultCodexModelClient implements CodexModelClient {
         runtime_model: input.runtime_model,
         reasoning_effort: input.reasoning_effort
       },
-      ...(input.signal === undefined ? {} : { signal: input.signal })
+      ...(input.deadline === undefined ? {} : { deadline: input.deadline })
     });
   }
 }

@@ -10,7 +10,7 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
-import { runtimeCapabilities } from "@hostdeck/core";
+import { type OperationDeadline, runtimeCapabilities } from "@hostdeck/core";
 import {
   createSelectedAuditRepository,
   openMigratedDatabase,
@@ -466,19 +466,19 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
         const failure = options.requireErrors?.[Math.min(requireIndex++, options.requireErrors.length - 1)] ?? null;
         if (failure !== null) throw failure;
       },
-      async interrupt(this: void, intent: unknown, signal?: AbortSignal) {
+      async interrupt(this: void, intent: unknown, deadline: OperationDeadline) {
         interruptThis = this;
         const captured = { ...(intent as Record<string, unknown>) };
         interruptCalls.push(captured);
         acceptedBeforeInterrupt = auditRepository.get(String(captured.operation_id ?? ""))?.records[0]?.phase === "accepted";
-        expect(signal).toBeInstanceOf(AbortSignal);
+        expect(deadline.signal).toBeInstanceOf(AbortSignal);
         if (options.interruptError !== undefined) throw options.interruptError;
         return sequenceValue(options.interruptResults ?? [progress("accepted", null)], interruptIndex++) as SelectedOperationProgress;
       },
-      async waitForTerminal(this: void, target: unknown, signal: AbortSignal) {
+      async waitForTerminal(this: void, target: unknown, deadline: OperationDeadline) {
         waitThis = this;
         waitCalls.push(target);
-        waitAfterInterrupt = interruptCalls.length === 1 && signal instanceof AbortSignal;
+        waitAfterInterrupt = interruptCalls.length === 1 && deadline.signal instanceof AbortSignal;
         if (options.waitError !== undefined) throw options.waitError;
         return sequenceValue(options.terminalResults ?? [progress("interrupted", null)], terminalIndex++) as SelectedOperationProgress;
       }

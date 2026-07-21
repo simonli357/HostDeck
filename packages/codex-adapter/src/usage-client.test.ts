@@ -1,4 +1,5 @@
 import type { RuntimeCompatibility } from "@hostdeck/contracts";
+import { createOperationDeadlineView } from "@hostdeck/core";
 import { describe, expect, it } from "vitest";
 import type { CodexRequestInput } from "./broker.js";
 import { assessCodexCompatibility } from "./compatibility.js";
@@ -13,6 +14,11 @@ const observedAt = "2026-07-11T17:00:00.000Z";
 describe("normalized Codex usage client", () => {
   it("sends one exact no-param read and freezes bounded account usage", async () => {
     const controller = new AbortController();
+    const deadline = createOperationDeadlineView({
+      timeoutMs: 4_000,
+      signal: controller.signal,
+      clock: { now: () => 0 }
+    });
     const port = fakePort((request) => {
       expect(request).toEqual({
         method: "account/usage/read",
@@ -29,7 +35,7 @@ describe("normalized Codex usage client", () => {
       now: () => observedAt
     });
 
-    const result = await client.readAccount(controller.signal);
+    const result = await client.readAccount(deadline);
     expect(result).toEqual({
       runtime_version: "0.144.0",
       connection_generation: 3,

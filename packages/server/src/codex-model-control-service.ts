@@ -25,8 +25,12 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
-import type { ErrorCode, IsoTimestamp } from "@hostdeck/core";
+import type { ErrorCode, IsoTimestamp, OperationDeadline } from "@hostdeck/core";
 import type { SelectedSessionState, SelectedStateRepository } from "@hostdeck/storage";
+import {
+  requireOpenOperationDeadline,
+  runSerializedWithDeadline
+} from "./operation-deadline-serialization.js";
 import type {
   PendingTurnDispatchSettlement,
   PendingTurnSetting,
@@ -40,6 +44,7 @@ export type CodexModelControlErrorCode =
   | "effort_unsupported"
   | "invalid_request"
   | "model_unknown"
+  | "operation_timeout"
   | "operation_conflict"
   | "runtime_protocol_error"
   | "runtime_unavailable"
@@ -81,7 +86,7 @@ export interface CodexModelTurnSettingsParticipant {
   readonly prepareTurnSettings: (
     target: unknown,
     expectedPendingRevision: unknown,
-    signal?: AbortSignal
+    deadline: OperationDeadline
   ) => Promise<CodexPreparedModelTurnSettings>;
   readonly settlePreparedTurn: (
     preparation: CodexPreparedModelTurnSettings,
@@ -103,14 +108,14 @@ export interface CodexModelControlServiceOptions {
 }
 
 export interface CodexModelControlService extends PendingTurnSettingsReader, CodexModelTurnSettingsParticipant {
-  readonly snapshot: (target: unknown, signal?: AbortSignal) => Promise<ModelControlSnapshot>;
-  readonly select: (intent: unknown, signal?: AbortSignal) => Promise<ModelControlSnapshot>;
-  readonly dispatchPendingTurn: (input: unknown, signal?: AbortSignal) => Promise<CodexPendingModelTurnAccepted>;
+  readonly snapshot: (target: unknown, deadline: OperationDeadline) => Promise<ModelControlSnapshot>;
+  readonly select: (intent: unknown, deadline: OperationDeadline) => Promise<ModelControlSnapshot>;
+  readonly dispatchPendingTurn: (input: unknown, deadline: OperationDeadline) => Promise<CodexPendingModelTurnAccepted>;
   readonly observeSettings: (event: NormalizedCodexEvent) => Promise<void>;
   readonly reconcile: (
     target: unknown,
     expectedPendingRevision: unknown,
-    signal?: AbortSignal
+    deadline?: OperationDeadline
   ) => Promise<ModelControlSnapshot>;
   readonly pending_count: number;
 }
@@ -136,16 +141,16 @@ const activeTurnStates = new Set(["in_progress", "waiting_for_approval", "waitin
 export function createCodexModelControlService(options: CodexModelControlServiceOptions): CodexModelControlService {
   const implementation = new DefaultCodexModelControlService(options);
   return Object.freeze({
-    snapshot: (target: unknown, signal?: AbortSignal) => implementation.snapshot(target, signal),
-    select: (intent: unknown, signal?: AbortSignal) => implementation.select(intent, signal),
-    prepareTurnSettings: (target: unknown, expectedPendingRevision: unknown, signal?: AbortSignal) =>
-      implementation.prepareTurnSettings(target, expectedPendingRevision, signal),
+    snapshot: (target: unknown, deadline: OperationDeadline) => implementation.snapshot(target, deadline),
+    select: (intent: unknown, deadline: OperationDeadline) => implementation.select(intent, deadline),
+    prepareTurnSettings: (target: unknown, expectedPendingRevision: unknown, deadline: OperationDeadline) =>
+      implementation.prepareTurnSettings(target, expectedPendingRevision, deadline),
     settlePreparedTurn: (preparation: CodexPreparedModelTurnSettings, settlement: PendingTurnDispatchSettlement) =>
       implementation.settlePreparedTurn(preparation, settlement),
-    dispatchPendingTurn: (input: unknown, signal?: AbortSignal) => implementation.dispatchPendingTurn(input, signal),
+    dispatchPendingTurn: (input: unknown, deadline: OperationDeadline) => implementation.dispatchPendingTurn(input, deadline),
     observeSettings: (event: NormalizedCodexEvent) => implementation.observeSettings(event),
-    reconcile: (target: unknown, expectedPendingRevision: unknown, signal?: AbortSignal) =>
-      implementation.reconcile(target, expectedPendingRevision, signal),
+    reconcile: (target: unknown, expectedPendingRevision: unknown, deadline?: OperationDeadline) =>
+      implementation.reconcile(target, expectedPendingRevision, deadline),
     readPendingSettings: (target: ManagedSessionTarget) => implementation.readPendingSettings(target),
     get pending_count() {
       return implementation.pending_count;
@@ -200,19 +205,19 @@ class DefaultCodexModelControlService implements CodexModelControlService {
     ]);
   }
 
-  async snapshot(target: unknown, signal?: AbortSignal): Promise<ModelControlSnapshot> {
+  async snapshot(target: unknown, deadline: OperationDeadline): Promise<ModelControlSnapshot> {
     const parsedTarget = parseTarget(target);
     return this.serialized(parsedTarget.session_id, async () => {
       const state = this.requireTarget(parsedTarget, false);
-      const observed = await this.observeRuntime(state, signal);
+      const observed = await this.observeRuntime(state, deadline);
       this.requireTarget(parsedTarget, false);
       this.reconcileFromReadBack(parsedTarget.session_id, observed.current);
       this.reconcileCatalogDrift(parsedTarget.session_id, observed.catalog);
       return this.buildSnapshot(parsedTarget.session_id, observed);
-    });
+    }, deadline);
   }
 
-  async select(input: unknown, signal?: AbortSignal): Promise<ModelControlSnapshot> {
+  async select(input: unknown, deadline: OperationDeadline): Promise<ModelControlSnapshot> {
     const intent = parseModelIntent(input);
     return this.serialized(intent.target.session_id, async () => {
       const state = this.requireTarget(intent.target, true);
@@ -240,7 +245,8 @@ class DefaultCodexModelControlService implements CodexModelControlService {
       if (reserved) this.pendingReservations += 1;
 
       try {
-        const observed = await this.observeRuntime(state, signal);
+        const observed = await this.observeRuntime(state, deadline);
+        requireModelDeadline(deadline);
         this.requireTarget(intent.target, true);
         const selectedModel = observed.catalog.models.find((model) => model.id === intent.model_id);
         if (selectedModel === undefined) {
@@ -274,13 +280,13 @@ class DefaultCodexModelControlService implements CodexModelControlService {
       } finally {
         if (reserved) this.pendingReservations -= 1;
       }
-    });
+    }, deadline);
   }
 
   async prepareTurnSettings(
     targetInput: unknown,
     expectedPendingRevision: unknown,
-    signal?: AbortSignal
+    deadline: OperationDeadline
   ): Promise<CodexPreparedModelTurnSettings> {
     const target = parseTarget(targetInput);
     const expectedRevision = expectedPendingRevision === null ? null : parseRevision(expectedPendingRevision);
@@ -299,7 +305,8 @@ class DefaultCodexModelControlService implements CodexModelControlService {
         );
       }
 
-      const observed = await this.observeRuntime(state, signal);
+      const observed = await this.observeRuntime(state, deadline);
+      requireModelDeadline(deadline);
       const currentTarget = this.requireTarget(target, true);
       assertIdleTurn(currentTarget);
       if (pending === null) {
@@ -349,7 +356,7 @@ class DefaultCodexModelControlService implements CodexModelControlService {
       this.pendingBySession.set(target.session_id, dispatchPending);
       this.activePreparationsBySession.set(target.session_id, preparation);
       return preparation;
-    });
+    }, deadline);
   }
 
   async settlePreparedTurn(
@@ -420,9 +427,13 @@ class DefaultCodexModelControlService implements CodexModelControlService {
     });
   }
 
-  async dispatchPendingTurn(input: unknown, signal?: AbortSignal): Promise<CodexPendingModelTurnAccepted> {
+  async dispatchPendingTurn(input: unknown, deadline: OperationDeadline): Promise<CodexPendingModelTurnAccepted> {
     const request = parsePendingTurn(input);
-    const preparation = await this.prepareTurnSettings(request.target, request.expected_pending_revision, signal);
+    const preparation = await this.prepareTurnSettings(
+      request.target,
+      request.expected_pending_revision,
+      deadline
+    );
     if (preparation.pending_revision === null || preparation.reasoning_effort === null) {
       throw controlError(
         "operation_conflict",
@@ -443,13 +454,14 @@ class DefaultCodexModelControlService implements CodexModelControlService {
 
     let accepted: CodexModelTurnAccepted;
     try {
+      requireModelDeadline(deadline);
       accepted = await this.options.models.startTurn({
         operation_id: request.operation_id,
         thread_id: request.target.codex_thread_id,
         text: request.text,
         runtime_model: preparation.runtime_model,
         reasoning_effort: preparation.reasoning_effort,
-        ...(signal === undefined ? {} : { signal })
+        deadline
       });
     } catch (error) {
       const mapped = mapAdapterError(error, "Codex model turn dispatch failed.", true);
@@ -512,13 +524,17 @@ class DefaultCodexModelControlService implements CodexModelControlService {
     });
   }
 
-  async reconcile(target: unknown, expectedPendingRevision: unknown, signal?: AbortSignal): Promise<ModelControlSnapshot> {
+  async reconcile(
+    target: unknown,
+    expectedPendingRevision: unknown,
+    deadline?: OperationDeadline
+  ): Promise<ModelControlSnapshot> {
     const parsedTarget = parseTarget(target);
     const parsedRevision = parseRevision(expectedPendingRevision);
     return this.serialized(parsedTarget.session_id, async () => {
       const state = this.requireTarget(parsedTarget, false);
       const pending = this.requirePending(parsedTarget.session_id, parsedRevision);
-      const observed = await this.observeRuntime(state, signal);
+      const observed = await this.observeRuntime(state, deadline);
       this.requireTarget(parsedTarget, false);
       if (matchesCurrent(pending, observed.current)) {
         if (
@@ -533,14 +549,17 @@ class DefaultCodexModelControlService implements CodexModelControlService {
       }
       this.reconcileCatalogDrift(parsedTarget.session_id, observed.catalog);
       return this.buildSnapshot(parsedTarget.session_id, observed);
-    });
+    }, deadline);
   }
 
-  private async observeRuntime(state: SelectedSessionState, signal?: AbortSignal): Promise<ObservedModelState> {
-    const catalog = await this.listCatalog(signal);
+  private async observeRuntime(
+    state: SelectedSessionState,
+    deadline?: OperationDeadline
+  ): Promise<ObservedModelState> {
+    const catalog = await this.listCatalog(deadline);
     let current: CodexThreadModelState;
     try {
-      current = await this.options.models.readCurrent(state.mapping.codex_thread_id, signal);
+      current = await this.options.models.readCurrent(state.mapping.codex_thread_id, deadline);
     } catch (error) {
       throw mapAdapterError(error, "Codex current model could not be read.");
     }
@@ -568,9 +587,9 @@ class DefaultCodexModelControlService implements CodexModelControlService {
     };
   }
 
-  private async listCatalog(signal?: AbortSignal): Promise<CodexModelCatalog> {
+  private async listCatalog(deadline?: OperationDeadline): Promise<CodexModelCatalog> {
     try {
-      return await this.options.models.listCatalog(signal);
+      return await this.options.models.listCatalog(deadline);
     } catch (error) {
       throw mapAdapterError(error, "Codex model catalog could not be read.");
     }
@@ -734,7 +753,21 @@ class DefaultCodexModelControlService implements CodexModelControlService {
     return parsed.data;
   }
 
-  private serialized<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
+  private serialized<T>(
+    sessionId: string,
+    operation: () => Promise<T>,
+    deadline?: OperationDeadline
+  ): Promise<T> {
+    if (deadline !== undefined) {
+      return runSerializedWithDeadline(
+        this.tails,
+        sessionId,
+        deadline,
+        modelDeadlineError,
+        operation,
+        modelInvalidDeadlineError
+      );
+    }
     const prior = this.tails.get(sessionId) ?? Promise.resolve();
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
@@ -902,6 +935,16 @@ function mapAdapterError(error: unknown, fallback: string, mutation = false): Ho
   if (error.code === "unsupported_method") {
     return controlError("capability_unsupported", "capability_unavailable", error.message, "not_sent", false, error);
   }
+  if (["request_aborted", "request_timeout"].includes(error.code)) {
+    return controlError(
+      "operation_timeout",
+      "operation_timeout",
+      error.message,
+      error.outcome === "unknown" ? "unknown" : "not_sent",
+      error.outcome === "unknown" ? false : error.retry_safe,
+      error
+    );
+  }
   if (error.outcome === "unknown") {
     return controlError("unknown_outcome", "unknown_error", error.message, "unknown", false, error);
   }
@@ -918,6 +961,36 @@ function mapAdapterError(error: unknown, fallback: string, mutation = false): Ho
     return controlError("service_overloaded", "service_overloaded", error.message, "not_sent", error.retry_safe, error);
   }
   return controlError("runtime_unavailable", "runtime_unavailable", error.message || fallback, "not_sent", error.retry_safe, error);
+}
+
+function requireModelDeadline(candidate: unknown): OperationDeadline {
+  return requireOpenOperationDeadline(
+    candidate,
+    modelDeadlineError,
+    modelInvalidDeadlineError
+  );
+}
+
+function modelInvalidDeadlineError(cause: unknown): HostDeckCodexModelControlError {
+  return controlError(
+    "invalid_request",
+    "validation_error",
+    "The model request deadline is invalid.",
+    "not_sent",
+    false,
+    cause
+  );
+}
+
+function modelDeadlineError(cause: unknown): HostDeckCodexModelControlError {
+  return controlError(
+    "operation_timeout",
+    "operation_timeout",
+    "Codex model operation exceeded its request deadline.",
+    "not_sent",
+    true,
+    cause
+  );
 }
 
 function errorEnvelope(error: HostDeckCodexModelControlError): NonNullable<PendingModelSelection["error"]> {

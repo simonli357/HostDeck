@@ -9,6 +9,7 @@ import {
   usageOperationIntentSchema,
   usageSnapshotSchema
 } from "@hostdeck/contracts";
+import type { OperationDeadline } from "@hostdeck/core";
 import {
   HostDeckAuthRepositoryError,
   type SelectedSessionState,
@@ -72,7 +73,7 @@ describe("selected usage read route", () => {
     let stateThis: unknown = "not-called";
     let usageThis: unknown = "not-called";
     let observedIntent: unknown;
-    let observedSignal: AbortSignal | undefined;
+    let observedDeadline: OperationDeadline | undefined;
     const mutableState: { get: SelectedStateRepository["get"] } = {
       get: function getState(this: void) {
         stateThis = this;
@@ -80,10 +81,10 @@ describe("selected usage read route", () => {
       }
     };
     const mutableUsage: { read: CodexUsageControlService["read"] } = {
-      read: async function readUsage(this: void, intent, signal) {
+      read: async function readUsage(this: void, intent, deadline) {
         usageThis = this;
         observedIntent = intent;
-        observedSignal = signal;
+        observedDeadline = deadline;
         return usageSnapshot();
       }
     };
@@ -120,7 +121,7 @@ describe("selected usage read route", () => {
         codex_thread_id: threadId
       }
     });
-    expect(observedSignal).toBeInstanceOf(AbortSignal);
+    expect(observedDeadline?.signal).toBeInstanceOf(AbortSignal);
 
     const nullState = Object.assign(Object.create(null) as Record<string, unknown>, {
       get: () => selectedState()
@@ -197,7 +198,7 @@ describe("selected usage read route", () => {
   it("composes the real control service on the exact no-store GET and propagates cancellation", async () => {
     let stateReads = 0;
     let accountReads = 0;
-    let observedSignal: AbortSignal | undefined;
+    let observedDeadline: OperationDeadline | undefined;
     const state = selectedState();
     const states = {
       get(candidate: string) {
@@ -215,9 +216,9 @@ describe("selected usage read route", () => {
       get connection_generation() {
         return 3;
       },
-      async readAccount(signal) {
+      async readAccount(deadline) {
         accountReads += 1;
-        observedSignal = signal;
+        observedDeadline = deadline;
         return accountUsageRead();
       }
     };
@@ -238,7 +239,7 @@ describe("selected usage read route", () => {
     expect(response.json()).toEqual(usageSnapshot());
     expect(stateReads).toBe(3);
     expect(accountReads).toBe(1);
-    expect(observedSignal).toBeInstanceOf(AbortSignal);
+    expect(observedDeadline?.signal).toBeInstanceOf(AbortSignal);
 
     const readsBeforeInvalid = stateReads;
     for (const request of [

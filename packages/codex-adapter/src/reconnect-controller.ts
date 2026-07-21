@@ -10,7 +10,11 @@ import {
   type OperationDeadline,
   OperationDeadlineExceededError
 } from "@hostdeck/core";
-import type { CodexProtocolIssue, CodexRequestInput } from "./broker.js";
+import type {
+  CodexProtocolIssue,
+  CodexRequestInput,
+  CodexServerResponseOptions
+} from "./broker.js";
 import {
   type CodexAppServerConnection,
   type CodexConnectionNotification,
@@ -216,8 +220,17 @@ export interface CodexRuntimeReconnectController {
   readonly generation: number;
   readonly start: (signal?: AbortSignal) => Promise<CodexReconnectReady>;
   readonly request: (input: CodexRequestInput) => Promise<unknown>;
-  readonly respondToServerRequest: (id: CodexRequestId, result: unknown) => Promise<void>;
-  readonly rejectServerRequest: (id: CodexRequestId, code: number, message: string) => Promise<void>;
+  readonly respondToServerRequest: (
+    id: CodexRequestId,
+    result: unknown,
+    options?: CodexServerResponseOptions
+  ) => Promise<void>;
+  readonly rejectServerRequest: (
+    id: CodexRequestId,
+    code: number,
+    message: string,
+    options?: CodexServerResponseOptions
+  ) => Promise<void>;
   readonly close: () => Promise<void>;
   readonly snapshot: () => CodexReconnectSnapshot;
 }
@@ -308,10 +321,17 @@ export function createCodexRuntimeReconnectController(
     },
     start: (signal?: AbortSignal) => implementation.start(signal),
     request: (input: CodexRequestInput) => implementation.request(input),
-    respondToServerRequest: (id: CodexRequestId, result: unknown) =>
-      implementation.respondToServerRequest(id, result),
-    rejectServerRequest: (id: CodexRequestId, code: number, message: string) =>
-      implementation.rejectServerRequest(id, code, message),
+    respondToServerRequest: (
+      id: CodexRequestId,
+      result: unknown,
+      responseOptions?: CodexServerResponseOptions
+    ) => implementation.respondToServerRequest(id, result, responseOptions),
+    rejectServerRequest: (
+      id: CodexRequestId,
+      code: number,
+      message: string,
+      responseOptions?: CodexServerResponseOptions
+    ) => implementation.rejectServerRequest(id, code, message, responseOptions),
     close: () => implementation.close(),
     snapshot: () => implementation.snapshot()
   });
@@ -402,14 +422,23 @@ class DefaultCodexRuntimeReconnectController implements CodexRuntimeReconnectCon
     return this.connection.request(input);
   }
 
-  respondToServerRequest(id: CodexRequestId, result: unknown): Promise<void> {
+  respondToServerRequest(
+    id: CodexRequestId,
+    result: unknown,
+    options?: CodexServerResponseOptions
+  ): Promise<void> {
     if (!this.isAdmitted()) return Promise.reject(blockedAdapterError());
-    return this.connection.respondToServerRequest(id, result);
+    return this.connection.respondToServerRequest(id, result, options);
   }
 
-  rejectServerRequest(id: CodexRequestId, code: number, message: string): Promise<void> {
+  rejectServerRequest(
+    id: CodexRequestId,
+    code: number,
+    message: string,
+    options?: CodexServerResponseOptions
+  ): Promise<void> {
     if (!this.isAdmitted()) return Promise.reject(blockedAdapterError());
-    return this.connection.rejectServerRequest(id, code, message);
+    return this.connection.rejectServerRequest(id, code, message, options);
   }
 
   close(): Promise<void> {

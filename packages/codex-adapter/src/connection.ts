@@ -6,7 +6,12 @@ import {
   resourceBudgetDefinitionByKey,
   runtimeCompatibilitySchema
 } from "@hostdeck/contracts";
-import { type CodexProtocolIssue, type CodexRequestInput, createCodexRequestBroker } from "./broker.js";
+import {
+  type CodexProtocolIssue,
+  type CodexRequestInput,
+  type CodexServerResponseOptions,
+  createCodexRequestBroker
+} from "./broker.js";
 import { assessCodexCompatibility, HostDeckCodexCompatibilityError } from "./compatibility.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
 import type { CodexRequestId, DecodedCodexInboundMessage } from "./protocol.js";
@@ -47,8 +52,17 @@ export interface CodexAppServerConnection {
   readonly connect: (signal?: AbortSignal) => Promise<RuntimeCompatibility>;
   readonly reconnect: (signal?: AbortSignal) => Promise<RuntimeCompatibility>;
   readonly request: (input: CodexRequestInput) => Promise<unknown>;
-  readonly respondToServerRequest: (id: CodexRequestId, result: unknown) => Promise<void>;
-  readonly rejectServerRequest: (id: CodexRequestId, code: number, message: string) => Promise<void>;
+  readonly respondToServerRequest: (
+    id: CodexRequestId,
+    result: unknown,
+    options?: CodexServerResponseOptions
+  ) => Promise<void>;
+  readonly rejectServerRequest: (
+    id: CodexRequestId,
+    code: number,
+    message: string,
+    options?: CodexServerResponseOptions
+  ) => Promise<void>;
   readonly close: (reason?: string) => Promise<void>;
 }
 
@@ -237,18 +251,27 @@ class DefaultCodexAppServerConnection implements CodexAppServerConnection {
     return this.connect(signal);
   }
 
-  respondToServerRequest(id: CodexRequestId, result: unknown): Promise<void> {
+  respondToServerRequest(
+    id: CodexRequestId,
+    result: unknown,
+    options?: CodexServerResponseOptions
+  ): Promise<void> {
     if (!["degraded", "ready"].includes(this.currentState) || this.currentCompatibility.mutation_policy !== "allowed") {
       return Promise.reject(connectionError("transport_not_open", "Codex server request cannot be resolved before compatibility is ready."));
     }
-    return this.broker.respondToServerRequest(id, result);
+    return this.broker.respondToServerRequest(id, result, options);
   }
 
-  rejectServerRequest(id: CodexRequestId, code: number, message: string): Promise<void> {
+  rejectServerRequest(
+    id: CodexRequestId,
+    code: number,
+    message: string,
+    options?: CodexServerResponseOptions
+  ): Promise<void> {
     if (!["degraded", "ready"].includes(this.currentState) || this.currentCompatibility.mutation_policy !== "allowed") {
       return Promise.reject(connectionError("transport_not_open", "Codex server request cannot be rejected before compatibility is ready."));
     }
-    return this.broker.rejectServerRequest(id, code, message);
+    return this.broker.rejectServerRequest(id, code, message, options);
   }
 
   async close(reason = "HostDeck closed the Codex app-server connection."): Promise<void> {

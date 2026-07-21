@@ -11,14 +11,20 @@ import {
   selectedSessionProjectionRecordSchema,
   usageAccountSnapshotSchema
 } from "@hostdeck/contracts";
+import type { OperationDeadline } from "@hostdeck/core";
 import type { SelectedSessionState } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
 import {
   type CodexUsageControlErrorCode,
+  type CodexUsageControlServiceOptions,
   type CodexUsageControlStatePort,
-  createCodexUsageControlService,
+  createCodexUsageControlService as createRawCodexUsageControlService,
   HostDeckCodexUsageControlError
 } from "./codex-usage-control-service.js";
+import { withTestOperationDeadlines } from "./test-operation-deadline.js";
+
+const createCodexUsageControlService = (options: CodexUsageControlServiceOptions) =>
+  withTestOperationDeadlines(createRawCodexUsageControlService(options), ["read"]);
 
 const sessionA = "sess_usage_control_a";
 const sessionB = "sess_usage_control_b";
@@ -295,7 +301,7 @@ describe("Codex usage control service", () => {
       ["unsupported_method", "capability_unsupported"],
       ["invalid_protocol_message", "runtime_protocol_error"],
       ["broker_overloaded", "service_overloaded"],
-      ["request_timeout", "runtime_unavailable"]
+      ["request_timeout", "operation_timeout"]
     ] as const;
     for (const [adapterCode, serviceCode] of mappings) {
       const states = new MemoryUsageStates();
@@ -367,7 +373,7 @@ class FakeUsageClient implements CodexUsageClient {
     return this.currentGeneration;
   }
 
-  async readAccount(_signal?: AbortSignal): Promise<CodexAccountUsageRead> {
+  async readAccount(_deadline?: OperationDeadline): Promise<CodexAccountUsageRead> {
     this.reads += 1;
     this.onRead?.();
     if (this.error !== null) throw this.error;

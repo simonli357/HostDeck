@@ -7,9 +7,10 @@ import {
   usageAccountSnapshotSchema,
   usageCalendarDateSchema
 } from "@hostdeck/contracts";
-import type { IsoTimestamp } from "@hostdeck/core";
+import type { IsoTimestamp, OperationDeadline } from "@hostdeck/core";
 import type { CodexRequestInput } from "./broker.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
+import { codexRequestOptionsFromDeadline } from "./request-deadline.js";
 
 export interface CodexAccountUsageRead {
   readonly runtime_version: string;
@@ -33,7 +34,7 @@ export interface CodexUsageClientOptions {
 export interface CodexUsageClient {
   readonly runtime_version: string;
   readonly connection_generation: number;
-  readonly readAccount: (signal?: AbortSignal) => Promise<CodexAccountUsageRead>;
+  readonly readAccount: (deadline?: OperationDeadline) => Promise<CodexAccountUsageRead>;
 }
 
 interface ParsedOptions {
@@ -53,7 +54,7 @@ const summaryKeys = [
 export function createCodexUsageClient(port: CodexUsageRequestPort, options: CodexUsageClientOptions = {}): CodexUsageClient {
   const implementation = new DefaultCodexUsageClient(parsePort(port), parseOptions(options));
   return Object.freeze({
-    readAccount: (signal?: AbortSignal) => implementation.readAccount(signal),
+    readAccount: (deadline?: OperationDeadline) => implementation.readAccount(deadline),
     get runtime_version() {
       return implementation.runtime_version;
     },
@@ -109,15 +110,14 @@ class DefaultCodexUsageClient implements CodexUsageClient {
     return generation;
   }
 
-  async readAccount(signal?: AbortSignal): Promise<CodexAccountUsageRead> {
+  async readAccount(deadline?: OperationDeadline): Promise<CodexAccountUsageRead> {
     const runtimeVersion = this.runtime_version;
     const generation = this.connection_generation;
     const result = await this.port.request({
       method: "account/usage/read",
       params: undefined,
       kind: "read",
-      timeout_ms: this.options.read_timeout_ms,
-      ...(signal === undefined ? {} : { signal })
+      ...codexRequestOptionsFromDeadline(deadline, this.options.read_timeout_ms)
     });
     if (this.connection_generation !== generation) {
       throw adapterError(

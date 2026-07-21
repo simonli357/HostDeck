@@ -25,6 +25,7 @@ import type { CodexThreadId } from "@hostdeck/core";
 import type { SelectedSessionState } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
 import { createCodexSkillsControlService } from "./codex-skills-control-service.js";
+import { withTestOperationDeadlines } from "./test-operation-deadline.js";
 
 const requireSmoke = process.env.HOSTDECK_REQUIRE_CODEX_SKILLS_SMOKE === "1";
 const codexBin = process.env.HOSTDECK_CODEX_BIN ?? "codex";
@@ -107,10 +108,10 @@ describe.skipIf(!requireSmoke)("exact Codex skills-control smoke", () => {
             return connection.request(input);
           }
         });
-        const service = createCodexSkillsControlService({
+        const service = withTestOperationDeadlines(createCodexSkillsControlService({
           skills,
           states: { get: (sessionId) => states.get(sessionId) ?? null }
-        });
+        }), ["list"]);
         const notificationMark = notifications.length;
 
         const firstA = await service.list(skillsIntent(targetA, "op_skills_smoke_a_0001"));

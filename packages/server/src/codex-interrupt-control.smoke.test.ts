@@ -33,6 +33,15 @@ import {
   createCodexInterruptControlService,
   HostDeckCodexInterruptControlError
 } from "./codex-interrupt-control-service.js";
+import {
+  type WithTestOperationDeadlines,
+  withTestOperationDeadlines
+} from "./test-operation-deadline.js";
+
+type TestInterruptControlService = WithTestOperationDeadlines<
+  CodexInterruptControlService,
+  "interrupt" | "waitForTerminal"
+>;
 
 const requireSmoke = process.env.HOSTDECK_REQUIRE_CODEX_INTERRUPT_SMOKE === "1";
 const codexBin = process.env.HOSTDECK_CODEX_BIN ?? "codex";
@@ -125,13 +134,13 @@ describe.skipIf(!requireSmoke)("installed Codex interrupt-control smoke", () => 
           }
         };
         const turns = createCodexTurnClient(turnPort);
-        const service = createCodexInterruptControlService({
+        const service = withTestOperationDeadlines(createCodexInterruptControlService({
           turns,
           states: {
             get: (sessionId) => states.get(sessionId) ?? null,
             getByThreadId: (candidate) => [...states.values()].find((state) => state.mapping.codex_thread_id === candidate) ?? null
           }
-        });
+        }), ["interrupt", "waitForTerminal"]);
         const normalizer = createCodexEventNormalizer({ is_managed_thread: (candidate) => [threadA, threadB].includes(candidate) });
         const cursor = { value: notifications.length };
         const selection = selectBoundedSmokeModel((await createCodexModelClient(connection).listCatalog()).models);
@@ -348,7 +357,7 @@ async function processNotificationsThrough(
   cursor: { value: number },
   endIndex: number,
   normalizer: CodexEventNormalizer,
-  service: CodexInterruptControlService
+  service: TestInterruptControlService
 ): Promise<void> {
   for (let index = cursor.value; index <= endIndex; index += 1) {
     const notification = notifications[index];

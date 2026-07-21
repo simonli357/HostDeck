@@ -242,7 +242,7 @@ export function createHostDeckCompactRouteRegistration(
                     kind: "compact",
                     confirm: true
                   },
-                  request.signal
+                  context.deadline
                 ]);
               } catch (error) {
                 if (error instanceof HostDeckCodexCompactControlError) return compactFailureTransition(error);
@@ -628,6 +628,8 @@ function mapCompactErrorCode(error: HostDeckCodexCompactControlError): ErrorCode
       return "storage_error";
     case "unknown_outcome":
       return "unknown_error";
+    case "operation_timeout":
+      return "operation_timeout";
     case "invalid_request":
       return "internal_error";
   }

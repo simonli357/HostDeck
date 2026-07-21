@@ -8,14 +8,15 @@ import {
   type SkillsSnapshot,
   skillSummarySchema
 } from "@hostdeck/contracts";
-import type { AbsoluteCwd, IsoTimestamp } from "@hostdeck/core";
+import type { AbsoluteCwd, IsoTimestamp, OperationDeadline } from "@hostdeck/core";
 import type { CodexRequestInput } from "./broker.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
 import type { SkillsListParams } from "./generated/v2/SkillsListParams.js";
+import { codexRequestOptionsFromDeadline } from "./request-deadline.js";
 
 export interface CodexSkillsListInput {
   readonly cwd: AbsoluteCwd | string;
-  readonly signal?: AbortSignal;
+  readonly deadline?: OperationDeadline;
 }
 
 export interface CodexSkillsListing {
@@ -144,8 +145,10 @@ class DefaultCodexSkillsClient implements CodexSkillsClient {
       method: "skills/list",
       params,
       kind: "read",
-      timeout_ms: this.options.read_timeout_ms,
-      ...(parsedInput.signal === undefined ? {} : { signal: parsedInput.signal })
+      ...codexRequestOptionsFromDeadline(
+        parsedInput.deadline,
+        this.options.read_timeout_ms
+      )
     });
     const currentGeneration = this.port.generation;
     if (!Number.isSafeInteger(currentGeneration) || currentGeneration < 1 || currentGeneration !== generation) {
@@ -334,22 +337,22 @@ function parseOptions(candidate: unknown): ParsedOptions {
   });
 }
 
-function parseInput(candidate: unknown): { readonly cwd: AbsoluteCwd; readonly signal?: AbortSignal } {
+function parseInput(candidate: unknown): {
+  readonly cwd: AbsoluteCwd;
+  readonly deadline?: unknown;
+} {
   const value = requireInputRecord(candidate, "Codex skills input must be a plain object.");
   if (
-    Object.keys(value).some((key) => !["cwd", "signal"].includes(key)) ||
+    Object.keys(value).some((key) => !["cwd", "deadline"].includes(key)) ||
     !Object.hasOwn(value, "cwd")
   ) {
     throw invalidInput("Codex skills input fields are invalid.");
   }
   const cwd = absoluteCwdSchema.safeParse(value.cwd);
   if (!cwd.success) throw invalidInput("Codex skills cwd is invalid.", cwd.error);
-  if (value.signal !== undefined && !(value.signal instanceof AbortSignal)) {
-    throw invalidInput("Codex skills signal must be an AbortSignal.");
-  }
   return {
     cwd: cwd.data,
-    ...(value.signal === undefined ? {} : { signal: value.signal as AbortSignal })
+    ...(value.deadline === undefined ? {} : { deadline: value.deadline })
   };
 }
 

@@ -23,13 +23,17 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
-import type { ErrorCode, IsoTimestamp } from "@hostdeck/core";
+import type { ErrorCode, IsoTimestamp, OperationDeadline } from "@hostdeck/core";
 import type { SelectedSessionState, SelectedStateRepository } from "@hostdeck/storage";
 import {
   type CodexModelTurnSettingsParticipant,
   type CodexPreparedModelTurnSettings,
   HostDeckCodexModelControlError
 } from "./codex-model-control-service.js";
+import {
+  requireOpenOperationDeadline,
+  runSerializedWithDeadline
+} from "./operation-deadline-serialization.js";
 import type {
   PendingTurnDispatchSettlement,
   PendingTurnSetting,
@@ -41,6 +45,7 @@ type PlanOperationIntent = Extract<SelectedOperationIntent, { readonly kind: "pl
 export type CodexPlanControlErrorCode =
   | "capability_unsupported"
   | "invalid_request"
+  | "operation_timeout"
   | "operation_conflict"
   | "runtime_protocol_error"
   | "runtime_unavailable"
@@ -85,14 +90,14 @@ export interface CodexPlanControlServiceOptions {
 }
 
 export interface CodexPlanControlService extends PendingTurnSettingsReader {
-  readonly snapshot: (target: unknown, signal?: AbortSignal) => Promise<PlanControlSnapshot>;
-  readonly select: (intent: unknown, signal?: AbortSignal) => Promise<PlanControlSnapshot>;
-  readonly dispatchPendingTurn: (input: unknown, signal?: AbortSignal) => Promise<CodexPendingPlanTurnAccepted>;
+  readonly snapshot: (target: unknown, deadline: OperationDeadline) => Promise<PlanControlSnapshot>;
+  readonly select: (intent: unknown, deadline: OperationDeadline) => Promise<PlanControlSnapshot>;
+  readonly dispatchPendingTurn: (input: unknown, deadline: OperationDeadline) => Promise<CodexPendingPlanTurnAccepted>;
   readonly observeEvent: (event: NormalizedCodexEvent) => Promise<void>;
   readonly reconcile: (
     target: unknown,
     expectedPendingRevision: unknown,
-    signal?: AbortSignal
+    deadline?: OperationDeadline
   ) => Promise<PlanControlSnapshot>;
   readonly rehydrate: (target: unknown) => Promise<PlanControlSnapshot["current"]>;
   readonly pending_count: number;
@@ -128,12 +133,12 @@ const idleExecution: PlanExecutionSnapshot = Object.freeze({
 export function createCodexPlanControlService(options: CodexPlanControlServiceOptions): CodexPlanControlService {
   const implementation = new DefaultCodexPlanControlService(options);
   return Object.freeze({
-    snapshot: (target: unknown, signal?: AbortSignal) => implementation.snapshot(target, signal),
-    select: (intent: unknown, signal?: AbortSignal) => implementation.select(intent, signal),
-    dispatchPendingTurn: (input: unknown, signal?: AbortSignal) => implementation.dispatchPendingTurn(input, signal),
+    snapshot: (target: unknown, deadline: OperationDeadline) => implementation.snapshot(target, deadline),
+    select: (intent: unknown, deadline: OperationDeadline) => implementation.select(intent, deadline),
+    dispatchPendingTurn: (input: unknown, deadline: OperationDeadline) => implementation.dispatchPendingTurn(input, deadline),
     observeEvent: (event: NormalizedCodexEvent) => implementation.observeEvent(event),
-    reconcile: (target: unknown, expectedPendingRevision: unknown, signal?: AbortSignal) =>
-      implementation.reconcile(target, expectedPendingRevision, signal),
+    reconcile: (target: unknown, expectedPendingRevision: unknown, deadline?: OperationDeadline) =>
+      implementation.reconcile(target, expectedPendingRevision, deadline),
     rehydrate: (target: unknown) => implementation.rehydrate(target),
     readPendingSettings: (target: ManagedSessionTarget) => implementation.readPendingSettings(target),
     get pending_count() {
@@ -196,19 +201,19 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
     return Object.freeze([Object.freeze({ control: "plan" as const, revision: pending.revision, phase: pending.phase })]);
   }
 
-  async snapshot(targetInput: unknown, signal?: AbortSignal): Promise<PlanControlSnapshot> {
+  async snapshot(targetInput: unknown, deadline: OperationDeadline): Promise<PlanControlSnapshot> {
     const target = parseTarget(targetInput);
     return this.serialized(target.session_id, async () => {
       this.requireTarget(target, false);
-      const catalog = await this.listCatalog(signal);
+      const catalog = await this.listCatalog(deadline);
       this.requireTarget(target, false);
       this.reconcileCatalogDrift(target.session_id, catalog);
       this.reconcileFromCurrent(target.session_id);
       return this.buildSnapshot(target.session_id, catalog);
-    });
+    }, deadline);
   }
 
-  async select(input: unknown, signal?: AbortSignal): Promise<PlanControlSnapshot> {
+  async select(input: unknown, deadline: OperationDeadline): Promise<PlanControlSnapshot> {
     const intent = parsePlanIntent(input);
     return this.serialized(intent.target.session_id, async () => {
       this.requireTarget(intent.target, true);
@@ -236,7 +241,8 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
       if (reserved) this.pendingReservations += 1;
 
       try {
-        const catalog = await this.listCatalog(signal);
+        const catalog = await this.listCatalog(deadline);
+        requirePlanDeadline(deadline);
         this.requireTarget(intent.target, true);
         const mode = modeForAction(intent.action);
         if (!catalog.modes.some((entry) => entry.mode === mode)) {
@@ -271,10 +277,10 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
       } finally {
         if (reserved) this.pendingReservations -= 1;
       }
-    });
+    }, deadline);
   }
 
-  async dispatchPendingTurn(input: unknown, signal?: AbortSignal): Promise<CodexPendingPlanTurnAccepted> {
+  async dispatchPendingTurn(input: unknown, deadline: OperationDeadline): Promise<CodexPendingPlanTurnAccepted> {
     const request = parsePendingTurn(input);
     return this.serialized(request.target.session_id, async () => {
       const state = this.requireTarget(request.target, true);
@@ -290,7 +296,7 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
         );
       }
 
-      const catalog = await this.listCatalog(signal);
+      const catalog = await this.listCatalog(deadline);
       const mode = catalog.modes.find((entry) => entry.mode === pending.mode);
       if (mode === undefined) {
         this.setConflict(request.target.session_id, pending, "The pending Plan mode is absent from the live Codex catalog.", false);
@@ -308,7 +314,7 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
         modelPreparation = await this.options.models.prepareTurnSettings(
           request.target,
           request.expected_model_revision,
-          signal
+          deadline
         );
       } catch (error) {
         this.requireTarget(request.target, false);
@@ -347,6 +353,7 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
 
       let accepted: CodexPlanTurnAccepted;
       try {
+        requirePlanDeadline(deadline);
         accepted = await this.options.plans.startTurn({
           operation_id: request.operation_id,
           thread_id: request.target.codex_thread_id,
@@ -354,7 +361,7 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
           mode,
           runtime_model: resolvedSettings.runtime_model,
           reasoning_effort: resolvedSettings.reasoning_effort,
-          ...(signal === undefined ? {} : { signal })
+          deadline
         });
       } catch (error) {
         const mapped = mapAdapterError(error, "Codex Plan turn dispatch failed.", true);
@@ -406,7 +413,7 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
         plan_revision: pending.revision,
         model_revision: modelPreparation.pending_revision
       });
-    });
+    }, deadline);
   }
 
   async observeEvent(event: NormalizedCodexEvent): Promise<void> {
@@ -462,13 +469,17 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
     });
   }
 
-  async reconcile(targetInput: unknown, expectedPendingRevision: unknown, signal?: AbortSignal): Promise<PlanControlSnapshot> {
+  async reconcile(
+    targetInput: unknown,
+    expectedPendingRevision: unknown,
+    deadline?: OperationDeadline
+  ): Promise<PlanControlSnapshot> {
     const target = parseTarget(targetInput);
     const revision = parseRevision(expectedPendingRevision);
     return this.serialized(target.session_id, async () => {
       this.requireTarget(target, false);
       const pending = this.requirePending(target.session_id, revision);
-      const catalog = await this.listCatalog(signal);
+      const catalog = await this.listCatalog(deadline);
       this.requireTarget(target, false);
       const current = this.currentBySession.get(target.session_id);
       if (current?.state === "confirmed" && current.mode === pending.mode && pending.resolved_settings !== null) {
@@ -485,7 +496,7 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
       }
       this.reconcileCatalogDrift(target.session_id, catalog);
       return this.buildSnapshot(target.session_id, catalog);
-    });
+    }, deadline);
   }
 
   async rehydrate(targetInput: unknown): Promise<PlanControlSnapshot["current"]> {
@@ -722,9 +733,9 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
     }
   }
 
-  private async listCatalog(signal?: AbortSignal): Promise<CodexPlanCatalog> {
+  private async listCatalog(deadline?: OperationDeadline): Promise<CodexPlanCatalog> {
     try {
-      return await this.options.plans.listCatalog(signal);
+      return await this.options.plans.listCatalog(deadline);
     } catch (error) {
       throw mapAdapterError(error, "Codex collaboration catalog could not be read.");
     }
@@ -853,7 +864,21 @@ class DefaultCodexPlanControlService implements CodexPlanControlService {
     return parsed.data;
   }
 
-  private serialized<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
+  private serialized<T>(
+    sessionId: string,
+    operation: () => Promise<T>,
+    deadline?: OperationDeadline
+  ): Promise<T> {
+    if (deadline !== undefined) {
+      return runSerializedWithDeadline(
+        this.tails,
+        sessionId,
+        deadline,
+        planDeadlineError,
+        operation,
+        planInvalidDeadlineError
+      );
+    }
     const prior = this.tails.get(sessionId) ?? Promise.resolve();
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
@@ -1011,6 +1036,16 @@ function mapModelError(error: unknown): HostDeckCodexPlanControlError {
   if (error.code === "service_overloaded") {
     return planError("service_overloaded", error.api_code, error.message, "not_sent", error.retry_safe, error);
   }
+  if (error.code === "operation_timeout") {
+    return planError(
+      "operation_timeout",
+      "operation_timeout",
+      error.message,
+      error.outcome === "unknown" ? "unknown" : "not_sent",
+      error.outcome === "unknown" ? false : error.retry_safe,
+      error
+    );
+  }
   if (["operation_conflict", "model_unknown", "effort_unsupported"].includes(error.code)) {
     return planError("operation_conflict", error.api_code, error.message, "not_sent", error.retry_safe, error);
   }
@@ -1023,6 +1058,16 @@ function mapAdapterError(error: unknown, fallback: string, mutation = false): Ho
   }
   if (error.code === "unsupported_method") {
     return planError("capability_unsupported", "capability_unavailable", error.message, "not_sent", false, error);
+  }
+  if (["request_aborted", "request_timeout"].includes(error.code)) {
+    return planError(
+      "operation_timeout",
+      "operation_timeout",
+      error.message,
+      error.outcome === "unknown" ? "unknown" : "not_sent",
+      error.outcome === "unknown" ? false : error.retry_safe,
+      error
+    );
   }
   if (error.outcome === "unknown") {
     return planError("unknown_outcome", "unknown_error", error.message, "unknown", false, error);
@@ -1040,6 +1085,36 @@ function mapAdapterError(error: unknown, fallback: string, mutation = false): Ho
     return planError("service_overloaded", "service_overloaded", error.message, "not_sent", error.retry_safe, error);
   }
   return planError("runtime_unavailable", "runtime_unavailable", error.message || fallback, "not_sent", error.retry_safe, error);
+}
+
+function requirePlanDeadline(candidate: unknown): OperationDeadline {
+  return requireOpenOperationDeadline(
+    candidate,
+    planDeadlineError,
+    planInvalidDeadlineError
+  );
+}
+
+function planInvalidDeadlineError(cause: unknown): HostDeckCodexPlanControlError {
+  return planError(
+    "invalid_request",
+    "validation_error",
+    "The Plan request deadline is invalid.",
+    "not_sent",
+    false,
+    cause
+  );
+}
+
+function planDeadlineError(cause: unknown): HostDeckCodexPlanControlError {
+  return planError(
+    "operation_timeout",
+    "operation_timeout",
+    "Codex Plan operation exceeded its request deadline.",
+    "not_sent",
+    true,
+    cause
+  );
 }
 
 function settlementForError(error: HostDeckCodexPlanControlError): PendingTurnDispatchSettlement {

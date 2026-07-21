@@ -13,7 +13,7 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
-import { runtimeCapabilities } from "@hostdeck/core";
+import { type OperationDeadline, runtimeCapabilities } from "@hostdeck/core";
 import {
   createSelectedAuditRepository,
   openMigratedDatabase,
@@ -486,6 +486,22 @@ describe("selected managed-session goal routes", () => {
         false
       ],
       [
+        "timeout-not-sent",
+        goalServiceError("operation_timeout", "operation_timeout"),
+        504,
+        "operation_timeout",
+        "failed",
+        false
+      ],
+      [
+        "timeout-unknown",
+        goalServiceError("operation_timeout", "operation_timeout", "unknown"),
+        504,
+        "operation_timeout",
+        "incomplete",
+        false
+      ],
+      [
         "unknown",
         goalServiceError("unknown_outcome", "unknown_error", "unknown"),
         409,
@@ -731,17 +747,17 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
     audit,
     csrf,
     goals: {
-      async snapshot(target: unknown, signal?: AbortSignal) {
+      async snapshot(target: unknown, deadline: OperationDeadline) {
         snapshotCalls.push(target);
-        snapshotSignalObserved = signal instanceof AbortSignal;
+        snapshotSignalObserved = deadline.signal instanceof AbortSignal;
         if (options.snapshotError !== undefined) throw options.snapshotError;
         return sequenceValue(options.snapshotResults ?? [goalSnapshot()], snapshotIndex++);
       },
-      async mutate(this: void, intent: unknown, signal?: AbortSignal) {
+      async mutate(this: void, intent: unknown, deadline: OperationDeadline) {
         mutateThis = this;
         const captured = { ...(intent as Record<string, unknown>) };
         mutateCalls.push(captured);
-        mutateSignalObserved = signal instanceof AbortSignal;
+        mutateSignalObserved = deadline.signal instanceof AbortSignal;
         acceptedBeforeMutate = auditRepository.get(String(captured.operation_id ?? ""))?.records[0]?.phase === "accepted";
         await options.mutateBarrier;
         if (options.mutateError !== undefined) throw options.mutateError;

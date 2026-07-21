@@ -189,7 +189,8 @@ export function createHostDeckSessionStartRouteRegistration(
               let candidate: unknown;
               try {
                 candidate = await Reflect.apply(ports.startSession, undefined, [
-                  startRequest
+                  startRequest,
+                  context.deadline
                 ]);
               } catch (error) {
                 if (!(error instanceof HostDeckManagedCodexThreadServiceError)) {

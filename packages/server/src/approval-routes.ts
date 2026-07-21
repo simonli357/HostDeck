@@ -260,7 +260,8 @@ export function createHostDeckApprovalRouteRegistration(
                     kind: "approval_response",
                     decision: body.decision,
                     confirm: true
-                  }
+                  },
+                  context.deadline
                 ]);
               } catch (error) {
                 if (!(error instanceof HostDeckCodexApprovalControlError)) {
@@ -280,7 +281,10 @@ export function createHostDeckApprovalRouteRegistration(
 
               let terminalCandidate: unknown;
               try {
-                terminalCandidate = await Reflect.apply(ports.waitForTerminal, undefined, [target, request.signal]);
+                terminalCandidate = await Reflect.apply(ports.waitForTerminal, undefined, [
+                  target,
+                  context.deadline
+                ]);
               } catch (error) {
                 if (error instanceof HostDeckCodexApprovalControlError) {
                   return incompleteTransition(mapApprovalErrorCode(error));
@@ -697,6 +701,8 @@ function mapApprovalErrorCode(error: HostDeckCodexApprovalControlError): ErrorCo
       return "storage_error";
     case "unknown_outcome":
       return error.api_code === "operation_timeout" ? "operation_timeout" : "unknown_error";
+    case "operation_timeout":
+      return "operation_timeout";
     case "invalid_request":
       return "internal_error";
   }

@@ -169,7 +169,7 @@ describe("managed-session interrupt selected vertical", () => {
           operation_id: operationId,
           thread_id: threadId,
           turn_id: turnId,
-          signal: expect.any(AbortSignal)
+          deadline: expect.objectContaining({ signal: expect.any(AbortSignal) })
         }
       ]);
       expect(await interruptService.snapshot(turnTarget(sessionId, threadId, turnId))).toMatchObject({

@@ -24,6 +24,7 @@ import {
   createCodexPlanControlService,
   HostDeckCodexPlanControlError
 } from "./codex-plan-control-service.js";
+import { withTestOperationDeadlines } from "./test-operation-deadline.js";
 
 const observedAt = "2026-07-10T21:00:00.000Z";
 const targetA = {
@@ -242,7 +243,10 @@ describe("Codex pending Plan control", () => {
     });
     const modelRevision = uncertainModel.pending?.revision ?? 0;
     const planRevision = uncertainPlan.pending?.revision ?? 0;
-    await expectPlanError(uncertain.planService.dispatchPendingTurn(planTurn(planRevision, modelRevision)), "unknown_outcome");
+    await expectPlanError(
+      uncertain.planService.dispatchPendingTurn(planTurn(planRevision, modelRevision)),
+      "operation_timeout"
+    );
     expect((await uncertain.planService.snapshot(targetA)).pending).toMatchObject({ phase: "unknown" });
     expect((await uncertain.modelService.snapshot(targetA)).pending).toMatchObject({ phase: "unknown" });
     await expectPlanError(uncertain.planService.dispatchPendingTurn(planTurn(planRevision, modelRevision)), "operation_conflict");
@@ -503,15 +507,18 @@ function createHarness(options: { includeSecondState?: boolean; maxPendingSelect
     getByThreadId: (threadId) => [...states.values()].find((state) => state.mapping.codex_thread_id === threadId) ?? null
   };
   const models = fakeModels();
-  const modelService = createCodexModelControlService({ models, states: statePort, now: () => observedAt });
+  const modelService = withTestOperationDeadlines(
+    createCodexModelControlService({ models, states: statePort, now: () => observedAt }),
+    ["dispatchPendingTurn", "prepareTurnSettings", "select", "snapshot"]
+  );
   const plans = fakePlans();
-  const planService = createCodexPlanControlService({
+  const planService = withTestOperationDeadlines(createCodexPlanControlService({
     plans,
     models: modelService,
     states: statePort,
     ...(options.maxPendingSelections === undefined ? {} : { max_pending_selections: options.maxPendingSelections }),
     now: () => observedAt
-  });
+  }), ["dispatchPendingTurn", "select", "snapshot"]);
   return { states, models, modelService, plans, planService };
 }
 

@@ -17,6 +17,15 @@ import {
   createCodexApprovalControlService,
   HostDeckCodexApprovalControlError
 } from "./codex-approval-control-service.js";
+import {
+  type WithTestOperationDeadlines,
+  withTestOperationDeadlines
+} from "./test-operation-deadline.js";
+
+type TestApprovalControlService = WithTestOperationDeadlines<
+  CodexApprovalControlService,
+  "respond" | "waitForTerminal"
+>;
 
 const observedAt = "2026-07-10T21:45:00.000Z";
 const expiresAt = "2026-07-10T21:45:01.000Z";
@@ -25,7 +34,7 @@ const target = {
   session_id: "sess_approval_a",
   codex_thread_id: "thread-approval-a"
 } as const;
-const services: CodexApprovalControlService[] = [];
+const services: TestApprovalControlService[] = [];
 
 afterEach(() => {
   for (const service of services.splice(0)) service.close();
@@ -433,7 +442,7 @@ describe("Codex approval control", () => {
     const terminal = harness.service.waitForTerminal(registered.target, controller.signal);
     controller.abort();
 
-    const error = await expectApprovalError(terminal, "unknown_outcome");
+    const error = await expectApprovalError(terminal, "operation_timeout");
     expect(error).toMatchObject({ api_code: "operation_timeout", outcome: "unknown", retry_safe: false });
     await expectApprovalError(
       harness.service.respond(responseIntent(registered, "approve", "op_approval_terminal_abort_retry_0001")),
@@ -584,7 +593,7 @@ interface FakeApprovalClient extends CodexApprovalClient {
 }
 
 interface Harness {
-  readonly service: CodexApprovalControlService;
+  readonly service: TestApprovalControlService;
   readonly approvals: FakeApprovalClient;
   readonly states: Map<string, SelectedSessionState>;
   readonly now: { value: string };
@@ -612,7 +621,7 @@ function createHarness(options: { readonly max_tracked_approvals?: number } = {}
   const now = { value: observedAt };
   const backgroundErrors: Error[] = [];
   const stateErrors = { get: null as Error | null, getByThreadId: null as Error | null };
-  const service = createCodexApprovalControlService({
+  const service = withTestOperationDeadlines(createCodexApprovalControlService({
     approvals,
     states: {
       get: (sessionId) => {
@@ -628,7 +637,7 @@ function createHarness(options: { readonly max_tracked_approvals?: number } = {}
     ...(options.max_tracked_approvals === undefined ? {} : { max_tracked_approvals: options.max_tracked_approvals }),
     now: () => now.value,
     on_background_error: (error) => backgroundErrors.push(error)
-  });
+  }), ["respond", "waitForTerminal"]);
   services.push(service);
   return { service, approvals, states, now, backgroundErrors, stateErrors };
 }

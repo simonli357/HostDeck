@@ -73,6 +73,15 @@ import {
 import { selectStructuredVerticalPlanModel } from "./codex-structured-vertical-selection.js";
 import { createCodexUsageControlService } from "./codex-usage-control-service.js";
 import { combinePendingTurnSettingsReaders } from "./pending-turn-settings.js";
+import {
+  type WithTestOperationDeadlines,
+  withTestOperationDeadlines
+} from "./test-operation-deadline.js";
+
+type TestApprovalControlService = WithTestOperationDeadlines<
+  CodexApprovalControlService,
+  "respond" | "waitForTerminal"
+>;
 
 const requireSmoke = process.env.HOSTDECK_REQUIRE_CODEX_VERTICAL_SMOKE === "1";
 const overallTimeoutMs = 360_000;
@@ -186,7 +195,7 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
       let expectedGeneration: number | null = null;
       let pipeline: CodexEventPipeline | null = null;
       let callbackMode: "buffering" | "live" = "buffering";
-      let approvals: CodexApprovalControlService | null = null;
+      let approvals: TestApprovalControlService | null = null;
       let tui: TuiProbe | null = null;
       const threadIds: CodexThreadId[] = [];
       const compactProgressEvidence: string[] = [];
@@ -272,47 +281,50 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
         repository.create(selectedState(targetB, projectB, version, createdAt));
         prove(proof, "two durable managed mappings created", "read_back");
 
-        const modelControl = createCodexModelControlService({
+        const modelControl = withTestOperationDeadlines(createCodexModelControlService({
           models: createCodexModelClient(port),
           states: repository
-        });
-        const planControl = createCodexPlanControlService({
+        }), ["dispatchPendingTurn", "prepareTurnSettings", "select", "snapshot"]);
+        const planControl = withTestOperationDeadlines(createCodexPlanControlService({
           plans: createCodexPlanClient(port),
           models: modelControl,
           states: repository
-        });
+        }), ["dispatchPendingTurn", "select", "snapshot"]);
         const pendingSettings = combinePendingTurnSettingsReaders([modelControl, planControl]);
-        const goalControl = createCodexGoalControlService({
+        const goalControl = withTestOperationDeadlines(createCodexGoalControlService({
           goals: createCodexGoalClient(port),
           states: repository,
           pending_settings: pendingSettings
-        });
+        }), ["mutate", "snapshot"]);
         const turnClient = createCodexTurnClient(port);
-        const promptControl = createCodexPromptControlService({
+        const promptControl = withTestOperationDeadlines(createCodexPromptControlService({
           turns: turnClient,
           models: modelControl,
           plans: planControl,
           states: repository
-        });
-        const usageControl = createCodexUsageControlService({
+        }), ["dispatch"]);
+        const usageControl = withTestOperationDeadlines(createCodexUsageControlService({
           usage: createCodexUsageClient(port),
           states: repository
-        });
-        const compactControl = createCodexCompactControlService({
+        }), ["read"]);
+        const compactControl = withTestOperationDeadlines(createCodexCompactControlService({
           compact: createCodexCompactClient(port),
           states: repository
-        });
-        const skillsControl = createCodexSkillsControlService({
+        }), ["compact"]);
+        const skillsControl = withTestOperationDeadlines(createCodexSkillsControlService({
           skills: createCodexSkillsClient(port),
           states: repository
-        });
-        approvals = createCodexApprovalControlService({
+        }), ["list"]);
+        approvals = withTestOperationDeadlines(createCodexApprovalControlService({
           approvals: createCodexApprovalClient(connection),
           states: repository,
           expiry_ms: 30_000,
           on_background_error: (error) => backgroundErrors.push(error)
-        });
-        const interruptControl = createCodexInterruptControlService({ turns: turnClient, states: repository });
+        }), ["respond", "waitForTerminal"]);
+        const interruptControl = withTestOperationDeadlines(
+          createCodexInterruptControlService({ turns: turnClient, states: repository }),
+          ["interrupt", "waitForTerminal"]
+        );
         const controlObserver = createCodexControlEventObserver({
           plans: planControl,
           goals: goalControl,

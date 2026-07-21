@@ -9,10 +9,16 @@ import {
   type RuntimeCompatibility,
   resourceBudgetDefinitionByKey
 } from "@hostdeck/contracts";
-import type { ClientOperationId, CodexThreadId, IsoTimestamp } from "@hostdeck/core";
+import type {
+  ClientOperationId,
+  CodexThreadId,
+  IsoTimestamp,
+  OperationDeadline
+} from "@hostdeck/core";
 import type { CodexRequestInput } from "./broker.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
 import type { CollaborationModeListParams } from "./generated/v2/CollaborationModeListParams.js";
+import { codexRequestOptionsFromDeadline } from "./request-deadline.js";
 import { type CodexTurnAccepted, type CodexTurnClient, createCodexTurnClient } from "./turn-client.js";
 
 export interface CodexPlanCatalog {
@@ -28,7 +34,7 @@ export interface CodexPlanTurnStartInput {
   readonly mode: PlanModeCatalogEntry;
   readonly runtime_model: string;
   readonly reasoning_effort: string | null;
-  readonly signal?: AbortSignal;
+  readonly deadline?: OperationDeadline;
 }
 
 export interface CodexPlanTurnAccepted extends CodexTurnAccepted {}
@@ -47,7 +53,7 @@ export interface CodexPlanClientOptions {
 
 export interface CodexPlanClient {
   readonly runtime_version: string;
-  readonly listCatalog: (signal?: AbortSignal) => Promise<CodexPlanCatalog>;
+  readonly listCatalog: (deadline?: OperationDeadline) => Promise<CodexPlanCatalog>;
   readonly startTurn: (input: CodexPlanTurnStartInput) => Promise<CodexPlanTurnAccepted>;
 }
 
@@ -91,7 +97,7 @@ class DefaultCodexPlanClient implements CodexPlanClient {
     return compatibility.observed_version;
   }
 
-  async listCatalog(signal?: AbortSignal): Promise<CodexPlanCatalog> {
+  async listCatalog(deadline?: OperationDeadline): Promise<CodexPlanCatalog> {
     void this.runtime_version;
     const params = {} satisfies CollaborationModeListParams;
     const result = requireRecord(
@@ -99,8 +105,7 @@ class DefaultCodexPlanClient implements CodexPlanClient {
         method: "collaborationMode/list",
         params,
         kind: "read",
-        timeout_ms: this.options.read_timeout_ms,
-        ...(signal === undefined ? {} : { signal })
+        ...codexRequestOptionsFromDeadline(deadline, this.options.read_timeout_ms)
       }),
       "Codex collaborationMode/list result must be an object."
     );
@@ -131,7 +136,7 @@ class DefaultCodexPlanClient implements CodexPlanClient {
         runtime_model: input.runtime_model,
         reasoning_effort: input.reasoning_effort
       },
-      ...(input.signal === undefined ? {} : { signal: input.signal })
+      ...(input.deadline === undefined ? {} : { deadline: input.deadline })
     });
   }
 }

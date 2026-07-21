@@ -258,6 +258,20 @@ describe("selected managed-session start route", () => {
         "failed"
       ],
       [
+        "timeout-not-sent",
+        serviceError("operation_timeout", "not_sent"),
+        504,
+        "operation_timeout",
+        "failed"
+      ],
+      [
+        "timeout-unknown",
+        serviceError("operation_timeout", "unknown"),
+        504,
+        "operation_timeout",
+        "incomplete"
+      ],
+      [
         "post-thread-storage",
         serviceError("storage_error", "remote_succeeded", "thread-route-start-001"),
         500,

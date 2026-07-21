@@ -5,7 +5,14 @@ import {
   type ResourceBudget,
   type RuntimeCompatibility
 } from "@hostdeck/contracts";
-import type { AbsoluteCwd, CodexThreadId, CodexTurnId, IsoTimestamp } from "@hostdeck/core";
+import {
+  type AbsoluteCwd,
+  type CodexThreadId,
+  type CodexTurnId,
+  createOperationDeadlineView,
+  type IsoTimestamp,
+  type OperationDeadline
+} from "@hostdeck/core";
 import type { CodexRequestInput } from "./broker.js";
 import {
   type CodexAdapterErrorCode,
@@ -283,7 +290,10 @@ export function createCodexReconciliationReadClient(
     generation,
     listAllThreads,
     readThread,
-    readGoal: (threadId: CodexThreadId | string, signal?: AbortSignal) => goals.read(threadId, signal),
+    readGoal: (threadId: CodexThreadId | string, signal?: AbortSignal) =>
+      withSignalDeadline(signal, options.thread.read_timeout_ms, (deadline) =>
+        goals.read(threadId, deadline)
+      ),
     readLatestTurn
   });
 }
@@ -307,8 +317,25 @@ export function createCodexReconciliationResubscribeClient(
       return models.runtime_version;
     },
     generation,
-    resumeThread: (threadId: CodexThreadId | string, signal?: AbortSignal) => models.readCurrent(threadId, signal)
+    resumeThread: (threadId: CodexThreadId | string, signal?: AbortSignal) =>
+      withSignalDeadline(signal, options.model.read_timeout_ms, (deadline) =>
+        models.readCurrent(threadId, deadline)
+      )
   });
+}
+
+async function withSignalDeadline<T>(
+  signal: AbortSignal | undefined,
+  timeoutMs: number,
+  operation: (deadline: OperationDeadline | undefined) => Promise<T>
+): Promise<T> {
+  if (signal === undefined) return operation(undefined);
+  const deadline = createOperationDeadlineView({ timeoutMs, signal });
+  try {
+    return await operation(deadline);
+  } finally {
+    deadline.dispose();
+  }
 }
 
 function createGuardedPort<

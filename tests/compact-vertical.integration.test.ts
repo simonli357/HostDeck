@@ -152,7 +152,8 @@ describe("managed-session compact selected vertical", () => {
       });
       expect(runtimeCompact.calls).toHaveLength(1);
       expect(runtimeCompact.calls[0]).toMatchObject({ operation_id: operationId, thread_id: threadId });
-      expect(runtimeCompact.calls[0]?.signal).toBeInstanceOf(AbortSignal);
+      expect(runtimeCompact.calls[0]?.deadline).toBeDefined();
+      expect(runtimeCompact.calls[0]?.deadline?.signal).toBeInstanceOf(AbortSignal);
 
       const second = await runCli(["--api-url", apiUrl, "compact", secondSessionId, "--json"], { env: {} });
       expect(second).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });

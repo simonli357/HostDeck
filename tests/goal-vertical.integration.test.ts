@@ -29,6 +29,7 @@ import {
   createHostDeckSelectedWriteAdmissionPolicy,
   createHostDeckSelectedWriteAuditExecutor
 } from "../packages/server/src/index.js";
+import { testOperationDeadline } from "../packages/server/src/test-operation-deadline.js";
 import {
   createSelectedAuditRepository,
   createSelectedStateRepository,
@@ -219,7 +220,15 @@ describe("managed-session goal selected vertical", () => {
       expect(secondRead).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });
       expect(JSON.parse(secondRead.stdout)).toEqual({ goal: null, uncertain_mutation: null });
       expect(runtimeGoals.current(secondThreadId)).toBeNull();
-      expect(await goalService.snapshot(secondTarget)).toEqual({ goal: null, uncertain_mutation: null });
+      const directDeadline = testOperationDeadline();
+      try {
+        expect(await goalService.snapshot(secondTarget, directDeadline)).toEqual({
+          goal: null,
+          uncertain_mutation: null
+        });
+      } finally {
+        directDeadline.dispose();
+      }
       expect(states.require(sessionId).projection.session.turn_state).toBe("idle");
       expect(states.require(secondSessionId).projection.session.turn_state).toBe("idle");
 

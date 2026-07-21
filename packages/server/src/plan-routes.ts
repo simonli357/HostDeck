@@ -11,7 +11,7 @@ import {
   selectedSessionProjectionRecordSchema,
   sessionIdParamsSchema
 } from "@hostdeck/contracts";
-import type { ErrorCode } from "@hostdeck/core";
+import type { ErrorCode, OperationDeadline } from "@hostdeck/core";
 import type { SelectedStateRepository } from "@hostdeck/storage";
 import type { FastifyReply } from "fastify";
 import { z } from "zod";
@@ -23,7 +23,8 @@ import { assertHostDeckCsrfPolicy, type HostDeckCsrfPolicy } from "./csrf-routes
 import {
   type HostDeckFastifyInstance,
   type HostDeckRoutePluginRegistration,
-  hostDeckNoStoreRouteConfig
+  hostDeckNoStoreRouteConfig,
+  hostDeckRequestDeadline
 } from "./fastify-app.js";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import { requireHostDeckRequestAuthentication } from "./fastify-request-authentication.js";
@@ -152,7 +153,11 @@ export function createHostDeckPlanRouteRegistration(
           rejectReadBody(request.body, request.headers["content-length"], request.headers["transfer-encoding"]);
           const params = sessionIdParamsSchema.parse(request.params);
           const admitted = resolvePlanAdmission(ports, params.session_id, false);
-          const snapshot = await readPlanSnapshot(ports.readPlanSnapshot, admitted.target, request.signal);
+          const snapshot = await readPlanSnapshot(
+            ports.readPlanSnapshot,
+            admitted.target,
+            hostDeckRequestDeadline(request)
+          );
           const verified = resolvePlanAdmission(ports, params.session_id, false);
           requireSameAdmission(admitted, verified, "read");
           return snapshot;
@@ -245,7 +250,7 @@ export function createHostDeckPlanRouteRegistration(
                     action: body.action,
                     expected_pending_revision: body.expected_pending_revision
                   },
-                  request.signal
+                  context.deadline
                 ]);
               } catch (error) {
                 if (error instanceof HostDeckCodexPlanControlError) {
@@ -496,11 +501,11 @@ function resolveRuntime(
 async function readPlanSnapshot(
   readSnapshot: ReadPlanSnapshot,
   target: ManagedSessionTarget,
-  signal: AbortSignal
+  deadline: OperationDeadline
 ): Promise<PlanControlSnapshot> {
   let candidate: unknown;
   try {
-    candidate = await Reflect.apply(readSnapshot, undefined, [target, signal]);
+    candidate = await Reflect.apply(readSnapshot, undefined, [target, deadline]);
   } catch (error) {
     if (error instanceof HostDeckCodexPlanControlError) throw publicPlanFailure(mapPlanErrorCode(error));
     throw planHttpError(500, "internal_error", "Plan state could not be read.", false);
@@ -609,6 +614,8 @@ function mapPlanErrorCode(error: HostDeckCodexPlanControlError): ErrorCode {
       return "service_overloaded";
     case "unknown_outcome":
       return "unknown_error";
+    case "operation_timeout":
+      return "operation_timeout";
     case "invalid_request":
       return "internal_error";
   }

@@ -23,6 +23,7 @@ import { createCodexEventPipeline } from "../packages/server/src/codex-event-pip
 import { createCodexModelControlService } from "../packages/server/src/codex-model-control-service.js";
 import { createCodexPlanControlService } from "../packages/server/src/codex-plan-control-service.js";
 import { createCodexRuntimeReconciliationLifecycle } from "../packages/server/src/codex-runtime-reconciliation-lifecycle.js";
+import { withTestOperationDeadlines } from "../packages/server/src/test-operation-deadline.js";
 import {
   createProductionProjectionAppendPort,
   createProductionProjectionContinuityPort,
@@ -93,12 +94,15 @@ describe("selected runtime crash reconciliation integration", () => {
       states,
       now: wall.now
     });
-    const planControl = createCodexPlanControlService({
-      plans: fakePlanClient(),
-      models: modelControl,
-      states,
-      now: wall.now
-    });
+    const planControl = withTestOperationDeadlines(
+      createCodexPlanControlService({
+        plans: fakePlanClient(),
+        models: modelControl,
+        states,
+        now: wall.now
+      }),
+      ["snapshot"]
+    );
     let approvalService: CodexApprovalControlService | null = null;
     const observedApprovals: Array<{ readonly generation: number; readonly request_id: string }> = [];
     const backgroundErrors: Error[] = [];

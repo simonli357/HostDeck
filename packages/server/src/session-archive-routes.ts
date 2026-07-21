@@ -223,7 +223,8 @@ export function createHostDeckSessionArchiveRouteRegistration(
               let candidate: unknown;
               try {
                 candidate = await Reflect.apply(ports.archiveSession, undefined, [
-                  target.session_id
+                  target.session_id,
+                  context.deadline
                 ]);
               } catch (error) {
                 if (!(error instanceof HostDeckManagedCodexThreadServiceError)) throw error;

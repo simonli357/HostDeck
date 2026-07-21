@@ -85,6 +85,10 @@ export interface CodexCompactResourceOptions {
   readonly mutation_timeout_ms: number;
 }
 
+export interface CodexApprovalResourceOptions {
+  readonly mutation_timeout_ms: number;
+}
+
 export interface CodexSkillsResourceOptions {
   readonly max_entries_per_cwd: number;
   readonly max_errors_per_cwd: number;
@@ -102,6 +106,7 @@ export interface CodexResourceOptions {
   readonly plan: CodexPlanResourceOptions;
   readonly usage: CodexUsageResourceOptions;
   readonly compact: CodexCompactResourceOptions;
+  readonly approval: CodexApprovalResourceOptions;
   readonly skills: CodexSkillsResourceOptions;
 }
 
@@ -153,6 +158,9 @@ export function codexResourceOptionsFromBudget(input: unknown): CodexResourceOpt
       read_timeout_ms: budget.protocol_read_timeout_ms
     }),
     compact: Object.freeze({
+      mutation_timeout_ms: budget.protocol_mutation_timeout_ms
+    }),
+    approval: Object.freeze({
       mutation_timeout_ms: budget.protocol_mutation_timeout_ms
     }),
     skills: Object.freeze({

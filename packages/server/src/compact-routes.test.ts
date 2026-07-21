@@ -11,7 +11,7 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
-import { runtimeCapabilities } from "@hostdeck/core";
+import { type OperationDeadline, runtimeCapabilities } from "@hostdeck/core";
 import {
   createSelectedAuditRepository,
   openMigratedDatabase,
@@ -628,11 +628,11 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
         if (options.snapshotError !== undefined) throw options.snapshotError;
         return sequenceValue(options.snapshotResults ?? [null], snapshotIndex++);
       },
-      async compact(this: void, intent: unknown, signal?: AbortSignal) {
+      async compact(this: void, intent: unknown, deadline: OperationDeadline) {
         startThis = this;
         const captured = { ...(intent as Record<string, unknown>) };
         startCalls.push(captured);
-        startSignalObserved = signal instanceof AbortSignal;
+        startSignalObserved = deadline.signal instanceof AbortSignal;
         acceptedBeforeStart = auditRepository.get(String(captured.operation_id ?? ""))?.records[0]?.phase === "accepted";
         await options.startBarrier;
         if (options.startError !== undefined) throw options.startError;

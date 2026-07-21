@@ -140,10 +140,10 @@ describe("selected write admission cross-route vertical", () => {
           error: null
         };
       },
-      async dispatch(candidate, signal) {
+      async dispatch(candidate, deadline) {
         const intent = promptOperationIntentSchema.parse(candidate);
-        if (!(signal instanceof AbortSignal)) {
-          throw new TypeError("Prompt dispatch signal is unavailable.");
+        if (!(deadline.signal instanceof AbortSignal) || deadline.signal.aborted) {
+          throw new TypeError("Prompt dispatch deadline is unavailable.");
         }
         promptDispatches.push(intent);
         promptStarted.resolve();
@@ -166,7 +166,10 @@ describe("selected write admission cross-route vertical", () => {
         if (state === undefined) throw new Error("Unknown admission vertical session.");
         return state;
       },
-      async archive(sessionId) {
+      async archive(sessionId, deadline) {
+        if (!(deadline.signal instanceof AbortSignal) || deadline.signal.aborted) {
+          throw new TypeError("Archive deadline is unavailable.");
+        }
         const active = activeStates.get(sessionId);
         if (active === undefined) throw new Error("Unknown admission vertical session.");
         archiveCalls.push(sessionId);

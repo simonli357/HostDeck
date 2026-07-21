@@ -8,7 +8,7 @@ import {
   type NormalizedCodexEvent
 } from "@hostdeck/codex-adapter";
 import type { ManagedSessionTarget } from "@hostdeck/contracts";
-import type { CodexThreadId } from "@hostdeck/core";
+import type { CodexThreadId, OperationDeadline } from "@hostdeck/core";
 import type { SelectedSessionState } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
 import { HostDeckCodexModelControlError } from "./codex-model-control-service.js";
@@ -21,6 +21,10 @@ import {
   HostDeckCodexPromptControlError
 } from "./codex-prompt-control-service.js";
 import type { PendingTurnSetting } from "./pending-turn-settings.js";
+import {
+  testOperationDeadline,
+  withTestOperationDeadlines
+} from "./test-operation-deadline.js";
 
 const observedAt = "2026-07-10T23:00:00.000Z";
 const targetA = {
@@ -135,30 +139,42 @@ describe("Codex prompt control", () => {
   it("routes an exact pending model revision without calling the plain start path", async () => {
     const harness = createHarness();
     harness.models.settings.set(targetA.session_id, pending("model", 4));
-    const result = await harness.service.dispatch(promptIntent());
-    expect(result).toMatchObject({ action: "start", model_revision: 4, plan_revision: null });
-    expect(harness.models.dispatchCalls).toEqual([
-      expect.objectContaining({ operation_id: "op_prompt_start_0001", expected_pending_revision: 4 })
-    ]);
-    expect(harness.plans.dispatchCalls).toHaveLength(0);
-    expect(harness.turns.startCalls).toHaveLength(0);
+    const deadline = testOperationDeadline();
+    try {
+      const result = await harness.service.dispatch(promptIntent(), deadline);
+      expect(result).toMatchObject({ action: "start", model_revision: 4, plan_revision: null });
+      expect(harness.models.dispatchCalls).toEqual([
+        expect.objectContaining({ operation_id: "op_prompt_start_0001", expected_pending_revision: 4 })
+      ]);
+      expect(harness.models.dispatchDeadlines).toEqual([deadline]);
+      expect(harness.plans.dispatchCalls).toHaveLength(0);
+      expect(harness.turns.startCalls).toHaveLength(0);
+    } finally {
+      deadline.dispose();
+    }
   });
 
   it("routes model plus Plan revisions through the single combined Plan path", async () => {
     const harness = createHarness();
     harness.models.settings.set(targetA.session_id, pending("model", 5));
     harness.plans.settings.set(targetA.session_id, pending("plan", 7));
-    const result = await harness.service.dispatch(promptIntent());
-    expect(result).toMatchObject({ action: "start", model_revision: 5, plan_revision: 7 });
-    expect(harness.plans.dispatchCalls).toEqual([
-      expect.objectContaining({
-        operation_id: "op_prompt_start_0001",
-        expected_model_revision: 5,
-        expected_plan_revision: 7
-      })
-    ]);
-    expect(harness.models.dispatchCalls).toHaveLength(0);
-    expect(harness.turns.startCalls).toHaveLength(0);
+    const deadline = testOperationDeadline();
+    try {
+      const result = await harness.service.dispatch(promptIntent(), deadline);
+      expect(result).toMatchObject({ action: "start", model_revision: 5, plan_revision: 7 });
+      expect(harness.plans.dispatchCalls).toEqual([
+        expect.objectContaining({
+          operation_id: "op_prompt_start_0001",
+          expected_model_revision: 5,
+          expected_plan_revision: 7
+        })
+      ]);
+      expect(harness.plans.dispatchDeadlines).toEqual([deadline]);
+      expect(harness.models.dispatchCalls).toHaveLength(0);
+      expect(harness.turns.startCalls).toHaveLength(0);
+    } finally {
+      deadline.dispose();
+    }
   });
 
   it("latches the exact accepted turn when returned pending revisions contradict the atomic snapshot", async () => {
@@ -270,7 +286,7 @@ describe("Codex prompt control", () => {
       outcome: "unknown",
       retry_safe: false
     });
-    await expectPromptError(harness.service.dispatch(promptIntent()), "unknown_outcome");
+    await expectPromptError(harness.service.dispatch(promptIntent()), "operation_timeout");
     const unknownSnapshot = await harness.service.snapshot(targetA);
     expect(unknownSnapshot).toMatchObject({ phase: "unknown", turn_id: null });
     expect(Object.isFrozen(unknownSnapshot.error)).toBe(true);
@@ -419,6 +435,7 @@ interface FakeTurns extends CodexTurnClient {
 interface FakePendingPort {
   readonly settings: Map<string, PendingTurnSetting>;
   readonly dispatchCalls: Array<Record<string, unknown>>;
+  readonly dispatchDeadlines: OperationDeadline[];
   dispatchGate: Promise<void> | null;
   dispatchError: Error | null;
   readError: Error | null;
@@ -436,14 +453,14 @@ function createHarness(options: { includeSecondState?: boolean; maxTrackedTurns?
   const turns = fakeTurns();
   const models = fakeModelPort();
   const plans = fakePlanPort();
-  const service = createCodexPromptControlService({
+  const service = withTestOperationDeadlines(createCodexPromptControlService({
     turns,
     models,
     plans,
     states: statePort,
     ...(options.maxTrackedTurns === undefined ? {} : { max_tracked_turns: options.maxTrackedTurns }),
     now: () => observedAt
-  });
+  }), ["dispatch"]);
   return { service, turns, models, plans, states };
 }
 
@@ -499,9 +516,11 @@ function fakeTurns(): FakeTurns {
 function fakeModelPort(): CodexPromptModelPort & FakePendingPort {
   const settings = new Map<string, PendingTurnSetting>();
   const dispatchCalls: Array<Record<string, unknown>> = [];
+  const dispatchDeadlines: OperationDeadline[] = [];
   return {
     settings,
     dispatchCalls,
+    dispatchDeadlines,
     dispatchGate: null,
     dispatchError: null,
     readError: null,
@@ -511,8 +530,9 @@ function fakeModelPort(): CodexPromptModelPort & FakePendingPort {
       const setting = settings.get(target.session_id);
       return setting === undefined ? [] : [setting];
     },
-    async dispatchPendingTurn(input) {
+    async dispatchPendingTurn(input, deadline) {
       dispatchCalls.push(input as Record<string, unknown>);
+      dispatchDeadlines.push(deadline);
       if (this.dispatchGate !== null) await this.dispatchGate;
       if (this.dispatchError !== null) throw this.dispatchError;
       const value = input as Record<string, unknown>;
@@ -530,9 +550,11 @@ function fakeModelPort(): CodexPromptModelPort & FakePendingPort {
 function fakePlanPort(): CodexPromptPlanPort & FakePendingPort {
   const settings = new Map<string, PendingTurnSetting>();
   const dispatchCalls: Array<Record<string, unknown>> = [];
+  const dispatchDeadlines: OperationDeadline[] = [];
   return {
     settings,
     dispatchCalls,
+    dispatchDeadlines,
     dispatchGate: null,
     dispatchError: null,
     readError: null,
@@ -542,8 +564,9 @@ function fakePlanPort(): CodexPromptPlanPort & FakePendingPort {
       const setting = settings.get(target.session_id);
       return setting === undefined ? [] : [setting];
     },
-    async dispatchPendingTurn(input) {
+    async dispatchPendingTurn(input, deadline) {
       dispatchCalls.push(input as Record<string, unknown>);
+      dispatchDeadlines.push(deadline);
       if (this.dispatchGate !== null) await this.dispatchGate;
       if (this.dispatchError !== null) throw this.dispatchError;
       const value = input as Record<string, unknown>;

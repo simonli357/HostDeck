@@ -9,6 +9,7 @@ import {
   usageOperationIntentSchema,
   usageSnapshotSchema
 } from "@hostdeck/contracts";
+import type { OperationDeadline } from "@hostdeck/core";
 import type { SelectedStateRepository } from "@hostdeck/storage";
 import { z } from "zod";
 import {
@@ -17,7 +18,8 @@ import {
 } from "./codex-usage-control-service.js";
 import {
   type HostDeckRoutePluginRegistration,
-  hostDeckNoStoreRouteConfig
+  hostDeckNoStoreRouteConfig,
+  hostDeckRequestDeadline
 } from "./fastify-app.js";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import { requireHostDeckRequestAuthentication } from "./fastify-request-authentication.js";
@@ -91,7 +93,7 @@ export function createHostDeckUsageRouteRegistration(
           return await invokeUsageRead(
             ports.readUsage,
             target,
-            request.signal
+            hostDeckRequestDeadline(request)
           );
         }
       );
@@ -234,7 +236,7 @@ function resolveManagedTarget(
 async function invokeUsageRead(
   readUsage: ReadUsageFunction,
   target: ManagedSessionTarget,
-  signal: AbortSignal
+  deadline: OperationDeadline
 ): Promise<UsageSnapshot> {
   const intent = usageOperationIntentSchema.parse({
     operation_id: `op_usage_read_${randomUUID().replaceAll("-", "")}`,
@@ -243,7 +245,7 @@ async function invokeUsageRead(
   });
   let candidate: unknown;
   try {
-    candidate = await Reflect.apply(readUsage, undefined, [intent, signal]);
+    candidate = await Reflect.apply(readUsage, undefined, [intent, deadline]);
   } catch (error) {
     if (error instanceof HostDeckCodexUsageControlError) {
       throw mapUsageFailure(error, target.session_id);
@@ -291,6 +293,14 @@ function mapUsageFailure(
         "Codex usage data failed protocol validation.",
         sessionId,
         false
+      );
+    case "operation_timeout":
+      return usageHttpError(
+        504,
+        "operation_timeout",
+        "Codex usage read exceeded its request deadline.",
+        sessionId,
+        error.retry_safe
       );
     case "runtime_unavailable":
       return usageHttpError(

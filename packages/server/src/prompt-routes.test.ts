@@ -10,7 +10,7 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
-import { runtimeCapabilities } from "@hostdeck/core";
+import { type OperationDeadline, runtimeCapabilities } from "@hostdeck/core";
 import {
   createSelectedAuditRepository,
   openMigratedDatabase,
@@ -418,6 +418,20 @@ describe("selected managed-session prompt route", () => {
         "incomplete"
       ],
       [
+        "timeout-not-sent",
+        { dispatchError: promptServiceError("operation_timeout", "not_sent") },
+        504,
+        "operation_timeout",
+        "failed"
+      ],
+      [
+        "timeout-unknown",
+        { dispatchError: promptServiceError("operation_timeout", "unknown") },
+        504,
+        "operation_timeout",
+        "incomplete"
+      ],
+      [
         "malformed",
         { dispatchResult: { private: "private-result-sentinel" } },
         500,
@@ -661,14 +675,14 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
           snapshotIndex++
         );
       },
-      async dispatch(this: void, intent: unknown, signal?: AbortSignal) {
+      async dispatch(this: void, intent: unknown, deadline: OperationDeadline) {
         dispatchThis = this;
         const captured = { ...(intent as Record<string, unknown>) };
         dispatchCalls.push(captured);
         const operationId = String(captured.operation_id ?? "");
         acceptedBeforeDispatch =
           auditRepository.get(operationId)?.records[0]?.phase === "accepted";
-        signalObserved = signal instanceof AbortSignal;
+        signalObserved = deadline.signal instanceof AbortSignal;
         await options.dispatchBarrier;
         if (options.dispatchError !== undefined) throw options.dispatchError;
         return options.dispatchResult ?? {
@@ -890,7 +904,11 @@ function promptServiceError(
 ): HostDeckCodexPromptControlError {
   return new HostDeckCodexPromptControlError(
     code,
-    code === "unknown_outcome" ? "unknown_error" : "operation_conflict",
+    code === "unknown_outcome"
+      ? "unknown_error"
+      : code === "operation_timeout"
+        ? "operation_timeout"
+        : "operation_conflict",
     "private-prompt-service-error-sentinel",
     outcome,
     false

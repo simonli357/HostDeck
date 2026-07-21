@@ -1,4 +1,5 @@
 import type { RuntimeCompatibility } from "@hostdeck/contracts";
+import { createOperationDeadlineView } from "@hostdeck/core";
 import { describe, expect, it } from "vitest";
 import type { CodexRequestInput } from "./broker.js";
 import {
@@ -17,6 +18,11 @@ const input = {
 describe("Codex compact client", () => {
   it("sends one exact mutation and returns a frozen accepted-only result", async () => {
     const controller = new AbortController();
+    const deadline = createOperationDeadlineView({
+      timeoutMs: 4_000,
+      signal: controller.signal,
+      clock: { now: () => 0 }
+    });
     const port = fakePort((request) => {
       expect(request).toEqual({
         method: "thread/compact/start",
@@ -32,7 +38,7 @@ describe("Codex compact client", () => {
       now: () => acceptedAt
     });
 
-    const result = await client.compactThread({ ...input, signal: controller.signal });
+    const result = await client.compactThread({ ...input, deadline });
     expect(result).toEqual({
       runtime_version: "0.144.0",
       connection_generation: 3,

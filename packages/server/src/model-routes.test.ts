@@ -11,7 +11,7 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
-import { runtimeCapabilities } from "@hostdeck/core";
+import { type OperationDeadline, runtimeCapabilities } from "@hostdeck/core";
 import {
   createSelectedAuditRepository,
   openMigratedDatabase,
@@ -391,6 +391,7 @@ describe("selected managed-session model routes", () => {
       ["unknown-model", modelServiceError("model_unknown", "validation_error"), 400, "validation_error", true],
       ["effort", modelServiceError("effort_unsupported", "capability_unavailable"), 409, "capability_unavailable", false],
       ["conflict", modelServiceError("operation_conflict", "operation_conflict"), 409, "operation_conflict", true],
+      ["timeout", modelServiceError("operation_timeout", "operation_timeout", "unknown"), 504, "operation_timeout", false],
       ["protocol", modelServiceError("runtime_protocol_error", "protocol_error"), 502, "protocol_error", false]
     ];
     for (const [label, error, status, code, retryable] of cases) {
@@ -625,17 +626,17 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
     csrf,
     lock,
     models: {
-      async snapshot(target: unknown, signal?: AbortSignal) {
+      async snapshot(target: unknown, deadline: OperationDeadline) {
         snapshotCalls.push(target);
-        snapshotSignalObserved = signal instanceof AbortSignal;
+        snapshotSignalObserved = deadline.signal instanceof AbortSignal;
         if (options.snapshotError !== undefined) throw options.snapshotError;
         return sequenceValue(options.snapshotResults ?? [modelSnapshot()], snapshotIndex++);
       },
-      async select(this: void, intent: unknown, signal?: AbortSignal) {
+      async select(this: void, intent: unknown, deadline: OperationDeadline) {
         selectThis = this;
         const captured = { ...(intent as Record<string, unknown>) };
         selectCalls.push(captured);
-        selectSignalObserved = signal instanceof AbortSignal;
+        selectSignalObserved = deadline.signal instanceof AbortSignal;
         acceptedBeforeSelect = auditRepository.get(String(captured.operation_id ?? ""))?.records[0]?.phase === "accepted";
         await options.selectBarrier;
         if (options.selectError !== undefined) throw options.selectError;

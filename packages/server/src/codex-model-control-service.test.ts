@@ -14,6 +14,7 @@ import {
   createCodexModelControlService,
   HostDeckCodexModelControlError
 } from "./codex-model-control-service.js";
+import { withTestOperationDeadlines } from "./test-operation-deadline.js";
 
 const observedAt = "2026-07-10T17:00:00.000Z";
 const targetA = {
@@ -202,11 +203,11 @@ describe("Codex pending model control", () => {
       outcome: "unknown",
       retry_safe: false
     });
-    await expectControlError(uncertain.service.dispatchPendingTurn(pendingTurn(revision)), "unknown_outcome");
+    await expectControlError(uncertain.service.dispatchPendingTurn(pendingTurn(revision)), "operation_timeout");
     expect((await uncertain.service.snapshot(targetA)).pending).toMatchObject({
       revision,
       phase: "unknown",
-      error: { code: "unknown_error" }
+      error: { code: "operation_timeout" }
     });
     await expectControlError(uncertain.service.dispatchPendingTurn(pendingTurn(revision)), "operation_conflict");
 
@@ -225,7 +226,7 @@ describe("Codex pending model control", () => {
     });
     await expectControlError(
       indistinguishable.service.dispatchPendingTurn(pendingTurn(indistinguishableRevision)),
-      "unknown_outcome"
+      "operation_timeout"
     );
     expect((await indistinguishable.service.reconcile(targetA, indistinguishableRevision)).pending).toMatchObject({
       phase: "unknown"
@@ -413,12 +414,12 @@ function createHarness(options: { maxPendingSelections?: number; includeSecondSt
     getByThreadId: (threadId) => [...states.values()].find((state) => state.mapping.codex_thread_id === threadId) ?? null
   };
   const models = fakeModels();
-  const service = createCodexModelControlService({
+  const service = withTestOperationDeadlines(createCodexModelControlService({
     models,
     states: statePort,
     ...(options.maxPendingSelections === undefined ? {} : { max_pending_selections: options.maxPendingSelections }),
     now: () => observedAt
-  });
+  }), ["dispatchPendingTurn", "prepareTurnSettings", "select", "snapshot"]);
   return { service, models, states };
 }
 

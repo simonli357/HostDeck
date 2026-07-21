@@ -114,7 +114,7 @@ describe("managed-session archive selected vertical", () => {
       runtime: { read: () => runtime() },
       sessions: {
         read: (candidate) => sessions.read(candidate),
-        archive: (candidate) => sessions.archive(candidate)
+        archive: (candidate, deadline) => sessions.archive(candidate, deadline)
       },
       subscribers: {
         archive_session: () => 0

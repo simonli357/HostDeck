@@ -1,9 +1,11 @@
 import type { RuntimeCompatibility } from "@hostdeck/contracts";
+import { createOperationDeadlineView } from "@hostdeck/core";
 import { describe, expect, it } from "vitest";
 import {
   type CodexApprovalRequestPort,
   createCodexApprovalClient
 } from "./approval-client.js";
+import type { CodexServerResponseOptions } from "./broker.js";
 import { assessCodexCompatibility } from "./compatibility.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
 import type { CodexRequestId } from "./protocol.js";
@@ -90,6 +92,43 @@ describe("Codex approval client", () => {
     ]);
   });
 
+  it("bounds background responses and derives user responses from the exact request deadline", async () => {
+    const port = fakePort();
+    const client = createCodexApprovalClient(port, { mutation_timeout_ms: 1_000 });
+    const background = client.parseRequest(commandRequest(4));
+    await client.respond({ request: background, decision: "deny" });
+    expect(port.responseOptions[0]).toEqual({ timeout_ms: 1_000 });
+
+    let now = 10;
+    const controller = new AbortController();
+    const deadline = createOperationDeadlineView({
+      timeoutMs: 80,
+      signal: controller.signal,
+      clock: { now: () => now }
+    });
+    now = 40;
+    const user = client.parseRequest(fileRequest("approval-file-deadline"));
+    await client.respond({ request: user, decision: "approve", deadline });
+    expect(port.responseOptions[1]).toEqual({
+      signal: controller.signal,
+      timeout_ms: 50
+    });
+
+    controller.abort(new Error("client disconnected"));
+    await expect(
+      client.respond({
+        request: client.parseRequest(commandRequest(5)),
+        decision: "deny",
+        deadline
+      })
+    ).rejects.toMatchObject({
+      code: "request_aborted",
+      outcome: "not_sent",
+      retry_safe: true
+    });
+    expect(port.responses).toHaveLength(2);
+  });
+
   it("rejects malformed, oversized, incomplete, unsupported-decision, and extra request shapes", () => {
     const client = createCodexApprovalClient(fakePort());
     const base = commandRequest(1);
@@ -169,16 +208,20 @@ describe("Codex approval client", () => {
 interface FakePort extends CodexApprovalRequestPort {
   generation: number;
   readonly responses: Array<{ readonly id: CodexRequestId; readonly result: unknown }>;
+  readonly responseOptions: CodexServerResponseOptions[];
 }
 
 function fakePort(compatibility = readyCompatibility()): FakePort {
   const responses: FakePort["responses"] = [];
+  const responseOptions: CodexServerResponseOptions[] = [];
   return {
     compatibility,
     generation: 1,
     responses,
-    async respondToServerRequest(id, result) {
+    responseOptions,
+    async respondToServerRequest(id, result, options = {}) {
       responses.push({ id, result });
+      responseOptions.push(options);
     }
   };
 }

@@ -7,7 +7,13 @@ import {
   resourceBudgetDefinitionByKey,
   sessionNameSchema
 } from "@hostdeck/contracts";
-import type { AbsoluteCwd, ClientOperationId, CodexThreadId, IsoTimestamp } from "@hostdeck/core";
+import type {
+  AbsoluteCwd,
+  ClientOperationId,
+  CodexThreadId,
+  IsoTimestamp,
+  OperationDeadline
+} from "@hostdeck/core";
 import type { CodexRequestInput } from "./broker.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
 import type { ThreadArchiveParams } from "./generated/v2/ThreadArchiveParams.js";
@@ -19,6 +25,7 @@ import type { ThreadLoadedListParams } from "./generated/v2/ThreadLoadedListPara
 import type { ThreadReadParams } from "./generated/v2/ThreadReadParams.js";
 import type { ThreadSetNameParams } from "./generated/v2/ThreadSetNameParams.js";
 import type { ThreadStartParams } from "./generated/v2/ThreadStartParams.js";
+import { codexRequestOptionsFromDeadline } from "./request-deadline.js";
 
 export type CodexThreadRuntimeStatus = "active" | "idle" | "not_loaded" | "system_error";
 export type CodexThreadActiveFlag = "waiting_on_approval" | "waiting_on_user_input";
@@ -83,13 +90,31 @@ export interface CodexThreadClientOptions {
 
 export interface CodexThreadClient {
   readonly runtime_version: string;
-  readonly start: (input: CodexThreadStartInput) => Promise<CodexThreadStartResult>;
-  readonly ensureMaterialized: (input: CodexThreadMaterializeInput) => Promise<CodexThreadRecord>;
-  readonly list: (input: CodexThreadListInput) => Promise<CodexThreadPage>;
-  readonly listAll: () => Promise<readonly CodexThreadRecord[]>;
-  readonly findByOperationId: (operationId: ClientOperationId | string) => Promise<readonly CodexThreadRecord[]>;
-  readonly read: (threadId: CodexThreadId | string) => Promise<CodexThreadRecord>;
-  readonly archive: (threadId: CodexThreadId | string) => Promise<void>;
+  readonly start: (
+    input: CodexThreadStartInput,
+    deadline?: OperationDeadline
+  ) => Promise<CodexThreadStartResult>;
+  readonly ensureMaterialized: (
+    input: CodexThreadMaterializeInput,
+    deadline?: OperationDeadline
+  ) => Promise<CodexThreadRecord>;
+  readonly list: (
+    input: CodexThreadListInput,
+    deadline?: OperationDeadline
+  ) => Promise<CodexThreadPage>;
+  readonly listAll: (deadline?: OperationDeadline) => Promise<readonly CodexThreadRecord[]>;
+  readonly findByOperationId: (
+    operationId: ClientOperationId | string,
+    deadline?: OperationDeadline
+  ) => Promise<readonly CodexThreadRecord[]>;
+  readonly read: (
+    threadId: CodexThreadId | string,
+    deadline?: OperationDeadline
+  ) => Promise<CodexThreadRecord>;
+  readonly archive: (
+    threadId: CodexThreadId | string,
+    deadline?: OperationDeadline
+  ) => Promise<void>;
 }
 
 interface ParsedThreadClientOptions {
@@ -162,7 +187,10 @@ class DefaultCodexThreadClient implements CodexThreadClient {
     return compatibility.observed_version;
   }
 
-  async start(input: CodexThreadStartInput): Promise<CodexThreadStartResult> {
+  async start(
+    input: CodexThreadStartInput,
+    deadline?: OperationDeadline
+  ): Promise<CodexThreadStartResult> {
     void this.runtime_version;
     const cwd = parseInputCwd(input.cwd);
     const marker = codexThreadOperationMarker(input.operation_id);
@@ -173,7 +201,12 @@ class DefaultCodexThreadClient implements CodexThreadClient {
       threadSource: marker
     } satisfies ThreadStartParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/start", params, kind: "mutation", timeout_ms: this.options.start_timeout_ms }),
+      await this.port.request({
+        method: "thread/start",
+        params,
+        kind: "mutation",
+        ...codexRequestOptionsFromDeadline(deadline, this.options.start_timeout_ms)
+      }),
       "Codex thread/start result must be an object."
     );
     const rawThread = requireRecord(result.thread, "Codex thread/start thread must be an object.");
@@ -198,49 +231,61 @@ class DefaultCodexThreadClient implements CodexThreadClient {
     };
   }
 
-  async ensureMaterialized(input: CodexThreadMaterializeInput): Promise<CodexThreadRecord> {
+  async ensureMaterialized(
+    input: CodexThreadMaterializeInput,
+    deadline?: OperationDeadline
+  ): Promise<CodexThreadRecord> {
     void this.runtime_version;
     const threadId = parseThreadId(input.thread_id);
     const cwd = parseInputCwd(input.cwd);
     const name = parseSessionName(input.name);
     const marker = codexThreadOperationMarker(input.operation_id);
-    let thread = await this.read(threadId);
+    let thread = await this.read(threadId, deadline);
     assertMaterializationIdentity(thread, threadId, cwd);
 
-    const storedBefore = (await this.listAll()).find((candidate) => candidate.id === threadId);
+    const storedBefore = (await this.listAll(deadline)).find((candidate) => candidate.id === threadId);
     if (storedBefore?.archived === true) throw invalidThreadPayload("Codex materialization target is already archived.");
     if (storedBefore !== undefined) assertMaterializationIdentity(storedBefore, threadId, cwd);
     if (storedBefore === undefined && !hasHostDeckOperationMarker(thread, input.operation_id)) {
       throw invalidThreadPayload("Unstored Codex materialization target lacks the exact HostDeck operation marker.");
     }
 
-    const goalBefore = await this.readThreadGoal(threadId);
+    const goalBefore = await this.readThreadGoal(threadId, deadline);
     if (goalBefore !== null && goalBefore.objective !== marker) {
       throw invalidThreadPayload("Codex materialization target has a conflicting goal.");
     }
-    if (thread.name !== name) await this.setThreadName(threadId, name);
-    if (storedBefore === undefined && goalBefore === null) await this.setThreadGoal(threadId, marker);
-    if (goalBefore?.status === "active") await this.pauseThreadGoal(threadId, marker);
+    if (thread.name !== name) await this.setThreadName(threadId, name, deadline);
+    if (storedBefore === undefined && goalBefore === null) {
+      await this.setThreadGoal(threadId, marker, deadline);
+    }
+    if (goalBefore?.status === "active") {
+      await this.pauseThreadGoal(threadId, marker, deadline);
+    }
     if (goalBefore !== null && !["active", "paused"].includes(goalBefore.status)) {
       throw invalidThreadPayload("Codex materialization target internal goal has an unsupported terminal status.");
     }
-    if (storedBefore === undefined || goalBefore !== null) await this.clearThreadGoal(threadId);
-    if ((await this.readThreadGoal(threadId)) !== null) {
+    if (storedBefore === undefined || goalBefore !== null) {
+      await this.clearThreadGoal(threadId, deadline);
+    }
+    if ((await this.readThreadGoal(threadId, deadline)) !== null) {
       throw invalidThreadPayload("Codex materialization target retained its internal goal.");
     }
 
-    const storedAfter = (await this.listAll()).filter((candidate) => candidate.id === threadId);
+    const storedAfter = (await this.listAll(deadline)).filter((candidate) => candidate.id === threadId);
     if (storedAfter.length !== 1 || storedAfter[0]?.archived !== false) {
       throw invalidThreadPayload("Codex did not materialize the exact thread into active stored history.");
     }
     assertMaterializationIdentity(storedAfter[0], threadId, cwd);
-    thread = await this.read(threadId);
+    thread = await this.read(threadId, deadline);
     assertMaterializationIdentity(thread, threadId, cwd);
     if (thread.name !== name) throw invalidThreadPayload("Codex did not preserve the managed thread name during materialization.");
     return { ...thread, archived: false };
   }
 
-  async list(input: CodexThreadListInput): Promise<CodexThreadPage> {
+  async list(
+    input: CodexThreadListInput,
+    deadline?: OperationDeadline
+  ): Promise<CodexThreadPage> {
     void this.runtime_version;
     const cursor = input.cursor === undefined || input.cursor === null ? null : parseCursor(input.cursor);
     const limit = parseBoundedInteger(input.limit, this.options.page_size, 1, 500, "thread list limit");
@@ -251,7 +296,12 @@ class DefaultCodexThreadClient implements CodexThreadClient {
       useStateDbOnly: false
     } satisfies ThreadListParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/list", params, kind: "read", timeout_ms: this.options.read_timeout_ms }),
+      await this.port.request({
+        method: "thread/list",
+        params,
+        kind: "read",
+        ...codexRequestOptionsFromDeadline(deadline, this.options.read_timeout_ms)
+      }),
       "Codex thread/list result must be an object."
     );
     if (!Array.isArray(result.data) || result.data.length > limit) {
@@ -265,13 +315,16 @@ class DefaultCodexThreadClient implements CodexThreadClient {
     };
   }
 
-  async listAll(): Promise<readonly CodexThreadRecord[]> {
+  async listAll(deadline?: OperationDeadline): Promise<readonly CodexThreadRecord[]> {
     const threads: CodexThreadRecord[] = [];
     for (const archived of [false, true]) {
       let cursor: string | null = null;
       const seenCursors = new Set<string>();
       for (let pageNumber = 0; pageNumber < this.options.max_pages; pageNumber += 1) {
-        const page = await this.list({ archived, cursor, limit: this.options.page_size });
+        const page = await this.list(
+          { archived, cursor, limit: this.options.page_size },
+          deadline
+        );
         threads.push(...page.data);
         if (page.next_cursor === null) break;
         if (seenCursors.has(page.next_cursor) || page.next_cursor === cursor) {
@@ -291,12 +344,17 @@ class DefaultCodexThreadClient implements CodexThreadClient {
     return threads;
   }
 
-  async findByOperationId(operationId: ClientOperationId | string): Promise<readonly CodexThreadRecord[]> {
+  async findByOperationId(
+    operationId: ClientOperationId | string,
+    deadline?: OperationDeadline
+  ): Promise<readonly CodexThreadRecord[]> {
     const marker = codexThreadOperationMarker(operationId);
-    const stored = await this.listAll();
+    const stored = await this.listAll(deadline);
     const matches = stored.filter((thread) => thread.thread_source === marker);
     const storedIds = new Set(stored.map((thread) => thread.id));
-    const loadedOnly = (await this.listLoadedThreadIds()).filter((threadId) => !storedIds.has(threadId));
+    const loadedOnly = (await this.listLoadedThreadIds(deadline)).filter(
+      (threadId) => !storedIds.has(threadId)
+    );
     if (loadedOnly.length > this.options.max_loaded_reads) {
       throw new HostDeckCodexAdapterError(
         "broker_overloaded",
@@ -305,14 +363,16 @@ class DefaultCodexThreadClient implements CodexThreadClient {
       );
     }
     for (const threadId of loadedOnly) {
-      const thread = await this.read(threadId);
+      const thread = await this.read(threadId, deadline);
       if (thread.thread_source === marker) matches.push(thread);
     }
     assertUniqueThreadIds(matches, "Codex operation-marker recovery returned duplicate thread ids.");
     return matches;
   }
 
-  private async listLoadedThreadIds(): Promise<readonly CodexThreadId[]> {
+  private async listLoadedThreadIds(
+    deadline?: OperationDeadline
+  ): Promise<readonly CodexThreadId[]> {
     void this.runtime_version;
     const threadIds: CodexThreadId[] = [];
     let cursor: string | null = null;
@@ -324,7 +384,7 @@ class DefaultCodexThreadClient implements CodexThreadClient {
           method: "thread/loaded/list",
           params,
           kind: "read",
-          timeout_ms: this.options.read_timeout_ms
+          ...codexRequestOptionsFromDeadline(deadline, this.options.read_timeout_ms)
         }),
         "Codex thread/loaded/list result must be an object."
       );
@@ -353,29 +413,55 @@ class DefaultCodexThreadClient implements CodexThreadClient {
     return threadIds;
   }
 
-  private async setThreadName(threadId: CodexThreadId, name: string): Promise<void> {
+  private async setThreadName(
+    threadId: CodexThreadId,
+    name: string,
+    deadline?: OperationDeadline
+  ): Promise<void> {
     const params = { threadId, name } satisfies ThreadSetNameParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/name/set", params, kind: "mutation", timeout_ms: this.options.mutation_timeout_ms }),
+      await this.port.request({
+        method: "thread/name/set",
+        params,
+        kind: "mutation",
+        ...codexRequestOptionsFromDeadline(deadline, this.options.mutation_timeout_ms)
+      }),
       "Codex thread/name/set result must be an object."
     );
     if (Object.keys(result).length !== 0) throw invalidThreadPayload("Codex thread/name/set returned unexpected fields.");
   }
 
-  private async readThreadGoal(threadId: CodexThreadId): Promise<ParsedThreadGoal | null> {
+  private async readThreadGoal(
+    threadId: CodexThreadId,
+    deadline?: OperationDeadline
+  ): Promise<ParsedThreadGoal | null> {
     const params = { threadId } satisfies ThreadGoalGetParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/goal/get", params, kind: "read", timeout_ms: this.options.read_timeout_ms }),
+      await this.port.request({
+        method: "thread/goal/get",
+        params,
+        kind: "read",
+        ...codexRequestOptionsFromDeadline(deadline, this.options.read_timeout_ms)
+      }),
       "Codex thread/goal/get result must be an object."
     );
     assertExactKeys(result, ["goal"], "Codex thread/goal/get fields are invalid.");
     return result.goal === null ? null : parseThreadGoal(result.goal, threadId);
   }
 
-  private async setThreadGoal(threadId: CodexThreadId, objective: string): Promise<void> {
+  private async setThreadGoal(
+    threadId: CodexThreadId,
+    objective: string,
+    deadline?: OperationDeadline
+  ): Promise<void> {
     const params = { threadId, objective, status: "paused" } satisfies ThreadGoalSetParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/goal/set", params, kind: "mutation", timeout_ms: this.options.mutation_timeout_ms }),
+      await this.port.request({
+        method: "thread/goal/set",
+        params,
+        kind: "mutation",
+        ...codexRequestOptionsFromDeadline(deadline, this.options.mutation_timeout_ms)
+      }),
       "Codex thread/goal/set result must be an object."
     );
     assertExactKeys(result, ["goal"], "Codex thread/goal/set fields are invalid.");
@@ -384,10 +470,19 @@ class DefaultCodexThreadClient implements CodexThreadClient {
     if (goal.status !== "paused") throw invalidThreadPayload("Codex materialization goal did not remain paused.");
   }
 
-  private async pauseThreadGoal(threadId: CodexThreadId, objective: string): Promise<void> {
+  private async pauseThreadGoal(
+    threadId: CodexThreadId,
+    objective: string,
+    deadline?: OperationDeadline
+  ): Promise<void> {
     const params = { threadId, status: "paused" } satisfies ThreadGoalSetParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/goal/set", params, kind: "mutation", timeout_ms: this.options.mutation_timeout_ms }),
+      await this.port.request({
+        method: "thread/goal/set",
+        params,
+        kind: "mutation",
+        ...codexRequestOptionsFromDeadline(deadline, this.options.mutation_timeout_ms)
+      }),
       "Codex thread/goal/set pause result must be an object."
     );
     assertExactKeys(result, ["goal"], "Codex thread/goal/set pause fields are invalid.");
@@ -397,22 +492,38 @@ class DefaultCodexThreadClient implements CodexThreadClient {
     }
   }
 
-  private async clearThreadGoal(threadId: CodexThreadId): Promise<void> {
+  private async clearThreadGoal(
+    threadId: CodexThreadId,
+    deadline?: OperationDeadline
+  ): Promise<void> {
     const params = { threadId } satisfies ThreadGoalClearParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/goal/clear", params, kind: "mutation", timeout_ms: this.options.mutation_timeout_ms }),
+      await this.port.request({
+        method: "thread/goal/clear",
+        params,
+        kind: "mutation",
+        ...codexRequestOptionsFromDeadline(deadline, this.options.mutation_timeout_ms)
+      }),
       "Codex thread/goal/clear result must be an object."
     );
     assertExactKeys(result, ["cleared"], "Codex thread/goal/clear fields are invalid.");
     if (typeof result.cleared !== "boolean") throw invalidThreadPayload("Codex thread/goal/clear result is invalid.");
   }
 
-  async read(threadId: CodexThreadId | string): Promise<CodexThreadRecord> {
+  async read(
+    threadId: CodexThreadId | string,
+    deadline?: OperationDeadline
+  ): Promise<CodexThreadRecord> {
     void this.runtime_version;
     const parsedThreadId = parseThreadId(threadId);
     const params = { threadId: parsedThreadId, includeTurns: false } satisfies ThreadReadParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/read", params, kind: "read", timeout_ms: this.options.read_timeout_ms }),
+      await this.port.request({
+        method: "thread/read",
+        params,
+        kind: "read",
+        ...codexRequestOptionsFromDeadline(deadline, this.options.read_timeout_ms)
+      }),
       "Codex thread/read result must be an object."
     );
     const thread = parseThread(result.thread, null);
@@ -420,11 +531,19 @@ class DefaultCodexThreadClient implements CodexThreadClient {
     return thread;
   }
 
-  async archive(threadId: CodexThreadId | string): Promise<void> {
+  async archive(
+    threadId: CodexThreadId | string,
+    deadline?: OperationDeadline
+  ): Promise<void> {
     void this.runtime_version;
     const params = { threadId: parseThreadId(threadId) } satisfies ThreadArchiveParams;
     const result = requireRecord(
-      await this.port.request({ method: "thread/archive", params, kind: "mutation", timeout_ms: this.options.mutation_timeout_ms }),
+      await this.port.request({
+        method: "thread/archive",
+        params,
+        kind: "mutation",
+        ...codexRequestOptionsFromDeadline(deadline, this.options.mutation_timeout_ms)
+      }),
       "Codex thread/archive result must be an object."
     );
     if (Object.keys(result).length !== 0) throw invalidThreadPayload("Codex thread/archive returned unexpected fields.");

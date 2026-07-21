@@ -6,15 +6,21 @@ import {
   type RuntimeCompatibility,
   resourceBudgetDefinitionByKey
 } from "@hostdeck/contracts";
-import type { ClientOperationId, CodexThreadId, IsoTimestamp } from "@hostdeck/core";
+import type {
+  ClientOperationId,
+  CodexThreadId,
+  IsoTimestamp,
+  OperationDeadline
+} from "@hostdeck/core";
 import type { CodexRequestInput } from "./broker.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
 import type { ThreadCompactStartParams } from "./generated/v2/ThreadCompactStartParams.js";
+import { codexRequestOptionsFromDeadline } from "./request-deadline.js";
 
 export interface CodexCompactInput {
   readonly operation_id: ClientOperationId | string;
   readonly thread_id: CodexThreadId | string;
-  readonly signal?: AbortSignal;
+  readonly deadline?: OperationDeadline;
 }
 
 export interface CodexCompactAccepted {
@@ -106,14 +112,15 @@ class DefaultCodexCompactClient implements CodexCompactClient {
     const candidate = parseInput(input);
     parseOperationId(candidate.operation_id);
     const threadId = parseThreadId(candidate.thread_id);
-    const signal = parseSignal(candidate.signal);
     const params = { threadId } satisfies ThreadCompactStartParams;
     const result = await this.port.request({
       method: "thread/compact/start",
       params,
       kind: "mutation",
-      timeout_ms: this.options.mutation_timeout_ms,
-      ...(signal === undefined ? {} : { signal })
+      ...codexRequestOptionsFromDeadline(
+        candidate.deadline,
+        this.options.mutation_timeout_ms
+      )
     });
     const currentGeneration = this.port.generation;
     if (!Number.isSafeInteger(currentGeneration) || currentGeneration < 1 || currentGeneration !== generation) {
@@ -180,7 +187,7 @@ function parseInput(candidate: unknown): Readonly<Record<string, unknown>> {
   const value = requirePlainRecord(candidate, "Codex compact input must be a plain object.", "not_sent");
   const keys = Object.keys(value).sort();
   if (
-    keys.some((key) => !["operation_id", "signal", "thread_id"].includes(key)) ||
+    keys.some((key) => !["deadline", "operation_id", "thread_id"].includes(key)) ||
     !Object.hasOwn(value, "operation_id") ||
     !Object.hasOwn(value, "thread_id")
   ) {
@@ -199,12 +206,6 @@ function parseThreadId(candidate: unknown): CodexThreadId {
   const parsed = codexThreadIdSchema.safeParse(candidate);
   if (!parsed.success) throw invalidInput("Codex compact thread id is invalid.", parsed.error);
   return parsed.data;
-}
-
-function parseSignal(candidate: unknown): AbortSignal | undefined {
-  if (candidate === undefined) return undefined;
-  if (!(candidate instanceof AbortSignal)) throw invalidInput("Codex compact signal must be an AbortSignal.");
-  return candidate;
 }
 
 function parseGeneration(candidate: unknown, outcome: "not_sent" | "unknown"): number {

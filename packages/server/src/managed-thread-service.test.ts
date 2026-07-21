@@ -18,7 +18,11 @@ import {
   isoTimestampSchema,
   selectedSessionStartRecoveryRecordSchema
 } from "@hostdeck/contracts";
-import type { SessionId } from "@hostdeck/core";
+import {
+  createOperationDeadlineView,
+  type OperationDeadline,
+  type SessionId
+} from "@hostdeck/core";
 import {
   createSelectedStateRepository,
   openMigratedDatabase,
@@ -31,6 +35,15 @@ import {
   type ManagedCodexThreadService,
   type ManagedCodexThreadServiceErrorCode
 } from "./managed-thread-service.js";
+import {
+  type WithTestOperationDeadlines,
+  withTestOperationDeadlines
+} from "./test-operation-deadline.js";
+
+type TestManagedCodexThreadService = WithTestOperationDeadlines<
+  ManagedCodexThreadService,
+  "archive" | "start"
+>;
 
 const cleanup: Array<() => void> = [];
 const now = new Date("2026-07-09T22:00:00.000Z");
@@ -112,7 +125,7 @@ describe("managed Codex thread start saga", () => {
 
   it("rejects an invalid cwd before reservation or Codex dispatch", async () => {
     const fixture = createFixture();
-    const service = createManagedCodexThreadService({
+    const service = withTestOperationDeadlines(createManagedCodexThreadService({
       threads: fixture.threads,
       states: fixture.states,
       now: () => now,
@@ -121,13 +134,75 @@ describe("managed Codex thread start saga", () => {
         throw new Error("private-invalid-cwd-sentinel");
       },
       capture_branch: () => "main"
-    });
+    }), ["archive", "start"]);
 
     await expectServiceError(service.start(request), "invalid_cwd", {
       outcome: "not_sent",
       thread_id: null
     });
     expect(fixture.states.listRecoveries()).toEqual([]);
+    expect(fixture.threads.start_calls).toBe(0);
+  });
+
+  it("expires after cwd validation without reserving or dispatching a thread", async () => {
+    const fixture = createFixture();
+    let clockNow = 0;
+    const deadline = createOperationDeadlineView({
+      timeoutMs: 10,
+      signal: new AbortController().signal,
+      clock: { now: () => clockNow }
+    });
+    const service = createManagedCodexThreadService({
+      threads: fixture.threads,
+      states: fixture.states,
+      now: () => now,
+      create_session_id: () => "sess_managed_001" as SessionId,
+      validate_cwd: async () => {
+        clockNow = 10;
+      },
+      capture_branch: () => "main"
+    });
+
+    await expectServiceError(service.start(request, deadline), "operation_timeout", {
+      outcome: "not_sent"
+    });
+    expect(fixture.states.listRecoveries()).toEqual([]);
+    expect(fixture.threads.start_calls).toBe(0);
+  });
+
+  it("terminalizes a reservation when the deadline expires before thread dispatch", async () => {
+    const fixture = createFixture();
+    let clockNow = 0;
+    const deadline = createOperationDeadlineView({
+      timeoutMs: 10,
+      signal: new AbortController().signal,
+      clock: { now: () => clockNow }
+    });
+    const states: SelectedStateRepository = {
+      ...fixture.states,
+      putRecovery(candidate) {
+        const result = fixture.states.putRecovery(candidate);
+        if (result.state === "reserved") clockNow = 10;
+        return result;
+      }
+    };
+    const service = createManagedCodexThreadService({
+      threads: fixture.threads,
+      states,
+      now: () => now,
+      create_session_id: () => "sess_managed_001" as SessionId,
+      validate_cwd: async () => undefined,
+      capture_branch: () => "main"
+    });
+
+    await expectServiceError(service.start(request, deadline), "operation_timeout", {
+      outcome: "not_sent"
+    });
+    expect(fixture.states.getRecovery(request.operation_id)).toMatchObject({
+      state: "failed",
+      codex_thread_id: null,
+      error_code: "operation_timeout"
+    });
     expect(fixture.threads.start_calls).toBe(0);
   });
 
@@ -435,6 +510,31 @@ describe("managed Codex archive and reconciliation", () => {
     expect(fixture.threads.archive_calls).toHaveLength(0);
   });
 
+  it("stops after the disposition read when the shared deadline expires before archive", async () => {
+    const fixture = createFixture();
+    await fixture.service.start(request);
+    let clockNow = 0;
+    const deadline = createOperationDeadlineView({
+      timeoutMs: 10,
+      signal: new AbortController().signal,
+      clock: { now: () => clockNow }
+    });
+    const records = [...fixture.threads.records];
+    fixture.threads.listAll = async (observedDeadline) => {
+      expect(observedDeadline).toBe(deadline);
+      clockNow = 10;
+      return records;
+    };
+
+    await expectServiceError(
+      fixture.service.archive("sess_managed_001", deadline),
+      "operation_timeout",
+      { outcome: "not_sent" }
+    );
+    expect(fixture.threads.archive_calls).toHaveLength(0);
+    expect(fixture.states.require("sess_managed_001").mapping.archived_at).toBeNull();
+  });
+
   it("rejects non-idle runtime state and runtime-version drift before dispatch", async () => {
     const active = createFixture();
     await active.service.start(request);
@@ -569,7 +669,7 @@ describe("managed Codex archive and reconciliation", () => {
 
     await expectServiceError(
       fixture.service.archive("sess_managed_001"),
-      "unknown_outcome",
+      "operation_timeout",
       { outcome: "unknown" }
     );
     fixture.threads.archive_error = null;
@@ -685,7 +785,7 @@ describe("managed Codex archive and reconciliation", () => {
 interface Fixture {
   readonly states: SelectedStateRepository;
   readonly threads: FakeThreadClient;
-  readonly service: ManagedCodexThreadService;
+  readonly service: TestManagedCodexThreadService;
 }
 
 function createFixture(): Fixture {
@@ -700,15 +800,15 @@ function createFixture(): Fixture {
   return { states, threads, service: serviceFor(threads, states) };
 }
 
-function serviceFor(threads: CodexThreadClient, states: SelectedStateRepository): ManagedCodexThreadService {
-  return createManagedCodexThreadService({
+function serviceFor(threads: CodexThreadClient, states: SelectedStateRepository): TestManagedCodexThreadService {
+  return withTestOperationDeadlines(createManagedCodexThreadService({
     threads,
     states,
     now: () => now,
     create_session_id: () => "sess_managed_001" as SessionId,
     validate_cwd: async () => undefined,
     capture_branch: () => "main"
-  });
+  }), ["archive", "start"]);
 }
 
 class FakeThreadClient implements CodexThreadClient {
@@ -749,7 +849,7 @@ class FakeThreadClient implements CodexThreadClient {
     return { data: this.records.filter((thread) => thread.archived === input.archived), next_cursor: null };
   }
 
-  async listAll(): Promise<readonly CodexThreadRecord[]> {
+  async listAll(_deadline?: OperationDeadline): Promise<readonly CodexThreadRecord[]> {
     return [...this.records];
   }
 

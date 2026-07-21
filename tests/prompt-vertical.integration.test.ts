@@ -191,7 +191,7 @@ describe("managed-session prompt selected vertical", () => {
           thread_id: threadId,
           text: privatePrompt,
           settings: { kind: "inherit" },
-          signal: expect.any(AbortSignal)
+          deadline: expect.objectContaining({ signal: expect.any(AbortSignal) })
         }
       ]);
       expect(turns.steerCalls).toEqual([]);

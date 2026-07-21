@@ -2,16 +2,27 @@ import {
   codexItemIdSchema,
   codexThreadIdSchema,
   codexTurnIdSchema,
+  defaultResourceBudget,
   isoTimestampSchema,
   type RuntimeCompatibility,
+  resourceBudgetDefinitionByKey,
   runtimeRequestIdSchema
 } from "@hostdeck/contracts";
-import type { CodexItemId, CodexThreadId, CodexTurnId, IsoTimestamp, RuntimeRequestId } from "@hostdeck/core";
+import type {
+  CodexItemId,
+  CodexThreadId,
+  CodexTurnId,
+  IsoTimestamp,
+  OperationDeadline,
+  RuntimeRequestId
+} from "@hostdeck/core";
 import { z } from "zod";
+import type { CodexServerResponseOptions } from "./broker.js";
 import { type CodexOperationOutcome, HostDeckCodexAdapterError } from "./errors.js";
 import type { CommandExecutionRequestApprovalResponse } from "./generated/v2/CommandExecutionRequestApprovalResponse.js";
 import type { FileChangeRequestApprovalResponse } from "./generated/v2/FileChangeRequestApprovalResponse.js";
 import type { CodexRequestId } from "./protocol.js";
+import { codexRequestOptionsFromDeadline } from "./request-deadline.js";
 
 export type CodexApprovalMethod =
   | "item/commandExecution/requestApproval"
@@ -36,12 +47,21 @@ export interface CodexApprovalRequest {
 export interface CodexApprovalResponseInput {
   readonly request: CodexApprovalRequest;
   readonly decision: "approve" | "deny";
+  readonly deadline?: OperationDeadline;
 }
 
 export interface CodexApprovalRequestPort {
   readonly compatibility: RuntimeCompatibility;
   readonly generation: number;
-  readonly respondToServerRequest: (id: CodexRequestId, result: unknown) => Promise<void>;
+  readonly respondToServerRequest: (
+    id: CodexRequestId,
+    result: unknown,
+    options?: CodexServerResponseOptions
+  ) => Promise<void>;
+}
+
+export interface CodexApprovalClientOptions {
+  readonly mutation_timeout_ms?: number;
 }
 
 export interface CodexApprovalClient {
@@ -203,7 +223,10 @@ const approvalRequestSchema = z
   })
   .strict();
 
-export function createCodexApprovalClient(port: CodexApprovalRequestPort): CodexApprovalClient {
+export function createCodexApprovalClient(
+  port: CodexApprovalRequestPort,
+  options: CodexApprovalClientOptions = {}
+): CodexApprovalClient {
   if (
     port === null ||
     typeof port !== "object" ||
@@ -213,7 +236,10 @@ export function createCodexApprovalClient(port: CodexApprovalRequestPort): Codex
   ) {
     throw new TypeError("Codex approval client requires a compatible generation-aware server-request port.");
   }
-  const implementation = new DefaultCodexApprovalClient(port);
+  const implementation = new DefaultCodexApprovalClient(
+    port,
+    parseOptions(options)
+  );
   return Object.freeze({
     get runtime_version() {
       return implementation.runtime_version;
@@ -227,7 +253,10 @@ export function createCodexApprovalClient(port: CodexApprovalRequestPort): Codex
 }
 
 class DefaultCodexApprovalClient implements CodexApprovalClient {
-  constructor(private readonly port: CodexApprovalRequestPort) {}
+  constructor(
+    private readonly port: CodexApprovalRequestPort,
+    private readonly mutationTimeoutMs: number
+  ) {}
 
   get runtime_version(): string {
     return requireApprovalRuntime(this.port.compatibility);
@@ -266,7 +295,14 @@ class DefaultCodexApprovalClient implements CodexApprovalClient {
 
   async respond(input: CodexApprovalResponseInput): Promise<void> {
     void this.runtime_version;
-    if (input === null || typeof input !== "object" || Array.isArray(input) || Object.keys(input).sort().join(",") !== "decision,request") {
+    if (
+      input === null ||
+      typeof input !== "object" ||
+      Array.isArray(input) ||
+      Object.keys(input).some((key) => !["deadline", "decision", "request"].includes(key)) ||
+      !Object.hasOwn(input, "decision") ||
+      !Object.hasOwn(input, "request")
+    ) {
       throw adapterError("invalid_protocol_message", "Codex approval response input is invalid.", "not_sent", true);
     }
     const request = approvalRequestSchema.safeParse(input.request);
@@ -285,18 +321,52 @@ class DefaultCodexApprovalClient implements CodexApprovalClient {
     if (request.data.generation !== this.generation) {
       throw adapterError("unknown_outcome", "Codex approval request belongs to another connection generation.", "unknown", false);
     }
+    const responseOptions = codexRequestOptionsFromDeadline(
+      input.deadline,
+      this.mutationTimeoutMs
+    );
     if (request.data.method === "item/commandExecution/requestApproval") {
       const response: CommandExecutionRequestApprovalResponse = {
         decision: input.decision === "approve" ? "accept" : "decline"
       };
-      await this.port.respondToServerRequest(request.data.protocol_request_id, response);
+      await this.port.respondToServerRequest(
+        request.data.protocol_request_id,
+        response,
+        responseOptions
+      );
       return;
     }
     const response: FileChangeRequestApprovalResponse = {
       decision: input.decision === "approve" ? "accept" : "decline"
     };
-    await this.port.respondToServerRequest(request.data.protocol_request_id, response);
+    await this.port.respondToServerRequest(
+      request.data.protocol_request_id,
+      response,
+      responseOptions
+    );
   }
+}
+
+function parseOptions(candidate: unknown): number {
+  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) {
+    throw new TypeError("Codex approval client options must be an object.");
+  }
+  const value = candidate as Record<string, unknown>;
+  if (Object.keys(value).some((key) => key !== "mutation_timeout_ms")) {
+    throw new TypeError("Codex approval client options contain unsupported fields.");
+  }
+  const definition = resourceBudgetDefinitionByKey.protocol_mutation_timeout_ms;
+  const timeout = value.mutation_timeout_ms ?? defaultResourceBudget.protocol_mutation_timeout_ms;
+  if (
+    !Number.isSafeInteger(timeout) ||
+    (timeout as number) < definition.minimum ||
+    (timeout as number) > definition.maximum
+  ) {
+    throw new TypeError(
+      `Codex approval mutation timeout must be between ${definition.minimum} and ${definition.maximum} milliseconds.`
+    );
+  }
+  return timeout as number;
 }
 
 function parseCommandRequest(candidate: unknown): Omit<CodexApprovalRequest, "method" | "protocol_request_id" | "request_id" | "generation"> {

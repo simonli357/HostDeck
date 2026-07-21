@@ -9,6 +9,7 @@ import {
   skillsOperationIntentSchema,
   skillsSnapshotSchema
 } from "@hostdeck/contracts";
+import type { OperationDeadline } from "@hostdeck/core";
 import {
   HostDeckAuthRepositoryError,
   type SelectedSessionState,
@@ -73,7 +74,7 @@ describe("selected skills read route", () => {
     let stateThis: unknown = "not-called";
     let skillsThis: unknown = "not-called";
     let observedIntent: unknown;
-    let observedSignal: AbortSignal | undefined;
+    let observedDeadline: OperationDeadline | undefined;
     const mutableState: { get: SelectedStateRepository["get"] } = {
       get: function getState(this: void) {
         stateThis = this;
@@ -81,10 +82,10 @@ describe("selected skills read route", () => {
       }
     };
     const mutableSkills: { list: CodexSkillsControlService["list"] } = {
-      list: async function listSkills(this: void, intent, signal) {
+      list: async function listSkills(this: void, intent, deadline) {
         skillsThis = this;
         observedIntent = intent;
-        observedSignal = signal;
+        observedDeadline = deadline;
         return skillsSnapshot();
       }
     };
@@ -121,7 +122,7 @@ describe("selected skills read route", () => {
         codex_thread_id: threadId
       }
     });
-    expect(observedSignal).toBeInstanceOf(AbortSignal);
+    expect(observedDeadline?.signal).toBeInstanceOf(AbortSignal);
 
     const nullState = Object.assign(
       Object.create(null) as Record<string, unknown>,
@@ -252,9 +253,9 @@ describe("selected skills read route", () => {
     expect(stateReads).toBe(3);
     expect(listCalls).toBe(1);
     expect(observedInput).toMatchObject({ cwd: selectedCwd });
-    expect((observedInput as { signal?: unknown }).signal).toBeInstanceOf(
-      AbortSignal
-    );
+    expect(
+      (observedInput as { deadline?: OperationDeadline }).deadline?.signal
+    ).toBeInstanceOf(AbortSignal);
     expect(response.body).not.toMatch(
       /hostdeck-skills-route|skill-private|dependency-private|prompt-private/iu
     );
@@ -588,6 +589,13 @@ describe("selected skills read route", () => {
         status: 503
       },
       {
+        code: "operation_timeout",
+        apiCode: "operation_timeout",
+        expectedCode: "operation_timeout",
+        retrySafe: true,
+        status: 504
+      },
+      {
         code: "service_overloaded",
         apiCode: "service_overloaded",
         expectedCode: "service_overloaded",
@@ -652,6 +660,7 @@ describe("selected skills read route", () => {
         url: `/api/v1/sessions/${sessionId}/skills`
       });
       const expectedRetry = [
+        "operation_timeout",
         "runtime_unavailable",
         "service_overloaded",
         "state_unavailable",

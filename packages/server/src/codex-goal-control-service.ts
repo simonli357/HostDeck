@@ -19,8 +19,12 @@ import {
   selectedSessionProjectionRecordSchema,
   type UncertainGoalMutation
 } from "@hostdeck/contracts";
-import type { ErrorCode, IsoTimestamp } from "@hostdeck/core";
+import type { ErrorCode, IsoTimestamp, OperationDeadline } from "@hostdeck/core";
 import type { SelectedSessionState, SelectedStateRepository } from "@hostdeck/storage";
+import {
+  requireOpenOperationDeadline,
+  runSerializedWithDeadline
+} from "./operation-deadline-serialization.js";
 import type { PendingTurnSettingsReader } from "./pending-turn-settings.js";
 
 type GoalOperationIntent = Extract<SelectedOperationIntent, { readonly kind: "goal" }>;
@@ -30,6 +34,7 @@ export type CodexGoalControlErrorCode =
   | "capability_unsupported"
   | "goal_missing"
   | "invalid_request"
+  | "operation_timeout"
   | "operation_conflict"
   | "pending_settings_conflict"
   | "runtime_protocol_error"
@@ -77,9 +82,9 @@ export interface CodexGoalControlServiceOptions {
 }
 
 export interface CodexGoalControlService {
-  readonly snapshot: (target: unknown, signal?: AbortSignal) => Promise<GoalControlSnapshot>;
-  readonly mutate: (intent: unknown, signal?: AbortSignal) => Promise<CodexGoalMutationResult>;
-  readonly reconcile: (target: unknown, signal?: AbortSignal) => Promise<GoalControlSnapshot>;
+  readonly snapshot: (target: unknown, deadline: OperationDeadline) => Promise<GoalControlSnapshot>;
+  readonly mutate: (intent: unknown, deadline: OperationDeadline) => Promise<CodexGoalMutationResult>;
+  readonly reconcile: (target: unknown, deadline?: OperationDeadline) => Promise<GoalControlSnapshot>;
   readonly observeGoal: (event: NormalizedCodexEvent) => Promise<void>;
   readonly uncertain_count: number;
 }
@@ -94,9 +99,9 @@ const activeTurnStates = new Set(["in_progress", "waiting_for_approval", "waitin
 export function createCodexGoalControlService(options: CodexGoalControlServiceOptions): CodexGoalControlService {
   const implementation = new DefaultCodexGoalControlService(options);
   return Object.freeze({
-    snapshot: (target: unknown, signal?: AbortSignal) => implementation.snapshot(target, signal),
-    mutate: (intent: unknown, signal?: AbortSignal) => implementation.mutate(intent, signal),
-    reconcile: (target: unknown, signal?: AbortSignal) => implementation.reconcile(target, signal),
+    snapshot: (target: unknown, deadline: OperationDeadline) => implementation.snapshot(target, deadline),
+    mutate: (intent: unknown, deadline: OperationDeadline) => implementation.mutate(intent, deadline),
+    reconcile: (target: unknown, deadline?: OperationDeadline) => implementation.reconcile(target, deadline),
     observeGoal: (event: NormalizedCodexEvent) => implementation.observeGoal(event),
     get uncertain_count() {
       return implementation.uncertain_count;
@@ -134,17 +139,17 @@ class DefaultCodexGoalControlService implements CodexGoalControlService {
     return this.uncertainBySession.size;
   }
 
-  async snapshot(target: unknown, signal?: AbortSignal): Promise<GoalControlSnapshot> {
+  async snapshot(target: unknown, deadline: OperationDeadline): Promise<GoalControlSnapshot> {
     const parsedTarget = parseTarget(target);
     return this.serialized(parsedTarget.session_id, async () => {
       const state = this.requireTarget(parsedTarget, false);
-      const goal = await this.readGoal(state, signal);
+      const goal = await this.readGoal(state, deadline);
       this.requireTarget(parsedTarget, false);
       return this.buildSnapshot(parsedTarget.session_id, goal);
-    });
+    }, deadline);
   }
 
-  async mutate(input: unknown, signal?: AbortSignal): Promise<CodexGoalMutationResult> {
+  async mutate(input: unknown, deadline: OperationDeadline): Promise<CodexGoalMutationResult> {
     const intent = parseIntent(input);
     return this.serialized(intent.target.session_id, async () => {
       const state = this.requireTarget(intent.target, true);
@@ -157,26 +162,27 @@ class DefaultCodexGoalControlService implements CodexGoalControlService {
           false
         );
       }
-      const current = await this.readGoal(state, signal);
+      const current = await this.readGoal(state, deadline);
+      requireGoalDeadline(deadline);
       const currentState = this.requireTarget(intent.target, true);
       assertExpectedRevision(intent, current);
       assertTransition(intent, current, currentState, this.options.pending_settings);
 
       const noOp = noOpResult(intent, current);
       if (noOp !== null) return noOp;
-      return this.withUncertainReservation(() => this.executeMutation(intent, current, signal));
-    });
+      return this.withUncertainReservation(() => this.executeMutation(intent, current, deadline));
+    }, deadline);
   }
 
   private async executeMutation(
     intent: GoalOperationIntent,
     current: CodexThreadGoal | null,
-    signal?: AbortSignal
+    deadline: OperationDeadline
   ): Promise<CodexGoalMutationResult> {
     const uncertain = this.createUncertain(intent, current);
     let response: CodexThreadGoal | null;
     try {
-      response = await this.dispatch(intent, signal);
+      response = await this.dispatch(intent, deadline);
     } catch (error) {
       const mapped = mapMutationError(error, "Codex goal mutation failed.");
       if (mapped.outcome === "unknown") this.latchUncertain(intent.target.session_id, uncertain, mapped);
@@ -199,7 +205,7 @@ class DefaultCodexGoalControlService implements CodexGoalControlService {
     let readBack: CodexThreadGoal | null;
     try {
       const latestState = this.requireTarget(intent.target, false);
-      readBack = await this.readGoal(latestState, signal);
+      readBack = await this.readGoal(latestState, deadline);
       this.requireTarget(intent.target, false);
     } catch (error) {
       const mapped = verificationUnknown(error);
@@ -232,7 +238,7 @@ class DefaultCodexGoalControlService implements CodexGoalControlService {
     });
   }
 
-  async reconcile(target: unknown, signal?: AbortSignal): Promise<GoalControlSnapshot> {
+  async reconcile(target: unknown, deadline?: OperationDeadline): Promise<GoalControlSnapshot> {
     const parsedTarget = parseTarget(target);
     return this.serialized(parsedTarget.session_id, async () => {
       const uncertain = this.uncertainBySession.get(parsedTarget.session_id);
@@ -246,7 +252,7 @@ class DefaultCodexGoalControlService implements CodexGoalControlService {
         );
       }
       const state = this.requireTarget(parsedTarget, false);
-      const current = await this.readGoal(state, signal);
+      const current = await this.readGoal(state, deadline);
       this.requireTarget(parsedTarget, false);
       if (matchesUncertain(uncertain, current)) {
         this.uncertainBySession.delete(parsedTarget.session_id);
@@ -261,7 +267,7 @@ class DefaultCodexGoalControlService implements CodexGoalControlService {
         this.latchConflict(parsedTarget.session_id, uncertain, conflict);
       }
       return this.buildSnapshot(parsedTarget.session_id, current);
-    });
+    }, deadline);
   }
 
   async observeGoal(event: NormalizedCodexEvent): Promise<void> {
@@ -296,27 +302,31 @@ class DefaultCodexGoalControlService implements CodexGoalControlService {
     });
   }
 
-  private async dispatch(intent: GoalOperationIntent, signal?: AbortSignal): Promise<CodexThreadGoal | null> {
+  private async dispatch(intent: GoalOperationIntent, deadline: OperationDeadline): Promise<CodexThreadGoal | null> {
+    requireGoalDeadline(deadline);
     switch (intent.action) {
       case "set":
-        return this.options.goals.setPaused(intent.target.codex_thread_id, intent.objective as string, signal);
+        return this.options.goals.setPaused(intent.target.codex_thread_id, intent.objective as string, deadline);
       case "pause":
-        return this.options.goals.setStatus(intent.target.codex_thread_id, "paused", signal);
+        return this.options.goals.setStatus(intent.target.codex_thread_id, "paused", deadline);
       case "resume":
-        return this.options.goals.setStatus(intent.target.codex_thread_id, "active", signal);
+        return this.options.goals.setStatus(intent.target.codex_thread_id, "active", deadline);
       case "complete":
-        return this.options.goals.setStatus(intent.target.codex_thread_id, "complete", signal);
+        return this.options.goals.setStatus(intent.target.codex_thread_id, "complete", deadline);
       case "clear": {
-        const cleared = await this.options.goals.clear(intent.target.codex_thread_id, signal);
+        const cleared = await this.options.goals.clear(intent.target.codex_thread_id, deadline);
         if (!cleared) throw protocolError("Codex did not acknowledge clearing the existing goal.");
         return null;
       }
     }
   }
 
-  private async readGoal(state: SelectedSessionState, signal?: AbortSignal): Promise<CodexThreadGoal | null> {
+  private async readGoal(
+    state: SelectedSessionState,
+    deadline?: OperationDeadline
+  ): Promise<CodexThreadGoal | null> {
     try {
-      const goal = await this.options.goals.read(state.mapping.codex_thread_id, signal);
+      const goal = await this.options.goals.read(state.mapping.codex_thread_id, deadline);
       if (goal !== null && goal.thread_id !== state.mapping.codex_thread_id) {
         throw protocolError("Codex goal read-back changed the selected thread identity.");
       }
@@ -476,7 +486,21 @@ class DefaultCodexGoalControlService implements CodexGoalControlService {
     }
   }
 
-  private serialized<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
+  private serialized<T>(
+    sessionId: string,
+    operation: () => Promise<T>,
+    deadline?: OperationDeadline
+  ): Promise<T> {
+    if (deadline !== undefined) {
+      return runSerializedWithDeadline(
+        this.tails,
+        sessionId,
+        deadline,
+        goalDeadlineError,
+        operation,
+        goalInvalidDeadlineError
+      );
+    }
     const prior = this.tails.get(sessionId) ?? Promise.resolve();
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
@@ -682,6 +706,16 @@ function mapAdapterError(error: unknown, fallback: string): HostDeckCodexGoalCon
   if (error.code === "unsupported_method") {
     return goalError("capability_unsupported", "capability_unavailable", error.message, "not_sent", false, error);
   }
+  if (["request_aborted", "request_timeout"].includes(error.code)) {
+    return goalError(
+      "operation_timeout",
+      "operation_timeout",
+      error.message,
+      error.outcome === "unknown" ? "unknown" : "not_sent",
+      error.outcome === "unknown" ? false : error.retry_safe,
+      error
+    );
+  }
   if (error.outcome === "unknown") {
     return goalError("unknown_outcome", "unknown_error", error.message, "unknown", false, error);
   }
@@ -710,6 +744,19 @@ function mapMutationError(error: unknown, fallback: string): HostDeckCodexGoalCo
 }
 
 function verificationUnknown(error: unknown): HostDeckCodexGoalControlError {
+  if (
+    error instanceof HostDeckCodexGoalControlError &&
+    error.api_code === "operation_timeout"
+  ) {
+    return goalError(
+      "operation_timeout",
+      "operation_timeout",
+      error.message,
+      "unknown",
+      false,
+      error
+    );
+  }
   return goalError(
     "unknown_outcome",
     "unknown_error",
@@ -717,6 +764,36 @@ function verificationUnknown(error: unknown): HostDeckCodexGoalControlError {
     "unknown",
     false,
     error
+  );
+}
+
+function requireGoalDeadline(candidate: unknown): OperationDeadline {
+  return requireOpenOperationDeadline(
+    candidate,
+    goalDeadlineError,
+    goalInvalidDeadlineError
+  );
+}
+
+function goalInvalidDeadlineError(cause: unknown): HostDeckCodexGoalControlError {
+  return goalError(
+    "invalid_request",
+    "validation_error",
+    "The goal request deadline is invalid.",
+    "not_sent",
+    false,
+    cause
+  );
+}
+
+function goalDeadlineError(cause: unknown): HostDeckCodexGoalControlError {
+  return goalError(
+    "operation_timeout",
+    "operation_timeout",
+    "Codex goal operation exceeded its request deadline.",
+    "not_sent",
+    true,
+    cause
   );
 }
 

@@ -40,6 +40,23 @@ import {
   type CodexUsageControlService,
   createCodexUsageControlService
 } from "./codex-usage-control-service.js";
+import {
+  type WithTestOperationDeadlines,
+  withTestOperationDeadlines
+} from "./test-operation-deadline.js";
+
+type TestCompactControlService = WithTestOperationDeadlines<
+  CodexCompactControlService,
+  "compact"
+>;
+type TestInterruptControlService = WithTestOperationDeadlines<
+  CodexInterruptControlService,
+  "interrupt" | "waitForTerminal"
+>;
+type TestUsageControlService = WithTestOperationDeadlines<
+  CodexUsageControlService,
+  "read"
+>;
 
 const requireSmoke = process.env.HOSTDECK_REQUIRE_CODEX_COMPACT_SMOKE === "1";
 const codexBin = process.env.HOSTDECK_CODEX_BIN ?? "codex";
@@ -142,11 +159,14 @@ describe.skipIf(!requireSmoke)("exact Codex compact-control smoke", () => {
             return connection.request(input);
           }
         });
-        const compactService = createCodexCompactControlService({ compact: compactClient, states: statePort });
-        const usageService = createCodexUsageControlService({
+        const compactService = withTestOperationDeadlines(
+          createCodexCompactControlService({ compact: compactClient, states: statePort }),
+          ["compact"]
+        );
+        const usageService = withTestOperationDeadlines(createCodexUsageControlService({
           usage: createCodexUsageClient(connection),
           states: statePort
-        });
+        }), ["read"]);
 
         const turnMethods: string[] = [];
         const turns = createCodexTurnClient({
@@ -158,7 +178,10 @@ describe.skipIf(!requireSmoke)("exact Codex compact-control smoke", () => {
             return connection.request(input);
           }
         });
-        const interruptService = createCodexInterruptControlService({ turns, states: statePort });
+        const interruptService = withTestOperationDeadlines(
+          createCodexInterruptControlService({ turns, states: statePort }),
+          ["interrupt", "waitForTerminal"]
+        );
         const normalizer = createCodexEventNormalizer({
           is_managed_thread: (candidate) => candidate === threadA || candidate === threadB
         });
@@ -431,9 +454,9 @@ async function processNotificationsThrough(
   cursor: { value: number },
   endIndex: number,
   normalizer: CodexEventNormalizer,
-  compactService: CodexCompactControlService,
-  interruptService: CodexInterruptControlService,
-  usageService: CodexUsageControlService,
+  compactService: TestCompactControlService,
+  interruptService: TestInterruptControlService,
+  usageService: TestUsageControlService,
   generation: number
 ): Promise<void> {
   for (let index = cursor.value; index <= endIndex; index += 1) {

@@ -16,6 +16,10 @@ import {
   createCodexSkillsControlService,
   HostDeckCodexSkillsControlError
 } from "./codex-skills-control-service.js";
+import {
+  testOperationDeadline,
+  withTestOperationDeadlines
+} from "./test-operation-deadline.js";
 
 const targetA = {
   type: "managed_session",
@@ -59,7 +63,9 @@ describe("Codex skills control service", () => {
       ],
       error_count: 0
     });
-    expect(harness.skills.calls).toEqual([{ cwd: cwdA, signal: controller.signal }]);
+    expect(harness.skills.calls).toHaveLength(1);
+    expect(harness.skills.calls[0]).toMatchObject({ cwd: cwdA });
+    expect(harness.skills.calls[0]?.deadline?.signal).toBe(controller.signal);
     expect(harness.states.getCalls).toBe(2);
     expect(Object.isFrozen(harness.service)).toBe(true);
     expect(Object.isFrozen(snapshot)).toBe(true);
@@ -196,7 +202,7 @@ describe("Codex skills control service", () => {
       ["unsupported_method", "capability_unsupported"],
       ["invalid_protocol_message", "runtime_protocol_error"],
       ["broker_overloaded", "service_overloaded"],
-      ["request_timeout", "runtime_unavailable"]
+      ["request_timeout", "operation_timeout"]
     ] as const;
     for (const [adapterCode, controlCode] of mappings) {
       const harness = createHarness();
@@ -260,7 +266,8 @@ describe("Codex skills control service", () => {
     };
     await expectControlError(
       createCodexSkillsControlService({ skills: harness.skills, states: brokenStates }).list(
-        skillsIntent(targetA, "op_skills_control_storage_0001")
+        skillsIntent(targetA, "op_skills_control_storage_0001"),
+        testOperationDeadline()
       ),
       "state_unavailable"
     );
@@ -308,7 +315,10 @@ class MemorySkillsStates implements CodexSkillsControlStatePort {
 function createHarness() {
   const skills = new FakeSkillsClient();
   const states = new MemorySkillsStates();
-  const service = createCodexSkillsControlService({ skills, states });
+  const service = withTestOperationDeadlines(
+    createCodexSkillsControlService({ skills, states }),
+    ["list"]
+  );
   return { skills, states, service };
 }
 

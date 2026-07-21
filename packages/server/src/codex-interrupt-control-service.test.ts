@@ -15,6 +15,15 @@ import {
   createCodexInterruptControlService,
   HostDeckCodexInterruptControlError
 } from "./codex-interrupt-control-service.js";
+import {
+  type WithTestOperationDeadlines,
+  withTestOperationDeadlines
+} from "./test-operation-deadline.js";
+
+type TestInterruptControlService = WithTestOperationDeadlines<
+  CodexInterruptControlService,
+  "interrupt" | "waitForTerminal"
+>;
 
 const observedAt = "2026-07-10T22:30:00.000Z";
 interface TestTarget {
@@ -42,8 +51,12 @@ describe("Codex interrupt control", () => {
     const harness = createHarness();
     harness.states.set(targetA.session_id, selectedState(targetA, "in_progress"));
     await harness.service.observeEvent(turnStartedEvent(targetA));
+    const controller = new AbortController();
 
-    const accepted = await harness.service.interrupt(interruptIntent(targetA, "op_interrupt_accept_0001"));
+    const accepted = await harness.service.interrupt(
+      interruptIntent(targetA, "op_interrupt_accept_0001"),
+      controller.signal
+    );
     expect(accepted).toMatchObject({
       operation_id: "op_interrupt_accept_0001",
       kind: "interrupt",
@@ -53,13 +66,13 @@ describe("Codex interrupt control", () => {
       error: null
     });
     expect(Object.isFrozen(accepted)).toBe(true);
-    expect(harness.turns.calls).toEqual([
-      {
-        operation_id: "op_interrupt_accept_0001",
-        thread_id: targetA.codex_thread_id,
-        turn_id: targetA.turn_id
-      }
-    ]);
+    expect(harness.turns.calls).toHaveLength(1);
+    expect(harness.turns.calls[0]).toMatchObject({
+      operation_id: "op_interrupt_accept_0001",
+      thread_id: targetA.codex_thread_id,
+      turn_id: targetA.turn_id
+    });
+    expect(harness.turns.calls[0]?.deadline?.signal).toBe(controller.signal);
     expect(harness.service.active_count).toBe(1);
     expect(harness.service.pending_count).toBe(1);
 
@@ -99,7 +112,7 @@ describe("Codex interrupt control", () => {
     const abortController = new AbortController();
     const abortedWait = aborted.service.waitForTerminal(targetA, abortController.signal);
     abortController.abort();
-    const waitError = await expectInterruptError(abortedWait, "unknown_outcome");
+    const waitError = await expectInterruptError(abortedWait, "operation_timeout");
     expect(waitError).toMatchObject({ api_code: "operation_timeout", outcome: "unknown", retry_safe: false });
     await aborted.service.observeEvent(turnCompletedEvent(targetA, "interrupted"));
     await expect(aborted.service.waitForTerminal(targetA, new AbortController().signal)).resolves.toMatchObject({
@@ -144,11 +157,11 @@ describe("Codex interrupt control", () => {
 
     await expectInterruptError(
       harness.service.interrupt(interruptIntent(targetA, "op_interrupt_unknown_0001")),
-      "unknown_outcome"
+      "operation_timeout"
     );
     expect(await harness.service.snapshot(targetA)).toMatchObject({
       state: "incomplete",
-      error: { code: "unknown_error", retryable: false }
+      error: { code: "operation_timeout", retryable: false }
     });
     harness.turns.error = null;
     await expectInterruptError(
@@ -473,7 +486,7 @@ interface FakeTurns {
 }
 
 interface Harness {
-  readonly service: CodexInterruptControlService;
+  readonly service: TestInterruptControlService;
   readonly turns: FakeTurns;
   readonly states: Map<string, SelectedSessionState>;
   readonly now: { value: string };
@@ -508,7 +521,7 @@ function createHarness(
   const states = new Map<string, SelectedSessionState>([[targetA.session_id, selectedState(targetA)]]);
   if (options.includeSecondState) states.set(targetB.session_id, selectedState(targetB));
   const now = { value: observedAt };
-  const service = createCodexInterruptControlService({
+  const service = withTestOperationDeadlines(createCodexInterruptControlService({
     turns,
     states: {
       get: (sessionId) => {
@@ -519,7 +532,7 @@ function createHarness(
     },
     ...(options.maxTrackedTurns === undefined ? {} : { max_tracked_turns: options.maxTrackedTurns }),
     now: () => now.value
-  });
+  }), ["interrupt", "waitForTerminal"]);
   return { service, turns, states, now };
 }
 

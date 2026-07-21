@@ -18,8 +18,12 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
-import type { ErrorCode, IsoTimestamp } from "@hostdeck/core";
+import type { ErrorCode, IsoTimestamp, OperationDeadline } from "@hostdeck/core";
 import type { SelectedSessionState, SelectedStateRepository } from "@hostdeck/storage";
+import {
+  requireOpenOperationDeadline,
+  runSerializedWithDeadline
+} from "./operation-deadline-serialization.js";
 
 type ApprovalResponseIntent = Extract<SelectedOperationIntent, { readonly kind: "approval_response" }>;
 
@@ -28,6 +32,7 @@ export type CodexApprovalControlErrorCode =
   | "capability_unsupported"
   | "invalid_request"
   | "operation_conflict"
+  | "operation_timeout"
   | "runtime_protocol_error"
   | "runtime_unavailable"
   | "service_overloaded"
@@ -72,8 +77,8 @@ export interface CodexApprovalControlService {
   readonly register: (message: unknown) => PendingApproval;
   readonly snapshot: (target: unknown) => Promise<PendingApproval | null>;
   readonly list: (target: unknown) => Promise<readonly PendingApproval[]>;
-  readonly respond: (intent: unknown) => Promise<PendingApproval>;
-  readonly waitForTerminal: (target: unknown, signal: AbortSignal) => Promise<PendingApproval>;
+  readonly respond: (intent: unknown, deadline: OperationDeadline) => Promise<PendingApproval>;
+  readonly waitForTerminal: (target: unknown, deadline: OperationDeadline) => Promise<PendingApproval>;
   readonly observeEvent: (event: NormalizedCodexEvent) => Promise<void>;
   readonly expireDue: () => Promise<number>;
   readonly disconnect: (generation: unknown) => Promise<number>;
@@ -124,8 +129,8 @@ export function createCodexApprovalControlService(
     register: (message: unknown) => implementation.register(message),
     snapshot: (target: unknown) => implementation.snapshot(target),
     list: (target: unknown) => implementation.list(target),
-    respond: (intent: unknown) => implementation.respond(intent),
-    waitForTerminal: (target: unknown, signal: AbortSignal) => implementation.waitForTerminal(target, signal),
+    respond: (intent: unknown, deadline: OperationDeadline) => implementation.respond(intent, deadline),
+    waitForTerminal: (target: unknown, deadline: OperationDeadline) => implementation.waitForTerminal(target, deadline),
     observeEvent: (event: NormalizedCodexEvent) => implementation.observeEvent(event),
     expireDue: () => implementation.expireDue(),
     disconnect: (generation: unknown) => implementation.disconnect(generation),
@@ -266,7 +271,7 @@ class DefaultCodexApprovalControlService implements CodexApprovalControlService 
     );
   }
 
-  async respond(input: unknown): Promise<PendingApproval> {
+  async respond(input: unknown, deadline: OperationDeadline): Promise<PendingApproval> {
     const intent = parseResponseIntent(input);
     return this.serialized(intent.target.request_id, async () => {
       this.assertOpen();
@@ -305,7 +310,12 @@ class DefaultCodexApprovalControlService implements CodexApprovalControlService 
       record.response_outcome = "sending";
       this.updatePublic(record, { state: "responding", decision: null });
       try {
-        await this.options.approvals.respond({ request: record.request, decision: intent.decision });
+        requireApprovalDeadline(deadline);
+        await this.options.approvals.respond({
+          request: record.request,
+          decision: intent.decision,
+          deadline
+        });
         if (record.closed) {
           throw approvalError(
             "unknown_outcome",
@@ -338,21 +348,20 @@ class DefaultCodexApprovalControlService implements CodexApprovalControlService 
         }
         throw mapped;
       }
-    });
+    }, deadline);
   }
 
-  async waitForTerminal(targetInput: unknown, signal: AbortSignal): Promise<PendingApproval> {
+  async waitForTerminal(
+    targetInput: unknown,
+    deadline: OperationDeadline
+  ): Promise<PendingApproval> {
     const target = parseApprovalTarget(targetInput);
-    if (!(signal instanceof AbortSignal)) {
-      throw approvalError(
-        "invalid_request",
-        "validation_error",
-        "The approval terminal-wait signal is invalid.",
-        "not_sent",
-        true
-      );
-    }
-    if (signal.aborted) throw terminalWaitAborted();
+    requireOpenOperationDeadline(
+      deadline,
+      terminalWaitAborted,
+      approvalInvalidDeadlineError
+    );
+    const signal = deadline.signal;
 
     const record = this.requireTargetRecord(target);
     if (record.closed) return record.public_state;
@@ -382,7 +391,7 @@ class DefaultCodexApprovalControlService implements CodexApprovalControlService 
         if (settled) return;
         settled = true;
         cleanup();
-        reject(terminalWaitAborted());
+        reject(terminalWaitAborted(signal.reason));
       };
       const waiter: TerminalWaiter = {
         signal,
@@ -888,7 +897,21 @@ class DefaultCodexApprovalControlService implements CodexApprovalControlService 
     }
   }
 
-  private serialized<T>(requestId: string, operation: () => Promise<T>): Promise<T> {
+  private serialized<T>(
+    requestId: string,
+    operation: () => Promise<T>,
+    deadline?: OperationDeadline
+  ): Promise<T> {
+    if (deadline !== undefined) {
+      return runSerializedWithDeadline(
+        this.tails,
+        requestId,
+        deadline,
+        approvalDeadlineError,
+        operation,
+        approvalInvalidDeadlineError
+      );
+    }
     const prior = this.tails.get(requestId) ?? Promise.resolve();
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
@@ -1024,13 +1047,14 @@ function readExactDataObject<const Keys extends readonly string[]>(
   >;
 }
 
-function terminalWaitAborted(): HostDeckCodexApprovalControlError {
+function terminalWaitAborted(cause?: unknown): HostDeckCodexApprovalControlError {
   return approvalError(
-    "unknown_outcome",
+    "operation_timeout",
     "operation_timeout",
     "Approval terminal proof was interrupted before an authoritative outcome.",
     "unknown",
-    false
+    false,
+    cause
   );
 }
 
@@ -1094,6 +1118,16 @@ function mapAdapterError(error: unknown, fallback: string): HostDeckCodexApprova
   if (error.code === "unsupported_method") {
     return approvalError("capability_unsupported", "capability_unavailable", error.message, "not_sent", false, error);
   }
+  if (["request_aborted", "request_timeout"].includes(error.code)) {
+    return approvalError(
+      "operation_timeout",
+      "operation_timeout",
+      error.message,
+      error.outcome === "unknown" ? "unknown" : "not_sent",
+      error.outcome === "unknown" ? false : error.retry_safe,
+      error
+    );
+  }
   if (error.outcome === "unknown" || error.outcome === "not_applicable") {
     return approvalError("unknown_outcome", "unknown_error", error.message, "unknown", false, error);
   }
@@ -1104,6 +1138,36 @@ function mapAdapterError(error: unknown, fallback: string): HostDeckCodexApprova
     return approvalError("service_overloaded", "service_overloaded", error.message, "not_sent", error.retry_safe, error);
   }
   return approvalError("runtime_unavailable", "runtime_unavailable", error.message || fallback, "not_sent", error.retry_safe, error);
+}
+
+function requireApprovalDeadline(candidate: unknown): OperationDeadline {
+  return requireOpenOperationDeadline(
+    candidate,
+    approvalDeadlineError,
+    approvalInvalidDeadlineError
+  );
+}
+
+function approvalInvalidDeadlineError(cause: unknown): HostDeckCodexApprovalControlError {
+  return approvalError(
+    "invalid_request",
+    "validation_error",
+    "The approval request deadline is invalid.",
+    "not_sent",
+    false,
+    cause
+  );
+}
+
+function approvalDeadlineError(cause: unknown): HostDeckCodexApprovalControlError {
+  return approvalError(
+    "operation_timeout",
+    "operation_timeout",
+    "Codex approval response exceeded its request deadline.",
+    "not_sent",
+    true,
+    cause
+  );
 }
 
 function approvalError(

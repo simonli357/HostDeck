@@ -15,7 +15,7 @@ import {
   resourceBudgetDefinitionByKey,
   type SelectedOperationIntent
 } from "@hostdeck/contracts";
-import type { ErrorCode, IsoTimestamp } from "@hostdeck/core";
+import type { ErrorCode, IsoTimestamp, OperationDeadline } from "@hostdeck/core";
 import type { SelectedSessionState, SelectedStateRepository } from "@hostdeck/storage";
 import {
   type CodexModelControlService,
@@ -25,6 +25,10 @@ import {
   type CodexPlanControlService,
   HostDeckCodexPlanControlError
 } from "./codex-plan-control-service.js";
+import {
+  requireOpenOperationDeadline,
+  runSerializedWithDeadline
+} from "./operation-deadline-serialization.js";
 import {
   combinePendingTurnSettingsReaders,
   type PendingTurnSetting,
@@ -37,6 +41,7 @@ export type CodexPromptControlErrorCode =
   | "capability_unsupported"
   | "invalid_request"
   | "operation_conflict"
+  | "operation_timeout"
   | "runtime_protocol_error"
   | "runtime_unavailable"
   | "service_overloaded"
@@ -92,7 +97,7 @@ export interface CodexPromptControlServiceOptions {
 
 export interface CodexPromptControlService {
   readonly snapshot: (target: unknown) => Promise<PromptTurnControlSnapshot>;
-  readonly dispatch: (intent: unknown, signal?: AbortSignal) => Promise<CodexPromptDispatchResult>;
+  readonly dispatch: (intent: unknown, deadline: OperationDeadline) => Promise<CodexPromptDispatchResult>;
   readonly observeEvent: (event: NormalizedCodexEvent) => Promise<void>;
   readonly tracked_count: number;
 }
@@ -121,7 +126,7 @@ export function createCodexPromptControlService(options: CodexPromptControlServi
   const implementation = new DefaultCodexPromptControlService(options);
   return Object.freeze({
     snapshot: (target: unknown) => implementation.snapshot(target),
-    dispatch: (intent: unknown, signal?: AbortSignal) => implementation.dispatch(intent, signal),
+    dispatch: (intent: unknown, deadline: OperationDeadline) => implementation.dispatch(intent, deadline),
     observeEvent: (event: NormalizedCodexEvent) => implementation.observeEvent(event),
     get tracked_count() {
       return implementation.tracked_count;
@@ -173,16 +178,13 @@ class DefaultCodexPromptControlService implements CodexPromptControlService {
     });
   }
 
-  async dispatch(input: unknown, signal?: AbortSignal): Promise<CodexPromptDispatchResult> {
+  async dispatch(input: unknown, deadline: OperationDeadline): Promise<CodexPromptDispatchResult> {
     const intent = parsePromptIntent(input);
-    if (signal !== undefined && !(signal instanceof AbortSignal)) {
-      throw promptError("invalid_request", "validation_error", "The prompt request signal is invalid.", "not_sent", true);
-    }
     return this.serialized(intent.target.session_id, async () => {
       const state = this.requireTarget(intent.target, true);
       this.reconcileTerminalProjection(intent.target.session_id, state);
       if (state.projection.session.turn_state === "in_progress") {
-        return this.steer(intent, state, signal);
+        return this.steer(intent, state, deadline);
       }
       if (activeTurnStates.has(state.projection.session.turn_state)) {
         throw promptError(
@@ -193,8 +195,8 @@ class DefaultCodexPromptControlService implements CodexPromptControlService {
           true
         );
       }
-      return this.start(intent, state, signal);
-    });
+      return this.start(intent, state, deadline);
+    }, deadline);
   }
 
   async observeEvent(event: NormalizedCodexEvent): Promise<void> {
@@ -245,7 +247,7 @@ class DefaultCodexPromptControlService implements CodexPromptControlService {
   private async start(
     intent: PromptOperationIntent,
     state: SelectedSessionState,
-    signal?: AbortSignal
+    deadline: OperationDeadline
   ): Promise<CodexPromptDispatchResult> {
     const existing = this.stateBySession.get(intent.target.session_id);
     if (existing !== undefined) {
@@ -313,6 +315,7 @@ class DefaultCodexPromptControlService implements CodexPromptControlService {
     let accepted: CodexTurnAccepted;
     let acceptedBeforeFailure: CodexTurnAccepted | null = null;
     try {
+      requirePromptDeadline(deadline);
       if (planRevision !== null) {
         const result = await this.options.plans.dispatchPendingTurn(
           {
@@ -320,7 +323,7 @@ class DefaultCodexPromptControlService implements CodexPromptControlService {
             expected_plan_revision: planRevision,
             expected_model_revision: modelRevision
           },
-          signal
+          deadline
         );
         acceptedBeforeFailure = result;
         if (result.plan_revision !== planRevision || result.model_revision !== modelRevision) {
@@ -336,7 +339,7 @@ class DefaultCodexPromptControlService implements CodexPromptControlService {
       } else if (modelRevision !== null) {
         const result = await this.options.models.dispatchPendingTurn(
           { ...intent, expected_pending_revision: modelRevision },
-          signal
+          deadline
         );
         acceptedBeforeFailure = result;
         if (result.pending_revision !== modelRevision) {
@@ -355,7 +358,7 @@ class DefaultCodexPromptControlService implements CodexPromptControlService {
           thread_id: intent.target.codex_thread_id,
           text: intent.text,
           settings: { kind: "inherit" },
-          ...(signal === undefined ? {} : { signal })
+          deadline
         });
         acceptedBeforeFailure = accepted;
       }
@@ -477,7 +480,7 @@ class DefaultCodexPromptControlService implements CodexPromptControlService {
   private async steer(
     intent: PromptOperationIntent,
     state: SelectedSessionState,
-    signal?: AbortSignal
+    deadline: OperationDeadline
   ): Promise<CodexPromptDispatchResult> {
     const current = this.stateBySession.get(intent.target.session_id);
     if (current?.phase !== "steerable" || current.turn_id === null || current.started_at === null || current.accepted_at === null) {
@@ -513,12 +516,13 @@ class DefaultCodexPromptControlService implements CodexPromptControlService {
     );
 
     try {
+      requirePromptDeadline(deadline);
       const steered = await this.options.turns.steerTurn({
         operation_id: intent.operation_id,
         thread_id: intent.target.codex_thread_id,
         expected_turn_id: current.turn_id,
         text: intent.text,
-        ...(signal === undefined ? {} : { signal })
+        deadline
       });
       if (steered.thread_id !== intent.target.codex_thread_id || steered.turn_id !== current.turn_id) {
         throw promptError(
@@ -663,7 +667,21 @@ class DefaultCodexPromptControlService implements CodexPromptControlService {
     return parsed.data;
   }
 
-  private serialized<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
+  private serialized<T>(
+    sessionId: string,
+    operation: () => Promise<T>,
+    deadline?: OperationDeadline
+  ): Promise<T> {
+    if (deadline !== undefined) {
+      return runSerializedWithDeadline(
+        this.tails,
+        sessionId,
+        deadline,
+        promptDeadlineError,
+        operation,
+        promptInvalidDeadlineError
+      );
+    }
     const prior = this.tails.get(sessionId) ?? Promise.resolve();
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
@@ -738,6 +756,16 @@ function mapDispatchError(error: unknown, fallback: string): HostDeckCodexPrompt
     if (error.code === "service_overloaded") {
       return promptError("service_overloaded", error.api_code, error.message, "not_sent", error.retry_safe, error);
     }
+    if (error.code === "operation_timeout") {
+      return promptError(
+        "operation_timeout",
+        "operation_timeout",
+        error.message,
+        error.outcome === "unknown" ? "unknown" : "not_sent",
+        error.outcome === "unknown" ? false : error.retry_safe,
+        error
+      );
+    }
     if (error.outcome === "unknown") {
       return promptError("unknown_outcome", "unknown_error", error.message, "unknown", false, error);
     }
@@ -764,6 +792,16 @@ function mapDispatchError(error: unknown, fallback: string): HostDeckCodexPrompt
   if (error.code === "unsupported_method") {
     return promptError("capability_unsupported", "capability_unavailable", error.message, "not_sent", false, error);
   }
+  if (["request_aborted", "request_timeout"].includes(error.code)) {
+    return promptError(
+      "operation_timeout",
+      "operation_timeout",
+      error.message,
+      error.outcome === "unknown" ? "unknown" : "not_sent",
+      error.outcome === "unknown" ? false : error.retry_safe,
+      error
+    );
+  }
   if (error.outcome === "unknown") {
     return promptError("unknown_outcome", "unknown_error", error.message, "unknown", false, error);
   }
@@ -783,6 +821,36 @@ function mapDispatchError(error: unknown, fallback: string): HostDeckCodexPrompt
     return promptError("service_overloaded", "service_overloaded", error.message, "not_sent", error.retry_safe, error);
   }
   return promptError("runtime_unavailable", "runtime_unavailable", error.message || fallback, "not_sent", error.retry_safe, error);
+}
+
+function requirePromptDeadline(candidate: unknown): OperationDeadline {
+  return requireOpenOperationDeadline(
+    candidate,
+    promptDeadlineError,
+    promptInvalidDeadlineError
+  );
+}
+
+function promptInvalidDeadlineError(cause: unknown): HostDeckCodexPromptControlError {
+  return promptError(
+    "invalid_request",
+    "validation_error",
+    "The prompt request deadline is invalid.",
+    "not_sent",
+    false,
+    cause
+  );
+}
+
+function promptDeadlineError(cause: unknown): HostDeckCodexPromptControlError {
+  return promptError(
+    "operation_timeout",
+    "operation_timeout",
+    "Codex prompt operation exceeded its request deadline.",
+    "not_sent",
+    true,
+    cause
+  );
 }
 
 function errorEnvelope(error: HostDeckCodexPromptControlError): NonNullable<PromptTurnControlSnapshot["error"]> {

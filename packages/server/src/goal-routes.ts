@@ -12,7 +12,7 @@ import {
   selectedSessionProjectionRecordSchema,
   sessionIdParamsSchema
 } from "@hostdeck/contracts";
-import type { ErrorCode } from "@hostdeck/core";
+import type { ErrorCode, OperationDeadline } from "@hostdeck/core";
 import type { SelectedStateRepository } from "@hostdeck/storage";
 import type { FastifyReply } from "fastify";
 import { z } from "zod";
@@ -25,7 +25,8 @@ import { assertHostDeckCsrfPolicy, type HostDeckCsrfPolicy } from "./csrf-routes
 import {
   type HostDeckFastifyInstance,
   type HostDeckRoutePluginRegistration,
-  hostDeckNoStoreRouteConfig
+  hostDeckNoStoreRouteConfig,
+  hostDeckRequestDeadline
 } from "./fastify-app.js";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import { requireHostDeckRequestAuthentication } from "./fastify-request-authentication.js";
@@ -162,7 +163,11 @@ export function createHostDeckGoalRouteRegistration(
           rejectReadBody(request.body, request.headers["content-length"], request.headers["transfer-encoding"]);
           const params = sessionIdParamsSchema.parse(request.params);
           const admitted = resolveGoalAdmission(ports, params.session_id, false);
-          const snapshot = await readGoalSnapshot(ports.readGoalSnapshot, admitted.target, request.signal);
+          const snapshot = await readGoalSnapshot(
+            ports.readGoalSnapshot,
+            admitted.target,
+            hostDeckRequestDeadline(request)
+          );
           const verified = resolveGoalAdmission(ports, params.session_id, false);
           requireSameAdmission(admitted, verified, "read");
           return snapshot;
@@ -257,7 +262,7 @@ export function createHostDeckGoalRouteRegistration(
                     objective: body.objective,
                     expected_goal_revision: body.expected_goal_revision
                   },
-                  request.signal
+                  context.deadline
                 ]);
               } catch (error) {
                 if (error instanceof HostDeckCodexGoalControlError) {
@@ -509,11 +514,11 @@ function resolveRuntime(
 async function readGoalSnapshot(
   readSnapshot: ReadGoalSnapshot,
   target: ManagedSessionTarget,
-  signal: AbortSignal
+  deadline: OperationDeadline
 ): Promise<GoalControlSnapshot> {
   let candidate: unknown;
   try {
-    candidate = await Reflect.apply(readSnapshot, undefined, [target, signal]);
+    candidate = await Reflect.apply(readSnapshot, undefined, [target, deadline]);
   } catch (error) {
     if (error instanceof HostDeckCodexGoalControlError) throw publicGoalFailure(mapGoalErrorCode(error));
     throw goalHttpError(500, "internal_error", "Goal state could not be read.", false);
@@ -631,6 +636,8 @@ function mapGoalErrorCode(error: HostDeckCodexGoalControlError): ErrorCode {
       return "service_overloaded";
     case "unknown_outcome":
       return "unknown_error";
+    case "operation_timeout":
+      return "operation_timeout";
     case "invalid_request":
       return "internal_error";
   }

@@ -21,6 +21,7 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "../packages/contracts/src/index.js";
+import type { OperationDeadline } from "../packages/core/src/index.js";
 import {
   createCodexModelControlService,
   createCodexPlanControlService,
@@ -319,11 +320,11 @@ describe("managed-session Plan selected vertical", () => {
 
 class VerticalPlanClient implements CodexPlanClient {
   readonly runtime_version = runtimeVersion;
-  readonly listCalls: Array<AbortSignal | undefined> = [];
+  readonly listCalls: Array<OperationDeadline | undefined> = [];
   readonly startCalls: CodexPlanTurnStartInput[] = [];
 
-  async listCatalog(signal?: AbortSignal): Promise<CodexPlanCatalog> {
-    this.listCalls.push(signal);
+  async listCatalog(deadline?: OperationDeadline): Promise<CodexPlanCatalog> {
+    this.listCalls.push(deadline);
     return {
       revision: "c".repeat(64),
       observed_at: timestamp as never,
@@ -347,16 +348,19 @@ class VerticalPlanClient implements CodexPlanClient {
 
 class RejectingVerticalModelClient implements CodexModelClient {
   readonly runtime_version = runtimeVersion;
-  readonly listCalls: Array<AbortSignal | undefined> = [];
+  readonly listCalls: Array<OperationDeadline | undefined> = [];
   readonly readCalls: string[] = [];
   readonly startCalls: CodexModelTurnStartInput[] = [];
 
-  async listCatalog(signal?: AbortSignal): Promise<CodexModelCatalog> {
-    this.listCalls.push(signal);
+  async listCatalog(deadline?: OperationDeadline): Promise<CodexModelCatalog> {
+    this.listCalls.push(deadline);
     throw new Error("Plan selection must not list model settings.");
   }
 
-  async readCurrent(thread: string): ReturnType<CodexModelClient["readCurrent"]> {
+  async readCurrent(
+    thread: string,
+    _deadline?: OperationDeadline
+  ): ReturnType<CodexModelClient["readCurrent"]> {
     this.readCalls.push(thread);
     throw new Error("Plan selection must not read model settings.");
   }

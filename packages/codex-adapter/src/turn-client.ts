@@ -7,12 +7,18 @@ import {
   type RuntimeCompatibility,
   resourceBudgetDefinitionByKey
 } from "@hostdeck/contracts";
-import type { ClientOperationId, CodexThreadId, CodexTurnId } from "@hostdeck/core";
+import type {
+  ClientOperationId,
+  CodexThreadId,
+  CodexTurnId,
+  OperationDeadline
+} from "@hostdeck/core";
 import type { CodexRequestInput } from "./broker.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
 import type { TurnInterruptParams } from "./generated/v2/TurnInterruptParams.js";
 import type { TurnStartParams } from "./generated/v2/TurnStartParams.js";
 import type { TurnSteerParams } from "./generated/v2/TurnSteerParams.js";
+import { codexRequestOptionsFromDeadline } from "./request-deadline.js";
 
 export type CodexTurnStartSettings =
   | { readonly kind: "inherit" }
@@ -29,7 +35,7 @@ export interface CodexTurnStartInput {
   readonly thread_id: CodexThreadId | string;
   readonly text: string;
   readonly settings: CodexTurnStartSettings;
-  readonly signal?: AbortSignal;
+  readonly deadline?: OperationDeadline;
 }
 
 export interface CodexTurnSteerInput {
@@ -37,14 +43,14 @@ export interface CodexTurnSteerInput {
   readonly thread_id: CodexThreadId | string;
   readonly expected_turn_id: CodexTurnId | string;
   readonly text: string;
-  readonly signal?: AbortSignal;
+  readonly deadline?: OperationDeadline;
 }
 
 export interface CodexTurnInterruptInput {
   readonly operation_id: ClientOperationId | string;
   readonly thread_id: CodexThreadId | string;
   readonly turn_id: CodexTurnId | string;
-  readonly signal?: AbortSignal;
+  readonly deadline?: OperationDeadline;
 }
 
 export interface CodexTurnAccepted {
@@ -108,19 +114,20 @@ class DefaultCodexTurnClient implements CodexTurnClient {
 
   async interruptTurn(input: CodexTurnInterruptInput): Promise<CodexTurnInterruptAccepted> {
     requireRuntime(this.port.compatibility, "turn_interrupt", "turn interrupt");
-    const candidate = parseInputRecord(input, ["operation_id", "thread_id", "turn_id"], ["signal"], "turn-interrupt");
+    const candidate = parseInputRecord(input, ["operation_id", "thread_id", "turn_id"], ["deadline"], "turn-interrupt");
     parseOperationId(candidate.operation_id);
     const threadId = parseThreadId(candidate.thread_id, "turn-interrupt target");
     const turnId = parseInputTurnId(candidate.turn_id, "interrupt target");
-    const signal = parseSignal(candidate.signal);
     const params = { threadId, turnId } satisfies TurnInterruptParams;
     const result = requireRecord(
       await this.port.request({
         method: "turn/interrupt",
         params,
         kind: "mutation",
-        timeout_ms: this.options.interrupt_timeout_ms,
-        ...(signal === undefined ? {} : { signal })
+        ...codexRequestOptionsFromDeadline(
+          candidate.deadline,
+          this.options.interrupt_timeout_ms
+        )
       }),
       "Codex turn/interrupt result must be an object."
     );
@@ -130,11 +137,10 @@ class DefaultCodexTurnClient implements CodexTurnClient {
 
   async startTurn(input: CodexTurnStartInput): Promise<CodexTurnAccepted> {
     void this.runtime_version;
-    const candidate = parseInputRecord(input, ["operation_id", "settings", "text", "thread_id"], ["signal"], "turn-start");
+    const candidate = parseInputRecord(input, ["operation_id", "settings", "text", "thread_id"], ["deadline"], "turn-start");
     const operationId = parseOperationId(candidate.operation_id);
     const threadId = parseThreadId(candidate.thread_id, "turn-start target");
     const text = parsePromptText(candidate.text);
-    const signal = parseSignal(candidate.signal);
     const params = {
       threadId,
       clientUserMessageId: operationId,
@@ -146,8 +152,7 @@ class DefaultCodexTurnClient implements CodexTurnClient {
         method: "turn/start",
         params,
         kind: "mutation",
-        timeout_ms: this.options.start_timeout_ms,
-        ...(signal === undefined ? {} : { signal })
+        ...codexRequestOptionsFromDeadline(candidate.deadline, this.options.start_timeout_ms)
       }),
       "Codex turn/start result must be an object."
     );
@@ -159,14 +164,13 @@ class DefaultCodexTurnClient implements CodexTurnClient {
     const candidate = parseInputRecord(
       input,
       ["expected_turn_id", "operation_id", "text", "thread_id"],
-      ["signal"],
+      ["deadline"],
       "turn-steer"
     );
     const operationId = parseOperationId(candidate.operation_id);
     const threadId = parseThreadId(candidate.thread_id, "turn-steer target");
     const expectedTurnId = parseInputTurnId(candidate.expected_turn_id, "expected");
     const text = parsePromptText(candidate.text);
-    const signal = parseSignal(candidate.signal);
     const params = {
       threadId,
       expectedTurnId,
@@ -178,8 +182,7 @@ class DefaultCodexTurnClient implements CodexTurnClient {
         method: "turn/steer",
         params,
         kind: "mutation",
-        timeout_ms: this.options.steer_timeout_ms,
-        ...(signal === undefined ? {} : { signal })
+        ...codexRequestOptionsFromDeadline(candidate.deadline, this.options.steer_timeout_ms)
       }),
       "Codex turn/steer result must be an object."
     );
@@ -332,12 +335,6 @@ function parseInputRecord(
     throw invalidInput(`Codex ${label} input fields are invalid.`);
   }
   return value;
-}
-
-function parseSignal(candidate: unknown): AbortSignal | undefined {
-  if (candidate === undefined) return undefined;
-  if (!(candidate instanceof AbortSignal)) throw invalidInput("Codex turn signal must be an AbortSignal.");
-  return candidate;
 }
 
 function parseBoundedInteger(candidate: number | undefined, fallback: number, min: number, max: number, label: string): number {

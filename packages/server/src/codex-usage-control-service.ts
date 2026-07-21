@@ -18,8 +18,9 @@ import {
   usageSnapshotSchema,
   usageThreadObservationSchema
 } from "@hostdeck/contracts";
-import type { ErrorCode } from "@hostdeck/core";
+import type { ErrorCode, OperationDeadline } from "@hostdeck/core";
 import type { SelectedSessionState, SelectedStateRepository } from "@hostdeck/storage";
+import { requireOpenOperationDeadline } from "./operation-deadline-serialization.js";
 
 type UsageOperationIntent = Extract<SelectedOperationIntent, { readonly kind: "usage" }>;
 type ThreadUsageEvent = Extract<NormalizedCodexEvent, { readonly method: "thread/tokenUsage/updated" }>;
@@ -34,6 +35,7 @@ export type CodexUsageControlErrorCode =
   | "capability_unsupported"
   | "invalid_request"
   | "observation_conflict"
+  | "operation_timeout"
   | "runtime_protocol_error"
   | "runtime_unavailable"
   | "service_overloaded"
@@ -68,7 +70,7 @@ export interface CodexUsageControlServiceOptions {
 }
 
 export interface CodexUsageControlService {
-  readonly read: (intent: unknown, signal?: AbortSignal) => Promise<UsageSnapshot>;
+  readonly read: (intent: unknown, deadline: OperationDeadline) => Promise<UsageSnapshot>;
   readonly observe: (event: NormalizedCodexEvent, generation: unknown) => boolean;
   readonly connection_generation: number | null;
   readonly tracked_thread_count: number;
@@ -112,7 +114,7 @@ const tokenFields = [
 export function createCodexUsageControlService(options: CodexUsageControlServiceOptions): CodexUsageControlService {
   const implementation = new DefaultCodexUsageControlService(parseOptions(options));
   return Object.freeze({
-    read: (intent: unknown, signal?: AbortSignal) => implementation.read(intent, signal),
+    read: (intent: unknown, deadline: OperationDeadline) => implementation.read(intent, deadline),
     observe: (event: NormalizedCodexEvent, generation: unknown) => implementation.observe(event, generation),
     get connection_generation() {
       return implementation.connection_generation;
@@ -139,10 +141,12 @@ class DefaultCodexUsageControlService implements CodexUsageControlService {
     return new Set([...this.threadById.keys(), ...this.compactionByThread.keys()]).size;
   }
 
-  async read(candidate: unknown, signal?: AbortSignal): Promise<UsageSnapshot> {
+  async read(candidate: unknown, deadline: OperationDeadline): Promise<UsageSnapshot> {
+    requireUsageDeadline(deadline);
     const intent = parseIntent(candidate);
     this.requireReadableTarget(intent.target);
-    const account = await this.readAccount(signal);
+    const account = await this.readAccount(deadline);
+    requireUsageDeadline(deadline);
     const generation = parseGeneration(account.connection_generation);
     this.synchronizeGeneration(generation);
     const currentTarget = this.requireReadableTarget(intent.target);
@@ -396,9 +400,9 @@ class DefaultCodexUsageControlService implements CodexUsageControlService {
     this.rateLimit = Object.freeze({ observation: deepFreeze(parsed.data), sequence: event.sequence });
   }
 
-  private async readAccount(signal?: AbortSignal): Promise<CodexAccountUsageRead> {
+  private async readAccount(deadline: OperationDeadline): Promise<CodexAccountUsageRead> {
     try {
-      return await this.options.usage.readAccount(signal);
+      return await this.options.usage.readAccount(deadline);
     } catch (error) {
       throw mapAdapterError(error);
     }
@@ -581,6 +585,15 @@ function mapAdapterError(error: unknown): HostDeckCodexUsageControlError {
   if (error.code === "unsupported_method") {
     return controlError("capability_unsupported", "capability_unavailable", error.message, false, error);
   }
+  if (["request_aborted", "request_timeout"].includes(error.code)) {
+    return controlError(
+      "operation_timeout",
+      "operation_timeout",
+      error.message,
+      error.outcome !== "unknown",
+      error
+    );
+  }
   if (["invalid_protocol_message", "protocol_violation"].includes(error.code)) {
     return controlError("runtime_protocol_error", "protocol_error", error.message, false, error);
   }
@@ -588,6 +601,28 @@ function mapAdapterError(error: unknown): HostDeckCodexUsageControlError {
     return controlError("service_overloaded", "service_overloaded", error.message, error.retry_safe, error);
   }
   return controlError("runtime_unavailable", "runtime_unavailable", error.message, error.retry_safe, error);
+}
+
+function requireUsageDeadline(candidate: unknown): OperationDeadline {
+  return requireOpenOperationDeadline(
+    candidate,
+    (cause) =>
+      controlError(
+        "operation_timeout",
+        "operation_timeout",
+        "Codex usage read exceeded its request deadline.",
+        true,
+        cause
+      ),
+    (cause) =>
+      controlError(
+        "invalid_request",
+        "validation_error",
+        "The usage request deadline is invalid.",
+        false,
+        cause
+      )
+  );
 }
 
 function controlError(

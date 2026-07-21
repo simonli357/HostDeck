@@ -28,6 +28,11 @@ export interface CodexRequestInput {
   readonly signal?: AbortSignal;
 }
 
+export interface CodexServerResponseOptions {
+  readonly timeout_ms?: number;
+  readonly signal?: AbortSignal;
+}
+
 export interface CodexRequestBrokerOptions {
   readonly max_in_flight?: number;
   readonly request_timeout_ms?: number;
@@ -47,8 +52,17 @@ export interface CodexRequestBroker {
   readonly pending_server_request_count: number;
   readonly request: (input: CodexRequestInput) => Promise<unknown>;
   readonly notify: (method: string) => Promise<void>;
-  readonly respondToServerRequest: (id: CodexRequestId, result: unknown) => Promise<void>;
-  readonly rejectServerRequest: (id: CodexRequestId, code: number, message: string) => Promise<void>;
+  readonly respondToServerRequest: (
+    id: CodexRequestId,
+    result: unknown,
+    options?: CodexServerResponseOptions
+  ) => Promise<void>;
+  readonly rejectServerRequest: (
+    id: CodexRequestId,
+    code: number,
+    message: string,
+    options?: CodexServerResponseOptions
+  ) => Promise<void>;
   readonly close: () => void;
 }
 
@@ -151,8 +165,19 @@ class DefaultCodexRequestBroker implements CodexRequestBroker {
       this.pending.set(id, pending);
       input.signal?.addEventListener("abort", abort as () => void, { once: true });
       pending.sent = true;
+      let send: Promise<void>;
+      try {
+        send = this.transport.sendText(frame);
+      } catch (error) {
+        const current = this.takePending(id);
+        if (current !== null) {
+          this.remember(this.retired, id);
+          current.reject(this.requestFailureFromTransport(current, error));
+        }
+        return;
+      }
 
-      void this.transport.sendText(frame).then(
+      void send.then(
         () => undefined,
         (error: unknown) => {
           const current = this.takePending(id);
@@ -175,14 +200,23 @@ class DefaultCodexRequestBroker implements CodexRequestBroker {
     await this.transport.sendText(frame);
   }
 
-  async respondToServerRequest(id: CodexRequestId, result: unknown): Promise<void> {
+  async respondToServerRequest(
+    id: CodexRequestId,
+    result: unknown,
+    options: CodexServerResponseOptions = {}
+  ): Promise<void> {
     const frame = serializeEnvelope({ id, result });
-    await this.sendServerResponse(id, frame);
+    await this.sendServerResponse(id, frame, options);
   }
 
-  async rejectServerRequest(id: CodexRequestId, code: number, message: string): Promise<void> {
+  async rejectServerRequest(
+    id: CodexRequestId,
+    code: number,
+    message: string,
+    options: CodexServerResponseOptions = {}
+  ): Promise<void> {
     const frame = encodeCodexServerError(id, code, message);
-    await this.sendServerResponse(id, frame);
+    await this.sendServerResponse(id, frame, options);
   }
 
   close(): void {
@@ -368,16 +402,27 @@ class DefaultCodexRequestBroker implements CodexRequestBroker {
     return pending;
   }
 
-  private async sendServerResponse(id: CodexRequestId, frame: string): Promise<void> {
+  private async sendServerResponse(
+    id: CodexRequestId,
+    frame: string,
+    options: CodexServerResponseOptions
+  ): Promise<void> {
+    const boundary = parseServerResponseOptions(options);
     const pending = this.claimServerRequest(id);
     try {
-      await this.transport.sendText(frame);
+      let send: Promise<void>;
+      try {
+        send = this.transport.sendText(frame);
+      } catch (error) {
+        throw serverResponseSendFailure(error);
+      }
+      await awaitServerResponseSend(send, boundary);
       if (this.pendingServerRequests.get(id) === pending) this.pendingServerRequests.delete(id);
     } catch (error) {
+      const failure = serverResponseSendFailure(error);
       if (this.pendingServerRequests.get(id) === pending) {
         if (
-          error instanceof HostDeckCodexAdapterError &&
-          error.outcome === "not_sent" &&
+          failure.outcome === "not_sent" &&
           pending.generation === this.transport.generation &&
           this.transport.state === "open"
         ) {
@@ -386,7 +431,7 @@ class DefaultCodexRequestBroker implements CodexRequestBroker {
           this.pendingServerRequests.delete(id);
         }
       }
-      throw error;
+      throw failure;
     }
   }
 
@@ -456,6 +501,118 @@ class DefaultCodexRequestBroker implements CodexRequestBroker {
   }
 }
 
+interface ParsedServerResponseOptions {
+  readonly signal: AbortSignal | undefined;
+  readonly timeoutMs: number | undefined;
+}
+
+function parseServerResponseOptions(
+  candidate: CodexServerResponseOptions
+): ParsedServerResponseOptions {
+  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) {
+    throw brokerError(
+      "protocol_violation",
+      "Codex server-response options are invalid.",
+      "not_sent",
+      true
+    );
+  }
+  const keys = Object.keys(candidate);
+  if (keys.some((key) => !["signal", "timeout_ms"].includes(key))) {
+    throw brokerError(
+      "protocol_violation",
+      "Codex server-response options contain unsupported fields.",
+      "not_sent",
+      true
+    );
+  }
+  if (candidate.signal !== undefined && !(candidate.signal instanceof AbortSignal)) {
+    throw brokerError(
+      "protocol_violation",
+      "Codex server-response signal is invalid.",
+      "not_sent",
+      true
+    );
+  }
+  if (candidate.signal?.aborted === true) {
+    throw brokerError(
+      "request_aborted",
+      "Codex server response was aborted before dispatch.",
+      "not_sent",
+      true
+    );
+  }
+  const timeoutMs =
+    candidate.timeout_ms === undefined
+      ? undefined
+      : parseRequestTimeout(candidate.timeout_ms, candidate.timeout_ms);
+  return Object.freeze({ signal: candidate.signal, timeoutMs });
+}
+
+function awaitServerResponseSend(
+  send: Promise<void>,
+  options: ParsedServerResponseOptions
+): Promise<void> {
+  if (options.signal === undefined && options.timeoutMs === undefined) return send;
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const cleanup = () => {
+      if (timer !== undefined) clearTimeout(timer);
+      options.signal?.removeEventListener("abort", onAbort);
+    };
+    const resolveOnce = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();
+    };
+    const rejectOnce = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+    const onAbort = () => {
+      rejectOnce(
+        brokerError(
+          "request_aborted",
+          "Codex server response was aborted after possible dispatch.",
+          "unknown",
+          false
+        )
+      );
+    };
+
+    options.signal?.addEventListener("abort", onAbort, { once: true });
+    if (options.signal?.aborted === true) {
+      onAbort();
+    } else if (options.timeoutMs !== undefined) {
+      timer = setTimeout(() => {
+        rejectOnce(
+          brokerError(
+            "request_timeout",
+            "Codex server response timed out after possible dispatch.",
+            "unknown",
+            false
+          )
+        );
+      }, options.timeoutMs);
+      timer.unref();
+    }
+    void send.then(resolveOnce, rejectOnce);
+  });
+}
+
+function serverResponseSendFailure(error: unknown): HostDeckCodexAdapterError {
+  if (error instanceof HostDeckCodexAdapterError) return error;
+  return new HostDeckCodexAdapterError(
+    "unknown_outcome",
+    "Codex server-response send outcome is unknown.",
+    { cause: error, outcome: "unknown", retry_safe: false }
+  );
+}
+
 function parseBrokerOptions(options: CodexRequestBrokerOptions) {
   return {
     ...options,
@@ -487,7 +644,7 @@ function parseRequestTimeout(candidate: number | undefined, fallback: number): n
   return boundedInteger(
     candidate,
     fallback,
-    50,
+    1,
     resourceBudgetDefinitionByKey.protocol_start_timeout_ms.maximum,
     "timeout_ms"
   );

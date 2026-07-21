@@ -242,7 +242,7 @@ export function createHostDeckPromptRouteRegistration(
                     kind: "prompt",
                     text: body.text
                   },
-                  request.signal
+                  context.deadline
                 ]);
               } catch (error) {
                 if (!(error instanceof HostDeckCodexPromptControlError)) throw error;
@@ -541,6 +541,8 @@ function mapPromptErrorCode(error: HostDeckCodexPromptControlError): ErrorCode {
       return error.api_code === "unknown_error" ? "unknown_error" : "operation_conflict";
     case "unknown_outcome":
       return "unknown_error";
+    case "operation_timeout":
+      return "operation_timeout";
     case "runtime_protocol_error":
       return error.outcome === "unknown" ? "unknown_error" : "protocol_error";
     case "invalid_request":
