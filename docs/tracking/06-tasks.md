@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-055` Generate versioned unprivileged systemd user units | ready | none | The packaged service process now proves independent app-server/HostDeck restart ownership. Exact units can bind that contract without invoking foreground `codexdeck serve`. |
+| 1 | `IFC-V1-055` Generate versioned unprivileged systemd user units | in_progress | none | Exact generator/unit/runtime criteria are frozen after the systemd 255.4 and real user-manager audit; implementation is next. |
 
 ## Intentional Blockers
 

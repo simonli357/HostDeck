@@ -5,12 +5,13 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `IFC-V1-055` is ready to generate the exact unprivileged systemd user units over the now-proven packaged service-owned HostDeck process.
+- Active task: `IFC-V1-055` is in progress. Exact generator, two-unit, parser/security, real user-manager restart, lease-exclusion, and cleanup criteria are frozen before implementation.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.5; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract plus 14 current Signal Ledger/Focus Rail visual targets are complete; both desktop-led boards remain rejected, and `FE-V1-003` is blocked only by human selection of exact assets/approved drift.
 - Release state: no-go. `BLK-V1-01` to `BLK-V1-03` and the packaged service-owned process are complete; user units/install chain, interface/mobile work, and release blocks remain unfinished.
 - Release environment: the selected HostDeck binding is exact Codex 0.144.0; the default binary has drifted to 0.144.5 and cannot be exact-runtime evidence. Tailscale 1.98.8 is active under the dedicated saved HostDeck profile with one other saved profile preserved; final ServeConfig is empty after manager/noninterference validation, and the physical Android Tailscale client remains enrolled.
+- User-service audit: systemd 255.4 is supported and its user manager executes/collects transient units. The manager is pre-existing `degraded` only because unrelated `update-notifier-crash.path` is failed; task evidence must preserve that failed-unit set. No HostDeck unit or runtime path existed at audit time.
 
 ## Proven
 
