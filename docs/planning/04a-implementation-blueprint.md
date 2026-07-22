@@ -115,7 +115,7 @@ The composition root calls `resolveResourceBudget` once before lease, storage, r
 5. Publish the completed sibling staging tree as `dist/hostdeck`; failed construction removes staging and cannot leave a partial current package.
 6. Build twice, relocate to an unrelated read-only path, verify/import all package roots, load both native modules, and run a real loopback lifecycle/restart plus config/asset/native/runtime/integrity rejection probes.
 
-This foundation exposes compiled library entrypoints only. `IFC-V1-053` adds the approved Vite dashboard, `IFC-V1-054` adds the HostDeck executable and command dispatch, and later leaves own user units, installation, uninstall, clean Ubuntu parity, and module/release hardening.
+This foundation exposes compiled library entrypoints only. `IFC-V1-053` adds the approved Vite dashboard. `IFC-V1-054` adds exactly one compiled `codexdeck` bin over the source grammar: direct execution remains distinct from side-effect-free library import, help/version stay daemon-independent, foreground mode derives package assets without cwd/dev fallback and invokes the accepted foreground owner once, and the package verifier binds the bin target/shebang/mode/content. Later leaves own user units, installation, uninstall, clean Ubuntu parity, and module/release hardening.
 
 ## Application Services
 

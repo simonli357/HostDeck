@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `IFC-V1-083` is complete and pushed as `58a99f6`. `IFC-V1-054` is now the first ready leaf for the runnable packaged process entry and selected command/serve dispatch; `IFC-V1-055` user units remain independently ready behind it.
+- Active task: `IFC-V1-054` is in progress with frozen leaf criteria for the runnable packaged process entry, selected command/serve dispatch, invocation matrix, and verifier identity. `IFC-V1-055` user units remain independently ready behind it.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.5; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract plus 14 current Signal Ledger/Focus Rail visual targets are complete; both desktop-led boards remain rejected, and `FE-V1-003` is blocked only by human selection of exact assets/approved drift.
