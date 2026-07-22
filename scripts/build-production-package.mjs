@@ -48,7 +48,6 @@ const expectedExternalModules = [
 ];
 const downstreamDeferrals = [
   "IFC-V1-053",
-  "IFC-V1-055",
   "IFC-V1-056",
   "IFC-V1-057",
   "IFC-V1-058"
@@ -61,8 +60,8 @@ export function selectedProductionSources(repositoryRoot = defaultRepositoryRoot
     throw new Error(`Selected runtime boundary failed:\n- ${result.failures.join("\n- ")}`);
   }
   const sources = result.closureFiles.filter((path) => !path.startsWith("packages/web/"));
-  if (sources.length !== 609) {
-    throw new Error(`Selected server/CLI closure contains ${sources.length} sources; expected exactly 609.`);
+  if (sources.length !== 610) {
+    throw new Error(`Selected server/CLI closure contains ${sources.length} sources; expected exactly 610.`);
   }
   const selectedPackages = new Set(sources.map((path) => path.split("/")[1]));
   if (selectedPackages.size !== packageNames.length || packageNames.some((name) => !selectedPackages.has(name))) {

@@ -22,7 +22,6 @@ const expectedPackageNames = [
 ];
 const expectedDeferrals = [
   "IFC-V1-053",
-  "IFC-V1-055",
   "IFC-V1-056",
   "IFC-V1-057",
   "IFC-V1-058"
@@ -291,7 +290,7 @@ function validateManifest(manifest) {
   }
 
   validateIdentity(value.source, "Source identity", "count");
-  if (value.source.count !== 609) throw new TypeError("Selected source count must be exactly 609.");
+  if (value.source.count !== 610) throw new TypeError("Selected source count must be exactly 610.");
   validateIdentity(value.output, "Owned output identity", "count");
   validateIdentity(value.content, "Package content identity", "entryCount");
   if (!Number.isSafeInteger(value.content.bytes) || value.content.bytes < 1) {
@@ -365,7 +364,7 @@ function validatePackages(packages, packageVersion, outputIdentity) {
     sourceCount += descriptor.sourceCount;
     compiledCount += descriptor.outputCount;
   }
-  if (sourceCount !== 609 || outputIdentity.count !== compiledCount + packages.length + 1) {
+  if (sourceCount !== 610 || outputIdentity.count !== compiledCount + packages.length + 1) {
     throw new TypeError("Owned source/output aggregate is inconsistent.");
   }
 }

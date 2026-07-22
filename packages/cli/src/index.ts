@@ -26,4 +26,5 @@ export * from "./session-list-client.js";
 export * from "./shell.js";
 export * from "./skills-client.js";
 export * from "./start-client.js";
+export * from "./systemd-user-units.js";
 export * from "./usage-client.js";
