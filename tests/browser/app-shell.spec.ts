@@ -3,8 +3,10 @@ import {
   installMissionControlApi,
   missionRequestPaths
 } from "./mission-control-fixture.js";
-
-const sessionId = "sess_shell_001";
+import {
+  installSessionDetailApi,
+  sessionDetailBrowserSessionId
+} from "./session-detail-fixture.js";
 
 test("renders the Mission Control shell and preserves modal route and focus", async ({ page }) => {
   const diagnostics = observePage(page);
@@ -50,12 +52,14 @@ test("renders the Mission Control shell and preserves modal route and focus", as
 
 test("renders direct Session Detail safely and rejects invalid routes", async ({ page }) => {
   const diagnostics = observePage(page);
-  await installMissionControlApi(page);
+  await installSessionDetailApi(page);
 
-  await page.goto(`/sessions/${sessionId}`);
+  await page.goto(`/sessions/${sessionDetailBrowserSessionId}`);
 
-  await expect(page.getByRole("heading", { level: 1, name: "Session Detail" })).toBeVisible();
-  await expect(page.getByText(sessionId, { exact: true })).toHaveCount(2);
+  await expect(page.getByText("The structured mobile session feed is ready for device validation."))
+    .toBeVisible();
+  await expect(page.getByRole("banner")).toContainText("android-release");
+  await expect(page.getByRole("banner")).not.toContainText(sessionDetailBrowserSessionId);
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole("button", { name: "Back to Mission Control" }).click();
@@ -72,8 +76,11 @@ test("renders direct Session Detail safely and rejects invalid routes", async ({
   await expectNoUnexpectedRuntimeActivity(page, diagnostics, [
     "/api/v1/access",
     "/api/v1/host/status",
-    "/api/v1/sessions",
-    "/api/v1/access/csrf"
+    `/api/v1/sessions/${sessionDetailBrowserSessionId}`,
+    "/api/v1/access/csrf",
+    "/api/v1/access",
+    "/api/v1/host/status",
+    "/api/v1/sessions"
   ]);
 });
 

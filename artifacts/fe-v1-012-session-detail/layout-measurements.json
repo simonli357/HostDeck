@@ -1,0 +1,194 @@
+{
+  "measurements": [
+    {
+      "viewport": {
+        "width": 360,
+        "height": 800
+      },
+      "document": {
+        "clientWidth": 360,
+        "scrollWidth": 360
+      },
+      "detail": {
+        "bottom": 1218,
+        "height": 1162,
+        "left": 0,
+        "right": 360,
+        "top": 56,
+        "width": 360
+      },
+      "context": {
+        "bottom": 147,
+        "height": 91,
+        "left": 0,
+        "right": 360,
+        "top": 56,
+        "width": 360
+      },
+      "firstTimelineItem": {
+        "bottom": 293,
+        "height": 130,
+        "left": 16,
+        "right": 344,
+        "top": 163,
+        "width": 328
+      },
+      "refreshTarget": {
+        "height": 44,
+        "width": 44
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "document": {
+        "clientWidth": 390,
+        "scrollWidth": 390
+      },
+      "detail": {
+        "bottom": 1141,
+        "height": 1085,
+        "left": 0,
+        "right": 390,
+        "top": 56,
+        "width": 390
+      },
+      "context": {
+        "bottom": 132,
+        "height": 76,
+        "left": 0,
+        "right": 390,
+        "top": 56,
+        "width": 390
+      },
+      "firstTimelineItem": {
+        "bottom": 256,
+        "height": 108,
+        "left": 16,
+        "right": 374,
+        "top": 148,
+        "width": 358
+      },
+      "refreshTarget": {
+        "height": 44,
+        "width": 44
+      }
+    },
+    {
+      "viewport": {
+        "width": 412,
+        "height": 915
+      },
+      "document": {
+        "clientWidth": 412,
+        "scrollWidth": 412
+      },
+      "detail": {
+        "bottom": 1123,
+        "height": 1067,
+        "left": 0,
+        "right": 412,
+        "top": 56,
+        "width": 412
+      },
+      "context": {
+        "bottom": 132,
+        "height": 76,
+        "left": 0,
+        "right": 412,
+        "top": 56,
+        "width": 412
+      },
+      "firstTimelineItem": {
+        "bottom": 256,
+        "height": 108,
+        "left": 16,
+        "right": 396,
+        "top": 148,
+        "width": 380
+      },
+      "refreshTarget": {
+        "height": 44,
+        "width": 44
+      }
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "document": {
+        "clientWidth": 768,
+        "scrollWidth": 768
+      },
+      "detail": {
+        "bottom": 1030,
+        "height": 974,
+        "left": 0,
+        "right": 768,
+        "top": 56,
+        "width": 768
+      },
+      "context": {
+        "bottom": 125,
+        "height": 69,
+        "left": 0,
+        "right": 768,
+        "top": 56,
+        "width": 768
+      },
+      "firstTimelineItem": {
+        "bottom": 249,
+        "height": 108,
+        "left": 24,
+        "right": 744,
+        "top": 141,
+        "width": 720
+      },
+      "refreshTarget": {
+        "height": 44,
+        "width": 44
+      }
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "document": {
+        "clientWidth": 1280,
+        "scrollWidth": 1280
+      },
+      "detail": {
+        "bottom": 1030,
+        "height": 974,
+        "left": 230,
+        "right": 1050,
+        "top": 56,
+        "width": 820
+      },
+      "context": {
+        "bottom": 125,
+        "height": 69,
+        "left": 254,
+        "right": 1026,
+        "top": 56,
+        "width": 772
+      },
+      "firstTimelineItem": {
+        "bottom": 249,
+        "height": 108,
+        "left": 254,
+        "right": 1026,
+        "top": 141,
+        "width": 772
+      },
+      "refreshTarget": {
+        "height": 44,
+        "width": 44
+      }
+    }
+  ]
+}

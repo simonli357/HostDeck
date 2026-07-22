@@ -23,6 +23,11 @@ import {
 } from "./browser-runtime.js";
 import type { BrowserConnectionStateCoordinator } from "./connection-state.js";
 import { ConnectedMissionControl } from "./mission-control.js";
+import {
+  projectSessionDetail,
+  SessionDetailScreen,
+  useSessionDetailController
+} from "./session-detail.js";
 
 export {
   missionControlPath,
@@ -71,11 +76,12 @@ export function HostDeckBrowserApp({
   coordinator: injectedCoordinator,
   createCoordinator = createProductionBrowserConnectionCoordinator
 }: HostDeckAppProps) {
-  const needsMissionRuntime = outlets?.missionControl === undefined;
-  const ownsMissionRuntime = injectedCoordinator === undefined && needsMissionRuntime;
+  const needsBrowserRuntime =
+    outlets?.missionControl === undefined || outlets?.sessionDetail === undefined;
+  const ownsBrowserRuntime = injectedCoordinator === undefined && needsBrowserRuntime;
   const runtimeRequest = useMemo<OwnedCoordinatorRequest>(
-    () => Object.freeze({ active: ownsMissionRuntime, createCoordinator }),
-    [createCoordinator, ownsMissionRuntime]
+    () => Object.freeze({ active: ownsBrowserRuntime, createCoordinator }),
+    [createCoordinator, ownsBrowserRuntime]
   );
   const [ownedState, setOwnedState] = useState<OwnedCoordinatorState>(
     initialCoordinatorState
@@ -131,7 +137,16 @@ export function HostDeckRoutes({
           />
         }
       />
-      <Route path={sessionDetailPathPattern} element={<SessionDetailRoute outlets={outlets} />} />
+      <Route
+        path={sessionDetailPathPattern}
+        element={
+          <SessionDetailRoute
+            outlets={outlets}
+            coordinator={coordinator}
+            runtimeFailed={runtimeFailed}
+          />
+        }
+      />
       <Route path="*" element={<NotFoundRoute />} />
     </Routes>
   );
@@ -161,7 +176,15 @@ function MissionControlRoute({
   );
 }
 
-function SessionDetailRoute({ outlets }: Readonly<{ outlets: HostDeckRouteOutlets }>) {
+function SessionDetailRoute({
+  outlets,
+  coordinator,
+  runtimeFailed
+}: Readonly<{
+  outlets: HostDeckRouteOutlets;
+  coordinator: BrowserConnectionStateCoordinator | undefined;
+  runtimeFailed: boolean;
+}>) {
   const rawSessionId = useParams<"session_id">().session_id;
   const parsed = sessionIdSchema.safeParse(rawSessionId);
 
@@ -170,14 +193,73 @@ function SessionDetailRoute({ outlets }: Readonly<{ outlets: HostDeckRouteOutlet
   }
 
   const sessionId = parsed.data;
+  const injectedContent = outlets.sessionDetail?.(sessionId);
+  if (injectedContent === undefined && coordinator !== undefined) {
+    return (
+      <ConnectedSessionDetailRoute
+        coordinator={coordinator}
+        hostAccess={outlets.hostAccess}
+        sessionId={sessionId}
+      />
+    );
+  }
   return (
     <HostDeckFrame
       back={<SessionBackButton />}
       hostAccess={outlets.hostAccess}
-      subtitle={sessionId}
+      subtitle={
+        injectedContent === undefined
+          ? runtimeFailed
+            ? "Detail unavailable"
+            : "Loading session"
+          : undefined
+      }
       title="Session Detail"
     >
-      {outlets.sessionDetail?.(sessionId) ?? <SessionDetailLoading sessionId={sessionId} />}
+      {injectedContent ??
+        (runtimeFailed ? (
+          <SessionDetailRuntimeFailure />
+        ) : (
+          <SessionDetailLoading sessionId={sessionId} />
+        ))}
+    </HostDeckFrame>
+  );
+}
+
+function ConnectedSessionDetailRoute({
+  coordinator,
+  hostAccess,
+  sessionId
+}: Readonly<{
+  coordinator: BrowserConnectionStateCoordinator;
+  hostAccess: ReactNode | undefined;
+  sessionId: SessionId;
+}>) {
+  const controller = useSessionDetailController(coordinator, sessionId);
+  const projection = projectSessionDetail(
+    controller.snapshot,
+    sessionId,
+    controller.feed,
+    controller.nowMs
+  );
+  return (
+    <HostDeckFrame
+      back={<SessionBackButton />}
+      hostAccess={hostAccess}
+      subtitle={projection.headerSubtitle}
+      title={projection.headerTitle}
+    >
+      <SessionDetailScreen
+        sessionId={sessionId}
+        snapshot={controller.snapshot}
+        feed={controller.feed}
+        nowMs={controller.nowMs}
+        pendingAction={controller.pendingAction}
+        actionError={controller.actionError}
+        feedError={controller.feedError}
+        onRefresh={controller.onRefresh}
+        projection={projection}
+      />
     </HostDeckFrame>
   );
 }
@@ -192,7 +274,7 @@ function HostDeckFrame({
   back?: ReactNode;
   children: ReactNode;
   hostAccess?: ReactNode;
-  subtitle?: string;
+  subtitle?: string | undefined;
   title?: string;
 }>) {
   return (
@@ -336,6 +418,22 @@ function SessionDetailLoading({ sessionId }: Readonly<{ sessionId: SessionId }>)
         <span className="hostdeck-timeline-loading__item" />
         <span className="hostdeck-timeline-loading__item" />
         <span className="hostdeck-timeline-loading__item" />
+      </div>
+    </section>
+  );
+}
+
+function SessionDetailRuntimeFailure() {
+  return (
+    <section
+      className="hostdeck-route hostdeck-route--error"
+      aria-labelledby="session-detail-runtime-title"
+      role="alert"
+    >
+      <span className="hostdeck-error-rail" aria-hidden="true" />
+      <div>
+        <h1 id="session-detail-runtime-title">Session Detail unavailable</h1>
+        <p>The secure browser connection could not start. Reload after checking this address.</p>
       </div>
     </section>
   );

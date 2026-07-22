@@ -68,7 +68,8 @@ describe("HostDeck phone shell", () => {
 
     expect(screen.getByTestId("location-path").textContent).toBe(`/sessions/${sessionId}`);
     expect(screen.getByRole("heading", { level: 1, name: "Selected session" })).toBeTruthy();
-    expect(screen.getAllByText(sessionId)).toHaveLength(2);
+    expect(screen.getAllByText(sessionId)).toHaveLength(1);
+    expect(screen.getByRole("banner").textContent).not.toContain(sessionId);
 
     await user.click(screen.getByRole("button", { name: "Back to Mission Control" }));
 

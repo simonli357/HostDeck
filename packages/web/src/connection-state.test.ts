@@ -848,6 +848,94 @@ describe("browser shell connection-state coordinator", () => {
     harness.coordinator.close();
   });
 
+  it("replays a bounded recent detail window without changing the live-only default", async () => {
+    const recentReader = new ControlledReader();
+    const harness = createHarness(loopbackOrigin);
+    harness.http.enqueue("access", jsonResponse(200, loopbackAccess()));
+    harness.http.enqueue(
+      "host",
+      jsonResponse(200, hostStatus({ mode: "loopback_read", origin: loopbackOrigin }))
+    );
+    harness.http.enqueue(
+      "detail",
+      jsonResponse(
+        200,
+        sessionDetail(
+          "loopback_read",
+          loopbackOrigin,
+          sessionItem(firstSessionId, { cursor: 150 })
+        )
+      )
+    );
+    harness.sse.enqueue(async () => sseResponse(recentReader));
+    await harness.coordinator.setTarget({
+      kind: "session_detail",
+      sessionId: firstSessionId
+    });
+    const consumer = () => undefined;
+    const connected = harness.coordinator.connectSessionStream(consumer, {
+      start: "recent"
+    });
+    expect(
+      harness.coordinator.connectSessionStream(consumer, { start: "recent" })
+    ).toBe(connected);
+    expect(() =>
+      harness.coordinator.connectSessionStream(consumer, { start: "live" })
+    ).toThrowError(/not ready/u);
+    await waitFor(() => harness.sse.requests.length === 1);
+    expect(harness.sse.requests[0]?.path).toBe(
+      `/api/v1/sessions/${firstSessionId}/events/stream?after=50`
+    );
+    harness.coordinator.close();
+    expect(recentReader.cancelCalls).toBe(1);
+    expect(recentReader.releaseCalls).toBe(1);
+  });
+
+  it("starts empty recent detail replay before the first event and rejects invalid options", async () => {
+    const reader = new ControlledReader();
+    const harness = createHarness(loopbackOrigin);
+    harness.http.enqueue("access", jsonResponse(200, loopbackAccess()));
+    harness.http.enqueue(
+      "host",
+      jsonResponse(200, hostStatus({ mode: "loopback_read", origin: loopbackOrigin }))
+    );
+    harness.http.enqueue(
+      "detail",
+      jsonResponse(
+        200,
+        sessionDetail("loopback_read", loopbackOrigin, sessionItem(firstSessionId))
+      )
+    );
+    await harness.coordinator.setTarget({
+      kind: "session_detail",
+      sessionId: firstSessionId
+    });
+
+    for (const options of [
+      null,
+      {},
+      { start: "all" },
+      { start: "recent", after: 1 },
+      Object.create({ start: "recent" })
+    ]) {
+      expect(() =>
+        harness.coordinator.connectSessionStream(
+          () => undefined,
+          options as never
+        )
+      ).toThrowError(/contract/u);
+    }
+    expect(harness.sse.requests).toHaveLength(0);
+
+    harness.sse.enqueue(async () => sseResponse(reader));
+    harness.coordinator.connectSessionStream(() => undefined, { start: "recent" });
+    await waitFor(() => harness.sse.requests.length === 1);
+    expect(harness.sse.requests[0]?.path).toBe(
+      `/api/v1/sessions/${firstSessionId}/events/stream`
+    );
+    harness.coordinator.close();
+  });
+
   it("owns synchronous stream publication before reentrant disconnect and leaves no request", async () => {
     const harness = createHarness(loopbackOrigin);
     harness.http.enqueue("access", jsonResponse(200, loopbackAccess()));

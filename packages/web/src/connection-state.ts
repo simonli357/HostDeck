@@ -11,6 +11,7 @@ import {
   type SelectedSessionListResponse,
   type SelectedSessionReadAccess,
   type SelectedSessionReadItem,
+  selectedEventPageMaxSize,
   selectedSessionListMaximumActiveSessions,
   sessionIdSchema
 } from "@hostdeck/contracts";
@@ -107,6 +108,7 @@ export type BrowserConnectionFailureSource =
   (typeof browserConnectionFailureSources)[number];
 export type BrowserConnectionWriteBlockCause =
   (typeof browserConnectionWriteBlockCauses)[number];
+export type BrowserConnectionSessionStreamStart = "live" | "recent";
 export type BrowserConnectionFailureReason =
   | BrowserHttpFailureReason
   | BrowserSseFailureReason
@@ -192,6 +194,10 @@ export interface BrowserConnectionClockPort {
   readonly now: () => number;
 }
 
+export interface BrowserConnectionSessionStreamOptions {
+  readonly start: BrowserConnectionSessionStreamStart;
+}
+
 export interface CreateBrowserConnectionStateCoordinatorOptions {
   readonly httpClient: BrowserHttpClient;
   readonly sseClient: BrowserSseClient;
@@ -207,7 +213,8 @@ export interface BrowserConnectionStateCoordinator {
   readonly refresh: () => Promise<BrowserConnectionSnapshot>;
   readonly loadMoreSessions: () => Promise<BrowserConnectionSnapshot>;
   readonly connectSessionStream: (
-    onEvent: (event: SelectedProjectionEvent) => unknown
+    onEvent: (event: SelectedProjectionEvent) => unknown,
+    options?: BrowserConnectionSessionStreamOptions
   ) => BrowserConnectionSnapshot;
   readonly disconnectSessionStream: (
     reason?: Extract<BrowserSseCloseReason, "client_closed" | "unmounted">
@@ -264,6 +271,7 @@ interface ActiveStream {
   readonly epoch: number;
   readonly sessionId: string;
   readonly consumer: (event: SelectedProjectionEvent) => unknown;
+  readonly start: BrowserConnectionSessionStreamStart;
   readonly startedAt: string;
   connection: BrowserSseConnection | null;
   active: boolean;
@@ -277,6 +285,7 @@ type QueryResult<Data> =
 const createOptionKeys = ["httpClient", "sseClient", "csrfClient", "origin", "clock"] as const;
 const requiredCreateOptionKeys = ["httpClient", "sseClient", "csrfClient"] as const;
 const clockKeys = ["now"] as const;
+const streamOptionKeys = ["start"] as const;
 const maximumSubscribers = 32;
 const fatalFailureReasons: readonly BrowserConnectionFailureReason[] = Object.freeze([
   "request_contract",
@@ -954,10 +963,12 @@ export function createBrowserConnectionStateCoordinator(
       return promise;
     },
     connectSessionStream(
-      onEvent: (event: SelectedProjectionEvent) => unknown
+      onEvent: (event: SelectedProjectionEvent) => unknown,
+      streamOptions?: BrowserConnectionSessionStreamOptions
     ): BrowserConnectionSnapshot {
       if (closed) throw connectionError("closed");
       if (typeof onEvent !== "function") throw connectionError("client_contract");
+      const start = readSessionStreamStart(streamOptions);
       if (
         target?.kind !== "session_detail" ||
         targetState.state !== "current" ||
@@ -968,7 +979,11 @@ export function createBrowserConnectionStateCoordinator(
         throw connectionError("not_ready");
       }
       if (activeStream !== null) {
-        if (activeStream.epoch === epoch && activeStream.consumer === onEvent) {
+        if (
+          activeStream.epoch === epoch &&
+          activeStream.consumer === onEvent &&
+          activeStream.start === start
+        ) {
           return currentSnapshot;
         }
         throw connectionError("not_ready");
@@ -976,12 +991,13 @@ export function createBrowserConnectionStateCoordinator(
       const startedAt = readOperationTime();
       const streamEpoch = epoch;
       const sessionId = target.sessionId;
-      const after = targetState.data.response.session.session.last_event_cursor;
+      const after = sessionStreamAfter(targetState.data.response, start);
       const initialBoundary = boundaryFromTargetData(targetState.data);
       const owner: ActiveStream = {
         epoch: streamEpoch,
         sessionId,
         consumer: onEvent,
+        start,
         startedAt,
         connection: null,
         active: true,
@@ -1469,6 +1485,28 @@ function boundaryFromTargetData(
     cursor: window.earliest_retained_cursor,
     reason: "retention"
   });
+}
+
+function readSessionStreamStart(
+  options: BrowserConnectionSessionStreamOptions | undefined
+): BrowserConnectionSessionStreamStart {
+  if (options === undefined) return "live";
+  const values = readExactRecord(options, streamOptionKeys, streamOptionKeys);
+  if (values === null) throw connectionError("client_contract");
+  const start = values.start;
+  if (start !== "live" && start !== "recent") {
+    throw connectionError("client_contract");
+  }
+  return start;
+}
+
+function sessionStreamAfter(
+  response: SelectedSessionDetailResponse,
+  start: BrowserConnectionSessionStreamStart
+): number | null {
+  const lastCursor = response.session.session.last_event_cursor;
+  if (start === "live" || lastCursor === null) return lastCursor;
+  return Math.max(0, lastCursor - selectedEventPageMaxSize);
 }
 
 function emptyResource<Data>(
