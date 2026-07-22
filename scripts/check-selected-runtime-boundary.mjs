@@ -128,7 +128,9 @@ const exactRootModules = new Map([
       "./app-shell.js",
       "./http-client.js",
       "./http-route-contracts.js",
-      "./pairing-bootstrap.js"
+      "./pairing-bootstrap.js",
+      "./sse-client.js",
+      "./sse-route-contract.js"
     ]
   ],
   [
@@ -471,10 +473,10 @@ function validateRootScripts(rootPackage, failures) {
     }
   }
   const expectedWebTest =
-    "vitest run packages/web/src/app-shell.test.tsx packages/web/src/http-client.test.ts packages/web/src/pairing-bootstrap.test.ts packages/test-fixtures/src/fixtures.test.ts";
+    "vitest run packages/web/src/app-shell.test.tsx packages/web/src/http-client.test.ts packages/web/src/pairing-bootstrap.test.ts packages/web/src/sse-client.test.ts packages/test-fixtures/src/fixtures.test.ts";
   if (scripts["test:web"] !== expectedWebTest) {
     failures.push(
-      "package.json test:web must run only selected shell, HTTP client, pairing, and fixture tests"
+      "package.json test:web must run only selected shell, HTTP client, pairing, SSE client, and fixture tests"
     );
   }
 }

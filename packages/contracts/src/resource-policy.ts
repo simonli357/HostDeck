@@ -1,6 +1,7 @@
 import type { ErrorCode } from "@hostdeck/core";
 import { z } from "zod";
 import { browserHttpResourceRanges } from "./browser-http-resource-policy.js";
+import { browserSseResourceRanges } from "./browser-sse-resource-policy.js";
 
 export const resourceBudgetUnits = ["bytes", "count", "milliseconds"] as const;
 export type ResourceBudgetUnit = (typeof resourceBudgetUnits)[number];
@@ -211,6 +212,86 @@ export const resourceBudgetDefinitions = Object.freeze([
     "browser_client",
     "service_overloaded",
     "reject_operation"
+  ),
+  defineResource(
+    "browser_sse_connect_timeout_ms",
+    "milliseconds",
+    browserSseResourceRanges.connectTimeoutMs.minimum,
+    browserSseResourceRanges.connectTimeoutMs.defaultValue,
+    browserSseResourceRanges.connectTimeoutMs.maximum,
+    "browser_client",
+    "operation_timeout",
+    "abort_operation"
+  ),
+  defineResource(
+    "browser_sse_idle_timeout_ms",
+    "milliseconds",
+    browserSseResourceRanges.idleTimeoutMs.minimum,
+    browserSseResourceRanges.idleTimeoutMs.defaultValue,
+    browserSseResourceRanges.idleTimeoutMs.maximum,
+    "browser_client",
+    "operation_timeout",
+    "abort_operation"
+  ),
+  defineResource(
+    "browser_sse_error_response_max_bytes",
+    "bytes",
+    browserSseResourceRanges.errorResponseMaxBytes.minimum,
+    browserSseResourceRanges.errorResponseMaxBytes.defaultValue,
+    browserSseResourceRanges.errorResponseMaxBytes.maximum,
+    "browser_client",
+    "service_overloaded",
+    "abort_operation"
+  ),
+  defineResource(
+    "browser_sse_event_max_bytes",
+    "bytes",
+    browserSseResourceRanges.eventMaxBytes.minimum,
+    browserSseResourceRanges.eventMaxBytes.defaultValue,
+    browserSseResourceRanges.eventMaxBytes.maximum,
+    "browser_client",
+    "service_overloaded",
+    "abort_operation"
+  ),
+  defineResource(
+    "browser_sse_reconnect_initial_delay_ms",
+    "milliseconds",
+    browserSseResourceRanges.reconnectInitialDelayMs.minimum,
+    browserSseResourceRanges.reconnectInitialDelayMs.defaultValue,
+    browserSseResourceRanges.reconnectInitialDelayMs.maximum,
+    "browser_client",
+    "daemon_unavailable",
+    "abort_operation"
+  ),
+  defineResource(
+    "browser_sse_reconnect_max_delay_ms",
+    "milliseconds",
+    browserSseResourceRanges.reconnectMaxDelayMs.minimum,
+    browserSseResourceRanges.reconnectMaxDelayMs.defaultValue,
+    browserSseResourceRanges.reconnectMaxDelayMs.maximum,
+    "browser_client",
+    "daemon_unavailable",
+    "abort_operation"
+  ),
+  defineResource(
+    "browser_sse_max_reconnect_attempts",
+    "count",
+    browserSseResourceRanges.maxReconnectAttempts.minimum,
+    browserSseResourceRanges.maxReconnectAttempts.defaultValue,
+    browserSseResourceRanges.maxReconnectAttempts.maximum,
+    "browser_client",
+    "daemon_unavailable",
+    "abort_operation"
+  ),
+  defineResource(
+    "browser_sse_max_concurrent_streams",
+    "count",
+    browserSseResourceRanges.maxConcurrentStreams.minimum,
+    browserSseResourceRanges.maxConcurrentStreams.defaultValue,
+    browserSseResourceRanges.maxConcurrentStreams.maximum,
+    "browser_client",
+    "service_overloaded",
+    "reject_operation"
   )
 ] as const);
 
@@ -305,6 +386,31 @@ export const resourceBudgetSchema = z
       "browser_max_in_flight_requests",
       "http_max_in_flight_requests",
       "Browser request concurrency cannot exceed HTTP request concurrency."
+    );
+    atLeast(
+      "browser_sse_connect_timeout_ms",
+      "http_request_deadline_ms",
+      "Browser SSE connect timeout cannot expire before the server route deadline."
+    );
+    lessThan(
+      "sse_heartbeat_interval_ms",
+      "browser_sse_idle_timeout_ms",
+      "Browser SSE idle timeout must allow a server heartbeat."
+    );
+    atMost(
+      "browser_sse_error_response_max_bytes",
+      "browser_response_max_bytes",
+      "Browser SSE error capacity cannot exceed the browser JSON response capacity."
+    );
+    atLeast(
+      "browser_sse_event_max_bytes",
+      "sse_event_max_bytes",
+      "Browser SSE event capacity must cover the selected server event limit."
+    );
+    atMost(
+      "browser_sse_reconnect_initial_delay_ms",
+      "browser_sse_reconnect_max_delay_ms",
+      "Browser SSE reconnect initial delay cannot exceed its maximum delay."
     );
     atMost(
       "remote_observer_command_timeout_ms",

@@ -10,7 +10,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const productionPackageManifestName = "hostdeck-package.json";
-export const productionPackageSourceCount = 611;
+export const productionPackageSourceCount = 612;
 export const productionPackageVerifierName = "verify.mjs";
 
 const expectedPackageNames = [

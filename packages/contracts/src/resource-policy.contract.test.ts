@@ -15,7 +15,7 @@ import {
 
 describe("selected V1 resource budget", () => {
   it("defines one complete, immutable, observable registry", () => {
-    expect(resourceBudgetDefinitions).toHaveLength(91);
+    expect(resourceBudgetDefinitions).toHaveLength(99);
     expect(Object.isFrozen(resourceBudgetDefinitions)).toBe(true);
     expect(Object.isFrozen(defaultResourceBudget)).toBe(true);
     expect(Object.isFrozen(resourceBudgetDefinitionByKey)).toBe(true);
@@ -114,7 +114,15 @@ describe("selected V1 resource budget", () => {
       browser_request_timeout_ms: 35_000,
       browser_request_body_max_bytes: 65_536,
       browser_response_max_bytes: 1_048_576,
-      browser_max_in_flight_requests: 8
+      browser_max_in_flight_requests: 8,
+      browser_sse_connect_timeout_ms: 35_000,
+      browser_sse_idle_timeout_ms: 45_000,
+      browser_sse_error_response_max_bytes: 65_536,
+      browser_sse_event_max_bytes: 65_536,
+      browser_sse_reconnect_initial_delay_ms: 500,
+      browser_sse_reconnect_max_delay_ms: 10_000,
+      browser_sse_max_reconnect_attempts: 8,
+      browser_sse_max_concurrent_streams: 2
     });
   });
 
@@ -185,6 +193,11 @@ describe("selected V1 resource budget", () => {
       { browser_request_body_max_bytes: 1_048_576, http_body_max_bytes: 1_024 },
       { browser_response_max_bytes: 1_024, http_response_max_bytes: 8_388_608 },
       { browser_max_in_flight_requests: 32, http_max_in_flight_requests: 1 },
+      { browser_sse_connect_timeout_ms: 1_000, http_request_deadline_ms: 120_000 },
+      { browser_sse_idle_timeout_ms: 5_000, sse_heartbeat_interval_ms: 5_000 },
+      { browser_sse_error_response_max_bytes: 1_048_576, browser_response_max_bytes: 1_024 },
+      { browser_sse_event_max_bytes: 1_024, sse_event_max_bytes: 262_144 },
+      { browser_sse_reconnect_initial_delay_ms: 5_000, browser_sse_reconnect_max_delay_ms: 100 },
       { cli_stream_idle_timeout_ms: 5_000, sse_heartbeat_interval_ms: 5_000 },
       {
         protocol_connect_timeout_ms: 30_000,

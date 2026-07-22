@@ -16,6 +16,10 @@
     "./browser-http-resource-policy": {
       "types": "./src/browser-http-resource-policy.ts",
       "import": "./src/browser-http-resource-policy.ts"
+    },
+    "./browser-sse-resource-policy": {
+      "types": "./src/browser-sse-resource-policy.ts",
+      "import": "./src/browser-sse-resource-policy.ts"
     }
   },
   "scripts": {

@@ -381,6 +381,7 @@ describe("selected session list/detail routes", () => {
         ...defaultResourceBudget,
         http_response_max_bytes: 1_024,
         browser_response_max_bytes: 1_024,
+        browser_sse_error_response_max_bytes: 1_024,
         cli_response_max_bytes: 1_024
       })
     );

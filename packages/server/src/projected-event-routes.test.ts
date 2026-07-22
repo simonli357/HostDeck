@@ -1149,6 +1149,10 @@ function budgetWithResponseBytes(bytes: number): ResourceBudget {
     ...defaultResourceBudget,
     http_response_max_bytes: bytes,
     browser_response_max_bytes: bytes,
+    browser_sse_error_response_max_bytes: Math.min(
+      bytes,
+      defaultResourceBudget.browser_sse_error_response_max_bytes
+    ),
     cli_response_max_bytes: bytes
   });
 }

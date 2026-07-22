@@ -1,8 +1,6 @@
 import {
   type ApiErrorEnvelope,
   apiRouteErrorBodySchema,
-  hostDeckLoopbackOriginSchema,
-  remoteExternalOriginSchema,
   selectedCsrfGenerationHeaderName,
   selectedCsrfGenerationHeaderValueSchema,
   selectedCsrfTokenHeaderName,
@@ -13,6 +11,10 @@ import {
   browserHttpResourceRanges,
   defaultBrowserHttpClientLimits
 } from "@hostdeck/contracts/browser-http-resource-policy";
+import {
+  type BrowserTransport,
+  readSelectedBrowserOrigin
+} from "./browser-origin.js";
 import {
   type BrowserHttpRouteContract,
   type BrowserHttpRouteData,
@@ -36,7 +38,7 @@ export const browserHttpFailureReasons = [
 
 export type BrowserHttpFailureReason =
   (typeof browserHttpFailureReasons)[number];
-export type BrowserHttpTransport = "http" | "https";
+export type BrowserHttpTransport = BrowserTransport;
 
 export interface BrowserHttpHeadersPort {
   readonly get: (name: string) => string | null;
@@ -176,7 +178,7 @@ export function createBrowserHttpClient(
   input: CreateBrowserHttpClientOptions = {}
 ): BrowserHttpClient {
   const options = readCreateOptions(input);
-  const origin = readCurrentOrigin(options.origin);
+  const origin = readSelectedBrowserOrigin(options.origin);
   const fetchPort = readFetchPort(options.fetch);
   const limits = readLimits(options.limits);
   let inFlightRequests = 0;
@@ -630,27 +632,6 @@ function readRouteContract<RouteId extends BrowserHttpRouteId>(
     throw new TypeError("HostDeck browser HTTP route id is invalid.");
   }
   return browserHttpRouteContracts[routeId];
-}
-
-function readCurrentOrigin(candidate: unknown): {
-  readonly transport: BrowserHttpTransport;
-} {
-  const value =
-    candidate === undefined
-      ? typeof globalThis.location?.origin === "string"
-        ? globalThis.location.origin
-        : undefined
-      : candidate;
-  if (typeof value !== "string") {
-    throw new TypeError("HostDeck browser current origin is unavailable.");
-  }
-  if (hostDeckLoopbackOriginSchema.safeParse(value).success) {
-    return Object.freeze({ transport: "http" });
-  }
-  if (remoteExternalOriginSchema.safeParse(value).success) {
-    return Object.freeze({ transport: "https" });
-  }
-  throw new TypeError("HostDeck browser current origin is not selected.");
 }
 
 function readFetchPort(candidate: unknown): BrowserHttpFetchPort {

@@ -46,7 +46,7 @@
     "smoke:executable-serve": "node scripts/production-executable-serve.smoke.mjs",
     "smoke:service-host": "node scripts/production-service-host.smoke.mjs",
     "smoke:systemd-user-units": "node scripts/production-systemd-user-units.smoke.mjs",
-    "test:web": "vitest run packages/web/src/app-shell.test.tsx packages/web/src/http-client.test.ts packages/web/src/pairing-bootstrap.test.ts packages/test-fixtures/src/fixtures.test.ts",
+    "test:web": "vitest run packages/web/src/app-shell.test.tsx packages/web/src/http-client.test.ts packages/web/src/pairing-bootstrap.test.ts packages/web/src/sse-client.test.ts packages/test-fixtures/src/fixtures.test.ts",
     "test:browser:shell": "pnpm --filter @hostdeck/web build && playwright test --config playwright.shell.config.ts",
     "test:browser:pairing": "playwright test --config playwright.pairing.config.ts",
     "test:e2e": "node scripts/not-implemented.mjs test:e2e REL-V1-007",
