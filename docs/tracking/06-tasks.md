@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-011` Implement mobile Mission Control | ready | none | Build the default phone route first from the approved Focus Rail target and completed access-first coordinator. |
+| 1 | `FE-V1-011` Implement mobile Mission Control | in_progress | none | Strict `MMC-01` to `MMC-18` criteria are frozen in `artifacts/fe-v1-011-mobile-mission-control.md`; implement the default phone route against Focus Rail and the completed access-first coordinator. |
 | 2 | `FE-V1-012` Implement structured Session Detail feed and stream state | ready | none | Consume the completed detail/SSE state after the default inventory route establishes shared components. |
 | 3 | `FE-V1-013` Implement fragment-safe pairing and host/access status | ready | none | Add the pre-session trust/recovery surface on the completed pairing, remote-security, and coordinator contracts. |
 

@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `FE-V1-025` is complete in `888abf1` with `BSC-01` to `BSC-18` and `BUG-015` closed. `FE-V1-011` mobile Mission Control is the first ready next leaf, followed by `FE-V1-012` Session Detail and `FE-V1-013` pairing/access status.
+- Active task: `FE-V1-011` mobile Mission Control is in progress with strict `MMC-01` to `MMC-18` criteria frozen in `artifacts/fe-v1-011-mobile-mission-control.md`. It consumes completed `FE-V1-025` access-first coordinator truth; `FE-V1-012` Session Detail and `FE-V1-013` pairing/access status remain the next ready leaves.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.5; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract and both replacement sets are complete. Under `DEC-028`, the human selected all seven current Focus Rail assets with no Signal Ledger borrowing or additional structural drift; both legacy desktop-led boards remain rejected.

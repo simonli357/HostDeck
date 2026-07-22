@@ -173,6 +173,8 @@ Every row is tested at 390 x 844; marked stress states also run at 360 x 800 and
 | Host/access | Remote disabled, Tailscale unavailable, local host status with laptop profile mismatch, Serve configuring/ready/conflict, unpaired, QR/link claim, read-only, writer, reload/CSRF bootstrap, expired/revoked, locked, profile switch while connected, and generic browser/network failure when the phone cannot reach the origin. |
 | Event details | Normal, redacted, truncated, unknown optional type, boundary. |
 
+`FE-V1-011` applies the Mission Control row directly to coordinator resources: access-only states must be session-data-free; retained loading/failure data must remain explicitly stale; generic origin failure cannot invent laptop diagnosis; grouped rows preserve canonical source order; refresh and pagination are single-call/no-retry controls. Its Playwright evidence additionally measures the full host strip plus two `ACT NOW` rows in the first 390 x 844 viewport and captures 360/390/412/768/1280 layouts from deterministic coordinator-backed states.
+
 ## UI Fidelity And Accessibility
 
 - Two complete mobile-first directions are inspected against `03-ux-spec.md`; theme-only variations fail the gate.
