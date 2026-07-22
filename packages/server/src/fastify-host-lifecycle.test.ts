@@ -68,7 +68,36 @@ describe("selected Fastify host lifecycle", () => {
         resourceBudget: resourceBudgetSchema.parse({}) as ResourceBudget
       })
     ).rejects.toThrow("Resolved resource budget must be frozen");
+    await expect(
+      startHostDeckFastifyLifecycle(base, {} as AbortSignal)
+    ).rejects.toThrow("startup signal must be an AbortSignal");
     expect(startCalls).toBe(0);
+
+    const abortedCleanup: string[] = [];
+    const abortedController = new AbortController();
+    abortedController.abort(new Error("private parent cancellation"));
+    const abortedError = await expectLifecycleFailure(
+      startHostDeckFastifyLifecycle(
+        {
+          ...base,
+          runtime: syntheticOwner(37_771, abortedCleanup, {}, () => undefined, () => {
+            startCalls += 1;
+          })
+        },
+        abortedController.signal
+      )
+    );
+    expect(abortedError).toMatchObject({
+      code: "startup_timeout",
+      stage: "runtime"
+    });
+    expect(startCalls).toBe(0);
+    expect(abortedCleanup).toEqual([
+      "begin-drain",
+      "close-sse",
+      "close-runtime",
+      "close-startup"
+    ]);
 
     const forgedPolicyCleanup: string[] = [];
     let forgedPolicyRouteCalls = 0;

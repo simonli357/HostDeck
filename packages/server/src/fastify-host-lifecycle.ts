@@ -250,8 +250,10 @@ const bindKeys = ["host", "port", "transport"];
 const httpConnectionRuntimes = new WeakMap<HostDeckFastifyInstance, HttpConnectionRuntime>();
 
 export async function startHostDeckFastifyLifecycle<TContext>(
-  input: StartHostDeckFastifyLifecycleInput<TContext>
+  input: StartHostDeckFastifyLifecycleInput<TContext>,
+  startupSignal?: AbortSignal
 ): Promise<HostDeckFastifyLifecycle<TContext>> {
+  const parsedStartupSignal = parseStartupSignal(startupSignal);
   const parsed = parseLifecycleInput<TContext>(input);
   return startParsedLifecycle<TContext>(parsed, {
     prepare(owner: HostDeckFastifyStartedRuntime<TContext>) {
@@ -276,12 +278,14 @@ export async function startHostDeckFastifyLifecycle<TContext>(
         }
       });
     }
-  });
+  }, parsedStartupSignal);
 }
 
 export async function startHostDeckTailscaleServeFastifyLifecycle<TContext>(
-  input: StartHostDeckTailscaleServeFastifyLifecycleInput<TContext>
+  input: StartHostDeckTailscaleServeFastifyLifecycleInput<TContext>,
+  startupSignal?: AbortSignal
 ): Promise<HostDeckFastifyLifecycle<TContext>> {
+  const parsedStartupSignal = parseStartupSignal(startupSignal);
   const parsed = parseTailscaleServeLifecycleInput<TContext>(input);
   return startParsedLifecycle<TContext>(parsed, {
     prepare(owner: HostDeckFastifyStartedRuntime<TContext>) {
@@ -324,22 +328,27 @@ export async function startHostDeckTailscaleServeFastifyLifecycle<TContext>(
         }
       });
     }
-  });
+  }, parsedStartupSignal);
 }
 
 async function startParsedLifecycle<TContext>(
   parsed: ParsedLifecycleInput<TContext>,
-  boundary: LifecycleBoundary<TContext>
+  boundary: LifecycleBoundary<TContext>,
+  startupSignal: AbortSignal | undefined
 ): Promise<HostDeckFastifyLifecycle<TContext>> {
   assertResolvedResourceBudget(parsed.resourceBudget);
   const startupDeadline = createOperationDeadline({
-    timeoutMs: parsed.resourceBudget.lifecycle_startup_timeout_ms
+    timeoutMs: parsed.resourceBudget.lifecycle_startup_timeout_ms,
+    ...(startupSignal === undefined
+      ? {}
+      : { parentSignal: startupSignal })
   });
   let stage: HostDeckFastifyLifecycleStage = "runtime";
   let app: HostDeckFastifyInstance | null = null;
   let cleanupOwner: CleanupRuntimeOwner = parsed.runtime;
 
   try {
+    startupDeadline.throwIfAborted();
     const runtimePromise = Promise.resolve().then(() =>
       parsed.runtime.start(
         Object.freeze({
@@ -440,6 +449,16 @@ async function startParsedLifecycle<TContext>(
   } finally {
     startupDeadline.dispose();
   }
+}
+
+function parseStartupSignal(input: unknown): AbortSignal | undefined {
+  if (input === undefined) return undefined;
+  if (!(input instanceof AbortSignal)) {
+    throw new TypeError(
+      "HostDeck Fastify startup signal must be an AbortSignal."
+    );
+  }
+  return input;
 }
 
 function parseLifecycleInput<TContext>(input: unknown): ParsedLifecycleInput<TContext> {
