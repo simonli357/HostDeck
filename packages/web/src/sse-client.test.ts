@@ -150,6 +150,58 @@ describe("bounded browser SSE client", () => {
     expect(fetches).toBe(0);
   });
 
+  it("rejects every malformed connection field and limit before fetch", async () => {
+    let fetches = 0;
+    let getterCalls = 0;
+    const client = createBrowserSseClient({
+      origin,
+      fetch: async () => {
+        fetches += 1;
+        return sseResponse(new ControlledReader());
+      }
+    });
+    const accessor = Object.defineProperty({}, "sessionId", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return sessionId;
+      }
+    });
+    for (const candidate of [
+      accessor,
+      { sessionId: "../private", onEvent() {} },
+      { sessionId, after: -1, onEvent() {} },
+      { sessionId, after: 1.5, onEvent() {} },
+      { sessionId, signal: { aborted: false }, onEvent() {} },
+      { sessionId, onEvent: null },
+      { sessionId, onEvent() {}, onState: 1 }
+    ]) {
+      expect(() => client.connect(candidate as never)).toThrow(TypeError);
+    }
+    for (const limits of [
+      selectedLimits({ eventMaxBytes: 1_000 }),
+      { ...defaultBrowserSseClientLimits, extra: 1 },
+      selectedLimits({
+        reconnectInitialDelayMs: 5_000,
+        reconnectMaxDelayMs: 100
+      })
+    ]) {
+      expect(() =>
+        createBrowserSseClient({
+          origin,
+          limits: limits as BrowserSseClientLimits,
+          fetch: async () => {
+            fetches += 1;
+            return sseResponse(new ControlledReader());
+          }
+        })
+      ).toThrow(TypeError);
+    }
+    await settle();
+    expect(fetches).toBe(0);
+    expect(getterCalls).toBe(0);
+  });
+
   it("closes a pre-aborted connection without reserving capacity or fetching", async () => {
     const controller = new AbortController();
     controller.abort();
@@ -281,6 +333,21 @@ describe("bounded browser SSE client", () => {
       "mismatched event id",
       eventFrame(messageEvent(1), { id: "2" }),
       "invalid_event"
+    ],
+    [
+      "mismatched event name",
+      eventFrame(messageEvent(1), { name: "runtime" }),
+      "invalid_event"
+    ],
+    [
+      "mismatched session",
+      eventFrame(
+        selectedProjectionEventSchema.parse({
+          ...messageEvent(1),
+          session_id: "sess_browser_sse_other"
+        })
+      ),
+      "invalid_event"
     ]
   ] as const)("fails a %s terminally", async (_label, wire, reason) => {
     const clock = new ManualClock();
@@ -356,6 +423,45 @@ describe("bounded browser SSE client", () => {
     expect(JSON.stringify(connection.snapshot())).not.toContain(
       "private transport detail"
     );
+  });
+
+  it("resets retry backoff on liveness and reconnects from the committed cursor", async () => {
+    const clock = new ManualClock();
+    const firstReader = new ControlledReader();
+    const secondReader = new ControlledReader();
+    const paths: string[] = [];
+    let attempt = 0;
+    const connection = createBrowserSseClient({
+      origin,
+      clock: clock.port,
+      fetch: async (path) => {
+        paths.push(path);
+        attempt += 1;
+        if (attempt === 1) throw new Error("first transport failure");
+        return sseResponse(attempt === 2 ? firstReader : secondReader);
+      }
+    }).connect({ sessionId, onEvent() {} });
+    await waitFor(() => connection.snapshot().retryCount === 1);
+    clock.advance(500);
+    await waitFor(() => connection.snapshot().phase === "connected");
+    firstReader.pushText(eventFrame(messageEvent(1)));
+    await waitFor(() => connection.snapshot().cursor === 1);
+    expect(connection.snapshot().retryCount).toBe(0);
+
+    firstReader.end();
+    await waitFor(() => connection.snapshot().phase === "reconnecting");
+    expect(connection.snapshot()).toMatchObject({
+      retryCount: 1,
+      retryAt: 1_000
+    });
+    clock.advance(500);
+    await waitFor(() => paths.length === 3);
+    expect(paths).toEqual([
+      `/api/v1/sessions/${sessionId}/events/stream`,
+      `/api/v1/sessions/${sessionId}/events/stream`,
+      `/api/v1/sessions/${sessionId}/events/stream?after=1`
+    ]);
+    connection.close();
   });
 
   it("times out a connect, cancels a late response, and never leaks its reader", async () => {
@@ -508,6 +614,71 @@ describe("bounded browser SSE client", () => {
       }).connect({ sessionId, onEvent() {} });
       await waitFor(() => connection.snapshot().phase === "failed");
       expect(connection.snapshot().failure?.reason).toBe(testCase.reason);
+    }
+  });
+
+  it("accepts an exact-cap error body and rejects streamed overflow", async () => {
+    const envelope = JSON.stringify({
+      error: {
+        code: "permission_denied",
+        message: "Pairing is required.",
+        retryable: false
+      }
+    });
+    const exact = `${envelope}${" ".repeat(1_024 - envelope.length)}`;
+    const exactConnection = createBrowserSseClient({
+      origin,
+      limits: selectedLimits({ errorResponseMaxBytes: 1_024 }),
+      fetch: async () =>
+        textResponse(401, exact, "application/json", {
+          "content-length": "1024"
+        })
+    }).connect({ sessionId, onEvent() {} });
+    await waitFor(() => exactConnection.snapshot().phase === "failed");
+    expect(exactConnection.snapshot().failure?.reason).toBe("api_error");
+
+    const overflowReader = new ControlledReader();
+    overflowReader.pushText(exact);
+    overflowReader.pushText(" ");
+    overflowReader.end();
+    const overflowConnection = createBrowserSseClient({
+      origin,
+      limits: selectedLimits({ errorResponseMaxBytes: 1_024 }),
+      fetch: async () =>
+        response(503, overflowReader, {
+          "content-type": "application/json"
+        })
+    }).connect({ sessionId, onEvent() {} });
+    await waitFor(() => overflowConnection.snapshot().phase === "failed");
+    expect(overflowConnection.snapshot().failure?.reason).toBe(
+      "response_too_large"
+    );
+  });
+
+  it("rejects invalid success status, media type, and body without retry", async () => {
+    const invalidResponses: BrowserSseResponsePort[] = [
+      textResponse(200, "event", "text/plain"),
+      {
+        status: 200,
+        ok: true,
+        headers: { get: () => "text/event-stream" },
+        body: null
+      },
+      jsonResponse(204, {
+        error: {
+          code: "internal_error",
+          message: "Invalid success status.",
+          retryable: false
+        }
+      })
+    ];
+    for (const invalidResponse of invalidResponses) {
+      const connection = createBrowserSseClient({
+        origin,
+        fetch: async () => invalidResponse
+      }).connect({ sessionId, onEvent() {} });
+      await waitFor(() => connection.snapshot().phase === "failed");
+      expect(connection.snapshot().failure?.reason).toBe("invalid_response");
     }
   });
 
