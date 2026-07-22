@@ -2,15 +2,18 @@
 
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { MemoryRouter, useLocation } from "react-router";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  HostDeckBrowserApp,
   HostDeckRoutes,
   missionControlPath,
   SessionRouteLink,
   sessionDetailPath,
   sessionDetailPathPattern
 } from "./app-shell.js";
+import { createBrowserAppStartupController } from "./app-startup.js";
 
 const sessionId = "sess_shell_001";
 
@@ -141,6 +144,60 @@ describe("HostDeck phone shell", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(document.activeElement).toBe(trigger);
   });
+
+  it("holds production routes behind one external pairing owner even under StrictMode", async () => {
+    const user = userEvent.setup();
+    const deferred = createDeferred<ReturnType<typeof pairedResult>>();
+    const bootstrapPairing = vi.fn(() => deferred.promise);
+    const adoptCsrfBootstrap = vi.fn();
+    const coordinator = Object.freeze({
+      snapshot: vi.fn(),
+      subscribe: vi.fn(),
+      setTarget: vi.fn(),
+      refresh: vi.fn(),
+      loadMoreSessions: vi.fn(),
+      connectSessionStream: vi.fn(),
+      disconnectSessionStream: vi.fn(),
+      bootstrapCsrf: vi.fn(),
+      adoptCsrfBootstrap,
+      requestProtected: vi.fn(),
+      close: vi.fn()
+    }) as never;
+    const createCoordinator = vi.fn(() => coordinator);
+    const startup = createBrowserAppStartupController({
+      bootstrapPairing,
+      createCoordinator,
+      reload: vi.fn()
+    });
+
+    render(
+      <StrictMode>
+        <HostDeckBrowserApp
+          startup={startup}
+          outlets={{
+            missionControl: <h1>Mission Control protected fixture</h1>,
+            sessionDetail: () => <h1>Session Detail protected fixture</h1>,
+            hostAccess: <p>Access fixture</p>
+          }}
+        />
+      </StrictMode>
+    );
+
+    expect(bootstrapPairing).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Mission Control protected fixture")).toBeNull();
+    deferred.resolve(pairedResult());
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Phone paired" })).toBeTruthy();
+    expect(adoptCsrfBootstrap).toHaveBeenCalledTimes(1);
+    expect(createCoordinator).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Mission Control protected fixture")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Open Mission Control" }));
+
+    expect(await screen.findByText("Mission Control protected fixture")).toBeTruthy();
+    expect(bootstrapPairing).toHaveBeenCalledTimes(1);
+    expect(adoptCsrfBootstrap).toHaveBeenCalledTimes(1);
+  });
 });
 
 function renderShell(
@@ -158,4 +215,28 @@ function renderShell(
 function LocationProbe() {
   const location = useLocation();
   return <output data-testid="location-path">{location.pathname}</output>;
+}
+
+function pairedResult() {
+  return Object.freeze({
+    state: "paired" as const,
+    device_id: "client_abcdefghijklmnopqrstuvwx",
+    permission: "write" as const,
+    client_label: "Android phone",
+    device_expires_at: "2026-10-20T12:00:00.000Z",
+    csrf_token: "C".repeat(43),
+    csrf_generation: 3,
+    csrf_rotated_at: "2026-07-22T12:00:00.000Z"
+  });
+}
+
+function createDeferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+  return { promise, resolve };
 }

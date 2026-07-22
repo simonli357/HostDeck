@@ -27,6 +27,10 @@ test("renders the Mission Control shell and preserves modal route and focus", as
 
   const dialog = page.getByRole("dialog", { name: "Host & access" });
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Secure control ready" })).toBeVisible();
+  await expect(dialog.getByText("Read & write", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Ready", { exact: true }).first()).toBeVisible();
+  await expect(dialog.getByText("http://127.0.0.1:4175", { exact: true })).toBeVisible();
   await expect(page).toHaveURL("http://127.0.0.1:4175/");
   await expect
     .poll(() => page.evaluate(() => document.querySelector('[role="dialog"]')?.contains(document.activeElement)))
@@ -48,6 +52,21 @@ test("renders the Mission Control shell and preserves modal route and focus", as
     "/api/v1/access/csrf"
   ]);
   expect(missionRequestPaths(api)).toHaveLength(4);
+});
+
+test("scrubs an invalid production fragment before routes or API work", async ({ page }) => {
+  const diagnostics = observePage(page);
+  const pairingCode = "AbCdEfGhIjKlMnOpQrSt_1";
+
+  await page.goto(`/#pair=${pairingCode}`);
+
+  await expect(page.getByRole("heading", { level: 1, name: "Pairing link is invalid" }))
+    .toBeVisible();
+  await expect(page).toHaveURL("http://127.0.0.1:4175/");
+  await expect(page.getByRole("heading", { level: 1, name: "Mission Control" })).toHaveCount(0);
+  expect(await page.locator("body").innerText()).not.toContain(pairingCode);
+  await expectNoHorizontalOverflow(page);
+  await expectNoUnexpectedRuntimeActivity(page, diagnostics);
 });
 
 test("renders direct Session Detail safely and rejects invalid routes", async ({ page }) => {

@@ -5,24 +5,32 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   defaultResourceBudget,
+  remoteIngressPublicStateSchema,
   resolveResourceBudget,
   selectedRequestAuthenticationContextSchema
 } from "@hostdeck/contracts";
 import {
   createAuthDeviceRepository,
+  createDeviceRevocationRepository,
   createPairingCodeRepository,
   createSelectedAuditRepository,
   createSelectedCsrfAuthorizationRepository,
+  createSelectedSessionReadRepository,
   openMigratedDatabase,
   type SelectedAuditRepository
 } from "@hostdeck/storage";
 import { afterEach, describe, expect, it } from "vitest";
+import { createBrowserAppStartupController } from "../../web/src/app-startup.js";
+import { createBrowserConnectionStateCoordinator } from "../../web/src/connection-state.js";
+import { createBrowserCsrfClient } from "../../web/src/csrf-client.js";
+import { createBrowserHttpClient } from "../../web/src/http-client.js";
 import {
   type BrowserPairingResponsePort,
   bootstrapBrowserPairing,
   browserCsrfBootstrapPath,
   browserPairClaimPath
 } from "../../web/src/pairing-bootstrap.js";
+import { createBrowserSseClient } from "../../web/src/sse-client.js";
 import {
   createHostDeckCsrfPolicy,
   createHostDeckCsrfRouteRegistration
@@ -39,6 +47,15 @@ import {
   requireHostDeckRequestAuthentication,
   resolveHostDeckRequestAuthentication
 } from "./fastify-request-authentication.js";
+import { createHostDeckHealthRouteRegistration } from "./health-routes.js";
+import {
+  createHostDeckHostHealthService,
+  hostDeckLocalHealthComponents
+} from "./host-health.js";
+import {
+  createHostDeckHostLockPolicy,
+  createHostDeckHostLockRouteRegistration
+} from "./host-lock-routes.js";
 import {
   createHostDeckPairingPolicy,
   createHostDeckPairingRouteRegistration,
@@ -50,6 +67,7 @@ import {
   createSecurityMutationAuditExecutor,
   type SecurityMutationAuditExecutor
 } from "./security-mutation-audit-executor.js";
+import { createHostDeckSessionReadRouteRegistration } from "./session-read-routes.js";
 import {
   createTailscaleServeProxyTrustPolicy,
   type TailscaleServeRemoteAdmissionSnapshot,
@@ -202,6 +220,243 @@ describe("Tailscale Serve pairing authorization composition", () => {
       rawCsrfToken,
       rotatedCsrfToken
     ]);
+  });
+
+  it("carries real pairing authority through app startup, first session load, and revocation purge", async () => {
+    const harness = createHarness();
+    await harness.app.ready();
+    const issued = await issueCode(
+      harness.app,
+      "op_fe_v1_013_issue_01",
+      "write"
+    );
+    let locationHash = `#pair=${issued.code}`;
+    let deviceCookie: string | null = null;
+    let coordinatorCreations = 0;
+    let csrfOperationIds = 0;
+    let clockMs = baseTime.getTime() + 2_000;
+    const browserRequestPaths: string[] = [];
+    const pairingRequestPaths: string[] = [];
+    const createdCoordinators: Array<
+      ReturnType<typeof createBrowserConnectionStateCoordinator>
+    > = [];
+
+    const startup = createBrowserAppStartupController({
+      bootstrapPairing: () =>
+        bootstrapBrowserPairing({
+          location: {
+            origin: externalOrigin,
+            pathname: "/",
+            search: "",
+            get hash() {
+              return locationHash;
+            }
+          },
+          history: {
+            state: null,
+            replaceState(_data, _unused, path) {
+              expect(path).toBe("/");
+              locationHash = "";
+            }
+          },
+          createOperationId(operation) {
+            return operation === "pair_claim"
+              ? "op_fe_v1_013_pair_claim_01"
+              : "op_fe_v1_013_csrf_bootstrap_01";
+          },
+          fetch: async (path, init) => {
+            pairingRequestPaths.push(path);
+            const response = await harness.app.inject({
+              headers: {
+                ...remoteHeaders(sourceA, {
+                  contentType: true,
+                  origin: true,
+                  ...(deviceCookie === null ? {} : { cookie: deviceCookie })
+                }),
+                ...init.headers
+              },
+              method: init.method,
+              payload: init.body,
+              url: path
+            });
+            const setCookie = response.headers["set-cookie"];
+            if (setCookie !== undefined) {
+              const match = new RegExp(
+                `^${hostDeckDeviceCookieName}=([^;]+)`,
+                "u"
+              ).exec(requireSingleHeader(setCookie));
+              if (match?.[1] !== undefined) deviceCookie = match[1];
+            }
+            return browserResponse(
+              response.statusCode,
+              response.headers,
+              response.body
+            );
+          }
+        }),
+      createCoordinator: () => {
+        coordinatorCreations += 1;
+        const httpClient = createBrowserHttpClient({
+          origin: externalOrigin,
+          fetch: async (path, init) => {
+            browserRequestPaths.push(path);
+            const response = await harness.app.inject({
+              headers: {
+                ...remoteHeaders(sourceA, {
+                  cookie: requireDeviceCookie(deviceCookie),
+                  origin: true
+                }),
+                ...init.headers
+              },
+              method: init.method,
+              ...(init.body === undefined ? {} : { payload: init.body }),
+              url: path
+            });
+            return browserResponse(
+              response.statusCode,
+              response.headers,
+              response.body
+            );
+          }
+        });
+        const csrfClient = createBrowserCsrfClient({
+          httpClient,
+          createOperationId: () => {
+            csrfOperationIds += 1;
+            return `op_fe_v1_013_unexpected_csrf_${csrfOperationIds}`;
+          }
+        });
+        const sseClient = createBrowserSseClient({
+          origin: externalOrigin,
+          fetch: async () => {
+            throw new TypeError("Mission Control must not start a session stream.");
+          }
+        });
+        const coordinator = createBrowserConnectionStateCoordinator({
+          httpClient,
+          csrfClient,
+          sseClient,
+          origin: externalOrigin,
+          clock: {
+            now: () => {
+              clockMs += 1;
+              return clockMs;
+            }
+          }
+        });
+        createdCoordinators.push(coordinator);
+        return coordinator;
+      },
+      reload: () => {
+        throw new TypeError("Successful startup must not reload.");
+      }
+    });
+
+    await waitForStartupPhase(startup, "paired");
+
+    expect(locationHash).toBe("");
+    expect(pairingRequestPaths).toEqual([
+      browserPairClaimPath,
+      browserCsrfBootstrapPath
+    ]);
+    expect(coordinatorCreations).toBe(1);
+    expect(deviceCookie).toBe(rawDeviceToken);
+    expect(createdCoordinators[0]?.snapshot()).toMatchObject({
+      phase: "idle",
+      csrf: { phase: "ready", generation: 2 }
+    });
+    expect(browserRequestPaths).toEqual([]);
+    expect(csrfOperationIds).toBe(0);
+    expect(startup.coordinator()).toBeNull();
+    expect(startup.snapshot()).toEqual({
+      phase: "paired",
+      pairing: {
+        permission: "write",
+        clientLabel: "Android phone",
+        deviceExpiresAt: expect.any(String)
+      }
+    });
+    const publicStartup = JSON.stringify(startup.snapshot());
+    for (const secret of [
+      issued.code,
+      rawDeviceToken,
+      rawCsrfToken,
+      rotatedCsrfToken,
+      "client_ABCDEFGHIJKLMNOPQRSTUVWX"
+    ]) {
+      expect(publicStartup).not.toContain(secret);
+    }
+
+    startup.continueToApp();
+    const coordinator = startup.coordinator();
+    expect(coordinator).not.toBeNull();
+    const ready = await coordinator?.setTarget({ kind: "mission_control" });
+
+    expect(ready).toMatchObject({
+      phase: "ready",
+      access: {
+        state: "current",
+        data: { authentication_state: "paired_device", permission: "write" }
+      },
+      host: { state: "current" },
+      targetState: {
+        state: "current",
+        data: {
+          kind: "mission_control",
+          sessions: [{ session: { id: "sess_startup_aggregate" } }]
+        }
+      },
+      csrf: { phase: "ready", generation: 2 },
+      writeEligibility: { eligible: true, causes: [] }
+    });
+    expect(browserRequestPaths[0]).toBe("/api/v1/access");
+    expect(browserRequestPaths.slice(1).sort()).toEqual([
+      "/api/v1/host/status",
+      "/api/v1/sessions"
+    ]);
+    expect(browserRequestPaths).not.toContain(browserCsrfBootstrapPath);
+    expect(csrfOperationIds).toBe(0);
+
+    const revocations = createDeviceRevocationRepository(harness.db);
+    revocations.revoke({
+      deviceId: "client_ABCDEFGHIJKLMNOPQRSTUVWX",
+      now: new Date(baseTime.getTime() + 3_000)
+    });
+    const requestsBeforeRevokeRefresh = browserRequestPaths.length;
+    const revoked = await coordinator?.refresh();
+
+    expect(browserRequestPaths.slice(requestsBeforeRevokeRefresh)).toEqual([
+      "/api/v1/access"
+    ]);
+    expect(revoked).toMatchObject({
+      phase: "access_limited",
+      access: {
+        state: "current",
+        data: { authentication_state: "revoked_device" }
+      },
+      host: { state: "blocked", data: null },
+      targetState: { state: "blocked", data: null },
+      csrf: { phase: "idle", generation: null, invalidationReason: "device_revoked" },
+      writeEligibility: { eligible: false, causes: ["revoked_device"] }
+    });
+    expect(csrfOperationIds).toBe(0);
+
+    const auditRows = JSON.stringify(
+      harness.db
+        .prepare("SELECT * FROM selected_audit_events ORDER BY operation_id, phase")
+        .all()
+    );
+    for (const secret of [issued.code, rawDeviceToken, rawCsrfToken, rotatedCsrfToken]) {
+      expect(auditRows).not.toContain(secret);
+    }
+    assertSecretsAbsentFromSqlite(harness.dbPath, [
+      issued.code,
+      rawDeviceToken,
+      rawCsrfToken,
+      rotatedCsrfToken
+    ]);
+    expect(startup.close().phase).toBe("closed");
+    expect(createdCoordinators[0]?.snapshot().phase).toBe("closed");
   });
 
   it("uses admitted source hashing for SQLite limits and issues only a hardened device cookie", async () => {
@@ -728,6 +983,54 @@ function createHarness(options: HarnessOptions = {}): Harness {
     },
     now: () => new Date(baseTime.getTime() + 1_000)
   });
+  let durableLock: Readonly<{
+    locked: boolean;
+    settings_updated_at: string;
+  }> = Object.freeze({
+    locked: false,
+    settings_updated_at: baseTime.toISOString()
+  });
+  const lockPolicy = createHostDeckHostLockPolicy({
+    settings: {
+      read: () => durableLock,
+      transition(input) {
+        const before = durableLock;
+        const changed = before.locked !== input.locked;
+        if (changed) {
+          durableLock = Object.freeze({
+            locked: input.locked,
+            settings_updated_at: input.now.toISOString()
+          });
+        }
+        return Object.freeze({ before, after: durableLock, changed });
+      }
+    },
+    now: () => new Date(baseTime.getTime() + 1_000)
+  });
+  const health = createHostDeckHostHealthService({
+    now: () => new Date(baseTime.getTime() + 1_000)
+  });
+  for (const component of hostDeckLocalHealthComponents) {
+    health.updateLocal({
+      component,
+      state: "ready",
+      reasons: [],
+      source_generation: 1
+    });
+  }
+  health.updateRemote({
+    source_generation: 1,
+    state: remoteIngressPublicStateSchema.parse({
+      generation: 7,
+      availability: "ready",
+      reason: null,
+      external_origin: externalOrigin,
+      laptop_action_required: false,
+      observed_at: new Date(baseTime.getTime() + 1_000).toISOString()
+    })
+  });
+  seedStartupAggregateSession(opened.db);
+  const sessionReads = createSelectedSessionReadRepository(opened.db);
   const remoteRequestAuthority =
     createHostDeckRemoteIngressRequestAuthorityPolicy();
   const app = createHostDeckTailscaleServeFastifyApp({
@@ -740,6 +1043,13 @@ function createHarness(options: HarnessOptions = {}): Harness {
     routePlugins: [
       pairingRegistration,
       createHostDeckCsrfRouteRegistration({ audit: executor, csrf: csrfPolicy }),
+      createHostDeckHostLockRouteRegistration({
+        audit: executor,
+        csrf: csrfPolicy,
+        lock: lockPolicy
+      }),
+      createHostDeckHealthRouteRegistration({ health }),
+      createHostDeckSessionReadRouteRegistration({ sessions: sessionReads }),
       protectedRoute()
     ],
     remoteIngressRequestAuthority: remoteRequestAuthority,
@@ -954,6 +1264,68 @@ function browserResponse(
       }
     }
   };
+}
+
+async function waitForStartupPhase(
+  startup: ReturnType<typeof createBrowserAppStartupController>,
+  phase: "paired"
+): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (startup.snapshot().phase === phase) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  throw new TypeError(
+    `HostDeck app startup did not reach ${phase}; current phase is ${startup.snapshot().phase}.`
+  );
+}
+
+function requireDeviceCookie(cookie: string | null): string {
+  if (cookie === null) {
+    throw new TypeError("HostDeck aggregate device cookie is unavailable.");
+  }
+  return cookie;
+}
+
+function seedStartupAggregateSession(
+  db: ReturnType<typeof openMigratedDatabase>["db"]
+): void {
+  const createdAt = baseTime.toISOString();
+  const updatedAt = new Date(baseTime.getTime() + 1_000).toISOString();
+  db.prepare(
+    `
+      INSERT INTO selected_sessions (
+        id, name, codex_thread_id, cwd, runtime_source, runtime_version,
+        disposition, created_at, updated_at, archived_at
+      ) VALUES (
+        'sess_startup_aggregate', 'startup-aggregate', 'thread-startup-aggregate',
+        '/workspace/hostdeck', 'codex_app_server', '0.144.0', 'selected', ?, ?, NULL
+      )
+    `
+  ).run(createdAt, updatedAt);
+  db.prepare(
+    `
+      INSERT INTO selected_session_projections (
+        session_id, session_state, turn_state, attention, freshness, freshness_reason,
+        updated_at, last_activity_at, branch, model, settings_json, goal_json,
+        recent_summary, last_event_cursor, retained_event_count, retained_event_bytes,
+        earliest_retained_cursor, retention_boundary_cursor
+      ) VALUES (
+        'sess_startup_aggregate', 'active', 'idle', 'none', 'current', NULL,
+        ?, ?, 'main', 'gpt-5.5-codex', ?, ?, ?, NULL, 0, 0, NULL, NULL
+      )
+    `
+  ).run(
+    updatedAt,
+    updatedAt,
+    JSON.stringify({
+      collaboration_mode: "default",
+      observed_at: updatedAt,
+      reasoning_effort: "high",
+      runtime_model: "gpt-5.5-codex"
+    }),
+    JSON.stringify({ objective: "Validate app startup.", state: "active" }),
+    "Pairing startup aggregate session."
+  );
 }
 
 function assertSecretsAbsentFromSqlite(

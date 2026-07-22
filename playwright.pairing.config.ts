@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/browser",
-  testMatch: "pairing-bootstrap.spec.ts",
+  testMatch: ["pairing-bootstrap.spec.ts", "pairing-access.spec.ts"],
   fullyParallel: false,
   workers: 1,
   timeout: 30_000,

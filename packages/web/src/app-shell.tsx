@@ -2,7 +2,13 @@ import { sessionIdSchema } from "@hostdeck/contracts/scalars";
 import type { SessionId } from "@hostdeck/core";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ArrowLeft, Box, Menu, X } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore
+} from "react";
 import {
   BrowserRouter,
   Link,
@@ -17,12 +23,15 @@ import {
   missionControlPath,
   sessionDetailPathPattern
 } from "./app-routing.js";
+import type { BrowserAppStartupController } from "./app-startup.js";
 import {
   type BrowserConnectionCoordinatorFactory,
   createProductionBrowserConnectionCoordinator
 } from "./browser-runtime.js";
 import type { BrowserConnectionStateCoordinator } from "./connection-state.js";
+import { ConnectedHostAccess } from "./host-access.js";
 import { ConnectedMissionControl } from "./mission-control.js";
+import { PairingStartupScreen } from "./pairing-screen.js";
 import {
   projectSessionDetail,
   SessionDetailScreen,
@@ -44,6 +53,7 @@ export interface HostDeckRouteOutlets {
 
 export interface HostDeckAppProps {
   readonly outlets?: HostDeckRouteOutlets | undefined;
+  readonly startup?: BrowserAppStartupController | undefined;
   readonly coordinator?: BrowserConnectionStateCoordinator | undefined;
   readonly createCoordinator?: BrowserConnectionCoordinatorFactory | undefined;
 }
@@ -73,9 +83,63 @@ const initialCoordinatorState = Object.freeze({
 
 export function HostDeckBrowserApp({
   outlets,
+  startup,
   coordinator: injectedCoordinator,
   createCoordinator = createProductionBrowserConnectionCoordinator
 }: HostDeckAppProps) {
+  if (startup !== undefined) {
+    return <StartedHostDeckBrowserApp outlets={outlets} startup={startup} />;
+  }
+  return (
+    <OwnedHostDeckBrowserApp
+      outlets={outlets}
+      coordinator={injectedCoordinator}
+      createCoordinator={createCoordinator}
+    />
+  );
+}
+
+function StartedHostDeckBrowserApp({
+  outlets,
+  startup
+}: Readonly<{
+  outlets: HostDeckRouteOutlets | undefined;
+  startup: BrowserAppStartupController;
+}>) {
+  const snapshot = useSyncExternalStore(
+    startup.subscribe,
+    startup.snapshot,
+    startup.snapshot
+  );
+  if (snapshot.phase !== "ready") {
+    return (
+      <PairingStartupScreen
+        snapshot={snapshot}
+        onContinue={() => startup.continueToApp()}
+        onReload={() => startup.reload()}
+      />
+    );
+  }
+  const coordinator = startup.coordinator();
+  if (coordinator === null) {
+    throw new TypeError("HostDeck ready startup is missing its browser coordinator.");
+  }
+  return (
+    <BrowserRouter>
+      <HostDeckRoutes outlets={outlets} coordinator={coordinator} />
+    </BrowserRouter>
+  );
+}
+
+function OwnedHostDeckBrowserApp({
+  outlets,
+  coordinator: injectedCoordinator,
+  createCoordinator
+}: Readonly<{
+  outlets: HostDeckRouteOutlets | undefined;
+  coordinator: BrowserConnectionStateCoordinator | undefined;
+  createCoordinator: BrowserConnectionCoordinatorFactory;
+}>) {
   const needsBrowserRuntime =
     outlets?.missionControl === undefined || outlets?.sessionDetail === undefined;
   const ownsBrowserRuntime = injectedCoordinator === undefined && needsBrowserRuntime;
@@ -147,7 +211,12 @@ export function HostDeckRoutes({
           />
         }
       />
-      <Route path="*" element={<NotFoundRoute />} />
+      <Route
+        path="*"
+        element={
+          <NotFoundRoute coordinator={coordinator} hostAccess={outlets.hostAccess} />
+        }
+      />
     </Routes>
   );
 }
@@ -170,7 +239,7 @@ function MissionControlRoute({
         : <MissionControlLoading />;
   }
   return (
-    <HostDeckFrame hostAccess={outlets.hostAccess}>
+    <HostDeckFrame coordinator={coordinator} hostAccess={outlets.hostAccess}>
       {content}
     </HostDeckFrame>
   );
@@ -189,7 +258,9 @@ function SessionDetailRoute({
   const parsed = sessionIdSchema.safeParse(rawSessionId);
 
   if (!parsed.success) {
-    return <NotFoundRoute />;
+    return (
+      <NotFoundRoute coordinator={coordinator} hostAccess={outlets.hostAccess} />
+    );
   }
 
   const sessionId = parsed.data;
@@ -206,6 +277,7 @@ function SessionDetailRoute({
   return (
     <HostDeckFrame
       back={<SessionBackButton />}
+      coordinator={coordinator}
       hostAccess={outlets.hostAccess}
       subtitle={
         injectedContent === undefined
@@ -245,6 +317,7 @@ function ConnectedSessionDetailRoute({
   return (
     <HostDeckFrame
       back={<SessionBackButton />}
+      coordinator={coordinator}
       hostAccess={hostAccess}
       subtitle={projection.headerSubtitle}
       title={projection.headerTitle}
@@ -267,12 +340,14 @@ function ConnectedSessionDetailRoute({
 function HostDeckFrame({
   back,
   children,
+  coordinator,
   hostAccess,
   subtitle,
   title = "HostDeck"
 }: Readonly<{
   back?: ReactNode;
   children: ReactNode;
+  coordinator?: BrowserConnectionStateCoordinator | undefined;
   hostAccess?: ReactNode;
   subtitle?: string | undefined;
   title?: string;
@@ -296,7 +371,14 @@ function HostDeckFrame({
             )}
           </div>
         </div>
-        <HostAccessSheet>{hostAccess ?? <HostAccessLoading />}</HostAccessSheet>
+        <HostAccessSheet>
+          {hostAccess ??
+            (coordinator === undefined ? (
+              <HostAccessLoading />
+            ) : (
+              <ConnectedHostAccess coordinator={coordinator} />
+            ))}
+        </HostAccessSheet>
       </header>
       <main id="hostdeck-main" className="hostdeck-main" tabIndex={-1}>
         {children}
@@ -452,9 +534,15 @@ function HostAccessLoading() {
   );
 }
 
-function NotFoundRoute() {
+function NotFoundRoute({
+  coordinator,
+  hostAccess
+}: Readonly<{
+  coordinator?: BrowserConnectionStateCoordinator | undefined;
+  hostAccess?: ReactNode;
+}>) {
   return (
-    <HostDeckFrame>
+    <HostDeckFrame coordinator={coordinator} hostAccess={hostAccess}>
       <section className="hostdeck-route hostdeck-route--error" aria-labelledby="not-found-title">
         <span className="hostdeck-error-rail" aria-hidden="true" />
         <div>
