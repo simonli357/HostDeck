@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-013` Implement fragment-safe pairing and host/access status | ready | none | Complete pre-session trust and recovery before enabling writes or controls. |
+| 1 | `FE-V1-013` Implement fragment-safe pairing and host/access status | in_progress | none | Complete pre-session trust and persistent access truth before enabling writes or controls. |
 | 2 | `FE-V1-020` Implement selected-session prompt composer | ready | none | Add the core targeted prompt workflow on the completed structured detail surface. |
 | 3 | `FE-V1-021` Implement primary `/model` control | ready | none | Deliver the first human-selected primary structured control. |
 | 4 | `FE-V1-026` Implement primary `/goal` control | ready | none | Deliver the second human-selected primary structured control. |

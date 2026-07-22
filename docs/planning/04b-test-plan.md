@@ -177,6 +177,8 @@ Every row is tested at 390 x 844; marked stress states also run at 360 x 800 and
 
 `FE-V1-012` applies the Session Detail row to one bounded recent-replay-to-live connection and a 100-event headless reducer. Tests cover empty/non-empty/retained windows, race-time events, reconnect duplicates, contradictory cursors, message-delta consolidation, every selected event/state/content variant, authority loss, stale/reconnecting/failure combinations, explicit refresh, pinned/unpinned new-activity behavior, privacy, cleanup, and 320/360/390/412/768/1280 visual/accessibility evidence against the approved Focus Rail targets.
 
+`FE-V1-013` applies the pairing and Host/access rows through a pre-React startup owner and one coordinator-backed access projector. Direct and browser tests prove fragment removal before router/API/referrer work, one-attempt claim/CSRF adoption, no-fragment/reload/back/forward behavior, sanitized failure families, explicit paired continuation, zero pre-authority disclosure, every access/write/host/stream projection, persistent sheet semantics, StrictMode/late-settlement cleanup, empty browser storage, and approved Focus Rail evidence. A selected Fastify/SQLite aggregate and physical Android QR run close cookie, CSRF, first-read, private HTTPS, screenshot, privacy, and residue truth without LAN/custom-CA fallback or profile mutation.
+
 ## UI Fidelity And Accessibility
 
 - Two complete mobile-first directions are inspected against `03-ux-spec.md`; theme-only variations fail the gate.
