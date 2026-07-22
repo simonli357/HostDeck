@@ -4,17 +4,16 @@
 
 - Target: runnable packaged `codexdeck`, complete required CLI surface, and selected foreground `serve` composition.
 - Refs: `BLK-V1-04`, `FR-011`, `PR-009`, `PR-012`, `DEC-027`.
-- Audit date: 2026-07-20.
-- Current package input: the `IFC-V1-021` deterministic six-package runtime layout, mechanically expanded through `IFC-V1-082` to 607 sources and 1,221 owned outputs.
+- Audit date: 2026-07-21.
+- Current package input: the `IFC-V1-021` deterministic six-package runtime layout, expanded through `IFC-V1-054` to 608 sources and 1,223 owned outputs.
 
 ## Current Truth
 
 - `IFC-V1-080` completes the exact required source grammar, help, duplicate/conflict rejection, and side-effect-free staging for commands without an implementation owner.
-- The source CLI has 18 bounded client factories and 26 public operations. `IFC-V1-084` calls selected manifest routes `host_status`, `session_list`, and `device_revoke`; `IFC-V1-085` implements `devices` through a separate secure read-only local application path. The paired-cookie-only `device_list` route remains unchanged under `DEC-024`; only `serve` and reserved service actions remain staged in the source grammar.
-- `packages/cli/src/shell.ts` exports a source-level `main`, but no production entry file invokes it.
-- The compiled package deliberately has no HostDeck `bin`, executable file, generated command shim, or executable identity in its verifier manifest.
-- `packages/server/src/production-application-composition.ts` now joins the secure foreground owner, migrated repositories, exact Codex reconnect/reconciliation, selected controls, projection/SSE, health, remote lifecycle, exact selected routes, static boundary, and ordered shutdown in one accepted typed context.
-- No production Fastify listener or executable invokes that context yet; foreground serve ownership remains `IFC-V1-083`, and packaged process/bin dispatch remains `IFC-V1-054`.
+- The CLI has 18 bounded client factories and 26 public operations. `IFC-V1-084` calls selected manifest routes `host_status`, `session_list`, and `device_revoke`; `IFC-V1-085` implements `devices` through a separate secure read-only local application path. The paired-cookie-only `device_list` route remains unchanged under `DEC-024`; only reserved service actions remain staged.
+- `packages/cli/src/shell.ts` is the direct process entry and remains inert when imported. The source manifest declares only `codexdeck -> ./src/shell.ts`; the emitted manifest rewrites only that command to `./dist/shell.js`.
+- The compiled package has one HostDeck executable with an exact shebang, executable mode, version, size, and SHA-256 identity in the verifier manifest. No generated shim, TypeScript loader, source target, checkout path, or second HostDeck command is accepted.
+- `codexdeck serve` composes the accepted foreground resources, production application, loopback Fastify/Tailscale lifecycle, package-relative static root, process-signal ownership, readiness output, and terminal-state handling. Invalid startup has no alternate listener, runtime, asset, cwd, LAN, certificate, tmux, or profile-switch path.
 - Real web assets, systemd user units, install/upgrade/uninstall, and clean-machine parity remain separate downstream owners.
 
 ## Granularity Correction
@@ -102,6 +101,14 @@ The prior `IFC-V1-054` row combined independently verifiable outcomes and was no
 - Direct executable-path, Node-path, package-manager, packed-runtime, and temporary global-style invocations run help/version from an unrelated cwd and a read-only relocated package. Command/config/service/serve dispatch probes cover success and failure without requiring real dashboard assets; a missing package-relative static tree remains an explicit `IFC-V1-053` startup failure, not an external/dev fallback.
 - Two unchanged offline builds are byte-identical; a failed build preserves the prior accepted package; verifier mutations restore cleanly. Validation leaves no staging/packed-install/global-prefix/config/state/runtime/database/socket/listener/process residue and emits no checkout/home/staging path, credential, pairing value, prompt, transcript, Tailscale identity, or child stderr.
 - Completion requires focused source/process tests, package helper and verifier negatives, the invocation matrix, one exact Codex 0.144.0 no-model executable serve smoke against a test-owned package-layout asset fixture, full workspace/static/package gates, manual mode/shebang/output/privacy/no-fallback inspection, owner-doc closure, coherent commits, and push. This leaf does not claim real Vite assets, service units/lifecycle, install/uninstall, clean Ubuntu parity, browser UI, or phone deployment.
+
+## IFC-V1-054 Evidence
+
+- Implementation `2b888ec` adds the one direct ESM process boundary, lazy colocated package-version validation, accepted foreground `serve` dispatch, package-relative assets, bounded canonical Codex resolution, exact readiness/termination handling, config-path redaction, and explicit pre-service non-success. Importing the compiled command is inert; direct execution reports `codexdeck 0.0.0` from an unrelated cwd.
+- The schema-2 package manifest binds `codexdeck`, `dist/shell.js`, `#!/usr/bin/env node`, mode, version, size `60212`, and command SHA-256 `74d2461c8ba1158553751f71f3d2a1e3b5ba3c6f789f5af6d9a043e1a4c45e6f`. Missing, multiple, source-targeted, non-executable, shebang-modified, escaping, stale, or unlisted HostDeck command state rejects and restores cleanly.
+- Package acceptance passes two deterministic offline builds and direct, Node-path, package-manager-link, packed-runtime, and temporary global-style invocation from unrelated cwd/read-only content. The final tree has 608 sources, 1,223 owned outputs, and 6,425 entries; source identity is `9fc4d1e59905ce7f855066a212c6a0d921501cd8273105e8d1fb81e77d8a0ec8`, output identity `84c7b2f3de67a637a2ef5ec4bd9d776a3f7c086456dd6e5556f4c0482438eee4`, content identity `d1bdadaec3b837c5bb00bca2391bc51c8fd0e228703e6cb82766c0b0fc2983fb`, and manifest identity `ad80a1a7220593cd5e1acc5030332fa95b8d500205947ead4d71a6f7eb1b8111`.
+- Eight focused executable-dispatch tests plus the config privacy regression pass. Full gates pass 1,843 unit tests with 28 intentional skips, 240 contract, 26 integration, and 20 web tests, plus root/CLI typechecks, lint/exports over 533 files and 8 packages, scaffold, planning, runtime boundary, frozen offline install, exact 0.144.0 binding over 671 files, package helpers/verifier negatives, diff, privacy, no-fallback, and zero-residue review.
+- The direct packaged command exact-Codex smoke runs twice from one read-only relocated package through the real shebang, serves test-owned index/hashed assets on IPv4 loopback, reports readiness once, handles `SIGTERM`, releases the socket/port, writes no transcript, and performs no model turn. Tailscale, its selected profile/Serve state, the phone, dependencies, and the lockfile were not changed. Real Vite assets, user units, installation, clean Ubuntu parity, browser UI, and phone deployment remain downstream.
 
 ## IFC-V1-083 Frozen Criteria
 

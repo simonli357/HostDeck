@@ -83,17 +83,17 @@ Exact defaults, cross-field invariants, and downstream consumers are recorded in
 
 ### Production Output Foundation
 
-`IFC-V1-021` emits one private self-contained `dist/hostdeck` runtime from the exact selected server/CLI transitive graph: 600 source modules across `core`, `contracts`, `codex-adapter`, `storage`, `server`, and `cli`. The independent web and test-fixture roots are excluded. Each selected source emits Node ESM JavaScript plus declarations; HostDeck TypeScript, tests, source maps, fixtures, secrets, temporary state, and historical interface code cannot enter the owned output.
+`IFC-V1-021` emits one private self-contained `dist/hostdeck` runtime from the exact selected server/CLI transitive graph, currently 608 source modules across `core`, `contracts`, `codex-adapter`, `storage`, `server`, and `cli`. The independent web and test-fixture roots are excluded. Each selected source emits Node ESM JavaScript plus declarations; HostDeck TypeScript, tests, source maps, fixtures, secrets, temporary state, and historical interface code cannot enter the owned output.
 
-The runtime tree carries rewritten exact package manifests and the production dependency graph resolved offline from the frozen lockfile. Every link is relative and contained; no deployed path may resolve to the checkout, package store, home directory, or staging tree. Package identity binds the workspace version, exact Node/pnpm/platform/architecture/ABI contract, reviewed Codex binding, source closure, output content, entrypoints, dependencies, and native modules without timestamps or private paths. Ordinary files are non-executable and non-writable by group/other; only dependency-declared binaries and native modules retain execute bits. This leaf deliberately owns no HostDeck `bin` entry.
+The runtime tree carries rewritten exact package manifests and the production dependency graph resolved offline from the frozen lockfile. Every link is relative and contained; no deployed path may resolve to the checkout, package store, home directory, or staging tree. Package identity binds the workspace version, exact Node/pnpm/platform/architecture/ABI contract, reviewed Codex binding, source closure, output content, entrypoints, dependencies, and native modules without timestamps or private paths. Ordinary files are non-executable and non-writable by group/other; dependency-declared binaries, native modules, and the one verified `codexdeck -> ./dist/shell.js` command retain execute bits.
 
-A dependency-free verifier rejects runtime-identity, manifest, content, native-module, or link drift before load. Package acceptance copies the tree to an unrelated path, makes it read-only, imports all six roots without a TypeScript loader, proves the 22-registration/35-route descriptor, and starts/closes/restarts a real loopback fixture lifecycle with writable config/assets/state outside the package. Real Vite assets, the runnable `codexdeck` entry, user units, install lifecycle, and clean-machine parity remain `IFC-V1-053` to `IFC-V1-058`.
+A dependency-free verifier rejects runtime, manifest, command/bin/shebang/mode/content, native-module, or link drift before load. Package acceptance copies the tree to an unrelated path, makes it read-only, imports all six roots without a TypeScript loader, proves the 22-registration/35-route descriptor, exercises five command layouts, and starts/closes/restarts the direct packaged foreground process against test-owned assets. Real Vite assets, user units, install lifecycle, and clean-machine parity remain `IFC-V1-053` and `IFC-V1-055` to `IFC-V1-058`.
 
 ## Process Topology
 
 ### Foreground Development
 
-This is the target production sequence. `IFC-V1-046` accepts the selected route composition, but the compiled foreground `serve` entry and complete command dispatch remain `IFC-V1-054`; `INT-V1-008` removed the historical tmux/custom-listener implementation with no fallback.
+This is the accepted foreground sequence. `IFC-V1-054` connects the compiled command to the selected route/application/listener owners; `INT-V1-008` removed the historical tmux/custom-listener implementation with no fallback.
 
 1. `codexdeck serve` acquires the state-directory lease.
 2. It creates a `0700` runtime directory below `$XDG_RUNTIME_DIR/hostdeck`.

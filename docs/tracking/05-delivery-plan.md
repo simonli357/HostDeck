@@ -6,8 +6,8 @@ Owns milestone, module maturity, production passes, and release truth.
 
 - Current pass: Tailscale-first production host interface after completing selected runtime integration.
 - Current milestone: M1 selected foundation and M2 real structured vertical are complete; M3 remote host interface is in progress.
-- Release state: no-go; deterministic server/CLI output, foreground resources, and the production application graph exist, but no accepted foreground listener or runnable packaged process exists yet.
-- Next exit: `IFC-V1-083` proves the selected loopback listener, post-listen remote observation, signal/runtime-exit handling, complete drain, and same-port restart before executable and service integration.
+- Release state: no-go; deterministic server/CLI output, the accepted foreground listener, and one runnable verified packaged process exist, but real dashboard assets, user units/service lifecycle, install parity, UI, and release hardening remain incomplete.
+- Next exit: `IFC-V1-055` generates and verifies versioned unprivileged systemd user units with explicit package paths, process ownership, degraded-remote behavior, and HostDeck/Codex restart separation.
 
 ## Milestones
 
@@ -27,7 +27,7 @@ Owns milestone, module maturity, production passes, and release truth.
 | `BLK-V1-01` Contracts/core/fixtures | Structured-runtime and remote-ingress/access contracts, invariants, fixtures, generated/normalized adapter boundaries, planning checker, executable-leaf audit, and focused hardening pass. | None; block complete. | `FND-V1-018`, `FND-V1-092` |
 | `BLK-V1-02` State/auth/audit | Mapping/recovery/projection/runtime compatibility, remote-ingress config/profile/Serve/observation durability, exact remote enable/disable audit with historical preservation, retention, pairing/CSRF/device authority, secure paths/lease, and combined aggregate migration/restart/conflict/query-plan/privacy hardening pass. | None; block complete. | `DAT-V1-092` |
 | `BLK-V1-03` Codex runtime/events | Exact binding, private IPC/handshake, thread/control/event vertical, production supervision, restart/reconciliation, multi-client lifecycle, executable tmux-runtime removal, and clean-commit aggregate hardening pass. | None; block complete. | `INT-V1-005` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
-| `BLK-V1-04` API/CLI/security/service | Typed loopback Fastify/SSE/static boundaries, app-auth primitives, bounded fanout, retention-safe replay/live handoff, complete drain, independent local/remote health, exact Tailscale observation/Serve ownership/proxy trust/application authorization, remote control, production remote lifecycle, aggregate hostile plus physical Android acceptance, exact selected route composition, legacy isolation, bounded source CLI, cross-owner resource stress, deterministic package output, foreground resources, and the real production application graph pass. | Foreground serve acceptance, built assets, executable CLI, user services, uninstall/parity, and interface hardening remain. | `IFC-V1-083`, `IFC-V1-053` to `IFC-V1-058`, `IFC-V1-091` |
+| `BLK-V1-04` API/CLI/security/service | Typed loopback Fastify/SSE/static boundaries, app-auth primitives, bounded fanout, retention-safe replay/live handoff, complete drain, independent local/remote health, exact Tailscale observation/Serve ownership/proxy trust/application authorization, remote control, production remote lifecycle, aggregate hostile plus physical Android acceptance, exact selected route composition, legacy isolation, bounded CLI, cross-owner resource stress, deterministic package output, foreground resources/application/listener, and one verified runnable packaged command pass. | Built assets, user units/service lifecycle, uninstall/parity, and interface hardening remain. | `IFC-V1-053` to `IFC-V1-058`, `IFC-V1-091` |
 | `BLK-V1-05` Mobile dashboard | View-model helpers only; old boards rejected. | Remote state/visual gate and all product UI/device evidence remain. | `FE-V1-004`, reopened `FE-V1-002`, `FE-V1-003`, `FE-V1-010` to `FE-V1-040`, `FE-V1-090` |
 | `BLK-V1-06` Release | Baseline commands/historical docs and both rebaseline decisions exist. | Selected remote-path clean install/security/device/profile/aggregate/docs/go-no-go absent. | `REL-V1-004` to `REL-V1-010`, `REL-V1-012` |
 
@@ -45,7 +45,7 @@ Owns milestone, module maturity, production passes, and release truth.
 | Remote contracts and durable state | Complete | `IFC-V1-070`, `FND-V1-018`, `FND-V1-092`, `DAT-V1-031`, `DAT-V1-032`, `DAT-V1-092` |
 | Real Codex compatibility and vertical | Complete | `INT-V1-003` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
 | Remote HTTPS/app-auth/security boundary | In progress | Aggregate hostile/physical acceptance, full selected composition, legacy isolation, and aggregate resource stress pass; packaged-path module hardening remains `IFC-V1-091`. |
-| Build/package/user services | In progress | `IFC-V1-021` deterministic compiled package is complete; `IFC-V1-054` executable dispatch and `IFC-V1-055` user units are ready, while web assets and lifecycle/install parity remain `IFC-V1-053` to `IFC-V1-058`. |
+| Build/package/user services | In progress | `IFC-V1-021` deterministic package and `IFC-V1-054` executable dispatch are complete; `IFC-V1-055` user units are ready, while web assets and lifecycle/install parity remain `IFC-V1-053` and `IFC-V1-056` to `IFC-V1-058`. |
 | Mobile visual selection/UI/device | Blocked | `FE-V1-004`, `FE-V1-002`, human `FE-V1-003`, `FE-V1-010` to `FE-V1-040`, `FE-V1-090` |
 | Security/privacy | Blocked | `REL-V1-005` |
 | Clean Ubuntu/aggregate/docs | Blocked | `REL-V1-004`, `REL-V1-006`, `REL-V1-007` |

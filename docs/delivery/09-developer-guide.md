@@ -56,9 +56,10 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | Contract tests | `pnpm test:contract` | Runs selected schema/API/CLI/storage contract tests. |
 | Integration tests | `pnpm test:integration` | Runs cross-module failure-ordering tests. |
 | Web state tests | `pnpm test:web` | Runs selected mobile fixture and headless pairing-bootstrap checks. |
-| Production package build | `pnpm build` | Offline frozen-lock build of `dist/hostdeck` from the exact 607-source server/CLI closure. Emits six compiled library packages plus production dependencies, identity manifest, and dependency-free verifier; it intentionally emits no web assets or HostDeck executable. |
-| Production package acceptance | `pnpm test:package` | Builds twice, proves rollback/stale replacement and deterministic identity, relocates the tree read-only, imports all six roots, exercises SQLite/flock and Fastify close/restart, and runs config/static/native/runtime/integrity/link failure probes. |
-| Production package verify | `node dist/hostdeck/verify.mjs dist/hostdeck` | Checks manifest/runtime/native/content identity, runtime manifests, modes, and contained relative links without workspace dependencies. |
+| Production package build | `pnpm build` | Offline frozen-lock build of `dist/hostdeck` from the exact 608-source server/CLI closure. Emits six compiled packages, production dependencies, one `codexdeck` executable, identity manifest, and dependency-free verifier; real web assets remain separate. |
+| Production package acceptance | `pnpm test:package` | Builds twice, proves rollback/deterministic identity, relocates read-only, imports all roots, exercises SQLite/flock/Fastify, invokes five command layouts, mutates command/verifier identity, and runs config/static/native/runtime/integrity/link failures. |
+| Production executable smoke | `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:executable-serve` | Runs the direct read-only packaged command twice with test-owned assets, exact no-model Codex, loopback HTTP/static checks, signal shutdown, same-port reuse, and residue inspection. |
+| Production package verify | `node dist/hostdeck/verify.mjs dist/hostdeck` | Checks manifest/runtime/native/content identity, exact command/bin/shebang/mode identity, runtime manifests, and contained relative links without workspace dependencies. |
 | Pairing browser tests | `pnpm test:browser:pairing` | Runs the real Chromium history/referrer/reload/two-tab/failure boundary; requires the Playwright Chromium bundle. |
 | Remote Android acceptance | `HOSTDECK_REMOTE_CONTROL_DEDICATED_PROFILE_ID=DEDICATED_ID HOSTDECK_REMOTE_CONTROL_AWAY_PROFILE_ID=AWAY_ID pnpm smoke:remote-android` | Strict no-retry `IFC-V1-079` run from a clean commit. Requires exact Tailscale 1.98.8, two distinct authorized saved profiles, and one unlocked authorized Android device with Tailscale, Chrome, USB debugging, and working cellular data. |
 | Later E2E tests | `pnpm test:e2e` | Placeholder; fails loudly until `REL-V1-007` implements it. |
@@ -66,9 +67,9 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 
 ## CLI And Service State
 
-The required source grammar is complete in `packages/cli/src/`. Host `status` and paginated session `list` use least-authority loopback GET routes; confirmed `revoke` uses the audited local-admin device-revoke route with exact operation/device correlation. Paginated `devices` uses a separate non-creating, guarded, read-only current-schema SQLite path and does not call or weaken the paired-cookie-only HTTP route under `DEC-024`. Human status output omits the private remote origin, and human session-list output omits cwd, thread identity, objective, and summary; JSON preserves selected public contracts. `serve` and reserved service actions remain staged for their owning leaves. Existing pair, lock, unlock, remote, and session/control commands use selected HTTP routes; only `devices` and bounded `legacy status/reset` enter local SQLite administration. `pnpm build` compiles the accepted roots into `dist/hostdeck`, but the package still has no `bin`, shebang, startup entrypoint, web assets, or runnable `codexdeck` command.
+The required grammar is complete in `packages/cli/src/`. Host `status` and paginated session `list` use least-authority loopback GET routes; confirmed `revoke` uses the audited local-admin device-revoke route with exact operation/device correlation. Paginated `devices` uses a separate non-creating, guarded, read-only current-schema SQLite path and does not call or weaken the paired-cookie-only HTTP route under `DEC-024`. Human status output omits the private remote origin, and human session-list output omits cwd, thread identity, objective, and summary; JSON preserves selected public contracts. Existing pair, lock, unlock, remote, and session/control commands use selected HTTP routes; only `devices` and bounded `legacy status/reset` enter local SQLite administration. `pnpm build` emits exactly one compiled `codexdeck` bin with direct foreground `serve` dispatch; reserved service actions remain explicit non-success until `IFC-V1-056`.
 
-Local `legacy status [--json]` reports only the `legacy_unmigrated` disposition and a bounded row count. `legacy reset --confirm [--json]` opens the local SQLite database, runs one immediate transaction, removes only inert legacy session state through declared foreign keys, preserves selected sessions/projections/security/global audit state, and performs no process or tmux action. Both remain source contracts until CLI packaging.
+Local `legacy status [--json]` reports only the `legacy_unmigrated` disposition and a bounded row count. `legacy reset --confirm [--json]` opens the local SQLite database, runs one immediate transaction, removes only inert legacy session state through declared foreign keys, preserves selected sessions/projections/security/global audit state, and performs no process or tmux action.
 
 Default local configuration:
 
@@ -78,7 +79,7 @@ Default local configuration:
 | API port | `3777` |
 | State directory | `${XDG_STATE_HOME}/hostdeck` when `XDG_STATE_HOME` is set, otherwise `~/.local/state/hostdeck` |
 | SQLite database | `hostdeck.sqlite` inside the state directory |
-| Runtime directory | `$XDG_RUNTIME_DIR/hostdeck`; the selected foreground resource bootstrap owns its private socket path, while runnable application/serve/bin integration remains downstream |
+| Runtime directory | `$XDG_RUNTIME_DIR/hostdeck`; the packaged foreground process owns its private Codex socket and requires `XDG_RUNTIME_DIR` before startup |
 | Config directory | `${XDG_CONFIG_HOME}/hostdeck` when set, otherwise `~/.config/hostdeck` |
 | Daemon lease | `hostdeck.lock` inside the state directory; one nonblocking Linux owner per state directory |
 | Config file | Optional JSON file passed with `--config` |
@@ -93,17 +94,17 @@ Supported config inputs:
 | State directory | `--state-dir` | `HOSTDECK_STATE_DIR` | `state_dir` or `stateDir` |
 | Database path | `--database` or `--database-path` | `HOSTDECK_DATABASE_PATH` | `database_path` or `databasePath` |
 
-## Executable Composition Gap
+## Packaged Executable Boundary
 
-`IFC-V1-046` accepts the selected 22-registration/35-route production factory, `IFC-V1-021` compiles its server/CLI dependency closure, and `IFC-V1-081` now owns secure foreground resources and rollback. `codexdeck serve` is still not runnable: `IFC-V1-082` owns the real application graph, `IFC-V1-083` owns the listener/Tailscale/shutdown lifecycle, and `IFC-V1-054` owns the compiled process entry and bin integration. None may restore the old custom listener, tmux discovery, direct-LAN TLS, or historical route fallback.
+`IFC-V1-054` connects the one compiled command to the accepted 22-registration/35-route application and foreground listener. It derives assets from the package root, resolves exact Codex from `HOSTDECK_CODEX_BIN` or bounded absolute `PATH` entries, publishes one loopback readiness line, waits for terminal truth, and has no old custom-listener, tmux, direct-LAN TLS, cwd, or historical-route fallback.
 
-Long-running systemd user units and runnable packaging remain downstream. Do not publish foreground or service-wrapper instructions until composition, build/package, and `REL-V1-006` clean-install evidence pass.
+The ordinary package still lacks the real Vite `web/` tree, generated systemd user units, installation lifecycle, and clean-machine parity. Do not publish foreground or service-wrapper user instructions until `IFC-V1-053` and `IFC-V1-055` to `IFC-V1-058` close those paths.
 
 ## Remote And Safety Notes
 
 - The selected production listener boundary is localhost-only; Tailscale Serve will proxy private HTTPS to that loopback listener.
 - The selected source CLI rejects `codexdeck lan`; direct-LAN/custom-CA commands are historical and unsupported for remote V1.
-- `remote status`, `remote enable`, and `remote disable` have source CLI and service contracts, but are not user-runnable until selected composition and CLI packaging exist.
+- `remote status`, `remote enable`, and `remote disable` are present in the packaged command, but require a successfully running local HostDeck process; no installed user workflow is claimed yet.
 - `codexdeck unlock` is CLI-only in V1; dashboard unlock remains rejected.
 - Pairing codes, device tokens, and CSRF tokens are stored only as hashes in local SQLite.
 - The opt-in `smoke:remote-android` runner requires the dedicated HostDeck profile to be selected with its Serve root absent before startup. The away profile must be a distinct saved profile; the runner compares its Serve JSON byte-for-byte without publishing it, never asks HostDeck to switch profiles, and restores the dedicated selection before exit.
@@ -121,12 +122,13 @@ Long-running systemd user units and runnable packaging remain downstream. Do not
 | Command-backed Codex turn fails before approval | Bubblewrap cannot create a user namespace, commonly because the Ubuntu AppArmor profile is absent. | Aggregate acceptance remains failed. Install/load the packaged profile; do not disable sandbox or lower approval policy. |
 | Invalid state directory or database path | Path is missing, unreadable, or migration fails. | Startup or bounded legacy-admin command fails loudly with typed config/storage errors. |
 | `XDG_RUNTIME_DIR is required` | A runtime-owning source contract is exercised without a secure per-user runtime directory. | Config/path validation fails before runtime side effects. |
-| Another owner holds the state directory lease | A HostDeck process/test already holds `hostdeck.lock`. | Lease acquisition fails before protected mutation; compiled startup/service ownership remains downstream. |
+| Another owner holds the state directory lease | A HostDeck process/test already holds `hostdeck.lock`. | Packaged foreground startup fails before protected mutation; later user-service ownership must obey the same lease. |
 | Duplicate loopback bind port | Another process already owns the configured port. | Fastify lifecycle startup fails before reporting ready; no alternate host, HTTPS, or LAN bind fallback exists. |
-| Placeholder scripts fail | E2E, build, or release smoke is not implemented yet. | Script exits nonzero with the owning future task ID. |
+| Placeholder scripts fail | E2E or release smoke is not implemented yet. | Script exits nonzero with the owning future task ID. |
 
 ## Evidence
 
+- Packaged command, foreground dispatch, invocation matrix, and verifier identity: `artifacts/ifc-v1-054-executable-production-audit.md`.
 - Service/API hardening: `artifacts/ifc-v1-090-api-cli-hardening.md`.
 - Historical foreground service smoke, superseded and no longer runnable: `artifacts/ifc-v1-012-service-mode-smoke.md`.
 - Historical network bind smoke, superseded by the selected Fastify/Tailscale boundary: `artifacts/ifc-v1-011-network-smoke.md`.

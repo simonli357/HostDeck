@@ -31,6 +31,8 @@ pnpm exec vitest run --config vitest.contract.config.ts packages/cli/src/cli.con
 pnpm test:integration
 pnpm test:web
 pnpm build
+dist/hostdeck/dist/shell.js --help
+dist/hostdeck/dist/shell.js --version
 pnpm test:package
 node dist/hostdeck/verify.mjs dist/hostdeck
 pnpm test:browser:pairing
@@ -98,6 +100,7 @@ HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-supervisor
 HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-restart
 HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-tui-coexistence
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:codex-lifecycle
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:executable-serve
 ```
 
 ## Regenerate Reviewed Codex Binding
@@ -108,6 +111,6 @@ pnpm generate:codex-bindings
 
 ## Explicit Gaps
 
-- CLI binary: the source grammar includes required `serve`, API-backed `status`, API-backed paginated `list`, secure local read-only paginated `devices`, API-backed confirmed `revoke`, and all reserved `service` actions alongside the accepted session/control/pair/lock/remote/legacy operations. Only `serve` and service lifecycle actions remain explicit side-effect-free non-successes until their owners land. `pnpm build` emits the compiled six-package library foundation and secure foreground resource bootstrap, but `codexdeck` is not installed as a workspace or packaged executable; `pnpm exec codexdeck --help` still fails with command not found. Application/serve composition and final compiled bin integration remain `IFC-V1-082`, `IFC-V1-083`, and `IFC-V1-054`. Keep `codexdeck ...` examples out of copy-paste command blocks until executable-package and clean-install smoke provide a runnable path.
+- CLI install/assets: `pnpm build` emits one verified `dist/hostdeck/dist/shell.js` `codexdeck` entry with complete command and foreground `serve` dispatch. The ordinary package intentionally has no real `web/` tree until `IFC-V1-053`, so production `serve` startup is not yet a user workflow; service actions remain explicit non-success until `IFC-V1-056`, and no global/user-service install is claimed before `IFC-V1-055` to `IFC-V1-058`.
 - E2E validation: `pnpm test:e2e` intentionally exits nonzero until `REL-V1-007` implements it.
 - Local release smoke: `pnpm smoke:local` intentionally exits nonzero until `REL-V1-006` implements it.

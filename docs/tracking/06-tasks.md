@@ -16,8 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-054` Produce the runnable packaged process entry and selected command/serve dispatch | in_progress | none | Leaf criteria are frozen; implementation is integrating the direct process boundary, accepted foreground owner, and exact package/bin verifier identity. |
-| 2 | `IFC-V1-055` Generate versioned unprivileged systemd user units with explicit ownership/dependencies | ready | none | The compiled package and accepted runtime lifecycle are complete; keep units behind the runnable process so their absolute executable path matches the final package. |
+| 1 | `IFC-V1-055` Generate versioned unprivileged systemd user units with explicit ownership/dependencies | ready | none | The compiled package, runnable process, and accepted runtime lifecycle are complete; units can now bind their absolute command and ownership paths to the verified package layout. |
 
 ## Intentional Blockers
 
