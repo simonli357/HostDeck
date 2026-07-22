@@ -41,6 +41,7 @@ export * from "./model-routes.js";
 export * from "./pairing-routes.js";
 export * from "./pending-turn-settings.js";
 export * from "./plan-routes.js";
+export * from "./production-application-composition.js";
 export * from "./projected-event-routes.js";
 export * from "./projection-fanout-hub.js";
 export * from "./projection-replay-live-handoff.js";
