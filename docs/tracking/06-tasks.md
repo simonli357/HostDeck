@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-010` Implement phone-first app shell and two-route navigation | in_progress | none | Exact route/history/dialog/dependency/Focus Rail criteria are frozen; implementation is active. |
+| 1 | `FE-V1-019` Implement typed bounded same-origin HTTP client foundation | ready | none | The Focus Rail shell and assembled API are complete; this client contract is the next dependency for HTTP, SSE, CSRF, and coordinated screen state. |
 
 ## Intentional Blockers
 

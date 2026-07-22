@@ -55,6 +55,15 @@ React type packages remain development-only. No CSS framework, state store, data
 - Route outlets are injectable so later leaves can implement real screens without replacing routing, focus, or shell ownership.
 - Default outlets show bounded skeleton/loading state only. They must not invent session, access, network, Codex, Tailscale, or permission truth.
 
+## Implemented Surface
+
+- `packages/web/src/app-shell.tsx` owns the exact routes, strict shared session-id validation, linked versus direct-entry Back semantics, explicit not-found state, injectable downstream outlets, and Radix Host/access sheet.
+- `packages/web/src/main.tsx`, `index.html`, `vite.config.ts`, and `styles.css` provide the fail-loud React entry and exact Focus Rail phone shell. Production entry imports no API, SSE, CSRF, pairing, or storage behavior.
+- `@hostdeck/contracts/scalars` exposes the existing scalar validator through a narrow package subpath. This keeps one schema owner while reducing the emitted browser JavaScript from 498.55 KB to 331.61 KB and excluding unrelated pairing/CSRF contract code.
+- The selected runtime-boundary checker now scans `.tsx`, resolves `.js` source imports to `.ts` or `.tsx`, validates the expanded web root, and starts the currently packaged production closure from the six non-web roots. Package acceptance remains exactly 610 server/CLI source modules until `IFC-V1-053` owns built web assets.
+- `BUG-014` pins the two audited Fastify transitive paths to patched `fast-uri` 3.1.4 and 4.1.1. No React dependency was implicated.
+- Implementation commit: `9b095ad`.
+
 ## Acceptance Matrix
 
 | ID | Criterion |
@@ -70,7 +79,30 @@ React type packages remain development-only. No CSS framework, state store, data
 | `SHL-09` | Component/router tests cover normal, direct-entry, invalid, repeated, keyboard, dialog, and injected-outlet behavior with cleanup. |
 | `SHL-10` | Vite production build and local Playwright 390 x 844 smoke pass; screenshots are manually inspected for blank output, clipping, overlap, and unauthorized visual drift. |
 
-## Planned Validation
+## Completion Evidence
+
+| Criterion | Evidence |
+| --- | --- |
+| `SHL-01` | Vite emits only `index.html`, one CSS asset, and one 331.61 KB JavaScript asset; no map/source file, external HTML/CSS URL, pairing/API/SSE/WebSocket marker, or source loader is emitted. |
+| `SHL-02` | Semantic root landmark/heading/loading state and exact Focus Rail tokens render at 390 x 844; screenshot inspected. |
+| `SHL-03` | Shared schema accepts the branded session id; empty, wrong-prefix, encoded slash, oversized, unknown, and hostile paths fail to the non-reflecting not-found surface. |
+| `SHL-04` | `SessionRouteLink` validates identity, records Mission Control source, and restores the prior history entry in component/router evidence. |
+| `SHL-05` | Direct detail Back replaces to `/`; the detail-only control disappears and cannot create a UI loop. Browser smoke proves the production deep-link fallback. |
+| `SHL-06` | Radix sheet retains `/`, contains focus, closes by button and Escape, and restores trigger focus in component and real Chromium evidence. |
+| `SHL-07` | Lucide-only shell controls have accessible names and exact 44px dimensions; source and screenshots contain no terminal/editor/desktop-only surface. |
+| `SHL-08` | Browser diagnostics observe zero API/external request, page/console error, or local/session storage entry. Source and emitted boundary scans contain no production entry call or pairing payload. Existing pairing tests remain green. |
+| `SHL-09` | Seven component/router cases cover default, linked, direct, invalid/encoded/oversized/unknown, query/hash, injected outlet, keyboard, close, and repeated-return behavior. |
+| `SHL-10` | Two Playwright phone scenarios pass and the three final screenshots were manually compared with Focus Rail for blank output, hierarchy, clipping, overlap, overflow, and unauthorized drift. |
+
+Final screenshots:
+
+| Capture | SHA-256 |
+| --- | --- |
+| `artifacts/fe-v1-010-shell/mission-control-390x844.png` | `ce118ac5a2608c8471e279983dc6dba463f8b9ce711bfb7444a2af3c5e2824d2` |
+| `artifacts/fe-v1-010-shell/session-detail-390x844.png` | `d0173b8db1c7e3ea835e8e4b9eb93e8207be474698f704740b017f689b4322f9` |
+| `artifacts/fe-v1-010-shell/host-access-390x844.png` | `67485e58065f3c7ac586eac748778c16bfac612552e9419858c7c74ebb7885df` |
+
+## Validation
 
 ```bash
 pnpm --filter @hostdeck/web test
@@ -82,8 +114,22 @@ pnpm test:unit
 pnpm typecheck
 pnpm lint
 pnpm check:scaffold
+pnpm check:runtime-boundary
 pnpm check:planning
+pnpm test:contract
+pnpm test:integration
+pnpm test:package
+pnpm install --offline --frozen-lockfile
+pnpm audit --prod
 git diff --check
 ```
 
-Implementation and final evidence are pending.
+Results:
+
+- Web package: 7 component/router tests; aggregate web: 27 tests; Chromium: 2 phone scenarios.
+- Workspace: 1,870 unit tests passed with 28 intentional skips; 240 contract and 27 integration tests passed. One first post-override unit invocation was terminated by signal 15 under host memory pressure before Vitest emitted a result; the unchanged canonical rerun completed normally in 81.85 seconds.
+- Static: root and web typechecks, Biome/package exports over 548 files and 8 packages, scaffold at 8 packages/21 scripts, runtime boundary at 610 production source modules/22 external modules, and planning integrity pass.
+- Package/supply chain: frozen offline install, two deterministic relocated package builds with 6,429 entries, and zero-known-vulnerability production audit pass. Patched `fast-uri` releases remain BSD-3-Clause.
+- Manual review: final source, emitted files, routes, privacy/runtime boundary, and all three final 390 x 844 images pass. No remaining drift is approved or hidden in this leaf.
+
+Downstream data, screens, actions, broad responsive/accessibility/fidelity, package integration, and real-phone work remain explicitly owned by the leaves listed in Scope; this shell evidence does not claim them complete.

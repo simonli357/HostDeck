@@ -13,7 +13,7 @@ Owns setup context, environment policy, services, and operational notes.
 | Required Codex for selected adapter work | Exact `codex-cli 0.144.0` must be on `PATH`; `HOSTDECK_CODEX_BIN` may name another executable for binding/smoke commands. The reviewed V1 binding uses experimental API for `/plan`. |
 | Linux command sandbox | Command-backed exact-Codex smokes require Bubblewrap to create an unprivileged user namespace. Ubuntu 24.04 hosts with `kernel.apparmor_restrict_unprivileged_userns=1` require the packaged `bwrap-userns-restrict` AppArmor profile to be installed and loaded. Do not replace this prerequisite with a sandbox or approval downgrade. |
 | Tmux | Optional and test-only. Exact thread/TUI smokes use `tmux 3.4` as an isolated terminal emulator; no HostDeck production package, service, or command depends on it. |
-| Browser validation | Playwright 1.61.1 with its Chromium 1228 bundle is required for the fragment/history pairing suite. |
+| Browser validation | Playwright 1.61.1 with its Chromium 1228 bundle is required for the phone-shell and fragment/history pairing suites. |
 | Hosted services | None. HostDeck is local-first and stores state locally. |
 
 ## Setup
@@ -24,7 +24,7 @@ pnpm install --frozen-lockfile
 pnpm exec playwright install chromium
 ```
 
-The frozen offline install and native lease rebuild were validated for the current workspace on 2026-07-09. If a previous install skipped an approved native build, remove `node_modules/` and rerun the frozen install.
+The frozen offline install was revalidated for the current workspace on 2026-07-22. If a previous install skipped an approved native build, remove `node_modules/` and rerun the frozen install.
 
 On Ubuntu 24.04, prepare the command sandbox before running command-backed Codex acceptance:
 
@@ -55,13 +55,16 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | Unit tests | `pnpm test` or `pnpm test:unit` | Runs Vitest unit tests. |
 | Contract tests | `pnpm test:contract` | Runs selected schema/API/CLI/storage contract tests. |
 | Integration tests | `pnpm test:integration` | Runs cross-module failure-ordering tests. |
-| Web state tests | `pnpm test:web` | Runs selected mobile fixture and headless pairing-bootstrap checks. |
+| Web development server | `pnpm --filter @hostdeck/web dev` | Starts the source React/Vite shell on loopback; Vite reports the selected free local port. This is not the packaged HostDeck service. |
+| Web production build | `pnpm --filter @hostdeck/web build` | Emits the current shell to `packages/web/dist` without source maps or external assets. Production package ownership remains `IFC-V1-053`. |
+| Web state tests | `pnpm test:web` | Runs the phone shell/router, selected mobile fixture, and headless pairing-bootstrap checks. |
 | Production package build | `pnpm build` | Offline frozen-lock build of `dist/hostdeck` from the exact 610-source server/CLI closure. Emits six compiled packages, production dependencies, one `codexdeck` executable, one non-executable `dist/service-host.js`, the pure systemd unit generator, schema-3 identity manifest, and dependency-free verifier; real web assets remain separate. |
 | Production package acceptance | `pnpm test:package` | Builds twice, proves rollback/deterministic identity, relocates read-only, imports all roots plus the inert service host and unit generator, exercises SQLite/flock/Fastify and five command layouts, mutates command/service-host/verifier identity, and runs config/static/native/runtime/integrity/link failures. |
 | Production executable smoke | `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:executable-serve` | Runs the direct read-only packaged command twice with test-owned assets, exact no-model Codex, loopback HTTP/static checks, signal shutdown, same-port reuse, and residue inspection. |
 | Production service-host smoke | `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:service-host` | Runs external exact no-model app-server ownership plus the read-only packaged service host with Tailscale absent; replaces app-server once and HostDeck twice while proving sibling PID/socket survival, readiness recovery, private modes, and cleanup. |
 | Production systemd user-unit smoke | `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:systemd-user-units` | On supported Linux/systemd, runtime-links the exact generated units and proves pull-in, repeated start, independent restart/stop/recovery, lease exclusion, parser/security ownership, Tailscale profile/Serve noninterference, failed-unit preservation, and exact cleanup without persistent installation. |
 | Production package verify | `node dist/hostdeck/verify.mjs dist/hostdeck` | Checks manifest/runtime/native/content identity, exact command/bin/shebang/mode and service-host identity, runtime manifests, and contained relative links without workspace dependencies. |
+| Phone-shell browser tests | `pnpm test:browser:shell` | Builds the web package and runs the 390 x 844 Chromium route/history/sheet/focus/overflow/no-network smoke with task screenshots. |
 | Pairing browser tests | `pnpm test:browser:pairing` | Runs the real Chromium history/referrer/reload/two-tab/failure boundary; requires the Playwright Chromium bundle. |
 | Remote Android acceptance | `HOSTDECK_REMOTE_CONTROL_DEDICATED_PROFILE_ID=DEDICATED_ID HOSTDECK_REMOTE_CONTROL_AWAY_PROFILE_ID=AWAY_ID pnpm smoke:remote-android` | Strict no-retry `IFC-V1-079` run from a clean commit. Requires exact Tailscale 1.98.8, two distinct authorized saved profiles, and one unlocked authorized Android device with Tailscale, Chrome, USB debugging, and working cellular data. |
 | Later E2E tests | `pnpm test:e2e` | Placeholder; fails loudly until `REL-V1-007` implements it. |

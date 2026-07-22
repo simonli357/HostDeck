@@ -19,6 +19,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-011 | The exact HostDeck/TUI coexistence smoke can leave its marker command unfinished or pause TUI B before the product view, despite healthy completed runtime state. | Medium | Small bugfix | Closed | Validation harness / `INT-V1-031` / `INT-V1-032` | Bounded prompt/tool timing, direct second-TUI identity proof, isolated update-check suppression, sanitized diagnostics, and clean exact standalone/aggregate passes. |
 | BUG-012 | The strict Android runner fails Fastify readiness because its fixed authenticated driver routes omit required API response schemas. | High | Small bugfix | Closed | Validation harness / `IFC-V1-079` | Commit `3528c6c`; route-schema inventory/static gates plus clean physical Fastify/start/pair/reload progression pass. |
 | BUG-013 | Post-pairing Chrome foreground inspection reads ActivityManager intent state containing the protected QR fragment and correctly aborts on its own privacy guard. | High | Small bugfix | Closed | Validation harness / `IFC-V1-079` | Commit `b4078b6`; bounded WindowManager-only regression plus the clean no-retry physical run pass all 12 phone rows without retaining the fragment. |
+| BUG-014 | A current production audit reports two high-severity `fast-uri` host-confusion advisories through Fastify's AJV and JSON serializer paths. | High | Release blocker | Closed | Supply chain / `FE-V1-010` validation | Exact patched overrides 3.1.4/4.1.1, dependency-tree proof, zero-vulnerability audit, full workspace/runtime/package gates, implementation `9b095ad`. |
 
 ## Routing
 
@@ -199,3 +200,16 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Fix: replace ActivityManager inspection with the fixed `dumpsys window displays` argv, accept exactly one bounded Chrome `mCurrentFocus` component, and reject URI-bearing, oversized, null, duplicate, or non-Chrome output.
 - Validation: the ordinary driver suite passes 6 with the physical case explicitly skipped; root typecheck, lint/exports, planning, scaffold, live bounded URI-free WindowManager output, and the full unit gate (1,858 passed, 27 explicit skips) pass. The strict no-retry Android run then passed pair/reload, lock/local unlock, profile-away/return, SSE recovery, self-revoke, evidence publication, and exact cleanup with all 12 phone rows terminal.
 - Closed by: commit `b4078b6`; `artifacts/ifc-v1-079-device/evidence.json` and the inspected four-screen physical evidence.
+
+### BUG-014 Vulnerable Fastify URI Parser Transitively Locked
+
+- Symptom: `pnpm audit --prod` reports `GHSA-v2hh-gcrm-f6hx` twice for `fast-uri` 3.1.3 and 4.1.0 through Fastify's AJV compiler and `fast-json-stringify` paths.
+- Impact: the committed production dependency graph contains high-severity host-confusion vulnerabilities and cannot meet release supply-chain acceptance.
+- Route: release blocker discovered during `FE-V1-010` dependency validation; the expected patched versions and affected paths are explicit.
+- Related requirements: `NFR-005`, `NFR-010`, `PR-007`.
+- Affected / owning task: shared production dependency graph; closure evidence is recorded with `FE-V1-010` because that audit discovered and fixed it.
+- Blocks: resolved in the same implementation unit before task closure; no release or frontend task remains blocked by this advisory.
+- Root cause: the frozen lock predated the advisory and retained vulnerable patch releases permitted by Fastify's current dependency ranges.
+- Fix: exact workspace overrides replace only `fast-uri` 3.1.3 with 3.1.4 and 4.1.0 with 4.1.1; no Fastify API, source fallback, or broad dependency upgrade was introduced.
+- Validation: dependency tree shows only 3.1.4/4.1.1; `pnpm audit --prod` reports no known vulnerabilities; offline frozen install, 1,870 unit, 240 contract, 27 integration, runtime-boundary, deterministic package acceptance, browser, typecheck, lint, scaffold, and planning gates pass. Both patched releases are BSD-3-Clause.
+- Closed by: implementation commit `9b095ad`; evidence in `artifacts/fe-v1-010-phone-shell.md`.
