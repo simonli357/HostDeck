@@ -102,6 +102,7 @@ HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-tui-coexiste
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:codex-lifecycle
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:executable-serve
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:service-host
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:systemd-user-units
 ```
 
 ## Regenerate Reviewed Codex Binding
@@ -112,6 +113,6 @@ pnpm generate:codex-bindings
 
 ## Explicit Gaps
 
-- CLI install/assets: `pnpm build` emits one verified `dist/hostdeck/dist/shell.js` `codexdeck` entry with complete command and foreground `serve` dispatch. The ordinary package intentionally has no real `web/` tree until `IFC-V1-053`, so production `serve` startup is not yet a user workflow; service actions remain explicit non-success until `IFC-V1-056`, and no global/user-service install is claimed before `IFC-V1-055` to `IFC-V1-058`.
+- CLI install/assets: `pnpm build` emits one verified `dist/hostdeck/dist/shell.js` `codexdeck` entry, the non-executable service host, and the exact pure user-unit generator. The ordinary package intentionally has no real `web/` tree until `IFC-V1-053`, so production `serve` startup is not yet a user workflow; service actions and persistent installation remain explicit non-success until `IFC-V1-056` to `IFC-V1-058`.
 - E2E validation: `pnpm test:e2e` intentionally exits nonzero until `REL-V1-007` implements it.
 - Local release smoke: `pnpm smoke:local` intentionally exits nonzero until `REL-V1-006` implements it.

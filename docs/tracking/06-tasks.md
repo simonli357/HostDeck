@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-055` Generate versioned unprivileged systemd user units | in_progress | none | Exact generator/unit/runtime criteria are frozen after the systemd 255.4 and real user-manager audit; implementation is next. |
+| 1 | `FE-V1-003` Record the selected mobile visual direction and implementation targets | blocked | human selection | Signal Ledger and Focus Rail each have seven current phone-first targets; choosing exact assets and approved drift unlocks the UI implementation chain and then real packaged assets. |
 
 ## Intentional Blockers
 

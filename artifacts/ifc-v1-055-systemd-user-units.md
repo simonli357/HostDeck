@@ -67,4 +67,20 @@ Both files begin with one generated-version comment, end with one newline, and u
 ## Completion Record
 
 - Criteria frozen from the accepted service-host/package boundary, systemd 255.4 local manuals/parser, current user-manager audit, and a collected transient execution probe.
-- Implementation and validation evidence: pending.
+- Criteria commit: `031f205`. Implementation commit: `31a385f`.
+- `@hostdeck/cli` now exports one side-effect-free generator and branded assertion. Exact plain input, bounded path/version syntax, canonical executable/package identity, manifest-bound service-host bytes, private optional environment-file state, deterministic quoting/specifier handling, generic stage/code errors, deep freezing, per-unit mode, and SHA-256 are enforced before output. Systemd-invalid quote, apostrophe, or backslash characters in executable paths reject explicitly; valid special characters in arguments and environment-file paths parse correctly.
+- The package verifier now binds the 610-source closure, 1,227 owned outputs, and 6,429 entries with `IFC-V1-055` removed from its downstream deferrals. Final manifest SHA-256 is `95ebb956e926f773369fec381f1e5cdca6b133ac4d1f5fa0c7d6d6a3b699541c`.
+
+## Validation Evidence
+
+- Ten direct generator tests cover exact content/hash/order/freeze/brand, zero mutation, directive ownership, nullable environment-file omission, supported-systemd parsing with hostile valid path characters, object/accessor/value injection, executable state including the exact safe hard-link class used by cached Codex, package/service-host identity, and absent/private/hostile environment-file state.
+- `systemd-analyze verify --user` accepts both generated files on systemd 255.4. Runtime `systemd-analyze security --user` reports `9.7/9.7`: this is the intentional same-user Codex project/command authority, not a root boundary. `/proc`, cgroup, socket, runtime-directory, and listener inspection proves current UID, zero effective capabilities, one settled main process per unit, `0700` runtime, `0600` socket, and one IPv4 loopback listener.
+- `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:systemd-user-units` refuses collisions, runtime-links only the exact generated files, pulls Codex in from HostDeck, proves repeated-start idempotence, HostDeck-only restart with stable Codex PID/socket, Codex restart/stop/recovery with stable HostDeck PID, HostDeck stop with a usable Codex socket, and foreground-owner rejection through the held shared lease. No model turn occurs.
+- Cleanup stops both exact units, releases the lease/listener, removes runtime links and the runtime directory/socket, unloads both units, restores the dynamic port, and preserves the original failed-unit set containing only unrelated `update-notifier-crash.path`. The pre-existing active Tailscale profile list, selected identity, and Serve JSON hashes match before/after; no Tailscale, browser, ADB, or phone mutation occurs.
+- Workspace validation passes: 1,863 unit tests with 28 intentional skips, contract 240, integration 27, web 20, typecheck, lint/exports (539 files/8 packages), scaffold (8 packages/21 required scripts), selected runtime boundary (612 production modules/22 externals), planning integrity (219 tasks/84 requirements/675 dependencies), and exact isolated Codex 0.144.0 binding (671 files).
+- `pnpm test:package` passes two deterministic builds, read-only relocation, six-root plus generator/service-host import, command/service-host/verifier mutation rejection, and exact 610/1,227/6,429 package identity. Post-run manager, process, runtime, socket, listener, failed-unit, Tailscale, and temporary-path inspection is clean.
+
+## Remaining Scope
+
+- No persistent installation, enablement, environment-file creation/reserved-variable validation, lifecycle/status command, upgrade/rollback, uninstall, real dashboard assets, or clean-machine claim is made. `IFC-V1-053` and `IFC-V1-056` to `IFC-V1-058` retain those owners.
+- The default user Codex is 0.144.5 and remains ineligible for reviewed-binding evidence; all exact runtime evidence above uses the isolated canonical 0.144.0 binary without changing the default installation.
