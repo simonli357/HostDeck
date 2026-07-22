@@ -40,7 +40,7 @@ Requirement refs: `FR-002`, `FR-005` to `FR-010`, `FR-016`, `NFR-004`, `IR-001` 
 | Mobile structured state/interaction rebaseline | `FE-V1-004` | Done; executable matrix and evidence in `artifacts/fe-v1-004-mobile-state-interaction-contract.md`. |
 | Replacement visual directions | `FE-V1-002` | Done; Signal Ledger and Focus Rail provide 14 current mobile-first targets and label both desktop-led boards rejected. |
 | Human selection | `FE-V1-003` | Done; Focus Rail and all seven current Option B assets are selected with no cross-option borrowing or additional structural drift. |
-| Phone-first shell and typed HTTP/SSE/CSRF/state clients | `FE-V1-010`, `FE-V1-019`, `FE-V1-023` to `FE-V1-025` | `FE-V1-010` is done with exact route/history/dialog/build/browser evidence; `FE-V1-019` is ready, and the remaining clients stay dependency-ordered behind it. |
+| Phone-first shell and typed HTTP/SSE/CSRF/state clients | `FE-V1-010`, `FE-V1-019`, `FE-V1-023` to `FE-V1-025` | `FE-V1-010` and exact bounded 34-route JSON client `FE-V1-019` are done; `FE-V1-023` SSE and `FE-V1-024` CSRF are ready before the shared coordinator. |
 | Mission Control and structured Session Detail | `FE-V1-011`, `FE-V1-012` | Blocked by approved state contracts and coordinated clients. |
 | Prompt, model, goal, plan, utilities, and inline approval | `FE-V1-020` to `FE-V1-022`, `FE-V1-026` to `FE-V1-030` | Each leaf consumes its exact structured API/runtime port. |
 | Host access, QR pairing, CSRF reload, devices, lock, remote profile/Serve, and compatibility UI | `FE-V1-013`, `FE-V1-031` to `FE-V1-035` | Blocked by production remote security and mutable-health contracts. |

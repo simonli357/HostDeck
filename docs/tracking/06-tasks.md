@@ -16,7 +16,8 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-019` Implement typed bounded same-origin HTTP client foundation | in_progress | none | Exact 34-route JSON coverage, origin/resource/failure/privacy contracts, and fake plus real Fastify evidence are frozen in `artifacts/fe-v1-019-bounded-browser-http-client.md`. |
+| 1 | `FE-V1-023` Implement typed EventSource/SSE client | ready | none | The bounded JSON foundation is complete; selected replay/live continuity is the next shared read dependency for Session Detail and the shell coordinator. |
+| 2 | `FE-V1-024` Implement in-memory CSRF lifecycle | ready | none | HTTP, remote trust, and CSRF bootstrap dependencies are complete; this can proceed independently after the SSE leaf. |
 
 ## Intentional Blockers
 

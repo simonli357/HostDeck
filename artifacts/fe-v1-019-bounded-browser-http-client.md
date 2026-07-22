@@ -30,7 +30,7 @@ The selected manifest contains 35 routes. This leaf owns all 34 `json` routes. `
 
 - The client snapshots one canonical current-document origin at construction. Selected HTTP means an IPv4 loopback origin with an explicit port; selected HTTPS means one canonical private Tailscale `*.ts.net` origin.
 - Requests use only root-relative selected paths with `mode: "same-origin"`, `credentials: "same-origin"`, `redirect: "error"`, `cache: "no-store"`, and `referrerPolicy: "no-referrer"`.
-- Device cookies remain browser-managed and inaccessible. CSRF-required route types accept one validated raw CSRF value and place it only in the selected header for that request; no result or error retains it.
+- Device cookies remain browser-managed and inaccessible. CSRF-required route types accept one validated raw CSRF token plus generation and place them only in the two selected headers for that request; no result or error retains either value.
 - Local-admin-only manifest routes remain typed because they are selected API routes, but the client never fabricates a local-admin header or treats Tailscale identity as HostDeck authority.
 
 ### Resource Contract
@@ -97,4 +97,27 @@ pnpm audit --prod
 git diff --check
 ```
 
-Implementation and final evidence are pending.
+## Implementation
+
+- `packages/web/src/http-route-contracts.ts` binds all 34 selected JSON routes to exact method/path/CSRF/status metadata and executable request/response schemas without a production import from `@hostdeck/server`.
+- `packages/web/src/http-client.ts` owns strict current-origin admission, exact request construction, browser-managed credentials, deadline/abort/capacity composition, streamed byte-bounded JSON reads, typed success/error parsing, stable failures, and no retry.
+- `packages/contracts/src/browser-http-resource-policy.ts` provides the narrow browser-safe limits contract. The shared registry now has 91 definitions and separates generic `http_response_max_bytes` from CLI/browser consumer capacities.
+- `tests/browser-http-client.integration.test.ts` uses real selected Fastify health/status routes through native loopback HTTP and the production admitted-Serve trust/authentication context for unpaired denial plus paired HTTPS read. It does not mutate live Tailscale, profiles, Serve, or the phone.
+- The exact runtime/package allowlists now include the audited public web modules and one additional shared contracts source. One `productionPackageSourceCount` constant owns the 611-source package identity.
+
+Implementation: `685780d`.
+
+## Validation Evidence
+
+| Layer | Result |
+| --- | --- |
+| Focused browser client | 14 tests pass, including hostile request/response ports, exact boundaries, abort/deadline races, cleanup, no retry, and privacy. |
+| Route/resource contracts | 9 tests pass; exact 34 JSON rows, SSE exclusion, schema/status binding, 91 resource definitions, defaults, ranges, and cross-invariants are enforced. |
+| Affected server routes | 37 focused session-read, projected-event, and write-admission tests pass; selected JSON output consumes `http_response_max_bytes`. |
+| Linked boundary regressions | 38 focused CLI transport, Fastify capacity, and browser-client tests pass after reduced test budgets were made coherent. |
+| Web | Package 38 and aggregate 41 tests pass; Vite builds 1,973 modules to 331.61 kB JavaScript with no source maps or external assets. |
+| Workspace | Unit 1,884 pass/28 intentional skips; contract 243; integration 28; root/web typechecks, lint/exports (554 files/8 packages), scaffold (8 packages/21 scripts), runtime boundary (611 production modules/22 externals), and planning integrity pass. |
+| Package/supply chain | Frozen offline install passes; package acceptance builds twice at 611 sources, 1,229 owned outputs, and 6,431 entries; production audit reports no known vulnerabilities. |
+| Manual review | Production web source has no server/Node/local-admin/storage import, caller URL/header/cookie authority, retry path, raw-cause retention, or secret-bearing public error. No test listener/timer/process residue remained. |
+
+All `HTTP-01` to `HTTP-14` criteria pass. `FE-V1-023` owns SSE continuity/reconnect, `FE-V1-024` owns in-memory CSRF rotation, and `FE-V1-025` owns coordinated diagnosis; this leaf does not claim those behaviors.
