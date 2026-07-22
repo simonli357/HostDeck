@@ -56,7 +56,7 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | Contract tests | `pnpm test:contract` | Runs selected schema/API/CLI/storage contract tests. |
 | Integration tests | `pnpm test:integration` | Runs cross-module failure-ordering tests. |
 | Web state tests | `pnpm test:web` | Runs selected mobile fixture and headless pairing-bootstrap checks. |
-| Production package build | `pnpm build` | Offline frozen-lock build of `dist/hostdeck` from the exact 606-source server/CLI closure. Emits six compiled library packages plus production dependencies, identity manifest, and dependency-free verifier; it intentionally emits no web assets or HostDeck executable. |
+| Production package build | `pnpm build` | Offline frozen-lock build of `dist/hostdeck` from the exact 607-source server/CLI closure. Emits six compiled library packages plus production dependencies, identity manifest, and dependency-free verifier; it intentionally emits no web assets or HostDeck executable. |
 | Production package acceptance | `pnpm test:package` | Builds twice, proves rollback/stale replacement and deterministic identity, relocates the tree read-only, imports all six roots, exercises SQLite/flock and Fastify close/restart, and runs config/static/native/runtime/integrity/link failure probes. |
 | Production package verify | `node dist/hostdeck/verify.mjs dist/hostdeck` | Checks manifest/runtime/native/content identity, runtime manifests, modes, and contained relative links without workspace dependencies. |
 | Pairing browser tests | `pnpm test:browser:pairing` | Runs the real Chromium history/referrer/reload/two-tab/failure boundary; requires the Playwright Chromium bundle. |
