@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-024` Implement in-memory CSRF lifecycle | in_progress | none | Strict page-memory, generation-ordering, mutation-injection, invalidation, race, privacy, and real-server criteria are frozen before implementation. |
+| 1 | `FE-V1-025` Implement shell connection-state coordinator | ready | none | The bounded HTTP, SSE, and CSRF clients plus mutable local/remote health contracts are complete; shared diagnosis and authority coordination now precede screen consumption. |
 
 ## Intentional Blockers
 

@@ -83,9 +83,9 @@ Public failures retain only operation kind, optional protected route id, reason,
 | `BCS-09` | Mutation request contract, caller abort, deadline, transport, response, API, retryable, and uncertain-outcome failures never retry the write or automatically bootstrap. |
 | `BCS-10` | Permission/read-only/conflict failures clear authority conservatively; unrelated failures preserve it; all recovery remains explicit and observable. |
 | `BCS-11` | Invalidation and close abort bootstrap plus all active mutations, reject late success by epoch, release listeners/controllers/references, and remain idempotent under repeated/racing calls. |
-| `BCS-12` | Public snapshots/errors/results are deeply immutable, bounded, and free of token, cookie, bearer, operation id, origin, device/profile/Tailscale identity, raw body, and raw cause data. |
+| `BCS-12` | Lifecycle-owned snapshots, errors, and bootstrap/adopt/invalidate/close results are deeply immutable, bounded, and free of token, cookie, bearer, operation id, origin, device/profile/Tailscale identity, raw body, and raw cause data. Typed selected mutation responses remain unretained pass-through values under their owning route contracts and never gain CSRF credentials or raw causes. |
 | `BCS-13` | Static/runtime inspection proves no browser durable storage, cookie API, history/URL credential, global credential, logging, service worker, alternate transport, hidden retry, or UI ownership. |
-| `BCS-14` | Real selected Fastify bootstrap and a selected protected mutation pass over native loopback and production admitted-Serve trust/auth contexts, including reload rotation, stale old page, revoke/authority denial, and cleanup. |
+| `BCS-14` | Real selected Fastify bootstrap passes over native loopback while its paired protected write proves the required insecure-transport rejection; bootstrap and a selected protected mutation pass through production admitted-Serve trust/auth, including reload rotation, stale old page, revoke/authority denial, and cleanup. |
 | `BCS-15` | Profile/access invalidation evidence uses an injected proven reason and stale-generation boundary without mutating live Tailscale/profile/Serve/phone state or inventing diagnosis. |
 | `BCS-16` | Focused tests, web/workspace gates, Vite/runtime/package boundaries, frozen install, audit, manual privacy/no-retry review, and zero listener/timer/process residue pass. |
 
@@ -112,4 +112,28 @@ git diff --check
 
 ## Evidence
 
-Criteria frozen before implementation. Implementation and terminal evidence remain pending.
+All `BCS-01` to `BCS-16` criteria pass on the committed tree.
+
+Closure clarifies two originally over-broad phrases without changing behavior: `BCS-12` distinguishes lifecycle-owned diagnostics from typed product responses, and `BCS-14` records the selected loopback HTTP write rejection instead of implying that paired browser writes may bypass private Serve HTTPS.
+
+### Implementation
+
+- `packages/web/src/csrf-client.ts` owns one branded bounded-HTTP authority lifecycle with single-flight bootstrap, exact generation arbitration, internal credential injection, explicit epoch invalidation, cancellation, and immutable token-free public state.
+- `http-route-contracts.ts` derives the exact 11 device-CSRF route ids from the browser catalog. `http-client.ts` nominally identifies factory-created clients so the raw token cannot be handed to a structural/exfiltration port.
+- The module owns no cookie, browser storage, URL/history, service worker, global, logging, direct fetch, retry, Tailscale diagnosis, DOM, or React behavior. Implementation: `d5ef512`; race hardening: `81e9cb5`; frozen criteria: `e8786d3`.
+
+### Automated Validation
+
+- Direct CSRF lifecycle: 21 tests. Web package: 87 tests. Aggregate web: 90 tests.
+- Real integration: 2 dedicated tests; complete integration: 32 tests. Full contract: 244 tests.
+- Full unit: 1,933 passed with 28 intentional skips across 197 passing and 27 skipped files.
+- Root/web typechecks, lint/exports (564 files/8 packages), scaffold (8 packages/21 scripts), runtime boundary (612 production modules/22 externals), planning, Vite build, frozen offline install, zero-vulnerability production audit, and diff checks pass.
+- Deterministic package acceptance passes at 612 selected sources, 1,231 owned outputs, and 6,433 entries. The Vite output remains 331.61 kB JavaScript and 6.49 kB CSS because production coordinator/UI entry wiring is downstream.
+
+### Runtime And Manual Inspection
+
+- The real selected Fastify CSRF/audit/auth/storage stack rotates through native loopback, where paired host lock correctly rejects insecure HTTP with 426 while preserving client authority. Production admitted-Serve trust/auth then proves reload generation 2 to 3, stale-page denial, one audited host-lock transition, explicit remote-authority invalidation, generation 4 recovery, durable revoke denial, revoked reload denial, and cleanup.
+- SQLite/WAL/SHM scans find none of the three loopback or five remote raw device/CSRF secrets. Public snapshots and sanitized failures contain no token, device, origin, profile, Tailscale identity, operation id, raw body, or raw cause.
+- Source inspection confirms no durable browser state, alternate transport, hidden bootstrap/write retry, swallowed failure, live Tailscale/profile/Serve/phone mutation, or remaining listener/database/temp residue.
+
+No `FE-V1-024` gap remains. Shared host/access/session coordination, React recovery UI, production entry consumption, browser/device matrices, and release acceptance remain owned by downstream leaves.

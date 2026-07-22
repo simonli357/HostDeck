@@ -64,7 +64,7 @@ The `tmux-output.md` filename is retained temporarily so historical artifact lin
 | `IFC-V1-058`, `IFC-V1-079`, `IFC-V1-091` | Production interface completion | Clean packaged parity, remote physical proof, and module hardening close the block. |
 | `FE-V1-004` state rebaseline | Reopened `FE-V1-002` | New mockups must use real mobile/structured/remote-profile states. |
 | Reopened `FE-V1-002` | Human `FE-V1-003` | Two complete alternatives precede selection. |
-| Completed `FE-V1-003`, `IFC-V1-046`, `FE-V1-010`, bounded JSON client `FE-V1-019`, and bounded SSE client `FE-V1-023` | Ready `FE-V1-024`, then `FE-V1-025` | The implemented shell and exact JSON/SSE transports use selected contracts; in-memory CSRF is the remaining coordinated-client prerequisite. |
+| Completed `FE-V1-003`, `IFC-V1-046`, `FE-V1-010`, bounded JSON/SSE clients `FE-V1-019`/`FE-V1-023`, and in-memory CSRF `FE-V1-024` | Ready `FE-V1-025` | The implemented shell and exact JSON/SSE/CSRF clients now provide the headless inputs for one shared host/access/session coordinator. |
 | Coordinated typed clients | `FE-V1-011` to `FE-V1-015`, `FE-V1-020` to `FE-V1-038` | Screens and actions consume shared exact state instead of owning transport guesses. |
 | Complete UI states/actions | `FE-V1-016`, `FE-V1-039`, `FE-V1-040`, then `FE-V1-017`, `FE-V1-018`, `FE-V1-090` | Responsive, accessibility, browser, fidelity, copy, and module hardening follow implementation. |
 | `FND-V1-092`, `DAT-V1-092`, `INT-V1-091`, `IFC-V1-091`, `FE-V1-090` | `REL-V1-004` to `REL-V1-010` | Release proof uses only the selected remote production path. |
