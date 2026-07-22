@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-025` Implement shell connection-state coordinator | ready | none | The bounded HTTP, SSE, and CSRF clients plus mutable local/remote health contracts are complete; shared diagnosis and authority coordination now precede screen consumption. |
+| 1 | `FE-V1-025` Implement shell connection-state coordinator | in_progress | none | Strict `BSC-01` to `BSC-18` criteria are frozen; implementation now replaces stale implicit-loopback/provenance assumptions with access-first route-backed state. |
 
 ## Intentional Blockers
 

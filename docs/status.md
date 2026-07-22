@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `FE-V1-025` is ready to implement the shell-level host/access/session connection-state coordinator. `FE-V1-024` completed the page-memory CSRF lifecycle and is pushed through `81e9cb5`.
+- Active task: `FE-V1-025` is in progress. Its strict access-first coordinator criteria and `BUG-015` contract correction are frozen in `artifacts/fe-v1-025-shell-connection-state-coordinator.md`; implementation is next. `FE-V1-024` is closed and pushed through `3e579ec`.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.5; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract and both replacement sets are complete. Under `DEC-028`, the human selected all seven current Focus Rail assets with no Signal Ledger borrowing or additional structural drift; both legacy desktop-led boards remain rejected.
@@ -140,7 +140,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Blockers
 
-- No external blocker prevents ready `FE-V1-025`; later UI and release leaves remain dependency-ordered behind coordinated state, screens/actions, hardening, packaging, and device evidence.
+- No external blocker prevents active `FE-V1-025`; later UI and release leaves remain dependency-ordered behind coordinated state, screens/actions, hardening, packaging, and device evidence.
 
 ## Validation
 
@@ -407,3 +407,4 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `FE-V1-019` criteria are pushed as `d3f33ee` and implementation as `685780d`; all client, real Fastify, workspace, package, supply-chain, privacy, and cleanup evidence passes, advancing the queue to ready `FE-V1-023` and `FE-V1-024`.
 - `FE-V1-023` criteria are pushed as `6396f8e`, implementation as `c8dc4d3`, and direct acceptance hardening as `91e8c87`; all fetch/parser/continuity, real Fastify, workspace, package, supply-chain, privacy, and cleanup evidence passes, advancing the queue to ready `FE-V1-024`.
 - `FE-V1-024` criteria are pushed as `e8786d3`, implementation as `d5ef512`, and race hardening as `81e9cb5`; all bootstrap/generation/mutation/invalidation/race, real Fastify, workspace, package, supply-chain, privacy, and cleanup evidence passes, advancing the queue to ready `FE-V1-025`.
+- `FE-V1-025` strict `BSC-01` to `BSC-18` criteria are frozen; implementation and evidence are pending. The criteria identify `BUG-015`: the old mobile access fixture permits implicit loopback browser writes and requires live fields absent from selected browser responses.

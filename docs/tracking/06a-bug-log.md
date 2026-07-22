@@ -213,3 +213,15 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Fix: exact workspace overrides replace only `fast-uri` 3.1.3 with 3.1.4 and 4.1.0 with 4.1.1; no Fastify API, source fallback, or broad dependency upgrade was introduced.
 - Validation: dependency tree shows only 3.1.4/4.1.1; `pnpm audit --prod` reports no known vulnerabilities; offline frozen install, 1,870 unit, 240 contract, 27 integration, runtime-boundary, deterministic package acceptance, browser, typecheck, lint, scaffold, and planning gates pass. Both patched releases are BSD-3-Clause.
 - Closed by: implementation commit `9b095ad`; evidence in `artifacts/fe-v1-010-phone-shell.md`.
+
+### BUG-015 Selected Mobile Access Contract Is Not Browser-Producible
+
+- Symptom: `selectedHostAccessSchema` permits implicit `loopback_local` browser writes and requires admitted request provenance/source key, device label, full runtime compatibility, and a connected session stream for Mission Control.
+- Impact: the selected browser API cannot produce that state. `DEC-024` makes safe loopback browser GETs unpaired/read-only; access/host/session routes intentionally omit proxy source keys, access bootstrap omits device labels and full compatibility, and Mission Control owns no session stream. A screen consuming the old fixture would have to fabricate authority or private/unavailable fields.
+- Route: backlog contract fix inside active `FE-V1-025`; the coordinator is the first live consumer and must establish a route-backed state before screens implement the stale fixture assumptions.
+- Related requirements: `IR-005`, `IR-006`, `IR-008`, `UX-009`, `DEC-024`, `DEC-027`.
+- Affected / owning task: selected-mobile fixture contract from completed foundation work; live replacement and regression evidence in `FE-V1-025`.
+- Blocks: `FE-V1-011` to `FE-V1-015` and access/action screens until the route-backed coordinator contract passes.
+- Root cause: the normalized visual fixture predated the final browser authentication/status composition and was not re-audited against exact route outputs after local-admin safe-GET authority was removed.
+- Fix: pending under `BSC-01` to `BSC-18`: access-first source state, explicit current/stale truth, loopback-read-only browser semantics, exact host/session consistency, and no unavailable provenance/label/compatibility/stream fabrication.
+- Validation: hostile reducer/query races, selected-mobile regression tests, real loopback/admitted-Serve authority matrix, full workspace gates, and manual privacy review.
