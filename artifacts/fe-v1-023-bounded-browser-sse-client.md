@@ -132,4 +132,27 @@ git diff --check
 
 ## Evidence
 
-Criteria frozen before implementation. Implementation and terminal evidence remain pending.
+All `SSE-01` to `SSE-16` criteria pass on the committed tree.
+
+### Implementation
+
+- `packages/web/src/sse-client.ts` owns the bounded fetch-stream state machine; `sse-route-contract.ts` owns the sole browser SSE route; `browser-origin.ts` shares the exact loopback/private-Tailscale origin policy with the JSON client.
+- `packages/contracts/src/browser-sse-resource-policy.ts` exposes the narrow browser limit contract. The shared registry contains exactly 99 definitions and rejects invalid browser/server and reconnect relationships.
+- Exact `eventsource-parser` 3.1.0 is pinned. Its package metadata and bundled license identify MIT, it has no runtime dependencies, frozen offline install passes, and `pnpm audit --prod` reports no known vulnerabilities.
+- Implementation: `c8dc4d3`. Direct acceptance hardening: `91e8c87`.
+
+### Automated Validation
+
+- Direct SSE client: 28 tests. Web package: 66 tests. Aggregate web: 69 tests.
+- Route contract: 1 test. Full contract: 244 tests. Real integration: 30 tests.
+- Full unit: 1,912 passed with 28 intentional skips across 196 passing and 27 skipped files.
+- Root and web typechecks, lint/exports, scaffold, runtime-boundary, planning, Vite build, frozen offline install, production audit, and diff checks pass.
+- Deterministic package acceptance passes at 612 source modules, 1,231 outputs, and 6,433 entries, including relocated read-only runtime and mutation rejection. Vite emits 331.61 kB JavaScript and 6.49 kB CSS.
+
+### Runtime And Manual Inspection
+
+- The real integration uses the production selected Fastify projection stream, bounded replay/live handoff, native loopback streaming, and production admitted-Serve trust/authentication. It proves unpaired denial, paired replay, exact heartbeat, live delivery, `after=2` reconnect, and cleanup without changing live Tailscale, profile, Serve, or phone state.
+- Source inspection confirms one fixed same-origin fetch transport, no native hidden reconnect, no mutation retry, sticky replay-boundary truth, cursor commit only after synchronous consumption, bounded immutable public state, privacy-safe failures, late-response cancellation, and reader/timer/listener/capacity cleanup.
+- The first full integration invocation encountered an unrelated compact-fixture `EADDRINUSE` race. That fixture passed alone and the unchanged complete integration suite then passed 30/30.
+
+No `FE-V1-023` gap remains. CSRF lifecycle, coordinated host/access state, UI consumption, cross-screen continuity, browser/device matrices, and release acceptance remain owned by downstream leaves.

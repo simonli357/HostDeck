@@ -16,8 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-023` Implement typed bounded browser SSE client | in_progress | none | Strict fetch-stream/parser, cursor, heartbeat/idle, reconnect, cancellation, and real-SSE criteria are frozen before implementation. |
-| 2 | `FE-V1-024` Implement in-memory CSRF lifecycle | ready | none | HTTP, remote trust, and CSRF bootstrap dependencies are complete; this can proceed independently after the SSE leaf. |
+| 1 | `FE-V1-024` Implement in-memory CSRF lifecycle | ready | none | The bounded HTTP and SSE clients, remote trust, and CSRF bootstrap dependencies are complete; this is the remaining coordinated-client prerequisite. |
 
 ## Intentional Blockers
 

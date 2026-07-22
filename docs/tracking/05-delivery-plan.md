@@ -7,7 +7,7 @@ Owns milestone, module maturity, production passes, and release truth.
 - Current pass: Tailscale-first production host interface and selected mobile-dashboard integration after completing selected runtime integration.
 - Current milestone: M1 selected foundation and M2 real structured vertical are complete; M3 remote host interface and M4 mobile dashboard are in progress.
 - Release state: no-go; deterministic server/CLI output, accepted foreground/service processes, and exact runtime-proven user units exist, but real dashboard assets, persistent service lifecycle/install parity, UI, and release hardening remain incomplete.
-- Next exit: `FE-V1-023` implements the typed bounded browser SSE continuity/reconnect foundation on the completed Focus Rail shell and JSON client.
+- Next exit: `FE-V1-024` implements the in-memory CSRF bootstrap/rotation lifecycle on the completed Focus Rail shell and bounded JSON/SSE clients.
 
 ## Milestones
 
