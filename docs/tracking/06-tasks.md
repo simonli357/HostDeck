@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-083` Implement and accept the selected foreground serve lifecycle | ready | none | The real production graph now reaches exact reconciled runtime readiness without publishing a listener; compose the accepted loopback Fastify, post-listen remote observation, and shutdown lifecycle next. |
+| 1 | `IFC-V1-083` Implement and accept the selected foreground serve lifecycle | in_progress | none | The real production graph now reaches exact reconciled runtime readiness without publishing a listener; compose the accepted loopback Fastify, post-listen remote observation, signal/runtime-exit handling, and shutdown lifecycle next. |
 | 2 | `IFC-V1-055` Generate versioned unprivileged systemd user units with explicit ownership/dependencies | ready | none | The compiled package and accepted runtime lifecycle are complete; units remain independent, but the foreground serve lifecycle is ordered first. |
 
 ## Intentional Blockers
