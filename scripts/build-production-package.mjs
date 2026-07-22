@@ -48,7 +48,6 @@ const expectedExternalModules = [
 ];
 const downstreamDeferrals = [
   "IFC-V1-053",
-  "IFC-V1-054",
   "IFC-V1-055",
   "IFC-V1-056",
   "IFC-V1-057",
@@ -83,6 +82,9 @@ export function createRuntimePackageManifest(sourceManifest, packageVersion, nod
   if (typeof sourceManifest.name !== "string" || !sourceManifest.name.startsWith("@hostdeck/")) {
     throw new TypeError("Source package manifest name is invalid.");
   }
+  if (sourceManifest.name !== "@hostdeck/cli" && sourceManifest.bin !== undefined) {
+    throw new TypeError(`${sourceManifest.name} must not declare runtime commands.`);
+  }
   const dependencies = {};
   for (const [name, rawVersion] of Object.entries(sourceManifest.dependencies ?? {}).sort(([left], [right]) =>
     left.localeCompare(right)
@@ -98,6 +100,9 @@ export function createRuntimePackageManifest(sourceManifest, packageVersion, nod
     version: packageVersion,
     private: true,
     type: "module",
+    ...(sourceManifest.name === "@hostdeck/cli"
+      ? { bin: createRuntimeCliBin(sourceManifest.bin) }
+      : {}),
     types: "./dist/index.d.ts",
     exports: {
       ".": {
@@ -109,6 +114,19 @@ export function createRuntimePackageManifest(sourceManifest, packageVersion, nod
   };
   if (Object.keys(dependencies).length > 0) manifest.dependencies = dependencies;
   return manifest;
+}
+
+function createRuntimeCliBin(candidate) {
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    Array.isArray(candidate) ||
+    Object.keys(candidate).length !== 1 ||
+    candidate.codexdeck !== "./src/shell.ts"
+  ) {
+    throw new TypeError("@hostdeck/cli source bin metadata is invalid.");
+  }
+  return { codexdeck: "./dist/shell.js" };
 }
 
 export function buildProductionPackage(options = {}) {
@@ -158,17 +176,19 @@ export function buildProductionPackage(options = {}) {
 
     const executableFiles = collectExecutableFiles(packageRoot);
     normalizePackageModes(packageRoot, new Set(executableFiles));
+    const command = collectHostDeckCommand(packageRoot, packageVersion);
     const nativeModules = collectRequiredNativeModules(packageRoot, executableFiles);
     const ownedOutput = computeOwnedOutputIdentity(packageRoot, descriptors);
     const content = inspectProductionPackageTree(packageRoot, executableFiles);
     const manifest = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       name: "hostdeck-production-package",
       packageVersion,
       packageManager: `pnpm@${runtime.pnpm}`,
       nativeBuildPolicy: "canonical-runtime-binary-only",
       runtime,
       codex,
+      command,
       source: { count: sourceIdentity.count, sha256: sourceIdentity.sha256 },
       output: { count: ownedOutput.count, sha256: ownedOutput.sha256 },
       content,
@@ -195,6 +215,43 @@ export function buildProductionPackage(options = {}) {
   } finally {
     removeTree(stagingRoot);
   }
+}
+
+function collectHostDeckCommand(root, packageVersion) {
+  const manifest = readJson(join(root, "package.json"));
+  if (
+    manifest.name !== "@hostdeck/cli" ||
+    manifest.version !== packageVersion ||
+    manifest.bin === null ||
+    typeof manifest.bin !== "object" ||
+    Array.isArray(manifest.bin) ||
+    Object.keys(manifest.bin).length !== 1 ||
+    manifest.bin.codexdeck !== "./dist/shell.js"
+  ) {
+    throw new Error("Production CLI command metadata is invalid.");
+  }
+  const path = "dist/shell.js";
+  const absolutePath = resolve(root, path);
+  const stats = lstatSync(absolutePath);
+  const content = readFileSync(absolutePath);
+  if (
+    !stats.isFile() ||
+    stats.isSymbolicLink() ||
+    stats.nlink !== 1 ||
+    (stats.mode & 0o777) !== 0o755 ||
+    !content.subarray(0, 20).equals(Buffer.from("#!/usr/bin/env node\n"))
+  ) {
+    throw new Error("Production CLI command target is invalid.");
+  }
+  return Object.freeze({
+    name: "codexdeck",
+    package: "@hostdeck/cli",
+    path,
+    sha256: sha256Hex(content),
+    shebang: "#!/usr/bin/env node",
+    size: content.length,
+    version: packageVersion
+  });
 }
 
 function assertBuildRuntime(repositoryRoot, rootManifest) {

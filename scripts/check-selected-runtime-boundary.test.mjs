@@ -6,10 +6,29 @@ import {
   compareExactModuleSet,
   findCliLocalStorageBoundaryViolations,
   findLegacyInterfaceTokens,
+  isExactSelectedCliBin,
   readConstStringArray,
   readInterfacePropertyNames,
   readNamedImportNames
 } from "./check-selected-runtime-boundary.mjs";
+
+test("accepts only the selected source CLI command metadata", () => {
+  assert.equal(
+    isExactSelectedCliBin({ codexdeck: "./src/shell.ts" }),
+    true
+  );
+  assert.equal(
+    isExactSelectedCliBin({ codexdeck: "./src/bin.ts" }),
+    false
+  );
+  assert.equal(
+    isExactSelectedCliBin({
+      codexdeck: "./src/shell.ts",
+      unexpected: "./src/index.ts"
+    }),
+    false
+  );
+});
 
 test("collects static imports, exports, and import types exactly", () => {
   const source = `

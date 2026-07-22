@@ -257,6 +257,13 @@ export function validateSelectedRuntimeBoundary(root = process.cwd()) {
         }
       }
     }
+    if (path === "packages/cli/package.json") {
+      if (!isExactSelectedCliBin(value.bin)) {
+        failures.push(`${path} must declare only codexdeck -> ./src/shell.ts`);
+      }
+    } else if (path.startsWith("packages/") && value.bin !== undefined) {
+      failures.push(`${path} declares an unselected workspace command`);
+    }
   }
 
   const rootPackage = manifests.find(({ path }) => path === "package.json")?.value;
@@ -325,6 +332,17 @@ export function validateSelectedRuntimeBoundary(root = process.cwd()) {
     closureFiles: Object.freeze([...closure.files].sort()),
     externalModules: Object.freeze([...closure.externalModules].sort())
   });
+}
+
+export function isExactSelectedCliBin(candidate) {
+  return (
+    candidate !== null &&
+    typeof candidate === "object" &&
+    !Array.isArray(candidate) &&
+    Object.getPrototypeOf(candidate) === Object.prototype &&
+    Object.keys(candidate).length === 1 &&
+    candidate.codexdeck === "./src/shell.ts"
+  );
 }
 
 export function collectModuleSpecifiers(source) {

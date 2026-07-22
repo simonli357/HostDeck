@@ -126,7 +126,7 @@ function loadConfigFile(configPath: string | undefined, options: LoadCliConfigOp
   try {
     raw = readFile(path);
   } catch {
-    throw configFailure(`Unable to read HostDeck config file ${path}.`, "--config");
+    throw configFailure("Unable to read HostDeck config file.", "--config");
   }
 
   let parsed: unknown;
@@ -134,11 +134,11 @@ function loadConfigFile(configPath: string | undefined, options: LoadCliConfigOp
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw configFailure(`HostDeck config file ${path} is not valid JSON.`, "--config");
+    throw configFailure("HostDeck config file is not valid JSON.", "--config");
   }
 
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw configFailure(`HostDeck config file ${path} must be a JSON object.`, "--config");
+    throw configFailure("HostDeck config file must be a JSON object.", "--config");
   }
 
   const record = parsed as Record<string, unknown>;
@@ -147,7 +147,7 @@ function loadConfigFile(configPath: string | undefined, options: LoadCliConfigOp
   );
   if (unknownKey !== undefined) {
     throw configFailure(
-      `HostDeck config file ${path} contains unsupported field ${unknownKey}.`,
+      `HostDeck config file contains unsupported field ${unknownKey}.`,
       "--config"
     );
   }
@@ -158,7 +158,7 @@ function loadConfigFile(configPath: string | undefined, options: LoadCliConfigOp
   ] as const) {
     if (Object.hasOwn(record, snakeCase) && Object.hasOwn(record, camelCase)) {
       throw configFailure(
-        `HostDeck config file ${path} must not define both ${snakeCase} and ${camelCase}.`,
+        `HostDeck config file must not define both ${snakeCase} and ${camelCase}.`,
         "--config"
       );
     }

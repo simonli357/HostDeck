@@ -22,7 +22,6 @@ const expectedPackageNames = [
 ];
 const expectedDeferrals = [
   "IFC-V1-053",
-  "IFC-V1-054",
   "IFC-V1-055",
   "IFC-V1-056",
   "IFC-V1-057",
@@ -229,7 +228,8 @@ export function verifyProductionPackage(root, options = {}) {
   const runtime = options.runtime ?? currentRuntimeIdentity();
   assertRuntimeIdentity(manifest.runtime, runtime);
   verifyPackageManifests(packageRoot, manifest);
-  verifyNoOwnedExecutables(packageRoot, manifest.packages, manifest.executableFiles);
+  verifyCommand(packageRoot, manifest.command, manifest.executableFiles);
+  verifyNoOwnedExecutables(packageRoot, manifest.packages, manifest.executableFiles, manifest.command.path);
 
   const tree = inspectProductionPackageTree(packageRoot, manifest.executableFiles);
   const owned = computeOwnedOutputIdentity(packageRoot, manifest.packages);
@@ -252,6 +252,7 @@ function validateManifest(manifest) {
     value,
     [
       "codex",
+      "command",
       "content",
       "deferrals",
       "executableFiles",
@@ -269,7 +270,7 @@ function validateManifest(manifest) {
     ],
     "Package manifest"
   );
-  if (value.schemaVersion !== 1 || value.name !== "hostdeck-production-package") {
+  if (value.schemaVersion !== 2 || value.name !== "hostdeck-production-package") {
     throw new TypeError("HostDeck package manifest schema is unsupported.");
   }
   if (value.nativeBuildPolicy !== "canonical-runtime-binary-only") {
@@ -312,11 +313,13 @@ function validateManifest(manifest) {
     throw new TypeError("Codex package identity is inconsistent.");
   }
 
+  validateCommand(value.command, value.packageVersion);
+
   if (!Array.isArray(value.deferrals) || !sameArray(value.deferrals, expectedDeferrals)) {
     throw new TypeError("Package downstream deferrals are invalid.");
   }
   validatePackages(value.packages, value.packageVersion, value.output);
-  validateExecutables(value.executableFiles);
+  validateExecutables(value.executableFiles, value.command.path);
   validateNativeManifest(value.nativeModules, value.executableFiles);
 }
 
@@ -376,15 +379,40 @@ function validateDependencies(dependencies, packageName) {
   }
 }
 
-function validateExecutables(executables) {
+function validateCommand(command, packageVersion) {
+  const value = assertRecord(command, "CLI command descriptor");
+  assertExactKeys(
+    value,
+    ["name", "package", "path", "sha256", "shebang", "size", "version"],
+    "CLI command descriptor"
+  );
+  if (
+    value.name !== "codexdeck" ||
+    value.package !== "@hostdeck/cli" ||
+    value.path !== "dist/shell.js" ||
+    value.shebang !== "#!/usr/bin/env node" ||
+    value.version !== packageVersion ||
+    !Number.isSafeInteger(value.size) ||
+    value.size < 1
+  ) {
+    throw new TypeError("CLI command descriptor is inconsistent.");
+  }
+  parseRelativePath(value.path, "CLI command path", false);
+  parseSha256(value.sha256, "CLI command SHA-256");
+}
+
+function validateExecutables(executables, commandPath) {
   if (!Array.isArray(executables)) throw new TypeError("Executable inventory must be an array.");
   const parsed = executables.map((path) => parseRelativePath(path, "Executable path", false));
   const sorted = [...parsed].sort((left, right) => left.localeCompare(right));
   if (!sameArray(parsed, sorted) || new Set(parsed).size !== parsed.length) {
     throw new TypeError("Executable inventory must be sorted and unique.");
   }
-  if (parsed.some((path) => path.startsWith("dist/") || path === productionPackageVerifierName)) {
-    throw new TypeError("HostDeck-owned files cannot be executable in this package foundation.");
+  if (!parsed.includes(commandPath)) {
+    throw new TypeError("CLI command is absent from the executable inventory.");
+  }
+  if (parsed.some((path) => (path.startsWith("dist/") && path !== commandPath) || path === productionPackageVerifierName)) {
+    throw new TypeError("Undeclared HostDeck-owned files cannot be executable.");
   }
 }
 
@@ -429,6 +457,7 @@ function verifyPackageManifests(root, manifest) {
     resolvedRoots.add(resolvedRoot);
     const runtimeManifest = readRequiredJson(join(resolvedRoot, "package.json"), `${descriptor.name} package.json`);
     const expectedKeys = ["engines", "exports", "name", "private", "type", "types", "version"];
+    if (descriptor.name === "@hostdeck/cli") expectedKeys.push("bin");
     if (Object.keys(descriptor.dependencies).length > 0) expectedKeys.push("dependencies");
     assertExactKeys(runtimeManifest, expectedKeys, `${descriptor.name} package.json`);
     if (
@@ -440,7 +469,10 @@ function verifyPackageManifests(root, manifest) {
       runtimeManifest.engines?.node !== manifest.runtime.node ||
       stableJson(runtimeManifest.dependencies ?? {}) !== stableJson(descriptor.dependencies) ||
       stableJson(runtimeManifest.exports) !==
-        stableJson({ ".": { import: "./dist/index.js", types: "./dist/index.d.ts" } })
+        stableJson({ ".": { import: "./dist/index.js", types: "./dist/index.d.ts" } }) ||
+      (descriptor.name === "@hostdeck/cli"
+        ? stableJson(runtimeManifest.bin) !== stableJson({ codexdeck: "./dist/shell.js" })
+        : runtimeManifest.bin !== undefined)
     ) {
       throw new TypeError(`${descriptor.name} runtime manifest is inconsistent.`);
     }
@@ -449,6 +481,32 @@ function verifyPackageManifests(root, manifest) {
     if (!isRequiredRegularFile(entrypoint) || !isRequiredRegularFile(types)) {
       throw new TypeError(`${descriptor.name} emitted entrypoints are missing.`);
     }
+  }
+}
+
+function verifyCommand(root, command, executableFiles) {
+  const path = resolveContained(root, command.path, "CLI command path");
+  const stats = lstatOrNull(path);
+  if (
+    stats === null ||
+    !stats.isFile() ||
+    stats.nlink !== 1 ||
+    !executableFiles.includes(command.path)
+  ) {
+    throw new TypeError("CLI command target is missing or not executable.");
+  }
+  assertFileMode(stats.mode, command.path, true);
+  const content = readFileSync(path);
+  if (
+    content.length !== command.size ||
+    sha256Hex(content) !== command.sha256 ||
+    !content.subarray(0, 20).equals(Buffer.from(`${command.shebang}\n`))
+  ) {
+    throw new TypeError("CLI command target identity is invalid.");
+  }
+  const text = content.toString("utf8");
+  if (/\b(?:ts-node|tsx)\b|from\s+["'][^"']+\.ts["']/u.test(text)) {
+    throw new TypeError("CLI command target depends on a source runtime loader.");
   }
 }
 
@@ -466,7 +524,7 @@ function verifyNativeModules(root, nativeModules, executableFiles) {
   }
 }
 
-function verifyNoOwnedExecutables(root, packages, executableFiles) {
+function verifyNoOwnedExecutables(root, packages, executableFiles, commandPath) {
   const ownedDistRoots = packages.map((descriptor) =>
     requireRealPath(
       resolveContained(root, `${descriptor.root === "." ? "" : `${descriptor.root}/`}dist`, `${descriptor.name} dist`),
@@ -478,8 +536,11 @@ function verifyNoOwnedExecutables(root, packages, executableFiles) {
       resolveContained(root, executable, "Executable path"),
       `Declared executable ${executable}`
     );
-    if (ownedDistRoots.some((distRoot) => isInside(distRoot, path))) {
-      throw new TypeError("HostDeck-owned compiled output cannot be executable in this package foundation.");
+    if (
+      ownedDistRoots.some((distRoot) => isInside(distRoot, path)) &&
+      executable !== commandPath
+    ) {
+      throw new TypeError("Undeclared HostDeck-owned compiled output cannot be executable.");
     }
   }
 }

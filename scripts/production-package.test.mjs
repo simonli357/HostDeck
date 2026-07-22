@@ -60,9 +60,9 @@ test("selects the exact non-web production closure", () => {
 test("rewrites source manifests to exact runtime-only package metadata", () => {
   const manifest = createRuntimePackageManifest(
     {
-      name: "@hostdeck/example",
+      name: "@hostdeck/cli",
       version: "0.0.0",
-      bin: { hostdeck: "./src/bin.ts" },
+      bin: { codexdeck: "./src/shell.ts" },
       scripts: { test: "vitest" },
       dependencies: {
         zod: "4.4.3",
@@ -74,10 +74,11 @@ test("rewrites source manifests to exact runtime-only package metadata", () => {
     "22.22.2"
   );
   assert.deepEqual(manifest, {
-    name: "@hostdeck/example",
+    name: "@hostdeck/cli",
     version: "0.0.0",
     private: true,
     type: "module",
+    bin: { codexdeck: "./dist/shell.js" },
     types: "./dist/index.d.ts",
     exports: {
       ".": { types: "./dist/index.d.ts", import: "./dist/index.js" }
@@ -88,7 +89,6 @@ test("rewrites source manifests to exact runtime-only package metadata", () => {
       zod: "4.4.3"
     }
   });
-  assert.equal("bin" in manifest, false);
   assert.equal("scripts" in manifest, false);
   assert.equal("devDependencies" in manifest, false);
 });
@@ -134,6 +134,30 @@ test("rejects non-exact runtime dependency versions", () => {
         "22.22.2"
       ),
     /not pinned exactly/u
+  );
+  assert.throws(
+    () =>
+      createRuntimePackageManifest(
+        {
+          name: "@hostdeck/cli",
+          bin: { codexdeck: "./src/other.ts" }
+        },
+        "0.0.0",
+        "22.22.2"
+      ),
+    /source bin metadata is invalid/u
+  );
+  assert.throws(
+    () =>
+      createRuntimePackageManifest(
+        {
+          name: "@hostdeck/server",
+          bin: { unexpected: "./src/index.ts" }
+        },
+        "0.0.0",
+        "22.22.2"
+      ),
+    /must not declare runtime commands/u
   );
 });
 

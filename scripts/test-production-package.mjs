@@ -5,6 +5,7 @@ import {
   chmodSync,
   copyFileSync,
   cpSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -20,7 +21,10 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { buildProductionPackage } from "./build-production-package.mjs";
-import { verifyProductionPackage } from "./verify-production-package.mjs";
+import {
+  computeManifestSha256,
+  verifyProductionPackage
+} from "./verify-production-package.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "..");
@@ -76,6 +80,7 @@ try {
     [smokeScript, relocated, "--read-only"],
     unrelatedCwd
   );
+  runExecutableInvocationMatrix(relocated, relocatedManifest, unrelatedCwd);
   verifyProductionPackage(relocated);
 
   makeWritable(relocated);
@@ -93,6 +98,77 @@ try {
       return () => writeFileSync(path, original);
     },
     /manifest fields are invalid/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "missing CLI bin metadata",
+    () => mutateJson(join(relocated, "package.json"), (value) => delete value.bin),
+    /package\.json fields are invalid|runtime manifest is inconsistent/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "source-targeted CLI bin metadata",
+    () =>
+      mutateJson(join(relocated, "package.json"), (value) => {
+        value.bin = { codexdeck: "./src/shell.ts" };
+      }),
+    /runtime manifest is inconsistent/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "multiply declared CLI bins",
+    () =>
+      mutateJson(join(relocated, "package.json"), (value) => {
+        value.bin = {
+          codexdeck: "./dist/shell.js",
+          unexpected: "./dist/index.js"
+        };
+      }),
+    /runtime manifest is inconsistent/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "non-executable CLI command",
+    () => {
+      const path = join(relocated, relocatedManifest.command.path);
+      chmodSync(path, 0o644);
+      return () => chmodSync(path, 0o755);
+    },
+    /command target is missing or not executable|file mode is invalid/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "modified CLI shebang",
+    () => {
+      const path = join(relocated, relocatedManifest.command.path);
+      const original = readFileSync(path);
+      const changed = Buffer.from(original);
+      changed[2] = "x".charCodeAt(0);
+      writeFileSync(path, changed, { mode: 0o755 });
+      return () => {
+        writeFileSync(path, original);
+        chmodSync(path, 0o755);
+      };
+    },
+    /command target identity is invalid/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "escaping CLI command descriptor",
+    () => {
+      const path = join(relocated, "hostdeck-package.json");
+      return mutateJson(path, (value) => {
+        value.command.path = "../shell.js";
+        value.manifestSha256 = computeManifestSha256(value);
+      });
+    },
+    /command descriptor is inconsistent|command path/iu
   );
   runMutationProbe(
     relocated,
@@ -181,6 +257,153 @@ function runMutationProbe(root, cwd, label, mutate, expected) {
   verifyProductionPackage(root);
 }
 
+function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {
+  const command = join(root, manifest.command.path);
+  assertHelpResult(
+    runChild("Node-path command help", [command, "--help"], unrelatedCwd)
+  );
+  assertVersionResult(
+    runCommand("direct executable version", command, ["version"], unrelatedCwd),
+    manifest.packageVersion
+  );
+
+  const managerProject = join(acceptanceRoot, "package-manager-install");
+  mkdirSync(managerProject, { recursive: true });
+  writeFileSync(
+    join(managerProject, "package.json"),
+    `${JSON.stringify({ name: "hostdeck-package-manager-acceptance", private: true, version: "1.0.0" }, null, 2)}\n`
+  );
+  runPnpm(
+    "package-manager link install",
+    ["add", "--offline", "--ignore-scripts", root],
+    managerProject
+  );
+  assertVersionResult(
+    runPnpm(
+      "package-manager command version",
+      ["exec", "codexdeck", "--version"],
+      managerProject
+    ),
+    manifest.packageVersion
+  );
+
+  const archive = join(acceptanceRoot, "hostdeck-runtime.tgz");
+  runCommand(
+    "runtime archive creation",
+    "tar",
+    ["-czf", archive, "-C", dirname(root), "hostdeck"],
+    unrelatedCwd
+  );
+  const packedInstallRoot = join(acceptanceRoot, "packed-install");
+  mkdirSync(packedInstallRoot, { recursive: true });
+  runCommand(
+    "runtime archive extraction",
+    "tar",
+    ["-xzf", archive, "-C", packedInstallRoot],
+    unrelatedCwd
+  );
+  const packedPackage = join(packedInstallRoot, "hostdeck");
+  const packedManifest = JSON.parse(
+    readFileSync(join(packedPackage, "hostdeck-package.json"), "utf8")
+  );
+  makeReadOnly(packedPackage, new Set(packedManifest.executableFiles));
+  verifyProductionPackage(packedPackage);
+  assertHelpResult(
+    runCommand(
+      "packed runtime executable help",
+      join(packedPackage, packedManifest.command.path),
+      ["help"],
+      unrelatedCwd
+    )
+  );
+
+  const globalPrefix = join(acceptanceRoot, "global-prefix");
+  const globalPackage = join(
+    globalPrefix,
+    "lib",
+    "node_modules",
+    "@hostdeck",
+    "cli"
+  );
+  const globalBin = join(globalPrefix, "bin", "codexdeck");
+  mkdirSync(dirname(globalPackage), { recursive: true });
+  mkdirSync(dirname(globalBin), { recursive: true });
+  symlinkSync(relative(dirname(globalPackage), packedPackage), globalPackage, "dir");
+  symlinkSync(
+    relative(dirname(globalBin), join(globalPackage, packedManifest.command.path)),
+    globalBin,
+    "file"
+  );
+  assertVersionResult(
+    runCommand(
+      "temporary global-style command version",
+      globalBin,
+      ["--version"],
+      unrelatedCwd
+    ),
+    manifest.packageVersion
+  );
+
+  const service = runCommand(
+    "reserved service command",
+    command,
+    ["service", "start"],
+    unrelatedCwd,
+    true
+  );
+  assert.equal(service.status, 70);
+  assert.match(service.stderr, /capability_unavailable/u);
+  const missingConfig = join(acceptanceRoot, "private-missing-config.json");
+  const config = runCommand(
+    "missing config command",
+    command,
+    ["--config", missingConfig, "status"],
+    unrelatedCwd,
+    true
+  );
+  assert.equal(config.status, 78);
+  assert.doesNotMatch(config.stderr, /private-missing-config/u);
+
+  const serveRoot = join(acceptanceRoot, "serve-preflight");
+  const serve = runCommand(
+    "missing runtime directory serve command",
+    command,
+    ["serve"],
+    unrelatedCwd,
+    true,
+    {
+      HOME: join(serveRoot, "home"),
+      XDG_CONFIG_HOME: join(serveRoot, "config"),
+      XDG_RUNTIME_DIR: "",
+      XDG_STATE_HOME: join(serveRoot, "state")
+    }
+  );
+  assert.equal(serve.status, 78);
+  assert.match(serve.stderr, /XDG_RUNTIME_DIR is required/u);
+  assert.equal(existsSync(serveRoot), false);
+}
+
+function assertHelpResult(result) {
+  assert.equal(result.status, 0);
+  assert.equal(result.stderr, "");
+  assert.match(result.stdout, /^Usage:\n {2}codexdeck serve/mu);
+  assert.doesNotMatch(result.stdout, /hostdeck-package-acceptance-/u);
+}
+
+function assertVersionResult(result, version) {
+  assert.equal(result.status, 0);
+  assert.equal(result.stderr, "");
+  assert.equal(result.stdout, `codexdeck ${version}\n`);
+}
+
+function mutateJson(path, change) {
+  const original = readFileSync(path);
+  const value = JSON.parse(original.toString("utf8"));
+  change(value);
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+  return () => writeFileSync(path, original);
+}
+
 function runRuntimeMismatchProbe(root, cwd) {
   const script = `
     import { pathToFileURL } from "node:url";
@@ -213,18 +436,37 @@ function runRuntimeMismatchProbe(root, cwd) {
 }
 
 function runChild(label, args, cwd, expectFailure = false) {
+  return runCommand(label, process.execPath, args, cwd, expectFailure);
+}
+
+function runPnpm(label, args, cwd) {
+  const npmExecPath = process.env.npm_execpath;
+  return typeof npmExecPath === "string" && existsSync(npmExecPath)
+    ? runCommand(label, process.execPath, [npmExecPath, ...args], cwd)
+    : runCommand(label, "pnpm", args, cwd);
+}
+
+function runCommand(
+  label,
+  command,
+  args,
+  cwd,
+  expectFailure = false,
+  environmentOverrides = {}
+) {
   const environment = {
     ...process.env,
     HOME: join(acceptanceRoot, "home"),
     XDG_CONFIG_HOME: join(acceptanceRoot, "xdg-config"),
     XDG_RUNTIME_DIR: join(acceptanceRoot, "xdg-runtime"),
-    XDG_STATE_HOME: join(acceptanceRoot, "xdg-state")
+    XDG_STATE_HOME: join(acceptanceRoot, "xdg-state"),
+    ...environmentOverrides
   };
   delete environment.NODE_OPTIONS;
   delete environment.NODE_PATH;
   delete environment.TS_NODE_PROJECT;
   delete environment.TS_NODE_TRANSPILE_ONLY;
-  const result = spawnSync(process.execPath, args, {
+  const result = spawnSync(command, args, {
     cwd,
     encoding: "utf8",
     env: environment,

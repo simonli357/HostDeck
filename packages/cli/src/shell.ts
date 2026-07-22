@@ -1,5 +1,16 @@
+#!/usr/bin/env node
+
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
+import {
+  accessSync,
+  constants as fsConstants,
+  lstatSync,
+  readFileSync,
+  realpathSync
+} from "node:fs";
+import { delimiter, dirname, isAbsolute, join, normalize, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type {
   ApiErrorEnvelope,
   CompactProgressResponse,
@@ -76,6 +87,13 @@ import {
   skillsSnapshotSchema,
   usageSnapshotSchema
 } from "@hostdeck/contracts";
+import {
+  assertHostDeckProductionForegroundServe,
+  type HostDeckProductionForegroundServe,
+  HostDeckProductionForegroundServeError,
+  type StartHostDeckProductionForegroundServeInput,
+  startHostDeckProductionForegroundServe
+} from "@hostdeck/server";
 import type { HttpFetch } from "./api-client.js";
 import {
   createHostDeckApprovalClient,
@@ -100,6 +118,7 @@ import {
 } from "./device-revoke-client.js";
 import {
   clientOperationFailure,
+  configFailure,
   internalFailure,
   toCliFailure,
   usageFailure
@@ -261,10 +280,28 @@ export interface CliRunOptions {
   readonly createPromptOperationId?: () => string;
   readonly createStartOperationId?: () => string;
   readonly renderPairingQr?: TerminalQrRenderer;
-  readonly version?: string;
+  readonly packageRoot?: string;
+  readonly startForegroundServe?: (
+    input: StartHostDeckProductionForegroundServeInput
+  ) => Promise<HostDeckProductionForegroundServe>;
+  readonly version?: string | (() => string);
+  readonly writeServeReady?: (output: string) => void;
 }
 
 const defaultVersion = "0.0.0";
+const cliModulePackageRoot = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  ".."
+);
+const selectedBrowserRoutes = Object.freeze([
+  "/",
+  "/sessions/:session_id"
+] as const);
+const exactPackageVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
+const maximumPackageManifestBytes = 65_536;
+const maximumExecutablePathBytes = 4_096;
+const maximumPathEnvironmentBytes = 32_768;
+const maximumPathEntries = 256;
 
 export async function runCli(args: readonly string[], options: CliRunOptions = {}): Promise<CliRunResult> {
   try {
@@ -275,14 +312,11 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     if (parsed.command.kind === "version") {
-      return success(renderVersion(options.version ?? defaultVersion));
-    }
-
-    if (parsed.command.kind === "serve") {
-      throw clientOperationFailure(
-        "capability_unavailable",
-        "Foreground serve is not available in this build."
-      );
+      const version =
+        typeof options.version === "function"
+          ? options.version()
+          : options.version ?? defaultVersion;
+      return success(renderVersion(version));
     }
 
     if (parsed.command.kind === "service") {
@@ -309,6 +343,9 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     const config = loadCliConfig(configOptions);
+    if (parsed.command.kind === "serve") {
+      return success(await runForegroundServeCommand(config, options));
+    }
     if (parsed.command.kind === "devices") {
       const deviceList =
         options.localDeviceList ??
@@ -1619,6 +1656,323 @@ export async function main(args = process.argv.slice(2), options: CliRunOptions 
 
   process.exitCode = result.exitCode;
   return result.exitCode;
+}
+
+async function runForegroundServeCommand(
+  config: ReturnType<typeof loadCliConfig>,
+  options: CliRunOptions
+): Promise<string> {
+  if (config.runtimeDir === null) {
+    throw configFailure(
+      "XDG_RUNTIME_DIR is required for foreground serve.",
+      "XDG_RUNTIME_DIR"
+    );
+  }
+  const packageRoot = resolveCanonicalPackageRoot(
+    options.packageRoot ?? cliModulePackageRoot
+  );
+  const env = options.env ?? process.env;
+  const codexBin = resolveCodexExecutable(env);
+  const loopbackPort = Number(config.baseUrl.port);
+  const input: StartHostDeckProductionForegroundServeInput = {
+    browser_routes: selectedBrowserRoutes,
+    codex_bin: codexBin,
+    config_dir: config.configDir,
+    database_path: config.databasePath,
+    loopback_port: loopbackPort,
+    observe_issue: () => undefined,
+    resource_budget: defaultResourceBudget,
+    runtime_dir: config.runtimeDir,
+    state_dir: config.stateDir,
+    static_build_root: join(packageRoot, "web"),
+    ...(options.signal === undefined ? {} : { signal: options.signal })
+  };
+  const start = options.startForegroundServe ?? startHostDeckProductionForegroundServe;
+  let service: HostDeckProductionForegroundServe;
+  try {
+    service = await start(input);
+    if (start === startHostDeckProductionForegroundServe) {
+      assertHostDeckProductionForegroundServe(service);
+    } else {
+      assertInjectedForegroundServe(service);
+    }
+  } catch (error) {
+    if (error instanceof HostDeckProductionForegroundServeError) {
+      throw clientOperationFailure(
+        "runtime_unavailable",
+        `HostDeck foreground service failed during ${error.stage}.`
+      );
+    }
+    throw error;
+  }
+
+  let readyOutput: string;
+  try {
+    const snapshot = service.snapshot();
+    if (
+      snapshot.phase !== "ready" ||
+      snapshot.listener_health !== "ready" ||
+      service.local_origin !== config.baseUrl.origin
+    ) {
+      throw new TypeError("Foreground serve readiness is contradictory.");
+    }
+    readyOutput = `HostDeck foreground service ready at ${service.local_origin}.\n`;
+    assertCliOutput(readyOutput, "stdout");
+    options.writeServeReady?.(readyOutput);
+  } catch (error) {
+    const cleanupError = await closeAfterProcessBoundaryFailure(service);
+    throw internalFailure(
+      "HostDeck foreground service readiness output failed.",
+      combineProcessBoundaryErrors(error, cleanupError)
+    );
+  }
+
+  let terminal: Awaited<HostDeckProductionForegroundServe["terminated"]>;
+  try {
+    terminal = await service.terminated;
+  } catch (error) {
+    const cleanupError = await closeAfterProcessBoundaryFailure(service);
+    throw internalFailure(
+      "HostDeck foreground service termination observation failed.",
+      combineProcessBoundaryErrors(error, cleanupError)
+    );
+  }
+  if (terminal.phase === "failed") {
+    throw clientOperationFailure(
+      "runtime_unavailable",
+      "HostDeck foreground service terminated in a failed state."
+    );
+  }
+  if (
+    terminal.phase !== "closed" ||
+    terminal.listener_health !== "closed" ||
+    terminal.listener.listening
+  ) {
+    const cleanupError = await closeAfterProcessBoundaryFailure(service);
+    throw internalFailure(
+      "HostDeck foreground service returned contradictory terminal state.",
+      cleanupError ?? terminal
+    );
+  }
+  return options.writeServeReady === undefined ? readyOutput : "";
+}
+
+function resolveCanonicalPackageRoot(candidate: string): string {
+  try {
+    if (
+      !isAbsolute(candidate) ||
+      candidate === "/" ||
+      normalize(candidate) !== candidate ||
+      Buffer.byteLength(candidate, "utf8") > maximumExecutablePathBytes ||
+      containsControl(candidate)
+    ) {
+      throw new TypeError();
+    }
+    const canonical = realpathSync.native(candidate);
+    if (canonical !== candidate || !lstatSync(canonical).isDirectory()) {
+      throw new TypeError();
+    }
+    return canonical;
+  } catch {
+    throw configFailure(
+      "HostDeck runtime package root is unavailable or noncanonical.",
+      "package_root"
+    );
+  }
+}
+
+function resolveCodexExecutable(
+  env: Readonly<Record<string, string | undefined>>
+): string {
+  const explicit = env.HOSTDECK_CODEX_BIN;
+  if (explicit !== undefined) {
+    const canonical = inspectExecutableCandidate(explicit);
+    if (canonical === null) {
+      throw configFailure(
+        "HOSTDECK_CODEX_BIN must name one canonical absolute executable file.",
+        "HOSTDECK_CODEX_BIN"
+      );
+    }
+    return canonical;
+  }
+
+  const rawPath = env.PATH;
+  if (
+    typeof rawPath !== "string" ||
+    rawPath.length === 0 ||
+    Buffer.byteLength(rawPath, "utf8") > maximumPathEnvironmentBytes ||
+    containsControl(rawPath)
+  ) {
+    throw configFailure(
+      "PATH must contain bounded absolute entries to resolve Codex.",
+      "PATH"
+    );
+  }
+  const entries = rawPath.split(delimiter);
+  if (
+    entries.length < 1 ||
+    entries.length > maximumPathEntries ||
+    entries.some(
+      (entry) =>
+        !isAbsolute(entry) ||
+        entry === "/" ||
+        normalize(entry) !== entry ||
+        Buffer.byteLength(entry, "utf8") > maximumExecutablePathBytes
+    )
+  ) {
+    throw configFailure(
+      "PATH must contain only bounded canonical absolute entries.",
+      "PATH"
+    );
+  }
+  for (const entry of entries) {
+    const canonical = inspectExecutableCandidate(join(entry, "codex"));
+    if (canonical !== null) return canonical;
+  }
+  throw configFailure(
+    "Codex executable was not found in PATH.",
+    "PATH"
+  );
+}
+
+function inspectExecutableCandidate(candidate: string): string | null {
+  try {
+    if (
+      !isAbsolute(candidate) ||
+      candidate === "/" ||
+      normalize(candidate) !== candidate ||
+      Buffer.byteLength(candidate, "utf8") > maximumExecutablePathBytes ||
+      containsControl(candidate)
+    ) {
+      return null;
+    }
+    const canonical = realpathSync.native(candidate);
+    const stats = lstatSync(canonical);
+    if (!stats.isFile() || stats.isSymbolicLink()) return null;
+    accessSync(canonical, fsConstants.X_OK);
+    return canonical;
+  } catch {
+    return null;
+  }
+}
+
+function assertInjectedForegroundServe(
+  candidate: unknown
+): asserts candidate is HostDeckProductionForegroundServe {
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    !Object.isFrozen(candidate)
+  ) {
+    throw new TypeError("Injected foreground serve owner is invalid.");
+  }
+  const values = candidate as Partial<HostDeckProductionForegroundServe>;
+  if (
+    typeof values.local_origin !== "string" ||
+    typeof values.close !== "function" ||
+    typeof values.snapshot !== "function" ||
+    !(values.terminated instanceof Promise)
+  ) {
+    throw new TypeError("Injected foreground serve owner is invalid.");
+  }
+}
+
+async function closeAfterProcessBoundaryFailure(
+  service: HostDeckProductionForegroundServe
+): Promise<unknown | null> {
+  try {
+    await service.close();
+    return null;
+  } catch (error) {
+    return error;
+  }
+}
+
+function combineProcessBoundaryErrors(
+  primary: unknown,
+  cleanup: unknown | null
+): unknown {
+  return cleanup === null
+    ? primary
+    : new AggregateError(
+        [primary, cleanup],
+        "HostDeck foreground process boundary and cleanup failed."
+      );
+}
+
+function containsControl(value: string): boolean {
+  for (const character of value) {
+    const code = character.codePointAt(0) ?? 0;
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
+
+function loadRuntimePackageVersion(packageRoot: string): string {
+  try {
+    const manifestPath = join(resolveCanonicalPackageRoot(packageRoot), "package.json");
+    const stats = lstatSync(manifestPath);
+    if (
+      !stats.isFile() ||
+      stats.isSymbolicLink() ||
+      stats.nlink !== 1 ||
+      stats.size < 1 ||
+      stats.size > maximumPackageManifestBytes ||
+      realpathSync.native(manifestPath) !== manifestPath
+    ) {
+      throw new TypeError();
+    }
+    const parsed: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed) ||
+      Object.getPrototypeOf(parsed) !== Object.prototype
+    ) {
+      throw new TypeError();
+    }
+    const manifest = parsed as Record<string, unknown>;
+    const bin = manifest.bin;
+    if (
+      manifest.name !== "@hostdeck/cli" ||
+      typeof manifest.version !== "string" ||
+      !exactPackageVersionPattern.test(manifest.version) ||
+      bin === null ||
+      typeof bin !== "object" ||
+      Array.isArray(bin) ||
+      Object.keys(bin).length !== 1 ||
+      (bin as Record<string, unknown>).codexdeck !== "./dist/shell.js"
+    ) {
+      throw new TypeError();
+    }
+    return manifest.version;
+  } catch (error) {
+    throw internalFailure(
+      "HostDeck runtime package identity is invalid.",
+      error
+    );
+  }
+}
+
+if (import.meta.main) {
+  try {
+    await main(process.argv.slice(2), {
+      packageRoot: cliModulePackageRoot,
+      version: () => loadRuntimePackageVersion(cliModulePackageRoot),
+      writeServeReady: (output) => {
+        process.stdout.write(output);
+      }
+    });
+  } catch {
+    process.exitCode = cliExitCodes.internal;
+    try {
+      process.stderr.write(
+        "HostDeck CLI error (internal_error): HostDeck process output failed.\n"
+      );
+    } catch {
+      // There is no remaining reliable process output channel.
+    }
+  }
 }
 
 function success(stdout: string): CliRunResult {

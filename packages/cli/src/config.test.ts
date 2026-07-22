@@ -170,6 +170,24 @@ describe("CLI config loading", () => {
     }
   });
 
+  it("does not disclose a failed config path", () => {
+    const privatePath = "/tmp/private-hostdeck-config/selected.json";
+    let failure: unknown;
+    try {
+      loadCliConfig({
+        env: { HOME: "/home/simonli" },
+        flags: { configPath: privatePath },
+        readFile: () => {
+          throw new Error(privatePath);
+        }
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(CliFailure);
+    expect((failure as Error).message).not.toContain(privatePath);
+  });
+
   it("rejects relative XDG bases and database paths outside state", () => {
     expectConfigFailure(() =>
       loadCliConfig({ env: { XDG_RUNTIME_DIR: "runtime" } })

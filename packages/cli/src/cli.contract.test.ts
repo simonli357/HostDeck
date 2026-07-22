@@ -286,7 +286,6 @@ describe("selected CLI shell contract", () => {
 
   it("reports staged commands unavailable without config, filesystem, network, or process work", async () => {
     for (const args of [
-      ["serve"],
       ["service", "install"],
       ["service", "upgrade"],
       ["service", "status"],
