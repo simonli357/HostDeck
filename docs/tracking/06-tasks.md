@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-086` Implement and package the service-owned HostDeck process entry | in_progress | none | The unit audit proved the current packaged `serve` entry owns a foreground Codex child. The independent HostDeck service process must exist and prove sibling survival before units can bind truthful ownership. |
+| 1 | `IFC-V1-055` Generate versioned unprivileged systemd user units | ready | none | The packaged service process now proves independent app-server/HostDeck restart ownership. Exact units can bind that contract without invoking foreground `codexdeck serve`. |
 
 ## Intentional Blockers
 

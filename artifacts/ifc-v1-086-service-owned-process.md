@@ -72,4 +72,19 @@ Run with the reviewed exact Codex 0.144.0 binary and no model turn:
 ## Completion Record
 
 - Criteria frozen after tracing the packaged foreground entry, production composition, service-owned supervisor close behavior, restart acceptance worker, package builder, and verifier.
-- Implementation and validation evidence: pending.
+- Criteria commit: `7796fc4`. Implementation commit: `a997914`.
+- The selected resource bootstrap now has explicit foreground-child and service-owned branches over one lease/storage/application boundary. Service mode requires an existing current-user `0700` runtime directory, passes only `{ mode: "service_owned", socket_path }` to the supervisor, requires null process-exit observation, and never repairs an externally owned socket.
+- `dist/service-host.js` is inert on import and directly runnable only through Node. It rejects arguments before environment access, requires explicit canonical `HOSTDECK_CODEX_BIN`, publishes one bounded readiness line, waits for a consistent terminal snapshot, and maps direct-process failure to one generic line.
+- Package manifest schema 3 binds the non-executable service-host descriptor while preserving one `codexdeck` bin. The accepted package contains 609 selected sources, 1,225 owned outputs, and 6,427 entries. Manifest SHA-256 is `aab9ec69c6a605f1ff96d8af67d56b61dacd2dd07cb80a0dcb9bf2a877b38592`; service-host SHA-256 is `2ada43a1ffd468658d3f3ed661653622fe050f36cbbcf5505e1e0edbaeea1658`.
+
+## Validation Evidence
+
+- Focused service process/resource/serve/supervisor coverage: 4 files and 45 tests pass. Real Linux supervisor integration: 6 tests pass, including canonical sibling survival and insecure sibling refusal without mode, PID, or socket mutation.
+- Workspace validation: 1,853 unit tests pass with 28 intentional skips; contract 240, integration 27, and web 20 pass. Typecheck, lint/package exports (536 files/8 packages), scaffold (8 packages/21 scripts), selected runtime boundary (611 production modules/22 external modules), planning integrity, and exact Codex 0.144.0 binding (671 files) pass.
+- `pnpm test:package` passes two deterministic builds, read-only relocation, inert import, exact command/service-host identity, rollback, and verifier mutations at 609 sources, 1,225 owned outputs, and 6,427 entries.
+- `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:service-host` passes with a private `PATH` that cannot resolve Tailscale. HostDeck A survives app-server replacement and recovers readiness; HostDeck A and B each stop cleanly while app-server B retains the same PID, `0600` socket identity, and usable socket. The final owner removes the socket, the loopback port is reusable, and no model turn occurs.
+- Frozen offline install, diff/secret/no-fallback inspection, and post-smoke process/temp residue checks pass. No dependency, lockfile, Tailscale profile/Serve, browser, ADB, or phone state changed.
+
+## Remaining Scope
+
+- `IFC-V1-055` remains the owner for exact user-unit generation and real user-manager validation. Install, upgrade, service commands, uninstall, real dashboard assets, and clean-machine parity remain downstream and are not claimed here.
