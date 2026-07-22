@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-010` Implement phone-first app shell and two-route navigation | ready | none | Focus Rail is selected and the shell is the first dependency for typed browser clients, Mission Control, Session Detail, and packaged web assets. |
+| 1 | `FE-V1-010` Implement phone-first app shell and two-route navigation | in_progress | none | Exact route/history/dialog/dependency/Focus Rail criteria are frozen; implementation is active. |
 
 ## Intentional Blockers
 
