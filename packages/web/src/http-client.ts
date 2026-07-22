@@ -40,6 +40,9 @@ export type BrowserHttpFailureReason =
   (typeof browserHttpFailureReasons)[number];
 export type BrowserHttpTransport = BrowserTransport;
 
+declare const browserHttpClientBrand: unique symbol;
+const browserHttpClientInstances = new WeakSet<object>();
+
 export interface BrowserHttpHeadersPort {
   readonly get: (name: string) => string | null;
 }
@@ -98,6 +101,7 @@ type BrowserHttpOptionsTuple<RouteId extends BrowserHttpRouteId> =
     : readonly [options?: BrowserHttpRouteRequestOptions<RouteId>];
 
 export interface BrowserHttpClient {
+  readonly [browserHttpClientBrand]: true;
   readonly request: <RouteId extends BrowserHttpRouteId>(
     routeId: RouteId,
     input: BrowserHttpRouteRequest<RouteId>,
@@ -183,7 +187,7 @@ export function createBrowserHttpClient(
   const limits = readLimits(options.limits);
   let inFlightRequests = 0;
 
-  return Object.freeze({
+  const client = Object.freeze({
     async request<RouteId extends BrowserHttpRouteId>(
       routeId: RouteId,
       requestInput: BrowserHttpRouteRequest<RouteId>,
@@ -294,7 +298,17 @@ export function createBrowserHttpClient(
         inFlightRequests -= 1;
       }
     }
-  });
+  }) as BrowserHttpClient;
+  browserHttpClientInstances.add(client);
+  return client;
+}
+
+export function isBrowserHttpClient(candidate: unknown): candidate is BrowserHttpClient {
+  return (
+    candidate !== null &&
+    typeof candidate === "object" &&
+    browserHttpClientInstances.has(candidate)
+  );
 }
 
 function prepareRequest<RouteId extends BrowserHttpRouteId>(

@@ -510,6 +510,14 @@ export const browserHttpRouteContracts = Object.freeze({
 export type BrowserHttpRouteId = keyof typeof browserHttpRouteContracts;
 export type BrowserHttpRouteContract<RouteId extends BrowserHttpRouteId> =
   (typeof browserHttpRouteContracts)[RouteId];
+export type BrowserHttpRouteIdWithCsrfPolicy<Policy extends BrowserHttpCsrfPolicy> = {
+  [RouteId in BrowserHttpRouteId]: BrowserHttpRouteContract<RouteId>["csrf"] extends Policy
+    ? RouteId
+    : never;
+}[BrowserHttpRouteId];
+export type BrowserHttpDeviceCsrfRouteId = BrowserHttpRouteIdWithCsrfPolicy<
+  "required_for_device"
+>;
 
 type SchemaFromRef<Ref> = Ref extends {
   readonly schema: infer Schema extends z.ZodType;
