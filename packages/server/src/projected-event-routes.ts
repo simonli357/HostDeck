@@ -168,12 +168,12 @@ function requireProjectedEventManifestEntry(): SelectedApiRouteManifestEntry {
 function readResponseMaxBytes(context: HostDeckRoutePluginContext): number {
   if (
     context.surface !== "api" ||
-    !Number.isSafeInteger(context.resourceBudget.cli_response_max_bytes) ||
-    context.resourceBudget.cli_response_max_bytes < 1
+    !Number.isSafeInteger(context.resourceBudget.http_response_max_bytes) ||
+    context.resourceBudget.http_response_max_bytes < 1
   ) {
     throw new TypeError("HostDeck projected-event response budget is invalid.");
   }
-  return context.resourceBudget.cli_response_max_bytes;
+  return context.resourceBudget.http_response_max_bytes;
 }
 
 function readConsistentPage(

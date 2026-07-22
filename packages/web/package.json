@@ -14,7 +14,7 @@
     "build": "vite build --config vite.config.ts",
     "dev": "vite --config vite.config.ts",
     "preview": "vite preview --config vite.config.ts",
-    "test": "vitest run src/app-shell.test.tsx",
+    "test": "vitest run src/app-shell.test.tsx src/http-client.test.ts src/pairing-bootstrap.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
@@ -24,7 +24,8 @@
     "lucide-react": "1.25.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "react-router": "8.2.0"
+    "react-router": "8.2.0",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@hostdeck/server": "workspace:*",

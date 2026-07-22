@@ -1147,6 +1147,8 @@ function eventTime(cursor: number) {
 function budgetWithResponseBytes(bytes: number): ResourceBudget {
   return resolveResourceBudget({
     ...defaultResourceBudget,
+    http_response_max_bytes: bytes,
+    browser_response_max_bytes: bytes,
     cli_response_max_bytes: bytes
   });
 }

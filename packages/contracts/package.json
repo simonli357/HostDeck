@@ -12,6 +12,10 @@
     "./scalars": {
       "types": "./src/scalars.ts",
       "import": "./src/scalars.ts"
+    },
+    "./browser-http-resource-policy": {
+      "types": "./src/browser-http-resource-policy.ts",
+      "import": "./src/browser-http-resource-policy.ts"
     }
   },
   "scripts": {

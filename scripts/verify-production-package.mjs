@@ -10,6 +10,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const productionPackageManifestName = "hostdeck-package.json";
+export const productionPackageSourceCount = 611;
 export const productionPackageVerifierName = "verify.mjs";
 
 const expectedPackageNames = [
@@ -290,7 +291,11 @@ function validateManifest(manifest) {
   }
 
   validateIdentity(value.source, "Source identity", "count");
-  if (value.source.count !== 610) throw new TypeError("Selected source count must be exactly 610.");
+  if (value.source.count !== productionPackageSourceCount) {
+    throw new TypeError(
+      `Selected source count must be exactly ${productionPackageSourceCount}.`
+    );
+  }
   validateIdentity(value.output, "Owned output identity", "count");
   validateIdentity(value.content, "Package content identity", "entryCount");
   if (!Number.isSafeInteger(value.content.bytes) || value.content.bytes < 1) {
@@ -364,7 +369,10 @@ function validatePackages(packages, packageVersion, outputIdentity) {
     sourceCount += descriptor.sourceCount;
     compiledCount += descriptor.outputCount;
   }
-  if (sourceCount !== 610 || outputIdentity.count !== compiledCount + packages.length + 1) {
+  if (
+    sourceCount !== productionPackageSourceCount ||
+    outputIdentity.count !== compiledCount + packages.length + 1
+  ) {
     throw new TypeError("Owned source/output aggregate is inconsistent.");
   }
 }

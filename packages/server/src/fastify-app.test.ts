@@ -662,6 +662,7 @@ function expectStableError(
 
 function singleRequestBudget(): ResourceBudget {
   return resolveResourceBudget({
+    browser_max_in_flight_requests: 1,
     http_max_in_flight_requests: 1,
     mutation_max_in_flight_global: 1,
     mutation_max_in_flight_per_device: 1,

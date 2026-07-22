@@ -1,10 +1,12 @@
 import type { ErrorCode } from "@hostdeck/core";
 import { z } from "zod";
+import { browserHttpResourceRanges } from "./browser-http-resource-policy.js";
 
 export const resourceBudgetUnits = ["bytes", "count", "milliseconds"] as const;
 export type ResourceBudgetUnit = (typeof resourceBudgetUnits)[number];
 
 export const resourceBudgetOwners = [
+  "browser_client",
   "cli_client",
   "codex_broker",
   "codex_event_pipeline",
@@ -68,6 +70,7 @@ function defineResource<const Key extends string>(
 
 export const resourceBudgetDefinitions = Object.freeze([
   defineResource("http_body_max_bytes", "bytes", 1_024, 65_536, 1_048_576, "fastify_app", "request_too_large", "reject_request"),
+  defineResource("http_response_max_bytes", "bytes", 1_024, 1_048_576, 8_388_608, "fastify_app", "service_overloaded", "abort_operation"),
   defineResource("http_headers_max_bytes", "bytes", 4_096, 16_384, 65_536, "host_service", "malformed_request", "close_connection"),
   defineResource("http_headers_max_count", "count", 16, 64, 256, "host_service", "malformed_request", "close_connection"),
   defineResource("http_url_max_bytes", "bytes", 256, 2_048, 8_192, "fastify_app", "malformed_request", "reject_request"),
@@ -167,7 +170,48 @@ export const resourceBudgetDefinitions = Object.freeze([
   defineResource("cli_request_body_max_bytes", "bytes", 1_024, 65_536, 1_048_576, "cli_client", "request_too_large", "reject_operation"),
   defineResource("cli_response_max_bytes", "bytes", 1_024, 1_048_576, 8_388_608, "cli_client", "service_overloaded", "abort_operation"),
   defineResource("cli_stream_idle_timeout_ms", "milliseconds", 5_000, 45_000, 300_000, "cli_client", "operation_timeout", "abort_operation"),
-  defineResource("cli_max_in_flight_requests", "count", 1, 4, 32, "cli_client", "service_overloaded", "reject_operation")
+  defineResource("cli_max_in_flight_requests", "count", 1, 4, 32, "cli_client", "service_overloaded", "reject_operation"),
+
+  defineResource(
+    "browser_request_timeout_ms",
+    "milliseconds",
+    browserHttpResourceRanges.requestTimeoutMs.minimum,
+    browserHttpResourceRanges.requestTimeoutMs.defaultValue,
+    browserHttpResourceRanges.requestTimeoutMs.maximum,
+    "browser_client",
+    "operation_timeout",
+    "abort_operation"
+  ),
+  defineResource(
+    "browser_request_body_max_bytes",
+    "bytes",
+    browserHttpResourceRanges.requestBodyMaxBytes.minimum,
+    browserHttpResourceRanges.requestBodyMaxBytes.defaultValue,
+    browserHttpResourceRanges.requestBodyMaxBytes.maximum,
+    "browser_client",
+    "request_too_large",
+    "reject_operation"
+  ),
+  defineResource(
+    "browser_response_max_bytes",
+    "bytes",
+    browserHttpResourceRanges.responseMaxBytes.minimum,
+    browserHttpResourceRanges.responseMaxBytes.defaultValue,
+    browserHttpResourceRanges.responseMaxBytes.maximum,
+    "browser_client",
+    "service_overloaded",
+    "abort_operation"
+  ),
+  defineResource(
+    "browser_max_in_flight_requests",
+    "count",
+    browserHttpResourceRanges.maxInFlightRequests.minimum,
+    browserHttpResourceRanges.maxInFlightRequests.defaultValue,
+    browserHttpResourceRanges.maxInFlightRequests.maximum,
+    "browser_client",
+    "service_overloaded",
+    "reject_operation"
+  )
 ] as const);
 
 export type ResourceBudgetKey = (typeof resourceBudgetDefinitions)[number]["key"];
@@ -241,6 +285,27 @@ export const resourceBudgetSchema = z
     atMost("cli_connect_timeout_ms", "cli_request_timeout_ms", "CLI connect timeout must fit within its request timeout.");
     atLeast("cli_request_timeout_ms", "http_request_deadline_ms", "CLI timeout cannot expire before the server request deadline.");
     atMost("cli_request_body_max_bytes", "http_body_max_bytes", "CLI request body must fit within the server body limit.");
+    atLeast("cli_response_max_bytes", "http_response_max_bytes", "CLI response capacity must cover the selected HTTP response limit.");
+    atLeast(
+      "browser_request_timeout_ms",
+      "http_request_deadline_ms",
+      "Browser timeout cannot expire before the server request deadline."
+    );
+    atMost(
+      "browser_request_body_max_bytes",
+      "http_body_max_bytes",
+      "Browser request body must fit within the server body limit."
+    );
+    atLeast(
+      "browser_response_max_bytes",
+      "http_response_max_bytes",
+      "Browser response capacity must cover the selected HTTP response limit."
+    );
+    atMost(
+      "browser_max_in_flight_requests",
+      "http_max_in_flight_requests",
+      "Browser request concurrency cannot exceed HTTP request concurrency."
+    );
     atMost(
       "remote_observer_command_timeout_ms",
       "remote_observer_cycle_timeout_ms",

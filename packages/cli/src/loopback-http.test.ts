@@ -328,7 +328,8 @@ describe("IFC-V1-051 bounded loopback HTTP transport", () => {
   it("enforces exact request and declared/observed response byte limits", async () => {
     const budget = resolveResourceBudget({
       cli_request_body_max_bytes: 1_024,
-      cli_response_max_bytes: 1_024
+      cli_response_max_bytes: 1_024,
+      http_response_max_bytes: 1_024
     });
     let calls = 0;
     const server = await listen((request, response) => {

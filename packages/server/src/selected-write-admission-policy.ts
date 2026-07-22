@@ -867,7 +867,7 @@ function canonicalLimits(budget: ResourceBudget): CanonicalLimits {
   return Object.freeze({
     maximumBytes: Math.max(
       budget.protocol_max_frame_bytes,
-      budget.cli_response_max_bytes
+      budget.http_response_max_bytes
     ),
     maximumNodes: 1_024,
     maximumDepth: 10,

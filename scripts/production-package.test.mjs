@@ -20,12 +20,13 @@ import {
 import {
   computeFileIdentity,
   computeManifestSha256,
+  productionPackageSourceCount,
   stableJson
 } from "./verify-production-package.mjs";
 
 test("selects the exact non-web production closure", () => {
   const sources = selectedProductionSources();
-  assert.equal(sources.length, 610);
+  assert.equal(sources.length, productionPackageSourceCount);
   assert.equal(sources.some((path) => path.startsWith("packages/web/")), false);
   assert.deepEqual(
     sources.filter((path) =>
@@ -36,6 +37,7 @@ test("selects the exact non-web production closure", () => {
         "packages/cli/src/service-host.ts",
         "packages/cli/src/session-list-client.ts",
         "packages/cli/src/systemd-user-units.ts",
+        "packages/contracts/src/browser-http-resource-policy.ts",
         "packages/server/src/foreground-resource-bootstrap.ts",
         "packages/server/src/production-application-composition.ts",
         "packages/server/src/production-foreground-serve.ts",
@@ -49,6 +51,7 @@ test("selects the exact non-web production closure", () => {
       "packages/cli/src/service-host.ts",
       "packages/cli/src/session-list-client.ts",
       "packages/cli/src/systemd-user-units.ts",
+      "packages/contracts/src/browser-http-resource-policy.ts",
       "packages/server/src/foreground-resource-bootstrap.ts",
       "packages/server/src/production-application-composition.ts",
       "packages/server/src/production-foreground-serve.ts",

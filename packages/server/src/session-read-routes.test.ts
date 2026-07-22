@@ -379,6 +379,8 @@ describe("selected session list/detail routes", () => {
     const budget = Object.freeze(
       resourceBudgetSchema.parse({
         ...defaultResourceBudget,
+        http_response_max_bytes: 1_024,
+        browser_response_max_bytes: 1_024,
         cli_response_max_bytes: 1_024
       })
     );

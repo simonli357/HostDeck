@@ -175,6 +175,9 @@ importers:
       react-router:
         specifier: 8.2.0
         version: 8.2.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@hostdeck/server':
         specifier: workspace:*
