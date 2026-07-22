@@ -1,26 +1,25 @@
-import { mkdir } from "node:fs/promises";
-import { resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import {
+  installMissionControlApi,
+  missionRequestPaths
+} from "./mission-control-fixture.js";
 
-const artifactDirectory = resolve("artifacts/fe-v1-010-shell");
 const sessionId = "sess_shell_001";
-
-test.beforeAll(async () => {
-  await mkdir(artifactDirectory, { recursive: true });
-});
 
 test("renders the Mission Control shell and preserves modal route and focus", async ({ page }) => {
   const diagnostics = observePage(page);
+  const api = await installMissionControlApi(page);
 
   await page.goto("/");
 
   await expect(page.getByRole("heading", { level: 1, name: "Mission Control" })).toBeVisible();
-  await expect(page.getByText("Loading sessions", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^release-approval/u })).toBeVisible();
+  await expect(page.getByText("Write", { exact: true })).toBeVisible();
+  await expect(page.getByText("Current", { exact: true })).toBeVisible();
   const trigger = page.getByRole("button", { name: "Open Host and access" });
   await expect(trigger).toHaveCSS("width", "44px");
   await expect(trigger).toHaveCSS("height", "44px");
   await expectNoHorizontalOverflow(page);
-  await page.screenshot({ path: resolve(artifactDirectory, "mission-control-390x844.png") });
 
   await trigger.click();
 
@@ -34,25 +33,30 @@ test("renders the Mission Control shell and preserves modal route and focus", as
   await expect
     .poll(() => page.evaluate(() => document.querySelector('[role="dialog"]')?.contains(document.activeElement)))
     .toBe(true);
-  await page.screenshot({ path: resolve(artifactDirectory, "host-access-390x844.png") });
 
   await page.keyboard.press("Escape");
 
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
   await expect(page).toHaveURL("http://127.0.0.1:4175/");
-  await expectNoUnexpectedRuntimeActivity(page, diagnostics);
+  await expectNoUnexpectedRuntimeActivity(page, diagnostics, [
+    "/api/v1/access",
+    "/api/v1/host/status",
+    "/api/v1/sessions",
+    "/api/v1/access/csrf"
+  ]);
+  expect(missionRequestPaths(api)).toHaveLength(4);
 });
 
 test("renders direct Session Detail safely and rejects invalid routes", async ({ page }) => {
   const diagnostics = observePage(page);
+  await installMissionControlApi(page);
 
   await page.goto(`/sessions/${sessionId}`);
 
   await expect(page.getByRole("heading", { level: 1, name: "Session Detail" })).toBeVisible();
   await expect(page.getByText(sessionId, { exact: true })).toHaveCount(2);
   await expectNoHorizontalOverflow(page);
-  await page.screenshot({ path: resolve(artifactDirectory, "session-detail-390x844.png") });
 
   await page.getByRole("button", { name: "Back to Mission Control" }).click();
 
@@ -65,7 +69,12 @@ test("renders direct Session Detail safely and rejects invalid routes", async ({
   await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
   await expect(page.getByRole("main")).not.toContainText("private-secret");
   await expectNoHorizontalOverflow(page);
-  await expectNoUnexpectedRuntimeActivity(page, diagnostics);
+  await expectNoUnexpectedRuntimeActivity(page, diagnostics, [
+    "/api/v1/access",
+    "/api/v1/host/status",
+    "/api/v1/sessions",
+    "/api/v1/access/csrf"
+  ]);
 });
 
 function observePage(page: Page) {
@@ -100,9 +109,12 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
 
 async function expectNoUnexpectedRuntimeActivity(
   page: Page,
-  diagnostics: ReturnType<typeof observePage>
+  diagnostics: ReturnType<typeof observePage>,
+  expectedApiPaths: readonly string[] = []
 ): Promise<void> {
-  expect(diagnostics.apiRequests).toEqual([]);
+  const actualApiPaths = diagnostics.apiRequests.map((url) => new URL(url).pathname);
+  expect(actualApiPaths[0]).toBe(expectedApiPaths[0]);
+  expect([...actualApiPaths].sort()).toEqual([...expectedApiPaths].sort());
   expect(diagnostics.externalRequests).toEqual([]);
   expect(diagnostics.consoleErrors).toEqual([]);
   expect(diagnostics.pageErrors).toEqual([]);

@@ -14,7 +14,7 @@
     "build": "vite build --config vite.config.ts",
     "dev": "vite --config vite.config.ts",
     "preview": "vite preview --config vite.config.ts",
-    "test": "vitest run src/app-shell.test.tsx src/connection-state.test.ts src/csrf-client.test.ts src/http-client.test.ts src/pairing-bootstrap.test.ts src/sse-client.test.ts",
+    "test": "vitest run src/app-shell.test.tsx src/browser-runtime.test.ts src/connection-state.test.ts src/csrf-client.test.ts src/http-client.test.ts src/mission-control.test.tsx src/pairing-bootstrap.test.ts src/sse-client.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

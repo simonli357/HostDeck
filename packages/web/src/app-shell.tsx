@@ -2,7 +2,7 @@ import { sessionIdSchema } from "@hostdeck/contracts/scalars";
 import type { SessionId } from "@hostdeck/core";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ArrowLeft, Box, Menu, X } from "lucide-react";
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   BrowserRouter,
   Link,
@@ -12,13 +12,24 @@ import {
   useNavigate,
   useParams
 } from "react-router";
+import {
+  isMissionSource,
+  missionControlPath,
+  sessionDetailPathPattern
+} from "./app-routing.js";
+import {
+  type BrowserConnectionCoordinatorFactory,
+  createProductionBrowserConnectionCoordinator
+} from "./browser-runtime.js";
+import type { BrowserConnectionStateCoordinator } from "./connection-state.js";
+import { ConnectedMissionControl } from "./mission-control.js";
 
-export const missionControlPath = "/" as const;
-export const sessionDetailPathPattern = "/sessions/:session_id" as const;
-
-const missionSourceKey = "hostdeck_source";
-const missionSourceValue = "mission_control";
-const missionSourceState = Object.freeze({ [missionSourceKey]: missionSourceValue });
+export {
+  missionControlPath,
+  SessionRouteLink,
+  sessionDetailPath,
+  sessionDetailPathPattern
+} from "./app-routing.js";
 
 export interface HostDeckRouteOutlets {
   readonly missionControl?: ReactNode;
@@ -28,52 +39,124 @@ export interface HostDeckRouteOutlets {
 
 export interface HostDeckAppProps {
   readonly outlets?: HostDeckRouteOutlets | undefined;
+  readonly coordinator?: BrowserConnectionStateCoordinator | undefined;
+  readonly createCoordinator?: BrowserConnectionCoordinatorFactory | undefined;
 }
 
-export interface SessionRouteLinkProps
-  extends Omit<ComponentPropsWithoutRef<"a">, "href"> {
-  readonly sessionId: unknown;
+interface HostDeckRoutesProps {
+  readonly outlets?: HostDeckRouteOutlets | undefined;
+  readonly coordinator?: BrowserConnectionStateCoordinator | undefined;
+  readonly runtimeFailed?: boolean | undefined;
 }
 
-export function sessionDetailPath(sessionId: unknown): `/sessions/${string}` {
-  const parsed = sessionIdSchema.parse(sessionId);
-  return `/sessions/${encodeURIComponent(parsed)}`;
+interface OwnedCoordinatorState {
+  readonly request: OwnedCoordinatorRequest | null;
+  readonly coordinator: BrowserConnectionStateCoordinator | null;
+  readonly failed: boolean;
 }
 
-export function SessionRouteLink({
-  sessionId,
-  children,
-  ...anchorProps
-}: SessionRouteLinkProps) {
-  return (
-    <Link {...anchorProps} to={sessionDetailPath(sessionId)} state={missionSourceState}>
-      {children}
-    </Link>
+interface OwnedCoordinatorRequest {
+  readonly active: boolean;
+  readonly createCoordinator: BrowserConnectionCoordinatorFactory;
+}
+
+const initialCoordinatorState = Object.freeze({
+  request: null,
+  coordinator: null,
+  failed: false
+});
+
+export function HostDeckBrowserApp({
+  outlets,
+  coordinator: injectedCoordinator,
+  createCoordinator = createProductionBrowserConnectionCoordinator
+}: HostDeckAppProps) {
+  const needsMissionRuntime = outlets?.missionControl === undefined;
+  const ownsMissionRuntime = injectedCoordinator === undefined && needsMissionRuntime;
+  const runtimeRequest = useMemo<OwnedCoordinatorRequest>(
+    () => Object.freeze({ active: ownsMissionRuntime, createCoordinator }),
+    [createCoordinator, ownsMissionRuntime]
   );
-}
+  const [ownedState, setOwnedState] = useState<OwnedCoordinatorState>(
+    initialCoordinatorState
+  );
 
-export function HostDeckBrowserApp({ outlets }: HostDeckAppProps) {
+  useEffect(() => {
+    if (!runtimeRequest.active) return;
+    let coordinator: BrowserConnectionStateCoordinator;
+    try {
+      coordinator = runtimeRequest.createCoordinator();
+    } catch {
+      setOwnedState(
+        Object.freeze({ request: runtimeRequest, coordinator: null, failed: true })
+      );
+      return;
+    }
+    setOwnedState(
+      Object.freeze({ request: runtimeRequest, coordinator, failed: false })
+    );
+    return () => {
+      coordinator.close();
+    };
+  }, [runtimeRequest]);
+
+  const currentOwnedState =
+    ownedState.request === runtimeRequest ? ownedState : initialCoordinatorState;
+
   return (
     <BrowserRouter>
-      <HostDeckRoutes outlets={outlets} />
+      <HostDeckRoutes
+        outlets={outlets}
+        coordinator={injectedCoordinator ?? currentOwnedState.coordinator ?? undefined}
+        runtimeFailed={injectedCoordinator === undefined && currentOwnedState.failed}
+      />
     </BrowserRouter>
   );
 }
 
-export function HostDeckRoutes({ outlets = {} }: HostDeckAppProps) {
+export function HostDeckRoutes({
+  outlets = {},
+  coordinator,
+  runtimeFailed = false
+}: HostDeckRoutesProps) {
   return (
     <Routes>
-      <Route path={missionControlPath} element={<MissionControlRoute outlets={outlets} />} />
+      <Route
+        path={missionControlPath}
+        element={
+          <MissionControlRoute
+            outlets={outlets}
+            coordinator={coordinator}
+            runtimeFailed={runtimeFailed}
+          />
+        }
+      />
       <Route path={sessionDetailPathPattern} element={<SessionDetailRoute outlets={outlets} />} />
       <Route path="*" element={<NotFoundRoute />} />
     </Routes>
   );
 }
 
-function MissionControlRoute({ outlets }: Readonly<{ outlets: HostDeckRouteOutlets }>) {
+function MissionControlRoute({
+  outlets,
+  coordinator,
+  runtimeFailed
+}: Readonly<{
+  outlets: HostDeckRouteOutlets;
+  coordinator: BrowserConnectionStateCoordinator | undefined;
+  runtimeFailed: boolean;
+}>) {
+  let content = outlets.missionControl;
+  if (content === undefined) {
+    content = coordinator !== undefined
+      ? <ConnectedMissionControl coordinator={coordinator} />
+      : runtimeFailed
+        ? <MissionControlRuntimeFailure />
+        : <MissionControlLoading />;
+  }
   return (
     <HostDeckFrame hostAccess={outlets.hostAccess}>
-      {outlets.missionControl ?? <MissionControlLoading />}
+      {content}
     </HostDeckFrame>
   );
 }
@@ -164,15 +247,6 @@ function SessionBackButton() {
   );
 }
 
-function isMissionSource(state: unknown): boolean {
-  if (state === null || typeof state !== "object" || Array.isArray(state)) return false;
-  try {
-    return Reflect.get(state, missionSourceKey) === missionSourceValue;
-  } catch {
-    return false;
-  }
-}
-
 function HostAccessSheet({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <Dialog.Root>
@@ -223,6 +297,22 @@ function MissionControlLoading() {
         <span className="hostdeck-loading-item" />
         <span className="hostdeck-loading-line hostdeck-loading-line--short" />
         <span className="hostdeck-loading-item hostdeck-loading-item--compact" />
+      </div>
+    </section>
+  );
+}
+
+function MissionControlRuntimeFailure() {
+  return (
+    <section
+      className="hostdeck-route hostdeck-route--error"
+      aria-labelledby="mission-control-runtime-title"
+      role="alert"
+    >
+      <span className="hostdeck-error-rail" aria-hidden="true" />
+      <div>
+        <h1 id="mission-control-runtime-title">Mission Control unavailable</h1>
+        <p>The secure browser connection could not start. Reload after checking this address.</p>
       </div>
     </section>
   );

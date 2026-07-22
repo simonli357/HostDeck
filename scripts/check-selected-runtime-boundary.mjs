@@ -475,10 +475,10 @@ function validateRootScripts(rootPackage, failures) {
     }
   }
   const expectedWebTest =
-    "vitest run packages/web/src/app-shell.test.tsx packages/web/src/connection-state.test.ts packages/web/src/csrf-client.test.ts packages/web/src/http-client.test.ts packages/web/src/pairing-bootstrap.test.ts packages/web/src/sse-client.test.ts packages/test-fixtures/src/fixtures.test.ts";
+    "vitest run packages/web/src/app-shell.test.tsx packages/web/src/browser-runtime.test.ts packages/web/src/connection-state.test.ts packages/web/src/csrf-client.test.ts packages/web/src/http-client.test.ts packages/web/src/mission-control.test.tsx packages/web/src/pairing-bootstrap.test.ts packages/web/src/sse-client.test.ts packages/test-fixtures/src/fixtures.test.ts";
   if (scripts["test:web"] !== expectedWebTest) {
     failures.push(
-      "package.json test:web must run only selected shell, connection-state, CSRF, HTTP, pairing, SSE, and fixture tests"
+      "package.json test:web must run only selected shell, browser-runtime, connection-state, CSRF, HTTP, Mission Control, pairing, SSE, and fixture tests"
     );
   }
 }

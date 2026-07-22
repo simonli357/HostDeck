@@ -12,6 +12,7 @@ import {
   selectedPairingFragmentPrefix,
   selectedPairingFragmentSchema
 } from "@hostdeck/contracts";
+import { createSecureBrowserOperationId } from "./browser-operation-id.js";
 
 export const browserPairClaimPath = "/api/v1/access/pairing-claims" as const;
 export const browserCsrfBootstrapPath = "/api/v1/access/csrf" as const;
@@ -275,15 +276,8 @@ export function bootstrapWindowPairing(): Promise<BrowserPairingBootstrapResult>
       const response = await window.fetch(path, init);
       return response as unknown as BrowserPairingResponsePort;
     },
-    createOperationId: createBrowserOperationId
+    createOperationId: createSecureBrowserOperationId
   });
-}
-
-function createBrowserOperationId(operation: BrowserPairingOperation): string {
-  if (typeof globalThis.crypto?.randomUUID !== "function") {
-    throw new TypeError("Secure browser operation-id generation is unavailable.");
-  }
-  return `op_browser_${operation}_${globalThis.crypto.randomUUID().replaceAll("-", "")}`;
 }
 
 function createOperationId(

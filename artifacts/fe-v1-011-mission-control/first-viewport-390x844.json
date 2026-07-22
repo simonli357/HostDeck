@@ -1,0 +1,20 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "status_rail": {
+    "x": 0,
+    "y": 56,
+    "width": 390,
+    "height": 56
+  },
+  "second_act_now_row": {
+    "x": 19,
+    "y": 330,
+    "width": 355,
+    "height": 96
+  },
+  "second_act_now_row_bottom": 426,
+  "act_now_row_count": 4
+}
