@@ -7,7 +7,7 @@ Owns milestone, module maturity, production passes, and release truth.
 - Current pass: Tailscale-first production host interface after completing selected runtime integration.
 - Current milestone: M1 selected foundation and M2 real structured vertical are complete; M3 remote host interface is in progress.
 - Release state: no-go; deterministic server/CLI output, the accepted foreground listener, and one runnable verified packaged process exist, but real dashboard assets, user units/service lifecycle, install parity, UI, and release hardening remain incomplete.
-- Next exit: `IFC-V1-055` generates and verifies versioned unprivileged systemd user units with explicit package paths, process ownership, degraded-remote behavior, and HostDeck/Codex restart separation.
+- Next exit: `IFC-V1-086` implements and verifies the packaged service-owned HostDeck process so app-server replacement leaves HostDeck alive and HostDeck replacement leaves app-server alive; `IFC-V1-055` then binds that proven ownership into user units.
 
 ## Milestones
 
@@ -45,7 +45,7 @@ Owns milestone, module maturity, production passes, and release truth.
 | Remote contracts and durable state | Complete | `IFC-V1-070`, `FND-V1-018`, `FND-V1-092`, `DAT-V1-031`, `DAT-V1-032`, `DAT-V1-092` |
 | Real Codex compatibility and vertical | Complete | `INT-V1-003` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
 | Remote HTTPS/app-auth/security boundary | In progress | Aggregate hostile/physical acceptance, full selected composition, legacy isolation, and aggregate resource stress pass; packaged-path module hardening remains `IFC-V1-091`. |
-| Build/package/user services | In progress | `IFC-V1-021` deterministic package and `IFC-V1-054` executable dispatch are complete; `IFC-V1-055` user units are ready, while web assets and lifecycle/install parity remain `IFC-V1-053` and `IFC-V1-056` to `IFC-V1-058`. |
+| Build/package/user services | In progress | `IFC-V1-021` deterministic package and `IFC-V1-054` executable dispatch are complete. `IFC-V1-086` now owns the missing packaged service process before `IFC-V1-055` user units; web assets and lifecycle/install parity remain `IFC-V1-053` and `IFC-V1-056` to `IFC-V1-058`. |
 | Mobile visual selection/UI/device | Blocked | `FE-V1-004`, `FE-V1-002`, human `FE-V1-003`, `FE-V1-010` to `FE-V1-040`, `FE-V1-090` |
 | Security/privacy | Blocked | `REL-V1-005` |
 | Clean Ubuntu/aggregate/docs | Blocked | `REL-V1-004`, `REL-V1-006`, `REL-V1-007` |

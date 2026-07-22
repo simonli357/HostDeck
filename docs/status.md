@@ -5,11 +5,11 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `IFC-V1-055` is ready to generate versioned unprivileged systemd user units against the completed runnable package and accepted runtime lifecycle.
+- Active task: `IFC-V1-086` is in progress to add the missing packaged service-owned HostDeck process. The unit audit proved `codexdeck serve` is foreground-only and cannot truthfully back the independent two-unit lifecycle; `IFC-V1-055` now follows this leaf.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.5; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract plus 14 current Signal Ledger/Focus Rail visual targets are complete; both desktop-led boards remain rejected, and `FE-V1-003` is blocked only by human selection of exact assets/approved drift.
-- Release state: no-go. `BLK-V1-01` to `BLK-V1-03` are complete; interface/mobile/release blocks remain unfinished.
+- Release state: no-go. `BLK-V1-01` to `BLK-V1-03` are complete; the service-owned process, user units/install chain, interface/mobile work, and release blocks remain unfinished.
 - Release environment: the selected HostDeck binding is exact Codex 0.144.0; the default binary has drifted to 0.144.5 and cannot be exact-runtime evidence. Tailscale 1.98.8 is active under the dedicated saved HostDeck profile with one other saved profile preserved; final ServeConfig is empty after manager/noninterference validation, and the physical Android Tailscale client remains enrolled.
 
 ## Proven
@@ -386,5 +386,5 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - `IFC-V1-052` criteria are pushed as `19aa0de`, aggregate implementation as `59fc5e8`, and explicit stream-failure assertion as `4986498`; all `RAG-01` to `RAG-10` evidence passes and this owner-doc closure advances the selected queue to ready `IFC-V1-021`.
 - `IFC-V1-081` foreground bootstrap implementation is pushed as `44635eb`; focused, real Linux, workspace, static, exact-binding, package, privacy, and zero-residue evidence pass, advancing the selected queue to ready `IFC-V1-082`.
 - `IFC-V1-082` production graph implementation is pushed as `66f91f4`; direct, adjacent, real exact-runtime, workspace, static, package, privacy, and zero-residue evidence pass, advancing the selected queue to ready `IFC-V1-083`.
-- `IFC-V1-083` production foreground serve implementation is pushed as `58a99f6`; focused, adjacent, exact-runtime, workspace, package, privacy/no-fallback, and zero-residue evidence pass, advancing the selected queue to ready `IFC-V1-054` while `IFC-V1-055` remains independently ready.
-- `IFC-V1-054` runnable packaged process implementation is pushed as `2b888ec`; exact command identity, five-layout invocation, deterministic package, real direct-process serve, workspace, privacy/no-fallback, and zero-residue evidence pass, advancing the selected queue to ready `IFC-V1-055`.
+- `IFC-V1-083` production foreground serve implementation is pushed as `58a99f6`; focused, adjacent, exact-runtime, workspace, package, privacy/no-fallback, and zero-residue evidence pass, advancing the selected queue to `IFC-V1-054`.
+- `IFC-V1-054` runnable packaged process implementation is pushed as `2b888ec`; exact command identity, five-layout invocation, deterministic package, real direct-process serve, workspace, privacy/no-fallback, and zero-residue evidence pass. The subsequent unit audit correctly separated the missing service-owned process as `IFC-V1-086` before `IFC-V1-055`.

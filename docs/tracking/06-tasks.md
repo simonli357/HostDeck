@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-055` Generate versioned unprivileged systemd user units with explicit ownership/dependencies | ready | none | The compiled package, runnable process, and accepted runtime lifecycle are complete; units can now bind their absolute command and ownership paths to the verified package layout. |
+| 1 | `IFC-V1-086` Implement and package the service-owned HostDeck process entry | in_progress | none | The unit audit proved the current packaged `serve` entry owns a foreground Codex child. The independent HostDeck service process must exist and prove sibling survival before units can bind truthful ownership. |
 
 ## Intentional Blockers
 

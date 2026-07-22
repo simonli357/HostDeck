@@ -115,7 +115,7 @@ The composition root calls `resolveResourceBudget` once before lease, storage, r
 5. Publish the completed sibling staging tree as `dist/hostdeck`; failed construction removes staging and cannot leave a partial current package.
 6. Build twice, relocate to an unrelated read-only path, verify/import all package roots, load both native modules, and run a real loopback lifecycle/restart plus config/asset/native/runtime/integrity rejection probes.
 
-This foundation exposes compiled library entrypoints only. `IFC-V1-053` adds the approved Vite dashboard. `IFC-V1-054` adds exactly one compiled `codexdeck` bin over the source grammar: direct execution remains distinct from side-effect-free library import, help/version stay daemon-independent, foreground mode derives package assets without cwd/dev fallback and invokes the accepted foreground owner once, and the package verifier binds the bin target/shebang/mode/content. Later leaves own user units, installation, uninstall, clean Ubuntu parity, and module/release hardening.
+This foundation exposes compiled library entrypoints only. `IFC-V1-053` adds the approved Vite dashboard. `IFC-V1-054` adds exactly one compiled `codexdeck` bin over the source grammar: direct execution remains distinct from side-effect-free library import, help/version stay daemon-independent, foreground mode derives package assets without cwd/dev fallback and invokes the accepted foreground owner once, and the package verifier binds the bin target/shebang/mode/content. `IFC-V1-086` adds one separate compiled service-host module that is inert on import, directly runnable only through an absolute Node invocation, non-executable, absent from `bin`, and independently bound by the package manifest/verifier. Later leaves own user units, installation, uninstall, clean Ubuntu parity, and module/release hardening.
 
 ## Application Services
 
@@ -191,7 +191,7 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 3. Acquire a nonblocking exclusive `flock(2)` lease. A held lease fails before config/runtime/database/listener/socket/app-server mutation; an unlocked stale file is reused, never unlinked for handoff.
 4. The lease owner creates/repairs the mode-`0700` config, runtime, and database-parent directories, then holds a validated database descriptor across SQLite open/migration and rechecks identity/mode before releasing the guard.
 5. Validate local settings and durable remote-ingress configuration without contacting or mutating Tailscale.
-6. Start or await mode-owned app-server and private socket.
+6. Start or await the mode-owned app-server and private socket. Foreground mode creates/repairs its private runtime directory, starts one exact child, owns the socket, and observes child exit. Service mode requires an already existing canonical owner-only runtime directory, waits boundedly for the sibling socket, and has no process or socket mutation capability.
 7. Complete compatibility handshake and start adapter reader.
 8. Load managed mappings and reconcile each against `thread/read`/list.
 9. Mark uncertain prior active states interrupted/stale; never infer running from persistence alone.
@@ -200,6 +200,8 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 12. Start the Fastify loopback HTTP listener, routes, SSE, and static assets.
 13. Mark local HostDeck ready, then observe the active Tailscale profile and exact HostDeck-owned Serve state without mutation. Only an explicit local `remote enable` or `remote disable` may invoke the ownership-safe manager.
 14. Report remote ready or a bounded remote-unavailable reason independently of local readiness. Every fatal local failure after lease acquisition closes mutable resources and releases the lease in reverse order.
+
+The packaged service-host entry executes this sequence with service ownership fixed before any mutable work. It requires no command grammar and rejects arguments before config, filesystem, socket, process, or listener access. Once ready, an app-server disconnect is handled by the reconnect/reconciliation owners and cannot terminate HostDeck; a HostDeck signal closes only HostDeck-owned stages. The exact process smoke must replace the app-server while HostDeck remains alive, then replace HostDeck twice while the app-server PID/socket remain alive.
 
 The selected listener implementation requires cleanup authority before runtime start: one exact runtime controller exposes `start`, `beginDrain`, `closeSse`, `closeRuntime`, and `closeStartup`; `start` returns only typed context plus a validated loopback bind. Fastify registration/readiness completes while unbound, Node limits apply before listen, and the actual address must equal that bind. Assigned-private-IP, wildcard, and public binds fail before listen. Tailscale Serve owns external HTTPS and proxies to this loopback listener; HostDeck owns neither TLS private keys nor a second network listener. Close transitions to draining, closes mutation admission, initiates listener refusal, bounds SSE/runtime and newly idle connection settlement, closes Fastify, then storage/lease startup ownership. Failure or timeout at one step is aggregated but cannot skip later cleanup; the exact application-stage order is frozen by `IFC-V1-037` below.
 
