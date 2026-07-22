@@ -140,16 +140,15 @@ Mission Control and Session Detail are the only full-page V1 product routes. Sup
 
 ## Visual Direction Gate
 
-- The existing Option A and Option B boards are rejected as implementation targets because both are desktop-led, omit phone Mission Control, and show only write-disabled phone detail.
-- `FE-V1-002` is reopened after this UX rebaseline and the structured state-contract update.
-- Each replacement option must show, at minimum: phone Mission Control mixed-attention state; phone Session Detail active/writable state with composer and primary controls; inline approval; locked/read-only state; remote-disconnected/replay-boundary state; Host/access remote-ready and laptop-action-required state; and a desktop expansion of the same design.
-- The two options must differ in information hierarchy, density, navigation, and component treatment, not only color/theme.
-- Mockup notes must map every visible element to a design-system token/component and identify generated imagery that is reference-only.
-- Human selection in `FE-V1-003` remains required before React screen implementation.
+- The original desktop-led Option A and Option B boards remain rejected because they omit phone Mission Control and show only write-disabled phone detail.
+- `FE-V1-002` produced two complete replacement sets after the structured state-contract rebaseline.
+- Under `DEC-028`, the human selected Focus Rail (Option B): all seven current assets listed in `assets/ui-concepts/option-b/asset-inventory.md`, governed by `assets/ui-concepts/option-b/design-system.md`, are implementation targets.
+- Signal Ledger and both rejected legacy boards are not implementation targets. No cross-option borrowing or additional structural drift is approved.
+- Typed contracts own behavior, authority, state, and final copy; accessibility requirements and real fragment-safe QR rendering override illustrative raster content without changing the selected visual structure.
 
 ## Acceptance Evidence
 
-- Mockup review at every reference viewport before selection.
+- Selected-target review at every reference viewport before implementation.
 - Implemented Playwright screenshots for required states at 360 x 800, 390 x 844, 412 x 915, 768 x 1024, and 1280 x 800.
 - Real-browser inspection with mobile keyboard open, long labels, slow/disconnected stream, approval arrival, lock transition, expired pairing, wrong-profile recovery, and Tailscale reconnect.
 - At least one actual Android or iOS browser pass through private Tailscale Serve while the phone has no LAN route to the laptop, including personal-to-company-to-personal laptop profile switching with no company-profile mutation.

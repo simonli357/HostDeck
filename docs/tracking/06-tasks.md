@@ -7,7 +7,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 - Execute leaf tasks from this queue unless the user changes priority.
 - `ready` requires every task dependency done and validation known.
 - Keep completed history out of this file; completion remains in the owning backlog/artifact.
-- Do not start React screen implementation before `FE-V1-003` human visual selection.
+- React screen implementation must use the selected Focus Rail assets and design system under `DEC-028`; unapproved cross-option drift is not allowed.
 - Do not use tmux/fake-Codex evidence to complete the selected app-server runtime.
 - Do not use direct-LAN/custom-CA evidence to complete the selected remote path, and do not implement Tailscale behavior before `IFC-V1-070` freezes it.
 - Update status only for handoff truth and run `pnpm check:planning` before completion/commit.
@@ -16,13 +16,12 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-003` Record the selected mobile visual direction and implementation targets | blocked | human selection | Signal Ledger and Focus Rail each have seven current phone-first targets; choosing exact assets and approved drift unlocks the UI implementation chain and then real packaged assets. |
+| 1 | `FE-V1-010` Implement phone-first app shell and two-route navigation | ready | none | Focus Rail is selected and the shell is the first dependency for typed browser clients, Mission Control, Session Detail, and packaged web assets. |
 
 ## Intentional Blockers
 
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
-| Mobile visual direction | `FE-V1-003` | Human selection of exact Signal Ledger or Focus Rail assets and any approved drift | React screen implementation. |
 | Release | `REL-V1-010` | All module hardening, clean package/service/remote-phone/profile/security evidence, human acceptance | V1 release and V2 planning. |
 
 ## Status Vocabulary

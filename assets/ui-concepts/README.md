@@ -4,17 +4,18 @@ Owns generated visual-direction options, implementation-target candidates, token
 
 ## Gate
 
-- Exactly two current candidates exist: `option-a/` and `option-b/`.
-- Both candidates are mobile-first and consume the executable `FE-V1-004` state/interaction contract.
-- The human must select exact assets in `FE-V1-003` before React screen implementation.
+- Two complete current sets exist: `option-a/` and `option-b/`.
+- Both sets are mobile-first and consume the executable `FE-V1-004` state/interaction contract.
+- The human selected Focus Rail (`option-b/`) in `FE-V1-003` under `DEC-028`.
+- All seven current Option B assets are exact implementation targets; no Option A borrowing or additional structural drift is approved.
 - Generated images are visual references. Typed contracts own behavior, authority, state, and final copy.
 
-## Current Candidates
+## Selected Target And Alternative
 
-| Option | Direction | Structural idea | Start inspection with |
-| --- | --- | --- | --- |
-| A | Signal Ledger | Bright, compact, flat attention ledger with semantic feed bands. | `option-a/mobile-mission-control-mixed.png`, `option-a/mobile-session-detail-active.png` |
-| B | Focus Rail | Dark grouped action queue with continuous session/event/state rails. | `option-b/mobile-mission-control-mixed.png`, `option-b/mobile-session-detail-active.png` |
+| Option | Direction | Status | Structural idea | Start inspection with |
+| --- | --- | --- | --- | --- |
+| B | Focus Rail | Selected V1 target | Dark grouped action queue with continuous session/event/state rails. | `option-b/mobile-mission-control-mixed.png`, `option-b/mobile-session-detail-active.png` |
+| A | Signal Ledger | Unselected alternative | Bright, compact, flat attention ledger with semantic feed bands. | `option-a/mobile-mission-control-mixed.png`, `option-a/mobile-session-detail-active.png` |
 
 Each option also includes:
 
@@ -56,11 +57,11 @@ Legacy boards remain only as decision history. They are not implementation targe
 
 ## Fidelity Evidence
 
-| Screen group | Current candidates | Implementation screenshot | Status |
+| Screen group | Selected target | Implementation screenshot | Status |
 | --- | --- | --- | --- |
-| Mission Control | Both option `mobile-mission-control-mixed.png` assets |  | Awaiting selection/implementation |
-| Session Detail | Both option `mobile-session-detail-active.png` assets |  | Awaiting selection/implementation |
-| Approval and boundary | Both option `mobile-approval-boundary-states.png` assets |  | Awaiting selection/implementation |
-| Pairing and access | Both option pairing/access assets |  | Awaiting selection/implementation |
-| Primary controls | Both option `primary-controls.png` assets |  | Awaiting selection/implementation |
-| Responsive expansion | Both option `responsive-continuum.png` assets |  | Awaiting selection/implementation |
+| Mission Control | `option-b/mobile-mission-control-mixed.png` |  | Awaiting implementation |
+| Session Detail | `option-b/mobile-session-detail-active.png` |  | Awaiting implementation |
+| Approval and boundary | `option-b/mobile-approval-boundary-states.png` |  | Awaiting implementation |
+| Pairing and access | `option-b/pairing-journey.png`, `option-b/access-recovery-states.png` |  | Awaiting implementation |
+| Primary controls | `option-b/primary-controls.png` |  | Awaiting implementation |
+| Responsive expansion | `option-b/responsive-continuum.png` |  | Awaiting implementation |

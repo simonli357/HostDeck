@@ -29,7 +29,8 @@ Requirement refs: `FR-002`, `FR-005` to `FR-010`, `FR-016`, `NFR-004`, `IR-001` 
 - Rebased state fixtures and interaction contracts complete first.
 - Two new image-generated directions each show required phone states plus desktop expansion and differ structurally, not only by palette.
 - Mockup review checks 360, 390, 412, 768, and 1280 widths before human selection.
-- Human `FE-V1-003` selects exact assets before React screen implementation.
+- Human `FE-V1-003` selected all seven current Focus Rail assets under `DEC-028`; `assets/ui-concepts/option-b/design-system.md` and its asset inventory are the implementation references.
+- Signal Ledger, both rejected legacy boards, cross-option borrowing, and additional structural drift are not approved targets.
 
 ## Task Map
 
@@ -38,8 +39,8 @@ Requirement refs: `FR-002`, `FR-005` to `FR-010`, `FR-016`, `NFR-004`, `IR-001` 
 | Historical view-model/state helpers | `FE-V1-001` | Retained; requires structured mobile rebaseline. |
 | Mobile structured state/interaction rebaseline | `FE-V1-004` | Done; executable matrix and evidence in `artifacts/fe-v1-004-mobile-state-interaction-contract.md`. |
 | Replacement visual directions | `FE-V1-002` | Done; Signal Ledger and Focus Rail provide 14 current mobile-first targets and label both desktop-led boards rejected. |
-| Human selection | `FE-V1-003` | Blocked only by the human choosing exact current assets and approved drift. |
-| Phone-first shell and typed HTTP/SSE/CSRF/state clients | `FE-V1-010`, `FE-V1-019`, `FE-V1-023` to `FE-V1-025` | Blocked by visual selection and the assembled production API. |
+| Human selection | `FE-V1-003` | Done; Focus Rail and all seven current Option B assets are selected with no cross-option borrowing or additional structural drift. |
+| Phone-first shell and typed HTTP/SSE/CSRF/state clients | `FE-V1-010`, `FE-V1-019`, `FE-V1-023` to `FE-V1-025` | `FE-V1-010` is next; typed clients remain dependency-ordered behind the shell and assembled production API. |
 | Mission Control and structured Session Detail | `FE-V1-011`, `FE-V1-012` | Blocked by approved state contracts and coordinated clients. |
 | Prompt, model, goal, plan, utilities, and inline approval | `FE-V1-020` to `FE-V1-022`, `FE-V1-026` to `FE-V1-030` | Each leaf consumes its exact structured API/runtime port. |
 | Host access, QR pairing, CSRF reload, devices, lock, remote profile/Serve, and compatibility UI | `FE-V1-013`, `FE-V1-031` to `FE-V1-035` | Blocked by production remote security and mutable-health contracts. |
