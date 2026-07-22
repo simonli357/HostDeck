@@ -8,6 +8,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./scalars": {
+      "types": "./src/scalars.ts",
+      "import": "./src/scalars.ts"
     }
   },
   "scripts": {

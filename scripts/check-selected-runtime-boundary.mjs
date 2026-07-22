@@ -19,7 +19,7 @@ import {
   SyntaxKind
 } from "typescript/unstable/ast";
 
-const productionRootEntries = [
+const selectedRootEntries = [
   "packages/server/src/index.ts",
   "packages/cli/src/index.ts",
   "packages/web/src/index.ts",
@@ -27,6 +27,10 @@ const productionRootEntries = [
   "packages/core/src/index.ts",
   "packages/storage/src/index.ts"
 ];
+
+const productionPackageRootEntries = selectedRootEntries.filter(
+  (path) => path !== "packages/web/src/index.ts"
+);
 
 const removedPaths = [
   "packages/tmux-adapter/package.json",
@@ -118,7 +122,7 @@ const exactRootModules = new Map([
       "./storage.js"
     ]
   ],
-  ["packages/web/src/index.ts", ["./pairing-bootstrap.js"]],
+  ["packages/web/src/index.ts", ["./app-shell.js", "./pairing-bootstrap.js"]],
   [
     "packages/test-fixtures/src/index.ts",
     ["./mobile-design-contract.js", "./remote-ingress.js", "./structured-runtime.js"]
@@ -276,7 +280,7 @@ export function validateSelectedRuntimeBoundary(root = process.cwd()) {
       failures.push(...compareExactModuleSet(path, collectModuleSpecifiers(source), expected));
     }
   }
-  for (const entry of productionRootEntries) {
+  for (const entry of selectedRootEntries) {
     const source = readRequiredSource(repositoryRoot, entry, failures);
     if (source === null) continue;
     for (const specifier of collectModuleSpecifiers(source)) {
@@ -458,9 +462,10 @@ function validateRootScripts(rootPackage, failures) {
       if (command.includes(fragment)) failures.push(`package.json script ${name} retains ${fragment}`);
     }
   }
-  const expectedWebTest = "vitest run packages/web/src/pairing-bootstrap.test.ts packages/test-fixtures/src/fixtures.test.ts";
+  const expectedWebTest =
+    "vitest run packages/web/src/app-shell.test.tsx packages/web/src/pairing-bootstrap.test.ts packages/test-fixtures/src/fixtures.test.ts";
   if (scripts["test:web"] !== expectedWebTest) {
-    failures.push("package.json test:web must run only selected pairing and fixture tests");
+    failures.push("package.json test:web must run only selected shell, pairing, and fixture tests");
   }
 }
 
@@ -608,7 +613,7 @@ function validateHistoricalExceptions(root, failures) {
 
 function buildProductionClosure(root, failures) {
   const workspacePackages = readWorkspacePackageMap(root, failures);
-  const pending = [...productionRootEntries];
+  const pending = [...productionPackageRootEntries];
   const files = new Set();
   const externalModules = new Set();
 
@@ -672,8 +677,17 @@ function resolveSourceModule(root, fromPath, specifier, workspacePackages) {
 
 function resolveSourcePath(target) {
   const candidates = [target];
-  if (extname(target) === ".js") candidates.push(`${target.slice(0, -3)}.ts`);
-  if (extname(target) === "") candidates.push(`${target}.ts`, join(target, "index.ts"));
+  if (extname(target) === ".js") {
+    candidates.push(`${target.slice(0, -3)}.ts`, `${target.slice(0, -3)}.tsx`);
+  }
+  if (extname(target) === "") {
+    candidates.push(
+      `${target}.ts`,
+      `${target}.tsx`,
+      join(target, "index.ts"),
+      join(target, "index.tsx")
+    );
+  }
   for (const candidate of candidates) {
     if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
   }
@@ -740,13 +754,19 @@ function sourceFiles(root) {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     const path = join(root, entry.name);
     if (entry.isDirectory()) files.push(...sourceFiles(path));
-    else if (entry.isFile() && path.endsWith(".ts") && !path.endsWith(".d.ts")) files.push(path);
+    else if (
+      entry.isFile() &&
+      (path.endsWith(".ts") || path.endsWith(".tsx")) &&
+      !path.endsWith(".d.ts")
+    ) {
+      files.push(path);
+    }
   }
   return files;
 }
 
 function isTestFile(path) {
-  return /(?:^|\.)(?:contract\.|integration\.|probe\.|smoke\.)?(?:test|spec)\.ts$/u.test(path);
+  return /(?:^|\.)(?:contract\.|integration\.|probe\.|smoke\.)?(?:test|spec)\.tsx?$/u.test(path);
 }
 
 function hasNonLiteralDynamicImport(source) {
