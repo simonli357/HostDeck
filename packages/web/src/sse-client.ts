@@ -15,6 +15,7 @@ import {
   createParser,
   type EventSourceMessage
 } from "eventsource-parser";
+import { registerBrowserSseClientAuthority } from "./browser-client-authority.js";
 import {
   type BrowserTransport,
   readSelectedBrowserOrigin
@@ -54,6 +55,9 @@ export type BrowserSsePhase =
   | "failed"
   | "closed";
 export type BrowserSseContinuity = "unproven" | "contiguous" | "boundary";
+
+declare const browserSseClientBrand: unique symbol;
+const browserSseClientInstances = new WeakSet<object>();
 
 export interface BrowserSseHeadersPort {
   readonly get: (name: string) => string | null;
@@ -160,6 +164,7 @@ export interface BrowserSseConnection {
 }
 
 export interface BrowserSseClient {
+  readonly [browserSseClientBrand]: true;
   readonly connect: (input: BrowserSseConnectOptions) => BrowserSseConnection;
   readonly close: () => void;
 }
@@ -168,6 +173,7 @@ interface ParsedClientOptions {
   readonly fetch: BrowserSseFetchPort;
   readonly clock: BrowserSseClockPort;
   readonly limits: BrowserSseClientLimits;
+  readonly origin: string;
   readonly transport: BrowserTransport;
 }
 
@@ -302,7 +308,7 @@ export function createBrowserSseClient(
   const activeConnections = new Set<BrowserSseConnection>();
   let closed = false;
 
-  const client: BrowserSseClient = Object.freeze({
+  const client = Object.freeze({
     connect(candidate: BrowserSseConnectOptions): BrowserSseConnection {
       if (closed) {
         throw new TypeError("HostDeck browser SSE client is closed.");
@@ -355,8 +361,18 @@ export function createBrowserSseClient(
       activeConnections.clear();
       activeSessionIds.clear();
     }
-  });
+  }) as BrowserSseClient;
+  browserSseClientInstances.add(client);
+  registerBrowserSseClientAuthority(client, options.origin);
   return client;
+}
+
+export function isBrowserSseClient(candidate: unknown): candidate is BrowserSseClient {
+  return (
+    candidate !== null &&
+    typeof candidate === "object" &&
+    browserSseClientInstances.has(candidate)
+  );
 }
 
 function createConnection(
@@ -790,6 +806,7 @@ function readClientOptions(candidate: unknown): ParsedClientOptions {
     fetch: readFetchPort(values.fetch),
     clock: readClockPort(values.clock),
     limits: readLimits(values.limits),
+    origin: origin.origin,
     transport: origin.transport
   });
 }

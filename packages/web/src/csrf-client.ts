@@ -3,6 +3,7 @@ import {
   clientOperationIdSchema,
   selectedCsrfBootstrapResponseSchema
 } from "@hostdeck/contracts";
+import { registerBrowserCsrfClientAuthority } from "./browser-client-authority.js";
 import {
   type BrowserHttpClient,
   type BrowserHttpRouteResponse,
@@ -52,6 +53,9 @@ export type BrowserCsrfFailureReason =
   (typeof browserCsrfFailureReasons)[number];
 export type BrowserCsrfOperation = "adopt" | "bootstrap" | "lifecycle" | "mutation";
 
+declare const browserCsrfClientBrand: unique symbol;
+const browserCsrfClientInstances = new WeakSet<object>();
+
 export interface BrowserCsrfSnapshot {
   readonly phase: BrowserCsrfPhase;
   readonly generation: number | null;
@@ -79,6 +83,7 @@ export interface BrowserCsrfBootstrapInput {
 }
 
 export interface BrowserCsrfClient {
+  readonly [browserCsrfClientBrand]: true;
   readonly snapshot: () => BrowserCsrfSnapshot;
   readonly bootstrap: () => Promise<BrowserCsrfSnapshot>;
   readonly adoptBootstrap: (response: BrowserCsrfBootstrapInput) => BrowserCsrfSnapshot;
@@ -393,14 +398,25 @@ export function createBrowserCsrfClient(
     return currentSnapshot;
   };
 
-  return Object.freeze({
+  const client = Object.freeze({
     snapshot: () => currentSnapshot,
     bootstrap,
     adoptBootstrap,
     request,
     invalidate,
     close
-  });
+  }) as BrowserCsrfClient;
+  browserCsrfClientInstances.add(client);
+  registerBrowserCsrfClientAuthority(client, httpClient);
+  return client;
+}
+
+export function isBrowserCsrfClient(candidate: unknown): candidate is BrowserCsrfClient {
+  return (
+    candidate !== null &&
+    typeof candidate === "object" &&
+    browserCsrfClientInstances.has(candidate)
+  );
 }
 
 function readCreateOptions(input: unknown): {

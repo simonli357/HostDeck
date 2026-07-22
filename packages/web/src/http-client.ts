@@ -11,6 +11,7 @@ import {
   browserHttpResourceRanges,
   defaultBrowserHttpClientLimits
 } from "@hostdeck/contracts/browser-http-resource-policy";
+import { registerBrowserHttpClientAuthority } from "./browser-client-authority.js";
 import {
   type BrowserTransport,
   readSelectedBrowserOrigin
@@ -300,6 +301,7 @@ export function createBrowserHttpClient(
     }
   }) as BrowserHttpClient;
   browserHttpClientInstances.add(client);
+  registerBrowserHttpClientAuthority(client, origin.origin);
   return client;
 }
 

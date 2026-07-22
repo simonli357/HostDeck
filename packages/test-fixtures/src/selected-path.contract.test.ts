@@ -133,28 +133,25 @@ describe("selected mobile fixture inventory", () => {
     expect(fixture.viewModel.risky_controls.every((control) => !control.enabled)).toBe(true);
   });
 
-  it("uses admitted private Serve HTTPS for current phone state without deriving app authority from Tailscale identity", () => {
+  it("uses route-backed private HTTPS state without exposing proxy or Tailnet identity", () => {
     const fixture = requireSurface(selectedMobileFixtureById("mission_control_ready"), "mission_control");
     expect(fixture.viewModel.host_access).toMatchObject({
       origin: remoteFixtureOrigin,
       client_connection: "online",
-      ingress_provenance: {
-        kind: "admitted_remote",
-        transport: "tailscale_serve_https",
-        app_authorization: "not_evaluated"
-      },
       remote_ingress: { availability: "ready", external_origin: remoteFixtureOrigin }
     });
+    expect(fixture.viewModel.host_access).not.toHaveProperty("ingress_provenance");
+    expect(fixture.viewModel.host_access).not.toHaveProperty("device_label");
+    expect(fixture.viewModel.host_access).not.toHaveProperty("runtime");
+    expect(fixture.viewModel.host_access).not.toHaveProperty("stream_state");
 
     const hostAccess = fixture.viewModel.host_access;
     expect(
       selectedHostAccessSchema.parse({
         ...hostAccess,
-        ingress_provenance: { ...hostAccess.ingress_provenance, tailnet_identity_present: true },
+        remote_ingress: null,
         access: "unpaired",
         device_id: null,
-        device_label: null,
-        runtime: null,
         reads_enabled: false,
         writes_enabled: false
       })
@@ -168,9 +165,7 @@ describe("selected mobile fixture inventory", () => {
     );
     expect(unreachable.viewModel.host_access).toMatchObject({
       client_connection: "unreachable",
-      ingress_provenance: null,
       remote_ingress: null,
-      runtime: null,
       access: "unknown",
       reads_enabled: false,
       writes_enabled: false
@@ -182,7 +177,6 @@ describe("selected mobile fixture inventory", () => {
     );
     expect(unavailable.viewModel.host_access).toMatchObject({
       client_connection: "reconnecting",
-      ingress_provenance: null,
       remote_ingress: { availability: "unavailable", reason: "profile_other", laptop_action_required: true },
       access: "unknown",
       reads_enabled: false,

@@ -3,86 +3,85 @@ import { describe, expect, it } from "vitest";
 import { type SelectedMobileFixture, selectedMobileFixtureById } from "./structured-runtime.js";
 
 describe("selected remote access hardening", () => {
-  it("rejects unavailable ingress, disconnected provenance, and stale admission generation", () => {
+  it("rejects non-ready current ingress, disconnected authority, and removed private fields", () => {
     const ready = mission("mission_control_ready").viewModel.host_access;
     const unavailable = mission("mission_control_remote_unavailable").viewModel.host_access.remote_ingress;
 
     expect(selectedHostAccessSchema.safeParse({ ...ready, remote_ingress: unavailable }).success).toBe(false);
     expect(selectedHostAccessSchema.safeParse({ ...ready, client_connection: "unreachable" }).success).toBe(false);
-    expect(
-      selectedHostAccessSchema.safeParse({
-        ...ready,
-        ingress_provenance: { ...ready.ingress_provenance, remote_generation: 6 }
-      }).success
-    ).toBe(false);
+    for (const extra of [
+      { ingress_provenance: { source_key: "private" } },
+      { device_label: "Fixture phone" },
+      { runtime: { state: "ready" } },
+      { stream_state: "connected" },
+      { remote_unlock_available: false },
+      { remote_network_mutation_available: false }
+    ]) {
+      expect(selectedHostAccessSchema.safeParse({ ...ready, ...extra }).success).toBe(false);
+    }
   });
 
-  it("keeps loopback-local authority impossible to acquire through admitted remote ingress", () => {
+  it("keeps loopback browser access read-only unless a paired cookie grants authority", () => {
     const remote = mission("mission_control_ready").viewModel.host_access;
     const local = {
       ...remote,
       origin: "http://127.0.0.1:3777",
-      ingress_provenance: {
-        kind: "local_loopback",
-        transport: "loopback_http",
-        origin: "http://127.0.0.1:3777",
-        remote_generation: null,
-        source_key: null,
-        tailnet_identity_present: false,
-        app_authorization: "not_evaluated"
-      },
-      access: "loopback_local",
+      remote_ingress: null,
+      access: "loopback_read",
       device_id: null,
-      device_label: null
+      reads_enabled: true,
+      writes_enabled: false
     };
 
     expect(selectedHostAccessSchema.parse(local)).toMatchObject({
-      ingress_provenance: { kind: "local_loopback" },
-      access: "loopback_local"
+      access: "loopback_read",
+      writes_enabled: false
     });
     expect(
-      selectedHostAccessSchema.safeParse({ ...remote, access: "loopback_local", device_id: null, device_label: null }).success
+      selectedHostAccessSchema.safeParse({
+        ...remote,
+        access: "loopback_read",
+        device_id: null,
+        reads_enabled: true,
+        writes_enabled: false
+      }).success
     ).toBe(false);
     expect(
       selectedHostAccessSchema.safeParse({
         ...local,
-        access: "paired_write",
-        device_id: "fixture-phone-001",
-        device_label: "Fixture phone"
+        writes_enabled: true
       }).success
     ).toBe(false);
-  });
-
-  it("does not derive app authority from optional tailnet identity", () => {
-    const ready = mission("mission_control_ready").viewModel.host_access;
     expect(
       selectedHostAccessSchema.parse({
-        ...ready,
-        ingress_provenance: { ...ready.ingress_provenance, tailnet_identity_present: true },
-        access: "unpaired",
-        device_id: null,
-        device_label: null,
-        runtime: null,
-        reads_enabled: false,
-        writes_enabled: false
+        ...local,
+        access: "paired_write",
+        device_id: "fixture-phone-001",
+        writes_enabled: true
       })
-    ).toMatchObject({ access: "unpaired", reads_enabled: false, writes_enabled: false });
+    ).toMatchObject({ access: "paired_write", writes_enabled: true });
   });
 
-  it("rejects contradictory client, stream, retained-ingress, device, and object-shape state", () => {
+  it("rejects contradictory client, retained-ingress, device, and object-shape state", () => {
     const ready = mission("mission_control_ready").viewModel.host_access;
     const unavailable = mission("mission_control_remote_unavailable").viewModel.host_access;
     const loading = mission("mission_control_loading").viewModel.host_access;
 
     expect(selectedHostAccessSchema.safeParse({ ...unavailable, client_connection: "unreachable" }).success).toBe(false);
-    expect(selectedHostAccessSchema.safeParse({ ...unavailable, stream_state: "connected" }).success).toBe(false);
     expect(selectedHostAccessSchema.safeParse({ ...loading, last_error: unavailable.last_error }).success).toBe(false);
+    expect(
+      selectedHostAccessSchema.parse({
+        ...ready,
+        access: "expired",
+        device_id: null,
+        reads_enabled: false,
+        writes_enabled: false
+      })
+    ).toMatchObject({ access: "expired", device_id: null });
     expect(
       selectedHostAccessSchema.safeParse({
         ...ready,
         access: "expired",
-        device_label: null,
-        runtime: null,
         reads_enabled: false,
         writes_enabled: false
       }).success

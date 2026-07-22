@@ -6,6 +6,7 @@ import {
 export type BrowserTransport = "http" | "https";
 
 export interface SelectedBrowserOrigin {
+  readonly origin: string;
   readonly transport: BrowserTransport;
 }
 
@@ -22,10 +23,10 @@ export function readSelectedBrowserOrigin(
     throw new TypeError("HostDeck browser current origin is unavailable.");
   }
   if (hostDeckLoopbackOriginSchema.safeParse(value).success) {
-    return Object.freeze({ transport: "http" });
+    return Object.freeze({ origin: value, transport: "http" });
   }
   if (remoteExternalOriginSchema.safeParse(value).success) {
-    return Object.freeze({ transport: "https" });
+    return Object.freeze({ origin: value, transport: "https" });
   }
   throw new TypeError("HostDeck browser current origin is not selected.");
 }

@@ -33,7 +33,6 @@ import {
   type RemoteIngressFixtureId,
   readyRemoteIngressPublicState,
   remoteFixtureOrigin,
-  remoteFixtureSourceKey,
   remoteIngressFixtureById
 } from "./remote-ingress.js";
 
@@ -422,18 +421,14 @@ const readOnlyHostAccess = hostAccessFixture({
   writes_enabled: false
 });
 const offlineHostAccess = hostAccessFixture({
-  runtime: disconnectedRuntimeCompatibility,
-  stream_state: "disconnected",
   writes_enabled: false,
   last_error: errorFixture("runtime_unavailable", "The private app-server connection closed.", true)
 });
 const incompatibleHostAccess = hostAccessFixture({
-  runtime: incompatibleRuntimeCompatibility,
   writes_enabled: false,
   last_error: errorFixture("incompatible_runtime", "Update Codex before using remote controls.", false)
 });
 const degradedHostAccess = hostAccessFixture({
-  runtime: degradedRuntimeCompatibility,
   writes_enabled: true,
   last_error: errorFixture("capability_unavailable", "Some optional Codex capabilities are unavailable.", false)
 });
@@ -444,67 +439,52 @@ const lockedHostAccess = hostAccessFixture({
 });
 const loadingHostAccess = hostAccessFixture({
   client_connection: "loading",
-  ingress_provenance: null,
   remote_ingress: null,
   access: "unknown",
   device_id: null,
-  device_label: null,
-  runtime: null,
-  stream_state: "connecting",
   reads_enabled: false,
   writes_enabled: false,
   last_error: null
 });
 const remoteUnreachableHostAccess = hostAccessFixture({
   client_connection: "unreachable",
-  ingress_provenance: null,
   remote_ingress: null,
   access: "unknown",
   device_id: null,
-  device_label: null,
-  runtime: null,
-  stream_state: "disconnected",
   reads_enabled: false,
   writes_enabled: false,
   last_error: errorFixture("daemon_unavailable", "The private HostDeck origin is unreachable.", true)
 });
 const remoteUnavailableHostAccess = hostAccessFixture({
   client_connection: "reconnecting",
-  ingress_provenance: null,
   remote_ingress: projectRemoteIngressPublicState(remoteIngressFixtureById("profile_other").state),
   access: "unknown",
   device_id: null,
-  device_label: null,
-  runtime: null,
-  stream_state: "reconnecting",
   reads_enabled: false,
   writes_enabled: false,
   last_error: errorFixture("daemon_unavailable", "Remote access requires action on the laptop.", true)
 });
 const permissionDeniedHostAccess = hostAccessFixture({
+  remote_ingress: null,
   access: "unpaired",
   device_id: null,
-  device_label: null,
-  runtime: null,
   reads_enabled: false,
   writes_enabled: false,
   last_error: errorFixture("permission_denied", "Pair this phone before reading session data.", false)
 });
 const unpairedHostAccess = permissionDeniedHostAccess;
 const expiredHostAccess = hostAccessFixture({
+  remote_ingress: null,
   access: "expired",
   device_id: null,
-  device_label: null,
-  runtime: null,
   reads_enabled: false,
   writes_enabled: false,
   last_error: errorFixture("permission_denied", "This paired device expired. Pair it again from the laptop.", false)
 });
 const revokedHostAccess = hostAccessFixture({
+  remote_ingress: null,
   access: "revoked",
   device_id: null,
-  device_label: null,
-  runtime: null,
   reads_enabled: false,
   writes_enabled: false,
   last_error: errorFixture("permission_denied", "This paired device was revoked. Pair it again from the laptop.", false)
@@ -526,12 +506,9 @@ const serveConflictHostAccess = unavailableRemoteHostAccess(
   "The HostDeck Serve path conflicts with another local mapping."
 );
 const streamReconnectingHostAccess = hostAccessFixture({
-  stream_state: "reconnecting",
   last_error: errorFixture("runtime_unavailable", "Reconnecting to the selected session stream.", true)
 });
 const fatalHostAccess = hostAccessFixture({
-  runtime: disconnectedRuntimeCompatibility,
-  stream_state: "error",
   writes_enabled: false,
   last_error: errorFixture("internal_error", "HostDeck cannot read its selected session projection.", false)
 });
@@ -712,7 +689,8 @@ export const selectedMobileStateFixtures: readonly SelectedMobileFixture[] = [
     degradedHostAccess,
     fixtureById("running"),
     "Some optional Codex capabilities are unavailable.",
-    true
+    true,
+    { compatibility: degradedRuntimeCompatibility }
   ),
   unavailableDetailFixture(
     "session_detail_fatal",
@@ -869,26 +847,12 @@ function hostAccessFixture(overrides: Readonly<Record<string, unknown>> = {}): S
   return selectedHostAccessSchema.parse({
     origin: remoteFixtureOrigin,
     client_connection: "online",
-    ingress_provenance: {
-      kind: "admitted_remote",
-      transport: "tailscale_serve_https",
-      origin: remoteFixtureOrigin,
-      remote_generation: 7,
-      source_key: remoteFixtureSourceKey,
-      tailnet_identity_present: false,
-      app_authorization: "not_evaluated"
-    },
     remote_ingress: readyRemoteIngressPublicState,
     access: "paired_write",
     device_id: "fixture-phone-001",
-    device_label: "Pixel fixture",
     reads_enabled: true,
     writes_enabled: true,
     locked: false,
-    runtime: readyRuntimeCompatibility,
-    stream_state: "connected",
-    remote_unlock_available: false,
-    remote_network_mutation_available: false,
     last_error: null,
     ...overrides
   });
@@ -897,13 +861,9 @@ function hostAccessFixture(overrides: Readonly<Record<string, unknown>> = {}): S
 function unavailableRemoteHostAccess(id: RemoteIngressFixtureId, message: string): SelectedHostAccess {
   return hostAccessFixture({
     client_connection: "reconnecting",
-    ingress_provenance: null,
     remote_ingress: projectRemoteIngressPublicState(remoteIngressFixtureById(id).state),
     access: "unknown",
     device_id: null,
-    device_label: null,
-    runtime: null,
-    stream_state: "reconnecting",
     reads_enabled: false,
     writes_enabled: false,
     last_error: errorFixture("daemon_unavailable", message, true)
@@ -985,9 +945,13 @@ function detailFixture(
   runtimeFixtureValue: StructuredRuntimeFixture,
   errorMessage: string | null,
   controlsEnabled: boolean,
-  options: { readonly boundary?: boolean } = {}
+  options: {
+    readonly boundary?: boolean;
+    readonly compatibility?: RuntimeCompatibility;
+  } = {}
 ): SelectedMobileFixture {
-  const resumeAvailable = hostAccess.runtime?.state === "ready" || hostAccess.runtime?.state === "degraded";
+  const compatibility = options.compatibility ?? runtimeFixtureValue.compatibility;
+  const resumeAvailable = compatibility.state === "ready" || compatibility.state === "degraded";
   const readsEnabled = hostAccess.reads_enabled && resumeAvailable;
   return {
     id,
@@ -997,7 +961,7 @@ function detailFixture(
       state,
       host_access: hostAccess,
       session: runtimeFixtureValue.session,
-      stream_state: hostAccess.stream_state,
+      stream_state: detailStreamState(id, state),
       events: runtimeFixtureValue.stream,
       approvals: runtimeFixtureValue.pendingApproval === null ? [] : [runtimeFixtureValue.pendingApproval],
       prompt: {
@@ -1007,10 +971,10 @@ function detailFixture(
         error: null
       },
       primary_controls: ["model", "goal", "plan"].map((control) =>
-        controlFixture(control as StructuredControlKind, controlsEnabled, readsEnabled, hostAccess.runtime)
+        controlFixture(control as StructuredControlKind, controlsEnabled, readsEnabled, compatibility)
       ),
       utility_controls: ["usage", "compact", "skills"].map((control) =>
-        controlFixture(control as StructuredControlKind, controlsEnabled, readsEnabled, hostAccess.runtime)
+        controlFixture(control as StructuredControlKind, controlsEnabled, readsEnabled, compatibility)
       ),
       risky_controls: ["interrupt", "archive"].map((action) => ({
         action,
@@ -1037,6 +1001,25 @@ function detailFixture(
   };
 }
 
+function detailStreamState(
+  id: SelectedMobileFixtureId,
+  state: string
+): "connected" | "reconnecting" | "disconnected" | "error" {
+  if (id === "session_detail_stream_reconnecting") return "reconnecting";
+  if (state === "offline" || state === "stale") return "disconnected";
+  if (state === "fatal") return "error";
+  return "connected";
+}
+
+function unavailableDetailStreamState(
+  state: string
+): "connecting" | "reconnecting" | "disconnected" | "error" {
+  if (state === "loading") return "connecting";
+  if (state === "remote_unavailable") return "reconnecting";
+  if (state === "fatal") return "error";
+  return "disconnected";
+}
+
 function unavailableDetailFixture(
   id: SelectedMobileFixtureId,
   state: string,
@@ -1051,7 +1034,7 @@ function unavailableDetailFixture(
       state,
       host_access: hostAccess,
       session: null,
-      stream_state: hostAccess.stream_state,
+      stream_state: unavailableDetailStreamState(state),
       events: null,
       approvals: [],
       prompt: {
@@ -1061,10 +1044,10 @@ function unavailableDetailFixture(
         error: null
       },
       primary_controls: ["model", "goal", "plan"].map((control) =>
-        controlFixture(control as StructuredControlKind, false, false, hostAccess.runtime)
+        controlFixture(control as StructuredControlKind, false, false, null)
       ),
       utility_controls: ["usage", "compact", "skills"].map((control) =>
-        controlFixture(control as StructuredControlKind, false, false, hostAccess.runtime)
+        controlFixture(control as StructuredControlKind, false, false, null)
       ),
       risky_controls: ["interrupt", "archive"].map((action) => ({
         action,
