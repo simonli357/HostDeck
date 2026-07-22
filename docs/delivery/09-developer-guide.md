@@ -56,7 +56,9 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | Contract tests | `pnpm test:contract` | Runs selected schema/API/CLI/storage contract tests. |
 | Integration tests | `pnpm test:integration` | Runs cross-module failure-ordering tests. |
 | Web development server | `pnpm --filter @hostdeck/web dev` | Starts the source React/Vite shell on loopback; Vite reports the selected free local port. This is not the packaged HostDeck service. |
+| Web production preview | `pnpm --filter @hostdeck/web preview` | Serves the existing `packages/web/dist` build on loopback without source watchers; build first and use only for local inspection. |
 | Web production build | `pnpm --filter @hostdeck/web build` | Emits the current shell to `packages/web/dist` without source maps or external assets. Production package ownership remains `IFC-V1-053`. |
+| Web shell tests | `pnpm --filter @hostdeck/web test` | Runs the focused phone shell/router component suite. |
 | Web state tests | `pnpm test:web` | Runs the phone shell/router, selected mobile fixture, and headless pairing-bootstrap checks. |
 | Production package build | `pnpm build` | Offline frozen-lock build of `dist/hostdeck` from the exact 610-source server/CLI closure. Emits six compiled packages, production dependencies, one `codexdeck` executable, one non-executable `dist/service-host.js`, the pure systemd unit generator, schema-3 identity manifest, and dependency-free verifier; real web assets remain separate. |
 | Production package acceptance | `pnpm test:package` | Builds twice, proves rollback/deterministic identity, relocates read-only, imports all roots plus the inert service host and unit generator, exercises SQLite/flock/Fastify and five command layouts, mutates command/service-host/verifier identity, and runs config/static/native/runtime/integrity/link failures. |
@@ -69,6 +71,8 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | Remote Android acceptance | `HOSTDECK_REMOTE_CONTROL_DEDICATED_PROFILE_ID=DEDICATED_ID HOSTDECK_REMOTE_CONTROL_AWAY_PROFILE_ID=AWAY_ID pnpm smoke:remote-android` | Strict no-retry `IFC-V1-079` run from a clean commit. Requires exact Tailscale 1.98.8, two distinct authorized saved profiles, and one unlocked authorized Android device with Tailscale, Chrome, USB debugging, and working cellular data. |
 | Later E2E tests | `pnpm test:e2e` | Placeholder; fails loudly until `REL-V1-007` implements it. |
 | Later release smoke | `pnpm smoke:local` | Placeholder; fails loudly until `REL-V1-006` implements it. |
+
+Vite source development requires available inotify watchers. If `dev` exits with `ENOSPC` because the host-wide watcher limit is already exhausted, close unrelated watcher-heavy processes or use the built `preview` command for read-only inspection; do not raise system limits as part of HostDeck startup.
 
 ## CLI And Service State
 

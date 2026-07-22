@@ -14,6 +14,7 @@ pnpm exec playwright install chromium
 
 ```bash
 pnpm --filter @hostdeck/web dev
+pnpm --filter @hostdeck/web preview
 pnpm check:scaffold
 pnpm check:planning
 pnpm check:runtime-boundary
@@ -31,6 +32,7 @@ pnpm test:contract
 pnpm exec vitest run --config vitest.contract.config.ts packages/cli/src/cli.contract.test.ts
 pnpm test:integration
 pnpm test:web
+pnpm --filter @hostdeck/web test
 pnpm --filter @hostdeck/web build
 pnpm test:browser:shell
 pnpm build
