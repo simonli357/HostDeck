@@ -16,7 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-025` Implement shell connection-state coordinator | in_progress | none | Strict `BSC-01` to `BSC-18` criteria are frozen; implementation now replaces stale implicit-loopback/provenance assumptions with access-first route-backed state. |
+| 1 | `FE-V1-011` Implement mobile Mission Control | ready | none | Build the default phone route first from the approved Focus Rail target and completed access-first coordinator. |
+| 2 | `FE-V1-012` Implement structured Session Detail feed and stream state | ready | none | Consume the completed detail/SSE state after the default inventory route establishes shared components. |
+| 3 | `FE-V1-013` Implement fragment-safe pairing and host/access status | ready | none | Add the pre-session trust/recovery surface on the completed pairing, remote-security, and coordinator contracts. |
 
 ## Intentional Blockers
 

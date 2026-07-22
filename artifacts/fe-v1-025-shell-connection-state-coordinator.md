@@ -118,4 +118,36 @@ git diff --check
 
 ## Evidence
 
-Implementation and evidence are pending. No `BSC-01` to `BSC-18` criterion is claimed complete by this criteria commit.
+### Implementation
+
+- Implementation commit: `888abf1`.
+- `packages/web/src/connection-state.ts` implements the branded, same-authority coordinator with exact targets, monotonic epochs, access-first disclosure, independently settled host/target resources, bounded pagination, selected-detail SSE ownership, CSRF lifecycle composition, canonical write eligibility, stable immutable snapshots, and deterministic close.
+- `packages/web/src/browser-client-authority.ts` binds each factory-created HTTP/SSE client to one exact origin and each CSRF client to its exact HTTP client without exposing authority metadata publicly.
+- `packages/contracts/src/selected-mobile.ts` and selected fixtures close `BUG-015`: browser loopback is `loopback_read`; live host access no longer fabricates ingress provenance/source keys, device labels, detailed compatibility, or a Mission Control stream; detail stream and compatibility inputs remain with their actual owners.
+- The hardening pass fixed four pre-closure defects: proven access-route denial now purges protected data, synchronous SSE publication installs ownership before notification, no-op publication preserves snapshot identity, and continuation pages cannot substitute an order snapshot. Contradictory origin/network transitions also select `remote_authority_changed` instead of a generic invalidation.
+
+### Acceptance
+
+| Criteria | Evidence |
+| --- | --- |
+| `BSC-01` to `BSC-03` | Direct tests reject unbranded/cross-origin/cross-HTTP/extra/accessor/prototype/clock/target/listener input; prove inert construction, deeply frozen stable snapshots, bounded subscribers, idempotent target/close, abort ownership, late-completion suppression, and synchronous re-entry safety. |
+| `BSC-04` to `BSC-08` | Access always precedes protected reads. Fresh and previously authorized unpaired/invalid/expired/revoked/403 states disclose no host/session data. Loopback unpaired is read-only, paired loopback write is explicit, local admin is rejected, host/target settle independently, authority contradictions fail fatally, and generic loss retains only same-target stale truth. |
+| `BSC-09` to `BSC-11` | Direct plus real-route cases cover unresolved, unpaired, invalid, expired, revoked, denied, read-only, locked, host-unavailable, host-not-ready, and CSRF-not-ready write causes; one bootstrap per authority; no hidden bootstrap/write retry; revoke, replacement class, origin, and remote-generation invalidation behavior. |
+| `BSC-12` to `BSC-15` | Direct cases prove cursor-only pagination, canonical order/uniqueness/access/order-snapshot checks, atomic 4,096 cap, detail not-found versus denial, stale/recovery history, SSE resume/reconnect/boundary/consumer/route/unmount/close behavior, and zero late callback publication. |
+| `BSC-16` | Contract regressions reject removed private/unavailable fields and implicit loopback writes; all 46 selected-mobile fixtures parse from route-backed host access plus separately owned detail-stream/compatibility inputs. |
+| `BSC-17` | Three real selected Fastify/SQLite compositions cover loopback read-only, admitted-Serve unpaired/paired reader/writer, list/detail/not-found, retention boundary, live SSE/reconnect, local compatibility degradation/recovery, audited lock, remote-generation CSRF invalidation/rebootstrap, revoke purge, privacy, and cleanup. They use test-owned transports only and do not mutate live Tailscale, profiles, Serve, or the phone. |
+| `BSC-18` | All focused, aggregate, static, package, install, supply-chain, privacy, and residue gates below pass. Manual review found no React/storage/polling/profile mutation, hidden retry/fallback, raw credential/source identity, surviving process, or temporary integration directory. |
+
+### Validation
+
+- `pnpm --filter @hostdeck/web test`: 6 files, 120 tests passed; coordinator direct matrix is 33 tests.
+- `pnpm test:web`: 7 files, 123 tests passed; `pnpm --filter @hostdeck/web build` passed (1,973 modules).
+- `pnpm test:unit`: 198 files passed, 27 explicitly skipped; 1,966 tests passed, 28 explicitly skipped.
+- `pnpm test:contract`: 34 files, 243 tests passed.
+- `pnpm test:integration`: 21 files, 35 tests passed; focused real coordinator composition is 3 tests.
+- `pnpm typecheck`, `pnpm lint` (568 files, 8 package exports), `pnpm check:scaffold` (8 packages/21 scripts), `pnpm check:runtime-boundary` (612 production modules/22 externals), and `pnpm check:planning` passed.
+- `pnpm test:package` passed two deterministic 6,433-entry builds and relocated read-only/runtime/config/static/integrity rejection.
+- `pnpm install --offline --frozen-lockfile`, `pnpm audit --prod` (no known vulnerabilities), and `git diff --check` passed.
+- Manual source/privacy scan found no browser persistence, timer/poll owner, live Tailscale/profile/Serve mutation, credential/source-key logging, TODO fallback, or console path. Process and `/tmp/hostdeck-connection-state-*` residue checks were empty.
+
+All `BSC-01` to `BSC-18` criteria are complete. Rendering remains intentionally downstream in `FE-V1-011` to `FE-V1-015` and the action/access screen leaves.

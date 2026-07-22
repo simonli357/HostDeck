@@ -40,10 +40,10 @@ Requirement refs: `FR-002`, `FR-005` to `FR-010`, `FR-016`, `NFR-004`, `IR-001` 
 | Mobile structured state/interaction rebaseline | `FE-V1-004` | Done; executable matrix and evidence in `artifacts/fe-v1-004-mobile-state-interaction-contract.md`. |
 | Replacement visual directions | `FE-V1-002` | Done; Signal Ledger and Focus Rail provide 14 current mobile-first targets and label both desktop-led boards rejected. |
 | Human selection | `FE-V1-003` | Done; Focus Rail and all seven current Option B assets are selected with no cross-option borrowing or additional structural drift. |
-| Phone-first shell and typed HTTP/SSE/CSRF/state clients | `FE-V1-010`, `FE-V1-019`, `FE-V1-023` to `FE-V1-025` | Shell `FE-V1-010`, exact bounded JSON `FE-V1-019`, bounded SSE `FE-V1-023`, and page-memory CSRF `FE-V1-024` are done; shared coordinator `FE-V1-025` is in progress under frozen strict criteria. |
-| Mission Control and structured Session Detail | `FE-V1-011`, `FE-V1-012` | Blocked by approved state contracts and coordinated clients. |
+| Phone-first shell and typed HTTP/SSE/CSRF/state clients | `FE-V1-010`, `FE-V1-019`, `FE-V1-023` to `FE-V1-025` | Complete: shell, exact bounded JSON/SSE clients, page-memory CSRF, and the access-first shared connection-state coordinator pass their strict module evidence. |
+| Mission Control and structured Session Detail | `FE-V1-011`, `FE-V1-012` | Ready on approved Focus Rail targets, state contracts, and coordinated clients. |
 | Prompt, model, goal, plan, utilities, and inline approval | `FE-V1-020` to `FE-V1-022`, `FE-V1-026` to `FE-V1-030` | Each leaf consumes its exact structured API/runtime port. |
-| Host access, QR pairing, CSRF reload, devices, lock, remote profile/Serve, and compatibility UI | `FE-V1-013`, `FE-V1-031` to `FE-V1-035` | Blocked by production remote security and mutable-health contracts. |
+| Host access, QR pairing, CSRF reload, devices, lock, remote profile/Serve, and compatibility UI | `FE-V1-013`, `FE-V1-031` to `FE-V1-035` | `FE-V1-013` is ready on completed remote security, mutable-health, pairing, and coordinator contracts; downstream access leaves remain ordered behind it. |
 | Event diagnostics, interrupt, archive, and TUI-resume affordances | `FE-V1-014`, `FE-V1-036` to `FE-V1-038` | Blocked by Session Detail and exact operation routes. |
 | Cross-screen failure and continuity matrix | `FE-V1-015` | Blocked by complete stream, health, and compatibility state. |
 | Responsive, accessibility, and browser matrices | `FE-V1-016`, `FE-V1-039`, `FE-V1-040` | Ordered after every required implemented state/action. |

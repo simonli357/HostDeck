@@ -218,10 +218,11 @@ Humans can report bugs in any format. The agent should extract the useful detail
 
 - Symptom: `selectedHostAccessSchema` permits implicit `loopback_local` browser writes and requires admitted request provenance/source key, device label, full runtime compatibility, and a connected session stream for Mission Control.
 - Impact: the selected browser API cannot produce that state. `DEC-024` makes safe loopback browser GETs unpaired/read-only; access/host/session routes intentionally omit proxy source keys, access bootstrap omits device labels and full compatibility, and Mission Control owns no session stream. A screen consuming the old fixture would have to fabricate authority or private/unavailable fields.
-- Route: backlog contract fix inside active `FE-V1-025`; the coordinator is the first live consumer and must establish a route-backed state before screens implement the stale fixture assumptions.
+- Route: closed inside `FE-V1-025`; the coordinator is the first live consumer and establishes route-backed state before screens consume it.
 - Related requirements: `IR-005`, `IR-006`, `IR-008`, `UX-009`, `DEC-024`, `DEC-027`.
 - Affected / owning task: selected-mobile fixture contract from completed foundation work; live replacement and regression evidence in `FE-V1-025`.
-- Blocks: `FE-V1-011` to `FE-V1-015` and access/action screens until the route-backed coordinator contract passes.
+- Blocks: resolved; `FE-V1-011`, `FE-V1-012`, and `FE-V1-013` are ready on the route-backed contract.
 - Root cause: the normalized visual fixture predated the final browser authentication/status composition and was not re-audited against exact route outputs after local-admin safe-GET authority was removed.
-- Fix: pending under `BSC-01` to `BSC-18`: access-first source state, explicit current/stale truth, loopback-read-only browser semantics, exact host/session consistency, and no unavailable provenance/label/compatibility/stream fabrication.
-- Validation: hostile reducer/query races, selected-mobile regression tests, real loopback/admitted-Serve authority matrix, full workspace gates, and manual privacy review.
+- Fix: `selectedHostAccessSchema` now uses `loopback_read`, device id only, route-derivable access/lock/read/write/error fields, optional current remote ingress, and no provenance/source key, label, detailed compatibility, or global stream fabrication. Session Detail owns its stream and compatibility remains with its exact runtime source.
+- Validation: selected-mobile regressions, 33 direct coordinator cases, three real loopback/admitted-Serve Fastify/SQLite cases, 243 contract tests, 35 integration tests, full workspace/static/package/install/audit gates, and manual privacy/residue review pass.
+- Closed by: `FE-V1-025` implementation `888abf1`; evidence in `artifacts/fe-v1-025-shell-connection-state-coordinator.md`.
