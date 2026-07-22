@@ -122,4 +122,60 @@ Manual inspection additionally covers approved-reference comparison, initial-rep
 
 ## Evidence
 
-Criteria are frozen before implementation. Implementation, validation results, screenshot hashes, measured layout evidence, drift disposition, and commit ids remain pending.
+Criteria were frozen before implementation in `015b99d`. Implementation and deterministic browser evidence are committed in `0d29a66`.
+
+### Result
+
+- `SDT-01` to `SDT-20` pass for this leaf. `connectSessionStream` keeps omitted/`live` behavior and adds one exact `recent` mode derived from current detail truth; no arbitrary cursor, event-page request, second stream, polling, or browser persistence exists.
+- The exact, deep-frozen reducer rejects malformed targets, contradictory duplicates, gaps, out-of-order events, and inconsistent later boundaries; it retains 100 raw events while preserving accepted cursor/count truth.
+- Agent deltas consolidate by item id and authoritative completion replaces partial text in place. Every selected event/state and content-limitation variant receives bounded semantic projection without raw wire identifiers.
+- Readable authority gates app-bar identity, context, and feed content. Revocation suppresses and purges immediately; stale detail, unavailable cleared feed, reconnecting retained feed, terminal failure, continuity boundary, empty history, and not-found/archived rejection remain distinct.
+- The production detail route owns one coordinator subscription and one recent SSE handoff. Refresh is single-flight, clears the baseline, reconnects only after current detail, and never self-retries.
+- The ordered Focus Rail timeline, read-only approval facts, document-owned scrolling, pinned/unpinned behavior, centered bounded new-activity control, generic failures, and direct/history Back behavior match the frozen interface contract.
+
+### Automated Validation
+
+| Gate | Result |
+| --- | --- |
+| Web package | 10 files, 175 tests passed. |
+| Web aggregate | 11 files, 178 tests passed. |
+| Production Chromium | 11 scenarios passed: shell/direct route, active continuum, stale/revoked, empty, approval/boundary, terminal failure, reconnect, long/reflow, keyboard/focus, reduced motion, contrast, live update, and 2x zoom. |
+| Unit | 202 files and 2,021 tests passed; 27 files/28 tests remained explicitly skipped by existing opt-in gates. |
+| Contract / integration | 34 files/243 tests and 21 files/35 tests passed. |
+| Static | Root/web typecheck, Biome/package exports over 584 files/8 packages, scaffold over 8 packages/21 scripts, runtime boundary over 612 production modules/22 externals, and planning over 219 tasks/84 requirements/675 dependencies passed. |
+| Build / package | Vite built 2,013 modules; deterministic production package acceptance passed two builds with 6,433 entries, relocated read-only execution, and runtime/config/static/integrity rejection. |
+| Supply chain / diff | Frozen offline install, zero-vulnerability production audit, privacy scan, process/result-marker cleanup, and final diff checks passed. |
+
+The Vite entry is 626.79 kB minified and 173.02 kB gzip. Vite emits its advisory 500 kB uncompressed chunk warning; no V1 performance threshold fails, and route splitting remains with complete-dashboard/release hardening rather than being hidden in this leaf.
+
+### Visual And Accessibility Evidence
+
+`layout-measurements.json` (`9a6005aff7d061fd80c85735f4817c19c10278c1b402b8fa2d0858b70d12d2af`) records all five reference widths. Every document has `clientWidth == scrollWidth`; context bottoms precede first timeline tops; refresh remains 44 x 44; the route is 360/390/412/768 px wide on the phone/tablet references and is centered at exactly 820 px on 1280.
+
+| Capture | Dimensions | SHA-256 |
+| --- | --- | --- |
+| `active-360x800.png` | 360 x 800 | `263bbae4b67b44b43e1ab92403f68132d58d8e608ba8427baa576753b2e415f1` |
+| `active-390x844.png` | 390 x 844 | `d84ad71395a9416945a19324e2b3ea6145f0c68ca54c8b8e06ee409acb76aac7` |
+| `active-412x915.png` | 412 x 915 | `09bac8ba1f8ce9fae4389b656f79e08fefbac7d0c7ba426ffa189e766a939e19` |
+| `active-768x1024.png` | 768 x 1024 | `8a29d19f863edf6f5915752ef58ffc376cb46223b9f5395f78d8560d063a2bd8` |
+| `active-1280x800.png` | 1280 x 800 | `8b6ca9e66492ec067430279c2bbf154a1345db6315b33243cc977db8d4d0d117` |
+| `active-full-390x844.png` | 390 x 1,141 | `689bc66f024c562deb6699b3f3db02351ebd3ba00ce9411f8c34a5ac23b59366` |
+| `approval-boundary-390x844.png` | 390 x 844 | `dedb8ae425240d00a35d67024c372bd1dbc0497e48f5cafdf20337d2eaff35a6` |
+| `reconnecting-390x844.png` | 390 x 844 | `5821a6401130c0a55cfba08c0e335125051184016f5e8eb9301aa47c7cacb9b9` |
+| `stream-failed-390x844.png` | 390 x 844 | `161ee80c5a0ea9a25333aa06764e24f16400d5f06f93af8e88cd002e537a6d27` |
+| `stale-390x844.png` | 390 x 844 | `5c7ea34e10603b0a628df46aa6da2e545cf1aaa6d3063eb890e9b4a2cfc92aba` |
+| `access-limited-390x844.png` | 390 x 844 | `ca57a6d3210c957dde5c761c376466fb3760786fe49bf69a9a269fde48aa5525` |
+| `empty-390x844.png` | 390 x 844 | `33416fe62a15002fc18877d65e0d9b6c53fa90775656ec4e2d4652c1f38deda8` |
+| `new-activity-390x844.png` | 390 x 844 | `2c80bf162296cb801ceb7e7b2c8fd3eafdf4b985bb8f0c8278219a57e3be7786` |
+| `long-reflow-320x800.png` | 320 x 2,669 | `848b69ae038a5804546407d7ccce2ff71f4bfc65bfd8aff997f30e4b6572c98f` |
+| `zoom-200-1280x800.png` | 1280 x 800 at 2x layout zoom | `c78a845e3bcfc73901aa0452e34348b175a073eb056cc62534be6992ac06107c` |
+
+All captures decode at their recorded dimensions with 1,630 to 6,158 colors. Automated checks prove no horizontal overflow, stable controls, unclipped long timeline items, 3 px visible focus, correct keyboard order, reduced-motion suppression, selected-token contrast, semantic list/time/status output, no downstream textbox/decision control, and empty browser storage.
+
+Manual comparison against `mobile-session-detail-active.png`, `mobile-approval-boundary-states.png`, and `responsive-continuum.png` confirms the selected Focus Rail app-bar hierarchy, continuous timeline, semantic blue/teal/amber/red treatments, flat event rows, visible boundaries, and phone-first density without Signal Ledger borrowing. The shared shell menu/context rail use the already selected route architecture. The illustrative composer, `/model`/`/goal`/`/plan` dock, approval decisions, and 1280 list/detail split are intentionally absent because `FE-V1-020`, `FE-V1-021`, `FE-V1-026`, `FE-V1-027`, `FE-V1-022`, and `FE-V1-016` own them; this is frozen scope, not unresolved drift.
+
+### Privacy, Residue, And Downstream Limits
+
+Deterministic browser requests remain on `http://127.0.0.1:4175`; page errors, external requests, and local/session storage remain empty. The stale refresh produces one expected browser-generated 503 resource line without exposing its private response body. Source inspection found no storage, console logging, polling, event-page fetch, second stream, raw route/session/thread/item/request/event id, full cwd, credential state, or live Tailscale/profile/Serve mutation in the product projection. Test-owned port 4175 processes and Playwright result state are absent after validation.
+
+This leaf does not claim pairing/access recovery, prompt submission, `/model`, `/goal`, `/plan`, utility actions, approval decisions, diagnostics, interrupt/archive/TUI resume, desktop split, packaged assets, complete-dashboard hardening, or real Android/Tailscale acceptance. Those remain with `FE-V1-013` to `FE-V1-016`, `FE-V1-020` to `FE-V1-022`, `FE-V1-026` to `FE-V1-040`, `IFC-V1-053`, and `FE-V1-090`.
