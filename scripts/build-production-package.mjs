@@ -61,8 +61,8 @@ export function selectedProductionSources(repositoryRoot = defaultRepositoryRoot
     throw new Error(`Selected runtime boundary failed:\n- ${result.failures.join("\n- ")}`);
   }
   const sources = result.closureFiles.filter((path) => !path.startsWith("packages/web/"));
-  if (sources.length !== 608) {
-    throw new Error(`Selected server/CLI closure contains ${sources.length} sources; expected exactly 608.`);
+  if (sources.length !== 609) {
+    throw new Error(`Selected server/CLI closure contains ${sources.length} sources; expected exactly 609.`);
   }
   const selectedPackages = new Set(sources.map((path) => path.split("/")[1]));
   if (selectedPackages.size !== packageNames.length || packageNames.some((name) => !selectedPackages.has(name))) {
@@ -177,11 +177,12 @@ export function buildProductionPackage(options = {}) {
     const executableFiles = collectExecutableFiles(packageRoot);
     normalizePackageModes(packageRoot, new Set(executableFiles));
     const command = collectHostDeckCommand(packageRoot, packageVersion);
+    const serviceHost = collectHostDeckServiceHost(packageRoot, packageVersion);
     const nativeModules = collectRequiredNativeModules(packageRoot, executableFiles);
     const ownedOutput = computeOwnedOutputIdentity(packageRoot, descriptors);
     const content = inspectProductionPackageTree(packageRoot, executableFiles);
     const manifest = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       name: "hostdeck-production-package",
       packageVersion,
       packageManager: `pnpm@${runtime.pnpm}`,
@@ -189,6 +190,7 @@ export function buildProductionPackage(options = {}) {
       runtime,
       codex,
       command,
+      serviceHost,
       source: { count: sourceIdentity.count, sha256: sourceIdentity.sha256 },
       output: { count: ownedOutput.count, sha256: ownedOutput.sha256 },
       content,
@@ -215,6 +217,32 @@ export function buildProductionPackage(options = {}) {
   } finally {
     removeTree(stagingRoot);
   }
+}
+
+function collectHostDeckServiceHost(root, packageVersion) {
+  const path = "dist/service-host.js";
+  const absolutePath = resolve(root, path);
+  const stats = lstatSync(absolutePath);
+  const content = readFileSync(absolutePath);
+  if (
+    !stats.isFile() ||
+    stats.isSymbolicLink() ||
+    stats.nlink !== 1 ||
+    (stats.mode & 0o777) !== 0o644 ||
+    content.subarray(0, 2).equals(Buffer.from("#!")) ||
+    /\b(?:ts-node|tsx)\b|from\s+["'][^"']+\.ts["']/u.test(
+      content.toString("utf8")
+    )
+  ) {
+    throw new Error("Production service-host module is invalid.");
+  }
+  return Object.freeze({
+    package: "@hostdeck/cli",
+    path,
+    sha256: sha256Hex(content),
+    size: content.length,
+    version: packageVersion
+  });
 }
 
 function collectHostDeckCommand(root, packageVersion) {

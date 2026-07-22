@@ -175,6 +175,28 @@ export function prepareHostDeckLocalPathsAfterLease(
   });
 }
 
+export function prepareHostDeckServiceLocalPathsAfterLease(
+  paths: ResolvedHostDeckLocalPaths
+): PreparedHostDeckLocalPaths {
+  const resolved = validateResolvedHostDeckLocalPaths(paths);
+  const uid = requireLinuxUid();
+  const repairs: HostDeckPathModeRepair[] = [];
+  ensureSecureDirectory(resolved.config_dir, "config_dir", uid, repairs);
+  assertSecureRuntimeParent(dirname(resolved.runtime_dir), uid);
+  inspectExistingSecureDirectory(resolved.runtime_dir, "runtime_dir", uid);
+  ensureSecureDirectory(
+    dirname(resolved.database_path),
+    "database parent",
+    uid,
+    repairs
+  );
+
+  return Object.freeze({
+    ...resolved,
+    repairs: freezeRepairs(repairs)
+  });
+}
+
 function validateResolvedHostDeckLocalPaths(paths: ResolvedHostDeckLocalPaths): ResolvedHostDeckLocalPaths {
   const resolved = resolveHostDeckLocalPaths({
     config_dir: paths.config_dir,

@@ -21,6 +21,7 @@ export * from "./remote-control-client.js";
 export * from "./render.js";
 export * from "./resume-client.js";
 export * from "./resume-launcher.js";
+export * from "./service-host.js";
 export * from "./session-list-client.js";
 export * from "./shell.js";
 export * from "./skills-client.js";

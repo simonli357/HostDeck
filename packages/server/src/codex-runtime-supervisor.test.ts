@@ -103,6 +103,7 @@ describe("Codex runtime supervisor", () => {
       }
     ]);
     expect(Object.isFrozen(process.requests[0]?.args)).toBe(true);
+    expect(socket.inspectionRepairModes.every((value) => value)).toBe(true);
     expect(started).toMatchObject({
       mode: "foreground_child",
       ownership: "foreground_child",
@@ -169,6 +170,8 @@ describe("Codex runtime supervisor", () => {
       process_exit: null,
       stale_socket_removed: false
     });
+    expect(socket.inspectionRepairModes).not.toHaveLength(0);
+    expect(socket.inspectionRepairModes.every((value) => !value)).toBe(true);
     expect(supervisor.snapshot()).toMatchObject({
       phase: "ready",
       process_state: "not_applicable",
@@ -772,6 +775,7 @@ function fakeSocket(
   readonly port: CodexRuntimeSocketPort;
   readonly removeCalls: string[];
   readonly inspectCalls: number;
+  readonly inspectionRepairModes: readonly boolean[];
   readonly current: () => CodexRuntimeSocketObservation;
   readonly identity: () => string;
   readonly setProbe: (probe: "ready" | "refused" | "missing") => void;
@@ -787,10 +791,12 @@ function fakeSocket(
         });
   let probe = options.probe ?? "ready";
   let inspectCalls = 0;
+  const inspectionRepairModes: boolean[] = [];
   const removeCalls: string[] = [];
   const port: CodexRuntimeSocketPort = {
-    inspect() {
+    inspect(_path, policy) {
       inspectCalls += 1;
+      inspectionRepairModes.push(policy.repair_mode);
       return observation;
     },
     probe() {
@@ -812,6 +818,7 @@ function fakeSocket(
     get inspectCalls() {
       return inspectCalls;
     },
+    inspectionRepairModes,
     current: () => observation,
     identity: () =>
       observation.state === "socket" ? observation.identity : "missing",

@@ -229,6 +229,7 @@ export function verifyProductionPackage(root, options = {}) {
   assertRuntimeIdentity(manifest.runtime, runtime);
   verifyPackageManifests(packageRoot, manifest);
   verifyCommand(packageRoot, manifest.command, manifest.executableFiles);
+  verifyServiceHost(packageRoot, manifest.serviceHost, manifest.executableFiles);
   verifyNoOwnedExecutables(packageRoot, manifest.packages, manifest.executableFiles, manifest.command.path);
 
   const tree = inspectProductionPackageTree(packageRoot, manifest.executableFiles);
@@ -266,11 +267,12 @@ function validateManifest(manifest) {
       "packages",
       "runtime",
       "schemaVersion",
+      "serviceHost",
       "source"
     ],
     "Package manifest"
   );
-  if (value.schemaVersion !== 2 || value.name !== "hostdeck-production-package") {
+  if (value.schemaVersion !== 3 || value.name !== "hostdeck-production-package") {
     throw new TypeError("HostDeck package manifest schema is unsupported.");
   }
   if (value.nativeBuildPolicy !== "canonical-runtime-binary-only") {
@@ -289,7 +291,7 @@ function validateManifest(manifest) {
   }
 
   validateIdentity(value.source, "Source identity", "count");
-  if (value.source.count !== 608) throw new TypeError("Selected source count must be exactly 608.");
+  if (value.source.count !== 609) throw new TypeError("Selected source count must be exactly 609.");
   validateIdentity(value.output, "Owned output identity", "count");
   validateIdentity(value.content, "Package content identity", "entryCount");
   if (!Number.isSafeInteger(value.content.bytes) || value.content.bytes < 1) {
@@ -314,6 +316,7 @@ function validateManifest(manifest) {
   }
 
   validateCommand(value.command, value.packageVersion);
+  validateServiceHost(value.serviceHost, value.packageVersion);
 
   if (!Array.isArray(value.deferrals) || !sameArray(value.deferrals, expectedDeferrals)) {
     throw new TypeError("Package downstream deferrals are invalid.");
@@ -362,7 +365,7 @@ function validatePackages(packages, packageVersion, outputIdentity) {
     sourceCount += descriptor.sourceCount;
     compiledCount += descriptor.outputCount;
   }
-  if (sourceCount !== 608 || outputIdentity.count !== compiledCount + packages.length + 1) {
+  if (sourceCount !== 609 || outputIdentity.count !== compiledCount + packages.length + 1) {
     throw new TypeError("Owned source/output aggregate is inconsistent.");
   }
 }
@@ -399,6 +402,26 @@ function validateCommand(command, packageVersion) {
   }
   parseRelativePath(value.path, "CLI command path", false);
   parseSha256(value.sha256, "CLI command SHA-256");
+}
+
+function validateServiceHost(serviceHost, packageVersion) {
+  const value = assertRecord(serviceHost, "Service-host descriptor");
+  assertExactKeys(
+    value,
+    ["package", "path", "sha256", "size", "version"],
+    "Service-host descriptor"
+  );
+  if (
+    value.package !== "@hostdeck/cli" ||
+    value.path !== "dist/service-host.js" ||
+    value.version !== packageVersion ||
+    !Number.isSafeInteger(value.size) ||
+    value.size < 1
+  ) {
+    throw new TypeError("Service-host descriptor is inconsistent.");
+  }
+  parseRelativePath(value.path, "Service-host path", false);
+  parseSha256(value.sha256, "Service-host SHA-256");
 }
 
 function validateExecutables(executables, commandPath) {
@@ -507,6 +530,31 @@ function verifyCommand(root, command, executableFiles) {
   const text = content.toString("utf8");
   if (/\b(?:ts-node|tsx)\b|from\s+["'][^"']+\.ts["']/u.test(text)) {
     throw new TypeError("CLI command target depends on a source runtime loader.");
+  }
+}
+
+function verifyServiceHost(root, serviceHost, executableFiles) {
+  const path = resolveContained(root, serviceHost.path, "Service-host path");
+  const stats = lstatOrNull(path);
+  if (
+    stats === null ||
+    !stats.isFile() ||
+    stats.nlink !== 1 ||
+    executableFiles.includes(serviceHost.path)
+  ) {
+    throw new TypeError("Service-host module is missing or executable.");
+  }
+  assertFileMode(stats.mode, serviceHost.path, false);
+  const content = readFileSync(path);
+  if (
+    content.length !== serviceHost.size ||
+    sha256Hex(content) !== serviceHost.sha256 ||
+    content.subarray(0, 2).equals(Buffer.from("#!")) ||
+    /\b(?:ts-node|tsx)\b|from\s+["'][^"']+\.ts["']/u.test(
+      content.toString("utf8")
+    )
+  ) {
+    throw new TypeError("Service-host module identity is invalid.");
   }
 }
 

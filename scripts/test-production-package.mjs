@@ -80,6 +80,7 @@ try {
     [smokeScript, relocated, "--read-only"],
     unrelatedCwd
   );
+  runServiceHostImport(relocated, relocatedManifest, unrelatedCwd);
   runExecutableInvocationMatrix(relocated, relocatedManifest, unrelatedCwd);
   verifyProductionPackage(relocated);
 
@@ -173,6 +174,42 @@ try {
   runMutationProbe(
     relocated,
     unrelatedCwd,
+    "executable service-host module",
+    () => {
+      const path = join(relocated, relocatedManifest.serviceHost.path);
+      chmodSync(path, 0o755);
+      return () => chmodSync(path, 0o644);
+    },
+    /service-host module is missing or executable|file mode is invalid/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "modified service-host module",
+    () => {
+      const path = join(relocated, relocatedManifest.serviceHost.path);
+      const original = readFileSync(path);
+      appendFileSync(path, "\n// service-host drift\n");
+      return () => writeFileSync(path, original);
+    },
+    /service-host module identity|owned output identity/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "escaping service-host descriptor",
+    () => {
+      const path = join(relocated, "hostdeck-package.json");
+      return mutateJson(path, (value) => {
+        value.serviceHost.path = "../service-host.js";
+        value.manifestSha256 = computeManifestSha256(value);
+      });
+    },
+    /service-host descriptor is inconsistent|service-host path/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
     "modified owned output",
     () => {
       const path = join(relocated, "dist", "index.js");
@@ -255,6 +292,26 @@ function runMutationProbe(root, cwd, label, mutate, expected) {
     restore();
   }
   verifyProductionPackage(root);
+}
+
+function runServiceHostImport(root, manifest, cwd) {
+  const script = `
+    import { pathToFileURL } from "node:url";
+    await import(pathToFileURL(process.argv[1]).href);
+    console.log("service-host import remained inert");
+  `;
+  const result = runChild(
+    "service-host inert import",
+    [
+      "--input-type=module",
+      "--eval",
+      script,
+      join(root, manifest.serviceHost.path)
+    ],
+    cwd
+  );
+  assert.equal(result.stdout, "service-host import remained inert\n");
+  assert.equal(result.stderr, "");
 }
 
 function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {

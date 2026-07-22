@@ -33,9 +33,11 @@ import type {
 } from "./codex-runtime-supervisor.js";
 import {
   assertHostDeckForegroundResources,
+  assertHostDeckServiceResources,
   HostDeckForegroundResourceError,
   type StartHostDeckForegroundResourcesInput,
-  startHostDeckForegroundResources
+  startHostDeckForegroundResources,
+  startHostDeckServiceResources
 } from "./foreground-resource-bootstrap.js";
 
 const roots: string[] = [];
@@ -461,6 +463,127 @@ describe("HostDeck foreground resource bootstrap", () => {
   });
 });
 
+describe("HostDeck service resource bootstrap", () => {
+  it("stops at the shared lease before observing the sibling runtime", async () => {
+    const layout = fixtureLayout("service-held-lease");
+    mkdirSync(layout.runtimeDir, { mode: 0o700 });
+    chmodSync(layout.runtimeDir, 0o700);
+    prepareHostDeckDaemonLeasePath(
+      resolveHostDeckLocalPaths({
+        config_dir: layout.configDir,
+        database_path: layout.databasePath,
+        runtime_dir: layout.runtimeDir,
+        state_dir: layout.stateDir
+      })
+    );
+    const owner = acquireHostDeckDaemonLease({ lease_path: layout.leasePath });
+    const runtime = fakeRuntime({ ownership: "service_owned" });
+
+    try {
+      await expect(
+        startHostDeckServiceResources(layout.input, {
+          runtimeSupervisorFactory: runtime.factory
+        })
+      ).rejects.toMatchObject({ code: "lease_held", stage: "lease" });
+      expect(runtime.startCalls).toBe(0);
+      expect(lstatSync(layout.runtimeDir).mode & 0o7777).toBe(0o700);
+      expect(existsSync(layout.socketPath)).toBe(false);
+    } finally {
+      owner.release();
+    }
+  });
+
+  it("awaits an existing service runtime without gaining process or socket ownership", async () => {
+    const layout = fixtureLayout("service-success");
+    mkdirSync(layout.runtimeDir, { mode: 0o700 });
+    chmodSync(layout.runtimeDir, 0o700);
+    const runtime = fakeRuntime({ ownership: "service_owned" });
+
+    const resources = await startHostDeckServiceResources(layout.input, {
+      runtimeSupervisorFactory: runtime.factory
+    });
+
+    expect(runtime.factoryInput).toEqual({
+      mode: "service_owned",
+      socket_path: layout.socketPath
+    });
+    expect(resources.runtime).toMatchObject({
+      mode: "service_owned",
+      ownership: "service_owned",
+      process_exit: null,
+      socket_mode_repaired: false,
+      stale_socket_removed: false
+    });
+    expect(() => assertHostDeckServiceResources(resources)).not.toThrow();
+    expect(() => assertHostDeckForegroundResources(resources)).toThrow(
+      TypeError
+    );
+
+    await resources.close();
+    expect(runtime.closeCalls).toBe(1);
+    expect(existsSync(layout.runtimeDir)).toBe(true);
+    expect(lstatSync(layout.runtimeDir).mode & 0o7777).toBe(0o700);
+    acquireAndRelease(layout.leasePath);
+  });
+
+  it("requires the externally owned runtime directory without creating or repairing it", async () => {
+    for (const [label, prepare] of [
+      ["missing", (_fixture: FixtureLayout) => undefined],
+      [
+        "insecure",
+        (fixture: FixtureLayout) => {
+          mkdirSync(fixture.runtimeDir, { mode: 0o711 });
+          chmodSync(fixture.runtimeDir, 0o711);
+        }
+      ]
+    ] as const) {
+      const fixture = fixtureLayout(`service-runtime-${label}`);
+      prepare(fixture);
+      const runtime = fakeRuntime({ ownership: "service_owned" });
+      await expect(
+        startHostDeckServiceResources(fixture.input, {
+          runtimeSupervisorFactory: runtime.factory
+        })
+      ).rejects.toMatchObject({ code: "path_failed", stage: "paths" });
+      expect(runtime.startCalls).toBe(0);
+      if (label === "missing") {
+        expect(existsSync(fixture.runtimeDir)).toBe(false);
+      } else {
+        expect(lstatSync(fixture.runtimeDir).mode & 0o7777).toBe(0o711);
+      }
+    }
+  });
+
+  it("rejects foreground runtime identity from a service supervisor", async () => {
+    const layout = fixtureLayout("service-identity");
+    mkdirSync(layout.runtimeDir, { mode: 0o700 });
+    const runtime = fakeRuntime({
+      ownership: "service_owned",
+      startResult: Object.freeze({
+        mode: "foreground_child",
+        ownership: "foreground_child",
+        socket_path: layout.socketPath,
+        socket_mode_repaired: false,
+        stale_socket_removed: false,
+        process_exit: Promise.resolve({
+          kind: "exited" as const,
+          expected: true,
+          code: 0,
+          signal: null
+        })
+      })
+    });
+
+    await expect(
+      startHostDeckServiceResources(layout.input, {
+        runtimeSupervisorFactory: runtime.factory
+      })
+    ).rejects.toMatchObject({ code: "runtime_failed", stage: "runtime" });
+    expect(runtime.closeCalls).toBe(1);
+    acquireAndRelease(layout.leasePath);
+  });
+});
+
 interface FixtureLayout {
   readonly root: string;
   readonly configDir: string;
@@ -508,6 +631,7 @@ function fixtureLayout(label: string): FixtureLayout {
 }
 
 interface FakeRuntimeOptions {
+  readonly ownership?: "foreground_child" | "service_owned";
   readonly onStart?: (
     input: StartCodexRuntimeSupervisorInput,
     factoryInput: CreateCodexRuntimeSupervisorInput
@@ -529,6 +653,7 @@ interface FakeRuntimeHarness {
 }
 
 function fakeRuntime(options: FakeRuntimeOptions = {}): FakeRuntimeHarness {
+  const ownership = options.ownership ?? "foreground_child";
   const processExit = Promise.resolve({
     kind: "exited" as const,
     expected: true,
@@ -536,12 +661,12 @@ function fakeRuntime(options: FakeRuntimeOptions = {}): FakeRuntimeHarness {
     signal: null
   });
   const started = Object.freeze({
-    mode: "foreground_child" as const,
-    ownership: "foreground_child" as const,
+    mode: ownership,
+    ownership,
     socket_path: "pending",
-    socket_mode_repaired: true,
+    socket_mode_repaired: ownership === "foreground_child",
     stale_socket_removed: false,
-    process_exit: processExit
+    process_exit: ownership === "foreground_child" ? processExit : null
   });
   const harness: FakeRuntimeHarness = {
     factoryCalls: 0,
@@ -577,7 +702,7 @@ function fakeRuntime(options: FakeRuntimeOptions = {}): FakeRuntimeHarness {
         phase = "closed";
       },
       snapshot() {
-        return snapshot(phase);
+        return snapshot(phase, ownership);
       }
     };
     return supervisor;
@@ -586,19 +711,26 @@ function fakeRuntime(options: FakeRuntimeOptions = {}): FakeRuntimeHarness {
 }
 
 function snapshot(
-  phase: CodexRuntimeSupervisorSnapshot["phase"]
+  phase: CodexRuntimeSupervisorSnapshot["phase"],
+  ownership: "foreground_child" | "service_owned" = "foreground_child"
 ): CodexRuntimeSupervisorSnapshot {
   return Object.freeze({
-    mode: "foreground_child",
+    mode: ownership,
     phase,
-    ownership: "foreground_child",
+    ownership,
     claim_held: phase === "ready",
     socket_ready: phase === "ready",
-    socket_mode_repaired: phase === "ready",
+    socket_mode_repaired: ownership === "foreground_child" && phase === "ready",
     stale_socket_removed: false,
-    process_state: phase === "ready" ? "running" : "not_started",
+    process_state:
+      ownership === "service_owned"
+        ? "not_applicable"
+        : phase === "ready"
+          ? "running"
+          : "not_started",
     process_exit: null,
-    spawn_attempts: phase === "idle" ? 0 : 1,
+    spawn_attempts:
+      ownership === "service_owned" || phase === "idle" ? 0 : 1,
     startup_retries: 0,
     term_signals: 0,
     kill_signals: 0,

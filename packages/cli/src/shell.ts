@@ -2,14 +2,8 @@
 
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
-import {
-  accessSync,
-  constants as fsConstants,
-  lstatSync,
-  readFileSync,
-  realpathSync
-} from "node:fs";
-import { delimiter, dirname, isAbsolute, join, normalize, resolve } from "node:path";
+import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   ApiErrorEnvelope,
@@ -110,7 +104,12 @@ import {
   type HostDeckCompactClient,
   type HostDeckCompactClientStartRequest
 } from "./compact-client.js";
-import { type LoadCliConfigOptions, loadCliConfig } from "./config.js";
+import {
+  type LoadCliConfigOptions,
+  loadCliConfig,
+  resolveCanonicalRuntimePackageRoot,
+  resolveHostDeckCodexExecutable
+} from "./config.js";
 import {
   createHostDeckDeviceRevokeClient,
   type HostDeckDeviceRevokeClient,
@@ -299,9 +298,6 @@ const selectedBrowserRoutes = Object.freeze([
 ] as const);
 const exactPackageVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 const maximumPackageManifestBytes = 65_536;
-const maximumExecutablePathBytes = 4_096;
-const maximumPathEnvironmentBytes = 32_768;
-const maximumPathEntries = 256;
 
 export async function runCli(args: readonly string[], options: CliRunOptions = {}): Promise<CliRunResult> {
   try {
@@ -1668,11 +1664,11 @@ async function runForegroundServeCommand(
       "XDG_RUNTIME_DIR"
     );
   }
-  const packageRoot = resolveCanonicalPackageRoot(
+  const packageRoot = resolveCanonicalRuntimePackageRoot(
     options.packageRoot ?? cliModulePackageRoot
   );
   const env = options.env ?? process.env;
-  const codexBin = resolveCodexExecutable(env);
+  const codexBin = resolveHostDeckCodexExecutable(env);
   const loopbackPort = Number(config.baseUrl.port);
   const input: StartHostDeckProductionForegroundServeInput = {
     browser_routes: selectedBrowserRoutes,
@@ -1757,105 +1753,6 @@ async function runForegroundServeCommand(
   return options.writeServeReady === undefined ? readyOutput : "";
 }
 
-function resolveCanonicalPackageRoot(candidate: string): string {
-  try {
-    if (
-      !isAbsolute(candidate) ||
-      candidate === "/" ||
-      normalize(candidate) !== candidate ||
-      Buffer.byteLength(candidate, "utf8") > maximumExecutablePathBytes ||
-      containsControl(candidate)
-    ) {
-      throw new TypeError();
-    }
-    const canonical = realpathSync.native(candidate);
-    if (canonical !== candidate || !lstatSync(canonical).isDirectory()) {
-      throw new TypeError();
-    }
-    return canonical;
-  } catch {
-    throw configFailure(
-      "HostDeck runtime package root is unavailable or noncanonical.",
-      "package_root"
-    );
-  }
-}
-
-function resolveCodexExecutable(
-  env: Readonly<Record<string, string | undefined>>
-): string {
-  const explicit = env.HOSTDECK_CODEX_BIN;
-  if (explicit !== undefined) {
-    const canonical = inspectExecutableCandidate(explicit);
-    if (canonical === null) {
-      throw configFailure(
-        "HOSTDECK_CODEX_BIN must name one canonical absolute executable file.",
-        "HOSTDECK_CODEX_BIN"
-      );
-    }
-    return canonical;
-  }
-
-  const rawPath = env.PATH;
-  if (
-    typeof rawPath !== "string" ||
-    rawPath.length === 0 ||
-    Buffer.byteLength(rawPath, "utf8") > maximumPathEnvironmentBytes ||
-    containsControl(rawPath)
-  ) {
-    throw configFailure(
-      "PATH must contain bounded absolute entries to resolve Codex.",
-      "PATH"
-    );
-  }
-  const entries = rawPath.split(delimiter);
-  if (
-    entries.length < 1 ||
-    entries.length > maximumPathEntries ||
-    entries.some(
-      (entry) =>
-        !isAbsolute(entry) ||
-        entry === "/" ||
-        normalize(entry) !== entry ||
-        Buffer.byteLength(entry, "utf8") > maximumExecutablePathBytes
-    )
-  ) {
-    throw configFailure(
-      "PATH must contain only bounded canonical absolute entries.",
-      "PATH"
-    );
-  }
-  for (const entry of entries) {
-    const canonical = inspectExecutableCandidate(join(entry, "codex"));
-    if (canonical !== null) return canonical;
-  }
-  throw configFailure(
-    "Codex executable was not found in PATH.",
-    "PATH"
-  );
-}
-
-function inspectExecutableCandidate(candidate: string): string | null {
-  try {
-    if (
-      !isAbsolute(candidate) ||
-      candidate === "/" ||
-      normalize(candidate) !== candidate ||
-      Buffer.byteLength(candidate, "utf8") > maximumExecutablePathBytes ||
-      containsControl(candidate)
-    ) {
-      return null;
-    }
-    const canonical = realpathSync.native(candidate);
-    const stats = lstatSync(canonical);
-    if (!stats.isFile() || stats.isSymbolicLink()) return null;
-    accessSync(canonical, fsConstants.X_OK);
-    return canonical;
-  } catch {
-    return null;
-  }
-}
-
 function assertInjectedForegroundServe(
   candidate: unknown
 ): asserts candidate is HostDeckProductionForegroundServe {
@@ -1900,17 +1797,12 @@ function combineProcessBoundaryErrors(
       );
 }
 
-function containsControl(value: string): boolean {
-  for (const character of value) {
-    const code = character.codePointAt(0) ?? 0;
-    if (code <= 0x1f || code === 0x7f) return true;
-  }
-  return false;
-}
-
 function loadRuntimePackageVersion(packageRoot: string): string {
   try {
-    const manifestPath = join(resolveCanonicalPackageRoot(packageRoot), "package.json");
+    const manifestPath = join(
+      resolveCanonicalRuntimePackageRoot(packageRoot),
+      "package.json"
+    );
     const stats = lstatSync(manifestPath);
     if (
       !stats.isFile() ||

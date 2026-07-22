@@ -6,18 +6,21 @@ import type {
   HostDeckFastifyLifecycleSnapshot,
   StartHostDeckTailscaleServeFastifyLifecycleInput
 } from "./fastify-host-lifecycle.js";
-import type { HostDeckForegroundResources } from "./foreground-resource-bootstrap.js";
+import type { HostDeckProductionResources } from "./foreground-resource-bootstrap.js";
 import type {
   HostDeckProductionApplication,
   HostDeckProductionApplicationSnapshot
 } from "./production-application-composition.js";
 import {
   assertHostDeckProductionForegroundServe,
+  assertHostDeckProductionServiceServe,
   type HostDeckProcessTerminationSignal,
   type HostDeckProductionForegroundServeDependencies,
   HostDeckProductionForegroundServeError,
+  type HostDeckProductionServiceServeDependencies,
   type StartHostDeckProductionForegroundServeInput,
   startHostDeckProductionForegroundServe,
+  startHostDeckProductionServiceServe,
   subscribeHostDeckProcessTerminationSignals
 } from "./production-foreground-serve.js";
 
@@ -345,6 +348,47 @@ describe("IFC-V1-083 production foreground serve owner", () => {
   });
 });
 
+describe("IFC-V1-086 production service serve owner", () => {
+  it("stays alive across sibling exit observation and closes only HostDeck owners", async () => {
+    const harness = createHarness({ ownership: "service_owned" });
+    const service = await harness.start();
+
+    expect(() => assertHostDeckProductionServiceServe(service)).not.toThrow();
+    expect(() => assertHostDeckProductionForegroundServe(service)).toThrow(
+      TypeError
+    );
+    expect(service.snapshot()).toMatchObject({
+      phase: "ready",
+      termination_trigger: null,
+      listener_health: "ready"
+    });
+
+    harness.resolveProcessExit({
+      kind: "exited",
+      expected: false,
+      code: 17,
+      signal: null
+    });
+    await Promise.resolve();
+    expect(service.snapshot()).toMatchObject({
+      phase: "ready",
+      termination_trigger: null,
+      reported_issue_count: 0
+    });
+    expect(harness.resourceCloseCalls).toBe(0);
+
+    harness.emitSignal("SIGTERM");
+    await expect(service.terminated).resolves.toMatchObject({
+      phase: "closed",
+      termination_trigger: "sigterm",
+      listener_health: "closed"
+    });
+    expect(harness.resourceCloseCalls).toBe(1);
+    expect(harness.listenerCloseCalls).toBe(1);
+    expect(harness.signalUnsubscribeCalls).toBe(1);
+  });
+});
+
 interface HarnessOptions {
   readonly applicationCreateError?: Error;
   readonly holdClose?: boolean;
@@ -356,10 +400,13 @@ interface HarnessOptions {
   readonly resourceCloseError?: Error;
   readonly resourceStartError?: Error;
   readonly signalSubscribeError?: Error;
+  readonly ownership?: "foreground_child" | "service_owned";
 }
 
 interface FakeServeHarness {
-  readonly dependencies: HostDeckProductionForegroundServeDependencies;
+  readonly dependencies:
+    | HostDeckProductionForegroundServeDependencies
+    | HostDeckProductionServiceServeDependencies;
   readonly events: string[];
   readonly port: number;
   readonly emitSignal: (signal: HostDeckProcessTerminationSignal) => void;
@@ -383,6 +430,7 @@ type ReturnTypeOwner = Awaited<
 >;
 
 function createHarness(options: HarnessOptions = {}): FakeServeHarness {
+  const ownership = options.ownership ?? "foreground_child";
   const events: string[] = [];
   const port = 46_321 + openHarnesses.length;
   const processExit = deferred<CodexRuntimeProcessExitObservation>();
@@ -398,7 +446,7 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
       HostDeckProductionApplication["remote"]["snapshot"]
     >["phase"],
     resourcePhase: "ready" as ReturnType<
-      HostDeckForegroundResources["snapshot"]
+      HostDeckProductionResources["snapshot"]
     >["phase"]
   };
   let signalListener: ((signal: HostDeckProcessTerminationSignal) => void) | null =
@@ -416,7 +464,11 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
       transport: "http" as const
     }),
     resource_budget: defaultResourceBudget,
-    runtime: Object.freeze({ process_exit: processExit.promise }),
+    runtime: Object.freeze({
+      mode: ownership,
+      ownership,
+      process_exit: ownership === "foreground_child" ? processExit.promise : null
+    }),
     snapshot: () =>
       Object.freeze({
         phase: state.resourcePhase,
@@ -432,7 +484,7 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
         throw options.resourceCloseError;
       }
     }
-  } as unknown as HostDeckForegroundResources;
+  } as unknown as HostDeckProductionResources;
 
   const listener = Object.freeze({
     beginDrain() {
@@ -544,7 +596,14 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
     snapshot: listenerSnapshot
   } as unknown as HostDeckFastifyLifecycle<HostDeckProductionApplication>;
 
-  const dependencies: HostDeckProductionForegroundServeDependencies = {
+  const startResources = async () => {
+    events.push("resources:start");
+    if (options.resourceStartError !== undefined) {
+      throw options.resourceStartError;
+    }
+    return resources;
+  };
+  const commonDependencies = {
     create_application() {
       events.push("application:create");
       if (options.applicationCreateError !== undefined) {
@@ -566,14 +625,9 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
       }
       return lifecycle;
     },
-    async start_foreground_resources() {
-      events.push("resources:start");
-      if (options.resourceStartError !== undefined) {
-        throw options.resourceStartError;
-      }
-      return resources;
-    },
-    subscribe_termination_signals(listener) {
+    subscribe_termination_signals(
+      listener: (signal: HostDeckProcessTerminationSignal) => void
+    ) {
       events.push("signals:subscribe");
       if (options.signalSubscribeError !== undefined) {
         throw options.signalSubscribeError;
@@ -586,6 +640,16 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
       };
     }
   };
+  const dependencies =
+    ownership === "foreground_child"
+      ? ({
+          ...commonDependencies,
+          start_foreground_resources: startResources
+        } satisfies HostDeckProductionForegroundServeDependencies)
+      : ({
+          ...commonDependencies,
+          start_service_resources: startResources
+        } satisfies HostDeckProductionServiceServeDependencies);
 
   const harness: FakeServeHarness = {
     dependencies,
@@ -598,10 +662,16 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
     rejectProcessExit: (cause) => processExit.reject(cause),
     resolveProcessExit: (observation) => processExit.resolve(observation),
     async start(overrides = {}) {
-      service = await startHostDeckProductionForegroundServe(
-        { ...validInput(), ...overrides },
-        dependencies
-      );
+      service =
+        ownership === "foreground_child"
+          ? await startHostDeckProductionForegroundServe(
+              { ...validInput(), ...overrides },
+              dependencies as HostDeckProductionForegroundServeDependencies
+            )
+          : await startHostDeckProductionServiceServe(
+              { ...validInput(), ...overrides },
+              dependencies as HostDeckProductionServiceServeDependencies
+            );
       harness.service = service;
       return service;
     },

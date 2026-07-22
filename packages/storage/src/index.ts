@@ -109,6 +109,7 @@ export {
   prepareHostDeckDaemonLeasePath,
   prepareHostDeckLocalPaths,
   prepareHostDeckLocalPathsAfterLease,
+  prepareHostDeckServiceLocalPathsAfterLease,
   prepareHostDeckStatePaths,
   type ResolvedHostDeckLocalPaths,
   resolveHostDeckLocalPaths,

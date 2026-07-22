@@ -88,9 +88,9 @@ import {
   hostDeckStaticBoundaryLimits
 } from "./fastify-static-boundary.js";
 import {
-  assertHostDeckForegroundResources,
+  assertHostDeckProductionResources,
   type HostDeckForegroundBind,
-  type HostDeckForegroundResources
+  type HostDeckProductionResources
 } from "./foreground-resource-bootstrap.js";
 import {
   createHostDeckHostHealthService,
@@ -172,7 +172,7 @@ export interface HostDeckProductionApplicationIssue {
 export interface CreateHostDeckProductionApplicationInput {
   readonly browser_routes: readonly `/${string}`[];
   readonly observe_issue: (issue: HostDeckProductionApplicationIssue) => void;
-  readonly resources: HostDeckForegroundResources;
+  readonly resources: HostDeckProductionResources;
   readonly static_build_root: string;
 }
 
@@ -215,7 +215,7 @@ export interface HostDeckProductionApplication {
 interface ParsedCompositionInput {
   readonly browserRoutes: readonly `/${string}`[];
   readonly observeIssue: CreateHostDeckProductionApplicationInput["observe_issue"];
-  readonly resources: HostDeckForegroundResources;
+  readonly resources: HostDeckProductionResources;
   readonly staticBuildRoot: string;
 }
 
@@ -959,7 +959,7 @@ function parseCompositionInput(input: unknown): ParsedCompositionInput {
     inputKeys,
     "HostDeck production application input is invalid."
   );
-  assertHostDeckForegroundResources(values.resources);
+  assertHostDeckProductionResources(values.resources);
   const resources = values.resources;
   assertResolvedResourceBudget(resources.resource_budget);
   const resourceSnapshot = resources.snapshot();
@@ -970,7 +970,7 @@ function parseCompositionInput(input: unknown): ParsedCompositionInput {
     !resources.database.open
   ) {
     throw new TypeError(
-      "HostDeck foreground resources are not ready for application composition."
+      "HostDeck production resources are not ready for application composition."
     );
   }
   if (typeof values.observe_issue !== "function") {
@@ -1263,7 +1263,7 @@ function persistCompatibility(
 }
 
 function createAuditShutdownPort(
-  db: HostDeckForegroundResources["database"],
+  db: HostDeckProductionResources["database"],
   timestamp: () => string
 ): Readonly<{
   readonly barrier: (deadline: OperationDeadline) => Readonly<{

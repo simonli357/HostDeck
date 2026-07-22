@@ -25,7 +25,7 @@ import {
 
 test("selects the exact non-web production closure", () => {
   const sources = selectedProductionSources();
-  assert.equal(sources.length, 608);
+  assert.equal(sources.length, 609);
   assert.equal(sources.some((path) => path.startsWith("packages/web/")), false);
   assert.deepEqual(
     sources.filter((path) =>
@@ -33,6 +33,7 @@ test("selects the exact non-web production closure", () => {
         "packages/cli/src/device-revoke-client.ts",
         "packages/cli/src/host-status-client.ts",
         "packages/cli/src/local-device-list.ts",
+        "packages/cli/src/service-host.ts",
         "packages/cli/src/session-list-client.ts",
         "packages/server/src/foreground-resource-bootstrap.ts",
         "packages/server/src/production-application-composition.ts",
@@ -44,6 +45,7 @@ test("selects the exact non-web production closure", () => {
       "packages/cli/src/device-revoke-client.ts",
       "packages/cli/src/host-status-client.ts",
       "packages/cli/src/local-device-list.ts",
+      "packages/cli/src/service-host.ts",
       "packages/cli/src/session-list-client.ts",
       "packages/server/src/foreground-resource-bootstrap.ts",
       "packages/server/src/production-application-composition.ts",

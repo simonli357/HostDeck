@@ -23,6 +23,7 @@ import {
   openSecureHostDeckRegularFile,
   prepareHostDeckDaemonLeasePath,
   prepareHostDeckLocalPathsAfterLease,
+  prepareHostDeckServiceLocalPathsAfterLease,
   type ResolvedHostDeckLocalPaths,
   resolveHostDeckLocalPaths
 } from "@hostdeck/storage";
@@ -122,6 +123,13 @@ export interface HostDeckForegroundResources {
   readonly close: () => Promise<void>;
 }
 
+export type StartHostDeckServiceResourcesInput =
+  StartHostDeckForegroundResourcesInput;
+export type HostDeckServiceResourceDependencies =
+  HostDeckForegroundResourceDependencies;
+export type HostDeckProductionResources = HostDeckForegroundResources;
+export type HostDeckServiceResources = HostDeckProductionResources;
+
 export class HostDeckForegroundResourceError extends Error {
   constructor(
     readonly code: HostDeckForegroundResourceErrorCode,
@@ -169,12 +177,33 @@ const requiredStartInputKeys = startInputKeys.filter(
 const dependencyKeys = ["now", "pid", "runtimeSupervisorFactory"] as const;
 const maxExecutablePathBytes = 4_096;
 const defaultNow = () => new Date();
-const acceptedForegroundResources = new WeakSet<object>();
+const acceptedProductionResources = new WeakSet<object>();
+
+type HostDeckRuntimeOwnership = "foreground_child" | "service_owned";
 
 export async function startHostDeckForegroundResources(
   input: StartHostDeckForegroundResourcesInput,
   dependencies: HostDeckForegroundResourceDependencies = {}
 ): Promise<HostDeckForegroundResources> {
+  return startHostDeckProductionResources(
+    input,
+    dependencies,
+    "foreground_child"
+  );
+}
+
+export async function startHostDeckServiceResources(
+  input: StartHostDeckServiceResourcesInput,
+  dependencies: HostDeckServiceResourceDependencies = {}
+): Promise<HostDeckServiceResources> {
+  return startHostDeckProductionResources(input, dependencies, "service_owned");
+}
+
+async function startHostDeckProductionResources(
+  input: StartHostDeckForegroundResourcesInput,
+  dependencies: HostDeckForegroundResourceDependencies,
+  ownership: HostDeckRuntimeOwnership
+): Promise<HostDeckProductionResources> {
   let parsed: ParsedStartInput;
   let ports: ParsedDependencies;
   let supervisor: HostDeckCodexRuntimeSupervisor;
@@ -182,11 +211,18 @@ export async function startHostDeckForegroundResources(
     parsed = parseStartInput(input);
     ports = parseDependencies(dependencies);
     inspectExecutable(parsed.codexBin);
-    supervisor = ports.runtimeSupervisorFactory({
-      mode: "foreground_child",
-      codex_bin: parsed.codexBin,
-      socket_path: parsed.paths.app_server_socket_path
-    });
+    supervisor = ports.runtimeSupervisorFactory(
+      ownership === "foreground_child"
+        ? {
+            mode: "foreground_child",
+            codex_bin: parsed.codexBin,
+            socket_path: parsed.paths.app_server_socket_path
+          }
+        : {
+            mode: "service_owned",
+            socket_path: parsed.paths.app_server_socket_path
+          }
+    );
     assertRuntimeSupervisor(supervisor);
     assertNotAborted(parsed.signal, "configuration");
   } catch (cause) {
@@ -217,7 +253,10 @@ export async function startHostDeckForegroundResources(
     assertNotAborted(parsed.signal, stage);
 
     stage = "paths";
-    const prepared = prepareHostDeckLocalPathsAfterLease(parsed.paths);
+    const prepared =
+      ownership === "foreground_child"
+        ? prepareHostDeckLocalPathsAfterLease(parsed.paths)
+        : prepareHostDeckServiceLocalPathsAfterLease(parsed.paths);
     repairs.push(...prepared.repairs);
     assertNotAborted(parsed.signal, stage);
 
@@ -237,7 +276,8 @@ export async function startHostDeckForegroundResources(
         parsed.resourceBudget,
         parsed.signal
       ),
-      parsed.paths.app_server_socket_path
+      parsed.paths.app_server_socket_path,
+      ownership
     );
     assertNotAborted(parsed.signal, stage);
 
@@ -274,14 +314,36 @@ export async function startHostDeckForegroundResources(
 export function assertHostDeckForegroundResources(
   candidate: unknown
 ): asserts candidate is HostDeckForegroundResources {
+  assertHostDeckProductionResources(candidate);
+  if (candidate.runtime.mode !== "foreground_child") {
+    throw new TypeError(
+      "HostDeck foreground resources must own a foreground runtime child."
+    );
+  }
+}
+
+export function assertHostDeckServiceResources(
+  candidate: unknown
+): asserts candidate is HostDeckServiceResources {
+  assertHostDeckProductionResources(candidate);
+  if (candidate.runtime.mode !== "service_owned") {
+    throw new TypeError(
+      "HostDeck service resources must observe a service-owned runtime."
+    );
+  }
+}
+
+export function assertHostDeckProductionResources(
+  candidate: unknown
+): asserts candidate is HostDeckProductionResources {
   if (
     candidate === null ||
     typeof candidate !== "object" ||
-    !acceptedForegroundResources.has(candidate) ||
+    !acceptedProductionResources.has(candidate) ||
     !Object.isFrozen(candidate)
   ) {
     throw new TypeError(
-      "HostDeck foreground resources must be created by their bootstrap factory."
+      "HostDeck production resources must be created by their bootstrap factory."
     );
   }
 }
@@ -427,7 +489,7 @@ function createResourceHandle(input: {
     snapshot,
     close
   });
-  acceptedForegroundResources.add(resources);
+  acceptedProductionResources.add(resources);
   return resources;
 }
 
@@ -776,7 +838,8 @@ function assertRuntimeSupervisor(
 
 function parseStartedRuntime(
   candidate: unknown,
-  expectedSocketPath: string
+  expectedSocketPath: string,
+  expectedOwnership: HostDeckRuntimeOwnership
 ): StartedCodexRuntime {
   const values = readExactDataObject(
     candidate,
@@ -799,20 +862,24 @@ function parseStartedRuntime(
     "Codex runtime supervisor returned invalid startup state."
   );
   if (
-    values.mode !== "foreground_child" ||
-    values.ownership !== "foreground_child" ||
+    values.mode !== expectedOwnership ||
+    values.ownership !== expectedOwnership ||
     values.socket_path !== expectedSocketPath ||
     typeof values.socket_mode_repaired !== "boolean" ||
     typeof values.stale_socket_removed !== "boolean" ||
-    !(values.process_exit instanceof Promise)
+    (expectedOwnership === "foreground_child"
+      ? !(values.process_exit instanceof Promise)
+      : values.process_exit !== null ||
+        values.stale_socket_removed !== false ||
+        values.socket_mode_repaired !== false)
   ) {
     throw new TypeError(
       "Codex runtime supervisor returned invalid startup state."
     );
   }
   return Object.freeze({
-    mode: "foreground_child",
-    ownership: "foreground_child",
+    mode: expectedOwnership,
+    ownership: expectedOwnership,
     socket_path: expectedSocketPath,
     socket_mode_repaired: values.socket_mode_repaired,
     stale_socket_removed: values.stale_socket_removed,

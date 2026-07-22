@@ -16,8 +16,12 @@ import {
 } from "./fastify-static-boundary.js";
 import {
   type HostDeckForegroundResources,
+  type HostDeckProductionResources,
+  type HostDeckServiceResources,
   type StartHostDeckForegroundResourcesInput,
-  startHostDeckForegroundResources
+  type StartHostDeckServiceResourcesInput,
+  startHostDeckForegroundResources,
+  startHostDeckServiceResources
 } from "./foreground-resource-bootstrap.js";
 import type { HostDeckRemoteHealthSnapshot } from "./host-health.js";
 import {
@@ -120,6 +124,13 @@ export interface HostDeckProductionForegroundServe {
   readonly terminated: Promise<HostDeckProductionForegroundServeSnapshot>;
 }
 
+export type StartHostDeckProductionServiceServeInput =
+  StartHostDeckProductionForegroundServeInput;
+export type HostDeckProductionServiceServeSnapshot =
+  HostDeckProductionForegroundServeSnapshot;
+export type HostDeckProductionServiceServe =
+  HostDeckProductionForegroundServe;
+
 export interface HostDeckProductionForegroundServeDependencies {
   readonly create_application?: (
     input: CreateHostDeckProductionApplicationInput
@@ -131,6 +142,22 @@ export interface HostDeckProductionForegroundServeDependencies {
   readonly start_foreground_resources?: (
     input: StartHostDeckForegroundResourcesInput
   ) => Promise<HostDeckForegroundResources>;
+  readonly subscribe_termination_signals?: (
+    listener: (signal: HostDeckProcessTerminationSignal) => void
+  ) => () => void;
+}
+
+export interface HostDeckProductionServiceServeDependencies {
+  readonly create_application?: (
+    input: CreateHostDeckProductionApplicationInput
+  ) => HostDeckProductionApplication;
+  readonly start_fastify_lifecycle?: (
+    input: StartHostDeckTailscaleServeFastifyLifecycleInput<HostDeckProductionApplication>,
+    startupSignal?: AbortSignal
+  ) => Promise<HostDeckFastifyLifecycle<HostDeckProductionApplication>>;
+  readonly start_service_resources?: (
+    input: StartHostDeckServiceResourcesInput
+  ) => Promise<HostDeckServiceResources>;
   readonly subscribe_termination_signals?: (
     listener: (signal: HostDeckProcessTerminationSignal) => void
   ) => () => void;
@@ -169,7 +196,7 @@ interface ParsedServeDependencies {
   readonly startFastifyLifecycle: NonNullable<
     HostDeckProductionForegroundServeDependencies["start_fastify_lifecycle"]
   >;
-  readonly startForegroundResources: NonNullable<
+  readonly startResources: NonNullable<
     HostDeckProductionForegroundServeDependencies["start_foreground_resources"]
   >;
   readonly subscribeTerminationSignals: NonNullable<
@@ -184,6 +211,7 @@ interface ServeIssueRuntime {
 }
 
 const acceptedForegroundServeOwners = new WeakSet<object>();
+const acceptedServiceServeOwners = new WeakSet<object>();
 const inputKeys = [
   "browser_routes",
   "codex_bin",
@@ -204,23 +232,66 @@ const dependencyKeys = [
   "start_foreground_resources",
   "subscribe_termination_signals"
 ] as const;
+const serviceDependencyKeys = [
+  "create_application",
+  "start_fastify_lifecycle",
+  "start_service_resources",
+  "subscribe_termination_signals"
+] as const;
 const issueCodePattern = /^[a-z][a-z0-9_]{0,119}$/u;
 const maximumCounter = Number.MAX_SAFE_INTEGER;
+type HostDeckServeOwnership = "foreground_child" | "service_owned";
 
 export async function startHostDeckProductionForegroundServe(
   input: StartHostDeckProductionForegroundServeInput,
   dependencies: HostDeckProductionForegroundServeDependencies = {}
 ): Promise<HostDeckProductionForegroundServe> {
-  let parsed: ParsedServeInput;
   let ports: ParsedServeDependencies;
   try {
-    parsed = parseServeInput(input);
     ports = parseServeDependencies(dependencies);
   } catch (cause) {
     throw serveError(
       "invalid_input",
       "preflight",
-      "HostDeck production foreground serve input is invalid.",
+      "HostDeck production foreground serve dependencies are invalid.",
+      cause
+    );
+  }
+  return startHostDeckProductionServe(input, ports, "foreground_child");
+}
+
+export async function startHostDeckProductionServiceServe(
+  input: StartHostDeckProductionServiceServeInput,
+  dependencies: HostDeckProductionServiceServeDependencies = {}
+): Promise<HostDeckProductionServiceServe> {
+  let ports: ParsedServeDependencies;
+  try {
+    ports = parseServiceServeDependencies(dependencies);
+  } catch (cause) {
+    throw serveError(
+      "invalid_input",
+      "preflight",
+      "HostDeck production service serve dependencies are invalid.",
+      cause
+    );
+  }
+  return startHostDeckProductionServe(input, ports, "service_owned");
+}
+
+async function startHostDeckProductionServe(
+  input: StartHostDeckProductionForegroundServeInput,
+  ports: ParsedServeDependencies,
+  ownership: HostDeckServeOwnership
+): Promise<HostDeckProductionForegroundServe> {
+  let parsed: ParsedServeInput;
+  const serveKind = ownership === "foreground_child" ? "foreground" : "service";
+  try {
+    parsed = parseServeInput(input);
+  } catch (cause) {
+    throw serveError(
+      "invalid_input",
+      "preflight",
+      `HostDeck production ${serveKind} serve input is invalid.`,
       cause
     );
   }
@@ -228,7 +299,7 @@ export async function startHostDeckProductionForegroundServe(
     throw serveError(
       "startup_aborted",
       "preflight",
-      "HostDeck production foreground serve startup was aborted.",
+      `HostDeck production ${serveKind} serve startup was aborted.`,
       parsed.signal.reason
     );
   }
@@ -243,7 +314,7 @@ export async function startHostDeckProductionForegroundServe(
   let stage: HostDeckProductionForegroundServeErrorStage = "signals";
   let terminationTrigger: HostDeckProductionForegroundServeTerminationTrigger | null = null;
   let fatalTermination = false;
-  let resources: HostDeckForegroundResources | null = null;
+  let resources: HostDeckProductionResources | null = null;
   let application: HostDeckProductionApplication | null = null;
   let lifecycle: HostDeckFastifyLifecycle<HostDeckProductionApplication> | null = null;
   let unsubscribeSignals: (() => void) | null = null;
@@ -261,7 +332,7 @@ export async function startHostDeckProductionForegroundServe(
         new HostDeckProductionForegroundServeError(
           "startup_aborted",
           stage,
-          "HostDeck production foreground serve termination was requested."
+          `HostDeck production ${serveKind} serve termination was requested.`
         )
       );
     }
@@ -287,7 +358,7 @@ export async function startHostDeckProductionForegroundServe(
     startupController.signal.throwIfAborted();
 
     stage = "resources";
-    resources = await ports.startForegroundResources({
+    resources = await ports.startResources({
       codex_bin: parsed.codexBin,
       config_dir: parsed.configDir,
       database_path: parsed.databasePath,
@@ -297,23 +368,26 @@ export async function startHostDeckProductionForegroundServe(
       signal: startupController.signal,
       state_dir: parsed.stateDir
     });
-    const processExit = requireProcessExitObservation(resources);
-    void processExit.then(
-      (observation) => {
-        if (observation.expected || isClosingPhase(application, lifecycle)) {
-          return;
+    assertRuntimeOwnership(resources, ownership);
+    if (ownership === "foreground_child") {
+      const processExit = requireProcessExitObservation(resources);
+      void processExit.then(
+        (observation) => {
+          if (observation.expected || isClosingPhase(application, lifecycle)) {
+            return;
+          }
+          report("serve", "runtime_exit");
+          attemptListenerFailure(application, report);
+          requestTermination("runtime_exit", true);
+        },
+        () => {
+          if (isClosingPhase(application, lifecycle)) return;
+          report("serve", "runtime_exit_observation_failed");
+          attemptListenerFailure(application, report);
+          requestTermination("runtime_exit_observation_failed", true);
         }
-        report("serve", "runtime_exit");
-        attemptListenerFailure(application, report);
-        requestTermination("runtime_exit", true);
-      },
-      () => {
-        if (isClosingPhase(application, lifecycle)) return;
-        report("serve", "runtime_exit_observation_failed");
-        attemptListenerFailure(application, report);
-        requestTermination("runtime_exit_observation_failed", true);
-      }
-    );
+      );
+    }
     startupController.signal.throwIfAborted();
 
     stage = "application";
@@ -342,7 +416,7 @@ export async function startHostDeckProductionForegroundServe(
 
     stage = "readiness";
     application.listener.ready();
-    assertReadyProductionServe(resources, application, lifecycle);
+    assertReadyProductionServe(resources, application, lifecycle, ownership);
 
     const owner = createForegroundServeOwner({
       application,
@@ -380,12 +454,13 @@ export async function startHostDeckProductionForegroundServe(
             new HostDeckProductionForegroundServeError(
               "startup_aborted",
               "shutdown",
-              "HostDeck production foreground serve is shutting down."
+              `HostDeck production ${serveKind} serve is shutting down.`
             )
           );
         }
       },
       resources,
+      serveKind,
       terminationTrigger: () => terminationTrigger,
       setManualTermination: () => {
         if (terminationTrigger === null) terminationTrigger = "manual";
@@ -398,7 +473,11 @@ export async function startHostDeckProductionForegroundServe(
       startAutomaticClose();
       throw startupController.signal.reason;
     }
-    acceptedForegroundServeOwners.add(owner);
+    if (ownership === "foreground_child") {
+      acceptedForegroundServeOwners.add(owner);
+    } else {
+      acceptedServiceServeOwners.add(owner);
+    }
     return owner;
   } catch (cause) {
     const startupWasAborted =
@@ -408,7 +487,7 @@ export async function startHostDeckProductionForegroundServe(
         new HostDeckProductionForegroundServeError(
           "startup_aborted",
           stage,
-          "HostDeck production foreground serve startup failed."
+          `HostDeck production ${serveKind} serve startup failed.`
         )
       );
     }
@@ -440,7 +519,8 @@ export async function startHostDeckProductionForegroundServe(
     const primary = createStartupServeError(
       stage,
       cause,
-      startupWasAborted
+      startupWasAborted,
+      serveKind
     );
     if (cleanupErrors.length === 0) throw primary;
     throw serveError(
@@ -449,7 +529,7 @@ export async function startHostDeckProductionForegroundServe(
       primary.message,
       new AggregateError(
         [primary, ...cleanupErrors],
-        "HostDeck production foreground serve startup cleanup failed."
+        `HostDeck production ${serveKind} serve startup cleanup failed.`
       )
     );
   }
@@ -466,6 +546,21 @@ export function assertHostDeckProductionForegroundServe(
   ) {
     throw new TypeError(
       "HostDeck production foreground serve owner must be created by its factory."
+    );
+  }
+}
+
+export function assertHostDeckProductionServiceServe(
+  candidate: unknown
+): asserts candidate is HostDeckProductionServiceServe {
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    !Object.isFrozen(candidate) ||
+    !acceptedServiceServeOwners.has(candidate)
+  ) {
+    throw new TypeError(
+      "HostDeck production service serve owner must be created by its factory."
     );
   }
 }
@@ -511,7 +606,8 @@ function createForegroundServeOwner(input: {
     code: string
   ) => void;
   readonly requestShutdownAbort: () => void;
-  readonly resources: HostDeckForegroundResources;
+  readonly resources: HostDeckProductionResources;
+  readonly serveKind: "foreground" | "service";
   readonly terminationTrigger: () => HostDeckProductionForegroundServeTerminationTrigger | null;
   readonly setManualTermination: () => void;
 }): HostDeckProductionForegroundServe {
@@ -575,10 +671,10 @@ function createForegroundServeOwner(input: {
         throw serveError(
           "shutdown_failed",
           "shutdown",
-          "HostDeck production foreground serve did not close cleanly.",
+          `HostDeck production ${input.serveKind} serve did not close cleanly.`,
           new AggregateError(
             errors,
-            "HostDeck production foreground serve cleanup failed."
+            `HostDeck production ${input.serveKind} serve cleanup failed.`
           )
         );
       }
@@ -695,8 +791,49 @@ function parseServeDependencies(
       createApplication as ParsedServeDependencies["createApplication"],
     startFastifyLifecycle:
       startFastifyLifecycle as ParsedServeDependencies["startFastifyLifecycle"],
-    startForegroundResources:
-      startForegroundResources as ParsedServeDependencies["startForegroundResources"],
+    startResources:
+      startForegroundResources as ParsedServeDependencies["startResources"],
+    subscribeTerminationSignals:
+      subscribeTerminationSignals as ParsedServeDependencies["subscribeTerminationSignals"]
+  });
+}
+
+function parseServiceServeDependencies(
+  input: unknown
+): ParsedServeDependencies {
+  const values = readAllowedDataObject(
+    input,
+    serviceDependencyKeys,
+    [],
+    "HostDeck production service serve dependencies"
+  );
+  const createApplication =
+    values.create_application ?? createHostDeckProductionApplication;
+  const startFastifyLifecycle =
+    values.start_fastify_lifecycle ??
+    startHostDeckTailscaleServeFastifyLifecycle;
+  const startServiceResources =
+    values.start_service_resources ?? startHostDeckServiceResources;
+  const subscribeTerminationSignals =
+    values.subscribe_termination_signals ??
+    subscribeHostDeckProcessTerminationSignals;
+  if (
+    typeof createApplication !== "function" ||
+    typeof startFastifyLifecycle !== "function" ||
+    typeof startServiceResources !== "function" ||
+    typeof subscribeTerminationSignals !== "function"
+  ) {
+    throw new TypeError(
+      "HostDeck production service serve dependencies are invalid."
+    );
+  }
+  return Object.freeze({
+    createApplication:
+      createApplication as ParsedServeDependencies["createApplication"],
+    startFastifyLifecycle:
+      startFastifyLifecycle as ParsedServeDependencies["startFastifyLifecycle"],
+    startResources:
+      startServiceResources as ParsedServeDependencies["startResources"],
     subscribeTerminationSignals:
       subscribeTerminationSignals as ParsedServeDependencies["subscribeTerminationSignals"]
   });
@@ -846,7 +983,7 @@ function reportHttpIssue(
 }
 
 function requireProcessExitObservation(
-  resources: HostDeckForegroundResources
+  resources: HostDeckProductionResources
 ): Promise<CodexRuntimeProcessExitObservation> {
   const processExit = resources.runtime.process_exit;
   if (processExit === null || !isPromiseLike(processExit)) {
@@ -857,10 +994,26 @@ function requireProcessExitObservation(
   return Promise.resolve(processExit);
 }
 
+function assertRuntimeOwnership(
+  resources: HostDeckProductionResources,
+  expected: HostDeckServeOwnership
+): void {
+  if (
+    resources.runtime.mode !== expected ||
+    resources.runtime.ownership !== expected ||
+    (expected === "service_owned" && resources.runtime.process_exit !== null)
+  ) {
+    throw new TypeError(
+      "HostDeck production resource ownership contradicts the selected serve mode."
+    );
+  }
+}
+
 function assertReadyProductionServe(
-  resources: HostDeckForegroundResources,
+  resources: HostDeckProductionResources,
   application: HostDeckProductionApplication,
-  lifecycle: HostDeckFastifyLifecycle<HostDeckProductionApplication>
+  lifecycle: HostDeckFastifyLifecycle<HostDeckProductionApplication>,
+  expectedOwnership: HostDeckServeOwnership
 ): void {
   const resourceSnapshot = resources.snapshot();
   const applicationSnapshot = application.snapshot();
@@ -871,6 +1024,8 @@ function assertReadyProductionServe(
     lifecycle.context !== application ||
     lifecycle.baseUrl.origin !==
       `http://${application.bind.host}:${application.bind.port}` ||
+    resources.runtime.mode !== expectedOwnership ||
+    resources.runtime.ownership !== expectedOwnership ||
     resourceSnapshot.phase !== "ready" ||
     !resourceSnapshot.database_open ||
     !resourceSnapshot.lease_held ||
@@ -886,7 +1041,7 @@ function assertReadyProductionServe(
     remoteSnapshot.phase !== "running"
   ) {
     throw new TypeError(
-      "HostDeck production foreground serve readiness is inconsistent."
+      "HostDeck production serve readiness is inconsistent."
     );
   }
 }
@@ -923,14 +1078,15 @@ function isClosingPhase(
 function createStartupServeError(
   stage: HostDeckProductionForegroundServeErrorStage,
   cause: unknown,
-  aborted: boolean
+  aborted: boolean,
+  serveKind: "foreground" | "service"
 ): HostDeckProductionForegroundServeError {
   if (cause instanceof HostDeckProductionForegroundServeError) return cause;
   if (aborted) {
     return serveError(
       "startup_aborted",
       stage,
-      "HostDeck production foreground serve startup was aborted.",
+      `HostDeck production ${serveKind} serve startup was aborted.`,
       cause
     );
   }
@@ -939,14 +1095,14 @@ function createStartupServeError(
       return serveError(
         "signal_ownership_failed",
         stage,
-        "HostDeck production foreground serve could not own termination signals.",
+        `HostDeck production ${serveKind} serve could not own termination signals.`,
         cause
       );
     case "resources":
       return serveError(
         "resource_start_failed",
         stage,
-        "HostDeck production foreground resources failed to start.",
+        `HostDeck production ${serveKind} resources failed to start.`,
         cause
       );
     case "application":
@@ -967,21 +1123,21 @@ function createStartupServeError(
       return serveError(
         "readiness_failed",
         stage,
-        "HostDeck production foreground serve readiness failed.",
+        `HostDeck production ${serveKind} serve readiness failed.`,
         cause
       );
     case "preflight":
       return serveError(
         "invalid_input",
         stage,
-        "HostDeck production foreground serve input is invalid.",
+        `HostDeck production ${serveKind} serve input is invalid.`,
         cause
       );
     case "shutdown":
       return serveError(
         "shutdown_failed",
         stage,
-        "HostDeck production foreground serve did not close cleanly.",
+        `HostDeck production ${serveKind} serve did not close cleanly.`,
         cause
       );
   }

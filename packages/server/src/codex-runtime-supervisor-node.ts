@@ -11,6 +11,7 @@ import type {
   CodexRuntimeProcessExit,
   CodexRuntimeProcessPort,
   CodexRuntimeProcessRequest,
+  CodexRuntimeSocketInspectionPolicy,
   CodexRuntimeSocketObservation,
   CodexRuntimeSocketPort,
   CodexRuntimeSocketProbe,
@@ -126,9 +127,19 @@ function spawnCodexRuntimeChild(
 }
 
 function inspectCodexRuntimeSocket(
-  socketPath: string
+  socketPath: string,
+  policy: CodexRuntimeSocketInspectionPolicy
 ): CodexRuntimeSocketObservation {
   assertPrivateSocketParent(socketPath);
+  if (
+    policy === null ||
+    typeof policy !== "object" ||
+    !Object.isFrozen(policy) ||
+    Reflect.ownKeys(policy).length !== 1 ||
+    typeof policy.repair_mode !== "boolean"
+  ) {
+    throw new TypeError("Codex socket inspection policy is invalid.");
+  }
   try {
     lstatSync(socketPath);
   } catch (error) {
@@ -138,7 +149,7 @@ function inspectCodexRuntimeSocket(
   const repair = secureHostDeckSocket(socketPath, {
     label: "Codex app-server socket",
     mode: 0o600,
-    repair_mode: true
+    repair_mode: policy.repair_mode
   });
   const metadata = lstatSync(socketPath);
   return Object.freeze({

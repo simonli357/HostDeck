@@ -122,9 +122,14 @@ export type CodexRuntimeSocketObservation =
 
 export type CodexRuntimeSocketProbe = "ready" | "refused" | "missing";
 
+export interface CodexRuntimeSocketInspectionPolicy {
+  readonly repair_mode: boolean;
+}
+
 export interface CodexRuntimeSocketPort {
   readonly inspect: (
-    socketPath: string
+    socketPath: string,
+    policy: CodexRuntimeSocketInspectionPolicy
   ) => CodexRuntimeSocketObservation | Promise<CodexRuntimeSocketObservation>;
   readonly probe: (
     socketPath: string,
@@ -791,7 +796,12 @@ class DefaultCodexRuntimeSupervisor
   private async inspectSocket(): Promise<ParsedSocketObservation> {
     let raw: unknown;
     try {
-      raw = await this.config.socketPort.inspect(this.config.socketPath);
+      raw = await this.config.socketPort.inspect(
+        this.config.socketPath,
+        Object.freeze({
+          repair_mode: this.config.mode === "foreground_child"
+        })
+      );
     } catch (cause) {
       if (cause instanceof HostDeckCodexRuntimeSupervisorError) throw cause;
       throw supervisorError(

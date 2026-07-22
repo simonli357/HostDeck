@@ -1,6 +1,20 @@
-import { readFileSync } from "node:fs";
+import {
+  accessSync,
+  constants as fsConstants,
+  lstatSync,
+  readFileSync,
+  realpathSync
+} from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  delimiter,
+  isAbsolute,
+  join,
+  normalize,
+  relative,
+  resolve,
+  sep
+} from "node:path";
 import { hostDeckLoopbackOriginSchema } from "@hostdeck/contracts";
 import { configFailure } from "./errors.js";
 
@@ -49,6 +63,9 @@ const rawConfigKeys = [
   "database_path",
   "databasePath"
 ] as const;
+const maximumExecutablePathBytes = 4_096;
+const maximumPathEnvironmentBytes = 32_768;
+const maximumPathEntries = 256;
 
 export function loadCliConfig(options: LoadCliConfigOptions = {}): CliConfig {
   const flags = options.flags ?? {};
@@ -112,6 +129,81 @@ export function loadCliConfig(options: LoadCliConfigOptions = {}): CliConfig {
     runtimeDir,
     databasePath
   };
+}
+
+export function resolveCanonicalRuntimePackageRoot(candidate: string): string {
+  try {
+    if (
+      !isAbsolute(candidate) ||
+      candidate === "/" ||
+      normalize(candidate) !== candidate ||
+      Buffer.byteLength(candidate, "utf8") > maximumExecutablePathBytes ||
+      containsControl(candidate)
+    ) {
+      throw new TypeError();
+    }
+    const canonical = realpathSync.native(candidate);
+    if (canonical !== candidate || !lstatSync(canonical).isDirectory()) {
+      throw new TypeError();
+    }
+    return canonical;
+  } catch {
+    throw configFailure(
+      "HostDeck runtime package root is unavailable or noncanonical.",
+      "package_root"
+    );
+  }
+}
+
+export function resolveHostDeckCodexExecutable(
+  env: Readonly<Record<string, string | undefined>>
+): string {
+  const explicit = env.HOSTDECK_CODEX_BIN;
+  if (explicit !== undefined) {
+    const canonical = inspectExecutableCandidate(explicit);
+    if (canonical === null) {
+      throw configFailure(
+        "HOSTDECK_CODEX_BIN must name one canonical absolute executable file.",
+        "HOSTDECK_CODEX_BIN"
+      );
+    }
+    return canonical;
+  }
+
+  const rawPath = env.PATH;
+  if (
+    typeof rawPath !== "string" ||
+    rawPath.length === 0 ||
+    Buffer.byteLength(rawPath, "utf8") > maximumPathEnvironmentBytes ||
+    containsControl(rawPath)
+  ) {
+    throw configFailure(
+      "PATH must contain bounded absolute entries to resolve Codex.",
+      "PATH"
+    );
+  }
+  const entries = rawPath.split(delimiter);
+  if (
+    entries.length < 1 ||
+    entries.length > maximumPathEntries ||
+    entries.some(
+      (entry) =>
+        !isAbsolute(entry) ||
+        entry === "/" ||
+        normalize(entry) !== entry ||
+        Buffer.byteLength(entry, "utf8") > maximumExecutablePathBytes
+    )
+  ) {
+    throw configFailure(
+      "PATH must contain only bounded canonical absolute entries.",
+      "PATH"
+    );
+  }
+  for (const entry of entries) {
+    const canonical = inspectExecutableCandidate(join(entry, "codex"));
+    if (canonical !== null) return canonical;
+  }
+  throw configFailure("Codex executable was not found in PATH.", "PATH");
 }
 
 function loadConfigFile(configPath: string | undefined, options: LoadCliConfigOptions): RawConfigFile {
@@ -313,4 +405,33 @@ function sourceOf(...candidates: readonly [string, unknown][]): string {
   }
 
   return "default";
+}
+
+function inspectExecutableCandidate(candidate: string): string | null {
+  try {
+    if (
+      !isAbsolute(candidate) ||
+      candidate === "/" ||
+      normalize(candidate) !== candidate ||
+      Buffer.byteLength(candidate, "utf8") > maximumExecutablePathBytes ||
+      containsControl(candidate)
+    ) {
+      return null;
+    }
+    const canonical = realpathSync.native(candidate);
+    const stats = lstatSync(canonical);
+    if (!stats.isFile() || stats.isSymbolicLink()) return null;
+    accessSync(canonical, fsConstants.X_OK);
+    return canonical;
+  } catch {
+    return null;
+  }
+}
+
+function containsControl(value: string): boolean {
+  for (const character of value) {
+    const code = character.codePointAt(0) ?? 0;
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
 }

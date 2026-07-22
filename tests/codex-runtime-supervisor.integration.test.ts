@@ -91,7 +91,7 @@ describe("Codex runtime supervisor Linux process/socket boundary", () => {
   });
 
   it("observes a service sibling but does not signal or unlink it on close or conflict", async () => {
-    const layout = fixtureLayout("service", "graceful");
+    const layout = fixtureLayout("service", "graceful", true, 0o600);
     const sibling = spawn(
       layout.executable,
       ["app-server", "--listen", `unix://${layout.socketPath}`],
@@ -132,6 +132,36 @@ describe("Codex runtime supervisor Linux process/socket boundary", () => {
     expect(sibling.exitCode).toBeNull();
     expect(sibling.signalCode).toBeNull();
     expect(existsSync(layout.socketPath)).toBe(true);
+  });
+
+  it("rejects an insecure service sibling without repairing or stopping it", async () => {
+    const layout = fixtureLayout("service-insecure", "graceful");
+    const sibling = spawn(
+      layout.executable,
+      ["app-server", "--listen", `unix://${layout.socketPath}`],
+      {
+        cwd: "/",
+        shell: false,
+        stdio: "ignore"
+      }
+    );
+    externalChildren.push(sibling);
+
+    const service = createCodexRuntimeSupervisor({
+      mode: "service_owned",
+      socket_path: layout.socketPath
+    });
+    await expectStartError(service, "socket_insecure");
+    expect(lstatSync(layout.socketPath).mode & 0o7777).toBe(0o666);
+    expect(sibling.exitCode).toBeNull();
+    expect(sibling.signalCode).toBeNull();
+    expect(existsSync(layout.socketPath)).toBe(true);
+    expect(service.snapshot()).toMatchObject({
+      claim_held: false,
+      spawn_attempts: 0,
+      term_signals: 0,
+      kill_signals: 0
+    });
   });
 
   it("maps real asynchronous missing and non-executable spawn failures", async () => {
@@ -262,7 +292,8 @@ async function expectStartError(
 function fixtureLayout(
   label: string,
   behavior: "graceful" | "ignore-term",
-  createExecutable = true
+  createExecutable = true,
+  socketMode = 0o666
 ): {
   readonly root: string;
   readonly runtimeDir: string;
@@ -278,13 +309,18 @@ function fixtureLayout(
   const executable = join(root, "codex-fixture.mjs");
   const argvPath = `${socketPath}.argv`;
   if (createExecutable) {
-    writeFileSync(executable, fixtureSource(behavior), { mode: 0o700 });
+    writeFileSync(executable, fixtureSource(behavior, socketMode), {
+      mode: 0o700
+    });
     chmodSync(executable, 0o700);
   }
   return { root, runtimeDir, socketPath, executable, argvPath };
 }
 
-function fixtureSource(behavior: "graceful" | "ignore-term"): string {
+function fixtureSource(
+  behavior: "graceful" | "ignore-term",
+  socketMode: number
+): string {
   return `#!/usr/bin/env node
 import { chmodSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
@@ -295,7 +331,7 @@ const socketPath = args[2].slice("unix://".length);
 writeFileSync(socketPath + ".argv", JSON.stringify(args), { mode: 0o600 });
 const server = createServer((socket) => socket.destroy());
 server.on("error", () => process.exit(70));
-server.listen(socketPath, () => chmodSync(socketPath, 0o666));
+server.listen(socketPath, () => chmodSync(socketPath, ${socketMode}));
 process.on("SIGTERM", () => {
   if (${JSON.stringify(behavior)} === "ignore-term") return;
   server.close(() => process.exit(0));
