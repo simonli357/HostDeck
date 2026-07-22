@@ -352,6 +352,30 @@ describe("browser CSRF authority lifecycle", () => {
     });
   });
 
+  it("keeps newer adopted authority when an older bootstrap settles late", async () => {
+    const response = deferred<BrowserHttpResponsePort>();
+    const test = harness({ fetch: async () => await response.promise });
+    const pending = test.client.bootstrap();
+    await Promise.resolve();
+
+    const adopted = test.client.adoptBootstrap(
+      bootstrapPayload(newerToken, 7, laterAt)
+    );
+    await expectCsrfFailure(pending, "authority_changed");
+    response.resolve(
+      jsonResponse(200, bootstrapPayload("E".repeat(43), 8, laterAt))
+    );
+
+    expect(test.client.snapshot()).toBe(adopted);
+    expect(test.client.snapshot()).toMatchObject({
+      phase: "ready",
+      generation: 7,
+      rotatedAt: laterAt
+    });
+    expect(JSON.stringify(test.client.snapshot())).not.toContain(newerToken);
+    expect(JSON.stringify(test.client.snapshot())).not.toContain("E".repeat(43));
+  });
+
   it("injects the exact current credential into all 11 protected routes", async () => {
     const test = harness({
       fetch: async () => apiErrorResponse(503, "runtime_unavailable", false)
@@ -596,32 +620,52 @@ describe("browser CSRF authority lifecycle", () => {
   });
 
   it("aborts active mutations on invalidation and rejects late success by epoch", async () => {
-    const response = deferred<BrowserHttpResponsePort>();
-    const test = harness({ fetch: async () => await response.promise });
+    const responses = [
+      deferred<BrowserHttpResponsePort>(),
+      deferred<BrowserHttpResponsePort>()
+    ];
+    let responseIndex = 0;
+    const test = harness({
+      fetch: async () => {
+        const response = responses[responseIndex++];
+        if (response === undefined) throw new Error("Unexpected third mutation.");
+        return await response.promise;
+      }
+    });
     test.client.adoptBootstrap(bootstrapPayload(rawToken, 2, rotatedAt));
-    const pending = test.client.request("host_lock", {
+    const first = test.client.request("host_lock", {
       body: { operation_id: "op_csrf_active_invalidate", confirmed: true }
+    });
+    const second = test.client.request("host_lock", {
+      body: { operation_id: "op_csrf_active_invalidate_2", confirmed: true }
     });
     await Promise.resolve();
 
     const invalidated = test.client.invalidate("access_lost");
-    await expectCsrfFailure(pending, "authority_changed");
-    response.resolve(
-      jsonResponse(200, {
-        authentication_state: "paired_device",
-        device_id: "client_browser_csrf",
-        permission: "write",
-        device_expires_at: "2026-07-23T17:00:00.000Z",
-        configured_origin: remoteOrigin,
-        network_mode: "remote",
-        transport: "https",
-        locked: true,
-        can_read_sessions: true,
-        can_write_sessions: false,
-        can_lock: true,
-        can_unlock: false
-      })
-    );
+    await Promise.all([
+      expectCsrfFailure(first, "authority_changed"),
+      expectCsrfFailure(second, "authority_changed")
+    ]);
+    expect(test.requests).toHaveLength(2);
+    expect(test.requests.every(({ init }) => init.signal.aborted)).toBe(true);
+    for (const response of responses) {
+      response.resolve(
+        jsonResponse(200, {
+          authentication_state: "paired_device",
+          device_id: "client_browser_csrf",
+          permission: "write",
+          device_expires_at: "2026-07-23T17:00:00.000Z",
+          configured_origin: remoteOrigin,
+          network_mode: "remote",
+          transport: "https",
+          locked: true,
+          can_read_sessions: true,
+          can_write_sessions: false,
+          can_lock: true,
+          can_unlock: false
+        })
+      );
+    }
     expect(test.client.snapshot()).toBe(invalidated);
     expect(test.client.snapshot().invalidationReason).toBe("access_lost");
   });
