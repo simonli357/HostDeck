@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-024` Implement in-memory CSRF lifecycle | ready | none | The bounded HTTP and SSE clients, remote trust, and CSRF bootstrap dependencies are complete; this is the remaining coordinated-client prerequisite. |
+| 1 | `FE-V1-024` Implement in-memory CSRF lifecycle | in_progress | none | Strict page-memory, generation-ordering, mutation-injection, invalidation, race, privacy, and real-server criteria are frozen before implementation. |
 
 ## Intentional Blockers
 

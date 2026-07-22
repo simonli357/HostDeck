@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `FE-V1-024` is ready to implement the in-memory CSRF lifecycle. `FE-V1-023` completed the bounded browser SSE foundation and is pushed through `91e8c87`.
+- Active task: `FE-V1-024` is in progress with strict page-memory CSRF lifecycle criteria frozen in `artifacts/fe-v1-024-in-memory-csrf-lifecycle.md`. `FE-V1-023` completed the bounded browser SSE foundation and is pushed through `e718fed`.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.5; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract and both replacement sets are complete. Under `DEC-028`, the human selected all seven current Focus Rail assets with no Signal Ledger borrowing or additional structural drift; both legacy desktop-led boards remain rejected.
@@ -139,7 +139,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Blockers
 
-- No external blocker prevents ready `FE-V1-024`; later UI and release leaves remain dependency-ordered behind coordinated clients, screens/actions, hardening, packaging, and device evidence.
+- No external blocker prevents active `FE-V1-024`; later UI and release leaves remain dependency-ordered behind coordinated clients, screens/actions, hardening, packaging, and device evidence.
 
 ## Validation
 
