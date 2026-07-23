@@ -84,6 +84,8 @@ HOSTDECK_REMOTE_CONTROL_AWAY_PROFILE_ID=AWAY_ID \
 pnpm smoke:remote-android
 ```
 
+`smoke:pairing-android` is the `FE-V1-013` production-UI device run. It requires one clean commit, exact Tailscale 1.98.8, the active dedicated HostDeck profile with its Serve root absent, and one unlocked authorized Android device with Tailscale, Chrome, USB debugging, and working cellular data. The harness disables and restores phone Wi-Fi, builds and serves the real React app through private Serve HTTPS, requires the human to scan and open the in-memory QR, verifies the paired confirmation, Mission Control, Host & access sheet, and fragment-free reload through bounded Android accessibility controls, then self-revokes the temporary device authority. Device screenshots and UI hierarchy remain temporary and are removed during cleanup because they can contain the private tailnet origin.
+
 `smoke:remote-android` is the strict `IFC-V1-079` no-retry device run. It requires one clean commit, exact Tailscale 1.98.8, two distinct authorized saved-profile ids, one unlocked authorized Android device, Android Tailscale and Chrome, and a cellular connection. The harness disables and restores phone Wi-Fi, uses USB only for guarded camera/Chrome inspection, requires the human to scan and open the in-memory QR, restores the dedicated profile, removes its exact Serve path, and publishes only sanitized evidence under `artifacts/ifc-v1-079-device/` after complete cleanup.
 
 ## Authenticated Exact-Codex Probe

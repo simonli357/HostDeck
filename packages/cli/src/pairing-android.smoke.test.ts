@@ -39,6 +39,7 @@ import {
   createHostDeckCsrfPolicy,
   createHostDeckCsrfRouteRegistration,
   createHostDeckDeviceRevokeRouteRegistration,
+  createHostDeckHealthRouteRegistration,
   createHostDeckHostHealthService,
   createHostDeckHostLockPolicy,
   createHostDeckHostLockRouteRegistration,
@@ -48,7 +49,9 @@ import {
   createHostDeckRemoteIngressRouteRegistration,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckSelectedWriteAdmissionPolicy,
+  createHostDeckSessionReadRouteRegistration,
   createHostDeckSseTransportRegistration,
+  createHostDeckStaticBoundaryRegistration,
   createRemoteIngressControlService,
   createSecurityMutationAuditExecutor,
   createTailscaleObserver,
@@ -57,6 +60,7 @@ import {
   type HostDeckFastifyLifecycle,
   type HostDeckRemoteIngressLifecycle,
   type HostDeckRoutePluginRegistration,
+  hostDeckLocalHealthComponents,
   hostDeckNoStoreRouteConfig,
   requireHostDeckRequestAuthentication,
   resolveHostDeckRequestAuthentication,
@@ -73,6 +77,7 @@ import {
   createRemoteIngressStateRepository,
   createSelectedAuditRepository,
   createSelectedCsrfAuthorizationRepository,
+  createSelectedSessionReadRepository,
   createSettingsRepository,
   openMigratedDatabase
 } from "@hostdeck/storage";
@@ -86,9 +91,11 @@ import { runCli } from "./shell.js";
 
 const requireRemoteAndroidAcceptance =
   process.env.HOSTDECK_REQUIRE_REMOTE_ANDROID_ACCEPTANCE === "1";
+const requirePairingUiAcceptance =
+  process.env.HOSTDECK_REQUIRE_PAIRING_ANDROID_SMOKE === "1" &&
+  !requireRemoteAndroidAcceptance;
 const requirePhysicalPairing =
-  process.env.HOSTDECK_REQUIRE_PAIRING_ANDROID_SMOKE === "1" ||
-  requireRemoteAndroidAcceptance;
+  requirePairingUiAcceptance || requireRemoteAndroidAcceptance;
 const describePhysical = requirePhysicalPairing ? describe : describe.skip;
 const overallTimeoutMs = requireRemoteAndroidAcceptance
   ? 20 * 60_000
@@ -159,6 +166,23 @@ describe("physical Android phone-driver protocol", () => {
     expect(bundle).not.toMatch(
       /chrome_devtools|Runtime\.evaluate|webSocketDebuggerUrl|__hostDeckPhysical/iu
     );
+  });
+
+  it("builds the real production browser app for pairing-only acceptance", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "hostdeck-pairing-ui-build-"));
+    try {
+      const buildRoot = await buildProductionBrowserApp(directory);
+      expect(readFileSync(join(buildRoot, "index.html"), "utf8")).toContain(
+        "/assets/"
+      );
+      expect(
+        readdirSync(join(buildRoot, "assets")).some((name) =>
+          name.endsWith(".js")
+        )
+      ).toBe(true);
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
   });
 
   it("closes the owned QR display process within its deadline", async () => {
@@ -255,6 +279,37 @@ describe("physical Android phone-driver protocol", () => {
       expect(isChromeForegroundWindowDisplay(candidate)).toBe(false);
     }
   });
+
+  it("parses bounded Android semantic nodes without retaining pairing material", () => {
+    const nodes = parseAndroidUiNodes(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<hierarchy rotation="0">' +
+        '<node text="Host &amp; access" content-desc="" bounds="[0,80][720,180]" />' +
+        '<node text="" content-desc="Open Host and access" bounds="[620,80][720,180]" />' +
+        "</hierarchy>"
+    );
+
+    expect(nodes).toEqual([
+      {
+        bounds: { bottom: 180, left: 0, right: 720, top: 80 },
+        description: "",
+        text: "Host & access"
+      },
+      {
+        bounds: { bottom: 180, left: 620, right: 720, top: 80 },
+        description: "Open Host and access",
+        text: ""
+      }
+    ]);
+    expect(Object.isFrozen(nodes)).toBe(true);
+    expect(nodes.every(Object.isFrozen)).toBe(true);
+    expect(() =>
+      parseAndroidUiNodes(
+        `<hierarchy><node text="${selectedPairingFragmentPrefix}secret" ` +
+          'content-desc="" bounds="[0,0][100,100]" /></hierarchy>'
+      )
+    ).toThrow("retained pairing material");
+  });
 });
 
 describePhysical("selected remote-ingress physical Android acceptance", () => {
@@ -275,18 +330,21 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       });
       const secrets = createSecretRegistry();
       const requestInspection: RequestInspection = {
+        accessRequests: 0,
         claimRequests: 0,
         csrfRequests: 0,
         deletionCookieObserved: false,
         fragmentLeaks: 0,
         hardenedCookieObserved: false,
+        hostStatusRequests: 0,
         noReferrerApiRequests: 0,
         protectedReadRejections: 0,
         protectedReadRequests: 0,
         protectedReadSuccesses: 0,
         rejectedRevokedCheckpoints: 0,
         revokedCheckpointRequests: 0,
-        revokeRequests: 0
+        revokeRequests: 0,
+        sessionListRequests: 0
       };
       const driverRuntime = createPhysicalDriverRuntime();
       const sseRuntime: PhysicalSseRuntime = {
@@ -322,7 +380,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       try {
         adbCommandCount = 0;
         deviceForbiddenValues.clear();
-        if (requireRemoteAndroidAcceptance) {
+        if (requirePairingUiAcceptance || requireRemoteAndroidAcceptance) {
           requireCleanAcceptanceWorktree();
           requireNoAdbApplicationTunnels();
           initialStayAwakeSetting = readAndroidStayAwakeSetting();
@@ -330,6 +388,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           initialWifiEnabled = readAndroidWifiEnabled();
           await enforceUnrelatedAndroidNetwork(initialWifiEnabled);
           environmentFacts = readPhysicalEnvironmentFacts();
+        }
+        if (requireRemoteAndroidAcceptance) {
           requireCondition(
             (await readSelectedSavedProfileId()) ===
               profileSwitch?.dedicatedProfileId,
@@ -342,6 +402,9 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           selectedProfile = "dedicated";
         }
         const browserBundle = await buildPhysicalBrowserBundle();
+        const productionBuildRoot = requirePairingUiAcceptance
+          ? await buildProductionBrowserApp(directory)
+          : null;
         const candidate = requireDedicatedAbsentCandidate(
           await observer.observeCandidate()
         );
@@ -370,6 +433,16 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           create_record_id: () => `audit:physical:remote:${++auditIndex}`
         });
         const health = createHostDeckHostHealthService({ now });
+        if (requirePairingUiAcceptance) {
+          for (const component of hostDeckLocalHealthComponents) {
+            health.updateLocal({
+              component,
+              reasons: [],
+              source_generation: 1,
+              state: "ready"
+            });
+          }
+        }
         const selectedRemote = createHostDeckRemoteIngressLifecycle({
           createControl(input) {
             const lifecycleObserver = createTailscaleObserver({
@@ -448,6 +521,9 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           now: () => performance.now()
         });
         const revocations = createDeviceRevocationRepository(opened.db);
+        const sessionReads = requirePairingUiAcceptance
+          ? createPhysicalSessionReads(opened.db, now)
+          : null;
         const apiRoutes = [
           createHostDeckRemoteIngressRouteRegistration({
             service: selectedRemote.control
@@ -475,9 +551,30 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             lock,
             now
           }),
+          ...(requirePairingUiAcceptance && sessionReads !== null
+            ? [
+                createHostDeckHealthRouteRegistration({ health }),
+                createHostDeckSessionReadRouteRegistration({
+                  sessions: sessionReads
+                })
+              ]
+            : []),
           physicalProtectedRoute(),
           physicalDriverRoute(driverRuntime)
         ];
+        const staticRoutes = requirePairingUiAcceptance
+          ? [
+              createHostDeckStaticBoundaryRegistration({
+                browserRoutes: ["/", "/sessions/:session_id"],
+                buildRoot: requireProductionBuildRoot(productionBuildRoot),
+                id: "physical-production-browser"
+              }),
+              physicalPageRoute(browserBundle, {
+                id: "physical-production-cleanup-page",
+                path: "/__physical/cleanup"
+              })
+            ]
+          : [physicalPageRoute(browserBundle)];
         const routePlugins = [
           composePhysicalRouteRegistration(
             "physical-remote-api",
@@ -496,7 +593,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           composePhysicalRouteRegistration(
             "physical-remote-page",
             "static",
-            [physicalPageRoute(browserBundle)],
+            staticRoutes,
             requestInspection,
             secrets
           )
@@ -645,18 +742,29 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         display = null;
 
         requireChromeRunning();
-        await waitFor(
-          () => hasPhysicalCheckpoint(driverRuntime, "paired"),
-          30_000,
-          "Physical Chrome did not validate paired browser state."
-        );
-        await waitFor(
-          () => hasPhysicalCheckpoint(driverRuntime, "reloaded"),
-          30_000,
-          "Physical Chrome did not validate a fragment-free reload."
-        );
-        requireChromeForeground();
-        assertPairingRuntimeTruth(opened.db, requestInspection);
+        if (requirePairingUiAcceptance) {
+          await runProductionPairingUiSequence({
+            db: opened.db,
+            driver: driverRuntime,
+            externalOrigin: candidate.externalOrigin,
+            requestInspection,
+            screenshotDirectory
+          });
+          assertPairingUiRuntimeTruth(opened.db, requestInspection);
+        } else {
+          await waitFor(
+            () => hasPhysicalCheckpoint(driverRuntime, "paired"),
+            30_000,
+            "Physical Chrome did not validate paired browser state."
+          );
+          await waitFor(
+            () => hasPhysicalCheckpoint(driverRuntime, "reloaded"),
+            30_000,
+            "Physical Chrome did not validate a fragment-free reload."
+          );
+          requireChromeForeground();
+          assertPairingRuntimeTruth(opened.db, requestInspection);
+        }
         assertPairingAudit(opened.db);
         assertSecretsAbsentFromDatabase(dbPath, secrets.values());
 
@@ -681,7 +789,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             },
             sseRuntime
           });
-        } else {
+        } else if (!requirePairingUiAcceptance) {
           driverRuntime.setCommand("cleanup");
           await waitFor(
             () => requestInspection.rejectedRevokedCheckpoints === 1,
@@ -858,11 +966,13 @@ interface CleanupTarget {
 }
 
 interface RequestInspection {
+  accessRequests: number;
   claimRequests: number;
   csrfRequests: number;
   deletionCookieObserved: boolean;
   fragmentLeaks: number;
   hardenedCookieObserved: boolean;
+  hostStatusRequests: number;
   noReferrerApiRequests: number;
   protectedReadRejections: number;
   protectedReadRequests: number;
@@ -870,6 +980,7 @@ interface RequestInspection {
   rejectedRevokedCheckpoints: number;
   revokedCheckpointRequests: number;
   revokeRequests: number;
+  sessionListRequests: number;
 }
 
 interface PairingRenderCapture {
@@ -1054,6 +1165,104 @@ async function buildPhysicalBrowserBundle(): Promise<string> {
   return entries[0].code;
 }
 
+async function buildProductionBrowserApp(directory: string): Promise<string> {
+  const webRoot = fileURLToPath(
+    new URL("../../web/", import.meta.url)
+  );
+  const configFile = fileURLToPath(
+    new URL("../../web/vite.config.ts", import.meta.url)
+  );
+  const buildRoot = join(directory, "production-web");
+  await viteBuild({
+    configFile,
+    logLevel: "silent",
+    root: webRoot,
+    build: {
+      emptyOutDir: true,
+      outDir: buildRoot,
+      sourcemap: false
+    }
+  });
+  const indexPath = join(buildRoot, "index.html");
+  const assetsRoot = join(buildRoot, "assets");
+  const index = readFileSync(indexPath, "utf8");
+  const assets = readdirSync(assetsRoot, { withFileTypes: true });
+  requireCondition(
+    Buffer.byteLength(index, "utf8") > 0 &&
+      Buffer.byteLength(index, "utf8") <= 2 * 1024 * 1024 &&
+      index.includes("/assets/") &&
+      !index.includes("/src/") &&
+      assets.length >= 2 &&
+      assets.length <= 20 &&
+      assets.every(
+        (entry) =>
+          entry.isFile() &&
+          /^[a-zA-Z0-9_.-]+-[a-zA-Z0-9_-]{8,}\.(?:css|js)$/u.test(
+            entry.name
+          )
+      ),
+    "Physical production browser build was invalid."
+  );
+  return buildRoot;
+}
+
+function requireProductionBuildRoot(candidate: string | null): string {
+  requireCondition(
+    typeof candidate === "string" && candidate.length > 0,
+    "Physical production browser build root was unavailable."
+  );
+  return candidate;
+}
+
+function createPhysicalSessionReads(
+  db: ReturnType<typeof openMigratedDatabase>["db"],
+  now: () => Date
+): ReturnType<typeof createSelectedSessionReadRepository> {
+  const createdAt = now().toISOString();
+  const updatedAt = now().toISOString();
+  db.prepare(
+    `
+      INSERT INTO selected_sessions (
+        id, name, codex_thread_id, cwd, runtime_source, runtime_version,
+        disposition, created_at, updated_at, archived_at
+      ) VALUES (
+        'sess_physical_pairing_ui', 'Physical pairing review',
+        'thread-physical-pairing-ui', '/workspace/hostdeck',
+        'codex_app_server', '0.144.0', 'selected', ?, ?, NULL
+      )
+    `
+  ).run(createdAt, updatedAt);
+  db.prepare(
+    `
+      INSERT INTO selected_session_projections (
+        session_id, session_state, turn_state, attention, freshness,
+        freshness_reason, updated_at, last_activity_at, branch, model,
+        settings_json, goal_json, recent_summary, last_event_cursor,
+        retained_event_count, retained_event_bytes, earliest_retained_cursor,
+        retention_boundary_cursor
+      ) VALUES (
+        'sess_physical_pairing_ui', 'active', 'idle', 'none', 'current',
+        NULL, ?, ?, 'main', 'gpt-5.5-codex', ?, ?, ?, NULL, 0, 0, NULL, NULL
+      )
+    `
+  ).run(
+    updatedAt,
+    updatedAt,
+    JSON.stringify({
+      collaboration_mode: "default",
+      observed_at: updatedAt,
+      reasoning_effort: "high",
+      runtime_model: "gpt-5.5-codex"
+    }),
+    JSON.stringify({
+      objective: "Validate physical pairing UI.",
+      state: "active"
+    }),
+    "Production pairing UI acceptance."
+  );
+  return createSelectedSessionReadRepository(db);
+}
+
 function composePhysicalRouteRegistration(
   id: string,
   surface: "api" | "sse" | "static",
@@ -1079,7 +1288,21 @@ function composePhysicalRouteRegistration(
   return Object.freeze(registration);
 }
 
-function physicalPageRoute(bundle: string): HostDeckRoutePluginRegistration {
+function physicalPageRoute(
+  bundle: string,
+  options: Readonly<{
+    id: string;
+    path: `/${string}`;
+  }> = Object.freeze({
+    id: "physical-fragment-pairing-page",
+    path: "/"
+  })
+): HostDeckRoutePluginRegistration {
+  requireCondition(
+    /^[a-z0-9][a-z0-9_-]{0,63}$/u.test(options.id) &&
+      (options.path === "/" || options.path === "/__physical/cleanup"),
+    "Physical browser page route options are invalid."
+  );
   const nonce = randomBytes(18).toString("base64url");
   const html =
     "<!doctype html><html lang=\"en\"><head>" +
@@ -1093,10 +1316,10 @@ function physicalPageRoute(bundle: string): HostDeckRoutePluginRegistration {
     "<p class=\"foot\">Private Android acceptance</p></main>" +
     `<script type="module" nonce="${nonce}">${bundle}</script></body></html>`;
   const registration: HostDeckRoutePluginRegistration = {
-    id: "physical-fragment-pairing-page",
+    id: options.id,
     surface: "static",
     register(app) {
-      app.get("/", async (_request, reply) => {
+      app.get(options.path, async (_request, reply) => {
         reply.headers({
           "cache-control": "no-store",
           "content-security-policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'`,
@@ -1324,6 +1547,18 @@ function installRequestInspection(
     if (request.url === "/api/v1/access/csrf") {
       inspection.csrfRequests += 1;
       if (referrer === undefined) inspection.noReferrerApiRequests += 1;
+    }
+    if (request.url === "/api/v1/access") {
+      inspection.accessRequests += 1;
+    }
+    if (request.url === "/api/v1/host/status") {
+      inspection.hostStatusRequests += 1;
+    }
+    if (
+      request.url === "/api/v1/sessions" ||
+      request.url.startsWith("/api/v1/sessions?")
+    ) {
+      inspection.sessionListRequests += 1;
     }
     if (request.url === "/__physical/protected") {
       inspection.protectedReadRequests += 1;
@@ -2127,6 +2362,314 @@ function isChromeForegroundWindowDisplay(output: string): boolean {
   );
 }
 
+interface AndroidUiNode {
+  readonly bounds: Readonly<{
+    readonly bottom: number;
+    readonly left: number;
+    readonly right: number;
+    readonly top: number;
+  }>;
+  readonly description: string;
+  readonly text: string;
+}
+
+async function runProductionPairingUiSequence(input: {
+  readonly db: ReturnType<typeof openMigratedDatabase>["db"];
+  readonly driver: PhysicalDriverRuntime;
+  readonly externalOrigin: string;
+  readonly requestInspection: RequestInspection;
+  readonly screenshotDirectory: string;
+}): Promise<void> {
+  const paired = await waitForAndroidUiNode(
+    "text",
+    "Phone paired",
+    30_000,
+    "Production pairing confirmation did not render on Android."
+  );
+  const continueButton = await waitForAndroidUiNode(
+    "text",
+    "Open Mission Control",
+    30_000,
+    "Production pairing confirmation did not expose its explicit continuation."
+  );
+  requireCondition(
+    pairingUiBeforeContinueIsValid(
+      paired,
+      readAndroidUiNodes(),
+      input.requestInspection
+    ),
+    "Production pairing confirmation disclosed protected state or repeated startup work."
+  );
+  await capturePhysicalScreenshot(
+    join(input.screenshotDirectory, "fe013-01-paired.png")
+  );
+  tapAndroidUiNode(continueButton);
+
+  await waitFor(
+    () =>
+      input.requestInspection.accessRequests >= 1 &&
+      input.requestInspection.hostStatusRequests >= 1 &&
+      input.requestInspection.sessionListRequests >= 1,
+    30_000,
+    "Production Mission Control did not load its authenticated route data."
+  );
+  await waitForAndroidUiNode(
+    "text",
+    "Mission Control",
+    30_000,
+    "Production Mission Control did not render on Android."
+  );
+  await waitForAndroidUiNode(
+    "text",
+    "Physical pairing review",
+    30_000,
+    "Production Mission Control did not render the authenticated session."
+  );
+  await capturePhysicalScreenshot(
+    join(input.screenshotDirectory, "fe013-02-mission-control.png")
+  );
+
+  const accessTrigger = await waitForAndroidUiNode(
+    "description",
+    "Open Host and access",
+    30_000,
+    "Production Host and access trigger was unavailable on Android."
+  );
+  tapAndroidUiNode(accessTrigger);
+  await waitForAndroidUiNode(
+    "text",
+    "Host & access",
+    30_000,
+    "Production Host and access sheet did not open on Android."
+  );
+  await waitForAndroidUiNode(
+    "text",
+    "Secure control ready",
+    30_000,
+    "Production Host and access sheet did not show current writer truth."
+  );
+  await waitForAndroidUiNode(
+    "text",
+    "Read & write",
+    30_000,
+    "Production Host and access sheet did not show writer permission."
+  );
+  await capturePhysicalScreenshot(
+    join(input.screenshotDirectory, "fe013-03-host-access.png")
+  );
+
+  const closeAccess = await waitForAndroidUiNode(
+    "description",
+    "Close Host and access",
+    30_000,
+    "Production Host and access close control was unavailable on Android."
+  );
+  tapAndroidUiNode(closeAccess);
+  const requestsBeforeReload = Object.freeze({
+    access: input.requestInspection.accessRequests,
+    csrf: input.requestInspection.csrfRequests,
+    host: input.requestInspection.hostStatusRequests,
+    sessions: input.requestInspection.sessionListRequests
+  });
+  adb(["shell", "input", "keyevent", "KEYCODE_REFRESH"]);
+  await waitFor(
+    () =>
+      input.requestInspection.accessRequests > requestsBeforeReload.access &&
+      input.requestInspection.csrfRequests > requestsBeforeReload.csrf &&
+      input.requestInspection.hostStatusRequests > requestsBeforeReload.host &&
+      input.requestInspection.sessionListRequests > requestsBeforeReload.sessions,
+    45_000,
+    "Fragment-free Android reload did not restore ordinary app authority."
+  );
+  await waitForAndroidUiNode(
+    "text",
+    "Physical pairing review",
+    30_000,
+    "Fragment-free Android reload did not restore Mission Control."
+  );
+  requireCondition(
+    input.requestInspection.claimRequests === 1 &&
+      input.requestInspection.csrfRequests === 2 &&
+      input.requestInspection.accessRequests >= 2 &&
+      input.requestInspection.accessRequests <= 4 &&
+      input.requestInspection.hostStatusRequests >= 2 &&
+      input.requestInspection.hostStatusRequests <= 4 &&
+      input.requestInspection.sessionListRequests >= 2 &&
+      input.requestInspection.sessionListRequests <= 4 &&
+      input.requestInspection.noReferrerApiRequests === 3 &&
+      input.requestInspection.fragmentLeaks === 0,
+    "Production Android reload repeated pairing or produced unbounded route work."
+  );
+  await capturePhysicalScreenshot(
+    join(input.screenshotDirectory, "fe013-04-reloaded.png")
+  );
+
+  input.driver.recordCheckpoint("paired");
+  input.driver.setCommand("cleanup");
+  openChromePath(input.externalOrigin, "/__physical/cleanup");
+  await waitFor(
+    () => hasPhysicalCheckpoint(input.driver, "reloaded"),
+    30_000,
+    "Physical UI cleanup did not enter with fragment-free cookie authority."
+  );
+  await waitFor(
+    () => input.requestInspection.rejectedRevokedCheckpoints === 1,
+    30_000,
+    "Physical UI cleanup did not revoke browser authority."
+  );
+  requireCondition(
+    input.requestInspection.deletionCookieObserved &&
+      countMatchingRows(
+        input.db,
+        "auth_devices",
+        "revoked_at IS NOT NULL"
+      ) === 1,
+    "Physical UI cleanup did not remove its browser authority."
+  );
+}
+
+function pairingUiBeforeContinueIsValid(
+  paired: AndroidUiNode,
+  nodes: readonly AndroidUiNode[],
+  inspection: RequestInspection
+): boolean {
+  return (
+    paired.text === "Phone paired" &&
+    nodes.every(
+      (node) => !node.text.includes(selectedPairingFragmentPrefix)
+    ) &&
+    inspection.claimRequests === 1 &&
+    inspection.csrfRequests === 1 &&
+    inspection.accessRequests === 0 &&
+    inspection.hostStatusRequests === 0 &&
+    inspection.sessionListRequests === 0
+  );
+}
+
+function readAndroidUiNodes(): readonly AndroidUiNode[] {
+  return parseAndroidUiNodes(
+    adb(["exec-out", "uiautomator", "dump", "/dev/tty"])
+  );
+}
+
+function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
+  requireCondition(
+    Buffer.byteLength(output, "utf8") > 0 &&
+      Buffer.byteLength(output, "utf8") <= 512 * 1024 &&
+      !output.includes("\u0000") &&
+      !output.includes(selectedPairingFragmentPrefix),
+    "Android UI hierarchy was invalid or retained pairing material."
+  );
+  const nodes: AndroidUiNode[] = [];
+  for (const match of output.matchAll(/<node\b([^>]*)\/?\s*>/gu)) {
+    const attributes = new Map<string, string>();
+    for (const attribute of (match[1] ?? "").matchAll(
+      /([a-zA-Z][a-zA-Z0-9_-]{0,31})="([^"]*)"/gu
+    )) {
+      const key = attribute[1];
+      const value = attribute[2];
+      if (key === undefined || value === undefined || attributes.has(key)) {
+        throw new Error("Android UI hierarchy attributes were invalid.");
+      }
+      attributes.set(key, decodeXmlAttribute(value));
+    }
+    const bounds = /^\[(\d{1,5}),(\d{1,5})\]\[(\d{1,5}),(\d{1,5})\]$/u.exec(
+      attributes.get("bounds") ?? ""
+    );
+    if (bounds === null) continue;
+    const left = Number(bounds[1]);
+    const top = Number(bounds[2]);
+    const right = Number(bounds[3]);
+    const bottom = Number(bounds[4]);
+    if (
+      ![left, top, right, bottom].every(Number.isSafeInteger) ||
+      left < 0 ||
+      top < 0 ||
+      right <= left ||
+      bottom <= top ||
+      right > 10_000 ||
+      bottom > 10_000
+    ) {
+      continue;
+    }
+    const text = attributes.get("text") ?? "";
+    const description = attributes.get("content-desc") ?? "";
+    if (text === "" && description === "") continue;
+    nodes.push(
+      Object.freeze({
+        bounds: Object.freeze({ bottom, left, right, top }),
+        description,
+        text
+      })
+    );
+  }
+  requireCondition(
+    nodes.length >= 1 && nodes.length <= 2_048,
+    "Android UI hierarchy had no bounded semantic nodes."
+  );
+  return Object.freeze(nodes);
+}
+
+async function waitForAndroidUiNode(
+  field: "description" | "text",
+  value: string,
+  timeoutMs: number,
+  message: string
+): Promise<AndroidUiNode> {
+  let found: AndroidUiNode | null = null;
+  await waitFor(() => {
+    const matches = readAndroidUiNodes().filter(
+      (node) => node[field] === value
+    );
+    requireCondition(
+      matches.length <= 1,
+      `Android UI hierarchy duplicated ${field} ${value}.`
+    );
+    found = matches[0] ?? null;
+    return found !== null;
+  }, timeoutMs, message);
+  requireCondition(found !== null, message);
+  return found;
+}
+
+function tapAndroidUiNode(node: AndroidUiNode): void {
+  const x = Math.floor((node.bounds.left + node.bounds.right) / 2);
+  const y = Math.floor((node.bounds.top + node.bounds.bottom) / 2);
+  adb(["shell", "input", "tap", String(x), String(y)]);
+}
+
+function openChromePath(origin: string, path: `/${string}`): void {
+  const target = new URL(path, origin);
+  requireCondition(
+    target.origin === origin &&
+      target.pathname === path &&
+      target.search === "" &&
+      target.hash === "",
+    "Physical Chrome path was invalid."
+  );
+  adb([
+    "shell",
+    "am",
+    "start",
+    "-W",
+    "-a",
+    "android.intent.action.VIEW",
+    "-d",
+    target.toString(),
+    "-p",
+    "com.android.chrome"
+  ]);
+}
+
+function decodeXmlAttribute(value: string): string {
+  return value
+    .replaceAll("&quot;", '"')
+    .replaceAll("&apos;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
+}
+
 async function runPhysicalSecuritySequence(input: {
   readonly db: ReturnType<typeof openMigratedDatabase>["db"];
   readonly driver: PhysicalDriverRuntime;
@@ -2373,6 +2916,59 @@ async function capturePhysicalScreenshot(path: string): Promise<void> {
     "Physical screenshot bytes were invalid."
   );
   writeFileSync(path, bytes, { flag: "wx", mode: 0o600 });
+}
+
+function assertPairingUiRuntimeTruth(
+  db: ReturnType<typeof openMigratedDatabase>["db"],
+  inspection: RequestInspection
+): void {
+  const devices = countRows(db, "auth_devices");
+  const usedCodes = countMatchingRows(
+    db,
+    "pairing_codes",
+    "used_at IS NOT NULL"
+  );
+  const revokedDevices = countMatchingRows(
+    db,
+    "auth_devices",
+    "revoked_at IS NOT NULL"
+  );
+  requireCondition(
+    devices === 1 &&
+      usedCodes === 1 &&
+      revokedDevices === 1 &&
+      inspection.claimRequests === 1 &&
+      inspection.csrfRequests === 4 &&
+      inspection.noReferrerApiRequests === 5 &&
+      inspection.accessRequests >= 3 &&
+      inspection.accessRequests <= 5 &&
+      inspection.hostStatusRequests >= 2 &&
+      inspection.hostStatusRequests <= 4 &&
+      inspection.sessionListRequests >= 2 &&
+      inspection.sessionListRequests <= 4 &&
+      inspection.protectedReadRequests === 2 &&
+      inspection.protectedReadSuccesses === 1 &&
+      inspection.protectedReadRejections === 1 &&
+      inspection.revokeRequests === 1 &&
+      inspection.revokedCheckpointRequests === 1 &&
+      inspection.rejectedRevokedCheckpoints === 1 &&
+      inspection.fragmentLeaks === 0 &&
+      inspection.hardenedCookieObserved &&
+      inspection.deletionCookieObserved,
+    "Physical production UI runtime truth was inconsistent " +
+      `(devices=${devices};used=${usedCodes};revoked=${revokedDevices};` +
+      `claims=${inspection.claimRequests};csrf=${inspection.csrfRequests};` +
+      `no_referrer=${inspection.noReferrerApiRequests};` +
+      `access=${inspection.accessRequests};host=${inspection.hostStatusRequests};` +
+      `sessions=${inspection.sessionListRequests};` +
+      `protected=${inspection.protectedReadRequests}/` +
+      `${inspection.protectedReadSuccesses}/` +
+      `${inspection.protectedReadRejections};` +
+      `revoke=${inspection.revokeRequests};` +
+      `fragment_leaks=${inspection.fragmentLeaks};` +
+      `cookie=${inspection.hardenedCookieObserved}/` +
+      `${inspection.deletionCookieObserved}).`
+  );
 }
 
 function assertPairingRuntimeTruth(
