@@ -694,7 +694,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           promptSubscribers = promptRuntime.subscribers;
           promptApiRoutes.push(
             createHostDeckProjectedEventRouteRegistration({
-              state: selectedStates
+              state: Object.freeze({
+                listEvents: selectedStates.listEvents,
+                require: selectedStates.require
+              })
             }),
             createHostDeckPromptRouteRegistration({
               admission: writeAdmission,
