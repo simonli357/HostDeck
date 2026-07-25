@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
 const artifactDirectory = resolve("artifacts/fe-v1-013-pairing-host-access");
+const visualReviewTime = new Date("2026-07-22T20:00:00.000Z");
 const pairingStates = [
   ["claiming", "Pairing this phone"],
   ["paired", "Phone paired"],
@@ -29,6 +30,10 @@ const viewports = [
 
 test.beforeAll(async () => {
   await mkdir(artifactDirectory, { recursive: true });
+});
+
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(visualReviewTime);
 });
 
 test("captures every bounded pairing outcome without secret or retry drift", async ({ page }) => {

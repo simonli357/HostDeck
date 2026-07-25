@@ -10,6 +10,7 @@ import {
 
 const artifactDirectory = resolve("artifacts/fe-v1-012-session-detail");
 const detailPath = `/sessions/${sessionDetailBrowserSessionId}`;
+const visualReviewTime = new Date("2026-07-22T22:00:00.000Z");
 const viewports = [
   { width: 360, height: 800 },
   { width: 390, height: 844 },
@@ -20,6 +21,10 @@ const viewports = [
 
 test.beforeAll(async () => {
   await mkdir(artifactDirectory, { recursive: true });
+});
+
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(visualReviewTime);
 });
 
 test("renders the production structured feed across the approved responsive continuum", async ({
