@@ -185,6 +185,35 @@ describe("physical Android phone-driver protocol", () => {
     }
   });
 
+  it("requires the exact production index during the private HTTPS preflight", () => {
+    const productionIndex =
+      '<!doctype html><html><body><div id="root"></div><script src="/assets/app-12345678.js"></script></body></html>';
+    const legacyPage =
+      '<title>HostDeck pairing acceptance</title>/__physical/checkpoint/';
+
+    expect(
+      isExpectedPhysicalPage(
+        { body: productionIndex, status: 200 },
+        productionIndex
+      )
+    ).toBe(true);
+    expect(
+      isExpectedPhysicalPage(
+        { body: `${productionIndex}\n`, status: 200 },
+        productionIndex
+      )
+    ).toBe(false);
+    expect(
+      isExpectedPhysicalPage({ body: legacyPage, status: 200 }, productionIndex)
+    ).toBe(false);
+    expect(
+      isExpectedPhysicalPage({ body: legacyPage, status: 200 }, null)
+    ).toBe(true);
+    expect(
+      isExpectedPhysicalPage({ body: legacyPage, status: 503 }, null)
+    ).toBe(false);
+  });
+
   it("closes the owned QR display process within its deadline", async () => {
     const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
       stdio: "ignore"
@@ -662,7 +691,18 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           selectedRemote.readAdmission(),
           candidate.externalOrigin
         );
-        await assertTrustedPhysicalPage(candidate.externalOrigin);
+        await assertTrustedPhysicalPage(
+          candidate.externalOrigin,
+          requirePairingUiAcceptance
+            ? readFileSync(
+                join(
+                  requireProductionBuildRoot(productionBuildRoot),
+                  "index.html"
+                ),
+                "utf8"
+              )
+            : null
+        );
         requireNoAdbApplicationTunnels();
 
         const rendered: PairingRenderCapture = {
@@ -1885,7 +1925,10 @@ function requireClosedAdmission(admission: Readonly<{
   );
 }
 
-async function assertTrustedPhysicalPage(origin: string): Promise<void> {
+async function assertTrustedPhysicalPage(
+  origin: string,
+  expectedProductionIndex: string | null
+): Promise<void> {
   const url = new URL("/", origin);
   const address = await resolveTailnetIpv4(url.hostname);
   const response = await new Promise<{
@@ -1931,10 +1974,24 @@ async function assertTrustedPhysicalPage(origin: string): Promise<void> {
     pending.end();
   });
   requireCondition(
-    response.status === 200 &&
-      response.body.includes("HostDeck pairing acceptance") &&
-      response.body.includes("/__physical/checkpoint/"),
+    isExpectedPhysicalPage(response, expectedProductionIndex),
     "Physical HTTPS page preflight was invalid."
+  );
+}
+
+function isExpectedPhysicalPage(
+  response: Readonly<{ body: string; status: number }>,
+  expectedProductionIndex: string | null
+): boolean {
+  if (response.status !== 200) return false;
+  if (expectedProductionIndex !== null) {
+    return (
+      expectedProductionIndex.length > 0 && response.body === expectedProductionIndex
+    );
+  }
+  return (
+    response.body.includes("HostDeck pairing acceptance") &&
+    response.body.includes("/__physical/checkpoint/")
   );
 }
 
