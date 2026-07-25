@@ -107,4 +107,52 @@ Focused real-route validation adds the selected Fastify composition around claim
 
 ## Evidence
 
-Criteria are frozen before implementation. Implementation, validation results, deterministic screenshot hashes, physical Android observations, drift disposition, and commit ids remain pending.
+### Implementation
+
+- `dc7886d` implements the pre-React one-attempt pairing owner, sanitized pairing states, CSRF adoption, explicit continuation, and production Host & access projection. `622dd13` adds the production Android UI path.
+- Physical-harness hardening from `519f7f4` through final accepted revision `68ea403` adds exact production preflight, stdin-only USB handoff, asynchronous Android inspection, repository-valid session state, verified UI transitions, cleanup-path ownership, bounded diagnostics, and exact audit assertions without weakening remote trust or retrying a claim.
+- `be4bfbc` pins each visual suite to its approved review instant; repeated FE-V1-011 to FE-V1-013 browser runs no longer rewrite evidence as wall-clock-relative labels age.
+- No dependency, selected product scope, Tailscale profile policy, Serve ownership, LAN/custom-CA behavior, or downstream control surface changed.
+
+### Automated Validation
+
+- Web aggregate: 14 files and 197 tests passed. Pairing Chromium: 6 passed. Shell/detail Chromium: 12 passed, including all pairing outcomes, history/referrer privacy, Host & access states, responsive widths, 320 reflow, 200 percent zoom, keyboard/focus, reduced motion, and contrast.
+- Workspace unit: 205 files and 2,046 tests passed with 28 explicit skips. Contract: 243 passed. Integration: 35 passed. Root typecheck, lint/exports over 593 files and 8 packages, scaffold, and the 612-source/22-external runtime boundary passed on the final revision.
+- The prior implementation gate also passed production web build, planning, deterministic package acceptance at 6,433 entries, frozen offline install, production audit, privacy/no-retry inspection, and residue cleanup. Post-implementation commits changed only acceptance tests and their browser fixture.
+
+### Deterministic Visual Evidence
+
+All 18 checked-in captures were manually inspected against Focus Rail. No Signal Ledger borrowing, desktop-led restructuring, overlap, clipping, horizontal overflow, or unapproved structural drift remains.
+
+```text
+ec871c7a107d787487126796c40460bc685fbd65849c80a35cd7e9ea5f32d332  access-locked-390x844.png
+9b7b544f3e95f175a52ab6e806834f88f11a4fc54375abc53525ab7c3a6bbb3c  access-long-origin-390x844.png
+27315d426d2c00aaec0af21a9be8713f89affba187ccf8ee4ed40b54acb37005  access-long-origin-reflow-320x800.png
+d52a6b114f908a95be1470a1f23a214616f7791554fce552d5bbc5d360736a8f  access-read-only-390x844.png
+57397f39cadb1adfa2acda2562dba4a1a79cf3af2aa898df05678058ca00a5dd  access-reconnecting-390x844.png
+ee9a30056942dd8ecc58c8abdfa4ed44bb1e133a850f96453271ccb5949b0f2b  access-stale-390x844.png
+68be226e18a4879d963290d93eec72f496ff32b63afa5a5b92334829e6fc7e3c  access-unpaired-390x844.png
+56098454019acc0af804fdb043cc273d44839ff8a85490ec14cf96fa33e94347  access-writer-390x844.png
+b60b929a7e5b817ab227ad9b110040d2d5789e79a86c07db265b63b2e0855b08  pairing-claiming-390x844.png
+34d5b57eada666930aa92be8ec667a2cc548c723f3b84b9d6dd284f3040012fe  pairing-claim_unknown-390x844.png
+45801f94405f669d46150581dbdba5d24edcfd60da3f479fced8d4ea53a8e5ff  pairing-link_not_accepted-390x844.png
+a3f7216317bdc55e14e7f9edeefb4d413e5a5e5e149afbd0aa9e237493c7d6c1  pairing-paired-1280x800.png
+b388b96b8e0ab8895a4db8522f9ba42b5657fd90834a0349286de1455a276d0d  pairing-paired-360x800.png
+e05303016242e6eaa396a8576f1735929a2b7a836e49b676bdafb5b5a1c7c464  pairing-paired-390x844.png
+30dcd9ce9dc0e1b8922c2526b7a55344512a2d7f976319bd37de3984fc6cd0c4  pairing-paired-412x915.png
+67c184ba0d2571152858832985a7822083ec5d682f8d4cae37b744c134ec3ca5  pairing-paired-768x1024.png
+e15453f625fd75a317110ae1d1c20e08756c258b9922f6fd9c5c53cb3d3f5551  pairing-paired_csrf_unavailable-390x844.png
+1a7aa1394f42435a49a74d2aac3b06ccc9dfe3ce5720db518788f35c8ba948de  pairing-paired-zoom-200-1280x800.png
+```
+
+### Physical Android Acceptance
+
+- `pnpm smoke:pairing-android` passed 12 of 12 tests in 56.58 seconds on clean revision `68ea403`: Xiaomi 15 Pro (`2410DPN6CC`), Android 16/API 36, Chrome 150.0.7871.181, Android Tailscale 1.98.8, and laptop Tailscale 1.98.8.
+- The harness disabled Wi-Fi and proved validated `CELLULAR|VPN` transport to private Tailscale Serve HTTPS. The exact generated one-time link reached Chrome through fixed stdin-only USB debug handoff; no QR scan, ADB forward/reverse tunnel, laptop-LAN route, public Funnel, or custom CA participated.
+- The phone proved one scrubbed claim, paired confirmation with no session disclosure, explicit Mission Control continuation, current writer/access/host/session truth, Host & access open/close, fragment-free reload without a second claim, three successful CSRF audit pairs plus one rejected post-revocation probe, self-revocation, cookie deletion, revoked-authority rejection, and secret-free browser cleanup.
+- Physical screenshots and hierarchy dumps were held only in the private run directory and removed after assertions; the private DNS name, device authority, pairing material, CSRF material, and cookies were not published. The final run used an unobscured Chrome surface after an unrelated Android chat-head overlay was removed from the acceptance environment.
+
+### Cleanup And Disposition
+
+- Final Serve status is `{}`; Wi-Fi and the original stay-awake setting are restored; Chrome is stopped; launcher is foreground; ADB forward/reverse lists are empty; both Tailscale peers remain enrolled; and `main` is clean and pushed.
+- `PHA-01` through `PHA-20` pass. `FE-V1-031` to `FE-V1-035`, complete dashboard hardening, package/install parity, and release acceptance remain separate downstream work; this leaf does not claim them.
