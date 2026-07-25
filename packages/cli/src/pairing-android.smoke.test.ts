@@ -3053,10 +3053,35 @@ function androidUiStateSummary(
       (node) => node.text === label || node.description === label
     )
   );
+  const observed = [
+    ...new Set(
+      nodes
+        .flatMap((node) => [node.text, node.description])
+        .filter(isSafeAndroidDiagnosticLabel)
+        .map((label) => label.replace(/[|;,]/gu, " "))
+    )
+  ].slice(0, 12);
   return (
     `bounds=${trigger.bounds.left},${trigger.bounds.top},` +
     `${trigger.bounds.right},${trigger.bounds.bottom};` +
-    `known=${visible.length === 0 ? "none" : visible.join("|")}`
+    `known=${visible.length === 0 ? "none" : visible.join("|")};` +
+    `observed=${observed.length === 0 ? "none" : observed.join("|")}`
+  );
+}
+
+function isSafeAndroidDiagnosticLabel(label: string): boolean {
+  return (
+    label.length >= 1 &&
+    label.length <= 80 &&
+    !hasControlCharacters(label) &&
+    !label.includes("@") &&
+    !label.includes("/") &&
+    !label.includes("#") &&
+    !label.includes("?") &&
+    !label.includes("=") &&
+    !label.includes(selectedPairingFragmentPrefix) &&
+    !/\.ts\.net\b/iu.test(label) &&
+    !/[A-Za-z0-9_-]{28,}/u.test(label)
   );
 }
 
