@@ -37,6 +37,7 @@ const requestBase = Object.freeze({
   referrerPolicy: "no-referrer" as const
 });
 const commandPath = "/__physical/command";
+const cleanupPath = "/__physical/cleanup";
 const protectedPath = "/__physical/protected";
 let activeEventSource: EventSource | null = null;
 let activeHeartbeat: AbortController | null = null;
@@ -63,6 +64,10 @@ void (fragmentScrubbed
 async function runPhysicalAcceptance(fragment: string): Promise<void> {
   renderState("Starting", "Checking the private phone connection.", "starting");
   if (fragment !== "") {
+    requireCondition(
+      window.location.pathname === "/",
+      "Pairing fragment entered outside the root route."
+    );
     await runPairingEntry(fragment);
     return;
   }
@@ -493,7 +498,8 @@ async function requireSecretFreeBrowserState(): Promise<void> {
   const registrations = await navigator.serviceWorker.getRegistrations();
   requireCondition(
     window.location.hash === "" &&
-      window.location.pathname === "/" &&
+      (window.location.pathname === "/" ||
+        window.location.pathname === cleanupPath) &&
       window.location.search === "" &&
       document.cookie === "" &&
       localStorage.length === 0 &&

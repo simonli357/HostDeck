@@ -162,6 +162,7 @@ describe("physical Android phone-driver protocol", () => {
     const bundle = await buildPhysicalBrowserBundle();
 
     expect(bundle).toContain("/__physical/checkpoint/");
+    expect(bundle).toContain("/__physical/cleanup");
     expect(bundle).toContain("requestFullscreen");
     expect(bundle).not.toMatch(
       /chrome_devtools|Runtime\.evaluate|webSocketDebuggerUrl|__hostDeckPhysical/iu
