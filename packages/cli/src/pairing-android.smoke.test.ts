@@ -869,7 +869,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           requireChromeForeground();
           assertPairingRuntimeTruth(opened.db, requestInspection);
         }
-        assertPairingAudit(opened.db);
+        assertPairingAudit(opened.db, {
+          csrfBootstrapCount: requirePairingUiAcceptance ? 4 : 1,
+          deviceRevokeCount: requirePairingUiAcceptance ? 1 : 0
+        });
         assertSecretsAbsentFromDatabase(dbPath, secrets.values());
 
         if (requireRemoteAndroidAcceptance) {
@@ -3444,21 +3447,59 @@ function firstProxyRejection(app: HostDeckFastifyInstance): string | null {
 }
 
 function assertPairingAudit(
-  db: ReturnType<typeof openMigratedDatabase>["db"]
+  db: ReturnType<typeof openMigratedDatabase>["db"],
+  expected: Readonly<{
+    csrfBootstrapCount: number;
+    deviceRevokeCount: number;
+  }>
 ): void {
+  requireCondition(
+    (expected.csrfBootstrapCount === 1 ||
+      expected.csrfBootstrapCount === 4) &&
+      (expected.deviceRevokeCount === 0 || expected.deviceRevokeCount === 1),
+    "Physical pairing audit expectation was invalid."
+  );
   const rows = db
     .prepare(
       "SELECT action, phase, outcome, COUNT(*) AS count " +
         "FROM selected_audit_events " +
-        "WHERE action IN ('pair_request','pair_claim','csrf_bootstrap') " +
+        "WHERE action IN ('pair_request','pair_claim','csrf_bootstrap','device_revoke') " +
         "GROUP BY action, phase, outcome ORDER BY action, phase, outcome"
     )
     .all();
+  const deviceRevokeRows =
+    expected.deviceRevokeCount === 0
+      ? []
+      : [
+          {
+            action: "device_revoke",
+            phase: "accepted",
+            outcome: "accepted",
+            count: expected.deviceRevokeCount
+          },
+          {
+            action: "device_revoke",
+            phase: "terminal",
+            outcome: "succeeded",
+            count: expected.deviceRevokeCount
+          }
+        ];
   requireCondition(
     JSON.stringify(rows) ===
       JSON.stringify([
-        { action: "csrf_bootstrap", phase: "accepted", outcome: "accepted", count: 1 },
-        { action: "csrf_bootstrap", phase: "terminal", outcome: "succeeded", count: 1 },
+        {
+          action: "csrf_bootstrap",
+          phase: "accepted",
+          outcome: "accepted",
+          count: expected.csrfBootstrapCount
+        },
+        {
+          action: "csrf_bootstrap",
+          phase: "terminal",
+          outcome: "succeeded",
+          count: expected.csrfBootstrapCount
+        },
+        ...deviceRevokeRows,
         { action: "pair_claim", phase: "accepted", outcome: "accepted", count: 1 },
         { action: "pair_claim", phase: "terminal", outcome: "succeeded", count: 1 },
         { action: "pair_request", phase: "accepted", outcome: "accepted", count: 1 },
