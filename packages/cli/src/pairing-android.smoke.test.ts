@@ -2671,12 +2671,21 @@ async function runProductionPairingUiSequence(input: {
     30_000,
     "Production Mission Control did not render on Android."
   );
-  await waitForAndroidUiNode(
-    "text",
-    "Physical pairing review",
-    30_000,
-    "Production Mission Control did not render the authenticated session."
-  );
+  try {
+    await waitForAndroidUiNode(
+      "text",
+      "Physical pairing review",
+      30_000,
+      "Production Mission Control did not render the authenticated session."
+    );
+  } catch {
+    throw new Error(
+      missionControlRouteFailure(
+        input.requestInspection,
+        input.readProxyRejection()
+      )
+    );
+  }
   await capturePhysicalScreenshot(
     join(input.screenshotDirectory, "fe013-02-mission-control.png")
   );
