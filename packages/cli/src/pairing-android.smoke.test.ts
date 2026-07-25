@@ -2719,13 +2719,21 @@ async function runProductionPairingUiSequence(input: {
     30_000,
     "Production Host and access trigger was unavailable on Android."
   );
-  tapAndroidUiNode(accessTrigger);
-  await waitForAndroidUiNode(
-    "text",
-    "Host & access",
-    30_000,
-    "Production Host and access sheet did not open on Android."
-  );
+  await performVerifiedAndroidTap({
+    initialTrigger: accessTrigger,
+    triggerField: "description",
+    triggerValue: "Open Host and access",
+    completed: async () =>
+      (await readAndroidUiNodes()).some(
+        (node) => node.text === "Host & access"
+      ),
+    completionFailureMessage:
+      "Production Host and access sheet did not open on Android.",
+    reacquireFailureMessage:
+      "Production Host and access trigger could not be reacquired on Android.",
+    terminalFailureMessage:
+      "Production Host and access sheet remained closed after two bounded taps."
+  });
   await waitForAndroidUiNode(
     "text",
     "Secure control ready",
@@ -2748,7 +2756,23 @@ async function runProductionPairingUiSequence(input: {
     30_000,
     "Production Host and access close control was unavailable on Android."
   );
-  tapAndroidUiNode(closeAccess);
+  await performVerifiedAndroidTap({
+    initialTrigger: closeAccess,
+    triggerField: "description",
+    triggerValue: "Close Host and access",
+    completed: async () =>
+      (await readAndroidUiNodes()).every(
+        (node) =>
+          node.description !== "Close Host and access" &&
+          node.text !== "Host & access"
+      ),
+    completionFailureMessage:
+      "Production Host and access sheet did not close on Android.",
+    reacquireFailureMessage:
+      "Production Host and access close control could not be reacquired on Android.",
+    terminalFailureMessage:
+      "Production Host and access sheet remained open after two bounded taps."
+  });
   const requestsBeforeReload = Object.freeze({
     access: input.requestInspection.accessRequests,
     csrf: input.requestInspection.csrfRequests,
@@ -2935,41 +2959,60 @@ async function continueFromPairingUi(
   initialButton: AndroidUiNode,
   inspection: RequestInspection
 ): Promise<void> {
-  let button = initialButton;
+  await performVerifiedAndroidTap({
+    initialTrigger: initialButton,
+    triggerField: "text",
+    triggerValue: "Open Mission Control",
+    completed: async () => {
+      if (
+        inspection.accessRequests > 0 ||
+        inspection.hostStatusRequests > 0 ||
+        inspection.sessionListRequests > 0
+      ) {
+        return true;
+      }
+      const nodes = await readAndroidUiNodes();
+      return nodes.every((node) => node.text !== "Open Mission Control");
+    },
+    completionFailureMessage:
+      "Production pairing continuation did not leave the confirmation screen.",
+    reacquireFailureMessage:
+      "Production pairing continuation could not reacquire its explicit button.",
+    terminalFailureMessage:
+      "Production pairing continuation remained on the confirmation screen after two bounded taps."
+  });
+}
+
+async function performVerifiedAndroidTap(input: {
+  readonly completed: () => boolean | Promise<boolean>;
+  readonly completionFailureMessage: string;
+  readonly initialTrigger: AndroidUiNode;
+  readonly reacquireFailureMessage: string;
+  readonly terminalFailureMessage: string;
+  readonly triggerField: "description" | "text";
+  readonly triggerValue: string;
+}): Promise<void> {
+  let trigger = input.initialTrigger;
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    tapAndroidUiNode(button);
+    tapAndroidUiNode(trigger);
     try {
       await waitFor(
-        async () => {
-          if (
-            inspection.accessRequests > 0 ||
-            inspection.hostStatusRequests > 0 ||
-            inspection.sessionListRequests > 0
-          ) {
-            return true;
-          }
-          const nodes = await readAndroidUiNodes();
-          return nodes.every(
-            (node) => node.text !== "Open Mission Control"
-          );
-        },
+        input.completed,
         8_000,
-        "Production pairing continuation did not leave the confirmation screen."
+        input.completionFailureMessage
       );
       return;
     } catch {
       if (attempt === 1) break;
-      button = await waitForAndroidUiNode(
-        "text",
-        "Open Mission Control",
+      trigger = await waitForAndroidUiNode(
+        input.triggerField,
+        input.triggerValue,
         5_000,
-        "Production pairing continuation could not reacquire its explicit button."
+        input.reacquireFailureMessage
       );
     }
   }
-  throw new Error(
-    "Production pairing continuation remained on the confirmation screen after two bounded taps."
-  );
+  throw new Error(input.terminalFailureMessage);
 }
 
 function tapAndroidUiNode(node: AndroidUiNode): void {
