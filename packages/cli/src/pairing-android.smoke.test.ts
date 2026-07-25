@@ -3531,6 +3531,8 @@ async function runProductionPromptUiSequence(
     missionControl: "fe020-02-mission-control.png",
     paired: "fe020-01-paired.png"
   });
+  const inputLabel = `Prompt for ${physicalUiSessionName}`;
+  const sendLabel = `Send prompt to ${physicalUiSessionName}`;
   const sessionLink = await waitForAndroidUiNode(
     "text",
     physicalUiSessionName,
@@ -3544,7 +3546,7 @@ async function runProductionPromptUiSequence(
     completed: async () =>
       input.requestInspection.sessionDetailRequests >= 1 &&
       (await readAndroidUiNodes()).some(
-        (node) => node.text === "Prompt target"
+        (node) => node.description === inputLabel
       ),
     completionFailureMessage:
       "Production Session Detail did not open on Android.",
@@ -3568,8 +3570,6 @@ async function runProductionPromptUiSequence(
     30_000,
     "Physical prompt composer did not become writable on Android."
   );
-  const inputLabel = `Prompt for ${physicalUiSessionName}`;
-  const sendLabel = `Send prompt to ${physicalUiSessionName}`;
   const textarea = await waitForAndroidUiNode(
     "description",
     inputLabel,
