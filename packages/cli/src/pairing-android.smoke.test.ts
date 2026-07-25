@@ -817,10 +817,16 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
 
         requireChromeRunning();
         if (requirePairingUiAcceptance) {
+          const pairingUiHost = host;
+          requireCondition(
+            pairingUiHost !== null,
+            "Physical production UI host was unavailable."
+          );
           await runProductionPairingUiSequence({
             db: opened.db,
             driver: driverRuntime,
             externalOrigin: candidate.externalOrigin,
+            readProxyRejection: () => firstProxyRejection(pairingUiHost.app),
             requestInspection,
             screenshotDirectory
           });
@@ -2580,6 +2586,7 @@ async function runProductionPairingUiSequence(input: {
   readonly db: ReturnType<typeof openMigratedDatabase>["db"];
   readonly driver: PhysicalDriverRuntime;
   readonly externalOrigin: string;
+  readonly readProxyRejection: () => string | null;
   readonly requestInspection: RequestInspection;
   readonly screenshotDirectory: string;
 }): Promise<void> {
@@ -2618,7 +2625,12 @@ async function runProductionPairingUiSequence(input: {
       "Production Mission Control did not load its authenticated route data."
     );
   } catch {
-    throw new Error(missionControlRouteFailure(input.requestInspection));
+    throw new Error(
+      missionControlRouteFailure(
+        input.requestInspection,
+        input.readProxyRejection()
+      )
+    );
   }
   await waitForAndroidUiNode(
     "text",
@@ -2735,14 +2747,18 @@ async function runProductionPairingUiSequence(input: {
   );
 }
 
-function missionControlRouteFailure(inspection: RequestInspection): string {
+function missionControlRouteFailure(
+  inspection: RequestInspection,
+  proxyRejection: string | null
+): string {
   const route = (requests: number, statuses: readonly number[]): string =>
     `${requests}/${statuses.length === 0 ? "none" : statuses.join(",")}`;
   return (
     "Production Mission Control did not load its authenticated route data " +
     `(access=${route(inspection.accessRequests, inspection.accessResponseStatuses)};` +
     `host=${route(inspection.hostStatusRequests, inspection.hostStatusResponseStatuses)};` +
-    `sessions=${route(inspection.sessionListRequests, inspection.sessionListResponseStatuses)}).`
+    `sessions=${route(inspection.sessionListRequests, inspection.sessionListResponseStatuses)};` +
+    `proxy=${proxyRejection ?? "none"}).`
   );
 }
 
