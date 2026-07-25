@@ -103,9 +103,9 @@ export function createHostDeckStaticBoundaryRegistration(
         redirect: false,
         root: build.assetsRoot,
         serveDotFiles: false,
-        setHeaders(response, filePath) {
-          response.setHeader("X-Content-Type-Options", "nosniff");
-          response.setHeader(
+        setHeaders(reply, filePath) {
+          reply.header("X-Content-Type-Options", "nosniff");
+          reply.header(
             "Cache-Control",
             isImmutableHashedAssetPath(filePath)
               ? "public, max-age=31536000, immutable"

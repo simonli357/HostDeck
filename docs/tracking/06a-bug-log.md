@@ -226,3 +226,16 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Fix: `selectedHostAccessSchema` now uses `loopback_read`, device id only, route-derivable access/lock/read/write/error fields, optional current remote ingress, and no provenance/source key, label, detailed compatibility, or global stream fabrication. Session Detail owns its stream and compatibility remains with its exact runtime source.
 - Validation: selected-mobile regressions, 33 direct coordinator cases, three real loopback/admitted-Serve Fastify/SQLite cases, 243 contract tests, 35 integration tests, full workspace/static/package/install/audit gates, and manual privacy/residue review pass.
 - Closed by: `FE-V1-025` implementation `888abf1`; evidence in `artifacts/fe-v1-025-shell-connection-state-coordinator.md`.
+
+### BUG-016 Newly Published Production Dependency Advisories
+
+- Symptom: the final `FE-V1-020` `pnpm audit --prod` gate newly reported four high and one moderate advisory across `find-my-way` 9.6.0, `react-router` 8.2.0, `@fastify/static` 9.3.0, and transitive `brace-expansion` 5.0.7.
+- Impact: the committed production graph failed the zero-known-vulnerability release gate; the Fastify findings affect request routing/static boundaries and cannot be waived as unrelated UI risk.
+- Route: release blocker discovered and resolved in the active `FE-V1-020` hardening unit; requirements and architecture remain unchanged.
+- Related requirements: `NFR-005`, `NFR-010`, `PR-007`.
+- Affected / owning task: shared server/web production dependency graph; closure evidence is recorded with `FE-V1-020` because its required supply-chain gate discovered the advisories.
+- Blocks: resolved before physical Android acceptance and task closure; no downstream task remains blocked by these advisories.
+- Root cause: exact direct versions and the frozen lock predated `GHSA-c96f-x56v-gq3h`, `GHSA-qwww-vcr4-c8h2`, `GHSA-83w8-p2f5-377r`, `GHSA-mh99-v99m-4gvg`, and `GHSA-8pvw-jcv7-9cmj`.
+- Fix: upgrade exact `@fastify/static` to 10.1.2 and `react-router` to 8.3.0; pin only vulnerable permitted transitives to `find-my-way` 9.7.0 and `brace-expansion` 5.0.8 through workspace overrides; adapt the static header callback to the patched plugin's `FastifyReply.header` contract. No route, CSRF, static-path, cache, or fallback policy changed.
+- Validation: dependency enumeration contains only the four patched versions; all are MIT licensed; static-boundary/Fastify 11, web 214, unit 2,064 with 28 explicit skips, contract 243, integration 36, Chromium 18, typecheck, lint/exports, scaffold, runtime boundary, deterministic package acceptance with 6,445 entries, frozen offline install, and zero-known-vulnerability production audit pass.
+- Closed by: the current dependency-hardening unit; final `FE-V1-020` evidence records its pushed commit.
