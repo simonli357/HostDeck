@@ -385,12 +385,14 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       const secrets = createSecretRegistry();
       const requestInspection: RequestInspection = {
         accessRequests: 0,
+        accessResponseStatuses: [],
         claimRequests: 0,
         csrfRequests: 0,
         deletionCookieObserved: false,
         fragmentLeaks: 0,
         hardenedCookieObserved: false,
         hostStatusRequests: 0,
+        hostStatusResponseStatuses: [],
         noReferrerApiRequests: 0,
         protectedReadRejections: 0,
         protectedReadRequests: 0,
@@ -398,7 +400,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         rejectedRevokedCheckpoints: 0,
         revokedCheckpointRequests: 0,
         revokeRequests: 0,
-        sessionListRequests: 0
+        sessionListRequests: 0,
+        sessionListResponseStatuses: []
       };
       const driverRuntime = createPhysicalDriverRuntime();
       const sseRuntime: PhysicalSseRuntime = {
@@ -1038,12 +1041,14 @@ interface CleanupTarget {
 
 interface RequestInspection {
   accessRequests: number;
+  accessResponseStatuses: number[];
   claimRequests: number;
   csrfRequests: number;
   deletionCookieObserved: boolean;
   fragmentLeaks: number;
   hardenedCookieObserved: boolean;
   hostStatusRequests: number;
+  hostStatusResponseStatuses: number[];
   noReferrerApiRequests: number;
   protectedReadRejections: number;
   protectedReadRequests: number;
@@ -1052,6 +1057,7 @@ interface RequestInspection {
   revokedCheckpointRequests: number;
   revokeRequests: number;
   sessionListRequests: number;
+  sessionListResponseStatuses: number[];
 }
 
 interface PairingRenderCapture {
@@ -1645,6 +1651,27 @@ function installRequestInspection(
     }
   });
   app.addHook("onResponse", async (request, reply) => {
+    if (request.url === "/api/v1/access") {
+      recordPhysicalResponseStatus(
+        inspection.accessResponseStatuses,
+        reply.statusCode
+      );
+    }
+    if (request.url === "/api/v1/host/status") {
+      recordPhysicalResponseStatus(
+        inspection.hostStatusResponseStatuses,
+        reply.statusCode
+      );
+    }
+    if (
+      request.url === "/api/v1/sessions" ||
+      request.url.startsWith("/api/v1/sessions?")
+    ) {
+      recordPhysicalResponseStatus(
+        inspection.sessionListResponseStatuses,
+        reply.statusCode
+      );
+    }
     if (request.url === "/__physical/protected") {
       if (reply.statusCode === 200) inspection.protectedReadSuccesses += 1;
       if (reply.statusCode === 401) inspection.protectedReadRejections += 1;
@@ -1690,6 +1717,14 @@ function installRequestInspection(
       inspection.rejectedRevokedCheckpoints += 1;
     }
   });
+}
+
+function recordPhysicalResponseStatus(statuses: number[], status: number): void {
+  requireCondition(
+    statuses.length < 16 && Number.isSafeInteger(status) && status >= 100 && status <= 599,
+    "Physical response-status evidence was invalid or exhausted."
+  );
+  statuses.push(status);
 }
 
 function requireDedicatedAbsentCandidate(
@@ -2573,14 +2608,18 @@ async function runProductionPairingUiSequence(input: {
   );
   tapAndroidUiNode(continueButton);
 
-  await waitFor(
-    () =>
-      input.requestInspection.accessRequests >= 1 &&
-      input.requestInspection.hostStatusRequests >= 1 &&
-      input.requestInspection.sessionListRequests >= 1,
-    30_000,
-    "Production Mission Control did not load its authenticated route data."
-  );
+  try {
+    await waitFor(
+      () =>
+        input.requestInspection.accessRequests >= 1 &&
+        input.requestInspection.hostStatusRequests >= 1 &&
+        input.requestInspection.sessionListRequests >= 1,
+      30_000,
+      "Production Mission Control did not load its authenticated route data."
+    );
+  } catch {
+    throw new Error(missionControlRouteFailure(input.requestInspection));
+  }
   await waitForAndroidUiNode(
     "text",
     "Mission Control",
@@ -2693,6 +2732,17 @@ async function runProductionPairingUiSequence(input: {
         "revoked_at IS NOT NULL"
       ) === 1,
     "Physical UI cleanup did not remove its browser authority."
+  );
+}
+
+function missionControlRouteFailure(inspection: RequestInspection): string {
+  const route = (requests: number, statuses: readonly number[]): string =>
+    `${requests}/${statuses.length === 0 ? "none" : statuses.join(",")}`;
+  return (
+    "Production Mission Control did not load its authenticated route data " +
+    `(access=${route(inspection.accessRequests, inspection.accessResponseStatuses)};` +
+    `host=${route(inspection.hostStatusRequests, inspection.hostStatusResponseStatuses)};` +
+    `sessions=${route(inspection.sessionListRequests, inspection.sessionListResponseStatuses)}).`
   );
 }
 
