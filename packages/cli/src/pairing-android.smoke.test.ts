@@ -2432,6 +2432,39 @@ function adb(args: readonly string[]): string {
   return output;
 }
 
+function adbAsync(args: readonly string[]): Promise<string> {
+  const serialized = args.join("\u0000");
+  requireCondition(
+    [...deviceForbiddenValues].every((value) => !serialized.includes(value)),
+    "A protected pairing value was rejected before asynchronous ADB dispatch."
+  );
+  adbCommandCount += 1;
+  return new Promise((resolve, reject) => {
+    execFile(
+      "adb",
+      [...args],
+      commandOptions(),
+      (error, stdout, stderr) => {
+        if (error !== null) {
+          reject(new Error("Physical asynchronous ADB command failed."));
+          return;
+        }
+        try {
+          requireCondition(
+            [...deviceForbiddenValues].every(
+              (value) => !stdout.includes(value) && !stderr.includes(value)
+            ),
+            "A protected pairing value was rejected in asynchronous ADB output."
+          );
+          resolve(stdout);
+        } catch (failure) {
+          reject(failure);
+        }
+      }
+    );
+  });
+}
+
 function openPrivatePairingLinkInChrome(pairingLink: string): void {
   requireCondition(
     deviceForbiddenValues.has(pairingLink),
@@ -2605,7 +2638,7 @@ async function runProductionPairingUiSequence(input: {
   requireCondition(
     pairingUiBeforeContinueIsValid(
       paired,
-      readAndroidUiNodes(),
+      await readAndroidUiNodes(),
       input.requestInspection
     ),
     "Production pairing confirmation disclosed protected state or repeated startup work."
@@ -2780,9 +2813,9 @@ function pairingUiBeforeContinueIsValid(
   );
 }
 
-function readAndroidUiNodes(): readonly AndroidUiNode[] {
+async function readAndroidUiNodes(): Promise<readonly AndroidUiNode[]> {
   return parseAndroidUiNodes(
-    adb(["exec-out", "uiautomator", "dump", "/dev/tty"])
+    await adbAsync(["exec-out", "uiautomator", "dump", "/dev/tty"])
   );
 }
 
@@ -2851,8 +2884,8 @@ async function waitForAndroidUiNode(
   message: string
 ): Promise<AndroidUiNode> {
   let found: AndroidUiNode | null = null;
-  await waitFor(() => {
-    const matches = readAndroidUiNodes().filter(
+  await waitFor(async () => {
+    const matches = (await readAndroidUiNodes()).filter(
       (node) => node[field] === value
     );
     requireCondition(
@@ -3134,11 +3167,19 @@ async function waitForFreshLifecycleIdle(
 async function capturePhysicalScreenshot(path: string): Promise<void> {
   requireChromeForeground();
   adbCommandCount += 1;
-  const bytes = execFileSync("adb", ["exec-out", "screencap", "-p"], {
-    encoding: null,
-    env: { PATH: process.env.PATH, HOME: process.env.HOME },
-    maxBuffer: 4 * 1024 * 1024,
-    timeout: 15_000
+  const bytes = await new Promise<Buffer>((resolve, reject) => {
+    execFile("adb", ["exec-out", "screencap", "-p"], {
+      encoding: null,
+      env: { PATH: process.env.PATH, HOME: process.env.HOME },
+      maxBuffer: 4 * 1024 * 1024,
+      timeout: 15_000
+    }, (error, stdout) => {
+      if (error !== null || !Buffer.isBuffer(stdout)) {
+        reject(new Error("Physical screenshot capture failed."));
+        return;
+      }
+      resolve(stdout);
+    });
   });
   requireCondition(
     Buffer.isBuffer(bytes) &&
