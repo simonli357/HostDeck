@@ -2669,7 +2669,7 @@ async function runProductionPairingUiSequence(input: {
   await capturePhysicalScreenshot(
     join(input.screenshotDirectory, "fe013-01-paired.png")
   );
-  tapAndroidUiNode(continueButton);
+  await continueFromPairingUi(continueButton, input.requestInspection);
 
   try {
     await waitFor(
@@ -2931,7 +2931,49 @@ async function waitForAndroidUiNode(
   return found;
 }
 
+async function continueFromPairingUi(
+  initialButton: AndroidUiNode,
+  inspection: RequestInspection
+): Promise<void> {
+  let button = initialButton;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    tapAndroidUiNode(button);
+    try {
+      await waitFor(
+        async () => {
+          if (
+            inspection.accessRequests > 0 ||
+            inspection.hostStatusRequests > 0 ||
+            inspection.sessionListRequests > 0
+          ) {
+            return true;
+          }
+          const nodes = await readAndroidUiNodes();
+          return nodes.every(
+            (node) => node.text !== "Open Mission Control"
+          );
+        },
+        8_000,
+        "Production pairing continuation did not leave the confirmation screen."
+      );
+      return;
+    } catch {
+      if (attempt === 1) break;
+      button = await waitForAndroidUiNode(
+        "text",
+        "Open Mission Control",
+        5_000,
+        "Production pairing continuation could not reacquire its explicit button."
+      );
+    }
+  }
+  throw new Error(
+    "Production pairing continuation remained on the confirmation screen after two bounded taps."
+  );
+}
+
 function tapAndroidUiNode(node: AndroidUiNode): void {
+  requireChromeForeground();
   const x = Math.floor((node.bounds.left + node.bounds.right) / 2);
   const y = Math.floor((node.bounds.top + node.bounds.bottom) / 2);
   adb(["shell", "input", "tap", String(x), String(y)]);
