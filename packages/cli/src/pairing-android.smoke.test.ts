@@ -2725,7 +2725,7 @@ async function runProductionPairingUiSequence(input: {
     triggerValue: "Open Host and access",
     completed: async () =>
       (await readAndroidUiNodes()).some(
-        (node) => node.text === "Host & access"
+        (node) => node.description === "Close Host and access"
       ),
     completionFailureMessage:
       "Production Host and access sheet did not open on Android.",
