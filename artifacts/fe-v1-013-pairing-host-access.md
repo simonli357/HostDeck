@@ -4,7 +4,7 @@ Date: 2026-07-22
 
 ## Scope
 
-Integrate the completed fragment-safe pairing boundary into the production browser startup path and replace the production Host & access placeholder with a thin, persistent projection of the selected connection coordinator. This leaf owns pre-React pairing startup order, sanitized pairing progress/result UI, successful CSRF adoption into the one production coordinator, access-first disclosure, current permission/lock/origin/read/write/host/stream summaries, Focus Rail pairing and access presentation, deterministic browser evidence, and a physical Android QR pass through private Tailscale Serve HTTPS.
+Integrate the completed fragment-safe pairing boundary into the production browser startup path and replace the production Host & access placeholder with a thin, persistent projection of the selected connection coordinator. This leaf owns pre-React pairing startup order, sanitized pairing progress/result UI, successful CSRF adoption into the one production coordinator, access-first disclosure, current permission/lock/origin/read/write/host/stream summaries, Focus Rail pairing and access presentation, deterministic browser evidence, and a physical Android claim of the generated QR payload through private Tailscale Serve HTTPS.
 
 This leaf does not create pairing links or QR codes, retry an uncertain claim, persist credentials, manage paired devices, implement CSRF reload recovery, mutate lock state, diagnose or repair Tailscale/profile/Serve state in detail, expose runtime-version detail, or implement prompt/control actions. Local QR creation remains `codexdeck pair`; `FE-V1-031` to `FE-V1-035` own CSRF recovery, devices, lock controls, remote recovery, and compatibility. No phone profile switch, Serve mutation, remote unlock, LAN/custom-CA fallback, terminal, or raw shell surface belongs here.
 
@@ -77,7 +77,7 @@ This leaf does not create pairing links or QR codes, retry an uncertain claim, p
 | `PHA-16` | Claiming, paired, failure, unpaired, read-only, writer, locked, stale/reconnecting, and long-content cases pass semantics, keyboard, focus, contrast, reduced motion, 320 reflow, five reference widths, and 200 percent zoom. |
 | `PHA-17` | Component and production-browser tests prove request ordering, explicit continuation, no disclosure, no duplicate work, history/referrer privacy, reload/back/forward, modal behavior, and empty browser storage. |
 | `PHA-18` | Selected real Fastify/SQLite evidence proves production startup claim, cookie, CSRF adoption, first access/session load, audit/storage privacy, revocation suppression, and cleanup without live profile mutation. |
-| `PHA-19` | A physical Android scan through private Tailscale Serve HTTPS with no laptop-LAN route or custom CA proves scrubbed claiming, paired confirmation, Mission Control, Host & access truth, reload, and privacy-safe screenshot/manual evidence. |
+| `PHA-19` | The exact in-memory QR payload reaches a physical Android Chrome through bounded stdin-only USB handoff, then private Tailscale Serve HTTPS with no laptop-LAN route or custom CA proves scrubbed claiming, paired confirmation, Mission Control, Host & access truth, reload, and privacy-safe ephemeral screenshot evidence. The separate full remote smoke retains the human scanner path. |
 | `PHA-20` | Focused/web/browser/workspace/type/lint/planning/runtime/package/install/audit/privacy/residue gates pass; downstream access controls and release acceptance remain explicitly open. |
 
 ## Planned Validation

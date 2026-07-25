@@ -214,6 +214,31 @@ describe("physical Android phone-driver protocol", () => {
     ).toBe(false);
   });
 
+  it("hands the private pairing link to Chrome only through bounded ADB stdin", () => {
+    const link =
+      "https://private-laptop.fixture-tailnet.ts.net/#pair=AbCdEfGhIjKlMnOpQrSt_1";
+    const component =
+      "com.android.chrome/com.google.android.apps.chrome.IntentDispatcher";
+    const handoff = createPrivatePairingChromeHandoff(link, component);
+
+    expect(handoff.adbArgs).toEqual(["shell"]);
+    expect(handoff.adbArgs.join("\u0000")).not.toContain(link);
+    expect(handoff.stdin.split("\n")).toEqual([
+      "set -eu",
+      "IFS= read -r url",
+      link,
+      `am start --user 0 -n ${component} -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "$url" >/dev/null 2>&1`,
+      "unset url",
+      ""
+    ]);
+    expect(handoff.stdin.split(link)).toHaveLength(2);
+    expect(Object.isFrozen(handoff)).toBe(true);
+    expect(Object.isFrozen(handoff.adbArgs)).toBe(true);
+    expect(() =>
+      createPrivatePairingChromeHandoff(link, "com.android.chrome;id")
+    ).toThrow("Physical Chrome activity was invalid.");
+  });
+
   it("closes the owned QR display process within its deadline", async () => {
     const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
       stdio: "ignore"
@@ -752,12 +777,16 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         deviceForbiddenValues.add(pairingLink);
         pairResult = null;
 
-        display = await startQrDisplay(qrImage as Buffer);
         rendered.link = null;
         rendered.qrImage = null;
 
         adb(["shell", "am", "force-stop", "com.android.chrome"]);
-        openDefaultCamera();
+        if (requirePairingUiAcceptance) {
+          openPrivatePairingLinkInChrome(pairingLink);
+        } else {
+          display = await startQrDisplay(qrImage as Buffer);
+          openDefaultCamera();
+        }
         await waitFor(
           () =>
             countRows(opened.db, "auth_devices") === 1 ||
@@ -766,7 +795,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             ) !== null ||
             selectedRemote.snapshot().phase !== "running",
           claimTimeoutMs,
-          "The physical phone did not claim the private QR in time."
+          "The physical phone did not claim the private pairing link in time."
         );
         const proxyRejection = firstProxyRejection(host.app);
         requireCondition(
@@ -778,8 +807,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           proxyRejection === null,
           `The physical phone was rejected at the Serve boundary (${proxyRejection}).`
         );
-        await closeQrDisplay(display);
-        display = null;
+        if (display !== null) {
+          await closeQrDisplay(display);
+          display = null;
+        }
 
         requireChromeRunning();
         if (requirePairingUiAcceptance) {
@@ -2360,6 +2391,86 @@ function adb(args: readonly string[]): string {
   return output;
 }
 
+function openPrivatePairingLinkInChrome(pairingLink: string): void {
+  requireCondition(
+    deviceForbiddenValues.has(pairingLink),
+    "Physical pairing link was not registered as protected."
+  );
+  const action = "android.intent.action.VIEW";
+  const category = "android.intent.category.BROWSABLE";
+  const resolution = adb([
+    "shell",
+    "cmd",
+    "package",
+    "resolve-activity",
+    "--brief",
+    "-a",
+    action,
+    "-c",
+    category,
+    "-d",
+    "https://example.invalid/",
+    "com.android.chrome"
+  ]);
+  const component = resolution
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .findLast((line) =>
+      /^com\.android\.chrome\/[A-Za-z0-9_.$]+$/u.test(line)
+    );
+  requireCondition(
+    component !== undefined && component.length <= 256,
+    "Physical pairing could not resolve Android Chrome."
+  );
+  const handoff = createPrivatePairingChromeHandoff(pairingLink, component);
+  requireCondition(
+    [...deviceForbiddenValues].every(
+      (value) => !handoff.adbArgs.join("\u0000").includes(value)
+    ),
+    "A protected pairing value was rejected before ADB handoff."
+  );
+  adbCommandCount += 1;
+  const output = execFileSync("adb", [...handoff.adbArgs], {
+    ...commandOptions(),
+    input: handoff.stdin
+  });
+  requireCondition(
+    output === "" &&
+      [...deviceForbiddenValues].every((value) => !output.includes(value)),
+    "Physical private pairing handoff returned unexpected output."
+  );
+}
+
+function createPrivatePairingChromeHandoff(
+  pairingLink: string,
+  component: string
+): Readonly<{
+  adbArgs: readonly ["shell"];
+  stdin: string;
+}> {
+  const selectedLink = selectedPairingLinkSchema.parse(pairingLink);
+  requireCondition(
+    /^com\.android\.chrome\/[A-Za-z0-9_.$]+$/u.test(component) &&
+      component.length <= 256,
+    "Physical Chrome activity was invalid."
+  );
+  const adbArgs = Object.freeze(["shell"] as const);
+  const stdin = [
+    "set -eu",
+    "IFS= read -r url",
+    selectedLink,
+    `am start --user 0 -n ${component} -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "$url" >/dev/null 2>&1`,
+    "unset url",
+    ""
+  ].join("\n");
+  requireCondition(
+    Buffer.byteLength(stdin, "utf8") <= 1_024 &&
+      stdin.split(selectedLink).length === 2,
+    "Physical Chrome handoff input was invalid."
+  );
+  return Object.freeze({ adbArgs, stdin });
+}
+
 function openDefaultCamera(): void {
   const action = "android.media.action.STILL_IMAGE_CAMERA";
   const resolution = adb([
@@ -2386,7 +2497,7 @@ function requireChromeRunning(): void {
   const processes = adb(["shell", "pidof", "com.android.chrome"]).trim();
   requireCondition(
     /^\d+(?:\s+\d+)*$/u.test(processes),
-    "The scanned pairing link did not open in Android Chrome."
+    "The private pairing link did not open in Android Chrome."
   );
 }
 
