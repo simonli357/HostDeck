@@ -42,6 +42,7 @@
     "smoke:codex-vertical": "HOSTDECK_REQUIRE_CODEX_VERTICAL_SMOKE=1 vitest run packages/server/src/codex-structured-vertical.smoke.test.ts",
     "smoke:remote-control": "HOSTDECK_REQUIRE_REMOTE_CONTROL_SMOKE=1 vitest run packages/cli/src/remote-control.smoke.test.ts",
     "smoke:pairing-android": "HOSTDECK_REQUIRE_PAIRING_ANDROID_SMOKE=1 vitest run packages/cli/src/pairing-android.smoke.test.ts",
+    "smoke:prompt-android": "HOSTDECK_REQUIRE_PROMPT_ANDROID_SMOKE=1 vitest run packages/cli/src/pairing-android.smoke.test.ts",
     "smoke:remote-android": "HOSTDECK_REQUIRE_REMOTE_ANDROID_ACCEPTANCE=1 vitest run packages/cli/src/pairing-android.smoke.test.ts",
     "smoke:executable-serve": "node scripts/production-executable-serve.smoke.mjs",
     "smoke:service-host": "node scripts/production-service-host.smoke.mjs",

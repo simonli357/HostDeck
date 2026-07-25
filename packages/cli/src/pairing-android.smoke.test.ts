@@ -24,18 +24,27 @@ import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import {
+  codexThreadIdSchema,
+  codexTurnIdSchema,
   defaultResourceBudget,
   type RemoteIngressObservationSnapshot,
   type RemoteServeDescriptor,
   remoteProxyTrustRejectionReasons,
   remoteServeDescriptorSchema,
+  runtimeCompatibilitySchema,
+  type SelectedProjectionEvent,
   selectedHostLockStateResponseSchema,
   selectedPairingFragmentPrefix,
   selectedPairingLinkSchema,
   selectedProjectionEventSchema,
-  selectedRequestAuthenticationContextSchema
+  selectedRequestAuthenticationContextSchema,
+  selectedSessionMappingRecordSchema,
+  selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
 import {
+  type CodexPromptControlService,
+  type CodexPromptControlServiceOptions,
+  createCodexPromptControlService,
   createHostDeckCsrfPolicy,
   createHostDeckCsrfRouteRegistration,
   createHostDeckDeviceRevokeRouteRegistration,
@@ -45,23 +54,33 @@ import {
   createHostDeckHostLockRouteRegistration,
   createHostDeckPairingPolicy,
   createHostDeckPairingRouteRegistration,
+  createHostDeckProjectedEventRouteRegistration,
+  createHostDeckProjectionStreamRouteRegistration,
+  createHostDeckPromptRouteRegistration,
   createHostDeckRemoteIngressLifecycle,
   createHostDeckRemoteIngressRouteRegistration,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckSelectedWriteAdmissionPolicy,
+  createHostDeckSelectedWriteAuditExecutor,
   createHostDeckSessionReadRouteRegistration,
   createHostDeckSseTransportRegistration,
   createHostDeckStaticBoundaryRegistration,
+  createProjectionSubscriberStreamService,
   createRemoteIngressControlService,
   createSecurityMutationAuditExecutor,
   createTailscaleObserver,
   createTailscaleServeManager,
   type HostDeckFastifyInstance,
   type HostDeckFastifyLifecycle,
+  HostDeckProjectionHandoffError,
   type HostDeckRemoteIngressLifecycle,
   type HostDeckRoutePluginRegistration,
   hostDeckLocalHealthComponents,
   hostDeckNoStoreRouteConfig,
+  type OpenProjectionReplayLiveHandoffInput,
+  type ProjectionHandoffFailure,
+  type ProjectionReplayLiveHandoff,
+  type ProjectionReplayLiveHandoffService,
   requireHostDeckRequestAuthentication,
   resolveHostDeckRequestAuthentication,
   startHostDeckTailscaleServeFastifyLifecycle,
@@ -78,6 +97,7 @@ import {
   createSelectedAuditRepository,
   createSelectedCsrfAuthorizationRepository,
   createSelectedSessionReadRepository,
+  createSelectedStateRepository,
   createSettingsRepository,
   openMigratedDatabase
 } from "@hostdeck/storage";
@@ -91,15 +111,23 @@ import { runCli } from "./shell.js";
 
 const requireRemoteAndroidAcceptance =
   process.env.HOSTDECK_REQUIRE_REMOTE_ANDROID_ACCEPTANCE === "1";
+const requirePromptUiAcceptance =
+  process.env.HOSTDECK_REQUIRE_PROMPT_ANDROID_SMOKE === "1" &&
+  !requireRemoteAndroidAcceptance;
 const requirePairingUiAcceptance =
   process.env.HOSTDECK_REQUIRE_PAIRING_ANDROID_SMOKE === "1" &&
-  !requireRemoteAndroidAcceptance;
+  !requireRemoteAndroidAcceptance &&
+  !requirePromptUiAcceptance;
+const requireProductionUiAcceptance =
+  requirePairingUiAcceptance || requirePromptUiAcceptance;
 const requirePhysicalPairing =
-  requirePairingUiAcceptance || requireRemoteAndroidAcceptance;
+  requireProductionUiAcceptance || requireRemoteAndroidAcceptance;
 const describePhysical = requirePhysicalPairing ? describe : describe.skip;
 const overallTimeoutMs = requireRemoteAndroidAcceptance
   ? 20 * 60_000
-  : 10 * 60_000;
+  : requirePromptUiAcceptance
+    ? 12 * 60_000
+    : 10 * 60_000;
 const claimTimeoutMs = 5 * 60_000;
 const tailscaleDnsServer = "100.100.100.100";
 const physicalPageMaxBytes = defaultResourceBudget.cli_response_max_bytes;
@@ -115,6 +143,16 @@ const physicalEvidenceDirectory = join(
   "artifacts",
   "ifc-v1-079-device"
 );
+const physicalPromptEvidenceDirectory = join(
+  process.cwd(),
+  "artifacts",
+  "fe-v1-020-selected-session-prompt-composer"
+);
+const physicalUiSessionId = "sess_physical_pairing_ui";
+const physicalUiSessionName = "physical-pairing-review";
+const physicalUiThreadId = "thread-physical-pairing-ui";
+const physicalPromptTurnId = "turn-physical-prompt-001";
+const physicalPromptText = "FE020_android_line_one\nFE020_android_line_two";
 const deviceForbiddenValues = new Set<string>();
 let adbCommandCount = 0;
 
@@ -263,6 +301,24 @@ describe("physical Android phone-driver protocol", () => {
     ).toThrow("Physical Chrome activity was invalid.");
   });
 
+  it("injects the two-line prompt without placing prompt text in ADB arguments or stdin", () => {
+    const handoff = createPhysicalPromptTextHandoff(physicalPromptText);
+    const lines = physicalPromptText.split("\n");
+
+    expect(handoff.adbArgs).toEqual(["shell"]);
+    expect(handoff.stdin).not.toContain(physicalPromptText);
+    for (const line of lines) {
+      expect(handoff.adbArgs.join("\u0000")).not.toContain(line);
+      expect(handoff.stdin).not.toContain(line);
+      expect(handoff.stdin).toContain(Buffer.from(line, "utf8").toString("base64"));
+    }
+    expect(Object.isFrozen(handoff)).toBe(true);
+    expect(Object.isFrozen(handoff.adbArgs)).toBe(true);
+    expect(() => createPhysicalPromptTextHandoff("one line only")).toThrow(
+      "Physical prompt text was invalid."
+    );
+  });
+
   it("closes the owned QR display process within its deadline", async () => {
     const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
       stdio: "ignore"
@@ -399,7 +455,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       const directory = mkdtempSync(join(tmpdir(), "hostdeck-pairing-android-"));
       const dbPath = join(directory, "hostdeck.sqlite");
       const opened = openMigratedDatabase(dbPath);
-      const states = createRemoteIngressStateRepository(opened.db);
+      const remoteStates = createRemoteIngressStateRepository(opened.db);
       const proofs = createRemoteIngressAdmissionProofRepository(opened.db);
       const observer = createTailscaleObserver({ signal: controller.signal });
       const manager = createTailscaleServeManager({
@@ -418,14 +474,20 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         hostStatusRequests: 0,
         hostStatusResponseStatuses: [],
         noReferrerApiRequests: 0,
+        promptNoReferrerRequests: 0,
+        promptRequests: 0,
+        promptResponseStatuses: [],
         protectedReadRejections: 0,
         protectedReadRequests: 0,
         protectedReadSuccesses: 0,
         rejectedRevokedCheckpoints: 0,
         revokedCheckpointRequests: 0,
         revokeRequests: 0,
+        sessionDetailRequests: 0,
+        sessionEventRequests: 0,
         sessionListRequests: 0,
-        sessionListResponseStatuses: []
+        sessionListResponseStatuses: [],
+        sessionStreamRequests: 0
       };
       const driverRuntime = createPhysicalDriverRuntime();
       const sseRuntime: PhysicalSseRuntime = {
@@ -437,7 +499,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       const profileSwitch = requireRemoteAndroidAcceptance
         ? requireProfileSwitchInput()
         : null;
-      const acceptanceStartedAt = requireRemoteAndroidAcceptance
+      const acceptanceStartedAt =
+        requireRemoteAndroidAcceptance || requirePromptUiAcceptance
         ? new Date().toISOString()
         : null;
       const screenshotDirectory = join(directory, "device-evidence");
@@ -453,6 +516,11 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       let foreignServeBefore: ServeStatusFingerprint | null = null;
       let environmentFacts: PhysicalEnvironmentFacts | null = null;
       let fullResult: PhysicalSequenceResult | null = null;
+      let promptResult: PhysicalPromptSequenceResult | null = null;
+      let promptRuntime: PhysicalPromptRuntime | null = null;
+      let promptSubscribers: ReturnType<
+        typeof createProjectionSubscriberStreamService
+      > | null = null;
       let initialWifiEnabled: boolean | null = null;
       let initialStayAwakeSetting: number | null = null;
       let selectedProfile: "away" | "dedicated" = "dedicated";
@@ -461,7 +529,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       try {
         adbCommandCount = 0;
         deviceForbiddenValues.clear();
-        if (requirePairingUiAcceptance || requireRemoteAndroidAcceptance) {
+        if (requireProductionUiAcceptance || requireRemoteAndroidAcceptance) {
           requireCleanAcceptanceWorktree();
           requireNoAdbApplicationTunnels();
           initialStayAwakeSetting = readAndroidStayAwakeSetting();
@@ -483,7 +551,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           selectedProfile = "dedicated";
         }
         const browserBundle = await buildPhysicalBrowserBundle();
-        const productionBuildRoot = requirePairingUiAcceptance
+        const productionBuildRoot = requireProductionUiAcceptance
           ? await buildProductionBrowserApp(directory)
           : null;
         const candidate = requireDedicatedAbsentCandidate(
@@ -514,7 +582,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           create_record_id: () => `audit:physical:remote:${++auditIndex}`
         });
         const health = createHostDeckHostHealthService({ now });
-        if (requirePairingUiAcceptance) {
+        if (requireProductionUiAcceptance) {
           for (const component of hostDeckLocalHealthComponents) {
             health.updateLocal({
               component,
@@ -542,7 +610,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
               monotonicNow: input.monotonicNow,
               now,
               observer: lifecycleObserver,
-              states
+              states: remoteStates
             });
           },
           health
@@ -602,9 +670,54 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           now: () => performance.now()
         });
         const revocations = createDeviceRevocationRepository(opened.db);
-        const sessionReads = requirePairingUiAcceptance
+        const sessionReads = requireProductionUiAcceptance
           ? createPhysicalSessionReads(opened.db, now)
           : null;
+        const selectedStates = requirePromptUiAcceptance
+          ? createSelectedStateRepository(opened.db)
+          : null;
+        const promptAuditExecutor = requirePromptUiAcceptance
+          ? createHostDeckSelectedWriteAuditExecutor({
+              repository: audit,
+              now: () => now().toISOString(),
+              create_record_id: () => `audit:physical:prompt:${++auditIndex}`
+            })
+          : null;
+        const promptApiRoutes: HostDeckRoutePluginRegistration[] = [];
+        const promptSseRoutes: HostDeckRoutePluginRegistration[] = [];
+        if (requirePromptUiAcceptance) {
+          requireCondition(
+            selectedStates !== null && promptAuditExecutor !== null,
+            "Physical prompt state or audit owner was unavailable."
+          );
+          promptRuntime = createPhysicalPromptRuntime(selectedStates, now);
+          promptSubscribers = promptRuntime.subscribers;
+          promptApiRoutes.push(
+            createHostDeckProjectedEventRouteRegistration({
+              state: selectedStates
+            }),
+            createHostDeckPromptRouteRegistration({
+              admission: writeAdmission,
+              audit: promptAuditExecutor,
+              csrf: csrfPolicy,
+              lock,
+              prompts: {
+                dispatch: promptRuntime.service.dispatch,
+                snapshot: promptRuntime.service.snapshot
+              },
+              runtime: { read: () => physicalPromptCompatibility(now) },
+              sessions: {
+                read: (sessionId) => selectedStates.require(sessionId)
+              }
+            })
+          );
+          promptSseRoutes.push(
+            createHostDeckProjectionStreamRouteRegistration({
+              observe_error: promptRuntime.recordStreamFailure,
+              subscribers: promptSubscribers
+            })
+          );
+        }
         const apiRoutes = [
           createHostDeckRemoteIngressRouteRegistration({
             service: selectedRemote.control
@@ -632,7 +745,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             lock,
             now
           }),
-          ...(requirePairingUiAcceptance && sessionReads !== null
+          ...(requireProductionUiAcceptance && sessionReads !== null
             ? [
                 createHostDeckHealthRouteRegistration({ health }),
                 createHostDeckSessionReadRouteRegistration({
@@ -640,10 +753,11 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
                 })
               ]
             : []),
+          ...promptApiRoutes,
           physicalProtectedRoute(),
           physicalDriverRoute(driverRuntime)
         ];
-        const staticRoutes = requirePairingUiAcceptance
+        const staticRoutes = requireProductionUiAcceptance
           ? [
               createHostDeckStaticBoundaryRegistration({
                 browserRoutes: ["/", "/sessions/:session_id"],
@@ -656,6 +770,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
               })
             ]
           : [physicalPageRoute(browserBundle)];
+        const sseRoutes = [
+          physicalSseRoute(sseRuntime),
+          ...promptSseRoutes
+        ];
         const routePlugins = [
           composePhysicalRouteRegistration(
             "physical-remote-api",
@@ -667,7 +785,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           composePhysicalRouteRegistration(
             "physical-remote-sse",
             "sse",
-            [physicalSseRoute(sseRuntime)],
+            sseRoutes,
             requestInspection,
             secrets
           ),
@@ -745,7 +863,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         );
         await assertTrustedPhysicalPage(
           candidate.externalOrigin,
-          requirePairingUiAcceptance
+          requireProductionUiAcceptance
             ? readFileSync(
                 join(
                   requireProductionBuildRoot(productionBuildRoot),
@@ -808,7 +926,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         rendered.qrImage = null;
 
         adb(["shell", "am", "force-stop", "com.android.chrome"]);
-        if (requirePairingUiAcceptance) {
+        if (requireProductionUiAcceptance) {
           openPrivatePairingLinkInChrome(pairingLink);
         } else {
           display = await startQrDisplay(qrImage as Buffer);
@@ -855,6 +973,27 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             screenshotDirectory
           });
           assertPairingUiRuntimeTruth(opened.db, requestInspection);
+        } else if (requirePromptUiAcceptance) {
+          const selectedPromptRuntime = promptRuntime;
+          const promptUiHost = host;
+          requireCondition(
+            promptUiHost !== null && selectedPromptRuntime !== null,
+            "Physical prompt production runtime was unavailable."
+          );
+          promptResult = await runProductionPromptUiSequence({
+            db: opened.db,
+            driver: driverRuntime,
+            externalOrigin: candidate.externalOrigin,
+            prompt: selectedPromptRuntime,
+            readProxyRejection: () => firstProxyRejection(promptUiHost.app),
+            requestInspection,
+            screenshotDirectory
+          });
+          assertPromptUiRuntimeTruth(
+            opened.db,
+            requestInspection,
+            selectedPromptRuntime
+          );
         } else {
           await waitFor(
             () => hasPhysicalCheckpoint(driverRuntime, "paired"),
@@ -870,10 +1009,22 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           assertPairingRuntimeTruth(opened.db, requestInspection);
         }
         assertPairingAudit(opened.db, {
-          successfulCsrfBootstrapCount: requirePairingUiAcceptance ? 3 : 1,
-          deviceRevokeCount: requirePairingUiAcceptance ? 1 : 0
+          successfulCsrfBootstrapCount: requirePairingUiAcceptance
+            ? 3
+            : requirePromptUiAcceptance
+              ? 2
+              : 1,
+          deviceRevokeCount: requireProductionUiAcceptance ? 1 : 0
         });
-        assertSecretsAbsentFromDatabase(dbPath, secrets.values());
+        if (requirePromptUiAcceptance) {
+          assertPhysicalPromptAudit(opened.db);
+        }
+        assertSecretsAbsentFromDatabase(
+          dbPath,
+          requirePromptUiAcceptance
+            ? [...secrets.values(), ...physicalPromptText.split("\n")]
+            : secrets.values()
+        );
 
         if (requireRemoteAndroidAcceptance) {
           await waitFor(
@@ -896,7 +1047,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             },
             sseRuntime
           });
-        } else if (!requirePairingUiAcceptance) {
+        } else if (!requireProductionUiAcceptance) {
           driverRuntime.setCommand("cleanup");
           await waitFor(
             () => requestInspection.rejectedRevokedCheckpoints === 1,
@@ -957,11 +1108,27 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         fallbackCleanup = null;
         adb(["shell", "am", "force-stop", "com.android.chrome"]);
         adb(["shell", "input", "keyevent", "KEYCODE_HOME"]);
+        await waitFor(
+          () => isChromeStopped(),
+          10_000,
+          "Physical acceptance retained the Android Chrome process."
+        );
+        if (requirePromptUiAcceptance) {
+          await waitFor(
+            () => !isAndroidKeyboardVisible(),
+            10_000,
+            "Physical prompt acceptance retained the software keyboard."
+          );
+        }
         requireNoAdbApplicationTunnels();
+        const promptSubscriberSnapshot = promptSubscribers?.snapshot() ?? null;
         requireCondition(
           adbCommandCount > 0 &&
             internalErrorCount === 0 &&
-            sseRuntime.active === 0,
+            sseRuntime.active === 0 &&
+            (!requirePromptUiAcceptance ||
+              (promptRuntime?.streamFailureCount === 0 &&
+                promptSubscriberSnapshot?.active_subscribers === 0)),
           "Physical acceptance retained an internal error or active device resource."
         );
         const screenshotBytes = requireRemoteAndroidAcceptance
@@ -997,6 +1164,20 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
               .snapshot().command_attempts,
             screenshots: screenshotBytes as readonly PhysicalScreenshot[],
             sequence: fullResult as PhysicalSequenceResult,
+            startedAt: acceptanceStartedAt as string
+          });
+        } else if (requirePromptUiAcceptance) {
+          await restoreAndroidWifi(initialWifiEnabled as boolean);
+          initialWifiEnabled = null;
+          await restoreAndroidStayAwake(
+            initialStayAwakeSetting as number
+          );
+          initialStayAwakeSetting = null;
+          requireNoAdbApplicationTunnels();
+          publishPhysicalPromptEvidence({
+            completedAt: new Date().toISOString(),
+            environment: environmentFacts as PhysicalEnvironmentFacts,
+            sequence: promptResult as PhysicalPromptSequenceResult,
             startedAt: acceptanceStartedAt as string
           });
         }
@@ -1083,14 +1264,20 @@ interface RequestInspection {
   hostStatusRequests: number;
   hostStatusResponseStatuses: number[];
   noReferrerApiRequests: number;
+  promptNoReferrerRequests: number;
+  promptRequests: number;
+  promptResponseStatuses: number[];
   protectedReadRejections: number;
   protectedReadRequests: number;
   protectedReadSuccesses: number;
   rejectedRevokedCheckpoints: number;
   revokedCheckpointRequests: number;
   revokeRequests: number;
+  sessionDetailRequests: number;
+  sessionEventRequests: number;
   sessionListRequests: number;
   sessionListResponseStatuses: number[];
+  sessionStreamRequests: number;
 }
 
 interface PairingRenderCapture {
@@ -1194,6 +1381,39 @@ interface PhysicalSequenceResult {
   readonly selfRevoked: true;
   readonly sseEvents: number;
   readonly sseHeartbeats: number;
+}
+
+type PhysicalPromptTurnPort = CodexPromptControlServiceOptions["turns"];
+type PhysicalPromptStartInput = Parameters<
+  PhysicalPromptTurnPort["startTurn"]
+>[0];
+type PhysicalOutputCursor = Exclude<
+  ProjectionReplayLiveHandoff["high_water_cursor"],
+  null
+>;
+
+interface PhysicalPromptRuntime {
+  readonly advance: (state: "in_progress" | "completed") => Promise<void>;
+  readonly recordStreamFailure: (failure: unknown) => void;
+  readonly service: CodexPromptControlService;
+  readonly startCalls: readonly PhysicalPromptStartInput[];
+  readonly streamFailureCount: number;
+  readonly subscribers: ReturnType<
+    typeof createProjectionSubscriberStreamService
+  >;
+}
+
+interface PhysicalPromptSequenceResult {
+  readonly acceptedVisible: true;
+  readonly completedVisible: true;
+  readonly keyboardVisible: true;
+  readonly multilineEdited: true;
+  readonly promptCharacterCount: number;
+  readonly promptLineCount: number;
+  readonly promptRequestCount: 1;
+  readonly runningVisible: true;
+  readonly sendAction: "start";
+  readonly sentOnce: true;
 }
 
 interface PhysicalScreenshot {
@@ -1336,8 +1556,8 @@ function createPhysicalSessionReads(
         id, name, codex_thread_id, cwd, runtime_source, runtime_version,
         disposition, created_at, updated_at, archived_at
       ) VALUES (
-        'sess_physical_pairing_ui', 'physical-pairing-review',
-        'thread-physical-pairing-ui', '/workspace/hostdeck',
+        '${physicalUiSessionId}', '${physicalUiSessionName}',
+        '${physicalUiThreadId}', '/workspace/hostdeck',
         'codex_app_server', '0.144.0', 'selected', ?, ?, NULL
       )
     `
@@ -1351,7 +1571,7 @@ function createPhysicalSessionReads(
         retained_event_count, retained_event_bytes, earliest_retained_cursor,
         retention_boundary_cursor
       ) VALUES (
-        'sess_physical_pairing_ui', 'active', 'idle', 'none', 'current',
+        '${physicalUiSessionId}', 'active', 'idle', 'none', 'current',
         NULL, ?, ?, 'main', 'gpt-5.5-codex', ?, ?, ?, NULL, 0, 0, NULL, NULL
       )
     `
@@ -1371,6 +1591,337 @@ function createPhysicalSessionReads(
     "Production pairing UI acceptance."
   );
   return createSelectedSessionReadRepository(db);
+}
+
+function createPhysicalPromptRuntime(
+  states: ReturnType<typeof createSelectedStateRepository>,
+  now: () => Date
+): PhysicalPromptRuntime {
+  const selected = states.require(physicalUiSessionId);
+  selectedSessionMappingRecordSchema.parse(selected.mapping);
+  selectedSessionProjectionRecordSchema.parse(selected.projection);
+  const turns = new PhysicalPromptTurnClient();
+  const service = createCodexPromptControlService({
+    turns,
+    models: noPendingPhysicalPromptControl("model"),
+    plans: noPendingPhysicalPromptControl("plan"),
+    states,
+    now: () => now().toISOString()
+  });
+  const handoff = new PhysicalPromptHandoffService([
+    physicalPromptSeedEvent(now().toISOString())
+  ]);
+  const streamFailures: unknown[] = [];
+  const subscribers = createProjectionSubscriberStreamService({
+    handoff,
+    observe_failure: (failure) => streamFailures.push(failure),
+    resource_budget: defaultResourceBudget
+  });
+  let phase: "ready" | "in_progress" | "completed" = "ready";
+  const runtime: PhysicalPromptRuntime = {
+    async advance(state) {
+      requireCondition(
+        (phase === "ready" && state === "in_progress") ||
+          (phase === "in_progress" && state === "completed"),
+        "Physical prompt progress violated accepted event order."
+      );
+      const capturedAt = now().toISOString();
+      replacePhysicalPromptAdmissionState(states, state, capturedAt);
+      await service.observeEvent(
+        physicalPromptRuntimeEvent(state, capturedAt)
+      );
+      const cursor = state === "in_progress" ? 2 : 3;
+      handoff.publish(
+        physicalPromptTurnEvent(cursor, state, capturedAt)
+      );
+      phase = state;
+    },
+    recordStreamFailure(failure) {
+      streamFailures.push(failure);
+    },
+    service,
+    get startCalls() {
+      return Object.freeze([...turns.startCalls]);
+    },
+    get streamFailureCount() {
+      return streamFailures.length;
+    },
+    subscribers
+  };
+  return Object.freeze(runtime);
+}
+
+class PhysicalPromptTurnClient implements PhysicalPromptTurnPort {
+  readonly runtime_version = "0.144.0";
+  readonly startCalls: PhysicalPromptStartInput[] = [];
+
+  async startTurn(
+    input: PhysicalPromptStartInput
+  ): ReturnType<PhysicalPromptTurnPort["startTurn"]> {
+    this.startCalls.push(input);
+    return Object.freeze({
+      thread_id: codexThreadIdSchema.parse(input.thread_id),
+      turn_id: codexTurnIdSchema.parse(physicalPromptTurnId),
+      state: "accepted" as const
+    });
+  }
+
+  async steerTurn(
+    _input: Parameters<PhysicalPromptTurnPort["steerTurn"]>[0]
+  ): ReturnType<PhysicalPromptTurnPort["steerTurn"]> {
+    throw new Error("Physical prompt acceptance must start one new turn.");
+  }
+
+  async interruptTurn(
+    _input: Parameters<PhysicalPromptTurnPort["interruptTurn"]>[0]
+  ): ReturnType<PhysicalPromptTurnPort["interruptTurn"]> {
+    throw new Error("Physical prompt acceptance must not interrupt a turn.");
+  }
+}
+
+function noPendingPhysicalPromptControl(kind: "model" | "plan") {
+  return Object.freeze({
+    readPendingSettings: () => Object.freeze([]),
+    async dispatchPendingTurn() {
+      throw new Error(
+        `Physical prompt acceptance has no pending ${kind} control.`
+      );
+    }
+  });
+}
+
+function physicalPromptCompatibility(now: () => Date) {
+  return runtimeCompatibilitySchema.parse({
+    source: "codex_app_server",
+    state: "ready",
+    mutation_policy: "allowed",
+    observed_version: "0.144.0",
+    binding_id: "binding-physical-prompt-001",
+    capabilities: [
+      "thread_lifecycle",
+      "turn_input",
+      "turn_steer",
+      "turn_interrupt",
+      "model",
+      "goal",
+      "plan",
+      "usage",
+      "compact",
+      "skills",
+      "approvals",
+      "multi_client"
+    ].map((name) => ({ name, state: "available", reason: null })),
+    checked_at: now().toISOString(),
+    reason: null
+  });
+}
+
+function replacePhysicalPromptAdmissionState(
+  states: ReturnType<typeof createSelectedStateRepository>,
+  turnState: "in_progress" | "completed",
+  updatedAt: string
+): void {
+  const current = states.require(physicalUiSessionId);
+  states.replace(
+    {
+      mapping: { ...current.mapping, updated_at: updatedAt },
+      projection: {
+        ...current.projection,
+        session: {
+          ...current.projection.session,
+          turn_state: turnState,
+          attention: "none",
+          updated_at: updatedAt,
+          last_activity_at: updatedAt
+        }
+      }
+    },
+    {
+      mapping_updated_at: current.mapping.updated_at,
+      projection_updated_at: current.projection.session.updated_at,
+      last_event_cursor: current.projection.session.last_event_cursor
+    }
+  );
+}
+
+function physicalPromptRuntimeEvent(
+  state: "in_progress" | "completed",
+  capturedAt: string
+): Parameters<CodexPromptControlService["observeEvent"]>[0] {
+  return {
+    sequence: state === "in_progress" ? 2 : 3,
+    method: state === "in_progress" ? "turn/started" : "turn/completed",
+    captured_at: capturedAt,
+    upstream_at: null,
+    codex_event_id: null,
+    scope: "thread",
+    thread_id: physicalUiThreadId,
+    turn_id: physicalPromptTurnId,
+    status: state,
+    ...(state === "completed" ? { error_message: null } : {})
+  } as Parameters<CodexPromptControlService["observeEvent"]>[0];
+}
+
+function physicalPromptSeedEvent(capturedAt: string): SelectedProjectionEvent {
+  return selectedProjectionEventSchema.parse({
+    captured_at: capturedAt,
+    codex_event_id: "physical-prompt-stream-ready",
+    codex_event_type: "item/agentMessage/delta",
+    content_notice: null,
+    content_state: "complete",
+    cursor: 1,
+    item_id: null,
+    phase: "delta",
+    role: "agent",
+    session_id: physicalUiSessionId,
+    text: "Physical prompt stream ready",
+    type: "message",
+    upstream_at: null
+  });
+}
+
+function physicalPromptTurnEvent(
+  cursor: number,
+  state: "in_progress" | "completed",
+  capturedAt: string
+): SelectedProjectionEvent {
+  return selectedProjectionEventSchema.parse({
+    session_id: physicalUiSessionId,
+    cursor,
+    captured_at: capturedAt,
+    upstream_at: null,
+    codex_event_id: `physical-prompt-turn-${cursor}`,
+    codex_event_type:
+      state === "in_progress" ? "turn/started" : "turn/completed",
+    content_state: "complete",
+    content_notice: null,
+    type: "turn",
+    turn_id: physicalPromptTurnId,
+    state,
+    error: null
+  });
+}
+
+class PhysicalPromptHandoffService
+  implements ProjectionReplayLiveHandoffService
+{
+  private readonly events: SelectedProjectionEvent[];
+  private readonly live = new Map<
+    string,
+    {
+      readonly controller: AbortController;
+      readonly sink: (event: SelectedProjectionEvent) => void;
+    }
+  >();
+
+  constructor(events: readonly SelectedProjectionEvent[]) {
+    this.events = [...events];
+  }
+
+  publish(event: SelectedProjectionEvent): void {
+    const previous = this.events.at(-1);
+    requireCondition(
+      event.session_id === physicalUiSessionId &&
+        (previous === undefined || event.cursor === previous.cursor + 1),
+      "Physical prompt event cursor was invalid."
+    );
+    this.events.push(event);
+    for (const entry of [...this.live.values()]) entry.sink(event);
+  }
+
+  open(candidate: unknown): ProjectionReplayLiveHandoff {
+    const input = candidate as OpenProjectionReplayLiveHandoffInput;
+    if (input.session_id !== physicalUiSessionId) {
+      throw new HostDeckProjectionHandoffError(
+        "session_not_found",
+        "Physical prompt session was not found."
+      );
+    }
+    const after = input.after as PhysicalOutputCursor | null;
+    const replay = Object.freeze(
+      this.events.filter(
+        (event) => after === null || event.cursor > after
+      )
+    );
+    const highWater = (this.events.at(-1)?.cursor ?? after) as
+      | PhysicalOutputCursor
+      | null;
+    const controller = new AbortController();
+    const replayBytes = replay.reduce(
+      (total, event) => total + physicalProjectionWireByteLength(event),
+      0
+    );
+    let activated = false;
+    let claimed = false;
+    let closed = false;
+    const service = this;
+    return Object.freeze({
+      activate(activationCandidate: unknown) {
+        const activation = activationCandidate as {
+          readonly on_event: (event: SelectedProjectionEvent) => void;
+        };
+        requireCondition(
+          !activated && typeof activation.on_event === "function",
+          "Physical prompt stream activation was invalid."
+        );
+        service.live.set(input.subscriber_id, {
+          controller,
+          sink: activation.on_event
+        });
+        activated = true;
+        return Object.freeze({
+          drained_event_count: 0,
+          live_after_cursor: highWater
+        });
+      },
+      after,
+      claim_replay() {
+        requireCondition(!claimed, "Physical prompt replay was already claimed.");
+        claimed = true;
+        return Object.freeze({
+          event_count: replay.length,
+          events: replay,
+          wire_bytes: replayBytes
+        });
+      },
+      close() {
+        if (closed) return false;
+        closed = true;
+        service.live.delete(input.subscriber_id);
+        controller.abort();
+        return true;
+      },
+      get failure(): ProjectionHandoffFailure | null {
+        return null;
+      },
+      high_water_cursor: highWater,
+      observed_fanout_cursor: null,
+      get paused_event_count() {
+        return 0;
+      },
+      get paused_wire_bytes() {
+        return 0;
+      },
+      replay_event_count: replay.length,
+      replay_wire_bytes: replayBytes,
+      session_id: input.session_id,
+      signal: controller.signal,
+      get state() {
+        return closed ? "closed" : activated ? "live" : "paused";
+      },
+      subscriber_id: input.subscriber_id,
+      truncated: false
+    });
+  }
+}
+
+function physicalProjectionWireByteLength(
+  event: SelectedProjectionEvent
+): number {
+  return Buffer.byteLength(
+    `id: ${event.cursor}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+    "utf8"
+  );
 }
 
 function composePhysicalRouteRegistration(
@@ -1670,6 +2221,32 @@ function installRequestInspection(
     ) {
       inspection.sessionListRequests += 1;
     }
+    if (request.url === `/api/v1/sessions/${physicalUiSessionId}`) {
+      inspection.sessionDetailRequests += 1;
+    }
+    if (
+      request.url === `/api/v1/sessions/${physicalUiSessionId}/events` ||
+      request.url.startsWith(
+        `/api/v1/sessions/${physicalUiSessionId}/events?`
+      )
+    ) {
+      inspection.sessionEventRequests += 1;
+    }
+    if (
+      request.url ===
+        `/api/v1/sessions/${physicalUiSessionId}/events/stream` ||
+      request.url.startsWith(
+        `/api/v1/sessions/${physicalUiSessionId}/events/stream?`
+      )
+    ) {
+      inspection.sessionStreamRequests += 1;
+    }
+    if (
+      request.url === `/api/v1/sessions/${physicalUiSessionId}/prompts`
+    ) {
+      inspection.promptRequests += 1;
+      if (referrer === undefined) inspection.promptNoReferrerRequests += 1;
+    }
     if (request.url === "/__physical/protected") {
       inspection.protectedReadRequests += 1;
     }
@@ -1702,6 +2279,14 @@ function installRequestInspection(
     ) {
       recordPhysicalResponseStatus(
         inspection.sessionListResponseStatuses,
+        reply.statusCode
+      );
+    }
+    if (
+      request.url === `/api/v1/sessions/${physicalUiSessionId}/prompts`
+    ) {
+      recordPhysicalResponseStatus(
+        inspection.promptResponseStatuses,
         reply.statusCode
       );
     }
@@ -2572,6 +3157,93 @@ function createPrivatePairingChromeHandoff(
   return Object.freeze({ adbArgs, stdin });
 }
 
+function enterPhysicalPromptText(prompt: string): void {
+  const handoff = createPhysicalPromptTextHandoff(prompt);
+  const promptLines = prompt.split("\n");
+  requireCondition(
+    promptLines.every(
+      (line) =>
+        !handoff.adbArgs.join("\u0000").includes(line) &&
+        !handoff.stdin.includes(line)
+    ),
+    "Physical prompt text reached the ADB handoff surface."
+  );
+  adbCommandCount += 1;
+  const output = execFileSync("adb", [...handoff.adbArgs], {
+    ...commandOptions(),
+    input: handoff.stdin
+  });
+  requireCondition(
+    output === "" && promptLines.every((line) => !output.includes(line)),
+    "Physical prompt text handoff returned unexpected output."
+  );
+}
+
+function createPhysicalPromptTextHandoff(prompt: string): Readonly<{
+  adbArgs: readonly ["shell"];
+  stdin: string;
+}> {
+  const lines = prompt.split("\n");
+  requireCondition(
+    lines.length === 2 &&
+      lines.every((line) => /^[A-Za-z0-9_-]{1,80}$/u.test(line)),
+    "Physical prompt text was invalid."
+  );
+  const encoded = lines.map((line) =>
+    Buffer.from(line, "utf8").toString("base64")
+  );
+  requireCondition(
+    encoded.length === 2 &&
+      encoded.every(
+        (value, index) =>
+          /^[A-Za-z0-9+/]+={0,2}$/u.test(value) &&
+          value !== lines[index]
+      ),
+    "Physical prompt encoding was invalid."
+  );
+  const adbArgs = Object.freeze(["shell"] as const);
+  const stdin = [
+    "set -eu",
+    "IFS= read -r first_b64",
+    encoded[0] as string,
+    "IFS= read -r second_b64",
+    encoded[1] as string,
+    'first="$(printf \'%s\' "$first_b64" | base64 -d)"',
+    'second="$(printf \'%s\' "$second_b64" | base64 -d)"',
+    'input text "$first" >/dev/null 2>&1',
+    "sleep 1",
+    "input keyevent KEYCODE_ENTER >/dev/null 2>&1",
+    "sleep 1",
+    'input text "$second" >/dev/null 2>&1',
+    "unset first_b64 second_b64 first second",
+    ""
+  ].join("\n");
+  requireCondition(
+    Buffer.byteLength(stdin, "utf8") <= 1_024 &&
+      lines.every((line) => !stdin.includes(line)),
+    "Physical prompt handoff input was invalid."
+  );
+  return Object.freeze({ adbArgs, stdin });
+}
+
+function isAndroidKeyboardVisible(): boolean {
+  const output = adb(["shell", "dumpsys", "input_method"]);
+  requireCondition(
+    Buffer.byteLength(output, "utf8") > 0 &&
+      Buffer.byteLength(output, "utf8") <= 1024 * 1024 &&
+      !output.includes("\u0000"),
+    "Android input-method state was invalid."
+  );
+  const values = [...output.matchAll(
+    /\b(?:mInputShown|mIsInputViewShown|isInputViewShown)=((?:true|false))\b/gu
+  )].map((match) => match[1]);
+  requireCondition(
+    values.length >= 1 && values.length <= 32,
+    "Android input-method visibility was unavailable."
+  );
+  return values.includes("true");
+}
+
 function openDefaultCamera(): void {
   const action = "android.media.action.STILL_IMAGE_CAMERA";
   const resolution = adb([
@@ -2600,6 +3272,10 @@ function requireChromeRunning(): void {
     /^\d+(?:\s+\d+)*$/u.test(processes),
     "The private pairing link did not open in Android Chrome."
   );
+}
+
+function isChromeStopped(): boolean {
+  return adb(["shell", "pidof", "com.android.chrome"]).trim() === "";
 }
 
 function requireChromeForeground(): void {
@@ -2642,80 +3318,22 @@ interface AndroidUiNode {
   readonly text: string;
 }
 
-async function runProductionPairingUiSequence(input: {
+interface ProductionUiEntryInput {
   readonly db: ReturnType<typeof openMigratedDatabase>["db"];
   readonly driver: PhysicalDriverRuntime;
   readonly externalOrigin: string;
   readonly readProxyRejection: () => string | null;
   readonly requestInspection: RequestInspection;
   readonly screenshotDirectory: string;
-}): Promise<void> {
-  const paired = await waitForAndroidUiNode(
-    "text",
-    "Phone paired",
-    30_000,
-    "Production pairing confirmation did not render on Android."
-  );
-  const continueButton = await waitForAndroidUiNode(
-    "text",
-    "Open Mission Control",
-    30_000,
-    "Production pairing confirmation did not expose its explicit continuation."
-  );
-  requireCondition(
-    pairingUiBeforeContinueIsValid(
-      paired,
-      await readAndroidUiNodes(),
-      input.requestInspection
-    ),
-    "Production pairing confirmation disclosed protected state or repeated startup work."
-  );
-  await capturePhysicalScreenshot(
-    join(input.screenshotDirectory, "fe013-01-paired.png")
-  );
-  await continueFromPairingUi(continueButton, input.requestInspection);
+}
 
-  try {
-    await waitFor(
-      () =>
-        input.requestInspection.accessRequests >= 1 &&
-        input.requestInspection.hostStatusRequests >= 1 &&
-        input.requestInspection.sessionListRequests >= 1,
-      30_000,
-      "Production Mission Control did not load its authenticated route data."
-    );
-  } catch {
-    throw new Error(
-      missionControlRouteFailure(
-        input.requestInspection,
-        input.readProxyRejection()
-      )
-    );
-  }
-  await waitForAndroidUiNode(
-    "text",
-    "Mission Control",
-    30_000,
-    "Production Mission Control did not render on Android."
-  );
-  try {
-    await waitForAndroidUiNode(
-      "text",
-      "physical-pairing-review",
-      30_000,
-      "Production Mission Control did not render the authenticated session."
-    );
-  } catch {
-    throw new Error(
-      missionControlRouteFailure(
-        input.requestInspection,
-        input.readProxyRejection()
-      )
-    );
-  }
-  await capturePhysicalScreenshot(
-    join(input.screenshotDirectory, "fe013-02-mission-control.png")
-  );
+async function runProductionPairingUiSequence(
+  input: ProductionUiEntryInput
+): Promise<void> {
+  await openProductionMissionControl(input, {
+    missionControl: "fe013-02-mission-control.png",
+    paired: "fe013-01-paired.png"
+  });
 
   const accessTrigger = await waitForAndroidUiNode(
     "description",
@@ -2800,7 +3418,7 @@ async function runProductionPairingUiSequence(input: {
   );
   await waitForAndroidUiNode(
     "text",
-    "physical-pairing-review",
+    physicalUiSessionName,
     30_000,
     "Fragment-free Android reload did not restore Mission Control."
   );
@@ -2821,6 +3439,299 @@ async function runProductionPairingUiSequence(input: {
     join(input.screenshotDirectory, "fe013-04-reloaded.png")
   );
 
+  await cleanProductionUiAuthority(input);
+}
+
+async function openProductionMissionControl(
+  input: ProductionUiEntryInput,
+  screenshots: Readonly<{
+    readonly missionControl: string;
+    readonly paired: string;
+  }>
+): Promise<void> {
+  const paired = await waitForAndroidUiNode(
+    "text",
+    "Phone paired",
+    30_000,
+    "Production pairing confirmation did not render on Android."
+  );
+  const continueButton = await waitForAndroidUiNode(
+    "text",
+    "Open Mission Control",
+    30_000,
+    "Production pairing confirmation did not expose its explicit continuation."
+  );
+  requireCondition(
+    pairingUiBeforeContinueIsValid(
+      paired,
+      await readAndroidUiNodes(),
+      input.requestInspection
+    ),
+    "Production pairing confirmation disclosed protected state or repeated startup work."
+  );
+  await capturePhysicalScreenshot(
+    join(input.screenshotDirectory, screenshots.paired)
+  );
+  await continueFromPairingUi(continueButton, input.requestInspection);
+
+  try {
+    await waitFor(
+      () =>
+        input.requestInspection.accessRequests >= 1 &&
+        input.requestInspection.hostStatusRequests >= 1 &&
+        input.requestInspection.sessionListRequests >= 1,
+      30_000,
+      "Production Mission Control did not load its authenticated route data."
+    );
+  } catch {
+    throw new Error(
+      missionControlRouteFailure(
+        input.requestInspection,
+        input.readProxyRejection()
+      )
+    );
+  }
+  await waitForAndroidUiNode(
+    "text",
+    "Mission Control",
+    30_000,
+    "Production Mission Control did not render on Android."
+  );
+  try {
+    await waitForAndroidUiNode(
+      "text",
+      physicalUiSessionName,
+      30_000,
+      "Production Mission Control did not render the authenticated session."
+    );
+  } catch {
+    throw new Error(
+      missionControlRouteFailure(
+        input.requestInspection,
+        input.readProxyRejection()
+      )
+    );
+  }
+  await capturePhysicalScreenshot(
+    join(input.screenshotDirectory, screenshots.missionControl)
+  );
+}
+
+async function runProductionPromptUiSequence(
+  input: ProductionUiEntryInput & {
+    readonly prompt: PhysicalPromptRuntime;
+  }
+): Promise<PhysicalPromptSequenceResult> {
+  await openProductionMissionControl(input, {
+    missionControl: "fe020-02-mission-control.png",
+    paired: "fe020-01-paired.png"
+  });
+  const sessionLink = await waitForAndroidUiNode(
+    "text",
+    physicalUiSessionName,
+    30_000,
+    "Physical prompt session link was unavailable on Android."
+  );
+  await performVerifiedAndroidTap({
+    initialTrigger: sessionLink,
+    triggerField: "text",
+    triggerValue: physicalUiSessionName,
+    completed: async () =>
+      input.requestInspection.sessionDetailRequests >= 1 &&
+      (await readAndroidUiNodes()).some(
+        (node) => node.text === "Prompt target"
+      ),
+    completionFailureMessage:
+      "Production Session Detail did not open on Android.",
+    reacquireFailureMessage:
+      "Physical prompt session link could not be reacquired on Android.",
+    terminalFailureMessage:
+      "Production Session Detail remained closed after two bounded taps."
+  });
+  await waitFor(
+    () =>
+      input.requestInspection.sessionDetailRequests >= 1 &&
+      input.requestInspection.sessionEventRequests >= 1 &&
+      input.requestInspection.sessionStreamRequests >= 1 &&
+      input.prompt.subscribers.snapshot().active_subscribers === 1,
+    45_000,
+    "Physical prompt detail did not establish one current production stream."
+  );
+  await waitForAndroidUiNode(
+    "text",
+    "Ready to send",
+    30_000,
+    "Physical prompt composer did not become writable on Android."
+  );
+  const inputLabel = `Prompt for ${physicalUiSessionName}`;
+  const sendLabel = `Send prompt to ${physicalUiSessionName}`;
+  const textarea = await waitForAndroidUiNode(
+    "description",
+    inputLabel,
+    30_000,
+    "Physical prompt textarea was unavailable on Android."
+  );
+  await performVerifiedAndroidTap({
+    initialTrigger: textarea,
+    triggerField: "description",
+    triggerValue: inputLabel,
+    completed: () => isAndroidKeyboardVisible(),
+    completionFailureMessage:
+      "Physical prompt textarea did not open the Android keyboard.",
+    reacquireFailureMessage:
+      "Physical prompt textarea could not be reacquired on Android.",
+    terminalFailureMessage:
+      "Physical prompt textarea did not retain keyboard focus after two bounded taps."
+  });
+  await waitFor(
+    () => isAndroidKeyboardVisible(),
+    10_000,
+    "Physical prompt Android keyboard did not remain visible."
+  );
+  const keyboardNodes = await readAndroidUiNodes();
+  requireCondition(
+    keyboardNodes.some((node) => node.text === "Prompt target") &&
+      keyboardNodes.some((node) => node.description === inputLabel) &&
+      keyboardNodes.some((node) => node.description === sendLabel),
+    "Physical prompt controls were not all visible above the Android keyboard."
+  );
+  await capturePhysicalScreenshot(
+    join(input.screenshotDirectory, "fe020-03-keyboard-open.png")
+  );
+
+  enterPhysicalPromptText(physicalPromptText);
+  await waitForAndroidUiNode(
+    "text",
+    physicalPromptText,
+    15_000,
+    "Physical prompt textarea did not preserve two edited lines."
+  );
+  requireCondition(
+    isAndroidKeyboardVisible(),
+    "Physical prompt multiline edit unexpectedly closed the Android keyboard."
+  );
+  const send = await waitForAndroidUiNode(
+    "description",
+    sendLabel,
+    15_000,
+    "Physical prompt send action was unavailable on Android."
+  );
+  await performVerifiedAndroidTap({
+    initialTrigger: send,
+    triggerField: "description",
+    triggerValue: sendLabel,
+    completed: () => input.requestInspection.promptRequests === 1,
+    completionFailureMessage:
+      "Physical prompt send did not issue its protected request.",
+    reacquireFailureMessage:
+      "Physical prompt send action could not be reacquired on Android.",
+    terminalFailureMessage:
+      "Physical prompt send did not dispatch after two bounded taps."
+  });
+  await waitForAndroidUiNode(
+    "text",
+    "New turn accepted",
+    30_000,
+    "Physical prompt accepted state did not render on Android."
+  );
+  const acceptedNodes = await readAndroidUiNodes();
+  const promptLines = physicalPromptText.split("\n");
+  const acceptedTextareas = acceptedNodes.filter(
+    (node) => node.description === inputLabel
+  );
+  requireCondition(
+    acceptedTextareas.length === 1 &&
+      promptLines.every(
+        (line) => !acceptedTextareas[0]?.text.includes(line)
+      ) &&
+      input.requestInspection.promptRequests === 1 &&
+      input.requestInspection.promptNoReferrerRequests === 1 &&
+      JSON.stringify(input.requestInspection.promptResponseStatuses) ===
+        "[202]" &&
+      input.prompt.startCalls.length === 1 &&
+      input.prompt.startCalls[0]?.thread_id === physicalUiThreadId &&
+      input.prompt.startCalls[0]?.text === physicalPromptText,
+    "Physical prompt acceptance did not preserve exact one-attempt private request truth."
+  );
+  if (isAndroidKeyboardVisible()) {
+    adb(["shell", "input", "keyevent", "KEYCODE_BACK"]);
+  }
+  await waitFor(
+    () => !isAndroidKeyboardVisible(),
+    10_000,
+    "Physical prompt acceptance could not dismiss the Android keyboard."
+  );
+  const scrubbedNodes = await readAndroidUiNodes();
+  requireCondition(
+    scrubbedNodes.every((node) =>
+      promptLines.every(
+        (line) =>
+          !node.text.includes(line) && !node.description.includes(line)
+      )
+    ),
+    "Physical prompt text remained visible after accepted-state keyboard cleanup."
+  );
+  for (const line of promptLines) {
+    deviceForbiddenValues.add(line);
+  }
+  await capturePhysicalScreenshot(
+    join(input.screenshotDirectory, "fe020-04-accepted.png")
+  );
+
+  await input.prompt.advance("in_progress");
+  await waitForAndroidUiNode(
+    "text",
+    "Turn running",
+    30_000,
+    "Physical prompt running event did not render on Android."
+  );
+  await capturePhysicalScreenshot(
+    join(input.screenshotDirectory, "fe020-05-running.png")
+  );
+  await input.prompt.advance("completed");
+  await waitForAndroidUiNode(
+    "text",
+    "Turn completed",
+    30_000,
+    "Physical prompt completion event did not render on Android."
+  );
+  await capturePhysicalScreenshot(
+    join(input.screenshotDirectory, "fe020-06-completed.png")
+  );
+  requireCondition(
+    input.requestInspection.promptRequests === 1 &&
+      input.prompt.startCalls.length === 1 &&
+      input.prompt.streamFailureCount === 0,
+    "Physical prompt progress introduced a duplicate dispatch or stream failure."
+  );
+
+  await cleanProductionUiAuthority(input);
+  await waitFor(
+    () => input.prompt.subscribers.snapshot().active_subscribers === 0,
+    15_000,
+    "Physical prompt cleanup retained a production stream subscriber."
+  );
+  requireCondition(
+    input.readProxyRejection() === null,
+    "Physical prompt production request was rejected at the Serve boundary."
+  );
+  return Object.freeze({
+    acceptedVisible: true,
+    completedVisible: true,
+    keyboardVisible: true,
+    multilineEdited: true,
+    promptCharacterCount: physicalPromptText.length,
+    promptLineCount: 2,
+    promptRequestCount: 1,
+    runningVisible: true,
+    sendAction: "start",
+    sentOnce: true
+  });
+}
+
+async function cleanProductionUiAuthority(
+  input: ProductionUiEntryInput
+): Promise<void> {
   input.driver.recordCheckpoint("paired");
   input.driver.setCommand("cleanup");
   openChromePath(input.externalOrigin, "/__physical/cleanup");
@@ -3096,6 +4007,16 @@ function openChromePath(origin: string, path: `/${string}`): void {
 
 function decodeXmlAttribute(value: string): string {
   return value
+    .replace(/&#(?:x([0-9A-Fa-f]{1,6})|(\d{1,7}));/gu, (entity, hex, decimal) => {
+      const codePoint = Number.parseInt(hex ?? decimal, hex === undefined ? 10 : 16);
+      return Number.isSafeInteger(codePoint) &&
+        (codePoint === 9 ||
+          codePoint === 10 ||
+          codePoint === 13 ||
+          (codePoint >= 32 && codePoint <= 0x10ffff))
+        ? String.fromCodePoint(codePoint)
+        : entity;
+    })
     .replaceAll("&quot;", '"')
     .replaceAll("&apos;", "'")
     .replaceAll("&lt;", "<")
@@ -3412,6 +4333,107 @@ function assertPairingUiRuntimeTruth(
   );
 }
 
+function assertPromptUiRuntimeTruth(
+  db: ReturnType<typeof openMigratedDatabase>["db"],
+  inspection: RequestInspection,
+  prompt: PhysicalPromptRuntime
+): void {
+  const devices = countRows(db, "auth_devices");
+  const usedCodes = countMatchingRows(
+    db,
+    "pairing_codes",
+    "used_at IS NOT NULL"
+  );
+  const revokedDevices = countMatchingRows(
+    db,
+    "auth_devices",
+    "revoked_at IS NOT NULL"
+  );
+  requireCondition(
+    devices === 1 &&
+      usedCodes === 1 &&
+      revokedDevices === 1 &&
+      inspection.claimRequests === 1 &&
+      inspection.csrfRequests === 3 &&
+      inspection.noReferrerApiRequests === 4 &&
+      inspection.promptNoReferrerRequests === 1 &&
+      inspection.accessRequests >= 2 &&
+      inspection.accessRequests <= 4 &&
+      inspection.hostStatusRequests >= 1 &&
+      inspection.hostStatusRequests <= 3 &&
+      inspection.sessionListRequests >= 1 &&
+      inspection.sessionListRequests <= 3 &&
+      inspection.sessionDetailRequests >= 1 &&
+      inspection.sessionDetailRequests <= 2 &&
+      inspection.sessionEventRequests >= 1 &&
+      inspection.sessionEventRequests <= 2 &&
+      inspection.sessionStreamRequests >= 1 &&
+      inspection.sessionStreamRequests <= 2 &&
+      inspection.promptRequests === 1 &&
+      inspection.promptResponseStatuses.length === 1 &&
+      inspection.promptResponseStatuses[0] === 202 &&
+      inspection.protectedReadRequests === 2 &&
+      inspection.protectedReadSuccesses === 1 &&
+      inspection.protectedReadRejections === 1 &&
+      inspection.revokeRequests === 1 &&
+      inspection.revokedCheckpointRequests === 1 &&
+      inspection.rejectedRevokedCheckpoints === 1 &&
+      inspection.fragmentLeaks === 0 &&
+      inspection.hardenedCookieObserved &&
+      inspection.deletionCookieObserved &&
+      prompt.startCalls.length === 1 &&
+      prompt.startCalls[0]?.text === physicalPromptText &&
+      prompt.streamFailureCount === 0 &&
+      prompt.subscribers.snapshot().active_subscribers === 0,
+    "Physical prompt production runtime truth was inconsistent."
+  );
+}
+
+function assertPhysicalPromptAudit(
+  db: ReturnType<typeof openMigratedDatabase>["db"]
+): void {
+  const rows = db
+    .prepare(
+      "SELECT phase, outcome, error_code, record_json " +
+        "FROM selected_audit_events WHERE action = 'prompt' " +
+        "ORDER BY phase, outcome"
+    )
+    .all() as readonly Readonly<{
+      readonly error_code: string | null;
+      readonly outcome: string;
+      readonly phase: string;
+      readonly record_json: string;
+    }>[];
+  requireCondition(
+    rows.length === 2 &&
+      rows[0]?.phase === "accepted" &&
+      rows[0].outcome === "accepted" &&
+      rows[0].error_code === null &&
+      rows[1]?.phase === "terminal" &&
+      rows[1].outcome === "succeeded" &&
+      rows[1].error_code === null,
+    "Physical prompt audit phases were invalid."
+  );
+  const records = rows.map((row) => JSON.parse(row.record_json) as unknown);
+  const accepted = records[0] as {
+    readonly payload_summary?: Readonly<Record<string, unknown>>;
+  };
+  const terminal = records[1] as {
+    readonly payload_summary?: Readonly<Record<string, unknown>>;
+  };
+  const raw = JSON.stringify(rows);
+  requireCondition(
+    accepted.payload_summary?.schema_version === 1 &&
+      accepted.payload_summary.text_length === physicalPromptText.length &&
+      terminal.payload_summary?.schema_version === 1 &&
+      terminal.payload_summary.accepted === true &&
+      physicalPromptText
+        .split("\n")
+        .every((line) => !raw.includes(line)),
+    "Physical prompt audit retained private text or lost bounded summary truth."
+  );
+}
+
 function assertPairingRuntimeTruth(
   db: ReturnType<typeof openMigratedDatabase>["db"],
   inspection: RequestInspection
@@ -3455,6 +4477,7 @@ function assertPairingAudit(
 ): void {
   requireCondition(
     (expected.successfulCsrfBootstrapCount === 1 ||
+      expected.successfulCsrfBootstrapCount === 2 ||
       expected.successfulCsrfBootstrapCount === 3) &&
       (expected.deviceRevokeCount === 0 || expected.deviceRevokeCount === 1),
     "Physical pairing audit expectation was invalid."
@@ -3713,6 +4736,139 @@ function publishPhysicalEvidence(input: {
       rmSync(physicalEvidenceDirectory, { force: true, recursive: true });
     }
     throw error;
+  } finally {
+    rmSync(staging, { force: true, recursive: true });
+  }
+}
+
+function publishPhysicalPromptEvidence(input: {
+  readonly completedAt: string;
+  readonly environment: PhysicalEnvironmentFacts;
+  readonly sequence: PhysicalPromptSequenceResult;
+  readonly startedAt: string;
+}): void {
+  requireCondition(
+    input.sequence.acceptedVisible &&
+      input.sequence.runningVisible &&
+      input.sequence.completedVisible &&
+      input.sequence.keyboardVisible &&
+      input.sequence.multilineEdited &&
+      input.sequence.sentOnce &&
+      input.sequence.promptRequestCount === 1 &&
+      input.sequence.promptCharacterCount === physicalPromptText.length &&
+      input.sequence.promptLineCount === 2 &&
+      input.sequence.sendAction === "start" &&
+      Number.isFinite(Date.parse(input.startedAt)) &&
+      Number.isFinite(Date.parse(input.completedAt)),
+    "Physical prompt evidence inputs were incomplete."
+  );
+  const evidence = Object.freeze({
+    schema_version: 1,
+    task: "FE-V1-020",
+    commit: input.environment.commit,
+    command: "pnpm smoke:prompt-android",
+    run: Object.freeze({
+      completed_at: input.completedAt,
+      retry_count: 0,
+      started_at: input.startedAt
+    }),
+    environment: Object.freeze({
+      android_api: input.environment.android_api,
+      android_model: input.environment.android_model,
+      android_release: input.environment.android_release,
+      chrome_version: input.environment.chrome_version,
+      host_os: input.environment.host_os,
+      node_version: input.environment.node_version,
+      tailscale_version: input.environment.tailscale_version
+    }),
+    network: Object.freeze({
+      adb_app_tunnel_count: 0,
+      cellular_active: true,
+      custom_ca_used: false,
+      private_serve_https: true,
+      qr_scan_count: 0,
+      tailscale_vpn_active: true,
+      usb_used_for_browser_handoff_only: true,
+      wifi_disabled_during_requests: true
+    }),
+    pairing: Object.freeze({
+      automated_one_time_link: true,
+      fragment_scrubbed_before_api: true,
+      writer_authority_self_revoked: true
+    }),
+    sequence: input.sequence,
+    privacy: Object.freeze({
+      persisted_prompt_text: false,
+      retained_phone_screenshots: 0,
+      retained_private_origin: false,
+      retained_runtime_identifiers: false
+    }),
+    cleanup: Object.freeze({
+      adb_forwards: 0,
+      adb_reverses: 0,
+      browser_closed: true,
+      database_open: false,
+      dedicated_serve_absent: true,
+      keyboard_visible: false,
+      listener_open: false,
+      stay_awake_setting_restored: true,
+      stream_subscribers: 0,
+      temporary_state_present: false,
+      wifi_restored: true
+    })
+  });
+  const serialized = `${JSON.stringify(evidence, null, 2)}\n`;
+  requireCondition(
+    Object.keys(evidence).sort().join(",") ===
+      [
+        "cleanup",
+        "command",
+        "commit",
+        "environment",
+        "network",
+        "pairing",
+        "privacy",
+        "run",
+        "schema_version",
+        "sequence",
+        "task"
+      ].join(",") &&
+      Buffer.byteLength(serialized, "utf8") <= 16 * 1024 &&
+      !/https?:\/\//iu.test(serialized) &&
+      !/\.ts\.net/iu.test(serialized) &&
+      !/\b(?:10|100|127|169\.254|172|192)\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/u.test(
+        serialized
+      ) &&
+      !/\bop_[A-Za-z0-9_-]+\b/u.test(serialized) &&
+      physicalPromptText
+        .split("\n")
+        .every((line) => !serialized.includes(line)) &&
+      [...deviceForbiddenValues].every(
+        (value) => !serialized.includes(value)
+      ),
+    "Physical prompt evidence failed its privacy or schema validator."
+  );
+
+  const staging = mkdtempSync(
+    join(tmpdir(), "hostdeck-prompt-android-evidence-")
+  );
+  try {
+    const staged = join(staging, "physical-android.json");
+    writeFileSync(staged, serialized, { flag: "wx", mode: 0o600 });
+    requireCondition(
+      readFileSync(staged, "utf8") === serialized,
+      "Physical prompt evidence changed during staging."
+    );
+    mkdirSync(physicalPromptEvidenceDirectory, {
+      mode: 0o755,
+      recursive: true
+    });
+    const target = join(
+      physicalPromptEvidenceDirectory,
+      "physical-android.json"
+    );
+    copyFileSync(staged, target);
+    chmodSync(target, 0o644);
   } finally {
     rmSync(staging, { force: true, recursive: true });
   }

@@ -79,12 +79,15 @@ pnpm smoke:codex-threads
 
 ```bash
 pnpm smoke:pairing-android
+pnpm smoke:prompt-android
 HOSTDECK_REMOTE_CONTROL_DEDICATED_PROFILE_ID=DEDICATED_ID \
 HOSTDECK_REMOTE_CONTROL_AWAY_PROFILE_ID=AWAY_ID \
 pnpm smoke:remote-android
 ```
 
 `smoke:pairing-android` is the `FE-V1-013` production-UI device run. It requires one clean commit, exact Tailscale 1.98.8, the active dedicated HostDeck profile with its Serve root absent, and one unlocked authorized Android device with Tailscale, Chrome, USB debugging, and working cellular data. The harness disables and restores phone Wi-Fi, builds and serves the real React app through private Serve HTTPS, generates and validates the in-memory QR payload, then passes that same selected one-time link to Chrome through fixed stdin-only ADB without placing it in host-side ADB arguments or captured output. It verifies the paired confirmation, Mission Control, Host & access sheet, and fragment-free reload through bounded Android accessibility controls, then self-revokes the temporary device authority. Device screenshots and UI hierarchy remain temporary and are removed during cleanup because they can contain the private tailnet origin.
+
+`smoke:prompt-android` is the `FE-V1-020` production prompt-composer device run over cellular plus private Tailscale HTTPS. It has the same clean-commit, Tailscale, Chrome, USB-debugging, and unlocked-phone prerequisites. The harness performs one automated stdin-only one-time-link handoff with no QR scan, opens the real Session Detail route, proves the visible software keyboard and exact two-line edit, sends one protected prompt, observes accepted then event-proven running and completed states, self-revokes browser authority, removes Serve, restores phone settings, deletes private screenshots and temporary state, and writes only sanitized evidence to `artifacts/fe-v1-020-selected-session-prompt-composer/physical-android.json`.
 
 `smoke:remote-android` is the strict `IFC-V1-079` no-retry device run. It requires one clean commit, exact Tailscale 1.98.8, two distinct authorized saved-profile ids, one unlocked authorized Android device, Android Tailscale and Chrome, and a cellular connection. The harness disables and restores phone Wi-Fi, uses USB only for guarded camera/Chrome inspection, requires the human to scan and open the in-memory QR, restores the dedicated profile, removes its exact Serve path, and publishes only sanitized evidence under `artifacts/ifc-v1-079-device/` after complete cleanup.
 
