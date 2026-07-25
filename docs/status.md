@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: none between leaves. `FE-V1-013` fragment-safe pairing and host/access status is complete under `PHA-01` to `PHA-20`; the next ready leaf is `FE-V1-020` selected-session prompt composition, followed by the human-prioritized `/model`, `/goal`, and `/plan` controls.
+- Active task: `FE-V1-020` selected-session prompt composition is in progress under frozen `SPC-01` to `SPC-20` criteria in `artifacts/fe-v1-020-selected-session-prompt-composer.md`; it adds one exact, one-attempt, keyboard-safe prompt workflow before the human-prioritized `/model`, `/goal`, and `/plan` controls.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.144.5; an isolated cached 0.144.0 binary reproduces the binding check without changing that installation.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract and both replacement sets are complete. Under `DEC-028`, the human selected all seven current Focus Rail assets with no Signal Ledger borrowing or additional structural drift; both legacy desktop-led boards remain rejected.
