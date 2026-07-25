@@ -1613,7 +1613,9 @@ function createPhysicalPromptRuntime(
   ]);
   const streamFailures: unknown[] = [];
   const subscribers = createProjectionSubscriberStreamService({
-    handoff,
+    handoff: Object.freeze({
+      open: (input: unknown) => handoff.open(input)
+    }),
     observe_failure: (failure) => streamFailures.push(failure),
     resource_budget: defaultResourceBudget
   });
