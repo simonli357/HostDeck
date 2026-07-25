@@ -2723,10 +2723,15 @@ async function runProductionPairingUiSequence(input: {
     initialTrigger: accessTrigger,
     triggerField: "description",
     triggerValue: "Open Host and access",
-    completed: async () =>
-      (await readAndroidUiNodes()).some(
-        (node) => node.description === "Close Host and access"
-      ),
+    completed: async () => {
+      const nodes = await readAndroidUiNodes();
+      return nodes.some(
+        (node) =>
+          node.description === "Close Host and access" ||
+          node.description === "Host & access" ||
+          node.text === "Host & access"
+      );
+    },
     completionFailureMessage:
       "Production Host and access sheet did not open on Android.",
     reacquireFailureMessage:
@@ -3003,16 +3008,56 @@ async function performVerifiedAndroidTap(input: {
       );
       return;
     } catch {
-      if (attempt === 1) break;
-      trigger = await waitForAndroidUiNode(
-        input.triggerField,
-        input.triggerValue,
-        5_000,
-        input.reacquireFailureMessage
+      const nodes = await readAndroidUiNodes();
+      const matches = nodes.filter(
+        (node) => node[input.triggerField] === input.triggerValue
       );
+      requireCondition(
+        matches.length <= 1,
+        "Android UI hierarchy duplicated a verified tap trigger."
+      );
+      if (attempt === 1) {
+        throw new Error(
+          `${input.terminalFailureMessage} (${androidUiStateSummary(nodes, trigger)}).`
+        );
+      }
+      const reacquired = matches[0];
+      if (reacquired === undefined) {
+        throw new Error(
+          `${input.reacquireFailureMessage} (${androidUiStateSummary(nodes, trigger)}).`
+        );
+      }
+      trigger = reacquired;
     }
   }
   throw new Error(input.terminalFailureMessage);
+}
+
+function androidUiStateSummary(
+  nodes: readonly AndroidUiNode[],
+  trigger: AndroidUiNode
+): string {
+  const labels = [
+    "Phone paired",
+    "Open Mission Control",
+    "Mission Control",
+    "physical-pairing-review",
+    "Open Host and access",
+    "Host & access",
+    "Close Host and access",
+    "Secure control ready",
+    "Read & write"
+  ];
+  const visible = labels.filter((label) =>
+    nodes.some(
+      (node) => node.text === label || node.description === label
+    )
+  );
+  return (
+    `bounds=${trigger.bounds.left},${trigger.bounds.top},` +
+    `${trigger.bounds.right},${trigger.bounds.bottom};` +
+    `known=${visible.length === 0 ? "none" : visible.join("|")}`
+  );
 }
 
 function tapAndroidUiNode(node: AndroidUiNode): void {
