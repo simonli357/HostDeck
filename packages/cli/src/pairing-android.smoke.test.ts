@@ -870,7 +870,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           assertPairingRuntimeTruth(opened.db, requestInspection);
         }
         assertPairingAudit(opened.db, {
-          csrfBootstrapCount: requirePairingUiAcceptance ? 4 : 1,
+          successfulCsrfBootstrapCount: requirePairingUiAcceptance ? 3 : 1,
           deviceRevokeCount: requirePairingUiAcceptance ? 1 : 0
         });
         assertSecretsAbsentFromDatabase(dbPath, secrets.values());
@@ -3449,13 +3449,13 @@ function firstProxyRejection(app: HostDeckFastifyInstance): string | null {
 function assertPairingAudit(
   db: ReturnType<typeof openMigratedDatabase>["db"],
   expected: Readonly<{
-    csrfBootstrapCount: number;
+    successfulCsrfBootstrapCount: number;
     deviceRevokeCount: number;
   }>
 ): void {
   requireCondition(
-    (expected.csrfBootstrapCount === 1 ||
-      expected.csrfBootstrapCount === 4) &&
+    (expected.successfulCsrfBootstrapCount === 1 ||
+      expected.successfulCsrfBootstrapCount === 3) &&
       (expected.deviceRevokeCount === 0 || expected.deviceRevokeCount === 1),
     "Physical pairing audit expectation was invalid."
   );
@@ -3491,13 +3491,13 @@ function assertPairingAudit(
           action: "csrf_bootstrap",
           phase: "accepted",
           outcome: "accepted",
-          count: expected.csrfBootstrapCount
+          count: expected.successfulCsrfBootstrapCount
         },
         {
           action: "csrf_bootstrap",
           phase: "terminal",
           outcome: "succeeded",
-          count: expected.csrfBootstrapCount
+          count: expected.successfulCsrfBootstrapCount
         },
         ...deviceRevokeRows,
         { action: "pair_claim", phase: "accepted", outcome: "accepted", count: 1 },
