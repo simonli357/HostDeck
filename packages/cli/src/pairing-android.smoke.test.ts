@@ -185,6 +185,29 @@ describe("physical Android phone-driver protocol", () => {
     }
   });
 
+  it("seeds one repository-valid production pairing session", () => {
+    const directory = mkdtempSync(join(tmpdir(), "hostdeck-pairing-session-"));
+    const opened = openMigratedDatabase(join(directory, "hostdeck.sqlite"));
+    try {
+      const sessions = createPhysicalSessionReads(
+        opened.db,
+        increasingWallClock()
+      );
+      const page = sessions.list({
+        after: null,
+        expected_order_snapshot: null,
+        limit: 1
+      });
+      expect(page.sessions).toHaveLength(1);
+      expect(page.sessions[0]?.session.name).toBe(
+        "physical-pairing-review"
+      );
+    } finally {
+      opened.db.close();
+      rmSync(directory, { force: true, recursive: true });
+    }
+  });
+
   it("requires the exact production index during the private HTTPS preflight", () => {
     const productionIndex =
       '<!doctype html><html><body><div id="root"></div><script src="/assets/app-12345678.js"></script></body></html>';
@@ -1309,7 +1332,7 @@ function createPhysicalSessionReads(
         id, name, codex_thread_id, cwd, runtime_source, runtime_version,
         disposition, created_at, updated_at, archived_at
       ) VALUES (
-        'sess_physical_pairing_ui', 'Physical pairing review',
+        'sess_physical_pairing_ui', 'physical-pairing-review',
         'thread-physical-pairing-ui', '/workspace/hostdeck',
         'codex_app_server', '0.144.0', 'selected', ?, ?, NULL
       )
@@ -2674,7 +2697,7 @@ async function runProductionPairingUiSequence(input: {
   try {
     await waitForAndroidUiNode(
       "text",
-      "Physical pairing review",
+      "physical-pairing-review",
       30_000,
       "Production Mission Control did not render the authenticated session."
     );
@@ -2744,7 +2767,7 @@ async function runProductionPairingUiSequence(input: {
   );
   await waitForAndroidUiNode(
     "text",
-    "Physical pairing review",
+    "physical-pairing-review",
     30_000,
     "Fragment-free Android reload did not restore Mission Control."
   );
