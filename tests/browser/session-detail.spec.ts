@@ -45,7 +45,11 @@ test("renders the production structured feed across the approved responsive cont
   await expect(page.getByText("I reviewed the structured session contracts.", { exact: true }))
     .toHaveCount(0);
   await expect(page.getByRole("button", { name: /approve|deny/u })).toHaveCount(0);
-  await expect(page.getByRole("textbox")).toHaveCount(0);
+  const composer = page.getByRole("textbox", { name: "Prompt for android-release" });
+  await expect(composer).toBeVisible();
+  await expect(composer).toBeDisabled();
+  await expect(page.getByText("Resolve the pending approval first.", { exact: true }))
+    .toBeVisible();
 
   expect(await api.streamRequestUrls()).toEqual([
     `http://127.0.0.1:4175/api/v1/sessions/${sessionDetailBrowserSessionId}/events/stream?after=0`
@@ -143,7 +147,9 @@ test("renders an honest empty state and does not invent downstream controls", as
   await expect(page.getByRole("heading", { name: "No activity recorded" })).toBeVisible();
   await expect(page.getByText("This session has no retained structured activity.")).toBeVisible();
   await expect(page.getByRole("list", { name: "Session activity" })).toHaveCount(0);
-  await expect(page.getByRole("textbox")).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Prompt for android-release" }))
+    .toBeDisabled();
+  await expect(page.getByRole("button", { name: /model|goal|plan|more/u })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /approve|deny/u })).toHaveCount(0);
   expect(await api.streamRequestUrls()).toEqual([
     `http://127.0.0.1:4175/api/v1/sessions/${sessionDetailBrowserSessionId}/events/stream`
@@ -294,8 +300,8 @@ async function expectStableTargets(page: Page): Promise<void> {
   const iconButtons = page.locator(".hostdeck-icon-button:visible");
   for (let index = 0; index < (await iconButtons.count()); index += 1) {
     const box = await iconButtons.nth(index).boundingBox();
-    expect(box?.width).toBe(44);
-    expect(box?.height).toBe(44);
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
   }
   const actionButtons = page.locator(".hostdeck-action-button:visible");
   for (let index = 0; index < (await actionButtons.count()); index += 1) {

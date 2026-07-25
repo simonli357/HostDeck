@@ -7,6 +7,8 @@ export * from "./http-client.js";
 export * from "./http-route-contracts.js";
 export * from "./pairing-bootstrap.js";
 export * from "./pairing-screen.js";
+export * from "./prompt-composer.js";
+export * from "./prompt-composer-state.js";
 export * from "./session-detail.js";
 export * from "./session-detail-feed.js";
 export * from "./sse-client.js";

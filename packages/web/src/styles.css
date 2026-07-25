@@ -46,7 +46,8 @@ button {
 
 button:focus-visible,
 a:focus-visible,
-summary:focus-visible {
+summary:focus-visible,
+textarea:focus-visible {
   outline: 3px solid var(--hostdeck-focus);
   outline-offset: 2px;
 }
@@ -717,6 +718,14 @@ summary:focus-visible {
   padding-top: 0;
 }
 
+.hostdeck-detail--with-composer {
+  padding-bottom: calc(224px + env(safe-area-inset-bottom));
+}
+
+.hostdeck-detail--with-composer:has(.hostdeck-prompt-composer__reload) {
+  padding-bottom: calc(284px + env(safe-area-inset-bottom));
+}
+
 .hostdeck-detail-context {
   display: grid;
   min-width: 0;
@@ -1053,6 +1062,203 @@ summary:focus-visible {
   margin: 12px auto 0;
   border-color: var(--hostdeck-focus);
   box-shadow: 0 4px 16px rgb(0 0 0 / 45%);
+}
+
+.hostdeck-detail--with-composer .hostdeck-detail-new-activity {
+  bottom: calc(224px + env(safe-area-inset-bottom));
+}
+
+.hostdeck-prompt-composer {
+  position: fixed;
+  z-index: 7;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: grid;
+  width: 100%;
+  max-width: 820px;
+  max-height: calc(100dvh - 56px);
+  min-width: 0;
+  gap: 8px;
+  margin: 0 auto;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--hostdeck-divider);
+  background: var(--hostdeck-surface);
+  box-shadow: 0 -8px 20px rgb(0 0 0 / 32%);
+  color: var(--hostdeck-muted);
+}
+
+.hostdeck-prompt-composer__target {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.hostdeck-prompt-composer__target span {
+  flex: 0 0 auto;
+  color: var(--hostdeck-muted);
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.hostdeck-prompt-composer__target strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--hostdeck-ink);
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hostdeck-prompt-composer__form {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 52px;
+  align-items: stretch;
+  border: 1px solid var(--hostdeck-divider);
+  border-radius: 6px;
+  background: var(--hostdeck-canvas);
+}
+
+.hostdeck-prompt-composer textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 56px;
+  max-height: 112px;
+  padding: 9px 10px;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 6px 0 0 6px;
+  outline-offset: -3px;
+  background: transparent;
+  color: var(--hostdeck-ink);
+  font: inherit;
+  font-size: 15px;
+  line-height: 20px;
+  field-sizing: content;
+  resize: none;
+}
+
+.hostdeck-prompt-composer textarea::placeholder {
+  color: var(--hostdeck-muted);
+  opacity: 1;
+}
+
+.hostdeck-prompt-composer textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.hostdeck-prompt-composer textarea[readonly] {
+  cursor: text;
+}
+
+.hostdeck-prompt-composer__send {
+  width: 52px;
+  height: auto;
+  min-height: 52px;
+  border-left-color: var(--hostdeck-divider);
+  border-radius: 0 5px 5px 0;
+  color: var(--hostdeck-focus);
+}
+
+.hostdeck-prompt-composer__send:not(:disabled) {
+  background: rgb(78 141 255 / 12%);
+}
+
+.hostdeck-prompt-composer__send:disabled {
+  cursor: not-allowed;
+  color: var(--hostdeck-muted);
+  opacity: 0.55;
+}
+
+.hostdeck-prompt-composer__status {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.hostdeck-prompt-composer__status > svg {
+  margin-top: 1px;
+  color: currentColor;
+}
+
+.hostdeck-prompt-composer__status > span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.hostdeck-prompt-composer__status strong,
+.hostdeck-prompt-composer__status small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-prompt-composer__status strong {
+  color: currentColor;
+  font-weight: 650;
+}
+
+.hostdeck-prompt-composer__status small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--hostdeck-muted);
+  font-size: 11px;
+  line-height: 15px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.hostdeck-prompt-composer__status output {
+  color: var(--hostdeck-muted);
+  white-space: nowrap;
+}
+
+.hostdeck-prompt-composer--connected {
+  color: var(--hostdeck-connected);
+}
+
+.hostdeck-prompt-composer--attention {
+  color: var(--hostdeck-attention);
+}
+
+.hostdeck-prompt-composer--danger {
+  color: var(--hostdeck-danger);
+}
+
+.hostdeck-prompt-composer--muted {
+  color: var(--hostdeck-muted);
+}
+
+.hostdeck-prompt-composer__reload {
+  display: inline-flex;
+  width: max-content;
+  min-height: 44px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--hostdeck-focus);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.hostdeck-prompt-composer__reload:hover {
+  background: var(--hostdeck-canvas);
 }
 
 @media (max-width: 767px) {
@@ -1498,6 +1704,11 @@ summary:focus-visible {
     margin-left: -24px;
   }
 
+  .hostdeck-prompt-composer {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+
   .hostdeck-timeline-item {
     grid-template-columns: 52px minmax(0, 1fr);
   }
@@ -1535,6 +1746,11 @@ summary:focus-visible {
     gap: 3px;
     padding-right: 4px;
     padding-left: 4px;
+  }
+
+  .hostdeck-prompt-composer {
+    padding-right: 12px;
+    padding-left: 12px;
   }
 }
 

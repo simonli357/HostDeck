@@ -21,6 +21,9 @@ describe("secure browser runtime composition", () => {
     expect(createSecureBrowserOperationId("csrf_bootstrap")).toBe(
       "op_browser_csrf_bootstrap_1234567812344abc8def1234567890ab"
     );
+    expect(createSecureBrowserOperationId("prompt")).toBe(
+      "op_browser_prompt_1234567812344abc8def1234567890ab"
+    );
   });
 
   it("fails closed for unsupported scope, missing crypto, throw, or malformed UUID", () => {

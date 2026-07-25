@@ -36,6 +36,11 @@ import type {
 } from "./connection-state.js";
 import { type MissionTone, projectSessionRow } from "./mission-control.js";
 import {
+  PromptComposer,
+  usePromptComposerController
+} from "./prompt-composer.js";
+import type { PromptComposerController } from "./prompt-composer-state.js";
+import {
   appendSessionDetailEvent,
   createSessionDetailFeed,
   projectSessionDetailTimeline,
@@ -87,6 +92,7 @@ export interface SessionDetailControllerState {
   readonly actionError: string | null;
   readonly feedError: string | null;
   readonly onRefresh: () => void;
+  readonly prompt: PromptComposerController;
 }
 
 export interface UseSessionDetailControllerOptions {
@@ -109,6 +115,7 @@ export interface SessionDetailScreenProps {
   readonly actionError?: string | null;
   readonly feedError?: string | null;
   readonly onRefresh?: () => void;
+  readonly prompt?: PromptComposerController | undefined;
   readonly projection?: SessionDetailProjection | undefined;
 }
 
@@ -138,6 +145,12 @@ export function useSessionDetailController(
   const pendingRef = useRef<SessionDetailPendingAction>(null);
   const mountedRef = useRef(true);
   const now = options.now ?? Date.now;
+  const prompt = usePromptComposerController(
+    coordinator,
+    sessionId,
+    snapshot,
+    feed
+  );
 
   const resetFeed = useCallback(() => {
     const empty = createSessionDetailFeed(sessionId);
@@ -227,7 +240,8 @@ export function useSessionDetailController(
     pendingAction,
     actionError,
     feedError,
-    onRefresh
+    onRefresh,
+    prompt
   });
 }
 
@@ -249,6 +263,7 @@ export function ConnectedSessionDetail({
       actionError={controller.actionError}
       feedError={controller.feedError}
       onRefresh={controller.onRefresh}
+      prompt={controller.prompt}
     />
   );
 }
@@ -263,6 +278,7 @@ export function SessionDetailScreen({
   actionError = null,
   feedError = null,
   onRefresh,
+  prompt,
   projection
 }: SessionDetailScreenProps) {
   const view =
@@ -272,7 +288,7 @@ export function SessionDetailScreen({
 
   return (
     <section
-      className="hostdeck-route hostdeck-detail"
+      className={`hostdeck-route hostdeck-detail${prompt === undefined ? "" : " hostdeck-detail--with-composer"}`}
       aria-labelledby="session-detail-title"
       aria-busy={view.loading || view.replayPending}
     >
@@ -313,6 +329,8 @@ export function SessionDetailScreen({
           replayPending={view.replayPending}
         />
       )}
+
+      {prompt === undefined ? null : <PromptComposer controller={prompt} />}
     </section>
   );
 }

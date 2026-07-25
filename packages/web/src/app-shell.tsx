@@ -331,6 +331,7 @@ function ConnectedSessionDetailRoute({
         actionError={controller.actionError}
         feedError={controller.feedError}
         onRefresh={controller.onRefresh}
+        prompt={controller.prompt}
         projection={projection}
       />
     </HostDeckFrame>

@@ -5,20 +5,34 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
+import type {
+  CodexTurnClient,
+  CodexTurnInterruptInput,
+  CodexTurnStartInput,
+  CodexTurnSteerInput,
+  NormalizedCodexEvent
+} from "../packages/codex-adapter/src/index.js";
 import {
+  codexThreadIdSchema,
+  codexTurnIdSchema,
   remoteIngressPublicStateSchema,
   resolveResourceBudget,
+  runtimeCompatibilitySchema,
   type SelectedProjectionEvent,
   type SelectedSessionListInput,
   type SelectedSessionListPage,
+  type SelectedSessionProjectionRecord,
   type SelectedSessionReadItem,
   selectedProjectionEventSchema,
   selectedSessionListPageSchema,
+  selectedSessionMappingRecordSchema,
+  selectedSessionProjectionRecordSchema,
   selectedSessionReadItemSchema
 } from "../packages/contracts/src/index.js";
-import type { OutputCursor } from "../packages/core/src/index.js";
+import type { OutputCursor, SessionId } from "../packages/core/src/index.js";
 import { selectedProjectionSseWireByteLength } from "../packages/server/src/fastify-sse-source.js";
 import {
+  createCodexPromptControlService,
   createHostDeckCsrfPolicy,
   createHostDeckCsrfRouteRegistration,
   createHostDeckFastifyApp,
@@ -27,9 +41,12 @@ import {
   createHostDeckHostLockPolicy,
   createHostDeckHostLockRouteRegistration,
   createHostDeckProjectionStreamRouteRegistration,
+  createHostDeckPromptRouteRegistration,
   createHostDeckRemoteIngressRequestAuthorityPolicy,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckRequestTrustPolicy,
+  createHostDeckSelectedWriteAdmissionPolicy,
+  createHostDeckSelectedWriteAuditExecutor,
   createHostDeckSessionReadRouteRegistration,
   createHostDeckTailscaleServeFastifyApp,
   createProjectionSubscriberStreamService,
@@ -48,6 +65,7 @@ import {
   createDeviceRevocationRepository,
   createSelectedAuditRepository,
   createSelectedCsrfAuthorizationRepository,
+  createSelectedStateRepository,
   createSettingsRepository,
   openMigratedDatabase
 } from "../packages/storage/src/index.js";
@@ -61,13 +79,23 @@ import {
   createBrowserHttpClient
 } from "../packages/web/src/http-client.js";
 import {
+  createPromptComposerController,
+  type PromptComposerController,
+  type PromptComposerDispatchInput
+} from "../packages/web/src/prompt-composer-state.js";
+import {
+  appendSessionDetailEvent,
+  createSessionDetailFeed,
+  type SessionDetailFeedState
+} from "../packages/web/src/session-detail-feed.js";
+import {
   type BrowserSseFetchPort,
   createBrowserSseClient
 } from "../packages/web/src/sse-client.js";
 
 const externalOrigin =
   "https://hostdeck-connection-state.fixture-tailnet.ts.net";
-const sessionId = "sess_connection_integration";
+const sessionId = "sess_connection_integration" as SessionId;
 const missingSessionId = "sess_connection_missing";
 const writerDeviceId = "client_connection_writer";
 const readerDeviceId = "client_connection_reader";
@@ -76,6 +104,9 @@ const readerToken = "R".repeat(43);
 const initialWriterCsrf = "I".repeat(43);
 const initialReaderCsrf = "J".repeat(43);
 const timestamp = "2026-07-22T19:00:00.000Z";
+const promptThreadId = "thread-connection-integration";
+const privatePrompt = "FE020_PRIVATE_PROMPT_SENTINEL validate the paired browser vertical";
+const ambiguousPrompt = "FE020_AMBIGUOUS_PROMPT_SENTINEL prove response loss safety";
 const resourceBudget = resolveResourceBudget({
   sse_heartbeat_interval_ms: 1_000
 });
@@ -319,6 +350,136 @@ describe("FE-V1-025 real shell connection-state composition", () => {
   });
 });
 
+describe("FE-V1-020 real paired prompt-composer composition", () => {
+  it("binds one browser prompt to selected admission, SQLite audit, and matching SSE truth", async () => {
+    const harness = await createHarness("serve");
+    const page = harness.createPage(writerToken);
+    let feed: SessionDetailFeedState = createSessionDetailFeed(sessionId);
+    let composer: PromptComposerController | null = null;
+    let loseAcceptedResponse = false;
+    const operationIds = [
+      "op_fe020_browser_prompt_0001",
+      "op_fe020_browser_prompt_0002",
+      "op_fe020_browser_prompt_0003"
+    ];
+
+    await page.coordinator.setTarget({ kind: "session_detail", sessionId });
+    page.coordinator.connectSessionStream(
+      (event) => {
+        feed = appendSessionDetailEvent(feed, event);
+        composer?.updateContext({ snapshot: page.coordinator.snapshot(), feed });
+      },
+      { start: "recent" }
+    );
+    await waitUntil(
+      () => page.coordinator.snapshot().stream.state === "connected" && feed.lastCursor === 1
+    );
+
+    composer = createPromptComposerController({
+      sessionId,
+      context: { snapshot: page.coordinator.snapshot(), feed },
+      createOperationId: () => requiredShift(operationIds),
+      dispatch: {
+        async dispatch(input: PromptComposerDispatchInput) {
+          const response = await page.coordinator.requestProtected(
+            "prompt_dispatch",
+            {
+              params: { session_id: input.sessionId },
+              body: input.request
+            },
+            { signal: input.signal }
+          );
+          if (loseAcceptedResponse) {
+            throw new Error("Private response-loss fixture cause.");
+          }
+          return response.data;
+        }
+      }
+    });
+    const unsubscribe = page.coordinator.subscribe(() => {
+      composer?.updateContext({ snapshot: page.coordinator.snapshot(), feed });
+    });
+
+    try {
+      composer.setDraft(`  ${privatePrompt}  `);
+      expect(await composer.submit()).toMatchObject({
+        phase: "accepted",
+        status: "New turn accepted",
+        draft: ""
+      });
+      expect(harness.promptStartCalls()).toEqual([
+        expect.objectContaining({
+          operation_id: "op_fe020_browser_prompt_0001",
+          thread_id: promptThreadId,
+          text: privatePrompt
+        })
+      ]);
+      expect(harness.rawAuditText("op_fe020_browser_prompt_0001")).not.toContain(
+        privatePrompt
+      );
+      expect(JSON.stringify(composer.snapshot())).not.toMatch(
+        /audit:connection-state|turn-connection-prompt/u
+      );
+
+      await harness.advancePromptTurn("in_progress", "turn-connection-prompt-001", 2);
+      await waitUntil(() => composer?.snapshot().phase === "running");
+      expect(composer.snapshot()).toMatchObject({
+        status: "Turn running",
+        sendEnabled: false
+      });
+      await harness.advancePromptTurn("completed", "turn-connection-prompt-001", 3);
+      await waitUntil(() => composer?.snapshot().phase === "completed");
+      expect(composer.snapshot().status).toBe("Turn completed");
+
+      harness.setPromptAdmissionState("waiting_for_approval");
+      composer.setDraft("FE020_REJECTED_PROMPT_SENTINEL reject stale browser admission");
+      expect(await composer.submit()).toMatchObject({
+        phase: "failed_retryable",
+        status: "Prompt was not accepted",
+        sendLabel: "Retry prompt",
+        draft: "FE020_REJECTED_PROMPT_SENTINEL reject stale browser admission"
+      });
+      expect(harness.promptStartCalls()).toHaveLength(1);
+      expect(harness.rawAuditText("op_fe020_browser_prompt_0002")).toBe("");
+
+      harness.setPromptAdmissionState("completed");
+      loseAcceptedResponse = true;
+      composer.setDraft(ambiguousPrompt);
+      expect(await composer.submit()).toMatchObject({
+        phase: "outcome_unknown",
+        reloadRequired: true,
+        inputReadOnly: true,
+        sendEnabled: false,
+        draft: ambiguousPrompt
+      });
+      expect(harness.promptStartCalls()).toHaveLength(2);
+      expect(harness.rawAuditText("op_fe020_browser_prompt_0003")).not.toContain(
+        ambiguousPrompt
+      );
+      expect(
+        `${composer.snapshot().status} ${composer.snapshot().statusDetail ?? ""}`
+      ).not.toMatch(/SENTINEL|response-loss fixture/u);
+      await composer.submit();
+      expect(harness.promptStartCalls()).toHaveLength(2);
+
+      expect(
+        harness.requestPaths.filter(
+          (path) => path === `/api/v1/sessions/${sessionId}/prompts`
+        )
+      ).toHaveLength(3);
+      expect(harness.rawAuditText()).not.toMatch(
+        /FE020_PRIVATE_PROMPT_SENTINEL|FE020_AMBIGUOUS_PROMPT_SENTINEL/u
+      );
+    } finally {
+      unsubscribe();
+      composer.close();
+      page.coordinator.close();
+      await waitUntil(() => harness.subscribers.snapshot().active_subscribers === 0);
+      expect(harness.handoff.activeSinkCount).toBe(0);
+    }
+  });
+});
+
 type HarnessMode = "loopback" | "serve";
 
 interface ConnectionServerHarness {
@@ -332,9 +493,19 @@ interface ConnectionServerHarness {
   readonly createPage: (token: string | null) => {
     readonly coordinator: BrowserConnectionStateCoordinator;
   };
+  readonly advancePromptTurn: (
+    state: "in_progress" | "completed",
+    turnId: string,
+    cursor: number
+  ) => Promise<void>;
+  readonly promptStartCalls: () => readonly CodexTurnStartInput[];
+  readonly rawAuditText: (operationId?: string) => string;
   readonly revokeWriter: () => void;
   readonly sessionPortCounts: () => { readonly get: number; readonly list: number };
   readonly setCompatibilityHealth: (state: "degraded" | "ready") => void;
+  readonly setPromptAdmissionState: (
+    state: "completed" | "waiting_for_approval"
+  ) => void;
   readonly setRemoteGeneration: (generation: number) => void;
 }
 
@@ -349,6 +520,16 @@ async function createHarness(mode: HarnessMode): Promise<ConnectionServerHarness
   const localOrigin = `http://127.0.0.1:${port}`;
   const settings = createSettingsRepository(opened.db);
   settings.getOrCreateDefault({ stateDir: root, bindPort: port, now });
+  const states = createSelectedStateRepository(opened.db);
+  states.create(connectionPromptState());
+  const promptTurns = new ConnectionPromptTurnClient();
+  const promptService = createCodexPromptControlService({
+    turns: promptTurns,
+    models: noPendingPromptModels(),
+    plans: noPendingPromptPlans(),
+    states,
+    now: () => timestamp
+  });
 
   const auth = createAuthDeviceRepository(opened.db);
   auth.create({
@@ -400,6 +581,11 @@ async function createHarness(mode: HarnessMode): Promise<ConnectionServerHarness
   const audit = createSelectedAuditRepository(opened.db);
   let auditSequence = 0;
   const securityAudit = createSecurityMutationAuditExecutor({
+    repository: audit,
+    now: () => now().toISOString(),
+    create_record_id: () => `audit:connection-state:${++auditSequence}`
+  });
+  const promptAudit = createHostDeckSelectedWriteAuditExecutor({
     repository: audit,
     now: () => now().toISOString(),
     create_record_id: () => `audit:connection-state:${++auditSequence}`
@@ -478,6 +664,21 @@ async function createHarness(mode: HarnessMode): Promise<ConnectionServerHarness
     createHostDeckProjectionStreamRouteRegistration({
       observe_error: (failure) => streamFailures.push(failure),
       subscribers
+    }),
+    createHostDeckPromptRouteRegistration({
+      admission: createHostDeckSelectedWriteAdmissionPolicy({
+        resourceBudget,
+        now: () => performance.now()
+      }),
+      audit: promptAudit,
+      csrf,
+      lock,
+      prompts: {
+        dispatch: promptService.dispatch,
+        snapshot: promptService.snapshot
+      },
+      runtime: { read: () => connectionPromptRuntime() },
+      sessions: { read: (candidate) => states.require(candidate) }
     })
   ];
 
@@ -523,6 +724,13 @@ async function createHarness(mode: HarnessMode): Promise<ConnectionServerHarness
     requestPaths,
     secrets,
     subscribers,
+    async advancePromptTurn(state, turnId, cursor) {
+      replacePromptAdmissionState(states, state, now);
+      await promptService.observeEvent(
+        connectionPromptRuntimeEvent(state, turnId, cursor)
+      );
+      handoff.publish(connectionPromptProjectionEvent(cursor, state, turnId));
+    },
     async close() {
       if (closed) return;
       closed = true;
@@ -569,6 +777,21 @@ async function createHarness(mode: HarnessMode): Promise<ConnectionServerHarness
       pages.add(coordinator);
       return Object.freeze({ coordinator });
     },
+    promptStartCalls: () => Object.freeze([...promptTurns.startCalls]),
+    rawAuditText(operationId) {
+      const rows = operationId === undefined
+        ? opened.db
+            .prepare("SELECT record_json FROM selected_audit_events ORDER BY operation_id, phase")
+            .all()
+        : opened.db
+            .prepare(
+              "SELECT record_json FROM selected_audit_events WHERE operation_id = ? ORDER BY phase"
+            )
+            .all(operationId);
+      return (rows as readonly { readonly record_json: string }[])
+        .map((row) => row.record_json)
+        .join("\n");
+    },
     revokeWriter() {
       createDeviceRevocationRepository(opened.db).revoke({
         deviceId: writerDeviceId,
@@ -584,6 +807,9 @@ async function createHarness(mode: HarnessMode): Promise<ConnectionServerHarness
         reasons: state === "degraded" ? ["compatibility_degraded"] : []
       });
     },
+    setPromptAdmissionState(state) {
+      replacePromptAdmissionState(states, state, now);
+    },
     setRemoteGeneration(generation) {
       remoteGeneration = generation;
       updateRemoteHealth();
@@ -591,6 +817,200 @@ async function createHarness(mode: HarnessMode): Promise<ConnectionServerHarness
   };
   harnesses.push(harness);
   return harness;
+}
+
+class ConnectionPromptTurnClient implements CodexTurnClient {
+  readonly runtime_version = "0.144.0";
+  readonly startCalls: CodexTurnStartInput[] = [];
+  readonly steerCalls: CodexTurnSteerInput[] = [];
+  readonly interruptCalls: CodexTurnInterruptInput[] = [];
+
+  async startTurn(input: CodexTurnStartInput): ReturnType<CodexTurnClient["startTurn"]> {
+    this.startCalls.push(input);
+    const turnId = `turn-connection-prompt-${String(this.startCalls.length).padStart(3, "0")}`;
+    return {
+      thread_id: codexThreadIdSchema.parse(input.thread_id),
+      turn_id: codexTurnIdSchema.parse(turnId),
+      state: "accepted" as const
+    };
+  }
+
+  async steerTurn(input: CodexTurnSteerInput): ReturnType<CodexTurnClient["steerTurn"]> {
+    this.steerCalls.push(input);
+    throw new Error("Connection prompt integration must not steer.");
+  }
+
+  async interruptTurn(
+    input: CodexTurnInterruptInput
+  ): ReturnType<CodexTurnClient["interruptTurn"]> {
+    this.interruptCalls.push(input);
+    throw new Error("Connection prompt integration must not interrupt.");
+  }
+}
+
+function noPendingPromptModels() {
+  return Object.freeze({
+    readPendingSettings: () => Object.freeze([]),
+    async dispatchPendingTurn() {
+      throw new Error("Connection prompt integration has no pending model selection.");
+    }
+  });
+}
+
+function noPendingPromptPlans() {
+  return Object.freeze({
+    readPendingSettings: () => Object.freeze([]),
+    async dispatchPendingTurn() {
+      throw new Error("Connection prompt integration has no pending Plan selection.");
+    }
+  });
+}
+
+function connectionPromptState() {
+  const mapping = selectedSessionMappingRecordSchema.parse({
+    id: sessionId,
+    name: "connection-integration",
+    codex_thread_id: promptThreadId,
+    cwd: "/workspace/hostdeck",
+    runtime_source: "codex_app_server",
+    runtime_version: "0.144.0",
+    disposition: "selected",
+    created_at: timestamp,
+    updated_at: timestamp,
+    archived_at: null
+  });
+  const projection: SelectedSessionProjectionRecord =
+    selectedSessionProjectionRecordSchema.parse({
+      session: {
+        id: mapping.id,
+        name: mapping.name,
+        codex_thread_id: mapping.codex_thread_id,
+        cwd: mapping.cwd,
+        runtime_source: mapping.runtime_source,
+        runtime_version: mapping.runtime_version,
+        created_at: mapping.created_at,
+        archived_at: null,
+        session_state: "active",
+        turn_state: "idle",
+        attention: "none",
+        freshness: "current",
+        freshness_reason: null,
+        updated_at: timestamp,
+        last_activity_at: timestamp,
+        branch: "main",
+        model: "gpt-5.5-codex",
+        settings: null,
+        goal: null,
+        recent_summary: "Real selected coordinator fixture.",
+        last_event_cursor: null
+      },
+      retained_event_count: 0,
+      retained_event_bytes: 0,
+      earliest_retained_cursor: null,
+      retention_boundary_cursor: null
+    });
+  return Object.freeze({ mapping, projection });
+}
+
+function replacePromptAdmissionState(
+  states: ReturnType<typeof createSelectedStateRepository>,
+  turnState: "in_progress" | "completed" | "waiting_for_approval",
+  now: () => Date
+): void {
+  const current = states.require(sessionId);
+  const updatedAt = now().toISOString();
+  states.replace(
+    {
+      mapping: { ...current.mapping, updated_at: updatedAt },
+      projection: {
+        ...current.projection,
+        session: {
+          ...current.projection.session,
+          turn_state: turnState,
+          attention: turnState === "waiting_for_approval" ? "needs_approval" : "none",
+          updated_at: updatedAt,
+          last_activity_at: updatedAt
+        }
+      }
+    },
+    {
+      mapping_updated_at: current.mapping.updated_at,
+      projection_updated_at: current.projection.session.updated_at,
+      last_event_cursor: current.projection.session.last_event_cursor
+    }
+  );
+}
+
+function connectionPromptRuntimeEvent(
+  state: "in_progress" | "completed",
+  turnId: string,
+  sequence: number
+): NormalizedCodexEvent {
+  return {
+    sequence,
+    method: state === "in_progress" ? "turn/started" : "turn/completed",
+    captured_at: timestamp,
+    upstream_at: null,
+    codex_event_id: null,
+    scope: "thread",
+    thread_id: promptThreadId,
+    turn_id: turnId,
+    status: state,
+    ...(state === "completed" ? { error_message: null } : {})
+  } as NormalizedCodexEvent;
+}
+
+function connectionPromptProjectionEvent(
+  cursor: number,
+  state: "in_progress" | "completed",
+  turnId: string
+): SelectedProjectionEvent {
+  return selectedProjectionEventSchema.parse({
+    session_id: sessionId,
+    cursor,
+    captured_at: timestamp,
+    upstream_at: null,
+    codex_event_id: `connection-prompt-event-${cursor}`,
+    codex_event_type: state === "in_progress" ? "turn/started" : "turn/completed",
+    content_state: "complete",
+    content_notice: null,
+    type: "turn",
+    turn_id: turnId,
+    state,
+    error: null
+  });
+}
+
+function connectionPromptRuntime() {
+  return runtimeCompatibilitySchema.parse({
+    source: "codex_app_server",
+    state: "ready",
+    mutation_policy: "allowed",
+    observed_version: "0.144.0",
+    binding_id: "binding-connection-prompt-001",
+    capabilities: [
+      "thread_lifecycle",
+      "turn_input",
+      "turn_steer",
+      "turn_interrupt",
+      "model",
+      "goal",
+      "plan",
+      "usage",
+      "compact",
+      "skills",
+      "approvals",
+      "multi_client"
+    ].map((name) => ({ name, state: "available", reason: null })),
+    checked_at: timestamp,
+    reason: null
+  });
+}
+
+function requiredShift<Value>(values: Value[]): Value {
+  const value = values.shift();
+  if (value === undefined) throw new TypeError("Required integration value is unavailable.");
+  return value;
 }
 
 class MemoryHandoffService implements ProjectionReplayLiveHandoffService {

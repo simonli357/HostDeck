@@ -1,5 +1,9 @@
 import type { Page, Request } from "@playwright/test";
 import {
+  type PromptDispatchResponse,
+  type PromptSessionRequest,
+  promptDispatchResponseSchema,
+  promptSessionRequestSchema,
   type SelectedProjectionEvent,
   selectedProjectionEventSchema,
   selectedSessionDetailResponseSchema
@@ -7,17 +11,39 @@ import {
 
 export type SessionDetailApiVariant =
   | "active"
+  | "writable"
+  | "writable_long"
+  | "read_only"
+  | "locked"
+  | "csrf_failed"
+  | "waiting_input"
+  | "turn_unknown"
+  | "stale_session"
   | "boundary"
   | "long"
   | "empty"
   | "denied"
   | "unavailable";
 
+export type SessionDetailPromptOutcome =
+  | "accepted_start"
+  | "accepted_steer"
+  | "retryable_rejection"
+  | "nonretryable_rejection"
+  | "correlation_mismatch"
+  | "pending";
+
 export interface SessionDetailApiController {
   readonly requests: readonly Request[];
   readonly breakStream: () => Promise<void>;
   readonly dropStream: () => Promise<void>;
+  readonly hasPendingPrompt: () => boolean;
   readonly pushEvent: (event: SessionDetailEventFixture) => Promise<void>;
+  readonly promptRequests: () => readonly Request[];
+  readonly releasePendingPrompt: (
+    outcome?: Exclude<SessionDetailPromptOutcome, "pending">
+  ) => void;
+  readonly setPromptOutcome: (outcome: SessionDetailPromptOutcome) => void;
   readonly setVariant: (variant: SessionDetailApiVariant) => void;
   readonly streamRequestUrls: () => Promise<readonly string[]>;
 }
@@ -27,6 +53,7 @@ type SessionDetailEventFixture = SelectedProjectionEvent;
 const origin = "http://127.0.0.1:4175";
 const sessionId = "sess_detail_browser_active";
 const timestamp = "2026-07-22T18:00:00.000Z";
+const promptTurnId = "turn-private-browser-prompt";
 const components = [
   "storage",
   "runtime",
@@ -44,6 +71,10 @@ export async function installSessionDetailApi(
   initialVariant: SessionDetailApiVariant = "active"
 ): Promise<SessionDetailApiController> {
   let variant = initialVariant;
+  let promptOutcome: SessionDetailPromptOutcome = "accepted_start";
+  let pendingPromptResolution:
+    | ((outcome: Exclude<SessionDetailPromptOutcome, "pending">) => void)
+    | null = null;
   const requests: Request[] = [];
   const initialEvents = eventsForVariant(initialVariant);
 
@@ -70,7 +101,7 @@ export async function installSessionDetailApi(
     }
 
     if (url.pathname === "/api/v1/access" && request.method() === "GET") {
-      await fulfillJson(route, variant === "denied" ? deniedAccess() : pairedWriterAccess());
+      await fulfillJson(route, variant === "denied" ? deniedAccess() : pairedAccess(variant));
       return;
     }
     if (variant === "denied") {
@@ -78,7 +109,7 @@ export async function installSessionDetailApi(
       return;
     }
     if (url.pathname === "/api/v1/host/status" && request.method() === "GET") {
-      await fulfillJson(route, readyHostStatus());
+      await fulfillJson(route, readyHostStatus(variant));
       return;
     }
     if (
@@ -93,11 +124,45 @@ export async function installSessionDetailApi(
       return;
     }
     if (url.pathname === "/api/v1/access/csrf" && request.method() === "POST") {
+      if (variant === "csrf_failed") {
+        await fulfillJson(
+          route,
+          {
+            error: {
+              code: "service_overloaded",
+              message: "Secure write setup is temporarily unavailable.",
+              retryable: true
+            }
+          },
+          503
+        );
+        return;
+      }
       await fulfillJson(route, {
         csrf_token: "D".repeat(43),
         csrf_generation: 1,
         rotated_at: timestamp
       });
+      return;
+    }
+    if (
+      url.pathname === `/api/v1/sessions/${sessionId}/prompts` &&
+      request.method() === "POST"
+    ) {
+      let selectedOutcome = promptOutcome;
+      if (selectedOutcome === "pending") {
+        if (pendingPromptResolution !== null) {
+          await route.fulfill({ status: 500, body: "duplicate pending prompt request" });
+          return;
+        }
+        selectedOutcome = await new Promise<Exclude<SessionDetailPromptOutcome, "pending">>(
+          (resolve) => {
+            pendingPromptResolution = resolve;
+          }
+        );
+        pendingPromptResolution = null;
+      }
+      await fulfillPromptOutcome(route, request, selectedOutcome);
       return;
     }
 
@@ -127,6 +192,29 @@ export async function installSessionDetailApi(
         if (runtime === undefined) throw new TypeError("Session Detail SSE fixture is missing.");
         runtime.dropStream();
       });
+    },
+    hasPendingPrompt() {
+      return pendingPromptResolution !== null;
+    },
+    promptRequests() {
+      return requests.filter((request) => {
+        const url = new URL(request.url());
+        return (
+          request.method() === "POST" &&
+          url.pathname === `/api/v1/sessions/${sessionId}/prompts`
+        );
+      });
+    },
+    releasePendingPrompt(
+      outcome: Exclude<SessionDetailPromptOutcome, "pending"> = "accepted_start"
+    ) {
+      if (pendingPromptResolution === null) {
+        throw new TypeError("No pending Session Detail prompt request exists.");
+      }
+      pendingPromptResolution(outcome);
+    },
+    setPromptOutcome(nextOutcome: SessionDetailPromptOutcome) {
+      promptOutcome = nextOutcome;
     },
     setVariant(nextVariant: SessionDetailApiVariant) {
       variant = nextVariant;
@@ -173,6 +261,33 @@ export function liveActivityEvent(cursor: number): SessionDetailEventFixture {
     item_id: null,
     title: "Device validation completed",
     detail: "The connected Android viewport passed the current checks."
+  });
+}
+
+export function promptTurnEvent(
+  cursor: number,
+  state:
+    | "idle"
+    | "in_progress"
+    | "waiting_for_input"
+    | "waiting_for_approval"
+    | "completed"
+    | "interrupted"
+    | "failed"
+    | "unknown",
+  turnId = promptTurnId
+): SessionDetailEventFixture {
+  return selectedProjectionEventSchema.parse({
+    ...eventBase(cursor),
+    codex_event_id: `codex-private-browser-prompt-${cursor}`,
+    codex_event_type: "thread/turn/state",
+    type: "turn",
+    turn_id: turnId,
+    state,
+    error:
+      state === "failed"
+        ? { code: "runtime_unavailable", message: "Runtime work stopped safely." }
+        : null
   });
 }
 
@@ -284,29 +399,105 @@ async function installSessionEventStream(
 
 async function fulfillJson(
   route: Parameters<Parameters<Page["route"]>[1]>[0],
-  body: unknown
+  body: unknown,
+  status = 200
 ): Promise<void> {
   await route.fulfill({
-    status: 200,
+    status,
     contentType: "application/json",
     headers: { "cache-control": "no-store" },
     body: JSON.stringify(body)
   });
 }
 
-function pairedWriterAccess() {
+async function fulfillPromptOutcome(
+  route: Parameters<Parameters<Page["route"]>[1]>[0],
+  request: Request,
+  outcome: Exclude<SessionDetailPromptOutcome, "pending">
+): Promise<void> {
+  let body: PromptSessionRequest;
+  try {
+    body = promptSessionRequestSchema.parse(request.postDataJSON());
+  } catch {
+    await fulfillJson(
+      route,
+      {
+        error: {
+          code: "validation_error",
+          message: "The prompt request is invalid.",
+          retryable: false
+        }
+      },
+      400
+    );
+    return;
+  }
+
+  if (outcome === "retryable_rejection") {
+    await fulfillJson(
+      route,
+      {
+        error: {
+          code: "service_overloaded",
+          message: "HostDeck is temporarily too busy.",
+          retryable: true
+        }
+      },
+      503
+    );
+    return;
+  }
+  if (outcome === "nonretryable_rejection") {
+    await fulfillJson(
+      route,
+      {
+        error: {
+          code: "session_not_writable",
+          message: "This session cannot accept a prompt now.",
+          retryable: false
+        }
+      },
+      409
+    );
+    return;
+  }
+
+  const operationId =
+    outcome === "correlation_mismatch"
+      ? "op_browser_prompt_11111111111141118111111111111111"
+      : body.operation_id;
+  const response: PromptDispatchResponse = promptDispatchResponseSchema.parse({
+    operation_id: operationId,
+    kind: "prompt",
+    target: {
+      type: "managed_session",
+      session_id: sessionId,
+      codex_thread_id: "thread-private-browser-prompt"
+    },
+    state: "accepted",
+    accepted_at: timestamp,
+    audit_record_id: "audit-private-browser-prompt",
+    turn_id: promptTurnId,
+    action: outcome === "accepted_steer" ? "steer" : "start"
+  });
+  await fulfillJson(route, response, 202);
+}
+
+function pairedAccess(variant: SessionDetailApiVariant) {
+  const readOnly = variant === "read_only";
+  const locked = variant === "locked";
   return {
     authentication_state: "paired_device",
     device_id: "device_detail_phone",
-    permission: "write",
+    permission: readOnly ? "read" : "write",
     device_expires_at: "2026-10-22T18:00:00.000Z",
     configured_origin: origin,
     network_mode: "loopback",
     transport: "http",
-    locked: false,
+    locked,
     can_read_sessions: true,
-    can_write_sessions: true,
-    can_lock: true,
+    can_write_sessions: !readOnly && !locked,
+    can_lock: !readOnly,
     can_unlock: false
   };
 }
@@ -328,7 +519,14 @@ function deniedAccess() {
   };
 }
 
-function readyHostStatus() {
+function readyHostStatus(variant: SessionDetailApiVariant) {
+  const readOnly = variant === "read_only";
+  const locked = variant === "locked";
+  const writeCauses = readOnly
+    ? ["read_only_access"]
+    : locked
+      ? ["host_locked"]
+      : [];
   return {
     local: {
       generation: 1,
@@ -355,13 +553,13 @@ function readyHostStatus() {
       updated_at: timestamp
     },
     access: {
-      mode: "paired_write",
+      mode: readOnly ? "paired_read" : "paired_write",
       network_mode: "loopback",
       transport: "http",
       write_eligibility: {
         scope: "host_health_and_authority",
-        eligible: true,
-        causes: []
+        eligible: writeCauses.length === 0,
+        causes: writeCauses
       }
     }
   };
@@ -369,11 +567,32 @@ function readyHostStatus() {
 
 function sessionDetail(variant: SessionDetailApiVariant, eventCount: number) {
   const empty = variant === "empty";
-  const long = variant === "long";
+  const readOnly = variant === "read_only";
+  const writable = isComposerFixtureVariant(variant);
+  const long = variant === "long" || variant === "writable_long";
   const bounded = variant === "boundary";
+  const turnState =
+    variant === "waiting_input"
+      ? "waiting_for_input"
+      : variant === "turn_unknown"
+        ? "unknown"
+        : writable
+          ? "idle"
+          : "waiting_for_approval";
+  const attention =
+    turnState === "waiting_for_input"
+      ? "needs_input"
+      : turnState === "waiting_for_approval"
+        ? "needs_approval"
+        : turnState === "unknown"
+          ? "unknown"
+          : variant === "stale_session"
+            ? "watch"
+            : "none";
+  const freshness = variant === "stale_session" ? "stale" : "current";
   return selectedSessionDetailResponseSchema.parse({
     access: {
-      mode: "paired_write",
+      mode: readOnly ? "paired_read" : "paired_write",
       network_mode: "loopback",
       transport: "http"
     },
@@ -390,10 +609,10 @@ function sessionDetail(variant: SessionDetailApiVariant, eventCount: number) {
         created_at: timestamp,
         archived_at: null,
         session_state: "active",
-        turn_state: "waiting_for_approval",
-        attention: "needs_approval",
-        freshness: "current",
-        freshness_reason: null,
+        turn_state: turnState,
+        attention,
+        freshness,
+        freshness_reason: freshness === "current" ? null : "Projection requires refresh.",
         updated_at: timestamp,
         last_activity_at: timestamp,
         branch: long
@@ -434,6 +653,25 @@ function sessionList(variant: SessionDetailApiVariant, eventCount: number) {
 
 function eventsForVariant(variant: SessionDetailApiVariant): readonly SessionDetailEventFixture[] {
   if (variant === "empty" || variant === "denied" || variant === "unavailable") return [];
+  if (isComposerFixtureVariant(variant)) {
+    return [
+      messageEvent(
+        1,
+        "user",
+        "completed",
+        "Prepare the selected mobile prompt workflow.",
+        "item-prompt-user"
+      ),
+      messageEvent(
+        2,
+        "agent",
+        "completed",
+        "The selected session is ready for one bounded prompt.",
+        "item-prompt-agent"
+      ),
+      runtimeEvent(3)
+    ];
+  }
   if (variant === "boundary") {
     return [
       boundaryEvent(1),
@@ -485,6 +723,19 @@ function eventsForVariant(variant: SessionDetailApiVariant): readonly SessionDet
     ),
     runtimeEvent(9)
   ];
+}
+
+function isComposerFixtureVariant(variant: SessionDetailApiVariant): boolean {
+  return (
+    variant === "writable" ||
+    variant === "writable_long" ||
+    variant === "read_only" ||
+    variant === "locked" ||
+    variant === "csrf_failed" ||
+    variant === "waiting_input" ||
+    variant === "turn_unknown" ||
+    variant === "stale_session"
+  );
 }
 
 function eventBase(cursor: number) {

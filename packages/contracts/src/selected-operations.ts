@@ -28,8 +28,10 @@ import {
   runtimeRequestIdSchema
 } from "./selected-runtime.js";
 
+export const promptTextMaxLength = 20_000;
+
 const operationLimits = {
-  promptLength: 20_000,
+  promptLength: promptTextMaxLength,
   modelIdLength: codexModelContractLimits.identityLength,
   effortLength: codexModelContractLimits.reasoningEffortLength,
   goalLength: 512,
