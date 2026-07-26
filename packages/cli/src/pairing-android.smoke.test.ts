@@ -525,6 +525,25 @@ describe("physical Android phone-driver protocol", () => {
     ]);
     expect(Object.isFrozen(nodes)).toBe(true);
     expect(nodes.every(Object.isFrozen)).toBe(true);
+    const textNode = nodes[0];
+    const descriptionNode = nodes[1];
+    requireCondition(
+      textNode !== undefined && descriptionNode !== undefined,
+      "Android semantic-node fixture was incomplete."
+    );
+    expect(matchesAndroidUiNode(textNode, "semantic", "Host & access")).toBe(
+      true
+    );
+    expect(
+      matchesAndroidUiNode(
+        descriptionNode,
+        "semantic",
+        "Open Host and access"
+      )
+    ).toBe(true);
+    expect(
+      matchesAndroidUiNode(textNode, "semantic", "Open Host and access")
+    ).toBe(false);
     expect(() =>
       parseAndroidUiNodes(
         `<hierarchy><node text="${selectedPairingFragmentPrefix}secret" ` +
@@ -3592,6 +3611,8 @@ interface AndroidUiNode {
   readonly text: string;
 }
 
+type AndroidUiNodeField = "description" | "semantic" | "text";
+
 interface ProductionUiEntryInput {
   readonly db: ReturnType<typeof openMigratedDatabase>["db"];
   readonly driver: PhysicalDriverRuntime;
@@ -3853,14 +3874,14 @@ async function runProductionPromptUiSequence(
     "Physical prompt composer did not become writable on Android."
   );
   const textarea = await waitForAndroidUiNode(
-    "description",
+    "semantic",
     inputLabel,
     30_000,
     "Physical prompt textarea was unavailable on Android."
   );
   await performVerifiedAndroidTap({
     initialTrigger: textarea,
-    triggerField: "description",
+    triggerField: "semantic",
     triggerValue: inputLabel,
     completed: () => isAndroidKeyboardVisible(),
     completionFailureMessage:
@@ -3878,7 +3899,9 @@ async function runProductionPromptUiSequence(
   const keyboardNodes = await readAndroidUiNodes();
   requireCondition(
     keyboardNodes.some((node) => node.text === "Prompt target") &&
-      keyboardNodes.some((node) => node.description === inputLabel) &&
+      keyboardNodes.some((node) =>
+        matchesAndroidUiNode(node, "semantic", inputLabel)
+      ) &&
       keyboardNodes.some((node) => node.description === sendLabel),
     "Physical prompt controls were not all visible above the Android keyboard."
   );
@@ -3924,7 +3947,7 @@ async function runProductionPromptUiSequence(
   const acceptedNodes = await readAndroidUiNodes();
   const promptLines = physicalPromptText.split("\n");
   const acceptedTextareas = acceptedNodes.filter(
-    (node) => node.description === inputLabel
+    (node) => matchesAndroidUiNode(node, "semantic", inputLabel)
   );
   requireCondition(
     acceptedTextareas.length === 1 &&
@@ -4141,7 +4164,7 @@ function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
 }
 
 async function waitForAndroidUiNode(
-  field: "description" | "text",
+  field: AndroidUiNodeField,
   value: string,
   timeoutMs: number,
   message: string
@@ -4149,7 +4172,7 @@ async function waitForAndroidUiNode(
   let found: AndroidUiNode | null = null;
   await waitFor(async () => {
     const matches = (await readAndroidUiNodes()).filter(
-      (node) => node[field] === value
+      (node) => matchesAndroidUiNode(node, field, value)
     );
     requireCondition(
       matches.length <= 1,
@@ -4196,7 +4219,7 @@ async function performVerifiedAndroidTap(input: {
   readonly initialTrigger: AndroidUiNode;
   readonly reacquireFailureMessage: string;
   readonly terminalFailureMessage: string;
-  readonly triggerField: "description" | "text";
+  readonly triggerField: AndroidUiNodeField;
   readonly triggerValue: string;
 }): Promise<void> {
   let trigger = input.initialTrigger;
@@ -4212,7 +4235,12 @@ async function performVerifiedAndroidTap(input: {
     } catch {
       const nodes = await readAndroidUiNodes();
       const matches = nodes.filter(
-        (node) => node[input.triggerField] === input.triggerValue
+        (node) =>
+          matchesAndroidUiNode(
+            node,
+            input.triggerField,
+            input.triggerValue
+          )
       );
       requireCondition(
         matches.length <= 1,
@@ -4233,6 +4261,16 @@ async function performVerifiedAndroidTap(input: {
     }
   }
   throw new Error(input.terminalFailureMessage);
+}
+
+function matchesAndroidUiNode(
+  node: AndroidUiNode,
+  field: AndroidUiNodeField,
+  value: string
+): boolean {
+  return field === "semantic"
+    ? node.text === value || node.description === value
+    : node[field] === value;
 }
 
 function androidUiStateSummary(
