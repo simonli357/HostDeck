@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { MemoryRouter, useLocation } from "react-router";
@@ -185,6 +185,49 @@ describe("HostDeck phone shell", () => {
     expect(harness.bootstrapCsrf).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps one device-list owner across Host and access sheet dismissal", async () => {
+    const user = userEvent.setup();
+    const harness = createDeviceCoordinatorHarness();
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={[missionControlPath]}>
+          <HostDeckRoutes
+            coordinator={harness.coordinator}
+            outlets={{
+              missionControl: (
+                <section>
+                  <h1>Mission Control device fixture</h1>
+                  <SessionRouteLink sessionId={sessionId}>Open device session</SessionRouteLink>
+                </section>
+              ),
+              sessionDetail: () => <h1>Session Detail device fixture</h1>
+            }}
+          />
+        </MemoryRouter>
+      </StrictMode>
+    );
+
+    await waitFor(() => expect(harness.requestDeviceList).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("button", { name: "Open Host and access" }));
+    expect(screen.getByText("Checking paired devices.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Close Host and access" }));
+    await user.click(screen.getByRole("button", { name: "Open Host and access" }));
+    expect(screen.getByText("Checking paired devices.")).toBeTruthy();
+    expect(harness.requestDeviceList).toHaveBeenCalledTimes(1);
+
+    await act(async () => harness.completeList());
+    expect(await screen.findByText("Xiaomi 15 Pro")).toBeTruthy();
+    expect(harness.requestDeviceList).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: "Close Host and access" }));
+    await user.click(screen.getByRole("link", { name: "Open device session" }));
+    expect(await screen.findByText("Session Detail device fixture")).toBeTruthy();
+    expect(harness.requestDeviceList).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Open Host and access" }));
+    expect(screen.getByText("Xiaomi 15 Pro")).toBeTruthy();
+    expect(harness.requestDeviceList).toHaveBeenCalledTimes(1);
+  });
+
   it("holds production routes behind one external pairing owner even under StrictMode", async () => {
     const user = userEvent.setup();
     const deferred = createDeferred<ReturnType<typeof pairedResult>>();
@@ -201,6 +244,8 @@ describe("HostDeck phone shell", () => {
       bootstrapCsrf: vi.fn(),
       adoptCsrfBootstrap,
       requestProtected: vi.fn(),
+      requestDeviceList: vi.fn(),
+      requestDeviceRevoke: vi.fn(),
       requestSelectedSessionRead: vi.fn(),
       close: vi.fn()
     }) as never;
@@ -315,6 +360,11 @@ function createRecoveryCoordinatorHarness(): Readonly<{
     bootstrapCsrf,
     adoptCsrfBootstrap: vi.fn(),
     requestProtected: vi.fn(),
+    requestDeviceList: vi.fn(async () => ({
+      status: 200,
+      data: { devices: [], next_cursor: null, has_more: false }
+    })),
+    requestDeviceRevoke: vi.fn(),
     requestSelectedSessionRead: vi.fn(),
     close: vi.fn()
   }) as unknown as BrowserConnectionStateCoordinator;
@@ -322,6 +372,55 @@ function createRecoveryCoordinatorHarness(): Readonly<{
     coordinator,
     bootstrapCsrf,
     completeBootstrap: () => bootstrap.resolve(recoveryConnectionSnapshot("ready"))
+  });
+}
+
+function createDeviceCoordinatorHarness(): Readonly<{
+  coordinator: BrowserConnectionStateCoordinator;
+  requestDeviceList: ReturnType<typeof vi.fn>;
+  completeList: () => Promise<void>;
+}> {
+  const current = recoveryConnectionSnapshot("ready");
+  const response = createDeferred<unknown>();
+  const requestDeviceList = vi.fn(() => response.promise);
+  const coordinator = Object.freeze({
+    snapshot: () => current,
+    subscribe: () => () => undefined,
+    setTarget: vi.fn(),
+    refresh: vi.fn(),
+    loadMoreSessions: vi.fn(),
+    connectSessionStream: vi.fn(),
+    disconnectSessionStream: vi.fn(),
+    bootstrapCsrf: vi.fn(),
+    adoptCsrfBootstrap: vi.fn(),
+    requestProtected: vi.fn(),
+    requestDeviceList,
+    requestDeviceRevoke: vi.fn(),
+    requestSelectedSessionRead: vi.fn(),
+    close: vi.fn()
+  }) as unknown as BrowserConnectionStateCoordinator;
+  return Object.freeze({
+    coordinator,
+    requestDeviceList,
+    completeList: async () => {
+      response.resolve({
+        status: 200,
+        data: {
+          devices: [{
+            device_id: "device_shell_recovery_private",
+            client_label: "Xiaomi 15 Pro",
+            permission: "write",
+            created_at: "2026-07-01T05:00:00.000Z",
+            last_used_at: "2026-07-26T05:00:00.000Z",
+            expires_at: "2026-10-26T05:00:00.000Z",
+            revoked_at: null
+          }],
+          next_cursor: null,
+          has_more: false
+        }
+      });
+      await response.promise;
+    }
   });
 }
 

@@ -571,6 +571,27 @@ describe("browser CSRF authority lifecycle", () => {
     }
   });
 
+  it("preserves CSRF authority for an exact device-target conflict", async () => {
+    const test = harness({
+      fetch: async () => apiErrorResponse(409, "operation_conflict", false)
+    });
+    test.client.adoptBootstrap(bootstrapPayload(rawToken, 2, rotatedAt));
+
+    await expectCsrfFailure(
+      test.client.request("device_revoke", {
+        params: { device_id: "device_csrf_conflict" },
+        body: { operation_id: "op_csrf_device_conflict", confirmed: true }
+      }),
+      "api_error"
+    );
+    expect(test.client.snapshot()).toMatchObject({
+      phase: "ready",
+      generation: 2,
+      failure: null
+    });
+    expect(test.requests).toHaveLength(1);
+  });
+
   it("retains authority for a retry-safe domain operation conflict", async () => {
     const test = harness({
       fetch: async () => apiErrorResponse(409, "operation_conflict", true)

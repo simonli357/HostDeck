@@ -36,6 +36,9 @@ describe("secure browser runtime composition", () => {
     expect(createSecureBrowserOperationId("approval")).toBe(
       "op_browser_approval_1234567812344abc8def1234567890ab"
     );
+    expect(createSecureBrowserOperationId("device_revoke")).toBe(
+      "op_browser_device_revoke_1234567812344abc8def1234567890ab"
+    );
   });
 
   it("fails closed for unsupported scope, missing crypto, throw, or malformed UUID", () => {

@@ -14,7 +14,7 @@
     "build": "vite build --config vite.config.ts",
     "dev": "vite --config vite.config.ts",
     "preview": "vite preview --config vite.config.ts",
-    "test": "vitest run src/app-shell.test.tsx src/app-startup.test.ts src/approval-decision-state.test.ts src/approval-decisions.test.tsx src/browser-runtime.test.ts src/connection-state.test.ts src/csrf-client.test.ts src/host-access-recovery-state.test.ts src/host-access.test.tsx src/http-client.test.ts src/mission-control.test.tsx src/goal-control-state.test.ts src/goal-control.test.tsx src/model-control-state.test.ts src/model-control.test.tsx src/pairing-bootstrap.test.ts src/pairing-screen.test.tsx src/plan-control-state.test.ts src/plan-control.test.tsx src/prompt-composer-state.test.ts src/prompt-composer.test.tsx src/session-detail-feed.test.ts src/session-detail.test.tsx src/sse-client.test.ts",
+    "test": "vitest run src/app-shell.test.tsx src/app-startup.test.ts src/approval-decision-state.test.ts src/approval-decisions.test.tsx src/browser-runtime.test.ts src/connection-state.test.ts src/csrf-client.test.ts src/host-access-recovery-state.test.ts src/host-access.test.tsx src/http-client.test.ts src/mission-control.test.tsx src/goal-control-state.test.ts src/goal-control.test.tsx src/model-control-state.test.ts src/model-control.test.tsx src/paired-device-management-state.test.ts src/paired-device-management.test.tsx src/pairing-bootstrap.test.ts src/pairing-screen.test.tsx src/plan-control-state.test.ts src/plan-control.test.tsx src/prompt-composer-state.test.ts src/prompt-composer.test.tsx src/session-detail-feed.test.ts src/session-detail.test.tsx src/sse-client.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

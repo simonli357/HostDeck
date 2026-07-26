@@ -189,6 +189,37 @@ export function HostDeckRoutes({
   coordinator,
   runtimeFailed = false
 }: HostDeckRoutesProps) {
+  if (coordinator !== undefined && outlets.hostAccess === undefined) {
+    return (
+      <ConnectedHostAccess coordinator={coordinator}>
+        {(content) => (
+          <HostDeckRouteTable
+            outlets={Object.freeze({ ...outlets, hostAccess: content })}
+            coordinator={coordinator}
+            runtimeFailed={runtimeFailed}
+          />
+        )}
+      </ConnectedHostAccess>
+    );
+  }
+  return (
+    <HostDeckRouteTable
+      outlets={outlets}
+      coordinator={coordinator}
+      runtimeFailed={runtimeFailed}
+    />
+  );
+}
+
+function HostDeckRouteTable({
+  outlets,
+  coordinator,
+  runtimeFailed
+}: Readonly<{
+  outlets: HostDeckRouteOutlets;
+  coordinator: BrowserConnectionStateCoordinator | undefined;
+  runtimeFailed: boolean;
+}>) {
   return (
     <Routes>
       <Route

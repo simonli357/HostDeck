@@ -12,6 +12,8 @@ export * from "./http-client.js";
 export * from "./http-route-contracts.js";
 export * from "./model-control.js";
 export * from "./model-control-state.js";
+export * from "./paired-device-management.js";
+export * from "./paired-device-management-state.js";
 export * from "./pairing-bootstrap.js";
 export * from "./pairing-screen.js";
 export * from "./plan-control.js";

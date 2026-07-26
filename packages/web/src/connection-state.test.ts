@@ -1074,6 +1074,324 @@ describe("browser shell connection-state coordinator", () => {
     harness.coordinator.close();
   });
 
+  it("lists devices for exact paired readers without session-write authority", async () => {
+    const harness = createHarness(remoteOrigin);
+    await expect(
+      harness.coordinator.requestDeviceList({ query: { limit: "20" } })
+    ).rejects.toMatchObject({ reason: "not_ready" });
+    expect(harness.http.requests).toHaveLength(0);
+
+    harness.http.enqueue("access", jsonResponse(200, pairedAccess(remoteOrigin, "read")));
+    harness.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({ mode: "paired_read", origin: remoteOrigin, remoteGeneration: 7 })
+      )
+    );
+    harness.http.enqueue(
+      "list",
+      jsonResponse(200, sessionList("paired_read", remoteOrigin, []))
+    );
+    await harness.coordinator.setTarget({ kind: "mission_control" });
+    harness.http.enqueue(
+      "devices",
+      jsonResponse(200, deviceListPage(["device_connection_phone", "device_other"]))
+    );
+
+    const response = await harness.coordinator.requestDeviceList({
+      query: { limit: "20" }
+    });
+
+    expect(response.data.devices.map((device) => device.device_id)).toEqual([
+      "device_connection_phone",
+      "device_other"
+    ]);
+    expect(harness.http.requests.at(-1)).toMatchObject({
+      routeId: "devices",
+      path: "/api/v1/access/devices?limit=20",
+      init: { method: "GET" }
+    });
+    expect(harness.http.requests.at(-1)?.init).not.toHaveProperty("body");
+    await expect(
+      harness.coordinator.requestDeviceRevoke({
+        params: { device_id: "device_other" },
+        body: { operation_id: "op_connection_device_reader_001", confirmed: true }
+      })
+    ).rejects.toMatchObject({ reason: "not_ready" });
+    expect(harness.http.routeIds().filter((route) => route === "revoke")).toHaveLength(0);
+    harness.coordinator.close();
+  });
+
+  it("revokes another device while the host is locked without using session write eligibility", async () => {
+    const harness = createHarness(remoteOrigin);
+    harness.http.enqueue(
+      "access",
+      jsonResponse(200, pairedAccess(remoteOrigin, "write", true))
+    );
+    harness.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({ mode: "paired_write", origin: remoteOrigin, remoteGeneration: 7 })
+      )
+    );
+    harness.http.enqueue(
+      "list",
+      jsonResponse(200, sessionList("paired_write", remoteOrigin, []))
+    );
+    harness.http.enqueue("csrf", jsonResponse(200, csrfBootstrap(1)));
+    const locked = await harness.coordinator.setTarget({ kind: "mission_control" });
+    expect(locked.writeEligibility).toMatchObject({
+      eligible: false,
+      causes: ["host_locked"]
+    });
+    await expect(
+      Reflect.apply(
+        harness.coordinator.requestProtected,
+        harness.coordinator,
+        [
+          "device_revoke",
+          {
+            params: { device_id: "device_other" },
+            body: {
+              operation_id: "op_connection_device_generic_bypass",
+              confirmed: true
+            }
+          }
+        ]
+      ) as Promise<unknown>
+    ).rejects.toMatchObject({ reason: "client_contract" });
+    expect(harness.http.routeIds().filter((route) => route === "revoke")).toHaveLength(0);
+    harness.http.enqueue(
+      "revoke",
+      jsonResponse(200, {
+        operation_id: "op_connection_device_other_001",
+        device_id: "device_other",
+        revoked_at: laterTimestamp,
+        authority_invalidated: true,
+        self_revoked: false
+      })
+    );
+
+    const response = await harness.coordinator.requestDeviceRevoke({
+      params: { device_id: "device_other" },
+      body: { operation_id: "op_connection_device_other_001", confirmed: true }
+    });
+
+    expect(response.data).toMatchObject({
+      device_id: "device_other",
+      self_revoked: false
+    });
+    expect(harness.http.requests.at(-1)).toMatchObject({
+      routeId: "revoke",
+      path: "/api/v1/access/devices/device_other/revoke",
+      init: {
+        method: "POST",
+        body: JSON.stringify({
+          operation_id: "op_connection_device_other_001",
+          confirmed: true
+        })
+      }
+    });
+    expect(harness.coordinator.snapshot()).toMatchObject({
+      access: { state: "current", data: { device_id: "device_connection_phone" } },
+      csrf: { phase: "ready" },
+      writeEligibility: { eligible: false, causes: ["host_locked"] }
+    });
+
+    harness.http.enqueue(
+      "revoke",
+      jsonResponse(409, apiError("operation_conflict", false))
+    );
+    await expect(
+      harness.coordinator.requestDeviceRevoke({
+        params: { device_id: "device_other" },
+        body: { operation_id: "op_connection_device_conflict", confirmed: true }
+      })
+    ).rejects.toMatchObject({ reason: "api_error", status: 409 });
+    expect(harness.coordinator.snapshot()).toMatchObject({
+      access: { state: "current", data: { device_id: "device_connection_phone" } },
+      csrf: { phase: "ready" },
+      writeEligibility: { eligible: false, causes: ["host_locked"] }
+    });
+    harness.coordinator.close();
+  });
+
+  it("rejects cross-target and contradictory-self revoke success without false publication", async () => {
+    const crossTarget = createHarness(remoteOrigin);
+    enqueueRemoteWriterMission(crossTarget, [], 7, 1);
+    await crossTarget.coordinator.setTarget({ kind: "mission_control" });
+    crossTarget.http.enqueue(
+      "revoke",
+      jsonResponse(200, {
+        operation_id: "op_connection_device_cross_target",
+        device_id: "device_different",
+        revoked_at: laterTimestamp,
+        authority_invalidated: true,
+        self_revoked: false
+      })
+    );
+    await expect(
+      crossTarget.coordinator.requestDeviceRevoke({
+        params: { device_id: "device_other" },
+        body: { operation_id: "op_connection_device_cross_target", confirmed: true }
+      })
+    ).rejects.toMatchObject({ reason: "client_contract" });
+    expect(crossTarget.coordinator.snapshot()).toMatchObject({
+      access: { state: "current", data: { device_id: "device_connection_phone" } },
+      csrf: { phase: "ready" },
+      writeEligibility: { eligible: true }
+    });
+    crossTarget.coordinator.close();
+
+    const contradictorySelf = createHarness(remoteOrigin);
+    enqueueRemoteWriterMission(contradictorySelf, [], 7, 1);
+    await contradictorySelf.coordinator.setTarget({ kind: "mission_control" });
+    contradictorySelf.http.enqueue(
+      "revoke",
+      jsonResponse(200, {
+        operation_id: "op_connection_device_self_contradiction",
+        device_id: "device_connection_phone",
+        revoked_at: laterTimestamp,
+        authority_invalidated: true,
+        self_revoked: false
+      })
+    );
+    await expect(
+      contradictorySelf.coordinator.requestDeviceRevoke({
+        params: { device_id: "device_connection_phone" },
+        body: {
+          operation_id: "op_connection_device_self_contradiction",
+          confirmed: true
+        }
+      })
+    ).rejects.toMatchObject({ reason: "client_contract" });
+    expect(contradictorySelf.coordinator.snapshot()).toMatchObject({
+      access: { state: "stale" },
+      host: { state: "blocked", data: null },
+      targetState: { state: "blocked", data: null },
+      csrf: { phase: "idle", invalidationReason: "device_revoked" },
+      writeEligibility: { eligible: false }
+    });
+    contradictorySelf.coordinator.close();
+  });
+
+  it("adopts self-revoke before resolving and closes active protected authority", async () => {
+    const harness = createHarness(remoteOrigin);
+    const reader = new ControlledReader();
+    harness.http.enqueue("access", jsonResponse(200, pairedAccess(remoteOrigin, "write")));
+    harness.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({ mode: "paired_write", origin: remoteOrigin, remoteGeneration: 7 })
+      )
+    );
+    harness.http.enqueue(
+      "detail",
+      jsonResponse(
+        200,
+        sessionDetail("paired_write", remoteOrigin, sessionItem(firstSessionId))
+      )
+    );
+    harness.http.enqueue("csrf", jsonResponse(200, csrfBootstrap(1)));
+    await harness.coordinator.setTarget({
+      kind: "session_detail",
+      sessionId: firstSessionId
+    });
+    harness.sse.enqueue(async () => sseResponse(reader));
+    harness.coordinator.connectSessionStream(() => {});
+    await waitFor(() => harness.coordinator.snapshot().stream.state === "connected");
+    harness.http.enqueue(
+      "revoke",
+      jsonResponse(200, {
+        operation_id: "op_connection_device_self_001",
+        device_id: "device_connection_phone",
+        revoked_at: laterTimestamp,
+        authority_invalidated: true,
+        self_revoked: true
+      })
+    );
+
+    const response = await harness.coordinator.requestDeviceRevoke({
+      params: { device_id: "device_connection_phone" },
+      body: { operation_id: "op_connection_device_self_001", confirmed: true }
+    });
+    const revoked = harness.coordinator.snapshot();
+
+    expect(response.data.self_revoked).toBe(true);
+    expect(revoked).toMatchObject({
+      phase: "access_limited",
+      access: {
+        state: "current",
+        data: {
+          authentication_state: "revoked_device",
+          device_id: null,
+          permission: null,
+          can_read_sessions: false,
+          can_write_sessions: false
+        }
+      },
+      host: { state: "blocked", data: null },
+      targetState: { state: "blocked", data: null },
+      stream: { state: "idle", boundary: null },
+      csrf: { phase: "idle", invalidationReason: "device_revoked" },
+      writeEligibility: { eligible: false, causes: ["revoked_device"] }
+    });
+    expect(reader.cancelCalls).toBe(1);
+    await expect(
+      harness.coordinator.requestProtected("host_lock", {
+        body: { operation_id: "op_connection_after_self_revoke", confirmed: true }
+      })
+    ).rejects.toMatchObject({ reason: "not_ready" });
+    harness.coordinator.close();
+  });
+
+  it("fails closed after an unconfirmed self-revoke and after device-list authority denial", async () => {
+    const failedSelf = createHarness(remoteOrigin);
+    enqueueRemoteWriterMission(failedSelf, [], 7, 1);
+    await failedSelf.coordinator.setTarget({ kind: "mission_control" });
+    failedSelf.http.enqueue(
+      "revoke",
+      jsonResponse(503, apiError("runtime_unavailable", true))
+    );
+
+    await expect(
+      failedSelf.coordinator.requestDeviceRevoke({
+        params: { device_id: "device_connection_phone" },
+        body: { operation_id: "op_connection_device_self_unknown", confirmed: true }
+      })
+    ).rejects.toMatchObject({ reason: "api_error" });
+    expect(failedSelf.coordinator.snapshot()).toMatchObject({
+      access: { state: "stale" },
+      host: { state: "blocked", data: null },
+      targetState: { state: "blocked", data: null },
+      csrf: { phase: "idle", invalidationReason: "device_revoked" },
+      writeEligibility: { eligible: false }
+    });
+    failedSelf.coordinator.close();
+
+    const deniedList = createHarness(remoteOrigin);
+    enqueueRemoteWriterMission(deniedList, [], 7, 1);
+    await deniedList.coordinator.setTarget({ kind: "mission_control" });
+    deniedList.http.enqueue(
+      "devices",
+      jsonResponse(403, apiError("permission_denied", false))
+    );
+    await expect(
+      deniedList.coordinator.requestDeviceList({ query: { limit: "20" } })
+    ).rejects.toMatchObject({ reason: "api_error" });
+    expect(deniedList.coordinator.snapshot()).toMatchObject({
+      access: { state: "stale" },
+      host: { state: "blocked", data: null },
+      targetState: { state: "blocked", data: null },
+      csrf: { phase: "idle", invalidationReason: "access_lost" },
+      writeEligibility: { eligible: false }
+    });
+    deniedList.coordinator.close();
+  });
+
   it("bounds selected-session control reads to the current detail authority and epoch", async () => {
     const harness = createHarness(remoteOrigin);
     await expect(
@@ -1372,7 +1690,15 @@ describe("browser shell connection-state coordinator", () => {
   });
 });
 
-type HttpRouteId = "access" | "host" | "list" | "detail" | "csrf" | "mutation";
+type HttpRouteId =
+  | "access"
+  | "host"
+  | "list"
+  | "detail"
+  | "csrf"
+  | "devices"
+  | "revoke"
+  | "mutation";
 type HttpHandler = (
   path: string,
   init: BrowserHttpRequestInit
@@ -1497,6 +1823,15 @@ function createHarness(
 
 function httpRouteId(path: string, method: "GET" | "POST"): HttpRouteId {
   if (path === "/api/v1/access" && method === "GET") return "access";
+  if (path.startsWith("/api/v1/access/devices?") && method === "GET") return "devices";
+  if (path === "/api/v1/access/devices" && method === "GET") return "devices";
+  if (
+    path.startsWith("/api/v1/access/devices/") &&
+    path.endsWith("/revoke") &&
+    method === "POST"
+  ) {
+    return "revoke";
+  }
   if (path === "/api/v1/host/status" && method === "GET") return "host";
   if (path.startsWith("/api/v1/sessions?") || path === "/api/v1/sessions") return "list";
   if (path === "/api/v1/access/csrf" && method === "POST") return "csrf";
@@ -1846,6 +2181,22 @@ function enqueueRemoteWriterMission(
     jsonResponse(200, sessionList("paired_write", remoteOrigin, sessions))
   );
   harness.http.enqueue("csrf", jsonResponse(200, csrfBootstrap(csrfGeneration)));
+}
+
+function deviceListPage(deviceIds: readonly string[]) {
+  return {
+    devices: deviceIds.map((deviceId) => ({
+      device_id: deviceId,
+      client_label: deviceId === "device_connection_phone" ? "Xiaomi 15 Pro" : "Laptop browser",
+      permission: "write",
+      created_at: timestamp,
+      last_used_at: timestamp,
+      expires_at: "2026-08-22T18:00:00.000Z",
+      revoked_at: null
+    })),
+    next_cursor: null,
+    has_more: false
+  };
 }
 
 function csrfBootstrap(generation: number) {

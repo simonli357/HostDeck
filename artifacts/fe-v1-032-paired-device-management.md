@@ -2,7 +2,7 @@
 
 Date: 2026-07-26
 
-Status: frozen criteria; implementation in progress.
+Status: complete.
 
 ## Scope
 
@@ -102,3 +102,29 @@ Excluded: pairing creation or claim changes, permission editing, device renaming
 - Component tests own the flat rail, bounded row metadata, read-only/locked controls, pagination, live semantics, nested confirmation, focus/dismissal, busy ownership, and self/access-loss transition.
 - Production-shell browser tests own exact request/header/body counts, current-device matching without DOM ids, conflict/uncertain explicit refresh, no mutation replay, external revoke, storage/history/DOM privacy, responsive containment, and effective 200 percent reflow.
 - Deterministic captures and layout measurements own selected Focus Rail fidelity across required states and viewports. Full workspace, package, supply-chain, source/privacy/no-retry, residue, and clean-diff review close `PDM-01` to `PDM-24`.
+
+## Completion Evidence
+
+- Production code adds only the coordinator's exact paired-device list and revoke operations, one strict page-bounded headless controller, one persistent React owner above route and sheet lifetimes, and one flat Focus Rail device section with a nested destructive confirmation. The list is reader-capable and lock-independent; revoke requires a current paired writer plus ready page CSRF and does not use session write eligibility.
+- The controller retains one 20-row page, one opaque input cursor, one list owner, one revoke owner, one confirmation, and one bounded result. It replaces pages, validates continuation and row order through the selected contracts, snapshots exact targets, suppresses late authority owners, and has no direct fetch, timer, retry, polling, storage, URL, service-worker, or diagnostic path.
+- Self-revoke success advances coordinator authority before resolution, aborts reads, invalidates CSRF, closes protected streaming, purges host/target/device data, and renders current revoked truth. Any dispatched self-revoke without correlated success conservatively blocks protected authority. Other-target conflict and uncertain outcomes retain only a stale page until one explicit list proof.
+- Hardening found and fixed a real cross-layer defect: the generic CSRF client treated every terminal `409 operation_conflict` as stale CSRF generation. The selected device-revoke route uses that response for a changed or already-revoked target, so it now preserves current page-CSRF authority and exposes an exact domain conflict while legacy protected routes retain their prior generation behavior. Direct CSRF and coordinator regressions cover both branches.
+- Lifecycle hardening moved the device owner above the Radix sheet and route table. StrictMode replay, sheet close/open, and Mission Control to Session Detail navigation now retain one owner and one list request. Browser fixture hardening also added the exact automatic device-list route to every production-shell fixture instead of accepting incidental `404` behavior.
+- UI hardening made narrow pagination explicit with named grid areas, captured its reachable page-two controls at 320 px, verified the actual outer sheet scroll owner, proved close reachability at every required viewport and 200 percent reflow, captured stacked 320 px confirmation actions, and made the busy close affordance visibly disabled. No route, tab, table, desktop inspector, nested card, second scroll owner, or Signal Ledger structure was added.
+- The focused device/coordinator/component/app-shell set passes 90 tests across five files. Root web validation passes 464 tests across 27 files; the package-local web inventory passes 461 tests across 26 files. The production-shell Chromium aggregate passes all 52 scenarios, and the final dedicated paired-device matrix passes all six scenarios after the last visual hardening.
+- Repository validation passes 2,319 unit tests with 28 intentional skips, 244 contract tests, and 36 integration tests. Root typecheck, lint/exports over 639 files and eight packages, scaffold, planning, and the selected-runtime boundary over 612 production modules and 22 external modules pass. The runtime checker now explicitly owns the two new web exports and test inventory.
+- Vite builds 2,030 modules to 63.35 kB CSS and 847.58 kB JavaScript. The existing main-chunk size advisory remains visible for downstream dashboard/release hardening; this leaf adds no hidden fallback or false readiness around it.
+- Deterministic package build and acceptance pass at 612 sources, 1,231 owned outputs, and 6,445 entries with identity `424cc0d7931ae02f8f089039c945a58a564a8b2a9ef1f5e2bfe2d06216c62426`. Package verification, relocated read-only execution, runtime/config/static/integrity rejection, frozen offline install, and `git diff --check` pass.
+- Production audit reports no known vulnerabilities. The production license inventory remains permissive: MIT, ISC, Apache-2.0, BSD-3-Clause, BlueOak-1.0.0, 0BSD, and permissive alternative expressions. No dependency or lockfile changed.
+- Visual evidence contains 27 deterministic PNGs plus `layout-measurements.json` under `artifacts/fe-v1-032-paired-device-management/`. Every PNG decodes at its named dimensions with nonzero variance; 27 unique measurements report no document or sheet-body horizontal overflow. Manual review covers every state family plus full-size mobile, desktop, short-height, 200 percent reflow, narrow pagination, busy, conflict, and self-revoke captures.
+- Focus Rail fidelity passes. Phone widths use the full-width bottom rail, desktop retains the existing bounded 560 px sheet rather than introducing a desktop application structure, destructive confirmation remains a separate mobile bottom sheet, and all rows stay scan-oriented. Approved drift is limited to typed device state that had no literal raster; the selected component system, density, icons, tones, dividers, and mobile ownership remain intact.
+- Browser requests stay on the deterministic loopback origin. DOM/URL/storage checks, source scans, artifact scans, and manual review find no raw device id, cursor, operation id, CSRF material, private origin, native cause, console path, alternate transport, retry, timer, persistence, or service-worker path. Playwright/Vitest/package processes and port 4175 are absent after validation.
+- Physical Android and complete-dashboard release acceptance remain correctly excluded. They are downstream hardening/release gates and are not replaced by emulated Chromium evidence.
+
+## Criteria Result
+
+- `PDM-01` to `PDM-07`: exact persistent ownership, paired authority admission, bounded page replacement, single-flight races, explicit stale recovery, and no retry/persistence pass.
+- `PDM-08` to `PDM-14`: private-free row truth, reader/writer policy, exact confirmation and operation correlation, and one-row other-device success pass.
+- `PDM-15` to `PDM-18`: immediate self-authority purge, conservative self uncertainty, domain conflict versus unconfirmed outcomes, and external authority-loss cleanup pass.
+- `PDM-19` to `PDM-22`: one flat Focus Rail composition, semantics/focus/busy behavior, responsive and 200 percent containment, and deterministic visual inventory pass.
+- `PDM-23` and `PDM-24`: focused and adjacent regressions, full repository/package/supply-chain/privacy gates, manual source and visual inspection, owner evidence, residue cleanup, and clean commit/push state pass.

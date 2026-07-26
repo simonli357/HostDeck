@@ -861,6 +861,11 @@ function coordinatorHarness(
     bootstrapCsrf: vi.fn(async () => snapshot),
     adoptCsrfBootstrap: vi.fn(() => snapshot),
     requestProtected: vi.fn(),
+    requestDeviceList: vi.fn(async () => ({
+      status: 200,
+      data: { devices: [], next_cursor: null, has_more: false }
+    })),
+    requestDeviceRevoke: vi.fn(),
     close
   } as unknown as BrowserConnectionStateCoordinator;
   return {

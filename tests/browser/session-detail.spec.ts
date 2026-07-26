@@ -62,6 +62,7 @@ test("renders the production structured feed across the approved responsive cont
     expect.stringMatching(
       new RegExp(`^/api/v1/(?:host/status|sessions/${sessionDetailBrowserSessionId})$`, "u")
     ),
+    "/api/v1/access/devices",
     `/api/v1/sessions/${sessionDetailBrowserSessionId}/approvals`,
     "/api/v1/access/csrf",
     `/api/v1/sessions/${sessionDetailBrowserSessionId}/approvals`

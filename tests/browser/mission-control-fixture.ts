@@ -1,6 +1,12 @@
 import type { Page, Request } from "@playwright/test";
 
-export type MissionApiVariant = "mixed" | "long" | "denied" | "unavailable";
+export type MissionApiVariant =
+  | "mixed"
+  | "long"
+  | "read_only"
+  | "locked"
+  | "denied"
+  | "unavailable";
 
 export interface MissionApiController {
   readonly requests: readonly Request[];
@@ -50,7 +56,7 @@ export async function installMissionControlApi(
     if (url.pathname === "/api/v1/access" && request.method() === "GET") {
       await fulfillJson(
         route,
-        variant === "denied" ? deniedAccess() : pairedWriterAccess()
+        variant === "denied" ? deniedAccess() : pairedAccess(variant)
       );
       return;
     }
@@ -58,12 +64,20 @@ export async function installMissionControlApi(
       await route.fulfill({ status: 500, body: "unexpected protected request" });
       return;
     }
+    if (url.pathname === "/api/v1/access/devices" && request.method() === "GET") {
+      await fulfillJson(route, {
+        devices: [],
+        next_cursor: null,
+        has_more: false
+      });
+      return;
+    }
     if (url.pathname === "/api/v1/host/status" && request.method() === "GET") {
-      await fulfillJson(route, readyHostStatus());
+      await fulfillJson(route, readyHostStatus(variant));
       return;
     }
     if (url.pathname === "/api/v1/sessions" && request.method() === "GET") {
-      await fulfillJson(route, sessionList(variant === "long"));
+      await fulfillJson(route, sessionList(variant));
       return;
     }
     if (url.pathname === "/api/v1/access/csrf" && request.method() === "POST") {
@@ -102,19 +116,21 @@ async function fulfillJson(
   });
 }
 
-function pairedWriterAccess() {
+function pairedAccess(variant: MissionApiVariant) {
+  const readOnly = variant === "read_only";
+  const locked = variant === "locked";
   return {
     authentication_state: "paired_device",
     device_id: "device_mission_phone",
-    permission: "write",
+    permission: readOnly ? "read" : "write",
     device_expires_at: "2026-10-22T18:00:00.000Z",
     configured_origin: origin,
     network_mode: "loopback",
     transport: "http",
-    locked: false,
+    locked,
     can_read_sessions: true,
-    can_write_sessions: true,
-    can_lock: true,
+    can_write_sessions: !readOnly && !locked,
+    can_lock: !readOnly,
     can_unlock: false
   };
 }
@@ -136,7 +152,8 @@ function deniedAccess() {
   };
 }
 
-function readyHostStatus() {
+function readyHostStatus(variant: MissionApiVariant) {
+  const readOnly = variant === "read_only";
   return {
     local: {
       generation: 1,
@@ -163,20 +180,20 @@ function readyHostStatus() {
       updated_at: timestamp
     },
     access: {
-      mode: "paired_write",
+      mode: readOnly ? "paired_read" : "paired_write",
       network_mode: "loopback",
       transport: "http",
       write_eligibility: {
         scope: "host_health_and_authority",
-        eligible: true,
-        causes: []
+        eligible: !readOnly,
+        causes: readOnly ? ["read_only_access"] : []
       }
     }
   };
 }
 
-function sessionList(longContent: boolean) {
-  const sessions = longContent
+function sessionList(variant: MissionApiVariant) {
+  const sessions = variant === "long"
     ? [
         session(
           "sess_mission_long_approval",
@@ -237,7 +254,7 @@ function sessionList(longContent: boolean) {
       ];
   return {
     access: {
-      mode: "paired_write",
+      mode: variant === "read_only" ? "paired_read" : "paired_write",
       network_mode: "loopback",
       transport: "http"
     },

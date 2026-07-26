@@ -146,6 +146,14 @@ export async function installSessionDetailApi(
       await route.fulfill({ status: 500, body: "unexpected protected request" });
       return;
     }
+    if (url.pathname === "/api/v1/access/devices" && request.method() === "GET") {
+      await fulfillJson(route, {
+        devices: [],
+        next_cursor: null,
+        has_more: false
+      });
+      return;
+    }
     if (url.pathname === "/api/v1/host/status" && request.method() === "GET") {
       await fulfillJson(route, readyHostStatus(variant));
       return;

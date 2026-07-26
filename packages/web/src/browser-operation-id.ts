@@ -7,7 +7,8 @@ export const browserOperationIdScopes = Object.freeze([
   "model",
   "goal",
   "plan",
-  "approval"
+  "approval",
+  "device_revoke"
 ] as const);
 
 export type BrowserOperationIdScope = (typeof browserOperationIdScopes)[number];

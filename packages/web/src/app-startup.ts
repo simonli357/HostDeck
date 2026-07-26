@@ -73,6 +73,8 @@ const coordinatorKeys = [
   "bootstrapCsrf",
   "adoptCsrfBootstrap",
   "requestProtected",
+  "requestDeviceList",
+  "requestDeviceRevoke",
   "requestSelectedSessionRead",
   "close"
 ] as const;

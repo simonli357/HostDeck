@@ -40,6 +40,10 @@ import {
   type HostAccessRecoveryView,
   projectHostAccessRecovery
 } from "./host-access-recovery-state.js";
+import {
+  PairedDeviceManagementPanel,
+  usePairedDeviceManagementController
+} from "./paired-device-management.js";
 
 export type HostAccessTone = "connected" | "attention" | "danger" | "muted";
 
@@ -93,12 +97,21 @@ export function ConnectedHostAccess({
     recoveryController.snapshot,
     recoveryController.snapshot
   );
+  const deviceController = usePairedDeviceManagementController(coordinator, snapshot);
+  const devices = useSyncExternalStore(
+    deviceController.subscribe,
+    deviceController.snapshot,
+    deviceController.snapshot
+  );
   const nowMs = Reflect.apply(now, undefined, []) as number;
   const content = (
-    <HostAccessPanel
-      projection={projectHostAccess(snapshot, nowMs, recovery)}
-      onRecover={recoveryController.recover}
-    />
+    <>
+      <HostAccessPanel
+        projection={projectHostAccess(snapshot, nowMs, recovery)}
+        onRecover={recoveryController.recover}
+      />
+      <PairedDeviceManagementPanel controller={deviceController} view={devices} />
+    </>
   );
   return children === undefined ? content : children(content);
 }

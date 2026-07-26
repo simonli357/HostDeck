@@ -84,6 +84,7 @@ test("renders the production mixed queue across the approved responsive continuu
     "/api/v1/access",
     expect.stringMatching(/^\/api\/v1\/(?:host\/status|sessions)$/u),
     expect.stringMatching(/^\/api\/v1\/(?:host\/status|sessions)$/u),
+    "/api/v1/access/devices",
     "/api/v1/access/csrf"
   ]);
   await expectCleanBrowser(page, diagnostics);

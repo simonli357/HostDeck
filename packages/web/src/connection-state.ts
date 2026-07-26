@@ -5,12 +5,17 @@ import {
   hostDeckLoopbackOriginSchema,
   remoteExternalOriginSchema,
   type SelectedAccessStateResponse,
+  type SelectedDeviceRevokeResponse,
   type SelectedHostStatusResponse,
   type SelectedProjectionEvent,
   type SelectedSessionDetailResponse,
   type SelectedSessionListResponse,
   type SelectedSessionReadAccess,
   type SelectedSessionReadItem,
+  selectedAccessStateResponseSchema,
+  selectedDeviceRevokeParamsSchema,
+  selectedDeviceRevokeRequestSchema,
+  selectedDeviceRevokeResponseSchema,
   selectedEventPageMaxSize,
   selectedSessionListMaximumActiveSessions,
   sessionIdSchema
@@ -82,6 +87,7 @@ export const browserConnectionResourceStates = Object.freeze([
 
 export const browserConnectionFailureSources = Object.freeze([
   "access",
+  "device_list",
   "host_status",
   "session_list",
   "session_detail",
@@ -204,6 +210,15 @@ export interface BrowserConnectionSelectedSessionReadOptions {
   readonly signal?: AbortSignal;
 }
 
+export interface BrowserConnectionDeviceListOptions {
+  readonly signal?: AbortSignal;
+}
+
+export type BrowserConnectionGenericProtectedRouteId = Exclude<
+  BrowserHttpDeviceCsrfRouteId,
+  "device_revoke"
+>;
+
 export interface CreateBrowserConnectionStateCoordinatorOptions {
   readonly httpClient: BrowserHttpClient;
   readonly sseClient: BrowserSseClient;
@@ -229,11 +244,19 @@ export interface BrowserConnectionStateCoordinator {
   readonly adoptCsrfBootstrap: (
     response: BrowserCsrfBootstrapInput
   ) => BrowserConnectionSnapshot;
-  readonly requestProtected: <RouteId extends BrowserHttpDeviceCsrfRouteId>(
+  readonly requestProtected: <RouteId extends BrowserConnectionGenericProtectedRouteId>(
     routeId: RouteId,
     input: BrowserHttpRouteRequest<RouteId>,
     options?: BrowserCsrfRequestOptions
   ) => Promise<BrowserHttpRouteResponse<RouteId>>;
+  readonly requestDeviceList: (
+    input: BrowserHttpRouteRequest<"device_list">,
+    options?: BrowserConnectionDeviceListOptions
+  ) => Promise<BrowserHttpRouteResponse<"device_list">>;
+  readonly requestDeviceRevoke: (
+    input: BrowserHttpRouteRequest<"device_revoke">,
+    options?: BrowserCsrfRequestOptions
+  ) => Promise<BrowserHttpRouteResponse<"device_revoke">>;
   readonly requestSelectedSessionRead: <RouteId extends BrowserHttpSelectedSessionReadRouteId>(
     routeId: RouteId,
     input: BrowserHttpRouteRequest<RouteId>,
@@ -287,6 +310,11 @@ interface ActiveStream {
   connection: BrowserSseConnection | null;
   active: boolean;
   closeReason: "client_closed" | "route_changed" | "unmounted" | null;
+}
+
+interface PreparedDeviceRevokeInput {
+  readonly deviceId: string;
+  readonly operationId: string;
 }
 
 type QueryResult<Data> =
@@ -466,8 +494,14 @@ export function createBrowserConnectionStateCoordinator(
   };
 
   const makeHttpFailure = (
-    source: Extract<BrowserConnectionFailureSource, "access" | "host_status" | "session_list" | "session_detail">,
-    routeId: Extract<BrowserHttpRouteId, "access_state" | "host_status" | "session_list" | "session_detail">,
+    source: Extract<
+      BrowserConnectionFailureSource,
+      "access" | "device_list" | "host_status" | "session_list" | "session_detail"
+    >,
+    routeId: Extract<
+      BrowserHttpRouteId,
+      "access_state" | "device_list" | "host_status" | "session_list" | "session_detail"
+    >,
     error: unknown,
     failureEpoch: number,
     observedAt: string
@@ -523,7 +557,46 @@ export function createBrowserConnectionStateCoordinator(
     access = retainOrFail(access, failure);
     host = emptyResource("blocked");
     targetState = emptyResource("blocked");
+    stream = target?.kind === "session_detail" ? idleStream(null) : notApplicableStream();
     rememberFailure(failure);
+  };
+
+  const invalidateCurrentAuthority = (
+    failure: BrowserConnectionFailure,
+    reason: BrowserCsrfInvalidationReason
+  ): BrowserConnectionSnapshot => {
+    epoch += 1;
+    abortQueries();
+    markAuthorityLost(failure, reason);
+    return publish();
+  };
+
+  const currentPairedDeviceAccess = (): SelectedAccessStateResponse | null =>
+    access.state === "current" &&
+    access.data !== null &&
+    access.data.authentication_state === "paired_device"
+      ? access.data
+      : null;
+
+  const currentPairedDeviceAuthorityKey = (): string | null => {
+    const currentAccess = currentPairedDeviceAccess();
+    return currentAccess === null ? null : pairedDeviceAuthorityKey(currentAccess);
+  };
+
+  const adoptSelfRevocation = (
+    previousAccess: SelectedAccessStateResponse,
+    observedAt: string
+  ): BrowserConnectionSnapshot => {
+    epoch += 1;
+    abortQueries();
+    invalidateCsrf("device_revoked");
+    closeStream("route_changed");
+    access = currentResource(revokedBrowserAccess(previousAccess), observedAt);
+    host = emptyResource("blocked");
+    targetState = emptyResource("blocked");
+    stream = target?.kind === "session_detail" ? idleStream(null) : notApplicableStream();
+    lastFailure = null;
+    return publish();
   };
 
   const currentWriterAuthorityKey = (): string | null =>
@@ -1115,12 +1188,146 @@ export function createBrowserConnectionStateCoordinator(
         throw error;
       }
     },
-    async requestProtected<RouteId extends BrowserHttpDeviceCsrfRouteId>(
+    async requestDeviceList(
+      requestInput: BrowserHttpRouteRequest<"device_list">,
+      requestOptions?: BrowserConnectionDeviceListOptions
+    ): Promise<BrowserHttpRouteResponse<"device_list">> {
+      if (closed) throw connectionError("closed");
+      const authorityKey = currentPairedDeviceAuthorityKey();
+      if (authorityKey === null) throw connectionError("not_ready");
+      const observedAt = readOperationTime();
+      try {
+        const response = requestOptions?.signal === undefined
+          ? await httpClient.request("device_list", requestInput)
+          : await httpClient.request("device_list", requestInput, {
+              signal: requestOptions.signal
+            });
+        if (closed) throw connectionError("closed");
+        if (currentPairedDeviceAuthorityKey() !== authorityKey) {
+          throw connectionError("not_ready");
+        }
+        return response;
+      } catch (error) {
+        if (closed) throw connectionError("closed");
+        if (currentPairedDeviceAuthorityKey() !== authorityKey) {
+          throw connectionError("not_ready");
+        }
+        const failure = makeHttpFailure(
+          "device_list",
+          "device_list",
+          error,
+          epoch,
+          observedAt
+        );
+        if (isAuthorityFailure(failure)) {
+          invalidateCurrentAuthority(
+            failure,
+            failure.apiError?.code === "invalid_origin"
+              ? "remote_authority_changed"
+              : "access_lost"
+          );
+        } else if (failure.reason !== "caller_aborted") {
+          rememberFailure(failure);
+          publish();
+        }
+        throw error;
+      }
+    },
+    async requestDeviceRevoke(
+      requestInput: BrowserHttpRouteRequest<"device_revoke">,
+      requestOptions?: BrowserCsrfRequestOptions
+    ): Promise<BrowserHttpRouteResponse<"device_revoke">> {
+      if (closed) throw connectionError("closed");
+      const prepared = readDeviceRevokeInput(requestInput);
+      if (prepared === null) throw connectionError("client_contract");
+      const currentAccess = currentPairedDeviceAccess();
+      if (
+        currentAccess === null ||
+        currentAccess.permission !== "write" ||
+        csrf.phase !== "ready"
+      ) {
+        throw connectionError("not_ready");
+      }
+      const authorityKey = pairedDeviceAuthorityKey(currentAccess);
+      const selfTarget = prepared.deviceId === currentAccess.device_id;
+      const observedAt = readOperationTime();
+      let submitted = false;
+      let selfRevocationAdopted = false;
+      try {
+        submitted = true;
+        const response = await csrfClient.request(
+          "device_revoke",
+          requestInput,
+          requestOptions
+        );
+        refreshCsrf();
+        if (closed) throw connectionError("closed");
+        if (currentPairedDeviceAuthorityKey() !== authorityKey) {
+          throw connectionError("not_ready");
+        }
+        const parsedResponse = selectedDeviceRevokeResponseSchema.safeParse(response.data);
+        if (
+          !parsedResponse.success ||
+          !deviceRevokeResponseMatches(
+            parsedResponse.data,
+            prepared,
+            selfTarget
+          )
+        ) {
+          throw connectionError("client_contract");
+        }
+        if (selfTarget) {
+          adoptSelfRevocation(currentAccess, observedAt);
+          selfRevocationAdopted = true;
+        } else {
+          publish();
+        }
+        return response;
+      } catch (error) {
+        if (closed) throw connectionError("closed");
+        refreshCsrf();
+        const authorityStillCurrent = currentPairedDeviceAuthorityKey() === authorityKey;
+        const failure = csrfFailure(error, epoch, observedAt);
+        if (selfTarget && submitted && !selfRevocationAdopted && authorityStillCurrent) {
+          invalidateCurrentAuthority(failure, "device_revoked");
+        } else if (
+          authorityStillCurrent &&
+          error instanceof HostDeckBrowserCsrfError &&
+          error.reason === "authority_rejected"
+        ) {
+          invalidateCurrentAuthority(
+            failure,
+            error.apiError?.code === "invalid_origin"
+              ? "remote_authority_changed"
+              : "access_lost"
+          );
+        } else if (
+          authorityStillCurrent &&
+          error instanceof HostDeckBrowserCsrfError &&
+          error.reason === "stale_generation"
+        ) {
+          closeStream("route_changed");
+          access = retainOrFail(access, failure);
+          host = retainOrFail(host, failure);
+          targetState = retainOrFail(targetState, failure);
+          rememberFailure(failure);
+          publish();
+        } else if (authorityStillCurrent) {
+          rememberFailure(failure);
+          publish();
+        }
+        throw error;
+      }
+    },
+    async requestProtected<RouteId extends BrowserConnectionGenericProtectedRouteId>(
       routeId: RouteId,
       requestInput: BrowserHttpRouteRequest<RouteId>,
       requestOptions?: BrowserCsrfRequestOptions
     ): Promise<BrowserHttpRouteResponse<RouteId>> {
       if (closed) throw connectionError("closed");
+      if ((routeId as BrowserHttpDeviceCsrfRouteId) === "device_revoke") {
+        throw connectionError("client_contract");
+      }
       if (!currentSnapshot.writeEligibility.eligible) {
         throw connectionError("not_ready");
       }
@@ -1303,6 +1510,70 @@ function readSelectedSessionRequestId(candidate: unknown): string | null {
   if (params === null) return null;
   const parsed = sessionIdSchema.safeParse(params.session_id);
   return parsed.success ? parsed.data : null;
+}
+
+function readDeviceRevokeInput(candidate: unknown): PreparedDeviceRevokeInput | null {
+  const input = readExactRecord(candidate, ["params", "body"], ["params", "body"]);
+  if (input === null) return null;
+  const params = selectedDeviceRevokeParamsSchema.safeParse(input.params);
+  const body = selectedDeviceRevokeRequestSchema.safeParse(input.body);
+  if (!params.success || !body.success) return null;
+  return Object.freeze({
+    deviceId: params.data.device_id,
+    operationId: body.data.operation_id
+  });
+}
+
+function deviceRevokeResponseMatches(
+  response: SelectedDeviceRevokeResponse,
+  request: PreparedDeviceRevokeInput,
+  selfTarget: boolean
+): boolean {
+  return (
+    response.operation_id === request.operationId &&
+    response.device_id === request.deviceId &&
+    response.authority_invalidated &&
+    response.self_revoked === selfTarget
+  );
+}
+
+function pairedDeviceAuthorityKey(access: SelectedAccessStateResponse): string {
+  if (
+    access.authentication_state !== "paired_device" ||
+    access.device_id === null ||
+    (access.permission !== "read" && access.permission !== "write")
+  ) {
+    throw connectionError("client_contract");
+  }
+  return JSON.stringify([
+    access.configured_origin,
+    access.network_mode,
+    access.transport,
+    access.device_id,
+    access.permission,
+    access.device_expires_at
+  ]);
+}
+
+function revokedBrowserAccess(
+  previous: SelectedAccessStateResponse
+): SelectedAccessStateResponse {
+  const parsed = selectedAccessStateResponseSchema.safeParse({
+    authentication_state: "revoked_device",
+    device_id: null,
+    permission: null,
+    device_expires_at: null,
+    configured_origin: previous.configured_origin,
+    network_mode: previous.network_mode,
+    transport: previous.transport,
+    locked: previous.locked,
+    can_read_sessions: false,
+    can_write_sessions: false,
+    can_lock: false,
+    can_unlock: false
+  });
+  if (!parsed.success) throw connectionError("client_contract");
+  return Object.freeze(parsed.data);
 }
 
 function hasCurrentSelectedSessionAuthority(
