@@ -114,20 +114,29 @@ import { runCli } from "./shell.js";
 
 const requireRemoteAndroidAcceptance =
   process.env.HOSTDECK_REQUIRE_REMOTE_ANDROID_ACCEPTANCE === "1";
+const requireRecoveryUiAcceptance =
+  process.env.HOSTDECK_REQUIRE_RECOVERY_ANDROID_SMOKE === "1" &&
+  !requireRemoteAndroidAcceptance;
 const requirePromptUiAcceptance =
   process.env.HOSTDECK_REQUIRE_PROMPT_ANDROID_SMOKE === "1" &&
-  !requireRemoteAndroidAcceptance;
+  !requireRemoteAndroidAcceptance &&
+  !requireRecoveryUiAcceptance;
 const requirePairingUiAcceptance =
   process.env.HOSTDECK_REQUIRE_PAIRING_ANDROID_SMOKE === "1" &&
   !requireRemoteAndroidAcceptance &&
+  !requireRecoveryUiAcceptance &&
   !requirePromptUiAcceptance;
 const requireProductionUiAcceptance =
-  requirePairingUiAcceptance || requirePromptUiAcceptance;
+  requirePairingUiAcceptance ||
+  requirePromptUiAcceptance ||
+  requireRecoveryUiAcceptance;
 const requirePhysicalPairing =
   requireProductionUiAcceptance || requireRemoteAndroidAcceptance;
 const describePhysical = requirePhysicalPairing ? describe : describe.skip;
 const overallTimeoutMs = requireRemoteAndroidAcceptance
   ? 20 * 60_000
+  : requireRecoveryUiAcceptance
+    ? 15 * 60_000
   : requirePromptUiAcceptance
     ? 12 * 60_000
     : 10 * 60_000;
@@ -153,6 +162,12 @@ const physicalPromptEvidenceDirectory = join(
   process.cwd(),
   "artifacts",
   "fe-v1-020-selected-session-prompt-composer"
+);
+const physicalRecoveryEvidenceDirectory = join(
+  process.cwd(),
+  "artifacts",
+  "fe-v1-034-remote-connection-recovery",
+  "physical-android"
 );
 const physicalUiSessionId = "sess_physical_pairing_ui";
 const physicalUiSessionName = "physical-pairing-review";
@@ -673,6 +688,11 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         protectedReadRejections: 0,
         protectedReadRequests: 0,
         protectedReadSuccesses: 0,
+        remoteBrowserMutationRequests: 0,
+        remoteBrowserStatusRequests: 0,
+        remoteDisableRequests: 0,
+        remoteEnableRequests: 0,
+        remoteStatusRequests: 0,
         rejectedRevokedCheckpoints: 0,
         revokedCheckpointRequests: 0,
         revokeRequests: 0,
@@ -689,13 +709,16 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         maxActive: 0,
         opened: 0
       };
-      const profileSwitch = requireRemoteAndroidAcceptance
+      const profileSwitch =
+        requireRemoteAndroidAcceptance || requireRecoveryUiAcceptance
         ? requireProfileSwitchInput()
         : null;
       const acceptanceStartedAt =
-        requireRemoteAndroidAcceptance || requirePromptUiAcceptance
-        ? new Date().toISOString()
-        : null;
+        requireRemoteAndroidAcceptance ||
+        requirePromptUiAcceptance ||
+        requireRecoveryUiAcceptance
+          ? new Date().toISOString()
+          : null;
       const screenshotDirectory = join(directory, "device-evidence");
       mkdirSync(screenshotDirectory, { mode: 0o700 });
       let host: HostDeckFastifyLifecycle<PhysicalRuntimeContext> | null = null;
@@ -710,6 +733,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       let environmentFacts: PhysicalEnvironmentFacts | null = null;
       let fullResult: PhysicalSequenceResult | null = null;
       let promptResult: PhysicalPromptSequenceResult | null = null;
+      let recoveryResult: PhysicalRecoverySequenceResult | null = null;
       let promptRuntime: PhysicalPromptRuntime | null = null;
       let promptSubscribers: ReturnType<
         typeof createProjectionSubscriberStreamService
@@ -731,7 +755,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           await enforceUnrelatedAndroidNetwork(initialWifiEnabled);
           environmentFacts = readPhysicalEnvironmentFacts();
         }
-        if (requireRemoteAndroidAcceptance) {
+        if (requireRemoteAndroidAcceptance || requireRecoveryUiAcceptance) {
           requireCondition(
             (await readSelectedSavedProfileId()) ===
               profileSwitch?.dedicatedProfileId,
@@ -1173,7 +1197,30 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         }
 
         requireChromeRunning();
-        if (requirePairingUiAcceptance) {
+        if (requireRecoveryUiAcceptance) {
+          const recoveryUiHost = host;
+          requireCondition(
+            recoveryUiHost !== null && lifecycleManager !== null,
+            "Physical recovery production runtime was unavailable."
+          );
+          recoveryResult = await runProductionRemoteRecoveryUiSequence({
+            db: opened.db,
+            driver: driverRuntime,
+            env,
+            externalOrigin: candidate.externalOrigin,
+            foreignServeBefore: foreignServeBefore as ServeStatusFingerprint,
+            manager: lifecycleManager,
+            profileSwitch: profileSwitch as ProfileSwitchInput,
+            readProxyRejection: () => firstProxyRejection(recoveryUiHost.app),
+            remote: selectedRemote,
+            requestInspection,
+            screenshotDirectory,
+            setSelectedProfile(profile) {
+              selectedProfile = profile;
+            }
+          });
+          assertRecoveryUiRuntimeTruth(opened.db, requestInspection);
+        } else if (requirePairingUiAcceptance) {
           const pairingUiHost = host;
           requireCondition(
             pairingUiHost !== null,
@@ -1226,7 +1273,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         assertPairingAudit(opened.db, {
           successfulCsrfBootstrapCount: requirePairingUiAcceptance
             ? 3
-            : requirePromptUiAcceptance
+            : requirePromptUiAcceptance || requireRecoveryUiAcceptance
               ? 2
               : 1,
           deviceRevokeCount: requireProductionUiAcceptance ? 1 : 0
@@ -1300,7 +1347,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           candidate.expectedProfileKey,
           fallbackCleanup.expectedServe
         );
-        if (requireRemoteAndroidAcceptance) {
+        if (requireRemoteAndroidAcceptance || requireRecoveryUiAcceptance) {
           await switchSavedProfile(profileSwitch?.awayProfileId as string);
           selectedProfile = "away";
           requireMatchingServeFingerprint(
@@ -1314,10 +1361,20 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             candidate.expectedProfileKey,
             fallbackCleanup.expectedServe
           );
-          await capturePhysicalScreenshot(
-            join(screenshotDirectory, "04-revoked-cleaned.png")
-          );
-          assertFullPhysicalAudit(opened.db);
+          if (requireRemoteAndroidAcceptance) {
+            await capturePhysicalScreenshot(
+              join(screenshotDirectory, "04-revoked-cleaned.png")
+            );
+            assertFullPhysicalAudit(opened.db);
+          } else {
+            requireCondition(
+              requestInspection.remoteEnableRequests === 1 &&
+                requestInspection.remoteDisableRequests === 1 &&
+                requestInspection.remoteBrowserMutationRequests === 0,
+              "Physical recovery cleanup observed an unexpected remote mutation path."
+            );
+            assertRecoveryPhysicalAudit(opened.db);
+          }
           assertSecretsAbsentFromDatabase(dbPath, secrets.values());
         }
         fallbackCleanup = null;
@@ -1348,6 +1405,9 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         );
         const screenshotBytes = requireRemoteAndroidAcceptance
           ? readPhysicalScreenshots(screenshotDirectory)
+          : null;
+        const recoveryScreenshotBytes = requireRecoveryUiAcceptance
+          ? readPhysicalRecoveryScreenshots(screenshotDirectory)
           : null;
         await host.close();
         host = null;
@@ -1381,6 +1441,27 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             sequence: fullResult as PhysicalSequenceResult,
             startedAt: acceptanceStartedAt as string
           });
+        } else if (requireRecoveryUiAcceptance) {
+          await restoreAndroidWifi(initialWifiEnabled as boolean);
+          initialWifiEnabled = null;
+          await restoreAndroidStayAwake(
+            initialStayAwakeSetting as number
+          );
+          initialStayAwakeSetting = null;
+          requireNoAdbApplicationTunnels();
+          publishPhysicalRecoveryEvidence({
+            completedAt: new Date().toISOString(),
+            environment: environmentFacts as PhysicalEnvironmentFacts,
+            foreignServeBytes: (
+              foreignServeBefore as ServeStatusFingerprint
+            ).bytes,
+            managerAttempts: requireLifecycleManager(lifecycleManager)
+              .snapshot().command_attempts,
+            screenshots:
+              recoveryScreenshotBytes as readonly PhysicalScreenshot[],
+            sequence: recoveryResult as PhysicalRecoverySequenceResult,
+            startedAt: acceptanceStartedAt as string
+          });
         } else if (requirePromptUiAcceptance) {
           await restoreAndroidWifi(initialWifiEnabled as boolean);
           initialWifiEnabled = null;
@@ -1404,7 +1485,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           // A disconnected phone is reported by the main physical assertion.
         }
         if (display !== null) await closeQrDisplay(display).catch(() => undefined);
-        if (requireRemoteAndroidAcceptance && profileSwitch !== null) {
+        if (
+          (requireRemoteAndroidAcceptance || requireRecoveryUiAcceptance) &&
+          profileSwitch !== null
+        ) {
           try {
             if (
               (await readSelectedSavedProfileId()) !==
@@ -1485,6 +1569,11 @@ interface RequestInspection {
   protectedReadRejections: number;
   protectedReadRequests: number;
   protectedReadSuccesses: number;
+  remoteBrowserMutationRequests: number;
+  remoteBrowserStatusRequests: number;
+  remoteDisableRequests: number;
+  remoteEnableRequests: number;
+  remoteStatusRequests: number;
   rejectedRevokedCheckpoints: number;
   revokedCheckpointRequests: number;
   revokeRequests: number;
@@ -1596,6 +1685,17 @@ interface PhysicalSequenceResult {
   readonly selfRevoked: true;
   readonly sseEvents: number;
   readonly sseHeartbeats: number;
+}
+
+interface PhysicalRecoverySequenceResult {
+  readonly browserMutationRequests: 0;
+  readonly checkedReadyVisible: true;
+  readonly claimRequests: 1;
+  readonly genericBrowserFailureVisible: true;
+  readonly managerAttemptsBeforeDisable: 1;
+  readonly managerAttemptsDuringSwitch: 0;
+  readonly profileReturnRecovered: true;
+  readonly remoteBrowserStatusRequests: 2;
 }
 
 type PhysicalPromptTurnPort = CodexPromptControlServiceOptions["turns"];
@@ -2468,6 +2568,7 @@ function installRequestInspection(
 ): void {
   app.addHook("onRequest", async (request) => {
     const referrer = request.headers.referer;
+    const localAdmin = request.headers["x-hostdeck-local-admin"];
     const observed = `${request.url}\n${typeof referrer === "string" ? referrer : ""}`;
     if (secrets.values().some((secret) => observed.includes(secret))) {
       inspection.fragmentLeaks += 1;
@@ -2485,6 +2586,18 @@ function installRequestInspection(
     }
     if (request.url === "/api/v1/host/status") {
       inspection.hostStatusRequests += 1;
+    }
+    if (request.url === "/api/v1/remote/status") {
+      inspection.remoteStatusRequests += 1;
+      if (localAdmin === undefined) inspection.remoteBrowserStatusRequests += 1;
+    }
+    if (request.url === "/api/v1/remote/enable") {
+      inspection.remoteEnableRequests += 1;
+      if (localAdmin === undefined) inspection.remoteBrowserMutationRequests += 1;
+    }
+    if (request.url === "/api/v1/remote/disable") {
+      inspection.remoteDisableRequests += 1;
+      if (localAdmin === undefined) inspection.remoteBrowserMutationRequests += 1;
     }
     if (
       request.url === "/api/v1/sessions" ||
@@ -3864,8 +3977,8 @@ async function runProductionPairingUiSequence(
 async function openProductionMissionControl(
   input: ProductionUiEntryInput,
   screenshots: Readonly<{
-    readonly missionControl: string;
-    readonly paired: string;
+    readonly missionControl: string | null;
+    readonly paired: string | null;
   }>
 ): Promise<void> {
   const paired = await waitForAndroidUiNode(
@@ -3888,9 +4001,11 @@ async function openProductionMissionControl(
     ),
     "Production pairing confirmation disclosed protected state or repeated startup work."
   );
-  await capturePhysicalScreenshot(
-    join(input.screenshotDirectory, screenshots.paired)
-  );
+  if (screenshots.paired !== null) {
+    await capturePhysicalScreenshot(
+      join(input.screenshotDirectory, screenshots.paired)
+    );
+  }
   await continueFromPairingUi(continueButton, input.requestInspection);
 
   try {
@@ -3931,9 +4046,272 @@ async function openProductionMissionControl(
       )
     );
   }
-  await capturePhysicalScreenshot(
-    join(input.screenshotDirectory, screenshots.missionControl)
+  if (screenshots.missionControl !== null) {
+    await capturePhysicalScreenshot(
+      join(input.screenshotDirectory, screenshots.missionControl)
+    );
+  }
+}
+
+async function runProductionRemoteRecoveryUiSequence(
+  input: ProductionUiEntryInput & {
+    readonly env: Readonly<Record<string, string>>;
+    readonly foreignServeBefore: ServeStatusFingerprint;
+    readonly manager: TailscaleServeManager;
+    readonly profileSwitch: ProfileSwitchInput;
+    readonly remote: HostDeckRemoteIngressLifecycle;
+    readonly setSelectedProfile: (profile: "away" | "dedicated") => void;
+  }
+): Promise<PhysicalRecoverySequenceResult> {
+  await openProductionMissionControl(input, {
+    missionControl: null,
+    paired: null
+  });
+  const managerAttemptsBeforeSwitch = input.manager.snapshot().command_attempts;
+  requireCondition(
+    managerAttemptsBeforeSwitch === 1,
+    "Physical recovery expected exactly one explicit local Serve enable."
   );
+
+  await openProductionHostAccessSheet();
+  await waitForAndroidUiNode(
+    "text",
+    "Remote access ready",
+    30_000,
+    "Production recovery UI did not show current ready truth."
+  );
+  await runOneProductionRemoteCheck(input.requestInspection);
+  requireCondition(
+    input.requestInspection.remoteBrowserStatusRequests === 1 &&
+      input.requestInspection.remoteBrowserMutationRequests === 0 &&
+      input.manager.snapshot().command_attempts === managerAttemptsBeforeSwitch,
+    "The first production recovery check mutated external state or used the wrong route."
+  );
+  await closeProductionHostAccessSheet();
+  await waitForAndroidUiNode(
+    "text",
+    "Mission Control",
+    30_000,
+    "Production recovery ready capture lost Mission Control."
+  );
+  await capturePrivateFreeProductionScreenshot(
+    join(input.screenshotDirectory, "fe034-01-ready.png"),
+    input.externalOrigin
+  );
+
+  await switchSavedProfile(input.profileSwitch.awayProfileId);
+  input.setSelectedProfile("away");
+  await waitFor(
+    () =>
+      input.remote.readAdmission().admission === "closed" &&
+      input.remote.snapshot().active_control_operations === 0,
+    15_000,
+    "Production recovery profile-away did not close remote admission."
+  );
+  assertRemoteCliResult(
+    await runRemoteStatusWhenLifecycleIdle(input.remote, input.env),
+    "unavailable"
+  );
+  requireMatchingServeFingerprint(
+    input.foreignServeBefore,
+    await readServeStatusFingerprint()
+  );
+  requireCondition(
+    input.manager.snapshot().command_attempts === managerAttemptsBeforeSwitch,
+    "Profile-away triggered an automatic Serve mutation."
+  );
+
+  const refreshAway = await waitForAndroidUiNode(
+    "description",
+    "Refresh sessions",
+    30_000,
+    "Production recovery refresh control was unavailable before profile-away observation."
+  );
+  tapAndroidUiNode(refreshAway);
+  await waitForAndroidUiNode(
+    "text",
+    "HostDeck is unreachable",
+    45_000,
+    "Production recovery did not render generic loaded-browser failure."
+  );
+  await capturePrivateFreeProductionScreenshot(
+    join(input.screenshotDirectory, "fe034-02-profile-away.png"),
+    input.externalOrigin
+  );
+
+  await switchSavedProfile(input.profileSwitch.dedicatedProfileId);
+  input.setSelectedProfile("dedicated");
+  await waitFor(
+    () =>
+      input.remote.readAdmission().admission === "open" &&
+      input.remote.snapshot().active_control_operations === 0,
+    15_000,
+    "Production recovery profile return did not reopen by observation."
+  );
+  const requestsBeforeRecovery = Object.freeze({
+    access: input.requestInspection.accessRequests,
+    host: input.requestInspection.hostStatusRequests,
+    sessions: input.requestInspection.sessionListRequests
+  });
+  const refreshRecovered = await waitForAndroidUiNode(
+    "description",
+    "Refresh sessions",
+    30_000,
+    "Production recovery refresh control was unavailable after profile return."
+  );
+  tapAndroidUiNode(refreshRecovered);
+  await waitFor(
+    () =>
+      input.requestInspection.accessRequests > requestsBeforeRecovery.access &&
+      input.requestInspection.hostStatusRequests > requestsBeforeRecovery.host &&
+      input.requestInspection.sessionListRequests > requestsBeforeRecovery.sessions,
+    45_000,
+    "Production recovery did not refresh lifecycle-owned host truth after profile return."
+  );
+  await waitForAndroidUiNode(
+    "text",
+    physicalUiSessionName,
+    30_000,
+    "Production recovery did not restore Mission Control without re-pairing."
+  );
+  await openProductionHostAccessSheet();
+  await waitForAndroidUiNode(
+    "text",
+    "Remote access ready",
+    30_000,
+    "Production recovery did not restore current detailed ready truth."
+  );
+  await runOneProductionRemoteCheck(input.requestInspection);
+  await closeProductionHostAccessSheet();
+  await capturePrivateFreeProductionScreenshot(
+    join(input.screenshotDirectory, "fe034-03-recovered.png"),
+    input.externalOrigin
+  );
+
+  requireCondition(
+    input.requestInspection.claimRequests === 1 &&
+      Number(input.requestInspection.remoteBrowserStatusRequests) === 2 &&
+      input.requestInspection.remoteBrowserMutationRequests === 0 &&
+      input.manager.snapshot().command_attempts === managerAttemptsBeforeSwitch &&
+      input.readProxyRejection() === null,
+    "Production recovery repeated pairing, mutated external state, or lost Serve trust."
+  );
+  await cleanProductionUiAuthority(input);
+  return Object.freeze({
+    browserMutationRequests: 0,
+    checkedReadyVisible: true,
+    claimRequests: 1,
+    genericBrowserFailureVisible: true,
+    managerAttemptsBeforeDisable: 1,
+    managerAttemptsDuringSwitch: 0,
+    profileReturnRecovered: true,
+    remoteBrowserStatusRequests: 2
+  });
+}
+
+async function openProductionHostAccessSheet(): Promise<void> {
+  const trigger = await waitForAndroidUiNode(
+    "description",
+    "Open Host and access",
+    30_000,
+    "Production Host and access trigger was unavailable on Android."
+  );
+  await performVerifiedAndroidTap({
+    initialTrigger: trigger,
+    triggerField: "description",
+    triggerValue: "Open Host and access",
+    completed: async () =>
+      (await readAndroidUiNodes()).some(
+        (node) => node.description === "Close Host and access"
+      ),
+    completionFailureMessage:
+      "Production Host and access sheet did not open on Android.",
+    reacquireFailureMessage:
+      "Production Host and access trigger could not be reacquired on Android.",
+    terminalFailureMessage:
+      "Production Host and access sheet remained closed after two bounded taps."
+  });
+}
+
+async function closeProductionHostAccessSheet(): Promise<void> {
+  const close = await waitForAndroidUiNode(
+    "description",
+    "Close Host and access",
+    30_000,
+    "Production Host and access close control was unavailable on Android."
+  );
+  await performVerifiedAndroidTap({
+    initialTrigger: close,
+    triggerField: "description",
+    triggerValue: "Close Host and access",
+    completed: async () =>
+      (await readAndroidUiNodes()).every(
+        (node) => node.description !== "Close Host and access"
+      ),
+    completionFailureMessage:
+      "Production Host and access sheet did not close on Android.",
+    reacquireFailureMessage:
+      "Production Host and access close control could not be reacquired on Android.",
+    terminalFailureMessage:
+      "Production Host and access sheet remained open after two bounded taps."
+  });
+}
+
+async function runOneProductionRemoteCheck(
+  inspection: RequestInspection
+): Promise<void> {
+  const requestsBefore = Object.freeze({
+    host: inspection.hostStatusRequests,
+    remote: inspection.remoteBrowserStatusRequests
+  });
+  const check = await waitForAndroidUiNode(
+    "text",
+    "Check again",
+    30_000,
+    "Production remote check action was unavailable on Android."
+  );
+  await performVerifiedAndroidTap({
+    initialTrigger: check,
+    triggerField: "text",
+    triggerValue: "Check again",
+    completed: () =>
+      inspection.remoteBrowserStatusRequests === requestsBefore.remote + 1 &&
+      inspection.hostStatusRequests > requestsBefore.host,
+    completionFailureMessage:
+      "Production remote check did not complete its exact status-then-refresh sequence.",
+    reacquireFailureMessage:
+      "Production remote check action could not be reacquired on Android.",
+    terminalFailureMessage:
+      "Production remote check did not settle after two bounded taps."
+  });
+  await waitForAndroidUiNode(
+    "text",
+    "Remote access ready",
+    30_000,
+    "Production remote check did not return to current ready truth."
+  );
+}
+
+async function capturePrivateFreeProductionScreenshot(
+  path: string,
+  externalOrigin: string
+): Promise<void> {
+  const origin = new URL(externalOrigin);
+  const nodes = await readAndroidUiNodes();
+  requireCondition(
+    nodes.every((node) =>
+      [node.text, node.description].every(
+        (value) =>
+          !value.includes(origin.origin) &&
+          !value.includes(origin.hostname) &&
+          [...deviceForbiddenValues].every(
+            (privateValue) => !value.includes(privateValue)
+          )
+      )
+    ),
+    "Physical production screenshot surface retained private browser material."
+  );
+  await capturePhysicalScreenshot(path);
 }
 
 async function runProductionPromptUiSequence(
@@ -4881,6 +5259,62 @@ function assertPairingUiRuntimeTruth(
   );
 }
 
+function assertRecoveryUiRuntimeTruth(
+  db: ReturnType<typeof openMigratedDatabase>["db"],
+  inspection: RequestInspection
+): void {
+  const devices = countRows(db, "auth_devices");
+  const usedCodes = countMatchingRows(
+    db,
+    "pairing_codes",
+    "used_at IS NOT NULL"
+  );
+  const revokedDevices = countMatchingRows(
+    db,
+    "auth_devices",
+    "revoked_at IS NOT NULL"
+  );
+  requireCondition(
+    devices === 1 &&
+      usedCodes === 1 &&
+      revokedDevices === 1 &&
+      inspection.claimRequests === 1 &&
+      inspection.csrfRequests === 3 &&
+      inspection.noReferrerApiRequests === 4 &&
+      inspection.accessRequests >= 4 &&
+      inspection.accessRequests <= 7 &&
+      inspection.hostStatusRequests >= 4 &&
+      inspection.hostStatusRequests <= 6 &&
+      inspection.sessionListRequests >= 4 &&
+      inspection.sessionListRequests <= 6 &&
+      inspection.remoteStatusRequests === 3 &&
+      inspection.remoteBrowserStatusRequests === 2 &&
+      inspection.remoteEnableRequests === 1 &&
+      inspection.remoteDisableRequests === 0 &&
+      inspection.remoteBrowserMutationRequests === 0 &&
+      inspection.protectedReadRequests === 2 &&
+      inspection.protectedReadSuccesses === 1 &&
+      inspection.protectedReadRejections === 1 &&
+      inspection.revokeRequests === 1 &&
+      inspection.revokedCheckpointRequests === 1 &&
+      inspection.rejectedRevokedCheckpoints === 1 &&
+      inspection.fragmentLeaks === 0 &&
+      inspection.hardenedCookieObserved &&
+      inspection.deletionCookieObserved,
+    "Physical recovery production runtime truth was inconsistent " +
+      `(devices=${devices};used=${usedCodes};revoked=${revokedDevices};` +
+      `claims=${inspection.claimRequests};csrf=${inspection.csrfRequests};` +
+      `access=${inspection.accessRequests};host=${inspection.hostStatusRequests};` +
+      `sessions=${inspection.sessionListRequests};` +
+      `remote=${inspection.remoteStatusRequests}/` +
+      `${inspection.remoteBrowserStatusRequests}/` +
+      `${inspection.remoteBrowserMutationRequests};` +
+      `mutation=${inspection.remoteEnableRequests}/` +
+      `${inspection.remoteDisableRequests};` +
+      `fragment_leaks=${inspection.fragmentLeaks}).`
+  );
+}
+
 function assertPromptUiRuntimeTruth(
   db: ReturnType<typeof openMigratedDatabase>["db"],
   inspection: RequestInspection,
@@ -5113,6 +5547,36 @@ function assertFullPhysicalAudit(
   );
 }
 
+function assertRecoveryPhysicalAudit(
+  db: ReturnType<typeof openMigratedDatabase>["db"]
+): void {
+  const rows = db
+    .prepare(
+      "SELECT action, phase, outcome, COUNT(*) AS count " +
+        "FROM selected_audit_events " +
+        "GROUP BY action, phase, outcome ORDER BY action, phase, outcome"
+    )
+    .all();
+  requireCondition(
+    JSON.stringify(rows) ===
+      JSON.stringify([
+        { action: "csrf_bootstrap", phase: "accepted", outcome: "accepted", count: 2 },
+        { action: "csrf_bootstrap", phase: "terminal", outcome: "succeeded", count: 2 },
+        { action: "device_revoke", phase: "accepted", outcome: "accepted", count: 1 },
+        { action: "device_revoke", phase: "terminal", outcome: "succeeded", count: 1 },
+        { action: "pair_claim", phase: "accepted", outcome: "accepted", count: 1 },
+        { action: "pair_claim", phase: "terminal", outcome: "succeeded", count: 1 },
+        { action: "pair_request", phase: "accepted", outcome: "accepted", count: 1 },
+        { action: "pair_request", phase: "terminal", outcome: "succeeded", count: 1 },
+        { action: "remote_disable", phase: "accepted", outcome: "accepted", count: 1 },
+        { action: "remote_disable", phase: "terminal", outcome: "succeeded", count: 1 },
+        { action: "remote_enable", phase: "accepted", outcome: "accepted", count: 1 },
+        { action: "remote_enable", phase: "terminal", outcome: "succeeded", count: 1 }
+      ]),
+    "Physical recovery audit trail was invalid."
+  );
+}
+
 function readPhysicalScreenshots(
   directory: string
 ): readonly PhysicalScreenshot[] {
@@ -5137,6 +5601,39 @@ function readPhysicalScreenshots(
             Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
           ),
         "Physical screenshot failed publication validation."
+      );
+      return Object.freeze({
+        bytes,
+        name,
+        sha256: createHash("sha256").update(bytes).digest("hex")
+      });
+    })
+  );
+}
+
+function readPhysicalRecoveryScreenshots(
+  directory: string
+): readonly PhysicalScreenshot[] {
+  const expected = [
+    "fe034-01-ready.png",
+    "fe034-02-profile-away.png",
+    "fe034-03-recovered.png"
+  ] as const;
+  requireCondition(
+    JSON.stringify(readdirSync(directory).sort()) ===
+      JSON.stringify([...expected]),
+    "Physical recovery screenshot inventory was incomplete."
+  );
+  return Object.freeze(
+    expected.map((name) => {
+      const bytes = readFileSync(join(directory, name));
+      requireCondition(
+        bytes.length >= 1_024 &&
+          bytes.length <= 4 * 1024 * 1024 &&
+          bytes.subarray(0, 8).equals(
+            Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+          ),
+        "Physical recovery screenshot failed publication validation."
       );
       return Object.freeze({
         bytes,
@@ -5288,6 +5785,154 @@ function publishPhysicalEvidence(input: {
   }
 }
 
+function publishPhysicalRecoveryEvidence(input: {
+  readonly completedAt: string;
+  readonly environment: PhysicalEnvironmentFacts;
+  readonly foreignServeBytes: number;
+  readonly managerAttempts: number;
+  readonly screenshots: readonly PhysicalScreenshot[];
+  readonly sequence: PhysicalRecoverySequenceResult;
+  readonly startedAt: string;
+}): void {
+  requireCondition(
+    input.managerAttempts === 2 &&
+      input.sequence.managerAttemptsBeforeDisable === 1 &&
+      input.sequence.managerAttemptsDuringSwitch === 0 &&
+      input.sequence.browserMutationRequests === 0 &&
+      input.sequence.remoteBrowserStatusRequests === 2 &&
+      input.sequence.claimRequests === 1 &&
+      input.screenshots.length === 3 &&
+      Number.isSafeInteger(input.foreignServeBytes) &&
+      input.foreignServeBytes >= 2 &&
+      input.foreignServeBytes <= 64 * 1024,
+    "Physical recovery evidence inputs were incomplete."
+  );
+  const evidence = Object.freeze({
+    schema_version: 1,
+    task: "FE-V1-034",
+    commit: input.environment.commit,
+    command: "pnpm smoke:recovery-android",
+    run: Object.freeze({
+      completed_at: input.completedAt,
+      retry_count: 0,
+      started_at: input.startedAt
+    }),
+    environment: Object.freeze({
+      android_api: input.environment.android_api,
+      android_model: input.environment.android_model,
+      android_release: input.environment.android_release,
+      chrome_version: input.environment.chrome_version,
+      host_os: input.environment.host_os,
+      node_version: input.environment.node_version,
+      tailscale_version: input.environment.tailscale_version
+    }),
+    network: Object.freeze({
+      adb_app_tunnel_count: 0,
+      adb_device_count: 1,
+      cellular_active: true,
+      custom_ca_used: false,
+      private_serve_https: true,
+      qr_scan_count: 0,
+      tailscale_vpn_active: true,
+      usb_used_for_bootstrap_and_test_driver_only: true,
+      wifi_disabled_during_requests: true
+    }),
+    lifecycle: Object.freeze({
+      browser_mutation_requests: 0,
+      listener: "ipv4_loopback_http",
+      manager_attempts: input.managerAttempts,
+      manager_attempts_during_saved_profile_switch: 0,
+      private_serve_https: true,
+      production_browser_build: true,
+      recovery: "observation_only"
+    }),
+    pairing: Object.freeze({
+      automated_one_time_link: true,
+      claim_requests: 1,
+      fragment_scrubbed_before_api: true,
+      repaired_without_repairing: true
+    }),
+    sequence: input.sequence,
+    foreign_serve: Object.freeze({
+      byte_count: input.foreignServeBytes,
+      byte_identical: true
+    }),
+    screenshots: Object.freeze(
+      input.screenshots.map((screenshot) =>
+        Object.freeze({
+          byte_count: screenshot.bytes.length,
+          file: screenshot.name,
+          sha256: screenshot.sha256
+        })
+      )
+    ),
+    privacy: Object.freeze({
+      account_identity_retained: false,
+      address_or_origin_retained: false,
+      pairing_material_retained: false,
+      raw_command_output_retained: false
+    }),
+    cleanup: Object.freeze({
+      adb_forwards: 0,
+      adb_reverses: 0,
+      browser_closed: true,
+      database_open: false,
+      dedicated_serve_absent: true,
+      foreign_serve_unchanged: true,
+      listener_open: false,
+      saved_profile_restored: true,
+      temporary_state_present: false,
+      wifi_restored: true
+    })
+  });
+  const serialized = `${JSON.stringify(evidence, null, 2)}\n`;
+  validatePhysicalRecoveryEvidence(evidence, serialized);
+
+  const staging = mkdtempSync(
+    join(tmpdir(), "hostdeck-recovery-android-evidence-")
+  );
+  let createdFinal = false;
+  try {
+    const evidencePath = join(staging, "evidence.json");
+    writeFileSync(evidencePath, serialized, { flag: "wx", mode: 0o600 });
+    for (const screenshot of input.screenshots) {
+      writeFileSync(join(staging, screenshot.name), screenshot.bytes, {
+        flag: "wx",
+        mode: 0o600
+      });
+    }
+    requireCondition(
+      readFileSync(evidencePath, "utf8") === serialized,
+      "Physical recovery evidence changed during private staging."
+    );
+    mkdirSync(physicalRecoveryEvidenceDirectory, { mode: 0o755 });
+    createdFinal = true;
+    copyFileSync(
+      evidencePath,
+      join(physicalRecoveryEvidenceDirectory, "evidence.json")
+    );
+    chmodSync(
+      join(physicalRecoveryEvidenceDirectory, "evidence.json"),
+      0o644
+    );
+    for (const screenshot of input.screenshots) {
+      const target = join(physicalRecoveryEvidenceDirectory, screenshot.name);
+      copyFileSync(join(staging, screenshot.name), target);
+      chmodSync(target, 0o644);
+    }
+  } catch (error) {
+    if (createdFinal) {
+      rmSync(physicalRecoveryEvidenceDirectory, {
+        force: true,
+        recursive: true
+      });
+    }
+    throw error;
+  } finally {
+    rmSync(staging, { force: true, recursive: true });
+  }
+}
+
 function publishPhysicalPromptEvidence(input: {
   readonly completedAt: string;
   readonly environment: PhysicalEnvironmentFacts;
@@ -5419,6 +6064,44 @@ function publishPhysicalPromptEvidence(input: {
   } finally {
     rmSync(staging, { force: true, recursive: true });
   }
+}
+
+function validatePhysicalRecoveryEvidence(
+  evidence: Readonly<Record<string, unknown>>,
+  serialized: string
+): void {
+  requireCondition(
+    Object.keys(evidence).sort().join(",") ===
+      [
+        "cleanup",
+        "command",
+        "commit",
+        "environment",
+        "foreign_serve",
+        "lifecycle",
+        "network",
+        "pairing",
+        "privacy",
+        "run",
+        "schema_version",
+        "screenshots",
+        "sequence",
+        "task"
+      ].join(",") &&
+      Buffer.byteLength(serialized, "utf8") <= 32 * 1024 &&
+      !/https?:\/\//iu.test(serialized) &&
+      !/\.ts\.net/iu.test(serialized) &&
+      !/\b(?:10|100|127|169\.254|172|192)\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/u.test(
+        serialized
+      ) &&
+      !/\b(?:serial|profile[_ -]?id|device[_ -]?id|node[_ -]?key|raw[_ -]?output)\b/iu.test(
+        serialized
+      ) &&
+      [...deviceForbiddenValues].every(
+        (value) => !serialized.includes(value)
+      ),
+    "Physical recovery evidence failed its privacy or schema validator."
+  );
 }
 
 function validatePhysicalEvidence(

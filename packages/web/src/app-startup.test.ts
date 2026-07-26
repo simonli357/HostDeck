@@ -163,6 +163,20 @@ describe("browser app startup controller", () => {
     await settle();
     expect(invalidCoordinator.snapshot().phase).toBe("startup_failed");
 
+    const missingRemoteStatus = createBrowserAppStartupController({
+      bootstrapPairing: async () => Object.freeze({ state: "no_fragment" }),
+      createCoordinator: () => {
+        const candidate = {
+          ...coordinatorPort(vi.fn(), vi.fn())
+        } as Record<string, unknown>;
+        Reflect.deleteProperty(candidate, "requestRemoteStatus");
+        return Object.freeze(candidate) as never;
+      },
+      reload: vi.fn()
+    });
+    await settle();
+    expect(missingRemoteStatus.snapshot().phase).toBe("startup_failed");
+
     const harness = createHarness(pairedResult);
     harness.adopt.mockImplementation(() => {
       throw new Error(csrfToken);
@@ -247,6 +261,7 @@ function coordinatorPort(
     adoptCsrfBootstrap,
     requestProtected: vi.fn(),
     requestDeviceList: vi.fn(),
+    requestRemoteStatus: vi.fn(),
     requestDeviceRevoke: vi.fn(),
     requestHostLock: vi.fn(),
     requestSelectedSessionRead: vi.fn(),

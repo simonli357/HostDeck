@@ -185,6 +185,62 @@ describe("HostDeck phone shell", () => {
     expect(harness.bootstrapCsrf).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps one remote-check owner across sheet and route lifetimes", async () => {
+    const user = userEvent.setup();
+    const harness = createRemoteRecoveryCoordinatorHarness();
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={[missionControlPath]}>
+          <HostDeckRoutes
+            coordinator={harness.coordinator}
+            outlets={{
+              missionControl: (
+                <section>
+                  <h1>Mission Control remote fixture</h1>
+                  <SessionRouteLink sessionId={sessionId}>Open remote session</SessionRouteLink>
+                </section>
+              ),
+              sessionDetail: () => <h1>Session Detail remote fixture</h1>
+            }}
+          />
+        </MemoryRouter>
+      </StrictMode>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Open Host and access" }));
+    await user.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() => expect(harness.requestRemoteStatus).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Check remote access" })).toHaveProperty(
+      "disabled",
+      true
+    );
+
+    await user.click(screen.getByRole("button", { name: "Close Host and access" }));
+    await user.click(screen.getByRole("link", { name: "Open remote session" }));
+    expect(await screen.findByText("Session Detail remote fixture")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Open Host and access" }));
+    expect(screen.getByRole("heading", { name: "Checking remote access" })).toBeTruthy();
+    expect(harness.requestRemoteStatus).toHaveBeenCalledTimes(1);
+
+    await act(async () => harness.completeStatus());
+    await waitFor(() => expect(harness.refresh).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("heading", { name: "Checking remote access" })).toBeTruthy();
+    expect(harness.requestRemoteStatus).toHaveBeenCalledTimes(1);
+
+    await act(async () => harness.completeRefresh());
+    expect(await screen.findByRole("heading", { name: "HostDeck profile is not active" }))
+      .toBeTruthy();
+    expect(harness.requestRemoteStatus).toHaveBeenCalledTimes(1);
+    expect(harness.refresh).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: "Close Host and access" }));
+    await user.click(screen.getByRole("button", { name: "Back to Mission Control" }));
+    await user.click(screen.getByRole("button", { name: "Open Host and access" }));
+    expect(screen.getByRole("heading", { name: "HostDeck profile is not active" })).toBeTruthy();
+    expect(harness.requestRemoteStatus).toHaveBeenCalledTimes(1);
+    expect(harness.refresh).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps one device-list owner across Host and access sheet dismissal", async () => {
     const user = userEvent.setup();
     const harness = createDeviceCoordinatorHarness();
@@ -292,6 +348,7 @@ describe("HostDeck phone shell", () => {
       adoptCsrfBootstrap,
       requestProtected: vi.fn(),
       requestDeviceList: vi.fn(),
+      requestRemoteStatus: vi.fn(),
       requestDeviceRevoke: vi.fn(),
       requestHostLock: vi.fn(),
       requestSelectedSessionRead: vi.fn(),
@@ -412,6 +469,7 @@ function createRecoveryCoordinatorHarness(): Readonly<{
       status: 200,
       data: { devices: [], next_cursor: null, has_more: false }
     })),
+    requestRemoteStatus: vi.fn(),
     requestDeviceRevoke: vi.fn(),
     requestHostLock: vi.fn(),
     requestSelectedSessionRead: vi.fn(),
@@ -444,6 +502,7 @@ function createDeviceCoordinatorHarness(): Readonly<{
     adoptCsrfBootstrap: vi.fn(),
     requestProtected: vi.fn(),
     requestDeviceList,
+    requestRemoteStatus: vi.fn(),
     requestDeviceRevoke: vi.fn(),
     requestHostLock: vi.fn(),
     requestSelectedSessionRead: vi.fn(),
@@ -470,6 +529,77 @@ function createDeviceCoordinatorHarness(): Readonly<{
         }
       });
       await response.promise;
+    }
+  });
+}
+
+function createRemoteRecoveryCoordinatorHarness(): Readonly<{
+  coordinator: BrowserConnectionStateCoordinator;
+  requestRemoteStatus: ReturnType<typeof vi.fn>;
+  refresh: ReturnType<typeof vi.fn>;
+  completeStatus: () => Promise<void>;
+  completeRefresh: () => Promise<void>;
+}> {
+  let current = recoveryConnectionSnapshot("ready");
+  const listeners = new Set<() => void>();
+  const status = createDeferred<unknown>();
+  const refreshed = createDeferred<BrowserConnectionSnapshot>();
+  const publish = (next: BrowserConnectionSnapshot): void => {
+    current = next;
+    for (const listener of [...listeners]) listener();
+  };
+  const requestRemoteStatus = vi.fn(() => status.promise);
+  const refresh = vi.fn(() =>
+    refreshed.promise.then((next) => {
+      publish(next);
+      return next;
+    })
+  );
+  const coordinator = Object.freeze({
+    snapshot: () => current,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    setTarget: vi.fn(),
+    refresh,
+    loadMoreSessions: vi.fn(),
+    connectSessionStream: vi.fn(),
+    disconnectSessionStream: vi.fn(),
+    bootstrapCsrf: vi.fn(),
+    adoptCsrfBootstrap: vi.fn(),
+    requestProtected: vi.fn(),
+    requestDeviceList: vi.fn(async () => ({
+      status: 200 as const,
+      data: Object.freeze({ devices: Object.freeze([]), next_cursor: null, has_more: false })
+    })),
+    requestRemoteStatus,
+    requestDeviceRevoke: vi.fn(),
+    requestHostLock: vi.fn(),
+    requestSelectedSessionRead: vi.fn(),
+    close: vi.fn()
+  }) as unknown as BrowserConnectionStateCoordinator;
+  return Object.freeze({
+    coordinator,
+    requestRemoteStatus,
+    refresh,
+    completeStatus: async () => {
+      status.resolve(Object.freeze({
+        status: 200,
+        data: Object.freeze({
+          generation: 4,
+          availability: "ready",
+          reason: null,
+          external_origin: "https://hostdeck-shell-recovery.fixture-tailnet.ts.net",
+          laptop_action_required: false,
+          observed_at: "2026-07-26T05:00:00.000Z"
+        })
+      }));
+      await status.promise;
+    },
+    completeRefresh: async () => {
+      refreshed.resolve(remoteProfileOtherConnectionSnapshot());
+      await refreshed.promise;
     }
   });
 }
@@ -514,6 +644,7 @@ function createHostLockCoordinatorHarness(): Readonly<{
       status: 200 as const,
       data: Object.freeze({ devices: Object.freeze([]), next_cursor: null, has_more: false })
     })),
+    requestRemoteStatus: vi.fn(),
     requestDeviceRevoke: vi.fn(),
     requestHostLock,
     requestSelectedSessionRead: vi.fn(),
@@ -645,5 +776,35 @@ function recoveryConnectionSnapshot(
       causes: Object.freeze(phase === "ready" ? [] : ["csrf_not_ready" as const])
     }),
     lastFailure: null
+  }) as unknown as BrowserConnectionSnapshot;
+}
+
+function remoteProfileOtherConnectionSnapshot(): BrowserConnectionSnapshot {
+  const base = recoveryConnectionSnapshot("ready");
+  if (base.host.data === null) {
+    throw new TypeError("Remote-recovery fixture requires current host status.");
+  }
+  const timestamp = "2026-07-26T05:01:00.000Z";
+  return Object.freeze({
+    ...base,
+    epoch: 2,
+    host: Object.freeze({
+      ...base.host,
+      data: Object.freeze({
+        ...base.host.data,
+        remote: Object.freeze({
+          generation: 2,
+          state_generation: 2,
+          availability: "unavailable" as const,
+          cause: "profile_other" as const,
+          external_origin: null,
+          laptop_action_required: true,
+          observed_at: timestamp,
+          checked_at: timestamp,
+          updated_at: timestamp
+        })
+      }),
+      observedAt: timestamp
+    })
   }) as unknown as BrowserConnectionSnapshot;
 }

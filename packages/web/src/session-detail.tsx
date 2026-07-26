@@ -66,6 +66,7 @@ import {
   usePromptComposerController
 } from "./prompt-composer.js";
 import type { PromptComposerController } from "./prompt-composer-state.js";
+import { projectRemoteConnectionRecovery } from "./remote-connection-recovery-state.js";
 import {
   appendSessionDetailEvent,
   createSessionDetailFeed,
@@ -946,6 +947,20 @@ function projectDetailNotices(
       body: "The last confirmed detail is retained while current state is unavailable.",
       tone: "attention",
       urgent: false
+    });
+  }
+  const remote = projectRemoteConnectionRecovery(snapshot);
+  if (
+    (remote.source === "current_laptop_observation" &&
+      remote.phase !== "ready" &&
+      remote.phase !== "not_observed") ||
+    remote.phase === "browser_unreachable"
+  ) {
+    notices.push({
+      title: remote.title,
+      body: remote.detail,
+      tone: remote.tone === "danger" ? "danger" : "attention",
+      urgent: remote.urgent
     });
   }
   if (snapshot.stream.state === "reconnecting") {

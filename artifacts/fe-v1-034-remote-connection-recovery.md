@@ -2,7 +2,7 @@
 
 Date: 2026-07-26
 
-Status: criteria frozen; implementation in progress.
+Status: implementation and non-device validation complete; physical Android acceptance pending.
 
 ## Scope
 
@@ -108,6 +108,16 @@ Excluded: profile switching, Tailscale login/logout/up/down/service ownership, S
 - Production-shell Chromium owns exact HTTP order, generic connection-loss boundaries, route/sheet persistence, duplicate activation, all reason families, DOM/storage/history/request privacy, responsive containment, and effective 200 percent reflow.
 - Deterministic captures and layout records own Focus Rail fidelity for checking, ready, disabled, Tailscale absent/stopped/signed-out, profile mismatch, Serve missing/conflict/drift/public, invalid origin, stale/failed, generic unreachable, and recovery states.
 - Physical Android owns production remote ready, profile-away browser failure, profile-return observation-only recovery, no re-pairing, no LAN/custom CA/ADB tunnel, no dashboard mutation, secret-free screenshots, and final profile/Serve/process cleanup.
+
+## Implementation Baseline
+
+- Added one strict persistent recovery controller and projector. Local checks perform one coordinator refresh; paired remote checks perform one exact `remote_status` read followed by at most one refresh. Failure, replacement, close, and malformed settlement paths publish no stale ready truth and perform no retry or mutation.
+- Added exact coordinator admission for paired-device `GET /api/v1/remote/status`. Generic protected dispatch rejects `remote_status`, `remote_enable`, and `remote_disable` before HTTP dispatch.
+- Added the flat `Remote connection` Focus Rail to Host & access and shared its current laptop diagnosis with Mission Control and Session Detail. Removed the unsupported Serve-configuring fixture claim.
+- Added the production no-QR Android recovery harness and `pnpm smoke:recovery-android`. The harness owns profile-away/profile-return observation, request and audit counts, privacy-checked screenshots, authority cleanup, Serve cleanup, and phone-setting restoration.
+- Focused and aggregate validation passed: 516 web tests; 17 physical-harness tests with the device case intentionally skipped; 2,371 unit tests with 28 skips; 244 contract tests; 36 integration tests; 63 production-shell Chromium scenarios; root and CLI typecheck; lint and package exports; scaffold, planning, runtime-boundary, production build, package/relocation, frozen offline install, dependency audit, and license review.
+- Browser evidence covers every public recovery reason, checking, failed check, reconnecting, recovered, both production routes, 320/360/390/412/768/1280 widths, 390 x 420 short height, and actual 200 percent reflow. Layout records prove one sheet scroll owner, reachable close/action controls, 44 px targets, and no document overflow.
+- `RCR-01` through `RCR-22` are implemented and validated. `RCR-23` and the physical portion of `RCR-24` remain open until `pnpm smoke:recovery-android` passes on the connected phone and its sanitized evidence is inspected.
 
 ## Reuse And Ownership
 

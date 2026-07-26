@@ -39,7 +39,7 @@ const sessionId = "sess_detail_screen_001" as SessionId;
 const timestamp = "2026-07-22T18:00:00.000Z";
 const laterTimestamp = "2026-07-22T18:01:00.000Z";
 const nowMs = Date.parse("2026-07-22T18:05:00.000Z");
-const remoteOrigin = "https://hostdeck-laptop.tail295ac2.ts.net";
+const remoteOrigin = "https://hostdeck-laptop.fixture-tailnet.ts.net";
 
 afterEach(() => {
   cleanup();

@@ -3174,6 +3174,131 @@ textarea:focus-visible {
   text-align: left;
 }
 
+.hostdeck-remote-recovery {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  padding: 14px 0 18px 14px;
+  border-bottom: 1px solid var(--hostdeck-divider);
+  border-left: 3px solid currentColor;
+}
+
+.hostdeck-remote-recovery__owner {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.hostdeck-remote-recovery__owner > span {
+  color: currentColor;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 18px;
+  text-transform: uppercase;
+}
+
+.hostdeck-remote-recovery__owner > small {
+  min-width: 0;
+  color: var(--hostdeck-muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-remote-recovery__state {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.hostdeck-remote-recovery__state > svg {
+  margin-top: 2px;
+}
+
+.hostdeck-remote-recovery__state > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.hostdeck-remote-recovery__state h2,
+.hostdeck-remote-recovery__state p {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-remote-recovery__state h2 {
+  color: var(--hostdeck-ink);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 22px;
+}
+
+.hostdeck-remote-recovery__state p {
+  color: var(--hostdeck-muted);
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.hostdeck-remote-recovery__origin {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  margin-left: 38px;
+}
+
+.hostdeck-remote-recovery__origin > span {
+  color: var(--hostdeck-muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 17px;
+  text-transform: uppercase;
+}
+
+.hostdeck-remote-recovery__origin > strong {
+  min-width: 0;
+  color: var(--hostdeck-ink);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-remote-recovery__action {
+  min-width: 0;
+  max-width: 240px;
+  margin-left: 38px;
+  justify-self: start;
+  white-space: nowrap;
+}
+
+.hostdeck-remote-recovery__action:disabled {
+  cursor: wait;
+}
+
+@media (max-width: 520px) {
+  .hostdeck-remote-recovery__owner {
+    display: grid;
+    justify-content: stretch;
+    gap: 1px;
+  }
+
+  .hostdeck-remote-recovery__owner > small {
+    text-align: left;
+  }
+
+  .hostdeck-remote-recovery__action {
+    width: calc(100% - 38px);
+    max-width: none;
+    justify-self: stretch;
+  }
+}
+
 .hostdeck-access-recovery {
   display: grid;
   min-width: 0;

@@ -219,6 +219,10 @@ export interface BrowserConnectionDeviceListOptions {
   readonly signal?: AbortSignal;
 }
 
+export interface BrowserConnectionRemoteStatusOptions {
+  readonly signal?: AbortSignal;
+}
+
 export type BrowserConnectionGenericProtectedRouteId = Exclude<
   BrowserHttpDeviceCsrfRouteId,
   "device_revoke" | "host_lock" | "host_unlock"
@@ -269,6 +273,9 @@ export interface BrowserConnectionStateCoordinator {
     input: BrowserHttpRouteRequest<"device_list">,
     options?: BrowserConnectionDeviceListOptions
   ) => Promise<BrowserHttpRouteResponse<"device_list">>;
+  readonly requestRemoteStatus: (
+    options?: BrowserConnectionRemoteStatusOptions
+  ) => Promise<BrowserHttpRouteResponse<"remote_status">>;
   readonly requestDeviceRevoke: (
     input: BrowserHttpRouteRequest<"device_revoke">,
     options?: BrowserCsrfRequestOptions
@@ -1303,6 +1310,46 @@ export function createBrowserConnectionStateCoordinator(
         throw error;
       }
     },
+    async requestRemoteStatus(
+      requestOptions?: BrowserConnectionRemoteStatusOptions
+    ): Promise<BrowserHttpRouteResponse<"remote_status">> {
+      if (closed) throw connectionError("closed");
+      const currentAccess = currentPairedDeviceAccess();
+      if (
+        access.state !== "current" ||
+        currentAccess === null ||
+        !currentAccess.can_read_sessions ||
+        currentAccess.network_mode !== "remote" ||
+        currentAccess.transport !== "https"
+      ) {
+        throw connectionError("not_ready");
+      }
+      const authorityKey = pairedDeviceAuthorityKey(currentAccess);
+      try {
+        const response = requestOptions?.signal === undefined
+          ? await httpClient.request("remote_status", {})
+          : await httpClient.request("remote_status", {}, {
+              signal: requestOptions.signal
+            });
+        if (closed) throw connectionError("closed");
+        if (
+          access.state !== "current" ||
+          currentPairedDeviceAuthorityKey() !== authorityKey
+        ) {
+          throw connectionError("not_ready");
+        }
+        return response;
+      } catch (error) {
+        if (closed) throw connectionError("closed");
+        if (
+          access.state !== "current" ||
+          currentPairedDeviceAuthorityKey() !== authorityKey
+        ) {
+          throw connectionError("not_ready");
+        }
+        throw error;
+      }
+    },
     async requestDeviceRevoke(
       requestInput: BrowserHttpRouteRequest<"device_revoke">,
       requestOptions?: BrowserCsrfRequestOptions
@@ -1489,7 +1536,10 @@ export function createBrowserConnectionStateCoordinator(
       if (
         (routeId as BrowserHttpDeviceCsrfRouteId) === "device_revoke" ||
         (routeId as BrowserHttpDeviceCsrfRouteId) === "host_lock" ||
-        (routeId as BrowserHttpRouteId) === "host_unlock"
+        (routeId as BrowserHttpRouteId) === "host_unlock" ||
+        (routeId as BrowserHttpRouteId) === "remote_status" ||
+        (routeId as BrowserHttpRouteId) === "remote_enable" ||
+        (routeId as BrowserHttpRouteId) === "remote_disable"
       ) {
         throw connectionError("client_contract");
       }

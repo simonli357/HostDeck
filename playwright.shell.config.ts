@@ -13,6 +13,7 @@ export default defineConfig({
     "paired-device-management.spec.ts",
     "plan-control.spec.ts",
     "prompt-composer.spec.ts",
+    "remote-connection-recovery.spec.ts",
     "session-detail.spec.ts"
   ],
   fullyParallel: false,

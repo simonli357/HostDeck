@@ -275,6 +275,13 @@ describe("FE-V1-004 mobile state and interaction design contract", () => {
     expect(requiredRemoteIngressFixtureIds).toContain("serve_drifted");
     expect(requiredRemoteIngressFixtureIds).toContain("serve_public");
     expect(state("preload_phone_network_unavailable").diagnosisSource).toBe("browser_network_only");
+
+    const checking = state("access_remote_checking");
+    expect(checking.state).toBe("read-only current remote status check in progress");
+    expect(checking.diagnosisSource).toBe("user_interaction");
+    expect(checking.interactions).toEqual(["read_host_access", "read_remote_status"]);
+    expect(checking.fixtureRefs.every(({ family }) => family !== "remote_ingress")).toBe(true);
+    expect((mobileStateTraceIds as readonly string[])).not.toContain("access_serve_configuring");
   });
 
   it("backs critical authority, remote, stream, and turn states with distinct parsed view models", () => {

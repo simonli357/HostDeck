@@ -239,7 +239,8 @@ test("keeps emergency admission and current-versus-stale truth explicit", async 
   mission.setVariant("host_unavailable");
   await page.getByRole("button", { name: "Refresh sessions" }).click();
   let sheet = await openHostSheet(page);
-  await expect(sheet.getByText("Stale", { exact: true })).toBeVisible();
+  const laptopHost = sheet.locator(".hostdeck-access-fact").filter({ hasText: "Laptop host" });
+  await expect(laptopHost.getByText("Stale", { exact: true })).toBeVisible();
   await expect(sheet.getByRole("heading", { name: "Remote writes unlocked" })).toBeVisible();
   await expect(sheet.getByRole("button", { name: "Lock writes" })).toBeEnabled();
   await captureDialogState(page, sheet, "degraded-host-lockable-390x844");

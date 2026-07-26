@@ -25,29 +25,29 @@
         "width": 320,
         "height": 656,
         "clientHeight": 655,
-        "scrollHeight": 1062,
+        "scrollHeight": 1526,
         "overflowY": "auto"
       },
       "recovery": {
-        "top": 642,
+        "top": 418,
         "right": 303,
-        "bottom": 768,
+        "bottom": 544,
         "left": 17,
         "width": 286,
         "height": 126
       },
       "action": {
-        "top": 716,
+        "top": 492,
         "right": 303,
-        "bottom": 760,
+        "bottom": 536,
         "left": 51,
         "width": 252,
         "height": 44
       },
       "closeAfterActionScroll": {
-        "top": -238.5,
+        "top": -702.5,
         "right": 303,
-        "bottom": -194.5,
+        "bottom": -658.5,
         "left": 259,
         "width": 44,
         "height": 44
@@ -79,29 +79,29 @@
         "width": 360,
         "height": 656,
         "clientHeight": 655,
-        "scrollHeight": 1062,
+        "scrollHeight": 1488,
         "overflowY": "auto"
       },
       "recovery": {
-        "top": 642,
+        "top": 437,
         "right": 343,
-        "bottom": 768,
+        "bottom": 563,
         "left": 17,
         "width": 326,
         "height": 126
       },
       "action": {
-        "top": 716,
+        "top": 511,
         "right": 343,
-        "bottom": 760,
+        "bottom": 555,
         "left": 51,
         "width": 292,
         "height": 44
       },
       "closeAfterActionScroll": {
-        "top": -238.5,
+        "top": -664.5,
         "right": 343,
-        "bottom": -194.5,
+        "bottom": -620.5,
         "left": 299,
         "width": 44,
         "height": 44
@@ -133,29 +133,29 @@
         "width": 390,
         "height": 680,
         "clientHeight": 679,
-        "scrollHeight": 1062,
+        "scrollHeight": 1488,
         "overflowY": "auto"
       },
       "recovery": {
-        "top": 686,
+        "top": 481,
         "right": 373,
-        "bottom": 812,
+        "bottom": 607,
         "left": 17,
         "width": 356,
         "height": 126
       },
       "action": {
-        "top": 760,
+        "top": 555,
         "right": 373,
-        "bottom": 804,
+        "bottom": 599,
         "left": 51,
         "width": 322,
         "height": 44
       },
       "closeAfterActionScroll": {
-        "top": -194.5,
+        "top": -620.5,
         "right": 373,
-        "bottom": -150.5,
+        "bottom": -576.5,
         "left": 329,
         "width": 44,
         "height": 44
@@ -187,29 +187,29 @@
         "width": 412,
         "height": 680,
         "clientHeight": 679,
-        "scrollHeight": 1043,
+        "scrollHeight": 1469,
         "overflowY": "auto"
       },
       "recovery": {
-        "top": 776,
+        "top": 571,
         "right": 395,
-        "bottom": 883,
+        "bottom": 678,
         "left": 17,
         "width": 378,
         "height": 107
       },
       "action": {
-        "top": 831,
+        "top": 626,
         "right": 395,
-        "bottom": 875,
+        "bottom": 670,
         "left": 51,
         "width": 344,
         "height": 44
       },
       "closeAfterActionScroll": {
-        "top": -104.5,
+        "top": -530.5,
         "right": 395,
-        "bottom": -60.5,
+        "bottom": -486.5,
         "left": 351,
         "width": 44,
         "height": 44
@@ -241,29 +241,29 @@
         "width": 560,
         "height": 680,
         "clientHeight": 679,
-        "scrollHeight": 1008,
+        "scrollHeight": 1396,
         "overflowY": "auto"
       },
       "recovery": {
-        "top": 920,
+        "top": 734,
         "right": 647,
-        "bottom": 992,
+        "bottom": 806,
         "left": 121,
         "width": 526,
         "height": 72
       },
       "action": {
-        "top": 924,
+        "top": 738,
         "right": 647,
-        "bottom": 982,
+        "bottom": 796,
         "left": 457,
         "width": 190,
         "height": 58
       },
       "closeAfterActionScroll": {
-        "top": 39.5,
+        "top": -348.5,
         "right": 647,
-        "bottom": 83.5,
+        "bottom": -304.5,
         "left": 603,
         "width": 44,
         "height": 44
@@ -295,29 +295,29 @@
         "width": 560,
         "height": 656,
         "clientHeight": 655,
-        "scrollHeight": 1008,
+        "scrollHeight": 1396,
         "overflowY": "auto"
       },
       "recovery": {
-        "top": 696,
+        "top": 510,
         "right": 903,
-        "bottom": 768,
+        "bottom": 582,
         "left": 377,
         "width": 526,
         "height": 72
       },
       "action": {
-        "top": 700,
+        "top": 514,
         "right": 903,
-        "bottom": 758,
+        "bottom": 572,
         "left": 713,
         "width": 190,
         "height": 58
       },
       "closeAfterActionScroll": {
-        "top": -184.5,
+        "top": -572.5,
         "right": 903,
-        "bottom": -140.5,
+        "bottom": -528.5,
         "left": 859,
         "width": 44,
         "height": 44
@@ -349,29 +349,29 @@
         "width": 390,
         "height": 344.390625,
         "clientHeight": 343,
-        "scrollHeight": 1062,
+        "scrollHeight": 1488,
         "overflowY": "auto"
       },
       "recovery": {
-        "top": 261.609375,
+        "top": 152.609375,
         "right": 373,
-        "bottom": 387.609375,
+        "bottom": 278.609375,
         "left": 17,
         "width": 356,
         "height": 126
       },
       "action": {
-        "top": 335.609375,
+        "top": 226.609375,
         "right": 373,
-        "bottom": 379.609375,
+        "bottom": 270.609375,
         "left": 51,
         "width": 322,
         "height": 44
       },
       "closeAfterActionScroll": {
-        "top": -618.890625,
+        "top": -948.890625,
         "right": 373,
-        "bottom": -574.890625,
+        "bottom": -904.890625,
         "left": 329,
         "width": 44,
         "height": 44
@@ -406,29 +406,29 @@
         "width": 560,
         "height": 328,
         "clientHeight": 327,
-        "scrollHeight": 1008,
+        "scrollHeight": 1396,
         "overflowY": "auto"
       },
       "recovery": {
-        "top": 296,
+        "top": 203,
         "right": 583,
-        "bottom": 368,
+        "bottom": 275,
         "left": 57,
         "width": 526,
         "height": 72
       },
       "action": {
-        "top": 300,
+        "top": 207,
         "right": 583,
-        "bottom": 358,
+        "bottom": 265,
         "left": 393,
         "width": 190,
         "height": 58
       },
       "closeAfterActionScroll": {
-        "top": -584.5,
+        "top": -879.5,
         "right": 583,
-        "bottom": -540.5,
+        "bottom": -835.5,
         "left": 539,
         "width": 44,
         "height": 44

@@ -40,7 +40,7 @@ import {
   projectSessionRow
 } from "./mission-control.js";
 
-const remoteOrigin = "https://hostdeck-laptop.tail295ac2.ts.net";
+const remoteOrigin = "https://hostdeck-laptop.fixture-tailnet.ts.net";
 const timestamp = "2026-07-22T18:00:00.000Z";
 const nowMs = Date.parse("2026-07-22T18:05:00.000Z");
 
@@ -426,8 +426,8 @@ describe("Mission Control screen states and interaction", () => {
       phase: "ready"
     });
     renderScreen(snapshot);
-    expect(screen.getByText("Remote access needs attention")).toBeTruthy();
-    expect(screen.getByText(/saved HostDeck Tailscale profile/)).toBeTruthy();
+    expect(screen.getByText("HostDeck profile is not active")).toBeTruthy();
+    expect(screen.getByText(/saved HostDeck profile in Tailscale/)).toBeTruthy();
 
     cleanup();
     renderScreen(
@@ -896,6 +896,7 @@ function coordinatorHarness(
       status: 200,
       data: { devices: [], next_cursor: null, has_more: false }
     })),
+    requestRemoteStatus: vi.fn(),
     requestDeviceRevoke: vi.fn(),
     requestHostLock: vi.fn(),
     close

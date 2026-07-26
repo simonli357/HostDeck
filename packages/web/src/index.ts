@@ -22,6 +22,7 @@ export * from "./plan-control.js";
 export * from "./plan-control-state.js";
 export * from "./prompt-composer.js";
 export * from "./prompt-composer-state.js";
+export * from "./remote-connection-recovery-state.js";
 export * from "./session-detail.js";
 export * from "./session-detail-feed.js";
 export * from "./sse-client.js";

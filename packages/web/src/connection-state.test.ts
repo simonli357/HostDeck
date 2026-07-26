@@ -4,6 +4,7 @@ import {
   managedSessionProjectionSchema,
   modelControlSnapshotSchema,
   promptDispatchResponseSchema,
+  remoteIngressPublicStateSchema,
   type SelectedAccessStateResponse,
   type SelectedHostAccessMode,
   type SelectedHostLocalHealthCause,
@@ -26,9 +27,10 @@ import {
   type BrowserSseClientLimits,
   defaultBrowserSseClientLimits
 } from "@hostdeck/contracts/browser-sse-resource-policy";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   type BrowserConnectionClockPort,
+  type BrowserConnectionGenericProtectedRouteId,
   type BrowserConnectionStateCoordinator,
   createBrowserConnectionStateCoordinator,
   HostDeckBrowserConnectionError
@@ -284,6 +286,83 @@ describe("browser shell connection-state coordinator", () => {
     });
     expect(harness.http.routeIds()).not.toContain("csrf");
     harness.coordinator.close();
+  });
+
+  it("owns one exact paired remote-status read outside session write admission", async () => {
+    const harness = createHarness(remoteOrigin);
+    harness.http.enqueue("access", jsonResponse(200, pairedAccess(remoteOrigin, "read")));
+    harness.http.enqueue(
+      "host",
+      jsonResponse(200, hostStatus({ mode: "paired_read", origin: remoteOrigin, remoteGeneration: 7 }))
+    );
+    harness.http.enqueue(
+      "list",
+      jsonResponse(200, sessionList("paired_read", remoteOrigin, []))
+    );
+    await harness.coordinator.setTarget({ kind: "mission_control" });
+    harness.http.enqueue("remote", jsonResponse(200, remoteStatus(7)));
+
+    const response = await harness.coordinator.requestRemoteStatus();
+
+    expect(response).toEqual({ status: 200, data: remoteStatus(7) });
+    expect(harness.coordinator.snapshot().writeEligibility).toMatchObject({
+      eligible: false,
+      causes: ["read_only_access"]
+    });
+    expect(harness.http.routeIds().at(-1)).toBe("remote");
+    const request = harness.http.requests.at(-1);
+    expect(request).toMatchObject({
+      path: "/api/v1/remote/status",
+      init: {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        mode: "same-origin",
+        redirect: "error",
+        referrerPolicy: "no-referrer"
+      }
+    });
+    expect(Object.hasOwn(request?.init ?? {}, "body")).toBe(false);
+    expect(Object.keys(request?.init.headers ?? {})).not.toContain("x-hostdeck-csrf-token");
+    expect(Object.keys(request?.init.headers ?? {})).not.toContain("x-hostdeck-local-admin");
+    harness.coordinator.close();
+  });
+
+  it("rejects unavailable and forged remote control paths before HTTP dispatch", async () => {
+    expectTypeOf<
+      Extract<
+        BrowserConnectionGenericProtectedRouteId,
+        "remote_status" | "remote_enable" | "remote_disable"
+      >
+    >().toEqualTypeOf<never>();
+
+    const local = createHarness(loopbackOrigin);
+    enqueueLoopbackMission(local, []);
+    await local.coordinator.setTarget({ kind: "mission_control" });
+    const requestCount = local.http.requests.length;
+
+    await expect(local.coordinator.requestRemoteStatus()).rejects.toMatchObject({
+      reason: "not_ready"
+    });
+    for (const routeId of ["remote_status", "remote_enable", "remote_disable"] as const) {
+      await expect(
+        local.coordinator.requestProtected(routeId as never, {} as never)
+      ).rejects.toMatchObject({ reason: "client_contract" });
+    }
+    expect(local.http.requests).toHaveLength(requestCount);
+    local.coordinator.close();
+
+    const remote = createHarness(remoteOrigin);
+    enqueueRemoteWriterMission(remote, [], 7, 1);
+    await remote.coordinator.setTarget({ kind: "mission_control" });
+    const pendingResponse = deferred<BrowserHttpResponsePort>();
+    remote.http.enqueue("remote", () => pendingResponse.promise);
+    const pending = remote.coordinator.requestRemoteStatus();
+    await waitFor(() => remote.http.routeIds().at(-1) === "remote");
+    remote.coordinator.close();
+    pendingResponse.resolve(jsonResponse(200, remoteStatus(7)));
+    await expect(pending).rejects.toMatchObject({ reason: "closed" });
+    expect(remote.http.routeIds().filter((route) => route === "remote")).toHaveLength(1);
   });
 
   it("opens loopback writes only for an explicit paired-writer cookie", async () => {
@@ -2252,6 +2331,7 @@ describe("browser shell connection-state coordinator", () => {
 type HttpRouteId =
   | "access"
   | "host"
+  | "remote"
   | "list"
   | "detail"
   | "csrf"
@@ -2393,6 +2473,7 @@ function httpRouteId(path: string, method: "GET" | "POST"): HttpRouteId {
     return "revoke";
   }
   if (path === "/api/v1/host/status" && method === "GET") return "host";
+  if (path === "/api/v1/remote/status" && method === "GET") return "remote";
   if (path.startsWith("/api/v1/sessions?") || path === "/api/v1/sessions") return "list";
   if (path === "/api/v1/access/csrf" && method === "POST") return "csrf";
   if (path === "/api/v1/access/lock" && method === "POST") return "mutation";
@@ -2766,6 +2847,17 @@ function csrfBootstrap(generation: number) {
     csrf_generation: generation,
     rotated_at: generation === 1 ? timestamp : laterTimestamp
   };
+}
+
+function remoteStatus(generation: number) {
+  return remoteIngressPublicStateSchema.parse({
+    generation,
+    availability: "ready",
+    reason: null,
+    external_origin: remoteOrigin,
+    laptop_action_required: false,
+    observed_at: timestamp
+  });
 }
 
 function apiError(code: string, retryable: boolean) {

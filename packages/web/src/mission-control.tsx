@@ -34,6 +34,7 @@ import {
   type HostLockProjection,
   projectHostLockState
 } from "./host-lock-state.js";
+import { projectRemoteConnectionRecovery } from "./remote-connection-recovery-state.js";
 
 export type MissionQueueId = "act_now" | "in_progress" | "quiet";
 export type MissionTone = "connected" | "attention" | "danger" | "muted";
@@ -662,7 +663,7 @@ function projectNotice(
     );
   }
 
-  const preciseRemoteNotice = remoteNotice(snapshot.host.data, snapshot.host.state);
+  const preciseRemoteNotice = remoteNotice(snapshot);
   if (preciseRemoteNotice !== null) return preciseRemoteNotice;
   if (access?.permission === "read") {
     return notice(
@@ -730,55 +731,22 @@ function accessNotice(
 }
 
 function remoteNotice(
-  host: SelectedHostStatusResponse | null,
-  hostState: BrowserConnectionSnapshot["host"]["state"]
+  snapshot: BrowserConnectionSnapshot
 ): MissionNotice | null {
-  if (host === null || hostState !== "current") return null;
-  if (host.remote.availability === "ready" || host.remote.availability === "unknown") {
+  const remote = projectRemoteConnectionRecovery(snapshot);
+  if (
+    remote.source !== "current_laptop_observation" ||
+    remote.phase === "ready" ||
+    remote.phase === "not_observed"
+  ) {
     return null;
   }
-  const body = remoteCauseCopy(host.remote.cause);
-  return notice("Remote access needs attention", body, "attention", false);
-}
-
-function remoteCauseCopy(cause: SelectedHostStatusResponse["remote"]["cause"]): string {
-  switch (cause) {
-    case "remote_disabled":
-      return "Remote access is disabled on the laptop.";
-    case "client_not_installed":
-      return "Tailscale is not installed on the laptop.";
-    case "client_stopped":
-      return "Tailscale is stopped on the laptop.";
-    case "client_signed_out":
-      return "Tailscale is signed out on the laptop.";
-    case "profile_absent":
-    case "profile_other":
-      return "Select the saved HostDeck Tailscale profile on the laptop.";
-    case "serve_absent":
-    case "serve_foreign":
-    case "serve_colliding":
-    case "serve_drifted":
-    case "serve_public":
-      return "The HostDeck Tailscale Serve mapping needs repair on the laptop.";
-    case "consent_required":
-    case "permission_denied":
-      return "Laptop approval is required to restore remote access.";
-    case "not_observed":
-    case "client_unsupported":
-    case "client_error":
-    case "profile_unknown":
-    case "external_origin_invalid":
-    case "observation_stale":
-    case "observation_failed":
-    case "command_failed":
-    case "command_timeout":
-    case "output_oversized":
-    case "schema_invalid":
-    case "profile_changed":
-    case "cleanup_incomplete":
-    case null:
-      return "Inspect HostDeck remote access on the laptop.";
-  }
+  return notice(
+    remote.title,
+    remote.detail,
+    remote.tone === "danger" ? "danger" : "attention",
+    remote.urgent
+  );
 }
 
 function degradedNotice(host: SelectedHostStatusResponse | null): MissionNotice {

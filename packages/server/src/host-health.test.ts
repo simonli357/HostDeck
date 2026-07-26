@@ -23,7 +23,7 @@ interface FakeClock {
 }
 
 const initialTime = Date.parse("2026-07-16T18:00:00.000Z");
-const remoteOrigin = "https://hostdeck-laptop.tail295ac2.ts.net";
+const remoteOrigin = "https://hostdeck-laptop.fixture-tailnet.ts.net";
 
 describe("mutable host health", () => {
   it("starts closed with exactly seven unknown local sources and independent unknown remote truth", () => {

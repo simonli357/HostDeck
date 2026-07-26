@@ -7,7 +7,7 @@ import {
   selectedHostLocalHealthComponents,
   selectedHostStatusResponseSchema
 } from "@hostdeck/contracts";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -19,7 +19,12 @@ import {
   browserConnectionResourceStates,
   browserConnectionWriteBlockCauses
 } from "./connection-state.js";
-import { HostAccessPanel, projectHostAccess } from "./host-access.js";
+import {
+  HostAccessPanel,
+  projectHostAccess,
+  RemoteConnectionRecoveryPanel
+} from "./host-access.js";
+import type { RemoteConnectionRecoveryView } from "./remote-connection-recovery-state.js";
 
 const timestamp = "2026-07-22T12:00:00.000Z";
 const nowMs = Date.parse(timestamp);
@@ -42,13 +47,13 @@ describe("host and access projection", () => {
       reads: "Available",
       writes: "Ready",
       host: "Ready",
-      remote: "Reached"
+      remote: "Ready"
     });
     const serialized = JSON.stringify(projection);
     expect(serialized).not.toContain("device_access_fixture");
     expect(serialized).not.toContain("csrf");
     expect(serialized).not.toContain("generation");
-    expect(serialized).not.toContain("source");
+    expect(serialized).not.toContain("source_key");
     expect(Object.isFrozen(projection)).toBe(true);
     expect(Object.isFrozen(projection.facts)).toBe(true);
     expect(projection.facts.every(Object.isFrozen)).toBe(true);
@@ -156,7 +161,12 @@ describe("host and access projection", () => {
   });
 
   it("renders semantic definition rows and wraps the selected origin as inert text", () => {
-    render(<HostAccessPanel projection={projectHostAccess(snapshot(), nowMs)} />);
+    render(
+      <HostAccessPanel
+        projection={projectHostAccess(snapshot(), nowMs)}
+        onCheckRemote={vi.fn()}
+      />
+    );
 
     expect(screen.getByRole("region", { name: "Host and access details" })).toBeTruthy();
     expect(
@@ -166,7 +176,8 @@ describe("host and access projection", () => {
     ).toBe(true);
     expect(document.querySelector('.hostdeck-access-recovery[role="status"]')?.textContent)
       .toContain("Page security ready");
-    expect(screen.getByText(remoteOrigin).tagName).toBe("DD");
+    const renderedOrigins = screen.getAllByText(remoteOrigin);
+    expect(renderedOrigins.map(({ tagName }) => tagName)).toEqual(["DD", "STRONG"]);
     expect(screen.queryByRole("link", { name: remoteOrigin })).toBeNull();
     expect(screen.getAllByRole("term").length).toBeGreaterThanOrEqual(8);
     expect(screen.getAllByRole("definition").length).toBeGreaterThanOrEqual(8);
@@ -182,7 +193,11 @@ describe("host and access projection", () => {
     const setupProjection = projectHostAccess(setupSnapshot, nowMs);
     const onRecover = vi.fn(async () => setupProjection.recovery);
     const view = render(
-      <HostAccessPanel projection={setupProjection} onRecover={onRecover} />
+      <HostAccessPanel
+        projection={setupProjection}
+        onCheckRemote={vi.fn()}
+        onRecover={onRecover}
+      />
     );
 
     expect(factValues(setupProjection).page_security).toBe("Check required");
@@ -199,12 +214,141 @@ describe("host and access projection", () => {
     const failedProjection = projectHostAccess(failedSnapshot, nowMs);
     expect(factValues(failedProjection).writes).toBe("Setup failed");
     view.rerender(
-      <HostAccessPanel projection={failedProjection} onRecover={onRecover} />
+      <HostAccessPanel
+        projection={failedProjection}
+        onCheckRemote={vi.fn()}
+        onRecover={onRecover}
+      />
     );
     expect(document.querySelector('.hostdeck-access-recovery[role="alert"]')?.textContent)
       .toContain("Secure setup not confirmed");
     expect(screen.getByRole("button", { name: "Retry secure setup" })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/csrf|generation|device_access_fixture/iu);
+  });
+
+  it("renders every remote evidence owner and source without exposing a control", () => {
+    const cases = [
+      remoteView({
+        phase: "profile_other",
+        reason: "profile_other",
+        source: "current_laptop_observation",
+        ownerLabel: "LOCAL LAPTOP",
+        sourceLabel: "Current laptop status",
+        title: "HostDeck profile is not active",
+        detail: "Switch profiles locally.",
+        tone: "attention",
+        current: true,
+        laptopActionRequired: true
+      }),
+      remoteView({
+        phase: "last_known",
+        reason: "serve_absent",
+        source: "last_laptop_observation",
+        ownerLabel: "LAST LAPTOP STATUS",
+        sourceLabel: "Not current",
+        title: "Remote status is stale",
+        detail: "Check again before relying on it.",
+        tone: "attention"
+      }),
+      remoteView({
+        phase: "browser_unreachable",
+        reason: null,
+        source: "browser_connection",
+        ownerLabel: "BROWSER",
+        sourceLabel: "Current browser connection",
+        title: "Private address unreachable",
+        detail: "Check this phone's Tailscale connection.",
+        tone: "danger",
+        urgent: true,
+        current: true,
+        laptopActionRequired: true
+      }),
+      remoteView()
+    ] as const;
+
+    for (const expected of cases) {
+      const view = render(<RemoteConnectionRecoveryPanel view={expected} />);
+      const region = screen.getByRole("region", { name: expected.title });
+      expect(region.textContent).toContain(expected.ownerLabel);
+      expect(region.textContent).toContain(expected.sourceLabel);
+      expect(within(region).queryByRole("button")).toBeNull();
+      expect(region.textContent).not.toMatch(/device_access_fixture|csrf|account@example/iu);
+      view.unmount();
+    }
+  });
+
+  it("renders an inert ready origin and one stable remote check command", async () => {
+    const user = userEvent.setup();
+    const ready = remoteView({
+      phase: "ready",
+      source: "current_laptop_observation",
+      ownerLabel: "PRIVATE CONNECTION",
+      sourceLabel: "Current laptop status",
+      title: "Remote access ready",
+      detail: "The exact private mapping is current.",
+      tone: "connected",
+      current: true,
+      externalOrigin: remoteOrigin,
+      action: "check_remote",
+      actionLabel: "Check again",
+      actionEnabled: true
+    });
+    const onCheck = vi.fn(async () => ready);
+    const rendered = render(
+      <RemoteConnectionRecoveryPanel view={ready} onCheck={onCheck} />
+    );
+
+    expect(screen.getByText(remoteOrigin).tagName).toBe("STRONG");
+    expect(screen.queryByRole("link", { name: remoteOrigin })).toBeNull();
+    const action = screen.getByRole("button", { name: "Check again" });
+    expect(action.classList.contains("hostdeck-remote-recovery__action")).toBe(true);
+    await user.click(action);
+    expect(onCheck).toHaveBeenCalledTimes(1);
+
+    rendered.rerender(
+      <RemoteConnectionRecoveryPanel
+        view={remoteView({
+          phase: "checking",
+          reason: null,
+          source: "browser_connection",
+          ownerLabel: "BROWSER",
+          sourceLabel: "Read-only status check",
+          title: "Checking remote access",
+          detail: "No Tailscale profile or private mapping is being changed.",
+          action: "check_remote",
+          actionLabel: "Check remote access",
+          busy: true
+        })}
+        onCheck={onCheck}
+      />
+    );
+    const busy = screen.getByRole("button", { name: "Check remote access" });
+    expect(busy).toHaveProperty("disabled", true);
+    expect(busy.getAttribute("aria-busy")).toBe("true");
+    expect(screen.getByRole("region", { name: "Checking remote access" }).getAttribute("aria-busy"))
+      .toBe("true");
+
+    rendered.rerender(
+      <RemoteConnectionRecoveryPanel
+        view={remoteView({
+          phase: "check_failed",
+          reason: null,
+          source: "browser_connection",
+          ownerLabel: "BROWSER",
+          sourceLabel: "Last status check",
+          title: "Remote check not confirmed",
+          detail: "No setting was changed.",
+          tone: "danger",
+          laptopActionRequired: true,
+          action: "check_remote",
+          actionLabel: "Check remote access",
+          actionEnabled: true
+        })}
+        onCheck={onCheck}
+      />
+    );
+    expect(screen.getByRole("alert").textContent).toContain("Remote check not confirmed");
+    expect(screen.getByRole("button", { name: "Check remote access" })).toBeTruthy();
   });
 
   it("rejects mutable snapshots and invalid time", () => {
@@ -329,6 +473,30 @@ function snapshot(
       causes
     }),
     lastFailure: null
+  });
+}
+
+function remoteView(
+  overrides: Partial<RemoteConnectionRecoveryView> = {}
+): RemoteConnectionRecoveryView {
+  return Object.freeze({
+    phase: "not_observed",
+    reason: "not_observed",
+    source: "not_observed",
+    ownerLabel: "HOSTDECK",
+    sourceLabel: "Not observed",
+    title: "Remote status not observed",
+    detail: "Check remote access to read current laptop status.",
+    tone: "muted",
+    urgent: false,
+    current: false,
+    laptopActionRequired: false,
+    externalOrigin: null,
+    action: null,
+    actionLabel: null,
+    actionEnabled: false,
+    busy: false,
+    ...overrides
   });
 }
 

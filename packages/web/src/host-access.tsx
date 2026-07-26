@@ -1,10 +1,10 @@
 import type {
-  SelectedAccessStateResponse,
-  SelectedHostRemoteStatus
+  SelectedAccessStateResponse
 } from "@hostdeck/contracts";
 import {
   Activity,
   AlertTriangle,
+  CircleCheck,
   Clock3,
   Eye,
   HeartPulse,
@@ -46,6 +46,13 @@ import {
   PairedDeviceManagementPanel,
   usePairedDeviceManagementController
 } from "./paired-device-management.js";
+import {
+  createRemoteConnectionRecoveryController,
+  projectRemoteConnectionRecovery,
+  type RemoteConnectionRecoveryController,
+  type RemoteConnectionRecoveryPhase,
+  type RemoteConnectionRecoveryView
+} from "./remote-connection-recovery-state.js";
 
 export type HostAccessTone = "connected" | "attention" | "danger" | "muted";
 
@@ -74,6 +81,7 @@ export interface HostAccessProjection {
   readonly tone: HostAccessTone;
   readonly urgent: boolean;
   readonly facts: readonly HostAccessFact[];
+  readonly remote: RemoteConnectionRecoveryView;
   readonly recovery: HostAccessRecoveryView;
 }
 
@@ -101,6 +109,12 @@ export function ConnectedHostAccess({
     recoveryController.snapshot,
     recoveryController.snapshot
   );
+  const remoteController = useRemoteConnectionRecoveryController(coordinator, snapshot);
+  const remote = useSyncExternalStore(
+    remoteController.subscribe,
+    remoteController.snapshot,
+    remoteController.snapshot
+  );
   const deviceController = usePairedDeviceManagementController(coordinator, snapshot);
   const devices = useSyncExternalStore(
     deviceController.subscribe,
@@ -111,14 +125,55 @@ export function ConnectedHostAccess({
   const content = (
     <>
       <HostAccessPanel
-        projection={projectHostAccess(snapshot, nowMs, recovery)}
+        projection={projectHostAccess(snapshot, nowMs, recovery, remote)}
         onRecover={recoveryController.recover}
+        onCheckRemote={remoteController.check}
       />
       <HostLockPanel binding={hostLock} />
       <PairedDeviceManagementPanel controller={deviceController} view={devices} />
     </>
   );
   return children === undefined ? content : children(content);
+}
+
+export function useRemoteConnectionRecoveryController(
+  coordinator: BrowserConnectionStateCoordinator,
+  snapshot: BrowserConnectionSnapshot
+): RemoteConnectionRecoveryController {
+  const owner = useMemo(
+    () =>
+      createRemoteConnectionRecoveryController({
+        port: Object.freeze({
+          snapshot: coordinator.snapshot,
+          requestRemoteStatus: coordinator.requestRemoteStatus,
+          refresh: coordinator.refresh
+        })
+      }),
+    [coordinator]
+  );
+  const activeOwner = useRef<Readonly<{
+    controller: RemoteConnectionRecoveryController;
+    token: object;
+  }> | null>(null);
+
+  useLayoutEffect(() => {
+    void snapshot;
+    owner.synchronize();
+  }, [owner, snapshot]);
+
+  useEffect(() => {
+    const token = Object.freeze({});
+    activeOwner.current = Object.freeze({ controller: owner, token });
+    return () => {
+      queueMicrotask(() => {
+        const active = activeOwner.current;
+        if (active?.controller === owner && active.token !== token) return;
+        owner.close();
+      });
+    };
+  }, [owner]);
+
+  return owner;
 }
 
 export function useHostAccessRecoveryController(
@@ -163,13 +218,18 @@ export function useHostAccessRecoveryController(
 
 export function HostAccessPanel({
   projection,
+  onCheckRemote,
   onRecover
 }: Readonly<{
   projection: HostAccessProjection;
+  onCheckRemote?: (() => Promise<RemoteConnectionRecoveryView>) | undefined;
   onRecover?: (() => Promise<HostAccessRecoveryView>) | undefined;
 }>) {
   if (projection.recovery.action !== null && onRecover === undefined) {
     throw new TypeError("HostDeck host-access recovery action is missing its owner.");
+  }
+  if (projection.remote.action !== null && onCheckRemote === undefined) {
+    throw new TypeError("HostDeck remote recovery action is missing its owner.");
   }
   return (
     <section className="hostdeck-access" aria-label="Host and access details">
@@ -205,7 +265,77 @@ export function HostAccessPanel({
           );
         })}
       </dl>
+      <RemoteConnectionRecoveryPanel
+        view={projection.remote}
+        onCheck={onCheckRemote}
+      />
       <RecoveryRailPanel view={projection.recovery} onRecover={onRecover} />
+    </section>
+  );
+}
+
+export function RemoteConnectionRecoveryPanel({
+  view,
+  onCheck
+}: Readonly<{
+  view: RemoteConnectionRecoveryView;
+  onCheck?: (() => Promise<RemoteConnectionRecoveryView>) | undefined;
+}>) {
+  if (view.action !== null && onCheck === undefined) {
+    throw new TypeError("HostDeck remote recovery action is missing its owner.");
+  }
+  const Icon = remoteRecoveryIcon(view.phase);
+  return (
+    <section
+      className={`hostdeck-remote-recovery hostdeck-tone--${view.tone}`}
+      aria-labelledby="hostdeck-remote-recovery-title"
+      aria-describedby="hostdeck-remote-recovery-detail"
+      aria-busy={view.busy || undefined}
+    >
+      <div className="hostdeck-remote-recovery__owner">
+        <span>{view.ownerLabel}</span>
+        <small>{view.sourceLabel}</small>
+      </div>
+      <div
+        className="hostdeck-remote-recovery__state"
+        role={view.urgent || view.phase === "check_failed" ? "alert" : "status"}
+        aria-atomic="true"
+      >
+        <Icon
+          className={view.busy ? "hostdeck-spin" : undefined}
+          size={24}
+          strokeWidth={2}
+          aria-hidden="true"
+        />
+        <span>
+          <h2 id="hostdeck-remote-recovery-title">{view.title}</h2>
+          <p id="hostdeck-remote-recovery-detail">{view.detail}</p>
+        </span>
+      </div>
+      {view.externalOrigin === null ? null : (
+        <div className="hostdeck-remote-recovery__origin">
+          <span>Private address</span>
+          <strong>{view.externalOrigin}</strong>
+        </div>
+      )}
+      {view.action === null ? null : (
+        <button
+          type="button"
+          className="hostdeck-action-button hostdeck-remote-recovery__action"
+          disabled={!view.actionEnabled}
+          aria-busy={view.busy || undefined}
+          onClick={() => {
+            if (onCheck !== undefined) void onCheck();
+          }}
+        >
+          {view.busy ? (
+            <LoaderCircle className="hostdeck-spin" size={18} strokeWidth={2} aria-hidden="true" />
+          ) : (
+            <RefreshCw size={18} strokeWidth={2} aria-hidden="true" />
+          )}
+          <span>{view.actionLabel}</span>
+        </button>
+      )}
     </section>
   );
 }
@@ -260,7 +390,8 @@ export function RecoveryRailPanel({
 export function projectHostAccess(
   snapshot: BrowserConnectionSnapshot,
   nowMs: number,
-  recovery?: HostAccessRecoveryView
+  recovery?: HostAccessRecoveryView,
+  remote?: RemoteConnectionRecoveryView
 ): HostAccessProjection {
   if (
     snapshot === null ||
@@ -272,11 +403,15 @@ export function projectHostAccess(
     throw new TypeError("HostDeck host/access projection input is invalid.");
   }
   const recoveryView = recovery ?? projectHostAccessRecovery(snapshot);
+  const remoteView = remote ?? projectRemoteConnectionRecovery(snapshot);
   if (!Object.isFrozen(recoveryView)) {
     throw new TypeError("HostDeck host/access recovery projection is invalid.");
   }
+  if (!Object.isFrozen(remoteView)) {
+    throw new TypeError("HostDeck remote recovery projection is invalid.");
+  }
   const access = snapshot.access.data;
-  if (access === null) return projectAbsentAccess(snapshot, recoveryView);
+  if (access === null) return projectAbsentAccess(snapshot, recoveryView, remoteView);
 
   const current = snapshot.access.state === "current";
   const mayDiscloseProtected = browserMayDiscloseProtected(access);
@@ -308,8 +443,8 @@ export function projectHostAccess(
     pageSecurityFact(recoveryView),
     mayDiscloseProtected ? hostFact(snapshot) : suppressedHostFact()
   );
-  const remote = remoteFact(snapshot, access, mayDiscloseProtected);
-  if (remote !== null) facts.push(remote);
+  const remoteFactValue = remoteFact(remoteView, mayDiscloseProtected);
+  if (remoteFactValue !== null) facts.push(remoteFactValue);
   const stream = mayDiscloseProtected ? streamFact(snapshot) : null;
   if (stream !== null) facts.push(stream);
 
@@ -320,6 +455,7 @@ export function projectHostAccess(
     summary.tone,
     summary.urgent,
     facts,
+    remoteView,
     recoveryView
   );
 }
@@ -343,7 +479,8 @@ function suppressedHostFact(): HostAccessFact {
 
 function projectAbsentAccess(
   snapshot: BrowserConnectionSnapshot,
-  recovery: HostAccessRecoveryView
+  recovery: HostAccessRecoveryView,
+  remote: RemoteConnectionRecoveryView
 ): HostAccessProjection {
   if (
     snapshot.phase === "idle" ||
@@ -359,6 +496,7 @@ function projectAbsentAccess(
         fact("connection", "Connection", "Checking", null, "muted"),
         pageSecurityFact(recovery)
       ],
+      remote,
       recovery
     );
   }
@@ -373,6 +511,7 @@ function projectAbsentAccess(
       fact("writes", "Secure writes", "Blocked", null, "danger"),
       pageSecurityFact(recovery)
     ],
+    remote,
     recovery
   );
 }
@@ -609,35 +748,16 @@ function hostFact(snapshot: BrowserConnectionSnapshot): HostAccessFact {
 }
 
 function remoteFact(
-  snapshot: BrowserConnectionSnapshot,
-  access: SelectedAccessStateResponse,
+  remote: RemoteConnectionRecoveryView,
   mayDiscloseProtected: boolean
 ): HostAccessFact | null {
-  if (access.network_mode === "remote") {
-    return fact(
-      "remote",
-      "Remote access",
-      snapshot.access.state === "current" ? "Reached" : "Reconnecting",
-      snapshot.access.state === "current" ? "Current private origin" : "Last verified private origin",
-      snapshot.access.state === "current" ? "connected" : "attention"
-    );
-  }
   if (!mayDiscloseProtected) return null;
-  const host = snapshot.host.data;
-  if (host === null) return null;
-  const remote = host.remote;
-  const value = remoteStatusLabel(remote);
-  const current = snapshot.host.state === "current";
   return fact(
     "remote",
     "Remote access",
-    current ? value : `${value} (stale)`,
-    remote.laptop_action_required ? "Local laptop action required" : null,
-    remote.availability === "ready" && current
-      ? "connected"
-      : remote.availability === "unknown"
-        ? "muted"
-        : "attention"
+    remoteFactLabel(remote.phase),
+    remote.sourceLabel,
+    remote.tone
   );
 }
 
@@ -744,16 +864,53 @@ function primaryWriteCause(
   return priority.find((cause) => causes.includes(cause)) ?? null;
 }
 
-function remoteStatusLabel(remote: SelectedHostRemoteStatus): string {
-  switch (remote.availability) {
+function remoteFactLabel(phase: RemoteConnectionRecoveryPhase): string {
+  switch (phase) {
     case "ready":
       return "Ready";
-    case "disabled":
-      return "Disabled";
-    case "unavailable":
-      return "Unavailable";
-    case "unknown":
+    case "checking":
+      return "Checking";
+    case "not_observed":
       return "Not checked";
+    case "last_known":
+      return "Stale";
+    case "browser_reconnecting":
+      return "Reconnecting";
+    case "browser_unreachable":
+      return "Unreachable";
+    case "check_failed":
+      return "Check failed";
+    case "access_limited":
+      return "Hidden";
+    case "closed":
+      return "Closed";
+    case "remote_disabled":
+      return "Disabled";
+    case "client_not_installed":
+    case "client_unsupported":
+    case "client_error":
+    case "client_stopped":
+    case "client_signed_out":
+    case "profile_absent":
+    case "profile_other":
+    case "profile_unknown":
+    case "serve_absent":
+    case "serve_foreign":
+    case "serve_colliding":
+    case "serve_drifted":
+    case "serve_public":
+    case "external_origin_invalid":
+    case "observation_stale":
+    case "observation_failed":
+    case "consent_required":
+    case "permission_denied":
+    case "command_failed":
+    case "command_timeout":
+    case "output_oversized":
+    case "schema_invalid":
+    case "profile_changed":
+    case "cleanup_incomplete":
+      return "Needs attention";
   }
 }
 
@@ -780,6 +937,7 @@ function projection(
   tone: HostAccessTone,
   urgent: boolean,
   facts: readonly HostAccessFact[],
+  remote: RemoteConnectionRecoveryView,
   recovery: HostAccessRecoveryView
 ): HostAccessProjection {
   return Object.freeze({
@@ -788,6 +946,7 @@ function projection(
     tone,
     urgent,
     facts: Object.freeze(facts),
+    remote,
     recovery
   });
 }
@@ -845,6 +1004,52 @@ function recoveryIcon(phase: HostAccessRecoveryPhase): LucideIcon {
     case "unavailable":
       return ShieldAlert;
     case "read_only":
+    case "closed":
+      return Eye;
+  }
+}
+
+function remoteRecoveryIcon(phase: RemoteConnectionRecoveryPhase): LucideIcon {
+  switch (phase) {
+    case "ready":
+      return CircleCheck;
+    case "checking":
+      return LoaderCircle;
+    case "not_observed":
+    case "last_known":
+      return Clock3;
+    case "browser_reconnecting":
+    case "browser_unreachable":
+    case "client_not_installed":
+    case "client_unsupported":
+    case "client_error":
+    case "client_stopped":
+    case "client_signed_out":
+    case "remote_disabled":
+      return WifiOff;
+    case "profile_absent":
+    case "profile_other":
+    case "profile_unknown":
+    case "profile_changed":
+      return Laptop;
+    case "serve_absent":
+    case "serve_foreign":
+    case "serve_colliding":
+    case "serve_drifted":
+    case "serve_public":
+    case "external_origin_invalid":
+    case "observation_stale":
+    case "observation_failed":
+    case "consent_required":
+    case "permission_denied":
+    case "command_failed":
+    case "command_timeout":
+    case "output_oversized":
+    case "schema_invalid":
+    case "cleanup_incomplete":
+    case "check_failed":
+      return ShieldAlert;
+    case "access_limited":
     case "closed":
       return Eye;
   }

@@ -280,7 +280,7 @@ export const mobileStateTraceIds = [
   "access_tailscale_signed_out",
   "access_profile_mismatch",
   "access_serve_absent",
-  "access_serve_configuring",
+  "access_remote_checking",
   "access_serve_conflict",
   "access_profile_switch_boundary",
   "access_csrf_bootstrap",
@@ -844,7 +844,18 @@ export const mobileStateTraces: readonly MobileStateTrace[] = Object.freeze([
   remoteAccessTrace("access_tailscale_signed_out", "Tailscale signed out on laptop", "profile_signed_out"),
   remoteAccessTrace("access_profile_mismatch", "different saved laptop profile active", "profile_other", true),
   remoteAccessTrace("access_serve_absent", "owned private Serve mapping absent", "serve_absent"),
-  remoteAccessTrace("access_serve_configuring", "local Serve enable accepted but exact read-back is pending", "serve_absent"),
+  accessTrace(
+    "access_remote_checking",
+    "read-only current remote status check in progress",
+    [selectedMobile("mission_control_remote_unavailable")],
+    ["read_remote_status"],
+    ["FE-V1-034"],
+    {
+      diagnosisSource: "user_interaction",
+      journeys: ["UX-009", "UX-012"],
+      mockupRequired: true
+    }
+  ),
   remoteAccessTrace("access_serve_conflict", "Serve mapping foreign, colliding, drifted, or public", "serve_colliding", true),
   accessTrace("access_profile_switch_boundary", "loaded connection closes while the laptop changes active profile", [selectedMobile("mission_control_profile_mismatch"), remoteIngress("profile_other")], ["read_remote_status", "reconnect_stream", "switch_tailscale_profile_local"], ["FE-V1-025", "FE-V1-034"], {
     diagnosisSource: "hostdeck_local_observation",
