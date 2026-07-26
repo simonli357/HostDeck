@@ -99,7 +99,9 @@ import {
   createSelectedSessionReadRepository,
   createSelectedStateRepository,
   createSettingsRepository,
-  openMigratedDatabase
+  openMigratedDatabase,
+  selectedProjectedEventByteLength,
+  selectedStateRevision
 } from "@hostdeck/storage";
 import QRCode from "qrcode";
 import { build as viteBuild } from "vite";
@@ -230,11 +232,12 @@ describe("physical Android phone-driver protocol", () => {
     const directory = mkdtempSync(join(tmpdir(), "hostdeck-pairing-session-"));
     const opened = openMigratedDatabase(join(directory, "hostdeck.sqlite"));
     try {
-      const sessions = createPhysicalSessionReads(
+      const fixture = createPhysicalSessionReads(
         opened.db,
-        increasingWallClock()
+        increasingWallClock(),
+        false
       );
-      const page = sessions.list({
+      const page = fixture.reads.list({
         after: null,
         expected_order_snapshot: null,
         limit: 1
@@ -243,6 +246,41 @@ describe("physical Android phone-driver protocol", () => {
       expect(page.sessions[0]?.session.name).toBe(
         "physical-pairing-review"
       );
+      expect(fixture.promptSeedEvent).toBeNull();
+    } finally {
+      opened.db.close();
+      rmSync(directory, { force: true, recursive: true });
+    }
+  });
+
+  it("persists the exact prompt replay seed with matching projection metadata", () => {
+    const directory = mkdtempSync(join(tmpdir(), "hostdeck-prompt-session-"));
+    const opened = openMigratedDatabase(join(directory, "hostdeck.sqlite"));
+    try {
+      const fixture = createPhysicalSessionReads(
+        opened.db,
+        increasingWallClock(),
+        true
+      );
+      const seed = fixture.promptSeedEvent;
+      requireCondition(seed !== null, "Physical prompt fixture omitted its seed.");
+      const states = createSelectedStateRepository(opened.db);
+      const state = states.require(physicalUiSessionId);
+      const page = states.listEvents(physicalUiSessionId, {
+        after: null,
+        limit: 1
+      });
+
+      expect(page.events).toEqual([seed]);
+      expect(state.projection).toMatchObject({
+        earliest_retained_cursor: 1,
+        retained_event_bytes: selectedProjectedEventByteLength(seed),
+        retained_event_count: 1,
+        session: {
+          last_event_cursor: 1,
+          recent_summary: "Physical prompt stream ready"
+        }
+      });
     } finally {
       opened.db.close();
       rmSync(directory, { force: true, recursive: true });
@@ -754,9 +792,14 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           now: () => performance.now()
         });
         const revocations = createDeviceRevocationRepository(opened.db);
-        const sessionReads = requireProductionUiAcceptance
-          ? createPhysicalSessionReads(opened.db, now)
+        const sessionFixture = requireProductionUiAcceptance
+          ? createPhysicalSessionReads(
+              opened.db,
+              now,
+              requirePromptUiAcceptance
+            )
           : null;
+        const sessionReads = sessionFixture?.reads ?? null;
         const selectedStates = requirePromptUiAcceptance
           ? createSelectedStateRepository(opened.db)
           : null;
@@ -771,10 +814,17 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         const promptSseRoutes: HostDeckRoutePluginRegistration[] = [];
         if (requirePromptUiAcceptance) {
           requireCondition(
-            selectedStates !== null && promptAuditExecutor !== null,
+            selectedStates !== null &&
+              promptAuditExecutor !== null &&
+              sessionFixture !== null &&
+              sessionFixture.promptSeedEvent !== null,
             "Physical prompt state or audit owner was unavailable."
           );
-          promptRuntime = createPhysicalPromptRuntime(selectedStates, now);
+          promptRuntime = createPhysicalPromptRuntime(
+            selectedStates,
+            now,
+            sessionFixture.promptSeedEvent
+          );
           promptSubscribers = promptRuntime.subscribers;
           promptApiRoutes.push(
             createHostDeckProjectedEventRouteRegistration({
@@ -1639,10 +1689,16 @@ function requireProductionBuildRoot(candidate: string | null): string {
   return candidate;
 }
 
+interface PhysicalSessionReadFixture {
+  readonly promptSeedEvent: SelectedProjectionEvent | null;
+  readonly reads: ReturnType<typeof createSelectedSessionReadRepository>;
+}
+
 function createPhysicalSessionReads(
   db: ReturnType<typeof openMigratedDatabase>["db"],
-  now: () => Date
-): ReturnType<typeof createSelectedSessionReadRepository> {
+  now: () => Date,
+  seedPromptEvent: boolean
+): PhysicalSessionReadFixture {
   const createdAt = now().toISOString();
   const updatedAt = now().toISOString();
   db.prepare(
@@ -1685,12 +1741,46 @@ function createPhysicalSessionReads(
     }),
     "Production pairing UI acceptance."
   );
-  return createSelectedSessionReadRepository(db);
+  let promptSeedEvent: SelectedProjectionEvent | null = null;
+  if (seedPromptEvent) {
+    promptSeedEvent = physicalPromptSeedEvent(updatedAt);
+    const states = createSelectedStateRepository(db);
+    const current = states.require(physicalUiSessionId);
+    const record = Object.freeze({
+      byte_length: selectedProjectedEventByteLength(promptSeedEvent),
+      event: promptSeedEvent
+    });
+    states.appendEvent(
+      record,
+      {
+        ...current.projection,
+        session: {
+          ...current.projection.session,
+          last_activity_at: updatedAt,
+          last_event_cursor: promptSeedEvent.cursor,
+          recent_summary:
+            promptSeedEvent.type === "message"
+              ? promptSeedEvent.text
+              : current.projection.session.recent_summary,
+          updated_at: updatedAt
+        },
+        earliest_retained_cursor: promptSeedEvent.cursor,
+        retained_event_bytes: record.byte_length,
+        retained_event_count: 1
+      },
+      selectedStateRevision(current)
+    );
+  }
+  return Object.freeze({
+    promptSeedEvent,
+    reads: createSelectedSessionReadRepository(db)
+  });
 }
 
 function createPhysicalPromptRuntime(
   states: ReturnType<typeof createSelectedStateRepository>,
-  now: () => Date
+  now: () => Date,
+  promptSeedEvent: SelectedProjectionEvent
 ): PhysicalPromptRuntime {
   const selected = states.require(physicalUiSessionId);
   selectedSessionMappingRecordSchema.parse(selected.mapping);
@@ -1703,9 +1793,7 @@ function createPhysicalPromptRuntime(
     states,
     now: () => now().toISOString()
   });
-  const handoff = new PhysicalPromptHandoffService([
-    physicalPromptSeedEvent(now().toISOString())
-  ]);
+  const handoff = new PhysicalPromptHandoffService([promptSeedEvent]);
   const streamFailures: unknown[] = [];
   const recordStreamFailure = (failure: unknown): void => {
     streamFailures.push(failure);
