@@ -3826,7 +3826,6 @@ async function runProductionPromptUiSequence(
     await waitFor(
       () =>
         input.requestInspection.sessionDetailRequests >= 1 &&
-        input.requestInspection.sessionEventRequests >= 1 &&
         input.requestInspection.sessionStreamRequests >= 1 &&
         input.prompt.subscribers.snapshot().active_subscribers === 1,
       45_000,
@@ -3837,7 +3836,9 @@ async function runProductionPromptUiSequence(
     const failures = input.prompt.streamFailureCodes;
     throw new Error(
       "Physical prompt detail did not establish one current production stream " +
-        `(requests=${input.requestInspection.sessionStreamRequests};` +
+        `(detail=${input.requestInspection.sessionDetailRequests};` +
+        `event_page=${input.requestInspection.sessionEventRequests};` +
+        `stream=${input.requestInspection.sessionStreamRequests};` +
         `active=${snapshot.active_subscribers};opened=${snapshot.opened_subscribers};` +
         `aborted=${snapshot.aborted_subscribers};explicit=${snapshot.explicit_closures};` +
         `source_failed=${snapshot.source_failed_subscribers};` +
@@ -4651,8 +4652,7 @@ function assertPromptUiRuntimeTruth(
       inspection.sessionListRequests <= 3 &&
       inspection.sessionDetailRequests >= 1 &&
       inspection.sessionDetailRequests <= 2 &&
-      inspection.sessionEventRequests >= 1 &&
-      inspection.sessionEventRequests <= 2 &&
+      inspection.sessionEventRequests === 0 &&
       inspection.sessionStreamRequests >= 1 &&
       inspection.sessionStreamRequests <= 2 &&
       inspection.promptRequests === 1 &&
