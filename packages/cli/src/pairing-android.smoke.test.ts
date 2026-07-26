@@ -2593,11 +2593,9 @@ function installRequestInspection(
     }
     if (request.url === "/api/v1/remote/enable") {
       inspection.remoteEnableRequests += 1;
-      if (localAdmin === undefined) inspection.remoteBrowserMutationRequests += 1;
     }
     if (request.url === "/api/v1/remote/disable") {
       inspection.remoteDisableRequests += 1;
-      if (localAdmin === undefined) inspection.remoteBrowserMutationRequests += 1;
     }
     if (
       request.url === "/api/v1/sessions" ||
@@ -2643,6 +2641,22 @@ function installRequestInspection(
     if (request.url === "/__physical/checkpoint/revoked") {
       inspection.revokedCheckpointRequests += 1;
     }
+  });
+  app.addHook("onSend", async (request, _reply, payload) => {
+    if (
+      request.url !== "/api/v1/remote/enable" &&
+      request.url !== "/api/v1/remote/disable"
+    ) {
+      return payload;
+    }
+    try {
+      if (resolveHostDeckRequestAuthentication(request).state !== "local_admin") {
+        inspection.remoteBrowserMutationRequests += 1;
+      }
+    } catch {
+      inspection.remoteBrowserMutationRequests += 1;
+    }
+    return payload;
   });
   app.addHook("onResponse", async (request, reply) => {
     if (request.url === "/api/v1/access") {
@@ -4075,7 +4089,10 @@ async function runProductionRemoteRecoveryUiSequence(
   );
   requireCondition(
     Number(input.requestInspection.remoteBrowserStatusRequests) === 0 &&
-      Number(input.requestInspection.remoteBrowserMutationRequests) === 0,
+      Number(input.requestInspection.remoteBrowserMutationRequests) === 0 &&
+      input.requestInspection.remoteStatusRequests === 2 &&
+      input.requestInspection.remoteEnableRequests === 1 &&
+      input.requestInspection.remoteDisableRequests === 0,
     "Physical recovery started with unexpected browser remote traffic " +
       recoveryRequestSummary(input.requestInspection, input.manager)
   );
@@ -5377,7 +5394,7 @@ function assertRecoveryUiRuntimeTruth(
       inspection.hostStatusRequests <= 6 &&
       inspection.sessionListRequests >= 4 &&
       inspection.sessionListRequests <= 6 &&
-      inspection.remoteStatusRequests === 3 &&
+      inspection.remoteStatusRequests === 5 &&
       inspection.remoteBrowserStatusRequests === 2 &&
       inspection.remoteEnableRequests === 1 &&
       inspection.remoteDisableRequests === 0 &&
