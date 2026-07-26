@@ -2,7 +2,7 @@
 
 Date: 2026-07-26
 
-Status: criteria frozen; implementation in progress.
+Status: complete; `HLS-01` to `HLS-24` pass.
 
 ## Scope
 
@@ -105,6 +105,36 @@ Excluded: remote unlock, automatic unlock, local CLI or server behavior changes,
 - Mission Control, Session Detail, Host & access, prompt, model, goal, Plan, and approval tests own shared projection/copy, current-versus-stale source, action visibility, local-only recovery, and no unlock surface.
 - Production-shell browser tests own exact lock request headers/body/count, pending/success/uncertain/current-refresh paths, no request replay, no unlock request, route transition, lock-independent device administration, DOM/storage/history/privacy, responsive containment, and effective 200 percent reflow.
 - Deterministic captures and layout measurements own Focus Rail fidelity across current, pending, locked, stale, uncertain, recovery, degraded-but-lockable, confirmation, busy, route, and viewport states. Full repository/package/supply-chain/privacy/no-retry/residue gates close `HLS-01` to `HLS-24`.
+
+## Completion Evidence
+
+- Production code adds one dedicated paired-writer `requestHostLock`, distinct pending and unconfirmed coordinator latches, one strict headless controller, one persistent React owner above route and Host & access lifetimes, and one shared lock projector consumed by Mission Control and Session Detail. The dashboard exposes no host-unlock operation.
+- The lock path validates and sanitizes the exact request and native abort option before latching. Admission depends only on current paired-writer access, `can_lock:true`, observed unlocked truth, ready page CSRF, and no existing lock transition. It remains available when host, runtime, selected target, or stream state is degraded, while denied and pre-aborted calls send zero requests.
+- The synchronous pending latch blocks prompt, model, goal, Plan, and approval admission with one canonical explanation before HTTP dispatch. Reads, SSE, access recovery, paired-device list/revoke, and already-dispatched operations retain their independent ownership and are not aborted, relabeled, or claimed stopped.
+- Correlated success requires the strict locked access response and exact device, permission, expiry, origin, network, transport, and capability continuity. It installs current `locked:true` access before resolution and leaves CSRF ready. Every same-authority uncorrelated post-dispatch outcome becomes unconfirmed without retry or operation-id reuse; authority loss retains the stronger existing policy.
+- Causal hardening protects lock truth from reads started before or during dispatch. Such reads cannot clear later uncertainty or overwrite a later correlated lock, and an early locked read cannot create a contradictory pending-plus-locked snapshot. Only a later current access proof begun in the unconfirmed window may prove locked or unlocked.
+- Controller hardening snapshots the exact authority epoch before dispatch, creates the operation id only after explicit confirmation, coalesces duplicate confirmation, distinguishes synchronous local admission failure from post-dispatch uncertainty, and suppresses late close or replaced-authority settlement. Public views retain no operation id, device id, private origin, raw error, API envelope, or CSRF credential.
+- Manual boundary review found and closed two omissions before completion. The selected-runtime checker now owns both host-lock exports and both web tests, and a forged generic `host_unlock` call is explicitly rejected before the CSRF client even though the typed generic route already excluded the local-admin route. Direct regression coverage proves zero unlock requests.
+- Host-lock `409 operation_conflict` remains a domain conflict rather than stale CSRF generation. The existing device-revoke exception and legacy protected-route generation behavior remain unchanged and covered.
+- UI composition adds one flat Host & access lock section before devices, one nested destructive confirmation, and one compact route rail before readable queue/timeline content. Confirmation states host-wide scope, read/SSE continuity, non-cancellation of sent/running work, and laptop-only `codexdeck unlock`; busy Escape, outside interaction, close, Cancel, and repeat submit are disabled.
+- The focused coordinator/CSRF/controller/component/shell/startup set passes 101 tests across six files. Package-local web validation passes 496 tests across 28 files; aggregate web validation passes 499 tests across 29 files. The production-shell Chromium aggregate passes all 56 scenarios, and the final dedicated host-lock matrix passes all four scenarios after the last boundary and evidence hardening.
+- Repository validation passes 2,354 unit tests with 28 intentional skips, 244 contract tests, and 36 integration tests. Root and all eight package typechecks, lint/exports over 647 files and eight packages, scaffold, planning, and the exact selected-runtime boundary over 612 production modules and 22 external modules pass.
+- Vite builds 2,033 modules to 67.73 kB CSS and 868.10 kB JavaScript. The existing main-chunk size advisory remains visible for downstream complete-dashboard and release hardening; this leaf adds no fallback or readiness claim around it.
+- Deterministic package build and acceptance remain byte-identical at 612 sources, 1,231 owned outputs, and 6,445 entries with identity `424cc0d7931ae02f8f089039c945a58a564a8b2a9ef1f5e2bfe2d06216c62426`. Two-build determinism, relocated read-only execution, runtime/config/static/integrity rejection, frozen offline install, and diff checks pass.
+- Production audit reports no known vulnerabilities. The production inventory contains only MIT, ISC, Apache-2.0, BSD-3-Clause, BlueOak-1.0.0, 0BSD, and reviewed permissive alternative expressions. No dependency or lockfile changed.
+- Visual evidence contains 24 deterministic PNGs plus 24 layout records under `artifacts/fe-v1-033-visible-host-lock-state/`. Every PNG decodes with nonzero variance; viewport captures match their named dimensions, and the two explicitly named full-page Session Detail captures are 320 x 940 and 390 x 909. Measurements report no document, dialog, or sheet-body horizontal overflow.
+- Manual full-size review covers confirmation, busy lock, current/stale locked recovery, unconfirmed and later-unlocked proof, degraded-but-lockable and reader states, both routes, long queue content, 320/360/390/412/768/1280, 390 x 420, and actual 200 percent reflow. Focus Rail hierarchy, mobile bottom-sheet ownership, close/action reachability, fixed type, semantic tones, and readable content pass without card nesting, desktop inspector structure, Signal Ledger borrowing, overlap, or clipping.
+- Browser requests stay on deterministic loopback. DOM/storage/request assertions plus source and artifact scans find no raw operation id, device id, CSRF material, private origin, unlock request, automatic retry, timer, browser persistence, service worker, or external request path. Playwright/Vitest/package processes and port 4175 are absent after validation; the pre-existing four-day-old developer preview on port 5173 was not task-owned and was left running.
+- Physical Android and complete-dashboard release acceptance remain downstream. This headless/browser leaf changes no Tailscale profile, Serve state, ADB state, phone state, package install behavior, or local CLI/server lock semantics.
+
+## Criteria Result
+
+- `HLS-01` to `HLS-04`: strict persistent ownership, exact paired-writer boundary, explicit confirmation, one fresh operation id, and one request pass; forged generic lock and unlock calls fail closed.
+- `HLS-05` to `HLS-08`: synchronous global write closure, independent read/device continuity, non-cancellation truth, exact correlated adoption, and zero-send local failure pass.
+- `HLS-09` to `HLS-13`: conservative unconfirmed outcomes, domain-conflict handling, causal proof ordering, route/authority/close races, and private-free shared projection pass without retry.
+- `HLS-14` to `HLS-20`: both route rails, all five current mutation controls, emergency degraded admission, exact confirmation copy, local-only recovery, and one production composition pass.
+- `HLS-21` and `HLS-22`: semantics, keyboard/focus, dismissal lock, reduced motion, 44 px targets, responsive containment, long content, short height, and 200 percent reflow pass in deterministic Chromium and inspected evidence.
+- `HLS-23` and `HLS-24`: focused and adjacent regressions, full repository/browser/package/supply-chain/privacy gates, source and visual inspection, owner evidence, and residue cleanup pass. Clean implementation and owner-doc commits are recorded by repository history.
 
 ## Reuse And Ownership
 

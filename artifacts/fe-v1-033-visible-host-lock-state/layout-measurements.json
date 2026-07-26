@@ -1,0 +1,558 @@
+[
+  {
+    "state": "confirmation-390x844",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 428,
+      "width": 390,
+      "height": 416
+    },
+    "lockSection": null,
+    "scrollOwner": {
+      "clientHeight": 319,
+      "clientWidth": 356,
+      "scrollHeight": 319,
+      "scrollWidth": 356
+    }
+  },
+  {
+    "state": "confirmation-320x800",
+    "viewport": {
+      "width": 320,
+      "height": 800
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 286,
+      "width": 320,
+      "height": 514
+    },
+    "lockSection": null,
+    "scrollOwner": {
+      "clientHeight": 417,
+      "clientWidth": 286,
+      "scrollHeight": 417,
+      "scrollWidth": 286
+    }
+  },
+  {
+    "state": "confirmation-short-390x420",
+    "viewport": {
+      "width": 390,
+      "height": 420
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 8,
+      "width": 390,
+      "height": 412
+    },
+    "lockSection": null,
+    "scrollOwner": {
+      "clientHeight": 319,
+      "clientWidth": 356,
+      "scrollHeight": 319,
+      "scrollWidth": 356
+    }
+  },
+  {
+    "state": "locking-busy-390x844",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 428,
+      "width": 390,
+      "height": 416
+    },
+    "lockSection": null,
+    "scrollOwner": {
+      "clientHeight": 319,
+      "clientWidth": 356,
+      "scrollHeight": 319,
+      "scrollWidth": 356
+    }
+  },
+  {
+    "state": "locked-recovery-320x800",
+    "viewport": {
+      "width": 320,
+      "height": 800
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 144,
+      "width": 320,
+      "height": 656
+    },
+    "lockSection": {
+      "x": 17,
+      "y": 441,
+      "width": 286,
+      "height": 232
+    },
+    "scrollOwner": {
+      "clientHeight": 1758,
+      "clientWidth": 286,
+      "scrollHeight": 1758,
+      "scrollWidth": 286
+    }
+  },
+  {
+    "state": "locked-recovery-360x800",
+    "viewport": {
+      "width": 360,
+      "height": 800
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 144,
+      "width": 360,
+      "height": 656
+    },
+    "lockSection": {
+      "x": 17,
+      "y": 422,
+      "width": 326,
+      "height": 232
+    },
+    "scrollOwner": {
+      "clientHeight": 1719,
+      "clientWidth": 326,
+      "scrollHeight": 1719,
+      "scrollWidth": 326
+    }
+  },
+  {
+    "state": "locked-recovery-390x844",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 164,
+      "width": 390,
+      "height": 680
+    },
+    "lockSection": {
+      "x": 17,
+      "y": 442,
+      "width": 356,
+      "height": 214
+    },
+    "scrollOwner": {
+      "clientHeight": 1569,
+      "clientWidth": 356,
+      "scrollHeight": 1569,
+      "scrollWidth": 356
+    }
+  },
+  {
+    "state": "locked-recovery-412x915",
+    "viewport": {
+      "width": 412,
+      "height": 915
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 235,
+      "width": 412,
+      "height": 680
+    },
+    "lockSection": {
+      "x": 17,
+      "y": 513,
+      "width": 378,
+      "height": 214
+    },
+    "scrollOwner": {
+      "clientHeight": 1569,
+      "clientWidth": 378,
+      "scrollHeight": 1569,
+      "scrollWidth": 378
+    }
+  },
+  {
+    "state": "locked-recovery-768x1024",
+    "viewport": {
+      "width": 768,
+      "height": 1024
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 104,
+      "y": 344,
+      "width": 560,
+      "height": 680
+    },
+    "lockSection": {
+      "x": 121,
+      "y": 622,
+      "width": 526,
+      "height": 173
+    },
+    "scrollOwner": {
+      "clientHeight": 1472,
+      "clientWidth": 526,
+      "scrollHeight": 1472,
+      "scrollWidth": 526
+    }
+  },
+  {
+    "state": "locked-recovery-1280x800",
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 360,
+      "y": 144,
+      "width": 560,
+      "height": 656
+    },
+    "lockSection": {
+      "x": 377,
+      "y": 422,
+      "width": 526,
+      "height": 173
+    },
+    "scrollOwner": {
+      "clientHeight": 1472,
+      "clientWidth": 526,
+      "scrollHeight": 1472,
+      "scrollWidth": 526
+    }
+  },
+  {
+    "state": "locked-recovery-short-390x420",
+    "viewport": {
+      "width": 390,
+      "height": 420
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 76,
+      "width": 390,
+      "height": 344
+    },
+    "lockSection": {
+      "x": 17,
+      "y": 142,
+      "width": 356,
+      "height": 214
+    },
+    "scrollOwner": {
+      "clientHeight": 1569,
+      "clientWidth": 356,
+      "scrollHeight": 1569,
+      "scrollWidth": 356
+    }
+  },
+  {
+    "state": "locked-recovery-reflow-200-1280x800",
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "zoom": "2",
+    "dialog": {
+      "x": 80,
+      "y": -512,
+      "width": 1120,
+      "height": 1312
+    },
+    "lockSection": {
+      "x": 114,
+      "y": -28,
+      "width": 1052,
+      "height": 346
+    },
+    "scrollOwner": {
+      "clientHeight": 1472,
+      "clientWidth": 526,
+      "scrollHeight": 1472,
+      "scrollWidth": 526
+    }
+  },
+  {
+    "state": "mission-locked-long-390x844",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": "1",
+    "routeRail": {
+      "x": 16,
+      "y": 128,
+      "width": 358,
+      "height": 94
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390
+    }
+  },
+  {
+    "state": "unconfirmed-sheet-390x844",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 164,
+      "width": 390,
+      "height": 680
+    },
+    "lockSection": {
+      "x": 17,
+      "y": 422,
+      "width": 356,
+      "height": 214
+    },
+    "scrollOwner": {
+      "clientHeight": 1568,
+      "clientWidth": 356,
+      "scrollHeight": 1568,
+      "scrollWidth": 356
+    }
+  },
+  {
+    "state": "mission-unconfirmed-390x844",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": "1",
+    "routeRail": {
+      "x": 16,
+      "y": 128,
+      "width": 358,
+      "height": 94
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390
+    }
+  },
+  {
+    "state": "unconfirmed-proved-unlocked-390x844",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 164,
+      "width": 390,
+      "height": 680
+    },
+    "lockSection": {
+      "x": 17,
+      "y": 422,
+      "width": 356,
+      "height": 165
+    },
+    "scrollOwner": {
+      "clientHeight": 1501,
+      "clientWidth": 356,
+      "scrollHeight": 1501,
+      "scrollWidth": 356
+    }
+  },
+  {
+    "state": "degraded-host-lockable-390x844",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 164,
+      "width": 390,
+      "height": 680
+    },
+    "lockSection": {
+      "x": 17,
+      "y": 562,
+      "width": 356,
+      "height": 165
+    },
+    "scrollOwner": {
+      "clientHeight": 1179,
+      "clientWidth": 356,
+      "scrollHeight": 1179,
+      "scrollWidth": 356
+    }
+  },
+  {
+    "state": "reader-no-lock-command-390x844",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 164,
+      "width": 390,
+      "height": 680
+    },
+    "lockSection": {
+      "x": 17,
+      "y": 635,
+      "width": 356,
+      "height": 92
+    },
+    "scrollOwner": {
+      "clientHeight": 1053,
+      "clientWidth": 356,
+      "scrollHeight": 1053,
+      "scrollWidth": 356
+    }
+  },
+  {
+    "state": "mission-current-locked-390x844",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": "1",
+    "routeRail": {
+      "x": 16,
+      "y": 128,
+      "width": 358,
+      "height": 94
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390
+    }
+  },
+  {
+    "state": "mission-stale-locked-390x844",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": "1",
+    "routeRail": {
+      "x": 16,
+      "y": 128,
+      "width": 358,
+      "height": 94
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390
+    }
+  },
+  {
+    "state": "stale-locked-recovery-390x844",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 164,
+      "width": 390,
+      "height": 680
+    },
+    "lockSection": {
+      "x": 17,
+      "y": 513,
+      "width": 356,
+      "height": 214
+    },
+    "scrollOwner": {
+      "clientHeight": 1286,
+      "clientWidth": 356,
+      "scrollHeight": 1286,
+      "scrollWidth": 356
+    }
+  },
+  {
+    "state": "session-detail-locked-full-390x844",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": "1",
+    "routeRail": {
+      "x": 16,
+      "y": 148,
+      "width": 358,
+      "height": 94
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390
+    }
+  },
+  {
+    "state": "session-detail-locked-full-320x800",
+    "viewport": {
+      "width": 320,
+      "height": 800
+    },
+    "zoom": "1",
+    "routeRail": {
+      "x": 16,
+      "y": 163,
+      "width": 288,
+      "height": 110
+    },
+    "document": {
+      "clientWidth": 320,
+      "scrollWidth": 320
+    }
+  },
+  {
+    "state": "session-detail-locked-sheet-390x844",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "zoom": "1",
+    "dialog": {
+      "x": 0,
+      "y": 164,
+      "width": 390,
+      "height": 680
+    },
+    "lockSection": {
+      "x": 17,
+      "y": 513,
+      "width": 356,
+      "height": 214
+    },
+    "scrollOwner": {
+      "clientHeight": 1259,
+      "clientWidth": 356,
+      "scrollHeight": 1259,
+      "scrollWidth": 356
+    }
+  }
+]

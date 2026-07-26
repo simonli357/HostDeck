@@ -537,11 +537,10 @@ describe("browser CSRF authority lifecycle", () => {
     expect(test.client.snapshot().phase).toBe("ready");
   });
 
-  it("clears authority on permission, read-only, and conflict responses without bootstrap", async () => {
+  it("clears authority on permission and read-only responses without bootstrap", async () => {
     for (const scenario of [
       { code: "permission_denied", status: 403, reason: "authority_rejected" },
-      { code: "read_only", status: 403, reason: "authority_rejected" },
-      { code: "operation_conflict", status: 409, reason: "stale_generation" }
+      { code: "read_only", status: 403, reason: "authority_rejected" }
     ] as const) {
       const test = harness({
         fetch: async () => apiErrorResponse(scenario.status, scenario.code, false)
@@ -584,6 +583,30 @@ describe("browser CSRF authority lifecycle", () => {
       }),
       "api_error"
     );
+    expect(test.client.snapshot()).toMatchObject({
+      phase: "ready",
+      generation: 2,
+      failure: null
+    });
+    expect(test.requests).toHaveLength(1);
+  });
+
+  it("preserves CSRF authority for a non-retryable host-lock domain conflict", async () => {
+    const test = harness({
+      fetch: async () => apiErrorResponse(409, "operation_conflict", false)
+    });
+    test.client.adoptBootstrap(bootstrapPayload(rawToken, 2, rotatedAt));
+
+    const error = await expectCsrfFailure(
+      test.client.request("host_lock", {
+        body: { operation_id: "op_csrf_host_lock_conflict", confirmed: true }
+      }),
+      "api_error"
+    );
+    expect(error.apiError).toMatchObject({
+      code: "operation_conflict",
+      retryable: false
+    });
     expect(test.client.snapshot()).toMatchObject({
       phase: "ready",
       generation: 2,

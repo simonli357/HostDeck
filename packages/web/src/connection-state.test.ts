@@ -3,6 +3,7 @@ import {
   goalControlSnapshotSchema,
   managedSessionProjectionSchema,
   modelControlSnapshotSchema,
+  promptDispatchResponseSchema,
   type SelectedAccessStateResponse,
   type SelectedHostAccessMode,
   type SelectedHostLocalHealthCause,
@@ -1027,38 +1028,448 @@ describe("browser shell connection-state coordinator", () => {
     expect(sseClock.pendingCount).toBe(0);
   });
 
-  it("gates protected mutations and never retries an explicit failure", async () => {
+  it("owns host lock outside the generic write path and latches an unconfirmed outcome", async () => {
     const harness = createHarness(remoteOrigin);
     await expect(
-      harness.coordinator.requestProtected("host_lock", {
+      harness.coordinator.requestHostLock({
         body: { operation_id: "op_connection_early_lock", confirmed: true }
       })
     ).rejects.toMatchObject({ reason: "not_ready" });
+    expect(harness.http.requests).toHaveLength(0);
 
     enqueueRemoteWriterMission(harness, [], 7, 1);
     await harness.coordinator.setTarget({ kind: "mission_control" });
+    const mutation = deferred<BrowserHttpResponsePort>();
+    harness.http.enqueue("mutation", async () => await mutation.promise);
+    const pending = harness.coordinator.requestHostLock({
+      body: { operation_id: "op_connection_failed_lock", confirmed: true }
+    });
+    await waitFor(() => harness.http.routeIds().includes("mutation"));
+    expect(harness.coordinator.snapshot().writeEligibility).toEqual({
+      scope: "browser_shell",
+      eligible: false,
+      causes: ["host_lock_pending"]
+    });
+    await expect(
+      harness.coordinator.requestProtected("prompt_dispatch", {
+        params: { session_id: firstSessionId },
+        body: {
+          operation_id: "op_connection_prompt_during_lock",
+          kind: "prompt",
+          text: "Do not dispatch this request."
+        }
+      })
+    ).rejects.toMatchObject({ reason: "not_ready" });
     harness.http.enqueue(
-      "mutation",
-      jsonResponse(503, apiError("runtime_unavailable", true))
+      "devices",
+      jsonResponse(200, deviceListPage(["device_connection_phone", "device_other"]))
     );
     await expect(
-      harness.coordinator.requestProtected("host_lock", {
-        body: { operation_id: "op_connection_failed_lock", confirmed: true }
+      harness.coordinator.requestDeviceList({ query: { limit: "20" } })
+    ).resolves.toMatchObject({ data: { devices: expect.any(Array) } });
+    harness.http.enqueue(
+      "revoke",
+      jsonResponse(200, {
+        operation_id: "op_connection_revoke_during_lock",
+        device_id: "device_other",
+        revoked_at: laterTimestamp,
+        authority_invalidated: true,
+        self_revoked: false
       })
-    ).rejects.toMatchObject({ reason: "api_error" });
+    );
+    await expect(
+      harness.coordinator.requestDeviceRevoke({
+        params: { device_id: "device_other" },
+        body: {
+          operation_id: "op_connection_revoke_during_lock",
+          confirmed: true
+        }
+      })
+    ).resolves.toMatchObject({ data: { device_id: "device_other" } });
+    expect(harness.coordinator.snapshot().writeEligibility.causes).toEqual([
+      "host_lock_pending"
+    ]);
+    await expect(
+      Reflect.apply(
+        harness.coordinator.requestProtected,
+        harness.coordinator,
+        [
+          "host_lock",
+          {
+            body: { operation_id: "op_connection_generic_lock", confirmed: true }
+          }
+        ]
+      )
+    ).rejects.toMatchObject({ reason: "client_contract" });
+    await expect(
+      Reflect.apply(
+        harness.coordinator.requestProtected,
+        harness.coordinator,
+        [
+          "host_unlock",
+          {
+            body: { operation_id: "op_connection_generic_unlock", confirmed: true }
+          }
+        ]
+      )
+    ).rejects.toMatchObject({ reason: "client_contract" });
+    expect(harness.http.routeIds()).not.toContain("host_unlock");
+
+    mutation.resolve(jsonResponse(503, apiError("runtime_unavailable", true)));
+    await expect(pending).rejects.toMatchObject({ reason: "api_error" });
     expect(harness.http.routeIds().filter((route) => route === "mutation")).toHaveLength(1);
     expect(harness.coordinator.snapshot()).toMatchObject({
+      access: { state: "current", data: { locked: false } },
+      csrf: { phase: "ready" },
       lastFailure: { source: "csrf", reason: "api_error", status: 503 },
-      writeEligibility: { eligible: true }
+      writeEligibility: {
+        eligible: false,
+        causes: ["host_lock_unconfirmed"]
+      }
+    });
+    await expect(
+      harness.coordinator.requestHostLock({
+        body: { operation_id: "op_connection_retry_lock", confirmed: true }
+      })
+    ).rejects.toMatchObject({ reason: "not_ready" });
+    harness.http.enqueue(
+      "devices",
+      jsonResponse(200, deviceListPage(["device_connection_phone"]))
+    );
+    await expect(
+      harness.coordinator.requestDeviceList({ query: { limit: "20" } })
+    ).resolves.toMatchObject({ data: { devices: [{ device_id: "device_connection_phone" }] } });
+    expect(harness.http.routeIds().filter((route) => route === "mutation")).toHaveLength(1);
+    harness.coordinator.close();
+  });
+
+  it("locks with exact credentials despite degraded runtime and adopts success before resolving", async () => {
+    const harness = createHarness(remoteOrigin);
+    harness.http.enqueue("access", jsonResponse(200, pairedAccess(remoteOrigin, "write")));
+    harness.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({
+          mode: "paired_write",
+          origin: remoteOrigin,
+          localCause: "runtime_disconnected",
+          remoteGeneration: 7
+        })
+      )
+    );
+    harness.http.enqueue(
+      "list",
+      jsonResponse(200, sessionList("paired_write", remoteOrigin, []))
+    );
+    harness.http.enqueue("csrf", jsonResponse(200, csrfBootstrap(1)));
+    const degraded = await harness.coordinator.setTarget({ kind: "mission_control" });
+    expect(degraded).toMatchObject({
+      phase: "offline",
+      csrf: { phase: "ready", generation: 1 },
+      writeEligibility: { eligible: false, causes: ["host_not_ready"] }
     });
 
+    const mutation = deferred<BrowserHttpResponsePort>();
+    harness.http.enqueue("mutation", async () => await mutation.promise);
+    const pending = harness.coordinator.requestHostLock({
+      body: { operation_id: "op_connection_lock_success_001", confirmed: true }
+    });
+    await waitFor(() => harness.http.routeIds().includes("mutation"));
+    expect(harness.coordinator.snapshot().writeEligibility).toEqual({
+      scope: "browser_shell",
+      eligible: false,
+      causes: ["host_lock_pending", "host_not_ready"]
+    });
+    expect(harness.http.requests.at(-1)).toMatchObject({
+      routeId: "mutation",
+      path: "/api/v1/access/lock",
+      init: {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "cache-control": "no-store",
+          "content-type": "application/json",
+          "x-hostdeck-csrf": rawCsrfToken,
+          "x-hostdeck-csrf-generation": "1"
+        },
+        body: JSON.stringify({
+          operation_id: "op_connection_lock_success_001",
+          confirmed: true
+        })
+      }
+    });
+
+    mutation.resolve(jsonResponse(200, pairedAccess(remoteOrigin, "write", true)));
+    await expect(pending).resolves.toMatchObject({ data: { locked: true } });
+    expect(harness.coordinator.snapshot()).toMatchObject({
+      access: { state: "current", data: { locked: true, can_write_sessions: false } },
+      host: { state: "current" },
+      targetState: { state: "current" },
+      csrf: { phase: "ready", generation: 1 },
+      writeEligibility: {
+        eligible: false,
+        causes: ["host_locked", "host_not_ready"]
+      }
+    });
+    expect(harness.http.routeIds().filter((route) => route === "mutation")).toHaveLength(1);
+    harness.coordinator.close();
+  });
+
+  it("does not let a refresh begun during lock dispatch overwrite correlated success", async () => {
+    const harness = createHarness(remoteOrigin);
+    enqueueRemoteWriterMission(harness, [], 7, 1);
+    await harness.coordinator.setTarget({ kind: "mission_control" });
+
+    const mutation = deferred<BrowserHttpResponsePort>();
+    const access = deferred<BrowserHttpResponsePort>();
+    harness.http.enqueue("mutation", async () => await mutation.promise);
+    harness.http.enqueue("access", async () => await access.promise);
+    harness.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({ mode: "paired_write", origin: remoteOrigin, remoteGeneration: 7 })
+      )
+    );
+    harness.http.enqueue(
+      "list",
+      jsonResponse(200, sessionList("paired_write", remoteOrigin, []))
+    );
+
+    const lock = harness.coordinator.requestHostLock({
+      body: { operation_id: "op_connection_lock_race_success", confirmed: true }
+    });
+    const refresh = harness.coordinator.refresh();
+    await waitFor(() => harness.http.routeIds().filter((route) => route === "access").length === 2);
+    mutation.resolve(jsonResponse(200, pairedAccess(remoteOrigin, "write", true)));
+    await expect(lock).resolves.toMatchObject({ data: { locked: true } });
+
+    access.resolve(jsonResponse(200, pairedAccess(remoteOrigin, "write", false)));
+    await refresh;
+    expect(harness.coordinator.snapshot()).toMatchObject({
+      access: { state: "current", data: { locked: true, can_write_sessions: false } },
+      csrf: { phase: "ready" },
+      writeEligibility: { eligible: false, causes: ["host_locked"] }
+    });
+    harness.coordinator.close();
+  });
+
+  it("does not publish a locked access bit from a refresh begun during pending lock", async () => {
+    const harness = createHarness(remoteOrigin);
+    enqueueRemoteWriterMission(harness, [], 7, 1);
+    await harness.coordinator.setTarget({ kind: "mission_control" });
+
+    const mutation = deferred<BrowserHttpResponsePort>();
+    const access = deferred<BrowserHttpResponsePort>();
+    harness.http.enqueue("mutation", async () => await mutation.promise);
+    harness.http.enqueue("access", async () => await access.promise);
+    harness.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({ mode: "paired_write", origin: remoteOrigin, remoteGeneration: 7 })
+      )
+    );
+    harness.http.enqueue(
+      "list",
+      jsonResponse(200, sessionList("paired_write", remoteOrigin, []))
+    );
+
+    const lock = harness.coordinator.requestHostLock({
+      body: { operation_id: "op_connection_lock_pending_read", confirmed: true }
+    });
+    const overlappingRefresh = harness.coordinator.refresh();
+    await waitFor(() => harness.http.routeIds().filter((route) => route === "access").length === 2);
+    access.resolve(jsonResponse(200, pairedAccess(remoteOrigin, "write", true)));
+    await overlappingRefresh;
+    expect(harness.coordinator.snapshot()).toMatchObject({
+      access: { state: "current", data: { locked: false, can_write_sessions: true } },
+      writeEligibility: { eligible: false, causes: ["host_lock_pending"] }
+    });
+
+    mutation.resolve(jsonResponse(409, apiError("operation_conflict", false)));
+    await expect(lock).rejects.toMatchObject({ reason: "api_error", status: 409 });
+    expect(harness.coordinator.snapshot()).toMatchObject({
+      access: { state: "current", data: { locked: false } },
+      writeEligibility: { eligible: false, causes: ["host_lock_unconfirmed"] }
+    });
+
+    harness.http.enqueue(
+      "access",
+      jsonResponse(200, pairedAccess(remoteOrigin, "write", true))
+    );
+    harness.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({ mode: "paired_write", origin: remoteOrigin, remoteGeneration: 7 })
+      )
+    );
+    harness.http.enqueue(
+      "list",
+      jsonResponse(200, sessionList("paired_write", remoteOrigin, []))
+    );
+    const proven = await harness.coordinator.refresh();
+    expect(proven).toMatchObject({
+      access: { state: "current", data: { locked: true, can_write_sessions: false } },
+      writeEligibility: { eligible: false, causes: ["host_locked"] }
+    });
+    harness.coordinator.close();
+  });
+
+  it("blocks later writes without cancelling a mutation already dispatched", async () => {
+    const harness = createHarness(remoteOrigin);
+    enqueueRemoteWriterMission(harness, [sessionItem(firstSessionId)], 7, 1);
+    await harness.coordinator.setTarget({ kind: "mission_control" });
+
+    const promptResponse = deferred<BrowserHttpResponsePort>();
+    const lockResponse = deferred<BrowserHttpResponsePort>();
+    harness.http.enqueue("prompt", async () => await promptResponse.promise);
+    harness.http.enqueue("mutation", async () => await lockResponse.promise);
+    const prompt = harness.coordinator.requestProtected("prompt_dispatch", {
+      params: { session_id: firstSessionId },
+      body: {
+        operation_id: "op_connection_prompt_before_lock",
+        kind: "prompt",
+        text: "Continue the bounded task."
+      }
+    });
+    await waitFor(() => harness.http.routeIds().includes("prompt"));
+    const promptRequest = harness.http.requests.find(({ routeId }) => routeId === "prompt");
+    expect(promptRequest?.init.signal.aborted).toBe(false);
+
+    const lock = harness.coordinator.requestHostLock({
+      body: { operation_id: "op_connection_lock_after_prompt", confirmed: true }
+    });
+    await waitFor(() => harness.http.routeIds().includes("mutation"));
+    await expect(
+      harness.coordinator.requestProtected("prompt_dispatch", {
+        params: { session_id: firstSessionId },
+        body: {
+          operation_id: "op_connection_prompt_blocked_by_lock",
+          kind: "prompt",
+          text: "This request must stay local."
+        }
+      })
+    ).rejects.toMatchObject({ reason: "not_ready" });
+    expect(harness.http.routeIds().filter((route) => route === "prompt")).toHaveLength(1);
+    expect(promptRequest?.init.signal.aborted).toBe(false);
+
+    lockResponse.resolve(jsonResponse(200, pairedAccess(remoteOrigin, "write", true)));
+    await lock;
+    expect(promptRequest?.init.signal.aborted).toBe(false);
+    promptResponse.resolve(
+      jsonResponse(
+        202,
+        promptDispatchResponseSchema.parse({
+          operation_id: "op_connection_prompt_before_lock",
+          kind: "prompt",
+          target: {
+            type: "managed_session",
+            session_id: firstSessionId,
+            codex_thread_id: "thread_connection_prompt"
+          },
+          state: "accepted",
+          accepted_at: timestamp,
+          audit_record_id: "audit_connection_prompt",
+          turn_id: "turn_connection_prompt",
+          action: "start"
+        })
+      )
+    );
+    await expect(prompt).resolves.toMatchObject({
+      status: 202,
+      data: { operation_id: "op_connection_prompt_before_lock" }
+    });
+    expect(harness.coordinator.snapshot().writeEligibility).toMatchObject({
+      eligible: false,
+      causes: ["host_locked"]
+    });
+    harness.coordinator.close();
+  });
+
+  it("requires a causally later access proof after a host-lock conflict", async () => {
+    const harness = createHarness(remoteOrigin);
+    enqueueRemoteWriterMission(harness, [], 7, 1);
+    await harness.coordinator.setTarget({ kind: "mission_control" });
+
+    const mutation = deferred<BrowserHttpResponsePort>();
+    const accessDuringDispatch = deferred<BrowserHttpResponsePort>();
+    harness.http.enqueue("mutation", async () => await mutation.promise);
+    harness.http.enqueue("access", async () => await accessDuringDispatch.promise);
+    harness.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({ mode: "paired_write", origin: remoteOrigin, remoteGeneration: 7 })
+      )
+    );
+    harness.http.enqueue(
+      "list",
+      jsonResponse(200, sessionList("paired_write", remoteOrigin, []))
+    );
+
+    const lock = harness.coordinator.requestHostLock({
+      body: { operation_id: "op_connection_lock_conflict", confirmed: true }
+    });
+    const overlappingRefresh = harness.coordinator.refresh();
+    await waitFor(() => harness.http.routeIds().filter((route) => route === "access").length === 2);
+    mutation.resolve(jsonResponse(409, apiError("operation_conflict", false)));
+    await expect(lock).rejects.toMatchObject({ reason: "api_error", status: 409 });
+    expect(harness.coordinator.snapshot()).toMatchObject({
+      csrf: { phase: "ready", generation: 1 },
+      writeEligibility: {
+        eligible: false,
+        causes: ["connection_not_current", "host_lock_unconfirmed"]
+      }
+    });
+
+    accessDuringDispatch.resolve(
+      jsonResponse(200, pairedAccess(remoteOrigin, "write", false))
+    );
+    await overlappingRefresh;
+    expect(harness.coordinator.snapshot()).toMatchObject({
+      access: { state: "current", data: { locked: false } },
+      writeEligibility: { eligible: false, causes: ["host_lock_unconfirmed"] }
+    });
+
+    harness.http.enqueue(
+      "access",
+      jsonResponse(200, pairedAccess(remoteOrigin, "write", true))
+    );
+    harness.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({ mode: "paired_write", origin: remoteOrigin, remoteGeneration: 7 })
+      )
+    );
+    harness.http.enqueue(
+      "list",
+      jsonResponse(200, sessionList("paired_write", remoteOrigin, []))
+    );
+    const proven = await harness.coordinator.refresh();
+    expect(proven).toMatchObject({
+      access: { state: "current", data: { locked: true } },
+      csrf: { phase: "ready", generation: 1 },
+      writeEligibility: { eligible: false, causes: ["host_locked"] }
+    });
+    expect(harness.http.routeIds().filter((route) => route === "mutation")).toHaveLength(1);
+    harness.coordinator.close();
+  });
+
+  it("preserves stronger authority rejection during host lock", async () => {
+    const harness = createHarness(remoteOrigin);
+    enqueueRemoteWriterMission(harness, [], 7, 1);
+    await harness.coordinator.setTarget({ kind: "mission_control" });
     harness.http.enqueue(
       "mutation",
       jsonResponse(403, apiError("permission_denied", false))
     );
     await expect(
-      harness.coordinator.requestProtected("host_lock", {
-        body: { operation_id: "op_connection_denied_lock", confirmed: true }
+      harness.coordinator.requestHostLock({
+        body: { operation_id: "op_connection_failed_lock", confirmed: true }
       })
     ).rejects.toMatchObject({ reason: "authority_rejected" });
     expect(harness.coordinator.snapshot()).toMatchObject({
@@ -1072,6 +1483,154 @@ describe("browser shell connection-state coordinator", () => {
       }
     });
     harness.coordinator.close();
+  });
+
+  it("rejects malformed, read-only, stale, local-admin, and already-locked lock calls before HTTP", async () => {
+    const malformed = createHarness(remoteOrigin);
+    enqueueRemoteWriterMission(malformed, [], 7, 1);
+    await malformed.coordinator.setTarget({ kind: "mission_control" });
+    for (const input of [
+      {},
+      { body: { operation_id: "op_connection_invalid_confirm", confirmed: false } },
+      {
+        body: {
+          operation_id: "op_connection_invalid_extra",
+          confirmed: true,
+          extra: true
+        }
+      }
+    ]) {
+      await expect(
+        Reflect.apply(malformed.coordinator.requestHostLock, malformed.coordinator, [input])
+      ).rejects.toMatchObject({ reason: "client_contract" });
+    }
+    let hostileGetterCalls = 0;
+    const hostileBody = Object.defineProperty({}, "operation_id", {
+      enumerable: true,
+      get() {
+        hostileGetterCalls += 1;
+        return "op_connection_hostile_lock";
+      }
+    });
+    Object.defineProperty(hostileBody, "confirmed", {
+      enumerable: true,
+      value: true
+    });
+    await expect(
+      Reflect.apply(malformed.coordinator.requestHostLock, malformed.coordinator, [
+        { body: hostileBody }
+      ])
+    ).rejects.toMatchObject({ reason: "client_contract" });
+    expect(hostileGetterCalls).toBe(0);
+    await expect(
+      Reflect.apply(malformed.coordinator.requestHostLock, malformed.coordinator, [
+        {
+          body: { operation_id: "op_connection_invalid_options", confirmed: true }
+        },
+        { signal: {} }
+      ])
+    ).rejects.toMatchObject({ reason: "client_contract" });
+    const aborted = new AbortController();
+    aborted.abort();
+    await expect(
+      malformed.coordinator.requestHostLock(
+        {
+          body: { operation_id: "op_connection_aborted_lock", confirmed: true }
+        },
+        { signal: aborted.signal }
+      )
+    ).rejects.toMatchObject({ reason: "caller_aborted" });
+    expect(malformed.coordinator.snapshot().writeEligibility).toEqual({
+      scope: "browser_shell",
+      eligible: true,
+      causes: []
+    });
+    expect(malformed.http.routeIds().filter((route) => route === "mutation")).toHaveLength(0);
+    malformed.coordinator.close();
+
+    const reader = createHarness(remoteOrigin);
+    reader.http.enqueue("access", jsonResponse(200, pairedAccess(remoteOrigin, "read")));
+    reader.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({ mode: "paired_read", origin: remoteOrigin, remoteGeneration: 7 })
+      )
+    );
+    reader.http.enqueue(
+      "list",
+      jsonResponse(200, sessionList("paired_read", remoteOrigin, []))
+    );
+    await reader.coordinator.setTarget({ kind: "mission_control" });
+    reader.coordinator.adoptCsrfBootstrap(csrfBootstrap(1));
+    await expect(
+      reader.coordinator.requestHostLock({
+        body: { operation_id: "op_connection_reader_lock", confirmed: true }
+      })
+    ).rejects.toMatchObject({ reason: "not_ready" });
+    expect(reader.http.routeIds()).not.toContain("mutation");
+    reader.coordinator.close();
+
+    const stale = createHarness(remoteOrigin);
+    enqueueRemoteWriterMission(stale, [], 7, 1);
+    await stale.coordinator.setTarget({ kind: "mission_control" });
+    stale.http.enqueue("access", async () => {
+      throw new Error("private stale access fixture");
+    });
+    await stale.coordinator.refresh();
+    await expect(
+      stale.coordinator.requestHostLock({
+        body: { operation_id: "op_connection_stale_lock", confirmed: true }
+      })
+    ).rejects.toMatchObject({ reason: "not_ready" });
+    expect(stale.http.routeIds()).not.toContain("mutation");
+    stale.coordinator.close();
+
+    const localAdmin = createHarness(loopbackOrigin);
+    localAdmin.http.enqueue("access", jsonResponse(200, localAdminAccess()));
+    localAdmin.http.enqueue(
+      "host",
+      jsonResponse(200, hostStatus({ mode: "local_admin", origin: loopbackOrigin }))
+    );
+    localAdmin.http.enqueue(
+      "list",
+      jsonResponse(200, sessionList("local_admin", loopbackOrigin, []))
+    );
+    await localAdmin.coordinator.setTarget({ kind: "mission_control" });
+    localAdmin.coordinator.adoptCsrfBootstrap(csrfBootstrap(1));
+    await expect(
+      localAdmin.coordinator.requestHostLock({
+        body: { operation_id: "op_connection_local_admin_lock", confirmed: true }
+      })
+    ).rejects.toMatchObject({ reason: "not_ready" });
+    expect(localAdmin.http.routeIds()).not.toContain("mutation");
+    localAdmin.coordinator.close();
+
+    const locked = createHarness(remoteOrigin);
+    locked.http.enqueue(
+      "access",
+      jsonResponse(200, pairedAccess(remoteOrigin, "write", true))
+    );
+    locked.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({ mode: "paired_write", origin: remoteOrigin, remoteGeneration: 7 })
+      )
+    );
+    locked.http.enqueue(
+      "list",
+      jsonResponse(200, sessionList("paired_write", remoteOrigin, []))
+    );
+    locked.http.enqueue("csrf", jsonResponse(200, csrfBootstrap(1)));
+    await locked.coordinator.setTarget({ kind: "mission_control" });
+    await expect(
+      locked.coordinator.requestHostLock({
+        body: { operation_id: "op_connection_already_locked", confirmed: true }
+      })
+    ).rejects.toMatchObject({ reason: "not_ready" });
+    expect(locked.http.routeIds()).not.toContain("mutation");
+    locked.coordinator.close();
   });
 
   it("lists devices for exact paired readers without session-write authority", async () => {
@@ -1341,7 +1900,7 @@ describe("browser shell connection-state coordinator", () => {
     });
     expect(reader.cancelCalls).toBe(1);
     await expect(
-      harness.coordinator.requestProtected("host_lock", {
+      harness.coordinator.requestHostLock({
         body: { operation_id: "op_connection_after_self_revoke", confirmed: true }
       })
     ).rejects.toMatchObject({ reason: "not_ready" });
@@ -1698,6 +2257,7 @@ type HttpRouteId =
   | "csrf"
   | "devices"
   | "revoke"
+  | "prompt"
   | "mutation";
 type HttpHandler = (
   path: string,
@@ -1836,6 +2396,7 @@ function httpRouteId(path: string, method: "GET" | "POST"): HttpRouteId {
   if (path.startsWith("/api/v1/sessions?") || path === "/api/v1/sessions") return "list";
   if (path === "/api/v1/access/csrf" && method === "POST") return "csrf";
   if (path === "/api/v1/access/lock" && method === "POST") return "mutation";
+  if (path.endsWith("/prompts") && method === "POST") return "prompt";
   if (path.startsWith("/api/v1/sessions/") && method === "GET") return "detail";
   throw new Error(`Unexpected browser HTTP route: ${method} ${path}`);
 }

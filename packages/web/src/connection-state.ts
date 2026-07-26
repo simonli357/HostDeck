@@ -6,6 +6,7 @@ import {
   remoteExternalOriginSchema,
   type SelectedAccessStateResponse,
   type SelectedDeviceRevokeResponse,
+  type SelectedHostLockStateResponse,
   type SelectedHostStatusResponse,
   type SelectedProjectionEvent,
   type SelectedSessionDetailResponse,
@@ -17,6 +18,8 @@ import {
   selectedDeviceRevokeRequestSchema,
   selectedDeviceRevokeResponseSchema,
   selectedEventPageMaxSize,
+  selectedHostLockRequestSchema,
+  selectedHostLockStateResponseSchema,
   selectedSessionListMaximumActiveSessions,
   sessionIdSchema
 } from "@hostdeck/contracts";
@@ -103,6 +106,8 @@ export const browserConnectionWriteBlockCauses = Object.freeze([
   "revoked_device",
   "permission_denied",
   "read_only_access",
+  "host_lock_pending",
+  "host_lock_unconfirmed",
   "host_locked",
   "host_status_unavailable",
   "host_not_ready",
@@ -216,8 +221,19 @@ export interface BrowserConnectionDeviceListOptions {
 
 export type BrowserConnectionGenericProtectedRouteId = Exclude<
   BrowserHttpDeviceCsrfRouteId,
-  "device_revoke"
+  "device_revoke" | "host_lock" | "host_unlock"
 >;
+
+type BrowserConnectionHostLockTransition = "none" | "pending" | "unconfirmed";
+
+interface PreparedHostLockRequestOptions {
+  readonly options: BrowserCsrfRequestOptions | undefined;
+  readonly callerAborted: boolean;
+}
+
+interface PreparedHostLockRequest {
+  readonly input: BrowserHttpRouteRequest<"host_lock">;
+}
 
 export interface CreateBrowserConnectionStateCoordinatorOptions {
   readonly httpClient: BrowserHttpClient;
@@ -257,6 +273,10 @@ export interface BrowserConnectionStateCoordinator {
     input: BrowserHttpRouteRequest<"device_revoke">,
     options?: BrowserCsrfRequestOptions
   ) => Promise<BrowserHttpRouteResponse<"device_revoke">>;
+  readonly requestHostLock: (
+    input: BrowserHttpRouteRequest<"host_lock">,
+    options?: BrowserCsrfRequestOptions
+  ) => Promise<BrowserHttpRouteResponse<"host_lock">>;
   readonly requestSelectedSessionRead: <RouteId extends BrowserHttpSelectedSessionReadRouteId>(
     routeId: RouteId,
     input: BrowserHttpRouteRequest<RouteId>,
@@ -379,6 +399,9 @@ export function createBrowserConnectionStateCoordinator(
   let activeStream: ActiveStream | null = null;
   let lastClockMs: number | null = null;
   let attemptedBootstrapAuthority: string | null = null;
+  let hostLockTransition: BrowserConnectionHostLockTransition = "none";
+  let hostLockGeneration = 0;
+  let hostLockProvenGeneration: number | null = null;
   let currentSnapshot: BrowserConnectionSnapshot = Object.freeze({
     epoch,
     target,
@@ -388,7 +411,7 @@ export function createBrowserConnectionStateCoordinator(
     targetState,
     stream,
     csrf,
-    writeEligibility: deriveWriteEligibility(access, host, csrf),
+    writeEligibility: deriveWriteEligibility(access, host, csrf, hostLockTransition),
     lastFailure
   });
 
@@ -405,7 +428,12 @@ export function createBrowserConnectionStateCoordinator(
   };
 
   const publish = (): BrowserConnectionSnapshot => {
-    const writeEligibility = deriveWriteEligibility(access, host, csrf);
+    const writeEligibility = deriveWriteEligibility(
+      access,
+      host,
+      csrf,
+      hostLockTransition
+    );
     const nextSnapshot: BrowserConnectionSnapshot = Object.freeze({
       epoch,
       target,
@@ -552,6 +580,8 @@ export function createBrowserConnectionStateCoordinator(
     failure: BrowserConnectionFailure,
     reason: BrowserCsrfInvalidationReason
   ): void => {
+    hostLockTransition = "none";
+    hostLockProvenGeneration = null;
     invalidateCsrf(reason);
     closeStream("route_changed");
     access = retainOrFail(access, failure);
@@ -587,6 +617,8 @@ export function createBrowserConnectionStateCoordinator(
     previousAccess: SelectedAccessStateResponse,
     observedAt: string
   ): BrowserConnectionSnapshot => {
+    hostLockTransition = "none";
+    hostLockProvenGeneration = null;
     epoch += 1;
     abortQueries();
     invalidateCsrf("device_revoked");
@@ -661,7 +693,10 @@ export function createBrowserConnectionStateCoordinator(
     controller: AbortController,
     observedAt: string,
     previousAccess: SelectedAccessStateResponse | null,
-    previousHost: SelectedHostStatusResponse | null
+    previousHost: SelectedHostStatusResponse | null,
+    loadHostLockGeneration: number,
+    loadHostLockProvenGeneration: number | null,
+    mayProveHostLock: boolean
   ): Promise<BrowserConnectionSnapshot> => {
     const accessResult = await query(
       () => httpClient.request("access_state", {}, { signal: controller.signal }),
@@ -687,7 +722,7 @@ export function createBrowserConnectionStateCoordinator(
       return publish();
     }
 
-    const nextAccess = accessResult.data.data;
+    let nextAccess = accessResult.data.data;
     if (!accessMatchesBrowser(nextAccess, origin)) {
       const mismatchInvalidation = accessInvalidationReason(previousAccess, nextAccess);
       const failure = makeContractFailure(
@@ -712,8 +747,37 @@ export function createBrowserConnectionStateCoordinator(
 
     const accessTransition = accessInvalidationReason(previousAccess, nextAccess);
     if (accessTransition !== null) {
+      hostLockTransition = "none";
+      hostLockProvenGeneration = null;
       invalidateCsrf(accessTransition);
       if (lastFailure?.epoch !== loadEpoch) lastFailure = null;
+    }
+    const retainedAccess = access.data;
+    const correlatedProofPostdatesLoad =
+      hostLockProvenGeneration === hostLockGeneration &&
+      loadHostLockProvenGeneration !== hostLockProvenGeneration;
+    const activeTransitionNeedsLaterProof =
+      hostLockTransition !== "none" && !mayProveHostLock;
+    const loadPredatesCurrentLockTruth =
+      loadHostLockGeneration !== hostLockGeneration ||
+      correlatedProofPostdatesLoad ||
+      activeTransitionNeedsLaterProof;
+    if (
+      accessTransition === null &&
+      retainedAccess !== null &&
+      retainedAccess.locked !== nextAccess.locked &&
+      loadPredatesCurrentLockTruth &&
+      samePairedDeviceAuthority(retainedAccess, nextAccess)
+    ) {
+      nextAccess = retainedAccess;
+    }
+    if (
+      mayProveHostLock &&
+      loadHostLockGeneration === hostLockGeneration &&
+      hostLockTransition === "unconfirmed"
+    ) {
+      hostLockTransition = "none";
+      hostLockProvenGeneration = nextAccess.locked ? hostLockGeneration : null;
     }
     access = currentResource(nextAccess, observedAt);
     if (!nextAccess.can_read_sessions) {
@@ -898,6 +962,9 @@ export function createBrowserConnectionStateCoordinator(
     const sameTarget = previousTarget !== null && targetKey(previousTarget) === nextTargetKey;
     const previousAccess = access.data;
     const previousHost = host.data;
+    const loadHostLockGeneration = hostLockGeneration;
+    const loadHostLockProvenGeneration = hostLockProvenGeneration;
+    const mayProveHostLock = hostLockTransition === "unconfirmed";
     abortQueries();
     epoch += 1;
     closeStream("route_changed");
@@ -919,7 +986,10 @@ export function createBrowserConnectionStateCoordinator(
           controller,
           observedAt,
           previousAccess,
-          previousHost
+          previousHost,
+          loadHostLockGeneration,
+          loadHostLockProvenGeneration,
+          mayProveHostLock
         )
       )
       .finally(() => {
@@ -1319,13 +1389,108 @@ export function createBrowserConnectionStateCoordinator(
         throw error;
       }
     },
+    async requestHostLock(
+      requestInput: BrowserHttpRouteRequest<"host_lock">,
+      requestOptions?: BrowserCsrfRequestOptions
+    ): Promise<BrowserHttpRouteResponse<"host_lock">> {
+      if (closed) throw connectionError("closed");
+      const preparedInput = readHostLockRequest(requestInput);
+      if (preparedInput === null) throw connectionError("client_contract");
+      const preparedOptions = readHostLockRequestOptions(requestOptions);
+      if (preparedOptions === null) throw connectionError("client_contract");
+      if (preparedOptions.callerAborted) {
+        throw new HostDeckBrowserCsrfError({
+          reason: "caller_aborted",
+          operation: "mutation",
+          routeId: "host_lock"
+        });
+      }
+      const currentAccess = currentPairedDeviceAccess();
+      if (
+        currentAccess === null ||
+        currentAccess.permission !== "write" ||
+        !currentAccess.can_lock ||
+        currentAccess.locked ||
+        csrf.phase !== "ready" ||
+        hostLockTransition !== "none"
+      ) {
+        throw connectionError("not_ready");
+      }
+      const authorityKey = pairedDeviceAuthorityKey(currentAccess);
+      const observedAt = readOperationTime();
+      hostLockGeneration += 1;
+      const attemptGeneration = hostLockGeneration;
+      hostLockTransition = "pending";
+      hostLockProvenGeneration = null;
+      publish();
+
+      try {
+        const response = await csrfClient.request(
+          "host_lock",
+          preparedInput.input,
+          preparedOptions.options
+        );
+        refreshCsrf();
+        if (closed) throw connectionError("closed");
+        const retainedAccess = pairedDeviceAccess(access.data);
+        const parsed = selectedHostLockStateResponseSchema.safeParse(response.data);
+        if (
+          retainedAccess === null ||
+          pairedDeviceAuthorityKey(retainedAccess) !== authorityKey ||
+          !parsed.success ||
+          !hostLockResponseMatches(parsed.data, currentAccess)
+        ) {
+          throw connectionError("client_contract");
+        }
+        access = currentResource(Object.freeze(parsed.data), observedAt);
+        hostLockTransition = "none";
+        hostLockProvenGeneration = attemptGeneration;
+        publish();
+        return response;
+      } catch (error) {
+        if (closed) throw connectionError("closed");
+        refreshCsrf();
+        const retainedAccess = pairedDeviceAccess(access.data);
+        const authorityStillCurrent =
+          retainedAccess !== null &&
+          pairedDeviceAuthorityKey(retainedAccess) === authorityKey;
+        const failure = hostLockFailure(error, epoch, observedAt);
+        if (!authorityStillCurrent) {
+          hostLockTransition = "none";
+          hostLockProvenGeneration = null;
+          publish();
+        } else if (
+          error instanceof HostDeckBrowserCsrfError &&
+          (error.reason === "authority_rejected" || error.reason === "stale_generation")
+        ) {
+          hostLockTransition = "none";
+          hostLockProvenGeneration = null;
+          closeStream("route_changed");
+          access = retainOrFail(access, failure);
+          host = retainOrFail(host, failure);
+          targetState = retainOrFail(targetState, failure);
+          rememberFailure(failure);
+          publish();
+        } else {
+          hostLockTransition = "unconfirmed";
+          hostLockProvenGeneration = null;
+          rememberFailure(failure);
+          publish();
+        }
+        throw error;
+      }
+    },
     async requestProtected<RouteId extends BrowserConnectionGenericProtectedRouteId>(
       routeId: RouteId,
       requestInput: BrowserHttpRouteRequest<RouteId>,
       requestOptions?: BrowserCsrfRequestOptions
     ): Promise<BrowserHttpRouteResponse<RouteId>> {
       if (closed) throw connectionError("closed");
-      if ((routeId as BrowserHttpDeviceCsrfRouteId) === "device_revoke") {
+      if (
+        (routeId as BrowserHttpDeviceCsrfRouteId) === "device_revoke" ||
+        (routeId as BrowserHttpDeviceCsrfRouteId) === "host_lock" ||
+        (routeId as BrowserHttpRouteId) === "host_unlock"
+      ) {
         throw connectionError("client_contract");
       }
       if (!currentSnapshot.writeEligibility.eligible) {
@@ -1419,6 +1584,8 @@ export function createBrowserConnectionStateCoordinator(
         failure: null
       });
       attemptedBootstrapAuthority = null;
+      hostLockTransition = "none";
+      hostLockProvenGeneration = null;
       lastFailure = null;
       const snapshot = publish();
       subscribers.clear();
@@ -1524,6 +1691,53 @@ function readDeviceRevokeInput(candidate: unknown): PreparedDeviceRevokeInput | 
   });
 }
 
+function readHostLockRequest(candidate: unknown): PreparedHostLockRequest | null {
+  const input = readExactRecord(candidate, ["body"], ["body"]);
+  if (input === null) return null;
+  const body = readExactRecord(
+    input.body,
+    ["operation_id", "confirmed"],
+    ["operation_id", "confirmed"]
+  );
+  if (body === null) return null;
+  const parsed = selectedHostLockRequestSchema.safeParse(body);
+  if (!parsed.success) return null;
+  return Object.freeze({
+    input: Object.freeze({ body: Object.freeze(parsed.data) })
+  });
+}
+
+function readHostLockRequestOptions(
+  candidate: unknown
+): PreparedHostLockRequestOptions | null {
+  if (candidate === undefined) {
+    return Object.freeze({ options: undefined, callerAborted: false });
+  }
+  const values = readExactRecord(candidate, [], ["signal"]);
+  if (values === null) return null;
+  if (values.signal === undefined) {
+    return Object.freeze({ options: Object.freeze({}), callerAborted: false });
+  }
+  const callerAborted = readNativeAbortSignalState(values.signal);
+  if (callerAborted === null) return null;
+  return Object.freeze({
+    options: Object.freeze({ signal: values.signal as AbortSignal }),
+    callerAborted
+  });
+}
+
+function readNativeAbortSignalState(candidate: unknown): boolean | null {
+  if (candidate === null || typeof candidate !== "object") return null;
+  try {
+    const getter = Object.getOwnPropertyDescriptor(AbortSignal.prototype, "aborted")?.get;
+    if (typeof getter !== "function") return null;
+    const aborted = Reflect.apply(getter, candidate, []) as unknown;
+    return typeof aborted === "boolean" ? aborted : null;
+  } catch {
+    return null;
+  }
+}
+
 function deviceRevokeResponseMatches(
   response: SelectedDeviceRevokeResponse,
   request: PreparedDeviceRevokeInput,
@@ -1553,6 +1767,32 @@ function pairedDeviceAuthorityKey(access: SelectedAccessStateResponse): string {
     access.permission,
     access.device_expires_at
   ]);
+}
+
+function pairedDeviceAccess(
+  candidate: SelectedAccessStateResponse | null
+): SelectedAccessStateResponse | null {
+  return candidate?.authentication_state === "paired_device" ? candidate : null;
+}
+
+function samePairedDeviceAuthority(
+  left: SelectedAccessStateResponse,
+  right: SelectedAccessStateResponse
+): boolean {
+  const leftPaired = pairedDeviceAccess(left);
+  const rightPaired = pairedDeviceAccess(right);
+  return (
+    leftPaired !== null &&
+    rightPaired !== null &&
+    pairedDeviceAuthorityKey(leftPaired) === pairedDeviceAuthorityKey(rightPaired)
+  );
+}
+
+function hostLockResponseMatches(
+  response: SelectedHostLockStateResponse,
+  requestAccess: SelectedAccessStateResponse
+): boolean {
+  return response.locked && samePairedDeviceAuthority(response, requestAccess);
 }
 
 function revokedBrowserAccess(
@@ -1965,9 +2205,15 @@ function streamFromSnapshot(
 function deriveWriteEligibility(
   access: BrowserConnectionResource<SelectedAccessStateResponse>,
   host: BrowserConnectionResource<SelectedHostStatusResponse>,
-  csrf: BrowserCsrfSnapshot
+  csrf: BrowserCsrfSnapshot,
+  hostLockTransition: BrowserConnectionHostLockTransition
 ): BrowserConnectionWriteEligibility {
   const causes: BrowserConnectionWriteBlockCause[] = [];
+  const transitionCause = hostLockTransition === "pending"
+    ? "host_lock_pending" as const
+    : hostLockTransition === "unconfirmed"
+      ? "host_lock_unconfirmed" as const
+      : null;
   if (access.state !== "current" || access.data === null) {
     causes.push(
       access.failure?.apiError?.code === "permission_denied"
@@ -1982,6 +2228,7 @@ function deriveWriteEligibility(
     } else if (expectedMode !== "paired_write") {
       causes.push("read_only_access");
     } else {
+      if (transitionCause !== null) causes.push(transitionCause);
       if (accessData.locked || !accessData.can_write_sessions) causes.push("host_locked");
       if (host.state !== "current" || host.data === null) {
         causes.push("host_status_unavailable");
@@ -1995,10 +2242,33 @@ function deriveWriteEligibility(
       if (csrf.phase !== "ready") causes.push("csrf_not_ready");
     }
   }
+  if (transitionCause !== null && !causes.includes(transitionCause)) {
+    causes.push(transitionCause);
+  }
   return Object.freeze({
     scope: "browser_shell",
     eligible: causes.length === 0,
     causes: Object.freeze(causes)
+  });
+}
+
+function hostLockFailure(
+  error: unknown,
+  failureEpoch: number,
+  observedAt: string
+): BrowserConnectionFailure {
+  if (error instanceof HostDeckBrowserCsrfError) {
+    return csrfFailure(error, failureEpoch, observedAt);
+  }
+  return freezeFailure({
+    source: "csrf",
+    reason: "client_contract",
+    routeId: "host_lock",
+    transport: null,
+    status: null,
+    apiError: null,
+    epoch: failureEpoch,
+    observedAt
   });
 }
 

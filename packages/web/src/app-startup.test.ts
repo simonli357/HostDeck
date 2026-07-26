@@ -248,6 +248,7 @@ function coordinatorPort(
     requestProtected: vi.fn(),
     requestDeviceList: vi.fn(),
     requestDeviceRevoke: vi.fn(),
+    requestHostLock: vi.fn(),
     requestSelectedSessionRead: vi.fn(),
     close
   }) as never;

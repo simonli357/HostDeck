@@ -8,6 +8,7 @@ export default defineConfig({
     "approval-decisions.spec.ts",
     "mission-control.spec.ts",
     "goal-control.spec.ts",
+    "host-lock.spec.ts",
     "model-control.spec.ts",
     "paired-device-management.spec.ts",
     "plan-control.spec.ts",

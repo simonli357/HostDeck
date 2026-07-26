@@ -19,6 +19,7 @@ import {
   HostDeckBrowserConnectionError
 } from "./connection-state.js";
 import { HostDeckBrowserCsrfError } from "./csrf-client.js";
+import { hostLockWriteReason } from "./host-lock-copy.js";
 import { HostDeckBrowserHttpError } from "./http-client.js";
 
 type ApprovalEvent = Extract<SelectedProjectionEvent, { readonly type: "approval" }>;
@@ -1231,8 +1232,10 @@ function writeDisabledReason(cause: BrowserConnectionWriteBlockCause): string {
       return "Pair this phone again to answer approvals.";
     case "read_only_access":
       return "Read-only access cannot answer approvals.";
+    case "host_lock_pending":
+    case "host_lock_unconfirmed":
     case "host_locked":
-      return "Remote writes are locked on the laptop.";
+      return hostLockWriteReason(cause);
     case "host_status_unavailable":
     case "host_not_ready":
       return "Laptop write services are not ready.";
@@ -1403,7 +1406,7 @@ function apiFailureMessage(error: ApiErrorEnvelope, operation: "read" | "decisio
     case "session_not_writable": return "This session cannot answer approvals now.";
     case "stale_session": return "Session state changed. Check current approval status.";
     case "approval_not_pending": return "This approval is no longer pending. Check current status.";
-    case "host_locked": return "Remote writes are locked on the laptop.";
+    case "host_locked": return hostLockWriteReason("host_locked");
     case "permission_denied":
     case "read_only": return operation === "read"
       ? "This phone cannot read approvals."

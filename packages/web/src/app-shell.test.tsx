@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { MemoryRouter, useLocation } from "react-router";
@@ -228,14 +228,61 @@ describe("HostDeck phone shell", () => {
     expect(harness.requestDeviceList).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps one host-lock owner across confirmation, route navigation, and sheet reopening", async () => {
+    const user = userEvent.setup();
+    const harness = createHostLockCoordinatorHarness();
+    render(
+      <MemoryRouter initialEntries={[missionControlPath]}>
+        <HostDeckRoutes
+          coordinator={harness.coordinator}
+          outlets={{
+            missionControl: (
+              <section>
+                <h1>Mission Control lock fixture</h1>
+                <SessionRouteLink sessionId={sessionId}>Open locked session</SessionRouteLink>
+              </section>
+            ),
+            sessionDetail: () => <h1>Session Detail lock fixture</h1>
+          }}
+        />
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Open Host and access" }));
+    await user.click(screen.getByRole("button", { name: "Lock writes" }));
+    const confirmation = screen.getByRole("dialog", { name: "Lock remote writes?" });
+    await user.click(within(confirmation).getByRole("button", { name: "Lock writes" }));
+
+    await waitFor(() => expect(harness.requestHostLock).toHaveBeenCalledTimes(1));
+    expect(harness.requestHostLock.mock.calls[0]?.[0]).toMatchObject({
+      body: { confirmed: true }
+    });
+    expect(harness.requestHostLock.mock.calls[0]?.[0].body.operation_id).toMatch(
+      /^op_browser_host_lock_/u
+    );
+
+    await act(async () => harness.completeLock());
+    expect(await screen.findByRole("heading", { name: "Remote writes locked" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Close Host and access" }));
+    await user.click(screen.getByRole("link", { name: "Open locked session" }));
+    expect(await screen.findByRole("heading", { name: "Session Detail lock fixture" })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Open Host and access" }));
+    expect(screen.getByRole("heading", { name: "Remote writes locked" })).toBeTruthy();
+    expect(screen.getByText("codexdeck unlock")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /unlock/u })).toBeNull();
+    expect(harness.requestHostLock).toHaveBeenCalledTimes(1);
+  });
+
   it("holds production routes behind one external pairing owner even under StrictMode", async () => {
     const user = userEvent.setup();
     const deferred = createDeferred<ReturnType<typeof pairedResult>>();
     const bootstrapPairing = vi.fn(() => deferred.promise);
     const adoptCsrfBootstrap = vi.fn();
+    const coordinatorSnapshot = recoveryConnectionSnapshot("ready");
     const coordinator = Object.freeze({
-      snapshot: vi.fn(),
-      subscribe: vi.fn(),
+      snapshot: vi.fn(() => coordinatorSnapshot),
+      subscribe: vi.fn(() => () => undefined),
       setTarget: vi.fn(),
       refresh: vi.fn(),
       loadMoreSessions: vi.fn(),
@@ -246,6 +293,7 @@ describe("HostDeck phone shell", () => {
       requestProtected: vi.fn(),
       requestDeviceList: vi.fn(),
       requestDeviceRevoke: vi.fn(),
+      requestHostLock: vi.fn(),
       requestSelectedSessionRead: vi.fn(),
       close: vi.fn()
     }) as never;
@@ -365,6 +413,7 @@ function createRecoveryCoordinatorHarness(): Readonly<{
       data: { devices: [], next_cursor: null, has_more: false }
     })),
     requestDeviceRevoke: vi.fn(),
+    requestHostLock: vi.fn(),
     requestSelectedSessionRead: vi.fn(),
     close: vi.fn()
   }) as unknown as BrowserConnectionStateCoordinator;
@@ -396,6 +445,7 @@ function createDeviceCoordinatorHarness(): Readonly<{
     requestProtected: vi.fn(),
     requestDeviceList,
     requestDeviceRevoke: vi.fn(),
+    requestHostLock: vi.fn(),
     requestSelectedSessionRead: vi.fn(),
     close: vi.fn()
   }) as unknown as BrowserConnectionStateCoordinator;
@@ -421,6 +471,94 @@ function createDeviceCoordinatorHarness(): Readonly<{
       });
       await response.promise;
     }
+  });
+}
+
+function createHostLockCoordinatorHarness(): Readonly<{
+  coordinator: BrowserConnectionStateCoordinator;
+  requestHostLock: ReturnType<typeof vi.fn>;
+  completeLock: () => Promise<void>;
+}> {
+  let current = hostLockConnectionSnapshot();
+  const listeners = new Set<() => void>();
+  const response = createDeferred<void>();
+  const publish = (next: BrowserConnectionSnapshot): void => {
+    current = next;
+    for (const listener of [...listeners]) listener();
+  };
+  const requestHostLock = vi.fn(async () => {
+    publish(hostLockConnectionSnapshot({ pending: true }));
+    await response.promise;
+    const locked = hostLockConnectionSnapshot({ epoch: 2, locked: true });
+    publish(locked);
+    if (locked.access.data === null) {
+      throw new TypeError("Host-lock fixture is missing paired access data.");
+    }
+    return Object.freeze({ status: 200 as const, data: locked.access.data });
+  });
+  const coordinator = Object.freeze({
+    snapshot: () => current,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    setTarget: vi.fn(),
+    refresh: vi.fn(async () => current),
+    loadMoreSessions: vi.fn(),
+    connectSessionStream: vi.fn(),
+    disconnectSessionStream: vi.fn(),
+    bootstrapCsrf: vi.fn(),
+    adoptCsrfBootstrap: vi.fn(),
+    requestProtected: vi.fn(),
+    requestDeviceList: vi.fn(async () => ({
+      status: 200 as const,
+      data: Object.freeze({ devices: Object.freeze([]), next_cursor: null, has_more: false })
+    })),
+    requestDeviceRevoke: vi.fn(),
+    requestHostLock,
+    requestSelectedSessionRead: vi.fn(),
+    close: vi.fn()
+  }) as unknown as BrowserConnectionStateCoordinator;
+  return Object.freeze({
+    coordinator,
+    requestHostLock,
+    completeLock: async () => {
+      response.resolve();
+      await response.promise;
+    }
+  });
+}
+
+function hostLockConnectionSnapshot(
+  options: Readonly<{ epoch?: number; locked?: boolean; pending?: boolean }> = {}
+): BrowserConnectionSnapshot {
+  const base = recoveryConnectionSnapshot("ready");
+  if (base.access.data === null) {
+    throw new TypeError("Host-lock fixture requires paired access data.");
+  }
+  const locked = options.locked ?? false;
+  const pending = options.pending ?? false;
+  const causes = locked
+    ? Object.freeze(["host_locked" as const])
+    : pending
+      ? Object.freeze(["host_lock_pending" as const])
+      : Object.freeze([]);
+  return Object.freeze({
+    ...base,
+    epoch: options.epoch ?? base.epoch,
+    access: Object.freeze({
+      ...base.access,
+      data: Object.freeze({
+        ...base.access.data,
+        locked,
+        can_write_sessions: !locked
+      })
+    }),
+    writeEligibility: Object.freeze({
+      scope: "browser_shell" as const,
+      eligible: causes.length === 0,
+      causes
+    })
   });
 }
 

@@ -17,6 +17,7 @@ import {
   HostDeckBrowserConnectionError
 } from "./connection-state.js";
 import { HostDeckBrowserCsrfError } from "./csrf-client.js";
+import { hostLockWriteReason } from "./host-lock-copy.js";
 import { HostDeckBrowserHttpError } from "./http-client.js";
 
 export const goalControlPhases = Object.freeze([
@@ -1116,7 +1117,7 @@ function apiFailureMessage(error: ApiErrorEnvelope, operation: "read" | "mutate"
     case "stale_session":
       return "Session state changed during goal control. Check current state before continuing.";
     case "host_locked":
-      return "Remote writes are locked on the laptop.";
+      return hostLockWriteReason("host_locked");
     case "permission_denied":
     case "read_only":
       return operation === "read"
@@ -1218,8 +1219,10 @@ function writeDisabledReason(cause: BrowserConnectionWriteBlockCause): string {
       return "Pair this phone again to change the goal.";
     case "read_only_access":
       return "Read-only access cannot change the goal.";
+    case "host_lock_pending":
+    case "host_lock_unconfirmed":
     case "host_locked":
-      return "Remote writes are locked on the laptop.";
+      return hostLockWriteReason(cause);
     case "host_status_unavailable":
     case "host_not_ready":
       return "Laptop write services are not ready.";

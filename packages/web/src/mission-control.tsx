@@ -29,6 +29,11 @@ import type {
   BrowserConnectionSnapshot,
   BrowserConnectionStateCoordinator
 } from "./connection-state.js";
+import { HostLockRouteRail } from "./host-lock.js";
+import {
+  type HostLockProjection,
+  projectHostLockState
+} from "./host-lock-state.js";
 
 export type MissionQueueId = "act_now" | "in_progress" | "quiet";
 export type MissionTone = "connected" | "attention" | "danger" | "muted";
@@ -72,6 +77,7 @@ export interface MissionControlProjection {
   readonly stale: boolean;
   readonly metaLabel: string;
   readonly statusCells: readonly MissionStatusCell[];
+  readonly lock: HostLockProjection;
   readonly notice: MissionNotice | null;
   readonly sections: readonly MissionQueueSection[];
   readonly hasMore: boolean;
@@ -191,6 +197,7 @@ export function MissionControlScreen({
       aria-busy={view.loading}
     >
       <HostAccessRail cells={view.statusCells} />
+      <HostLockRouteRail projection={view.lock} />
       <div className="hostdeck-route__heading hostdeck-mission__heading">
         <div>
           <h1 id="mission-control-title">Mission Control</h1>
@@ -317,6 +324,7 @@ export function projectMissionControl(
         ? formatSessionCount(missionData.sessions.length, missionData.hasMore)
         : unavailableMeta(snapshot.phase),
     statusCells: Object.freeze(projectStatusCells(snapshot)),
+    lock: projectHostLockState(snapshot),
     notice: projectNotice(snapshot, canDisclose, stale, loading),
     sections: Object.freeze(sections),
     hasMore: canDisclose && missionData.hasMore
@@ -656,14 +664,6 @@ function projectNotice(
 
   const preciseRemoteNotice = remoteNotice(snapshot.host.data, snapshot.host.state);
   if (preciseRemoteNotice !== null) return preciseRemoteNotice;
-  if (access?.locked === true) {
-    return notice(
-      "Remote writes are locked",
-      "Session monitoring remains available. Unlocking requires the laptop.",
-      "attention",
-      false
-    );
-  }
   if (access?.permission === "read") {
     return notice(
       "Read-only access",

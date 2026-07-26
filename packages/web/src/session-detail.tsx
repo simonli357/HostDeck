@@ -48,6 +48,11 @@ import type {
 } from "./connection-state.js";
 import { GoalControl, useGoalControlController } from "./goal-control.js";
 import type { GoalControlController } from "./goal-control-state.js";
+import { HostLockRouteRail } from "./host-lock.js";
+import {
+  type HostLockProjection,
+  projectHostLockState
+} from "./host-lock-state.js";
 import { type MissionTone, projectSessionRow } from "./mission-control.js";
 import {
   ModelControl,
@@ -101,6 +106,7 @@ export interface SessionDetailProjection {
   readonly headerTitle: string;
   readonly headerSubtitle: string;
   readonly contextCells: readonly SessionDetailContextCell[];
+  readonly lock: HostLockProjection;
   readonly notices: readonly SessionDetailNotice[];
   readonly timeline: readonly SessionDetailTimelineItem[];
 }
@@ -355,6 +361,8 @@ export function SessionDetailScreen({
         />
       ) : null}
 
+      <HostLockRouteRail projection={view.lock} />
+
       {actionError === null ? null : (
         <SessionDetailInlineError message={actionError} />
       )}
@@ -533,6 +541,7 @@ export function projectSessionDetail(
               icon: stream.icon
             })
           ]),
+    lock: projectHostLockState(snapshot),
     notices: projectDetailNotices(snapshot, canDisclose, stale),
     timeline
   });

@@ -22,7 +22,8 @@ import type {
   BrowserConnectionPhase,
   BrowserConnectionResourceState,
   BrowserConnectionSnapshot,
-  BrowserConnectionStateCoordinator
+  BrowserConnectionStateCoordinator,
+  BrowserConnectionWriteBlockCause
 } from "./connection-state.js";
 import {
   ConnectedSessionDetail,
@@ -207,6 +208,31 @@ describe("Session Detail projection", () => {
 });
 
 describe("Session Detail screen", () => {
+  it.each([
+    {
+      cause: "host_lock_pending" as const,
+      title: "Locking remote writes",
+      role: "status" as const
+    },
+    {
+      cause: "host_lock_unconfirmed" as const,
+      title: "Lock outcome unconfirmed",
+      role: "alert" as const
+    }
+  ])("keeps activity readable below $cause truth", ({ cause, title, role }) => {
+    const feed = appendSessionDetailEvent(
+      createSessionDetailFeed(sessionId),
+      messageEvent(1, "Readable activity remains visible")
+    );
+    renderDetail(detailSnapshot({ causes: [cause] }), feed);
+
+    const lock = screen.getByRole(role);
+    const activity = screen.getByText("Readable activity remains visible");
+    expect(lock.textContent).toContain(title);
+    expect(lock.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(activity).toBeTruthy();
+  });
+
   it("integrates with the app frame without exposing the route identifier", async () => {
     const harness = coordinatorHarness(detailSnapshot());
     render(
@@ -444,6 +470,7 @@ function detailSnapshot(
       readonly cursor: number;
       readonly reason: "retention" | "disconnect" | "restart" | "schema_change";
     } | null;
+    readonly causes?: readonly BrowserConnectionWriteBlockCause[];
   } = {}
 ): BrowserConnectionSnapshot {
   const access = options.access === undefined ? pairedAccess() : options.access;
@@ -461,6 +488,7 @@ function detailSnapshot(
   const boundary = options.boundary === undefined ? null : options.boundary;
   const targetFailure = targetState === "failed" ? browserFailure("session_detail") : null;
   const streamFailure = streamState === "failed" ? browserFailure("session_stream") : null;
+  const causes = options.causes ?? [];
   return Object.freeze({
     epoch: 1,
     target: Object.freeze({ kind: "session_detail" as const, sessionId }),
@@ -510,8 +538,8 @@ function detailSnapshot(
     }),
     writeEligibility: Object.freeze({
       scope: "browser_shell" as const,
-      eligible: true,
-      causes: Object.freeze([])
+      eligible: causes.length === 0,
+      causes: Object.freeze([...causes])
     }),
     lastFailure: targetFailure ?? streamFailure
   });
@@ -729,6 +757,7 @@ function coordinatorHarness(
       data: { devices: [], next_cursor: null, has_more: false }
     })),
     requestDeviceRevoke: vi.fn(),
+    requestHostLock: vi.fn(),
     requestSelectedSessionRead,
     close: vi.fn(() => snapshot)
   } as unknown as BrowserConnectionStateCoordinator;

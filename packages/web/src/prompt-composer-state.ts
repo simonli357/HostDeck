@@ -23,6 +23,7 @@ import {
   HostDeckBrowserConnectionError
 } from "./connection-state.js";
 import { HostDeckBrowserCsrfError } from "./csrf-client.js";
+import { hostLockWriteReason } from "./host-lock-copy.js";
 import {
   type SessionDetailFeedState,
   sessionDetailFeedLimit
@@ -660,7 +661,7 @@ function apiFailureMessage(code: string): string {
     case "stale_session":
       return "Session state changed. Refresh before sending.";
     case "host_locked":
-      return "Remote writes are locked on the laptop.";
+      return hostLockWriteReason("host_locked");
     case "permission_denied":
     case "read_only":
       return "This phone does not have prompt permission.";
@@ -734,8 +735,10 @@ function disabledReason(cause: PromptComposerDisabledCause): string {
       return "Pair this phone again to send prompts.";
     case "read_only_access":
       return "Read-only access cannot send prompts.";
+    case "host_lock_pending":
+    case "host_lock_unconfirmed":
     case "host_locked":
-      return "Remote writes are locked on the laptop.";
+      return hostLockWriteReason(cause);
     case "host_status_unavailable":
     case "host_not_ready":
       return "Laptop write services are not ready.";

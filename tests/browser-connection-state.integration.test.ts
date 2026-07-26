@@ -297,7 +297,7 @@ describe("FE-V1-025 real shell connection-state composition", () => {
 
     page.coordinator.disconnectSessionStream();
     await page.coordinator.setTarget({ kind: "mission_control" });
-    const lockedResponse = await page.coordinator.requestProtected("host_lock", {
+    const lockedResponse = await page.coordinator.requestHostLock({
       body: {
         operation_id: "op_connection_integration_lock_0001",
         confirmed: true

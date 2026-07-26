@@ -40,6 +40,8 @@ import {
   type HostAccessRecoveryView,
   projectHostAccessRecovery
 } from "./host-access-recovery-state.js";
+import { type HostLockBinding, HostLockPanel } from "./host-lock.js";
+import { hostLockWriteReason } from "./host-lock-copy.js";
 import {
   PairedDeviceManagementPanel,
   usePairedDeviceManagementController
@@ -77,12 +79,14 @@ export interface HostAccessProjection {
 
 export interface ConnectedHostAccessProps {
   readonly coordinator: BrowserConnectionStateCoordinator;
+  readonly hostLock: HostLockBinding;
   readonly now?: () => number;
   readonly children?: ((content: ReactNode) => ReactNode) | undefined;
 }
 
 export function ConnectedHostAccess({
   coordinator,
+  hostLock,
   now = Date.now,
   children
 }: ConnectedHostAccessProps) {
@@ -110,6 +114,7 @@ export function ConnectedHostAccess({
         projection={projectHostAccess(snapshot, nowMs, recovery)}
         onRecover={recoveryController.recover}
       />
+      <HostLockPanel binding={hostLock} />
       <PairedDeviceManagementPanel controller={deviceController} view={devices} />
     </>
   );
@@ -673,6 +678,10 @@ function writeBlockLabel(causes: readonly BrowserConnectionWriteBlockCause[]): s
       return "Permission denied";
     case "read_only_access":
       return "Read only";
+    case "host_lock_pending":
+      return "Locking";
+    case "host_lock_unconfirmed":
+      return "Lock unconfirmed";
     case "host_locked":
       return "Locked";
     case "host_status_unavailable":
@@ -699,6 +708,9 @@ function writeBlockSummary(causes: readonly BrowserConnectionWriteBlockCause[]):
       return "Pair this phone from the laptop before using controls.";
     case "read_only_access":
       return "This device does not have writer permission.";
+    case "host_lock_pending":
+    case "host_lock_unconfirmed":
+      return hostLockWriteReason(cause);
     case "host_locked":
       return "Unlock HostDeck locally on the laptop.";
     case "host_status_unavailable":
@@ -722,6 +734,8 @@ function primaryWriteCause(
     "revoked_device",
     "permission_denied",
     "read_only_access",
+    "host_lock_pending",
+    "host_lock_unconfirmed",
     "host_locked",
     "host_status_unavailable",
     "host_not_ready",

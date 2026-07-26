@@ -5,6 +5,7 @@ export type MissionApiVariant =
   | "long"
   | "read_only"
   | "locked"
+  | "host_unavailable"
   | "denied"
   | "unavailable";
 
@@ -73,6 +74,21 @@ export async function installMissionControlApi(
       return;
     }
     if (url.pathname === "/api/v1/host/status" && request.method() === "GET") {
+      if (variant === "host_unavailable") {
+        await route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          headers: { "cache-control": "no-store" },
+          body: JSON.stringify({
+            error: {
+              code: "runtime_unavailable",
+              message: "The laptop runtime is unavailable.",
+              retryable: true
+            }
+          })
+        });
+        return;
+      }
       await fulfillJson(route, readyHostStatus(variant));
       return;
     }

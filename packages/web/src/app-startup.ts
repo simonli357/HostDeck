@@ -75,6 +75,7 @@ const coordinatorKeys = [
   "requestProtected",
   "requestDeviceList",
   "requestDeviceRevoke",
+  "requestHostLock",
   "requestSelectedSessionRead",
   "close"
 ] as const;

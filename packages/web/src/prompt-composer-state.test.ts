@@ -67,6 +67,8 @@ describe("prompt composer projection", () => {
       "revoked_device",
       "permission_denied",
       "read_only_access",
+      "host_lock_pending",
+      "host_lock_unconfirmed",
       "host_locked",
       "host_status_unavailable",
       "host_not_ready",
@@ -91,6 +93,26 @@ describe("prompt composer projection", () => {
       expect(view.disabledReason).toBeTruthy();
       expect(view.disabledReason).not.toMatch(/device_prompt_private|thread-private/u);
     }
+  });
+
+  it.each([
+    ["host_lock_pending", "A remote-write lock request is being confirmed."],
+    ["host_lock_unconfirmed", "The last remote-write lock outcome is unconfirmed. Refresh HostDeck."],
+    ["host_locked", "Remote writes are locked on the laptop."]
+  ] as const)("uses shared host-lock copy for %s", (writeCause, reason) => {
+    expect(
+      projectPromptComposer({
+        sessionId,
+        ...promptContext({ writeCause }),
+        draft: "One prompt",
+        operation: idleOperation()
+      })
+    ).toMatchObject({
+      disabledCause: writeCause,
+      inputDisabled: true,
+      sendEnabled: false,
+      disabledReason: reason
+    });
   });
 
   it("distinguishes exact session and stream admission families", () => {

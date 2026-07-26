@@ -30,7 +30,8 @@ import type {
   BrowserConnectionPhase,
   BrowserConnectionResourceState,
   BrowserConnectionSnapshot,
-  BrowserConnectionStateCoordinator
+  BrowserConnectionStateCoordinator,
+  BrowserConnectionWriteBlockCause
 } from "./connection-state.js";
 import {
   ConnectedMissionControl,
@@ -363,7 +364,7 @@ describe("Mission Control screen states and interaction", () => {
     {
       label: "locked",
       snapshot: () => currentSnapshot({ access: pairedAccess("write", true) }),
-      expected: "Remote writes are locked"
+      expected: "Remote writes locked"
     },
     {
       label: "runtime offline",
@@ -443,6 +444,29 @@ describe("Mission Control screen states and interaction", () => {
     const region = screen.getByRole("region", { name: "Mission Control" });
     expect(region.textContent).not.toContain("profile");
     expect(region.textContent).not.toContain("Serve");
+  });
+
+  it.each([
+    {
+      cause: "host_lock_pending" as const,
+      title: "Locking remote writes",
+      source: "This phone's explicit lock request",
+      role: "status" as const
+    },
+    {
+      cause: "host_lock_unconfirmed" as const,
+      title: "Lock outcome unconfirmed",
+      source: "The last lock attempt from this phone",
+      role: "alert" as const
+    }
+  ])("keeps the readable queue below $cause truth", ({ cause, title, source, role }) => {
+    renderScreen(currentSnapshot({ causes: [cause] }));
+    const lock = screen.getByRole(role);
+    const heading = screen.getByRole("heading", { level: 1, name: "Mission Control" });
+    expect(lock.textContent).toContain(title);
+    expect(lock.textContent).toContain(source);
+    expect(lock.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(screen.getByRole("link", { name: /default/ })).toBeTruthy();
   });
 
   it("guards refresh and pagination as explicit one-call operations", async () => {
@@ -578,6 +602,7 @@ function currentSnapshot(
     readonly targetState?: BrowserConnectionResourceState;
     readonly sessions?: readonly SelectedSessionReadItem[];
     readonly hasMore?: boolean;
+    readonly causes?: readonly BrowserConnectionWriteBlockCause[];
   } = {}
 ): BrowserConnectionSnapshot {
   const access = options.access === undefined ? pairedAccess("write") : options.access;
@@ -587,6 +612,12 @@ function currentSnapshot(
   const accessState = options.accessState ?? (access === null ? "loading" : "current");
   const hostState = options.hostState ?? (host === null ? "loading" : "current");
   const failure = targetState === "failed" ? browserFailure("session_list") : null;
+  const causes = options.causes ??
+    (access?.locked === true
+      ? ["host_locked" as const]
+      : access?.permission === "read"
+        ? ["read_only_access" as const]
+        : []);
   return Object.freeze({
     epoch: 1,
     target: Object.freeze({ kind: "mission_control" as const }),
@@ -627,8 +658,8 @@ function currentSnapshot(
     }),
     writeEligibility: Object.freeze({
       scope: "browser_shell" as const,
-      eligible: true,
-      causes: Object.freeze([])
+      eligible: causes.length === 0,
+      causes: Object.freeze([...causes])
     }),
     lastFailure: failure
   });
@@ -866,6 +897,7 @@ function coordinatorHarness(
       data: { devices: [], next_cursor: null, has_more: false }
     })),
     requestDeviceRevoke: vi.fn(),
+    requestHostLock: vi.fn(),
     close
   } as unknown as BrowserConnectionStateCoordinator;
   return {

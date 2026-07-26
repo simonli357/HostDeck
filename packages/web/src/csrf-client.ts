@@ -573,7 +573,8 @@ function mapMutationFailure(
     if (
       error.apiError?.code === "operation_conflict" &&
       error.apiError.retryable === false &&
-      routeId !== "device_revoke"
+      routeId !== "device_revoke" &&
+      routeId !== "host_lock"
     ) {
       return failure({ ...common, reason: "stale_generation" });
     }

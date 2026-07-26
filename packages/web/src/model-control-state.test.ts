@@ -229,6 +229,8 @@ describe("model-control state", () => {
   });
 
   it.each([
+    ["host_lock_pending", "A remote-write lock request is being confirmed."],
+    ["host_lock_unconfirmed", "The last remote-write lock outcome is unconfirmed. Refresh HostDeck."],
     ["host_locked", "Remote writes are locked on the laptop."],
     ["csrf_not_ready", "Secure write setup is not ready."],
     ["host_not_ready", "Laptop write services are not ready."]

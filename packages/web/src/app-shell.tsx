@@ -30,6 +30,7 @@ import {
 } from "./browser-runtime.js";
 import type { BrowserConnectionStateCoordinator } from "./connection-state.js";
 import { ConnectedHostAccess } from "./host-access.js";
+import { ConnectedHostLock } from "./host-lock.js";
 import { ConnectedMissionControl } from "./mission-control.js";
 import { PairingStartupScreen } from "./pairing-screen.js";
 import {
@@ -189,17 +190,29 @@ export function HostDeckRoutes({
   coordinator,
   runtimeFailed = false
 }: HostDeckRoutesProps) {
-  if (coordinator !== undefined && outlets.hostAccess === undefined) {
+  if (coordinator !== undefined) {
     return (
-      <ConnectedHostAccess coordinator={coordinator}>
-        {(content) => (
-          <HostDeckRouteTable
-            outlets={Object.freeze({ ...outlets, hostAccess: content })}
-            coordinator={coordinator}
-            runtimeFailed={runtimeFailed}
-          />
-        )}
-      </ConnectedHostAccess>
+      <ConnectedHostLock coordinator={coordinator}>
+        {(hostLock) =>
+          outlets.hostAccess === undefined ? (
+            <ConnectedHostAccess coordinator={coordinator} hostLock={hostLock}>
+              {(content) => (
+                <HostDeckRouteTable
+                  outlets={Object.freeze({ ...outlets, hostAccess: content })}
+                  coordinator={coordinator}
+                  runtimeFailed={runtimeFailed}
+                />
+              )}
+            </ConnectedHostAccess>
+          ) : (
+            <HostDeckRouteTable
+              outlets={outlets}
+              coordinator={coordinator}
+              runtimeFailed={runtimeFailed}
+            />
+          )
+        }
+      </ConnectedHostLock>
     );
   }
   return (
@@ -245,7 +258,7 @@ function HostDeckRouteTable({
       <Route
         path="*"
         element={
-          <NotFoundRoute coordinator={coordinator} hostAccess={outlets.hostAccess} />
+          <NotFoundRoute hostAccess={outlets.hostAccess} />
         }
       />
     </Routes>
@@ -270,7 +283,7 @@ function MissionControlRoute({
         : <MissionControlLoading />;
   }
   return (
-    <HostDeckFrame coordinator={coordinator} hostAccess={outlets.hostAccess}>
+    <HostDeckFrame hostAccess={outlets.hostAccess}>
       {content}
     </HostDeckFrame>
   );
@@ -290,7 +303,7 @@ function SessionDetailRoute({
 
   if (!parsed.success) {
     return (
-      <NotFoundRoute coordinator={coordinator} hostAccess={outlets.hostAccess} />
+      <NotFoundRoute hostAccess={outlets.hostAccess} />
     );
   }
 
@@ -308,7 +321,6 @@ function SessionDetailRoute({
   return (
     <HostDeckFrame
       back={<SessionBackButton />}
-      coordinator={coordinator}
       hostAccess={outlets.hostAccess}
       subtitle={
         injectedContent === undefined
@@ -348,7 +360,6 @@ function ConnectedSessionDetailRoute({
   return (
     <HostDeckFrame
       back={<SessionBackButton />}
-      coordinator={coordinator}
       hostAccess={hostAccess}
       subtitle={projection.headerSubtitle}
       title={projection.headerTitle}
@@ -376,14 +387,12 @@ function ConnectedSessionDetailRoute({
 function HostDeckFrame({
   back,
   children,
-  coordinator,
   hostAccess,
   subtitle,
   title = "HostDeck"
 }: Readonly<{
   back?: ReactNode;
   children: ReactNode;
-  coordinator?: BrowserConnectionStateCoordinator | undefined;
   hostAccess?: ReactNode;
   subtitle?: string | undefined;
   title?: string;
@@ -409,14 +418,10 @@ function HostDeckFrame({
         </div>
         {hostAccess !== undefined ? (
           <HostAccessSheet>{hostAccess}</HostAccessSheet>
-        ) : coordinator === undefined ? (
+        ) : (
           <HostAccessSheet>
             <HostAccessLoading />
           </HostAccessSheet>
-        ) : (
-          <ConnectedHostAccess coordinator={coordinator}>
-            {(content) => <HostAccessSheet>{content}</HostAccessSheet>}
-          </ConnectedHostAccess>
         )}
       </header>
       <main id="hostdeck-main" className="hostdeck-main" tabIndex={-1}>
@@ -574,14 +579,12 @@ function HostAccessLoading() {
 }
 
 function NotFoundRoute({
-  coordinator,
   hostAccess
 }: Readonly<{
-  coordinator?: BrowserConnectionStateCoordinator | undefined;
   hostAccess?: ReactNode;
 }>) {
   return (
-    <HostDeckFrame coordinator={coordinator} hostAccess={hostAccess}>
+    <HostDeckFrame hostAccess={hostAccess}>
       <section className="hostdeck-route hostdeck-route--error" aria-labelledby="not-found-title">
         <span className="hostdeck-error-rail" aria-hidden="true" />
         <div>
