@@ -2,7 +2,9 @@
 
 Date: 2026-07-25
 
-Status: criteria frozen; implementation in progress.
+Completed: 2026-07-26
+
+Status: complete; `PMC-01` to `PMC-20` pass.
 
 ## Scope
 
@@ -68,11 +70,22 @@ Excluded: goal, Plan, utility, approval, interrupt, archive, runtime, API, CLI, 
 | `PMC-19` | Deterministic screenshots cover loading, ready/current, staged pending, awaiting confirmation, conflict, unsupported/read-only, known failure, unknown outcome, and long-content states against Focus Rail with recorded drift. |
 | `PMC-20` | Focused state/component/API/browser suites, adjacent web regressions, full unit/contract/integration/static/build/package/planning/privacy checks, manual inspection, clean residue, and owner-doc evidence pass before closure. |
 
-## Planned Evidence
+## Completion Evidence
 
-- Headless model controller tests for every snapshot phase, selection transition, correlation rule, authority change, cancellation race, failure class, and no-duplicate invariant.
-- Coordinator and HTTP-contract tests for the selected-session read boundary and exact `model_read`/`model_select` composition.
-- React tests for Session Detail integration, Radix dialog semantics, radio/effort behavior, focus, close protection, read-only/unsupported/failure states, and StrictMode ownership.
-- Deterministic Playwright captures and measurements at the frozen responsive/state matrix, followed by manual inspection against `assets/ui-concepts/option-b/primary-controls.png` and `design-system.md`.
-- Full repository validation and concise completion evidence in this artifact and the owning backlog row.
+- Implementation: `59cfd5a`. The production coordinator now owns the exact selected-session model read, the headless controller owns live catalog/current/pending and one-attempt mutation truth, and Session Detail composes the single live Focus Rail `/model` dock action and modal sheet.
+- Focused validation: 22 headless model tests, 37 model/session component tests, and 32 shell/startup integration tests pass. The full web aggregate passes 243 tests across 18 files; the web package passes 240 tests across 17 files.
+- Browser validation: all 22 production-shell Chromium scenarios pass, including loading, ready, pending phases, staged, conflict, read-only, unsupported, known failure, ambiguous outcome, keyboard/focus, responsive, and adjacent prompt/Session Detail/Mission Control coverage.
+- Repository validation: root and all eight workspace typechecks, lint over 607 files/exports, 2,098 unit tests with 28 explicit skips, 244 contract tests, 36 integration tests, scaffold, planning, runtime-boundary, deterministic package, frozen offline install, production audit, privacy scan, diff checks, and zero-listener residue pass.
+- Visual evidence: 22 PNG captures plus machine layout measurements live under `artifacts/fe-v1-021-primary-model-control/`. Manual review against `assets/ui-concepts/option-b/primary-controls.png` covered 320/360/390/412/768/1280, short height, long content/scrolled content, and actual 200 percent reflow. A discovered sheet-grid overlap and duplicate disabled copy were corrected; no unapproved structural drift remains.
+- Privacy and authority review found no browser persistence, direct fetch, timer, prompt/slash dispatch, thread id, terminal/tmux/shell path, private exception reflection, or duplicate mutation path in the owned production modules.
 
+## Criteria Result
+
+- `PMC-01` to `PMC-03`: selected-target read authority, lifecycle cancellation, and strict live snapshot sourcing pass.
+- `PMC-04` to `PMC-08`: current-versus-pending truth, every pending phase, unknown identity, catalog/default effort rules, no-op, staged, and clear-pending behavior pass.
+- `PMC-09` to `PMC-12`: one secure operation/one POST, strict correlation, separated failure classes, and ambiguous-outcome read-only reconciliation pass.
+- `PMC-13` to `PMC-16`: all dispatch gates, authority transitions, no slash/raw path, and one-live-control partial dock pass.
+- `PMC-17` to `PMC-19`: modal semantics, focus/keyboard/close behavior, responsive/reflow bounds, deterministic state captures, and Focus Rail fidelity pass.
+- `PMC-20`: focused, adjacent, repository, visual, privacy, and residue closure gates pass.
+
+The installed default Codex CLI is now 0.145.0 while the reviewed production binding remains 0.144.0. `pnpm check:codex-bindings` therefore fails by design in this environment; no binding was regenerated or runtime contract changed in this UI leaf. This remains a downstream runtime/release-environment blocker and does not alter the accepted `/model` API contract.
