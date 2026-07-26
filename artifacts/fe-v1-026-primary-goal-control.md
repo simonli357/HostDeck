@@ -2,7 +2,9 @@
 
 Date: 2026-07-26
 
-Status: criteria frozen; implementation pending.
+Completed: 2026-07-26
+
+Status: complete; `PGC-01` to `PGC-20` pass.
 
 ## Scope
 
@@ -80,10 +82,23 @@ Excluded: `/plan`, utilities, approval, interrupt, archive, runtime, API, CLI, p
 | `PGC-19` | Deterministic screenshots cover loading, no-goal create, active, paused, blocked/limited, complete, each confirmation, submitting, verified results, accepted resume, uncertainty, conflict, read-only, unsupported, known failure, and long-content states against Focus Rail with recorded drift. |
 | `PGC-20` | Focused state/component/API/browser suites, model/prompt/Session Detail regressions, full unit/contract/integration/static/build/package/planning/privacy checks, manual visual inspection, clean residue, and owner-doc evidence pass before closure. |
 
-## Planned Evidence
+## Completion Evidence
 
-- Headless goal-controller tests for every snapshot status, null/current/uncertain combination, draft boundary, action/turn matrix, confirmation transition, correlation rule, authority change, cancellation race, failure class, and no-duplicate invariant.
-- Browser coordinator and HTTP-contract tests for exact `goal_read`/`goal_mutate` composition and goal operation-id scope.
-- React tests for the shared dock, Session Detail production wiring, goal rails/form/actions, all confirmations, modal semantics, focus/close protection, long objective, read-only/unsupported/failure states, and StrictMode ownership.
-- Deterministic Playwright state/viewport captures and measurements, followed by manual comparison against `assets/ui-concepts/option-b/primary-controls.png` and `design-system.md` plus adjacent model/prompt/Session Detail inspection.
-- Full repository validation and concise completion evidence in this artifact and the owning backlog row.
+- Implementation: `d42f16f`.
+- Production implementation adds one strict headless goal owner, one coordinator-backed React owner, the Focus Rail sheet, and one shared two-command Session Detail dock. Opening and refresh use `goal_read`; mutation uses `goal_mutate` with a goal-scoped operation id and the exact observed revision. No second client, persistence, polling, prompt, literal slash, terminal, thread-id, or automatic retry path exists.
+- The controller preserves all six runtime statuses, null goal, exact objective/usage/timestamp truth, 4,000-character observed objectives, the 512-character mutation boundary, active-turn pause semantics, idle-only actions, three confirmations, action-specific response correlation, uncertainty locks, authority loss, cancellation, and bounded known-versus-unknown failures. Five explicit mismatch cases prove that set, pause, resume, complete, and clear cannot accept an uncorrelated `200` response.
+- React and route composition preserve exact ISO timestamps in semantic markup, trap and restore focus, block ordinary dismissal during submit, keep disabled reasons in text, and render `/model` then `/goal` in one equal-width toolbar. The production route regression caught and fixed a missing `goal` prop in `app-shell.tsx`.
+- The protected-write audit found and fixed a shared CSRF classification bug: a retry-safe typed `operation_conflict` remains a bounded API rejection instead of being collapsed into stale-generation authority loss. Non-retryable conflict and unproven post-dispatch outcomes still fail closed as unknown.
+- Focused goal headless/component coverage passes 53 tests. The complete web aggregate passes 298 tests across 20 files. All 28 production-shell Chromium scenarios pass, including six dedicated goal scenarios plus `/model`, prompt, Session Detail, Mission Control, route, keyboard, reflow, short-height, and 200 percent regressions.
+- Repository validation passes 2,153 unit tests with 28 intentional skips, 244 contract tests, 36 integration tests, root typecheck, lint/exports over 614 files and eight packages, scaffold, planning, selected-runtime privacy boundary over 612 production modules and 22 externals, production web build, deterministic package acceptance, root package build, frozen offline install, zero-known-vulnerability production audit, and diff checks. Exact isolated Codex 0.144.0 verifies all 671 generated binding files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`; the user's default 0.145.0 remains intentionally ineligible.
+- Aggregate validation exposed two unrelated wall-clock-sensitive test fixtures. Their test-owned allowances were widened without changing production behavior or assertions; the final full unit run then passed in 50.87 seconds.
+- Visual evidence contains 36 deterministic PNGs plus machine layout measurements under `artifacts/fe-v1-026-primary-goal-control/`. Manual review covers loading, null/create, all six statuses, active turn, each confirmation/result, uncertainty, conflict, known/unknown failure, read-only, long content at every target width, scrolled 320 px, short height, and actual 200 percent reflow. Adjacent Session Detail, prompt, and model captures were regenerated and inspected because the shared dock legitimately changed.
+- Approved drift is limited to typed runtime truth, the implemented two-command dock, a fixed status/check row, and mobile containment needed for long state. No Signal Ledger borrowing, dead `/plan`/More placeholder, nested card, desktop-led composition, hidden action, or unapproved structural drift remains. The existing Vite main-chunk warning remains visible for later cross-screen/release hardening; no dependency was added in this leaf.
+
+## Criteria Result
+
+- `PGC-01` to `PGC-05`: exact selected authority, owned cancellation, strict snapshot sourcing, complete runtime truth, and observed-versus-edit objective bounds pass.
+- `PGC-06` to `PGC-10`: the action/turn matrix, pause-without-interrupt, confirmed agentic resume, separate complete/clear consequences, and one-operation/one-POST ownership pass.
+- `PGC-11` to `PGC-14`: action-specific correlation, uncertainty and ambiguous-outcome locks, bounded failure classes, and immediate read/write authority transitions pass.
+- `PGC-15` to `PGC-19`: one shared live dock, no slash/raw path, modal accessibility, responsive/reflow containment, deterministic state coverage, and Focus Rail fidelity pass.
+- `PGC-20`: focused, adjacent, repository, visual, privacy, reproducibility, owner-doc, and clean-diff closure gates pass. Physical-phone release acceptance remains correctly excluded from this leaf and owned downstream.
