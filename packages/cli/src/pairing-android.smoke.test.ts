@@ -552,6 +552,25 @@ describe("physical Android phone-driver protocol", () => {
     ).toThrow("retained pairing material");
   });
 
+  it("uses the authoritative Android keyboard request over stale view state", () => {
+    expect(
+      parseAndroidKeyboardVisibility(
+        "mInputShown=false\nmIsInputViewShown=true\nisInputViewShown=true"
+      )
+    ).toBe(false);
+    expect(
+      parseAndroidKeyboardVisibility(
+        "mInputShown=true\nmIsInputViewShown=false"
+      )
+    ).toBe(true);
+    expect(parseAndroidKeyboardVisibility("isInputViewShown=true")).toBe(true);
+    expect(() =>
+      parseAndroidKeyboardVisibility(
+        "mIsInputViewShown=true\nisInputViewShown=false"
+      )
+    ).toThrow("visibility was contradictory");
+  });
+
   it("opens the physical prompt replay through the strict subscriber contract", async () => {
     const event = physicalPromptSeedEvent("2026-07-25T00:00:00.000Z");
     const handoff = new PhysicalPromptHandoffService([event]);
@@ -3527,14 +3546,32 @@ function isAndroidKeyboardVisible(): boolean {
       !output.includes("\u0000"),
     "Android input-method state was invalid."
   );
-  const values = [...output.matchAll(
-    /\b(?:mInputShown|mIsInputViewShown|isInputViewShown)=((?:true|false))\b/gu
+  return parseAndroidKeyboardVisibility(output);
+}
+
+function parseAndroidKeyboardVisibility(output: string): boolean {
+  const requested = [...output.matchAll(
+    /\bmInputShown=((?:true|false))\b/gu
   )].map((match) => match[1]);
   requireCondition(
-    values.length >= 1 && values.length <= 32,
+    requested.length <= 8 &&
+      requested.every((value) => value === requested[0]),
+    "Android input-method request state was contradictory."
+  );
+  if (requested.length > 0) return requested[0] === "true";
+
+  const visible = [...output.matchAll(
+    /\b(?:mIsInputViewShown|isInputViewShown)=((?:true|false))\b/gu
+  )].map((match) => match[1]);
+  requireCondition(
+    visible.length >= 1 && visible.length <= 32,
     "Android input-method visibility was unavailable."
   );
-  return values.includes("true");
+  requireCondition(
+    visible.every((value) => value === visible[0]),
+    "Android input-method visibility was contradictory."
+  );
+  return visible[0] === "true";
 }
 
 function openDefaultCamera(): void {
