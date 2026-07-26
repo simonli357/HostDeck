@@ -3849,6 +3849,7 @@ interface AndroidUiNode {
 }
 
 type AndroidUiNodeField = "className" | "description" | "semantic" | "text";
+type AndroidVerticalRevealDirection = "backward" | "forward";
 
 interface ProductionUiEntryInput {
   readonly db: ReturnType<typeof openMigratedDatabase>["db"];
@@ -4074,9 +4075,10 @@ async function runProductionRemoteRecoveryUiSequence(
   );
 
   await openProductionHostAccessSheet();
-  await waitForAndroidUiNode(
+  await revealAndroidUiNode(
     "text",
     "Remote access ready",
+    "forward",
     30_000,
     "Production recovery UI did not show current ready truth."
   );
@@ -4175,9 +4177,10 @@ async function runProductionRemoteRecoveryUiSequence(
     "Production recovery did not restore Mission Control without re-pairing."
   );
   await openProductionHostAccessSheet();
-  await waitForAndroidUiNode(
+  await revealAndroidUiNode(
     "text",
     "Remote access ready",
+    "forward",
     30_000,
     "Production recovery did not restore current detailed ready truth."
   );
@@ -4234,9 +4237,10 @@ async function openProductionHostAccessSheet(): Promise<void> {
 }
 
 async function closeProductionHostAccessSheet(): Promise<void> {
-  const close = await waitForAndroidUiNode(
+  const close = await revealAndroidUiNode(
     "description",
     "Close Host and access",
+    "backward",
     30_000,
     "Production Host and access close control was unavailable on Android."
   );
@@ -4264,9 +4268,10 @@ async function runOneProductionRemoteCheck(
     host: inspection.hostStatusRequests,
     remote: inspection.remoteBrowserStatusRequests
   });
-  const check = await waitForAndroidUiNode(
+  const check = await revealAndroidUiNode(
     "text",
     "Check again",
+    "forward",
     30_000,
     "Production remote check action was unavailable on Android."
   );
@@ -4284,9 +4289,10 @@ async function runOneProductionRemoteCheck(
     terminalFailureMessage:
       "Production remote check did not settle after two bounded taps."
   });
-  await waitForAndroidUiNode(
+  await revealAndroidUiNode(
     "text",
     "Remote access ready",
+    "backward",
     30_000,
     "Production remote check did not return to current ready truth."
   );
@@ -4766,6 +4772,69 @@ async function waitForAndroidUiNode(
   }, timeoutMs, message);
   requireCondition(found !== null, message);
   return found;
+}
+
+async function revealAndroidUiNode(
+  field: AndroidUiNodeField,
+  value: string,
+  direction: AndroidVerticalRevealDirection,
+  timeoutMs: number,
+  message: string
+): Promise<AndroidUiNode> {
+  let found: AndroidUiNode | null = null;
+  let swipeCount = 0;
+  await waitFor(async () => {
+    const nodes = await readAndroidUiNodes();
+    const matches = nodes.filter((node) =>
+      matchesAndroidUiNode(node, field, value)
+    );
+    requireCondition(
+      matches.length <= 1,
+      `Android UI hierarchy duplicated ${field} ${value}.`
+    );
+    found = matches[0] ?? null;
+    if (found !== null) return true;
+    if (swipeCount < 4) {
+      swipeAndroidViewport(nodes, direction);
+      swipeCount += 1;
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+    return false;
+  }, timeoutMs, message);
+  requireCondition(found !== null, message);
+  return found;
+}
+
+function swipeAndroidViewport(
+  nodes: readonly AndroidUiNode[],
+  direction: AndroidVerticalRevealDirection
+): void {
+  const right = Math.max(...nodes.map((node) => node.bounds.right));
+  const bottom = Math.max(...nodes.map((node) => node.bounds.bottom));
+  requireCondition(
+    Number.isSafeInteger(right) &&
+      Number.isSafeInteger(bottom) &&
+      right >= 320 &&
+      bottom >= 480 &&
+      right <= 10_000 &&
+      bottom <= 10_000,
+    "Android viewport bounds were invalid for a bounded reveal."
+  );
+  const x = Math.floor(right / 2);
+  const upperY = Math.floor(bottom * 0.32);
+  const lowerY = Math.floor(bottom * 0.76);
+  const [startY, endY] =
+    direction === "forward" ? [lowerY, upperY] : [upperY, lowerY];
+  adb([
+    "shell",
+    "input",
+    "swipe",
+    String(x),
+    String(startY),
+    String(x),
+    String(endY),
+    "350"
+  ]);
 }
 
 async function continueFromPairingUi(

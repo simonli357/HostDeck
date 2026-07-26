@@ -119,6 +119,12 @@ Excluded: profile switching, Tailscale login/logout/up/down/service ownership, S
 - Browser evidence covers every public recovery reason, checking, failed check, reconnecting, recovered, both production routes, 320/360/390/412/768/1280 widths, 390 x 420 short height, and actual 200 percent reflow. Layout records prove one sheet scroll owner, reachable close/action controls, 44 px targets, and no document overflow.
 - `RCR-01` through `RCR-22` are implemented and validated. `RCR-23` and the physical portion of `RCR-24` remain open until `pnpm smoke:recovery-android` passes on the connected phone and its sanitized evidence is inspected.
 
+## Physical Run Log
+
+- Attempt 1 reached the production Host & access sheet over cellular plus private Tailscale HTTPS, then stopped before interaction because the Android driver searched only the initial viewport for the below-fold Remote connection rail. No physical criterion was accepted from this run.
+- Failure cleanup restored the dedicated saved profile, removed the dedicated Serve mapping, closed Chrome/runtime state, restored phone network settings, left no ADB application tunnel, and published no partial evidence.
+- The driver now performs at most four device-relative swipes within the existing single sheet scroll owner to reveal the recovery rail, then reverses direction to reach the explicit close control. This changes only physical navigation; production UI and acceptance assertions remain unchanged.
+
 ## Reuse And Ownership
 
 Reuse the selected remote-ingress and host-health contracts, lifecycle-owned host status, bounded browser HTTP client, persistent coordinator, existing Host & access sheet, Focus Rail recovery rail, Lucide icons, deterministic fixtures, and Android acceptance infrastructure. Add no dependency.
