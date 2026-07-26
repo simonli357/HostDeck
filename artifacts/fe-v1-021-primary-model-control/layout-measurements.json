@@ -26,23 +26,33 @@
           "width": 320,
           "height": 55
         },
-        "model": {
-          "top": 607,
-          "right": 157,
-          "bottom": 651,
-          "left": 16,
-          "width": 141,
-          "height": 44
-        },
-        "goal": {
-          "top": 607,
-          "right": 304,
-          "bottom": 651,
-          "left": 163,
-          "width": 141,
-          "height": 44
-        },
-        "commandCount": 2,
+        "commands": [
+          {
+            "top": 607,
+            "right": 108,
+            "bottom": 651,
+            "left": 16,
+            "width": 92,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 206,
+            "bottom": 651,
+            "left": 114,
+            "width": 92,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 304,
+            "bottom": 651,
+            "left": 212,
+            "width": 92,
+            "height": 44
+          }
+        ],
+        "commandCount": 3,
         "composer": {
           "top": 657,
           "right": 320,
@@ -87,23 +97,33 @@
           "width": 360,
           "height": 55
         },
-        "model": {
-          "top": 607,
-          "right": 177,
-          "bottom": 651,
-          "left": 16,
-          "width": 161,
-          "height": 44
-        },
-        "goal": {
-          "top": 607,
-          "right": 344,
-          "bottom": 651,
-          "left": 183,
-          "width": 161,
-          "height": 44
-        },
-        "commandCount": 2,
+        "commands": [
+          {
+            "top": 607,
+            "right": 121.328125,
+            "bottom": 651,
+            "left": 16,
+            "width": 105.328125,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 232.65625,
+            "bottom": 651,
+            "left": 127.328125,
+            "width": 105.328125,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 344,
+            "bottom": 651,
+            "left": 238.65625,
+            "width": 105.34375,
+            "height": 44
+          }
+        ],
+        "commandCount": 3,
         "composer": {
           "top": 657,
           "right": 360,
@@ -148,23 +168,33 @@
           "width": 390,
           "height": 55
         },
-        "model": {
-          "top": 651,
-          "right": 192,
-          "bottom": 695,
-          "left": 16,
-          "width": 176,
-          "height": 44
-        },
-        "goal": {
-          "top": 651,
-          "right": 374,
-          "bottom": 695,
-          "left": 198,
-          "width": 176,
-          "height": 44
-        },
-        "commandCount": 2,
+        "commands": [
+          {
+            "top": 651,
+            "right": 131.328125,
+            "bottom": 695,
+            "left": 16,
+            "width": 115.328125,
+            "height": 44
+          },
+          {
+            "top": 651,
+            "right": 252.65625,
+            "bottom": 695,
+            "left": 137.328125,
+            "width": 115.328125,
+            "height": 44
+          },
+          {
+            "top": 651,
+            "right": 374,
+            "bottom": 695,
+            "left": 258.65625,
+            "width": 115.34375,
+            "height": 44
+          }
+        ],
+        "commandCount": 3,
         "composer": {
           "top": 701,
           "right": 390,
@@ -209,23 +239,33 @@
           "width": 412,
           "height": 55
         },
-        "model": {
-          "top": 722,
-          "right": 203,
-          "bottom": 766,
-          "left": 16,
-          "width": 187,
-          "height": 44
-        },
-        "goal": {
-          "top": 722,
-          "right": 396,
-          "bottom": 766,
-          "left": 209,
-          "width": 187,
-          "height": 44
-        },
-        "commandCount": 2,
+        "commands": [
+          {
+            "top": 722,
+            "right": 138.65625,
+            "bottom": 766,
+            "left": 16,
+            "width": 122.65625,
+            "height": 44
+          },
+          {
+            "top": 722,
+            "right": 267.328125,
+            "bottom": 766,
+            "left": 144.65625,
+            "width": 122.671875,
+            "height": 44
+          },
+          {
+            "top": 722,
+            "right": 395.984375,
+            "bottom": 766,
+            "left": 273.328125,
+            "width": 122.65625,
+            "height": 44
+          }
+        ],
+        "commandCount": 3,
         "composer": {
           "top": 772,
           "right": 412,
@@ -270,23 +310,33 @@
           "width": 768,
           "height": 55
         },
-        "model": {
-          "top": 831,
-          "right": 381,
-          "bottom": 875,
-          "left": 16,
-          "width": 365,
-          "height": 44
-        },
-        "goal": {
-          "top": 831,
-          "right": 752,
-          "bottom": 875,
-          "left": 387,
-          "width": 365,
-          "height": 44
-        },
-        "commandCount": 2,
+        "commands": [
+          {
+            "top": 831,
+            "right": 257.328125,
+            "bottom": 875,
+            "left": 16,
+            "width": 241.328125,
+            "height": 44
+          },
+          {
+            "top": 831,
+            "right": 504.65625,
+            "bottom": 875,
+            "left": 263.328125,
+            "width": 241.328125,
+            "height": 44
+          },
+          {
+            "top": 831,
+            "right": 751.984375,
+            "bottom": 875,
+            "left": 510.65625,
+            "width": 241.328125,
+            "height": 44
+          }
+        ],
+        "commandCount": 3,
         "composer": {
           "top": 881,
           "right": 768,
@@ -331,23 +381,33 @@
           "width": 820,
           "height": 55
         },
-        "model": {
-          "top": 607,
-          "right": 637,
-          "bottom": 651,
-          "left": 246,
-          "width": 391,
-          "height": 44
-        },
-        "goal": {
-          "top": 607,
-          "right": 1034,
-          "bottom": 651,
-          "left": 643,
-          "width": 391,
-          "height": 44
-        },
-        "commandCount": 2,
+        "commands": [
+          {
+            "top": 607,
+            "right": 504.65625,
+            "bottom": 651,
+            "left": 246,
+            "width": 258.65625,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 769.328125,
+            "bottom": 651,
+            "left": 510.65625,
+            "width": 258.671875,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 1033.984375,
+            "bottom": 651,
+            "left": 775.328125,
+            "width": 258.65625,
+            "height": 44
+          }
+        ],
+        "commandCount": 3,
         "composer": {
           "top": 657,
           "right": 1050,

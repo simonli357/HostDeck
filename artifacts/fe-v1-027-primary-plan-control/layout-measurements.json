@@ -1,0 +1,1001 @@
+{
+  "measurements": [
+    {
+      "viewport": {
+        "width": 320,
+        "height": 800
+      },
+      "dock": {
+        "viewport": {
+          "width": 320,
+          "height": 800
+        },
+        "controls": {
+          "top": 601,
+          "right": 320,
+          "bottom": 800,
+          "left": 0,
+          "width": 320,
+          "height": 199
+        },
+        "dock": {
+          "top": 602,
+          "right": 320,
+          "bottom": 657,
+          "left": 0,
+          "width": 320,
+          "height": 55
+        },
+        "commands": [
+          {
+            "top": 607,
+            "right": 108,
+            "bottom": 651,
+            "left": 16,
+            "width": 92,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 206,
+            "bottom": 651,
+            "left": 114,
+            "width": 92,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 304,
+            "bottom": 651,
+            "left": 212,
+            "width": 92,
+            "height": 44
+          }
+        ],
+        "commandCount": 3,
+        "composer": {
+          "top": 657,
+          "right": 320,
+          "bottom": 800,
+          "left": 0,
+          "width": 320,
+          "height": 143
+        },
+        "target": {
+          "top": 667,
+          "right": 308,
+          "bottom": 684,
+          "left": 12,
+          "width": 296,
+          "height": 17
+        }
+      }
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 800
+      },
+      "dock": {
+        "viewport": {
+          "width": 360,
+          "height": 800
+        },
+        "controls": {
+          "top": 601,
+          "right": 360,
+          "bottom": 800,
+          "left": 0,
+          "width": 360,
+          "height": 199
+        },
+        "dock": {
+          "top": 602,
+          "right": 360,
+          "bottom": 657,
+          "left": 0,
+          "width": 360,
+          "height": 55
+        },
+        "commands": [
+          {
+            "top": 607,
+            "right": 121.328125,
+            "bottom": 651,
+            "left": 16,
+            "width": 105.328125,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 232.65625,
+            "bottom": 651,
+            "left": 127.328125,
+            "width": 105.328125,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 344,
+            "bottom": 651,
+            "left": 238.65625,
+            "width": 105.34375,
+            "height": 44
+          }
+        ],
+        "commandCount": 3,
+        "composer": {
+          "top": 657,
+          "right": 360,
+          "bottom": 800,
+          "left": 0,
+          "width": 360,
+          "height": 143
+        },
+        "target": {
+          "top": 667,
+          "right": 344,
+          "bottom": 684,
+          "left": 16,
+          "width": 328,
+          "height": 17
+        }
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "dock": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "controls": {
+          "top": 645,
+          "right": 390,
+          "bottom": 844,
+          "left": 0,
+          "width": 390,
+          "height": 199
+        },
+        "dock": {
+          "top": 646,
+          "right": 390,
+          "bottom": 701,
+          "left": 0,
+          "width": 390,
+          "height": 55
+        },
+        "commands": [
+          {
+            "top": 651,
+            "right": 131.328125,
+            "bottom": 695,
+            "left": 16,
+            "width": 115.328125,
+            "height": 44
+          },
+          {
+            "top": 651,
+            "right": 252.65625,
+            "bottom": 695,
+            "left": 137.328125,
+            "width": 115.328125,
+            "height": 44
+          },
+          {
+            "top": 651,
+            "right": 374,
+            "bottom": 695,
+            "left": 258.65625,
+            "width": 115.34375,
+            "height": 44
+          }
+        ],
+        "commandCount": 3,
+        "composer": {
+          "top": 701,
+          "right": 390,
+          "bottom": 844,
+          "left": 0,
+          "width": 390,
+          "height": 143
+        },
+        "target": {
+          "top": 711,
+          "right": 374,
+          "bottom": 728,
+          "left": 16,
+          "width": 358,
+          "height": 17
+        }
+      }
+    },
+    {
+      "viewport": {
+        "width": 412,
+        "height": 915
+      },
+      "dock": {
+        "viewport": {
+          "width": 412,
+          "height": 915
+        },
+        "controls": {
+          "top": 716,
+          "right": 412,
+          "bottom": 915,
+          "left": 0,
+          "width": 412,
+          "height": 199
+        },
+        "dock": {
+          "top": 717,
+          "right": 412,
+          "bottom": 772,
+          "left": 0,
+          "width": 412,
+          "height": 55
+        },
+        "commands": [
+          {
+            "top": 722,
+            "right": 138.65625,
+            "bottom": 766,
+            "left": 16,
+            "width": 122.65625,
+            "height": 44
+          },
+          {
+            "top": 722,
+            "right": 267.328125,
+            "bottom": 766,
+            "left": 144.65625,
+            "width": 122.671875,
+            "height": 44
+          },
+          {
+            "top": 722,
+            "right": 395.984375,
+            "bottom": 766,
+            "left": 273.328125,
+            "width": 122.65625,
+            "height": 44
+          }
+        ],
+        "commandCount": 3,
+        "composer": {
+          "top": 772,
+          "right": 412,
+          "bottom": 915,
+          "left": 0,
+          "width": 412,
+          "height": 143
+        },
+        "target": {
+          "top": 782,
+          "right": 396,
+          "bottom": 799,
+          "left": 16,
+          "width": 380,
+          "height": 17
+        }
+      }
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "dock": {
+        "viewport": {
+          "width": 768,
+          "height": 1024
+        },
+        "controls": {
+          "top": 825,
+          "right": 768,
+          "bottom": 1024,
+          "left": 0,
+          "width": 768,
+          "height": 199
+        },
+        "dock": {
+          "top": 826,
+          "right": 768,
+          "bottom": 881,
+          "left": 0,
+          "width": 768,
+          "height": 55
+        },
+        "commands": [
+          {
+            "top": 831,
+            "right": 257.328125,
+            "bottom": 875,
+            "left": 16,
+            "width": 241.328125,
+            "height": 44
+          },
+          {
+            "top": 831,
+            "right": 504.65625,
+            "bottom": 875,
+            "left": 263.328125,
+            "width": 241.328125,
+            "height": 44
+          },
+          {
+            "top": 831,
+            "right": 751.984375,
+            "bottom": 875,
+            "left": 510.65625,
+            "width": 241.328125,
+            "height": 44
+          }
+        ],
+        "commandCount": 3,
+        "composer": {
+          "top": 881,
+          "right": 768,
+          "bottom": 1024,
+          "left": 0,
+          "width": 768,
+          "height": 143
+        },
+        "target": {
+          "top": 891,
+          "right": 744,
+          "bottom": 908,
+          "left": 24,
+          "width": 720,
+          "height": 17
+        }
+      }
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "dock": {
+        "viewport": {
+          "width": 1280,
+          "height": 800
+        },
+        "controls": {
+          "top": 601,
+          "right": 1050,
+          "bottom": 800,
+          "left": 230,
+          "width": 820,
+          "height": 199
+        },
+        "dock": {
+          "top": 602,
+          "right": 1050,
+          "bottom": 657,
+          "left": 230,
+          "width": 820,
+          "height": 55
+        },
+        "commands": [
+          {
+            "top": 607,
+            "right": 504.65625,
+            "bottom": 651,
+            "left": 246,
+            "width": 258.65625,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 769.328125,
+            "bottom": 651,
+            "left": 510.65625,
+            "width": 258.671875,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 1033.984375,
+            "bottom": 651,
+            "left": 775.328125,
+            "width": 258.65625,
+            "height": 44
+          }
+        ],
+        "commandCount": 3,
+        "composer": {
+          "top": 657,
+          "right": 1050,
+          "bottom": 800,
+          "left": 230,
+          "width": 820,
+          "height": 143
+        },
+        "target": {
+          "top": 667,
+          "right": 1026,
+          "bottom": 684,
+          "left": 254,
+          "width": 772,
+          "height": 17
+        }
+      }
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 800
+      },
+      "sheet": {
+        "viewport": {
+          "width": 320,
+          "height": 800
+        },
+        "dialog": {
+          "top": 64,
+          "right": 320,
+          "bottom": 800,
+          "left": 0,
+          "width": 320,
+          "height": 736
+        },
+        "body": {
+          "top": 148,
+          "right": 303,
+          "bottom": 727,
+          "left": 17,
+          "width": 286,
+          "height": 579,
+          "clientHeight": 579,
+          "scrollHeight": 982
+        },
+        "footer": {
+          "top": 727,
+          "right": 303,
+          "bottom": 788,
+          "left": 17,
+          "width": 286,
+          "height": 61
+        },
+        "submit": {
+          "top": 740,
+          "right": 303,
+          "bottom": 788,
+          "left": 137.390625,
+          "width": 165.609375,
+          "height": 48
+        },
+        "close": {
+          "top": 94,
+          "right": 303,
+          "bottom": 138,
+          "left": 259,
+          "width": 44,
+          "height": 44
+        },
+        "rails": {
+          "top": 164,
+          "right": 303,
+          "bottom": 616,
+          "left": 17,
+          "width": 286,
+          "height": 452
+        },
+        "options": {
+          "top": 704,
+          "right": 303,
+          "bottom": 995,
+          "left": 17,
+          "width": 286,
+          "height": 291
+        },
+        "textOverflow": false
+      }
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 800
+      },
+      "sheet": {
+        "viewport": {
+          "width": 360,
+          "height": 800
+        },
+        "dialog": {
+          "top": 64,
+          "right": 360,
+          "bottom": 800,
+          "left": 0,
+          "width": 360,
+          "height": 736
+        },
+        "body": {
+          "top": 148,
+          "right": 343,
+          "bottom": 727,
+          "left": 17,
+          "width": 326,
+          "height": 579,
+          "clientHeight": 579,
+          "scrollHeight": 925
+        },
+        "footer": {
+          "top": 727,
+          "right": 343,
+          "bottom": 788,
+          "left": 17,
+          "width": 326,
+          "height": 61
+        },
+        "submit": {
+          "top": 740,
+          "right": 343,
+          "bottom": 788,
+          "left": 153.390625,
+          "width": 189.609375,
+          "height": 48
+        },
+        "close": {
+          "top": 94,
+          "right": 343,
+          "bottom": 138,
+          "left": 299,
+          "width": 44,
+          "height": 44
+        },
+        "rails": {
+          "top": 164,
+          "right": 343,
+          "bottom": 559,
+          "left": 17,
+          "width": 326,
+          "height": 395
+        },
+        "options": {
+          "top": 647,
+          "right": 343,
+          "bottom": 938,
+          "left": 17,
+          "width": 326,
+          "height": 291
+        },
+        "textOverflow": false
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "sheet": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "dialog": {
+          "top": 67.53125,
+          "right": 390,
+          "bottom": 844,
+          "left": 0,
+          "width": 390,
+          "height": 776.46875
+        },
+        "body": {
+          "top": 151.53125,
+          "right": 373,
+          "bottom": 771,
+          "left": 17,
+          "width": 356,
+          "height": 619.46875,
+          "clientHeight": 619,
+          "scrollHeight": 870
+        },
+        "footer": {
+          "top": 771,
+          "right": 373,
+          "bottom": 832,
+          "left": 17,
+          "width": 356,
+          "height": 61
+        },
+        "submit": {
+          "top": 784,
+          "right": 373,
+          "bottom": 832,
+          "left": 165.390625,
+          "width": 207.609375,
+          "height": 48
+        },
+        "close": {
+          "top": 97.53125,
+          "right": 373,
+          "bottom": 141.53125,
+          "left": 329,
+          "width": 44,
+          "height": 44
+        },
+        "rails": {
+          "top": 167.53125,
+          "right": 373,
+          "bottom": 541.53125,
+          "left": 17,
+          "width": 356,
+          "height": 374
+        },
+        "options": {
+          "top": 629.53125,
+          "right": 373,
+          "bottom": 903.53125,
+          "left": 17,
+          "width": 356,
+          "height": 274
+        },
+        "textOverflow": false
+      }
+    },
+    {
+      "viewport": {
+        "width": 412,
+        "height": 915
+      },
+      "sheet": {
+        "viewport": {
+          "width": 412,
+          "height": 915
+        },
+        "dialog": {
+          "top": 75,
+          "right": 412,
+          "bottom": 915,
+          "left": 0,
+          "width": 412,
+          "height": 840
+        },
+        "body": {
+          "top": 159,
+          "right": 395,
+          "bottom": 842,
+          "left": 17,
+          "width": 378,
+          "height": 683,
+          "clientHeight": 683,
+          "scrollHeight": 822
+        },
+        "footer": {
+          "top": 842,
+          "right": 395,
+          "bottom": 903,
+          "left": 17,
+          "width": 378,
+          "height": 61
+        },
+        "submit": {
+          "top": 855,
+          "right": 395,
+          "bottom": 903,
+          "left": 174.1875,
+          "width": 220.8125,
+          "height": 48
+        },
+        "close": {
+          "top": 105,
+          "right": 395,
+          "bottom": 149,
+          "left": 351,
+          "width": 44,
+          "height": 44
+        },
+        "rails": {
+          "top": 175,
+          "right": 395,
+          "bottom": 518,
+          "left": 17,
+          "width": 378,
+          "height": 343
+        },
+        "options": {
+          "top": 606,
+          "right": 395,
+          "bottom": 863,
+          "left": 17,
+          "width": 378,
+          "height": 257
+        },
+        "textOverflow": false
+      }
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "sheet": {
+        "viewport": {
+          "width": 768,
+          "height": 1024
+        },
+        "dialog": {
+          "top": 184,
+          "right": 664,
+          "bottom": 1024,
+          "left": 104,
+          "width": 560,
+          "height": 840
+        },
+        "body": {
+          "top": 257,
+          "right": 647,
+          "bottom": 951,
+          "left": 121,
+          "width": 526,
+          "height": 694,
+          "clientHeight": 694,
+          "scrollHeight": 697
+        },
+        "footer": {
+          "top": 951,
+          "right": 647,
+          "bottom": 1012,
+          "left": 121,
+          "width": 526,
+          "height": 61
+        },
+        "submit": {
+          "top": 964,
+          "right": 647,
+          "bottom": 1012,
+          "left": 337.390625,
+          "width": 309.609375,
+          "height": 48
+        },
+        "close": {
+          "top": 208.5,
+          "right": 647,
+          "bottom": 252.5,
+          "left": 603,
+          "width": 44,
+          "height": 44
+        },
+        "rails": {
+          "top": 273,
+          "right": 647,
+          "bottom": 564,
+          "left": 121,
+          "width": 526,
+          "height": 291
+        },
+        "options": {
+          "top": 636,
+          "right": 647,
+          "bottom": 836,
+          "left": 121,
+          "width": 526,
+          "height": 200
+        },
+        "textOverflow": false
+      }
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "sheet": {
+        "viewport": {
+          "width": 1280,
+          "height": 800
+        },
+        "dialog": {
+          "top": 64,
+          "right": 920,
+          "bottom": 800,
+          "left": 360,
+          "width": 560,
+          "height": 736
+        },
+        "body": {
+          "top": 137,
+          "right": 903,
+          "bottom": 727,
+          "left": 377,
+          "width": 526,
+          "height": 590,
+          "clientHeight": 590,
+          "scrollHeight": 697
+        },
+        "footer": {
+          "top": 727,
+          "right": 903,
+          "bottom": 788,
+          "left": 377,
+          "width": 526,
+          "height": 61
+        },
+        "submit": {
+          "top": 740,
+          "right": 903,
+          "bottom": 788,
+          "left": 593.390625,
+          "width": 309.609375,
+          "height": 48
+        },
+        "close": {
+          "top": 88.5,
+          "right": 903,
+          "bottom": 132.5,
+          "left": 859,
+          "width": 44,
+          "height": 44
+        },
+        "rails": {
+          "top": 153,
+          "right": 903,
+          "bottom": 444,
+          "left": 377,
+          "width": 526,
+          "height": 291
+        },
+        "options": {
+          "top": 516,
+          "right": 903,
+          "bottom": 716,
+          "left": 377,
+          "width": 526,
+          "height": 200
+        },
+        "textOverflow": false
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 420
+      },
+      "sheet": {
+        "viewport": {
+          "width": 390,
+          "height": 420
+        },
+        "dialog": {
+          "top": 8,
+          "right": 390,
+          "bottom": 420,
+          "left": 0,
+          "width": 390,
+          "height": 412
+        },
+        "body": {
+          "top": 92,
+          "right": 373,
+          "bottom": 347,
+          "left": 17,
+          "width": 356,
+          "height": 255,
+          "clientHeight": 255,
+          "scrollHeight": 846
+        },
+        "footer": {
+          "top": 347,
+          "right": 373,
+          "bottom": 408,
+          "left": 17,
+          "width": 356,
+          "height": 61
+        },
+        "submit": {
+          "top": 360,
+          "right": 373,
+          "bottom": 408,
+          "left": 165.390625,
+          "width": 207.609375,
+          "height": 48
+        },
+        "close": {
+          "top": 38,
+          "right": 373,
+          "bottom": 82,
+          "left": 329,
+          "width": 44,
+          "height": 44
+        },
+        "rails": {
+          "top": 102,
+          "right": 373,
+          "bottom": 464,
+          "left": 17,
+          "width": 356,
+          "height": 362
+        },
+        "options": {
+          "top": 552,
+          "right": 373,
+          "bottom": 826,
+          "left": 17,
+          "width": 356,
+          "height": 274
+        },
+        "textOverflow": false
+      }
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 800,
+        "effectiveWidth": 640,
+        "effectiveHeight": 400,
+        "zoom": 2
+      },
+      "sheet": {
+        "viewport": {
+          "width": 640,
+          "height": 400
+        },
+        "dialog": {
+          "top": 8,
+          "right": 600,
+          "bottom": 400,
+          "left": 40,
+          "width": 560,
+          "height": 392
+        },
+        "body": {
+          "top": 81,
+          "right": 583,
+          "bottom": 327,
+          "left": 57,
+          "width": 526,
+          "height": 246,
+          "clientHeight": 246,
+          "scrollHeight": 661
+        },
+        "footer": {
+          "top": 327,
+          "right": 583,
+          "bottom": 388,
+          "left": 57,
+          "width": 526,
+          "height": 61
+        },
+        "submit": {
+          "top": 340,
+          "right": 583,
+          "bottom": 388,
+          "left": 273.390625,
+          "width": 309.609375,
+          "height": 48
+        },
+        "close": {
+          "top": 32.5,
+          "right": 583,
+          "bottom": 76.5,
+          "left": 539,
+          "width": 44,
+          "height": 44
+        },
+        "rails": {
+          "top": 91,
+          "right": 583,
+          "bottom": 358,
+          "left": 57,
+          "width": 526,
+          "height": 267
+        },
+        "options": {
+          "top": 430,
+          "right": 583,
+          "bottom": 630,
+          "left": 57,
+          "width": 526,
+          "height": 200
+        },
+        "textOverflow": false
+      }
+    }
+  ]
+}

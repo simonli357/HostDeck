@@ -151,7 +151,8 @@ test("renders an honest empty state and does not invent downstream controls", as
     .toBeDisabled();
   await expect(page.getByRole("button", { name: /^\/model for /u })).toHaveCount(1);
   await expect(page.getByRole("button", { name: /^\/goal for /u })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: /^\/plan|more/iu })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^\/plan for /u })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /more/iu })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /approve|deny/u })).toHaveCount(0);
   expect(await api.streamRequestUrls()).toEqual([
     `http://127.0.0.1:4175/api/v1/sessions/${sessionDetailBrowserSessionId}/events/stream`

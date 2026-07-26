@@ -333,6 +333,7 @@ function ConnectedSessionDetailRoute({
         onRefresh={controller.onRefresh}
         goal={controller.goal}
         model={controller.model}
+        plan={controller.plan}
         prompt={controller.prompt}
         projection={projection}
       />

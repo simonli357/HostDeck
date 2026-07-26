@@ -11,6 +11,8 @@ export * from "./model-control.js";
 export * from "./model-control-state.js";
 export * from "./pairing-bootstrap.js";
 export * from "./pairing-screen.js";
+export * from "./plan-control.js";
+export * from "./plan-control-state.js";
 export * from "./prompt-composer.js";
 export * from "./prompt-composer-state.js";
 export * from "./session-detail.js";

@@ -5,7 +5,8 @@ export const browserOperationIdScopes = Object.freeze([
   "csrf_bootstrap",
   "prompt",
   "model",
-  "goal"
+  "goal",
+  "plan"
 ] as const);
 
 export type BrowserOperationIdScope = (typeof browserOperationIdScopes)[number];

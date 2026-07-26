@@ -7,6 +7,7 @@ export default defineConfig({
     "mission-control.spec.ts",
     "goal-control.spec.ts",
     "model-control.spec.ts",
+    "plan-control.spec.ts",
     "prompt-composer.spec.ts",
     "session-detail.spec.ts"
   ],
