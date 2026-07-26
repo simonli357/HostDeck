@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-022` Implement inline approval decisions | ready | none | Extend the completed read-only approval timeline into its exact decision workflow. |
+| 1 | `FE-V1-022` Implement inline approval decisions | in_progress | none | Extend the completed read-only approval timeline into its exact decision workflow. |
 | 2 | `FE-V1-031` Implement CSRF reload and stale-session recovery | ready | none | Complete bounded authority recovery on the now-proven pairing and access surface. |
 | 3 | `FE-V1-032` Implement paired-device management | ready | none | Add exact device listing and revocation after the pairing authority path is proven. |
 | 4 | `FE-V1-033` Implement visible host-lock state | ready | none | Carry lock authority into every protected dashboard action without adding remote unlock. |
