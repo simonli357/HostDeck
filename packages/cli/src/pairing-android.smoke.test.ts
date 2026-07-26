@@ -3953,7 +3953,8 @@ async function runProductionPromptUiSequence(
   );
   const keyboardNodes = await readAndroidUiNodes();
   const promptTargetVisible = keyboardNodes.some(
-    (node) => node.text === "Prompt target"
+    (node) =>
+      node.text === "Prompt target" || node.text === "PROMPT TARGET"
   );
   const promptLabelVisible = keyboardNodes.some((node) =>
     matchesAndroidUiNode(node, "semantic", inputLabel)
