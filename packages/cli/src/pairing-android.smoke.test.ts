@@ -2,7 +2,8 @@ import {
   type ChildProcess,
   execFile,
   execFileSync,
-  spawn
+  spawn,
+  spawnSync
 } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import {
@@ -587,6 +588,20 @@ describe("physical Android phone-driver protocol", () => {
         "mIsInputViewShown=true\nisInputViewShown=false"
       )
     ).toThrow("visibility was contradictory");
+  });
+
+  it("distinguishes a stopped Chrome package from malformed pid output", () => {
+    expect(readChromeProcessState(0, "123 456\n", "")).toBe("running");
+    expect(readChromeProcessState(1, "", "")).toBe("stopped");
+    expect(() => readChromeProcessState(0, "not-a-pid", "")).toThrow(
+      "Chrome process state was invalid"
+    );
+    expect(() => readChromeProcessState(1, "123", "")).toThrow(
+      "Chrome process state was invalid"
+    );
+    expect(() => readChromeProcessState(2, "", "failure")).toThrow(
+      "Chrome process state was invalid"
+    );
   });
 
   it("opens the physical prompt replay through the strict subscriber contract", async () => {
@@ -3407,6 +3422,40 @@ function adbAsync(args: readonly string[]): Promise<string> {
   });
 }
 
+function adbWithStatus(args: readonly string[]): Readonly<{
+  status: number;
+  stderr: string;
+  stdout: string;
+}> {
+  const serialized = args.join("\u0000");
+  requireCondition(
+    [...deviceForbiddenValues].every((value) => !serialized.includes(value)),
+    "A protected pairing value was rejected before status-aware ADB dispatch."
+  );
+  adbCommandCount += 1;
+  const result = spawnSync("adb", [...args], commandOptions());
+  requireCondition(
+    result.error === undefined &&
+      result.signal === null &&
+      typeof result.status === "number" &&
+      typeof result.stdout === "string" &&
+      typeof result.stderr === "string",
+    "Physical status-aware ADB command did not complete."
+  );
+  requireCondition(
+    [...deviceForbiddenValues].every(
+      (value) =>
+        !result.stdout.includes(value) && !result.stderr.includes(value)
+    ),
+    "A protected pairing value was rejected in status-aware ADB output."
+  );
+  return Object.freeze({
+    status: result.status,
+    stderr: result.stderr,
+    stdout: result.stdout
+  });
+}
+
 function openPrivatePairingLinkInChrome(pairingLink: string): void {
   requireCondition(
     deviceForbiddenValues.has(pairingLink),
@@ -3623,7 +3672,26 @@ function requireChromeRunning(): void {
 }
 
 function isChromeStopped(): boolean {
-  return adb(["shell", "pidof", "com.android.chrome"]).trim() === "";
+  const result = adbWithStatus(["shell", "pidof", "com.android.chrome"]);
+  return readChromeProcessState(
+    result.status,
+    result.stdout,
+    result.stderr
+  ) === "stopped";
+}
+
+function readChromeProcessState(
+  status: number,
+  stdout: string,
+  stderr: string
+): "running" | "stopped" {
+  const output = stdout.trim();
+  const error = stderr.trim();
+  if (status === 0 && /^\d+(?:\s+\d+)*$/u.test(output) && error === "") {
+    return "running";
+  }
+  if (status === 1 && output === "" && error === "") return "stopped";
+  throw new Error("Android Chrome process state was invalid.");
 }
 
 function requireChromeForeground(): void {
