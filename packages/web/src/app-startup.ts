@@ -73,6 +73,7 @@ const coordinatorKeys = [
   "bootstrapCsrf",
   "adoptCsrfBootstrap",
   "requestProtected",
+  "requestSelectedSessionRead",
   "close"
 ] as const;
 const maximumSubscribers = 16;

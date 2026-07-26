@@ -4,7 +4,9 @@ import {
   type BrowserHttpRouteData,
   type BrowserHttpRouteRequest,
   type BrowserHttpRouteRequestOptions,
-  browserHttpRouteContracts
+  type BrowserHttpSelectedSessionReadRouteId,
+  browserHttpRouteContracts,
+  browserHttpSelectedSessionReadRouteIds
 } from "./http-route-contracts.js";
 
 describe("FE-V1-019 browser HTTP route contracts", () => {
@@ -111,6 +113,35 @@ describe("FE-V1-019 browser HTTP route contracts", () => {
       missingGeneration,
       readCsrf
     }).toBeDefined();
+  });
+
+  it("freezes the reusable selected-session read boundary to exact GET routes", () => {
+    expect(browserHttpSelectedSessionReadRouteIds).toEqual([
+      "model_read",
+      "goal_read",
+      "plan_read",
+      "usage_read",
+      "compact_read",
+      "skills_read",
+      "approval_list"
+    ]);
+    expect(Object.isFrozen(browserHttpSelectedSessionReadRouteIds)).toBe(true);
+    for (const routeId of browserHttpSelectedSessionReadRouteIds) {
+      const route = browserHttpRouteContracts[routeId];
+      expect(route).toMatchObject({
+        id: routeId,
+        method: "GET",
+        csrf: "none",
+        request: { query: null, body: null, queryKeys: [] }
+      });
+      expect(route.path).toContain(":session_id");
+      expect(route.request.params?.id).toBe("session_id_params_v1");
+    }
+
+    const exact: BrowserHttpSelectedSessionReadRouteId = "model_read";
+    // @ts-expect-error Session Detail is not a structured-control read route.
+    const excluded: BrowserHttpSelectedSessionReadRouteId = "session_detail";
+    expect({ exact, excluded }).toBeDefined();
   });
 });
 

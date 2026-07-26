@@ -5,6 +5,8 @@ export * from "./csrf-client.js";
 export * from "./host-access.js";
 export * from "./http-client.js";
 export * from "./http-route-contracts.js";
+export * from "./model-control.js";
+export * from "./model-control-state.js";
 export * from "./pairing-bootstrap.js";
 export * from "./pairing-screen.js";
 export * from "./prompt-composer.js";

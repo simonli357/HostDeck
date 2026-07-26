@@ -41,8 +41,10 @@ import {
 import type {
   BrowserHttpDeviceCsrfRouteId,
   BrowserHttpRouteId,
-  BrowserHttpRouteRequest
+  BrowserHttpRouteRequest,
+  BrowserHttpSelectedSessionReadRouteId
 } from "./http-route-contracts.js";
+import { browserHttpSelectedSessionReadRouteIds } from "./http-route-contracts.js";
 import {
   type BrowserSseBoundary,
   type BrowserSseClient,
@@ -198,6 +200,10 @@ export interface BrowserConnectionSessionStreamOptions {
   readonly start: BrowserConnectionSessionStreamStart;
 }
 
+export interface BrowserConnectionSelectedSessionReadOptions {
+  readonly signal?: AbortSignal;
+}
+
 export interface CreateBrowserConnectionStateCoordinatorOptions {
   readonly httpClient: BrowserHttpClient;
   readonly sseClient: BrowserSseClient;
@@ -227,6 +233,11 @@ export interface BrowserConnectionStateCoordinator {
     routeId: RouteId,
     input: BrowserHttpRouteRequest<RouteId>,
     options?: BrowserCsrfRequestOptions
+  ) => Promise<BrowserHttpRouteResponse<RouteId>>;
+  readonly requestSelectedSessionRead: <RouteId extends BrowserHttpSelectedSessionReadRouteId>(
+    routeId: RouteId,
+    input: BrowserHttpRouteRequest<RouteId>,
+    options?: BrowserConnectionSelectedSessionReadOptions
   ) => Promise<BrowserHttpRouteResponse<RouteId>>;
   readonly close: () => BrowserConnectionSnapshot;
 }
@@ -1137,6 +1148,49 @@ export function createBrowserConnectionStateCoordinator(
         throw error;
       }
     },
+    async requestSelectedSessionRead<RouteId extends BrowserHttpSelectedSessionReadRouteId>(
+      routeId: RouteId,
+      requestInput: BrowserHttpRouteRequest<RouteId>,
+      requestOptions?: BrowserConnectionSelectedSessionReadOptions
+    ): Promise<BrowserHttpRouteResponse<RouteId>> {
+      if (closed) throw connectionError("closed");
+      if (!(browserHttpSelectedSessionReadRouteIds as readonly unknown[]).includes(routeId)) {
+        throw connectionError("client_contract");
+      }
+      const sessionId = readSelectedSessionRequestId(requestInput);
+      if (sessionId === null || !hasCurrentSelectedSessionAuthority(currentSnapshot, sessionId)) {
+        throw connectionError(sessionId === null ? "client_contract" : "not_ready");
+      }
+      const requestEpoch = epoch;
+      try {
+        const requestArguments =
+          requestOptions?.signal === undefined
+            ? [routeId, requestInput]
+            : [routeId, requestInput, { signal: requestOptions.signal }];
+        const response = (await Reflect.apply(
+          httpClient.request,
+          httpClient,
+          requestArguments
+        )) as BrowserHttpRouteResponse<RouteId>;
+        if (
+          closed ||
+          epoch !== requestEpoch ||
+          !hasCurrentSelectedSessionAuthority(currentSnapshot, sessionId)
+        ) {
+          throw connectionError(closed ? "closed" : "not_ready");
+        }
+        return response;
+      } catch (error) {
+        if (closed) throw connectionError("closed");
+        if (
+          epoch !== requestEpoch ||
+          !hasCurrentSelectedSessionAuthority(currentSnapshot, sessionId)
+        ) {
+          throw connectionError("not_ready");
+        }
+        throw error;
+      }
+    },
     close(): BrowserConnectionSnapshot {
       if (closed) return currentSnapshot;
       closed = true;
@@ -1240,6 +1294,30 @@ function readTarget(candidate: unknown): BrowserConnectionTarget | null {
 
 function targetKey(target: BrowserConnectionTarget): string {
   return target.kind === "mission_control" ? "mission_control" : `session_detail:${target.sessionId}`;
+}
+
+function readSelectedSessionRequestId(candidate: unknown): string | null {
+  const input = readExactRecord(candidate, ["params"], ["params"]);
+  if (input === null) return null;
+  const params = readExactRecord(input.params, ["session_id"], ["session_id"]);
+  if (params === null) return null;
+  const parsed = sessionIdSchema.safeParse(params.session_id);
+  return parsed.success ? parsed.data : null;
+}
+
+function hasCurrentSelectedSessionAuthority(
+  snapshot: BrowserConnectionSnapshot,
+  sessionId: string
+): boolean {
+  return (
+    snapshot.target?.kind === "session_detail" &&
+    snapshot.target.sessionId === sessionId &&
+    snapshot.access.state === "current" &&
+    snapshot.access.data?.can_read_sessions === true &&
+    snapshot.targetState.state === "current" &&
+    snapshot.targetState.data?.kind === "session_detail" &&
+    snapshot.targetState.data.response.session.session.id === sessionId
+  );
 }
 
 async function query<RouteId extends BrowserHttpRouteId>(

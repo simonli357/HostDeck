@@ -246,6 +246,7 @@ function coordinatorPort(
     bootstrapCsrf: vi.fn(),
     adoptCsrfBootstrap,
     requestProtected: vi.fn(),
+    requestSelectedSessionRead: vi.fn(),
     close
   }) as never;
 }

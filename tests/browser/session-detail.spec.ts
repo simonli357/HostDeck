@@ -149,7 +149,8 @@ test("renders an honest empty state and does not invent downstream controls", as
   await expect(page.getByRole("list", { name: "Session activity" })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "Prompt for android-release" }))
     .toBeDisabled();
-  await expect(page.getByRole("button", { name: /model|goal|plan|more/u })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^\/model for /u })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /^\/(goal|plan)|more/iu })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /approve|deny/u })).toHaveCount(0);
   expect(await api.streamRequestUrls()).toEqual([
     `http://127.0.0.1:4175/api/v1/sessions/${sessionDetailBrowserSessionId}/events/stream`
@@ -224,10 +225,19 @@ test("contains long content and passes keyboard, reflow, zoom, and live-update c
   await expectNoHorizontalOverflow(page, 320);
   await expectStableTargets(page);
   await expectNoClippedTimelineItems(page);
-  await expectNextKeyboardFocus(page, page.getByRole("link", { name: "Skip to content" }));
+  const skipLink = page.getByRole("link", { name: "Skip to content" });
+  await skipLink.focus();
+  await expect(skipLink).toBeFocused();
+  await expectVisibleFocus(skipLink);
   await expectNextKeyboardFocus(page, page.getByRole("button", { name: "Back to Mission Control" }));
   await expectNextKeyboardFocus(page, page.getByRole("button", { name: "Open Host and access" }));
   await expectNextKeyboardFocus(page, page.getByRole("button", { name: "Refresh session" }));
+  await expectNextKeyboardFocus(
+    page,
+    page.getByRole("button", {
+      name: "/model for android-release-validation-long-session-name-2026"
+    })
+  );
   await expectTokenContrast(page);
   await page.evaluate(() => {
     window.scrollTo(0, 0);

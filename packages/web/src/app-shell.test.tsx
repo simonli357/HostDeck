@@ -161,6 +161,7 @@ describe("HostDeck phone shell", () => {
       bootstrapCsrf: vi.fn(),
       adoptCsrfBootstrap,
       requestProtected: vi.fn(),
+      requestSelectedSessionRead: vi.fn(),
       close: vi.fn()
     }) as never;
     const createCoordinator = vi.fn(() => coordinator);

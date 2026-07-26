@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 
 import {
+  type ModelControlSnapshot,
   managedSessionProjectionSchema,
+  modelControlSnapshotSchema,
   type SelectedAccessStateResponse,
   type SelectedProjectionEvent,
   selectedAccessStateResponseSchema,
@@ -219,6 +221,7 @@ describe("Session Detail screen", () => {
     expect(banner.textContent).toContain("api-refactor");
     expect(banner.textContent).toContain("Running / api-refactor");
     expect(banner.textContent).not.toContain(sessionId);
+    expect(screen.getByRole("button", { name: "/model for api-refactor" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Back to Mission Control" }));
     expect(await screen.findByRole("heading", { name: "Mission Control" })).toBeTruthy();
@@ -293,6 +296,40 @@ describe("Session Detail screen", () => {
 });
 
 describe("Session Detail controller", () => {
+  it("wires only /model to the active session control dock", async () => {
+    const harness = coordinatorHarness(detailSnapshot({ streamState: "idle" }));
+    render(
+      <MemoryRouter>
+        <ConnectedSessionDetail
+          coordinator={harness.coordinator}
+          sessionId={sessionId}
+          now={() => nowMs}
+          formatTimestamp={() => "2:00 PM"}
+        />
+      </MemoryRouter>
+    );
+
+    const modelTrigger = await screen.findByRole("button", {
+      name: "/model for api-refactor"
+    });
+    const controls = modelTrigger.closest(".hostdeck-session-controls");
+    expect(controls).not.toBeNull();
+    expect(controls?.contains(screen.getByRole("textbox", { name: "Prompt for api-refactor" }))).toBe(
+      true
+    );
+    expect(screen.queryByText("/goal")).toBeNull();
+    expect(screen.queryByText("/plan")).toBeNull();
+
+    fireEvent.click(modelTrigger);
+    expect(await screen.findByRole("dialog", { name: "/model" })).toBeTruthy();
+    expect(harness.requestSelectedSessionRead).toHaveBeenCalledTimes(1);
+    expect(harness.requestSelectedSessionRead).toHaveBeenCalledWith(
+      "model_read",
+      { params: { session_id: sessionId } },
+      { signal: expect.any(AbortSignal) }
+    );
+  });
+
   it("owns exact recent setup, event delivery, single-flight refresh, and cleanup", async () => {
     const refresh = deferred<BrowserConnectionSnapshot>();
     const harness = coordinatorHarness(detailSnapshot({ streamState: "idle" }), refresh.promise);
@@ -657,6 +694,10 @@ function coordinatorHarness(
   );
   const disconnect = vi.fn(() => snapshot);
   const refresh = vi.fn(() => refreshPromise ?? Promise.resolve(snapshot));
+  const requestSelectedSessionRead = vi.fn(async () => ({
+    status: 200 as const,
+    data: modelSnapshot()
+  }));
   const coordinator = {
     snapshot: () => snapshot,
     subscribe(listener: () => void) {
@@ -674,6 +715,7 @@ function coordinatorHarness(
     bootstrapCsrf: vi.fn(async () => snapshot),
     adoptCsrfBootstrap: vi.fn(() => snapshot),
     requestProtected: vi.fn(),
+    requestSelectedSessionRead,
     close: vi.fn(() => snapshot)
   } as unknown as BrowserConnectionStateCoordinator;
   return {
@@ -682,6 +724,7 @@ function coordinatorHarness(
     connect,
     disconnect,
     refresh,
+    requestSelectedSessionRead,
     unsubscribe,
     snapshot: () => snapshot,
     publish(next: BrowserConnectionSnapshot) {
@@ -689,6 +732,35 @@ function coordinatorHarness(
       for (const listener of listeners) listener();
     }
   };
+}
+
+function modelSnapshot(): ModelControlSnapshot {
+  return modelControlSnapshotSchema.parse({
+    catalog_revision: "c".repeat(64),
+    catalog_observed_at: timestamp,
+    current: {
+      model_id: "model-a",
+      runtime_model: "runtime-a",
+      reasoning_effort: "high",
+      catalog_state: "available",
+      observed_at: timestamp
+    },
+    pending: null,
+    models: [
+      {
+        id: "model-a",
+        runtime_model: "runtime-a",
+        label: "Codex Alpha",
+        description: "Balanced coding model.",
+        is_default: true,
+        input_modalities: ["text", "image"],
+        reasoning_efforts: [
+          { id: "low", description: "Fast", is_default: false },
+          { id: "high", description: "Thorough", is_default: true }
+        ]
+      }
+    ]
+  });
 }
 
 function deferred<Value>() {

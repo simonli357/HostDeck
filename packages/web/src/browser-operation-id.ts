@@ -3,7 +3,8 @@ import { clientOperationIdSchema } from "@hostdeck/contracts";
 export const browserOperationIdScopes = Object.freeze([
   "pair_claim",
   "csrf_bootstrap",
-  "prompt"
+  "prompt",
+  "model"
 ] as const);
 
 export type BrowserOperationIdScope = (typeof browserOperationIdScopes)[number];

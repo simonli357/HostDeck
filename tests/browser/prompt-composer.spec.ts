@@ -34,7 +34,8 @@ test("dispatches exact start and steer requests and advances only from matching 
   await expect(textarea).toBeEditable();
   await expect(send).toBeDisabled();
   await expect(page.getByText("Ready to send", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /model|goal|plan|more/u })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^\/model for /u })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /^\/(goal|plan)|more/iu })).toHaveCount(0);
   await expectFooterGeometry(page);
   await page.screenshot({
     path: resolve(artifactDirectory, "ready-390x844.png"),
@@ -311,7 +312,8 @@ test("renders distinct authority, host, CSRF, turn, and freshness disabled famil
   }
 
   expect(api.promptRequests()).toHaveLength(0);
-  await expect(page.getByRole("button", { name: /model|goal|plan|more/u })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^\/model for /u })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /^\/(goal|plan)|more/iu })).toHaveCount(0);
   await expectCleanBrowser(diagnostics, [/status of 503 \(Service Unavailable\)/u]);
 });
 

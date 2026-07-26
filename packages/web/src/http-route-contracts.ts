@@ -519,6 +519,19 @@ export type BrowserHttpDeviceCsrfRouteId = BrowserHttpRouteIdWithCsrfPolicy<
   "required_for_device"
 >;
 
+export const browserHttpSelectedSessionReadRouteIds = Object.freeze([
+  "model_read",
+  "goal_read",
+  "plan_read",
+  "usage_read",
+  "compact_read",
+  "skills_read",
+  "approval_list"
+] as const satisfies readonly BrowserHttpRouteId[]);
+
+export type BrowserHttpSelectedSessionReadRouteId =
+  (typeof browserHttpSelectedSessionReadRouteIds)[number];
+
 type SchemaFromRef<Ref> = Ref extends {
   readonly schema: infer Schema extends z.ZodType;
 }

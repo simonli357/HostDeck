@@ -1,6 +1,7 @@
 import {
   encodeSelectedSessionListCursor,
   managedSessionProjectionSchema,
+  modelControlSnapshotSchema,
   type SelectedAccessStateResponse,
   type SelectedHostAccessMode,
   type SelectedHostLocalHealthCause,
@@ -1072,6 +1073,81 @@ describe("browser shell connection-state coordinator", () => {
     harness.coordinator.close();
   });
 
+  it("bounds selected-session control reads to the current detail authority and epoch", async () => {
+    const harness = createHarness(remoteOrigin);
+    await expect(
+      harness.coordinator.requestSelectedSessionRead("model_read", {
+        params: { session_id: firstSessionId }
+      })
+    ).rejects.toMatchObject({ reason: "not_ready" });
+    expect(harness.http.requests).toHaveLength(0);
+
+    harness.http.enqueue("access", jsonResponse(200, pairedAccess(remoteOrigin, "write")));
+    harness.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({ mode: "paired_write", origin: remoteOrigin, remoteGeneration: 7 })
+      )
+    );
+    harness.http.enqueue(
+      "detail",
+      jsonResponse(
+        200,
+        sessionDetail(
+          "paired_write",
+          remoteOrigin,
+          sessionItem(firstSessionId)
+        )
+      )
+    );
+    harness.http.enqueue("csrf", jsonResponse(200, csrfBootstrap(1)));
+    await harness.coordinator.setTarget({
+      kind: "session_detail",
+      sessionId: firstSessionId
+    });
+
+    harness.http.enqueue("detail", jsonResponse(200, modelSnapshot()));
+    const response = await harness.coordinator.requestSelectedSessionRead(
+      "model_read",
+      { params: { session_id: firstSessionId } }
+    );
+    expect(response).toMatchObject({
+      status: 200,
+      data: { current: { model_id: "model-a" }, pending: null }
+    });
+    expect(harness.http.requests.at(-1)).toMatchObject({
+      path: `/api/v1/sessions/${firstSessionId}/model`,
+      init: { method: "GET" }
+    });
+    expect(harness.http.requests.at(-1)?.init).not.toHaveProperty("body");
+
+    const requestCount = harness.http.requests.length;
+    await expect(
+      harness.coordinator.requestSelectedSessionRead("model_read", {
+        params: { session_id: secondSessionId }
+      })
+    ).rejects.toMatchObject({ reason: "not_ready" });
+    await expect(
+      harness.coordinator.requestSelectedSessionRead("host_status" as never, {
+        params: { session_id: firstSessionId }
+      } as never)
+    ).rejects.toMatchObject({ reason: "client_contract" });
+    expect(harness.http.requests).toHaveLength(requestCount);
+
+    const late = deferred<BrowserHttpResponsePort>();
+    harness.http.enqueue("detail", () => late.promise);
+    const pending = harness.coordinator.requestSelectedSessionRead("model_read", {
+      params: { session_id: firstSessionId }
+    });
+    await settle();
+    enqueueRemoteWriterMission(harness, [], 7, 2);
+    await harness.coordinator.setTarget({ kind: "mission_control" });
+    late.resolve(jsonResponse(200, modelSnapshot()));
+    await expect(pending).rejects.toMatchObject({ reason: "not_ready" });
+    harness.coordinator.close();
+  });
+
   it("maps an access-route denial without starting protected reads", async () => {
     const harness = createHarness(remoteOrigin);
     harness.http.enqueue(
@@ -1673,6 +1749,34 @@ function sessionDetail(
   return selectedSessionDetailResponseSchema.parse({
     access: sessionAccess(mode, origin),
     session
+  });
+}
+
+function modelSnapshot() {
+  return modelControlSnapshotSchema.parse({
+    catalog_revision: "b".repeat(64),
+    catalog_observed_at: timestamp,
+    current: {
+      model_id: "model-a",
+      runtime_model: "runtime-a",
+      reasoning_effort: "high",
+      catalog_state: "available",
+      observed_at: timestamp
+    },
+    pending: null,
+    models: [
+      {
+        id: "model-a",
+        runtime_model: "runtime-a",
+        label: "Model A",
+        description: null,
+        is_default: true,
+        input_modalities: ["text"],
+        reasoning_efforts: [
+          { id: "high", description: null, is_default: true }
+        ]
+      }
+    ]
   });
 }
 

@@ -6,12 +6,12 @@
         "height": 800
       },
       "footer": {
-        "top": 656,
+        "top": 657,
         "right": 320,
         "bottom": 800,
         "left": 0,
         "width": 320,
-        "height": 144
+        "height": 143
       },
       "target": {
         "top": 667,
@@ -52,12 +52,12 @@
         "height": 800
       },
       "footer": {
-        "top": 656,
+        "top": 657,
         "right": 360,
         "bottom": 800,
         "left": 0,
         "width": 360,
-        "height": 144
+        "height": 143
       },
       "target": {
         "top": 667,
@@ -98,12 +98,12 @@
         "height": 844
       },
       "footer": {
-        "top": 700,
+        "top": 701,
         "right": 390,
         "bottom": 844,
         "left": 0,
         "width": 390,
-        "height": 144
+        "height": 143
       },
       "target": {
         "top": 711,
@@ -144,12 +144,12 @@
         "height": 915
       },
       "footer": {
-        "top": 771,
+        "top": 772,
         "right": 412,
         "bottom": 915,
         "left": 0,
         "width": 412,
-        "height": 144
+        "height": 143
       },
       "target": {
         "top": 782,
@@ -190,12 +190,12 @@
         "height": 1024
       },
       "footer": {
-        "top": 880,
+        "top": 881,
         "right": 768,
         "bottom": 1024,
         "left": 0,
         "width": 768,
-        "height": 144
+        "height": 143
       },
       "target": {
         "top": 891,
@@ -236,12 +236,12 @@
         "height": 800
       },
       "footer": {
-        "top": 656,
+        "top": 657,
         "right": 1050,
         "bottom": 800,
         "left": 230,
         "width": 820,
-        "height": 144
+        "height": 143
       },
       "target": {
         "top": 667,
