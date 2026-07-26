@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-034` Implement remote connection recovery | ready | none | Expose actionable profile, Tailscale, and Serve truth without mutating external state. |
+| 1 | `FE-V1-034` Implement remote connection recovery | in_progress | none | Frozen `RCR-01` to `RCR-24`; implement exact read-only checking, shared recovery truth, Focus Rail UI, and production phone evidence. |
 | 2 | `FE-V1-035` Implement compatibility state | ready | none | Surface exact runtime compatibility before complete-dashboard failure hardening. |
 | 3 | `FE-V1-028` Implement usage utility | ready | none | Add the first secondary structured utility after the primary controls. |
 | 4 | `FE-V1-029` Implement compact utility | ready | none | Add bounded context compaction through its exact structured route. |
