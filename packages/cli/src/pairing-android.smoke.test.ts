@@ -2965,15 +2965,15 @@ async function requireAndroidPrivateHttpsReachability(
     "-n",
     androidTailscaleComponent
   ]);
-  await waitFor(() => {
-    const output = adb(ping);
+  await waitFor(async () => {
+    const output = await adbAsync(ping);
     return (
       Buffer.byteLength(output, "utf8") <= 16 * 1024 &&
       output.includes("1 received")
     );
   }, 30_000, "Physical Android could not establish a cellular Tailscale peer path.");
-  await waitFor(() => {
-    const output = adb(probe);
+  await waitFor(async () => {
+    const output = await adbAsync(probe);
     return output === "";
   }, 45_000, "Physical Android could not reach private HTTPS over Tailscale.");
 }
