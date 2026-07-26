@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-032` Implement paired-device management | ready | none | Add exact device listing and revocation after the pairing authority path is proven. |
+| 1 | `FE-V1-032` Implement paired-device management | in_progress | none | Frozen `PDM-01` to `PDM-24`; implement the exact lock-independent list/revoke boundary, immediate self-authority purge, and persistent Focus Rail device surface. |
 | 2 | `FE-V1-033` Implement visible host-lock state | ready | none | Carry lock authority into every protected dashboard action without adding remote unlock. |
 | 3 | `FE-V1-034` Implement remote connection recovery | ready | none | Expose actionable profile, Tailscale, and Serve truth without mutating external state. |
 | 4 | `FE-V1-035` Implement compatibility state | ready | none | Surface exact runtime compatibility before complete-dashboard failure hardening. |

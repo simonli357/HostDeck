@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `FE-V1-032` paired-device management; begin with production-hardening review and frozen criteria for the exact selected list/revoke APIs, active-authority effects, and approved Focus Rail device surface.
+- Active task: `FE-V1-032` paired-device management; `PDM-01` to `PDM-24` are frozen over exact lock-independent list/revoke authority, bounded page replacement, self and uncertain-outcome authority effects, and one persistent Focus Rail device surface.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.145.0, so the exact binding check is intentionally ineligible until the reviewed runtime is rebaselined or an isolated 0.144.0 binary is selected.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract and both replacement sets are complete. Under `DEC-028`, the human selected all seven current Focus Rail assets with no Signal Ledger borrowing or additional structural drift; both legacy desktop-led boards remain rejected.
