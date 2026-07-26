@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-033` Implement visible host-lock state | ready | none | Carry lock authority into every protected dashboard action without adding remote unlock. |
+| 1 | `FE-V1-033` Implement visible host-lock state | in_progress | none | Frozen `HLS-01` to `HLS-24`; implement emergency lock admission, global transition truth, shared Focus Rail visibility, and local-only unlock recovery. |
 | 2 | `FE-V1-034` Implement remote connection recovery | ready | none | Expose actionable profile, Tailscale, and Serve truth without mutating external state. |
 | 3 | `FE-V1-035` Implement compatibility state | ready | none | Surface exact runtime compatibility before complete-dashboard failure hardening. |
 | 4 | `FE-V1-028` Implement usage utility | ready | none | Add the first secondary structured utility after the primary controls. |
