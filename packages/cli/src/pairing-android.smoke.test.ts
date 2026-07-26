@@ -133,6 +133,7 @@ const overallTimeoutMs = requireRemoteAndroidAcceptance
 const claimTimeoutMs = 5 * 60_000;
 const automatedClaimTimeoutMs = 45_000;
 const androidTailscaleComponent = "com.tailscale.ipn/.MainActivity";
+const androidEditTextClass = "android.widget.EditText";
 const tailscaleDnsServer = "100.100.100.100";
 const physicalPageMaxBytes = defaultResourceBudget.cli_response_max_bytes;
 const chromeForegroundAdbArgs = [
@@ -508,18 +509,28 @@ describe("physical Android phone-driver protocol", () => {
         '<hierarchy rotation="0">' +
         '<node text="Host &amp; access" content-desc="" bounds="[0,80][720,180]" />' +
         '<node text="" content-desc="Open Host and access" bounds="[620,80][720,180]" />' +
+        '<node text="" content-desc="" class="android.widget.EditText" ' +
+        'bounds="[20,200][700,320]" />' +
         "</hierarchy>"
     );
 
     expect(nodes).toEqual([
       {
         bounds: { bottom: 180, left: 0, right: 720, top: 80 },
+        className: "",
         description: "",
         text: "Host & access"
       },
       {
         bounds: { bottom: 180, left: 620, right: 720, top: 80 },
+        className: "",
         description: "Open Host and access",
+        text: ""
+      },
+      {
+        bounds: { bottom: 320, left: 20, right: 700, top: 200 },
+        className: androidEditTextClass,
+        description: "",
         text: ""
       }
     ]);
@@ -527,8 +538,11 @@ describe("physical Android phone-driver protocol", () => {
     expect(nodes.every(Object.isFrozen)).toBe(true);
     const textNode = nodes[0];
     const descriptionNode = nodes[1];
+    const editNode = nodes[2];
     requireCondition(
-      textNode !== undefined && descriptionNode !== undefined,
+      textNode !== undefined &&
+        descriptionNode !== undefined &&
+        editNode !== undefined,
       "Android semantic-node fixture was incomplete."
     );
     expect(matchesAndroidUiNode(textNode, "semantic", "Host & access")).toBe(
@@ -544,6 +558,10 @@ describe("physical Android phone-driver protocol", () => {
     expect(
       matchesAndroidUiNode(textNode, "semantic", "Open Host and access")
     ).toBe(false);
+    expect(
+      matchesAndroidUiNode(editNode, "className", androidEditTextClass)
+    ).toBe(true);
+    expect(findAndroidPromptEditor(nodes, "Host & access")).toBe(editNode);
     expect(() =>
       parseAndroidUiNodes(
         `<hierarchy><node text="${selectedPairingFragmentPrefix}secret" ` +
@@ -3644,11 +3662,12 @@ interface AndroidUiNode {
     readonly right: number;
     readonly top: number;
   }>;
+  readonly className: string;
   readonly description: string;
   readonly text: string;
 }
 
-type AndroidUiNodeField = "description" | "semantic" | "text";
+type AndroidUiNodeField = "className" | "description" | "semantic" | "text";
 
 interface ProductionUiEntryInput {
   readonly db: ReturnType<typeof openMigratedDatabase>["db"];
@@ -3910,16 +3929,15 @@ async function runProductionPromptUiSequence(
     30_000,
     "Physical prompt composer did not become writable on Android."
   );
-  const textarea = await waitForAndroidUiNode(
-    "semantic",
+  const textarea = await waitForAndroidPromptEditor(
     inputLabel,
     30_000,
     "Physical prompt textarea was unavailable on Android."
   );
   await performVerifiedAndroidTap({
     initialTrigger: textarea,
-    triggerField: "semantic",
-    triggerValue: inputLabel,
+    triggerField: "className",
+    triggerValue: androidEditTextClass,
     completed: () => isAndroidKeyboardVisible(),
     completionFailureMessage:
       "Physical prompt textarea did not open the Android keyboard.",
@@ -3936,9 +3954,7 @@ async function runProductionPromptUiSequence(
   const keyboardNodes = await readAndroidUiNodes();
   requireCondition(
     keyboardNodes.some((node) => node.text === "Prompt target") &&
-      keyboardNodes.some((node) =>
-        matchesAndroidUiNode(node, "semantic", inputLabel)
-      ) &&
+      findAndroidPromptEditor(keyboardNodes, inputLabel) !== null &&
       keyboardNodes.some((node) => node.description === sendLabel),
     "Physical prompt controls were not all visible above the Android keyboard."
   );
@@ -3983,13 +3999,11 @@ async function runProductionPromptUiSequence(
   );
   const acceptedNodes = await readAndroidUiNodes();
   const promptLines = physicalPromptText.split("\n");
-  const acceptedTextareas = acceptedNodes.filter(
-    (node) => matchesAndroidUiNode(node, "semantic", inputLabel)
-  );
+  const acceptedTextarea = findAndroidPromptEditor(acceptedNodes, inputLabel);
   requireCondition(
-    acceptedTextareas.length === 1 &&
+    acceptedTextarea !== null &&
       promptLines.every(
-        (line) => !acceptedTextareas[0]?.text.includes(line)
+        (line) => !acceptedTextarea.text.includes(line)
       ) &&
       input.requestInspection.promptRequests === 1 &&
       input.requestInspection.promptNoReferrerRequests === 1 &&
@@ -4184,10 +4198,18 @@ function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
     }
     const text = attributes.get("text") ?? "";
     const description = attributes.get("content-desc") ?? "";
-    if (text === "" && description === "") continue;
+    const className = attributes.get("class") ?? "";
+    if (
+      text === "" &&
+      description === "" &&
+      className !== androidEditTextClass
+    ) {
+      continue;
+    }
     nodes.push(
       Object.freeze({
         bounds: Object.freeze({ bottom, left, right, top }),
+        className,
         description,
         text
       })
@@ -4198,6 +4220,68 @@ function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
     "Android UI hierarchy had no bounded semantic nodes."
   );
   return Object.freeze(nodes);
+}
+
+async function waitForAndroidPromptEditor(
+  label: string,
+  timeoutMs: number,
+  message: string
+): Promise<AndroidUiNode> {
+  let found: AndroidUiNode | null = null;
+  await waitFor(async () => {
+    found = findAndroidPromptEditor(await readAndroidUiNodes(), label);
+    return found !== null;
+  }, timeoutMs, message);
+  requireCondition(found !== null, message);
+  return found;
+}
+
+function findAndroidPromptEditor(
+  nodes: readonly AndroidUiNode[],
+  label: string
+): AndroidUiNode | null {
+  const labels = nodes.filter((node) =>
+    matchesAndroidUiNode(node, "semantic", label)
+  );
+  requireCondition(
+    labels.length <= 2,
+    "Android UI hierarchy duplicated the prompt editor label."
+  );
+  if (labels.length === 0) return null;
+  const editors = nodes.filter(
+    (node) =>
+      node.className === androidEditTextClass &&
+      androidUiNodeWidth(node) >= 120 &&
+      androidUiNodeHeight(node) >= 36 &&
+      labels.some((labelNode) => promptEditorIsNearLabel(node, labelNode))
+  );
+  requireCondition(
+    editors.length <= 1,
+    "Android UI hierarchy duplicated the prompt editor control."
+  );
+  return editors[0] ?? null;
+}
+
+function promptEditorIsNearLabel(
+  editor: AndroidUiNode,
+  label: AndroidUiNode
+): boolean {
+  const labelX = Math.floor((label.bounds.left + label.bounds.right) / 2);
+  const labelY = Math.floor((label.bounds.top + label.bounds.bottom) / 2);
+  return (
+    labelX >= editor.bounds.left - 64 &&
+    labelX <= editor.bounds.right + 64 &&
+    labelY >= editor.bounds.top - 192 &&
+    labelY <= editor.bounds.bottom + 192
+  );
+}
+
+function androidUiNodeWidth(node: AndroidUiNode): number {
+  return node.bounds.right - node.bounds.left;
+}
+
+function androidUiNodeHeight(node: AndroidUiNode): number {
+  return node.bounds.bottom - node.bounds.top;
 }
 
 async function waitForAndroidUiNode(
@@ -4277,7 +4361,9 @@ async function performVerifiedAndroidTap(input: {
             node,
             input.triggerField,
             input.triggerValue
-          )
+          ) &&
+          (input.triggerField !== "className" ||
+            androidUiNodesShareControlRegion(node, trigger))
       );
       requireCondition(
         matches.length <= 1,
@@ -4310,6 +4396,18 @@ function matchesAndroidUiNode(
     : node[field] === value;
 }
 
+function androidUiNodesShareControlRegion(
+  left: AndroidUiNode,
+  right: AndroidUiNode
+): boolean {
+  return (
+    left.bounds.left <= right.bounds.right + 64 &&
+    left.bounds.right >= right.bounds.left - 64 &&
+    left.bounds.top <= right.bounds.bottom + 128 &&
+    left.bounds.bottom >= right.bounds.top - 128
+  );
+}
+
 function androidUiStateSummary(
   nodes: readonly AndroidUiNode[],
   trigger: AndroidUiNode
@@ -4339,6 +4437,10 @@ function androidUiStateSummary(
 
 function tapAndroidUiNode(node: AndroidUiNode): void {
   requireChromeForeground();
+  requireCondition(
+    androidUiNodeWidth(node) >= 24 && androidUiNodeHeight(node) >= 24,
+    "Android UI tap target was not visibly actionable."
+  );
   const x = Math.floor((node.bounds.left + node.bounds.right) / 2);
   const y = Math.floor((node.bounds.top + node.bounds.bottom) / 2);
   adb(["shell", "input", "tap", String(x), String(y)]);
