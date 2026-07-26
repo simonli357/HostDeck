@@ -9,21 +9,37 @@ import {
   Eye,
   HeartPulse,
   Laptop,
+  LoaderCircle,
   LockKeyhole,
   type LucideIcon,
   Radio,
+  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   UnlockKeyhole,
   Wifi,
   WifiOff
 } from "lucide-react";
-import { useSyncExternalStore } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore
+} from "react";
 import type {
   BrowserConnectionSnapshot,
   BrowserConnectionStateCoordinator,
   BrowserConnectionWriteBlockCause
 } from "./connection-state.js";
+import {
+  createHostAccessRecoveryController,
+  type HostAccessRecoveryController,
+  type HostAccessRecoveryPhase,
+  type HostAccessRecoveryView,
+  projectHostAccessRecovery
+} from "./host-access-recovery-state.js";
 
 export type HostAccessTone = "connected" | "attention" | "danger" | "muted";
 
@@ -36,6 +52,7 @@ export interface HostAccessFact {
     | "lock"
     | "reads"
     | "writes"
+    | "page_security"
     | "host"
     | "remote"
     | "stream";
@@ -51,29 +68,91 @@ export interface HostAccessProjection {
   readonly tone: HostAccessTone;
   readonly urgent: boolean;
   readonly facts: readonly HostAccessFact[];
+  readonly recovery: HostAccessRecoveryView;
 }
 
 export interface ConnectedHostAccessProps {
   readonly coordinator: BrowserConnectionStateCoordinator;
   readonly now?: () => number;
+  readonly children?: ((content: ReactNode) => ReactNode) | undefined;
 }
 
 export function ConnectedHostAccess({
   coordinator,
-  now = Date.now
+  now = Date.now,
+  children
 }: ConnectedHostAccessProps) {
   const snapshot = useSyncExternalStore(
     coordinator.subscribe,
     coordinator.snapshot,
     coordinator.snapshot
   );
+  const recoveryController = useHostAccessRecoveryController(coordinator, snapshot);
+  const recovery = useSyncExternalStore(
+    recoveryController.subscribe,
+    recoveryController.snapshot,
+    recoveryController.snapshot
+  );
   const nowMs = Reflect.apply(now, undefined, []) as number;
-  return <HostAccessPanel projection={projectHostAccess(snapshot, nowMs)} />;
+  const content = (
+    <HostAccessPanel
+      projection={projectHostAccess(snapshot, nowMs, recovery)}
+      onRecover={recoveryController.recover}
+    />
+  );
+  return children === undefined ? content : children(content);
+}
+
+export function useHostAccessRecoveryController(
+  coordinator: BrowserConnectionStateCoordinator,
+  snapshot: BrowserConnectionSnapshot
+): HostAccessRecoveryController {
+  const owner = useMemo(
+    () =>
+      createHostAccessRecoveryController({
+        port: Object.freeze({
+          snapshot: coordinator.snapshot,
+          refresh: coordinator.refresh,
+          bootstrapCsrf: coordinator.bootstrapCsrf
+        })
+      }),
+    [coordinator]
+  );
+  const activeOwner = useRef<Readonly<{
+    controller: HostAccessRecoveryController;
+    token: object;
+  }> | null>(null);
+
+  useLayoutEffect(() => {
+    void snapshot;
+    owner.synchronize();
+  }, [owner, snapshot]);
+
+  useEffect(() => {
+    const token = Object.freeze({});
+    activeOwner.current = Object.freeze({ controller: owner, token });
+    return () => {
+      queueMicrotask(() => {
+        const active = activeOwner.current;
+        if (active?.controller === owner && active.token !== token) return;
+        owner.close();
+      });
+    };
+  }, [owner]);
+
+  return owner;
 }
 
 export function HostAccessPanel({
-  projection
-}: Readonly<{ projection: HostAccessProjection }>) {
+  projection,
+  onRecover
+}: Readonly<{
+  projection: HostAccessProjection;
+  onRecover?: (() => Promise<HostAccessRecoveryView>) | undefined;
+}>) {
+  if (projection.recovery.action !== null && onRecover === undefined) {
+    throw new TypeError("HostDeck host-access recovery action is missing its owner.");
+  }
   return (
     <section className="hostdeck-access" aria-label="Host and access details">
       <div
@@ -108,13 +187,62 @@ export function HostAccessPanel({
           );
         })}
       </dl>
+      <RecoveryRailPanel view={projection.recovery} onRecover={onRecover} />
     </section>
+  );
+}
+
+export function RecoveryRailPanel({
+  view,
+  onRecover
+}: Readonly<{
+  view: HostAccessRecoveryView;
+  onRecover?: (() => Promise<HostAccessRecoveryView>) | undefined;
+}>) {
+  const Icon = recoveryIcon(view.phase);
+  return (
+    <div
+      className={`hostdeck-access-recovery hostdeck-tone--${view.tone}`}
+      role={view.urgent ? "alert" : "status"}
+      aria-atomic="true"
+      aria-busy={view.busy || undefined}
+    >
+      <Icon
+        className={view.busy ? "hostdeck-spin" : undefined}
+        size={21}
+        strokeWidth={2}
+        aria-hidden="true"
+      />
+      <span className="hostdeck-access-recovery__copy">
+        <strong>{view.status}</strong>
+        <span>{view.detail}</span>
+      </span>
+      {view.action === null ? null : (
+        <button
+          type="button"
+          className="hostdeck-action-button hostdeck-access-recovery__action"
+          disabled={!view.actionEnabled}
+          aria-busy={view.busy || undefined}
+          onClick={() => {
+            if (onRecover !== undefined) void onRecover();
+          }}
+        >
+          {view.busy ? (
+            <LoaderCircle className="hostdeck-spin" size={18} strokeWidth={2} aria-hidden="true" />
+          ) : (
+            <RefreshCw size={18} strokeWidth={2} aria-hidden="true" />
+          )}
+          <span>{view.actionLabel}</span>
+        </button>
+      )}
+    </div>
   );
 }
 
 export function projectHostAccess(
   snapshot: BrowserConnectionSnapshot,
-  nowMs: number
+  nowMs: number,
+  recovery?: HostAccessRecoveryView
 ): HostAccessProjection {
   if (
     snapshot === null ||
@@ -125,8 +253,12 @@ export function projectHostAccess(
   ) {
     throw new TypeError("HostDeck host/access projection input is invalid.");
   }
+  const recoveryView = recovery ?? projectHostAccessRecovery(snapshot);
+  if (!Object.isFrozen(recoveryView)) {
+    throw new TypeError("HostDeck host/access recovery projection is invalid.");
+  }
   const access = snapshot.access.data;
-  if (access === null) return projectAbsentAccess(snapshot);
+  if (access === null) return projectAbsentAccess(snapshot, recoveryView);
 
   const current = snapshot.access.state === "current";
   const mayDiscloseProtected = browserMayDiscloseProtected(access);
@@ -155,6 +287,7 @@ export function projectHostAccess(
       readable ? "connected" : "danger"
     ),
     writeFact(snapshot),
+    pageSecurityFact(recoveryView),
     mayDiscloseProtected ? hostFact(snapshot) : suppressedHostFact()
   );
   const remote = remoteFact(snapshot, access, mayDiscloseProtected);
@@ -163,7 +296,14 @@ export function projectHostAccess(
   if (stream !== null) facts.push(stream);
 
   const summary = accessSummary(snapshot, access, current);
-  return projection(summary.title, summary.body, summary.tone, summary.urgent, facts);
+  return projection(
+    summary.title,
+    summary.body,
+    summary.tone,
+    summary.urgent,
+    facts,
+    recoveryView
+  );
 }
 
 function browserMayDiscloseProtected(access: SelectedAccessStateResponse): boolean {
@@ -184,7 +324,8 @@ function suppressedHostFact(): HostAccessFact {
 }
 
 function projectAbsentAccess(
-  snapshot: BrowserConnectionSnapshot
+  snapshot: BrowserConnectionSnapshot,
+  recovery: HostAccessRecoveryView
 ): HostAccessProjection {
   if (
     snapshot.phase === "idle" ||
@@ -196,7 +337,11 @@ function projectAbsentAccess(
       "HostDeck is resolving this browser's current authority.",
       "muted",
       false,
-      [fact("connection", "Connection", "Checking", null, "muted")]
+      [
+        fact("connection", "Connection", "Checking", null, "muted"),
+        pageSecurityFact(recovery)
+      ],
+      recovery
     );
   }
   return projection(
@@ -207,8 +352,10 @@ function projectAbsentAccess(
     [
       fact("connection", "Connection", connectionFailureLabel(snapshot), null, "danger"),
       fact("reads", "Session reads", "Blocked", null, "danger"),
-      fact("writes", "Secure writes", "Blocked", null, "danger")
-    ]
+      fact("writes", "Secure writes", "Blocked", null, "danger"),
+      pageSecurityFact(recovery)
+    ],
+    recovery
   );
 }
 
@@ -356,12 +503,57 @@ function writeFact(snapshot: BrowserConnectionSnapshot): HostAccessFact {
   if (snapshot.writeEligibility.eligible) {
     return fact("writes", "Secure writes", "Ready", "Current page authority", "connected");
   }
+  const pageSecurityBlocked = primaryWriteCause(snapshot.writeEligibility.causes) === "csrf_not_ready";
   return fact(
     "writes",
     "Secure writes",
-    writeBlockLabel(snapshot.writeEligibility.causes),
-    writeBlockSummary(snapshot.writeEligibility.causes),
+    pageSecurityBlocked
+      ? pageSecurityWriteLabel(snapshot)
+      : writeBlockLabel(snapshot.writeEligibility.causes),
+    pageSecurityBlocked
+      ? pageSecurityWriteDetail(snapshot)
+      : writeBlockSummary(snapshot.writeEligibility.causes),
     "attention"
+  );
+}
+
+function pageSecurityWriteLabel(snapshot: BrowserConnectionSnapshot): string {
+  if (snapshot.csrf.phase === "bootstrapping") return "Securing";
+  if (snapshot.csrf.phase === "failed") return "Setup failed";
+  if (
+    snapshot.csrf.phase === "idle" &&
+    snapshot.csrf.invalidationReason === "not_bootstrapped"
+  ) {
+    return "Securing";
+  }
+  if (snapshot.csrf.phase === "closed") return "Unavailable";
+  return "Check required";
+}
+
+function pageSecurityWriteDetail(snapshot: BrowserConnectionSnapshot): string {
+  if (snapshot.csrf.phase === "bootstrapping") {
+    return "Secure page authority is being established.";
+  }
+  if (snapshot.csrf.phase === "failed") {
+    return "Secure page setup was not confirmed.";
+  }
+  if (
+    snapshot.csrf.phase === "idle" &&
+    snapshot.csrf.invalidationReason === "not_bootstrapped"
+  ) {
+    return "Secure page authority is starting.";
+  }
+  if (snapshot.csrf.phase === "closed") return "The browser connection is closed.";
+  return "Page security must be renewed.";
+}
+
+function pageSecurityFact(recovery: HostAccessRecoveryView): HostAccessFact {
+  return fact(
+    "page_security",
+    "Page security",
+    recovery.pageSecurity,
+    recovery.pageSecurityDetail,
+    recovery.tone
   );
 }
 
@@ -560,9 +752,17 @@ function projection(
   body: string,
   tone: HostAccessTone,
   urgent: boolean,
-  facts: readonly HostAccessFact[]
+  facts: readonly HostAccessFact[],
+  recovery: HostAccessRecoveryView
 ): HostAccessProjection {
-  return Object.freeze({ title, body, tone, urgent, facts: Object.freeze(facts) });
+  return Object.freeze({
+    title,
+    body,
+    tone,
+    urgent,
+    facts: Object.freeze(facts),
+    recovery
+  });
 }
 
 function summaryIcon(tone: HostAccessTone) {
@@ -588,12 +788,38 @@ function factIcon(factValue: HostAccessFact): LucideIcon {
       return Activity;
     case "writes":
       return ShieldCheck;
+    case "page_security":
+      return factValue.tone === "connected" ? ShieldCheck : ShieldAlert;
     case "host":
       return HeartPulse;
     case "remote":
       return factValue.tone === "connected" ? Wifi : WifiOff;
     case "stream":
       return Radio;
+  }
+}
+
+function recoveryIcon(phase: HostAccessRecoveryPhase): LucideIcon {
+  switch (phase) {
+    case "ready":
+    case "recovered":
+      return ShieldCheck;
+    case "checking":
+    case "automatic_bootstrap":
+    case "checking_access":
+    case "securing_page":
+      return LoaderCircle;
+    case "setup_required":
+    case "stale":
+      return RefreshCw;
+    case "bootstrap_failed":
+    case "refresh_failed":
+    case "pairing_required":
+    case "unavailable":
+      return ShieldAlert;
+    case "read_only":
+    case "closed":
+      return Eye;
   }
 }
 

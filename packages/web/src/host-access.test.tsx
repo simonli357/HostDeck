@@ -8,7 +8,8 @@ import {
   selectedHostStatusResponseSchema
 } from "@hostdeck/contracts";
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { userEvent } from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type BrowserConnectionPhase,
   type BrowserConnectionResourceState,
@@ -135,7 +136,10 @@ describe("host and access projection", () => {
       nowMs
     );
     expect(loading.title).toBe("Checking access");
-    expect(factValues(loading)).toEqual({ connection: "Checking" });
+    expect(factValues(loading)).toEqual({
+      connection: "Checking",
+      page_security: "Checking"
+    });
 
     const unreachable = projectHostAccess(
       snapshot({ access: null, accessState: "failed", host: null, hostState: "blocked", phase: "unreachable" }),
@@ -145,7 +149,8 @@ describe("host and access projection", () => {
     expect(factValues(unreachable)).toEqual({
       connection: "Unreachable",
       reads: "Blocked",
-      writes: "Blocked"
+      writes: "Blocked",
+      page_security: "Unavailable"
     });
     expect(unreachable.body).not.toMatch(/profile|serve|runtime/iu);
   });
@@ -154,11 +159,52 @@ describe("host and access projection", () => {
     render(<HostAccessPanel projection={projectHostAccess(snapshot(), nowMs)} />);
 
     expect(screen.getByRole("region", { name: "Host and access details" })).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toContain("Secure control ready");
+    expect(
+      screen.getAllByRole("status").some((status) =>
+        status.textContent?.includes("Secure control ready") === true
+      )
+    ).toBe(true);
+    expect(document.querySelector('.hostdeck-access-recovery[role="status"]')?.textContent)
+      .toContain("Page security ready");
     expect(screen.getByText(remoteOrigin).tagName).toBe("DD");
     expect(screen.queryByRole("link", { name: remoteOrigin })).toBeNull();
     expect(screen.getAllByRole("term").length).toBeGreaterThanOrEqual(8);
     expect(screen.getAllByRole("definition").length).toBeGreaterThanOrEqual(8);
+  });
+
+  it("renders one accessible bounded recovery command and failure alert", async () => {
+    const user = userEvent.setup();
+    const setupSnapshot = snapshot({
+      csrfPhase: "idle",
+      invalidationReason: "pairing_replaced",
+      writeCauses: ["csrf_not_ready"]
+    });
+    const setupProjection = projectHostAccess(setupSnapshot, nowMs);
+    const onRecover = vi.fn(async () => setupProjection.recovery);
+    const view = render(
+      <HostAccessPanel projection={setupProjection} onRecover={onRecover} />
+    );
+
+    expect(factValues(setupProjection).page_security).toBe("Check required");
+    expect(factValues(setupProjection).writes).toBe("Check required");
+    const action = screen.getByRole("button", { name: "Secure this page" });
+    expect(action.classList.contains("hostdeck-access-recovery__action")).toBe(true);
+    await user.click(action);
+    expect(onRecover).toHaveBeenCalledTimes(1);
+
+    const failedSnapshot = snapshot({
+      csrfPhase: "failed",
+      writeCauses: ["csrf_not_ready"]
+    });
+    const failedProjection = projectHostAccess(failedSnapshot, nowMs);
+    expect(factValues(failedProjection).writes).toBe("Setup failed");
+    view.rerender(
+      <HostAccessPanel projection={failedProjection} onRecover={onRecover} />
+    );
+    expect(document.querySelector('.hostdeck-access-recovery[role="alert"]')?.textContent)
+      .toContain("Secure setup not confirmed");
+    expect(screen.getByRole("button", { name: "Retry secure setup" })).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/csrf|generation|device_access_fixture/iu);
   });
 
   it("rejects mutable snapshots and invalid time", () => {
@@ -226,6 +272,8 @@ function snapshot(
     readonly streamState?: BrowserConnectionSnapshot["stream"]["state"];
     readonly streamContinuity?: BrowserConnectionSnapshot["stream"]["continuity"];
     readonly writeCauses?: readonly BrowserConnectionWriteBlockCause[];
+    readonly csrfPhase?: BrowserConnectionSnapshot["csrf"]["phase"];
+    readonly invalidationReason?: BrowserConnectionSnapshot["csrf"]["invalidationReason"];
   } = {}
 ): BrowserConnectionSnapshot {
   const authenticationState = options.authenticationState ?? "paired_device";
@@ -238,15 +286,27 @@ function snapshot(
   const accessResourceState = options.accessState ?? (access === null ? "loading" : "current");
   const hostResourceState = options.hostState ?? (host === null ? "blocked" : "current");
   const detail = options.target === "detail";
+  const target = detail
+    ? Object.freeze({ kind: "session_detail" as const, sessionId: "sess_access_fixture" })
+    : Object.freeze({ kind: "mission_control" as const });
+  const targetData = detail
+    ? Object.freeze({
+        kind: "session_detail" as const,
+        response: Object.freeze({
+          session: Object.freeze({
+            session: Object.freeze({ id: "sess_access_fixture" })
+          })
+        })
+      })
+    : Object.freeze({ kind: "mission_control" as const });
+  const csrfPhase = options.csrfPhase ?? (causes.includes("csrf_not_ready") ? "idle" : "ready");
   return Object.freeze({
     epoch: 1,
-    target: detail
-      ? Object.freeze({ kind: "session_detail" as const, sessionId: "sess_access_fixture" })
-      : Object.freeze({ kind: "mission_control" as const }),
+    target,
     phase: options.phase ?? (readable ? "ready" : "access_limited"),
     access: resource(accessResourceState, access),
     host: resource(hostResourceState, host),
-    targetState: resource(readable ? "loading" : "blocked", null),
+    targetState: resource(readable ? "current" : "blocked", readable ? targetData : null) as BrowserConnectionSnapshot["targetState"],
     stream: Object.freeze({
       state: options.streamState ?? (detail ? "idle" : "not_applicable"),
       snapshot: null,
@@ -255,11 +315,13 @@ function snapshot(
       failure: null
     }),
     csrf: Object.freeze({
-      phase: causes.includes("csrf_not_ready") ? "idle" as const : "ready" as const,
-      generation: causes.includes("csrf_not_ready") ? null : 1,
-      rotatedAt: causes.includes("csrf_not_ready") ? null : timestamp,
+      phase: csrfPhase,
+      generation: csrfPhase === "ready" ? 1 : null,
+      rotatedAt: csrfPhase === "ready" ? timestamp : null,
       failure: null,
-      invalidationReason: causes.includes("csrf_not_ready") ? "not_bootstrapped" as const : null
+      invalidationReason: csrfPhase === "idle"
+        ? options.invalidationReason ?? "not_bootstrapped"
+        : null
     }),
     writeEligibility: Object.freeze({
       scope: "browser_shell" as const,

@@ -14,6 +14,10 @@ import {
   sessionDetailPathPattern
 } from "./app-shell.js";
 import { createBrowserAppStartupController } from "./app-startup.js";
+import type {
+  BrowserConnectionSnapshot,
+  BrowserConnectionStateCoordinator
+} from "./connection-state.js";
 
 const sessionId = "sess_shell_001";
 
@@ -145,6 +149,42 @@ describe("HostDeck phone shell", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it("keeps one page-security recovery owner across sheet dismissal and reopening", async () => {
+    const user = userEvent.setup();
+    const harness = createRecoveryCoordinatorHarness();
+    render(
+      <MemoryRouter initialEntries={[missionControlPath]}>
+        <HostDeckRoutes
+          coordinator={harness.coordinator}
+          outlets={{ missionControl: <h1>Mission Control recovery fixture</h1> }}
+        />
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Open Host and access" }));
+    const action = screen.getByRole("button", { name: "Secure this page" });
+    await user.click(action);
+    await waitFor(() => expect(harness.bootstrapCsrf).toHaveBeenCalledTimes(1));
+    expect(action.getAttribute("aria-busy")).toBe("true");
+    expect(action).toHaveProperty("disabled", true);
+
+    await user.click(screen.getByRole("button", { name: "Close Host and access" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await user.click(screen.getByRole("button", { name: "Open Host and access" }));
+    expect(screen.getByRole("button", { name: "Secure this page" })).toHaveProperty(
+      "disabled",
+      true
+    );
+    expect(harness.bootstrapCsrf).toHaveBeenCalledTimes(1);
+
+    harness.completeBootstrap();
+    expect(
+      await screen.findByText("Page security recovered")
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Secure this page" })).toBeNull();
+    expect(harness.bootstrapCsrf).toHaveBeenCalledTimes(1);
+  });
+
   it("holds production routes behind one external pairing owner even under StrictMode", async () => {
     const user = userEvent.setup();
     const deferred = createDeferred<ReturnType<typeof pairedResult>>();
@@ -240,4 +280,133 @@ function createDeferred<T>(): {
     resolve = innerResolve;
   });
   return { promise, resolve };
+}
+
+function createRecoveryCoordinatorHarness(): Readonly<{
+  coordinator: BrowserConnectionStateCoordinator;
+  bootstrapCsrf: ReturnType<typeof vi.fn>;
+  completeBootstrap: () => void;
+}> {
+  let current = recoveryConnectionSnapshot("idle");
+  const listeners = new Set<() => void>();
+  const bootstrap = createDeferred<BrowserConnectionSnapshot>();
+  const publish = (next: BrowserConnectionSnapshot) => {
+    current = next;
+    for (const listener of [...listeners]) listener();
+  };
+  const bootstrapCsrf = vi.fn(() => {
+    publish(recoveryConnectionSnapshot("bootstrapping"));
+    return bootstrap.promise.then((next) => {
+      publish(next);
+      return next;
+    });
+  });
+  const coordinator = Object.freeze({
+    snapshot: () => current,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    setTarget: vi.fn(),
+    refresh: vi.fn(),
+    loadMoreSessions: vi.fn(),
+    connectSessionStream: vi.fn(),
+    disconnectSessionStream: vi.fn(),
+    bootstrapCsrf,
+    adoptCsrfBootstrap: vi.fn(),
+    requestProtected: vi.fn(),
+    requestSelectedSessionRead: vi.fn(),
+    close: vi.fn()
+  }) as unknown as BrowserConnectionStateCoordinator;
+  return Object.freeze({
+    coordinator,
+    bootstrapCsrf,
+    completeBootstrap: () => bootstrap.resolve(recoveryConnectionSnapshot("ready"))
+  });
+}
+
+function recoveryConnectionSnapshot(
+  phase: "idle" | "bootstrapping" | "ready"
+): BrowserConnectionSnapshot {
+  const timestamp = "2026-07-26T05:00:00.000Z";
+  const origin = "https://hostdeck-shell-recovery.fixture-tailnet.ts.net";
+  const access = Object.freeze({
+    authentication_state: "paired_device" as const,
+    device_id: "device_shell_recovery_private",
+    permission: "write" as const,
+    device_expires_at: "2026-10-26T05:00:00.000Z",
+    configured_origin: origin,
+    network_mode: "remote" as const,
+    transport: "https" as const,
+    locked: false,
+    can_read_sessions: true,
+    can_write_sessions: true,
+    can_lock: true,
+    can_unlock: false
+  });
+  const host = Object.freeze({
+    local: Object.freeze({
+      generation: 1,
+      state: "ready" as const,
+      readiness: "ready" as const,
+      updated_at: timestamp,
+      components: Object.freeze([]),
+      mutation_admission: "open" as const
+    }),
+    remote: Object.freeze({
+      generation: 1,
+      state_generation: 1,
+      availability: "ready" as const,
+      cause: null,
+      external_origin: origin,
+      laptop_action_required: false,
+      observed_at: timestamp,
+      checked_at: timestamp,
+      updated_at: timestamp
+    }),
+    access: Object.freeze({
+      mode: "paired_write" as const,
+      network_mode: "remote" as const,
+      transport: "https" as const,
+      write_eligibility: Object.freeze({
+        scope: "host_health_and_authority" as const,
+        eligible: true,
+        causes: Object.freeze([])
+      })
+    })
+  });
+  const resource = <Data,>(data: Data) => Object.freeze({
+    state: "current" as const,
+    data,
+    failure: null,
+    observedAt: timestamp
+  });
+  return Object.freeze({
+    epoch: 1,
+    target: Object.freeze({ kind: "mission_control" as const }),
+    phase: phase === "ready" ? "ready" as const : "degraded" as const,
+    access: resource(access),
+    host: resource(host),
+    targetState: resource(Object.freeze({ kind: "mission_control" as const })) as BrowserConnectionSnapshot["targetState"],
+    stream: Object.freeze({
+      state: "not_applicable" as const,
+      snapshot: null,
+      continuity: "not_applicable" as const,
+      boundary: null,
+      failure: null
+    }),
+    csrf: Object.freeze({
+      phase,
+      generation: phase === "ready" ? 2 : null,
+      rotatedAt: phase === "ready" ? timestamp : null,
+      failure: null,
+      invalidationReason: phase === "idle" ? "pairing_replaced" as const : null
+    }),
+    writeEligibility: Object.freeze({
+      scope: "browser_shell" as const,
+      eligible: phase === "ready",
+      causes: Object.freeze(phase === "ready" ? [] : ["csrf_not_ready" as const])
+    }),
+    lastFailure: null
+  }) as unknown as BrowserConnectionSnapshot;
 }

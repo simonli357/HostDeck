@@ -22,6 +22,7 @@ export type SessionDetailApiVariant =
   | "boundary"
   | "long"
   | "empty"
+  | "expired"
   | "denied"
   | "unavailable";
 
@@ -31,18 +32,30 @@ export type SessionDetailPromptOutcome =
   | "retryable_rejection"
   | "nonretryable_rejection"
   | "correlation_mismatch"
+  | "stale_generation"
   | "pending";
+
+export type SessionDetailCsrfOutcome = "success" | "failure" | "pending";
+export type SessionDetailAccessOutcome = "success" | "failure";
 
 export interface SessionDetailApiController {
   readonly requests: readonly Request[];
   readonly breakStream: () => Promise<void>;
   readonly dropStream: () => Promise<void>;
   readonly hasPendingPrompt: () => boolean;
+  readonly hasPendingAccess: () => boolean;
+  readonly hasPendingCsrf: () => boolean;
   readonly pushEvent: (event: SessionDetailEventFixture) => Promise<void>;
   readonly promptRequests: () => readonly Request[];
   readonly releasePendingPrompt: (
     outcome?: Exclude<SessionDetailPromptOutcome, "pending">
   ) => void;
+  readonly releasePendingAccess: (outcome?: SessionDetailAccessOutcome) => void;
+  readonly releasePendingCsrf: (
+    outcome?: Exclude<SessionDetailCsrfOutcome, "pending">
+  ) => void;
+  readonly holdNextAccess: () => void;
+  readonly setCsrfOutcome: (outcome: SessionDetailCsrfOutcome | null) => void;
   readonly setPromptOutcome: (outcome: SessionDetailPromptOutcome) => void;
   readonly setVariant: (variant: SessionDetailApiVariant) => void;
   readonly streamRequestUrls: () => Promise<readonly string[]>;
@@ -75,6 +88,12 @@ export async function installSessionDetailApi(
   let pendingPromptResolution:
     | ((outcome: Exclude<SessionDetailPromptOutcome, "pending">) => void)
     | null = null;
+  let holdAccess = false;
+  let pendingAccessResolution: ((outcome: SessionDetailAccessOutcome) => void) | null = null;
+  let csrfOutcomeOverride: SessionDetailCsrfOutcome | null = null;
+  let pendingCsrfResolution:
+    | ((outcome: Exclude<SessionDetailCsrfOutcome, "pending">) => void)
+    | null = null;
   const requests: Request[] = [];
   const initialEvents = eventsForVariant(initialVariant);
 
@@ -101,10 +120,29 @@ export async function installSessionDetailApi(
     }
 
     if (url.pathname === "/api/v1/access" && request.method() === "GET") {
-      await fulfillJson(route, variant === "denied" ? deniedAccess() : pairedAccess(variant));
+      let accessOutcome: SessionDetailAccessOutcome = "success";
+      if (holdAccess) {
+        holdAccess = false;
+        accessOutcome = await new Promise<SessionDetailAccessOutcome>((resolve) => {
+          pendingAccessResolution = resolve;
+        });
+        pendingAccessResolution = null;
+      }
+      if (accessOutcome === "failure") {
+        await fulfillJson(route, serviceUnavailable(), 503);
+        return;
+      }
+      await fulfillJson(
+        route,
+        variant === "denied"
+          ? deniedAccess("revoked_device")
+          : variant === "expired"
+            ? deniedAccess("expired_device")
+            : pairedAccess(variant)
+      );
       return;
     }
-    if (variant === "denied") {
+    if (variant === "denied" || variant === "expired") {
       await route.fulfill({ status: 500, body: "unexpected protected request" });
       return;
     }
@@ -131,7 +169,20 @@ export async function installSessionDetailApi(
       return;
     }
     if (url.pathname === "/api/v1/access/csrf" && request.method() === "POST") {
-      if (variant === "csrf_failed") {
+      let csrfOutcome = csrfOutcomeOverride ?? (variant === "csrf_failed" ? "failure" : "success");
+      if (csrfOutcome === "pending") {
+        if (pendingCsrfResolution !== null) {
+          await route.fulfill({ status: 500, body: "duplicate pending CSRF request" });
+          return;
+        }
+        csrfOutcome = await new Promise<Exclude<SessionDetailCsrfOutcome, "pending">>(
+          (resolve) => {
+            pendingCsrfResolution = resolve;
+          }
+        );
+        pendingCsrfResolution = null;
+      }
+      if (csrfOutcome === "failure") {
         await fulfillJson(
           route,
           {
@@ -203,6 +254,12 @@ export async function installSessionDetailApi(
     hasPendingPrompt() {
       return pendingPromptResolution !== null;
     },
+    hasPendingAccess() {
+      return pendingAccessResolution !== null;
+    },
+    hasPendingCsrf() {
+      return pendingCsrfResolution !== null;
+    },
     promptRequests() {
       return requests.filter((request) => {
         const url = new URL(request.url());
@@ -219,6 +276,32 @@ export async function installSessionDetailApi(
         throw new TypeError("No pending Session Detail prompt request exists.");
       }
       pendingPromptResolution(outcome);
+    },
+    releasePendingAccess(outcome: SessionDetailAccessOutcome = "success") {
+      if (pendingAccessResolution === null) {
+        throw new TypeError("No pending Session Detail access request exists.");
+      }
+      pendingAccessResolution(outcome);
+    },
+    releasePendingCsrf(
+      outcome: Exclude<SessionDetailCsrfOutcome, "pending"> = "success"
+    ) {
+      if (pendingCsrfResolution === null) {
+        throw new TypeError("No pending Session Detail CSRF request exists.");
+      }
+      pendingCsrfResolution(outcome);
+    },
+    holdNextAccess() {
+      if (holdAccess || pendingAccessResolution !== null) {
+        throw new TypeError("A Session Detail access request is already held.");
+      }
+      holdAccess = true;
+    },
+    setCsrfOutcome(outcome: SessionDetailCsrfOutcome | null) {
+      if (pendingCsrfResolution !== null) {
+        throw new TypeError("A Session Detail CSRF request is already pending.");
+      }
+      csrfOutcomeOverride = outcome;
     },
     setPromptOutcome(nextOutcome: SessionDetailPromptOutcome) {
       promptOutcome = nextOutcome;
@@ -468,6 +551,20 @@ async function fulfillPromptOutcome(
     );
     return;
   }
+  if (outcome === "stale_generation") {
+    await fulfillJson(
+      route,
+      {
+        error: {
+          code: "operation_conflict",
+          message: "Page authority changed before the operation completed.",
+          retryable: false
+        }
+      },
+      409
+    );
+    return;
+  }
 
   const operationId =
     outcome === "correlation_mismatch"
@@ -509,9 +606,11 @@ function pairedAccess(variant: SessionDetailApiVariant) {
   };
 }
 
-function deniedAccess() {
+function deniedAccess(
+  authenticationState: "expired_device" | "revoked_device"
+) {
   return {
-    authentication_state: "revoked_device",
+    authentication_state: authenticationState,
     device_id: null,
     permission: null,
     device_expires_at: null,
@@ -526,14 +625,19 @@ function deniedAccess() {
   };
 }
 
+function serviceUnavailable() {
+  return {
+    error: {
+      code: "daemon_unavailable",
+      message: "HostDeck is temporarily unavailable.",
+      retryable: true
+    }
+  };
+}
+
 function readyHostStatus(variant: SessionDetailApiVariant) {
   const readOnly = variant === "read_only";
-  const locked = variant === "locked";
-  const writeCauses = readOnly
-    ? ["read_only_access"]
-    : locked
-      ? ["host_locked"]
-      : [];
+  const writeCauses = readOnly ? ["read_only_access"] : [];
   return {
     local: {
       generation: 1,
@@ -670,7 +774,14 @@ function emptyApprovalList() {
 }
 
 function eventsForVariant(variant: SessionDetailApiVariant): readonly SessionDetailEventFixture[] {
-  if (variant === "empty" || variant === "denied" || variant === "unavailable") return [];
+  if (
+    variant === "empty" ||
+    variant === "expired" ||
+    variant === "denied" ||
+    variant === "unavailable"
+  ) {
+    return [];
+  }
   if (isComposerFixtureVariant(variant)) {
     return [
       messageEvent(

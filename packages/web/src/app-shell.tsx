@@ -376,14 +376,17 @@ function HostDeckFrame({
             )}
           </div>
         </div>
-        <HostAccessSheet>
-          {hostAccess ??
-            (coordinator === undefined ? (
-              <HostAccessLoading />
-            ) : (
-              <ConnectedHostAccess coordinator={coordinator} />
-            ))}
-        </HostAccessSheet>
+        {hostAccess !== undefined ? (
+          <HostAccessSheet>{hostAccess}</HostAccessSheet>
+        ) : coordinator === undefined ? (
+          <HostAccessSheet>
+            <HostAccessLoading />
+          </HostAccessSheet>
+        ) : (
+          <ConnectedHostAccess coordinator={coordinator}>
+            {(content) => <HostAccessSheet>{content}</HostAccessSheet>}
+          </ConnectedHostAccess>
+        )}
       </header>
       <main id="hostdeck-main" className="hostdeck-main" tabIndex={-1}>
         {children}

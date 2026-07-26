@@ -3119,6 +3119,64 @@ textarea:focus-visible {
   text-align: left;
 }
 
+.hostdeck-access-recovery {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 4px 0 8px;
+}
+
+.hostdeck-access-recovery > svg {
+  margin-top: 2px;
+}
+
+.hostdeck-access-recovery__copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.hostdeck-access-recovery__copy strong {
+  color: var(--hostdeck-ink);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-access-recovery__copy > span {
+  color: var(--hostdeck-muted);
+  font-size: 13px;
+  line-height: 19px;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-access-recovery__action {
+  max-width: 190px;
+  justify-self: end;
+  white-space: normal;
+}
+
+.hostdeck-access-recovery__action:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+@media (max-width: 520px) {
+  .hostdeck-access-recovery {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .hostdeck-access-recovery__action {
+    width: 100%;
+    max-width: none;
+    grid-column: 2;
+    justify-self: stretch;
+  }
+}
+
 .hostdeck-pairing-app__phone {
   margin-right: 12px;
   color: var(--hostdeck-connected);

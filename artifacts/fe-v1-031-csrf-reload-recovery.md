@@ -2,7 +2,7 @@
 
 Date: 2026-07-26
 
-Status: criteria frozen; implementation pending.
+Status: complete.
 
 ## Scope
 
@@ -88,3 +88,24 @@ Excluded: pairing-link creation or claim changes, cookie issuance or clearing, d
 - Browser tests use the production shell and exact browser clients to prove fragment-free reload inventory, one automatic bootstrap, failed bootstrap, explicit retry, stale protected-write rejection, one refresh plus one bootstrap, revoke/expiry/read-only/lock/offline states, no product replay, and request/header/storage/DOM privacy.
 - Deterministic captures and layout measurements own 320/360/390/412/768/1280, short-height, long-copy, Mission Control/Session Detail, and 200 percent reflow fidelity against `access-recovery-states.png` and the selected design system.
 - Selected Fastify/bootstrap/coordinator integration, repository-wide validation, package/install/audit checks, source/privacy/no-retry review, residue inspection, and clean commit/push state close `CRR-01` to `CRR-20`.
+
+## Completion Evidence
+
+- Production code adds one strict headless recovery controller over only `snapshot`, `refresh`, and `bootstrapCsrf`; one persistent coordinator-backed React owner above the Host & access portal; one `Page security` fact; and one unframed Focus Rail recovery band. Current writers bootstrap directly, stale writers refresh once before at most one bootstrap, and read-only, denied, expired, revoked, locked, host-health, stream, and target truth remain independent.
+- The owner publishes only frozen bounded copy and action state. It has no HTTP client, token, cookie API, product mutation, storage, timer, polling, backoff, reload loop, service worker, Tailscale/profile/Serve mutation, raw diagnostic, or automatic retry path. Target/writer/epoch correlation suppresses late results and never publishes recovered copy for another page.
+- Pre-closure source hardening found and fixed a microtask dispatch race: close or target/epoch replacement between `recover()` and the scheduled port call now suppresses refresh/bootstrap before dispatch. A port promise rejected after owner suppression is explicitly observed, invalid refresh ownership settles without an unbounded waiter, and malformed post-operation snapshots map to bounded failure while preserving the last valid private-free projection. Dedicated regressions cover pre-dispatch close/replacement and late rejected settlement.
+- Focused controller/component/app-shell coverage passes 28 tests across three files. The selected web aggregate passes 441 tests across 25 files. The production-shell Chromium aggregate passes all 46 scenarios, including six dedicated recovery scenarios proving fragment-free bootstrap counts, failure/retry, stale-generation refresh then bootstrap, no product replay, offline retained truth, target replacement, privacy, responsive containment, and effective 200 percent reflow.
+- Repository validation passes 2,296 unit tests with 28 intentional skips, 244 contract tests, 36 integration tests, all eight workspace typechecks, lint/exports over 632 files and eight packages, scaffold, planning, and the selected-runtime boundary over 612 production modules and 22 externals. Vite builds 2,028 modules to 57.36 kB CSS and 820.80 kB JavaScript; the existing main-chunk advisory remains visible for downstream complete-dashboard/release hardening.
+- Root package build and deterministic package acceptance pass at 612 sources, 1,231 owned outputs, and 6,445 entries with identity `424cc0d7931ae02f8f089039c945a58a564a8b2a9ef1f5e2bfe2d06216c62426`. Two unchanged builds, relocated read-only execution, runtime/config/static/integrity rejection, frozen offline install, zero-known-vulnerability production audit, and diff checks pass. No dependency, lockfile, route, setup, or command changed.
+- Visual evidence contains 24 deterministic PNGs plus `layout-measurements.json` under `artifacts/fe-v1-031-csrf-reload-recovery/`. Every PNG decodes at its named size with nonzero variance. Manual full-size and contact review covers checking, automatic bootstrap, ready, setup failure, direct retry, stale check/checking/securing/recovered, offline refresh failure, read-only, locked, expired, revoked, target replacement, 320/360/390/412/768/1280, 390 x 420, and effective 200 percent reflow against the approved Focus Rail target.
+- Layout measurements prove no document-width overflow, one bounded sheet scroll owner, a 560 px maximum sheet, 44 px action and close targets, visible action after bounded scrolling, and contained 320 px through desktop/reflow placement. Approved drift is limited to typed runtime truth and mobile containment; no desktop action panel, nested card, Signal Ledger borrowing, remote diagnosis control, fake logout, or hidden action remains.
+- Browser requests stay on the deterministic loopback origin; page errors, external requests, history credential state, local/session storage, raw CSRF material, private device identity, and product replay are absent. Source/artifact scans find no credential, alternate transport, storage, timer, console, or diagnostic path. Port 4175, Playwright/Vitest/package processes, result markers, and task-owned temporary directories are absent; the pre-existing loopback Vite preview on port 5173 was left intact.
+- Physical Android and packaged remote-phone acceptance remain correctly excluded from this leaf. They are downstream release gates and are not replaced by Chromium emulation.
+
+## Criteria Result
+
+- `CRR-01` to `CRR-04`: exact headless ownership, immutable private-free projection, fragment-free bootstrap observation, and distinct page-authority truth pass.
+- `CRR-05` to `CRR-09`: direct versus refresh-then-bootstrap planning, one-attempt deduplication, pre/post-dispatch race suppression, bounded settlement, and no product replay/retry/persistence pass.
+- `CRR-10` to `CRR-15`: denied/read-only/lock/health/stream independence, conservative setup/offline failures, exact success language, and adjacent authority/privacy contracts pass.
+- `CRR-16` to `CRR-19`: one persistent Host & access owner, one accessible Focus Rail fact/action, mobile/desktop/short-height/reflow containment, and deterministic state inventory pass.
+- `CRR-20`: focused, adjacent, repository, build/package, supply-chain, visual, privacy, residue, owner-evidence, and clean-diff gates pass.
