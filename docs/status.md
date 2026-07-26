@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `FE-V1-031` CSRF reload and stale-session recovery; first action is to audit the exact bootstrap/authority contracts and freeze harsh criteria and evidence before product code.
+- Active task: `FE-V1-031` CSRF reload and stale-session recovery; `CRR-01` to `CRR-20` are frozen, and implementation starts with one persistent headless direct-or-refresh-then-bootstrap recovery owner over the existing coordinator.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.145.0, so the exact binding check is intentionally ineligible until the reviewed runtime is rebaselined or an isolated 0.144.0 binary is selected.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract and both replacement sets are complete. Under `DEC-028`, the human selected all seven current Focus Rail assets with no Signal Ledger borrowing or additional structural drift; both legacy desktop-led boards remain rejected.
