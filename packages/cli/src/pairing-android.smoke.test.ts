@@ -465,11 +465,16 @@ describe("physical Android phone-driver protocol", () => {
       subscriber_id: "physical-prompt-contract"
     });
 
-    const first = await stream[Symbol.asyncIterator]().next();
+    const iterator = stream[Symbol.asyncIterator]();
+    const first = await iterator.next();
     expect(first).toEqual({ done: false, value: event });
     expect(failures).toEqual([]);
     expect(subscribers.snapshot().active_subscribers).toBe(1);
+    const pending = iterator.next();
+    await Promise.resolve();
+    expect(subscribers.snapshot().active_subscribers).toBe(1);
     expect(stream.close()).toBe(true);
+    await expect(pending).resolves.toEqual({ done: true, value: undefined });
     expect(subscribers.snapshot().active_subscribers).toBe(0);
     expect(subscribers.close()).toBe(0);
   });
@@ -1430,6 +1435,7 @@ interface PhysicalPromptRuntime {
   readonly service: CodexPromptControlService;
   readonly startCalls: readonly PhysicalPromptStartInput[];
   readonly streamFailureCount: number;
+  readonly streamFailureCodes: readonly string[];
   readonly subscribers: ReturnType<
     typeof createProjectionSubscriberStreamService
   >;
@@ -1644,11 +1650,14 @@ function createPhysicalPromptRuntime(
     physicalPromptSeedEvent(now().toISOString())
   ]);
   const streamFailures: unknown[] = [];
+  const recordStreamFailure = (failure: unknown): void => {
+    streamFailures.push(failure);
+  };
   const subscribers = createProjectionSubscriberStreamService({
     handoff: Object.freeze({
       open: (input: unknown) => handoff.open(input)
     }),
-    observe_failure: (failure) => streamFailures.push(failure),
+    observe_failure: recordStreamFailure,
     resource_budget: defaultResourceBudget
   });
   let phase: "ready" | "in_progress" | "completed" = "ready";
@@ -1670,9 +1679,7 @@ function createPhysicalPromptRuntime(
       );
       phase = state;
     },
-    recordStreamFailure(failure) {
-      streamFailures.push(failure);
-    },
+    recordStreamFailure,
     service,
     get startCalls() {
       return Object.freeze([...turns.startCalls]);
@@ -1680,9 +1687,23 @@ function createPhysicalPromptRuntime(
     get streamFailureCount() {
       return streamFailures.length;
     },
+    get streamFailureCodes() {
+      return Object.freeze(streamFailures.map(physicalStreamFailureCode));
+    },
     subscribers
   };
   return Object.freeze(runtime);
+}
+
+function physicalStreamFailureCode(candidate: unknown): string {
+  if (candidate === null || typeof candidate !== "object") return "unknown";
+  const descriptor = Object.getOwnPropertyDescriptor(candidate, "code");
+  return descriptor !== undefined &&
+    "value" in descriptor &&
+    typeof descriptor.value === "string" &&
+    /^[a-z][a-z0-9_]{0,63}$/u.test(descriptor.value)
+    ? descriptor.value
+    : "unknown";
 }
 
 class PhysicalPromptTurnClient implements PhysicalPromptTurnPort {
@@ -3582,15 +3603,29 @@ async function runProductionPromptUiSequence(
     terminalFailureMessage:
       "Production Session Detail remained closed after two bounded taps."
   });
-  await waitFor(
-    () =>
-      input.requestInspection.sessionDetailRequests >= 1 &&
-      input.requestInspection.sessionEventRequests >= 1 &&
-      input.requestInspection.sessionStreamRequests >= 1 &&
-      input.prompt.subscribers.snapshot().active_subscribers === 1,
-    45_000,
-    "Physical prompt detail did not establish one current production stream."
-  );
+  try {
+    await waitFor(
+      () =>
+        input.requestInspection.sessionDetailRequests >= 1 &&
+        input.requestInspection.sessionEventRequests >= 1 &&
+        input.requestInspection.sessionStreamRequests >= 1 &&
+        input.prompt.subscribers.snapshot().active_subscribers === 1,
+      45_000,
+      "Physical prompt detail did not establish one current production stream."
+    );
+  } catch {
+    const snapshot = input.prompt.subscribers.snapshot();
+    const failures = input.prompt.streamFailureCodes;
+    throw new Error(
+      "Physical prompt detail did not establish one current production stream " +
+        `(requests=${input.requestInspection.sessionStreamRequests};` +
+        `active=${snapshot.active_subscribers};opened=${snapshot.opened_subscribers};` +
+        `aborted=${snapshot.aborted_subscribers};explicit=${snapshot.explicit_closures};` +
+        `source_failed=${snapshot.source_failed_subscribers};` +
+        `open_failed=${snapshot.source_open_failures};` +
+        `failures=${failures.length === 0 ? "none" : failures.join("|")}).`
+    );
+  }
   await waitForAndroidUiNode(
     "text",
     "Ready to send",
