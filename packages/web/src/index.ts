@@ -2,6 +2,8 @@ export * from "./app-shell.js";
 export * from "./app-startup.js";
 export * from "./connection-state.js";
 export * from "./csrf-client.js";
+export * from "./goal-control.js";
+export * from "./goal-control-state.js";
 export * from "./host-access.js";
 export * from "./http-client.js";
 export * from "./http-route-contracts.js";

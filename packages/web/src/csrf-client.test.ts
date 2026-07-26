@@ -571,6 +571,26 @@ describe("browser CSRF authority lifecycle", () => {
     }
   });
 
+  it("retains authority for a retry-safe domain operation conflict", async () => {
+    const test = harness({
+      fetch: async () => apiErrorResponse(409, "operation_conflict", true)
+    });
+    test.client.adoptBootstrap(bootstrapPayload(rawToken, 2, rotatedAt));
+
+    await expectCsrfFailure(
+      test.client.request("host_lock", {
+        body: { operation_id: "op_csrf_retry_safe_conflict", confirmed: true }
+      }),
+      "api_error"
+    );
+    expect(test.client.snapshot()).toMatchObject({
+      phase: "ready",
+      generation: 2,
+      failure: null
+    });
+    expect(test.requests).toHaveLength(1);
+  });
+
   it("preserves authority across non-authority API, transport, and caller failures", async () => {
     const api = harness({
       fetch: async () => apiErrorResponse(503, "runtime_unavailable", true)

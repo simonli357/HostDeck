@@ -331,6 +331,7 @@ function ConnectedSessionDetailRoute({
         actionError={controller.actionError}
         feedError={controller.feedError}
         onRefresh={controller.onRefresh}
+        goal={controller.goal}
         model={controller.model}
         prompt={controller.prompt}
         projection={projection}

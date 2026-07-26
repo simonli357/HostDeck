@@ -296,7 +296,7 @@ describe("Session Detail screen", () => {
 });
 
 describe("Session Detail controller", () => {
-  it("wires only /model to the active session control dock", async () => {
+  it("wires /model and /goal into one active session control dock", async () => {
     const harness = coordinatorHarness(detailSnapshot({ streamState: "idle" }));
     render(
       <MemoryRouter>
@@ -312,12 +312,18 @@ describe("Session Detail controller", () => {
     const modelTrigger = await screen.findByRole("button", {
       name: "/model for api-refactor"
     });
+    const goalTrigger = screen.getByRole("button", { name: "/goal for api-refactor" });
+    const toolbar = screen.getByRole("toolbar", { name: "Session controls" });
     const controls = modelTrigger.closest(".hostdeck-session-controls");
     expect(controls).not.toBeNull();
+    expect(document.querySelectorAll(".hostdeck-primary-action-dock")).toHaveLength(1);
+    expect(Array.from(toolbar.querySelectorAll(".hostdeck-primary-action-dock__command"))).toEqual([
+      modelTrigger,
+      goalTrigger
+    ]);
     expect(controls?.contains(screen.getByRole("textbox", { name: "Prompt for api-refactor" }))).toBe(
       true
     );
-    expect(screen.queryByText("/goal")).toBeNull();
     expect(screen.queryByText("/plan")).toBeNull();
 
     fireEvent.click(modelTrigger);

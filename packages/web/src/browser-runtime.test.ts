@@ -24,6 +24,12 @@ describe("secure browser runtime composition", () => {
     expect(createSecureBrowserOperationId("prompt")).toBe(
       "op_browser_prompt_1234567812344abc8def1234567890ab"
     );
+    expect(createSecureBrowserOperationId("model")).toBe(
+      "op_browser_model_1234567812344abc8def1234567890ab"
+    );
+    expect(createSecureBrowserOperationId("goal")).toBe(
+      "op_browser_goal_1234567812344abc8def1234567890ab"
+    );
   });
 
   it("fails closed for unsupported scope, missing crypto, throw, or malformed UUID", () => {

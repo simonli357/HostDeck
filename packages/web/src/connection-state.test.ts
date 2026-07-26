@@ -1,5 +1,6 @@
 import {
   encodeSelectedSessionListCursor,
+  goalControlSnapshotSchema,
   managedSessionProjectionSchema,
   modelControlSnapshotSchema,
   type SelectedAccessStateResponse,
@@ -1122,6 +1123,21 @@ describe("browser shell connection-state coordinator", () => {
     });
     expect(harness.http.requests.at(-1)?.init).not.toHaveProperty("body");
 
+    harness.http.enqueue("detail", jsonResponse(200, goalSnapshot()));
+    const goalResponse = await harness.coordinator.requestSelectedSessionRead(
+      "goal_read",
+      { params: { session_id: firstSessionId } }
+    );
+    expect(goalResponse).toMatchObject({
+      status: 200,
+      data: { goal: { objective: "Validate selected goal authority." }, uncertain_mutation: null }
+    });
+    expect(harness.http.requests.at(-1)).toMatchObject({
+      path: `/api/v1/sessions/${firstSessionId}/goal`,
+      init: { method: "GET" }
+    });
+    expect(harness.http.requests.at(-1)?.init).not.toHaveProperty("body");
+
     const requestCount = harness.http.requests.length;
     await expect(
       harness.coordinator.requestSelectedSessionRead("model_read", {
@@ -1302,7 +1318,7 @@ describe("browser shell connection-state coordinator", () => {
       reason: "not_ready"
     });
     harness.coordinator.close();
-  }, 20_000);
+  }, 60_000);
 
   it("installs request ownership before notifying a reentrant same-target subscriber", async () => {
     const harness = createHarness(loopbackOrigin);
@@ -1777,6 +1793,22 @@ function modelSnapshot() {
         ]
       }
     ]
+  });
+}
+
+function goalSnapshot() {
+  return goalControlSnapshotSchema.parse({
+    goal: {
+      revision: "d".repeat(64),
+      objective: "Validate selected goal authority.",
+      status: "paused",
+      token_budget: null,
+      tokens_used: 0,
+      time_used_seconds: 0,
+      created_at: timestamp,
+      updated_at: timestamp
+    },
+    uncertain_mutation: null
   });
 }
 

@@ -528,7 +528,10 @@ function mapBootstrapFailure(error: unknown): HostDeckBrowserCsrfError {
     return failure({ ...common, reason: "invalid_response" });
   }
   if (error.reason === "api_error") {
-    if (error.apiError?.code === "operation_conflict") {
+    if (
+      error.apiError?.code === "operation_conflict" &&
+      error.apiError.retryable === false
+    ) {
       return failure({ ...common, reason: "stale_generation" });
     }
     if (
@@ -567,7 +570,10 @@ function mapMutationFailure(
     return failure({ ...common, reason: "invalid_response" });
   }
   if (error.reason === "api_error") {
-    if (error.apiError?.code === "operation_conflict") {
+    if (
+      error.apiError?.code === "operation_conflict" &&
+      error.apiError.retryable === false
+    ) {
       return failure({ ...common, reason: "stale_generation" });
     }
     if (

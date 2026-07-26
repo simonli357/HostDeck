@@ -129,6 +129,8 @@ const exactRootModules = new Map([
       "./app-startup.js",
       "./connection-state.js",
       "./csrf-client.js",
+      "./goal-control-state.js",
+      "./goal-control.js",
       "./host-access.js",
       "./http-client.js",
       "./http-route-contracts.js",
@@ -484,10 +486,10 @@ function validateRootScripts(rootPackage, failures) {
     }
   }
   const expectedWebTest =
-    "vitest run packages/web/src/app-shell.test.tsx packages/web/src/app-startup.test.ts packages/web/src/browser-runtime.test.ts packages/web/src/connection-state.test.ts packages/web/src/csrf-client.test.ts packages/web/src/host-access.test.tsx packages/web/src/http-client.test.ts packages/web/src/mission-control.test.tsx packages/web/src/model-control-state.test.ts packages/web/src/model-control.test.tsx packages/web/src/pairing-bootstrap.test.ts packages/web/src/pairing-screen.test.tsx packages/web/src/prompt-composer-state.test.ts packages/web/src/prompt-composer.test.tsx packages/web/src/session-detail-feed.test.ts packages/web/src/session-detail.test.tsx packages/web/src/sse-client.test.ts packages/test-fixtures/src/fixtures.test.ts";
+    "vitest run packages/web/src/app-shell.test.tsx packages/web/src/app-startup.test.ts packages/web/src/browser-runtime.test.ts packages/web/src/connection-state.test.ts packages/web/src/csrf-client.test.ts packages/web/src/host-access.test.tsx packages/web/src/http-client.test.ts packages/web/src/mission-control.test.tsx packages/web/src/goal-control-state.test.ts packages/web/src/goal-control.test.tsx packages/web/src/model-control-state.test.ts packages/web/src/model-control.test.tsx packages/web/src/pairing-bootstrap.test.ts packages/web/src/pairing-screen.test.tsx packages/web/src/prompt-composer-state.test.ts packages/web/src/prompt-composer.test.tsx packages/web/src/session-detail-feed.test.ts packages/web/src/session-detail.test.tsx packages/web/src/sse-client.test.ts packages/test-fixtures/src/fixtures.test.ts";
   if (scripts["test:web"] !== expectedWebTest) {
     failures.push(
-      "package.json test:web must run only selected shell, startup, browser-runtime, connection-state, CSRF, host/access, HTTP, Mission Control, model control, pairing, prompt composer, Session Detail, SSE, and fixture tests"
+      "package.json test:web must run only selected shell, startup, browser-runtime, connection-state, CSRF, host/access, HTTP, Mission Control, goal control, model control, pairing, prompt composer, Session Detail, SSE, and fixture tests"
     );
   }
 }

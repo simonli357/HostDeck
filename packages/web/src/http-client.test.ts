@@ -153,6 +153,81 @@ describe("FE-V1-019 bounded browser HTTP client", () => {
     });
   });
 
+  it("composes exact selected goal reads and protected mutations", async () => {
+    const requests: Array<{ path: string; init: BrowserHttpRequestInit }> = [];
+    const snapshot = {
+      goal: {
+        revision: "d".repeat(64),
+        objective: "Ship the exact mobile goal control.",
+        status: "paused",
+        token_budget: null,
+        tokens_used: 0,
+        time_used_seconds: 0,
+        created_at: "2026-07-26T01:00:00.000Z",
+        updated_at: "2026-07-26T01:00:00.000Z"
+      },
+      uncertain_mutation: null
+    };
+    const client = createBrowserHttpClient({
+      origin: remoteOrigin,
+      fetch: async (path, init) => {
+        requests.push({ path, init });
+        return jsonResponse(200, snapshot);
+      }
+    });
+
+    await client.request("goal_read", {
+      params: { session_id: sessionId }
+    });
+    await client.request(
+      "goal_mutate",
+      {
+        params: { session_id: sessionId },
+        body: {
+          operation_id: "op_browser_goal_http_exact_001",
+          kind: "goal",
+          action: "set",
+          objective: "Ship the exact mobile goal control.",
+          expected_goal_revision: null
+        }
+      },
+      { csrfToken, csrfGeneration }
+    );
+
+    expect(requests).toHaveLength(2);
+    expect(requests[0]).toEqual({
+      path: `/api/v1/sessions/${sessionId}/goal`,
+      init: expect.objectContaining({
+        method: "GET",
+        headers: {
+          accept: "application/json",
+          "cache-control": "no-store"
+        }
+      })
+    });
+    expect(requests[0]?.init.body).toBeUndefined();
+    expect(requests[1]).toEqual({
+      path: `/api/v1/sessions/${sessionId}/goal`,
+      init: expect.objectContaining({
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "cache-control": "no-store",
+          "content-type": "application/json",
+          "x-hostdeck-csrf": csrfToken,
+          "x-hostdeck-csrf-generation": csrfGeneration
+        }
+      })
+    });
+    expect(JSON.parse(requests[1]?.init.body ?? "")).toEqual({
+      operation_id: "op_browser_goal_http_exact_001",
+      kind: "goal",
+      action: "set",
+      objective: "Ship the exact mobile goal control.",
+      expected_goal_revision: null
+    });
+  });
+
   it("rejects hostile or malformed request data before fetch", async () => {
     let fetches = 0;
     let getterCalls = 0;

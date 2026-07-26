@@ -150,7 +150,8 @@ test("renders an honest empty state and does not invent downstream controls", as
   await expect(page.getByRole("textbox", { name: "Prompt for android-release" }))
     .toBeDisabled();
   await expect(page.getByRole("button", { name: /^\/model for /u })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: /^\/(goal|plan)|more/iu })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^\/goal for /u })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /^\/plan|more/iu })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /approve|deny/u })).toHaveCount(0);
   expect(await api.streamRequestUrls()).toEqual([
     `http://127.0.0.1:4175/api/v1/sessions/${sessionDetailBrowserSessionId}/events/stream`
@@ -236,6 +237,12 @@ test("contains long content and passes keyboard, reflow, zoom, and live-update c
     page,
     page.getByRole("button", {
       name: "/model for android-release-validation-long-session-name-2026"
+    })
+  );
+  await expectNextKeyboardFocus(
+    page,
+    page.getByRole("button", {
+      name: "/goal for android-release-validation-long-session-name-2026"
     })
   );
   await expectTokenContrast(page);

@@ -34,6 +34,8 @@ import type {
   BrowserConnectionSnapshot,
   BrowserConnectionStateCoordinator
 } from "./connection-state.js";
+import { GoalControl, useGoalControlController } from "./goal-control.js";
+import type { GoalControlController } from "./goal-control-state.js";
 import { type MissionTone, projectSessionRow } from "./mission-control.js";
 import {
   ModelControl,
@@ -99,6 +101,7 @@ export interface SessionDetailControllerState {
   readonly onRefresh: () => void;
   readonly prompt: PromptComposerController;
   readonly model: ModelControlController;
+  readonly goal: GoalControlController;
 }
 
 export interface UseSessionDetailControllerOptions {
@@ -123,6 +126,7 @@ export interface SessionDetailScreenProps {
   readonly onRefresh?: () => void;
   readonly prompt?: PromptComposerController | undefined;
   readonly model?: ModelControlController | undefined;
+  readonly goal?: GoalControlController | undefined;
   readonly projection?: SessionDetailProjection | undefined;
 }
 
@@ -159,6 +163,7 @@ export function useSessionDetailController(
     feed
   );
   const model = useModelControlController(coordinator, sessionId, snapshot);
+  const goal = useGoalControlController(coordinator, sessionId, snapshot);
 
   const resetFeed = useCallback(() => {
     const empty = createSessionDetailFeed(sessionId);
@@ -250,7 +255,8 @@ export function useSessionDetailController(
     feedError,
     onRefresh,
     prompt,
-    model
+    model,
+    goal
   });
 }
 
@@ -274,6 +280,7 @@ export function ConnectedSessionDetail({
       onRefresh={controller.onRefresh}
       prompt={controller.prompt}
       model={controller.model}
+      goal={controller.goal}
     />
   );
 }
@@ -290,6 +297,7 @@ export function SessionDetailScreen({
   onRefresh,
   prompt,
   model,
+  goal,
   projection
 }: SessionDetailScreenProps) {
   const view =
@@ -299,7 +307,7 @@ export function SessionDetailScreen({
 
   return (
     <section
-      className={`hostdeck-route hostdeck-detail${prompt === undefined && model === undefined ? "" : " hostdeck-detail--with-controls"}`}
+      className={`hostdeck-route hostdeck-detail${prompt === undefined && model === undefined && goal === undefined ? "" : " hostdeck-detail--with-controls"}`}
       aria-labelledby="session-detail-title"
       aria-busy={view.loading || view.replayPending}
     >
@@ -341,9 +349,14 @@ export function SessionDetailScreen({
         />
       )}
 
-      {prompt === undefined && model === undefined ? null : (
+      {prompt === undefined && model === undefined && goal === undefined ? null : (
         <div className="hostdeck-session-controls">
-          {model === undefined ? null : <ModelControl controller={model} />}
+          {model === undefined && goal === undefined ? null : (
+            <div className="hostdeck-primary-action-dock" role="toolbar" aria-label="Session controls">
+              {model === undefined ? null : <ModelControl controller={model} />}
+              {goal === undefined ? null : <GoalControl controller={goal} />}
+            </div>
+          )}
           {prompt === undefined ? null : <PromptComposer controller={prompt} />}
         </div>
       )}

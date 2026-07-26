@@ -31,7 +31,7 @@ describe("operation deadline serialization", () => {
   it("rejects an aborted queued operation promptly and never runs it later", async () => {
     const tails = new Map<string, Promise<void>>();
     const firstDeadline = createOperationDeadline({ timeoutMs: 1_000 });
-    const queuedDeadline = createOperationDeadline({ timeoutMs: 20 });
+    const queuedDeadline = createOperationDeadline({ timeoutMs: 250 });
     let releaseFirst: (() => void) | undefined;
     const first = runSerializedWithDeadline(
       tails,

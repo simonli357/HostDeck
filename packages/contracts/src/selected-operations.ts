@@ -29,12 +29,13 @@ import {
 } from "./selected-runtime.js";
 
 export const promptTextMaxLength = 20_000;
+export const goalObjectiveMaxLength = 512;
 
 const operationLimits = {
   promptLength: promptTextMaxLength,
   modelIdLength: codexModelContractLimits.identityLength,
   effortLength: codexModelContractLimits.reasoningEffortLength,
-  goalLength: 512,
+  goalLength: goalObjectiveMaxLength,
   summaryLength: 512,
   approvalFieldLength: 1_000,
   skillNameLength: 160,

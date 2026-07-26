@@ -126,20 +126,18 @@ export function ModelControl({ controller }: ModelControlProps) {
 
   return (
     <Dialog.Root open={view.sheetOpen} onOpenChange={setOpen}>
-      <div className="hostdeck-primary-action-dock" role="toolbar" aria-label="Session controls">
-        <Dialog.Trigger asChild>
-          <button
-            type="button"
-            className="hostdeck-primary-action-dock__command"
-            disabled={!view.actionEnabled}
-            title={view.actionDisabledReason ?? "Change model for the next turn"}
-            aria-label={`/model for ${view.targetLabel}`}
-          >
-            <Box size={18} strokeWidth={2} aria-hidden="true" />
-            <span>/model</span>
-          </button>
-        </Dialog.Trigger>
-      </div>
+      <Dialog.Trigger asChild>
+        <button
+          type="button"
+          className="hostdeck-primary-action-dock__command"
+          disabled={!view.actionEnabled}
+          title={view.actionDisabledReason ?? "Change model for the next turn"}
+          aria-label={`/model for ${view.targetLabel}`}
+        >
+          <Box size={18} strokeWidth={2} aria-hidden="true" />
+          <span>/model</span>
+        </button>
+      </Dialog.Trigger>
 
       <Dialog.Portal>
         <Dialog.Overlay className="hostdeck-sheet-overlay" />

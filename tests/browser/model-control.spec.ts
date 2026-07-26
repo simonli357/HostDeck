@@ -29,7 +29,8 @@ test("reads exact model truth and stages one correlated next-turn selection", as
 
   const trigger = page.getByRole("button", { name: "/model for android-release" });
   await expect(trigger).toBeVisible();
-  await expect(page.getByRole("button", { name: /^\/(goal|plan)|more/iu })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "/goal for android-release" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^\/plan|more/iu })).toHaveCount(0);
   await expectDockGeometry(page);
   await trigger.click();
 
@@ -440,13 +441,16 @@ async function expectDockGeometry(page: Page) {
     };
     const controls = document.querySelector(".hostdeck-session-controls");
     const dock = document.querySelector(".hostdeck-primary-action-dock");
-    const model = document.querySelector(".hostdeck-primary-action-dock__command");
+    const commands = [...document.querySelectorAll(".hostdeck-primary-action-dock__command")];
+    const model = commands[0];
+    const goal = commands[1];
     const composer = document.querySelector(".hostdeck-prompt-composer");
     const target = document.querySelector(".hostdeck-prompt-composer__target");
     if (
       !(controls instanceof HTMLElement) ||
       !(dock instanceof HTMLElement) ||
       !(model instanceof HTMLElement) ||
+      !(goal instanceof HTMLElement) ||
       !(composer instanceof HTMLElement) ||
       !(target instanceof HTMLElement)
     ) {
@@ -457,6 +461,8 @@ async function expectDockGeometry(page: Page) {
       controls: measure(controls),
       dock: measure(dock),
       model: measure(model),
+      goal: measure(goal),
+      commandCount: commands.length,
       composer: measure(composer),
       target: measure(target)
     };
@@ -465,8 +471,12 @@ async function expectDockGeometry(page: Page) {
   expect(measurement.controls.right).toBeLessThanOrEqual(measurement.viewport.width + 1);
   expect(measurement.controls.bottom).toBeLessThanOrEqual(measurement.viewport.height + 1);
   expect(measurement.dock.bottom).toBeLessThanOrEqual(measurement.composer.top + 1);
+  expect(measurement.commandCount).toBe(2);
   expect(measurement.model.width).toBeGreaterThanOrEqual(44);
   expect(measurement.model.height).toBeGreaterThanOrEqual(44);
+  expect(measurement.goal.width).toBeGreaterThanOrEqual(44);
+  expect(measurement.goal.height).toBeGreaterThanOrEqual(44);
+  expect(Math.abs(measurement.model.width - measurement.goal.width)).toBeLessThanOrEqual(1);
   expect(measurement.target.left).toBeGreaterThanOrEqual(measurement.composer.left);
   expect(measurement.target.right).toBeLessThanOrEqual(measurement.composer.right);
   return measurement;
