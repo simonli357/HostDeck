@@ -2,7 +2,7 @@
 
 Date: 2026-07-26
 
-Status: criteria frozen; implementation pending.
+Status: complete; `IAD-01` to `IAD-20` pass.
 
 ## Scope
 
@@ -87,10 +87,25 @@ Excluded: a dedicated approval inbox, policy/session grants, terminal or slash-t
 | `IAD-19` | Deterministic screenshots cover list loading/failure/empty; normal/elevated/broad pending; confirmation; responding; approved/denied/expired/superseded; event-only/list-only/conflict; due check; read-only/locked/reconnecting; known/unknown failure; long/multiple content; and adjacent Session Detail/dock/composer states with drift recorded. |
 | `IAD-20` | Focused controller/feed/component/API/concurrency/browser suites, adjacent prompt/model/goal/plan/Session Detail regressions, full unit/contract/integration/static/build/package/planning/privacy checks, manual source/visual inspection, clean residue, and owner-doc evidence pass before closure. |
 
-## Planned Evidence
+## Completion Evidence
 
-- Headless controller tests own every list, reconciliation, authority, expiry, confirmation, submission, correlation, failure, race, cancellation, and cleanup row.
-- Feed and component tests own request-id coalescing, synthesized retained-gap items, action binding, confirmation behavior, semantics, keyboard/focus, and adjacent Session Detail behavior.
-- Selected API integration proves one exact approved and denied terminal response plus duplicate/expired/resolved/authority and response-loss behavior through the production route/gate/service/audit boundary.
-- Production-shell Chromium captures and layout measurements own Focus Rail fidelity, mobile/desktop/reflow/short-height containment, multi-request behavior, and model/goal/plan/prompt regressions.
-- Repository-wide validation, privacy/source review, package/install/audit checks, evidence inventory, and clean worktree/push state close `IAD-01` to `IAD-20`.
+- Implementation `e6907e4` adds one strict exact-session approval controller, one coordinator-backed React owner, event/list reconciliation in Session Detail, and the approved inline Focus Rail surface. Runtime-boundary hardening `80581e6` explicitly admits the two approval modules and both selected web tests instead of bypassing the production allowlists.
+- One abortable `approval_list` owner coalesces event and list truth, preserves first timeline position, synthesizes retained-gap requests, rejects immutable contradictions, schedules only the earliest expiry check, and removes prior-owner disclosure on target or authority change. Event-only pending, list-only, responding, terminal, due, session-grant, reconnecting, and stale states remain conservative and read-only where required.
+- Decision handling uses one global mutation claim and exactly one protected `approval_respond` request. Deny and normal one-time approval are direct; elevated and broad approval require the exact-target confirmation sheet. Exact operation, decision, session, thread, request, immutable fields, terminal state, and authority epoch must correlate before success; no POST retries automatically.
+- Pre-closure hardening fixed production shell composition, same-context StrictMode failure deduplication, unsupported-response visibility, secure approval operation-id scope coverage, raw-session DOM-id disclosure in the adjacent composer, and action/status reachability above the fixed mobile controls. Known rejection, unsupported state, reconciliation conflict, and outcome unknown remain distinct.
+- Focused approval controller/UI/runtime/Session Detail coverage passes 83 tests across four files. The selected web aggregate passes 428 tests across 24 files. The production-shell Chromium aggregate passes all 40 scenarios; the six dedicated approval scenarios prove the complete state matrix, exact request path/body/header/counts, races, privacy, keyboard behavior, authority changes, responsive containment, and 200 percent reflow.
+- The selected production approval boundary passes 48 focused server/CLI tests, five approval contract tests, and one vertical integration test. Exact approved/denied outcomes, duplicate and terminal conflicts, authority loss, and response loss remain owned by the existing production route, gate, service, and audit contracts; this leaf changes no server or runtime API.
+- Repository validation passes 2,283 unit tests with 28 intentional skips, 244 contract tests, 36 integration tests, root and all eight workspace typechecks, lint/exports over 628 files and eight packages, scaffold, planning, and the selected-runtime boundary over 612 production modules and 22 externals. Vite production build, root package build, two-build deterministic package acceptance, frozen offline install, zero-known-vulnerability production audit, and diff checks pass.
+- The root package remains 612 sources, 1,231 owned outputs, and 6,445 entries at `424cc0d7931ae02f8f089039c945a58a564a8b2a9ef1f5e2bfe2d06216c62426`. No dependency, lockfile, command, setup, route contract, or release claim changed.
+- Visual evidence contains 36 dedicated deterministic PNGs and layout measurements under `artifacts/fe-v1-022-inline-approval-decisions/`, plus 17 regenerated adjacent Session Detail, Prompt, Model, Goal, and Plan regression targets. Inspection covers loading/failure/empty; every risk and server state; confirmation; event/list gaps; conflict; unsupported; known/unknown failure; authority/reconnect; long/multiple content; 320/360/390/412/768/1280; 390 x 420; and actual 200 percent reflow.
+- Measurements prove no item scroll overflow, equal paired actions, 44 px minimum targets, contained sheet scrolling at short height and effective 640 x 400 reflow, and bounded placement above the composer and three-command dock. No desktop action panel, nested card stack, hidden command, overlap, or Signal Ledger borrowing remains.
+- Source, rendered-DOM, request, artifact, and staged-diff review finds no credential, raw request/thread/operation id, raw payload/error, policy/session action, slash-text path, command/cwd invention, or automatic mutation retry. No task-owned process or listener remains; the long-running loopback Vite preview and existing tooling caches predate this leaf and were left intact.
+- The existing 806.30 kB Vite main-chunk warning remains visible for downstream cross-screen/release hardening. Physical-phone release acceptance remains intentionally excluded from this leaf and does not substitute for downstream interface hardening or release gates.
+
+## Criteria Result
+
+- `IAD-01` to `IAD-04`: exact selected ownership, cancellation/coalescing/expiry cleanup, strict event/list reconciliation, timeline coalescing, and retained-gap visibility pass.
+- `IAD-05` to `IAD-10`: complete typed truth, one-time-only actionability, authority and stream gating, direct versus confirmed decisions, focus restoration, and duplicate-send exclusion pass.
+- `IAD-11` to `IAD-16`: one exact operation/POST, terminal response correlation, bounded success language, known/unsupported/unknown race truth, and privacy/path exclusions pass.
+- `IAD-17` to `IAD-19`: accessible inline actions and confirmation, stable target sizing, mobile/desktop/short-height/reflow containment, deterministic state inventory, and approved Focus Rail fidelity pass.
+- `IAD-20`: focused, adjacent, production-boundary, repository, visual, package, privacy, owner-doc, and clean-residue closure gates pass.

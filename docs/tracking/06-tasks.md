@@ -16,19 +16,18 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-022` Implement inline approval decisions | in_progress | none | Extend the completed read-only approval timeline into its exact decision workflow. |
-| 2 | `FE-V1-031` Implement CSRF reload and stale-session recovery | ready | none | Complete bounded authority recovery on the now-proven pairing and access surface. |
-| 3 | `FE-V1-032` Implement paired-device management | ready | none | Add exact device listing and revocation after the pairing authority path is proven. |
-| 4 | `FE-V1-033` Implement visible host-lock state | ready | none | Carry lock authority into every protected dashboard action without adding remote unlock. |
-| 5 | `FE-V1-034` Implement remote connection recovery | ready | none | Expose actionable profile, Tailscale, and Serve truth without mutating external state. |
-| 6 | `FE-V1-035` Implement compatibility state | ready | none | Surface exact runtime compatibility before complete-dashboard failure hardening. |
-| 7 | `FE-V1-028` Implement usage utility | ready | none | Add the first secondary structured utility after the primary controls. |
-| 8 | `FE-V1-029` Implement compact utility | ready | none | Add bounded context compaction through its exact structured route. |
-| 9 | `FE-V1-030` Implement skills utility | ready | none | Add capability-aware skill discovery after the primary controls. |
-| 10 | `FE-V1-014` Implement bounded event diagnostics | ready | none | Add diagnostic disclosure without weakening the semantic timeline or privacy boundary. |
-| 11 | `FE-V1-036` Implement interrupt affordance | ready | none | Add the first bounded session action after the primary workflow. |
-| 12 | `FE-V1-037` Implement archive affordance | ready | none | Add explicit archive confirmation and outcome handling. |
-| 13 | `FE-V1-038` Implement laptop-resume affordance | ready | none | Add the selected TUI-resume handoff after other session actions. |
+| 1 | `FE-V1-031` Implement CSRF reload and stale-session recovery | ready | none | Complete bounded authority recovery on the now-proven pairing and access surface. |
+| 2 | `FE-V1-032` Implement paired-device management | ready | none | Add exact device listing and revocation after the pairing authority path is proven. |
+| 3 | `FE-V1-033` Implement visible host-lock state | ready | none | Carry lock authority into every protected dashboard action without adding remote unlock. |
+| 4 | `FE-V1-034` Implement remote connection recovery | ready | none | Expose actionable profile, Tailscale, and Serve truth without mutating external state. |
+| 5 | `FE-V1-035` Implement compatibility state | ready | none | Surface exact runtime compatibility before complete-dashboard failure hardening. |
+| 6 | `FE-V1-028` Implement usage utility | ready | none | Add the first secondary structured utility after the primary controls. |
+| 7 | `FE-V1-029` Implement compact utility | ready | none | Add bounded context compaction through its exact structured route. |
+| 8 | `FE-V1-030` Implement skills utility | ready | none | Add capability-aware skill discovery after the primary controls. |
+| 9 | `FE-V1-014` Implement bounded event diagnostics | ready | none | Add diagnostic disclosure without weakening the semantic timeline or privacy boundary. |
+| 10 | `FE-V1-036` Implement interrupt affordance | ready | none | Add the first bounded session action after the primary workflow. |
+| 11 | `FE-V1-037` Implement archive affordance | ready | none | Add explicit archive confirmation and outcome handling. |
+| 12 | `FE-V1-038` Implement laptop-resume affordance | ready | none | Add the selected TUI-resume handoff after other session actions. |
 
 ## Intentional Blockers
 
