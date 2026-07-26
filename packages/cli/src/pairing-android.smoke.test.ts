@@ -129,6 +129,8 @@ const overallTimeoutMs = requireRemoteAndroidAcceptance
     ? 12 * 60_000
     : 10 * 60_000;
 const claimTimeoutMs = 5 * 60_000;
+const automatedClaimTimeoutMs = 45_000;
+const androidTailscaleComponent = "com.tailscale.ipn/.MainActivity";
 const tailscaleDnsServer = "100.100.100.100";
 const physicalPageMaxBytes = defaultResourceBudget.cli_response_max_bytes;
 const chromeForegroundAdbArgs = [
@@ -411,6 +413,40 @@ describe("physical Android phone-driver protocol", () => {
       "x".repeat(chromeForegroundMaxBytes + 1)
     ]) {
       expect(isChromeForegroundWindowDisplay(candidate)).toBe(false);
+    }
+  });
+
+  it("builds a certificate-verifying Android probe for one private HTTPS origin", () => {
+    const probe = createAndroidPrivateHttpsProbe("https://hostdeck.test");
+
+    expect(probe).toEqual([
+      "shell",
+      "curl",
+      "--connect-timeout",
+      "5",
+      "--fail",
+      "--max-time",
+      "10",
+      "--output",
+      "/dev/null",
+      "--proto",
+      "=https",
+      "--silent",
+      "--show-error",
+      "https://hostdeck.test/"
+    ]);
+    expect(Object.isFrozen(probe)).toBe(true);
+    expect(probe).not.toContain("--insecure");
+    for (const candidate of [
+      "http://hostdeck.test",
+      "https://user@hostdeck.test",
+      "https://hostdeck.test/path",
+      "https://hostdeck.test?query=1",
+      "https://hostdeck.test/#fragment"
+    ]) {
+      expect(() => createAndroidPrivateHttpsProbe(candidate)).toThrow(
+        "probe target was invalid"
+      );
     }
   });
 
@@ -910,6 +946,11 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
               )
             : null
         );
+        if (requireProductionUiAcceptance) {
+          await requireAndroidPrivateHttpsReachability(
+            candidate.externalOrigin
+          );
+        }
         requireNoAdbApplicationTunnels();
 
         const rendered: PairingRenderCapture = {
@@ -976,7 +1017,9 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
               (host as HostDeckFastifyLifecycle<PhysicalRuntimeContext>).app
             ) !== null ||
             selectedRemote.snapshot().phase !== "running",
-          claimTimeoutMs,
+          requireProductionUiAcceptance
+            ? automatedClaimTimeoutMs
+            : claimTimeoutMs,
           "The physical phone did not claim the private pairing link in time."
         );
         const proxyRejection = firstProxyRejection(host.app);
@@ -2893,6 +2936,54 @@ async function enforceUnrelatedAndroidNetwork(
     30_000,
     "Physical acceptance requires active cellular and Tailscale VPN transport."
   );
+}
+
+async function requireAndroidPrivateHttpsReachability(
+  origin: string
+): Promise<void> {
+  const probe = createAndroidPrivateHttpsProbe(origin);
+  adb([
+    "shell",
+    "am",
+    "start",
+    "-W",
+    "-n",
+    androidTailscaleComponent
+  ]);
+  await waitFor(() => {
+    const output = adb(probe);
+    return output === "";
+  }, 45_000, "Physical Android could not reach private HTTPS over Tailscale.");
+}
+
+function createAndroidPrivateHttpsProbe(origin: string): readonly string[] {
+  const target = new URL(origin);
+  requireCondition(
+    target.origin === origin &&
+      target.protocol === "https:" &&
+      target.username === "" &&
+      target.password === "" &&
+      target.pathname === "/" &&
+      target.search === "" &&
+      target.hash === "",
+    "Physical Android HTTPS probe target was invalid."
+  );
+  return Object.freeze([
+    "shell",
+    "curl",
+    "--connect-timeout",
+    "5",
+    "--fail",
+    "--max-time",
+    "10",
+    "--output",
+    "/dev/null",
+    "--proto",
+    "=https",
+    "--silent",
+    "--show-error",
+    target.toString()
+  ]);
 }
 
 function readAndroidStayAwakeSetting(): number {
@@ -4855,7 +4946,7 @@ function publishPhysicalPromptEvidence(input: {
       private_serve_https: true,
       qr_scan_count: 0,
       tailscale_vpn_active: true,
-      usb_used_for_browser_handoff_only: true,
+      usb_used_for_bootstrap_and_test_driver_only: true,
       wifi_disabled_during_requests: true
     }),
     pairing: Object.freeze({
