@@ -4,6 +4,7 @@ export default defineConfig({
   testDir: "./tests/browser",
   testMatch: [
     "app-shell.spec.ts",
+    "approval-decisions.spec.ts",
     "mission-control.spec.ts",
     "goal-control.spec.ts",
     "model-control.spec.ts",

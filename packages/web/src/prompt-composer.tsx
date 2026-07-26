@@ -12,6 +12,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -108,6 +109,7 @@ export function PromptComposer({ controller, onReload = reloadCurrentPage }: Pro
   );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previousPhase = useRef<PromptComposerPhase>(view.phase);
+  const instanceId = useId();
 
   useEffect(() => {
     const previous = previousPhase.current;
@@ -125,10 +127,10 @@ export function PromptComposer({ controller, onReload = reloadCurrentPage }: Pro
 
   if (!view.visible || view.targetLabel === null) return null;
 
-  const statusId = `hostdeck-prompt-status-${view.sessionId}`;
-  const targetId = `hostdeck-prompt-target-${view.sessionId}`;
-  const inputId = `hostdeck-prompt-input-${view.sessionId}`;
-  const countId = `hostdeck-prompt-count-${view.sessionId}`;
+  const statusId = `${instanceId}-status`;
+  const targetId = `${instanceId}-target`;
+  const inputId = `${instanceId}-input`;
+  const countId = `${instanceId}-count`;
   const showCount = view.characterCount >= characterCountThreshold;
   const StatusIcon = statusIcon(view.phase, view.tone);
   const submit = () => {

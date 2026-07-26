@@ -335,6 +335,7 @@ function ConnectedSessionDetailRoute({
         model={controller.model}
         plan={controller.plan}
         prompt={controller.prompt}
+        approvals={controller.approvals}
         projection={projection}
       />
     </HostDeckFrame>

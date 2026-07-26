@@ -119,6 +119,13 @@ export async function installSessionDetailApi(
       await fulfillJson(route, sessionDetail(variant, eventsForVariant(variant).length));
       return;
     }
+    if (
+      url.pathname === `/api/v1/sessions/${sessionId}/approvals` &&
+      request.method() === "GET"
+    ) {
+      await fulfillJson(route, emptyApprovalList());
+      return;
+    }
     if (url.pathname === "/api/v1/sessions" && request.method() === "GET") {
       await fulfillJson(route, sessionList(variant, eventsForVariant(variant).length));
       return;
@@ -651,6 +658,17 @@ function sessionList(variant: SessionDetailApiVariant, eventCount: number) {
   };
 }
 
+function emptyApprovalList() {
+  return {
+    target: {
+      type: "managed_session",
+      session_id: sessionId,
+      codex_thread_id: "thread-private-browser-detail"
+    },
+    approvals: []
+  };
+}
+
 function eventsForVariant(variant: SessionDetailApiVariant): readonly SessionDetailEventFixture[] {
   if (variant === "empty" || variant === "denied" || variant === "unavailable") return [];
   if (isComposerFixtureVariant(variant)) {
@@ -796,7 +814,7 @@ function approvalEvent(cursor: number): SessionDetailEventFixture {
     scope: "Connected test phone",
     reason: "Continue the bounded release validation on the selected device.",
     risk: "elevated",
-    expires_at: "2026-07-22T19:00:00.000Z",
+    expires_at: "2026-07-22T23:00:00.000Z",
     decision: null
   });
 }

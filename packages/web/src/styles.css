@@ -1054,6 +1054,68 @@ textarea:focus-visible {
   margin-top: 1px;
 }
 
+.hostdeck-timeline-item p.hostdeck-approval-item__detail {
+  color: var(--hostdeck-muted);
+  font-size: 13px;
+  line-height: 18px;
+  white-space: normal;
+}
+
+.hostdeck-approval-item__facts {
+  margin-top: 10px;
+}
+
+.hostdeck-approval-item__actions {
+  display: grid;
+  min-width: 0;
+  min-height: 57px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--hostdeck-divider);
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+}
+
+.hostdeck-approval-item__actions > button {
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  font-size: 13px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-approval-item__status {
+  display: grid;
+  min-width: 0;
+  min-height: 57px;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--hostdeck-divider);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.hostdeck-approval-item__status > svg {
+  margin-top: 1px;
+}
+
+.hostdeck-approval-item__status > span {
+  min-width: 0;
+  color: currentColor;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-approval-status-item .hostdeck-icon-text-button {
+  margin-top: 12px;
+}
+
 .hostdeck-detail-timeline__end {
   width: 1px;
   height: 1px;
@@ -2758,6 +2820,170 @@ textarea:focus-visible {
   background: var(--hostdeck-canvas);
 }
 
+.hostdeck-approval-sheet {
+  display: grid;
+  max-height: min(90dvh, 720px);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+
+.hostdeck-approval-sheet--attention {
+  border-top-color: var(--hostdeck-attention);
+}
+
+.hostdeck-approval-sheet--danger {
+  border-top-color: var(--hostdeck-danger);
+}
+
+.hostdeck-approval-sheet__header > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.hostdeck-approval-sheet__header .hostdeck-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.hostdeck-approval-sheet__target {
+  min-width: 0;
+  margin: 0;
+  color: var(--hostdeck-muted);
+  font-size: 13px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-approval-sheet__target strong {
+  color: var(--hostdeck-ink);
+  font-weight: 650;
+}
+
+.hostdeck-approval-sheet__form {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.hostdeck-approval-sheet__body {
+  min-height: 0;
+  padding: 16px 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.hostdeck-approval-sheet__risk {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--hostdeck-divider);
+  border-bottom: 1px solid var(--hostdeck-divider);
+}
+
+.hostdeck-approval-sheet__risk > svg {
+  margin-top: 1px;
+}
+
+.hostdeck-approval-sheet__risk > span,
+.hostdeck-approval-sheet__status > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.hostdeck-approval-sheet__risk strong,
+.hostdeck-approval-sheet__risk small,
+.hostdeck-approval-sheet__status strong,
+.hostdeck-approval-sheet__status small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-approval-sheet__risk strong,
+.hostdeck-approval-sheet__status strong {
+  color: currentColor;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 20px;
+}
+
+.hostdeck-approval-sheet__risk small,
+.hostdeck-approval-sheet__status small {
+  color: var(--hostdeck-muted);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.hostdeck-approval-sheet__facts {
+  display: grid;
+  gap: 0;
+  margin: 12px 0 0;
+}
+
+.hostdeck-approval-sheet__facts > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(72px, 0.32fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--hostdeck-divider);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.hostdeck-approval-sheet__facts dt,
+.hostdeck-approval-sheet__facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-approval-sheet__facts dt {
+  color: var(--hostdeck-muted);
+}
+
+.hostdeck-approval-sheet__facts dd {
+  color: var(--hostdeck-ink);
+}
+
+.hostdeck-approval-sheet__status {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hostdeck-divider);
+}
+
+.hostdeck-approval-sheet__status > svg {
+  margin-top: 1px;
+}
+
+.hostdeck-approval-sheet__footer {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hostdeck-divider);
+  background: var(--hostdeck-surface);
+}
+
+.hostdeck-approval-sheet__footer > button {
+  min-width: 0;
+  min-height: 48px;
+  padding-right: 10px;
+  padding-left: 10px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 359px) {
   .hostdeck-plan-options__list {
     grid-template-columns: minmax(0, 1fr);
@@ -2771,13 +2997,15 @@ textarea:focus-visible {
 @media (max-height: 620px) {
   .hostdeck-model-sheet,
   .hostdeck-goal-sheet,
-  .hostdeck-plan-sheet {
+  .hostdeck-plan-sheet,
+  .hostdeck-approval-sheet {
     max-height: calc(100dvh - 8px);
   }
 
   .hostdeck-model-sheet__body,
   .hostdeck-goal-sheet__body,
-  .hostdeck-plan-sheet__body {
+  .hostdeck-plan-sheet__body,
+  .hostdeck-approval-sheet__body {
     padding-top: 10px;
     padding-bottom: 10px;
   }

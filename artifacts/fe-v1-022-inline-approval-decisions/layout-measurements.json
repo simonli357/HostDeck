@@ -1,0 +1,171 @@
+{
+  "measurements": [
+    {
+      "viewport": {
+        "width": 320,
+        "height": 800
+      },
+      "item": {
+        "height": 657,
+        "width": 288,
+        "scrollHeight": 657,
+        "scrollWidth": 288,
+        "buttons": [
+          {
+            "height": 54,
+            "width": 112
+          },
+          {
+            "height": 54,
+            "width": 112
+          }
+        ]
+      }
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 800
+      },
+      "item": {
+        "height": 585,
+        "width": 328,
+        "scrollHeight": 585,
+        "scrollWidth": 328,
+        "buttons": [
+          {
+            "height": 54,
+            "width": 132
+          },
+          {
+            "height": 54,
+            "width": 132
+          }
+        ]
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "item": {
+        "height": 549,
+        "width": 358,
+        "scrollHeight": 549,
+        "scrollWidth": 358,
+        "buttons": [
+          {
+            "height": 54,
+            "width": 147
+          },
+          {
+            "height": 54,
+            "width": 147
+          }
+        ]
+      }
+    },
+    {
+      "viewport": {
+        "width": 412,
+        "height": 915
+      },
+      "item": {
+        "height": 521,
+        "width": 380,
+        "scrollHeight": 521,
+        "scrollWidth": 380,
+        "buttons": [
+          {
+            "height": 44,
+            "width": 158
+          },
+          {
+            "height": 44,
+            "width": 158
+          }
+        ]
+      }
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "item": {
+        "height": 395,
+        "width": 720,
+        "scrollHeight": 395,
+        "scrollWidth": 720,
+        "buttons": [
+          {
+            "height": 44,
+            "width": 322
+          },
+          {
+            "height": 44,
+            "width": 322
+          }
+        ]
+      }
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "item": {
+        "height": 377,
+        "width": 772,
+        "scrollHeight": 377,
+        "scrollWidth": 772,
+        "buttons": [
+          {
+            "height": 44,
+            "width": 348
+          },
+          {
+            "height": 44,
+            "width": 348
+          }
+        ]
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 420
+      },
+      "sheet": {
+        "height": 412,
+        "width": 390,
+        "bodyClientHeight": 255,
+        "bodyScrollHeight": 509
+      },
+      "window": {
+        "height": 420,
+        "width": 390
+      }
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 800,
+        "effectiveWidth": 640,
+        "effectiveHeight": 400,
+        "zoom": 2
+      },
+      "sheet": {
+        "height": 392,
+        "width": 560,
+        "bodyClientHeight": 246,
+        "bodyScrollHeight": 438
+      },
+      "window": {
+        "height": 400,
+        "width": 640
+      }
+    }
+  ]
+}

@@ -66,6 +66,7 @@ describe("PromptComposer", () => {
     expect((textarea as HTMLTextAreaElement).value).toBe("");
     expect(document.activeElement).toBe(textarea);
     expect(document.body.textContent).not.toContain("Review line one");
+    expect(document.body.innerHTML).not.toContain(sessionId);
   });
 
   it("keeps Enter multiline and uses Ctrl+Enter as the same gated command", async () => {

@@ -36,7 +36,7 @@ test("renders the production structured feed across the approved responsive cont
 
   await expect(page.getByText("The structured mobile session feed is ready for device validation."))
     .toBeVisible();
-  await expect(page.getByText("Approval required", { exact: true })).toBeVisible();
+  await expect(page.getByText("Approval status checking", { exact: true })).toBeVisible();
   await expect(page.getByText("Install the Android validation package", { exact: true }))
     .toBeVisible();
   await expect(page.getByText("Needs approval", { exact: true }).first()).toBeVisible();
@@ -62,7 +62,9 @@ test("renders the production structured feed across the approved responsive cont
     expect.stringMatching(
       new RegExp(`^/api/v1/(?:host/status|sessions/${sessionDetailBrowserSessionId})$`, "u")
     ),
-    "/api/v1/access/csrf"
+    `/api/v1/sessions/${sessionDetailBrowserSessionId}/approvals`,
+    "/api/v1/access/csrf",
+    `/api/v1/sessions/${sessionDetailBrowserSessionId}/approvals`
   ]);
 
   const measurements: Awaited<ReturnType<typeof measureLayout>>[] = [];
@@ -110,7 +112,7 @@ test("shows stale and revoked authority truth without leaking retained session d
   const diagnostics = observePage(page);
   const api = await installSessionDetailApi(page);
   await page.goto(detailPath);
-  await expect(page.getByText("Approval required", { exact: true })).toBeVisible();
+  await expect(page.getByText("Approval status checking", { exact: true })).toBeVisible();
 
   api.setVariant("unavailable");
   await page.getByRole("button", { name: "Refresh session" }).click();
@@ -174,7 +176,7 @@ test("keeps boundary and terminal stream failure truth visible with retained act
 
   await expect(page.getByText("Earlier activity unavailable", { exact: true })).toBeVisible();
   await expect(page.getByText("History limited", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("Approval required", { exact: true })).toBeVisible();
+  await expect(page.getByText("Approval status checking", { exact: true })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({
     path: resolve(artifactDirectory, "approval-boundary-390x844.png"),
@@ -198,7 +200,7 @@ test("shows reconnecting state without discarding or falsifying retained activit
   const diagnostics = observePage(page);
   const api = await installSessionDetailApi(page);
   await page.goto(detailPath);
-  await expect(page.getByText("Approval required", { exact: true })).toBeVisible();
+  await expect(page.getByText("Approval status checking", { exact: true })).toBeVisible();
 
   await api.dropStream();
   await expect(page.getByText("Activity stream reconnecting", { exact: true })).toBeVisible();

@@ -10,7 +10,7 @@ import {
   GitBranch,
   History,
   LoaderCircle,
-  type LucideIcon, 
+  type LucideIcon,
   Radio,
   RefreshCw,
   RotateCcw,
@@ -29,6 +29,18 @@ import {
   useState,
   useSyncExternalStore
 } from "react";
+import type {
+  ApprovalDecisionController,
+  ApprovalDecisionView
+} from "./approval-decision-state.js";
+import {
+  ApprovalConfirmationDialog,
+  ApprovalStatusTimelineItem,
+  ApprovalTimelineItem,
+  shouldShowApprovalGlobalStatus,
+  useApprovalDecisionController,
+  useApprovalDecisionView
+} from "./approval-decisions.js";
 import type {
   BrowserConnectionPhase,
   BrowserConnectionSnapshot,
@@ -105,6 +117,7 @@ export interface SessionDetailControllerState {
   readonly model: ModelControlController;
   readonly goal: GoalControlController;
   readonly plan: PlanControlController;
+  readonly approvals: ApprovalDecisionController;
 }
 
 export interface UseSessionDetailControllerOptions {
@@ -131,6 +144,7 @@ export interface SessionDetailScreenProps {
   readonly model?: ModelControlController | undefined;
   readonly goal?: GoalControlController | undefined;
   readonly plan?: PlanControlController | undefined;
+  readonly approvals?: ApprovalDecisionController | undefined;
   readonly projection?: SessionDetailProjection | undefined;
 }
 
@@ -169,6 +183,12 @@ export function useSessionDetailController(
   const model = useModelControlController(coordinator, sessionId, snapshot);
   const goal = useGoalControlController(coordinator, sessionId, snapshot);
   const plan = usePlanControlController(coordinator, sessionId, snapshot);
+  const approvals = useApprovalDecisionController(
+    coordinator,
+    sessionId,
+    snapshot,
+    feed
+  );
 
   const resetFeed = useCallback(() => {
     const empty = createSessionDetailFeed(sessionId);
@@ -262,7 +282,8 @@ export function useSessionDetailController(
     prompt,
     model,
     goal,
-    plan
+    plan,
+    approvals
   });
 }
 
@@ -288,6 +309,7 @@ export function ConnectedSessionDetail({
       model={controller.model}
       goal={controller.goal}
       plan={controller.plan}
+      approvals={controller.approvals}
     />
   );
 }
@@ -306,6 +328,7 @@ export function SessionDetailScreen({
   model,
   goal,
   plan,
+  approvals,
   projection
 }: SessionDetailScreenProps) {
   const view =
@@ -342,18 +365,33 @@ export function SessionDetailScreen({
 
       {showInitialSkeleton ? (
         <SessionDetailLoadingTimeline />
-      ) : !view.canDisclose ? null : view.empty ? (
-        <SessionDetailEmpty />
-      ) : view.activityUnavailable ? (
-        <SessionDetailActivityUnavailable />
-      ) : view.noVisibleActivity ? (
-        <SessionDetailNoVisibleActivity />
+      ) : !view.canDisclose ? null : approvals === undefined ? (
+        view.empty ? (
+          <SessionDetailEmpty />
+        ) : view.activityUnavailable ? (
+          <SessionDetailActivityUnavailable />
+        ) : view.noVisibleActivity ? (
+          <SessionDetailNoVisibleActivity />
+        ) : (
+          <SessionDetailTimeline
+            key={feed.sessionId}
+            items={view.timeline}
+            acceptedCount={feed.acceptedCount}
+            replayPending={view.replayPending}
+            approvals={null}
+            approvalView={null}
+          />
+        )
       ) : (
-        <SessionDetailTimeline
+        <ConnectedSessionDetailTimelineArea
           key={feed.sessionId}
           items={view.timeline}
           acceptedCount={feed.acceptedCount}
           replayPending={view.replayPending}
+          empty={view.empty}
+          activityUnavailable={view.activityUnavailable}
+          noVisibleActivity={view.noVisibleActivity}
+          approvals={approvals}
         />
       )}
 
@@ -370,6 +408,42 @@ export function SessionDetailScreen({
         </div>
       )}
     </section>
+  );
+}
+
+function ConnectedSessionDetailTimelineArea({
+  items,
+  acceptedCount,
+  replayPending,
+  empty,
+  activityUnavailable,
+  noVisibleActivity,
+  approvals
+}: Readonly<{
+  items: readonly SessionDetailTimelineItem[];
+  acceptedCount: number;
+  replayPending: boolean;
+  empty: boolean;
+  activityUnavailable: boolean;
+  noVisibleActivity: boolean;
+  approvals: ApprovalDecisionController;
+}>) {
+  const approvalView = useApprovalDecisionView(approvals);
+  const hasApprovalSurface =
+    approvalView.items.length > 0 || shouldShowApprovalGlobalStatus(approvalView);
+  if (!hasApprovalSurface) {
+    if (empty) return <SessionDetailEmpty />;
+    if (activityUnavailable) return <SessionDetailActivityUnavailable />;
+    if (noVisibleActivity) return <SessionDetailNoVisibleActivity />;
+  }
+  return (
+    <SessionDetailTimeline
+      items={items}
+      acceptedCount={acceptedCount + approvalView.items.filter((item) => item.eventOrder === null).length}
+      replayPending={replayPending}
+      approvals={approvals}
+      approvalView={approvalView}
+    />
   );
 }
 
@@ -589,13 +663,18 @@ function SessionDetailNoVisibleActivity() {
 function SessionDetailTimeline({
   items,
   acceptedCount,
-  replayPending
+  replayPending,
+  approvals,
+  approvalView
 }: Readonly<{
   items: readonly SessionDetailTimelineItem[];
   acceptedCount: number;
   replayPending: boolean;
+  approvals: ApprovalDecisionController | null;
+  approvalView: ApprovalDecisionView | null;
 }>) {
   const endRef = useRef<HTMLDivElement>(null);
+  const approvalConfirmationOriginRef = useRef<HTMLButtonElement>(null);
   const pinnedRef = useRef(true);
   const initializedRef = useRef(false);
   const previousAcceptedRef = useRef(acceptedCount);
@@ -647,12 +726,41 @@ function SessionDetailTimeline({
     setNewActivityCount(0);
   };
 
+  const approvalController = approvals;
   return (
     <div className="hostdeck-detail-timeline-wrap">
       <ol className="hostdeck-detail-timeline" aria-label="Session activity">
-        {items.map((item) => (
-          <SessionTimelineItem key={item.key} item={item} />
-        ))}
+        {items.map((item) => {
+          if (approvalController !== null && item.approvalRequestId !== undefined) {
+            const approval = approvalController.lookupEvent(item.approvalRequestId);
+            if (approval !== null) {
+              return (
+                <ApprovalTimelineItem
+                  key={item.key}
+                  item={approval}
+                  timeline={item}
+                  controller={approvalController}
+                  confirmationOrigin={approvalConfirmationOriginRef}
+                />
+              );
+            }
+          }
+          return <SessionTimelineItem key={item.key} item={item} />;
+        })}
+        {approvalController === null || approvalView === null ? null : approvalView.items
+          .filter((item) => item.eventOrder === null)
+          .map((item) => (
+            <ApprovalTimelineItem
+              key={item.handle}
+              item={item}
+              timeline={null}
+              controller={approvalController}
+              confirmationOrigin={approvalConfirmationOriginRef}
+            />
+          ))}
+        {approvalController === null || approvalView === null ? null : (
+          <ApprovalStatusTimelineItem view={approvalView} controller={approvalController} />
+        )}
       </ol>
       <div ref={endRef} className="hostdeck-detail-timeline__end" aria-hidden="true" />
       {newActivityCount === 0 ? null : (
@@ -666,6 +774,13 @@ function SessionDetailTimeline({
             {newActivityCount} new {newActivityCount === 1 ? "event" : "events"}
           </span>
         </button>
+      )}
+      {approvalController === null || approvalView === null ? null : (
+        <ApprovalConfirmationDialog
+          view={approvalView}
+          controller={approvalController}
+          confirmationOrigin={approvalConfirmationOriginRef}
+        />
       )}
     </div>
   );

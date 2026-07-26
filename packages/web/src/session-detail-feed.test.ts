@@ -127,6 +127,25 @@ describe("Session Detail timeline projection", () => {
     );
   });
 
+  it("coalesces one approval request from pending through terminal at its first rail position", () => {
+    let state = createSessionDetailFeed(sessionId);
+    state = appendSessionDetailEvent(state, approvalTimelineEvent(2, "pending", null));
+    state = appendSessionDetailEvent(state, activityEvent(3));
+    state = appendSessionDetailEvent(state, approvalTimelineEvent(4, "approved", "approve"));
+
+    const timeline = projectSessionDetailTimeline(state, null, formatTimestamp);
+    expect(timeline).toHaveLength(2);
+    expect(timeline[0]).toMatchObject({
+      key: "approval:2",
+      order: 2,
+      approvalRequestId: "string:detail-feed-approval",
+      stateLabel: "Approved",
+      title: "Approval approved",
+      pending: false
+    });
+    expect(timeline[1]?.order).toBe(3);
+  });
+
   it("adds one synthetic retained-history boundary and avoids duplicating a streamed one", () => {
     const syntheticFeed = appendSessionDetailEvent(
       createSessionDetailFeed(sessionId),
@@ -383,6 +402,29 @@ function messageEvent(
     item_id: itemId,
     text
   });
+}
+
+function approvalTimelineEvent(
+  cursor: number,
+  state: "pending" | "approved",
+  decision: "approve" | null
+): SelectedProjectionEvent {
+  return parseEvent({
+    ...base(cursor),
+    type: "approval",
+    request_id: "string:detail-feed-approval",
+    state,
+    action: "Run focused tests",
+    scope: "Workspace files",
+    reason: "Verify approval coalescing.",
+    risk: "elevated",
+    expires_at: expiryForState(state),
+    decision
+  });
+}
+
+function expiryForState(state: "pending" | "approved"): string | null {
+  return state === "pending" ? "2026-07-22T18:05:00.000Z" : null;
 }
 
 function boundaryEvent(

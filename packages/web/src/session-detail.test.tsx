@@ -4,6 +4,7 @@ import {
   type ModelControlSnapshot,
   managedSessionProjectionSchema,
   modelControlSnapshotSchema,
+  pendingApprovalListResponseSchema,
   type SelectedAccessStateResponse,
   type SelectedProjectionEvent,
   selectedAccessStateResponseSchema,
@@ -328,7 +329,6 @@ describe("Session Detail controller", () => {
     );
     fireEvent.click(modelTrigger);
     expect(await screen.findByRole("dialog", { name: "/model" })).toBeTruthy();
-    expect(harness.requestSelectedSessionRead).toHaveBeenCalledTimes(1);
     expect(harness.requestSelectedSessionRead).toHaveBeenCalledWith(
       "model_read",
       { params: { session_id: sessionId } },
@@ -361,6 +361,9 @@ describe("Session Detail controller", () => {
     const consumer = harness.connect.mock.calls[0]?.[0];
     consumer?.(messageEvent(1, "Delivered through the coordinator."));
     expect(await screen.findByText("Delivered through the coordinator.")).toBeTruthy();
+    consumer?.(approvalEvent(2));
+    await waitFor(() => expect(document.querySelector(".hostdeck-approval-item")).not.toBeNull());
+    expect(await screen.findByText("Approval expiry reached")).toBeTruthy();
 
     const refreshButton = screen.getByRole("button", { name: "Refresh session" });
     fireEvent.click(refreshButton);
@@ -700,9 +703,9 @@ function coordinatorHarness(
   );
   const disconnect = vi.fn(() => snapshot);
   const refresh = vi.fn(() => refreshPromise ?? Promise.resolve(snapshot));
-  const requestSelectedSessionRead = vi.fn(async () => ({
+  const requestSelectedSessionRead = vi.fn(async (routeId: string) => ({
     status: 200 as const,
-    data: modelSnapshot()
+    data: routeId === "approval_list" ? emptyApprovalList() : modelSnapshot()
   }));
   const coordinator = {
     snapshot: () => snapshot,
@@ -766,6 +769,17 @@ function modelSnapshot(): ModelControlSnapshot {
         ]
       }
     ]
+  });
+}
+
+function emptyApprovalList() {
+  return pendingApprovalListResponseSchema.parse({
+    target: {
+      type: "managed_session",
+      session_id: sessionId,
+      codex_thread_id: "thread-private-detail"
+    },
+    approvals: []
   });
 }
 

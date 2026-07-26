@@ -57,6 +57,7 @@ export interface SessionDetailTimelineItem {
   readonly timeLabel: string | null;
   readonly contentNotice: string | null;
   readonly pending: boolean;
+  readonly approvalRequestId?: string | undefined;
 }
 
 export type SessionDetailTimestampFormatter = (timestamp: string) => string;
@@ -143,10 +144,15 @@ export function projectSessionDetailTimeline(
   }
   const working: WorkingTimelineItem[] = [];
   const messageIndexes = new Map<string, number>();
+  const approvalIndexes = new Map<string, number>();
 
   for (const event of feed.events) {
     if (event.type === "message") {
       projectMessageEvent(working, messageIndexes, event, formatTimestamp);
+      continue;
+    }
+    if (event.type === "approval") {
+      projectApprovalEvent(working, approvalIndexes, event, formatTimestamp);
       continue;
     }
     working.push(Object.freeze({
@@ -179,6 +185,34 @@ export function projectSessionDetailTimeline(
       .map((entry) => entry.item)
       .sort((left, right) => left.order - right.order)
   );
+}
+
+function projectApprovalEvent(
+  working: WorkingTimelineItem[],
+  indexes: Map<string, number>,
+  event: Extract<SelectedProjectionEvent, { readonly type: "approval" }>,
+  formatTimestamp: SessionDetailTimestampFormatter
+): void {
+  const identity = event.request_id;
+  const existingIndex = indexes.get(identity);
+  const projected = projectApproval(event, formatTimestamp);
+  if (existingIndex === undefined) {
+    working.push(Object.freeze({ identity, item: projected }));
+    indexes.set(identity, working.length - 1);
+    return;
+  }
+  const existing = working[existingIndex];
+  if (existing === undefined) {
+    throw new TypeError("HostDeck Session Detail approval index is inconsistent.");
+  }
+  working[existingIndex] = Object.freeze({
+    identity,
+    item: freezeTimelineItem({
+      ...projected,
+      key: existing.item.key,
+      order: existing.item.order
+    })
+  });
 }
 
 function projectMessageEvent(
@@ -367,7 +401,8 @@ function projectApproval(
     capturedAt: event.captured_at,
     timeLabel: safeFormatTimestamp(event.captured_at, formatTimestamp),
     contentNotice: event.content_notice,
-    pending
+    pending,
+    approvalRequestId: event.request_id
   });
 }
 
