@@ -444,6 +444,35 @@ describe("physical Android phone-driver protocol", () => {
       )
     ).toThrow("retained pairing material");
   });
+
+  it("opens the physical prompt replay through the strict subscriber contract", async () => {
+    const event = physicalPromptSeedEvent("2026-07-25T00:00:00.000Z");
+    const handoff = new PhysicalPromptHandoffService([event]);
+    const failures: unknown[] = [];
+    const subscribers = createProjectionSubscriberStreamService({
+      handoff: Object.freeze({
+        open: (input: unknown) => handoff.open(input)
+      }),
+      observe_failure: (failure) => failures.push(failure),
+      resource_budget: defaultResourceBudget
+    });
+    const stream = subscribers.open({
+      after: null,
+      authorization: Object.freeze({ state: "local_admin" }),
+      device_id: null,
+      session_id: physicalUiSessionId,
+      signal: new AbortController().signal,
+      subscriber_id: "physical-prompt-contract"
+    });
+
+    const first = await stream[Symbol.asyncIterator]().next();
+    expect(first).toEqual({ done: false, value: event });
+    expect(failures).toEqual([]);
+    expect(subscribers.snapshot().active_subscribers).toBe(1);
+    expect(stream.close()).toBe(true);
+    expect(subscribers.snapshot().active_subscribers).toBe(0);
+    expect(subscribers.close()).toBe(0);
+  });
 });
 
 describePhysical("selected remote-ingress physical Android acceptance", () => {
@@ -1768,7 +1797,7 @@ function physicalPromptRuntimeEvent(
 }
 
 function physicalPromptSeedEvent(capturedAt: string): SelectedProjectionEvent {
-  return selectedProjectionEventSchema.parse({
+  return Object.freeze(selectedProjectionEventSchema.parse({
     captured_at: capturedAt,
     codex_event_id: "physical-prompt-stream-ready",
     codex_event_type: "item/agentMessage/delta",
@@ -1782,7 +1811,7 @@ function physicalPromptSeedEvent(capturedAt: string): SelectedProjectionEvent {
     text: "Physical prompt stream ready",
     type: "message",
     upstream_at: null
-  });
+  }));
 }
 
 function physicalPromptTurnEvent(
@@ -1790,7 +1819,7 @@ function physicalPromptTurnEvent(
   state: "in_progress" | "completed",
   capturedAt: string
 ): SelectedProjectionEvent {
-  return selectedProjectionEventSchema.parse({
+  return Object.freeze(selectedProjectionEventSchema.parse({
     session_id: physicalUiSessionId,
     cursor,
     captured_at: capturedAt,
@@ -1804,7 +1833,7 @@ function physicalPromptTurnEvent(
     turn_id: physicalPromptTurnId,
     state,
     error: null
-  });
+  }));
 }
 
 class PhysicalPromptHandoffService
@@ -3543,11 +3572,9 @@ async function runProductionPromptUiSequence(
     initialTrigger: sessionLink,
     triggerField: "text",
     triggerValue: physicalUiSessionName,
-    completed: async () =>
+    completed: () =>
       input.requestInspection.sessionDetailRequests >= 1 &&
-      (await readAndroidUiNodes()).some(
-        (node) => node.description === inputLabel
-      ),
+      input.prompt.subscribers.snapshot().active_subscribers === 1,
     completionFailureMessage:
       "Production Session Detail did not open on Android.",
     reacquireFailureMessage:
