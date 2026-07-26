@@ -110,4 +110,53 @@ Focused real-route validation will compose the selected Fastify prompt route, pa
 
 ## Evidence
 
-Criteria are frozen before product implementation. Implementation commits, exact validation counts, deterministic screenshot hashes, physical Android observations, drift disposition, cleanup, and closure commit remain pending.
+### Implementation
+
+- `6232718` implements the prompt-scoped operation id, exhaustive headless state/projector/controller, production Session Detail composer, Focus Rail styling, browser fixture, and deterministic visual evidence. `979ee96` adds the production physical Android prompt path.
+- `2bb2199` updates disclosed production dependencies without changing the prompt contract. Physical-runner hardening from `345a311` through accepted revision `cb6bc1d` aligns the strict Fastify/SSE contracts, proves phone-side cellular Tailscale HTTPS without blocking the server event loop, targets the real Android editor and keyboard state, and verifies teardown without QR, ADB tunneling, certificate bypass, or retry.
+- No `/model`, `/goal`, `/plan`, utility, approval, interrupt, archive, resume, terminal, or generic slash-input control was added. The three primary controls remain separate leaves.
+
+### Automated Validation
+
+- Web package: 15 files and 211 tests passed. Aggregate web: 16 files and 214 tests passed. Chromium shell/detail/composer: 18 passed; the focused prompt-composer rerun passed 6 and reproduced the final FE-V1-020 screenshot hashes.
+- Workspace unit: 207 files and 2,069 tests passed with 28 explicit skips. Contract: 243 passed. Integration: 36 passed. The physical opt-in file passed all 18 tests on the accepted run.
+- Root and web typechecks, lint/exports over 600 files and 8 packages, scaffold (8 packages/21 scripts), selected runtime boundary (612 production modules/22 externals), and planning integrity (219 tasks/84 requirements/675 dependencies/17 queued before closure) passed.
+- The production Vite build emitted 28.00 kB CSS and 679.58 kB JavaScript. Deterministic package acceptance passed two builds at 6,445 entries, the frozen offline install was already current, and `pnpm audit --prod` reported no known vulnerabilities.
+
+### Deterministic Visual Evidence
+
+All 19 retained captures and `layout-measurements.json` were manually inspected against Focus Rail. The 320 short-height, 390 keyboard-height proxy, 768, 1280, and 200 percent zoom evidence preserves the target, editor, send action, status, timeline, focus, wrapping, and sticky geometry without overlap or horizontal overflow. Disabled, rejection, unknown-outcome, accepted, running, and completed states remain visually distinct without color-only meaning. There is no Signal Ledger borrowing, card nesting, terminal/raw slash surface, desktop-led restructuring, or unapproved structural drift. The separately owned primary-control dock is intentionally absent until `FE-V1-021`, `FE-V1-026`, and `FE-V1-027`.
+
+```text
+a9f20d5156df1c48eba5446f55968dd3946c1ebaa74c5bca9e7adada6b59f976  accepted-start-390x844.png
+9a44c969d4a6dda698884cb3a1b0f03810e011c1a1e937628e4ee05d5d772cbe  accepted-steer-390x844.png
+6b332157b1ab101f5cab949d8c5fd8ec3cdf6c5150ffe6f506a8d3c99287995a  completed-390x844.png
+1f53a33ff830604ace005381c38896d3f550425cb2bad2099e1a92f6ccf9afe7  composing-390x844.png
+95627b58a3149e453dcbffcdfc62c791ce77b036d7762cb5f6dd4de9a678f97c  disabled-csrf-390x844.png
+539a392af4dd55f7fba50c44b6d1f1ef7081a3683cd3b9cb3b531d46ff53b3c6  disabled-host-locked-390x844.png
+374cf62a59895465e4538c16c28d7d6153e7c71ed08e372056ef648e343ec9c6  disabled-needs-input-390x844.png
+dc99865a4076216f78f021148ea367c0c1922c01b5b83b20a34207c6ab6efe29  disabled-read-only-390x844.png
+8803e08e96541f05b995e85aef8a231e82fc9e702397ff1571f408d57808077c  disabled-stale-session-390x844.png
+cd36eaaf37f0a36997f155f25e35d95c352f48e5380e1a2992b28cb7248bdf40  disabled-turn-unknown-390x844.png
+ea9b30cc6d51047ada9eb0a3d601e80f19b46adf44c3b03580e6af71023b16a7  keyboard-height-proxy-390x420.png
+31235ea9dd12827d5baa3eac38e4169801ab09a622e8e073c79cdbe81c252cbe  nonretryable-rejection-390x844.png
+8cac69fa5b997edfcb46e74532ed01e9d61a23664f16b4678cd1276c6f5015f0  outcome-unknown-390x844.png
+b01452bdd90b16ddb5375211c71930035a8ab1f320866348a2996407edf11560  ready-390x844.png
+d1bc088bd0e18911f916f836da97ffb00dc6653457fe40aacda2c8231327a15d  retryable-rejection-390x844.png
+d402a4a9bc3473581c68713c92662078e5e77ae6fe879e4982cc417d1caa6f47  running-390x844.png
+d0d1877aab0b65335ff989a0f16b04a641b0f29dc258ecbe9757684a90a101bc  short-height-long-target-320x480.png
+22074719f79573924ac11f77507464dc5ed24b236ab8f1ec8201fea14828438d  submitting-390x844.png
+249b5dec67bcc811e34636f3880d830cf86c020f04ae65b1873c13102679e7b5  zoom-200-1280x800.png
+```
+
+### Physical Android Acceptance
+
+- `pnpm smoke:prompt-android` passed all 18 tests in 61.12 seconds on clean revision `cb6bc1d`: Xiaomi 15 Pro, Android 16/API 36, Chrome 150.0.7871.181, Ubuntu 24.04.4 LTS, Node 22.22.2, and Tailscale 1.98.8.
+- The harness disabled Wi-Fi, foregrounded Android Tailscale, proved phone-to-laptop tailnet reachability and certificate-verifying private Serve HTTPS, handed one one-time pairing link to Chrome through bounded stdin-only USB debug control, and made zero QR scans. USB was only the bootstrap/test driver; HostDeck requests used cellular plus Tailscale and never ADB forward/reverse, LAN, Funnel, a custom CA, or `--insecure`.
+- The real production UI paired once, opened Session Detail and one bounded recent-replay/live stream, displayed the software keyboard with target/editor/send/status visible, preserved an exact two-line 45-character edit, sent one `start` prompt request, showed accepted, running, and completed states from authoritative events, and self-revoked writer authority.
+- The machine-readable proof is `artifacts/fe-v1-020-selected-session-prompt-composer/physical-android.json`. It retains no private origin, runtime identifier, prompt text, pairing/CSRF material, or phone screenshot.
+
+### Cleanup And Disposition
+
+- Final Serve status is `{}`; Wi-Fi and stay-awake state are restored; Chrome is stopped; the keyboard is closed; ADB forward/reverse lists are empty; the listener/database/temporary state are closed; and stream subscribers are zero.
+- `SPC-01` through `SPC-20` pass. Complete dashboard hardening, packaged web assets/install parity, remaining controls and recovery surfaces, supported-browser/device release acceptance, and V1 go/no-go remain downstream; this leaf is not a release claim.

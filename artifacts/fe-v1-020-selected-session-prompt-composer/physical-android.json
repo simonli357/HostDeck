@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "task": "FE-V1-020",
+  "commit": "cb6bc1d25f7c742d2de147715f5f7bce6540fe2b",
+  "command": "pnpm smoke:prompt-android",
+  "run": {
+    "completed_at": "2026-07-26T02:20:16.927Z",
+    "retry_count": 0,
+    "started_at": "2026-07-26T02:19:19.849Z"
+  },
+  "environment": {
+    "android_api": "36",
+    "android_model": "Xiaomi 15 Pro",
+    "android_release": "16",
+    "chrome_version": "150.0.7871.181",
+    "host_os": "Ubuntu 24.04.4 LTS",
+    "node_version": "v22.22.2",
+    "tailscale_version": "1.98.8"
+  },
+  "network": {
+    "adb_app_tunnel_count": 0,
+    "cellular_active": true,
+    "custom_ca_used": false,
+    "private_serve_https": true,
+    "qr_scan_count": 0,
+    "tailscale_vpn_active": true,
+    "usb_used_for_bootstrap_and_test_driver_only": true,
+    "wifi_disabled_during_requests": true
+  },
+  "pairing": {
+    "automated_one_time_link": true,
+    "fragment_scrubbed_before_api": true,
+    "writer_authority_self_revoked": true
+  },
+  "sequence": {
+    "acceptedVisible": true,
+    "completedVisible": true,
+    "keyboardVisible": true,
+    "multilineEdited": true,
+    "promptCharacterCount": 45,
+    "promptLineCount": 2,
+    "promptRequestCount": 1,
+    "runningVisible": true,
+    "sendAction": "start",
+    "sentOnce": true
+  },
+  "privacy": {
+    "persisted_prompt_text": false,
+    "retained_phone_screenshots": 0,
+    "retained_private_origin": false,
+    "retained_runtime_identifiers": false
+  },
+  "cleanup": {
+    "adb_forwards": 0,
+    "adb_reverses": 0,
+    "browser_closed": true,
+    "database_open": false,
+    "dedicated_serve_absent": true,
+    "keyboard_visible": false,
+    "listener_open": false,
+    "stay_awake_setting_restored": true,
+    "stream_subscribers": 0,
+    "temporary_state_present": false,
+    "wifi_restored": true
+  }
+}
