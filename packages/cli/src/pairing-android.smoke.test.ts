@@ -3952,11 +3952,26 @@ async function runProductionPromptUiSequence(
     "Physical prompt Android keyboard did not remain visible."
   );
   const keyboardNodes = await readAndroidUiNodes();
+  const promptTargetVisible = keyboardNodes.some(
+    (node) => node.text === "Prompt target"
+  );
+  const promptLabelVisible = keyboardNodes.some((node) =>
+    matchesAndroidUiNode(node, "semantic", inputLabel)
+  );
+  const promptEditorVisible =
+    findAndroidPromptEditor(keyboardNodes, inputLabel) !== null;
+  const promptSendVisible = keyboardNodes.some(
+    (node) => node.description === sendLabel
+  );
+  const editTextCount = keyboardNodes.filter(
+    (node) => node.className === androidEditTextClass
+  ).length;
   requireCondition(
-    keyboardNodes.some((node) => node.text === "Prompt target") &&
-      findAndroidPromptEditor(keyboardNodes, inputLabel) !== null &&
-      keyboardNodes.some((node) => node.description === sendLabel),
-    "Physical prompt controls were not all visible above the Android keyboard."
+    promptTargetVisible && promptEditorVisible && promptSendVisible,
+    "Physical prompt controls were not all visible above the Android keyboard " +
+      `(target=${promptTargetVisible};label=${promptLabelVisible};` +
+      `editor=${promptEditorVisible};send=${promptSendVisible};` +
+      `edit_texts=${editTextCount}).`
   );
   await capturePhysicalScreenshot(
     join(input.screenshotDirectory, "fe020-03-keyboard-open.png")
