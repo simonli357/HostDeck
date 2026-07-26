@@ -2,7 +2,7 @@
 
 Date: 2026-07-26
 
-Status: criteria frozen; implementation and evidence pending.
+Status: complete; `PPC-01` to `PPC-20` pass.
 
 ## Scope
 
@@ -90,11 +90,23 @@ Excluded: prompt dispatch, model or goal mutation, utilities, approvals, interru
 | `PPC-19` | Deterministic screenshots cover loading; current confirmed/unknown; null and every pending phase; idle and non-idle execution; staged/cleared/no-op result; unsupported; known/unknown failure; read-only; active-turn staging; long content; and dock regressions against Focus Rail with drift recorded. |
 | `PPC-20` | Focused state/component/API/browser suites, model/goal/prompt/Session Detail regressions, full unit/contract/integration/static/build/package/planning/privacy checks, manual visual inspection, clean residue, and owner-doc evidence pass before closure. |
 
-## Planned Evidence
+## Completion Evidence
 
-- Direct headless tests for every snapshot projection, local-choice transition, replacement lock, request body, response-correlation branch, authority transition, cancellation race, and known-versus-unknown failure class.
-- Component tests for the exact three-rail surface, catalog radio group, footer commands, live status, focus/dismissal ownership, write/read authority loss, and the shared three-control dock.
-- Production coordinator and selected Fastify integration proof that one user action uses `plan_read`/`plan_select` only, with protected one-attempt mutation and no model/goal/prompt/turn side effect.
-- Deterministic Chromium screenshots and layout measurements at every required state and viewport, including adjacent `/model`, `/goal`, prompt, and Session Detail captures changed by the third dock control.
-- Focused and aggregate web tests; full repository static, unit, contract, integration, build, package, offline-install, dependency-audit, privacy, runtime-boundary, planning, diff, and residue gates; manual source and visual inspection.
-- On closure, replace this section with exact commands/results, screenshot inventory, inspected drift, implementation commit, remaining approved deferrals, and `PPC-01` to `PPC-20` disposition.
+- Implementation: `1456413`.
+- Production code adds one strict headless Plan owner, one coordinator-backed React owner, a labelled Radix form sheet, and the third live command in the shared Session Detail dock. Open/check use only `plan_read`; mutation uses only protected `plan_select` with a Plan-scoped operation id, exact action, and exact observed pending revision. Source review finds no second client, persistence, polling, literal slash dispatch, prompt, turn-start, terminal, model/goal mutation, interrupt, raw error, or automatic POST retry path.
+- The controller keeps catalog, wholly confirmed-or-unknown current mode, nullable next-turn selection, and current-turn execution independent. It covers all five pending phases, all seven execution states and four evidence values, local-choice discard, clear/no-op/restage rules, active-turn staging, exact staged/cleared/already-confirmed response correlation, bounded known/unsupported/unknown failures, and immediate read/write authority loss.
+- Hardening found and closed two pre-closure gaps: same-session authority-epoch changes now abort and remove stale read/write state, with pre- and post-POST coordinator target checks protecting React lag; and the radio controls now live in an actual named form with keyboard submission while one in-flight owner blocks duplicate click, Enter, dismissal, and stale response publication. Typed permission, lock, stale, validation, origin, and session rejections require a fresh read before another mutation.
+- Focused Plan headless/component coverage passes 68 tests. The aggregate selected web suite passes 366 tests across 22 files. The complete production-shell Chromium suite passes all 34 scenarios, including six dedicated Plan scenarios and adjacent Model, Goal, Prompt, Session Detail, Mission Control, routing, focus, keyboard, reflow, short-height, reduced-motion, and contrast regressions.
+- Repository validation passes 2,221 unit tests with 28 intentional skips, 244 contract tests, 36 integration tests, all eight workspace typechecks, lint/exports over 621 files and eight packages, scaffold, planning, selected-runtime privacy boundary over 612 production modules and 22 externals, Vite production build, deterministic package acceptance, root package build, frozen offline install, zero-known-vulnerability production audit, and diff checks. The root package remains 612 sources, 1,231 owned outputs, and 6,445 entries at `424cc0d7931ae02f8f089039c945a58a564a8b2a9ef1f5e2bfe2d06216c62426`.
+- Exact isolated Codex 0.144.0 verifies all 671 generated binding files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. The user's default 0.145.0 remains intentionally ineligible and unchanged.
+- Visual evidence contains 35 deterministic PNGs plus machine layout measurements under `artifacts/fe-v1-027-primary-plan-control/`. Every PNG decodes at its named size and has nonzero pixel variance. Manual contact-sheet and full-size review covers loading; confirmed/unknown current; null and every pending phase; every execution state; staged, cleared, already-confirmed, and conflict-restaged results; unsupported/read/known/unknown/correlation failures; read-only; long content at 320/360/390/412/768/1280; scrolled 320; 390 x 420; and actual 200 percent reflow.
+- Layout measurements prove one three-command dock, equal command widths within one pixel, 44 px command/close targets, a 48 px fixed submit target, one contained body scroll owner, no text overflow, and no horizontal or viewport escape. Adjacent Session Detail, Prompt, Model, and Goal evidence changed only to include the third equal live control and was regenerated and inspected.
+- Approved drift is limited to typed runtime truth, the complete three-command dock, continuous semantic state rails, a fixed status/check row, and mobile containment for long state. No Signal Ledger borrowing, nested card stack, dead More/utility placeholder, desktop-led composition, hidden action, or unapproved structural drift remains. The existing Vite main-chunk warning remains visible for later cross-screen/release hardening; no dependency was added. Physical-phone release acceptance remains correctly excluded from this leaf and owned downstream.
+
+## Criteria Result
+
+- `PPC-01` to `PPC-04`: exact selected authority, owned cancellation/epoch suppression, one strict snapshot source, complete catalog/current truth, and private-identifier suppression pass.
+- `PPC-05` to `PPC-09`: every pending/execution state, separate current/next/current-turn rails, local-choice ownership, no-op/clear/replace/restage rules, dispatch locks, and active-turn staging pass.
+- `PPC-10` to `PPC-14`: one secure operation/POST, action-specific response correlation, bounded result language, conservative ambiguity locks, and complete read/write authority families pass.
+- `PPC-15` to `PPC-19`: one equal live `/model`, `/goal`, `/plan` dock, no raw/slash side path, modal/form/radio accessibility, responsive containment, deterministic state coverage, and Focus Rail fidelity pass.
+- `PPC-20`: focused, adjacent, repository, visual, privacy, reproducibility, owner-doc, and clean-diff closure gates pass.
