@@ -4073,6 +4073,12 @@ async function runProductionRemoteRecoveryUiSequence(
     managerAttemptsBeforeSwitch === 1,
     "Physical recovery expected exactly one explicit local Serve enable."
   );
+  requireCondition(
+    Number(input.requestInspection.remoteBrowserStatusRequests) === 0 &&
+      Number(input.requestInspection.remoteBrowserMutationRequests) === 0,
+    "Physical recovery started with unexpected browser remote traffic " +
+      recoveryRequestSummary(input.requestInspection, input.manager)
+  );
 
   await openProductionHostAccessSheet();
   await revealAndroidUiNode(
@@ -4087,7 +4093,8 @@ async function runProductionRemoteRecoveryUiSequence(
     input.requestInspection.remoteBrowserStatusRequests === 1 &&
       input.requestInspection.remoteBrowserMutationRequests === 0 &&
       input.manager.snapshot().command_attempts === managerAttemptsBeforeSwitch,
-    "The first production recovery check mutated external state or used the wrong route."
+    "The first production recovery check mutated external state or used the wrong route " +
+      recoveryRequestSummary(input.requestInspection, input.manager)
   );
   await closeProductionHostAccessSheet();
   await waitForAndroidUiNode(
@@ -4210,6 +4217,20 @@ async function runProductionRemoteRecoveryUiSequence(
     profileReturnRecovered: true,
     remoteBrowserStatusRequests: 2
   });
+}
+
+function recoveryRequestSummary(
+  inspection: RequestInspection,
+  manager: TailscaleServeManager
+): string {
+  return (
+    `(browser_status=${inspection.remoteBrowserStatusRequests};` +
+    `browser_mutation=${inspection.remoteBrowserMutationRequests};` +
+    `remote_total=${inspection.remoteStatusRequests};` +
+    `enable=${inspection.remoteEnableRequests};` +
+    `disable=${inspection.remoteDisableRequests};` +
+    `manager_attempts=${manager.snapshot().command_attempts}).`
+  );
 }
 
 async function openProductionHostAccessSheet(): Promise<void> {

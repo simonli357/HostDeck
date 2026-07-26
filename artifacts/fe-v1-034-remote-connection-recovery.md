@@ -124,6 +124,7 @@ Excluded: profile switching, Tailscale login/logout/up/down/service ownership, S
 - Attempt 1 reached the production Host & access sheet over cellular plus private Tailscale HTTPS, then stopped before interaction because the Android driver searched only the initial viewport for the below-fold Remote connection rail. No physical criterion was accepted from this run.
 - Failure cleanup restored the dedicated saved profile, removed the dedicated Serve mapping, closed Chrome/runtime state, restored phone network settings, left no ADB application tunnel, and published no partial evidence.
 - The driver now performs at most four device-relative swipes within the existing single sheet scroll owner to reveal the recovery rail, then reverses direction to reach the explicit close control. This changes only physical navigation; production UI and acceptance assertions remain unchanged.
+- Attempt 2 reached and activated the production recovery control, then stopped at the immediate no-mutation/request-count assertion. Cleanup again restored the dedicated profile and absent Serve state and published no partial evidence. Sanitized per-route and manager counters were added at the pre-check and post-check boundaries so the next run can distinguish unexpected prior browser traffic, duplicate status dispatch, and external mutation without exposing private values.
 
 ## Reuse And Ownership
 
