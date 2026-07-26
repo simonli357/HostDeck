@@ -416,9 +416,19 @@ describe("physical Android phone-driver protocol", () => {
     }
   });
 
-  it("builds a certificate-verifying Android probe for one private HTTPS origin", () => {
+  it("builds bounded Android tailnet and HTTPS probes for one private origin", () => {
+    const ping = createAndroidPrivateTailnetPing("https://hostdeck.test");
     const probe = createAndroidPrivateHttpsProbe("https://hostdeck.test");
 
+    expect(ping).toEqual([
+      "shell",
+      "ping",
+      "-c",
+      "1",
+      "-W",
+      "3",
+      "hostdeck.test"
+    ]);
     expect(probe).toEqual([
       "shell",
       "curl",
@@ -435,6 +445,7 @@ describe("physical Android phone-driver protocol", () => {
       "--show-error",
       "https://hostdeck.test/"
     ]);
+    expect(Object.isFrozen(ping)).toBe(true);
     expect(Object.isFrozen(probe)).toBe(true);
     expect(probe).not.toContain("--insecure");
     for (const candidate of [
@@ -445,6 +456,9 @@ describe("physical Android phone-driver protocol", () => {
       "https://hostdeck.test/#fragment"
     ]) {
       expect(() => createAndroidPrivateHttpsProbe(candidate)).toThrow(
+        "probe target was invalid"
+      );
+      expect(() => createAndroidPrivateTailnetPing(candidate)).toThrow(
         "probe target was invalid"
       );
     }
@@ -2941,6 +2955,7 @@ async function enforceUnrelatedAndroidNetwork(
 async function requireAndroidPrivateHttpsReachability(
   origin: string
 ): Promise<void> {
+  const ping = createAndroidPrivateTailnetPing(origin);
   const probe = createAndroidPrivateHttpsProbe(origin);
   adb([
     "shell",
@@ -2951,23 +2966,33 @@ async function requireAndroidPrivateHttpsReachability(
     androidTailscaleComponent
   ]);
   await waitFor(() => {
+    const output = adb(ping);
+    return (
+      Buffer.byteLength(output, "utf8") <= 16 * 1024 &&
+      output.includes("1 received")
+    );
+  }, 30_000, "Physical Android could not establish a cellular Tailscale peer path.");
+  await waitFor(() => {
     const output = adb(probe);
     return output === "";
   }, 45_000, "Physical Android could not reach private HTTPS over Tailscale.");
 }
 
+function createAndroidPrivateTailnetPing(origin: string): readonly string[] {
+  const target = parseAndroidPrivateHttpsOrigin(origin);
+  return Object.freeze([
+    "shell",
+    "ping",
+    "-c",
+    "1",
+    "-W",
+    "3",
+    target.hostname
+  ]);
+}
+
 function createAndroidPrivateHttpsProbe(origin: string): readonly string[] {
-  const target = new URL(origin);
-  requireCondition(
-    target.origin === origin &&
-      target.protocol === "https:" &&
-      target.username === "" &&
-      target.password === "" &&
-      target.pathname === "/" &&
-      target.search === "" &&
-      target.hash === "",
-    "Physical Android HTTPS probe target was invalid."
-  );
+  const target = parseAndroidPrivateHttpsOrigin(origin);
   return Object.freeze([
     "shell",
     "curl",
@@ -2984,6 +3009,21 @@ function createAndroidPrivateHttpsProbe(origin: string): readonly string[] {
     "--show-error",
     target.toString()
   ]);
+}
+
+function parseAndroidPrivateHttpsOrigin(origin: string): URL {
+  const target = new URL(origin);
+  requireCondition(
+    target.origin === origin &&
+      target.protocol === "https:" &&
+      target.username === "" &&
+      target.password === "" &&
+      target.pathname === "/" &&
+      target.search === "" &&
+      target.hash === "",
+    "Physical Android HTTPS probe target was invalid."
+  );
+  return target;
 }
 
 function readAndroidStayAwakeSetting(): number {
