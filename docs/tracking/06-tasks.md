@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-021` Implement primary `/model` control | ready | none | Deliver the first human-selected primary structured control. |
+| 1 | `FE-V1-021` Implement primary `/model` control | in_progress | none | Deliver the first human-selected primary structured control against frozen `PMC-01` to `PMC-20`. |
 | 2 | `FE-V1-026` Implement primary `/goal` control | ready | none | Deliver the second human-selected primary structured control. |
 | 3 | `FE-V1-027` Implement primary `/plan` control | ready | none | Deliver the third human-selected primary structured control. |
 | 4 | `FE-V1-022` Implement inline approval decisions | ready | none | Extend the completed read-only approval timeline into its exact decision workflow. |
