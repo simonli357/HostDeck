@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: criteria frozen; implementation not started. `SKL-01` through `SKL-24` must pass before closure.
+Status: complete. `SKL-01` through `SKL-24` pass in implementation `943dd46`.
 
 ## Scope
 
@@ -88,6 +88,19 @@ Excluded: cwd/path display or input, filesystem discovery, arbitrary directory a
 - Production-shell Chromium owns exact bodyless/queryless/CSRF-free GET shape/count, no prefetch/poll/retry, response/authority races, strict DOM/storage/history privacy, adjacent controls/composer continuity, responsive containment, and effective 200 percent reflow.
 - Deterministic screenshots and layout JSON own Focus Rail fidelity, one modal/scroll owner, equal four-cell dock, fixed footer, 44 px targets, 1,024-row bounded rendering, wrapped long content, and no viewport/document overflow.
 - Repository validation owns contract/runtime/API regressions, dependency/asset stability, package/build truth, selected-runtime privacy boundary, no process/listener/device residue, and clean pushed history.
+
+## Completion Evidence
+
+- One immutable-session owner performs one abortable bodyless/queryless/CSRF-free `skills_read` only after explicit open or refresh. It strictly reparses and correlates the complete snapshot, owns cancellation and replacement races, preserves same-authority stale truth, clears replaced authority, and exposes no write, retry, polling, storage, filesystem, shell, slash, or fallback path.
+- The public projection and React surface preserve exact content/empty/partial/error, scope, enabled, nullable-description, summary, and freshness truth. Local 160-character search and 24-row progressive disclosure retain source order and make all 1,024 valid rows reachable without persistence or a hidden full-list DOM.
+- The shared utility sheet contains exactly `/usage`, `/compact`, and `/skills`; its one four-cell dock, modal/focus lifecycle, Compact dismissal lock, fixed Skills footer, one scroll owner, 44 px controls, and 320/360/390/412/768/1280 plus short-height and 200 percent layouts pass automated geometry and manual Focus Rail inspection.
+- Focused Skills state/component coverage passes 44 tests. Aggregate web passes 627 tests; production-shell Chromium passes 79 scenarios, including six dedicated Skills scenarios; unit passes 2,504 tests with 28 intentional external skips; contract passes 245; integration passes 36; root typecheck and lint/exports pass across 679 checked files and eight packages.
+- Scaffold (eight packages/21 scripts), planning before closure (220 tasks/84 requirements/683 dependencies/six queued), selected-runtime boundary (614 production modules/22 externals), exact isolated Codex 0.144.0 binding (671 files), Vite/root builds, deterministic package/relocation/config/static/integrity acceptance (614 sources, 1,235 owned outputs, 6,449 entries), frozen offline install, and zero-known-vulnerability production audit across 184 production dependencies pass.
+- The 29 deterministic PNGs and `layout-measurements.json` cover the menu, loading, content, empty, partial, authoritative error, stale, unsupported, malformed/foreign/read failure, failed refresh with retained stale data, read-only/lock/turn states, search, 1,024-row ceiling, long/expanded/scrolled content, responsive widths, short height, and 200 percent reflow. DOM/history/storage/request, source-boundary, secret, diff, listener/port, and task-residue reviews pass.
+
+## Manual Inspection And Remaining Scope
+
+Manual comparison against the selected Focus Rail primary-control and mobile Session Detail assets found no unapproved Signal Ledger borrowing, nested-card hierarchy, file-tree/terminal treatment, desktop-led restructuring, overlap, clipping, hidden footer, or horizontal overflow. The wider viewport remains the same bounded mobile sheet rather than a separate desktop inspector. Physical-phone aggregate acceptance, final responsive/accessibility hardening, packaged real-asset acceptance, and release readiness remain owned by `FE-V1-016`, `FE-V1-039`, `FE-V1-017`, and release leaves; they are not gaps in this utility task.
 
 ## Reuse And Ownership
 

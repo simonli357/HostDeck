@@ -16,12 +16,11 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-030` Implement skills utility | in_progress | none | Add capability-aware skill discovery after the primary controls. |
-| 2 | `FE-V1-014` Implement bounded event diagnostics | ready | none | Add diagnostic disclosure without weakening the semantic timeline or privacy boundary. |
-| 3 | `FE-V1-036` Implement interrupt affordance | ready | none | Add the first bounded session action after the primary workflow. |
-| 4 | `FE-V1-037` Implement archive affordance | ready | none | Add explicit archive confirmation and outcome handling. |
-| 5 | `FE-V1-038` Implement laptop-resume affordance | ready | none | Add the selected TUI-resume handoff after other session actions. |
-| 6 | `FE-V1-035` Implement compatibility and update-required UI | ready | none | Consume the proven production compatibility projection without unsafe fallback or fabricated recovery. |
+| 1 | `FE-V1-014` Implement bounded event diagnostics | in_progress | none | Add diagnostic disclosure without weakening the semantic timeline or privacy boundary. |
+| 2 | `FE-V1-036` Implement interrupt affordance | ready | none | Add the first bounded session action after the primary workflow. |
+| 3 | `FE-V1-037` Implement archive affordance | ready | none | Add explicit archive confirmation and outcome handling. |
+| 4 | `FE-V1-038` Implement laptop-resume affordance | ready | none | Add the selected TUI-resume handoff after other session actions. |
+| 5 | `FE-V1-035` Implement compatibility and update-required UI | ready | none | Consume the proven production compatibility projection without unsafe fallback or fabricated recovery. |
 
 ## Intentional Blockers
 
