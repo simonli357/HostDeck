@@ -41,7 +41,7 @@ Excluded: account identity, billing or monetary estimates, subscription manageme
 - A reported model context window is labelled capacity. Null means `Not reported`. The UI does not calculate remaining tokens, percentage used, fit, warning thresholds, or compaction need because the contract does not prove those values.
 - Runtime scope is labelled `Rate limits`. Not-observed is distinct from observed-with-null-windows. Primary and secondary windows independently show exact used percent, nullable duration, nullable reset time, and mapped reached state. Null means `Not reported`, never unlimited or available.
 - The five reached types map to bounded user-facing limit/credit labels without raw enum leakage, account identity, remediation links, payment claims, or inference about which window caused the observation.
-- `usage_empty` requires all account summary fields unreported, no populated daily bucket, and both thread and rate observations absent. Zero-valued account data, an explicit observed empty history, any thread observation, or any rate observation is content rather than empty.
+- `usage_empty` requires all account summary fields unreported, null daily history, and both thread and rate observations absent. Zero-valued account data, an explicit empty or populated daily history, any thread observation, or any rate observation is content rather than empty.
 
 ### State And Failure Semantics
 
