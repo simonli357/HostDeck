@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: criteria frozen; implementation not started. `CCU-01` through `CCU-24` must pass before closure.
+Status: complete. `CCU-01` through `CCU-24` pass at implementation `d88129d`.
 
 ## Scope
 
@@ -95,3 +95,24 @@ Excluded: automatic compaction, token thresholds or savings, inferred compaction
 Reuse `compactProgressResponseSchema`, `compactStartRequestSchema`, `compact_read`, `compact_start`, the browser coordinator/CSRF client, existing controller lifecycle and secure operation-id conventions, the completed Usage utility host, Radix Dialog, Focus Rail sheet/dock primitives, Lucide icons, selected Session Detail fixtures, and Playwright production shell. Add no production dependency or generated visual asset: `assets/ui-concepts/option-b/primary-controls.png`, `mobile-session-detail-active.png`, the Option B design system, and accepted `FE-V1-028` utility captures define this screen group's structure.
 
 `FE-V1-029` owns only browser Compact read/start state, confirmation, bounded progress projection, the second live utility row, and deterministic UI evidence. `INT-V1-029` owns restart reconciliation; `FE-V1-030` owns Skills; `FE-V1-014` owns event diagnostics; `FE-V1-036` to `FE-V1-038` own session actions; `FE-V1-039`, `FE-V1-016`, and release leaves own aggregate module, physical-device, packaged-asset, and release acceptance.
+
+## Completion Evidence
+
+- Implementation `d88129d` adds one strict immutable-session Compact owner, exact read/start ports, secure operation ids, target-labelled confirmation, conservative accepted-to-terminal progress truth, and one shared Usage/Compact Radix utility layer. It adds no production dependency, persistence, timer, polling, retry, slash-command, terminal, prompt, turn-start, or external-navigation path.
+- Focused Compact state/component/shared-host tests pass 38/38; focused Session Detail/app-shell/browser-runtime tests pass 36/36. Aggregate web passes 583 tests in 34 files; production-shell Chromium passes 73/73, including 5 dedicated Compact and 5 adjacent Usage scenarios; unit passes 2,460 with 28 intentional skips; contract passes 245; integration passes 36.
+- Root typecheck, lint/exports (672 files, 8 packages), scaffold (8 packages, 21 scripts), runtime boundary (614 production modules, 22 externals), and planning before closure (220 tasks, 84 requirements, 683 dependencies, 7 queued) pass. Exact isolated Codex 0.144.0 binding passes 671 files with SHA-256 `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`; default 0.145.0 correctly remains ineligible.
+- Vite/root builds, deterministic package acceptance/relocation/config/static/integrity rejection, frozen offline install, zero-known-vulnerability production audit, and diff/privacy/request-boundary checks pass. The package has 614 sources, 1,235 owned outputs, 6,449 entries, and SHA-256 `35f41f5daccab92d6ded30bf1de374d5451e1ce81282e1136a2452f7810a3ace`; no package or lockfile changed beyond the existing script inventory.
+- Thirty-six dedicated PNGs plus layout JSON cover menu, loading, ready, confirmation, submitting, accepted, running, completed, interrupted, retryable and terminal failure, incomplete, conflict, unknown outcome, malformed read, stale, unsupported, read-only, locked, active/waiting/unknown turns, stale target, 320/360/390/412/768/1280, 390 x 420, long confirmation, and effective 200 percent reflow. Measurements prove 44 px controls, no text or viewport overflow, at most one scroll owner, and no footer overlap.
+- Manual comparison against approved `assets/ui-concepts/option-b/primary-controls.png` found the flat dark rail hierarchy, bounded mobile sheet, dividers, typography, icons, and fixed action/status footer aligned with Focus Rail. Desktop remains a constrained phone-first utility rather than a desktop inspector; no Signal Ledger borrowing, nested cards, blank capture, overlap, clipping, or unapproved structural drift was found.
+- Browser evidence proves no Compact request before explicit utility open, exact selected-session GET, no POST before final confirmation, one strict CSRF-protected POST body, no resend/poll/storage/fallback, submit-time dismissal lock, and deterministic Back/Close/Escape/outside focus restoration through the shared host. Public views, DOM, history, storage, screenshots, and bounded copy exclude private identities and runtime causes; ports 4175/4176 and task temp state are clean. The unrelated port 5173 preview and earlier-task screenshot changes were left untouched.
+- The existing Vite chunk-size warning remains visible for downstream release hardening; this task added no dependency. Physical-phone and packaged-release acceptance remain explicitly downstream and were not required to prove this bounded responsive utility.
+
+## Criteria Result
+
+| Criteria | Result | Evidence |
+| --- | --- | --- |
+| `CCU-01` to `CCU-07` | Pass | Strict construction, exact request/schema/correlation ownership, accepted-to-terminal projection, restart gating, cancellation, and duplicate suppression tests. |
+| `CCU-08` to `CCU-13` | Pass | Target-labelled confirmation, read/write/turn authority matrices, epoch/target races, known conflict/failure distinctions, explicit reconciliation, and uncertain-outcome latch coverage. |
+| `CCU-14` to `CCU-19` | Pass | Privacy and source-boundary review, exact two-row shared utility host, modal/focus/accessibility assertions, submit dismissal lock, and approved Focus Rail composition. |
+| `CCU-20` to `CCU-23` | Pass | Full lifecycle/responsive/zoom/short-height captures, layout measurements, exact browser API assertions, aggregate regressions, and manual visual inspection. |
+| `CCU-24` | Pass | Full repository, exact-runtime, build/package/install/audit/diff/privacy/residue gates pass; implementation and evidence are committed and pushed. |
