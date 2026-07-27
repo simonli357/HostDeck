@@ -62,7 +62,13 @@ export interface SessionDetailApiController {
   readonly streamRequestUrls: () => Promise<readonly string[]>;
 }
 
-type SessionDetailEventFixture = SelectedProjectionEvent;
+export type SessionDetailEventFixture = SelectedProjectionEvent;
+
+export interface SessionDetailApiOptions {
+  readonly initialEvents?: readonly SessionDetailEventFixture[];
+  readonly retentionBoundaryCursor?: number;
+  readonly streamEvents?: readonly SessionDetailEventFixture[];
+}
 
 const origin = "http://127.0.0.1:4175";
 const sessionId = "sess_detail_browser_active";
@@ -82,7 +88,8 @@ export const sessionDetailBrowserSessionId = sessionId;
 
 export async function installSessionDetailApi(
   page: Page,
-  initialVariant: SessionDetailApiVariant = "active"
+  initialVariant: SessionDetailApiVariant = "active",
+  options: SessionDetailApiOptions = {}
 ): Promise<SessionDetailApiController> {
   let variant = initialVariant;
   let promptOutcome: SessionDetailPromptOutcome = "accepted_start";
@@ -96,9 +103,30 @@ export async function installSessionDetailApi(
     | ((outcome: Exclude<SessionDetailCsrfOutcome, "pending">) => void)
     | null = null;
   const requests: Request[] = [];
-  const initialEvents = eventsForVariant(initialVariant);
+  const initialEvents = options.initialEvents === undefined
+    ? eventsForVariant(initialVariant)
+    : Object.freeze(
+        options.initialEvents.map((event) => selectedProjectionEventSchema.parse(event))
+      );
+  const streamEvents = options.streamEvents === undefined
+    ? initialEvents
+    : Object.freeze(
+        options.streamEvents.map((event) => selectedProjectionEventSchema.parse(event))
+      );
+  const selectedEvents = () =>
+    options.initialEvents !== undefined &&
+      variant !== "empty" &&
+      variant !== "expired" &&
+      variant !== "denied" &&
+      variant !== "unavailable"
+      ? initialEvents
+      : eventsForVariant(variant);
+  const selectedRetentionBoundary = () =>
+    options.initialEvents !== undefined && selectedEvents() === initialEvents
+      ? options.retentionBoundaryCursor
+      : undefined;
 
-  await installSessionEventStream(page, initialEvents);
+  await installSessionEventStream(page, streamEvents);
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     requests.push(request);
@@ -163,7 +191,10 @@ export async function installSessionDetailApi(
       url.pathname === `/api/v1/sessions/${sessionId}` &&
       request.method() === "GET"
     ) {
-      await fulfillJson(route, sessionDetail(variant, eventsForVariant(variant).length));
+      await fulfillJson(
+        route,
+        sessionDetail(variant, selectedEvents(), selectedRetentionBoundary())
+      );
       return;
     }
     if (
@@ -174,7 +205,10 @@ export async function installSessionDetailApi(
       return;
     }
     if (url.pathname === "/api/v1/sessions" && request.method() === "GET") {
-      await fulfillJson(route, sessionList(variant, eventsForVariant(variant).length));
+      await fulfillJson(
+        route,
+        sessionList(variant, selectedEvents(), selectedRetentionBoundary())
+      );
       return;
     }
     if (url.pathname === "/api/v1/access/csrf" && request.method() === "POST") {
@@ -694,12 +728,23 @@ function readyHostStatus(variant: SessionDetailApiVariant) {
   });
 }
 
-function sessionDetail(variant: SessionDetailApiVariant, eventCount: number) {
-  const empty = variant === "empty";
+function sessionDetail(
+  variant: SessionDetailApiVariant,
+  events: readonly SessionDetailEventFixture[],
+  retentionBoundaryCursor?: number
+) {
+  const firstEvent = events[0] ?? null;
+  const lastEvent = events.at(-1) ?? null;
+  const eventCount = events.length;
+  const empty = eventCount === 0;
   const readOnly = variant === "read_only";
   const writable = isComposerFixtureVariant(variant);
   const long = variant === "long" || variant === "writable_long";
-  const bounded = variant === "boundary";
+  const derivedBoundaryCursor = firstEvent?.type === "replay_boundary"
+    ? firstEvent.after
+    : null;
+  const boundaryCursor = retentionBoundaryCursor ?? derivedBoundaryCursor;
+  const bounded = boundaryCursor !== null;
   const turnState =
     variant === "waiting_input"
       ? "waiting_for_input"
@@ -751,7 +796,7 @@ function sessionDetail(variant: SessionDetailApiVariant, eventCount: number) {
         settings: null,
         goal: null,
         recent_summary: "Validate the structured mobile session feed.",
-        last_event_cursor: empty ? null : eventCount
+        last_event_cursor: lastEvent?.cursor ?? null
       },
       event_window: empty
         ? {
@@ -763,15 +808,19 @@ function sessionDetail(variant: SessionDetailApiVariant, eventCount: number) {
         : {
             state: bounded ? "bounded" : "contiguous",
             retained_event_count: eventCount,
-            earliest_retained_cursor: 1,
-            boundary_cursor: bounded ? 0 : null
+            earliest_retained_cursor: firstEvent?.cursor ?? null,
+            boundary_cursor: boundaryCursor
           }
     }
   });
 }
 
-function sessionList(variant: SessionDetailApiVariant, eventCount: number) {
-  const detail = sessionDetail(variant, eventCount);
+function sessionList(
+  variant: SessionDetailApiVariant,
+  events: readonly SessionDetailEventFixture[],
+  retentionBoundaryCursor?: number
+) {
+  const detail = sessionDetail(variant, events, retentionBoundaryCursor);
   return {
     access: detail.access,
     sessions: [detail.session],

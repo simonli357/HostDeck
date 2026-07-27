@@ -7,6 +7,7 @@ export * from "./compact-control-state.js";
 export * from "./connection-state.js";
 export * from "./csrf-client.js";
 export * from "./event-diagnostics-state.js";
+export * from "./event-diagnostics.js";
 export * from "./goal-control.js";
 export * from "./goal-control-state.js";
 export * from "./host-access.js";

@@ -801,7 +801,8 @@ function deriveAvailability(
     authorityKey,
     readEnabled:
       snapshot.access.state === "current" &&
-      snapshot.targetState.state === "current"
+      snapshot.targetState.state === "current" &&
+      detail.freshness === "current"
   });
 }
 
@@ -923,13 +924,23 @@ function classifyReadFailure(error: unknown): EventDiagnosticsFailure {
   }
   if (error instanceof HostDeckBrowserHttpError) {
     if (error.apiError !== null) return classifyApiFailure(error.apiError);
-    if (error.reason === "deadline_exceeded") {
-      return failure("timeout", "The event verification timed out.");
+    switch (error.reason) {
+      case "deadline_exceeded":
+        return failure("timeout", "The event verification timed out.");
+      case "caller_aborted":
+        return failure("aborted", "The event verification was interrupted.");
+      case "capacity_exhausted":
+        return failure("overloaded", "HostDeck is temporarily too busy to verify this event.");
+      case "invalid_response":
+      case "response_too_large":
+        return failure("malformed", "HostDeck could not validate the current event page.");
+      case "transport_unavailable":
+        return failure("transport", "HostDeck could not reach the event service.");
+      case "request_contract":
+      case "request_too_large":
+      case "api_error":
+        return failure("failure", "HostDeck could not verify this retained event.");
     }
-    if (error.reason === "caller_aborted") {
-      return failure("aborted", "The event verification was interrupted.");
-    }
-    return failure("transport", "HostDeck could not reach the event service.");
   }
   if (error instanceof HostDeckBrowserConnectionError) {
     return failure(

@@ -239,6 +239,11 @@ test("contains long content and passes keyboard, reflow, zoom, and live-update c
   await expectNextKeyboardFocus(page, page.getByRole("button", { name: "Back to Mission Control" }));
   await expectNextKeyboardFocus(page, page.getByRole("button", { name: "Open Host and access" }));
   await expectNextKeyboardFocus(page, page.getByRole("button", { name: "Refresh session" }));
+  const eventDetailsActions = page.getByRole("button", { name: "View event details" });
+  await expect(eventDetailsActions).toHaveCount(4);
+  for (let index = 0; index < 4; index += 1) {
+    await expectNextKeyboardFocus(page, eventDetailsActions.nth(index));
+  }
   await expectNextKeyboardFocus(
     page,
     page.getByRole("button", {
@@ -336,11 +341,20 @@ async function expectStableTargets(page: Page): Promise<void> {
 async function expectNoClippedTimelineItems(page: Page): Promise<void> {
   const items = page.locator(".hostdeck-timeline-item:visible");
   for (let index = 0; index < (await items.count()); index += 1) {
-    const clipped = await items.nth(index).evaluate(
-      (element) =>
-        element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight
-    );
-    expect(clipped).toBe(false);
+    const geometry = await items.nth(index).evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      clientWidth: element.clientWidth,
+      scrollHeight: element.scrollHeight,
+      scrollWidth: element.scrollWidth
+    }));
+    expect(
+      geometry.scrollWidth,
+      `timeline item ${index + 1} must not overflow horizontally`
+    ).toBe(geometry.clientWidth);
+    expect(
+      geometry.scrollHeight,
+      `timeline item ${index + 1} must not overflow vertically`
+    ).toBe(geometry.clientHeight);
   }
 }
 

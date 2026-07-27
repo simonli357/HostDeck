@@ -7,6 +7,7 @@ export default defineConfig({
     "app-shell.spec.ts",
     "approval-decisions.spec.ts",
     "compact-control.spec.ts",
+    "event-diagnostics.spec.ts",
     "mission-control.spec.ts",
     "goal-control.spec.ts",
     "host-lock.spec.ts",

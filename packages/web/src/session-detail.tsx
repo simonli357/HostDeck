@@ -48,6 +48,12 @@ import type {
   BrowserConnectionSnapshot,
   BrowserConnectionStateCoordinator
 } from "./connection-state.js";
+import {
+  EventDiagnosticsAction,
+  EventDiagnosticsSheet,
+  useEventDiagnosticsController
+} from "./event-diagnostics.js";
+import type { EventDiagnosticsController } from "./event-diagnostics-state.js";
 import { GoalControl, useGoalControlController } from "./goal-control.js";
 import type { GoalControlController } from "./goal-control-state.js";
 import { HostLockRouteRail } from "./host-lock.js";
@@ -137,6 +143,7 @@ export interface SessionDetailControllerState {
   readonly compact: CompactControlController;
   readonly skills: SkillsControlController;
   readonly approvals: ApprovalDecisionController;
+  readonly eventDiagnostics: EventDiagnosticsController;
 }
 
 export interface UseSessionDetailControllerOptions {
@@ -167,6 +174,7 @@ export interface SessionDetailScreenProps {
   readonly compact?: CompactControlController | undefined;
   readonly skills?: SkillsControlController | undefined;
   readonly approvals?: ApprovalDecisionController | undefined;
+  readonly eventDiagnostics?: EventDiagnosticsController | undefined;
   readonly projection?: SessionDetailProjection | undefined;
 }
 
@@ -213,6 +221,13 @@ export function useSessionDetailController(
     sessionId,
     snapshot,
     feed
+  );
+  const eventDiagnostics = useEventDiagnosticsController(
+    coordinator,
+    sessionId,
+    snapshot,
+    feed,
+    snapshot.stream.boundary
   );
 
   const resetFeed = useCallback(() => {
@@ -311,7 +326,8 @@ export function useSessionDetailController(
     usage,
     compact,
     skills,
-    approvals
+    approvals,
+    eventDiagnostics
   });
 }
 
@@ -341,6 +357,7 @@ export function ConnectedSessionDetail({
       compact={controller.compact}
       skills={controller.skills}
       approvals={controller.approvals}
+      eventDiagnostics={controller.eventDiagnostics}
     />
   );
 }
@@ -363,6 +380,7 @@ export function SessionDetailScreen({
   compact,
   skills,
   approvals,
+  eventDiagnostics,
   projection
 }: SessionDetailScreenProps) {
   const view =
@@ -416,6 +434,7 @@ export function SessionDetailScreen({
             replayPending={view.replayPending}
             approvals={null}
             approvalView={null}
+            eventDiagnostics={eventDiagnostics ?? null}
           />
         )
       ) : (
@@ -428,6 +447,7 @@ export function SessionDetailScreen({
           activityUnavailable={view.activityUnavailable}
           noVisibleActivity={view.noVisibleActivity}
           approvals={approvals}
+          eventDiagnostics={eventDiagnostics ?? null}
         />
       )}
 
@@ -457,7 +477,8 @@ function ConnectedSessionDetailTimelineArea({
   empty,
   activityUnavailable,
   noVisibleActivity,
-  approvals
+  approvals,
+  eventDiagnostics
 }: Readonly<{
   items: readonly SessionDetailTimelineItem[];
   acceptedCount: number;
@@ -466,6 +487,7 @@ function ConnectedSessionDetailTimelineArea({
   activityUnavailable: boolean;
   noVisibleActivity: boolean;
   approvals: ApprovalDecisionController;
+  eventDiagnostics: EventDiagnosticsController | null;
 }>) {
   const approvalView = useApprovalDecisionView(approvals);
   const hasApprovalSurface =
@@ -482,6 +504,7 @@ function ConnectedSessionDetailTimelineArea({
       replayPending={replayPending}
       approvals={approvals}
       approvalView={approvalView}
+      eventDiagnostics={eventDiagnostics}
     />
   );
 }
@@ -705,16 +728,19 @@ function SessionDetailTimeline({
   acceptedCount,
   replayPending,
   approvals,
-  approvalView
+  approvalView,
+  eventDiagnostics
 }: Readonly<{
   items: readonly SessionDetailTimelineItem[];
   acceptedCount: number;
   replayPending: boolean;
   approvals: ApprovalDecisionController | null;
   approvalView: ApprovalDecisionView | null;
+  eventDiagnostics: EventDiagnosticsController | null;
 }>) {
   const endRef = useRef<HTMLDivElement>(null);
   const approvalConfirmationOriginRef = useRef<HTMLButtonElement>(null);
+  const eventDiagnosticsOriginRef = useRef<HTMLButtonElement>(null);
   const pinnedRef = useRef(true);
   const initializedRef = useRef(false);
   const previousAcceptedRef = useRef(acceptedCount);
@@ -781,11 +807,20 @@ function SessionDetailTimeline({
                   timeline={item}
                   controller={approvalController}
                   confirmationOrigin={approvalConfirmationOriginRef}
+                  eventDiagnostics={eventDiagnostics ?? undefined}
+                  eventDiagnosticsOrigin={eventDiagnosticsOriginRef}
                 />
               );
             }
           }
-          return <SessionTimelineItem key={item.key} item={item} />;
+          return (
+            <SessionTimelineItem
+              key={item.key}
+              item={item}
+              eventDiagnostics={eventDiagnostics}
+              eventDiagnosticsOrigin={eventDiagnosticsOriginRef}
+            />
+          );
         })}
         {approvalController === null || approvalView === null ? null : approvalView.items
           .filter((item) => item.eventOrder === null)
@@ -822,11 +857,25 @@ function SessionDetailTimeline({
           confirmationOrigin={approvalConfirmationOriginRef}
         />
       )}
+      {eventDiagnostics === null ? null : (
+        <EventDiagnosticsSheet
+          controller={eventDiagnostics}
+          originRef={eventDiagnosticsOriginRef}
+        />
+      )}
     </div>
   );
 }
 
-function SessionTimelineItem({ item }: Readonly<{ item: SessionDetailTimelineItem }>) {
+function SessionTimelineItem({
+  item,
+  eventDiagnostics,
+  eventDiagnosticsOrigin
+}: Readonly<{
+  item: SessionDetailTimelineItem;
+  eventDiagnostics: EventDiagnosticsController | null;
+  eventDiagnosticsOrigin: RefObject<HTMLButtonElement | null>;
+}>) {
   const Icon = timelineIcon(item.icon);
   return (
     <li className={`hostdeck-timeline-item hostdeck-timeline-item--${item.tone}`}>
@@ -845,6 +894,13 @@ function SessionTimelineItem({ item }: Readonly<{ item: SessionDetailTimelineIte
           )}
           {item.capturedAt === null || item.timeLabel === null ? null : (
             <time dateTime={item.capturedAt}>{item.timeLabel}</time>
+          )}
+          {eventDiagnostics === null || item.diagnosticCursor === null ? null : (
+            <EventDiagnosticsAction
+              controller={eventDiagnostics}
+              cursor={item.diagnosticCursor}
+              originRef={eventDiagnosticsOrigin}
+            />
           )}
         </div>
         <h2>{item.title}</h2>

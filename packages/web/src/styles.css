@@ -992,12 +992,14 @@ textarea:focus-visible {
 }
 
 .hostdeck-timeline-item__header {
+  position: relative;
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 8px;
   margin-bottom: 5px;
+  padding-right: 44px;
   font-size: 12px;
   line-height: 16px;
 }
@@ -1017,6 +1019,20 @@ textarea:focus-visible {
   margin-left: auto;
   color: var(--hostdeck-muted);
   white-space: nowrap;
+}
+
+.hostdeck-timeline-item__details {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  margin: 0;
+  color: var(--hostdeck-muted);
+  transform: translateY(-50%);
+}
+
+.hostdeck-timeline-item__details:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .hostdeck-timeline-item h2 {
@@ -4425,6 +4441,280 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.hostdeck-event-sheet {
+  display: grid;
+  max-height: min(90dvh, 780px);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+
+.hostdeck-event-sheet--attention {
+  border-top-color: var(--hostdeck-attention);
+}
+
+.hostdeck-event-sheet--danger {
+  border-top-color: var(--hostdeck-danger);
+}
+
+.hostdeck-event-sheet--connected {
+  border-top-color: var(--hostdeck-connected);
+}
+
+.hostdeck-event-sheet__header > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.hostdeck-event-sheet__target {
+  min-width: 0;
+  margin: 0;
+  color: var(--hostdeck-muted);
+  font-size: 13px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-event-sheet__target strong {
+  color: var(--hostdeck-ink);
+  font-weight: 650;
+}
+
+.hostdeck-event-sheet__scroller {
+  min-width: 0;
+  min-height: 0;
+  padding: 14px 2px 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.hostdeck-event-section {
+  min-width: 0;
+}
+
+.hostdeck-event-section + .hostdeck-event-section {
+  margin-top: 16px;
+}
+
+.hostdeck-event-section__heading {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--hostdeck-ink);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-event-section__heading > svg {
+  color: var(--hostdeck-focus);
+}
+
+.hostdeck-event-identity,
+.hostdeck-event-payload {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  border-top: 1px solid var(--hostdeck-divider);
+}
+
+.hostdeck-event-identity > div,
+.hostdeck-event-field {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(92px, 0.36fr) minmax(0, 1fr);
+  gap: 8px 12px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--hostdeck-divider);
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.hostdeck-event-identity dt,
+.hostdeck-event-identity dd,
+.hostdeck-event-field dt,
+.hostdeck-event-field dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.hostdeck-event-identity dt,
+.hostdeck-event-field dt {
+  color: var(--hostdeck-muted);
+}
+
+.hostdeck-event-identity dd,
+.hostdeck-event-field dd {
+  color: var(--hostdeck-ink);
+}
+
+.hostdeck-event-identity dd[data-value-state="not_reported"],
+.hostdeck-event-field dd[data-value-state="not_reported"],
+.hostdeck-event-field dd[data-value-state="empty"] {
+  color: var(--hostdeck-muted);
+  font-style: italic;
+}
+
+.hostdeck-event-field__value--collapsed {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.hostdeck-event-field__disclosure {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 44px;
+  grid-column: 2;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  padding: 8px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--hostdeck-focus);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.hostdeck-event-limitation,
+.hostdeck-event-boundary {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px 2px;
+  border-top: 1px solid var(--hostdeck-divider);
+  border-bottom: 1px solid var(--hostdeck-divider);
+}
+
+.hostdeck-event-boundary {
+  color: var(--hostdeck-danger);
+  border-top-style: dashed;
+  border-bottom-style: dashed;
+}
+
+.hostdeck-event-limitation > svg,
+.hostdeck-event-boundary > svg {
+  margin-top: 1px;
+}
+
+.hostdeck-event-limitation > span,
+.hostdeck-event-boundary > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.hostdeck-event-limitation strong,
+.hostdeck-event-limitation small,
+.hostdeck-event-boundary strong,
+.hostdeck-event-boundary small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-event-limitation strong,
+.hostdeck-event-boundary strong {
+  color: var(--hostdeck-ink);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.hostdeck-event-limitation small,
+.hostdeck-event-boundary small {
+  color: var(--hostdeck-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.hostdeck-event-boundary + .hostdeck-event-section,
+.hostdeck-event-limitation + .hostdeck-event-section {
+  margin-top: 16px;
+}
+
+.hostdeck-event-footer {
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--hostdeck-divider);
+  background: var(--hostdeck-surface);
+}
+
+.hostdeck-event-status {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.hostdeck-event-status > svg {
+  align-self: start;
+  margin-top: 3px;
+}
+
+.hostdeck-event-status > span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.hostdeck-event-status strong,
+.hostdeck-event-status small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-event-status strong {
+  color: var(--hostdeck-ink);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.hostdeck-event-status small {
+  color: var(--hostdeck-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.hostdeck-secondary-button.hostdeck-event-status__retry {
+  min-width: 78px;
+  min-height: 44px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+@media (max-width: 340px) {
+  .hostdeck-event-identity > div,
+  .hostdeck-event-field {
+    grid-template-columns: minmax(82px, 0.34fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .hostdeck-event-status {
+    gap: 6px;
+  }
+
+  .hostdeck-secondary-button.hostdeck-event-status__retry {
+    min-width: 70px;
+    padding-right: 7px;
+    padding-left: 7px;
+  }
+}
+
 @media (max-width: 359px) {
   .hostdeck-plan-options__list {
     grid-template-columns: minmax(0, 1fr);
@@ -4444,6 +4734,10 @@ textarea:focus-visible {
     max-height: calc(100dvh - 8px);
   }
 
+  .hostdeck-event-sheet {
+    max-height: calc(100dvh - 8px);
+  }
+
   .hostdeck-model-sheet__body,
   .hostdeck-goal-sheet__body,
   .hostdeck-plan-sheet__body,
@@ -4451,6 +4745,11 @@ textarea:focus-visible {
   .hostdeck-compact-sheet__scroller,
   .hostdeck-skills-sheet__scroller,
   .hostdeck-approval-sheet__body {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .hostdeck-event-sheet__scroller {
     padding-top: 10px;
     padding-bottom: 10px;
   }

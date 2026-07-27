@@ -381,6 +381,7 @@ function ConnectedSessionDetailRoute({
         compact={controller.compact}
         skills={controller.skills}
         approvals={controller.approvals}
+        eventDiagnostics={controller.eventDiagnostics}
         projection={projection}
       />
     </HostDeckFrame>

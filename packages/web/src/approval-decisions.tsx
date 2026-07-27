@@ -34,6 +34,8 @@ import {
   type BrowserConnectionStateCoordinator,
   HostDeckBrowserConnectionError
 } from "./connection-state.js";
+import { EventDiagnosticsAction } from "./event-diagnostics.js";
+import type { EventDiagnosticsController } from "./event-diagnostics-state.js";
 import type {
   SessionDetailFeedState,
   SessionDetailTimelineItem
@@ -49,6 +51,8 @@ export interface ApprovalTimelineItemProps {
   readonly timeline: SessionDetailTimelineItem | null;
   readonly controller: ApprovalDecisionController;
   readonly confirmationOrigin?: RefObject<HTMLButtonElement | null> | undefined;
+  readonly eventDiagnostics?: EventDiagnosticsController | undefined;
+  readonly eventDiagnosticsOrigin?: RefObject<HTMLButtonElement | null> | undefined;
 }
 
 export interface ApprovalConfirmationDialogProps {
@@ -172,7 +176,9 @@ export function ApprovalTimelineItem({
   item,
   timeline,
   controller,
-  confirmationOrigin
+  confirmationOrigin,
+  eventDiagnostics,
+  eventDiagnosticsOrigin
 }: ApprovalTimelineItemProps) {
   const capturedAt = timeline?.capturedAt ?? item.createdAt;
   const timeLabel = timeline?.timeLabel ?? formatTimestamp(item.createdAt);
@@ -192,6 +198,17 @@ export function ApprovalTimelineItem({
           <span className="hostdeck-timeline-item__state">{item.stateLabel}</span>
           {capturedAt === null || timeLabel === null ? null : (
             <time dateTime={capturedAt}>{timeLabel}</time>
+          )}
+          {eventDiagnostics === undefined ||
+          eventDiagnosticsOrigin === undefined ||
+          timeline?.diagnosticCursor === null ||
+          timeline?.diagnosticCursor === undefined ? null : (
+            <EventDiagnosticsAction
+              controller={eventDiagnostics}
+              cursor={timeline.diagnosticCursor}
+              disabled={item.submitting}
+              originRef={eventDiagnosticsOrigin}
+            />
           )}
         </div>
         <h2>{title}</h2>

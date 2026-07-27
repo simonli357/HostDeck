@@ -270,6 +270,27 @@ describe("event-diagnostics state", () => {
     expect(port.read).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a stale selected-session projection local until Session Detail is current", async () => {
+    const event = eventOf("message", 2);
+    const port = eventPort({ read: async () => eventPage(event) });
+    const controller = createController(
+      port,
+      context({ events: [event], freshness: "stale" })
+    );
+
+    await controller.open(2);
+
+    expect(port.read).not.toHaveBeenCalled();
+    expect(controller.snapshot()).toMatchObject({
+      sheetOpen: true,
+      phase: "stale",
+      freshness: "stale",
+      status: "Retained event detail",
+      retryEnabled: false,
+      identity: { cursor: 2 }
+    });
+  });
+
   it("aborts an active read on epoch loss and suppresses late settlement", async () => {
     const event = eventOf("runtime", 6);
     const pending = deferred<unknown>();
@@ -509,6 +530,36 @@ describe("event-diagnostics state", () => {
     expect(JSON.stringify(controller.snapshot())).not.toContain("private_detail");
   });
 
+  it.each([
+    ["invalid_response", "HostDeck could not validate the current event page."],
+    ["response_too_large", "HostDeck could not validate the current event page."],
+    ["capacity_exhausted", "HostDeck is temporarily too busy to verify this event."],
+    ["caller_aborted", "The event verification was interrupted."],
+    ["transport_unavailable", "HostDeck could not reach the event service."]
+  ] as const)("classifies %s browser-client failures", async (reason, expected) => {
+    const event = eventOf("message", 2);
+    const controller = createController(
+      eventPort({
+        read: async () => {
+          throw new HostDeckBrowserHttpError({
+            reason,
+            routeId: "session_events",
+            transport: "https"
+          });
+        }
+      }),
+      context({ events: [event] })
+    );
+
+    await controller.open(2);
+
+    expect(controller.snapshot()).toMatchObject({
+      phase: "failure",
+      statusDetail: expected,
+      freshness: "stale"
+    });
+  });
+
   it("fails loudly for malformed construction, context, cursors, and ambiguous ownership", () => {
     const event = eventOf("message", 2);
     const port = eventPort();
@@ -707,6 +758,7 @@ function context(
     targetState?: BrowserConnectionResourceState;
     projectedThreadId?: string;
     runtimeVersion?: string;
+    freshness?: "current" | "stale";
     turnState?: "idle" | "in_progress" | "waiting_for_input" | "unknown";
     csrfGeneration?: number;
     route?: "session_detail" | "mission_control";
@@ -727,8 +779,8 @@ function context(
     session_state: "active",
     turn_state: input.turnState ?? "idle",
     attention: "none",
-    freshness: "current",
-    freshness_reason: null,
+    freshness: input.freshness ?? "current",
+    freshness_reason: input.freshness === "stale" ? "Projection requires refresh." : null,
     updated_at: timestamp,
     last_activity_at: timestamp,
     branch: "feat/event-diagnostics",

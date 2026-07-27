@@ -8,6 +8,7 @@ import {
   pendingApprovalListResponseSchema,
   pendingApprovalResponseSchema,
   selectedAccessStateResponseSchema,
+  selectedEventPageResponseSchema,
   selectedSessionDetailResponseSchema,
   selectedSessionReadItemSchema
 } from "@hostdeck/contracts";
@@ -35,6 +36,7 @@ import type {
   BrowserConnectionStateCoordinator,
   BrowserConnectionWriteBlockCause
 } from "./connection-state.js";
+import { createEventDiagnosticsController } from "./event-diagnostics-state.js";
 import { SessionDetailScreen } from "./session-detail.js";
 import {
   appendSessionDetailEvent,
@@ -69,15 +71,33 @@ describe("inline approval decisions", () => {
     );
     await controller.synchronize();
     const feed = appendSessionDetailEvent(createSessionDetailFeed(sessionId), event);
+    const currentContext = context({ events: [event] });
+    const eventDiagnostics = createEventDiagnosticsController({
+      sessionId,
+      context: Object.freeze({
+        snapshot: currentContext.snapshot,
+        events: [event],
+        boundary: null
+      }),
+      port: Object.freeze({
+        read: async () => selectedEventPageResponseSchema.parse({
+          session_id: sessionId,
+          events: [event],
+          next_cursor: event.cursor,
+          truncated: false
+        })
+      })
+    });
 
     render(
       <SessionDetailScreen
         sessionId={sessionId}
-        snapshot={context({ events: [event] }).snapshot}
+        snapshot={currentContext.snapshot}
         feed={feed}
         nowMs={Date.parse(timestamp)}
         formatTimestamp={() => "3:00 AM"}
         approvals={controller}
+        eventDiagnostics={eventDiagnostics}
       />
     );
 
@@ -85,6 +105,8 @@ describe("inline approval decisions", () => {
     expect(within(activity).getAllByText("Approval required")).toHaveLength(2);
     const actions = within(activity).getAllByRole("button", { name: "Review & approve" });
     expect(actions).toHaveLength(2);
+    expect(within(activity).getAllByRole("button", { name: "View event details" }))
+      .toHaveLength(1);
     expect(activity.textContent?.indexOf("Write release marker")).toBeLessThan(
       activity.textContent?.indexOf("Publish the signed Android build") ?? -1
     );
