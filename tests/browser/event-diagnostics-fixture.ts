@@ -70,8 +70,10 @@ export async function installEventDiagnosticsApi(
     input.sessionVariant ?? "active",
     {
       initialEvents: events,
-      retentionBoundaryCursor: input.retentionBoundaryCursor,
-      streamEvents: input.streamEvents
+      ...(input.retentionBoundaryCursor === undefined
+        ? {}
+        : { retentionBoundaryCursor: input.retentionBoundaryCursor }),
+      ...(input.streamEvents === undefined ? {} : { streamEvents: input.streamEvents })
     }
   );
   let outcome: EventDiagnosticsReadOutcome = "success";
