@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: criteria frozen; implementation and evidence pending.
+Status: complete. Criteria commit `0fa8b18`; implementation commit `ceb339e`.
 
 ## Scope
 
@@ -96,6 +96,31 @@ Excluded: changing the reviewed Codex 0.144.0 binding, accepting 0.145.x, regene
 - Exact isolated 0.144.0 no-model production regression and default 0.145.x no-model diagnostic smoke from clean committed code, with no Tailscale/profile/Serve/phone mutation.
 - Deterministic package and emitted-runtime checks proving the same behavior from the selected production output.
 
+## Implementation Record
+
+- `codex-version-probe.ts` owns one strict Linux process-group observation with exact `--version` argv, 4 KiB aggregate output, a 10-second maximum, fatal UTF-8/output/process failures, and bounded cleanup. Foreground and service resources probe after guarded storage opens and before any supervisor start or socket attachment.
+- A valid exact 0.144.0 observation retains the existing runtime path. Any other valid semver returns `version_incompatible` with an idle supervisor and no process/socket claim; production passes the observed version into reconnect rather than substituting the binding version.
+- Only an owned terminal connect-stage incompatibility enters `diagnostic_ready`. Startup persists the incompatible record, reconciles accepted-only audit gaps, seals every non-archived durable session disconnected, closes subscriber admission, completes normal maintenance, and publishes a loopback listener with readiness and mutations closed.
+- Protected host status now projects exactly seven public compatibility fields across six states, three evidence classes, and four capability cues. Contradictory health/storage combinations fail closed, and private binding, capability, process, path, socket, command, identity, environment, and raw-reason data remain internal.
+- The packaged executable smoke covers both exact and diagnostic modes through the same read-only relocated artifact. Local-admin requests use bounded raw loopback HTTP so browser-generated `Sec-Fetch-*` headers cannot invalidate CLI authority in the harness.
+
+## Validation
+
+| Gate | Result |
+| --- | --- |
+| Focused probe/resource/reconciliation/application/serve/projector/routes | 83 server tests plus a 72-test affected source matrix pass; diagnostic composition passes 9/9 and proves no runtime dispatch or accepted audit. |
+| Browser/CLI compatibility regressions | 117 focused tests pass; aggregate web passes 516/516. |
+| Workspace tests | Unit passes 2,393 with 28 intentional skips; contract passes 245; integration passes 36. |
+| Static checks | Root typecheck; Biome and exports across 657 files/8 packages; scaffold; runtime-boundary; and diff checks pass. Runtime boundary contains 614 production modules and 22 external modules. |
+| Planning | `pnpm check:planning` passes 220 tasks, 84 requirements, and 683 dependencies before closure. |
+| Dependency/install | Frozen offline install and `pnpm audit --prod` pass with no known vulnerability. |
+| Binding | Isolated exact Codex 0.144.0 verifies all 671 reviewed files and binding hash `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. |
+| Web/package build | Vite production build passes. Deterministic package acceptance passes two builds at 614 sources, 1,235 owned outputs, and 6,449 entries; package SHA-256 is `35f41f5daccab92d6ded30bf1de374d5451e1ce81282e1136a2452f7810a3ace`. |
+| Clean exact process | At clean commit `ceb339e`, `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:executable-serve` passes two read-only-package starts, normal readiness, same-port reuse, clean shutdown, and no model turn. |
+| Clean drift process | At clean commit `ceb339e`, `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.145.0 HOSTDECK_EXPECT_DIAGNOSTIC=1 pnpm smoke:executable-serve` passes two starts with current `version_drift`, protected reads, readiness 503, SSE 503, mutation 409, no app-server admission/socket/JSONL, and clean shutdown. |
+| Privacy/residue | Diff and emitted-output review find no private production disclosure. No task process, listener, Unix socket, or temporary root remains; Tailscale profile/Serve, browser, ADB, and phone state were not used or changed. |
+
 ## Completion Record
 
-- Pending implementation, validation, owner-doc closure, commit ids, and push evidence.
+- `PCD-01` to `PCD-24` pass. Criteria `0fa8b18` and implementation `ceb339e` are pushed to `origin/main`; owner-doc closure is the coherent documentation unit containing this record.
+- `BUG-017` is closed and `FE-V1-035` is dependency-ready. This does not claim compatibility UI, complete interface hardening, real packaged assets, persistent install/parity, phone acceptance for this state, or V1 release readiness.

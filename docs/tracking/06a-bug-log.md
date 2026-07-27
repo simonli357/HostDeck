@@ -22,7 +22,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-014 | A current production audit reports two high-severity `fast-uri` host-confusion advisories through Fastify's AJV and JSON serializer paths. | High | Release blocker | Closed | Supply chain / `FE-V1-010` validation | Exact patched overrides 3.1.4/4.1.1, dependency-tree proof, zero-vulnerability audit, full workspace/runtime/package gates, implementation `9b095ad`. |
 | BUG-015 | The selected mobile access fixture requires browser state that the selected APIs cannot produce and permits implicit loopback writes. | High | Backlog bugfix | Closed | `FE-V1-025` | Route-backed coordinator contract and regressions; implementation `888abf1`. |
 | BUG-016 | Newly published production advisories affect the selected router, static plugin, browser router, and transitive glob graph. | High | Release blocker | Closed | Supply chain / `FE-V1-020` validation | Exact patched versions, zero-vulnerability audit, and full workspace/package/browser gates. |
-| BUG-017 | Production substitutes the reviewed Codex version for a real probe and exits before it can serve an incompatible-runtime diagnostic UI. | Critical | Release blocker | Open | `IFC-V1-087` | `artifacts/ifc-v1-087-production-compatibility-diagnostics.md`; implementation pending. |
+| BUG-017 | Production substitutes the reviewed Codex version for a real probe and exits before it can serve an incompatible-runtime diagnostic UI. | Critical | Release blocker | Closed | `IFC-V1-087` | Real probe, diagnostic-ready listener, durable/public truth, aggregate and clean exact/drift process evidence; implementation `ceb339e`. |
 
 ## Routing
 
@@ -250,8 +250,8 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Route: critical release blocker and backlog architecture fix. The defect crosses process observation, runtime admission, durable compatibility/session truth, application/listener startup, selected host status, and later UI recovery.
 - Related requirements: `FR-017`, `IR-006`, `IR-008`, `NFR-005`, `NFR-010`, `NFR-012`.
 - Affected / owning task: completed production composition/lifecycle and health-route behavior from `IFC-V1-039`, `IFC-V1-082`, `IFC-V1-083`, and `IFC-V1-086`; corrective leaf `IFC-V1-087`.
-- Blocks: `FE-V1-035` and `IFC-V1-091`; release acceptance remains downstream of those tasks.
+- Blocks: resolved for `FE-V1-035` and `IFC-V1-091`; release acceptance remains downstream of those tasks.
 - Root cause: smoke setup is the only real `codex --version` owner; the initialize user agent reflects HostDeck's client identity and is not independent server-version evidence; compatibility persistence occurs only after successful reconciliation; and listener startup requires runtime-ready application phase.
-- Frozen fix: boundedly probe the configured binary, skip runtime start/attachment for a valid version mismatch, persist current incompatibility, seal durable projections disconnected, permit only the proven diagnostic-ready listener with mutation admission closed, and expose a strict sanitized compatibility projection through the existing protected host-status response.
-- Validation: `PCD-01` to `PCD-24`, including hostile fake ports, exact/mismatched real process/listener smokes, durable boundary/privacy inspection, full workspace/package gates, and zero residue.
-- Evidence: criteria in `artifacts/ifc-v1-087-production-compatibility-diagnostics.md`; implementation and closure pending.
+- Fix: boundedly probe the configured binary, skip runtime start/attachment for a valid version mismatch, persist current incompatibility, seal durable projections disconnected, permit only the proven diagnostic-ready listener with mutation admission closed, and expose a strict sanitized compatibility projection through the existing protected host-status response.
+- Validation: `PCD-01` to `PCD-24` pass through hostile fake ports, 2,393 unit/28 skips, 245 contract, 36 integration, 516 web, full static/install/audit/package gates, clean committed exact/mismatched real process/listener smokes, durable boundary/privacy inspection, and zero residue.
+- Closed by: `IFC-V1-087`; criteria `0fa8b18`, implementation `ceb339e`, and evidence in `artifacts/ifc-v1-087-production-compatibility-diagnostics.md`.
