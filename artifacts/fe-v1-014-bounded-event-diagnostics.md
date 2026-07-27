@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: criteria frozen; implementation not started. `EVD-01` through `EVD-24` must pass before closure.
+Status: complete. `EVD-01` through `EVD-24` pass with the production cursor-zero evidence correction recorded below.
 
 ## Scope
 
@@ -83,6 +83,11 @@ Excluded: arbitrary event/session/cursor input, history pagination, full-transcr
 | `EVD-23` | Deterministic browser captures and layout measurements cover complete, all limitation states, all eight variants, loading/current/stale/failure/malformed/mismatch/pruned, cursor-zero, continuity-only, read-only/locked, consolidated/approval, long/expanded/scrolled, responsive/short-height/zoom states; manual comparison records only approved Focus Rail drift. |
 | `EVD-24` | Focused and aggregate web/browser suites plus full unit/contract/integration/type/lint/scaffold/planning/runtime-boundary/build/package/install/audit/privacy/diff/residue checks, owner-doc evidence, clean commits, and pushes pass before closure. |
 
+## Criteria Correction
+
+- The selected production SSE protocol cannot emit a cursor-zero retained event: its first ordinary event and first replay boundary both begin at cursor one. Injecting cursor zero into the production-shell browser fixture would therefore create evidence for a state the production route cannot produce.
+- `EVD-03`, `EVD-21`, and the local-fallback part of `EVD-23` are satisfied by direct headless and component cursor-zero tests. Production-shell Chromium covers the same no-read presentation, authority, and dismissal path through a valid continuity-only boundary. This correction narrows only the evidence layer; cursor-zero remains accepted defensively by the public event schema and remains explicit local-only truth.
+
 ## Planned Evidence
 
 - Headless tests own exact context/selection validation, query derivation, response correlation, stale/current authority, retained fallback, cancellation/retry, exhaustive projection, sanitized failures, and immutable private-free views.
@@ -96,3 +101,22 @@ Excluded: arbitrary event/session/cursor input, history pagination, full-transcr
 Reuse `selectedProjectionEventSchema`, `selectedEventPageResponseSchema`, `selectedEventDiagnosticsSchema`, the `session_events` browser route, coordinator selected-session authority, the bounded Session Detail feed, Radix Dialog, Focus Rail timeline/sheet primitives, Lucide icons, selected runtime/mobile fixtures, and Playwright production shell. Add no production dependency or generated asset; `assets/ui-concepts/option-b/mobile-session-detail-active.png`, `mobile-approval-boundary-states.png`, `primary-controls.png`, and the Option B design system are the approved targets.
 
 `FE-V1-014` owns only browser event selection/read state, explicit normalized diagnostic projection, eligible timeline affordances, the read-only details sheet, and deterministic UI evidence. `IFC-V1-069` retains page/auth/storage/retention truth; `FE-V1-012` retains feed/timeline/SSE behavior; `FE-V1-022` retains approval decisions; `FE-V1-036` and `FE-V1-037` retain interrupt/archive; `FE-V1-015`, `FE-V1-016`, `FE-V1-039`, `FE-V1-017`, and release leaves retain aggregate state, responsive/accessibility, module, physical-device, packaged-asset, and release acceptance.
+
+## Completion Evidence
+
+- Implementation commits `4633bcd`, `246208f`, and `0489a86` add one strict immutable-session diagnostics owner, exact one-event verification, local-only boundary fallback, exhaustive eight-variant projection, sanitized failure taxonomy, eligible timeline actions, and one accessible Focus Rail sheet. Production code adds no dependency, persistence, timer, polling, retry loop, arbitrary cursor/history input, write path, raw JSON/protocol surface, link, copy, download, or terminal behavior.
+- Focused state/component tests pass 56/56; the wider affected focused matrix passes 91/91. Aggregate web passes 683 tests in 38 files. Production-shell Chromium passes 85/85, including six dedicated diagnostics scenarios and adjacent approval, Session Detail keyboard/geometry, prompt, control, utility, security, and recovery regressions. Unit passes 2,560 with 28 intentional external skips; contract passes 245; integration passes 36.
+- Root typecheck, lint/exports across 686 files and eight packages, scaffold (eight packages/21 scripts), planning before closure (220 tasks/84 requirements/683 dependencies/five queued), selected runtime boundary (614 production modules/22 externals), and exact Codex 0.144.0 binding (671 files) pass. A clean isolated `0489a86` worktree also passes the exact deterministic/structured/lifecycle runtime aggregate in 160.24 seconds with zero owned process, file, root, or report residue.
+- Vite and root builds pass. Deterministic package acceptance and verification pass at 614 sources, 1,235 owned outputs, 6,449 entries, and SHA-256 `35f41f5daccab92d6ded30bf1de374d5451e1ce81282e1136a2452f7810a3ace`; frozen offline install and the production audit pass with zero findings across 184 dependencies. Only test registration changed package manifests; no dependency or lockfile changed.
+- Thirty-two deterministic PNGs plus `layout-measurements.json` cover all eight variants, four limitation states, current/loading/stale/retry/failure/malformed/mismatch/pruned truth, nullable and continuity-only boundaries, read-only/locked authority, consolidated message and approval selection, long expanded/scrolled content, 320/360/390/412/768/1280 widths, 390 x 420 short height, and effective 200 percent reflow. Measurements and manual inspection prove one scroll owner, fixed visible footer, 44 px controls, wrapped maximum content, no document/sheet horizontal overflow, and no approved Focus Rail drift.
+- Browser request/DOM/history/storage privacy assertions, explicit private-sentinel rejection, source-boundary review, dependency/diff checks, listener/temp-root inspection, and generated-artifact cleanup pass. The pre-existing port 5173 preview and user-owned historical screenshot edits were left untouched; no phone, Tailscale profile, Serve configuration, or device state was changed for this leaf.
+
+## Criteria Result
+
+| Criteria | Result | Evidence |
+| --- | --- | --- |
+| `EVD-01` to `EVD-07` | Pass | Strict construction, exact selection/read correlation, single-flight cancellation, authority epochs, stale/current/local-only truth, retry, and failure tests. |
+| `EVD-08` to `EVD-15` | Pass | Exhaustive private-free public projection, all variants/limitations/boundaries, sanitized error taxonomy, and production source-boundary inspection. |
+| `EVD-16` to `EVD-20` | Pass | Eligible/consolidated row actions, modal/focus/accessibility behavior, approved Focus Rail mapping, and full geometry/reflow evidence. |
+| `EVD-21` to `EVD-23` | Pass | Focused, aggregate, and browser matrices plus 32 captures and layout JSON; cursor zero uses the corrected direct/component evidence layer above. |
+| `EVD-24` | Pass | Full workspace, exact-runtime, build/package/install/audit/privacy/diff/residue gates and pushed implementation commits. |
