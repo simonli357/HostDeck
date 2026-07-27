@@ -16,15 +16,14 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-034` Implement remote connection recovery | in_progress | none | Frozen `RCR-01` to `RCR-24`; implement exact read-only checking, shared recovery truth, Focus Rail UI, and production phone evidence. |
-| 2 | `FE-V1-035` Implement compatibility state | ready | none | Surface exact runtime compatibility before complete-dashboard failure hardening. |
-| 3 | `FE-V1-028` Implement usage utility | ready | none | Add the first secondary structured utility after the primary controls. |
-| 4 | `FE-V1-029` Implement compact utility | ready | none | Add bounded context compaction through its exact structured route. |
-| 5 | `FE-V1-030` Implement skills utility | ready | none | Add capability-aware skill discovery after the primary controls. |
-| 6 | `FE-V1-014` Implement bounded event diagnostics | ready | none | Add diagnostic disclosure without weakening the semantic timeline or privacy boundary. |
-| 7 | `FE-V1-036` Implement interrupt affordance | ready | none | Add the first bounded session action after the primary workflow. |
-| 8 | `FE-V1-037` Implement archive affordance | ready | none | Add explicit archive confirmation and outcome handling. |
-| 9 | `FE-V1-038` Implement laptop-resume affordance | ready | none | Add the selected TUI-resume handoff after other session actions. |
+| 1 | `FE-V1-035` Implement compatibility state | ready | none | Surface exact runtime compatibility before complete-dashboard failure hardening. |
+| 2 | `FE-V1-028` Implement usage utility | ready | none | Add the first secondary structured utility after the primary controls. |
+| 3 | `FE-V1-029` Implement compact utility | ready | none | Add bounded context compaction through its exact structured route. |
+| 4 | `FE-V1-030` Implement skills utility | ready | none | Add capability-aware skill discovery after the primary controls. |
+| 5 | `FE-V1-014` Implement bounded event diagnostics | ready | none | Add diagnostic disclosure without weakening the semantic timeline or privacy boundary. |
+| 6 | `FE-V1-036` Implement interrupt affordance | ready | none | Add the first bounded session action after the primary workflow. |
+| 7 | `FE-V1-037` Implement archive affordance | ready | none | Add explicit archive confirmation and outcome handling. |
+| 8 | `FE-V1-038` Implement laptop-resume affordance | ready | none | Add the selected TUI-resume handoff after other session actions. |
 
 ## Intentional Blockers
 

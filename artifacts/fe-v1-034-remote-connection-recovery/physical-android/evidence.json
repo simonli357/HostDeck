@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "task": "FE-V1-034",
+  "commit": "72494c5d2b07c8ac5afadc5e0f667d4e55a47a27",
+  "command": "pnpm smoke:recovery-android",
+  "run": {
+    "completed_at": "2026-07-27T14:07:44.376Z",
+    "retry_count": 0,
+    "started_at": "2026-07-27T14:05:10.105Z"
+  },
+  "environment": {
+    "android_api": "36",
+    "android_model": "Xiaomi 15 Pro",
+    "android_release": "16",
+    "chrome_version": "150.0.7871.181",
+    "host_os": "Ubuntu 24.04.4 LTS",
+    "node_version": "v22.22.2",
+    "tailscale_version": "1.98.8"
+  },
+  "network": {
+    "adb_app_tunnel_count": 0,
+    "adb_device_count": 1,
+    "cellular_active": true,
+    "custom_ca_used": false,
+    "private_serve_https": true,
+    "qr_scan_count": 0,
+    "tailscale_vpn_active": true,
+    "usb_used_for_bootstrap_and_test_driver_only": true,
+    "wifi_disabled_during_requests": true
+  },
+  "lifecycle": {
+    "browser_mutation_requests": 0,
+    "listener": "ipv4_loopback_http",
+    "manager_attempts": 2,
+    "manager_attempts_during_saved_profile_switch": 0,
+    "private_serve_https": true,
+    "production_browser_build": true,
+    "recovery": "observation_only"
+  },
+  "pairing": {
+    "automated_one_time_link": true,
+    "claim_requests": 1,
+    "fragment_scrubbed_before_api": true,
+    "repaired_without_repairing": true
+  },
+  "sequence": {
+    "browserMutationRequests": 0,
+    "checkedReadyVisible": true,
+    "claimRequests": 1,
+    "genericBrowserFailureVisible": true,
+    "managerAttemptsBeforeDisable": 1,
+    "managerAttemptsDuringSwitch": 0,
+    "profileReturnRecovered": true,
+    "remoteBrowserStatusRequests": 2
+  },
+  "foreign_serve": {
+    "byte_count": 3,
+    "byte_identical": true
+  },
+  "screenshots": [
+    {
+      "byte_count": 101519,
+      "file": "fe034-01-ready.png",
+      "sha256": "75fe3993649c029a4ee02e4eb3407d8ceede6699c14ab291366fee29da5a7695"
+    },
+    {
+      "byte_count": 146809,
+      "file": "fe034-02-profile-away.png",
+      "sha256": "e5234489303e882fd5c92588d63ef1c4928ecec7b4c6472d98e2fecc744d20ac"
+    },
+    {
+      "byte_count": 100589,
+      "file": "fe034-03-recovered.png",
+      "sha256": "b6d56489a7cd4026326648742e157140ad590a2915de1a43339cfcaa71f2a9ca"
+    }
+  ],
+  "privacy": {
+    "account_identity_retained": false,
+    "address_or_origin_retained": false,
+    "pairing_material_retained": false,
+    "raw_command_output_retained": false
+  },
+  "cleanup": {
+    "adb_forwards": 0,
+    "adb_reverses": 0,
+    "browser_closed": true,
+    "database_open": false,
+    "dedicated_serve_absent": true,
+    "foreign_serve_unchanged": true,
+    "listener_open": false,
+    "mobile_data_restored": true,
+    "saved_profile_restored": true,
+    "stay_awake_setting_restored": true,
+    "temporary_state_present": false,
+    "wifi_restored": true
+  }
+}

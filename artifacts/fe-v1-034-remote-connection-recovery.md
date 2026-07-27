@@ -1,8 +1,8 @@
 # FE-V1-034 Remote Connection Recovery
 
-Date: 2026-07-26
+Date: 2026-07-27
 
-Status: implementation and non-device validation complete; physical Android acceptance pending.
+Status: complete. `RCR-01` through `RCR-24` pass, including production physical Android acceptance.
 
 ## Scope
 
@@ -115,9 +115,9 @@ Excluded: profile switching, Tailscale login/logout/up/down/service ownership, S
 - Added exact coordinator admission for paired-device `GET /api/v1/remote/status`. Generic protected dispatch rejects `remote_status`, `remote_enable`, and `remote_disable` before HTTP dispatch.
 - Added the flat `Remote connection` Focus Rail to Host & access and shared its current laptop diagnosis with Mission Control and Session Detail. Removed the unsupported Serve-configuring fixture claim.
 - Added the production no-QR Android recovery harness and `pnpm smoke:recovery-android`. The harness owns profile-away/profile-return observation, request and audit counts, privacy-checked screenshots, authority cleanup, Serve cleanup, and phone-setting restoration.
-- Focused and aggregate validation passed: 516 web tests; 21 physical-harness tests with the device case intentionally skipped; 2,371 unit tests with 28 skips; 244 contract tests; 36 integration tests; 63 production-shell Chromium scenarios; root and CLI typecheck; lint and package exports; scaffold, planning, runtime-boundary, production build, package/relocation, frozen offline install, dependency audit, and license review.
+- Focused and aggregate validation passed: 516 web tests; 21 non-device physical-harness tests with the device case intentionally skipped; 2,375 unit tests with 28 skips; 244 contract tests; 36 integration tests; 63 production-shell Chromium scenarios; root and CLI typecheck; lint and package exports; scaffold, planning, runtime-boundary, production build, package/relocation, frozen offline install, dependency audit, and license review.
 - Browser evidence covers every public recovery reason, checking, failed check, reconnecting, recovered, both production routes, 320/360/390/412/768/1280 widths, 390 x 420 short height, and actual 200 percent reflow. Layout records prove one sheet scroll owner, reachable close/action controls, 44 px targets, and no document overflow.
-- `RCR-01` through `RCR-22` are implemented and validated. `RCR-23` and the physical portion of `RCR-24` remain open until `pnpm smoke:recovery-android` passes on the connected phone and its sanitized evidence is inspected.
+- `RCR-01` through `RCR-24` are implemented and validated. Physical evidence is published under `artifacts/fe-v1-034-remote-connection-recovery/physical-android/`.
 
 ## Physical Run Log
 
@@ -131,6 +131,9 @@ Excluded: profile switching, Tailscale login/logout/up/down/service ownership, S
 - The following run reached the production ready screenshot checkpoint over cellular plus private HTTPS, where the evidence privacy guard rejected Chrome's visible address-bar origin. It published no partial evidence and restored its inherited baseline, but that baseline already contained the prior mobile-data cleanup defect. Failure cleanup now preserves the original acceptance error, independently attempts every Chrome, profile, Serve, lifecycle, database, temporary-state, Wi-Fi, mobile-data, stay-awake, and ADB-tunnel cleanup, and reports privacy-safe aggregate failures instead of swallowing them.
 - Evidence capture now requires one exact Chrome toolbar and compositor geometry, scans every semantic node intersecting the retained page viewport, decodes the bounded full screenshot in memory, and writes only the app viewport. Ambiguous geometry, retained private page material, malformed PNG data, or out-of-bounds crop fails closed; deterministic geometry and pixel-copy tests pass.
 - Clean revision `7c32565` then stopped before network mutation because Xiaomi's complete telephony-registry dump exceeded the generic 512 KiB ADB command buffer before the current-state parser could run. The strict cleanup contract passed and retained the mobile-data-off, Wi-Fi-on baseline. Mobile-data observation now runs one static on-device filter for only exact `mUserMobileDataState` boolean lines, retains the same one-to-four uniform-state parser, and lowers the accepted result bound to 1 KiB.
+- Clean revision `72494c5` passed all 22 physical-harness tests in 166.99 seconds. One automated fragment-only pairing claim loaded the production React build through private Tailscale Serve HTTPS while phone Wi-Fi was disabled and validated cellular plus Tailscale VPN transports were active. The dashboard showed current ready truth, generic loaded-browser failure after the laptop moved to the saved away profile, and current ready truth after observation-only return without re-pairing.
+- The accepted run issued two browser status reads, zero browser mutation requests, one explicit local enable and disable, and zero manager attempts during saved-profile switching. The foreign profile's Serve fingerprint remained byte-identical. Self-revocation, dedicated-profile return, absent dedicated Serve state, closed Chrome/listener/database, removed temporary state, zero ADB tunnels, and restored Wi-Fi, mobile-data, and stay-awake settings all passed.
+- `fe034-01-ready.png`, `fe034-02-profile-away.png`, and `fe034-03-recovered.png` were hash-verified and visually inspected at 1080 x 2067. They contain only the app viewport, show no overlap or clipping, and retain no address bar, notification, origin, DNS/IP, account/profile identity, device serial, QR/pairing material, cookie/token, or command output. Live identity-value and private URL/email/Tailscale-IP scans pass; `evidence.json` records the bounded environment, sequence, request counts, hashes, privacy flags, and cleanup truth.
 
 ## Reuse And Ownership
 
