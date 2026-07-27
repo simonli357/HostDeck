@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: ready `FE-V1-028` usage utility. `IFC-V1-087` and `BUG-017` are closed; `FE-V1-035` is also dependency-ready against the proven production compatibility projection.
+- Active task: `FE-V1-028` usage utility is in progress against frozen `UUS-01` to `UUS-24`. `IFC-V1-087` and `BUG-017` are closed; `FE-V1-035` is also dependency-ready against the proven production compatibility projection.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's default 0.145.0 binary remains ineligible as exact-runtime evidence but now passes the required no-runtime diagnostic path; the isolated exact 0.144.0 binary passes the supported-path regression.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract and both replacement sets are complete. Under `DEC-028`, the human selected all seven current Focus Rail assets with no Signal Ledger borrowing or additional structural drift; both legacy desktop-led boards remain rejected.
@@ -155,7 +155,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Blockers
 
-- No task-specific blocker prevents ready `FE-V1-028`. V1 remains release-blocked by unfinished mobile/interface hardening, real packaged assets, persistent install/parity, device acceptance, and final release gates.
+- No task-specific blocker prevents in-progress `FE-V1-028`. V1 remains release-blocked by unfinished mobile/interface hardening, real packaged assets, persistent install/parity, device acceptance, and final release gates.
 
 ## Validation
 

@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-028` Implement usage utility | ready | none | Add the first secondary structured utility after the primary controls. |
+| 1 | `FE-V1-028` Implement usage utility | in_progress | none | Add the first secondary structured utility after the primary controls. |
 | 2 | `FE-V1-029` Implement compact utility | ready | none | Add bounded context compaction through its exact structured route. |
 | 3 | `FE-V1-030` Implement skills utility | ready | none | Add capability-aware skill discovery after the primary controls. |
 | 4 | `FE-V1-014` Implement bounded event diagnostics | ready | none | Add diagnostic disclosure without weakening the semantic timeline or privacy boundary. |
