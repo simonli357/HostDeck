@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `FE-V1-028` is complete at implementation `c1c669e`; `UUS-01` to `UUS-24` pass. The selected queue advances to ready `FE-V1-029`; `FE-V1-035` remains dependency-ready against the proven production compatibility projection.
+- Active task: `FE-V1-029` confirmed Compact utility is in progress against frozen `CCU-01` to `CCU-24`. `FE-V1-028` is complete and `FE-V1-035` remains dependency-ready against the proven production compatibility projection.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's default 0.145.0 binary remains ineligible as exact-runtime evidence but now passes the required no-runtime diagnostic path; the isolated exact 0.144.0 binary passes the supported-path regression.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract and both replacement sets are complete. Under `DEC-028`, the human selected all seven current Focus Rail assets with no Signal Ledger borrowing or additional structural drift; both legacy desktop-led boards remain rejected.
@@ -156,7 +156,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Blockers
 
-- No task-specific blocker prevents ready `FE-V1-029`. V1 remains release-blocked by unfinished mobile/interface hardening, real packaged assets, persistent install/parity, device acceptance, and final release gates.
+- No task-specific blocker prevents in-progress `FE-V1-029`. V1 remains release-blocked by unfinished mobile/interface hardening, real packaged assets, persistent install/parity, device acceptance, and final release gates.
 
 ## Validation
 
@@ -328,7 +328,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Git
 
-- `FE-V1-028` criteria through `be73659` and implementation/evidence `c1c669e` are pushed; this owner-doc closure advances the selected queue to ready `FE-V1-029`.
+- `FE-V1-028` criteria through `be73659`, implementation/evidence `c1c669e`, and closure `875c0eb` are pushed; `FE-V1-029` is active against frozen `CCU-01` to `CCU-24`.
 - `IFC-V1-087` criteria `0fa8b18` and implementation `ceb339e` are pushed; `PCD-01` to `PCD-24` pass, `BUG-017` is closed, and the selected queue advances to ready `FE-V1-028` while `FE-V1-035` becomes dependency-ready.
 - `FE-V1-034` implementation `1f02880` and physical hardening through accepted revision `72494c5` are pushed; this owner-doc closure advances the active queue to ready `FE-V1-035`.
 - `FE-V1-033` criteria `4243f17` and implementation/evidence `3f00ce4` are pushed; this owner-doc closure advances the active queue to ready `FE-V1-034`.
