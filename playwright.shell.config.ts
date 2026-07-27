@@ -16,6 +16,7 @@ export default defineConfig({
     "prompt-composer.spec.ts",
     "remote-connection-recovery.spec.ts",
     "session-detail.spec.ts",
+    "skills-control.spec.ts",
     "usage-control.spec.ts"
   ],
   fullyParallel: false,

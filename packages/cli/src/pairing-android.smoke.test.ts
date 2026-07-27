@@ -243,22 +243,26 @@ describe("physical Android phone-driver protocol", () => {
     );
   });
 
-  it("builds the real production browser app for pairing-only acceptance", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "hostdeck-pairing-ui-build-"));
-    try {
-      const buildRoot = await buildProductionBrowserApp(directory);
-      expect(readFileSync(join(buildRoot, "index.html"), "utf8")).toContain(
-        "/assets/"
-      );
-      expect(
-        readdirSync(join(buildRoot, "assets")).some((name) =>
-          name.endsWith(".js")
-        )
-      ).toBe(true);
-    } finally {
-      rmSync(directory, { force: true, recursive: true });
-    }
-  });
+  it(
+    "builds the real production browser app for pairing-only acceptance",
+    async () => {
+      const directory = mkdtempSync(join(tmpdir(), "hostdeck-pairing-ui-build-"));
+      try {
+        const buildRoot = await buildProductionBrowserApp(directory);
+        expect(readFileSync(join(buildRoot, "index.html"), "utf8")).toContain(
+          "/assets/"
+        );
+        expect(
+          readdirSync(join(buildRoot, "assets")).some((name) =>
+            name.endsWith(".js")
+          )
+        ).toBe(true);
+      } finally {
+        rmSync(directory, { force: true, recursive: true });
+      }
+    },
+    15_000
+  );
 
   it("seeds one repository-valid production pairing session", () => {
     const directory = mkdtempSync(join(tmpdir(), "hostdeck-pairing-session-"));

@@ -5,6 +5,7 @@ import {
   selectedAccessStateResponseSchema,
   selectedSessionDetailResponseSchema,
   selectedSessionReadItemSchema,
+  skillsSnapshotSchema,
   type UsageSnapshot,
   usageSnapshotSchema
 } from "@hostdeck/contracts";
@@ -25,6 +26,11 @@ import type {
 } from "./connection-state.js";
 import { HostDeckBrowserHttpError } from "./http-client.js";
 import { SessionUtilities } from "./session-utilities.js";
+import { useSkillsControlController } from "./skills-control.js";
+import {
+  createSkillsControlController,
+  type SkillsControlPort
+} from "./skills-control-state.js";
 import { useUsageControlController } from "./usage-control.js";
 import {
   createUsageControlController,
@@ -57,12 +63,12 @@ describe("UsageControl", () => {
     expect(port.read).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /usage/iu })).toBeTruthy();
     expect(screen.getByRole("button", { name: /compact/iu })).toBeTruthy();
-    expect(screen.queryByText("/skills")).toBeNull();
+    expect(screen.getByRole("button", { name: /skills/iu })).toBeTruthy();
     expect(
       Array.from(dialog.querySelectorAll(".hostdeck-utility-menu__item strong"), (item) =>
         item.textContent
       )
-    ).toEqual(["/usage", "/compact"]);
+    ).toEqual(["/usage", "/compact", "/skills"]);
 
     await user.click(screen.getByRole("button", { name: /usage/iu }));
     dialog = screen.getByRole("dialog", { name: "/usage" });
@@ -280,7 +286,8 @@ describe("UsageControl", () => {
     function Harness() {
       const usage = useUsageControlController(coordinator, sessionId, current.snapshot);
       const compact = useCompactControlController(coordinator, sessionId, current.snapshot);
-      return <SessionUtilities compact={compact} usage={usage} />;
+      const skills = useSkillsControlController(coordinator, sessionId, current.snapshot);
+      return <SessionUtilities compact={compact} skills={skills} usage={usage} />;
     }
 
     const rendered = render(
@@ -318,7 +325,8 @@ describe("UsageControl", () => {
     function Harness() {
       const usage = useUsageControlController(coordinator, sessionId, current.snapshot);
       const compact = useCompactControlController(coordinator, sessionId, current.snapshot);
-      return <SessionUtilities compact={compact} usage={usage} />;
+      const skills = useSkillsControlController(coordinator, sessionId, current.snapshot);
+      return <SessionUtilities compact={compact} skills={skills} usage={usage} />;
     }
 
     const rendered = render(
@@ -345,7 +353,8 @@ describe("UsageControl", () => {
     function Harness({ snapshot }: Readonly<{ snapshot: BrowserConnectionSnapshot }>) {
       const usage = useUsageControlController(coordinator, sessionId, snapshot);
       const compact = useCompactControlController(coordinator, sessionId, snapshot);
-      return <SessionUtilities compact={compact} usage={usage} />;
+      const skills = useSkillsControlController(coordinator, sessionId, snapshot);
+      return <SessionUtilities compact={compact} skills={skills} usage={usage} />;
     }
 
     const rendered = render(
@@ -387,7 +396,12 @@ function renderUtilities(usage: ReturnType<typeof readyController>) {
     port: compactPort(),
     createOperationId: () => "op_browser_compact_usage_ui_001"
   });
-  return render(<SessionUtilities compact={compact} usage={usage} />);
+  const skills = createSkillsControlController({
+    sessionId,
+    context: controlContext(),
+    port: skillsPort()
+  });
+  return render(<SessionUtilities compact={compact} skills={skills} usage={usage} />);
 }
 
 function compactPort(): CompactControlPort {
@@ -399,6 +413,26 @@ function compactPort(): CompactControlPort {
 
 function usagePort(overrides: Partial<UsageControlPort> = {}) {
   return { read: vi.fn(overrides.read ?? (async () => usageSnapshot())) };
+}
+
+function skillsPort(): SkillsControlPort {
+  return Object.freeze({ read: vi.fn(async () => skillsSnapshot()) });
+}
+
+function skillsSnapshot() {
+  return skillsSnapshotSchema.parse({
+    target: {
+      type: "managed_session",
+      session_id: sessionId,
+      codex_thread_id: threadId
+    },
+    runtime_version: "0.144.0",
+    connection_generation: 4,
+    observed_at: timestamp,
+    state: "empty",
+    skills: [],
+    error_count: 0
+  });
 }
 
 function usageSnapshot(

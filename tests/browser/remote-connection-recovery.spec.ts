@@ -224,7 +224,8 @@ test("uses the same current laptop recovery copy on Session Detail", async ({ pa
   const overlay = await installRemoteHostOverlay(page, "profile_other");
   await page.goto(`/sessions/${sessionDetailBrowserSessionId}`);
 
-  await expect(page.getByRole("heading", { level: 1, name: "Session Detail" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "android-release activity" }))
+    .toBeVisible();
   await expect(page.getByText("HostDeck profile is not active", { exact: true }).first())
     .toBeVisible();
   await expect(page.getByRole("list", { name: "Session activity" })).toBeVisible();

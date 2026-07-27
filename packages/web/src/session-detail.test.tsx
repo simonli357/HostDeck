@@ -8,10 +8,12 @@ import {
   pendingApprovalListResponseSchema,
   type SelectedAccessStateResponse,
   type SelectedProjectionEvent,
+  type SkillsSnapshot,
   selectedAccessStateResponseSchema,
   selectedProjectionEventSchema,
   selectedSessionDetailResponseSchema,
   selectedSessionReadItemSchema,
+  skillsSnapshotSchema,
   type UsageSnapshot,
   usageSnapshotSchema
 } from "@hostdeck/contracts";
@@ -379,12 +381,15 @@ describe("Session Detail controller", () => {
       harness.requestSelectedSessionRead.mock.calls.filter(([routeId]) => routeId === "compact_read")
     ).toHaveLength(0);
     expect(
+      harness.requestSelectedSessionRead.mock.calls.filter(([routeId]) => routeId === "skills_read")
+    ).toHaveLength(0);
+    expect(
       Array.from(
         screen.getByRole("dialog", { name: "Session utilities" })
           .querySelectorAll(".hostdeck-utility-menu__item strong"),
         (item) => item.textContent
       )
-    ).toEqual(["/usage", "/compact"]);
+    ).toEqual(["/usage", "/compact", "/skills"]);
     fireEvent.click(screen.getByRole("button", { name: /usage/iu }));
     expect(await screen.findByText("Usage capture current", { exact: true })).toBeTruthy();
     expect(harness.requestSelectedSessionRead).toHaveBeenCalledWith(
@@ -408,6 +413,20 @@ describe("Session Detail controller", () => {
     );
     expect(
       harness.requestSelectedSessionRead.mock.calls.filter(([routeId]) => routeId === "compact_read")
+    ).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Back to session utilities" }));
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "Session utilities" })).toBeTruthy()
+    );
+    fireEvent.click(screen.getByRole("button", { name: /skills/iu }));
+    expect(await screen.findByText("No skills reported", { exact: true })).toBeTruthy();
+    expect(harness.requestSelectedSessionRead).toHaveBeenCalledWith(
+      "skills_read",
+      { params: { session_id: sessionId } },
+      { signal: expect.any(AbortSignal) }
+    );
+    expect(
+      harness.requestSelectedSessionRead.mock.calls.filter(([routeId]) => routeId === "skills_read")
     ).toHaveLength(1);
   });
 
@@ -789,7 +808,9 @@ function coordinatorHarness(
           ? usageSnapshot()
           : routeId === "compact_read"
             ? compactProgressResponseSchema.parse({ progress: null })
-          : modelSnapshot()
+            : routeId === "skills_read"
+              ? skillsSnapshot()
+              : modelSnapshot()
   }));
   const coordinator = {
     snapshot: () => snapshot,
@@ -885,6 +906,22 @@ function usageSnapshot(): UsageSnapshot {
     },
     thread: { state: "not_observed", scope: "thread" },
     rate_limits: { state: "not_observed", scope: "runtime" }
+  });
+}
+
+function skillsSnapshot(): SkillsSnapshot {
+  return skillsSnapshotSchema.parse({
+    target: {
+      type: "managed_session",
+      session_id: sessionId,
+      codex_thread_id: "thread-private-detail"
+    },
+    runtime_version: "0.144.0",
+    connection_generation: 1,
+    observed_at: timestamp,
+    state: "empty",
+    skills: [],
+    error_count: 0
   });
 }
 

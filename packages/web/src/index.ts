@@ -28,6 +28,8 @@ export * from "./remote-connection-recovery-state.js";
 export * from "./session-detail.js";
 export * from "./session-detail-feed.js";
 export * from "./session-utilities.js";
+export * from "./skills-control.js";
+export * from "./skills-control-state.js";
 export * from "./sse-client.js";
 export * from "./sse-route-contract.js";
 export * from "./usage-control.js";

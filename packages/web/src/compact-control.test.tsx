@@ -6,7 +6,8 @@ import {
   selectedAccessStateResponseSchema,
   selectedOperationProgressSchema,
   selectedSessionDetailResponseSchema,
-  selectedSessionReadItemSchema
+  selectedSessionReadItemSchema,
+  skillsSnapshotSchema
 } from "@hostdeck/contracts";
 import type { SessionId } from "@hostdeck/core";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -25,6 +26,11 @@ import type {
 } from "./connection-state.js";
 import { HostDeckBrowserHttpError } from "./http-client.js";
 import { SessionUtilities } from "./session-utilities.js";
+import { useSkillsControlController } from "./skills-control.js";
+import {
+  createSkillsControlController,
+  type SkillsControlPort
+} from "./skills-control-state.js";
 import { createUsageControlController, type UsageControlPort } from "./usage-control-state.js";
 
 const sessionId = "sess_compact_ui_001" as SessionId;
@@ -55,7 +61,7 @@ describe("CompactControl", () => {
       Array.from(menu.querySelectorAll(".hostdeck-utility-menu__item strong"), (item) =>
         item.textContent
       )
-    ).toEqual(["/usage", "/compact"]);
+    ).toEqual(["/usage", "/compact", "/skills"]);
 
     await user.click(screen.getByRole("button", { name: /compact/iu }));
     const dialog = screen.getByRole("dialog", { name: "/compact" });
@@ -208,7 +214,12 @@ describe("CompactControl", () => {
         context: currentContext,
         port: usagePort()
       });
-      return <SessionUtilities compact={compact} usage={usage} />;
+      const skills = useSkillsControlController(
+        coordinator,
+        sessionId,
+        currentContext.snapshot
+      );
+      return <SessionUtilities compact={compact} skills={skills} usage={usage} />;
     }
 
     const rendered = render(
@@ -261,7 +272,12 @@ function renderUtilities(
     context: currentContext,
     port: usagePort()
   });
-  return render(<SessionUtilities compact={compact} usage={usage} />);
+  const skills = createSkillsControlController({
+    sessionId,
+    context: currentContext,
+    port: skillsPort()
+  });
+  return render(<SessionUtilities compact={compact} skills={skills} usage={usage} />);
 }
 
 function compactController(
@@ -287,6 +303,26 @@ function compactPort(overrides: Partial<CompactControlPort> = {}) {
 
 function usagePort(): UsageControlPort {
   return Object.freeze({ read: vi.fn(async () => ({ unused: true })) });
+}
+
+function skillsPort(): SkillsControlPort {
+  return Object.freeze({ read: vi.fn(async () => skillsSnapshot()) });
+}
+
+function skillsSnapshot() {
+  return skillsSnapshotSchema.parse({
+    target: {
+      type: "managed_session",
+      session_id: sessionId,
+      codex_thread_id: threadId
+    },
+    runtime_version: "0.144.0",
+    connection_generation: 4,
+    observed_at: timestamp,
+    state: "empty",
+    skills: [],
+    error_count: 0
+  });
 }
 
 function compactResponse(

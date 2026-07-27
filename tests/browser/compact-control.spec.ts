@@ -42,9 +42,9 @@ test("discovers Compact without prefetch and proves its explicit lifecycle", asy
   await expect(menu).toBeVisible();
   await expect(menu.locator(".hostdeck-utility-menu__item strong")).toHaveText([
     "/usage",
-    "/compact"
+    "/compact",
+    "/skills"
   ]);
-  await expect(menu.getByText("/skills", { exact: true })).toHaveCount(0);
   expect(api.readRequests()).toHaveLength(0);
   await page.screenshot({
     path: resolve(artifactDirectory, "utility-menu-390x844.png"),

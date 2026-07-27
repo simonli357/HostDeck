@@ -5,6 +5,7 @@ import {
   Ellipsis,
   Gauge,
   Minimize2,
+  Sparkles,
   X
 } from "lucide-react";
 import {
@@ -17,17 +18,20 @@ import {
 } from "react";
 import { CompactSheetBody } from "./compact-control.js";
 import type { CompactControlController } from "./compact-control-state.js";
+import { SkillsSheetBody } from "./skills-control.js";
+import type { SkillsControlController } from "./skills-control-state.js";
 import { UsageSheetBody } from "./usage-control.js";
 import type { UsageControlController } from "./usage-control-state.js";
 
 export interface SessionUtilitiesProps {
   readonly compact: CompactControlController;
+  readonly skills: SkillsControlController;
   readonly usage: UsageControlController;
 }
 
-type UtilityPage = "menu" | "usage" | "compact";
+type UtilityPage = "menu" | "usage" | "compact" | "skills";
 
-export function SessionUtilities({ compact, usage }: SessionUtilitiesProps) {
+export function SessionUtilities({ compact, skills, usage }: SessionUtilitiesProps) {
   const compactView = useSyncExternalStore(
     compact.subscribe,
     compact.snapshot,
@@ -38,20 +42,30 @@ export function SessionUtilities({ compact, usage }: SessionUtilitiesProps) {
     usage.snapshot,
     usage.snapshot
   );
+  const skillsView = useSyncExternalStore(
+    skills.subscribe,
+    skills.snapshot,
+    skills.snapshot
+  );
   const [dialogOpen, setDialogOpen] = useState(false);
   const [page, setPage] = useState<UtilityPage>("menu");
   const usageItemRef = useRef<HTMLButtonElement>(null);
   const compactItemRef = useRef<HTMLButtonElement>(null);
+  const skillsItemRef = useRef<HTMLButtonElement>(null);
   const backButtonRef = useRef<HTMLButtonElement>(null);
   const id = useId();
   const targetId = `${id}-target`;
   const usageStatusId = `${id}-usage-status`;
   const compactStatusId = `${id}-compact-status`;
+  const skillsStatusId = `${id}-skills-status`;
   const sameTarget =
     usageView.sessionId === compactView.sessionId &&
+    usageView.sessionId === skillsView.sessionId &&
     usageView.targetLabel !== null &&
-    usageView.targetLabel === compactView.targetLabel;
-  const visible = usageView.visible && compactView.visible && sameTarget;
+    usageView.targetLabel === compactView.targetLabel &&
+    usageView.targetLabel === skillsView.targetLabel;
+  const visible =
+    usageView.visible && compactView.visible && skillsView.visible && sameTarget;
   const compactSubmissionActive =
     page === "compact" && compactView.closeDisabled;
 
@@ -60,7 +74,8 @@ export function SessionUtilities({ compact, usage }: SessionUtilitiesProps) {
     const activeSheetOpen =
       page === "menu" ||
       (page === "usage" && usageView.sheetOpen) ||
-      (page === "compact" && compactView.sheetOpen);
+      (page === "compact" && compactView.sheetOpen) ||
+      (page === "skills" && skillsView.sheetOpen);
     if (!visible || !activeSheetOpen) {
       setDialogOpen(false);
       setPage("menu");
@@ -69,6 +84,7 @@ export function SessionUtilities({ compact, usage }: SessionUtilitiesProps) {
     compactView.sheetOpen,
     dialogOpen,
     page,
+    skillsView.sheetOpen,
     usageView.sheetOpen,
     visible
   ]);
@@ -85,27 +101,36 @@ export function SessionUtilities({ compact, usage }: SessionUtilitiesProps) {
     ? usageView.tone
     : page === "compact"
       ? compactView.tone
-      : "focus";
+      : page === "skills"
+        ? skillsView.tone
+        : "focus";
   const title = page === "menu"
     ? "Session utilities"
     : page === "usage"
       ? "/usage"
-      : "/compact";
+      : page === "compact"
+        ? "/compact"
+        : "/skills";
   const statusId = page === "usage"
     ? usageStatusId
     : page === "compact"
       ? compactStatusId
-      : null;
+      : page === "skills"
+        ? skillsStatusId
+        : null;
   const closeLabel = page === "menu"
     ? "Close session utilities"
     : page === "usage"
       ? "Close Usage utility"
-      : "Close Compact utility";
+      : page === "compact"
+        ? "Close Compact utility"
+        : "Close Skills utility";
 
   const setOpen = (open: boolean) => {
     if (open) {
       usage.dismiss();
       compact.dismiss();
+      skills.dismiss();
       setPage("menu");
       setDialogOpen(true);
       return;
@@ -113,6 +138,7 @@ export function SessionUtilities({ compact, usage }: SessionUtilitiesProps) {
     if (compactSubmissionActive) return;
     usage.dismiss();
     compact.dismiss();
+    skills.dismiss();
     setDialogOpen(false);
     setPage("menu");
   };
@@ -120,6 +146,7 @@ export function SessionUtilities({ compact, usage }: SessionUtilitiesProps) {
   const openUsage = () => {
     if (!usageView.actionEnabled) return;
     compact.dismiss();
+    skills.dismiss();
     setPage("usage");
     void usage.open();
   };
@@ -127,15 +154,29 @@ export function SessionUtilities({ compact, usage }: SessionUtilitiesProps) {
   const openCompact = () => {
     if (!compactView.actionEnabled) return;
     usage.dismiss();
+    skills.dismiss();
     setPage("compact");
     void compact.open();
   };
 
-  const returnToMenu = () => {
-    if (compactSubmissionActive) return;
-    const item = page === "usage" ? usageItemRef : compactItemRef;
+  const openSkills = () => {
+    if (!skillsView.actionEnabled) return;
     usage.dismiss();
     compact.dismiss();
+    setPage("skills");
+    void skills.open();
+  };
+
+  const returnToMenu = () => {
+    if (compactSubmissionActive) return;
+    const item = page === "usage"
+      ? usageItemRef
+      : page === "compact"
+        ? compactItemRef
+        : skillsItemRef;
+    usage.dismiss();
+    compact.dismiss();
+    skills.dismiss();
     setPage("menu");
     queueMicrotask(() => item.current?.focus());
   };
@@ -206,7 +247,11 @@ export function SessionUtilities({ compact, usage }: SessionUtilitiesProps) {
               compactActionEnabled={compactView.actionEnabled}
               compactItemRef={compactItemRef}
               onCompact={openCompact}
+              onSkills={openSkills}
               onUsage={openUsage}
+              skillsActionDisabledReason={skillsView.actionDisabledReason}
+              skillsActionEnabled={skillsView.actionEnabled}
+              skillsItemRef={skillsItemRef}
               usageActionDisabledReason={usageView.actionDisabledReason}
               usageActionEnabled={usageView.actionEnabled}
               usageItemRef={usageItemRef}
@@ -217,11 +262,17 @@ export function SessionUtilities({ compact, usage }: SessionUtilitiesProps) {
               statusId={usageStatusId}
               view={usageView}
             />
-          ) : (
+          ) : page === "compact" ? (
             <CompactSheetBody
               controller={compact}
               statusId={compactStatusId}
               view={compactView}
+            />
+          ) : (
+            <SkillsSheetBody
+              controller={skills}
+              statusId={skillsStatusId}
+              view={skillsView}
             />
           )}
         </Dialog.Content>
@@ -235,7 +286,11 @@ function UtilityMenu({
   compactActionEnabled,
   compactItemRef,
   onCompact,
+  onSkills,
   onUsage,
+  skillsActionDisabledReason,
+  skillsActionEnabled,
+  skillsItemRef,
   usageActionDisabledReason,
   usageActionEnabled,
   usageItemRef
@@ -244,7 +299,11 @@ function UtilityMenu({
   compactActionEnabled: boolean;
   compactItemRef: React.RefObject<HTMLButtonElement | null>;
   onCompact: () => void;
+  onSkills: () => void;
   onUsage: () => void;
+  skillsActionDisabledReason: string | null;
+  skillsActionEnabled: boolean;
+  skillsItemRef: React.RefObject<HTMLButtonElement | null>;
   usageActionDisabledReason: string | null;
   usageActionEnabled: boolean;
   usageItemRef: React.RefObject<HTMLButtonElement | null>;
@@ -273,6 +332,15 @@ function UtilityMenu({
           label="/compact"
           onClick={onCompact}
         />
+        <UtilityMenuItem
+          actionDisabledReason={skillsActionDisabledReason}
+          actionEnabled={skillsActionEnabled}
+          description="Inspect bounded runtime skill metadata"
+          icon={Sparkles}
+          itemRef={skillsItemRef}
+          label="/skills"
+          onClick={onSkills}
+        />
       </ul>
     </div>
   );
@@ -292,7 +360,7 @@ function UtilityMenuItem({
   description: string;
   icon: typeof Gauge;
   itemRef: React.RefObject<HTMLButtonElement | null>;
-  label: "/usage" | "/compact";
+  label: "/usage" | "/compact" | "/skills";
   onClick: () => void;
 }>) {
   return (

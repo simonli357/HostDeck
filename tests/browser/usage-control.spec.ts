@@ -41,9 +41,9 @@ test("discovers Usage through More without prefetch and performs one exact read"
   await expect(utilities.getByRole("button", { name: /compact/iu })).toBeVisible();
   await expect(utilities.locator(".hostdeck-utility-menu__item strong")).toHaveText([
     "/usage",
-    "/compact"
+    "/compact",
+    "/skills"
   ]);
-  await expect(utilities.getByText("/skills", { exact: true })).toHaveCount(0);
   expect(api.requests()).toHaveLength(0);
   await page.screenshot({
     path: resolve(artifactDirectory, "utility-menu-390x844.png"),
