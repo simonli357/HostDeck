@@ -78,6 +78,11 @@ import {
   type SessionDetailTone,
   sessionDetailFeedLimit
 } from "./session-detail-feed.js";
+import {
+  UsageControl,
+  useUsageControlController
+} from "./usage-control.js";
+import type { UsageControlController } from "./usage-control-state.js";
 
 export type SessionDetailPendingAction = "refresh" | null;
 
@@ -124,6 +129,7 @@ export interface SessionDetailControllerState {
   readonly model: ModelControlController;
   readonly goal: GoalControlController;
   readonly plan: PlanControlController;
+  readonly usage: UsageControlController;
   readonly approvals: ApprovalDecisionController;
 }
 
@@ -151,6 +157,7 @@ export interface SessionDetailScreenProps {
   readonly model?: ModelControlController | undefined;
   readonly goal?: GoalControlController | undefined;
   readonly plan?: PlanControlController | undefined;
+  readonly usage?: UsageControlController | undefined;
   readonly approvals?: ApprovalDecisionController | undefined;
   readonly projection?: SessionDetailProjection | undefined;
 }
@@ -190,6 +197,7 @@ export function useSessionDetailController(
   const model = useModelControlController(coordinator, sessionId, snapshot);
   const goal = useGoalControlController(coordinator, sessionId, snapshot);
   const plan = usePlanControlController(coordinator, sessionId, snapshot);
+  const usage = useUsageControlController(coordinator, sessionId, snapshot);
   const approvals = useApprovalDecisionController(
     coordinator,
     sessionId,
@@ -290,6 +298,7 @@ export function useSessionDetailController(
     model,
     goal,
     plan,
+    usage,
     approvals
   });
 }
@@ -316,6 +325,7 @@ export function ConnectedSessionDetail({
       model={controller.model}
       goal={controller.goal}
       plan={controller.plan}
+      usage={controller.usage}
       approvals={controller.approvals}
     />
   );
@@ -335,6 +345,7 @@ export function SessionDetailScreen({
   model,
   goal,
   plan,
+  usage,
   approvals,
   projection
 }: SessionDetailScreenProps) {
@@ -345,7 +356,7 @@ export function SessionDetailScreen({
 
   return (
     <section
-      className={`hostdeck-route hostdeck-detail${prompt === undefined && model === undefined && goal === undefined && plan === undefined ? "" : " hostdeck-detail--with-controls"}`}
+      className={`hostdeck-route hostdeck-detail${prompt === undefined && model === undefined && goal === undefined && plan === undefined && usage === undefined ? "" : " hostdeck-detail--with-controls"}`}
       aria-labelledby="session-detail-title"
       aria-busy={view.loading || view.replayPending}
     >
@@ -404,13 +415,14 @@ export function SessionDetailScreen({
         />
       )}
 
-      {prompt === undefined && model === undefined && goal === undefined && plan === undefined ? null : (
+      {prompt === undefined && model === undefined && goal === undefined && plan === undefined && usage === undefined ? null : (
         <div className="hostdeck-session-controls">
-          {model === undefined && goal === undefined && plan === undefined ? null : (
+          {model === undefined && goal === undefined && plan === undefined && usage === undefined ? null : (
             <div className="hostdeck-primary-action-dock" role="toolbar" aria-label="Session controls">
               {model === undefined ? null : <ModelControl controller={model} />}
               {goal === undefined ? null : <GoalControl controller={goal} />}
               {plan === undefined ? null : <PlanControl controller={plan} />}
+              {usage === undefined ? null : <UsageControl controller={usage} />}
             </div>
           )}
           {prompt === undefined ? null : <PromptComposer controller={prompt} />}

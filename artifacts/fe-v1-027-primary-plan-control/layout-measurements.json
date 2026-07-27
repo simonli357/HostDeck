@@ -29,30 +29,38 @@
         "commands": [
           {
             "top": 607,
-            "right": 108,
+            "right": 83.5,
             "bottom": 651,
             "left": 16,
-            "width": 92,
+            "width": 67.5,
             "height": 44
           },
           {
             "top": 607,
-            "right": 206,
+            "right": 157,
             "bottom": 651,
-            "left": 114,
-            "width": 92,
+            "left": 89.5,
+            "width": 67.5,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 230.5,
+            "bottom": 651,
+            "left": 163,
+            "width": 67.5,
             "height": 44
           },
           {
             "top": 607,
             "right": 304,
             "bottom": 651,
-            "left": 212,
-            "width": 92,
+            "left": 236.5,
+            "width": 67.5,
             "height": 44
           }
         ],
-        "commandCount": 3,
+        "commandCount": 4,
         "composer": {
           "top": 657,
           "right": 320,
@@ -100,30 +108,38 @@
         "commands": [
           {
             "top": 607,
-            "right": 121.328125,
+            "right": 93.5,
             "bottom": 651,
             "left": 16,
-            "width": 105.328125,
+            "width": 77.5,
             "height": 44
           },
           {
             "top": 607,
-            "right": 232.65625,
+            "right": 177,
             "bottom": 651,
-            "left": 127.328125,
-            "width": 105.328125,
+            "left": 99.5,
+            "width": 77.5,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 260.5,
+            "bottom": 651,
+            "left": 183,
+            "width": 77.5,
             "height": 44
           },
           {
             "top": 607,
             "right": 344,
             "bottom": 651,
-            "left": 238.65625,
-            "width": 105.34375,
+            "left": 266.5,
+            "width": 77.5,
             "height": 44
           }
         ],
-        "commandCount": 3,
+        "commandCount": 4,
         "composer": {
           "top": 657,
           "right": 360,
@@ -171,30 +187,38 @@
         "commands": [
           {
             "top": 651,
-            "right": 131.328125,
+            "right": 101,
             "bottom": 695,
             "left": 16,
-            "width": 115.328125,
+            "width": 85,
             "height": 44
           },
           {
             "top": 651,
-            "right": 252.65625,
+            "right": 192,
             "bottom": 695,
-            "left": 137.328125,
-            "width": 115.328125,
+            "left": 107,
+            "width": 85,
+            "height": 44
+          },
+          {
+            "top": 651,
+            "right": 283,
+            "bottom": 695,
+            "left": 198,
+            "width": 85,
             "height": 44
           },
           {
             "top": 651,
             "right": 374,
             "bottom": 695,
-            "left": 258.65625,
-            "width": 115.34375,
+            "left": 289,
+            "width": 85,
             "height": 44
           }
         ],
-        "commandCount": 3,
+        "commandCount": 4,
         "composer": {
           "top": 701,
           "right": 390,
@@ -242,30 +266,38 @@
         "commands": [
           {
             "top": 722,
-            "right": 138.65625,
+            "right": 106.5,
             "bottom": 766,
             "left": 16,
-            "width": 122.65625,
+            "width": 90.5,
             "height": 44
           },
           {
             "top": 722,
-            "right": 267.328125,
+            "right": 203,
             "bottom": 766,
-            "left": 144.65625,
-            "width": 122.671875,
+            "left": 112.5,
+            "width": 90.5,
             "height": 44
           },
           {
             "top": 722,
-            "right": 395.984375,
+            "right": 299.5,
             "bottom": 766,
-            "left": 273.328125,
-            "width": 122.65625,
+            "left": 209,
+            "width": 90.5,
+            "height": 44
+          },
+          {
+            "top": 722,
+            "right": 396,
+            "bottom": 766,
+            "left": 305.5,
+            "width": 90.5,
             "height": 44
           }
         ],
-        "commandCount": 3,
+        "commandCount": 4,
         "composer": {
           "top": 772,
           "right": 412,
@@ -313,30 +345,38 @@
         "commands": [
           {
             "top": 831,
-            "right": 257.328125,
+            "right": 195.5,
             "bottom": 875,
             "left": 16,
-            "width": 241.328125,
+            "width": 179.5,
             "height": 44
           },
           {
             "top": 831,
-            "right": 504.65625,
+            "right": 381,
             "bottom": 875,
-            "left": 263.328125,
-            "width": 241.328125,
+            "left": 201.5,
+            "width": 179.5,
             "height": 44
           },
           {
             "top": 831,
-            "right": 751.984375,
+            "right": 566.5,
             "bottom": 875,
-            "left": 510.65625,
-            "width": 241.328125,
+            "left": 387,
+            "width": 179.5,
+            "height": 44
+          },
+          {
+            "top": 831,
+            "right": 752,
+            "bottom": 875,
+            "left": 572.5,
+            "width": 179.5,
             "height": 44
           }
         ],
-        "commandCount": 3,
+        "commandCount": 4,
         "composer": {
           "top": 881,
           "right": 768,
@@ -384,30 +424,38 @@
         "commands": [
           {
             "top": 607,
-            "right": 504.65625,
+            "right": 438.5,
             "bottom": 651,
             "left": 246,
-            "width": 258.65625,
+            "width": 192.5,
             "height": 44
           },
           {
             "top": 607,
-            "right": 769.328125,
+            "right": 637,
             "bottom": 651,
-            "left": 510.65625,
-            "width": 258.671875,
+            "left": 444.5,
+            "width": 192.5,
             "height": 44
           },
           {
             "top": 607,
-            "right": 1033.984375,
+            "right": 835.5,
             "bottom": 651,
-            "left": 775.328125,
-            "width": 258.65625,
+            "left": 643,
+            "width": 192.5,
+            "height": 44
+          },
+          {
+            "top": 607,
+            "right": 1034,
+            "bottom": 651,
+            "left": 841.5,
+            "width": 192.5,
             "height": 44
           }
         ],
-        "commandCount": 3,
+        "commandCount": 4,
         "composer": {
           "top": 657,
           "right": 1050,

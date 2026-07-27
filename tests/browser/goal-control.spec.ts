@@ -36,7 +36,9 @@ test("reads exact goal truth and creates one paused goal without dispatching a t
   await expect(trigger).toBeVisible();
   await expect(page.getByRole("button", { name: "/model for android-release" })).toBeVisible();
   await expect(page.getByRole("button", { name: "/plan for android-release" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /more/iu })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "More session utilities for android-release" })
+  ).toBeVisible();
   await expectDockGeometry(page);
   await trigger.click();
 
@@ -612,6 +614,7 @@ async function expectDockGeometry(page: Page) {
     const model = commands[0];
     const goal = commands[1];
     const plan = commands[2];
+    const more = commands[3];
     const composer = document.querySelector(".hostdeck-prompt-composer");
     const target = document.querySelector(".hostdeck-prompt-composer__target");
     if (
@@ -620,6 +623,7 @@ async function expectDockGeometry(page: Page) {
       !(model instanceof HTMLElement) ||
       !(goal instanceof HTMLElement) ||
       !(plan instanceof HTMLElement) ||
+      !(more instanceof HTMLElement) ||
       !(composer instanceof HTMLElement) ||
       !(target instanceof HTMLElement)
     ) {
@@ -629,7 +633,7 @@ async function expectDockGeometry(page: Page) {
       viewport: { width: window.innerWidth, height: window.innerHeight },
       controls: measure(controls),
       dock: measure(dock),
-      commands: [measure(model), measure(goal), measure(plan)],
+      commands: [measure(model), measure(goal), measure(plan), measure(more)],
       composer: measure(composer),
       target: measure(target),
       commandCount: commands.length
@@ -639,7 +643,7 @@ async function expectDockGeometry(page: Page) {
   expect(measurement.controls.right).toBeLessThanOrEqual(measurement.viewport.width + 1);
   expect(measurement.controls.bottom).toBeLessThanOrEqual(measurement.viewport.height + 1);
   expect(measurement.dock.bottom).toBeLessThanOrEqual(measurement.composer.top + 1);
-  expect(measurement.commandCount).toBe(3);
+  expect(measurement.commandCount).toBe(4);
   for (const command of measurement.commands) {
     expect(command.width).toBeGreaterThanOrEqual(44);
     expect(command.height).toBeGreaterThanOrEqual(44);

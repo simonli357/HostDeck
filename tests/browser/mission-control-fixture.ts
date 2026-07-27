@@ -1,4 +1,5 @@
 import type { Page, Request } from "@playwright/test";
+import { selectedHostStatusResponseSchema } from "../../packages/contracts/src/index.js";
 
 export type MissionApiVariant =
   | "mixed"
@@ -170,7 +171,7 @@ function deniedAccess() {
 
 function readyHostStatus(variant: MissionApiVariant) {
   const readOnly = variant === "read_only";
-  return {
+  return selectedHostStatusResponseSchema.parse({
     local: {
       generation: 1,
       state: "ready",
@@ -183,6 +184,15 @@ function readyHostStatus(variant: MissionApiVariant) {
         causes: []
       })),
       mutation_admission: "open"
+    },
+    compatibility: {
+      state: "supported",
+      evidence: "current",
+      observed_version: "0.144.0",
+      supported_version: "0.144.0",
+      capability_state: "verified",
+      checked_at: timestamp,
+      recorded_at: timestamp
     },
     remote: {
       generation: 0,
@@ -205,7 +215,7 @@ function readyHostStatus(variant: MissionApiVariant) {
         causes: readOnly ? ["read_only_access"] : []
       }
     }
-  };
+  });
 }
 
 function sessionList(variant: MissionApiVariant) {

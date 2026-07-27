@@ -10,7 +10,9 @@ import {
   selectedAccessStateResponseSchema,
   selectedProjectionEventSchema,
   selectedSessionDetailResponseSchema,
-  selectedSessionReadItemSchema
+  selectedSessionReadItemSchema,
+  type UsageSnapshot,
+  usageSnapshotSchema
 } from "@hostdeck/contracts";
 import type { SessionId } from "@hostdeck/core";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -323,7 +325,7 @@ describe("Session Detail screen", () => {
 });
 
 describe("Session Detail controller", () => {
-  it("wires /model, /goal, and /plan into one active session control dock", async () => {
+  it("wires the three primary controls and More into one active session control dock", async () => {
     const harness = coordinatorHarness(detailSnapshot({ streamState: "idle" }));
     render(
       <MemoryRouter>
@@ -341,6 +343,9 @@ describe("Session Detail controller", () => {
     });
     const goalTrigger = screen.getByRole("button", { name: "/goal for api-refactor" });
     const planTrigger = screen.getByRole("button", { name: "/plan for api-refactor" });
+    const moreTrigger = screen.getByRole("button", {
+      name: "More session utilities for api-refactor"
+    });
     const toolbar = screen.getByRole("toolbar", { name: "Session controls" });
     const controls = modelTrigger.closest(".hostdeck-session-controls");
     expect(controls).not.toBeNull();
@@ -348,7 +353,8 @@ describe("Session Detail controller", () => {
     expect(Array.from(toolbar.querySelectorAll(".hostdeck-primary-action-dock__command"))).toEqual([
       modelTrigger,
       goalTrigger,
-      planTrigger
+      planTrigger,
+      moreTrigger
     ]);
     expect(controls?.contains(screen.getByRole("textbox", { name: "Prompt for api-refactor" }))).toBe(
       true
@@ -360,6 +366,24 @@ describe("Session Detail controller", () => {
       { params: { session_id: sessionId } },
       { signal: expect.any(AbortSignal) }
     );
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "/model" }), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "/model" })).toBeNull());
+
+    fireEvent.click(moreTrigger);
+    expect(screen.getByRole("dialog", { name: "Session utilities" })).toBeTruthy();
+    expect(
+      harness.requestSelectedSessionRead.mock.calls.filter(([routeId]) => routeId === "usage_read")
+    ).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: /usage/iu }));
+    expect(await screen.findByText("Usage capture current", { exact: true })).toBeTruthy();
+    expect(harness.requestSelectedSessionRead).toHaveBeenCalledWith(
+      "usage_read",
+      { params: { session_id: sessionId } },
+      { signal: expect.any(AbortSignal) }
+    );
+    expect(
+      harness.requestSelectedSessionRead.mock.calls.filter(([routeId]) => routeId === "usage_read")
+    ).toHaveLength(1);
   });
 
   it("owns exact recent setup, event delivery, single-flight refresh, and cleanup", async () => {
@@ -733,7 +757,12 @@ function coordinatorHarness(
   const refresh = vi.fn(() => refreshPromise ?? Promise.resolve(snapshot));
   const requestSelectedSessionRead = vi.fn(async (routeId: string) => ({
     status: 200 as const,
-    data: routeId === "approval_list" ? emptyApprovalList() : modelSnapshot()
+    data:
+      routeId === "approval_list"
+        ? emptyApprovalList()
+        : routeId === "usage_read"
+          ? usageSnapshot()
+          : modelSnapshot()
   }));
   const coordinator = {
     snapshot: () => snapshot,
@@ -803,6 +832,32 @@ function modelSnapshot(): ModelControlSnapshot {
         ]
       }
     ]
+  });
+}
+
+function usageSnapshot(): UsageSnapshot {
+  return usageSnapshotSchema.parse({
+    target: {
+      type: "managed_session",
+      session_id: sessionId,
+      codex_thread_id: "thread-private-detail"
+    },
+    runtime_version: "0.144.0",
+    connection_generation: 1,
+    measured_at: timestamp,
+    account: {
+      scope: "account",
+      summary: {
+        lifetime_tokens: 1_000,
+        peak_daily_tokens: 100,
+        longest_running_turn_seconds: 30,
+        current_streak_days: 2,
+        longest_streak_days: 4
+      },
+      daily_buckets: []
+    },
+    thread: { state: "not_observed", scope: "thread" },
+    rate_limits: { state: "not_observed", scope: "runtime" }
   });
 }
 

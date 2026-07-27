@@ -5,6 +5,7 @@ import {
   promptDispatchResponseSchema,
   promptSessionRequestSchema,
   type SelectedProjectionEvent,
+  selectedHostStatusResponseSchema,
   selectedProjectionEventSchema,
   selectedSessionDetailResponseSchema
 } from "../../packages/contracts/src/index.js";
@@ -646,7 +647,7 @@ function serviceUnavailable() {
 function readyHostStatus(variant: SessionDetailApiVariant) {
   const readOnly = variant === "read_only";
   const writeCauses = readOnly ? ["read_only_access"] : [];
-  return {
+  return selectedHostStatusResponseSchema.parse({
     local: {
       generation: 1,
       state: "ready",
@@ -659,6 +660,15 @@ function readyHostStatus(variant: SessionDetailApiVariant) {
         causes: []
       })),
       mutation_admission: "open"
+    },
+    compatibility: {
+      state: "supported",
+      evidence: "current",
+      observed_version: "0.144.0",
+      supported_version: "0.144.0",
+      capability_state: "verified",
+      checked_at: timestamp,
+      recorded_at: timestamp
     },
     remote: {
       generation: 0,
@@ -681,7 +691,7 @@ function readyHostStatus(variant: SessionDetailApiVariant) {
         causes: writeCauses
       }
     }
-  };
+  });
 }
 
 function sessionDetail(variant: SessionDetailApiVariant, eventCount: number) {

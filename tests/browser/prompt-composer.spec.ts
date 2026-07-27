@@ -37,7 +37,9 @@ test("dispatches exact start and steer requests and advances only from matching 
   await expect(page.getByRole("button", { name: /^\/model for /u })).toHaveCount(1);
   await expect(page.getByRole("button", { name: /^\/goal for /u })).toHaveCount(1);
   await expect(page.getByRole("button", { name: /^\/plan for /u })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: /more/iu })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "More session utilities for android-release" })
+  ).toBeVisible();
   await expectFooterGeometry(page);
   await page.screenshot({
     path: resolve(artifactDirectory, "ready-390x844.png"),
@@ -317,7 +319,7 @@ test("renders distinct authority, host, CSRF, turn, and freshness disabled famil
   await expect(page.getByRole("button", { name: /^\/model for /u })).toHaveCount(1);
   await expect(page.getByRole("button", { name: /^\/goal for /u })).toHaveCount(1);
   await expect(page.getByRole("button", { name: /^\/plan for /u })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: /more/iu })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /More session utilities/iu })).toHaveCount(1);
   await expectCleanBrowser(diagnostics, [/status of 503 \(Service Unavailable\)/u]);
 });
 

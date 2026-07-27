@@ -14,7 +14,8 @@ export default defineConfig({
     "plan-control.spec.ts",
     "prompt-composer.spec.ts",
     "remote-connection-recovery.spec.ts",
-    "session-detail.spec.ts"
+    "session-detail.spec.ts",
+    "usage-control.spec.ts"
   ],
   fullyParallel: false,
   workers: 1,
