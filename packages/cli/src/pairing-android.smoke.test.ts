@@ -519,6 +519,56 @@ describe("physical Android phone-driver protocol", () => {
     }
   });
 
+  it("requires separate validated cellular Internet and Tailscale VPN networks", () => {
+    const cellular =
+      "NetworkAgentInfo{network{101} ni{MOBILE[LTE] CONNECTED} " +
+      "Score(IS_VALIDATED) Transports: CELLULAR Capabilities: INTERNET&VALIDATED}";
+    const tailscale =
+      "NetworkAgentInfo{network{102} ni{VPN CONNECTED extra: VPN:com.tailscale.ipn} " +
+      "Score(IS_VALIDATED&IS_VPN) Transports: VPN Capabilities: INTERNET&VALIDATED}";
+    const cellularBackedTailscale = tailscale.replace(
+      "Transports: VPN",
+      "Transports: CELLULAR|VPN"
+    );
+    const imsOnly = cellular
+      .replace("Capabilities: INTERNET&VALIDATED", "Capabilities: IMS&VALIDATED")
+      .replace("network{101}", "network{103}");
+    const wifi =
+      "NetworkAgentInfo{network{104} ni{WIFI CONNECTED} " +
+      "Score(IS_VALIDATED) Transports: WIFI Capabilities: INTERNET&VALIDATED}";
+
+    expect(hasAndroidCellularTailscaleTransport(`${cellular}\n${tailscale}`)).toBe(
+      true
+    );
+    expect(
+      hasAndroidCellularTailscaleTransport(
+        `${cellular}\n${cellularBackedTailscale}`
+      )
+    ).toBe(true);
+    expect(hasAndroidCellularInternetNetwork(cellular)).toBe(true);
+    expect(hasAndroidCellularInternetNetwork(imsOnly)).toBe(false);
+    expect(hasAndroidCellularTailscaleTransport(`${imsOnly}\n${tailscale}`)).toBe(
+      false
+    );
+    expect(hasAndroidCellularTailscaleTransport(`${cellular}\n${wifi}\n${tailscale}`)).toBe(
+      false
+    );
+    expect(hasAndroidCellularTailscaleTransport("\u0000")).toBe(false);
+    expect(
+      parseAndroidMobileDataState(
+        "  mUserMobileDataState= true\n  mUserMobileDataState=true\n"
+      )
+    ).toBe(true);
+    expect(parseAndroidMobileDataState("mUserMobileDataState=false\n")).toBe(
+      false
+    );
+    expect(() =>
+      parseAndroidMobileDataState(
+        "mUserMobileDataState=true\nmUserMobileDataState=false\n"
+      )
+    ).toThrow("observation was contradictory");
+  });
+
   it("parses bounded Android semantic nodes without retaining pairing material", () => {
     const nodes = parseAndroidUiNodes(
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -739,6 +789,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         typeof createProjectionSubscriberStreamService
       > | null = null;
       let initialWifiEnabled: boolean | null = null;
+      let initialMobileDataEnabled: boolean | null = null;
       let initialStayAwakeSetting: number | null = null;
       let selectedProfile: "away" | "dedicated" = "dedicated";
       let internalErrorCount = 0;
@@ -752,7 +803,11 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           initialStayAwakeSetting = readAndroidStayAwakeSetting();
           await enforceAndroidAwakeAndUnlocked(initialStayAwakeSetting);
           initialWifiEnabled = readAndroidWifiEnabled();
-          await enforceUnrelatedAndroidNetwork(initialWifiEnabled);
+          initialMobileDataEnabled = readAndroidMobileDataEnabled();
+          await enforceUnrelatedAndroidNetwork(
+            initialWifiEnabled,
+            initialMobileDataEnabled
+          );
           environmentFacts = readPhysicalEnvironmentFacts();
         }
         if (requireRemoteAndroidAcceptance || requireRecoveryUiAcceptance) {
@@ -1424,6 +1479,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         if (requireRemoteAndroidAcceptance) {
           await restoreAndroidWifi(initialWifiEnabled as boolean);
           initialWifiEnabled = null;
+          await restoreAndroidMobileData(
+            initialMobileDataEnabled as boolean
+          );
+          initialMobileDataEnabled = null;
           await restoreAndroidStayAwake(
             initialStayAwakeSetting as number
           );
@@ -1444,6 +1503,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         } else if (requireRecoveryUiAcceptance) {
           await restoreAndroidWifi(initialWifiEnabled as boolean);
           initialWifiEnabled = null;
+          await restoreAndroidMobileData(
+            initialMobileDataEnabled as boolean
+          );
+          initialMobileDataEnabled = null;
           await restoreAndroidStayAwake(
             initialStayAwakeSetting as number
           );
@@ -1465,6 +1528,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         } else if (requirePromptUiAcceptance) {
           await restoreAndroidWifi(initialWifiEnabled as boolean);
           initialWifiEnabled = null;
+          await restoreAndroidMobileData(
+            initialMobileDataEnabled as boolean
+          );
+          initialMobileDataEnabled = null;
           await restoreAndroidStayAwake(
             initialStayAwakeSetting as number
           );
@@ -1533,6 +1600,11 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           rmSync(directory, { force: true, recursive: true });
           if (initialWifiEnabled !== null) {
             await restoreAndroidWifi(initialWifiEnabled).catch(() => undefined);
+          }
+          if (initialMobileDataEnabled !== null) {
+            await restoreAndroidMobileData(initialMobileDataEnabled).catch(
+              () => undefined
+            );
           }
           if (initialStayAwakeSetting !== null) {
             await restoreAndroidStayAwake(initialStayAwakeSetting).catch(
@@ -3209,9 +3281,18 @@ function requireNoAdbApplicationTunnels(): void {
 }
 
 async function enforceUnrelatedAndroidNetwork(
-  initiallyEnabled: boolean
+  initialWifiEnabled: boolean,
+  initialMobileDataEnabled: boolean
 ): Promise<void> {
-  if (initiallyEnabled) {
+  if (!initialMobileDataEnabled) {
+    adb(["shell", "svc", "data", "enable"]);
+  }
+  await waitFor(
+    () => readAndroidMobileDataEnabled(),
+    15_000,
+    "Physical acceptance could not enable Android mobile data."
+  );
+  if (initialWifiEnabled) {
     adb(["shell", "svc", "wifi", "disable"]);
   }
   await waitFor(
@@ -3222,19 +3303,68 @@ async function enforceUnrelatedAndroidNetwork(
   await waitFor(
     () => {
       const connectivity = adb(["shell", "dumpsys", "connectivity"]);
-      if (Buffer.byteLength(connectivity, "utf8") > 512 * 1024) return false;
-      return connectivity.split(/\r?\n/u).some(
-        (line) =>
-          line.includes("NetworkAgentInfo") &&
-          /\bVPN CONNECTED\b/iu.test(line) &&
-          /\bVPN:com\.tailscale\.ipn\b/iu.test(line) &&
-          /Transports:[^\]]*\bCELLULAR\b/iu.test(line) &&
-          /Transports:[^\]]*\bVPN\b/iu.test(line) &&
-          /\bVALIDATED\b/iu.test(line)
-      );
+      return hasAndroidCellularTailscaleTransport(connectivity);
     },
     30_000,
     "Physical acceptance requires active cellular and Tailscale VPN transport."
+  );
+}
+
+function hasAndroidCellularTailscaleTransport(output: string): boolean {
+  if (!isBoundedAndroidConnectivityOutput(output)) return false;
+  const networkAgents = output
+    .split(/\r?\n/u)
+    .filter((line) => line.includes("NetworkAgentInfo"));
+  const cellular = networkAgents.some(isAndroidCellularInternetAgent);
+  const tailscale = networkAgents.some(
+    (line) =>
+      isCurrentAndroidInternetAgent(line) &&
+      /\bni\{VPN\s+CONNECTED\b/iu.test(line) &&
+      /\bVPN:com\.tailscale\.ipn\b/iu.test(line) &&
+      /\bTransports:[^}\r\n]{0,96}\bVPN\b/iu.test(line)
+  );
+  const wifi = networkAgents.some(
+    (line) =>
+      /\bni\{WIFI(?:\[[^\]\r\n]{1,32}\])?[^}\r\n]{0,128}\bCONNECTED\b/iu.test(
+        line
+      )
+  );
+  return cellular && tailscale && !wifi;
+}
+
+function isBoundedAndroidConnectivityOutput(output: string): boolean {
+  return (
+    Buffer.byteLength(output, "utf8") > 0 &&
+    Buffer.byteLength(output, "utf8") <= 512 * 1024 &&
+    !output.includes("\u0000")
+  );
+}
+
+function isCurrentAndroidInternetAgent(line: string): boolean {
+  return (
+    /\bCONNECTED\b/iu.test(line) &&
+    /\bINTERNET\b/iu.test(line) &&
+    /\b(?:IS_)?VALIDATED\b/iu.test(line)
+  );
+}
+
+function isAndroidCellularInternetAgent(line: string): boolean {
+  return (
+    isCurrentAndroidInternetAgent(line) &&
+    /\bni\{MOBILE(?:\[[^\]\r\n]{1,32}\])?[^}\r\n]{0,128}\bCONNECTED\b/iu.test(
+      line
+    ) &&
+    /\bTransports:[^}\r\n]{0,96}\bCELLULAR\b/iu.test(line)
+  );
+}
+
+function hasAndroidCellularInternetNetwork(output: string): boolean {
+  return (
+    isBoundedAndroidConnectivityOutput(output) &&
+    output
+      .split(/\r?\n/u)
+      .filter((line) => line.includes("NetworkAgentInfo"))
+      .some(isAndroidCellularInternetAgent)
   );
 }
 
@@ -3398,13 +3528,61 @@ function readAndroidWifiEnabled(): boolean {
 }
 
 async function restoreAndroidWifi(initiallyEnabled: boolean): Promise<void> {
-  if (initiallyEnabled && !readAndroidWifiEnabled()) {
-    adb(["shell", "svc", "wifi", "enable"]);
+  if (readAndroidWifiEnabled() !== initiallyEnabled) {
+    adb([
+      "shell",
+      "svc",
+      "wifi",
+      initiallyEnabled ? "enable" : "disable"
+    ]);
   }
   await waitFor(
     () => readAndroidWifiEnabled() === initiallyEnabled,
     15_000,
     "Physical acceptance could not restore Android Wi-Fi state."
+  );
+}
+
+function readAndroidMobileDataEnabled(): boolean {
+  return parseAndroidMobileDataState(
+    adb(["shell", "dumpsys", "telephony.registry"])
+  );
+}
+
+function parseAndroidMobileDataState(output: string): boolean {
+  requireCondition(
+    Buffer.byteLength(output, "utf8") > 0 &&
+      Buffer.byteLength(output, "utf8") <= 512 * 1024 &&
+      !output.includes("\u0000"),
+    "Android mobile-data observation was invalid."
+  );
+  const states = [
+    ...output.matchAll(/^\s*mUserMobileDataState=\s*(true|false)\s*$/gmu)
+  ].map((match) => match[1]);
+  requireCondition(
+    states.length >= 1 &&
+      states.length <= 4 &&
+      states.every((state) => state === states[0]),
+    "Android mobile-data observation was contradictory."
+  );
+  return states[0] === "true";
+}
+
+async function restoreAndroidMobileData(
+  initiallyEnabled: boolean
+): Promise<void> {
+  if (readAndroidMobileDataEnabled() !== initiallyEnabled) {
+    adb([
+      "shell",
+      "svc",
+      "data",
+      initiallyEnabled ? "enable" : "disable"
+    ]);
+  }
+  await waitFor(
+    () => readAndroidMobileDataEnabled() === initiallyEnabled,
+    15_000,
+    "Physical acceptance could not restore Android mobile-data state."
   );
 }
 
@@ -5845,9 +6023,12 @@ function publishPhysicalEvidence(input: {
       dedicated_serve_absent: true,
       foreign_serve_unchanged: true,
       listener_open: false,
+      mobile_data_restored: true,
       saved_profile_restored: true,
       sse_active: 0,
-      temporary_state_present: false
+      stay_awake_setting_restored: true,
+      temporary_state_present: false,
+      wifi_restored: true
     })
   });
   const serialized = `${JSON.stringify(evidence, null, 2)}\n`;
@@ -5987,7 +6168,9 @@ function publishPhysicalRecoveryEvidence(input: {
       dedicated_serve_absent: true,
       foreign_serve_unchanged: true,
       listener_open: false,
+      mobile_data_restored: true,
       saved_profile_restored: true,
+      stay_awake_setting_restored: true,
       temporary_state_present: false,
       wifi_restored: true
     })
@@ -6110,6 +6293,7 @@ function publishPhysicalPromptEvidence(input: {
       dedicated_serve_absent: true,
       keyboard_visible: false,
       listener_open: false,
+      mobile_data_restored: true,
       stay_awake_setting_restored: true,
       stream_subscribers: 0,
       temporary_state_present: false,
