@@ -378,6 +378,7 @@ function ConnectedSessionDetailRoute({
         plan={controller.plan}
         prompt={controller.prompt}
         usage={controller.usage}
+        compact={controller.compact}
         approvals={controller.approvals}
         projection={projection}
       />

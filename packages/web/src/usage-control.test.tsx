@@ -13,13 +13,19 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useCompactControlController } from "./compact-control.js";
+import {
+  type CompactControlPort,
+  createCompactControlController
+} from "./compact-control-state.js";
 import type {
   BrowserConnectionResourceState,
   BrowserConnectionSnapshot,
   BrowserConnectionStateCoordinator
 } from "./connection-state.js";
 import { HostDeckBrowserHttpError } from "./http-client.js";
-import { UsageControl, useUsageControlController } from "./usage-control.js";
+import { SessionUtilities } from "./session-utilities.js";
+import { useUsageControlController } from "./usage-control.js";
 import {
   createUsageControlController,
   type UsageControlPort
@@ -40,7 +46,7 @@ describe("UsageControl", () => {
     const response = deferred<UsageSnapshot>();
     const port = usagePort({ read: async () => response.promise });
     const controller = readyController(port);
-    render(<UsageControl controller={controller} />);
+    renderUtilities(controller);
     const trigger = screen.getByRole("button", {
       name: "More session utilities for android-usage-release"
     });
@@ -50,8 +56,13 @@ describe("UsageControl", () => {
     expect(dialog.textContent).toContain("Target: android-usage-release");
     expect(port.read).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /usage/iu })).toBeTruthy();
-    expect(screen.queryByText("/compact")).toBeNull();
+    expect(screen.getByRole("button", { name: /compact/iu })).toBeTruthy();
     expect(screen.queryByText("/skills")).toBeNull();
+    expect(
+      Array.from(dialog.querySelectorAll(".hostdeck-utility-menu__item strong"), (item) =>
+        item.textContent
+      )
+    ).toEqual(["/usage", "/compact"]);
 
     await user.click(screen.getByRole("button", { name: /usage/iu }));
     dialog = screen.getByRole("dialog", { name: "/usage" });
@@ -78,7 +89,7 @@ describe("UsageControl", () => {
     const user = userEvent.setup();
     const port = usagePort();
     const controller = readyController(port);
-    render(<UsageControl controller={controller} />);
+    renderUtilities(controller);
 
     await openUsage(user);
     await screen.findByText("Usage capture current", { exact: true });
@@ -97,7 +108,7 @@ describe("UsageControl", () => {
     const user = userEvent.setup();
     const port = usagePort();
     const controller = readyController(port, controlContext({ freshness: "stale" }));
-    render(<UsageControl controller={controller} />);
+    renderUtilities(controller);
 
     await user.click(screen.getByRole("button", { name: /More session utilities/ }));
     const usage = screen.getByRole("button", { name: /usage/iu });
@@ -112,7 +123,7 @@ describe("UsageControl", () => {
     const controller = readyController(
       usagePort({ read: async () => usageSnapshot({ empty: true }) })
     );
-    render(<UsageControl controller={controller} />);
+    renderUtilities(controller);
     await openUsage(user);
 
     expect(await screen.findByText("No usage observations reported", { exact: true })).toBeTruthy();
@@ -133,7 +144,7 @@ describe("UsageControl", () => {
           })
       })
     );
-    render(<UsageControl controller={controller} />);
+    renderUtilities(controller);
     await openUsage(user);
 
     expect(await screen.findByText("Workspace member usage limit reached", { exact: true })).toBeTruthy();
@@ -154,7 +165,7 @@ describe("UsageControl", () => {
           })
       })
     );
-    render(<UsageControl controller={controller} />);
+    renderUtilities(controller);
     await openUsage(user);
     await screen.findByText("Usage capture current", { exact: true });
 
@@ -201,7 +212,7 @@ describe("UsageControl", () => {
       }
     });
     const controller = readyController(port);
-    render(<UsageControl controller={controller} />);
+    renderUtilities(controller);
     await openUsage(user);
     await screen.findByText("Usage capture current", { exact: true });
     controller.updateContext(controlContext({ epoch: 2 }));
@@ -233,7 +244,7 @@ describe("UsageControl", () => {
         }
       })
     );
-    render(<UsageControl controller={controller} />);
+    renderUtilities(controller);
     await openUsage(user);
 
     expect(await screen.findByText(expected, { exact: true })).toBeTruthy();
@@ -245,7 +256,7 @@ describe("UsageControl", () => {
   it("closes the modal and removes usage disclosure when authority is replaced", async () => {
     const user = userEvent.setup();
     const controller = readyController(usagePort());
-    render(<UsageControl controller={controller} />);
+    renderUtilities(controller);
     await openUsage(user);
     await screen.findByText("Usage capture current", { exact: true });
 
@@ -267,8 +278,9 @@ describe("UsageControl", () => {
     const current = controlContext();
 
     function Harness() {
-      const owner = useUsageControlController(coordinator, sessionId, current.snapshot);
-      return <UsageControl controller={owner} />;
+      const usage = useUsageControlController(coordinator, sessionId, current.snapshot);
+      const compact = useCompactControlController(coordinator, sessionId, current.snapshot);
+      return <SessionUtilities compact={compact} usage={usage} />;
     }
 
     const rendered = render(
@@ -304,8 +316,9 @@ describe("UsageControl", () => {
     const current = controlContext();
 
     function Harness() {
-      const owner = useUsageControlController(coordinator, sessionId, current.snapshot);
-      return <UsageControl controller={owner} />;
+      const usage = useUsageControlController(coordinator, sessionId, current.snapshot);
+      const compact = useCompactControlController(coordinator, sessionId, current.snapshot);
+      return <SessionUtilities compact={compact} usage={usage} />;
     }
 
     const rendered = render(
@@ -330,8 +343,9 @@ describe("UsageControl", () => {
     const ready = controlContext().snapshot;
 
     function Harness({ snapshot }: Readonly<{ snapshot: BrowserConnectionSnapshot }>) {
-      const owner = useUsageControlController(coordinator, sessionId, snapshot);
-      return <UsageControl controller={owner} />;
+      const usage = useUsageControlController(coordinator, sessionId, snapshot);
+      const compact = useCompactControlController(coordinator, sessionId, snapshot);
+      return <SessionUtilities compact={compact} usage={usage} />;
     }
 
     const rendered = render(
@@ -364,6 +378,23 @@ async function openUsage(user: ReturnType<typeof userEvent.setup>) {
 
 function readyController(port: ReturnType<typeof usagePort>, context = controlContext()) {
   return createUsageControlController({ sessionId, context, port });
+}
+
+function renderUtilities(usage: ReturnType<typeof readyController>) {
+  const compact = createCompactControlController({
+    sessionId,
+    context: controlContext(),
+    port: compactPort(),
+    createOperationId: () => "op_browser_compact_usage_ui_001"
+  });
+  return render(<SessionUtilities compact={compact} usage={usage} />);
+}
+
+function compactPort(): CompactControlPort {
+  return Object.freeze({
+    read: vi.fn(async () => ({ progress: null })),
+    start: vi.fn(async () => ({ progress: null }))
+  });
 }
 
 function usagePort(overrides: Partial<UsageControlPort> = {}) {

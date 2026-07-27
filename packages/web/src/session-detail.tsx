@@ -41,6 +41,8 @@ import {
   useApprovalDecisionController,
   useApprovalDecisionView
 } from "./approval-decisions.js";
+import { useCompactControlController } from "./compact-control.js";
+import type { CompactControlController } from "./compact-control-state.js";
 import type {
   BrowserConnectionPhase,
   BrowserConnectionSnapshot,
@@ -78,8 +80,8 @@ import {
   type SessionDetailTone,
   sessionDetailFeedLimit
 } from "./session-detail-feed.js";
+import { SessionUtilities } from "./session-utilities.js";
 import {
-  UsageControl,
   useUsageControlController
 } from "./usage-control.js";
 import type { UsageControlController } from "./usage-control-state.js";
@@ -130,6 +132,7 @@ export interface SessionDetailControllerState {
   readonly goal: GoalControlController;
   readonly plan: PlanControlController;
   readonly usage: UsageControlController;
+  readonly compact: CompactControlController;
   readonly approvals: ApprovalDecisionController;
 }
 
@@ -158,6 +161,7 @@ export interface SessionDetailScreenProps {
   readonly goal?: GoalControlController | undefined;
   readonly plan?: PlanControlController | undefined;
   readonly usage?: UsageControlController | undefined;
+  readonly compact?: CompactControlController | undefined;
   readonly approvals?: ApprovalDecisionController | undefined;
   readonly projection?: SessionDetailProjection | undefined;
 }
@@ -198,6 +202,7 @@ export function useSessionDetailController(
   const goal = useGoalControlController(coordinator, sessionId, snapshot);
   const plan = usePlanControlController(coordinator, sessionId, snapshot);
   const usage = useUsageControlController(coordinator, sessionId, snapshot);
+  const compact = useCompactControlController(coordinator, sessionId, snapshot);
   const approvals = useApprovalDecisionController(
     coordinator,
     sessionId,
@@ -299,6 +304,7 @@ export function useSessionDetailController(
     goal,
     plan,
     usage,
+    compact,
     approvals
   });
 }
@@ -326,6 +332,7 @@ export function ConnectedSessionDetail({
       goal={controller.goal}
       plan={controller.plan}
       usage={controller.usage}
+      compact={controller.compact}
       approvals={controller.approvals}
     />
   );
@@ -346,6 +353,7 @@ export function SessionDetailScreen({
   goal,
   plan,
   usage,
+  compact,
   approvals,
   projection
 }: SessionDetailScreenProps) {
@@ -356,7 +364,7 @@ export function SessionDetailScreen({
 
   return (
     <section
-      className={`hostdeck-route hostdeck-detail${prompt === undefined && model === undefined && goal === undefined && plan === undefined && usage === undefined ? "" : " hostdeck-detail--with-controls"}`}
+      className={`hostdeck-route hostdeck-detail${prompt === undefined && model === undefined && goal === undefined && plan === undefined && (usage === undefined || compact === undefined) ? "" : " hostdeck-detail--with-controls"}`}
       aria-labelledby="session-detail-title"
       aria-busy={view.loading || view.replayPending}
     >
@@ -415,14 +423,16 @@ export function SessionDetailScreen({
         />
       )}
 
-      {prompt === undefined && model === undefined && goal === undefined && plan === undefined && usage === undefined ? null : (
+      {prompt === undefined && model === undefined && goal === undefined && plan === undefined && (usage === undefined || compact === undefined) ? null : (
         <div className="hostdeck-session-controls">
-          {model === undefined && goal === undefined && plan === undefined && usage === undefined ? null : (
+          {model === undefined && goal === undefined && plan === undefined && (usage === undefined || compact === undefined) ? null : (
             <div className="hostdeck-primary-action-dock" role="toolbar" aria-label="Session controls">
               {model === undefined ? null : <ModelControl controller={model} />}
               {goal === undefined ? null : <GoalControl controller={goal} />}
               {plan === undefined ? null : <PlanControl controller={plan} />}
-              {usage === undefined ? null : <UsageControl controller={usage} />}
+              {usage === undefined || compact === undefined ? null : (
+                <SessionUtilities compact={compact} usage={usage} />
+              )}
             </div>
           )}
           {prompt === undefined ? null : <PromptComposer controller={prompt} />}

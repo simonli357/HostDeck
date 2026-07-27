@@ -38,7 +38,11 @@ test("discovers Usage through More without prefetch and performs one exact read"
   await expect(utilities).toBeVisible();
   await expect(utilities.getByText("Target: android-release", { exact: true })).toBeVisible();
   await expect(utilities.getByRole("button", { name: /usage/iu })).toBeVisible();
-  await expect(utilities.getByText("/compact", { exact: true })).toHaveCount(0);
+  await expect(utilities.getByRole("button", { name: /compact/iu })).toBeVisible();
+  await expect(utilities.locator(".hostdeck-utility-menu__item strong")).toHaveText([
+    "/usage",
+    "/compact"
+  ]);
   await expect(utilities.getByText("/skills", { exact: true })).toHaveCount(0);
   expect(api.requests()).toHaveLength(0);
   await page.screenshot({
@@ -98,8 +102,9 @@ test("owns loading, one in-flight read, stale capture, and explicit refresh", as
   const usage = page.getByRole("dialog", { name: "/usage" });
   await expect(usage.getByText("Loading usage", { exact: true })).toBeVisible();
   await expect.poll(() => api.hasPendingRead()).toBe(true);
-  await expect(usage.getByRole("button", { name: "Refresh structured usage" })).toBeDisabled();
-  await page.keyboard.press("Enter");
+  const loadingRefresh = usage.getByRole("button", { name: "Refresh structured usage" });
+  await expect(loadingRefresh).toBeDisabled();
+  await loadingRefresh.evaluate((button) => (button as HTMLButtonElement).click());
   await page.setViewportSize({ width: 390, height: 843 });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(api.requests()).toHaveLength(1);

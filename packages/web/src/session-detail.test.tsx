@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import {
+  compactProgressResponseSchema,
   type ModelControlSnapshot,
   managedSessionProjectionSchema,
   modelControlSnapshotSchema,
@@ -374,6 +375,16 @@ describe("Session Detail controller", () => {
     expect(
       harness.requestSelectedSessionRead.mock.calls.filter(([routeId]) => routeId === "usage_read")
     ).toHaveLength(0);
+    expect(
+      harness.requestSelectedSessionRead.mock.calls.filter(([routeId]) => routeId === "compact_read")
+    ).toHaveLength(0);
+    expect(
+      Array.from(
+        screen.getByRole("dialog", { name: "Session utilities" })
+          .querySelectorAll(".hostdeck-utility-menu__item strong"),
+        (item) => item.textContent
+      )
+    ).toEqual(["/usage", "/compact"]);
     fireEvent.click(screen.getByRole("button", { name: /usage/iu }));
     expect(await screen.findByText("Usage capture current", { exact: true })).toBeTruthy();
     expect(harness.requestSelectedSessionRead).toHaveBeenCalledWith(
@@ -383,6 +394,20 @@ describe("Session Detail controller", () => {
     );
     expect(
       harness.requestSelectedSessionRead.mock.calls.filter(([routeId]) => routeId === "usage_read")
+    ).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Back to session utilities" }));
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "Session utilities" })).toBeTruthy()
+    );
+    fireEvent.click(screen.getByRole("button", { name: /compact/iu }));
+    expect(await screen.findAllByText("No tracked compaction", { exact: true })).toHaveLength(2);
+    expect(harness.requestSelectedSessionRead).toHaveBeenCalledWith(
+      "compact_read",
+      { params: { session_id: sessionId } },
+      { signal: expect.any(AbortSignal) }
+    );
+    expect(
+      harness.requestSelectedSessionRead.mock.calls.filter(([routeId]) => routeId === "compact_read")
     ).toHaveLength(1);
   });
 
@@ -762,6 +787,8 @@ function coordinatorHarness(
         ? emptyApprovalList()
         : routeId === "usage_read"
           ? usageSnapshot()
+          : routeId === "compact_read"
+            ? compactProgressResponseSchema.parse({ progress: null })
           : modelSnapshot()
   }));
   const coordinator = {

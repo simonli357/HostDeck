@@ -6,6 +6,7 @@ export default defineConfig({
     "access-recovery.spec.ts",
     "app-shell.spec.ts",
     "approval-decisions.spec.ts",
+    "compact-control.spec.ts",
     "mission-control.spec.ts",
     "goal-control.spec.ts",
     "host-lock.spec.ts",

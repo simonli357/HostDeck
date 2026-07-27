@@ -1,30 +1,22 @@
 import type { SessionId } from "@hostdeck/core";
-import * as Dialog from "@radix-ui/react-dialog";
 import {
   Activity,
   AlertTriangle,
-  ArrowLeft,
   CalendarDays,
   CircleCheck,
   CircleDot,
   Clock3,
   Database,
-  Ellipsis,
-  Gauge,
   Info,
   LoaderCircle,
   RefreshCw,
-  TimerReset,
-  X
+  TimerReset
 } from "lucide-react";
 import {
-  type RefObject,
   useEffect,
   useLayoutEffect,
   useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore
+  useRef
 } from "react";
 import type {
   BrowserConnectionSnapshot,
@@ -40,11 +32,11 @@ import {
   type UsageTokenBreakdownView
 } from "./usage-control-state.js";
 
-export interface UsageControlProps {
+export interface UsageSheetBodyProps {
   readonly controller: UsageControlController;
+  readonly view: ReturnType<UsageControlController["snapshot"]>;
+  readonly statusId: string;
 }
-
-type UtilityPage = "menu" | "usage";
 
 const timestampFormatter = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -107,170 +99,11 @@ export function useUsageControlController(
   return owner;
 }
 
-export function UsageControl({ controller }: UsageControlProps) {
-  const view = useSyncExternalStore(
-    controller.subscribe,
-    controller.snapshot,
-    controller.snapshot
-  );
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [page, setPage] = useState<UtilityPage>("menu");
-  const usageItemRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!dialogOpen) return;
-    if (!view.visible || (page === "usage" && !view.sheetOpen)) {
-      setDialogOpen(false);
-      setPage("menu");
-    }
-  }, [dialogOpen, page, view.sheetOpen, view.visible]);
-
-  if (!view.visible || view.targetLabel === null) return null;
-
-  const targetId = `hostdeck-usage-target-${view.sessionId}`;
-  const statusId = `hostdeck-usage-status-${view.sessionId}`;
-  const setOpen = (open: boolean) => {
-    if (open) {
-      setPage("menu");
-      setDialogOpen(true);
-      return;
-    }
-    controller.dismiss();
-    setDialogOpen(false);
-    setPage("menu");
-  };
-  const openUsage = () => {
-    if (!view.actionEnabled) return;
-    setPage("usage");
-    void controller.open();
-  };
-  const returnToMenu = () => {
-    controller.dismiss();
-    setPage("menu");
-    queueMicrotask(() => usageItemRef.current?.focus());
-  };
-
-  return (
-    <Dialog.Root open={dialogOpen} onOpenChange={setOpen}>
-      <Dialog.Trigger asChild>
-        <button
-          type="button"
-          className="hostdeck-primary-action-dock__command hostdeck-primary-action-dock__command--icon"
-          aria-label={`More session utilities for ${view.targetLabel}`}
-          title="More session utilities"
-        >
-          <Ellipsis size={22} strokeWidth={2} aria-hidden="true" />
-        </button>
-      </Dialog.Trigger>
-
-      <Dialog.Portal>
-        <Dialog.Overlay className="hostdeck-sheet-overlay" />
-        <Dialog.Content
-          className={`hostdeck-sheet hostdeck-usage-sheet hostdeck-usage-sheet--${view.tone}`}
-          aria-describedby={page === "usage" ? `${targetId} ${statusId}` : targetId}
-        >
-          <span className="hostdeck-sheet__handle" aria-hidden="true" />
-          <div className="hostdeck-sheet__header hostdeck-usage-sheet__header">
-            <span className="hostdeck-usage-sheet__heading">
-              {page === "usage" ? (
-                <button
-                  type="button"
-                  className="hostdeck-icon-button"
-                  aria-label="Back to session utilities"
-                  title="Back to session utilities"
-                  onClick={returnToMenu}
-                >
-                  <ArrowLeft size={22} strokeWidth={2} aria-hidden="true" />
-                </button>
-              ) : null}
-              <span>
-                <Dialog.Title className="hostdeck-sheet__title">
-                  {page === "menu" ? "Session utilities" : "/usage"}
-                </Dialog.Title>
-                <Dialog.Description className="hostdeck-usage-sheet__target" id={targetId}>
-                  Target: <strong>{view.targetLabel}</strong>
-                </Dialog.Description>
-              </span>
-            </span>
-            <Dialog.Close asChild>
-              <button
-                type="button"
-                className="hostdeck-icon-button"
-                aria-label={page === "menu" ? "Close session utilities" : "Close Usage utility"}
-                title={page === "menu" ? "Close session utilities" : "Close Usage utility"}
-              >
-                <X size={22} strokeWidth={2} aria-hidden="true" />
-              </button>
-            </Dialog.Close>
-          </div>
-
-          {page === "menu" ? (
-            <UtilityMenu
-              actionEnabled={view.actionEnabled}
-              actionDisabledReason={view.actionDisabledReason}
-              itemRef={usageItemRef}
-              onUsage={openUsage}
-            />
-          ) : (
-            <UsageSheetBody controller={controller} view={view} statusId={statusId} />
-          )}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
-
-function UtilityMenu({
-  actionEnabled,
-  actionDisabledReason,
-  itemRef,
-  onUsage
-}: Readonly<{
-  actionEnabled: boolean;
-  actionDisabledReason: string | null;
-  itemRef: RefObject<HTMLButtonElement | null>;
-  onUsage: () => void;
-}>) {
-  return (
-    <div className="hostdeck-utility-menu">
-      <p className="hostdeck-utility-menu__intro">
-        Structured reads and actions for this session.
-      </p>
-      <ul className="hostdeck-utility-menu__list">
-        <li>
-          <button
-            ref={itemRef}
-            type="button"
-            className="hostdeck-utility-menu__item"
-            disabled={!actionEnabled}
-            title={actionDisabledReason ?? "Open structured usage"}
-            onClick={onUsage}
-          >
-            <Gauge size={22} strokeWidth={2} aria-hidden="true" />
-            <span>
-              <strong>/usage</strong>
-              <small>Account, thread, context, and rate-limit observations</small>
-              {actionDisabledReason === null ? null : (
-                <small className="hostdeck-utility-menu__reason">{actionDisabledReason}</small>
-              )}
-            </span>
-            <Info size={18} strokeWidth={2} aria-hidden="true" />
-          </button>
-        </li>
-      </ul>
-    </div>
-  );
-}
-
-function UsageSheetBody({
+export function UsageSheetBody({
   controller,
   view,
   statusId
-}: Readonly<{
-  controller: UsageControlController;
-  view: ReturnType<UsageControlController["snapshot"]>;
-  statusId: string;
-}>) {
+}: UsageSheetBodyProps) {
   const hasData =
     view.capture !== null &&
     view.account !== null &&

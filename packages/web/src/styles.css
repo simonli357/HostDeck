@@ -3465,6 +3465,285 @@ textarea:focus-visible {
   color: var(--hostdeck-muted);
 }
 
+.hostdeck-compact-sheet__body {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.hostdeck-compact-sheet__scroller {
+  min-width: 0;
+  min-height: 0;
+  padding: 14px 2px 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.hostdeck-compact-content {
+  display: grid;
+  min-width: 0;
+}
+
+.hostdeck-compact-state {
+  display: grid;
+  min-width: 0;
+  min-height: 84px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  padding: 10px 2px 14px;
+  border-bottom: 1px solid var(--hostdeck-divider);
+}
+
+.hostdeck-compact-state__node {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+}
+
+.hostdeck-compact-state > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.hostdeck-compact-state small,
+.hostdeck-compact-state strong,
+.hostdeck-compact-state > span:last-child > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-compact-state small,
+.hostdeck-compact-state > span:last-child > span {
+  color: var(--hostdeck-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.hostdeck-compact-state strong {
+  color: var(--hostdeck-ink);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 22px;
+}
+
+.hostdeck-compact-boundary {
+  min-width: 0;
+  padding: 16px 2px;
+  border-bottom: 1px solid var(--hostdeck-divider);
+}
+
+.hostdeck-compact-boundary__heading {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+}
+
+.hostdeck-compact-boundary__heading > svg {
+  margin-top: 2px;
+}
+
+.hostdeck-compact-boundary__heading > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.hostdeck-compact-boundary h2,
+.hostdeck-compact-boundary small,
+.hostdeck-compact-boundary p {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-compact-boundary h2 {
+  color: var(--hostdeck-ink);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 21px;
+}
+
+.hostdeck-compact-boundary small,
+.hostdeck-compact-boundary p {
+  color: var(--hostdeck-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.hostdeck-compact-boundary p {
+  margin-top: 10px;
+  padding-left: 31px;
+}
+
+.hostdeck-compact-confirmation {
+  min-width: 0;
+  padding: 16px 2px 18px;
+  border-bottom: 1px solid var(--hostdeck-divider);
+}
+
+.hostdeck-compact-confirmation__heading {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  color: var(--hostdeck-attention);
+}
+
+.hostdeck-compact-confirmation__heading > svg {
+  margin-top: 2px;
+}
+
+.hostdeck-compact-confirmation__heading > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.hostdeck-compact-confirmation h2,
+.hostdeck-compact-confirmation small,
+.hostdeck-compact-confirmation p {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-compact-confirmation h2 {
+  color: var(--hostdeck-ink);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 21px;
+}
+
+.hostdeck-compact-confirmation small,
+.hostdeck-compact-confirmation p {
+  color: var(--hostdeck-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.hostdeck-compact-confirmation > p {
+  margin-top: 10px;
+}
+
+.hostdeck-compact-confirmation__actions {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.hostdeck-compact-confirmation__actions > button {
+  min-width: 0;
+  min-height: 48px;
+  justify-content: center;
+  padding-right: 10px;
+  padding-left: 10px;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-compact-footer {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hostdeck-divider);
+  background: var(--hostdeck-surface);
+}
+
+.hostdeck-compact-status {
+  display: grid;
+  min-width: 0;
+  min-height: 54px;
+  grid-template-columns: 22px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+}
+
+.hostdeck-compact-status > span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.hostdeck-compact-status strong,
+.hostdeck-compact-status small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-compact-status strong {
+  color: currentColor;
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.hostdeck-compact-status small {
+  color: var(--hostdeck-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.hostdeck-compact-status__check:disabled,
+.hostdeck-compact-footer__start:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.hostdeck-primary-button.hostdeck-compact-footer__start {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  justify-content: center;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-compact-footer__reason {
+  min-width: 0;
+  margin: -2px 0 0;
+  color: var(--hostdeck-attention);
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-compact-loading {
+  display: grid;
+  min-height: 220px;
+  align-content: start;
+  gap: 10px;
+}
+
+.hostdeck-compact-loading > span {
+  display: block;
+  height: 84px;
+  border: 1px solid var(--hostdeck-divider);
+  border-radius: 4px;
+  background: var(--hostdeck-canvas);
+}
+
+.hostdeck-compact-loading > span:nth-child(2) {
+  height: 104px;
+}
+
+.hostdeck-compact-unavailable {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  color: var(--hostdeck-muted);
+}
+
 @media (max-width: 359px) {
   .hostdeck-usage-summary dt,
   .hostdeck-usage-summary small {
@@ -3489,6 +3768,14 @@ textarea:focus-visible {
 
   .hostdeck-usage-rate-window + .hostdeck-usage-rate-window {
     border-left: 0;
+  }
+
+  .hostdeck-compact-confirmation__actions {
+    gap: 8px;
+  }
+
+  .hostdeck-compact-confirmation__actions > button {
+    font-size: 13px;
   }
 }
 
@@ -3679,6 +3966,7 @@ textarea:focus-visible {
   .hostdeck-goal-sheet__body,
   .hostdeck-plan-sheet__body,
   .hostdeck-usage-sheet__scroller,
+  .hostdeck-compact-sheet__scroller,
   .hostdeck-approval-sheet__body {
     padding-top: 10px;
     padding-bottom: 10px;
