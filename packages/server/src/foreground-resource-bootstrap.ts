@@ -7,7 +7,11 @@ import {
 } from "node:fs";
 import { isAbsolute, normalize } from "node:path";
 import {
+  codexBindingDescriptor
+} from "@hostdeck/codex-adapter";
+import {
   assertResolvedResourceBudget,
+  codexVersionSchema,
   type ResourceBudget
 } from "@hostdeck/contracts";
 import {
@@ -34,6 +38,11 @@ import {
   HostDeckCodexRuntimeSupervisorError,
   type StartedCodexRuntime
 } from "./codex-runtime-supervisor.js";
+import {
+  type CodexVersionProbe,
+  codexVersionProbeLimits,
+  probeCodexVersion
+} from "./codex-version-probe.js";
 
 export const hostDeckForegroundResourceErrorCodes = [
   "invalid_config",
@@ -67,6 +76,18 @@ export type HostDeckForegroundResourcePhase =
   | "closed"
   | "failed";
 
+export const hostDeckRuntimePreparationStates = Object.freeze([
+  "ready",
+  "version_incompatible"
+] as const);
+
+export type HostDeckRuntimePreparationState =
+  (typeof hostDeckRuntimePreparationStates)[number];
+
+export interface HostDeckPreparedCodexRuntime extends StartedCodexRuntime {
+  readonly preparation: HostDeckRuntimePreparationState;
+}
+
 export interface StartHostDeckForegroundResourcesInput {
   readonly config_dir: string;
   readonly state_dir: string;
@@ -79,6 +100,7 @@ export interface StartHostDeckForegroundResourcesInput {
 }
 
 export interface HostDeckForegroundResourceDependencies {
+  readonly codexVersionProbe?: CodexVersionProbe;
   readonly now?: () => Date;
   readonly pid?: number;
   readonly runtimeSupervisorFactory?: typeof createCodexRuntimeSupervisor;
@@ -92,8 +114,10 @@ export interface HostDeckForegroundBind {
 
 export interface HostDeckForegroundResourceSnapshot {
   readonly phase: HostDeckForegroundResourcePhase;
+  readonly codex_version: string;
   readonly database_open: boolean;
   readonly lease_held: boolean;
+  readonly runtime_preparation: HostDeckRuntimePreparationState;
   readonly runtime: CodexRuntimeSupervisorSnapshot;
 }
 
@@ -113,10 +137,11 @@ export interface HostDeckForegroundResources {
   readonly bind: HostDeckForegroundBind;
   readonly paths: ResolvedHostDeckLocalPaths;
   readonly codex_bin: string;
+  readonly codex_version: string;
   readonly resource_budget: ResourceBudget;
   readonly database: ReturnType<typeof openMigratedDatabase>["db"];
   readonly migration: ReturnType<typeof openMigratedDatabase>["result"];
-  readonly runtime: StartedCodexRuntime;
+  readonly runtime: HostDeckPreparedCodexRuntime;
   readonly path_repairs: readonly HostDeckPathModeRepair[];
   readonly shutdown: HostDeckForegroundResourceShutdownPorts;
   readonly snapshot: () => HostDeckForegroundResourceSnapshot;
@@ -151,6 +176,7 @@ interface ParsedStartInput {
 }
 
 interface ParsedDependencies {
+  readonly codexVersionProbe: CodexVersionProbe;
   readonly now: () => Date;
   readonly pid: number | undefined;
   readonly runtimeSupervisorFactory: typeof createCodexRuntimeSupervisor;
@@ -174,7 +200,12 @@ const startInputKeys = [
 const requiredStartInputKeys = startInputKeys.filter(
   (key) => key !== "signal"
 );
-const dependencyKeys = ["now", "pid", "runtimeSupervisorFactory"] as const;
+const dependencyKeys = [
+  "codexVersionProbe",
+  "now",
+  "pid",
+  "runtimeSupervisorFactory"
+] as const;
 const maxExecutablePathBytes = 4_096;
 const defaultNow = () => new Date();
 const acceptedProductionResources = new WeakSet<object>();
@@ -269,19 +300,41 @@ async function startHostDeckProductionResources(
     assertNotAborted(parsed.signal, stage);
 
     stage = "runtime";
-    runtimeStartAttempted = true;
-    const runtime = parseStartedRuntime(
-      await startRuntimeSupervisor(
-        supervisor,
-        parsed.resourceBudget,
-        parsed.signal
-      ),
-      parsed.paths.app_server_socket_path,
-      ownership
+    const codexVersion = parseObservedCodexVersion(
+      await ports.codexVersionProbe(
+        Object.freeze({
+          executable: parsed.codexBin,
+          signal: parsed.signal ?? new AbortController().signal,
+          timeout_ms: Math.min(
+            codexVersionProbeLimits.maximum_timeout_ms,
+            parsed.resourceBudget.lifecycle_startup_timeout_ms
+          )
+        })
+      )
     );
+    let runtime: HostDeckPreparedCodexRuntime;
+    if (codexVersion === codexBindingDescriptor.codex_version) {
+      runtimeStartAttempted = true;
+      const started = parseStartedRuntime(
+        await startRuntimeSupervisor(
+          supervisor,
+          parsed.resourceBudget,
+          parsed.signal
+        ),
+        parsed.paths.app_server_socket_path,
+        ownership
+      );
+      runtime = Object.freeze({ ...started, preparation: "ready" });
+    } else {
+      runtime = createVersionIncompatibleRuntime(
+        parsed.paths.app_server_socket_path,
+        ownership
+      );
+    }
     assertNotAborted(parsed.signal, stage);
 
     return createResourceHandle({
+      codexVersion,
       lease,
       opened,
       parsed,
@@ -349,11 +402,12 @@ export function assertHostDeckProductionResources(
 }
 
 function createResourceHandle(input: {
+  readonly codexVersion: string;
   readonly lease: HostDeckDaemonLease;
   readonly opened: OpenedGuardedDatabase;
   readonly parsed: ParsedStartInput;
   readonly repairs: readonly HostDeckPathModeRepair[];
-  readonly runtime: StartedCodexRuntime;
+  readonly runtime: HostDeckPreparedCodexRuntime;
   readonly supervisor: HostDeckCodexRuntimeSupervisor;
 }): HostDeckForegroundResources {
   let phase: HostDeckForegroundResourcePhase = "ready";
@@ -381,8 +435,10 @@ function createResourceHandle(input: {
   const snapshot = (): HostDeckForegroundResourceSnapshot =>
     Object.freeze({
       phase,
+      codex_version: input.codexVersion,
       database_open: input.opened.database.db.open,
       lease_held: !input.lease.released,
+      runtime_preparation: input.runtime.preparation,
       runtime: input.supervisor.snapshot()
     });
 
@@ -480,6 +536,7 @@ function createResourceHandle(input: {
     bind,
     paths: input.parsed.paths,
     codex_bin: input.parsed.codexBin,
+    codex_version: input.codexVersion,
     resource_budget: input.parsed.resourceBudget,
     database: input.opened.database.db,
     migration,
@@ -707,8 +764,11 @@ function parseDependencies(candidate: unknown): ParsedDependencies {
   );
   const now = values.now;
   const pid = values.pid;
+  const codexVersionProbe = values.codexVersionProbe;
   const runtimeSupervisorFactory = values.runtimeSupervisorFactory;
   if (
+    (codexVersionProbe !== undefined &&
+      typeof codexVersionProbe !== "function") ||
     (now !== undefined && typeof now !== "function") ||
     (pid !== undefined &&
       (typeof pid !== "number" || !Number.isSafeInteger(pid) || pid < 1)) ||
@@ -720,6 +780,10 @@ function parseDependencies(candidate: unknown): ParsedDependencies {
     );
   }
   return Object.freeze({
+    codexVersionProbe:
+      codexVersionProbe === undefined
+        ? probeCodexVersion
+        : (codexVersionProbe as CodexVersionProbe),
     now: now === undefined ? defaultNow : (now as () => Date),
     pid,
     runtimeSupervisorFactory:
@@ -885,6 +949,31 @@ function parseStartedRuntime(
     stale_socket_removed: values.stale_socket_removed,
     process_exit: values.process_exit as StartedCodexRuntime["process_exit"]
   });
+}
+
+function createVersionIncompatibleRuntime(
+  socketPath: string,
+  ownership: HostDeckRuntimeOwnership
+): HostDeckPreparedCodexRuntime {
+  return Object.freeze({
+    mode: ownership,
+    ownership,
+    socket_path: socketPath,
+    socket_mode_repaired: false,
+    stale_socket_removed: false,
+    process_exit: null,
+    preparation: "version_incompatible"
+  });
+}
+
+function parseObservedCodexVersion(candidate: unknown): string {
+  const parsed = codexVersionSchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw new TypeError(
+      "Codex version probe returned invalid observed-version state."
+    );
+  }
+  return parsed.data;
 }
 
 function hasCallableDataProperty(candidate: object, key: string): boolean {

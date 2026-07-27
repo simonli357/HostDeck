@@ -123,6 +123,31 @@ describe("IFC-V1-083 production foreground serve owner", () => {
     expect(harness.signalUnsubscribeCalls).toBe(1);
   });
 
+  it("keeps a mutation-closed diagnostic listener alive without child ownership", async () => {
+    const harness = createHarness({ diagnosticReady: true });
+    const service = await harness.start();
+
+    expect(service.snapshot()).toMatchObject({
+      phase: "ready",
+      application: { phase: "diagnostic_ready" },
+      listener_health: "ready",
+      remote_phase: "running",
+      termination_trigger: null
+    });
+    harness.resolveProcessExit({
+      kind: "exited",
+      expected: false,
+      code: 17,
+      signal: null
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(service.snapshot()).toMatchObject({
+      phase: "ready",
+      termination_trigger: null,
+      reported_issue_count: 0
+    });
+  });
+
   it("coalesces repeated process signals and caller abort into one clean shutdown", async () => {
     const signalHarness = createHarness({ holdClose: true });
     const signaled = await signalHarness.start();
@@ -391,6 +416,7 @@ describe("IFC-V1-086 production service serve owner", () => {
 
 interface HarnessOptions {
   readonly applicationCreateError?: Error;
+  readonly diagnosticReady?: boolean;
   readonly holdClose?: boolean;
   readonly holdStartup?: boolean;
   readonly inconsistentReadiness?: boolean;
@@ -431,12 +457,15 @@ type ReturnTypeOwner = Awaited<
 
 function createHarness(options: HarnessOptions = {}): FakeServeHarness {
   const ownership = options.ownership ?? "foreground_child";
+  const diagnosticReady = options.diagnosticReady === true;
   const events: string[] = [];
   const port = 46_321 + openHarnesses.length;
   const processExit = deferred<CodexRuntimeProcessExitObservation>();
   const closeRelease = deferred<void>();
   const state = {
-    applicationPhase: "runtime_ready" as HostDeckProductionApplicationSnapshot["phase"],
+    applicationPhase: (diagnosticReady
+      ? "diagnostic_ready"
+      : "runtime_ready") as HostDeckProductionApplicationSnapshot["phase"],
     listenerHealth: "not_ready" as ReturnType<
       HostDeckProductionApplication["listener"]["snapshot"]
     >,
@@ -463,18 +492,33 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
       port,
       transport: "http" as const
     }),
+    codex_version: diagnosticReady ? "0.145.0" : "0.144.0",
     resource_budget: defaultResourceBudget,
     runtime: Object.freeze({
       mode: ownership,
       ownership,
-      process_exit: ownership === "foreground_child" ? processExit.promise : null
+      preparation: diagnosticReady ? "version_incompatible" : "ready",
+      process_exit:
+        ownership === "foreground_child" && !diagnosticReady
+          ? processExit.promise
+          : null,
+      socket_mode_repaired: !diagnosticReady,
+      socket_path: "/tmp/hostdeck-production-serve-runtime/codex.sock",
+      stale_socket_removed: false
     }),
     snapshot: () =>
       Object.freeze({
         phase: state.resourcePhase,
+        codex_version: diagnosticReady ? "0.145.0" : "0.144.0",
         database_open: state.resourcePhase === "ready",
         lease_held: state.resourcePhase === "ready",
-        runtime: Object.freeze({ phase: state.resourcePhase })
+        runtime_preparation: diagnosticReady ? "version_incompatible" : "ready",
+        runtime: Object.freeze({
+          phase: diagnosticReady ? "idle" : state.resourcePhase,
+          process_state: diagnosticReady ? "not_started" : "running",
+          claim_held: !diagnosticReady && state.resourcePhase === "ready",
+          socket_ready: !diagnosticReady && state.resourcePhase === "ready"
+        })
       }),
     async close() {
       resourceCloseCalls += 1;
@@ -515,9 +559,35 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
       localSnapshot: () =>
         Object.freeze({
           readiness:
-            options.inconsistentReadiness === true ? "not_ready" : "ready",
+            options.inconsistentReadiness === true
+              ? diagnosticReady
+                ? "ready"
+                : "not_ready"
+              : diagnosticReady
+                ? "not_ready"
+                : "ready",
           mutation_admission:
-            options.inconsistentReadiness === true ? "closed" : "open"
+            options.inconsistentReadiness === true
+              ? diagnosticReady
+                ? "open"
+                : "closed"
+              : diagnosticReady
+                ? "closed"
+                : "open",
+          components: Object.freeze([
+            Object.freeze({
+              component: "compatibility",
+              state: diagnosticReady ? "failed" : "ready",
+              reasons: Object.freeze(
+                diagnosticReady ? ["runtime_incompatible"] : []
+              )
+            }),
+            Object.freeze({
+              component: "runtime",
+              state: diagnosticReady ? "failed" : "ready",
+              reasons: Object.freeze(diagnosticReady ? ["runtime_failed"] : [])
+            })
+          ])
         }),
       remoteSnapshot: () =>
         Object.freeze({

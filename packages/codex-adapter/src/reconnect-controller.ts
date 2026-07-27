@@ -359,6 +359,7 @@ class DefaultCodexRuntimeReconnectController implements CodexRuntimeReconnectCon
   private pendingDisconnectGeneration: number | null = null;
   private lastDisconnectedGeneration = 0;
   private pendingFatal: HostDeckCodexReconnectError | null = null;
+  private terminalCompatibility: RuntimeCompatibility | null = null;
   private lastFailure: CodexReconnectFailureSummary | null = null;
   private nextDelayMs: number | null = null;
   private activeCycleAbort: AbortController | null = null;
@@ -834,6 +835,9 @@ class DefaultCodexRuntimeReconnectController implements CodexRuntimeReconnectCon
   }
 
   private publicCompatibility(): RuntimeCompatibility {
+    if (this.phase === "incompatible" && this.terminalCompatibility !== null) {
+      return this.terminalCompatibility;
+    }
     const compatibility = this.connection.compatibility;
     const registeringCurrentInbound =
       this.inboundCompatibilityGeneration !== null &&
@@ -934,6 +938,12 @@ class DefaultCodexRuntimeReconnectController implements CodexRuntimeReconnectCon
   private async recordTerminal(error: unknown): Promise<void> {
     if (this.closing) return;
     let normalized = asReconnectError(error, stageForPhase(this.phase));
+    const terminalCompatibility =
+      normalized.code === "incompatible" &&
+      this.connection.compatibility.state === "incompatible" &&
+      this.connection.compatibility.mutation_policy === "blocked"
+        ? freezeCompatibility(this.connection.compatibility)
+        : null;
     const terminalPhase = normalized.code === "incompatible" ? "incompatible" : "failed";
     this.phase = terminalPhase;
     this.admittedGeneration = null;
@@ -951,6 +961,7 @@ class DefaultCodexRuntimeReconnectController implements CodexRuntimeReconnectCon
     }
     this.lastFailure = Object.freeze({ code: normalized.code, stage: normalized.stage });
     this.phase = normalized.code === "incompatible" ? "incompatible" : "failed";
+    this.terminalCompatibility = terminalCompatibility;
     if (!this.everReady) {
       this.initialReady.reject(normalized);
       return;
@@ -1277,8 +1288,14 @@ function isGenerationChange(error: unknown): boolean {
   return isOwnedReconnectError(error) && error.code === "generation_changed";
 }
 
-function isOwnedReconnectError(error: unknown): error is HostDeckCodexReconnectError {
+export function isHostDeckCodexReconnectError(
+  error: unknown
+): error is HostDeckCodexReconnectError {
   return error instanceof HostDeckCodexReconnectError && ownedReconnectErrors.has(error);
+}
+
+function isOwnedReconnectError(error: unknown): error is HostDeckCodexReconnectError {
+  return isHostDeckCodexReconnectError(error);
 }
 
 function throwIfAborted(signal: AbortSignal, stage: CodexReconnectStage): void {

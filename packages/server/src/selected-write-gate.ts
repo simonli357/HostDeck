@@ -917,6 +917,7 @@ function admissionFailureStatus(code: ErrorCode): number {
     case "validation_error":
       return 400;
     case "operation_conflict":
+    case "incompatible_runtime":
       return 409;
     case "rate_limited":
       return 429;
@@ -936,6 +937,8 @@ function admissionFailureMessage(code: ErrorCode): string {
       return "Selected mutation admission input is invalid.";
     case "operation_conflict":
       return "Selected mutation conflicts with a retained operation.";
+    case "incompatible_runtime":
+      return "Selected mutation requires a compatible runtime.";
     case "rate_limited":
       return "Selected mutation request rate is exhausted.";
     case "operation_timeout":

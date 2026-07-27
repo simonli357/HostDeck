@@ -103,6 +103,7 @@ import {
   createHostDeckResumeRouteRegistration,
   hostDeckResumeRouteRegistrationId
 } from "./resume-routes.js";
+import { assertHostDeckRuntimeCompatibilityRecordReader } from "./runtime-compatibility-status.js";
 import {
   assertHostDeckSecurityMutationAuditExecutor
 } from "./security-mutation-audit-executor.js";
@@ -203,7 +204,7 @@ export interface CreateHostDeckSelectedApiRouteCompositionInput {
   readonly controls: HostDeckSelectedApiControls;
   readonly csrf: CreateHostDeckCsrfRouteRegistrationInput["csrf"];
   readonly devices: HostDeckSelectedApiDevices;
-  readonly health: CreateHostDeckHealthRouteRegistrationInput["health"];
+  readonly health: CreateHostDeckHealthRouteRegistrationInput;
   readonly lock: CreateHostDeckHostLockRouteRegistrationInput["lock"];
   readonly now: CreateHostDeckDeviceRevokeRouteRegistrationInput["now"];
   readonly observeSseError: CreateHostDeckProjectionStreamRouteRegistrationInput["observe_error"];
@@ -220,6 +221,7 @@ interface ParsedComposition {
   readonly admission: CreateHostDeckSessionStartRouteRegistrationInput["admission"];
   readonly archiveSubscribers: CreateHostDeckSessionArchiveRouteRegistrationInput["subscribers"];
   readonly audit: CreateHostDeckSessionStartRouteRegistrationInput["audit"];
+  readonly compatibility: CreateHostDeckHealthRouteRegistrationInput["compatibility"];
   readonly controls: HostDeckSelectedApiControls;
   readonly csrf: CreateHostDeckCsrfRouteRegistrationInput["csrf"];
   readonly deviceList: CreateHostDeckDeviceListRouteRegistrationInput["devices"];
@@ -352,7 +354,10 @@ export function createHostDeckSelectedApiRouteComposition(
   composedAdmissionPolicies.add(parsed.admission);
 
   const registrations = [
-    createHostDeckHealthRouteRegistration({ health: parsed.health }),
+    createHostDeckHealthRouteRegistration({
+      compatibility: parsed.compatibility,
+      health: parsed.health
+    }),
     createHostDeckSessionReadRouteRegistration({ sessions: parsed.sessionRead }),
     createHostDeckSessionStartRouteRegistration({
       admission: parsed.admission,
@@ -498,6 +503,11 @@ function parseCompositionInput(input: unknown): ParsedComposition {
     sessionKeys,
     "Selected API session services are invalid."
   );
+  const health = readExactDataObject(
+    values.health,
+    ["compatibility", "health"],
+    "Selected API health services are invalid."
+  );
 
   assertHostDeckSelectedWriteAdmissionPolicy(values.admission);
   assertHostDeckSelectedWriteAuditExecutor(values.audit);
@@ -506,7 +516,8 @@ function parseCompositionInput(input: unknown): ParsedComposition {
     values.authentication.activeDeviceAuthority
   );
   assertHostDeckCsrfPolicy(values.csrf);
-  assertHostDeckHostHealthService(values.health);
+  assertHostDeckHostHealthService(health.health);
+  assertHostDeckRuntimeCompatibilityRecordReader(health.compatibility);
   assertHostDeckHostLockPolicy(values.lock);
   assertHostDeckPairingPolicy(values.pairing);
   assertHostDeckSecurityMutationAuditExecutor(values.securityAudit);
@@ -559,12 +570,13 @@ function parseCompositionInput(input: unknown): ParsedComposition {
     admission: values.admission,
     archiveSubscribers: functionView(sessions.subscribers, ["archive_session"]),
     audit: values.audit,
+    compatibility: health.compatibility,
     controls: parsedControls,
     csrf: values.csrf,
     deviceList: functionView(devices, ["list"]),
     deviceRevoke: functionView(devices, ["revoke"]),
     eventState: functionView(state, ["listEvents", "require"]),
-    health: values.health,
+    health: health.health,
     lock: values.lock,
     managedArchive: functionView(managed, ["archive", "read"]),
     managedRead: functionView(managed, ["read"]),

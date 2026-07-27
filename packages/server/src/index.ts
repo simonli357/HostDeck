@@ -55,6 +55,7 @@ export * from "./remote-ingress-request-authority.js";
 export * from "./remote-ingress-routes.js";
 export * from "./resume-metadata.js";
 export * from "./resume-routes.js";
+export * from "./runtime-compatibility-status.js";
 export * from "./security-mutation-audit-executor.js";
 export * from "./selected-api-route-composition.js";
 export * from "./selected-api-route-manifest.js";

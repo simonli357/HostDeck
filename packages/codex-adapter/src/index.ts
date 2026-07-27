@@ -140,7 +140,8 @@ export {
   codexReconnectResubscribeMethods,
   codexReconnectStages,
   createCodexRuntimeReconnectController,
-  HostDeckCodexReconnectError
+  HostDeckCodexReconnectError,
+  isHostDeckCodexReconnectError
 } from "./reconnect-controller.js";
 export {
   type CodexRequestDeadlineOptions,

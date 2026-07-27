@@ -1,6 +1,12 @@
 import {
+  assessCodexCompatibility,
+  codexBindingDescriptor
+} from "@hostdeck/codex-adapter";
+import {
   defaultResourceBudget,
-  remoteIngressPublicStateSchema
+  remoteIngressPublicStateSchema,
+  type SelectedRuntimeCompatibilityRecord,
+  selectedRuntimeCompatibilityRecordSchema
 } from "@hostdeck/contracts";
 import { HostDeckAuthRepositoryError } from "@hostdeck/storage";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -32,6 +38,10 @@ import {
   type HostDeckReportedLocalHealthReason
 } from "./host-health.js";
 import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
+import {
+  createHostDeckRuntimeCompatibilityRecordReader,
+  type HostDeckRuntimeCompatibilityRecordReader
+} from "./runtime-compatibility-status.js";
 import { createTailscaleServeProxyTrustPolicy } from "./tailscale-serve-proxy-trust.js";
 
 const apps: HostDeckFastifyInstance[] = [];
@@ -51,6 +61,10 @@ const writeDeviceId = "client_health_writer";
 const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
   allowedOrigin: loopbackOrigin
 });
+const compatibilityReaders = new WeakMap<
+  HostDeckHostHealthService,
+  HostDeckRuntimeCompatibilityRecordReader
+>();
 
 afterEach(async () => {
   for (const app of apps.splice(0).reverse()) await app.close();
@@ -59,15 +73,19 @@ afterEach(async () => {
 describe("selected health and host-status routes", () => {
   it("requires one branded health service and returns one immutable registration", () => {
     const health = healthHarness().service;
-    const registration = createHostDeckHealthRouteRegistration({ health });
+    const compatibility = compatibilityReader(health);
+    const registration = createHostDeckHealthRouteRegistration({
+      compatibility,
+      health
+    });
     expect(registration).toMatchObject({
       id: hostDeckHealthRouteRegistrationId,
       surface: "api"
     });
     expect(Object.isFrozen(registration)).toBe(true);
-    expect(() => createHostDeckHealthRouteRegistration({ health })).toThrow(
-      "already owns"
-    );
+    expect(() =>
+      createHostDeckHealthRouteRegistration({ compatibility, health })
+    ).toThrow("already owns");
 
     let accessorCalls = 0;
     const accessor = Object.defineProperty({}, "health", {
@@ -81,9 +99,13 @@ describe("selected health and host-status routes", () => {
       null,
       [],
       {},
-      { health, extra: true },
-      Object.assign(Object.create({ inherited: true }), { health }),
-      { health: Object.freeze({ ...health }) },
+      { compatibility, health, extra: true },
+      Object.assign(Object.create({ inherited: true }), {
+        compatibility,
+        health
+      }),
+      { compatibility, health: Object.freeze({ ...health }) },
+      { compatibility: Object.freeze({ ...compatibility }), health },
       accessor
     ]) {
       expect(() =>
@@ -418,6 +440,15 @@ describe("selected health and host-status routes", () => {
         })),
         mutation_admission: "open"
       },
+      compatibility: {
+        state: "supported",
+        evidence: "current",
+        observed_version: "0.144.0",
+        supported_version: "0.144.0",
+        capability_state: "verified",
+        checked_at: new Date(initialTime - 1_000).toISOString(),
+        recorded_at: new Date(initialTime).toISOString()
+      },
       remote: {
         generation: 1,
         state_generation: null,
@@ -658,7 +689,12 @@ describe("selected health and host-status routes", () => {
       requestAuthenticationPolicy: policy,
       requestTrustPolicy: loopbackTrustPolicy,
       resourceBudget: defaultResourceBudget,
-      routePlugins: [createHostDeckHealthRouteRegistration({ health: health.service })]
+      routePlugins: [
+        createHostDeckHealthRouteRegistration({
+          compatibility: compatibilityReader(health.service),
+          health: health.service
+        })
+      ]
     });
     apps.push(app);
     let invalidated = false;
@@ -703,7 +739,12 @@ describe("selected health and host-status routes", () => {
       observeInternalError: (observation) => observations.push(observation),
       requestAuthenticationPolicy: authenticationPolicy(),
       resourceBudget: defaultResourceBudget,
-      routePlugins: [createHostDeckHealthRouteRegistration({ health: health.service })],
+      routePlugins: [
+        createHostDeckHealthRouteRegistration({
+          compatibility: compatibilityReader(health.service),
+          health: health.service
+        })
+      ],
       remoteIngressRequestAuthority: remoteRequestAuthority,
       tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
         localOrigin: remoteLocalOrigin,
@@ -769,20 +810,33 @@ describe("selected health and host-status routes", () => {
 interface HealthHarness {
   readonly service: HostDeckHostHealthService;
   readonly clock: { calls: number; value: number };
+  readonly setCompatibility: (
+    record: SelectedRuntimeCompatibilityRecord | null
+  ) => void;
   readonly tick: () => void;
 }
 
 function healthHarness(): HealthHarness {
   const clock = { calls: 0, value: initialTime };
+  let compatibility: SelectedRuntimeCompatibilityRecord | null = null;
   const service = createHostDeckHostHealthService({
     now() {
       clock.calls += 1;
       return new Date(clock.value);
     }
   });
+  compatibilityReaders.set(
+    service,
+    createHostDeckRuntimeCompatibilityRecordReader({
+      read: () => compatibility
+    })
+  );
   return {
     service,
     clock,
+    setCompatibility(record) {
+      compatibility = record;
+    },
     tick() {
       clock.value += 1_000;
     }
@@ -790,6 +844,7 @@ function healthHarness(): HealthHarness {
 }
 
 function makeReady(health: HealthHarness): void {
+  health.setCompatibility(readyCompatibilityRecord());
   for (const component of [
     "storage",
     "runtime",
@@ -855,7 +910,12 @@ function createLoopbackApp(
     }),
     requestTrustPolicy: loopbackTrustPolicy,
     resourceBudget: defaultResourceBudget,
-    routePlugins: [createHostDeckHealthRouteRegistration({ health })]
+    routePlugins: [
+      createHostDeckHealthRouteRegistration({
+        compatibility: compatibilityReader(health),
+        health
+      })
+    ]
   });
   apps.push(app);
   return { app, observations, authCalls: () => authCalls };
@@ -870,7 +930,12 @@ function createRemoteApp(health: HostDeckHostHealthService): {
     observeInternalError: () => undefined,
     requestAuthenticationPolicy: authenticationPolicy(),
     resourceBudget: defaultResourceBudget,
-    routePlugins: [createHostDeckHealthRouteRegistration({ health })],
+    routePlugins: [
+      createHostDeckHealthRouteRegistration({
+        compatibility: compatibilityReader(health),
+        health
+      })
+    ],
     remoteIngressRequestAuthority: remoteRequestAuthority,
     tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
       localOrigin: remoteLocalOrigin,
@@ -884,6 +949,34 @@ function createRemoteApp(health: HostDeckHostHealthService): {
   });
   apps.push(app);
   return { app };
+}
+
+function compatibilityReader(
+  health: HostDeckHostHealthService
+): HostDeckRuntimeCompatibilityRecordReader {
+  const reader = compatibilityReaders.get(health);
+  if (reader === undefined) {
+    throw new TypeError("Health test fixture has no compatibility reader.");
+  }
+  return reader;
+}
+
+function readyCompatibilityRecord(): SelectedRuntimeCompatibilityRecord {
+  return selectedRuntimeCompatibilityRecordSchema.parse({
+    id: "hostdeck_runtime",
+    compatibility: assessCodexCompatibility({
+      observed_version: codexBindingDescriptor.codex_version,
+      checked_at: new Date(initialTime - 1_000).toISOString(),
+      handshake: {
+        state: "initialized",
+        user_agent: `hostdeck/${codexBindingDescriptor.codex_version}`,
+        platform_family: "unix",
+        platform_os: "linux",
+        collaboration_modes: ["Plan", "Default"]
+      }
+    }),
+    recorded_at: new Date(initialTime).toISOString()
+  });
 }
 
 function authenticationPolicy(): HostDeckRequestAuthenticationPolicy {

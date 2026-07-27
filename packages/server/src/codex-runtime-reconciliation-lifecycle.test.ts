@@ -305,6 +305,50 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
     }
   });
 
+  it("seals restart truth without a runtime when startup is incompatible", async () => {
+    const harness = createHarness({ approvalsSuperseded: 4 });
+    try {
+      harness.repository.create(
+        stateCandidate("sess_unavailable", "thread-unavailable", {
+          turn_state: "in_progress",
+          attention: "watch"
+        })
+      );
+      const deadline = testDeadline();
+      try {
+        await harness.lifecycle.sealStartupUnavailable({ deadline });
+        expect(
+          harness.repository.require("sess_unavailable").projection.session
+        ).toMatchObject({
+          turn_state: "in_progress",
+          attention: "watch",
+          freshness: "disconnected",
+          freshness_reason:
+            "HostDeck restarted; runtime reconciliation is required."
+        });
+        expect(harness.order).toEqual([
+          "audit",
+          "projection:runtime:disconnected"
+        ]);
+        expect(harness.lifecycle.snapshot()).toMatchObject({
+          phase: "gap_prepared",
+          generation: null,
+          gap_reason: "restart",
+          durable_session_count: 1,
+          approvals_superseded: 0,
+          audits_reconciled: 2
+        });
+        await expect(
+          harness.lifecycle.sealStartupUnavailable({ deadline })
+        ).rejects.toMatchObject({ code: "lifecycle_conflict" });
+      } finally {
+        deadline.dispose();
+      }
+    } finally {
+      harness.close();
+    }
+  });
+
   it("persists every recoverable active and idle turn category before exact resubscription", async () => {
     const harness = createHarness();
     const cases = [

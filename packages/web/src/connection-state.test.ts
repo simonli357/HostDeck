@@ -1,6 +1,7 @@
 import {
   encodeSelectedSessionListCursor,
   goalControlSnapshotSchema,
+  isoTimestampSchema,
   managedSessionProjectionSchema,
   modelControlSnapshotSchema,
   promptDispatchResponseSchema,
@@ -55,6 +56,7 @@ const loopbackOrigin = "http://127.0.0.1:3777";
 const remoteOrigin = "https://hostdeck-connection.fixture-tailnet.ts.net";
 const otherRemoteOrigin = "https://hostdeck-other.fixture-tailnet.ts.net";
 const timestamp = "2026-07-22T18:00:00.000Z";
+const compatibilityTimestamp = isoTimestampSchema.parse(timestamp);
 const laterTimestamp = "2026-07-22T18:01:00.000Z";
 const rawCsrfToken = "C".repeat(43);
 const firstSessionId = "sess_connection_001";
@@ -2567,11 +2569,8 @@ function hostStatus(options: {
     | "storage_unavailable";
   readonly remoteGeneration?: number;
 }): SelectedHostStatusResponse {
-  const componentOverride = localComponentOverride(options.localCause);
   const components = selectedHostLocalHealthComponents.map((component) => {
-    const override = componentOverride?.component === component
-      ? componentOverride
-      : null;
+    const override = localComponentOverride(component, options.localCause);
     return {
       component,
       state: override?.state ?? "ready",
@@ -2579,7 +2578,11 @@ function hostStatus(options: {
       causes: override === null ? [] : [override.cause]
     };
   });
-  const localState = componentOverride?.state ?? "ready";
+  const localState = options.localCause === undefined
+    ? "ready"
+    : options.localCause === "runtime_disconnected"
+      ? "degraded"
+      : "failed";
   const localReady = localState === "ready";
   const remote = options.origin.startsWith("https:")
     ? {
@@ -2618,6 +2621,7 @@ function hostStatus(options: {
       components,
       mutation_admission: localReady ? "open" : "closed"
     },
+    compatibility: hostCompatibility(options.localCause),
     remote,
     access: {
       mode: options.mode,
@@ -2633,22 +2637,66 @@ function hostStatus(options: {
 }
 
 function localComponentOverride(
+  component: SelectedHostLocalHealthComponent,
   cause: "runtime_disconnected" | "runtime_incompatible" | "storage_unavailable" | undefined
 ): {
-  readonly component: SelectedHostLocalHealthComponent;
   readonly state: SelectedHostLocalHealthState;
   readonly cause: SelectedHostLocalHealthCause;
 } | null {
   switch (cause) {
     case "runtime_disconnected":
-      return { component: "runtime", state: "degraded", cause };
+      if (component === "runtime") return { state: "degraded", cause };
+      return component === "compatibility"
+        ? { state: "degraded", cause: "compatibility_degraded" }
+        : null;
     case "runtime_incompatible":
-      return { component: "compatibility", state: "failed", cause };
+      if (component === "runtime") {
+        return { state: "failed", cause: "runtime_failed" };
+      }
+      return component === "compatibility"
+        ? { state: "failed", cause }
+        : null;
     case "storage_unavailable":
-      return { component: "storage", state: "failed", cause };
+      return component === "storage" ? { state: "failed", cause } : null;
     case undefined:
       return null;
   }
+}
+
+function hostCompatibility(
+  cause: "runtime_disconnected" | "runtime_incompatible" | "storage_unavailable" | undefined
+): SelectedHostStatusResponse["compatibility"] {
+  if (cause === "runtime_disconnected") {
+    return {
+      state: "disconnected",
+      evidence: "last_known",
+      observed_version: "0.144.0",
+      supported_version: "0.144.0",
+      capability_state: "unverified",
+      checked_at: compatibilityTimestamp,
+      recorded_at: compatibilityTimestamp
+    };
+  }
+  if (cause === "runtime_incompatible") {
+    return {
+      state: "incompatible",
+      evidence: "current",
+      observed_version: "0.144.0",
+      supported_version: "0.144.0",
+      capability_state: "blocked",
+      checked_at: compatibilityTimestamp,
+      recorded_at: compatibilityTimestamp
+    };
+  }
+  return {
+    state: "supported",
+    evidence: "current",
+    observed_version: "0.144.0",
+    supported_version: "0.144.0",
+    capability_state: "verified",
+    checked_at: compatibilityTimestamp,
+    recorded_at: compatibilityTimestamp
+  };
 }
 
 function sessionItem(

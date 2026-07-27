@@ -24,6 +24,11 @@ import {
   type HostDeckRemoteHealthSnapshot
 } from "./host-health.js";
 import {
+  assertHostDeckRuntimeCompatibilityRecordReader,
+  type HostDeckRuntimeCompatibilityRecordReader,
+  projectHostDeckRuntimeCompatibilityStatus
+} from "./runtime-compatibility-status.js";
+import {
   type SelectedApiRouteManifestEntry,
   selectedApiRouteManifest
 } from "./selected-api-route-manifest.js";
@@ -31,10 +36,11 @@ import {
 export const hostDeckHealthRouteRegistrationId = "selected-health-status";
 
 export interface CreateHostDeckHealthRouteRegistrationInput {
+  readonly compatibility: HostDeckRuntimeCompatibilityRecordReader;
   readonly health: HostDeckHostHealthService;
 }
 
-const inputKeys = ["health"] as const;
+const inputKeys = ["compatibility", "health"] as const;
 const noQuerySchema = z.object({}).strict();
 const registeredHealthServices = new WeakSet<object>();
 const livenessResponse = deepFreeze(
@@ -58,7 +64,9 @@ export function createHostDeckHealthRouteRegistration(
     inputKeys,
     "HostDeck health route input is invalid."
   );
+  assertHostDeckRuntimeCompatibilityRecordReader(values.compatibility);
   assertHostDeckHostHealthService(values.health);
+  const compatibility = values.compatibility;
   const health = values.health;
   if (registeredHealthServices.has(health)) {
     throw new TypeError("Host health service already owns a route registration.");
@@ -124,7 +132,8 @@ export function createHostDeckHealthRouteRegistration(
             response: { 200: selectedHostStatusResponseSchema }
           }
         },
-        (request) => handleHostStatus(request, health, responseContexts)
+        (request) =>
+          handleHostStatus(request, compatibility, health, responseContexts)
       );
     }
   };
@@ -153,6 +162,7 @@ function handleReadiness(
 
 function handleHostStatus(
   request: FastifyRequest,
+  compatibility: HostDeckRuntimeCompatibilityRecordReader,
   health: HostDeckHostHealthService,
   responseContexts: WeakMap<FastifyRequest, SelectedRequestAuthenticationContext>
 ): SelectedHostStatusResponse {
@@ -160,7 +170,7 @@ function handleHostStatus(
     request,
     "loopback_or_device_cookie"
   );
-  const response = readHostStatusResponse(health, context);
+  const response = readHostStatusResponse(compatibility, health, context);
   responseContexts.set(request, context);
   assertHostDeckRequestAuthenticationCurrent(request, context);
   return response;
@@ -199,12 +209,18 @@ function readReadinessResponse(
 }
 
 function readHostStatusResponse(
+  compatibility: HostDeckRuntimeCompatibilityRecordReader,
   health: HostDeckHostHealthService,
   context: SelectedRequestAuthenticationContext
 ): SelectedHostStatusResponse {
   try {
     const local = Reflect.apply(health.localSnapshot, undefined, []);
     const remote = Reflect.apply(health.remoteSnapshot, undefined, []);
+    const compatibilityRecord = Reflect.apply(
+      compatibility.read,
+      undefined,
+      []
+    );
     const mode = accessMode(context);
     const causes: Array<"read_only_access" | "host_not_ready"> = [];
     if (mode === "loopback_read" || mode === "paired_read") {
@@ -215,6 +231,10 @@ function readHostStatusResponse(
     return deepFreeze(
       selectedHostStatusResponseSchema.parse({
         local: publicLocalHealth(local, true),
+        compatibility: projectHostDeckRuntimeCompatibilityStatus(
+          local,
+          compatibilityRecord
+        ),
         remote: publicRemoteHealth(remote),
         access: {
           mode,

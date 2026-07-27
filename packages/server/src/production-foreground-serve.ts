@@ -1,3 +1,4 @@
+import { codexBindingDescriptor } from "@hostdeck/codex-adapter";
 import {
   assertResolvedResourceBudget,
   type ResourceBudget
@@ -369,7 +370,10 @@ async function startHostDeckProductionServe(
       state_dir: parsed.stateDir
     });
     assertRuntimeOwnership(resources, ownership);
-    if (ownership === "foreground_child") {
+    if (
+      ownership === "foreground_child" &&
+      resources.runtime.preparation === "ready"
+    ) {
       const processExit = requireProcessExitObservation(resources);
       void processExit.then(
         (observation) => {
@@ -998,10 +1002,29 @@ function assertRuntimeOwnership(
   resources: HostDeckProductionResources,
   expected: HostDeckServeOwnership
 ): void {
+  const snapshot = resources.snapshot();
+  const readyRuntime = resources.runtime.preparation === "ready";
+  const hasExpectedProcessExit =
+    expected === "foreground_child"
+      ? isPromiseLike(resources.runtime.process_exit)
+      : resources.runtime.process_exit === null;
   if (
     resources.runtime.mode !== expected ||
     resources.runtime.ownership !== expected ||
-    (expected === "service_owned" && resources.runtime.process_exit !== null)
+    snapshot.runtime_preparation !== resources.runtime.preparation ||
+    snapshot.codex_version !== resources.codex_version ||
+    (readyRuntime
+      ? resources.codex_version !== codexBindingDescriptor.codex_version ||
+        !hasExpectedProcessExit
+      : resources.runtime.preparation !== "version_incompatible" ||
+        resources.codex_version === codexBindingDescriptor.codex_version ||
+        resources.runtime.process_exit !== null ||
+        resources.runtime.socket_mode_repaired ||
+        resources.runtime.stale_socket_removed ||
+        snapshot.runtime.phase !== "idle" ||
+        snapshot.runtime.process_state !== "not_started" ||
+        snapshot.runtime.claim_held ||
+        snapshot.runtime.socket_ready)
   ) {
     throw new TypeError(
       "HostDeck production resource ownership contradicts the selected serve mode."
@@ -1020,6 +1043,27 @@ function assertReadyProductionServe(
   const listenerSnapshot = lifecycle.snapshot();
   const localHealth = application.health.localSnapshot();
   const remoteSnapshot = application.remote.snapshot();
+  const compatibilityHealth = localHealth.components.find(
+    (component) => component.component === "compatibility"
+  );
+  const runtimeHealth = localHealth.components.find(
+    (component) => component.component === "runtime"
+  );
+  const normalReady =
+    resources.runtime.preparation === "ready" &&
+    applicationSnapshot.phase === "runtime_ready" &&
+    localHealth.readiness === "ready" &&
+    localHealth.mutation_admission === "open";
+  const diagnosticReady =
+    applicationSnapshot.phase === "diagnostic_ready" &&
+    localHealth.readiness === "not_ready" &&
+    localHealth.mutation_admission === "closed" &&
+    compatibilityHealth?.state === "failed" &&
+    compatibilityHealth.reasons.length === 1 &&
+    compatibilityHealth.reasons[0] === "runtime_incompatible" &&
+    runtimeHealth?.state === "failed" &&
+    runtimeHealth.reasons.length === 1 &&
+    runtimeHealth.reasons[0] === "runtime_failed";
   if (
     lifecycle.context !== application ||
     lifecycle.baseUrl.origin !==
@@ -1029,10 +1073,8 @@ function assertReadyProductionServe(
     resourceSnapshot.phase !== "ready" ||
     !resourceSnapshot.database_open ||
     !resourceSnapshot.lease_held ||
-    applicationSnapshot.phase !== "runtime_ready" ||
+    (!normalReady && !diagnosticReady) ||
     application.listener.snapshot() !== "ready" ||
-    localHealth.readiness !== "ready" ||
-    localHealth.mutation_admission !== "open" ||
     listenerSnapshot.phase !== "ready" ||
     !listenerSnapshot.listening ||
     listenerSnapshot.bound?.host !== "127.0.0.1" ||

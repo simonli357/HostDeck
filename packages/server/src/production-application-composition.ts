@@ -16,12 +16,14 @@ import {
   createCodexTurnClient,
   createCodexUnixWebSocketTransport,
   createCodexUsageClient,
-  type HostDeckCodexReconnectError
+  type HostDeckCodexReconnectError,
+  isHostDeckCodexReconnectError
 } from "@hostdeck/codex-adapter";
 import {
   assertResolvedResourceBudget,
   type ResourceBudget,
   type RuntimeCompatibility,
+  runtimeCompatibilitySchema,
   selectedRequestAuthenticationContextSchema
 } from "@hostdeck/contracts";
 import type { OperationDeadline } from "@hostdeck/core";
@@ -123,6 +125,7 @@ import {
   type HostDeckRemoteIngressLifecycle
 } from "./remote-ingress-lifecycle.js";
 import { createHostDeckResumeMetadataReader } from "./resume-metadata.js";
+import { createHostDeckRuntimeCompatibilityRecordReader } from "./runtime-compatibility-status.js";
 import { createSecurityMutationAuditExecutor } from "./security-mutation-audit-executor.js";
 import {
   createHostDeckSelectedApiRouteComposition,
@@ -142,6 +145,7 @@ export const hostDeckProductionApplicationPhases = Object.freeze([
   "assembled",
   "starting",
   "runtime_ready",
+  "diagnostic_ready",
   "draining",
   "closed",
   "failed"
@@ -298,6 +302,9 @@ export function createHostDeckProductionApplication(
   const sessionReadRepository = createSelectedSessionReadRepository(db);
   const auditRepository = createSelectedAuditRepository(db);
   const compatibilityRepository = createRuntimeCompatibilityRepository(db);
+  const compatibilityStatus = createHostDeckRuntimeCompatibilityRecordReader({
+    read: compatibilityRepository.get
+  });
   const authRepository = createAuthDeviceRepository(db);
   const csrfRepository = createSelectedCsrfAuthorizationRepository(db);
   const pairingRepository = createPairingCodeRepository(db, { policy: budget });
@@ -432,7 +439,7 @@ export function createHostDeckProductionApplication(
   });
   reconnect = createCodexRuntimeReconnectController({
     transport,
-    observed_version: codexBindingDescriptor.codex_version,
+    observed_version: resources.codex_version,
     resource_budget: budget,
     lifecycle: lifecycleRelay.lifecycle,
     on_notification: (notification) => {
@@ -699,7 +706,10 @@ export function createHostDeckProductionApplication(
       list: deviceListingRepository.list,
       revoke: deviceRevocationRepository.revoke
     }),
-    health,
+    health: Object.freeze({
+      compatibility: compatibilityStatus,
+      health
+    }),
     lock,
     now: readNow,
     observeSseError: (observation) => report("sse", observation.code),
@@ -798,7 +808,34 @@ export function createHostDeckProductionApplication(
     phase = "starting";
     startPromise = (async () => {
       try {
-        await reconnectController.start(deadline.signal);
+        let diagnosticCompatibility: RuntimeCompatibility | null = null;
+        try {
+          await reconnectController.start(deadline.signal);
+        } catch (error) {
+          if (
+            !isHostDeckCodexReconnectError(error) ||
+            error.code !== "incompatible" ||
+            error.stage !== "connect"
+          ) {
+            throw error;
+          }
+          diagnosticCompatibility = requireInitialDiagnosticCompatibility({
+            error,
+            observedVersion: resources.codex_version,
+            reconnect: reconnectController
+          });
+          persistCompatibility(
+            compatibilityRepository,
+            diagnosticCompatibility
+          );
+          await reconciliation.sealStartupUnavailable({ deadline });
+          subscribers.close();
+          localHealth.update("compatibility", "failed", [
+            "runtime_incompatible"
+          ]);
+          localHealth.update("runtime", "failed", ["runtime_failed"]);
+          report("reconnect", "incompatible");
+        }
         deadline.throwIfAborted();
         startupMaintenance = await runHostDeckStartupMaintenance({
           now: readNow,
@@ -820,7 +857,10 @@ export function createHostDeckProductionApplication(
             "HostDeck projection graph is unavailable before listener startup."
           );
         }
-        phase = "runtime_ready";
+        phase =
+          diagnosticCompatibility === null
+            ? "runtime_ready"
+            : "diagnostic_ready";
       } catch (error) {
         phase = "failed";
         attemptLocalHealthUpdate(
@@ -1262,6 +1302,38 @@ function persistCompatibility(
   });
 }
 
+function requireInitialDiagnosticCompatibility(input: {
+  readonly error: unknown;
+  readonly observedVersion: string;
+  readonly reconnect: CodexRuntimeReconnectController;
+}): RuntimeCompatibility {
+  const snapshot = input.reconnect.snapshot();
+  const compatibility = input.reconnect.compatibility;
+  const parsed = runtimeCompatibilitySchema.safeParse(compatibility);
+  if (
+    !isHostDeckCodexReconnectError(input.error) ||
+    input.error.code !== "incompatible" ||
+    input.error.stage !== "connect" ||
+    snapshot.phase !== "incompatible" ||
+    snapshot.admitted_generation !== null ||
+    snapshot.last_failure?.code !== "incompatible" ||
+    snapshot.last_failure.stage !== "connect" ||
+    !parsed.success ||
+    parsed.data.state !== "incompatible" ||
+    parsed.data.mutation_policy !== "blocked" ||
+    parsed.data.observed_version !== input.observedVersion ||
+    parsed.data.binding_id !== codexBindingDescriptor.binding_id ||
+    !Object.isFrozen(compatibility) ||
+    !Object.isFrozen(compatibility.capabilities) ||
+    compatibility.capabilities.some((entry) => !Object.isFrozen(entry))
+  ) {
+    throw new TypeError(
+      "Codex startup failure is not eligible for diagnostic readiness."
+    );
+  }
+  return compatibility;
+}
+
 function createAuditShutdownPort(
   db: HostDeckProductionResources["database"],
   timestamp: () => string
@@ -1367,9 +1439,13 @@ function createListenerHealthPort(
       state = "closed";
     },
     ready() {
-      if (state !== "not_ready" || applicationPhase() !== "runtime_ready") {
+      const phase = applicationPhase();
+      if (
+        state !== "not_ready" ||
+        (phase !== "runtime_ready" && phase !== "diagnostic_ready")
+      ) {
         throw new TypeError(
-          "HostDeck listener cannot become ready before the production runtime."
+          "HostDeck listener cannot become ready before the production application boundary."
         );
       }
       health.update("listener", "ready", []);

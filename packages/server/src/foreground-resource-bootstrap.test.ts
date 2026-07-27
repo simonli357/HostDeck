@@ -161,13 +161,17 @@ describe("HostDeck foreground resource bootstrap", () => {
     });
     expect(resources.paths.database_path).toBe(layout.databasePath);
     expect(resources.codex_bin).toBe(layout.executable);
+    expect(resources.codex_version).toBe("0.144.0");
     expect(resources.resource_budget).toBe(defaultResourceBudget);
     expect(resources.database.open).toBe(true);
     expect(resources.database.readonly).toBe(false);
     expect(resources.migration.currentVersion).toBe(
       defaultMigrations.at(-1)?.version
     );
-    expect(resources.runtime).toEqual(runtime.started);
+    expect(resources.runtime).toEqual({
+      ...runtime.started,
+      preparation: "ready"
+    });
     expect(Object.isFrozen(resources.runtime)).toBe(true);
     expect(Object.isFrozen(resources)).toBe(true);
     expect(Object.isFrozen(resources.bind)).toBe(true);
@@ -190,8 +194,10 @@ describe("HostDeck foreground resource bootstrap", () => {
     });
     expect(resources.snapshot()).toMatchObject({
       phase: "ready",
+      codex_version: "0.144.0",
       database_open: true,
       lease_held: true,
+      runtime_preparation: "ready",
       runtime: { phase: "ready" }
     });
 
@@ -209,6 +215,77 @@ describe("HostDeck foreground resource bootstrap", () => {
       database_open: false,
       lease_held: false
     });
+    acquireAndRelease(layout.leasePath);
+  });
+
+  it("retains valid version drift without starting or attaching the runtime", async () => {
+    const layout = fixtureLayout("version-drift");
+    const runtime = fakeRuntime();
+    let probeCalls = 0;
+    const resources = await startHostDeckForegroundResources(layout.input, {
+      codexVersionProbe: async (input) => {
+        probeCalls += 1;
+        expect(Object.isFrozen(input)).toBe(true);
+        expect(input.executable).toBe(layout.executable);
+        expect(input.signal).toBeInstanceOf(AbortSignal);
+        expect(input.timeout_ms).toBeLessThanOrEqual(10_000);
+        expect(existsSync(layout.databasePath)).toBe(true);
+        expectLeaseHeld(layout.leasePath);
+        return "0.145.0";
+      },
+      runtimeSupervisorFactory: runtime.factory
+    });
+
+    expect(probeCalls).toBe(1);
+    expect(runtime.startCalls).toBe(0);
+    expect(resources.codex_version).toBe("0.145.0");
+    expect(resources.runtime).toEqual({
+      mode: "foreground_child",
+      ownership: "foreground_child",
+      socket_path: layout.socketPath,
+      socket_mode_repaired: false,
+      stale_socket_removed: false,
+      process_exit: null,
+      preparation: "version_incompatible"
+    });
+    expect(resources.snapshot()).toMatchObject({
+      phase: "ready",
+      codex_version: "0.145.0",
+      runtime_preparation: "version_incompatible",
+      runtime: {
+        phase: "idle",
+        spawn_attempts: 0,
+        socket_ready: false
+      }
+    });
+
+    await resources.close();
+    expect(runtime.closeCalls).toBe(1);
+    expect(resources.snapshot()).toMatchObject({
+      phase: "closed",
+      database_open: false,
+      lease_held: false,
+      runtime: { phase: "closed" }
+    });
+    acquireAndRelease(layout.leasePath);
+  });
+
+  it("fails and rolls back when the probe returns malformed state", async () => {
+    const layout = fixtureLayout("invalid-version-state");
+    const runtime = fakeRuntime();
+    const error = await captureStartError(
+      layout.input,
+      runtime.factory,
+      undefined,
+      async () => "nightly"
+    );
+
+    expect(error).toMatchObject({
+      code: "runtime_failed",
+      stage: "runtime"
+    });
+    expect(runtime.startCalls).toBe(0);
+    expect(runtime.closeCalls).toBe(0);
     acquireAndRelease(layout.leasePath);
   });
 
@@ -607,7 +684,11 @@ function fixtureLayout(label: string): FixtureLayout {
   const leasePath = join(stateDir, "hostdeck.lock");
   const socketPath = join(runtimeDir, "app-server.sock");
   const executable = join(root, "codex-fixture");
-  writeFileSync(executable, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+  writeFileSync(
+    executable,
+    "#!/bin/sh\nprintf 'codex-cli 0.144.0\\n'\n",
+    { mode: 0o700 }
+  );
   chmodSync(executable, 0o700);
   return {
     root,
@@ -741,12 +822,14 @@ function snapshot(
 async function captureStartError(
   input: StartHostDeckForegroundResourcesInput,
   runtimeSupervisorFactory: typeof createCodexRuntimeSupervisor,
-  now?: () => Date
+  now?: () => Date,
+  codexVersionProbe?: () => Promise<string>
 ): Promise<unknown> {
   try {
     await startHostDeckForegroundResources(input, {
       runtimeSupervisorFactory,
-      ...(now === undefined ? {} : { now })
+      ...(now === undefined ? {} : { now }),
+      ...(codexVersionProbe === undefined ? {} : { codexVersionProbe })
     });
   } catch (error) {
     return error;

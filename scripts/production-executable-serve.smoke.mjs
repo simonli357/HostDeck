@@ -14,8 +14,9 @@ import {
   symlinkSync,
   writeFileSync
 } from "node:fs";
+import { request as requestHttp } from "node:http";
 import { createServer } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -28,11 +29,14 @@ const verification = verifyProductionPackage(sourcePackage);
 const sourceManifest = JSON.parse(
   readFileSync(join(sourcePackage, "hostdeck-package.json"), "utf8")
 );
-const codexBin = requireExactCodexBinary(
+const expectDiagnostic = process.env.HOSTDECK_EXPECT_DIAGNOSTIC === "1";
+const codex = requireCodexBinary(
   process.env.HOSTDECK_CODEX_BIN,
-  sourceManifest.codex.codexVersion
+  sourceManifest.codex.codexVersion,
+  expectDiagnostic
 );
-const root = mkdtempSync(join(tmpdir(), "hostdeck-executable-serve-"));
+const codexBin = codex.path;
+const root = mkdtempSync(join(homedir(), ".hostdeck-executable-serve-"));
 const packageRoot = join(root, "package");
 const homeDir = join(root, "home");
 const configHome = join(root, "config-home");
@@ -87,6 +91,82 @@ try {
       asset.headers.get("cache-control"),
       "public, max-age=31536000, immutable"
     );
+    const localAdminHeaders = {
+      "x-hostdeck-local-admin": "cli-v1"
+    };
+    const hostStatusResponse = await requestLoopback(
+      `http://127.0.0.1:${port}/api/v1/host/status`,
+      { headers: localAdminHeaders }
+    );
+    assert.equal(hostStatusResponse.status, 200);
+    assert.equal(hostStatusResponse.headers.get("cache-control"), "no-store");
+    const hostStatus = await hostStatusResponse.json();
+    assert.deepEqual(hostStatus.compatibility, {
+      state: expectDiagnostic ? "version_drift" : "supported",
+      evidence: "current",
+      observed_version: codex.version,
+      supported_version: sourceManifest.codex.codexVersion,
+      capability_state: expectDiagnostic ? "blocked" : "verified",
+      checked_at: hostStatus.compatibility.checked_at,
+      recorded_at: hostStatus.compatibility.recorded_at
+    });
+    assert.equal(
+      typeof hostStatus.compatibility.checked_at,
+      "string"
+    );
+    assert.equal(
+      typeof hostStatus.compatibility.recorded_at,
+      "string"
+    );
+    assert.equal(
+      hostStatus.local.readiness,
+      expectDiagnostic ? "not_ready" : "ready"
+    );
+    assert.equal(
+      hostStatus.local.mutation_admission,
+      expectDiagnostic ? "closed" : "open"
+    );
+    assert.equal(
+      /binding_id|capabilities|reason|socket|codex_bin|user_agent|environment/iu.test(
+        JSON.stringify(hostStatus.compatibility)
+      ),
+      false
+    );
+    const readiness = await requestLoopback(
+      `http://127.0.0.1:${port}/api/v1/health/ready`,
+      { headers: localAdminHeaders }
+    );
+    assert.equal(readiness.status, expectDiagnostic ? 503 : 200);
+
+    if (expectDiagnostic) {
+      const stream = await requestLoopback(
+        `http://127.0.0.1:${port}/api/v1/sessions/sess_diagnostic_smoke_001/events/stream`,
+        {
+          headers: { accept: "text/event-stream" }
+        }
+      );
+      assert.equal(stream.status, 503);
+      assert.equal((await stream.json()).error.code, "service_overloaded");
+
+      const mutation = await requestLoopback(
+        `http://127.0.0.1:${port}/api/v1/sessions`,
+        {
+          body: JSON.stringify({
+            operation_id: `op_diagnostic_package_${attempt}`,
+            name: "diagnostic-blocked",
+            cwd: "/tmp/hostdeck-diagnostic-blocked"
+          }),
+          headers: {
+            ...localAdminHeaders,
+            "content-type": "application/json"
+          },
+          method: "POST"
+        }
+      );
+      assert.equal(mutation.status, 409);
+      assert.equal((await mutation.json()).error.code, "incompatible_runtime");
+      assert.equal(existsSync(socketPath), false);
+    }
 
     assert.equal(run.child.kill("SIGTERM"), true);
     const result = await withTimeout(
@@ -109,7 +189,9 @@ try {
 
   assert.equal(findFiles(codexHome).some((path) => path.endsWith(".jsonl")), false);
   console.log(
-    `HostDeck executable serve smoke passed: ${verification.sourceCount} sources, read-only package, two loopback starts, exact Codex ${sourceManifest.codex.codexVersion}, no model turn.`
+    expectDiagnostic
+      ? `HostDeck executable diagnostic smoke passed: ${verification.sourceCount} sources, read-only package, two loopback starts, observed Codex ${codex.version}, no runtime admission.`
+      : `HostDeck executable serve smoke passed: ${verification.sourceCount} sources, read-only package, two loopback starts, exact Codex ${sourceManifest.codex.codexVersion}, no model turn.`
   );
 } finally {
   try {
@@ -229,7 +311,7 @@ function startServe(command, port) {
   return { child, completed, ready };
 }
 
-function requireExactCodexBinary(candidate, expectedVersion) {
+function requireCodexBinary(candidate, expectedVersion, diagnostic) {
   if (typeof candidate !== "string" || !candidate.startsWith("/")) {
     throw new TypeError(
       "Executable serve smoke requires absolute HOSTDECK_CODEX_BIN."
@@ -246,15 +328,26 @@ function requireExactCodexBinary(candidate, expectedVersion) {
     maxBuffer: 65_536,
     timeout: 10_000
   });
+  const match = /^codex-cli ([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)\n?$/u.exec(
+    result.stdout
+  );
+  const observedVersion = match?.[1];
   if (
     result.status !== 0 ||
-    !new RegExp(`(?:^|\\s)${escapeRegExp(expectedVersion)}(?:\\s|$)`, "u").test(
-      result.stdout
-    )
+    result.signal !== null ||
+    result.stderr !== "" ||
+    observedVersion === undefined ||
+    (diagnostic
+      ? observedVersion === expectedVersion
+      : observedVersion !== expectedVersion)
   ) {
-    throw new TypeError("Executable serve smoke Codex version is unsupported.");
+    throw new TypeError(
+      diagnostic
+        ? "Executable diagnostic smoke requires a valid unsupported Codex version."
+        : "Executable serve smoke Codex version is unsupported."
+    );
   }
-  return path;
+  return Object.freeze({ path, version: observedVersion });
 }
 
 function createStaticFixture(buildRoot) {
@@ -297,10 +390,80 @@ async function assertLoopbackPortAvailable(port) {
   });
 }
 
-async function fetchWithTimeout(url) {
+async function fetchWithTimeout(url, init = {}) {
   return fetch(url, {
-    headers: { connection: "close" },
+    ...init,
+    headers: { connection: "close", ...init.headers },
     signal: AbortSignal.timeout(5_000)
+  });
+}
+
+async function requestLoopback(url, init = {}) {
+  const target = new URL(url);
+  assert.equal(target.protocol, "http:");
+  assert.equal(target.hostname, "127.0.0.1");
+  assert(init.body === undefined || typeof init.body === "string");
+
+  return await new Promise((resolveRequest, rejectRequest) => {
+    let settled = false;
+    const rejectOnce = (error) => {
+      if (settled) return;
+      settled = true;
+      rejectRequest(error);
+    };
+    const request = requestHttp(
+      target,
+      {
+        headers: { connection: "close", ...init.headers },
+        method: init.method ?? "GET",
+        signal: AbortSignal.timeout(5_000)
+      },
+      (response) => {
+        const chunks = [];
+        let bytes = 0;
+        response.on("data", (chunk) => {
+          if (!Buffer.isBuffer(chunk)) {
+            request.destroy(
+              new Error("Executable serve response was not a byte buffer.")
+            );
+            return;
+          }
+          bytes += chunk.byteLength;
+          if (bytes > 1_048_576) {
+            request.destroy(
+              new Error("Executable serve response exceeded its smoke bound.")
+            );
+            return;
+          }
+          chunks.push(chunk);
+        });
+        response.once("error", rejectOnce);
+        response.once("end", () => {
+          if (settled) return;
+          const status = response.statusCode;
+          if (status === undefined) {
+            rejectOnce(
+              new Error("Executable serve response omitted its status code.")
+            );
+            return;
+          }
+          const headers = new Headers();
+          for (let index = 0; index < response.rawHeaders.length; index += 2) {
+            headers.append(
+              response.rawHeaders[index],
+              response.rawHeaders[index + 1]
+            );
+          }
+          settled = true;
+          resolveRequest(
+            new Response(Buffer.concat(chunks, bytes), { headers, status })
+          );
+        });
+      }
+    );
+    request.once("error", rejectOnce);
+    if (init.body !== undefined) request.write(init.body);
+    request.end();
   });
 }
 
@@ -362,8 +525,4 @@ function withTimeout(promise, milliseconds, message) {
       timer = setTimeout(() => reject(new Error(message)), milliseconds);
     })
   ]).finally(() => clearTimeout(timer));
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }

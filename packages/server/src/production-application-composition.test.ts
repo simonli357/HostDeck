@@ -9,7 +9,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defaultResourceBudget } from "@hostdeck/contracts";
 import { createOperationDeadline, type OperationDeadline } from "@hostdeck/core";
-import { createSettingsRepository } from "@hostdeck/storage";
+import {
+  createRuntimeCompatibilityRepository,
+  createSelectedStateRepository,
+  createSettingsRepository
+} from "@hostdeck/storage";
 import { afterEach, describe, expect, it } from "vitest";
 import type {
   CodexRuntimeProcessExitObservation,
@@ -24,7 +28,11 @@ import {
   type HostDeckFastifyInstance,
   hostDeckFastifyRouteInventory
 } from "./fastify-app.js";
-import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
+import {
+  createHostDeckRequestTrustPolicy,
+  hostDeckLocalAdminRequestHeaderName,
+  hostDeckLocalAdminRequestHeaderValue
+} from "./fastify-request-trust.js";
 import {
   type HostDeckForegroundResources,
   startHostDeckForegroundResources
@@ -42,6 +50,7 @@ import { selectedApiRouteManifest } from "./selected-api-route-manifest.js";
 const fixtures: CompositionFixture[] = [];
 const fastifyApps = new Set<HostDeckFastifyInstance>();
 const indexSentinel = "HOSTDECK_PRODUCTION_COMPOSITION_STATIC_SENTINEL";
+const diagnosticSessionId = "sess_production_diagnostic_001";
 
 afterEach(async () => {
   const errors: unknown[] = [];
@@ -262,7 +271,7 @@ describe("IFC-V1-082 production application composition", () => {
     const application = compose(fixture);
 
     expect(() => application.listener.ready()).toThrow(
-      "HostDeck listener cannot become ready before the production runtime."
+      "HostDeck listener cannot become ready before the production application boundary."
     );
     application.runtime.beginDrain();
     expect(application.snapshot().phase).toBe("draining");
@@ -385,6 +394,175 @@ describe("IFC-V1-082 production application composition", () => {
     });
   });
 
+  it("serves mutation-closed diagnostics for a real observed version mismatch", async () => {
+    const fixture = await createFixture("version-drift", {
+      codexVersion: "0.145.0"
+    });
+    const stateRepository = createSelectedStateRepository(
+      fixture.resources.database
+    );
+    stateRepository.create(diagnosticRuntimeSession());
+    const issues: unknown[] = [];
+    const application = compose(fixture, (issue) => issues.push(issue));
+
+    await withDeadline((deadline) =>
+      application.runtime.start({
+        deadline,
+        resourceBudget: defaultResourceBudget
+      })
+    );
+
+    expect(fixture.runtime.startCalls).toBe(0);
+    expect(fixture.resources.snapshot()).toMatchObject({
+      phase: "ready",
+      codex_version: "0.145.0",
+      runtime_preparation: "version_incompatible",
+      runtime: {
+        phase: "idle",
+        process_state: "not_started",
+        claim_held: false,
+        socket_ready: false
+      }
+    });
+    expect(application.snapshot()).toMatchObject({
+      phase: "diagnostic_ready",
+      reconnect: {
+        phase: "incompatible",
+        connection_state: "disconnected",
+        admitted_generation: null,
+        last_failure: { code: "incompatible", stage: "connect" }
+      },
+      reconciliation: {
+        phase: "gap_prepared",
+        gap_reason: "restart",
+        durable_session_count: 1
+      },
+      startup_maintenance: { status: "ready" }
+    });
+    expect(application.health.localSnapshot()).toMatchObject({
+      readiness: "not_ready",
+      mutation_admission: "closed",
+      components: expect.arrayContaining([
+        expect.objectContaining({
+          component: "compatibility",
+          state: "failed",
+          reasons: ["runtime_incompatible"]
+        }),
+        expect.objectContaining({
+          component: "runtime",
+          state: "failed",
+          reasons: ["runtime_failed"]
+        }),
+        expect.objectContaining({ component: "storage", state: "ready" })
+      ])
+    });
+    expect(
+      createRuntimeCompatibilityRepository(fixture.resources.database).get()
+    ).toMatchObject({
+      id: "hostdeck_runtime",
+      compatibility: {
+        state: "incompatible",
+        mutation_policy: "blocked",
+        observed_version: "0.145.0"
+      }
+    });
+    expect(issues).toEqual([{ source: "reconnect", code: "incompatible" }]);
+    expect(
+      stateRepository.require(diagnosticSessionId).projection.session
+    ).toMatchObject({
+      freshness: "disconnected",
+      freshness_reason:
+        "HostDeck restarted; runtime reconciliation is required.",
+      turn_state: "in_progress"
+    });
+    const diagnosticEvents = stateRepository.listEvents(
+      diagnosticSessionId
+    ).events;
+    expect(diagnosticEvents).toHaveLength(1);
+    expect(diagnosticEvents[0]).toMatchObject({
+      state: "disconnected",
+      type: "runtime"
+    });
+
+    application.listener.ready();
+    const app = createLocalApp(application);
+    await app.ready();
+    const staticResponse = await app.inject({
+      headers: { host: `127.0.0.1:${fixture.resources.bind.port}` },
+      method: "GET",
+      url: "/"
+    });
+    expect(staticResponse.statusCode, staticResponse.body).toBe(200);
+    expect(staticResponse.body).toContain(indexSentinel);
+
+    const requestHeaders = {
+      host: `127.0.0.1:${fixture.resources.bind.port}`,
+      [hostDeckLocalAdminRequestHeaderName]:
+        hostDeckLocalAdminRequestHeaderValue
+    };
+    const statusResponse = await app.inject({
+      headers: requestHeaders,
+      method: "GET",
+      url: "/api/v1/host/status"
+    });
+    expect(statusResponse.statusCode, statusResponse.body).toBe(200);
+    expect(statusResponse.json()).toMatchObject({
+      local: { readiness: "not_ready", mutation_admission: "closed" },
+      compatibility: {
+        state: "version_drift",
+        evidence: "current",
+        observed_version: "0.145.0",
+        supported_version: "0.144.0",
+        capability_state: "blocked"
+      }
+    });
+    expect(statusResponse.headers["cache-control"]).toBe("no-store");
+    expect(statusResponse.body).not.toMatch(
+      /binding_id|capabilities|reason|socket|codex_bin|private|user_agent/iu
+    );
+
+    const readinessResponse = await app.inject({
+      headers: requestHeaders,
+      method: "GET",
+      url: "/api/v1/health/ready"
+    });
+    expect(readinessResponse.statusCode, readinessResponse.body).toBe(503);
+    const streamResponse = await app.inject({
+      headers: {
+        accept: "text/event-stream",
+        host: `127.0.0.1:${fixture.resources.bind.port}`
+      },
+      method: "GET",
+      url: `/api/v1/sessions/${diagnosticSessionId}/events/stream`
+    });
+    expect(streamResponse.statusCode, streamResponse.body).toBe(503);
+    expect(streamResponse.json()).toMatchObject({
+      error: { code: "service_overloaded", retryable: false }
+    });
+    const operationId = "op_diagnostic_start_001";
+    const mutationResponse = await app.inject({
+      headers: requestHeaders,
+      method: "POST",
+      payload: {
+        operation_id: operationId,
+        name: "diagnostic-blocked",
+        cwd: "/tmp/hostdeck-diagnostic-blocked"
+      },
+      url: "/api/v1/sessions"
+    });
+    expect(mutationResponse.statusCode, mutationResponse.body).toBe(409);
+    expect(mutationResponse.json()).toMatchObject({
+      error: { code: "incompatible_runtime", retryable: false }
+    });
+    const auditCount = fixture.resources.database
+      .prepare(
+        "SELECT COUNT(*) AS count FROM selected_audit_events WHERE operation_id = ?"
+      )
+      .get(operationId) as { readonly count: number };
+    expect(auditCount.count).toBe(0);
+    expect(fixture.runtime.startCalls).toBe(0);
+  });
+
   it("turns a rejected runtime-exit observation into bounded terminal diagnostics", async () => {
     const fixture = await createFixture("exit-observation");
     const issues: unknown[] = [];
@@ -431,7 +609,10 @@ interface CompositionFixture {
   application: HostDeckProductionApplication | null;
 }
 
-async function createFixture(label: string): Promise<CompositionFixture> {
+async function createFixture(
+  label: string,
+  options: Readonly<{ readonly codexVersion?: string }> = {}
+): Promise<CompositionFixture> {
   const root = mkdtempSync(join(tmpdir(), `hd-pa-${label}-`));
   chmodSync(root, 0o700);
   const configDir = join(root, "config");
@@ -439,7 +620,11 @@ async function createFixture(label: string): Promise<CompositionFixture> {
   const runtimeDir = join(root, "runtime");
   const executable = join(root, "codex-fixture");
   const buildRoot = join(root, "build");
-  writeFileSync(executable, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+  writeFileSync(
+    executable,
+    `#!/bin/sh\nprintf 'codex-cli ${options.codexVersion ?? "0.144.0"}\\n'\n`,
+    { mode: 0o700 }
+  );
   mkdirSync(join(buildRoot, "assets"), { recursive: true, mode: 0o700 });
   writeFileSync(
     join(buildRoot, "index.html"),
@@ -586,6 +771,54 @@ function runtimeSnapshot(
     term_signals: 0,
     kill_signals: 0,
     cleanup_failures: 0
+  });
+}
+
+function diagnosticRuntimeSession(): Readonly<Record<string, unknown>> {
+  const createdAt = "2026-07-20T12:00:00.000Z";
+  const mapping = {
+    id: diagnosticSessionId,
+    name: "production-diagnostic",
+    codex_thread_id: "thread-production-diagnostic-001",
+    cwd: "/tmp/hostdeck-production-diagnostic",
+    runtime_source: "codex_app_server",
+    runtime_version: "0.144.0",
+    disposition: "selected",
+    created_at: createdAt,
+    updated_at: createdAt,
+    archived_at: null
+  } as const;
+  return Object.freeze({
+    mapping,
+    projection: {
+      session: {
+        id: mapping.id,
+        name: mapping.name,
+        codex_thread_id: mapping.codex_thread_id,
+        cwd: mapping.cwd,
+        runtime_source: mapping.runtime_source,
+        runtime_version: mapping.runtime_version,
+        created_at: mapping.created_at,
+        archived_at: mapping.archived_at,
+        session_state: "active",
+        turn_state: "in_progress",
+        attention: "watch",
+        freshness: "current",
+        freshness_reason: null,
+        updated_at: mapping.updated_at,
+        last_activity_at: createdAt,
+        branch: "main",
+        model: null,
+        settings: null,
+        goal: null,
+        recent_summary: "Managed projection created.",
+        last_event_cursor: null
+      },
+      retained_event_count: 0,
+      retained_event_bytes: 0,
+      earliest_retained_cursor: null,
+      retention_boundary_cursor: null
+    }
   });
 }
 

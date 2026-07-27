@@ -4,10 +4,15 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  assessCodexCompatibility,
+  codexBindingDescriptor
+} from "@hostdeck/codex-adapter";
+import {
   defaultResourceBudget,
   remoteIngressPublicStateSchema,
   resolveResourceBudget,
-  selectedRequestAuthenticationContextSchema
+  selectedRequestAuthenticationContextSchema,
+  selectedRuntimeCompatibilityRecordSchema
 } from "@hostdeck/contracts";
 import {
   createAuthDeviceRepository,
@@ -63,6 +68,7 @@ import {
   hostDeckPairingPolicySnapshot
 } from "./pairing-routes.js";
 import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
+import { createHostDeckRuntimeCompatibilityRecordReader } from "./runtime-compatibility-status.js";
 import {
   createSecurityMutationAuditExecutor,
   type SecurityMutationAuditExecutor
@@ -1029,6 +1035,24 @@ function createHarness(options: HarnessOptions = {}): Harness {
       observed_at: new Date(baseTime.getTime() + 1_000).toISOString()
     })
   });
+  const compatibility = createHostDeckRuntimeCompatibilityRecordReader({
+    read: () =>
+      selectedRuntimeCompatibilityRecordSchema.parse({
+        id: "hostdeck_runtime",
+        compatibility: assessCodexCompatibility({
+          observed_version: codexBindingDescriptor.codex_version,
+          checked_at: baseTime.toISOString(),
+          handshake: {
+            state: "initialized",
+            user_agent: `hostdeck/${codexBindingDescriptor.codex_version}`,
+            platform_family: "unix",
+            platform_os: "linux",
+            collaboration_modes: ["Plan", "Default"]
+          }
+        }),
+        recorded_at: baseTime.toISOString()
+      })
+  });
   seedStartupAggregateSession(opened.db);
   const sessionReads = createSelectedSessionReadRepository(opened.db);
   const remoteRequestAuthority =
@@ -1048,7 +1072,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
         csrf: csrfPolicy,
         lock: lockPolicy
       }),
-      createHostDeckHealthRouteRegistration({ health }),
+      createHostDeckHealthRouteRegistration({ compatibility, health }),
       createHostDeckSessionReadRouteRegistration({ sessions: sessionReads }),
       protectedRoute()
     ],

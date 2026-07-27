@@ -5,12 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
-import type {
-  CodexTurnClient,
-  CodexTurnInterruptInput,
-  CodexTurnStartInput,
-  CodexTurnSteerInput,
-  NormalizedCodexEvent
+import {
+  assessCodexCompatibility,
+  type CodexTurnClient,
+  type CodexTurnInterruptInput,
+  type CodexTurnStartInput,
+  type CodexTurnSteerInput,
+  codexBindingDescriptor,
+  type NormalizedCodexEvent
 } from "../packages/codex-adapter/src/index.js";
 import {
   codexThreadIdSchema,
@@ -24,6 +26,7 @@ import {
   type SelectedSessionProjectionRecord,
   type SelectedSessionReadItem,
   selectedProjectionEventSchema,
+  selectedRuntimeCompatibilityRecordSchema,
   selectedSessionListPageSchema,
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema,
@@ -45,6 +48,7 @@ import {
   createHostDeckRemoteIngressRequestAuthorityPolicy,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckRequestTrustPolicy,
+  createHostDeckRuntimeCompatibilityRecordReader,
   createHostDeckSelectedWriteAdmissionPolicy,
   createHostDeckSelectedWriteAuditExecutor,
   createHostDeckSessionReadRouteRegistration,
@@ -254,9 +258,14 @@ describe("FE-V1-025 real shell connection-state composition", () => {
     harness.setCompatibilityHealth("degraded");
     const degraded = await page.coordinator.refresh();
     expect(degraded).toMatchObject({
-      phase: "degraded",
+      phase: "offline",
       host: {
         data: {
+          compatibility: {
+            state: "degraded",
+            evidence: "last_known",
+            capability_state: "unverified"
+          },
           local: {
             state: "degraded",
             mutation_admission: "closed",
@@ -615,6 +624,25 @@ async function createHarness(mode: HarnessMode): Promise<ConnectionServerHarness
   let remoteGeneration = 31;
   let remoteSourceGeneration = 0;
   let compatibilitySourceGeneration = 1;
+  let runtimeSourceGeneration = 1;
+  const compatibility = createHostDeckRuntimeCompatibilityRecordReader({
+    read: () =>
+      selectedRuntimeCompatibilityRecordSchema.parse({
+        id: "hostdeck_runtime",
+        compatibility: assessCodexCompatibility({
+          observed_version: codexBindingDescriptor.codex_version,
+          checked_at: timestamp,
+          handshake: {
+            state: "initialized",
+            user_agent: `hostdeck/${codexBindingDescriptor.codex_version}`,
+            platform_family: "unix",
+            platform_os: "linux",
+            collaboration_modes: ["Plan", "Default"]
+          }
+        }),
+        recorded_at: timestamp
+      })
+  });
   const updateRemoteHealth = () => {
     health.updateRemote({
       source_generation: ++remoteSourceGeneration,
@@ -659,7 +687,7 @@ async function createHarness(mode: HarnessMode): Promise<ConnectionServerHarness
   const routePlugins = [
     createHostDeckHostLockRouteRegistration({ audit: securityAudit, csrf, lock }),
     createHostDeckCsrfRouteRegistration({ audit: securityAudit, csrf }),
-    createHostDeckHealthRouteRegistration({ health }),
+    createHostDeckHealthRouteRegistration({ compatibility, health }),
     createHostDeckSessionReadRouteRegistration({ sessions }),
     createHostDeckProjectionStreamRouteRegistration({
       observe_error: (failure) => streamFailures.push(failure),
@@ -800,6 +828,12 @@ async function createHarness(mode: HarnessMode): Promise<ConnectionServerHarness
     },
     sessionPortCounts: () => Object.freeze({ get: getCalls, list: listCalls }),
     setCompatibilityHealth(state) {
+      health.updateLocal({
+        component: "runtime",
+        source_generation: ++runtimeSourceGeneration,
+        state: state === "degraded" ? "degraded" : "ready",
+        reasons: state === "degraded" ? ["runtime_reconciling"] : []
+      });
       health.updateLocal({
         component: "compatibility",
         source_generation: ++compatibilitySourceGeneration,

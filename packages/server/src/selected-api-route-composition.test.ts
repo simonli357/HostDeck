@@ -33,6 +33,7 @@ import { createHostDeckPairingPolicy } from "./pairing-routes.js";
 import { createProjectionSubscriberStreamService } from "./projection-subscriber-stream.js";
 import { createRemoteIngressControlService } from "./remote-ingress-control-service.js";
 import { createHostDeckRemoteIngressRequestAuthorityPolicy } from "./remote-ingress-request-authority.js";
+import { createHostDeckRuntimeCompatibilityRecordReader } from "./runtime-compatibility-status.js";
 import { createSecurityMutationAuditExecutor } from "./security-mutation-audit-executor.js";
 import {
   type CreateHostDeckSelectedApiRouteCompositionInput,
@@ -689,6 +690,9 @@ function createHandlerProbeFixture(): HandlerProbeFixture {
     now
   });
   const health = createHostDeckHostHealthService({ now });
+  const compatibility = createHostDeckRuntimeCompatibilityRecordReader({
+    read: () => null
+  });
   const remote = createRemoteIngressControlService({
     admissionProofs: createRemoteIngressAdmissionProofRepository(opened.db),
     audit: securityAudit,
@@ -788,7 +792,7 @@ function createHandlerProbeFixture(): HandlerProbeFixture {
       list: () => requireProbe("devices.list"),
       revoke: () => requireProbe("devices.revoke")
     },
-    health,
+    health: { compatibility, health },
     lock,
     now,
     observeSseError: () => undefined,
@@ -980,6 +984,9 @@ function createFixture(): CompositionFixture {
     now
   });
   const health = createHostDeckHostHealthService({ now });
+  const compatibility = createHostDeckRuntimeCompatibilityRecordReader({
+    read: () => null
+  });
   const remote = createRemoteIngressControlService({
     admissionProofs: createRemoteIngressAdmissionProofRepository(opened.db),
     audit: securityAudit,
@@ -1043,7 +1050,7 @@ function createFixture(): CompositionFixture {
     },
     csrf,
     devices: { list: fail, revoke: fail },
-    health,
+    health: { compatibility, health },
     lock,
     now,
     observeSseError: () => undefined,

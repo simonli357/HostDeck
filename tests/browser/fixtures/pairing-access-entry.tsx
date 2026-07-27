@@ -163,6 +163,15 @@ function accessSnapshot(state: AccessFixtureState): BrowserConnectionSnapshot {
       })),
       mutation_admission: "open"
     },
+    compatibility: {
+      state: "supported",
+      evidence: "current",
+      observed_version: "0.144.0",
+      supported_version: "0.144.0",
+      capability_state: "verified",
+      checked_at: timestamp,
+      recorded_at: timestamp
+    },
     remote: {
       generation: 1,
       state_generation: 1,

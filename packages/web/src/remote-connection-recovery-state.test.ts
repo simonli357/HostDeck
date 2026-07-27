@@ -426,6 +426,15 @@ function hostStatus(
       })),
       mutation_admission: "open"
     },
+    compatibility: {
+      state: "supported",
+      evidence: "current",
+      observed_version: "0.144.0",
+      supported_version: "0.144.0",
+      capability_state: "verified",
+      checked_at: timestamp,
+      recorded_at: timestamp
+    },
     remote: remoteStatus(remoteFixture),
     access: {
       mode,

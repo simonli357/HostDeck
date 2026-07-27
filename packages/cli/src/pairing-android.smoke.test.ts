@@ -26,6 +26,10 @@ import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import {
+  assessCodexCompatibility,
+  codexBindingDescriptor
+} from "@hostdeck/codex-adapter";
+import {
   codexThreadIdSchema,
   codexTurnIdSchema,
   defaultResourceBudget,
@@ -40,6 +44,7 @@ import {
   selectedPairingLinkSchema,
   selectedProjectionEventSchema,
   selectedRequestAuthenticationContextSchema,
+  selectedRuntimeCompatibilityRecordSchema,
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
@@ -62,6 +67,7 @@ import {
   createHostDeckRemoteIngressLifecycle,
   createHostDeckRemoteIngressRouteRegistration,
   createHostDeckRequestAuthenticationPolicy,
+  createHostDeckRuntimeCompatibilityRecordReader,
   createHostDeckSelectedWriteAdmissionPolicy,
   createHostDeckSelectedWriteAuditExecutor,
   createHostDeckSessionReadRouteRegistration,
@@ -973,7 +979,26 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           now: () => now().toISOString(),
           create_record_id: () => `audit:physical:remote:${++auditIndex}`
         });
+        const compatibilityRecordedAt = now().toISOString();
         const health = createHostDeckHostHealthService({ now });
+        const compatibility = createHostDeckRuntimeCompatibilityRecordReader({
+          read: () =>
+            selectedRuntimeCompatibilityRecordSchema.parse({
+              id: "hostdeck_runtime",
+              compatibility: assessCodexCompatibility({
+                observed_version: codexBindingDescriptor.codex_version,
+                checked_at: compatibilityRecordedAt,
+                handshake: {
+                  state: "initialized",
+                  user_agent: `hostdeck/${codexBindingDescriptor.codex_version}`,
+                  platform_family: "unix",
+                  platform_os: "linux",
+                  collaboration_modes: ["Plan", "Default"]
+                }
+              }),
+              recorded_at: compatibilityRecordedAt
+            })
+        });
         if (requireProductionUiAcceptance) {
           for (const component of hostDeckLocalHealthComponents) {
             health.updateLocal({
@@ -1154,7 +1179,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           }),
           ...(requireProductionUiAcceptance && sessionReads !== null
             ? [
-                createHostDeckHealthRouteRegistration({ health }),
+                createHostDeckHealthRouteRegistration({ compatibility, health }),
                 createHostDeckSessionReadRouteRegistration({
                   sessions: sessionReads
                 })

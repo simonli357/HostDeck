@@ -532,6 +532,11 @@ describe("Codex runtime reconnect controller", () => {
 
     await expect(controller.start()).rejects.toMatchObject({ code: "incompatible", stage: "connect" });
     expect(controller.snapshot()).toMatchObject({ phase: "incompatible", connect_attempts: 1 });
+    expect(controller.compatibility).toMatchObject({
+      state: "incompatible",
+      mutation_policy: "blocked",
+      observed_version: "0.145.0"
+    });
     expect(manual.sleepDelays).toEqual([]);
     expect(transport.generation).toBe(0);
     await controller.close();

@@ -4,6 +4,10 @@ import {
   selectedHostAccessModes,
   selectedHostAccessStatusSchema,
   selectedHostAggregateLocalHealthState,
+  selectedHostCompatibilityCapabilityStates,
+  selectedHostCompatibilityEvidenceStates,
+  selectedHostCompatibilityStates,
+  selectedHostCompatibilityStatusSchema,
   selectedHostLocalHealthCauses,
   selectedHostLocalHealthComponents,
   selectedHostLocalHealthStates,
@@ -26,6 +30,9 @@ describe("selected host health contracts", () => {
       selectedHostLocalHealthCauses,
       selectedHostRemoteObservationFailureCauses,
       selectedHostAccessModes,
+      selectedHostCompatibilityStates,
+      selectedHostCompatibilityEvidenceStates,
+      selectedHostCompatibilityCapabilityStates,
       selectedHostWriteEligibilityCauses
     ]) {
       expect(Object.isFrozen(values)).toBe(true);
@@ -88,6 +95,74 @@ describe("selected host health contracts", () => {
         "impossible" as never
       )
     ).toBe(false);
+  });
+
+  it("accepts only the selected compatibility products and cross-field invariants", () => {
+    const valid = [
+      supportedCompatibility(),
+      {
+        ...supportedCompatibility(),
+        state: "version_drift",
+        observed_version: "0.145.0",
+        capability_state: "blocked"
+      },
+      {
+        ...supportedCompatibility(),
+        state: "incompatible",
+        capability_state: "blocked"
+      },
+      {
+        ...supportedCompatibility(),
+        state: "degraded",
+        capability_state: "limited"
+      },
+      {
+        ...supportedCompatibility(),
+        state: "degraded",
+        evidence: "last_known",
+        capability_state: "unverified"
+      },
+      disconnectedCompatibility(),
+      unknownCompatibility(),
+      {
+        ...supportedCompatibility(),
+        state: "unknown",
+        evidence: "last_known",
+        capability_state: "unverified"
+      }
+    ] as const;
+    for (const candidate of valid) {
+      expect(selectedHostCompatibilityStatusSchema.parse(candidate)).toEqual(
+        candidate
+      );
+    }
+
+    for (const candidate of [
+      { ...supportedCompatibility(), evidence: "last_known" },
+      { ...supportedCompatibility(), observed_version: "0.145.0" },
+      {
+        ...supportedCompatibility(),
+        state: "version_drift",
+        observed_version: "0.144.0",
+        capability_state: "blocked"
+      },
+      {
+        ...supportedCompatibility(),
+        state: "incompatible",
+        observed_version: "0.145.0",
+        capability_state: "blocked"
+      },
+      { ...unknownCompatibility(), observed_version: "0.144.0" },
+      {
+        ...disconnectedCompatibility(),
+        recorded_at: "2026-07-16T19:59:00.000Z"
+      },
+      { ...supportedCompatibility(), binding_id: "private-binding" }
+    ]) {
+      expect(selectedHostCompatibilityStatusSchema.safeParse(candidate).success).toBe(
+        false
+      );
+    }
   });
 
   it("accepts only exact initial and all-ready local readiness truth", () => {
@@ -496,21 +571,30 @@ function localReady() {
 function localDegraded() {
   return {
     ...readinessReady(),
-    generation: 8,
+    generation: 9,
     state: "degraded" as const,
     readiness: "not_ready" as const,
     mutation_admission: "closed" as const,
     updated_at: laterTimestamp,
-    components: readyComponents().map((component) =>
-      component.component === "runtime"
-        ? {
-            ...component,
-            state: "degraded" as const,
-            checked_at: laterTimestamp,
-            causes: ["runtime_disconnected" as const]
-          }
-        : component
-    )
+    components: readyComponents().map((component) => {
+      if (component.component === "runtime") {
+        return {
+          ...component,
+          state: "degraded" as const,
+          checked_at: laterTimestamp,
+          causes: ["runtime_disconnected" as const]
+        };
+      }
+      if (component.component === "compatibility") {
+        return {
+          ...component,
+          state: "degraded" as const,
+          checked_at: laterTimestamp,
+          causes: ["compatibility_degraded" as const]
+        };
+      }
+      return component;
+    })
   };
 }
 
@@ -583,11 +667,54 @@ function hostStatus(
       | ReturnType<typeof remoteObserverFailure>
       | Record<string, unknown>;
     access: ReturnType<typeof access>;
+    compatibility:
+      | ReturnType<typeof supportedCompatibility>
+      | ReturnType<typeof disconnectedCompatibility>
+      | ReturnType<typeof unknownCompatibility>;
   }> = {}
 ) {
+  const local = overrides.local ?? localReady();
   return {
-    local: overrides.local ?? localReady(),
+    local,
+    compatibility:
+      overrides.compatibility ??
+      (local.state === "degraded"
+        ? disconnectedCompatibility()
+        : supportedCompatibility()),
     remote: overrides.remote ?? remoteUnknown(),
     access: overrides.access ?? access("local_admin", true, [])
+  };
+}
+
+function supportedCompatibility() {
+  return {
+    state: "supported" as const,
+    evidence: "current" as const,
+    observed_version: "0.144.0",
+    supported_version: "0.144.0",
+    capability_state: "verified" as const,
+    checked_at: timestamp,
+    recorded_at: laterTimestamp
+  };
+}
+
+function disconnectedCompatibility() {
+  return {
+    ...supportedCompatibility(),
+    state: "disconnected" as const,
+    evidence: "last_known" as const,
+    capability_state: "unverified" as const
+  };
+}
+
+function unknownCompatibility() {
+  return {
+    state: "unknown" as const,
+    evidence: "unobserved" as const,
+    observed_version: null,
+    supported_version: "0.144.0",
+    capability_state: "unverified" as const,
+    checked_at: null,
+    recorded_at: null
   };
 }

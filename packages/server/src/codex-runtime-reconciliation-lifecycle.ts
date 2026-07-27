@@ -133,7 +133,14 @@ export interface CodexRuntimeReconciliationSnapshot {
 }
 
 export interface CodexRuntimeReconciliationLifecycle extends CodexReconnectLifecyclePort {
+  readonly sealStartupUnavailable: (
+    input: CodexRuntimeStartupUnavailableInput
+  ) => Promise<void>;
   readonly snapshot: () => CodexRuntimeReconciliationSnapshot;
+}
+
+export interface CodexRuntimeStartupUnavailableInput {
+  readonly deadline: OperationDeadline;
 }
 
 type GapReason = "disconnect" | "restart";
@@ -143,6 +150,7 @@ type SessionIssue = "contradiction" | "missing" | "none" | "unavailable";
 interface PreparedGap {
   readonly reason: GapReason;
   readonly lost_generation: number | null;
+  readonly durable_session_count: number;
   readonly approvals_superseded: number;
   readonly audits_reconciled: number;
 }
@@ -250,6 +258,8 @@ export function createCodexRuntimeReconciliationLifecycle(
     reconcile: (input: CodexReconnectReconcileInput) => implementation.reconcile(input),
     resubscribe: (input: CodexReconnectResubscribeInput) => implementation.resubscribe(input),
     ready: (input: CodexReconnectReadyInput) => implementation.ready(input),
+    sealStartupUnavailable: (input: CodexRuntimeStartupUnavailableInput) =>
+      implementation.sealStartupUnavailable(input),
     snapshot: () => implementation.snapshot()
   });
 }
@@ -294,6 +304,41 @@ class DefaultCodexRuntimeReconciliationLifecycle {
       this.state.generation = null;
       this.state.continuity = null;
       this.state.gapReason = gap.reason;
+      this.state.durableSessionCount = gap.durable_session_count;
+      this.state.approvalsSuperseded = gap.approvals_superseded;
+      this.state.auditsReconciled = gap.audits_reconciled;
+      this.state.lastFailure = null;
+    } catch (error) {
+      this.recordFailure(error, "projection_failed");
+      throw error;
+    }
+  }
+
+  async sealStartupUnavailable(
+    input: CodexRuntimeStartupUnavailableInput
+  ): Promise<void> {
+    parseStartupUnavailableInput(input);
+    if (
+      this.state.phase !== "idle" ||
+      this.pendingGap !== null ||
+      this.cycle !== null
+    ) {
+      throw this.fail(
+        "lifecycle_conflict",
+        "Codex unavailable-startup reconciliation can run only once from idle."
+      );
+    }
+    try {
+      input.deadline.throwIfAborted();
+      const gap = await this.prepareGap("restart", null, input.deadline);
+      input.deadline.throwIfAborted();
+      this.pendingGap = gap;
+      this.cycle = null;
+      this.state.phase = "gap_prepared";
+      this.state.generation = null;
+      this.state.continuity = null;
+      this.state.gapReason = gap.reason;
+      this.state.durableSessionCount = gap.durable_session_count;
       this.state.approvalsSuperseded = gap.approvals_superseded;
       this.state.auditsReconciled = gap.audits_reconciled;
       this.state.lastFailure = null;
@@ -616,6 +661,7 @@ class DefaultCodexRuntimeReconciliationLifecycle {
     return Object.freeze({
       reason,
       lost_generation: lostGeneration,
+      durable_session_count: states.length,
       approvals_superseded: approvalsSuperseded,
       audits_reconciled: audit.reconciled_operation_count
     });
@@ -1210,6 +1256,17 @@ function parseDisconnectedInput(input: CodexReconnectDisconnectedInput): void {
   );
   assertGeneration(input.generation);
   assertNullableGeneration(input.previous_admitted_generation);
+  assertDeadline(input.deadline);
+}
+
+function parseStartupUnavailableInput(
+  input: CodexRuntimeStartupUnavailableInput
+): void {
+  assertPlainExactObject(
+    input,
+    ["deadline"],
+    "Codex unavailable-startup lifecycle input"
+  );
   assertDeadline(input.deadline);
 }
 

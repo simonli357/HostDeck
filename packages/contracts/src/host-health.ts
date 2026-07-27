@@ -11,6 +11,7 @@ import {
   isoTimestampSchema,
   nonNegativeSafeIntegerSchema
 } from "./scalars.js";
+import { codexVersionSchema } from "./selected-runtime.js";
 
 export const selectedHostLocalHealthComponents = Object.freeze([
   "storage",
@@ -80,6 +81,28 @@ export const selectedHostWriteEligibilityCauses = Object.freeze([
   "host_not_ready"
 ] as const);
 
+export const selectedHostCompatibilityStates = Object.freeze([
+  "supported",
+  "degraded",
+  "incompatible",
+  "unknown",
+  "disconnected",
+  "version_drift"
+] as const);
+
+export const selectedHostCompatibilityEvidenceStates = Object.freeze([
+  "current",
+  "last_known",
+  "unobserved"
+] as const);
+
+export const selectedHostCompatibilityCapabilityStates = Object.freeze([
+  "verified",
+  "limited",
+  "blocked",
+  "unverified"
+] as const);
+
 export type SelectedHostLocalHealthComponent =
   (typeof selectedHostLocalHealthComponents)[number];
 export type SelectedHostLocalHealthState =
@@ -91,6 +114,12 @@ export type SelectedHostRemoteObservationFailureCause =
 export type SelectedHostAccessMode = (typeof selectedHostAccessModes)[number];
 export type SelectedHostWriteEligibilityCause =
   (typeof selectedHostWriteEligibilityCauses)[number];
+export type SelectedHostCompatibilityState =
+  (typeof selectedHostCompatibilityStates)[number];
+export type SelectedHostCompatibilityEvidenceState =
+  (typeof selectedHostCompatibilityEvidenceStates)[number];
+export type SelectedHostCompatibilityCapabilityState =
+  (typeof selectedHostCompatibilityCapabilityStates)[number];
 
 interface CauseRule {
   readonly components: readonly SelectedHostLocalHealthComponent[];
@@ -330,10 +359,136 @@ export const selectedHostAccessStatusSchema = exactDataObject(
     })
 );
 
+export const selectedHostCompatibilityStatusSchema = exactDataObject(
+  z
+    .object({
+      state: z.enum(selectedHostCompatibilityStates),
+      evidence: z.enum(selectedHostCompatibilityEvidenceStates),
+      observed_version: codexVersionSchema.nullable(),
+      supported_version: codexVersionSchema,
+      capability_state: z.enum(selectedHostCompatibilityCapabilityStates),
+      checked_at: isoTimestampSchema.nullable(),
+      recorded_at: isoTimestampSchema.nullable()
+    })
+    .strict()
+    .superRefine((value, context) => {
+      const hasEvidenceTimes =
+        value.checked_at !== null && value.recorded_at !== null;
+      if (value.evidence === "unobserved") {
+        if (
+          value.observed_version !== null ||
+          value.checked_at !== null ||
+          value.recorded_at !== null
+        ) {
+          addIssue(
+            context,
+            [],
+            "Unobserved compatibility cannot expose retained evidence."
+          );
+        }
+      } else if (!hasEvidenceTimes) {
+        addIssue(
+          context,
+          [],
+          "Observed compatibility evidence requires check and record times."
+        );
+      }
+      if (
+        hasEvidenceTimes &&
+        Date.parse(value.recorded_at as string) <
+          Date.parse(value.checked_at as string)
+      ) {
+        addIssue(
+          context,
+          ["recorded_at"],
+          "Compatibility cannot be recorded before it was checked."
+        );
+      }
+
+      if (
+        value.state === "supported" &&
+        (value.evidence !== "current" ||
+          value.capability_state !== "verified" ||
+          value.observed_version !== value.supported_version)
+      ) {
+        addIssue(
+          context,
+          [],
+          "Supported compatibility requires current exact-version verification."
+        );
+      }
+      if (
+        value.state === "version_drift" &&
+        (value.evidence !== "current" ||
+          value.capability_state !== "blocked" ||
+          value.observed_version === null ||
+          value.observed_version === value.supported_version)
+      ) {
+        addIssue(
+          context,
+          [],
+          "Version drift requires a current blocked nonmatching version."
+        );
+      }
+      if (
+        value.state === "incompatible" &&
+        (value.evidence !== "current" ||
+          value.capability_state !== "blocked" ||
+          (value.observed_version !== null &&
+            value.observed_version !== value.supported_version))
+      ) {
+        addIssue(
+          context,
+          [],
+          "Incompatible compatibility requires current blocked non-drift evidence."
+        );
+      }
+      if (
+        value.state === "degraded" &&
+        !(
+          (value.evidence === "current" &&
+            value.capability_state === "limited") ||
+          (value.evidence === "last_known" &&
+            value.capability_state === "unverified")
+        )
+      ) {
+        addIssue(
+          context,
+          [],
+          "Degraded compatibility must be current and limited or retained and unverified."
+        );
+      }
+      if (
+        value.state === "disconnected" &&
+        (value.evidence !== "last_known" ||
+          value.capability_state !== "unverified")
+      ) {
+        addIssue(
+          context,
+          [],
+          "Disconnected compatibility requires unverified last-known evidence."
+        );
+      }
+      if (
+        value.state === "unknown" &&
+        ((value.evidence !== "last_known" &&
+          value.evidence !== "unobserved") ||
+          value.capability_state !== "unverified")
+      ) {
+        addIssue(
+          context,
+          [],
+          "Unknown compatibility cannot claim current or verified capability evidence."
+        );
+      }
+    })
+);
+
 export const selectedHostStatusResponseSchema = exactDataObject(
   z
     .object({
       local: selectedHostLocalStatusSchema,
+      compatibility: selectedHostCompatibilityStatusSchema,
       remote: selectedHostRemoteStatusSchema,
       access: selectedHostAccessStatusSchema
     })
@@ -357,6 +512,44 @@ export const selectedHostStatusResponseSchema = exactDataObject(
           "Host write eligibility must match request authority and local health."
         );
       }
+      const runtime = value.local.components.find(
+        (component) => component.component === "runtime"
+      );
+      const compatibility = value.local.components.find(
+        (component) => component.component === "compatibility"
+      );
+      const stateMatchesHealth =
+        value.compatibility.state === "supported"
+          ? runtime?.state === "ready" && compatibility?.state === "ready"
+          : value.compatibility.state === "version_drift" ||
+              value.compatibility.state === "incompatible"
+            ? runtime?.state === "failed" &&
+              runtime.causes.length === 1 &&
+              runtime.causes[0] === "runtime_failed" &&
+              compatibility?.state === "failed" &&
+              compatibility.causes.length === 1 &&
+              compatibility.causes[0] === "runtime_incompatible"
+            : value.compatibility.state === "disconnected"
+              ? runtime?.state === "degraded" &&
+                runtime.causes.length === 1 &&
+                runtime.causes[0] === "runtime_disconnected" &&
+                compatibility?.state === "degraded" &&
+                compatibility.causes.length === 1 &&
+                compatibility.causes[0] === "compatibility_degraded"
+              : value.compatibility.state === "degraded"
+                ? runtime?.state === "degraded" &&
+                  compatibility?.state === "degraded" &&
+                  compatibility.causes.length === 1 &&
+                  compatibility.causes[0] === "compatibility_degraded"
+                : compatibility?.state === "unknown" ||
+                  compatibility?.state === "stale";
+      if (!stateMatchesHealth) {
+        addIssue(
+          context,
+          ["compatibility"],
+          "Host compatibility summary must match public component health."
+        );
+      }
     })
 );
 
@@ -378,6 +571,9 @@ export type SelectedHostRemoteStatus = z.infer<
 >;
 export type SelectedHostAccessStatus = z.infer<
   typeof selectedHostAccessStatusSchema
+>;
+export type SelectedHostCompatibilityStatus = z.infer<
+  typeof selectedHostCompatibilityStatusSchema
 >;
 export type SelectedHostStatusResponse = z.infer<
   typeof selectedHostStatusResponseSchema

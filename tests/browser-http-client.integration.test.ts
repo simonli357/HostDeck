@@ -1,7 +1,14 @@
 import { request as httpRequest } from "node:http";
 import { type AddressInfo, createServer } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
-import { defaultResourceBudget } from "../packages/contracts/src/index.js";
+import {
+  assessCodexCompatibility,
+  codexBindingDescriptor
+} from "../packages/codex-adapter/src/index.js";
+import {
+  defaultResourceBudget,
+  selectedRuntimeCompatibilityRecordSchema
+} from "../packages/contracts/src/index.js";
 import {
   createHostDeckFastifyApp,
   createHostDeckHealthRouteRegistration,
@@ -9,6 +16,7 @@ import {
   createHostDeckRemoteIngressRequestAuthorityPolicy,
   createHostDeckRequestAuthenticationPolicy,
   createHostDeckRequestTrustPolicy,
+  createHostDeckRuntimeCompatibilityRecordReader,
   createHostDeckTailscaleServeFastifyApp,
   createTailscaleServeProxyTrustPolicy,
   type HostDeckFastifyInstance,
@@ -44,7 +52,10 @@ describe("FE-V1-019 real selected API browser client", () => {
       }),
       resourceBudget: defaultResourceBudget,
       routePlugins: [
-        createHostDeckHealthRouteRegistration({ health: localHealth })
+        createHostDeckHealthRouteRegistration({
+          compatibility: readyCompatibilityReader(),
+          health: localHealth
+        })
       ]
     });
     apps.push(localApp);
@@ -79,7 +90,10 @@ describe("FE-V1-019 real selected API browser client", () => {
       requestAuthenticationPolicy: authenticationPolicy(),
       resourceBudget: defaultResourceBudget,
       routePlugins: [
-        createHostDeckHealthRouteRegistration({ health: remoteHealth })
+        createHostDeckHealthRouteRegistration({
+          compatibility: readyCompatibilityReader(),
+          health: remoteHealth
+        })
       ],
       remoteIngressRequestAuthority: authority,
       tailscaleServeProxyTrustPolicy: createTailscaleServeProxyTrustPolicy({
@@ -161,6 +175,27 @@ function readyHealth() {
     });
   }
   return health;
+}
+
+function readyCompatibilityReader() {
+  return createHostDeckRuntimeCompatibilityRecordReader({
+    read: () =>
+      selectedRuntimeCompatibilityRecordSchema.parse({
+        id: "hostdeck_runtime",
+        compatibility: assessCodexCompatibility({
+          observed_version: codexBindingDescriptor.codex_version,
+          checked_at: checkedAt,
+          handshake: {
+            state: "initialized",
+            user_agent: `hostdeck/${codexBindingDescriptor.codex_version}`,
+            platform_family: "unix",
+            platform_os: "linux",
+            collaboration_modes: ["Plan", "Default"]
+          }
+        }),
+        recorded_at: checkedAt
+      })
+  });
 }
 
 function authenticationPolicy() {

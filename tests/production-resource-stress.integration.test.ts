@@ -28,6 +28,7 @@ import {
   type SelectedSessionEventStream,
   selectedAuditActorSchema,
   selectedProjectionEventSchema,
+  selectedRuntimeCompatibilityRecordSchema,
   selectedSessionEventStreamSchema,
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema,
@@ -43,6 +44,7 @@ import {
   createHostDeckHostLockPolicy,
   createHostDeckPairingPolicy,
   createHostDeckRequestAuthenticationPolicy,
+  createHostDeckRuntimeCompatibilityRecordReader,
   createHostDeckSelectedApiRouteComposition,
   createHostDeckSelectedWriteAdmissionPolicy,
   createHostDeckSelectedWriteAuditExecutor,
@@ -893,6 +895,16 @@ async function createStressHarness(options: { readonly port?: number } = {}): Pr
       states: createRemoteIngressStateRepository(opened.db),
     });
     const health = createHostDeckHostHealthService({ now: nextDate });
+    const compatibility = createHostDeckRuntimeCompatibilityRecordReader({
+      read: () => {
+        const current = connection.compatibility;
+        return selectedRuntimeCompatibilityRecordSchema.parse({
+          id: "hostdeck_runtime",
+          compatibility: current,
+          recorded_at: current.checked_at
+        });
+      }
+    });
     const runtime = Object.freeze({ read: () => connection.compatibility });
     const input = {
       admission,
@@ -926,7 +938,7 @@ async function createStressHarness(options: { readonly port?: number } = {}): Pr
       },
       csrf,
       devices: { list: failUnused, revoke: failUnused },
-      health,
+      health: { compatibility, health },
       lock,
       now: nextDate,
       observeSseError: () => undefined,
