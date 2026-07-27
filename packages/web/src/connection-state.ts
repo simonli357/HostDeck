@@ -1579,7 +1579,7 @@ export function createBrowserConnectionStateCoordinator(
       if (!(browserHttpSelectedSessionReadRouteIds as readonly unknown[]).includes(routeId)) {
         throw connectionError("client_contract");
       }
-      const sessionId = readSelectedSessionRequestId(requestInput);
+      const sessionId = readSelectedSessionRequestId(routeId, requestInput);
       if (sessionId === null || !hasCurrentSelectedSessionAuthority(currentSnapshot, sessionId)) {
         throw connectionError(sessionId === null ? "client_contract" : "not_ready");
       }
@@ -1720,7 +1720,30 @@ function targetKey(target: BrowserConnectionTarget): string {
   return target.kind === "mission_control" ? "mission_control" : `session_detail:${target.sessionId}`;
 }
 
-function readSelectedSessionRequestId(candidate: unknown): string | null {
+function readSelectedSessionRequestId(
+  routeId: BrowserHttpSelectedSessionReadRouteId,
+  candidate: unknown
+): string | null {
+  if (routeId === "session_events") {
+    const input = readExactRecord(
+      candidate,
+      ["params", "query"],
+      ["params", "query"]
+    );
+    if (input === null) return null;
+    const params = readExactRecord(input.params, ["session_id"], ["session_id"]);
+    const query = readExactRecord(input.query, ["limit"], ["after", "limit"]);
+    if (
+      params === null ||
+      query === null ||
+      typeof query.limit !== "string" ||
+      (query.after !== undefined && typeof query.after !== "string")
+    ) {
+      return null;
+    }
+    const parsed = sessionIdSchema.safeParse(params.session_id);
+    return parsed.success ? parsed.data : null;
+  }
   const input = readExactRecord(candidate, ["params"], ["params"]);
   if (input === null) return null;
   const params = readExactRecord(input.params, ["session_id"], ["session_id"]);

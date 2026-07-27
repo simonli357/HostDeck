@@ -2081,6 +2081,61 @@ describe("browser shell connection-state coordinator", () => {
     });
     expect(harness.http.requests.at(-1)?.init).not.toHaveProperty("body");
 
+    const event = selectedProjectionEventSchema.parse({
+      session_id: firstSessionId,
+      cursor: 1,
+      captured_at: timestamp,
+      upstream_at: null,
+      codex_event_id: "codex-connection-event-1",
+      codex_event_type: "item/message",
+      content_state: "complete",
+      content_notice: null,
+      type: "message",
+      role: "agent",
+      phase: "completed",
+      item_id: "item-connection-event-1",
+      text: "One exact selected event."
+    });
+    harness.http.enqueue(
+      "detail",
+      jsonResponse(200, {
+        session_id: firstSessionId,
+        events: [event],
+        next_cursor: 1,
+        truncated: false
+      })
+    );
+    const eventResponse = await harness.coordinator.requestSelectedSessionRead(
+      "session_events",
+      {
+        params: { session_id: firstSessionId },
+        query: { after: "0", limit: "1" }
+      }
+    );
+    expect(eventResponse).toMatchObject({
+      status: 200,
+      data: { session_id: firstSessionId, events: [{ cursor: 1 }], next_cursor: 1 }
+    });
+    expect(harness.http.requests.at(-1)).toMatchObject({
+      path: `/api/v1/sessions/${firstSessionId}/events?after=0&limit=1`,
+      init: { method: "GET" }
+    });
+    expect(harness.http.requests.at(-1)?.init).not.toHaveProperty("body");
+
+    const exactRequestCount = harness.http.requests.length;
+    await expect(
+      harness.coordinator.requestSelectedSessionRead("session_events", {
+        params: { session_id: firstSessionId }
+      } as never)
+    ).rejects.toMatchObject({ reason: "client_contract" });
+    await expect(
+      harness.coordinator.requestSelectedSessionRead("session_events", {
+        params: { session_id: firstSessionId },
+        query: { limit: "1", unexpected: "private" }
+      } as never)
+    ).rejects.toMatchObject({ reason: "client_contract" });
+    expect(harness.http.requests).toHaveLength(exactRequestCount);
+
     harness.http.enqueue("detail", jsonResponse(200, goalSnapshot()));
     const goalResponse = await harness.coordinator.requestSelectedSessionRead(
       "goal_read",

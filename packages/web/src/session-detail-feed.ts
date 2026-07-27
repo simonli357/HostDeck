@@ -57,6 +57,7 @@ export interface SessionDetailTimelineItem {
   readonly timeLabel: string | null;
   readonly contentNotice: string | null;
   readonly pending: boolean;
+  readonly diagnosticCursor: number | null;
   readonly approvalRequestId?: string | undefined;
 }
 
@@ -172,6 +173,7 @@ export function projectSessionDetailTimeline(
       item: projectBoundary(
         `continuity:${boundary.reason}:${boundary.cursor}`,
         boundary.cursor - 0.5,
+        boundary.cursor,
         boundary.reason,
         null,
         null,
@@ -247,7 +249,8 @@ function projectMessageEvent(
       capturedAt: event.captured_at,
       timeLabel: safeFormatTimestamp(event.captured_at, formatTimestamp),
       contentNotice: event.content_notice,
-      pending: event.phase === "delta"
+      pending: event.phase === "delta",
+      diagnosticCursor: event.cursor
     });
     working.push(Object.freeze({ identity, item }));
     if (identity !== null) indexes.set(identity, working.length - 1);
@@ -274,7 +277,8 @@ function projectMessageEvent(
       contentNotice:
         event.content_notice ??
         (event.phase === "delta" ? prior.contentNotice : null),
-      pending: event.phase === "delta"
+      pending: event.phase === "delta",
+      diagnosticCursor: event.cursor
     })
   });
 }
@@ -298,6 +302,7 @@ function projectNonMessageEvent(
       return projectBoundary(
         `boundary:${event.cursor}`,
         event.cursor,
+        event.cursor,
         event.reason,
         event.captured_at,
         safeFormatTimestamp(event.captured_at, formatTimestamp),
@@ -317,7 +322,8 @@ function projectNonMessageEvent(
         capturedAt: event.captured_at,
         timeLabel: safeFormatTimestamp(event.captured_at, formatTimestamp),
         contentNotice: event.content_notice,
-        pending: false
+        pending: false,
+        diagnosticCursor: event.cursor
       });
   }
 }
@@ -340,7 +346,8 @@ function projectTurn(
     capturedAt: event.captured_at,
     timeLabel: safeFormatTimestamp(event.captured_at, formatTimestamp),
     contentNotice: event.content_notice,
-    pending: event.state === "in_progress"
+    pending: event.state === "in_progress",
+    diagnosticCursor: event.cursor
   });
 }
 
@@ -364,7 +371,8 @@ function projectActivity(
     capturedAt: event.captured_at,
     timeLabel: safeFormatTimestamp(event.captured_at, formatTimestamp),
     contentNotice: event.content_notice,
-    pending
+    pending,
+    diagnosticCursor: event.cursor
   });
 }
 
@@ -402,6 +410,7 @@ function projectApproval(
     timeLabel: safeFormatTimestamp(event.captured_at, formatTimestamp),
     contentNotice: event.content_notice,
     pending,
+    diagnosticCursor: event.cursor,
     approvalRequestId: event.request_id
   });
 }
@@ -425,7 +434,8 @@ function projectControl(
     capturedAt: event.captured_at,
     timeLabel: safeFormatTimestamp(event.captured_at, formatTimestamp),
     contentNotice: event.content_notice,
-    pending
+    pending,
+    diagnosticCursor: event.cursor
   });
 }
 
@@ -451,13 +461,15 @@ function projectRuntime(
     capturedAt: event.captured_at,
     timeLabel: safeFormatTimestamp(event.captured_at, formatTimestamp),
     contentNotice: event.content_notice,
-    pending: false
+    pending: false,
+    diagnosticCursor: event.cursor
   });
 }
 
 function projectBoundary(
   key: string,
   order: number,
+  diagnosticCursor: number,
   reason: SessionDetailContinuityBoundary["reason"],
   capturedAt: string | null,
   timeLabel: string | null,
@@ -477,7 +489,8 @@ function projectBoundary(
     capturedAt,
     timeLabel,
     contentNotice,
-    pending: false
+    pending: false,
+    diagnosticCursor
   });
 }
 

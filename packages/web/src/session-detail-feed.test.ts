@@ -100,7 +100,8 @@ describe("Session Detail timeline projection", () => {
       body: "Authoritative reply",
       order: 1,
       pending: false,
-      timeLabel: "2:00 PM"
+      timeLabel: "2:00 PM",
+      diagnosticCursor: 3
     });
     expect(Object.isFrozen(timeline)).toBe(true);
     expect(Object.isFrozen(timeline[0])).toBe(true);
@@ -141,7 +142,8 @@ describe("Session Detail timeline projection", () => {
       approvalRequestId: "string:detail-feed-approval",
       stateLabel: "Approved",
       title: "Approval approved",
-      pending: false
+      pending: false,
+      diagnosticCursor: 4
     });
     expect(timeline[1]?.order).toBe(3);
   });
@@ -162,6 +164,7 @@ describe("Session Detail timeline projection", () => {
       "Tool activity"
     ]);
     expect(synthetic[0]?.capturedAt).toBeNull();
+    expect(synthetic[0]?.diagnosticCursor).toBe(6);
 
     let streamedFeed = appendSessionDetailEvent(
       createSessionDetailFeed(sessionId),
@@ -171,6 +174,7 @@ describe("Session Detail timeline projection", () => {
     const streamed = projectSessionDetailTimeline(streamedFeed, boundary, formatTimestamp);
     expect(streamed.filter((item) => item.label === "Boundary")).toHaveLength(1);
     expect(streamed[0]?.capturedAt).toBe(timestamp);
+    expect(streamed[0]?.diagnosticCursor).toBe(6);
   });
 
   it("projects every selected event state to semantic non-color text", () => {
@@ -185,6 +189,7 @@ describe("Session Detail timeline projection", () => {
       const item = timeline[0];
       expect(item?.label.length).toBeGreaterThan(0);
       expect(item?.title.length).toBeGreaterThan(0);
+      expect(item?.diagnosticCursor).toBe(event.cursor);
       expect(["focus", "connected", "attention", "danger", "muted"]).toContain(
         item?.tone
       );
