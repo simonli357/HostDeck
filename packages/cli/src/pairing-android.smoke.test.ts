@@ -145,6 +145,8 @@ const claimTimeoutMs = 5 * 60_000;
 const automatedClaimTimeoutMs = 45_000;
 const androidTailscaleComponent = "com.tailscale.ipn/.MainActivity";
 const androidEditTextClass = "android.widget.EditText";
+const androidMobileDataStateCommand =
+  "dumpsys telephony.registry | grep -E '^ *mUserMobileDataState= *(true|false) *$'";
 const chromeCompositorResourceId =
   "com.android.chrome:id/compositor_view_holder";
 const chromeToolbarResourceId = "com.android.chrome:id/toolbar_container";
@@ -3733,14 +3735,14 @@ async function restoreAndroidWifi(initiallyEnabled: boolean): Promise<void> {
 
 function readAndroidMobileDataEnabled(): boolean {
   return parseAndroidMobileDataState(
-    adb(["shell", "dumpsys", "telephony.registry"])
+    adb(["shell", androidMobileDataStateCommand])
   );
 }
 
 function parseAndroidMobileDataState(output: string): boolean {
   requireCondition(
     Buffer.byteLength(output, "utf8") > 0 &&
-      Buffer.byteLength(output, "utf8") <= 512 * 1024 &&
+      Buffer.byteLength(output, "utf8") <= 1_024 &&
       !output.includes("\u0000"),
     "Android mobile-data observation was invalid."
   );
