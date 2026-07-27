@@ -19,6 +19,7 @@ import {
 } from "node:fs";
 import { createServer, type Server as HttpServer } from "node:http";
 import { request as httpsRequest } from "node:https";
+import { createRequire } from "node:module";
 import { type AddressInfo, createConnection } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -144,6 +145,9 @@ const claimTimeoutMs = 5 * 60_000;
 const automatedClaimTimeoutMs = 45_000;
 const androidTailscaleComponent = "com.tailscale.ipn/.MainActivity";
 const androidEditTextClass = "android.widget.EditText";
+const chromeCompositorResourceId =
+  "com.android.chrome:id/compositor_view_holder";
+const chromeToolbarResourceId = "com.android.chrome:id/toolbar_container";
 const tailscaleDnsServer = "100.100.100.100";
 const physicalPageMaxBytes = defaultResourceBudget.cli_response_max_bytes;
 const chromeForegroundAdbArgs = [
@@ -175,6 +179,9 @@ const physicalUiThreadId = "thread-physical-pairing-ui";
 const physicalPromptTurnId = "turn-physical-prompt-001";
 const physicalPromptText = "FE020_android_line_one\nFE020_android_line_two";
 const deviceForbiddenValues = new Set<string>();
+const { PNG: Png } = createRequire(import.meta.url)("pngjs") as unknown as {
+  readonly PNG: PngConstructor;
+};
 let adbCommandCount = 0;
 
 describe("physical Android phone-driver protocol", () => {
@@ -577,6 +584,10 @@ describe("physical Android phone-driver protocol", () => {
         '<node text="" content-desc="Open Host and access" bounds="[620,80][720,180]" />' +
         '<node text="" content-desc="" class="android.widget.EditText" ' +
         'bounds="[20,200][700,320]" />' +
+        '<node text="" content-desc="" class="android.view.ViewGroup" ' +
+        `resource-id="${chromeToolbarResourceId}" bounds="[0,80][720,180]" />` +
+        '<node text="" content-desc="" class="android.widget.FrameLayout" ' +
+        `resource-id="${chromeCompositorResourceId}" bounds="[0,80][720,1280]" />` +
         "</hierarchy>"
     );
 
@@ -585,18 +596,35 @@ describe("physical Android phone-driver protocol", () => {
         bounds: { bottom: 180, left: 0, right: 720, top: 80 },
         className: "",
         description: "",
+        resourceId: "",
         text: "Host & access"
       },
       {
         bounds: { bottom: 180, left: 620, right: 720, top: 80 },
         className: "",
         description: "Open Host and access",
+        resourceId: "",
         text: ""
       },
       {
         bounds: { bottom: 320, left: 20, right: 700, top: 200 },
         className: androidEditTextClass,
         description: "",
+        resourceId: "",
+        text: ""
+      },
+      {
+        bounds: { bottom: 180, left: 0, right: 720, top: 80 },
+        className: "android.view.ViewGroup",
+        description: "",
+        resourceId: chromeToolbarResourceId,
+        text: ""
+      },
+      {
+        bounds: { bottom: 1280, left: 0, right: 720, top: 80 },
+        className: "android.widget.FrameLayout",
+        description: "",
+        resourceId: chromeCompositorResourceId,
         text: ""
       }
     ]);
@@ -634,6 +662,77 @@ describe("physical Android phone-driver protocol", () => {
           'content-desc="" bounds="[0,0][100,100]" /></hierarchy>'
       )
     ).toThrow("retained pairing material");
+  });
+
+  it("selects only the production page viewport for private-free evidence", () => {
+    const nodes = parseAndroidUiNodes(
+      '<hierarchy rotation="0">' +
+        '<node text="private.example.ts.net" content-desc="" ' +
+        'class="android.widget.EditText" bounds="[220,120][700,280]" />' +
+        '<node text="Mission Control" content-desc="" ' +
+        'bounds="[24,360][720,440]" />' +
+        '<node text="" content-desc="" class="android.view.ViewGroup" ' +
+        `resource-id="${chromeToolbarResourceId}" bounds="[0,120][720,288]" />` +
+        '<node text="" content-desc="" class="android.widget.FrameLayout" ' +
+        `resource-id="${chromeCompositorResourceId}" bounds="[0,120][720,1280]" />` +
+        "</hierarchy>"
+    );
+
+    expect(
+      selectPrivateFreeProductionScreenshotRegion(
+        nodes,
+        "https://private.example.ts.net"
+      )
+    ).toEqual({ height: 992, left: 0, top: 288, width: 720 });
+    expect(() =>
+      selectPrivateFreeProductionScreenshotRegion(
+        [
+          ...nodes,
+          Object.freeze({
+            bounds: Object.freeze({ bottom: 500, left: 0, right: 720, top: 440 }),
+            className: "",
+            description: "",
+            resourceId: "",
+            text: "private.example.ts.net"
+          })
+        ],
+        "https://private.example.ts.net"
+      )
+    ).toThrow("retained private browser material");
+  });
+
+  it("crops physical PNG evidence to the exact selected pixel region", () => {
+    const source = new Png({ height: 600, width: 320 });
+    for (let y = 0; y < source.height; y += 1) {
+      for (let x = 0; x < source.width; x += 1) {
+        const offset = (y * source.width + x) * 4;
+        source.data[offset] = x % 256;
+        source.data[offset + 1] = y % 256;
+        source.data[offset + 2] = (x + y) % 256;
+        source.data[offset + 3] = 255;
+      }
+    }
+    const cropped = Png.sync.read(
+      cropPhysicalScreenshot(Png.sync.write(source), {
+        height: 480,
+        left: 0,
+        top: 120,
+        width: 320
+      })
+    );
+
+    expect({ height: cropped.height, width: cropped.width }).toEqual({
+      height: 480,
+      width: 320
+    });
+    expect([...cropped.data.subarray(0, 4)]).toEqual([0, 120, 120, 255]);
+    const lastOffset = (cropped.width * cropped.height - 1) * 4;
+    expect([...cropped.data.subarray(lastOffset, lastOffset + 4)]).toEqual([
+      63,
+      87,
+      150,
+      255
+    ]);
   });
 
   it("uses the authoritative Android keyboard request over stale view state", () => {
@@ -4037,7 +4136,29 @@ interface AndroidUiNode {
   }>;
   readonly className: string;
   readonly description: string;
+  readonly resourceId: string;
   readonly text: string;
+}
+
+interface PhysicalScreenshotRegion {
+  readonly height: number;
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+}
+
+interface PngImage {
+  readonly data: Buffer;
+  readonly height: number;
+  readonly width: number;
+}
+
+interface PngConstructor {
+  new (input: Readonly<{ height: number; width: number }>): PngImage;
+  readonly sync: Readonly<{
+    read: (bytes: Buffer) => PngImage;
+    write: (image: PngImage) => Buffer;
+  }>;
 }
 
 type AndroidUiNodeField = "className" | "description" | "semantic" | "text";
@@ -4518,22 +4639,82 @@ async function capturePrivateFreeProductionScreenshot(
   path: string,
   externalOrigin: string
 ): Promise<void> {
-  const origin = new URL(externalOrigin);
   const nodes = await readAndroidUiNodes();
-  requireCondition(
-    nodes.every((node) =>
-      [node.text, node.description].every(
-        (value) =>
-          !value.includes(origin.origin) &&
-          !value.includes(origin.hostname) &&
-          [...deviceForbiddenValues].every(
-            (privateValue) => !value.includes(privateValue)
-          )
-      )
-    ),
-    "Physical production screenshot surface retained private browser material."
+  const region = selectPrivateFreeProductionScreenshotRegion(
+    nodes,
+    externalOrigin
   );
-  await capturePhysicalScreenshot(path);
+  await capturePhysicalScreenshot(path, region);
+}
+
+function selectPrivateFreeProductionScreenshotRegion(
+  nodes: readonly AndroidUiNode[],
+  externalOrigin: string
+): PhysicalScreenshotRegion {
+  const toolbarNodes = nodes.filter(
+    (node) => node.resourceId === chromeToolbarResourceId
+  );
+  const compositorNodes = nodes.filter(
+    (node) => node.resourceId === chromeCompositorResourceId
+  );
+  requireCondition(
+    toolbarNodes.length === 1 && compositorNodes.length === 1,
+    "Physical production screenshot could not isolate the Chrome page viewport."
+  );
+  const toolbar = toolbarNodes[0];
+  const compositor = compositorNodes[0];
+  requireCondition(
+    toolbar !== undefined &&
+      compositor !== undefined &&
+      toolbar.bounds.left === compositor.bounds.left &&
+      toolbar.bounds.right === compositor.bounds.right &&
+      toolbar.bounds.top >= compositor.bounds.top &&
+      toolbar.bounds.bottom > toolbar.bounds.top &&
+      toolbar.bounds.bottom < compositor.bounds.bottom,
+    "Physical production screenshot Chrome viewport geometry was invalid."
+  );
+  const region = Object.freeze({
+    height: compositor.bounds.bottom - toolbar.bounds.bottom,
+    left: compositor.bounds.left,
+    top: toolbar.bounds.bottom,
+    width: compositor.bounds.right - compositor.bounds.left
+  });
+  requireCondition(
+    region.width >= 320 &&
+      region.width <= 4_096 &&
+      region.height >= 480 &&
+      region.height <= 8_192,
+    "Physical production screenshot page viewport was outside bounded dimensions."
+  );
+  const origin = new URL(externalOrigin);
+  requireCondition(
+    nodes
+      .filter((node) => androidNodeIntersectsRegion(node, region))
+      .every((node) =>
+        [node.text, node.description].every(
+          (value) =>
+            !value.includes(origin.origin) &&
+            !value.includes(origin.hostname) &&
+            [...deviceForbiddenValues].every(
+              (privateValue) => !value.includes(privateValue)
+            )
+        )
+      ),
+    "Physical production screenshot page viewport retained private browser material."
+  );
+  return region;
+}
+
+function androidNodeIntersectsRegion(
+  node: AndroidUiNode,
+  region: PhysicalScreenshotRegion
+): boolean {
+  return (
+    node.bounds.right > region.left &&
+    node.bounds.left < region.left + region.width &&
+    node.bounds.bottom > region.top &&
+    node.bounds.top < region.top + region.height
+  );
 }
 
 async function runProductionPromptUiSequence(
@@ -4883,10 +5064,13 @@ function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
     const text = attributes.get("text") ?? "";
     const description = attributes.get("content-desc") ?? "";
     const className = attributes.get("class") ?? "";
+    const resourceId = attributes.get("resource-id") ?? "";
     if (
       text === "" &&
       description === "" &&
-      className !== androidEditTextClass
+      className !== androidEditTextClass &&
+      resourceId !== chromeToolbarResourceId &&
+      resourceId !== chromeCompositorResourceId
     ) {
       continue;
     }
@@ -4895,6 +5079,7 @@ function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
         bounds: Object.freeze({ bottom, left, right, top }),
         className,
         description,
+        resourceId,
         text
       })
     );
@@ -5462,7 +5647,10 @@ async function waitForFreshLifecycleIdle(
   );
 }
 
-async function capturePhysicalScreenshot(path: string): Promise<void> {
+async function capturePhysicalScreenshot(
+  path: string,
+  region: PhysicalScreenshotRegion | null = null
+): Promise<void> {
   requireChromeForeground();
   adbCommandCount += 1;
   const bytes = await new Promise<Buffer>((resolve, reject) => {
@@ -5479,6 +5667,14 @@ async function capturePhysicalScreenshot(path: string): Promise<void> {
       resolve(stdout);
     });
   });
+  requireValidPngBytes(bytes);
+  const evidenceBytes =
+    region === null ? bytes : cropPhysicalScreenshot(bytes, region);
+  requireValidPngBytes(evidenceBytes);
+  writeFileSync(path, evidenceBytes, { flag: "wx", mode: 0o600 });
+}
+
+function requireValidPngBytes(bytes: Buffer): void {
   requireCondition(
     Buffer.isBuffer(bytes) &&
       bytes.length >= 1_024 &&
@@ -5488,7 +5684,49 @@ async function capturePhysicalScreenshot(path: string): Promise<void> {
       ),
     "Physical screenshot bytes were invalid."
   );
-  writeFileSync(path, bytes, { flag: "wx", mode: 0o600 });
+}
+
+function cropPhysicalScreenshot(
+  bytes: Buffer,
+  region: PhysicalScreenshotRegion
+): Buffer {
+  requireCondition(
+    bytes.length >= 24,
+    "Physical screenshot dimensions were unavailable."
+  );
+  const encodedWidth = bytes.readUInt32BE(16);
+  const encodedHeight = bytes.readUInt32BE(20);
+  requireCondition(
+    encodedWidth >= 320 &&
+      encodedWidth <= 4_096 &&
+      encodedHeight >= 480 &&
+      encodedHeight <= 8_192 &&
+      region.left >= 0 &&
+      region.top >= 0 &&
+      region.left + region.width <= encodedWidth &&
+      region.top + region.height <= encodedHeight,
+    "Physical screenshot crop exceeded the bounded image dimensions."
+  );
+  const source = Png.sync.read(bytes);
+  requireCondition(
+    source.width === encodedWidth &&
+      source.height === encodedHeight &&
+      source.data.length === source.width * source.height * 4,
+    "Physical screenshot decoded dimensions were invalid."
+  );
+  const target = new Png({ height: region.height, width: region.width });
+  const rowBytes = region.width * 4;
+  for (let row = 0; row < region.height; row += 1) {
+    const sourceStart =
+      ((region.top + row) * source.width + region.left) * 4;
+    source.data.copy(
+      target.data,
+      row * rowBytes,
+      sourceStart,
+      sourceStart + rowBytes
+    );
+  }
+  return Png.sync.write(target);
 }
 
 function assertPairingUiRuntimeTruth(

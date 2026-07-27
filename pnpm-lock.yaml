@@ -62,6 +62,9 @@ importers:
       '@types/qrcode':
         specifier: 1.5.6
         version: 1.5.6
+      pngjs:
+        specifier: 5.0.0
+        version: 5.0.0
 
   packages/codex-adapter:
     dependencies:
