@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: criteria frozen; implementation in progress. `UUS-01` through `UUS-24` must pass before closure.
+Status: complete. `UUS-01` through `UUS-24` pass at implementation `c1c669e`.
 
 ## Scope
 
@@ -101,3 +101,23 @@ Excluded: account identity, billing or monetary estimates, subscription manageme
 Reuse `usageSnapshotSchema`, `usage_read`, the browser connection coordinator, existing controller lifecycle conventions, Radix Dialog, Focus Rail sheet/dock primitives, Lucide icons, selected Session Detail fixtures, and Playwright production shell. Add no production dependency and generate no new visual asset: the approved Session Detail, primary-controls, and responsive-continuum rasters already define this utility group's structure.
 
 `FE-V1-028` owns only browser usage read state, bounded usage projection, the first live utility-overflow path, and deterministic UI evidence. `FE-V1-029` and `FE-V1-030` later add Compact and Skills to the same utility system; `FE-V1-014` owns event diagnostics; `FE-V1-036` to `FE-V1-038` own session actions; `FE-V1-035` owns compatibility UI; `FE-V1-039`, `FE-V1-016`, and release leaves own module, physical-device, packaged-asset, and release acceptance.
+
+## Completion Evidence
+
+- Implementation `c1c669e` adds one strict abortable `usage_read` owner, complete bounded account/thread/context/rate projection, the equal four-cell primary dock, the icon-only More entry, and one same-layer Radix utility sheet. It adds no production dependency, asset, persistence, timer, retry, mutation, slash, terminal, turn, compact, billing, or external-navigation path.
+- Hardening fixed eight defects found during production review: missing app-shell Usage forwarding; an invalid browser host-status fixture; long-value wrapping; short-viewport footer overlap; false staleness on write-to-read permission downgrade; retained data incorrectly remaining current during refresh/failure; target replacement throwing while projecting old data; and western-time-zone date-only bucket shifts.
+- Focused state/component/Session Detail tests pass 61/61. Aggregate web passes 558 tests in 32 files; production-shell Chromium passes 68/68, including 5 dedicated Usage scenarios; unit passes 2,435 with 28 intentional skips; contract passes 245; integration passes 36. Root/web typecheck, lint/exports (664 files, 8 packages), scaffold (8 packages, 21 scripts), runtime boundary (614 production modules, 22 externals), and planning (220 tasks, 84 requirements, 683 dependencies, 8 queued before closure) pass.
+- Exact isolated Codex 0.144.0 binding passes 671 files with SHA-256 `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`; default 0.145.0 correctly remains ineligible. Root build, deterministic package acceptance/relocation/integrity checks, package verification, CLI help/version, frozen offline install, zero-known-vulnerability production audit, and diff checks pass. The package has 614 sources, 1,235 owned outputs, 6,449 entries, and SHA-256 `35f41f5daccab92d6ded30bf1de374d5451e1ce81282e1136a2452f7810a3ace`.
+- Twenty-one dedicated PNGs plus layout JSON cover menu, current, loading, stale, empty, unsupported, failure, limit, long-value, scroll, 320/360/390/412/768/1280, 390 x 420, and 200 percent reflow states. Adjacent Session Detail, Prompt, Model, Goal, Plan, and Approval captures were regenerated for the shared four-cell dock. Manual inspection found no overlap, horizontal overflow, footer/composer obstruction, blank capture, or unapproved Focus Rail drift.
+- Browser evidence proves one bodyless/queryless/CSRF-free request, no external requests, empty local/session storage, private-free history/DOM, and clean 4175/4176 listeners. Internal thread/device/origin values are used only for equality checks and are stripped from public views. The pre-existing port 5173 preview and an unrelated concurrent Playwright run were left untouched and are not task residue.
+- The existing 915.31 kB Vite chunk-size warning remains visible for downstream release hardening; this task added no dependency. Physical-phone and packaged-release acceptance are explicitly downstream and were not required to prove this bounded responsive utility.
+
+## Criteria Result
+
+| Criteria | Result | Evidence |
+| --- | --- | --- |
+| `UUS-01` to `UUS-07` | Pass | Strict construction, exact single-flight request ownership, schema/target validation, epoch/authority transitions, cancellation, and deterministic state tests. |
+| `UUS-08` to `UUS-14` | Pass | Null/empty/zero, seven-bucket, thread/context, rate-limit, unsupported, sanitized-failure, and explicit-retry coverage. |
+| `UUS-15` to `UUS-19` | Pass | Source/request boundary review, four-cell dock, one utility layer, keyboard/focus/accessibility checks, and approved Focus Rail composition. |
+| `UUS-20` to `UUS-23` | Pass | Responsive/zoom/short-height layouts, privacy assertions, focused and aggregate tests, 21 Usage captures, adjacent regressions, and manual visual inspection. |
+| `UUS-24` | Pass | Full repository, exact-runtime, build/package/install/audit/diff/residue gates pass; implementation is clean, committed, and pushed. |
