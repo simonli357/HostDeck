@@ -735,6 +735,23 @@ describe("physical Android phone-driver protocol", () => {
     ]);
   });
 
+  it("reports physical cleanup failures without retaining private causes", async () => {
+    const errors: unknown[] = [];
+    await collectPhysicalCleanupError(
+      "Physical cleanup could not restore Android mobile-data state.",
+      () => {
+        throw new Error("private device output");
+      },
+      errors
+    );
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toEqual(
+      new Error("Physical cleanup could not restore Android mobile-data state.")
+    );
+    expect(JSON.stringify(errors)).not.toContain("private device output");
+  });
+
   it("uses the authoritative Android keyboard request over stale view state", () => {
     expect(
       parseAndroidKeyboardVisibility(
@@ -892,6 +909,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       let initialStayAwakeSetting: number | null = null;
       let selectedProfile: "away" | "dedicated" = "dedicated";
       let internalErrorCount = 0;
+      let acceptanceError: unknown = null;
+      const cleanupErrors: unknown[] = [];
 
       try {
         adbCommandCount = 0;
@@ -1643,29 +1662,46 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             startedAt: acceptanceStartedAt as string
           });
         }
+      } catch (error) {
+        acceptanceError = error;
       } finally {
-        try {
-          adb(["shell", "am", "force-stop", "com.android.chrome"]);
-          adb(["shell", "input", "keyevent", "KEYCODE_HOME"]);
-        } catch {
-          // A disconnected phone is reported by the main physical assertion.
+        await collectPhysicalCleanupError(
+          "Physical cleanup could not stop Android Chrome.",
+          async () => {
+            adb(["shell", "am", "force-stop", "com.android.chrome"]);
+            adb(["shell", "input", "keyevent", "KEYCODE_HOME"]);
+            await waitFor(
+              () => isChromeStopped(),
+              10_000,
+              "Physical cleanup retained Android Chrome."
+            );
+          },
+          cleanupErrors
+        );
+        if (display !== null) {
+          await collectPhysicalCleanupError(
+            "Physical cleanup could not close the QR display.",
+            () => closeQrDisplay(display as QrDisplay),
+            cleanupErrors
+          );
         }
-        if (display !== null) await closeQrDisplay(display).catch(() => undefined);
         if (
           (requireRemoteAndroidAcceptance || requireRecoveryUiAcceptance) &&
           profileSwitch !== null
         ) {
-          try {
-            if (
-              (await readSelectedSavedProfileId()) !==
-              profileSwitch.dedicatedProfileId
-            ) {
-              await switchSavedProfile(profileSwitch.dedicatedProfileId);
-            }
-            selectedProfile = "dedicated";
-          } catch {
-            // The failed acceptance retains this cleanup uncertainty.
-          }
+          await collectPhysicalCleanupError(
+            "Physical cleanup could not restore the dedicated saved profile.",
+            async () => {
+              if (
+                (await readSelectedSavedProfileId()) !==
+                profileSwitch.dedicatedProfileId
+              ) {
+                await switchSavedProfile(profileSwitch.dedicatedProfileId);
+              }
+              selectedProfile = "dedicated";
+            },
+            cleanupErrors
+          );
         }
         if (
           remoteEnabled &&
@@ -1675,43 +1711,96 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           localOrigin !== null &&
           selectedProfile === "dedicated"
         ) {
-          try {
-            assertRemoteCliResult(
-              await runCli(["remote", "disable", "--json"], {
-                createOperationId: () => "op_physical_remote_disable_cleanup_0001",
-                env
-              }),
-              "disabled"
-            );
-            remoteEnabled = false;
-          } catch {
-            // The exact manager fallback below still proves or restores absence.
-          }
+          await collectPhysicalCleanupError(
+            "Physical cleanup could not disable remote access through the selected lifecycle.",
+            async () => {
+              assertRemoteCliResult(
+                await runCli(["remote", "disable", "--json"], {
+                  createOperationId: () =>
+                    "op_physical_remote_disable_cleanup_0001",
+                  env: env as Readonly<Record<string, string>>
+                }),
+                "disabled"
+              );
+              remoteEnabled = false;
+            },
+            cleanupErrors
+          );
         }
-        try {
-          if (fallbackCleanup !== null) {
-            await proveOrRestoreAbsent(observer, manager, fallbackCleanup);
-          }
-        } finally {
-          controller.abort();
-          if (host !== null) await host.close().catch(() => undefined);
-          if (opened.db.open) opened.db.close();
-          rmSync(directory, { force: true, recursive: true });
-          if (initialWifiEnabled !== null) {
-            await restoreAndroidWifi(initialWifiEnabled).catch(() => undefined);
-          }
-          if (initialMobileDataEnabled !== null) {
-            await restoreAndroidMobileData(initialMobileDataEnabled).catch(
-              () => undefined
-            );
-          }
-          if (initialStayAwakeSetting !== null) {
-            await restoreAndroidStayAwake(initialStayAwakeSetting).catch(
-              () => undefined
-            );
-          }
-          deviceForbiddenValues.clear();
+        if (fallbackCleanup !== null) {
+          await collectPhysicalCleanupError(
+            "Physical cleanup could not prove or restore absent Serve state.",
+            () =>
+              proveOrRestoreAbsent(
+                observer,
+                manager,
+                fallbackCleanup as CleanupTarget
+              ),
+            cleanupErrors
+          );
         }
+        controller.abort();
+        if (host !== null) {
+          await collectPhysicalCleanupError(
+            "Physical cleanup could not close the HostDeck lifecycle.",
+            () => host?.close(),
+            cleanupErrors
+          );
+        }
+        if (opened.db.open) {
+          await collectPhysicalCleanupError(
+            "Physical cleanup could not close the acceptance database.",
+            () => {
+              opened.db.close();
+            },
+            cleanupErrors
+          );
+        }
+        await collectPhysicalCleanupError(
+          "Physical cleanup could not remove temporary acceptance state.",
+          () => rmSync(directory, { force: true, recursive: true }),
+          cleanupErrors
+        );
+        if (initialWifiEnabled !== null) {
+          await collectPhysicalCleanupError(
+            "Physical cleanup could not restore Android Wi-Fi state.",
+            () => restoreAndroidWifi(initialWifiEnabled as boolean),
+            cleanupErrors
+          );
+        }
+        if (initialMobileDataEnabled !== null) {
+          await collectPhysicalCleanupError(
+            "Physical cleanup could not restore Android mobile-data state.",
+            () => restoreAndroidMobileData(initialMobileDataEnabled as boolean),
+            cleanupErrors
+          );
+        }
+        if (initialStayAwakeSetting !== null) {
+          await collectPhysicalCleanupError(
+            "Physical cleanup could not restore Android stay-awake state.",
+            () => restoreAndroidStayAwake(initialStayAwakeSetting as number),
+            cleanupErrors
+          );
+        }
+        await collectPhysicalCleanupError(
+          "Physical cleanup retained an ADB application tunnel.",
+          () => requireNoAdbApplicationTunnels(),
+          cleanupErrors
+        );
+        deviceForbiddenValues.clear();
+      }
+      if (acceptanceError !== null && cleanupErrors.length > 0) {
+        throw new AggregateError(
+          [acceptanceError, ...cleanupErrors],
+          "Physical acceptance and cleanup failed."
+        );
+      }
+      if (acceptanceError !== null) throw acceptanceError;
+      if (cleanupErrors.length > 0) {
+        throw new AggregateError(
+          cleanupErrors,
+          "Physical acceptance cleanup failed."
+        );
       }
     },
     overallTimeoutMs
@@ -3683,6 +3772,18 @@ async function restoreAndroidMobileData(
     15_000,
     "Physical acceptance could not restore Android mobile-data state."
   );
+}
+
+async function collectPhysicalCleanupError(
+  message: string,
+  operation: () => void | Promise<void>,
+  errors: unknown[]
+): Promise<void> {
+  try {
+    await operation();
+  } catch {
+    errors.push(new Error(message));
+  }
 }
 
 function readPhysicalEnvironmentFacts(): PhysicalEnvironmentFacts {
