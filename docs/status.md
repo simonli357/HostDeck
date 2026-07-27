@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: ready `FE-V1-035` compatibility state. Freeze exact supported/degraded/incompatible/unknown/disconnected/version-drift truth and recovery criteria before implementation.
+- Active task: in-progress `IFC-V1-087` production compatibility diagnostics. `BUG-017` blocks `FE-V1-035` until production observes the real Codex version, persists incompatible truth, seals stale sessions, serves a mutation-closed diagnostic listener, and exposes the strict public compatibility projection.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's current default binary is 0.145.0, so the exact binding check is intentionally ineligible until the reviewed runtime is rebaselined or an isolated 0.144.0 binary is selected.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract and both replacement sets are complete. Under `DEC-028`, the human selected all seven current Focus Rail assets with no Signal Ledger borrowing or additional structural drift; both legacy desktop-led boards remain rejected.
@@ -146,6 +146,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Not Proven
 
+- Production still injects the reviewed 0.144.0 value as observed runtime truth and cannot serve initial incompatibility. `IFC-V1-087` criteria are frozen; implementation and exact/mismatched process evidence are pending before `FE-V1-035` resumes.
 - The packaged executable, foreground/service-owned startup, and generated user units are proven against test-owned package-layout assets. Real Vite assets, persistent install/lifecycle, uninstall, and clean-machine parity remain downstream through `IFC-V1-053` and `IFC-V1-056` to `IFC-V1-058`.
 - Selected interface module hardening and release acceptance remain downstream. The exact HostDeck/TUI lifecycle, remote physical path, and selected route composition are proven inputs, not a packaged release claim.
 - Paired-device management beyond bounded self-revocation, sustained trusted-source rate limits, complete cross-screen disconnect hardening, and the packaged remote-phone workflow remain downstream. `FE-V1-034` proves one production Android saved-profile-away/return recovery path, but it does not substitute for module hardening or packaged release acceptance.
@@ -153,7 +154,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Blockers
 
-- No external blocker prevents ready `FE-V1-035`; later UI and release leaves remain dependency-ordered behind screens/actions, module hardening, packaging, and complete device evidence. The default Codex 0.145.0 remains a downstream release-environment mismatch, while the isolated exact 0.144.0 toolchain still verifies the reviewed binding.
+- `BUG-017` is a critical internal release blocker: `FE-V1-035` is dependency-blocked by active `IFC-V1-087`. No human or device action is required for the implementation pass. The default Codex 0.145.0 is the required real mismatch fixture, while the isolated exact 0.144.0 toolchain remains the supported-path regression fixture.
 
 ## Validation
 
@@ -323,6 +324,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Git
 
+- `BUG-017` is routed to in-progress `IFC-V1-087`; `PCD-01` to `PCD-24` freeze real version observation, no-runtime drift handling, durable disconnected sealing, diagnostic-ready startup, and the strict public compatibility projection. Criteria commit/push and implementation are pending.
 - `FE-V1-034` implementation `1f02880` and physical hardening through accepted revision `72494c5` are pushed; this owner-doc closure advances the active queue to ready `FE-V1-035`.
 - `FE-V1-033` criteria `4243f17` and implementation/evidence `3f00ce4` are pushed; this owner-doc closure advances the active queue to ready `FE-V1-034`.
 - `FE-V1-032` criteria `fee4cdc` and implementation/evidence `a796a90` are pushed; this owner-doc closure advances the active queue to ready `FE-V1-033`.

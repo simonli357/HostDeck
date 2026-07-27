@@ -20,6 +20,9 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-012 | The strict Android runner fails Fastify readiness because its fixed authenticated driver routes omit required API response schemas. | High | Small bugfix | Closed | Validation harness / `IFC-V1-079` | Commit `3528c6c`; route-schema inventory/static gates plus clean physical Fastify/start/pair/reload progression pass. |
 | BUG-013 | Post-pairing Chrome foreground inspection reads ActivityManager intent state containing the protected QR fragment and correctly aborts on its own privacy guard. | High | Small bugfix | Closed | Validation harness / `IFC-V1-079` | Commit `b4078b6`; bounded WindowManager-only regression plus the clean no-retry physical run pass all 12 phone rows without retaining the fragment. |
 | BUG-014 | A current production audit reports two high-severity `fast-uri` host-confusion advisories through Fastify's AJV and JSON serializer paths. | High | Release blocker | Closed | Supply chain / `FE-V1-010` validation | Exact patched overrides 3.1.4/4.1.1, dependency-tree proof, zero-vulnerability audit, full workspace/runtime/package gates, implementation `9b095ad`. |
+| BUG-015 | The selected mobile access fixture requires browser state that the selected APIs cannot produce and permits implicit loopback writes. | High | Backlog bugfix | Closed | `FE-V1-025` | Route-backed coordinator contract and regressions; implementation `888abf1`. |
+| BUG-016 | Newly published production advisories affect the selected router, static plugin, browser router, and transitive glob graph. | High | Release blocker | Closed | Supply chain / `FE-V1-020` validation | Exact patched versions, zero-vulnerability audit, and full workspace/package/browser gates. |
+| BUG-017 | Production substitutes the reviewed Codex version for a real probe and exits before it can serve an incompatible-runtime diagnostic UI. | Critical | Release blocker | Open | `IFC-V1-087` | `artifacts/ifc-v1-087-production-compatibility-diagnostics.md`; implementation pending. |
 
 ## Routing
 
@@ -239,3 +242,16 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Fix: upgrade exact `@fastify/static` to 10.1.2 and `react-router` to 8.3.0; pin only vulnerable permitted transitives to `find-my-way` 9.7.0 and `brace-expansion` 5.0.8 through workspace overrides; adapt the static header callback to the patched plugin's `FastifyReply.header` contract. No route, CSRF, static-path, cache, or fallback policy changed.
 - Validation: dependency enumeration contains only the four patched versions; all are MIT licensed; static-boundary/Fastify 11, web 214, unit 2,064 with 28 explicit skips, contract 243, integration 36, Chromium 18, typecheck, lint/exports, scaffold, runtime boundary, deterministic package acceptance with 6,445 entries, frozen offline install, and zero-known-vulnerability production audit pass.
 - Closed by: the current dependency-hardening unit; final `FE-V1-020` evidence records its pushed commit.
+
+### BUG-017 Production Compatibility State Is Not Observable Or Reachable
+
+- Symptom: production gives the reconnect controller `codexBindingDescriptor.codex_version` as the observed version, and initial incompatibility rejects application startup before Fastify/static routes listen.
+- Impact: a protocol-compatible drifted binary can be recorded as the reviewed 0.144.0 value, while a proven incompatible runtime leaves no dashboard from which the phone can see the version or update-required state. `FE-V1-035` cannot truthfully implement its required production behavior.
+- Route: critical release blocker and backlog architecture fix. The defect crosses process observation, runtime admission, durable compatibility/session truth, application/listener startup, selected host status, and later UI recovery.
+- Related requirements: `FR-017`, `IR-006`, `IR-008`, `NFR-005`, `NFR-010`, `NFR-012`.
+- Affected / owning task: completed production composition/lifecycle and health-route behavior from `IFC-V1-039`, `IFC-V1-082`, `IFC-V1-083`, and `IFC-V1-086`; corrective leaf `IFC-V1-087`.
+- Blocks: `FE-V1-035` and `IFC-V1-091`; release acceptance remains downstream of those tasks.
+- Root cause: smoke setup is the only real `codex --version` owner; the initialize user agent reflects HostDeck's client identity and is not independent server-version evidence; compatibility persistence occurs only after successful reconciliation; and listener startup requires runtime-ready application phase.
+- Frozen fix: boundedly probe the configured binary, skip runtime start/attachment for a valid version mismatch, persist current incompatibility, seal durable projections disconnected, permit only the proven diagnostic-ready listener with mutation admission closed, and expose a strict sanitized compatibility projection through the existing protected host-status response.
+- Validation: `PCD-01` to `PCD-24`, including hostile fake ports, exact/mismatched real process/listener smokes, durable boundary/privacy inspection, full workspace/package gates, and zero residue.
+- Evidence: criteria in `artifacts/ifc-v1-087-production-compatibility-diagnostics.md`; implementation and closure pending.

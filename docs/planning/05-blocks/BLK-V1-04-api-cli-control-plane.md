@@ -9,9 +9,9 @@ Owns the production browser/operator boundary: loopback Fastify/SSE, Tailscale S
 - A dedicated saved HostDeck Tailscale profile coexists with a saved company profile one at a time. HostDeck never switches profiles or mutates an unrecognized profile.
 - SSE replay/live handoff, backpressure, heartbeat, disconnect, revocation, and shutdown are bounded.
 - `codexdeck` is runnable after build/install and manages foreground plus unprivileged service mode.
-- Runtime/storage/stream health changes after startup and blocks unsafe mutations.
+- Runtime/storage/stream health changes after startup and blocks unsafe mutations; proven initial Codex incompatibility remains reachable only through a mutation-closed diagnostic listener.
 
-Requirement refs: `FR-011`, `FR-012`, `FR-018`, `NFR-001`, `NFR-002`, `NFR-005`, `NFR-009` to `NFR-011`, `PR-002` to `PR-005`, `PR-007` to `PR-012`, `SFR-001` to `SFR-008`, `SFR-012` to `SFR-018`.
+Requirement refs: `FR-011`, `FR-012`, `FR-017`, `FR-018`, `IR-006`, `IR-008`, `NFR-001`, `NFR-002`, `NFR-005`, `NFR-009` to `NFR-012`, `PR-002` to `PR-005`, `PR-007` to `PR-012`, `SFR-001` to `SFR-008`, `SFR-012` to `SFR-018`.
 
 ## Local Architecture
 
@@ -21,7 +21,7 @@ Requirement refs: `FR-011`, `FR-012`, `FR-018`, `NFR-001`, `NFR-002`, `NFR-005`,
 | SSE plugin/hub adapter | Cursor replay and live projection stream through the selected Readable-backed SSE transport. | Global/device/session subscribers, queue/replay bytes/events, heartbeat, abort/source cleanup, handler settlement, shutdown deadline; no direct plugin AsyncIterable path. |
 | Trust hooks | External Host/Origin, admitted Serve proxy context, device cookie, CSRF generation, permission, lock, and source/global rate/concurrency. | No wildcard credentialed CORS, spoofed-forwarded-header trust, unauthenticated remote read, or Tailscale-identity authorization shortcut. |
 | Tailscale adapter | Observe exact selected/active profile and Serve state; apply/remove only an exactly owned HostDeck mapping after explicit CLI intent. | Never own `tailscaled`, switch profiles, access node keys, expose a public listener, or mutate company/unknown Serve state. |
-| Orchestrator/health | Selected Codex adapter, projector, storage, loopback listener, remote ingress, shutdown. | Local and remote health update independently; no test-only live source. |
+| Orchestrator/health | Real Codex version observation, selected adapter, compatibility/session persistence, projector, storage, loopback listener, remote ingress, shutdown. | Exact runtime readiness or proven mutation-closed diagnostic readiness; local and remote health update independently; no injected version or test-only live source. |
 | CLI/package | Command parser/client, admin paths, build/bin, service units. | Request timeout, stable exit codes, verified install/uninstall. |
 
 ## Write Gate
@@ -57,12 +57,12 @@ Local-admin CLI calls use an explicit loopback/admin authority, not a magic miss
 | Replay/live, subscriber bounds, mutable health, shutdown, and aggregate stream matrix | `IFC-V1-034` to `IFC-V1-038`, `IFC-V1-046`, `IFC-V1-078`, `IFC-V1-079` | Headless replay-to-live continuity, sustained global/device/session-bounded selected SSE subscribers, independent seven-source local/remote health, shutdown, exact selected registration, production remote lifecycle, and aggregate physical acceptance are complete. |
 | Exact route-manifest contract | `IFC-V1-019`, `IFC-V1-046`, `IFC-V1-075` | Complete for the current exact 35-route manifest: remote status/enable/disable replace selected direct-LAN/certificate routes, historical LAN factories are isolated from selected package roots and CLI, strict ownership remains reusable, and all handlers compose through the accepted production factory. |
 | Reusable exact-target write gate | `IFC-V1-066` | Complete; exact parse/auth/lock/target/audit/at-most-once-dispatch/terminal-proof ordering passes and is reused by selected remote writes. |
-| Host/session/event reads, start/resume/archive, prompt, per-control, approval, interrupt, and selected API/CLI aggregate | `IFC-V1-039` to `IFC-V1-046`, `IFC-V1-060` to `IFC-V1-065`, `IFC-V1-068`, `IFC-V1-069` | Complete: every selected route and CLI leaf composes through one accepted production loopback and admitted-remote factory with exact handler, authority, audit, and source-client evidence. |
+| Host/session/event reads, compatibility diagnostics, start/resume/archive, prompt, per-control, approval, interrupt, and selected API/CLI aggregate | `IFC-V1-039` to `IFC-V1-046`, `IFC-V1-060` to `IFC-V1-065`, `IFC-V1-068`, `IFC-V1-069`, `IFC-V1-087` | Existing selected routes and CLI leaves compose through one accepted production loopback and admitted-remote factory. `IFC-V1-087` is in progress to correct real version observation, diagnostic startup, durable boundary truth, and the public compatibility projection before interface hardening. |
 | Legacy custom-listener and raw/tmux route disposition | `IFC-V1-067` | Complete: selected package roots and their 600-module source/emitted closure are loopback HTTP plus admitted remote only; direct-LAN/TLS/raw/tmux production interfaces and dependencies are absent, pair/lock/unlock are HTTP-only, and only exact historical audit/migration decoders plus bounded confirmed legacy-session reset remain. Evidence: `artifacts/ifc-v1-067-legacy-production-interface-isolation.md`. |
 | HTTP/SSE/idempotency/deadline/CLI bounds and stress aggregate | `IFC-V1-047` to `IFC-V1-052` | Complete: the accepted HTTP, SSE, idempotency/concurrency, end-to-end deadline, and bounded source-CLI owners compose under one exact 22-registration/35-route real-listener budget with synchronized overload, response-loss, shutdown/restart, privacy, and zero-residue evidence. |
 | Deterministic production-output foundation | `IFC-V1-021` | Complete: exact 600-source closure, 1,207 owned outputs, offline frozen dependencies, deterministic runtime/Codex/native/content identity, rollback publication, contained links/modes, and unrelated-path read-only imports/native/Fastify/failure evidence pass. |
 | Built assets, CLI binary, service-owned process, user units, lifecycle commands, uninstall, and clean parity | `IFC-V1-053` to `IFC-V1-058`, `IFC-V1-086` | The CLI binary, independently restartable packaged service process, and exact runtime-proven user units are complete. Real assets and persistent install/lifecycle/uninstall/parity remain dependency-ordered behind human-selected frontend implementation. |
-| Reopened interface hardening | `IFC-V1-091` | Blocked only by the package/service chain through `IFC-V1-058`; selected composition, resource aggregate, legacy-interface isolation, and remote acceptance pass, and direct-LAN evidence is not a gate. |
+| Reopened interface hardening | `IFC-V1-087`, `IFC-V1-091` | `IFC-V1-087` first closes `BUG-017`; aggregate hardening remains dependency-ordered behind it and the package/service chain through `IFC-V1-058`. Direct-LAN evidence is not a gate. |
 
 Owning backlog: `docs/tracking/backlog/api-cli-control-plane.md`.
 

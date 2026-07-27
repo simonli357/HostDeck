@@ -96,20 +96,20 @@ A dependency-free schema-3 verifier rejects runtime, manifest, command/bin/sheba
 
 This is the accepted foreground sequence. `IFC-V1-054` connects the compiled command to the selected route/application/listener owners; `INT-V1-008` removed the historical tmux/custom-listener implementation with no fallback.
 
-1. `codexdeck serve` acquires the state-directory lease.
-2. It creates a `0700` runtime directory below `$XDG_RUNTIME_DIR/hostdeck`.
-3. It starts a dedicated `codex app-server --listen unix://<socket>` child and waits for a bounded compatibility handshake.
-4. It opens storage, reconciles managed threads, starts projection subscriptions, then starts Fastify.
-5. On shutdown it stops accepting requests, drains SSE and storage, closes the Codex client, terminates the owned app-server child, releases the lease, and removes owned runtime files.
+1. `codexdeck serve` acquires the state-directory lease, prepares owner-only paths, and opens guarded storage.
+2. It runs one bounded `codex --version` probe against the configured canonical executable before runtime start or socket attachment.
+3. Exact reviewed version starts a dedicated `codex app-server --listen unix://<socket>` child, completes compatibility/reconciliation, and then starts Fastify.
+4. A valid unsupported semver starts no app-server. HostDeck persists incompatibility, seals durable sessions disconnected, and starts a loopback/private-Serve diagnostic listener with readiness and mutation admission closed. Malformed probes and all non-compatibility startup failures remain fatal.
+5. On shutdown it stops accepting requests, drains SSE and storage, closes the Codex client, closes the started or skipped supervisor owner, releases the lease, and removes only owned runtime files.
 
 ### Long-Running User Service
 
 | Unit | Ownership | Restart behavior |
 | --- | --- | --- |
 | `hostdeck-codex.service` | Dedicated app-server process and private Unix socket. | Restarts independently; an unexpected restart marks active projections interrupted/unknown until reconciliation. |
-| `hostdeck.service` | HostDeck storage, Codex client, loopback API/SSE, built dashboard, remote-ingress observation, and audit. | Depends on app-server readiness, not on remote availability. A HostDeck-only restart leaves Codex running; `tailscaled` is external and never restarted by HostDeck. |
+| `hostdeck.service` | HostDeck storage, Codex client, loopback API/SSE, built dashboard, remote-ingress observation, and audit. | Exact-version admission waits for app-server readiness; proven version drift serves only diagnostics without attaching. A HostDeck-only restart leaves Codex running; `tailscaled` is external and never restarted by HostDeck. |
 
-The service-mode HostDeck process is distinct from `codexdeck serve`. It starts the same selected resource, application, listener, and shutdown graph with the runtime supervisor fixed to `service_owned`; it validates the exact Codex executable for compatibility/resume identity but can only await the external socket. It has no child-process port, process-exit observer, socket-unlink path, or fallback to foreground ownership. App-server disconnect/restart therefore drives the accepted reconnect/reconciliation state while the HostDeck process remains alive. HostDeck shutdown releases only its listener, application resources, storage, and state lease.
+The service-mode HostDeck process is distinct from `codexdeck serve`. It starts the same selected resource, application, listener, and shutdown graph with the runtime supervisor fixed to `service_owned`. It boundedly probes the configured executable used by the generated sibling unit before socket attachment. Exact reviewed version may await the external socket; a valid mismatch does not attach and may publish only diagnostic-ready state. It has no child-process port, process-exit observer, socket-unlink path, or fallback to foreground ownership. After successful admission, app-server disconnect/restart drives the accepted reconnect/reconciliation state while the HostDeck process remains alive. HostDeck shutdown releases only its listener, application resources, storage, and state lease.
 
 The packaged CLI library generates and verifies deterministic versioned user-unit descriptors without writing or contacting the manager; `IFC-V1-056` owns persistent installation and lifecycle commands. `hostdeck-codex.service` alone owns the systemd runtime-directory lifecycle; `hostdeck.service` observes that canonical owner-only directory and socket without creating, repairing, or removing them. The HostDeck unit uses only `Wants=` plus `After=` for weak startup/ordering and never `Requires=`, `BindsTo=`, `PartOf=`, or another stop/restart propagation directive. Both are `Type=exec` user services with fixed restart/start-limit/timeouts, mode-`0077` umask, and journal output. Only HostDeck is installable through `default.target`; the Codex unit is a static independently restartable dependency. Neither unit depends on `tailscaled`. Systemd active state means process setup succeeded; the loopback health endpoint remains application readiness. The CLI does not edit arbitrary user units, `systemctl --user` failures are actionable, and foreground mode remains available.
 
@@ -142,13 +142,13 @@ HostDeck never edits Codex rollout files or app-server state databases directly.
 
 ### Compatibility Handshake
 
-1. Discover `codex` from configured absolute path or `PATH`; require exact `codex-cli 0.144.0` output.
+1. Resolve one configured canonical absolute `codex` path and run a bounded no-shell `--version` probe. Strictly parse `codex-cli <semver>`; exact 0.144.0 may proceed to runtime admission, while a valid mismatch is retained as diagnostic truth without runtime start or attachment.
 2. Regenerate the experimental TypeScript binding to a temporary directory and compare the reviewed whole-tree identity in build/validation paths.
 3. Connect to the Unix socket and send one `initialize` with HostDeck client identity and `experimentalApi: true`; `/plan` requires this pinned opt-in.
-4. Corroborate the app-server version from the returned `hostdeck/<version>` user agent and require Linux/Unix platform fields.
+4. Require Linux/Unix platform fields and validate the returned user agent against HostDeck's sent client identity. The user agent is not independent app-server-version evidence; the bounded local binary probe is authoritative for the selected foreground/generated-service topology.
 5. Validate required product capability evidence against private generated methods, events, fields, approval responses, and the live `Plan`/`Default` collaboration catalog. The initialize response does not enumerate product methods.
 6. Persist observed version, generated binding identity, capability states, and check result.
-7. Expose `ready`, `degraded`, `incompatible`, or `disconnected`; incompatible never degrades to terminal injection.
+7. Expose `ready`, `degraded`, `incompatible`, or `disconnected`; incompatible never degrades to terminal injection. Proven initial incompatibility may publish only the mutation-closed diagnostic listener and sanitized host-status projection.
 
 Generated bindings are version-specific artifacts. `pnpm check:codex-bindings` regenerates to a temporary directory, applies deterministic NodeNext import normalization, and fails on unreviewed path/content or manifest drift. Generated types stay private to the adapter; normalized HostDeck schemas absorb additive changes and reject unknown required semantics.
 

@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-035` Implement compatibility state | ready | none | Surface exact runtime compatibility before complete-dashboard failure hardening. |
+| 1 | `IFC-V1-087` Implement production compatibility diagnostics | in_progress | none | Fix `BUG-017` so production observes the real binary and can serve truthful incompatible-runtime state before UI implementation. |
 | 2 | `FE-V1-028` Implement usage utility | ready | none | Add the first secondary structured utility after the primary controls. |
 | 3 | `FE-V1-029` Implement compact utility | ready | none | Add bounded context compaction through its exact structured route. |
 | 4 | `FE-V1-030` Implement skills utility | ready | none | Add capability-aware skill discovery after the primary controls. |
