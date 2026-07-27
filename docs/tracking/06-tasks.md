@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-036` Implement interrupt affordance | ready | none | Add the first bounded session action after the primary workflow. |
+| 1 | `FE-V1-036` Implement interrupt affordance | in_progress | none | Implement frozen `ATI-01` to `ATI-24` exact-turn, one-attempt, no-resend, and mobile Session actions criteria. |
 | 2 | `FE-V1-037` Implement archive affordance | ready | none | Add explicit archive confirmation and outcome handling. |
 | 3 | `FE-V1-038` Implement laptop-resume affordance | ready | none | Add the selected TUI-resume handoff after other session actions. |
 | 4 | `FE-V1-035` Implement compatibility and update-required UI | ready | none | Consume the proven production compatibility projection without unsafe fallback or fabricated recovery. |
