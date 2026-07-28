@@ -93,11 +93,54 @@ describe("HostDeck phone shell", () => {
     renderShell([sessionDetailPath(sessionId)]);
 
     expect(screen.getByRole("heading", { level: 1, name: "Session Detail" })).toBeTruthy();
+    const retainedNavigation = screen.getByRole("navigation", {
+      name: "Mission Control sessions"
+    });
+    expect(within(retainedNavigation).getByText("No retained session list")).toBeTruthy();
+    expect(within(retainedNavigation).queryAllByRole("listitem")).toHaveLength(0);
+    expect(within(retainedNavigation).getAllByRole("link")).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: "Back to Mission Control" }));
 
     expect(screen.getByTestId("location-path").textContent).toBe(missionControlPath);
     expect(screen.getByRole("heading", { level: 1, name: "Mission Control" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Back to Mission Control" })).toBeNull();
+  });
+
+  it("retains Mission context across a detail target and purges it on authority loss", async () => {
+    const user = userEvent.setup();
+    const harness = createResponsiveContextCoordinatorHarness();
+    render(
+      <MemoryRouter initialEntries={[missionControlPath]}>
+        <HostDeckRoutes
+          coordinator={harness.coordinator}
+          outlets={{
+            hostAccess: <p>Access fixture</p>,
+            missionControl: (
+              <section>
+                <h1>Mission Control responsive fixture</h1>
+                <SessionRouteLink sessionId={sessionId}>Open responsive session</SessionRouteLink>
+              </section>
+            ),
+            sessionDetail: () => <h1>Session Detail responsive fixture</h1>
+          }}
+        />
+      </MemoryRouter>
+    );
+
+    act(() => harness.publishDetail());
+    await user.click(screen.getByRole("link", { name: "Open responsive session" }));
+
+    const retainedNavigation = screen.getByRole("navigation", {
+      name: "Mission Control sessions"
+    });
+    expect(within(retainedNavigation).getByText(/^Retained list/u)).toBeTruthy();
+    expect(within(retainedNavigation).getByText("No retained sessions")).toBeTruthy();
+    expect(harness.setTarget).not.toHaveBeenCalled();
+    expect(harness.loadMoreSessions).not.toHaveBeenCalled();
+
+    act(() => harness.publishAuthorityLoss());
+    expect(within(retainedNavigation).getByText("No retained session list")).toBeTruthy();
+    expect(within(retainedNavigation).queryByText(/^Retained list/u)).toBeNull();
   });
 
   it("rejects invalid and unknown paths without reflecting hostile input", () => {
@@ -434,6 +477,51 @@ function createDeferred<T>(): {
     resolve = innerResolve;
   });
   return { promise, resolve };
+}
+
+function createResponsiveContextCoordinatorHarness(): Readonly<{
+  coordinator: BrowserConnectionStateCoordinator;
+  setTarget: ReturnType<typeof vi.fn>;
+  loadMoreSessions: ReturnType<typeof vi.fn>;
+  publishDetail: () => void;
+  publishAuthorityLoss: () => void;
+}> {
+  let current = recoveryConnectionSnapshot("ready");
+  const listeners = new Set<() => void>();
+  const setTarget = vi.fn();
+  const loadMoreSessions = vi.fn();
+  const publish = (next: BrowserConnectionSnapshot): void => {
+    current = next;
+    for (const listener of [...listeners]) listener();
+  };
+  const coordinator = Object.freeze({
+    snapshot: () => current,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    setTarget,
+    refresh: vi.fn(),
+    loadMoreSessions,
+    connectSessionStream: vi.fn(),
+    disconnectSessionStream: vi.fn(),
+    bootstrapCsrf: vi.fn(),
+    adoptCsrfBootstrap: vi.fn(),
+    requestProtected: vi.fn(),
+    requestDeviceList: vi.fn(),
+    requestRemoteStatus: vi.fn(),
+    requestDeviceRevoke: vi.fn(),
+    requestHostLock: vi.fn(),
+    requestSelectedSessionRead: vi.fn(),
+    close: vi.fn()
+  }) as unknown as BrowserConnectionStateCoordinator;
+  return Object.freeze({
+    coordinator,
+    setTarget,
+    loadMoreSessions,
+    publishDetail: () => publish(responsiveDetailConnectionSnapshot(true)),
+    publishAuthorityLoss: () => publish(responsiveDetailConnectionSnapshot(false))
+  });
 }
 
 function createRecoveryCoordinatorHarness(): Readonly<{
@@ -773,7 +861,18 @@ function recoveryConnectionSnapshot(
     phase: phase === "ready" ? "ready" as const : "degraded" as const,
     access: resource(access),
     host: resource(host),
-    targetState: resource(Object.freeze({ kind: "mission_control" as const })) as BrowserConnectionSnapshot["targetState"],
+    targetState: resource(Object.freeze({
+      kind: "mission_control" as const,
+      access: Object.freeze({
+        mode: "paired_write" as const,
+        network_mode: "remote" as const,
+        transport: "https" as const
+      }),
+      sessions: Object.freeze([]),
+      nextCursor: null,
+      hasMore: false,
+      pageCount: 1
+    })),
     stream: Object.freeze({
       state: "not_applicable" as const,
       snapshot: null,
@@ -795,6 +894,70 @@ function recoveryConnectionSnapshot(
     }),
     lastFailure: null
   }) as unknown as BrowserConnectionSnapshot;
+}
+
+function responsiveDetailConnectionSnapshot(readable: boolean): BrowserConnectionSnapshot {
+  const base = recoveryConnectionSnapshot("ready");
+  const timestamp = "2026-07-26T05:02:00.000Z";
+  const deniedAccess = base.access.data === null
+    ? null
+    : Object.freeze({
+        ...base.access.data,
+        authentication_state: "revoked_device" as const,
+        device_id: null,
+        permission: null,
+        device_expires_at: null,
+        can_read_sessions: false,
+        can_write_sessions: false,
+        can_lock: false,
+        can_unlock: false
+      });
+  if (!readable && deniedAccess === null) {
+    throw new TypeError("Responsive shell fixture requires access data.");
+  }
+  return Object.freeze({
+    ...base,
+    epoch: readable ? 2 : 3,
+    target: Object.freeze({ kind: "session_detail" as const, sessionId }),
+    phase: readable ? "ready" as const : "access_limited" as const,
+    access: readable
+      ? base.access
+      : Object.freeze({
+          state: "current" as const,
+          data: deniedAccess,
+          failure: null,
+          observedAt: timestamp
+        }),
+    targetState: Object.freeze({
+      state: readable ? "loading" as const : "blocked" as const,
+      data: null,
+      failure: null,
+      observedAt: null
+    }),
+    stream: Object.freeze({
+      state: "idle" as const,
+      snapshot: null,
+      continuity: "not_applicable" as const,
+      boundary: null,
+      failure: null
+    }),
+    csrf: readable
+      ? base.csrf
+      : Object.freeze({
+          phase: "idle" as const,
+          generation: null,
+          rotatedAt: null,
+          failure: null,
+          invalidationReason: "device_revoked" as const
+        }),
+    writeEligibility: readable
+      ? base.writeEligibility
+      : Object.freeze({
+          scope: "browser_shell" as const,
+          eligible: false,
+          causes: Object.freeze(["revoked_device" as const])
+        })
+  });
 }
 
 function remoteProfileOtherConnectionSnapshot(): BrowserConnectionSnapshot {

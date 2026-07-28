@@ -8,6 +8,7 @@ import {
 
 export type MissionApiVariant =
   | "mixed"
+  | "responsive"
   | "failure_matrix"
   | "long"
   | "read_only"
@@ -20,6 +21,10 @@ export type MissionApiVariant =
 export interface MissionApiController {
   readonly requests: readonly Request[];
   readonly setVariant: (variant: MissionApiVariant) => void;
+}
+
+export interface MissionApiOptions {
+  readonly fallbackUnhandled?: boolean;
 }
 
 const origin = "http://127.0.0.1:4175";
@@ -36,7 +41,8 @@ const components = [
 
 export async function installMissionControlApi(
   page: Page,
-  initialVariant: MissionApiVariant = "mixed"
+  initialVariant: MissionApiVariant = "mixed",
+  options: MissionApiOptions = {}
 ): Promise<MissionApiController> {
   let variant = initialVariant;
   const requests: Request[] = [];
@@ -128,6 +134,10 @@ export async function installMissionControlApi(
       return;
     }
 
+    if (options.fallbackUnhandled === true) {
+      await route.fallback();
+      return;
+    }
     await route.fulfill({ status: 404, body: "unexpected route" });
   });
 
@@ -335,11 +345,21 @@ export function missionSessionListFixture(variant: MissionApiVariant) {
           { summary: "The previous runtime recovery was interrupted." }
         ),
         session(
-          "sess_mission_browser_running",
-          "interface-build",
+          variant === "responsive"
+            ? "sess_detail_browser_active"
+            : "sess_mission_browser_running",
+          variant === "responsive" ? "android-release" : "interface-build",
           "watch",
           "in_progress",
-          { summary: "Building the selected mobile interface." }
+          {
+            ...(variant === "responsive"
+              ? { branch: "feat/mobile-session-detail" }
+              : {}),
+            summary:
+              variant === "responsive"
+                ? "Validate the structured mobile session feed."
+                : "Building the selected mobile interface."
+          }
         ),
         session(
           "sess_mission_browser_quiet",

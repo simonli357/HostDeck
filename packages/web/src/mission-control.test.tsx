@@ -23,9 +23,13 @@ import {
 } from "@hostdeck/core";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { HostDeckBrowserApp } from "./app-shell.js";
+import {
+  HostDeckBrowserApp,
+  missionControlPath,
+  sessionDetailPath
+} from "./app-shell.js";
 import type {
   BrowserConnectionFailure,
   BrowserConnectionPhase,
@@ -38,8 +42,10 @@ import {
   ConnectedMissionControl,
   MissionControlScreen,
   projectMissionControl,
-  projectSessionRow
+  projectSessionRow,
+  ResponsiveMissionNavigation
 } from "./mission-control.js";
+import type { BrowserMissionNavigationContext } from "./responsive-layout-state.js";
 
 const remoteOrigin = "https://hostdeck-laptop.fixture-tailnet.ts.net";
 const timestamp = "2026-07-22T18:00:00.000Z";
@@ -573,6 +579,89 @@ describe("Mission Control screen states and interaction", () => {
   });
 });
 
+describe("responsive retained Mission navigation", () => {
+  it("renders one truthful direct-entry fallback with no fabricated inventory", () => {
+    render(
+      <MemoryRouter initialEntries={[sessionDetailPath("sess_mission_direct")]}>
+        <LocationProbe />
+        <ResponsiveMissionNavigation
+          context={null}
+          nowMs={nowMs}
+          selectedSessionId="sess_mission_direct"
+        />
+      </MemoryRouter>
+    );
+
+    const navigation = screen.getByRole("navigation", {
+      name: "Mission Control sessions"
+    });
+    expect(screen.getByText("Session list unavailable")).toBeTruthy();
+    expect(screen.getByText("No retained session list")).toBeTruthy();
+    expect(navigation.querySelectorAll("li")).toHaveLength(0);
+    expect(screen.queryByText(/sessions?$/i)).toBeNull();
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("link", { name: "Open Mission Control" }));
+    expect(screen.getByTestId("selected-location").textContent).toBe(missionControlPath);
+  });
+
+  it("preserves canonical grouping, stale truth, selection, and replace history", () => {
+    const selectedSessionId = "sess_mission_retained_running";
+    const replacementSessionId = "sess_mission_retained_approval";
+    const context = missionNavigationContext(
+      [
+        sessionItem(replacementSessionId, "approval", {
+          attention: "needs_approval",
+          turnState: "waiting_for_approval"
+        }),
+        sessionItem(selectedSessionId, "running", {
+          attention: "watch",
+          turnState: "in_progress"
+        }),
+        sessionItem("sess_mission_retained_quiet", "quiet", {
+          turnState: "completed"
+        })
+      ],
+      "stale"
+    );
+    render(
+      <MemoryRouter
+        initialEntries={[missionControlPath, sessionDetailPath(selectedSessionId)]}
+        initialIndex={1}
+      >
+        <ResponsiveMissionNavigation
+          context={context}
+          nowMs={nowMs}
+          selectedSessionId={selectedSessionId}
+        />
+        <HistoryProbe />
+      </MemoryRouter>
+    );
+
+    const navigation = screen.getByRole("navigation", {
+      name: "Mission Control sessions"
+    });
+    expect(screen.getByText(/Retained stale list/u)).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "ACT NOW" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "IN PROGRESS" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "QUIET" })).toBeTruthy();
+    expect(navigation.querySelectorAll("li")).toHaveLength(3);
+    expect(screen.queryByRole("button", { name: /refresh|load more/i })).toBeNull();
+
+    const selected = screen.getByRole("link", { name: /running/i });
+    expect(selected.getAttribute("aria-current")).toBe("page");
+    const replacement = screen.getByRole("link", { name: /approval/i });
+    expect(replacement.getAttribute("aria-current")).toBeNull();
+
+    fireEvent.click(replacement);
+    expect(screen.getByTestId("selected-location").textContent).toBe(
+      sessionDetailPath(replacementSessionId)
+    );
+    fireEvent.click(screen.getByRole("button", { name: "History back" }));
+    expect(screen.getByTestId("selected-location").textContent).toBe(missionControlPath);
+  });
+});
+
 describe("Mission Control production owner", () => {
   it("creates a fresh coordinator after StrictMode cleanup and closes each owner once", async () => {
     const first = coordinatorHarness(currentSnapshot());
@@ -652,6 +741,35 @@ function renderScreen(snapshot: BrowserConnectionSnapshot) {
 function LocationProbe() {
   const location = useLocation();
   return <output data-testid="selected-location">{location.pathname}</output>;
+}
+
+function HistoryProbe() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return (
+    <>
+      <output data-testid="selected-location">{location.pathname}</output>
+      <button type="button" onClick={() => navigate(-1)}>
+        History back
+      </button>
+    </>
+  );
+}
+
+function missionNavigationContext(
+  sessions: readonly SelectedSessionReadItem[],
+  freshness: BrowserMissionNavigationContext["freshness"] = "current"
+): BrowserMissionNavigationContext {
+  const data = currentSnapshot({ sessions }).targetState.data;
+  if (data?.kind !== "mission_control") {
+    throw new TypeError("Mission navigation fixture has no Mission data.");
+  }
+  return Object.freeze({
+    data,
+    observedAt: timestamp,
+    sourceEpoch: 1,
+    freshness
+  });
 }
 
 function currentSnapshot(

@@ -264,6 +264,18 @@ function fixtureCoordinator(
     bootstrapCsrf: unexpected,
     adoptCsrfBootstrap: unexpected,
     requestProtected: unexpected,
+    requestDeviceList: async () => Object.freeze({
+      status: 200 as const,
+      data: Object.freeze({
+        devices: Object.freeze([]),
+        next_cursor: null,
+        has_more: false
+      })
+    }),
+    requestRemoteStatus: unexpected,
+    requestDeviceRevoke: unexpected,
+    requestHostLock: unexpected,
+    requestSelectedSessionRead: unexpected,
     close: () => snapshot
   }) as never;
 }

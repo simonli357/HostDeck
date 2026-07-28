@@ -6,6 +6,7 @@ import {
   type ReactNode,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore
 } from "react";
@@ -32,8 +33,15 @@ import type { BrowserConnectionStateCoordinator } from "./connection-state.js";
 import { ConnectedHostAccess } from "./host-access.js";
 import { ConnectedHostLock } from "./host-lock.js";
 import { SessionActionsSheet } from "./interrupt-control.js";
-import { ConnectedMissionControl } from "./mission-control.js";
+import {
+  ConnectedMissionControl,
+  ResponsiveMissionNavigation
+} from "./mission-control.js";
 import { PairingStartupScreen } from "./pairing-screen.js";
+import {
+  type BrowserMissionNavigationContext,
+  synchronizeResponsiveMissionContext
+} from "./responsive-layout-state.js";
 import {
   projectSessionDetail,
   SessionDetailScreen,
@@ -193,45 +201,80 @@ export function HostDeckRoutes({
 }: HostDeckRoutesProps) {
   if (coordinator !== undefined) {
     return (
-      <ConnectedHostLock coordinator={coordinator}>
-        {(hostLock) =>
-          outlets.hostAccess === undefined ? (
-            <ConnectedHostAccess coordinator={coordinator} hostLock={hostLock}>
-              {(content) => (
+      <ResponsiveMissionContextOwner coordinator={coordinator}>
+        {(missionContext) => (
+          <ConnectedHostLock coordinator={coordinator}>
+            {(hostLock) =>
+              outlets.hostAccess === undefined ? (
+                <ConnectedHostAccess coordinator={coordinator} hostLock={hostLock}>
+                  {(content) => (
+                    <HostDeckRouteTable
+                      outlets={Object.freeze({ ...outlets, hostAccess: content })}
+                      coordinator={coordinator}
+                      missionContext={missionContext}
+                      runtimeFailed={runtimeFailed}
+                    />
+                  )}
+                </ConnectedHostAccess>
+              ) : (
                 <HostDeckRouteTable
-                  outlets={Object.freeze({ ...outlets, hostAccess: content })}
+                  outlets={outlets}
                   coordinator={coordinator}
+                  missionContext={missionContext}
                   runtimeFailed={runtimeFailed}
                 />
-              )}
-            </ConnectedHostAccess>
-          ) : (
-            <HostDeckRouteTable
-              outlets={outlets}
-              coordinator={coordinator}
-              runtimeFailed={runtimeFailed}
-            />
-          )
-        }
-      </ConnectedHostLock>
+              )
+            }
+          </ConnectedHostLock>
+        )}
+      </ResponsiveMissionContextOwner>
     );
   }
   return (
     <HostDeckRouteTable
       outlets={outlets}
       coordinator={coordinator}
+      missionContext={null}
       runtimeFailed={runtimeFailed}
     />
   );
 }
 
+function ResponsiveMissionContextOwner({
+  children,
+  coordinator
+}: Readonly<{
+  children: (context: BrowserMissionNavigationContext | null) => ReactNode;
+  coordinator: BrowserConnectionStateCoordinator;
+}>) {
+  const snapshot = useSyncExternalStore(
+    coordinator.subscribe,
+    coordinator.snapshot,
+    coordinator.snapshot
+  );
+  const owner = useRef<{
+    coordinator: BrowserConnectionStateCoordinator;
+    context: BrowserMissionNavigationContext | null;
+  }>({ coordinator, context: null });
+  if (owner.current.coordinator !== coordinator) {
+    owner.current = { coordinator, context: null };
+  }
+  owner.current.context = synchronizeResponsiveMissionContext(
+    owner.current.context,
+    snapshot
+  );
+  return children(owner.current.context);
+}
+
 function HostDeckRouteTable({
   outlets,
   coordinator,
+  missionContext,
   runtimeFailed
 }: Readonly<{
   outlets: HostDeckRouteOutlets;
   coordinator: BrowserConnectionStateCoordinator | undefined;
+  missionContext: BrowserMissionNavigationContext | null;
   runtimeFailed: boolean;
 }>) {
   return (
@@ -252,6 +295,7 @@ function HostDeckRouteTable({
           <SessionDetailRoute
             outlets={outlets}
             coordinator={coordinator}
+            missionContext={missionContext}
             runtimeFailed={runtimeFailed}
           />
         }
@@ -293,10 +337,12 @@ function MissionControlRoute({
 function SessionDetailRoute({
   outlets,
   coordinator,
+  missionContext,
   runtimeFailed
 }: Readonly<{
   outlets: HostDeckRouteOutlets;
   coordinator: BrowserConnectionStateCoordinator | undefined;
+  missionContext: BrowserMissionNavigationContext | null;
   runtimeFailed: boolean;
 }>) {
   const rawSessionId = useParams<"session_id">().session_id;
@@ -315,6 +361,7 @@ function SessionDetailRoute({
       <ConnectedSessionDetailRoute
         coordinator={coordinator}
         hostAccess={outlets.hostAccess}
+        missionContext={missionContext}
         sessionId={sessionId}
       />
     );
@@ -332,12 +379,18 @@ function SessionDetailRoute({
       }
       title="Session Detail"
     >
-      {injectedContent ??
-        (runtimeFailed ? (
-          <SessionDetailRuntimeFailure />
-        ) : (
-          <SessionDetailLoading sessionId={sessionId} />
-        ))}
+      <ResponsiveSessionLayout
+        missionContext={missionContext}
+        nowMs={Date.now()}
+        sessionId={sessionId}
+      >
+        {injectedContent ??
+          (runtimeFailed ? (
+            <SessionDetailRuntimeFailure />
+          ) : (
+            <SessionDetailLoading sessionId={sessionId} />
+          ))}
+      </ResponsiveSessionLayout>
     </HostDeckFrame>
   );
 }
@@ -345,10 +398,12 @@ function SessionDetailRoute({
 function ConnectedSessionDetailRoute({
   coordinator,
   hostAccess,
+  missionContext,
   sessionId
 }: Readonly<{
   coordinator: BrowserConnectionStateCoordinator;
   hostAccess: ReactNode | undefined;
+  missionContext: BrowserMissionNavigationContext | null;
   sessionId: SessionId;
 }>) {
   const navigate = useNavigate();
@@ -374,27 +429,58 @@ function ConnectedSessionDetailRoute({
       subtitle={projection.headerSubtitle}
       title={projection.headerTitle}
     >
-      <SessionDetailScreen
-        sessionId={sessionId}
-        snapshot={controller.snapshot}
-        feed={controller.feed}
+      <ResponsiveSessionLayout
+        missionContext={missionContext}
         nowMs={controller.nowMs}
-        pendingAction={controller.pendingAction}
-        actionError={controller.actionError}
-        feedError={controller.feedError}
-        onRefresh={controller.onRefresh}
-        goal={controller.goal}
-        model={controller.model}
-        plan={controller.plan}
-        prompt={controller.prompt}
-        usage={controller.usage}
-        compact={controller.compact}
-        skills={controller.skills}
-        approvals={controller.approvals}
-        eventDiagnostics={controller.eventDiagnostics}
-        projection={projection}
-      />
+        sessionId={sessionId}
+      >
+        <SessionDetailScreen
+          sessionId={sessionId}
+          snapshot={controller.snapshot}
+          feed={controller.feed}
+          nowMs={controller.nowMs}
+          pendingAction={controller.pendingAction}
+          actionError={controller.actionError}
+          feedError={controller.feedError}
+          onRefresh={controller.onRefresh}
+          goal={controller.goal}
+          model={controller.model}
+          plan={controller.plan}
+          prompt={controller.prompt}
+          usage={controller.usage}
+          compact={controller.compact}
+          skills={controller.skills}
+          approvals={controller.approvals}
+          eventDiagnostics={controller.eventDiagnostics}
+          projection={projection}
+        />
+      </ResponsiveSessionLayout>
     </HostDeckFrame>
+  );
+}
+
+function ResponsiveSessionLayout({
+  children,
+  missionContext,
+  nowMs,
+  sessionId
+}: Readonly<{
+  children: ReactNode;
+  missionContext: BrowserMissionNavigationContext | null;
+  nowMs: number;
+  sessionId: SessionId;
+}>) {
+  return (
+    <div className="hostdeck-responsive-detail-layout">
+      <aside className="hostdeck-responsive-detail-layout__mission">
+        <ResponsiveMissionNavigation
+          context={missionContext}
+          nowMs={nowMs}
+          selectedSessionId={sessionId}
+        />
+      </aside>
+      <div className="hostdeck-responsive-detail-layout__detail">{children}</div>
+    </div>
   );
 }
 
@@ -481,7 +567,7 @@ function HostAccessSheet({ children }: Readonly<{ children: ReactNode }>) {
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="hostdeck-sheet-overlay" />
-        <Dialog.Content className="hostdeck-sheet">
+        <Dialog.Content className="hostdeck-sheet hostdeck-host-access-sheet">
           <span className="hostdeck-sheet__handle" aria-hidden="true" />
           <div className="hostdeck-sheet__header">
             <Dialog.Title className="hostdeck-sheet__title">Host &amp; access</Dialog.Title>

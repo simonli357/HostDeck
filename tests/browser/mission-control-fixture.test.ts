@@ -6,6 +6,7 @@ import {
 
 const readableVariants = Object.freeze([
   "mixed",
+  "responsive",
   "failure_matrix",
   "long",
   "read_only",

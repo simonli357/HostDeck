@@ -23,7 +23,12 @@ import {
   useState,
   useSyncExternalStore
 } from "react";
-import { SessionRouteLink } from "./app-routing.js";
+import { Link } from "react-router";
+import {
+  missionControlPath,
+  SessionRouteLink,
+  sessionDetailPath
+} from "./app-routing.js";
 import type {
   BrowserConnectionPhase,
   BrowserConnectionSnapshot,
@@ -41,6 +46,7 @@ import {
   projectHostLockState
 } from "./host-lock-state.js";
 import { projectRemoteConnectionRecovery } from "./remote-connection-recovery-state.js";
+import type { BrowserMissionNavigationContext } from "./responsive-layout-state.js";
 import { projectRuntimeCompatibility } from "./runtime-compatibility-state.js";
 
 export type MissionQueueId = "act_now" | "in_progress" | "quiet";
@@ -104,6 +110,12 @@ export interface MissionControlScreenProps {
   readonly actionError?: string | null;
   readonly onRefresh?: () => void;
   readonly onLoadMore?: () => void;
+}
+
+export interface ResponsiveMissionNavigationProps {
+  readonly context: BrowserMissionNavigationContext | null;
+  readonly nowMs: number;
+  readonly selectedSessionId: string;
 }
 
 const missionTarget = Object.freeze({ kind: "mission_control" as const });
@@ -280,6 +292,98 @@ export function MissionControlScreen({
   );
 }
 
+export function ResponsiveMissionNavigation({
+  context,
+  nowMs,
+  selectedSessionId
+}: ResponsiveMissionNavigationProps) {
+  const sections = context === null
+    ? []
+    : sectionOrder.flatMap((id) => {
+        const rows = context.data.sessions
+          .map((item) => projectSessionRow(item, nowMs))
+          .filter((row) => row.group === id);
+        return rows.length === 0
+          ? []
+          : [
+              Object.freeze({
+                id,
+                label: sectionLabel(id),
+                tone: sectionTone(id),
+                rows: Object.freeze(rows)
+              })
+            ];
+      });
+  const hasPriorityRows = sections.some(
+    (section) => section.id !== "quiet" && section.rows.length > 0
+  );
+
+  return (
+    <nav className="hostdeck-responsive-mission" aria-label="Mission Control sessions">
+      <div className="hostdeck-responsive-mission__heading">
+        <div>
+          <h2>Mission Control</h2>
+          {context === null ? (
+            <span>Session list unavailable</span>
+          ) : (
+            <span>
+              {context.freshness === "stale" ? "Retained stale list" : "Retained list"}
+              {" / "}
+              <time dateTime={context.observedAt}>
+                {formatResponsiveObservationTime(context.observedAt)}
+              </time>
+            </span>
+          )}
+        </div>
+        <Link className="hostdeck-icon-button" to={missionControlPath} aria-label="Open Mission Control">
+          <Activity size={20} strokeWidth={2} aria-hidden="true" />
+        </Link>
+      </div>
+
+      {context === null ? (
+        <div className="hostdeck-responsive-mission__fallback">
+          <Clock3 size={20} strokeWidth={2} aria-hidden="true" />
+          <div>
+            <strong>No retained session list</strong>
+            <p>Open Mission Control to load the current grouped queue.</p>
+          </div>
+        </div>
+      ) : sections.length === 0 ? (
+        <div className="hostdeck-responsive-mission__fallback">
+          <CircleCheck size={20} strokeWidth={2} aria-hidden="true" />
+          <div>
+            <strong>No retained sessions</strong>
+            <p>The last confirmed Mission Control list was empty.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="hostdeck-responsive-mission__queue">
+          {sections.map((section) =>
+            section.id === "quiet" ? (
+              <QuietQueueSection
+                key={section.id}
+                section={section}
+                defaultOpen={!hasPriorityRows}
+                headingIdPrefix="responsive-mission-group"
+                navigationMode="retained"
+                selectedSessionId={selectedSessionId}
+              />
+            ) : (
+              <MissionQueueSectionView
+                key={section.id}
+                section={section}
+                headingIdPrefix="responsive-mission-group"
+                navigationMode="retained"
+                selectedSessionId={selectedSessionId}
+              />
+            )
+          )}
+        </div>
+      )}
+    </nav>
+  );
+}
+
 export function projectMissionControl(
   snapshot: BrowserConnectionSnapshot,
   nowMs: number
@@ -403,9 +507,17 @@ function MissionNoticeView({ notice }: Readonly<{ notice: MissionNotice }>) {
 }
 
 function MissionQueueSectionView({
-  section
-}: Readonly<{ section: MissionQueueSection }>) {
-  const headingId = `mission-group-${section.id}`;
+  section,
+  headingIdPrefix = "mission-group",
+  navigationMode = "mission",
+  selectedSessionId = null
+}: Readonly<{
+  section: MissionQueueSection;
+  headingIdPrefix?: string;
+  navigationMode?: "mission" | "retained";
+  selectedSessionId?: string | null;
+}>) {
+  const headingId = `${headingIdPrefix}-${section.id}`;
   return (
     <section
       className={`hostdeck-queue-group hostdeck-queue-group--${section.tone}`}
@@ -415,16 +527,29 @@ function MissionQueueSectionView({
         <h2 id={headingId}>{section.label}</h2>
         <span>{section.rows.length}</span>
       </div>
-      <MissionRowList rows={section.rows} />
+      <MissionRowList
+        rows={section.rows}
+        navigationMode={navigationMode}
+        selectedSessionId={selectedSessionId}
+      />
     </section>
   );
 }
 
 function QuietQueueSection({
   section,
-  defaultOpen
-}: Readonly<{ section: MissionQueueSection; defaultOpen: boolean }>) {
-  const headingId = "mission-group-quiet";
+  defaultOpen,
+  headingIdPrefix = "mission-group",
+  navigationMode = "mission",
+  selectedSessionId = null
+}: Readonly<{
+  section: MissionQueueSection;
+  defaultOpen: boolean;
+  headingIdPrefix?: string;
+  navigationMode?: "mission" | "retained";
+  selectedSessionId?: string | null;
+}>) {
+  const headingId = `${headingIdPrefix}-quiet`;
   const [open, setOpen] = useState(defaultOpen);
   return (
     <section
@@ -449,18 +574,31 @@ function QuietQueueSection({
             aria-hidden="true"
           />
         </summary>
-        <MissionRowList rows={section.rows} />
+        <MissionRowList
+          rows={section.rows}
+          navigationMode={navigationMode}
+          selectedSessionId={selectedSessionId}
+        />
       </details>
     </section>
   );
 }
 
-function MissionRowList({ rows }: Readonly<{ rows: readonly MissionSessionRow[] }>) {
+function MissionRowList({
+  rows,
+  navigationMode = "mission",
+  selectedSessionId = null
+}: Readonly<{
+  rows: readonly MissionSessionRow[];
+  navigationMode?: "mission" | "retained";
+  selectedSessionId?: string | null;
+}>) {
   return (
     <ul className="hostdeck-session-list">
-      {rows.map((row) => (
-        <li key={row.item.session.id} className={`hostdeck-session-row hostdeck-session-row--${row.tone}`}>
-          <SessionRouteLink className="hostdeck-session-row__link" sessionId={row.item.session.id}>
+      {rows.map((row) => {
+        const selected = row.item.session.id === selectedSessionId;
+        const content = (
+          <>
             <span className="hostdeck-session-row__topline">
               <strong>{row.item.session.name}</strong>
               <span className={`hostdeck-session-state hostdeck-session-state--${row.tone}`}>
@@ -476,9 +614,33 @@ function MissionRowList({ rows }: Readonly<{ rows: readonly MissionSessionRow[] 
               <span className="hostdeck-session-row__age">{row.activityLabel}</span>
             </span>
             <span className="hostdeck-session-row__summary">{row.summary}</span>
-          </SessionRouteLink>
-        </li>
-      ))}
+          </>
+        );
+        return (
+          <li
+            key={row.item.session.id}
+            className={`hostdeck-session-row hostdeck-session-row--${row.tone}${selected ? " hostdeck-session-row--selected" : ""}`}
+          >
+            {navigationMode === "retained" ? (
+              <Link
+                className="hostdeck-session-row__link"
+                to={sessionDetailPath(row.item.session.id)}
+                replace
+                aria-current={selected ? "page" : undefined}
+              >
+                {content}
+              </Link>
+            ) : (
+              <SessionRouteLink
+                className="hostdeck-session-row__link"
+                sessionId={row.item.session.id}
+              >
+                {content}
+              </SessionRouteLink>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -949,6 +1111,22 @@ function sectionTone(id: MissionQueueId): MissionTone {
 function formatSessionCount(count: number, hasMore: boolean): string {
   const noun = count === 1 ? "session" : "sessions";
   return `${count}${hasMore ? "+" : ""} ${noun}`;
+}
+
+const responsiveObservationFormatter = new Intl.DateTimeFormat("en-US", {
+  day: "numeric",
+  hour: "2-digit",
+  hourCycle: "h23",
+  minute: "2-digit",
+  month: "short",
+  timeZone: "UTC"
+});
+
+function formatResponsiveObservationTime(observedAt: string): string {
+  const timestamp = Date.parse(observedAt);
+  return Number.isFinite(timestamp)
+    ? `${responsiveObservationFormatter.format(new Date(timestamp))} UTC`
+    : "Confirmation time unavailable";
 }
 
 function unavailableMeta(phase: BrowserConnectionPhase): string {

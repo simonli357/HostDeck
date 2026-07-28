@@ -429,62 +429,64 @@ export function SessionDetailScreen({
       aria-labelledby="session-detail-title"
       aria-busy={view.loading || view.replayPending}
     >
-      <h1 id="session-detail-title" className="hostdeck-visually-hidden">
-        {view.canDisclose ? `${view.headerTitle} activity` : "Session Detail"}
-      </h1>
+      <div className="hostdeck-detail__scroll-owner">
+        <h1 id="session-detail-title" className="hostdeck-visually-hidden">
+          {view.canDisclose ? `${view.headerTitle} activity` : "Session Detail"}
+        </h1>
 
-      {view.canDisclose ? (
-        <SessionContextRail
-          cells={view.contextCells}
-          pending={pendingAction === "refresh"}
-          disabled={pendingAction !== null}
-          onRefresh={onRefresh}
-        />
-      ) : null}
+        {view.canDisclose ? (
+          <SessionContextRail
+            cells={view.contextCells}
+            pending={pendingAction === "refresh"}
+            disabled={pendingAction !== null}
+            onRefresh={onRefresh}
+          />
+        ) : null}
 
-      <HostLockRouteRail projection={view.lock} />
+        <HostLockRouteRail projection={view.lock} />
 
-      {actionError === null ? null : (
-        <SessionDetailInlineError message={actionError} />
-      )}
-      {feedError === null ? null : <SessionDetailInlineError message={feedError} />}
-      {view.notices.map((notice) => (
-        <SessionDetailNoticeView key={`${notice.title}:${notice.body}`} notice={notice} />
-      ))}
+        {actionError === null ? null : (
+          <SessionDetailInlineError message={actionError} />
+        )}
+        {feedError === null ? null : <SessionDetailInlineError message={feedError} />}
+        {view.notices.map((notice) => (
+          <SessionDetailNoticeView key={`${notice.title}:${notice.body}`} notice={notice} />
+        ))}
 
-      {showInitialSkeleton ? (
-        <SessionDetailLoadingTimeline />
-      ) : !view.canDisclose ? null : approvals === undefined ? (
-        view.empty ? (
-          <SessionDetailEmpty />
-        ) : view.activityUnavailable ? (
-          <SessionDetailActivityUnavailable />
-        ) : view.noVisibleActivity ? (
-          <SessionDetailNoVisibleActivity />
+        {showInitialSkeleton ? (
+          <SessionDetailLoadingTimeline />
+        ) : !view.canDisclose ? null : approvals === undefined ? (
+          view.empty ? (
+            <SessionDetailEmpty />
+          ) : view.activityUnavailable ? (
+            <SessionDetailActivityUnavailable />
+          ) : view.noVisibleActivity ? (
+            <SessionDetailNoVisibleActivity />
+          ) : (
+            <SessionDetailTimeline
+              key={feed.sessionId}
+              items={view.timeline}
+              acceptedCount={feed.acceptedCount}
+              replayPending={view.replayPending}
+              approvals={null}
+              approvalView={null}
+              eventDiagnostics={eventDiagnostics ?? null}
+            />
+          )
         ) : (
-          <SessionDetailTimeline
+          <ConnectedSessionDetailTimelineArea
             key={feed.sessionId}
             items={view.timeline}
             acceptedCount={feed.acceptedCount}
             replayPending={view.replayPending}
-            approvals={null}
-            approvalView={null}
+            empty={view.empty}
+            activityUnavailable={view.activityUnavailable}
+            noVisibleActivity={view.noVisibleActivity}
+            approvals={approvals}
             eventDiagnostics={eventDiagnostics ?? null}
           />
-        )
-      ) : (
-        <ConnectedSessionDetailTimelineArea
-          key={feed.sessionId}
-          items={view.timeline}
-          acceptedCount={feed.acceptedCount}
-          replayPending={view.replayPending}
-          empty={view.empty}
-          activityUnavailable={view.activityUnavailable}
-          noVisibleActivity={view.noVisibleActivity}
-          approvals={approvals}
-          eventDiagnostics={eventDiagnostics ?? null}
-        />
-      )}
+        )}
+      </div>
 
       {prompt === undefined && model === undefined && goal === undefined && plan === undefined && (usage === undefined || compact === undefined || skills === undefined) ? null : (
         <div className="hostdeck-session-controls">
