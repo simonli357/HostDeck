@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `FE-V1-038` laptop TUI-resume handoff is ready. The next action is to inspect its exact selected API/UI boundaries and freeze harsh criteria before product code; `FE-V1-035` remains ready behind it.
+- Active task: `FE-V1-038` exact laptop TUI-resume handoff is in progress with `LTR-01` to `LTR-24` frozen before product code. The next action is to implement and harden its selected-session read owner, clipboard-only boundary, and approved Session actions states; `FE-V1-035` remains ready behind it.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's default 0.145.0 binary remains ineligible as exact-runtime evidence but now passes the required no-runtime diagnostic path; the isolated exact 0.144.0 binary passes the supported-path regression.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract and both replacement sets are complete. Under `DEC-028`, the human selected all seven current Focus Rail assets with no Signal Ledger borrowing or additional structural drift; both legacy desktop-led boards remain rejected.
@@ -161,7 +161,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Blockers
 
-- No task-specific blocker prevents next `FE-V1-038`. V1 remains release-blocked by unfinished mobile/interface hardening, real packaged assets, persistent install/parity, device acceptance, and final release gates.
+- No task-specific blocker prevents active `FE-V1-038`. V1 remains release-blocked by unfinished mobile/interface hardening, real packaged assets, persistent install/parity, device acceptance, and final release gates.
 
 ## Validation
 
