@@ -5316,7 +5316,7 @@ textarea:focus-visible {
 .hostdeck-access-fact {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(112px, 2fr) minmax(0, 3fr);
   gap: 12px;
   padding: 12px 0;
   border-bottom: 1px solid var(--hostdeck-divider);
