@@ -11,6 +11,7 @@ import {
   TriangleAlert,
   Wifi
 } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type {
   BrowserAppStartupPhase,
   BrowserAppStartupSnapshot
@@ -43,6 +44,43 @@ export function PairingStartupScreen({
 }: PairingStartupScreenProps) {
   const view = projectPairingStartup(snapshot);
   const pairing = snapshot.pairing;
+  const resultRef = useRef<HTMLElement | null>(null);
+  const actionRef = useRef<HTMLButtonElement | null>(null);
+  const actionFocusPending = useRef(false);
+  const previousPhase = useRef(snapshot.phase);
+  const [announcement, setAnnouncement] = useState<
+    Readonly<{ sequence: number; urgent: boolean; message: string }>
+  >(
+    Object.freeze({ sequence: 0, urgent: false, message: "" })
+  );
+
+  useLayoutEffect(() => {
+    document.title = "Pair a phone | HostDeck";
+  }, []);
+
+  useEffect(() => {
+    if (previousPhase.current === snapshot.phase) return;
+    previousPhase.current = snapshot.phase;
+    setAnnouncement((current) =>
+      Object.freeze({
+        sequence: current.sequence + 1,
+        urgent: view.urgent,
+        message: `${view.title}. ${view.body}`
+      })
+    );
+  }, [snapshot.phase, view.body, view.title, view.urgent]);
+
+  useLayoutEffect(() => {
+    if (!actionFocusPending.current) return;
+    if (view.action !== null && actionRef.current !== null) {
+      actionRef.current.focus({ preventScroll: true });
+      actionFocusPending.current = false;
+      return;
+    }
+    resultRef.current?.focus({ preventScroll: true });
+    if (!isPairingTransition(snapshot.phase)) actionFocusPending.current = false;
+  }, [snapshot.phase, view.action]);
+
   return (
     <div className="hostdeck-app hostdeck-pairing-app">
       <a className="hostdeck-skip-link" href="#hostdeck-pairing-main">
@@ -66,7 +104,13 @@ export function PairingStartupScreen({
             <li
               key={stage.label}
               className={`hostdeck-pairing-stage hostdeck-pairing-stage--${stage.state}`}
-              aria-current={stage.state === "active" ? "step" : undefined}
+              aria-current={
+                stage.state === "active" ||
+                stage.state === "failed" ||
+                (snapshot.phase === "paired" && index === view.stages.length - 1)
+                  ? "step"
+                  : undefined
+              }
             >
               <span className="hostdeck-pairing-stage__node" aria-hidden="true">
                 {stage.state === "complete" ? (
@@ -88,10 +132,18 @@ export function PairingStartupScreen({
         </ol>
 
         <section
+          ref={resultRef}
           className={`hostdeck-pairing-result hostdeck-pairing-result--${view.tone}`}
           aria-labelledby="hostdeck-pairing-title"
-          aria-live={view.urgent ? "assertive" : "polite"}
+          tabIndex={-1}
         >
+          <span
+            className="hostdeck-visually-hidden"
+            role={announcement.urgent ? "alert" : "status"}
+            aria-atomic="true"
+          >
+            <span key={announcement.sequence}>{announcement.message}</span>
+          </span>
           <span className="hostdeck-pairing-result__icon" aria-hidden="true">
             {resultIcon(snapshot.phase)}
           </span>
@@ -127,18 +179,26 @@ export function PairingStartupScreen({
 
           {view.action === "continue" ? (
             <button
+              ref={actionRef}
               type="button"
               className="hostdeck-primary-button hostdeck-pairing-result__action"
-              onClick={onContinue}
+              onClick={() => {
+                actionFocusPending.current = true;
+                onContinue();
+              }}
             >
               <span>Open Mission Control</span>
               <ArrowRight size={19} strokeWidth={2} aria-hidden="true" />
             </button>
           ) : view.action === "reload" ? (
             <button
+              ref={actionRef}
               type="button"
               className="hostdeck-action-button hostdeck-pairing-result__action"
-              onClick={onReload}
+              onClick={() => {
+                actionFocusPending.current = true;
+                onReload();
+              }}
             >
               <RefreshCw size={18} strokeWidth={2} aria-hidden="true" />
               <span>Reload to check</span>
@@ -319,6 +379,10 @@ function resultIcon(phase: BrowserAppStartupPhase) {
   }
   if (phase === "closed") return <Wifi size={46} strokeWidth={1.8} />;
   return <TriangleAlert size={46} strokeWidth={1.8} />;
+}
+
+function isPairingTransition(phase: BrowserAppStartupPhase): boolean {
+  return phase === "checking" || phase === "claiming" || phase === "reloading";
 }
 
 function formatUtcDate(value: string): string {

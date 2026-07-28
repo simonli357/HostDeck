@@ -216,15 +216,18 @@ export function EventDiagnosticsSheet({
               </Dialog.Close>
             </div>
 
-            <div
+            <section
               key={view.selectionRevision ?? "closed"}
               className="hostdeck-event-sheet__scroller"
+              aria-label="Event diagnostic details"
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: The read-only overflow owner must be keyboard-scrollable.
+              tabIndex={0}
             >
               <EventIdentity view={view} />
               <EventLimitation limitationId={limitationId} view={view} />
               <EventBoundary view={view} />
               <EventPayload view={view} />
-            </div>
+            </section>
 
             <EventStatus controller={controller} statusId={statusId} view={view} />
           </Dialog.Content>
@@ -390,7 +393,6 @@ function EventStatus({
         id={statusId}
         className={`hostdeck-event-status hostdeck-tone--${view.tone}`}
         role={view.tone === "danger" ? "alert" : "status"}
-        aria-live="polite"
         aria-atomic="true"
         aria-busy={view.busy}
       >

@@ -362,24 +362,27 @@ function DeviceRow({
       </div>
       <dl className="hostdeck-device-row__facts">
         <div>
-          {row.permission === "write" ? (
-            <ShieldCheck size={16} strokeWidth={2} aria-hidden="true" />
-          ) : (
-            <Eye size={16} strokeWidth={2} aria-hidden="true" />
-          )}
-          <span><dt>Permission</dt><dd>{row.permissionLabel}</dd></span>
+          <dt>
+            {row.permission === "write" ? (
+              <ShieldCheck size={16} strokeWidth={2} aria-hidden="true" />
+            ) : (
+              <Eye size={16} strokeWidth={2} aria-hidden="true" />
+            )}
+            <span>Permission</span>
+          </dt>
+          <dd>{row.permissionLabel}</dd>
         </div>
         <div>
-          <StatusIcon size={16} strokeWidth={2} aria-hidden="true" />
-          <span><dt>Status</dt><dd>{row.statusLabel}</dd></span>
+          <dt><StatusIcon size={16} strokeWidth={2} aria-hidden="true" /><span>Status</span></dt>
+          <dd>{row.statusLabel}</dd>
         </div>
         <div>
-          <Clock3 size={16} strokeWidth={2} aria-hidden="true" />
-          <span><dt>Last used</dt><dd>{row.lastUsedLabel}</dd></span>
+          <dt><Clock3 size={16} strokeWidth={2} aria-hidden="true" /><span>Last used</span></dt>
+          <dd>{row.lastUsedLabel}</dd>
         </div>
         <div>
-          <Clock3 size={16} strokeWidth={2} aria-hidden="true" />
-          <span><dt>Expires</dt><dd>{row.expiresLabel}</dd></span>
+          <dt><Clock3 size={16} strokeWidth={2} aria-hidden="true" /><span>Expires</span></dt>
+          <dd>{row.expiresLabel}</dd>
         </div>
       </dl>
       {row.revokeVisible ? (

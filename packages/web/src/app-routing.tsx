@@ -25,8 +25,14 @@ export function SessionRouteLink({
   children,
   ...anchorProps
 }: SessionRouteLinkProps) {
+  const path = sessionDetailPath(sessionId);
   return (
-    <Link {...anchorProps} to={sessionDetailPath(sessionId)} state={missionSourceState}>
+    <Link
+      {...anchorProps}
+      data-hostdeck-session-path={path}
+      to={path}
+      state={missionSourceState}
+    >
       {children}
     </Link>
   );

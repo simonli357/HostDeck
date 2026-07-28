@@ -310,10 +310,11 @@ describe("Session Detail screen", () => {
     );
     renderDetail(detailSnapshot({ causes: [cause] }), feed);
 
-    const lock = screen.getByRole(role);
+    const lock = screen.getByText(title).closest(`[role="${role}"]`);
     const activity = screen.getByText("Readable activity remains visible");
-    expect(lock.textContent).toContain(title);
-    expect(lock.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(lock?.textContent).toContain(title);
+    expect((lock?.compareDocumentPosition(activity) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .not.toBe(0);
     expect(activity).toBeTruthy();
   });
 
@@ -585,10 +586,15 @@ describe("Session Detail screen", () => {
     );
 
     expect(screen.getByRole("button", { name: "1 new event" })).toBeTruthy();
+    expect(document.getElementById("hostdeck-approval-updates")?.textContent).toBe("");
+    expect(document.getElementById("hostdeck-activity-updates")?.textContent).toBe(
+      "1 new event."
+    );
     expect(scrollIntoView).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "1 new event" }));
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("button", { name: "1 new event" })).toBeNull();
+    expect(document.getElementById("hostdeck-activity-updates")?.textContent).toBe("");
   });
 });
 
@@ -614,7 +620,7 @@ describe("Session Detail controller", () => {
     const moreTrigger = screen.getByRole("button", {
       name: "More session utilities for api-refactor"
     });
-    const toolbar = screen.getByRole("toolbar", { name: "Session controls" });
+    const toolbar = screen.getByRole("group", { name: "Session controls" });
     const controls = modelTrigger.closest(".hostdeck-session-controls");
     expect(controls).not.toBeNull();
     expect(document.querySelectorAll(".hostdeck-primary-action-dock")).toHaveLength(1);

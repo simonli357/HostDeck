@@ -154,8 +154,10 @@ function CompatibilityFact({
   return (
     <div>
       <dt>{label}</dt>
-      <dd>{value}</dd>
-      {detail === undefined ? null : <small>{detail}</small>}
+      <dd>
+        <span>{value}</span>
+        {detail === undefined ? null : <small>{detail}</small>}
+      </dd>
     </div>
   );
 }

@@ -177,7 +177,8 @@ describe("host and access projection", () => {
     expect(document.querySelector('.hostdeck-access-recovery[role="status"]')?.textContent)
       .toContain("Page security ready");
     const renderedOrigins = screen.getAllByText(remoteOrigin);
-    expect(renderedOrigins.map(({ tagName }) => tagName)).toEqual(["DD", "STRONG"]);
+    expect(renderedOrigins.map((element) => element.closest("dd")?.tagName ?? element.tagName))
+      .toEqual(["DD", "STRONG"]);
     expect(screen.queryByRole("link", { name: remoteOrigin })).toBeNull();
     expect(screen.getAllByRole("term").length).toBeGreaterThanOrEqual(8);
     expect(screen.getAllByRole("definition").length).toBeGreaterThanOrEqual(8);

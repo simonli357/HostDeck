@@ -79,13 +79,18 @@ describe("HostDeck phone shell", () => {
 
     expect(screen.getByTestId("location-path").textContent).toBe(`/sessions/${sessionId}`);
     expect(screen.getByRole("heading", { level: 1, name: "Selected session" })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("main"));
+    expect(document.title).toBe("Session Detail | HostDeck");
     expect(screen.getAllByText(sessionId)).toHaveLength(1);
     expect(screen.getByRole("banner").textContent).not.toContain(sessionId);
 
     await user.click(screen.getByRole("button", { name: "Back to Mission Control" }));
 
     expect(screen.getByTestId("location-path").textContent).toBe(missionControlPath);
-    expect(screen.getByRole("link", { name: "Open api-refactor" })).toBeTruthy();
+    expect(document.activeElement).toBe(
+      screen.getByRole("link", { name: "Open api-refactor" })
+    );
+    expect(document.title).toBe("Mission Control | HostDeck");
   });
 
   it("returns a direct detail entry to Mission Control without adding a back loop", async () => {
@@ -179,8 +184,10 @@ describe("HostDeck phone shell", () => {
     await user.click(trigger);
 
     const dialog = screen.getByRole("dialog", { name: "Host & access" });
+    const scrollOwner = screen.getByRole("region", { name: "Host and access content" });
     expect(screen.getByTestId("location-path").textContent).toBe(missionControlPath);
     expect(dialog.contains(screen.getByRole("button", { name: "Access action" }))).toBe(true);
+    expect(scrollOwner.getAttribute("tabindex")).toBe("0");
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
 
     await user.tab();
@@ -433,6 +440,7 @@ describe("HostDeck phone shell", () => {
     await user.click(screen.getByRole("button", { name: "Open Mission Control" }));
 
     expect(await screen.findByText("Mission Control protected fixture")).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("main"));
     expect(bootstrapPairing).toHaveBeenCalledTimes(1);
     expect(adoptCsrfBootstrap).toHaveBeenCalledTimes(1);
   });

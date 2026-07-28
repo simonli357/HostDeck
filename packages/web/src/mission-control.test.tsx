@@ -642,9 +642,10 @@ describe("responsive retained Mission navigation", () => {
       name: "Mission Control sessions"
     });
     expect(screen.getByText(/Retained stale list/u)).toBeTruthy();
-    expect(screen.getByRole("heading", { level: 2, name: "ACT NOW" })).toBeTruthy();
-    expect(screen.getByRole("heading", { level: 2, name: "IN PROGRESS" })).toBeTruthy();
-    expect(screen.getByRole("heading", { level: 2, name: "QUIET" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "ACT NOW" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "IN PROGRESS" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "QUIET" })).toBeTruthy();
+    expect(screen.queryAllByRole("heading")).toHaveLength(0);
     expect(navigation.querySelectorAll("li")).toHaveLength(3);
     expect(screen.queryByRole("button", { name: /refresh|load more/i })).toBeNull();
 

@@ -406,7 +406,6 @@ export function ApprovalConfirmationDialog({
                   className={`hostdeck-approval-sheet__status hostdeck-tone--${view.tone}`}
                   id={statusDescriptionId}
                   role={view.tone === "danger" ? "alert" : "status"}
-                  aria-live="polite"
                   aria-atomic="true"
                 >
                   {submitting ? (
@@ -473,7 +472,6 @@ export function ApprovalStatusTimelineItem({
       </span>
       <article
         role={danger ? "alert" : "status"}
-        aria-live="polite"
         aria-atomic="true"
       >
         <div className="hostdeck-timeline-item__header">

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -72,6 +72,7 @@ describe("pairing startup screen", () => {
     expect(screen.getByText("Android phone")).toBeTruthy();
     expect(screen.getByText("Private HTTPS", { selector: "dd" })).toBeTruthy();
     expect(screen.getByText("Oct 20, 2026")).toBeTruthy();
+    expect(screen.getByText("Ready").closest("li")?.getAttribute("aria-current")).toBe("step");
     expect(screen.queryByText(/client_/u)).toBeNull();
     expect(screen.getByRole("main").textContent).not.toContain("csrf");
 
@@ -95,6 +96,7 @@ describe("pairing startup screen", () => {
     expect(screen.getByRole("list", { name: "Pairing progress" })).toBeTruthy();
     expect(screen.getByText("Pair phone").closest("li")?.getAttribute("aria-current")).toBe("step");
     expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("");
 
     view.rerender(
       <PairingStartupScreen
@@ -103,8 +105,34 @@ describe("pairing startup screen", () => {
         onReload={onReload}
       />
     );
+    expect(screen.getByRole("alert").textContent).toBe(
+      "Pairing outcome is unknown. The request may have completed. Reload once to check this phone's access."
+    );
     await user.click(screen.getByRole("button", { name: "Reload to check" }));
     expect(onReload).toHaveBeenCalledTimes(1);
+
+    view.rerender(
+      <PairingStartupScreen
+        snapshot={snapshot("reloading")}
+        onContinue={vi.fn()}
+        onReload={onReload}
+      />
+    );
+    const result = document.querySelector<HTMLElement>(".hostdeck-pairing-result");
+    await waitFor(() => expect(document.activeElement).toBe(result));
+
+    view.rerender(
+      <PairingStartupScreen
+        snapshot={snapshot("claim_unknown")}
+        onContinue={vi.fn()}
+        onReload={onReload}
+      />
+    );
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Reload to check" })
+      )
+    );
   });
 
   it("keeps invalid and rejected links non-enumerating and non-retryable", () => {

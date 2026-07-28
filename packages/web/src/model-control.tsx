@@ -171,7 +171,12 @@ export function ModelControl({ controller }: ModelControlProps) {
             </Dialog.Close>
           </div>
 
-          <div className="hostdeck-model-sheet__body">
+          <section
+            className="hostdeck-model-sheet__body"
+            aria-label="Model settings"
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: The state-dependent overflow owner must always be keyboard-scrollable.
+            tabIndex={0}
+          >
             {view.current === null ? (
               <ModelLoading phase={view.phase} />
             ) : (
@@ -297,7 +302,6 @@ export function ModelControl({ controller }: ModelControlProps) {
               className={`hostdeck-model-sheet__status hostdeck-tone--${view.tone}`}
               id={statusId}
               role={view.tone === "danger" ? "alert" : "status"}
-              aria-live="polite"
               aria-atomic="true"
             >
               <StatusIcon
@@ -321,7 +325,7 @@ export function ModelControl({ controller }: ModelControlProps) {
                 <RefreshCw size={18} strokeWidth={2} aria-hidden="true" />
               </button>
             </div>
-          </div>
+          </section>
 
           <div className="hostdeck-model-sheet__footer">
             <Dialog.Close asChild>

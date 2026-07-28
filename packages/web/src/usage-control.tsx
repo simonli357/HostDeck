@@ -111,7 +111,12 @@ export function UsageSheetBody({
     view.rateLimits !== null;
   return (
     <div className="hostdeck-usage-sheet__body">
-      <div className="hostdeck-usage-sheet__scroller">
+      <section
+        className="hostdeck-usage-sheet__scroller"
+        aria-label="Usage details"
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: The read-only overflow owner must be keyboard-scrollable.
+        tabIndex={0}
+      >
         {!hasData && view.phase === "loading" ? <UsageLoading /> : null}
         {hasData ? (
           <div className="hostdeck-usage-content">
@@ -124,7 +129,7 @@ export function UsageSheetBody({
         ) : view.phase === "unsupported" || view.phase === "failure" ? (
           <UsageUnavailable phase={view.phase} />
         ) : null}
-      </div>
+      </section>
       <UsageStatus controller={controller} view={view} statusId={statusId} />
     </div>
   );
@@ -171,8 +176,8 @@ function UsageScopeSummary({
               exact={accountMetric.value}
             />
           )}
+          <small>lifetime tokens</small>
         </dd>
-        <small>lifetime tokens</small>
       </div>
       <div>
         <dt>This thread</dt>
@@ -185,13 +190,12 @@ function UsageScopeSummary({
               exact={threadBreakdown.totalExact}
             />
           )}
+          <small>cumulative tokens</small>
         </dd>
-        <small>cumulative tokens</small>
       </div>
       <div>
         <dt>Primary limit</dt>
-        <dd>{rateValue}</dd>
-        <small>used</small>
+        <dd>{rateValue}<small>used</small></dd>
       </div>
     </dl>
   );

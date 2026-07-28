@@ -5,6 +5,7 @@ import { ArrowLeft, Box, Menu, X } from "lucide-react";
 import {
   type ReactNode,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -17,8 +18,14 @@ import {
   Routes,
   useLocation,
   useNavigate,
+  useNavigationType,
   useParams
 } from "react-router";
+import {
+  type HostDeckRouteFocusLocation,
+  hostDeckDocumentTitle,
+  resolveHostDeckRouteFocus
+} from "./accessibility-state.js";
 import {
   isMissionSource,
   missionControlPath,
@@ -72,6 +79,7 @@ interface HostDeckRoutesProps {
   readonly outlets?: HostDeckRouteOutlets | undefined;
   readonly coordinator?: BrowserConnectionStateCoordinator | undefined;
   readonly runtimeFailed?: boolean | undefined;
+  readonly focusMainOnMount?: boolean | undefined;
 }
 
 interface OwnedCoordinatorState {
@@ -121,6 +129,8 @@ function StartedHostDeckBrowserApp({
     startup.snapshot,
     startup.snapshot
   );
+  const enteredFromPairing = useRef(snapshot.phase !== "ready");
+  if (snapshot.phase !== "ready") enteredFromPairing.current = true;
   if (snapshot.phase !== "ready") {
     return (
       <PairingStartupScreen
@@ -136,7 +146,11 @@ function StartedHostDeckBrowserApp({
   }
   return (
     <BrowserRouter>
-      <HostDeckRoutes outlets={outlets} coordinator={coordinator} />
+      <HostDeckRoutes
+        outlets={outlets}
+        coordinator={coordinator}
+        focusMainOnMount={enteredFromPairing.current}
+      />
     </BrowserRouter>
   );
 }
@@ -197,7 +211,8 @@ function OwnedHostDeckBrowserApp({
 export function HostDeckRoutes({
   outlets = {},
   coordinator,
-  runtimeFailed = false
+  runtimeFailed = false,
+  focusMainOnMount = false
 }: HostDeckRoutesProps) {
   if (coordinator !== undefined) {
     return (
@@ -211,6 +226,7 @@ export function HostDeckRoutes({
                     <HostDeckRouteTable
                       outlets={Object.freeze({ ...outlets, hostAccess: content })}
                       coordinator={coordinator}
+                      focusMainOnMount={focusMainOnMount}
                       missionContext={missionContext}
                       runtimeFailed={runtimeFailed}
                     />
@@ -220,6 +236,7 @@ export function HostDeckRoutes({
                 <HostDeckRouteTable
                   outlets={outlets}
                   coordinator={coordinator}
+                  focusMainOnMount={focusMainOnMount}
                   missionContext={missionContext}
                   runtimeFailed={runtimeFailed}
                 />
@@ -234,6 +251,7 @@ export function HostDeckRoutes({
     <HostDeckRouteTable
       outlets={outlets}
       coordinator={coordinator}
+      focusMainOnMount={focusMainOnMount}
       missionContext={null}
       runtimeFailed={runtimeFailed}
     />
@@ -269,17 +287,20 @@ function ResponsiveMissionContextOwner({
 function HostDeckRouteTable({
   outlets,
   coordinator,
+  focusMainOnMount,
   missionContext,
   runtimeFailed
 }: Readonly<{
   outlets: HostDeckRouteOutlets;
   coordinator: BrowserConnectionStateCoordinator | undefined;
+  focusMainOnMount: boolean;
   missionContext: BrowserMissionNavigationContext | null;
   runtimeFailed: boolean;
 }>) {
   return (
-    <Routes>
-      <Route
+    <RouteAccessibilityOwner focusMainOnMount={focusMainOnMount}>
+      <Routes>
+        <Route
         path={missionControlPath}
         element={
           <MissionControlRoute
@@ -289,7 +310,7 @@ function HostDeckRouteTable({
           />
         }
       />
-      <Route
+        <Route
         path={sessionDetailPathPattern}
         element={
           <SessionDetailRoute
@@ -300,14 +321,87 @@ function HostDeckRouteTable({
           />
         }
       />
-      <Route
+        <Route
         path="*"
         element={
           <NotFoundRoute hostAccess={outlets.hostAccess} />
         }
       />
-    </Routes>
+      </Routes>
+    </RouteAccessibilityOwner>
   );
+}
+
+function RouteAccessibilityOwner({
+  children,
+  focusMainOnMount
+}: Readonly<{ children: ReactNode; focusMainOnMount: boolean }>) {
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  const previous = useRef<HostDeckRouteFocusLocation | null>(null);
+
+  useLayoutEffect(() => {
+    const current = Object.freeze({
+      pathname: location.pathname,
+      missionSource: isMissionSource(location.state)
+    });
+    const request = resolveHostDeckRouteFocus(
+      previous.current,
+      current,
+      navigationType,
+      focusMainOnMount
+    );
+    previous.current = current;
+    document.title = hostDeckDocumentTitle(current.pathname);
+    if (request.kind === "none") return;
+    const main = document.getElementById("hostdeck-main");
+    if (request.kind === "main") {
+      main?.focus({ preventScroll: true });
+      return;
+    }
+
+    main?.focus({ preventScroll: true });
+    let ownedTarget: HTMLElement | null = main;
+    let timeoutId: number | null = null;
+    const findTarget = () => {
+      const candidates = [...document.querySelectorAll<HTMLElement>("[data-hostdeck-session-path]")]
+        .filter((candidate) =>
+          candidate.getAttribute("data-hostdeck-session-path") === request.sessionPath &&
+          candidate.closest('[aria-hidden="true"], [hidden], [inert]') === null
+        );
+      return candidates.find((candidate) =>
+        candidate.offsetParent !== null || candidate.getClientRects().length > 0
+      ) ?? candidates[0] ?? null;
+    };
+    const observer = new MutationObserver(() => restoreOwnedFocus());
+    const stop = () => {
+      observer.disconnect();
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
+    const restoreOwnedFocus = () => {
+      const active = document.activeElement;
+      if (
+        active !== document.body &&
+        active !== ownedTarget &&
+        !(ownedTarget !== null && !ownedTarget.isConnected && active === null)
+      ) {
+        stop();
+        return;
+      }
+      const target = findTarget();
+      if (target === null || target === active) return;
+      target.focus({ preventScroll: true });
+      ownedTarget = target;
+    };
+    if (main !== null) {
+      observer.observe(main, { childList: true, subtree: true });
+    }
+    restoreOwnedFocus();
+    timeoutId = window.setTimeout(stop, 2_000);
+    return stop;
+  }, [focusMainOnMount, location.pathname, location.state, navigationType]);
+
+  return children;
 }
 
 function MissionControlRoute({
@@ -580,7 +674,14 @@ function HostAccessSheet({ children }: Readonly<{ children: ReactNode }>) {
               </button>
             </Dialog.Close>
           </div>
-          <div className="hostdeck-sheet__body">{children}</div>
+          <section
+            className="hostdeck-sheet__body"
+            aria-label="Host and access content"
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: The sheet's overflow owner must remain keyboard-scrollable even when its current state has no controls.
+            tabIndex={0}
+          >
+            {children}
+          </section>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

@@ -294,7 +294,6 @@ function LaptopResumeCopyStatus({ view }: Readonly<{ view: LaptopResumeControlVi
     <div
       className={`hostdeck-laptop-resume-copy hostdeck-laptop-resume-copy--${view.copyPhase}`}
       role={failed ? "alert" : "status"}
-      aria-live="polite"
     >
       <Icon size={21} strokeWidth={2} aria-hidden="true" />
       <span>

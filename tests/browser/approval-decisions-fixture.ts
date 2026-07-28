@@ -6,12 +6,14 @@ import {
   type PendingApproval,
   type PendingApprovalListResponse,
   pendingApprovalListResponseSchema,
-  pendingApprovalResponseSchema
+  pendingApprovalResponseSchema,
+  selectedProjectionEventSchema
 } from "../../packages/contracts/src/index.js";
 import {
   installSessionDetailApi,
   type SessionDetailApiController,
   type SessionDetailApiVariant,
+  type SessionDetailEventFixture,
   sessionDetailBrowserSessionId
 } from "./session-detail-fixture.js";
 
@@ -65,6 +67,28 @@ const longRequestId = "string:approval-browser-long-001";
 const timestamp = "2026-07-22T18:06:00.000Z";
 const expiry = "2026-07-22T23:00:00.000Z";
 const listPath = `/api/v1/sessions/${sessionId}/approvals`;
+
+export function broadApprovalRequestEvent(cursor: number): SessionDetailEventFixture {
+  return selectedProjectionEventSchema.parse({
+    session_id: sessionId,
+    cursor,
+    captured_at: `2026-07-22T18:${String(cursor).padStart(2, "0")}:00.000Z`,
+    upstream_at: null,
+    codex_event_id: null,
+    codex_event_type: null,
+    content_state: "complete",
+    content_notice: null,
+    type: "approval",
+    request_id: broadRequestId,
+    state: "pending",
+    action: "Publish the signed Android validation package",
+    scope: "Selected Android release channel",
+    reason: "Verify the current mobile release candidate.",
+    risk: "broad",
+    expires_at: expiry,
+    decision: null
+  });
+}
 
 export async function installApprovalDecisionsApi(
   page: Page,

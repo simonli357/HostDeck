@@ -192,7 +192,12 @@ export function GoalControl({ controller }: GoalControlProps) {
             </Dialog.Close>
           </div>
 
-          <div className="hostdeck-goal-sheet__body">
+          <section
+            className="hostdeck-goal-sheet__body"
+            aria-label="Goal settings"
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: The state-dependent overflow owner must always be keyboard-scrollable.
+            tabIndex={0}
+          >
             {view.phase === "loading" ? (
               <GoalLoading />
             ) : (
@@ -376,13 +381,12 @@ export function GoalControl({ controller }: GoalControlProps) {
               </section>
             )}
 
-          </div>
+          </section>
 
           <div
             className={`hostdeck-goal-sheet__status hostdeck-tone--${view.tone}`}
             id={statusId}
             role={view.tone === "danger" ? "alert" : "status"}
-            aria-live="polite"
             aria-atomic="true"
           >
             <StatusIcon

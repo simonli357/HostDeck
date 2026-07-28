@@ -29,6 +29,11 @@ import {
   useState,
   useSyncExternalStore
 } from "react";
+import {
+  advanceApprovalAnnouncement,
+  initialApprovalAnnouncementState,
+  newActivityAnnouncement
+} from "./accessibility-state.js";
 import type {
   ApprovalDecisionController,
   ApprovalDecisionView
@@ -491,14 +496,15 @@ export function SessionDetailScreen({
       {prompt === undefined && model === undefined && goal === undefined && plan === undefined && (usage === undefined || compact === undefined || skills === undefined) ? null : (
         <div className="hostdeck-session-controls">
           {model === undefined && goal === undefined && plan === undefined && (usage === undefined || compact === undefined || skills === undefined) ? null : (
-            <div className="hostdeck-primary-action-dock" role="toolbar" aria-label="Session controls">
+            <fieldset className="hostdeck-primary-action-dock">
+              <legend className="hostdeck-visually-hidden">Session controls</legend>
               {model === undefined ? null : <ModelControl controller={model} />}
               {goal === undefined ? null : <GoalControl controller={goal} />}
               {plan === undefined ? null : <PlanControl controller={plan} />}
               {usage === undefined || compact === undefined || skills === undefined ? null : (
                 <SessionUtilities compact={compact} skills={skills} usage={usage} />
               )}
-            </div>
+            </fieldset>
           )}
           {prompt === undefined ? null : <PromptComposer controller={prompt} />}
         </div>
@@ -659,12 +665,14 @@ function SessionContextRail({
               key={cell.label}
               className={`hostdeck-detail-context__cell hostdeck-tone--${cell.tone}`}
             >
-              <Icon size={16} strokeWidth={2} aria-hidden="true" />
-              <span>
-                <dt>{cell.label}</dt>
-                <dd>{cell.value}</dd>
+              <dt>
+                <Icon size={16} strokeWidth={2} aria-hidden="true" />
+                <span>{cell.label}</span>
+              </dt>
+              <dd>
+                <span>{cell.value}</span>
                 {cell.detail === null ? null : <small>{cell.detail}</small>}
-              </span>
+              </dd>
             </div>
           );
         })}
@@ -781,7 +789,13 @@ function SessionDetailTimeline({
   const pinnedRef = useRef(true);
   const initializedRef = useRef(false);
   const previousAcceptedRef = useRef(acceptedCount);
+  const approvalAnnouncementStateRef = useRef(initialApprovalAnnouncementState);
   const [newActivityCount, setNewActivityCount] = useState(0);
+  const [approvalAnnouncement, setApprovalAnnouncement] = useState<
+    Readonly<{ sequence: number; message: string }>
+  >(
+    Object.freeze({ sequence: 0, message: "" })
+  );
 
   useEffect(() => {
     const updatePinned = () => {
@@ -822,6 +836,21 @@ function SessionDetailTimeline({
       Math.min(sessionDetailFeedLimit, current + added)
     );
   }, [acceptedCount]);
+
+  useEffect(() => {
+    const result = advanceApprovalAnnouncement(
+      approvalAnnouncementStateRef.current,
+      approvalView?.items ?? [],
+      !replayPending && approvalView !== null && approvalView.phase !== "loading",
+      approvalView?.targetLabel ?? null
+    );
+    approvalAnnouncementStateRef.current = result.state;
+    if (result.message !== null) {
+      setApprovalAnnouncement((current) =>
+        Object.freeze({ sequence: current.sequence + 1, message: result.message ?? "" })
+      );
+    }
+  }, [approvalView, replayPending]);
 
   const returnToLive = () => {
     scrollTimelineEnd(endRef, prefersReducedMotion() ? "auto" : "smooth");
@@ -875,6 +904,24 @@ function SessionDetailTimeline({
         )}
       </ol>
       <div ref={endRef} className="hostdeck-detail-timeline__end" aria-hidden="true" />
+      <span
+        id="hostdeck-approval-updates"
+        className="hostdeck-visually-hidden"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <span key={approvalAnnouncement.sequence}>{approvalAnnouncement.message}</span>
+      </span>
+      <span
+        id="hostdeck-activity-updates"
+        className="hostdeck-visually-hidden"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {newActivityCount === 0 ? "" : newActivityAnnouncement(newActivityCount)}
+      </span>
       {newActivityCount === 0 ? null : (
         <button
           type="button"

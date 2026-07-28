@@ -3,6 +3,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests/browser",
   testMatch: [
+    "accessibility-pairing.spec.ts",
     "pairing-bootstrap.spec.ts",
     "pairing-access.spec.ts",
     "responsive-pairing-layout.spec.ts"
@@ -11,6 +12,7 @@ export default defineConfig({
   workers: 1,
   timeout: 30_000,
   reporter: [["line"]],
+  outputDir: "/tmp/hostdeck-playwright-pairing",
   use: {
     baseURL: "http://127.0.0.1:4179",
     browserName: "chromium",

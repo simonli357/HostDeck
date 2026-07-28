@@ -1,0 +1,50 @@
+{
+  "before": {
+    "devicePixelRatio": 1,
+    "innerHeight": 800,
+    "innerWidth": 640,
+    "outerHeight": 800,
+    "outerWidth": 640,
+    "screenHeight": 800,
+    "screenWidth": 640,
+    "visualHeight": 800,
+    "visualWidth": 625
+  },
+  "zoomed": {
+    "devicePixelRatio": 2,
+    "innerHeight": 400,
+    "innerWidth": 320,
+    "outerHeight": 800,
+    "outerWidth": 640,
+    "screenHeight": 800,
+    "screenWidth": 640,
+    "visualHeight": 400,
+    "visualWidth": 312.5
+  },
+  "beforeRootFontSize": "16px",
+  "contrast": {
+    "pairs": {
+      "primaryText": 5.830057430934117,
+      "disabledText": 6.59509371917081,
+      "disabledBoundary": 3.2310068637103737,
+      "controlBoundary": 3.3081963155232175,
+      "focusIndicator": 5.414455012677678
+    },
+    "actualPrimary": null
+  },
+  "dialogGeometry": {
+    "top": 8,
+    "right": 320,
+    "bottom": 400,
+    "left": 0,
+    "viewportHeight": 400,
+    "viewportWidth": 320
+  },
+  "final": {
+    "clientWidth": 312,
+    "scrollWidth": 312,
+    "scrollHeight": 813,
+    "activeRole": "button",
+    "activeName": "/model for android-release-validation-long-session-name-2026"
+  }
+}

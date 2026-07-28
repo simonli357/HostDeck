@@ -1,0 +1,61 @@
+{
+  "date": "2026-07-27",
+  "reviewMode": "Keyboard-only Chromium journeys operated through Playwright and X11 key input, with full-size visual inspection of native-zoom focus output.",
+  "privateRuntimeDataRetained": false,
+  "viewports": [
+    "390x844 phone",
+    "320x800 reflow",
+    "320x480 short height",
+    "1280x800 retained desktop split",
+    "640x800 physical Chrome at native 200 percent zoom and 320x400 CSS"
+  ],
+  "journeys": [
+    {
+      "id": "pairing",
+      "keys": "Tab, Enter, Space",
+      "result": "Skip link reaches main; the paired action remains focused after activation; all five bounded outcomes expose one current progress step; 320 reflow has no clipped focus or target."
+    },
+    {
+      "id": "mission-detail-back",
+      "keys": "Tab, Enter, browser Back",
+      "result": "Mission row opens Session Detail with main focus; Back restores the exact source row; direct and retained desktop detail use the documented main fallback without body focus."
+    },
+    {
+      "id": "detail-controls-and-approvals",
+      "keys": "Tab, Enter, Space, Escape",
+      "result": "Composer and four-command dock remain in source order; approval opens its labelled confirmation, cycles in both directions, dismisses with Escape, and restores the trigger."
+    },
+    {
+      "id": "primary-sheets",
+      "keys": "Tab, Shift+Tab, Enter, Space, Arrow keys, Escape",
+      "result": "Model, goal, and Plan expose native groups and choices; focus stays inside each modal, scroll owners are keyboard reachable, confirmations receive sensible initial focus, and closure restores the connected command."
+    },
+    {
+      "id": "utility-sheets",
+      "keys": "Tab, Shift+Tab, Enter, Space, Escape",
+      "result": "More, Usage, Compact, and Skills remain one nested-view chain; read-only overflow owners and search are reachable; Compact confirmation focus is explicit; Escape restores More."
+    },
+    {
+      "id": "diagnostics-and-session-actions",
+      "keys": "Tab, Shift+Tab, Enter, Space, Escape",
+      "result": "Event details, interrupt, archive, laptop resume, and nested Host and access retain exact target/consequence text, modal containment, confirmation focus, and trigger restoration."
+    },
+    {
+      "id": "host-access-lock-devices-recovery",
+      "keys": "Tab, Shift+Tab, Enter, Space, Escape",
+      "result": "The Host and access body is keyboard scrollable even when empty; lock and revoke confirmations cycle and restore focus; recovery, compatibility, lock, and device controls remain in logical order."
+    },
+    {
+      "id": "route-errors",
+      "keys": "Tab, Enter",
+      "result": "Not-found recovery has one page heading and labelled link; activation returns to Mission Control and moves focus to main."
+    },
+    {
+      "id": "native-zoom",
+      "keys": "Ctrl+Plus five times, Tab, Enter, Shift+Tab, Escape",
+      "result": "A 640x800 physical Chrome window becomes a 320x400 CSS layout at DPR 2; Mission, detail, and model remain one-column, horizontally contained, visibly focused, keyboard reachable, and correctly restored."
+    }
+  ],
+  "result": "pass",
+  "downstreamLimitation": "Physical Android TalkBack and final phone module acceptance remain owned by FE-V1-090."
+}

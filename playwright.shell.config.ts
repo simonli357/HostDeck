@@ -3,6 +3,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests/browser",
   testMatch: [
+    "accessibility.spec.ts",
     "access-recovery.spec.ts",
     "app-shell.spec.ts",
     "archive-control.spec.ts",

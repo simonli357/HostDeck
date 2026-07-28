@@ -196,7 +196,12 @@ export function PlanControl({ controller }: PlanControlProps) {
               void controller.submit();
             }}
           >
-          <div className="hostdeck-plan-sheet__body">
+          <section
+            className="hostdeck-plan-sheet__body"
+            aria-label="Plan settings"
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: The state-dependent overflow owner must always be keyboard-scrollable.
+            tabIndex={0}
+          >
             {view.current === null || view.execution === null ? (
               <PlanLoading phase={view.phase} />
             ) : (
@@ -336,7 +341,6 @@ export function PlanControl({ controller }: PlanControlProps) {
               className={`hostdeck-plan-sheet__status hostdeck-tone--${view.tone}`}
               id={statusId}
               role={view.tone === "danger" ? "alert" : "status"}
-              aria-live="polite"
               aria-atomic="true"
             >
               <StatusIcon
@@ -360,7 +364,7 @@ export function PlanControl({ controller }: PlanControlProps) {
                 <RefreshCw size={18} strokeWidth={2} aria-hidden="true" />
               </button>
             </div>
-          </div>
+          </section>
 
           <div className="hostdeck-plan-sheet__footer">
             <Dialog.Close asChild>

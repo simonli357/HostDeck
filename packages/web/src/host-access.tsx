@@ -268,14 +268,14 @@ export function HostAccessPanel({
                 fact.id === "origin" ? " hostdeck-access-fact--origin" : ""
               }`}
             >
-              <Icon size={19} strokeWidth={2} aria-hidden="true" />
-              <span>
-                <dt>{fact.label}</dt>
-                <dd className={fact.id === "origin" ? "hostdeck-access-fact__origin" : undefined}>
-                  {fact.value}
-                </dd>
+              <dt>
+                <Icon size={19} strokeWidth={2} aria-hidden="true" />
+                <span>{fact.label}</span>
+              </dt>
+              <dd className={fact.id === "origin" ? "hostdeck-access-fact__origin" : undefined}>
+                <span>{fact.value}</span>
                 {fact.detail === null ? null : <small>{fact.detail}</small>}
-              </span>
+              </dd>
             </div>
           );
         })}

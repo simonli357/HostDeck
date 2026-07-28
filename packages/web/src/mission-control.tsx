@@ -322,7 +322,7 @@ export function ResponsiveMissionNavigation({
     <nav className="hostdeck-responsive-mission" aria-label="Mission Control sessions">
       <div className="hostdeck-responsive-mission__heading">
         <div>
-          <h2>Mission Control</h2>
+          <strong className="hostdeck-responsive-mission__title">Mission Control</strong>
           {context === null ? (
             <span>Session list unavailable</span>
           ) : (
@@ -479,11 +479,11 @@ function HostAccessRail({ cells }: Readonly<{ cells: readonly MissionStatusCell[
             key={cell.label}
             className={`hostdeck-status-rail__cell hostdeck-tone--${cell.tone}`}
           >
-            <Icon size={16} strokeWidth={2} aria-hidden="true" />
-            <span>
-              <dt>{cell.label}</dt>
-              <dd>{cell.value}</dd>
-            </span>
+            <dt>
+              <Icon size={16} strokeWidth={2} aria-hidden="true" />
+              <span>{cell.label}</span>
+            </dt>
+            <dd>{cell.value}</dd>
           </div>
         );
       })}
@@ -518,13 +518,15 @@ function MissionQueueSectionView({
   selectedSessionId?: string | null;
 }>) {
   const headingId = `${headingIdPrefix}-${section.id}`;
+  const retained = navigationMode === "retained";
   return (
     <section
       className={`hostdeck-queue-group hostdeck-queue-group--${section.tone}`}
-      aria-labelledby={headingId}
+      aria-label={retained ? section.label : undefined}
+      aria-labelledby={retained ? undefined : headingId}
     >
       <div className="hostdeck-queue-group__heading">
-        <h2 id={headingId}>{section.label}</h2>
+        {retained ? <span>{section.label}</span> : <h2 id={headingId}>{section.label}</h2>}
         <span>{section.rows.length}</span>
       </div>
       <MissionRowList
@@ -550,15 +552,19 @@ function QuietQueueSection({
   selectedSessionId?: string | null;
 }>) {
   const headingId = `${headingIdPrefix}-quiet`;
+  const retained = navigationMode === "retained";
   const [open, setOpen] = useState(defaultOpen);
   return (
     <section
       className="hostdeck-queue-group hostdeck-queue-group--muted"
-      aria-labelledby={headingId}
+      aria-label={retained ? section.label : undefined}
+      aria-labelledby={retained ? undefined : headingId}
     >
-      <h2 id={headingId} className="hostdeck-visually-hidden">
-        {section.label}
-      </h2>
+      {retained ? null : (
+        <h2 id={headingId} className="hostdeck-visually-hidden">
+          {section.label}
+        </h2>
+      )}
       <details
         className="hostdeck-queue-disclosure"
         open={open}
@@ -624,6 +630,7 @@ function MissionRowList({
             {navigationMode === "retained" ? (
               <Link
                 className="hostdeck-session-row__link"
+                data-hostdeck-session-path={sessionDetailPath(row.item.session.id)}
                 to={sessionDetailPath(row.item.session.id)}
                 replace
                 aria-current={selected ? "page" : undefined}

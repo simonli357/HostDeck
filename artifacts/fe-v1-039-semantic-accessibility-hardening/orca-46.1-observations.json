@@ -1,0 +1,15 @@
+{
+  "orcaVersion": "46.1",
+  "rawLogRetained": false,
+  "deterministicFixtureOnly": true,
+  "missionHeadingObserved": true,
+  "missionRowObserved": true,
+  "detailHeadingObserved": true,
+  "timelineObserved": true,
+  "formFieldObserved": true,
+  "modelDialogObserved": true,
+  "approvalObserved": true,
+  "notFoundHeadingObserved": true,
+  "speechOutputObserved": true,
+  "protectedMarkerObserved": false
+}
