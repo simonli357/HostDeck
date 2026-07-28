@@ -16,9 +16,8 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-037` Implement archive affordance | in_progress | none | Implement frozen `MTA-01` to `MTA-24` exact archive, persistence-truth, and Focus Rail criteria. |
-| 2 | `FE-V1-038` Implement laptop-resume affordance | ready | none | Add the selected TUI-resume handoff after other session actions. |
-| 3 | `FE-V1-035` Implement compatibility and update-required UI | ready | none | Consume the proven production compatibility projection without unsafe fallback or fabricated recovery. |
+| 1 | `FE-V1-038` Implement laptop-resume affordance | ready | none | Add the selected TUI-resume handoff after other session actions. |
+| 2 | `FE-V1-035` Implement compatibility and update-required UI | ready | none | Consume the proven production compatibility projection without unsafe fallback or fabricated recovery. |
 
 ## Intentional Blockers
 
