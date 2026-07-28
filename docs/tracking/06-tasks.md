@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-015` Close the cross-screen failure-state acceptance matrix | in_progress | none | Implement frozen `CFS-01` to `CFS-24`, beginning with stale-time and recovered-failure truth, then prove every route/control admission through the production shell. |
+| 1 | `FE-V1-016` Harden responsive layout, containment, keyboard, safe-area, and viewport behavior | in_progress | none | Every implemented screen/action state and `FE-V1-015` failure matrix now exists; freeze the complete responsive acceptance matrix before changing layout. |
 
 ## Intentional Blockers
 

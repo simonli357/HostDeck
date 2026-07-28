@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: criteria frozen; implementation audit in progress.
+Status: complete; `CFS-01` to `CFS-24` pass.
 
 ## Scope
 
@@ -92,12 +92,57 @@ Excluded: adding a route or capability; changing server/runtime/API contracts; c
 
 ## Implementation Record
 
-Pending.
+### Issue And Fix Inventory
+
+| Issue found | Correction | Owning evidence |
+| --- | --- | --- |
+| No aggregate executable contract covered every coordinated route axis and every shipped read/write control. | Added one immutable state-axis inventory and a complete owner-level admission matrix across canonical write causes, selected-session read freshness, stream continuity, retained boundaries, and authority purge. | `packages/web/src/cross-screen-control-matrix.test.ts` |
+| Mission Control and Session Detail labeled retained data stale without exposing when it was last confirmed. | Added one shared projector for exact access, host, list, detail, and session-projection observation times. Missing, malformed, and calendar-invalid RFC 3339 facts render explicit unavailable-time truth instead of browser-clock inference. | `packages/web/src/cross-screen-failure-state.ts`; route/component tests |
+| Same-target coordinator failures disappeared from the visible routes after a successful observation even though `lastFailure` remained intentionally retained. | Added bounded recovered-issue projection for access, host, list, detail, and stream sources. Request-backed recovery requires a later coordinator epoch; ordered stream recovery may be proven within the same target epoch. Target or authority change purges the notice. | `packages/web/src/cross-screen-failure-state.test.ts`; six production-shell scenarios |
+| The browser SSE fixture did not model cursor replay precisely enough for reconnect and retained-boundary acceptance. | Made the fixture replay only schema-valid seed events whose cursor is strictly greater than the requested `after` cursor, while preserving exact ordering and connection cleanup. | `tests/browser/mission-control-fixture.ts`; `tests/browser/mission-control-fixture.test.ts` |
+| A host fixture used a calendar-invalid timestamp that permissive date parsing normalized silently. | Replaced permissive parsing at this boundary with the existing strict timestamp parser and added hostile invalid-date coverage. | Direct projector tests and production fixtures |
+| The new projector was briefly exported as public package surface even though only selected web composition owns it. | Removed the unnecessary package-root export and updated the exact selected-runtime test inventory. | `scripts/check-selected-runtime-boundary.mjs`; runtime-boundary gate |
+
+The implementation remains headless-first and consumes coordinator snapshots and completed control owners. Mission Control and Session Detail only render projected facts; no second transport, retry, polling, storage, timer-owned recovery, profile mutation, terminal path, API change, dependency, or public package contract was introduced.
+
+### Executable Matrix
+
+- Nineteen direct projector cases cover every stale source, unavailable and hostile time, all five recovered-failure sources, still-failed and incomplete recovery, wrong target, authority purge, future evidence, and request-versus-stream epoch ordering.
+- Twenty-nine aggregate matrix cases inventory the access, host, target, session, stream, operation, and recovery axes. They execute all ordinary mutation owners against the fully current baseline and every canonical write cause; execute selected-session reads against access/target/session freshness; preserve structured recovery reads; keep exact current reads available across a retained boundary; and prove synchronous protected-control purge.
+- Existing Mission Control classification still exhausts all 1,260 valid lifecycle/turn/freshness combinations. Existing operation-owner tests retain exact identity, no-resend, conflict, pending, accepted, unknown-outcome, and terminal semantics.
+
+### Browser And Visual Evidence
+
+- Six production-shell Chromium scenarios cover the complete Mission Control failure family, stale and recovered truth, authority purge, generic observed API failure, incompatible/degraded/disconnected runtime truth, unknown/failed/interrupted Session Detail, stale access/detail truth, retained replay boundary while reconnecting, and same-target access recovery.
+- Twenty deterministic state captures, `contact-sheet.png`, and `layout-measurements.json` live under `artifacts/fe-v1-015-cross-screen-failure-states/`.
+- Evidence spans 320 x 480, 360 x 800, 390 x 420, 390 x 844, 412 x 915, 768 x 1024, and 200 percent zoom at 1280 x 800. Browser assertions cover exact copy and timestamps, control admission, request counts, privacy, focus/semantics, 44 px primary targets, no horizontal overflow, and notice/action-dock separation.
+- Full-size and contact-sheet inspection found no hidden notice, clipped control, contradictory healthy/current copy, color-only status, nested-card drift, desktop-console drift, console/page error, listener, preview process, or browser residue.
 
 ## Validation
 
-Pending.
+| Gate | Result |
+| --- | --- |
+| Direct cross-screen projector and admission matrix | 2 files, 48 tests pass (19 projector, 29 matrix). |
+| Focused affected web slice | 5 files, 106 tests pass. |
+| Aggregate web | 48 files, 886 tests pass. |
+| Aggregate unit | 242 files pass, 27 files intentionally skipped; 2,770 tests pass and 28 are intentionally skipped. |
+| Contract / integration | 34 files and 245 contract tests pass; 21 files and 36 integration tests pass. |
+| Production shell | All 143 Chromium scenarios pass, including six dedicated cross-screen scenarios. |
+| Static boundaries | Root/web typechecks, Biome over 721 files, exports over eight packages, scaffold over eight packages/21 scripts, and selected runtime boundary over 614 production modules/22 externals pass. |
+| Planning | 220 tasks, 84 requirements, 683 dependencies, and the selected queue validate; all five planning-validator tests pass after closure. |
+| Build / package | Vite builds 2,052 modules. Root build, two deterministic package builds, relocation, read-only runtime, config/static ownership, integrity rejection, and independent verification pass at 614 sources, 1,235 outputs, 6,449 entries, SHA-256 `35f41f5daccab92d6ded30bf1de374d5451e1ce81282e1136a2452f7810a3ace`. |
+| Install / supply chain | Frozen offline install passes; production audit reports no known vulnerability; all production-license expressions are permissive. |
+| Exact runtime | Isolated Codex 0.144.0 binding passes 671 files at hash `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. The default 0.145.0 binary correctly remains ineligible. |
+| Manual / residue | Twenty captures plus contact sheet/layout data pass inspection; privacy, request-count, diff, process/listener, and output-residue checks pass. |
+
+The existing Vite chunk-size advisory remains a downstream optimization signal, not a new failure. No test, screenshot, or release claim depends on the default drifted Codex binary.
 
 ## Completion Record
 
-Pending.
+- `CFS-01` to `CFS-11`: the immutable executable matrix, strict timestamp parsing, independent stale facts, persistent bounded recovery history, explicit later-observation rules, and authority/target purge pass.
+- `CFS-12` to `CFS-18`: both production routes preserve their exact classifications and boundaries; all mutation/read owners retain reviewed admission, independent security exceptions, identity, and operation-local result truth.
+- `CFS-19` to `CFS-22`: source review, direct tests, browser request inventory, and inspected Focus Rail evidence show no retry/polling/fallback/storage/external mutation and no accessibility, reflow, clipping, or desktop-structure regression within this leaf's selected matrix.
+- `CFS-23` and `CFS-24`: all selected gates pass; task, artifact, status, queue, implementation, screenshots, and pushed history agree.
+- Frozen criteria: `2b09b17`. Implementation and evidence: `489f150`. Selected-boundary correction: `839361c`.
+- The 18 pre-existing user-owned screenshot modifications were excluded from every commit, restored after aggregate browser execution, and byte-verified against their temporary backup.
+- `FE-V1-016`, `FE-V1-039`, `FE-V1-040`, `FE-V1-017`, `FE-V1-018`, and `FE-V1-090` still own complete responsive, accessibility, supported-browser, mockup-diff, copy/workflow, and real-device module hardening. Package/install and final release acceptance also remain downstream; V1 is not release-ready.
