@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-016` Harden responsive layout, containment, keyboard, safe-area, and viewport behavior | in_progress | none | Every implemented screen/action state and `FE-V1-015` failure matrix now exists; freeze the complete responsive acceptance matrix before changing layout. |
+| 1 | `FE-V1-016` Harden responsive layout, containment, keyboard, safe-area, and viewport behavior | in_progress | none | Implement frozen `RSP-01` to `RSP-24`, beginning with the request-free retained Mission context, selected 1280 split, centralized inset tokens, and executable 141-state layout ledger. |
 
 ## Intentional Blockers
 
