@@ -446,7 +446,7 @@ async function expectFact(rail: Locator, label: string, value: string): Promise<
     .filter({ hasText: label })
     .first();
   await expect(fact.locator("dt")).toHaveText(label);
-  await expect(fact.locator("dd")).toHaveText(value);
+  await expect(fact.locator("dd > span")).toHaveText(value);
 }
 
 async function capture(page: Page, name: string): Promise<void> {
