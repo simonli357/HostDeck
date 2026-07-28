@@ -2,6 +2,12 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, type Page, type Request, test } from "@playwright/test";
 import {
+  hostAccessCloseButton,
+  hostAccessCloseSelector,
+  hostAccessDialog,
+  openHostAccess
+} from "./host-access-navigation.js";
+import {
   installSessionDetailApi,
   type SessionDetailApiController,
   sessionDetailBrowserSessionId
@@ -239,7 +245,7 @@ test("suppresses recovered copy for an old target while shared page setup settle
   await dialog.getByRole("button", { name: "Check access" }).click();
   await expect.poll(() => api.hasPendingCsrf()).toBe(true);
   await expect(dialog.getByText("Securing this page", { exact: true })).toBeVisible();
-  await dialog.getByRole("button", { name: "Close Host and access" }).click();
+  await hostAccessCloseButton(dialog).click();
   await page.getByRole("button", { name: "Back to Mission Control" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Mission Control" })).toBeVisible();
 
@@ -327,17 +333,6 @@ test("contains the Focus Rail recovery surface across reference, short-height, a
   await expectCleanBrowser(diagnostics, [/status of 503 \(Service Unavailable\)/u]);
 });
 
-async function openHostAccess(page: Page): Promise<void> {
-  const dialog = hostAccessDialog(page);
-  if (await dialog.isVisible()) return;
-  await page.getByRole("button", { name: "Open Host and access" }).click();
-  await expect(dialog).toBeVisible();
-}
-
-function hostAccessDialog(page: Page) {
-  return page.getByRole("dialog", { name: "Host & access" });
-}
-
 async function expectNoRecoveryAction(page: Page): Promise<void> {
   const dialog = hostAccessDialog(page);
   await expect(
@@ -405,7 +400,7 @@ async function measureRecoveryLayout(
   await dialog.evaluate((element) => {
     element.scrollTop = 0;
   });
-  const close = dialog.getByRole("button", { name: "Close Host and access" });
+  const close = hostAccessCloseButton(dialog);
   await expect(close).toBeVisible();
   const closeAtTop = await close.evaluate((element) => {
     const rect = element.getBoundingClientRect();
@@ -422,14 +417,21 @@ async function measureRecoveryLayout(
   await action.scrollIntoViewIfNeeded();
   await expect(action).toBeVisible();
   await expectNoHorizontalOverflow(page);
-  const measurement = await page.evaluate(() => {
+  const measurement = await page.evaluate((closeSelector) => {
     const sheet = document.querySelector<HTMLElement>(".hostdeck-sheet");
     const recovery = document.querySelector<HTMLElement>(".hostdeck-access-recovery");
     const action = document.querySelector<HTMLElement>(".hostdeck-access-recovery__action");
-    const close = document.querySelector<HTMLElement>(
-      'button[aria-label="Close Host and access"]'
-    );
-    if (sheet === null || recovery === null || action === null || close === null) {
+    const close = document.querySelector<HTMLElement>(closeSelector);
+    const scrollOwner = sheet?.querySelector<HTMLElement>(
+      ".hostdeck-session-actions__scroller, .hostdeck-sheet__body"
+    ) ?? sheet;
+    if (
+      sheet === null ||
+      recovery === null ||
+      action === null ||
+      close === null ||
+      scrollOwner === null
+    ) {
       throw new TypeError("HostDeck recovery layout fixture is incomplete.");
     }
     const rect = (element: HTMLElement) => {
@@ -451,15 +453,20 @@ async function measureRecoveryLayout(
       sheet: {
         ...rect(sheet),
         clientHeight: sheet.clientHeight,
-        scrollHeight: sheet.scrollHeight,
-        overflowY: getComputedStyle(sheet).overflowY
+        scrollHeight: sheet.scrollHeight
+      },
+      scrollOwner: {
+        ...rect(scrollOwner),
+        clientHeight: scrollOwner.clientHeight,
+        scrollHeight: scrollOwner.scrollHeight,
+        overflowY: getComputedStyle(scrollOwner).overflowY
       },
       recovery: rect(recovery),
       action: rect(action),
       closeAfterActionScroll: rect(close),
       viewportHeight: window.innerHeight
     };
-  });
+  }, hostAccessCloseSelector);
   expect(measurement.document.scrollWidth).toBe(measurement.document.clientWidth);
   expect(measurement.sheet.left).toBeGreaterThanOrEqual(0);
   expect(measurement.sheet.right).toBeLessThanOrEqual(measurement.document.clientWidth);
@@ -472,7 +479,7 @@ async function measureRecoveryLayout(
   expect(measurement.action.right).toBeLessThanOrEqual(measurement.sheet.right);
   expect(measurement.action.top).toBeGreaterThanOrEqual(0);
   expect(measurement.action.bottom).toBeLessThanOrEqual(measurement.viewportHeight);
-  expect(measurement.sheet.overflowY).toBe("auto");
+  expect(measurement.scrollOwner.overflowY).toBe("auto");
   return { viewport, closeAtTop, ...measurement };
 }
 

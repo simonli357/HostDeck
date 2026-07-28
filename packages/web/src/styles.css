@@ -3028,6 +3028,226 @@ textarea:focus-visible {
   color: var(--hostdeck-attention);
 }
 
+.hostdeck-session-actions-sheet {
+  display: grid;
+  max-height: min(90dvh, 740px);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+
+.hostdeck-session-actions-sheet--attention {
+  border-top-color: var(--hostdeck-attention);
+}
+
+.hostdeck-session-actions-sheet--danger {
+  border-top-color: var(--hostdeck-danger);
+}
+
+.hostdeck-session-actions-sheet--connected {
+  border-top-color: var(--hostdeck-connected);
+}
+
+.hostdeck-session-actions__header .hostdeck-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.hostdeck-session-actions__heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.hostdeck-session-actions__heading > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.hostdeck-session-actions__target {
+  min-width: 0;
+  color: var(--hostdeck-muted);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-session-actions__target strong {
+  color: var(--hostdeck-ink);
+  font-weight: 650;
+}
+
+.hostdeck-session-actions__body,
+.hostdeck-session-actions__panel {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.hostdeck-session-actions__panel {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.hostdeck-session-actions__menu {
+  padding-top: 16px;
+}
+
+.hostdeck-session-actions__interrupt {
+  color: var(--hostdeck-danger);
+}
+
+.hostdeck-session-actions__interrupt strong,
+.hostdeck-session-actions__interrupt small {
+  color: inherit;
+}
+
+.hostdeck-session-actions__interrupt:disabled {
+  color: var(--hostdeck-muted);
+}
+
+.hostdeck-session-actions__interrupt:disabled .hostdeck-utility-menu__reason {
+  color: var(--hostdeck-attention);
+}
+
+.hostdeck-session-actions__scroller {
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.hostdeck-session-actions__host {
+  padding-top: 20px;
+}
+
+.hostdeck-interrupt-risk,
+.hostdeck-interrupt-status {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--hostdeck-divider);
+  border-bottom: 1px solid var(--hostdeck-divider);
+}
+
+.hostdeck-interrupt-risk {
+  color: var(--hostdeck-danger);
+}
+
+.hostdeck-interrupt-risk > svg,
+.hostdeck-interrupt-status > svg {
+  margin-top: 1px;
+}
+
+.hostdeck-interrupt-risk > span,
+.hostdeck-interrupt-status > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.hostdeck-interrupt-risk strong,
+.hostdeck-interrupt-risk small,
+.hostdeck-interrupt-status strong,
+.hostdeck-interrupt-status small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-interrupt-risk strong,
+.hostdeck-interrupt-status strong {
+  color: currentColor;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 20px;
+}
+
+.hostdeck-interrupt-risk small,
+.hostdeck-interrupt-status small {
+  color: var(--hostdeck-muted);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.hostdeck-interrupt-facts {
+  display: grid;
+  gap: 0;
+  margin: 12px 0 0;
+}
+
+.hostdeck-interrupt-facts > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(72px, 0.32fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--hostdeck-divider);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.hostdeck-interrupt-facts dt,
+.hostdeck-interrupt-facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-interrupt-facts dt {
+  color: var(--hostdeck-muted);
+}
+
+.hostdeck-interrupt-facts dd {
+  color: var(--hostdeck-ink);
+}
+
+.hostdeck-interrupt-status {
+  margin-top: 14px;
+  border-bottom: 0;
+  color: var(--hostdeck-focus);
+}
+
+.hostdeck-interrupt-status--attention {
+  color: var(--hostdeck-attention);
+}
+
+.hostdeck-interrupt-status--danger {
+  color: var(--hostdeck-danger);
+}
+
+.hostdeck-interrupt-status--connected {
+  color: var(--hostdeck-connected);
+}
+
+.hostdeck-session-actions__footer {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hostdeck-divider);
+  background: var(--hostdeck-surface);
+}
+
+.hostdeck-session-actions__footer--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hostdeck-session-actions__footer > button {
+  min-width: 0;
+  min-height: 48px;
+  padding-right: 10px;
+  padding-left: 10px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
 .hostdeck-usage-sheet__body {
   display: grid;
   min-width: 0;
@@ -4723,6 +4943,10 @@ textarea:focus-visible {
   .hostdeck-plan-option {
     min-height: 78px;
   }
+
+  .hostdeck-session-actions__footer {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-height: 620px) {
@@ -4730,7 +4954,8 @@ textarea:focus-visible {
   .hostdeck-goal-sheet,
   .hostdeck-plan-sheet,
   .hostdeck-usage-sheet,
-  .hostdeck-approval-sheet {
+  .hostdeck-approval-sheet,
+  .hostdeck-session-actions-sheet {
     max-height: calc(100dvh - 8px);
   }
 
@@ -4744,7 +4969,8 @@ textarea:focus-visible {
   .hostdeck-usage-sheet__scroller,
   .hostdeck-compact-sheet__scroller,
   .hostdeck-skills-sheet__scroller,
-  .hostdeck-approval-sheet__body {
+  .hostdeck-approval-sheet__body,
+  .hostdeck-session-actions__scroller {
     padding-top: 10px;
     padding-bottom: 10px;
   }

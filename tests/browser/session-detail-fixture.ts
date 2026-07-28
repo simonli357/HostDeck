@@ -63,11 +63,21 @@ export interface SessionDetailApiController {
 }
 
 export type SessionDetailEventFixture = SelectedProjectionEvent;
+export type SessionDetailTurnState =
+  | "idle"
+  | "in_progress"
+  | "waiting_for_input"
+  | "waiting_for_approval"
+  | "completed"
+  | "interrupted"
+  | "failed"
+  | "unknown";
 
 export interface SessionDetailApiOptions {
   readonly initialEvents?: readonly SessionDetailEventFixture[];
   readonly retentionBoundaryCursor?: number;
   readonly streamEvents?: readonly SessionDetailEventFixture[];
+  readonly turnState?: SessionDetailTurnState;
 }
 
 const origin = "http://127.0.0.1:4175";
@@ -193,7 +203,12 @@ export async function installSessionDetailApi(
     ) {
       await fulfillJson(
         route,
-        sessionDetail(variant, selectedEvents(), selectedRetentionBoundary())
+        sessionDetail(
+          variant,
+          selectedEvents(),
+          selectedRetentionBoundary(),
+          options.turnState
+        )
       );
       return;
     }
@@ -207,7 +222,12 @@ export async function installSessionDetailApi(
     if (url.pathname === "/api/v1/sessions" && request.method() === "GET") {
       await fulfillJson(
         route,
-        sessionList(variant, selectedEvents(), selectedRetentionBoundary())
+        sessionList(
+          variant,
+          selectedEvents(),
+          selectedRetentionBoundary(),
+          options.turnState
+        )
       );
       return;
     }
@@ -421,6 +441,20 @@ export function promptTurnEvent(
       state === "failed"
         ? { code: "runtime_unavailable", message: "Runtime work stopped safely." }
         : null
+  });
+}
+
+export function replayBoundaryEvent(
+  cursor: number,
+  after: number | null,
+  reason: "retention" | "disconnect" | "restart" | "schema_change" = "disconnect"
+): SessionDetailEventFixture {
+  return selectedProjectionEventSchema.parse({
+    ...eventBase(cursor),
+    type: "replay_boundary",
+    after,
+    next_cursor: cursor,
+    reason
   });
 }
 
@@ -731,7 +765,8 @@ function readyHostStatus(variant: SessionDetailApiVariant) {
 function sessionDetail(
   variant: SessionDetailApiVariant,
   events: readonly SessionDetailEventFixture[],
-  retentionBoundaryCursor?: number
+  retentionBoundaryCursor?: number,
+  turnStateOverride?: SessionDetailTurnState
 ) {
   const firstEvent = events[0] ?? null;
   const lastEvent = events.at(-1) ?? null;
@@ -745,14 +780,15 @@ function sessionDetail(
     : null;
   const boundaryCursor = retentionBoundaryCursor ?? derivedBoundaryCursor;
   const bounded = boundaryCursor !== null;
-  const turnState =
+  const turnState = turnStateOverride ?? (
     variant === "waiting_input"
       ? "waiting_for_input"
       : variant === "turn_unknown"
         ? "unknown"
         : writable
           ? "idle"
-          : "waiting_for_approval";
+          : "waiting_for_approval"
+  );
   const attention =
     turnState === "waiting_for_input"
       ? "needs_input"
@@ -818,9 +854,10 @@ function sessionDetail(
 function sessionList(
   variant: SessionDetailApiVariant,
   events: readonly SessionDetailEventFixture[],
-  retentionBoundaryCursor?: number
+  retentionBoundaryCursor?: number,
+  turnStateOverride?: SessionDetailTurnState
 ) {
-  const detail = sessionDetail(variant, events, retentionBoundaryCursor);
+  const detail = sessionDetail(variant, events, retentionBoundaryCursor, turnStateOverride);
   return {
     access: detail.access,
     sessions: [detail.session],
@@ -1017,11 +1054,5 @@ function runtimeEvent(cursor: number): SessionDetailEventFixture {
 }
 
 function boundaryEvent(cursor: number): SessionDetailEventFixture {
-  return selectedProjectionEventSchema.parse({
-    ...eventBase(cursor),
-    type: "replay_boundary",
-    after: 0,
-    next_cursor: cursor,
-    reason: "retention"
-  });
+  return replayBoundaryEvent(cursor, 0, "retention");
 }

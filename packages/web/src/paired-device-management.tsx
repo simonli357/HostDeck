@@ -438,7 +438,7 @@ function deviceStatusIcon(status: PairedDeviceStatus) {
 function focusSafeDevicePanelTarget(panel: HTMLElement | null): void {
   const outerDialog = panel?.closest<HTMLElement>('[role="dialog"]');
   const close = outerDialog?.querySelector<HTMLButtonElement>(
-    'button[aria-label="Close Host and access"]'
+    'button[aria-label="Close Host and access"], button[aria-label="Close session actions"]'
   );
   if (close?.isConnected === true && !close.disabled) close.focus();
   else panel?.focus();

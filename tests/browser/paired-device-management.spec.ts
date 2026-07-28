@@ -2,6 +2,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
+  hostAccessCloseButton,
+  hostAccessScrollOwner,
+  openHostAccess
+} from "./host-access-navigation.js";
+import {
   installMissionControlApi
 } from "./mission-control-fixture.js";
 import {
@@ -98,22 +103,22 @@ test("contains writer, reader, locked, long, responsive, short-height, and reflo
 
   for (const viewport of responsiveViewports) {
     await page.setViewportSize(viewport);
-    const close = sheet.getByRole("button", { name: "Close Host and access" });
+    const close = hostAccessCloseButton(sheet);
     await close.scrollIntoViewIfNeeded();
     await expect(close).toBeVisible();
     await captureState(page, `writer-${viewport.width}x${viewport.height}`);
   }
   await page.setViewportSize({ width: 390, height: 420 });
-  await sheet.getByRole("button", { name: "Close Host and access" }).scrollIntoViewIfNeeded();
-  await expect(sheet.getByRole("button", { name: "Close Host and access" })).toBeVisible();
+  await hostAccessCloseButton(sheet).scrollIntoViewIfNeeded();
+  await expect(hostAccessCloseButton(sheet)).toBeVisible();
   await captureState(page, "writer-short-390x420");
 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.evaluate(() => {
     document.documentElement.style.zoom = "2";
   });
-  await sheet.getByRole("button", { name: "Close Host and access" }).scrollIntoViewIfNeeded();
-  await expect(sheet.getByRole("button", { name: "Close Host and access" })).toBeVisible();
+  await hostAccessCloseButton(sheet).scrollIntoViewIfNeeded();
+  await expect(hostAccessCloseButton(sheet)).toBeVisible();
   await captureState(page, "writer-reflow-200-1280x800");
   await page.evaluate(() => {
     document.documentElement.style.zoom = "1";
@@ -288,7 +293,7 @@ test("explains final self-revoke and adopts loss before restoring outer-sheet fo
 
   await expect(sheet.getByText("This phone was revoked", { exact: true })).toBeVisible();
   await expect(sheet.getByRole("list", { name: "Paired devices" })).toHaveCount(0);
-  await expect(sheet.getByRole("button", { name: "Close Host and access" })).toBeFocused();
+  await expect(hostAccessCloseButton(sheet)).toBeFocused();
   await captureState(page, "self-revoked-390x844");
   expect(devices.revokeRequests()).toHaveLength(1);
   await expectPrivateFreeSurface(page);
@@ -388,10 +393,7 @@ function paginationRows() {
 }
 
 async function openDeviceSheet(page: Page): Promise<Locator> {
-  await expect(page.getByRole("button", { name: "Open Host and access" })).toBeVisible();
-  await page.getByRole("button", { name: "Open Host and access" }).click();
-  const sheet = page.getByRole("dialog", { name: "Host & access" });
-  await expect(sheet).toBeVisible();
+  const sheet = await openHostAccess(page);
   const region = sheet.getByRole("region", { name: "Paired devices" });
   await expect(region).toBeVisible();
   await region.scrollIntoViewIfNeeded();
@@ -418,7 +420,7 @@ async function captureState(
     })),
     sheet: roundedBox(await sheet.boundingBox()),
     deviceRegion: roundedBox(await region.boundingBox()),
-    scrollOwners: await sheet.locator(".hostdeck-sheet__body").evaluate((element) => ({
+    scrollOwners: await hostAccessScrollOwner(sheet).evaluate((element) => ({
       clientHeight: element.clientHeight,
       clientWidth: element.clientWidth,
       scrollHeight: element.scrollHeight,
@@ -444,7 +446,7 @@ async function expectNoHorizontalOverflow(page: Page, sheet: Locator): Promise<v
       scrollWidth: document.documentElement.clientWidth
     })));
   expect(
-    await sheet.locator(".hostdeck-sheet__body").evaluate(
+    await hostAccessScrollOwner(sheet).evaluate(
       (element) => element.scrollWidth <= element.clientWidth + 1
     )
   ).toBe(true);

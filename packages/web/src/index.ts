@@ -16,6 +16,8 @@ export * from "./host-lock.js";
 export * from "./host-lock-state.js";
 export * from "./http-client.js";
 export * from "./http-route-contracts.js";
+export * from "./interrupt-control.js";
+export * from "./interrupt-control-state.js";
 export * from "./model-control.js";
 export * from "./model-control-state.js";
 export * from "./paired-device-management.js";

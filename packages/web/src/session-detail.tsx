@@ -61,6 +61,8 @@ import {
   type HostLockProjection,
   projectHostLockState
 } from "./host-lock-state.js";
+import { useInterruptControlController } from "./interrupt-control.js";
+import type { InterruptControlController } from "./interrupt-control-state.js";
 import { type MissionTone, projectSessionRow } from "./mission-control.js";
 import {
   ModelControl,
@@ -144,6 +146,7 @@ export interface SessionDetailControllerState {
   readonly skills: SkillsControlController;
   readonly approvals: ApprovalDecisionController;
   readonly eventDiagnostics: EventDiagnosticsController;
+  readonly interrupt: InterruptControlController;
 }
 
 export interface UseSessionDetailControllerOptions {
@@ -223,6 +226,13 @@ export function useSessionDetailController(
     feed
   );
   const eventDiagnostics = useEventDiagnosticsController(
+    coordinator,
+    sessionId,
+    snapshot,
+    feed,
+    snapshot.stream.boundary
+  );
+  const interrupt = useInterruptControlController(
     coordinator,
     sessionId,
     snapshot,
@@ -327,7 +337,8 @@ export function useSessionDetailController(
     compact,
     skills,
     approvals,
-    eventDiagnostics
+    eventDiagnostics,
+    interrupt
   });
 }
 

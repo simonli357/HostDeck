@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: in progress. `ATI-01` through `ATI-24` are frozen before product code.
+Status: complete. `ATI-01` through `ATI-24` pass.
 
 ## Scope
 
@@ -98,3 +98,32 @@ Excluded: archive implementation, deletion, session stop aliases, arbitrary turn
 Reuse `interruptRequestSchema`, `interruptResponseSchema`, the typed `turn_interrupt` browser route, coordinator protected-write authority, validated bounded Session Detail feed, selected session projection, secure browser operation-id helper, shared host-lock copy, existing Host & access content, Radix Dialog, Lucide icons, Focus Rail sheet primitives, production browser fixture, and approved `mobile-session-detail-active.png`, `mobile-approval-boundary-states.png`, `primary-controls.png`, and Option B design system. Add no production dependency or generated asset.
 
 `FE-V1-036` owns browser exact-turn derivation, interrupt confirmation/one-attempt state, pending and strongest-known result truth, Session actions menu foundation, accessibility, responsive visual evidence, and adjacent Host & access integration. `IFC-V1-045` retains API/service/audit truth; `FE-V1-012` retains feed/timeline/SSE; `FE-V1-033` retains host lock; `FE-V1-035` retains compatibility UI; `FE-V1-037` adds archive to the menu; `FE-V1-038` adds laptop resume; `FE-V1-015`, `FE-V1-039`, `FE-V1-016`, and release leaves retain aggregate hardening, physical-phone acceptance, packaging, and go/no-go.
+
+## Completion Evidence
+
+### Behavior And Hardening
+
+- One headless owner admits only one exact feed-proven active turn under current read/write/host/stream/continuity/CSRF authority, freezes confirmation, issues one correlated protected request, and exposes only bounded immutable view truth.
+- Controller-lifetime attempted-turn ownership prevents an older turn from becoming resubmittable after a later distinct attempt. Unsettled runtime/thread replacement, cursor regression, repeated terminal evidence, and API/feed contradiction fail closed; a setup failure that sent nothing cannot acquire later feed-confirmed request truth.
+- Session Detail now owns one 44 px vertical-ellipsis Session actions sheet with exactly `Interrupt active turn` and `Host & access`. Mission Control retains its direct Host/access trigger, and the routine dock/composer remains unchanged.
+- The shared Host/access navigation, scroll-owner, close-focus, paired-device, lock, and recovery assertions now support both valid shells. No interrupt retry, archive/delete/session-stop, terminal, prompt, approval, polling, timer, storage, direct HTTP, or second route exists.
+
+### Automated Validation
+
+- Direct state tests: 21 passed. Focused state/component/production-composition tests: 57 passed. Aggregate web: 40 files and 721 tests passed.
+- Dedicated Chromium: 21 passed. Affected Host/access and Session Detail regressions: 29 passed. Full production shell: 106 passed after correcting legacy tests that assumed the removed direct Session Detail Host/access trigger.
+- Workspace unit: 2,598 passed with 28 intentional skips. Contract: 245 passed. Integration: 36 passed. Root and web typechecks pass.
+- Biome/package exports pass over 694 files and eight packages. Scaffold passes at eight packages and 21 root scripts. Planning passes before closure at 220 tasks, 84 requirements, 683 dependencies, and four queued tasks. Selected runtime boundary passes at 614 production modules and 22 external modules.
+- Exact isolated Codex 0.144.0 binding verifies 671 files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. The default 0.145.0 binary correctly refuses this exact gate and remains the already-recorded environment drift.
+- Production build and package acceptance pass at 614 sources, 1,235 owned outputs, 6,449 entries, and SHA-256 `35f41f5daccab92d6ded30bf1de374d5451e1ce81282e1136a2452f7810a3ace`. Frozen offline install is current, and `pnpm audit --prod` reports no known vulnerabilities.
+
+### Visual And Privacy Inspection
+
+- Thirty-seven deterministic PNGs and 14 layout records cover menu, Host/access, confirmation, pending, every result family, disabled evidence/authority states, 320/360/390/412/768/1280 widths, 390 x 420 short height, long identifiers, and actual 200 percent zoom.
+- Manual comparison against the selected Focus Rail mobile Session Detail and elevated-action references found no unapproved structural drift. The sheet remains bottom-anchored and phone-first, uses one body scroll owner and fixed action footer, keeps all controls at least 44 px, and has no clipping, overlap, or horizontal overflow.
+- DOM/request/storage/history assertions and source review found no rendered operation id, thread id, device id, origin, cwd, CSRF value, raw error/body/cause, private fixture sentinel, or persisted interrupt state. Malformed and mismatched responses intentionally collapse to the same sanitized unknown surface.
+
+### Remaining Scope
+
+- The existing Vite chunk-size warning remains a downstream aggregate performance concern; it is not introduced by a dependency or a false package result in this leaf.
+- Physical-phone acceptance, compatibility UI, archive, laptop resume, cross-screen hardening, packaged remote workflow, store delivery, and final go/no-go remain owned by their downstream leaves. No FE-V1-036 criterion remains open.

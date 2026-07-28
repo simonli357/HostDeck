@@ -8,6 +8,7 @@ export const browserOperationIdScopes = Object.freeze([
   "goal",
   "plan",
   "compact",
+  "interrupt",
   "approval",
   "device_revoke",
   "host_lock"

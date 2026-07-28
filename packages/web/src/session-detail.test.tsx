@@ -2,6 +2,7 @@
 
 import {
   compactProgressResponseSchema,
+  interruptResponseSchema,
   type ModelControlSnapshot,
   managedSessionProjectionSchema,
   modelControlSnapshotSchema,
@@ -10,6 +11,8 @@ import {
   type SelectedProjectionEvent,
   type SkillsSnapshot,
   selectedAccessStateResponseSchema,
+  selectedHostLocalHealthComponents,
+  selectedHostStatusResponseSchema,
   selectedProjectionEventSchema,
   selectedSessionDetailResponseSchema,
   selectedSessionReadItemSchema,
@@ -19,6 +22,7 @@ import {
 } from "@hostdeck/contracts";
 import type { SessionId } from "@hostdeck/core";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HostDeckRoutes } from "./app-shell.js";
@@ -257,6 +261,102 @@ describe("Session Detail screen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Back to Mission Control" }));
     expect(await screen.findByRole("heading", { name: "Mission Control" })).toBeTruthy();
+  });
+
+  it("composes one exact protected interrupt through the production Session Detail app bar", async () => {
+    const exactTurnId = "turn-session-detail-interrupt-001";
+    const connected = Object.freeze({
+      ...detailSnapshot({
+        session: sessionItem({ cursor: 1, turnState: "in_progress" }),
+        streamCursor: 1
+      }),
+      host: resource("current", interruptHostStatus(), null)
+    });
+    const initial = Object.freeze({
+      ...detailSnapshot({
+        session: sessionItem({ cursor: 1, turnState: "in_progress" }),
+        streamState: "idle",
+        streamCursor: null
+      }),
+      host: resource("current", interruptHostStatus(), null)
+    });
+    const harness = coordinatorHarness(initial);
+    harness.requestProtected.mockImplementation(async (_routeId, request) => {
+      const body = (request as { readonly body: { readonly operation_id: string } }).body;
+      return Object.freeze({
+        status: 200 as const,
+        data: interruptResponseSchema.parse({
+          operation_id: body.operation_id,
+          kind: "interrupt",
+          target: {
+            type: "turn",
+            session_id: sessionId,
+            codex_thread_id: "thread-private-detail",
+            turn_id: exactTurnId
+          },
+          state: "interrupted",
+          updated_at: laterTimestamp,
+          turn_id: exactTurnId,
+          error: null
+        })
+      });
+    });
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={[`/sessions/${sessionId}`]}>
+          <HostDeckRoutes
+            coordinator={harness.coordinator}
+            outlets={{ hostAccess: <p>Production Host access fixture</p> }}
+          />
+        </MemoryRouter>
+      </StrictMode>
+    );
+
+    await waitFor(() => expect(harness.connect).toHaveBeenCalled());
+    const streamConsumer = harness.connect.mock.calls.at(-1)?.[0];
+    harness.publish(connected);
+    streamConsumer?.(turnEvent(1, "in_progress", exactTurnId));
+    const actionTrigger = await screen.findByRole("button", { name: "Open session actions" });
+    expect(screen.queryByRole("button", { name: "Open Host and access" })).toBeNull();
+
+    fireEvent.click(actionTrigger);
+    const menu = screen.getByRole("dialog", { name: "Session actions" });
+    expect(
+      Array.from(menu.querySelectorAll(".hostdeck-utility-menu__item strong"), (item) =>
+        item.textContent
+      )
+    ).toEqual(["Interrupt active turn", "Host & access"]);
+    fireEvent.click(screen.getByRole("button", { name: /Interrupt active turn/iu }));
+    expect(screen.getByRole("dialog", { name: "Interrupt active turn?" }).textContent).toContain(
+      exactTurnId
+    );
+    expect(harness.requestProtected).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Interrupt turn" }));
+    await waitFor(() => expect(harness.requestProtected).toHaveBeenCalledTimes(1));
+    const call = harness.requestProtected.mock.calls[0];
+    if (call === undefined) throw new TypeError("Interrupt request call is missing.");
+    expect(call?.[0]).toBe("turn_interrupt");
+    expect(call?.[1]).toEqual({
+      params: { session_id: sessionId, turn_id: exactTurnId },
+      body: {
+        operation_id: expect.stringMatching(/^op_browser_interrupt_/u),
+        kind: "interrupt",
+        confirm: true
+      }
+    });
+    expect(Object.keys((call[1] as { body: object }).body)).toEqual([
+      "operation_id",
+      "kind",
+      "confirm"
+    ]);
+    expect(call?.[2]).toEqual({ signal: expect.any(AbortSignal) });
+    expect(await screen.findByRole("dialog", { name: "Turn interrupted" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /retry/iu })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(harness.requestProtected).toHaveBeenCalledTimes(1);
   });
 
   it("renders semantic timeline content without raw route or runtime identifiers", () => {
@@ -786,6 +886,22 @@ function approvalEvent(cursor: number): SelectedProjectionEvent {
   });
 }
 
+function turnEvent(
+  cursor: number,
+  state: "in_progress" | "waiting_for_input" | "waiting_for_approval" | "completed" | "interrupted" | "failed",
+  turnId = "turn-private-detail"
+): SelectedProjectionEvent {
+  return selectedProjectionEventSchema.parse({
+    ...eventBase(cursor),
+    type: "turn",
+    turn_id: turnId,
+    state,
+    error: state === "failed"
+      ? { code: "runtime_unavailable", message: "Bounded selected failure." }
+      : null
+  });
+}
+
 function coordinatorHarness(
   initial: BrowserConnectionSnapshot,
   refreshPromise?: Promise<BrowserConnectionSnapshot>
@@ -812,6 +928,11 @@ function coordinatorHarness(
               ? skillsSnapshot()
               : modelSnapshot()
   }));
+  const requestProtected = vi.fn(async (
+    _routeId: unknown,
+    _request: unknown,
+    _options?: unknown
+  ): Promise<unknown> => undefined);
   const coordinator = {
     snapshot: () => snapshot,
     subscribe(listener: () => void) {
@@ -828,7 +949,7 @@ function coordinatorHarness(
     disconnectSessionStream: disconnect,
     bootstrapCsrf: vi.fn(async () => snapshot),
     adoptCsrfBootstrap: vi.fn(() => snapshot),
-    requestProtected: vi.fn(),
+    requestProtected,
     requestDeviceList: vi.fn(async () => ({
       status: 200,
       data: { devices: [], next_cursor: null, has_more: false }
@@ -844,6 +965,7 @@ function coordinatorHarness(
     connect,
     disconnect,
     refresh,
+    requestProtected,
     requestSelectedSessionRead,
     unsubscribe,
     snapshot: () => snapshot,
@@ -852,6 +974,54 @@ function coordinatorHarness(
       for (const listener of listeners) listener();
     }
   };
+}
+
+function interruptHostStatus() {
+  return selectedHostStatusResponseSchema.parse({
+    local: {
+      generation: 1,
+      state: "ready",
+      readiness: "ready",
+      updated_at: timestamp,
+      components: selectedHostLocalHealthComponents.map((component) => ({
+        component,
+        state: "ready",
+        checked_at: timestamp,
+        causes: []
+      })),
+      mutation_admission: "open"
+    },
+    compatibility: {
+      state: "supported",
+      evidence: "current",
+      observed_version: "0.144.0",
+      supported_version: "0.144.0",
+      capability_state: "verified",
+      checked_at: timestamp,
+      recorded_at: timestamp
+    },
+    remote: {
+      generation: 1,
+      state_generation: 1,
+      availability: "ready",
+      cause: null,
+      external_origin: remoteOrigin,
+      laptop_action_required: false,
+      observed_at: timestamp,
+      checked_at: timestamp,
+      updated_at: timestamp
+    },
+    access: {
+      mode: "paired_write",
+      network_mode: "remote",
+      transport: "https",
+      write_eligibility: {
+        scope: "host_health_and_authority",
+        eligible: true,
+        causes: []
+      }
+    }
+  });
 }
 
 function modelSnapshot(): ModelControlSnapshot {

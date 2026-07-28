@@ -1,6 +1,11 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import {
+  hostAccessCloseButton,
+  hostAccessScrollOwner,
+  openHostAccess
+} from "./host-access-navigation.js";
 import { installHostLockApi } from "./host-lock-fixture.js";
 import { installMissionControlApi } from "./mission-control-fixture.js";
 import {
@@ -129,7 +134,7 @@ test("owns one exact confirmation, pending latch, and correlated lock", async ({
   for (const viewport of responsiveViewports) {
     await page.setViewportSize(viewport);
     await lockSection.scrollIntoViewIfNeeded();
-    await expect(sheet.getByRole("button", { name: "Close Host and access" })).toBeVisible();
+    await expect(hostAccessCloseButton(sheet)).toBeVisible();
     await captureDialogState(
       page,
       sheet,
@@ -140,7 +145,7 @@ test("owns one exact confirmation, pending latch, and correlated lock", async ({
   await page.setViewportSize({ width: 390, height: 420 });
   await lockSection.evaluate((element) => element.scrollIntoView({ block: "center" }));
   await captureDialogState(page, sheet, "locked-recovery-short-390x420");
-  const closeSheet = sheet.getByRole("button", { name: "Close Host and access" });
+  const closeSheet = hostAccessCloseButton(sheet);
   await closeSheet.scrollIntoViewIfNeeded();
   await expectInsideViewport(page, closeSheet);
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -154,7 +159,7 @@ test("owns one exact confirmation, pending latch, and correlated lock", async ({
   });
   await page.setViewportSize({ width: 390, height: 844 });
 
-  await sheet.getByRole("button", { name: "Close Host and access" }).click();
+  await hostAccessCloseButton(sheet).click();
   const routeRail = page.locator(".hostdeck-lock-rail");
   await expect(routeRail).toContainText("Remote writes locked");
   await expect(routeRail).toContainText("Current HostDeck access state from the laptop");
@@ -207,7 +212,7 @@ test("latches an unconfirmed outcome until a causally later access proof", async
   expect(lock.lockRequests()).toHaveLength(1);
   expect(devices.revokeRequests()).toHaveLength(0);
 
-  await sheet.getByRole("button", { name: "Close Host and access" }).click();
+  await hostAccessCloseButton(sheet).click();
   const rail = page.locator(".hostdeck-lock-rail");
   await expect(rail).toHaveAttribute("role", "alert");
   await expect(rail).toContainText("Lock outcome unconfirmed");
@@ -307,11 +312,7 @@ test("carries the same current lock before readable Session Detail activity", as
 });
 
 async function openHostSheet(page: Page): Promise<Locator> {
-  const trigger = page.getByRole("button", { name: "Open Host and access" });
-  await expect(trigger).toBeVisible();
-  await trigger.click();
-  const sheet = page.getByRole("dialog", { name: "Host & access" });
-  await expect(sheet).toBeVisible();
+  const sheet = await openHostAccess(page);
   await expect(sheet.locator(".hostdeck-host-lock")).toBeVisible();
   await sheet.locator(".hostdeck-host-lock").scrollIntoViewIfNeeded();
   return sheet;
@@ -326,7 +327,7 @@ async function captureDialogState(
   expect(
     await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
   ).toBe(true);
-  const body = dialog.locator(".hostdeck-sheet__body");
+  const body = hostAccessScrollOwner(dialog);
   const scrollOwner = (await body.count()) === 0
     ? null
     : await body.evaluate((element) => ({

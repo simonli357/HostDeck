@@ -237,7 +237,7 @@ test("contains long content and passes keyboard, reflow, zoom, and live-update c
   await expect(skipLink).toBeFocused();
   await expectVisibleFocus(skipLink);
   await expectNextKeyboardFocus(page, page.getByRole("button", { name: "Back to Mission Control" }));
-  await expectNextKeyboardFocus(page, page.getByRole("button", { name: "Open Host and access" }));
+  await expectNextKeyboardFocus(page, page.getByRole("button", { name: "Open session actions" }));
   await expectNextKeyboardFocus(page, page.getByRole("button", { name: "Refresh session" }));
   const eventDetailsActions = page.getByRole("button", { name: "View event details" });
   await expect(eventDetailsActions).toHaveCount(4);

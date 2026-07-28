@@ -31,6 +31,7 @@ import {
 import type { BrowserConnectionStateCoordinator } from "./connection-state.js";
 import { ConnectedHostAccess } from "./host-access.js";
 import { ConnectedHostLock } from "./host-lock.js";
+import { SessionActionsSheet } from "./interrupt-control.js";
 import { ConnectedMissionControl } from "./mission-control.js";
 import { PairingStartupScreen } from "./pairing-screen.js";
 import {
@@ -359,8 +360,13 @@ function ConnectedSessionDetailRoute({
   );
   return (
     <HostDeckFrame
+      action={
+        <SessionActionsSheet
+          controller={controller.interrupt}
+          hostAccess={hostAccess ?? <HostAccessLoading />}
+        />
+      }
       back={<SessionBackButton />}
-      hostAccess={hostAccess}
       subtitle={projection.headerSubtitle}
       title={projection.headerTitle}
     >
@@ -389,12 +395,14 @@ function ConnectedSessionDetailRoute({
 }
 
 function HostDeckFrame({
+  action,
   back,
   children,
   hostAccess,
   subtitle,
   title = "HostDeck"
 }: Readonly<{
+  action?: ReactNode;
   back?: ReactNode;
   children: ReactNode;
   hostAccess?: ReactNode;
@@ -420,7 +428,7 @@ function HostDeckFrame({
             )}
           </div>
         </div>
-        {hostAccess !== undefined ? (
+        {action !== undefined ? action : hostAccess !== undefined ? (
           <HostAccessSheet>{hostAccess}</HostAccessSheet>
         ) : (
           <HostAccessSheet>

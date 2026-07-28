@@ -3,6 +3,11 @@ import { resolve } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { remoteIngressUnavailableReasons } from "../../packages/core/src/index.js";
 import {
+  hostAccessCloseButton,
+  hostAccessCloseSelector,
+  openHostAccess
+} from "./host-access-navigation.js";
+import {
   installRemoteHostOverlay,
   installRemoteRecoveryApi,
   type RemoteRecoveryState,
@@ -84,7 +89,7 @@ test("renders every bounded current laptop reason through one shared Focus Rail 
     await expect(recovery.getByRole("button", { name: "Check remote access" })).toBeEnabled();
     await recovery.scrollIntoViewIfNeeded();
     await capture(page, `reason-${cause}-390x844.png`);
-    await sheet.getByRole("button", { name: "Close Host and access" }).click();
+    await hostAccessCloseButton(sheet).click();
   }
 
   expect(api.remoteStatusRequests()).toHaveLength(0);
@@ -121,7 +126,7 @@ test("coalesces one paired private status read, persists through sheet closure, 
   await recovery.scrollIntoViewIfNeeded();
   await capture(page, "paired-checking-390x844.png");
 
-  await sheet.getByRole("button", { name: "Close Host and access" }).click();
+  await hostAccessCloseButton(sheet).click();
   sheet = await openHostSheet(page);
   await expect(sheet.getByRole("heading", { name: "Checking remote access" })).toBeVisible();
   expect(api.remoteStatusRequests()).toHaveLength(1);
@@ -201,7 +206,7 @@ test("shows only generic browser truth during loaded reconnect and recovers by o
   await recovery.scrollIntoViewIfNeeded();
   await capture(page, "loaded-private-origin-reconnecting-390x844.png");
 
-  await sheet.getByRole("button", { name: "Close Host and access" }).click();
+  await hostAccessCloseButton(sheet).click();
   api.setAvailable(true);
   await page.getByRole("button", { name: "Refresh sessions" }).click();
   await expect(page.getByRole("heading", { name: "No active sessions" })).toBeVisible();
@@ -314,12 +319,7 @@ test("keeps a fresh unreachable private origin outside HostDeck diagnosis", asyn
 });
 
 async function openHostSheet(page: Page): Promise<Locator> {
-  const sheet = page.getByRole("dialog", { name: "Host & access" });
-  if (!(await sheet.isVisible())) {
-    await page.getByRole("button", { name: "Open Host and access" }).click();
-  }
-  await expect(sheet).toBeVisible();
-  return sheet;
+  return openHostAccess(page);
 }
 
 async function capture(page: Page, name: string): Promise<void> {
@@ -331,7 +331,7 @@ async function capture(page: Page, name: string): Promise<void> {
 }
 
 async function expectSheetCloseReachable(sheet: Locator): Promise<void> {
-  const close = sheet.getByRole("button", { name: "Close Host and access" });
+  const close = hostAccessCloseButton(sheet);
   await close.scrollIntoViewIfNeeded();
   await expect(close).toBeVisible();
   await expect(close).toBeEnabled();
@@ -343,11 +343,11 @@ async function measureRemoteLayout(
   recovery: Locator,
   viewport: Readonly<{ width: number; height: number; zoom?: number }>
 ): Promise<Record<string, unknown>> {
-  const measurement = await page.evaluate(() => {
+  const measurement = await page.evaluate((closeSelector) => {
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
     const rail = document.querySelector<HTMLElement>(".hostdeck-remote-recovery");
     const action = rail?.querySelector<HTMLElement>("button");
-    const close = dialog?.querySelector<HTMLElement>('[aria-label="Close Host and access"]');
+    const close = dialog?.querySelector<HTMLElement>(closeSelector);
     if (dialog === null || rail === null || close === null || close === undefined) {
       throw new TypeError("Remote recovery layout target is missing.");
     }
@@ -381,7 +381,7 @@ async function measureRemoteLayout(
         height: value.height
       };
     }
-  });
+  }, hostAccessCloseSelector);
   expect(measurement.documentScrollWidth).toBeLessThanOrEqual(measurement.documentClientWidth);
   expect(measurement.rail.left).toBeGreaterThanOrEqual(measurement.dialog.left - 1);
   expect(measurement.rail.right).toBeLessThanOrEqual(measurement.dialog.right + 1);
