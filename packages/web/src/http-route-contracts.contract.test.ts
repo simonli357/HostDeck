@@ -118,6 +118,7 @@ describe("FE-V1-019 browser HTTP route contracts", () => {
   it("freezes the reusable selected-session read boundary to exact GET routes", () => {
     expect(browserHttpSelectedSessionReadRouteIds).toEqual([
       "session_events",
+      "session_resume_metadata",
       "model_read",
       "goal_read",
       "plan_read",

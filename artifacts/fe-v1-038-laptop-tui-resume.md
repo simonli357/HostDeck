@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: criteria frozen before product code. `LTR-01` through `LTR-24` are required.
+Status: complete. `LTR-01` through `LTR-24` pass.
 
 ## Scope
 
@@ -77,7 +77,7 @@ Excluded: Mission Control row actions, remote command execution, phone shell/ter
 | `LTR-17` | Active-turn, paired read-only, and host-locked current sessions can read/copy resume metadata; archive/interrupt eligibility remains independent and no resume path interrupts, archives, unlocks, writes, or changes runtime state. |
 | `LTR-18` | One labelled modal sheet owns menu/resume/loading/content/failure/Host/access/mutation transitions, focus trap/order/restore, keyboard activation, Escape/outside behavior, live status, selectable code, visible focus, reduced motion, and 44 px targets without nesting a terminal/dialog. |
 | `LTR-19` | Local-only boundary, exact session, command freshness, loading, available, copied, copy-failed, unavailable, not-found, stale-session, runtime/offline, malformed/mismatch, stale-capture, disabled, and authority-loss states are non-color-distinct and expose no unsafe control. |
-| `LTR-20` | Focus Rail tokens, flat dividers, one body scroll owner, fixed footer, safe areas, and six-pixel radii match approved assets at 320/360/390/412/768/1280, short height, maximum valid 1,000-character command/reason, and actual 200 percent reflow without overlap, clipping, horizontal overflow, hidden command/action, or composer obstruction. |
+| `LTR-20` | Focus Rail tokens, flat dividers, one body scroll owner, fixed footer, safe areas, and six-pixel radii match approved assets at 320/360/390/412/768/1280, short height, maximum contract-valid private Unix remote and 240-character unavailable reason, and actual 200 percent reflow without overlap, clipping, horizontal overflow, hidden command/action, or composer obstruction. |
 | `LTR-21` | Headless tests cover strict construction/context, every admission/identity/authority transition, exact read timing/correlation, available/unavailable and every failure class, stale/purge/refresh, exact clipboard writes/failures/duplicate suppression, immutability, close/late settlement, and no private side effects. |
 | `LTR-22` | Component/coordinator/API tests prove exact allowlist/GET shape/count, four-row order, active/read-only/lock independence, local-only copy, all states, focus transitions, selectable command, Host/access and mutation continuity, no nested dialog/terminal, and production app-shell composition. |
 | `LTR-23` | Deterministic Chromium captures/layout records cover menu, loading, available, copied, copy failure, unavailable, not-found/stale/runtime/transport/malformed/mismatch, disabled states, long/narrow/short/tablet/desktop/zoom plus request/clipboard/DOM/history/storage/privacy and no-automatic-retry inspection. |
@@ -96,3 +96,39 @@ Excluded: Mission Control row actions, remote command execution, phone shell/ter
 Reuse `selectedResumeMetadataResponseSchema`, `selectedLaptopResumeSchema`, the typed `session_resume_metadata` route, coordinator selected-session read authority, selected Session Detail projection, `IFC-V1-060` server consistency and command formatting, the shared Session actions sheet, existing Host/access content, Radix Dialog, Lucide icons, Focus Rail sheet primitives, production browser fixture, and approved `mobile-session-detail-active.png`, `responsive-continuum.png`, and Option B design system. Add no production dependency or generated asset.
 
 `FE-V1-038` owns browser resume-metadata read/capture/copy state, exact response-to-selected-detail correlation, the local-only Session actions presentation, clipboard adapter, accessibility, and responsive visual evidence. `IFC-V1-060` retains API/service/command/CLI/process-launch truth; `FE-V1-012` retains detail/feed/SSE; `FE-V1-036` and `FE-V1-037` retain Interrupt/Archive and the shared menu foundation; `FE-V1-033` retains lock; `FE-V1-035` retains compatibility UI; `FE-V1-015`, `FE-V1-016`, `FE-V1-039`, and release leaves retain aggregate hardening, physical-phone acceptance, packaging, and go/no-go.
+
+## Completion Evidence
+
+### Implemented Behavior
+
+- One strict deeply frozen selected-session owner derives immutable target and read-authority identity, issues only the exact resume-metadata GET, strictly correlates the response session and thread, and retains no separate executable, argv, socket, or thread projection.
+- Opening and each explicit `Check again` perform at most one coalesced read. Same-target epoch drift makes retained metadata stale and non-copyable; target or authority replacement aborts, purges, and closes without retargeting or late publication.
+- `Copy command` writes the exact current canonical command through the browser Clipboard API only. Pending duplication is suppressed; denial remains visible and permits only an explicit retry; dismiss and close suppress late read/copy settlement without claiming cancellation.
+- The existing Session actions sheet now presents Interrupt, Archive, Resume, and Host/access in that order. Resume remains a neutral read-only handoff during active turns, paired read-only access, and host lock, while stale, archived, incompatible, missing, and unreadable detail fail closed before a request.
+- The laptop page states plainly that phone execution is unavailable, keeps the command selectable and wrapped, and adds no terminal, shell input, process action, mutation, CSRF/write/lock dependency, storage, URL transport, share path, or automatic retry.
+
+### Automated Validation
+
+| Gate | Result |
+| --- | --- |
+| Focused laptop-resume state/component | 2 files and 46 tests pass, including 36 direct headless cases and 10 component/integration cases. |
+| Aggregate web | 44 files and 814 tests pass. |
+| Aggregate unit | 237 files pass, 27 files skip explicitly; 2,691 tests pass and 28 skip explicitly. |
+| Contract and integration | 34 contract files/245 tests and 21 integration files/36 tests pass. |
+| Chromium | All 8 dedicated laptop-resume scenarios and the complete 131-scenario production shell pass. |
+| Static and boundary | Scaffold, planning, TypeScript, Biome lint/package exports, diff check, and the 614-module selected-runtime boundary pass. The default Codex 0.145.0 correctly rejects the reviewed binding gate; the isolated exact 0.144.0 binary verifies all 671 reviewed files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. |
+| Build and package | Production build, six structural package tests, deterministic and relocated package acceptance, and independent package verification pass. The verified 6,449-entry package hash remains `35f41f5daccab92d6ded30bf1de374d5451e1ce81282e1136a2452f7810a3ace`. |
+| Supply chain | Frozen offline install succeeds, production audit reports no known vulnerabilities, and 172 production package records across 175 paths use the existing permissive license set. |
+
+### Visual, Accessibility, And Privacy Inspection
+
+- `artifacts/fe-v1-038-laptop-tui-resume/` contains 32 inspected screenshots and 10 layout records covering menu, loading, available/copied/copy-failed, all selected failure families, mutation-gate independence, stale admission, maximum remote/reason content, 320/360/390/412/768/1280 widths, 320 x 480 and 390 x 420 short heights, and actual 200 percent reflow.
+- Layout records show no document or sheet horizontal overflow, one bounded body scroller, fixed-footer containment, four-pixel command radius, and no target below 44 px. Short-height and zoom scrolled captures prove the command/reason and terminal action remain reachable.
+- Keyboard/focus, one-dialog ownership, exact request and clipboard counts, no automatic retry, Host/access and mutation continuity, DOM/history/storage/request privacy, reduced motion, and selectable text assertions pass. Manual source and screenshot review found no second action surface, terminal chrome, clipping, overlap, unsafe fallback, or real credential/user-secret disclosure.
+- The surface uses the approved Focus Rail canvas, flat rails, semantic status colors plus icons/copy, compact type scale, safe areas, and shared sheet primitives without changing Mission Control, the timeline, composer, `/model`, `/goal`, `/plan`, or utility dock.
+
+### Remaining Scope
+
+- Cross-screen state hardening, physical-phone aggregate acceptance, final responsive/accessibility matrices, package/service release acceptance, and go/no-go remain owned by `FE-V1-015`, `FE-V1-039`, `FE-V1-016`, and release leaves. This leaf does not claim V1 release readiness.
+- Compatibility and update-required presentation remains `FE-V1-035`; no terminal/update-command fallback was added here.
+- Vite retains its existing large-chunk advisory. This leaf adds no production dependency or setup/command change; aggregate performance disposition remains downstream hardening work.

@@ -521,6 +521,7 @@ export type BrowserHttpDeviceCsrfRouteId = BrowserHttpRouteIdWithCsrfPolicy<
 
 export const browserHttpSelectedSessionReadRouteIds = Object.freeze([
   "session_events",
+  "session_resume_metadata",
   "model_read",
   "goal_read",
   "plan_read",

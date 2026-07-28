@@ -366,6 +366,7 @@ function ConnectedSessionDetailRoute({
           archive={controller.archive}
           controller={controller.interrupt}
           hostAccess={hostAccess ?? <HostAccessLoading />}
+          laptopResume={controller.laptopResume}
           onArchiveSucceeded={() => navigate(missionControlPath, { replace: true })}
         />
       }

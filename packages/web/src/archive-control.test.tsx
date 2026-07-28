@@ -14,6 +14,10 @@ import type {
   InterruptControlController,
   InterruptControlView
 } from "./interrupt-control-state.js";
+import type {
+  LaptopResumeControlController,
+  LaptopResumeControlView
+} from "./laptop-resume-control-state.js";
 
 afterEach(() => {
   cleanup();
@@ -21,7 +25,7 @@ afterEach(() => {
 });
 
 describe("archive Session actions", () => {
-  it("keeps exact Interrupt, Archive, Host order and focuses the enabled idle action", async () => {
+  it("keeps exact Interrupt, Archive, Resume, Host order and focuses the enabled idle action", async () => {
     const user = userEvent.setup();
     const harness = archiveUiController();
     renderSheet(harness.controller);
@@ -32,7 +36,12 @@ describe("archive Session actions", () => {
       Array.from(dialog.querySelectorAll(".hostdeck-utility-menu__item strong"), (item) =>
         item.textContent
       )
-    ).toEqual(["Interrupt active turn", "Archive session", "Host & access"]);
+    ).toEqual([
+      "Interrupt active turn",
+      "Archive session",
+      "Resume on laptop",
+      "Host & access"
+    ]);
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
     const archive = within(dialog).getByRole("button", { name: /Archive session/iu });
     expect((within(dialog).getByRole("button", {
@@ -166,7 +175,9 @@ describe("archive Session actions", () => {
     expect(screen.getByText(reason)).toBeTruthy();
     expect(harness.confirm).not.toHaveBeenCalled();
     await waitFor(() =>
-      expect(document.activeElement).toBe(screen.getByRole("button", { name: /Host & access/iu }))
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: /Resume on laptop/iu })
+      )
     );
   });
 });
@@ -186,9 +197,49 @@ function renderSheet(
       archive={archive}
       controller={unavailableInterruptController()}
       hostAccess={<p>Paired Xiaomi fixture</p>}
+      laptopResume={laptopResumeController()}
       onArchiveSucceeded={onArchiveSucceeded}
     />
   );
+}
+
+function laptopResumeController(): LaptopResumeControlController {
+  const current = laptopResumeView();
+  return Object.freeze({
+    snapshot: () => current,
+    subscribe: () => () => undefined,
+    updateContext: () => current,
+    open: async () => current,
+    refresh: async () => current,
+    copy: async () => current,
+    dismiss: () => current,
+    close: () => current
+  });
+}
+
+function laptopResumeView(): LaptopResumeControlView {
+  return Object.freeze({
+    visible: true,
+    sheetOpen: false,
+    phase: "closed",
+    tone: "muted",
+    status: "Laptop resume closed",
+    statusDetail: null,
+    sessionId: "session-archive-ui-001" as LaptopResumeControlView["sessionId"],
+    targetLabel: "android-release",
+    actionEnabled: true,
+    actionDisabledReason: null,
+    busy: false,
+    refreshEnabled: false,
+    available: null,
+    unavailableReason: null,
+    command: null,
+    commandFreshness: null,
+    copyEnabled: false,
+    copyPhase: "idle",
+    copyStatus: null,
+    copyStatusDetail: null
+  });
 }
 
 function archiveUiController(options: Readonly<{

@@ -44,6 +44,7 @@ test("keeps one mobile Session actions sheet and preserves Host access and routi
   await expect(dialog.locator(".hostdeck-utility-menu__item strong")).toHaveText([
     "Interrupt active turn",
     "Archive session",
+    "Resume on laptop",
     "Host & access"
   ]);
   const interrupt = interruptAction(dialog);
@@ -311,7 +312,11 @@ for (const disabledCase of [
     const action = interruptAction(dialog);
     await expect(action).toBeDisabled();
     await expect(dialog.getByText(disabledCase.reason, { exact: true })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: /Host & access/iu })).toBeFocused();
+    if (disabledCase.name === "stale") {
+      await expect(dialog.getByRole("button", { name: /Host & access/iu })).toBeFocused();
+    } else {
+      await expect(dialog.getByRole("button", { name: /Resume on laptop/iu })).toBeFocused();
+    }
     expect(fixture.interrupt.requests()).toHaveLength(0);
     await capture(page, `disabled-${disabledCase.name}-390x844.png`);
     await expectPrivateDataAbsent(page);

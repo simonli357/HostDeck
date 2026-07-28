@@ -3270,6 +3270,154 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.hostdeck-laptop-resume-boundary,
+.hostdeck-laptop-resume-status,
+.hostdeck-laptop-resume-copy {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--hostdeck-divider);
+  border-bottom: 1px solid var(--hostdeck-divider);
+}
+
+.hostdeck-laptop-resume-boundary {
+  color: var(--hostdeck-focus);
+}
+
+.hostdeck-laptop-resume-status,
+.hostdeck-laptop-resume-copy {
+  margin-top: 12px;
+  border-bottom: 0;
+  color: var(--hostdeck-focus);
+}
+
+.hostdeck-laptop-resume-boundary > svg,
+.hostdeck-laptop-resume-status > svg,
+.hostdeck-laptop-resume-copy > svg {
+  margin-top: 1px;
+}
+
+.hostdeck-laptop-resume-boundary > span,
+.hostdeck-laptop-resume-status > span,
+.hostdeck-laptop-resume-copy > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.hostdeck-laptop-resume-boundary strong,
+.hostdeck-laptop-resume-boundary small,
+.hostdeck-laptop-resume-status strong,
+.hostdeck-laptop-resume-status small,
+.hostdeck-laptop-resume-copy strong,
+.hostdeck-laptop-resume-copy small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-laptop-resume-boundary strong,
+.hostdeck-laptop-resume-status strong,
+.hostdeck-laptop-resume-copy strong {
+  color: currentColor;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 20px;
+}
+
+.hostdeck-laptop-resume-boundary small,
+.hostdeck-laptop-resume-status small,
+.hostdeck-laptop-resume-copy small {
+  color: var(--hostdeck-muted);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.hostdeck-laptop-resume-status--attention {
+  color: var(--hostdeck-attention);
+}
+
+.hostdeck-laptop-resume-status--danger,
+.hostdeck-laptop-resume-copy--failed {
+  color: var(--hostdeck-danger);
+}
+
+.hostdeck-laptop-resume-status--connected,
+.hostdeck-laptop-resume-copy--copied {
+  color: var(--hostdeck-connected);
+}
+
+.hostdeck-laptop-resume-command {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.hostdeck-laptop-resume-command > span {
+  color: var(--hostdeck-muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 18px;
+}
+
+.hostdeck-laptop-resume-command code {
+  display: block;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--hostdeck-divider);
+  border-radius: 4px;
+  background: var(--hostdeck-canvas);
+  color: var(--hostdeck-ink);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+  user-select: text;
+  white-space: pre-wrap;
+}
+
+.hostdeck-laptop-resume-command > small {
+  color: var(--hostdeck-muted);
+  font-size: 12px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-laptop-resume-facts {
+  display: grid;
+  gap: 0;
+  margin: 12px 0 0;
+}
+
+.hostdeck-laptop-resume-facts > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(72px, 0.32fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--hostdeck-divider);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.hostdeck-laptop-resume-facts dt,
+.hostdeck-laptop-resume-facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-laptop-resume-facts dt {
+  color: var(--hostdeck-muted);
+}
+
+.hostdeck-laptop-resume-facts dd {
+  color: var(--hostdeck-ink);
+}
+
 .hostdeck-session-actions__footer {
   display: grid;
   min-width: 0;

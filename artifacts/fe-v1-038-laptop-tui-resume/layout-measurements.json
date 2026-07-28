@@ -1,0 +1,584 @@
+{
+  "measurements": [
+    {
+      "state": "long-command",
+      "requestedViewport": {
+        "width": 320,
+        "height": 800
+      },
+      "geometry": {
+        "viewport": {
+          "height": 800,
+          "width": 320
+        },
+        "document": {
+          "clientWidth": 320,
+          "scrollWidth": 320
+        },
+        "sheet": {
+          "bottom": 800,
+          "clientWidth": 318,
+          "left": 0,
+          "right": 320,
+          "scrollWidth": 318,
+          "top": 80
+        },
+        "body": {
+          "clientWidth": 286,
+          "overflow": "hidden",
+          "scrollWidth": 286
+        },
+        "scroller": {
+          "clientWidth": 286,
+          "overflowY": "auto",
+          "scrollWidth": 286
+        },
+        "footer": {
+          "bottom": 788,
+          "top": 727
+        },
+        "command": {
+          "borderRadius": 4,
+          "clientWidth": 280,
+          "scrollWidth": 280
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 286
+          }
+        ]
+      }
+    },
+    {
+      "state": "long-command",
+      "requestedViewport": {
+        "width": 360,
+        "height": 800
+      },
+      "geometry": {
+        "viewport": {
+          "height": 800,
+          "width": 360
+        },
+        "document": {
+          "clientWidth": 360,
+          "scrollWidth": 360
+        },
+        "sheet": {
+          "bottom": 800,
+          "clientWidth": 358,
+          "left": 0,
+          "right": 360,
+          "scrollWidth": 358,
+          "top": 80
+        },
+        "body": {
+          "clientWidth": 326,
+          "overflow": "hidden",
+          "scrollWidth": 326
+        },
+        "scroller": {
+          "clientWidth": 326,
+          "overflowY": "auto",
+          "scrollWidth": 326
+        },
+        "footer": {
+          "bottom": 788,
+          "top": 727
+        },
+        "command": {
+          "borderRadius": 4,
+          "clientWidth": 320,
+          "scrollWidth": 320
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 326
+          }
+        ]
+      }
+    },
+    {
+      "state": "long-command",
+      "requestedViewport": {
+        "width": 390,
+        "height": 844
+      },
+      "geometry": {
+        "viewport": {
+          "height": 844,
+          "width": 390
+        },
+        "document": {
+          "clientWidth": 390,
+          "scrollWidth": 390
+        },
+        "sheet": {
+          "bottom": 844,
+          "clientWidth": 388,
+          "left": 0,
+          "right": 390,
+          "scrollWidth": 388,
+          "top": 104
+        },
+        "body": {
+          "clientWidth": 356,
+          "overflow": "hidden",
+          "scrollWidth": 356
+        },
+        "scroller": {
+          "clientWidth": 356,
+          "overflowY": "auto",
+          "scrollWidth": 356
+        },
+        "footer": {
+          "bottom": 832,
+          "top": 771
+        },
+        "command": {
+          "borderRadius": 4,
+          "clientWidth": 350,
+          "scrollWidth": 350
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 356
+          }
+        ]
+      }
+    },
+    {
+      "state": "long-command",
+      "requestedViewport": {
+        "width": 412,
+        "height": 915
+      },
+      "geometry": {
+        "viewport": {
+          "height": 915,
+          "width": 412
+        },
+        "document": {
+          "clientWidth": 412,
+          "scrollWidth": 412
+        },
+        "sheet": {
+          "bottom": 915,
+          "clientWidth": 410,
+          "left": 0,
+          "right": 412,
+          "scrollWidth": 410,
+          "top": 175
+        },
+        "body": {
+          "clientWidth": 378,
+          "overflow": "hidden",
+          "scrollWidth": 378
+        },
+        "scroller": {
+          "clientWidth": 378,
+          "overflowY": "auto",
+          "scrollWidth": 378
+        },
+        "footer": {
+          "bottom": 903,
+          "top": 842
+        },
+        "command": {
+          "borderRadius": 4,
+          "clientWidth": 372,
+          "scrollWidth": 372
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 378
+          }
+        ]
+      }
+    },
+    {
+      "state": "long-command",
+      "requestedViewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "geometry": {
+        "viewport": {
+          "height": 1024,
+          "width": 768
+        },
+        "document": {
+          "clientWidth": 768,
+          "scrollWidth": 768
+        },
+        "sheet": {
+          "bottom": 1024,
+          "clientWidth": 558,
+          "left": 104,
+          "right": 664,
+          "scrollWidth": 558,
+          "top": 284
+        },
+        "body": {
+          "clientWidth": 526,
+          "overflow": "hidden",
+          "scrollWidth": 526
+        },
+        "scroller": {
+          "clientWidth": 526,
+          "overflowY": "auto",
+          "scrollWidth": 526
+        },
+        "footer": {
+          "bottom": 1012,
+          "top": 951
+        },
+        "command": {
+          "borderRadius": 4,
+          "clientWidth": 520,
+          "scrollWidth": 520
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 526
+          }
+        ]
+      }
+    },
+    {
+      "state": "long-command",
+      "requestedViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "geometry": {
+        "viewport": {
+          "height": 800,
+          "width": 1280
+        },
+        "document": {
+          "clientWidth": 1280,
+          "scrollWidth": 1280
+        },
+        "sheet": {
+          "bottom": 800,
+          "clientWidth": 558,
+          "left": 360,
+          "right": 920,
+          "scrollWidth": 558,
+          "top": 80
+        },
+        "body": {
+          "clientWidth": 526,
+          "overflow": "hidden",
+          "scrollWidth": 526
+        },
+        "scroller": {
+          "clientWidth": 526,
+          "overflowY": "auto",
+          "scrollWidth": 526
+        },
+        "footer": {
+          "bottom": 788,
+          "top": 727
+        },
+        "command": {
+          "borderRadius": 4,
+          "clientWidth": 520,
+          "scrollWidth": 520
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 526
+          }
+        ]
+      }
+    },
+    {
+      "state": "long-command-short",
+      "requestedViewport": {
+        "width": 320,
+        "height": 480
+      },
+      "geometry": {
+        "viewport": {
+          "height": 480,
+          "width": 320
+        },
+        "document": {
+          "clientWidth": 320,
+          "scrollWidth": 320
+        },
+        "sheet": {
+          "bottom": 480,
+          "clientWidth": 318,
+          "left": 0,
+          "right": 320,
+          "scrollWidth": 318,
+          "top": 8
+        },
+        "body": {
+          "clientWidth": 286,
+          "overflow": "hidden",
+          "scrollWidth": 286
+        },
+        "scroller": {
+          "clientWidth": 286,
+          "overflowY": "auto",
+          "scrollWidth": 286
+        },
+        "footer": {
+          "bottom": 468,
+          "top": 407
+        },
+        "command": {
+          "borderRadius": 4,
+          "clientWidth": 280,
+          "scrollWidth": 280
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 286
+          }
+        ]
+      }
+    },
+    {
+      "state": "long-command-short",
+      "requestedViewport": {
+        "width": 390,
+        "height": 420
+      },
+      "geometry": {
+        "viewport": {
+          "height": 420,
+          "width": 390
+        },
+        "document": {
+          "clientWidth": 390,
+          "scrollWidth": 390
+        },
+        "sheet": {
+          "bottom": 420,
+          "clientWidth": 388,
+          "left": 0,
+          "right": 390,
+          "scrollWidth": 388,
+          "top": 8
+        },
+        "body": {
+          "clientWidth": 356,
+          "overflow": "hidden",
+          "scrollWidth": 356
+        },
+        "scroller": {
+          "clientWidth": 356,
+          "overflowY": "auto",
+          "scrollWidth": 356
+        },
+        "footer": {
+          "bottom": 408,
+          "top": 347
+        },
+        "command": {
+          "borderRadius": 4,
+          "clientWidth": 350,
+          "scrollWidth": 350
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 356
+          }
+        ]
+      }
+    },
+    {
+      "state": "long-command-zoom-200",
+      "requestedViewport": {
+        "width": 1280,
+        "height": 800,
+        "effectiveWidth": 640,
+        "effectiveHeight": 400
+      },
+      "geometry": {
+        "viewport": {
+          "height": 400,
+          "width": 640
+        },
+        "document": {
+          "clientWidth": 640,
+          "scrollWidth": 640
+        },
+        "sheet": {
+          "bottom": 400,
+          "clientWidth": 558,
+          "left": 40,
+          "right": 600,
+          "scrollWidth": 558,
+          "top": 8
+        },
+        "body": {
+          "clientWidth": 526,
+          "overflow": "hidden",
+          "scrollWidth": 526
+        },
+        "scroller": {
+          "clientWidth": 526,
+          "overflowY": "auto",
+          "scrollWidth": 526
+        },
+        "footer": {
+          "bottom": 388,
+          "top": 327
+        },
+        "command": {
+          "borderRadius": 4,
+          "clientWidth": 520,
+          "scrollWidth": 520
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 526
+          }
+        ]
+      }
+    },
+    {
+      "state": "long-reason-zoom-200",
+      "requestedViewport": {
+        "width": 1280,
+        "height": 800,
+        "effectiveWidth": 640,
+        "effectiveHeight": 400
+      },
+      "geometry": {
+        "viewport": {
+          "height": 400,
+          "width": 640
+        },
+        "document": {
+          "clientWidth": 640,
+          "scrollWidth": 640
+        },
+        "sheet": {
+          "bottom": 400,
+          "clientWidth": 558,
+          "left": 40,
+          "right": 600,
+          "scrollWidth": 558,
+          "top": 8
+        },
+        "body": {
+          "clientWidth": 526,
+          "overflow": "hidden",
+          "scrollWidth": 526
+        },
+        "scroller": {
+          "clientWidth": 526,
+          "overflowY": "auto",
+          "scrollWidth": 526
+        },
+        "footer": {
+          "bottom": 388,
+          "top": 327
+        },
+        "command": null,
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 526
+          }
+        ]
+      }
+    }
+  ]
+}

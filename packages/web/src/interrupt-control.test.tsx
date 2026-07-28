@@ -14,6 +14,10 @@ import type {
   InterruptControlView,
   InterruptResultView
 } from "./interrupt-control-state.js";
+import type {
+  LaptopResumeControlController,
+  LaptopResumeControlView
+} from "./laptop-resume-control-state.js";
 
 const turnId = "turn-interrupt-ui-001";
 
@@ -23,7 +27,7 @@ afterEach(() => {
 });
 
 describe("SessionActionsSheet", () => {
-  it("owns exactly interrupt and Host access in one focus-restoring session sheet", async () => {
+  it("owns exact Interrupt, Archive, Resume, Host access in one focus-restoring sheet", async () => {
     const user = userEvent.setup();
     const harness = uiController();
     renderSheet(harness.controller);
@@ -36,7 +40,12 @@ describe("SessionActionsSheet", () => {
       Array.from(dialog.querySelectorAll(".hostdeck-utility-menu__item strong"), (item) =>
         item.textContent
       )
-    ).toEqual(["Interrupt active turn", "Archive session", "Host & access"]);
+    ).toEqual([
+      "Interrupt active turn",
+      "Archive session",
+      "Resume on laptop",
+      "Host & access"
+    ]);
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
     const interrupt = within(dialog).getByRole("button", { name: /Interrupt active turn/iu });
     await waitFor(() => expect(document.activeElement).toBe(interrupt));
@@ -147,7 +156,9 @@ describe("SessionActionsSheet", () => {
     expect(screen.getByText(reason)).toBeTruthy();
     expect(harness.confirm).not.toHaveBeenCalled();
     await waitFor(() =>
-      expect(document.activeElement).toBe(screen.getByRole("button", { name: /Host & access/iu }))
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: /Resume on laptop/iu })
+      )
     );
   });
 
@@ -158,7 +169,7 @@ describe("SessionActionsSheet", () => {
 
     await user.click(screen.getByRole("button", { name: "Open session actions" }));
 
-    expect(screen.getAllByText("Session details are not available.")).toHaveLength(2);
+    expect(screen.getAllByText("Session details are not available.")).toHaveLength(3);
     expect(document.body.textContent).not.toContain(turnId);
     expect(document.body.textContent).not.toContain("android-release");
     await user.click(screen.getByRole("button", { name: /Host & access/iu }));
@@ -172,9 +183,49 @@ function renderSheet(controller: InterruptControlController) {
       archive={unavailableArchiveController(!controller.snapshot().visible)}
       controller={controller}
       hostAccess={<p>Paired Xiaomi fixture</p>}
+      laptopResume={laptopResumeController(!controller.snapshot().visible)}
       onArchiveSucceeded={vi.fn()}
     />
   );
+}
+
+function laptopResumeController(hidden = false): LaptopResumeControlController {
+  const current = laptopResumeView(hidden);
+  return Object.freeze({
+    snapshot: () => current,
+    subscribe: () => () => undefined,
+    updateContext: () => current,
+    open: async () => current,
+    refresh: async () => current,
+    copy: async () => current,
+    dismiss: () => current,
+    close: () => current
+  });
+}
+
+function laptopResumeView(hidden = false): LaptopResumeControlView {
+  return Object.freeze({
+    visible: !hidden,
+    sheetOpen: false,
+    phase: hidden ? "hidden" : "closed",
+    tone: "muted",
+    status: hidden ? "Session details unavailable" : "Laptop resume closed",
+    statusDetail: hidden ? "Session details are not available." : null,
+    sessionId: "session-interrupt-ui-001" as LaptopResumeControlView["sessionId"],
+    targetLabel: hidden ? null : "android-release",
+    actionEnabled: !hidden,
+    actionDisabledReason: hidden ? "Session details are not available." : null,
+    busy: false,
+    refreshEnabled: false,
+    available: null,
+    unavailableReason: null,
+    command: null,
+    commandFreshness: null,
+    copyEnabled: false,
+    copyPhase: "idle",
+    copyStatus: null,
+    copyStatusDetail: null
+  });
 }
 
 function unavailableArchiveController(hidden = false): ArchiveControlController {

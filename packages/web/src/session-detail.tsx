@@ -65,6 +65,8 @@ import {
 } from "./host-lock-state.js";
 import { useInterruptControlController } from "./interrupt-control.js";
 import type { InterruptControlController } from "./interrupt-control-state.js";
+import { useLaptopResumeControlController } from "./laptop-resume-control.js";
+import type { LaptopResumeControlController } from "./laptop-resume-control-state.js";
 import { type MissionTone, projectSessionRow } from "./mission-control.js";
 import {
   ModelControl,
@@ -150,6 +152,7 @@ export interface SessionDetailControllerState {
   readonly eventDiagnostics: EventDiagnosticsController;
   readonly interrupt: InterruptControlController;
   readonly archive: ArchiveControlController;
+  readonly laptopResume: LaptopResumeControlController;
 }
 
 export interface UseSessionDetailControllerOptions {
@@ -243,6 +246,11 @@ export function useSessionDetailController(
     snapshot.stream.boundary
   );
   const archive = useArchiveControlController(
+    coordinator,
+    sessionId,
+    snapshot
+  );
+  const laptopResume = useLaptopResumeControlController(
     coordinator,
     sessionId,
     snapshot
@@ -347,7 +355,8 @@ export function useSessionDetailController(
     approvals,
     eventDiagnostics,
     interrupt,
-    archive
+    archive,
+    laptopResume
   });
 }
 

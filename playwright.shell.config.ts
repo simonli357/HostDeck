@@ -13,6 +13,7 @@ export default defineConfig({
     "goal-control.spec.ts",
     "host-lock.spec.ts",
     "interrupt-control.spec.ts",
+    "laptop-resume-control.spec.ts",
     "model-control.spec.ts",
     "paired-device-management.spec.ts",
     "plan-control.spec.ts",

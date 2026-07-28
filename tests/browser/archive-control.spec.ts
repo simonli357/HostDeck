@@ -39,6 +39,7 @@ test("keeps one ordered mobile Session actions sheet with idle archive and Host 
   await expect(dialog.locator(".hostdeck-utility-menu__item strong")).toHaveText([
     "Interrupt active turn",
     "Archive session",
+    "Resume on laptop",
     "Host & access"
   ]);
   await expect(interruptAction(dialog)).toBeDisabled();
@@ -216,8 +217,10 @@ for (const disabledCase of [
     if (disabledCase.name === "active-turn") {
       await expect(interruptAction(dialog)).toBeEnabled();
       await expect(interruptAction(dialog)).toBeFocused();
-    } else {
+    } else if (disabledCase.name === "stale") {
       await expect(dialog.getByRole("button", { name: /Host & access/iu })).toBeFocused();
+    } else {
+      await expect(dialog.getByRole("button", { name: /Resume on laptop/iu })).toBeFocused();
     }
     expect(fixture.archive.requests()).toHaveLength(0);
     await capture(page, `disabled-${disabledCase.name}-390x844.png`);

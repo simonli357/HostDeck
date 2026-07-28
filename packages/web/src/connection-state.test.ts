@@ -1,5 +1,6 @@
 import {
   encodeSelectedSessionListCursor,
+  formatSelectedResumeLaunchCommand,
   goalControlSnapshotSchema,
   isoTimestampSchema,
   managedSessionProjectionSchema,
@@ -19,6 +20,7 @@ import {
   selectedHostLocalHealthComponents,
   selectedHostStatusResponseSchema,
   selectedProjectionEventSchema,
+  selectedResumeMetadataResponseSchema,
   selectedSessionDetailResponseSchema,
   selectedSessionListResponseSchema,
   selectedSessionListSortKey,
@@ -2081,6 +2083,54 @@ describe("browser shell connection-state coordinator", () => {
     });
     expect(harness.http.requests.at(-1)?.init).not.toHaveProperty("body");
 
+    harness.http.enqueue("detail", jsonResponse(200, resumeMetadata()));
+    const resumeResponse = await harness.coordinator.requestSelectedSessionRead(
+      "session_resume_metadata",
+      { params: { session_id: firstSessionId } }
+    );
+    expect(resumeResponse).toMatchObject({
+      status: 200,
+      data: {
+        session_id: firstSessionId,
+        local_only: true,
+        available: true,
+        launch: {
+          args: [
+            "resume",
+            "--remote",
+            expect.stringMatching(/^unix:\/\//u),
+            `thread-${firstSessionId}`
+          ]
+        }
+      }
+    });
+    expect(harness.http.requests.at(-1)).toMatchObject({
+      path: `/api/v1/sessions/${firstSessionId}/resume`,
+      init: {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        redirect: "error",
+        referrerPolicy: "no-referrer"
+      }
+    });
+    expect(harness.http.requests.at(-1)?.init).not.toHaveProperty("body");
+
+    const exactResumeRequestCount = harness.http.requests.length;
+    await expect(
+      harness.coordinator.requestSelectedSessionRead("session_resume_metadata", {
+        params: { session_id: firstSessionId },
+        body: { command: "private" }
+      } as never)
+    ).rejects.toMatchObject({ reason: "client_contract" });
+    await expect(
+      harness.coordinator.requestSelectedSessionRead("session_resume_metadata", {
+        params: { session_id: firstSessionId },
+        query: { retry: "true" }
+      } as never)
+    ).rejects.toMatchObject({ reason: "client_contract" });
+    expect(harness.http.requests).toHaveLength(exactResumeRequestCount);
+
     const event = selectedProjectionEventSchema.parse({
       session_id: firstSessionId,
       cursor: 1,
@@ -2166,13 +2216,13 @@ describe("browser shell connection-state coordinator", () => {
 
     const late = deferred<BrowserHttpResponsePort>();
     harness.http.enqueue("detail", () => late.promise);
-    const pending = harness.coordinator.requestSelectedSessionRead("model_read", {
+    const pending = harness.coordinator.requestSelectedSessionRead("session_resume_metadata", {
       params: { session_id: firstSessionId }
     });
     await settle();
     enqueueRemoteWriterMission(harness, [], 7, 2);
     await harness.coordinator.setTarget({ kind: "mission_control" });
-    late.resolve(jsonResponse(200, modelSnapshot()));
+    late.resolve(jsonResponse(200, resumeMetadata()));
     await expect(pending).rejects.toMatchObject({ reason: "not_ready" });
     harness.coordinator.close();
   });
@@ -2873,6 +2923,26 @@ function modelSnapshot() {
         ]
       }
     ]
+  });
+}
+
+function resumeMetadata() {
+  const launch = {
+    executable: "codex",
+    args: [
+      "resume",
+      "--remote",
+      "unix:///run/user/1000/hostdeck/connection-state-private.sock",
+      `thread-${firstSessionId}`
+    ]
+  } as const;
+  return selectedResumeMetadataResponseSchema.parse({
+    session_id: firstSessionId,
+    local_only: true,
+    available: true,
+    command: formatSelectedResumeLaunchCommand(launch),
+    launch,
+    unavailable_reason: null
   });
 }
 

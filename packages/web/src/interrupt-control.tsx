@@ -41,12 +41,22 @@ import type {
   BrowserConnectionStateCoordinator
 } from "./connection-state.js";
 import {
-  createInterruptControlController, 
+  createInterruptControlController,
   type InterruptControlController,
   type InterruptControlTone,
   type InterruptControlView,
   type InterruptResultView
 } from "./interrupt-control-state.js";
+import {
+  LaptopResumeActionItem,
+  LaptopResumeSheetBody,
+  useLaptopResumeControlView
+} from "./laptop-resume-control.js";
+import type {
+  LaptopResumeControlController,
+  LaptopResumeControlTone,
+  LaptopResumeControlView
+} from "./laptop-resume-control-state.js";
 import type {
   SessionDetailContinuityBoundary,
   SessionDetailFeedState
@@ -60,10 +70,11 @@ export interface SessionActionsSheetProps {
   readonly archive: ArchiveControlController;
   readonly controller: InterruptControlController;
   readonly hostAccess: ReactNode;
+  readonly laptopResume: LaptopResumeControlController;
   readonly onArchiveSucceeded: () => void;
 }
 
-type SessionActionsPage = "menu" | "host" | "interrupt" | "archive";
+type SessionActionsPage = "menu" | "host" | "interrupt" | "archive" | "laptop_resume";
 type SessionActionsMode =
   | "menu"
   | "host"
@@ -72,8 +83,9 @@ type SessionActionsMode =
   | "interrupt_result"
   | "archive_confirmation"
   | "archive_pending"
-  | "archive_result";
-type SessionActionFocusOwner = "interrupt" | "archive";
+  | "archive_result"
+  | "laptop_resume";
+type SessionActionFocusOwner = "interrupt" | "archive" | "laptop_resume";
 
 const timestampFormatter = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -165,50 +177,73 @@ export function SessionActionsSheet({
   archive,
   controller,
   hostAccess,
+  laptopResume,
   onArchiveSucceeded
 }: SessionActionsSheetProps) {
   const view = useInterruptControlView(controller);
   const archiveView = useArchiveControlView(archive);
+  const laptopResumeView = useLaptopResumeControlView(laptopResume);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [page, setPage] = useState<SessionActionsPage>("menu");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const interruptItemRef = useRef<HTMLButtonElement | null>(null);
   const archiveItemRef = useRef<HTMLButtonElement | null>(null);
+  const laptopResumeItemRef = useRef<HTMLButtonElement | null>(null);
   const hostItemRef = useRef<HTMLButtonElement | null>(null);
   const backButtonRef = useRef<HTMLButtonElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const doneButtonRef = useRef<HTMLButtonElement | null>(null);
+  const laptopResumeActionRef = useRef<HTMLButtonElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const returnFocusOwner = useRef<SessionActionFocusOwner | null>(null);
   const descriptionId = useId();
-  const mode = sessionActionsMode(page, view, archiveView);
+  const mode = sessionActionsMode(page, view, archiveView, laptopResumeView);
   const closeDisabled = view.closeDisabled || archiveView.closeDisabled;
   const busy = view.busy || archiveView.busy;
 
   useLayoutEffect(() => {
     if (!dialogOpen) return;
     queueMicrotask(() => {
-      const focusTarget = mode === "menu"
-        ? returnFocusOwner.current === "interrupt"
-          ? interruptItemRef.current
-          : returnFocusOwner.current === "archive"
-            ? archiveItemRef.current
-            : view.actionEnabled
-              ? interruptItemRef.current
-              : archiveView.actionEnabled
-                ? archiveItemRef.current
-                : hostItemRef.current
-        : mode === "host"
-          ? backButtonRef.current
-          : isConfirmationMode(mode)
-            ? cancelButtonRef.current
-            : isResultMode(mode)
-              ? doneButtonRef.current
-              : contentRef.current;
+      let focusTarget: HTMLElement | null = contentRef.current;
+      if (mode === "menu") {
+        const menuActions = [
+          { owner: "interrupt", item: interruptItemRef.current, enabled: view.actionEnabled },
+          { owner: "archive", item: archiveItemRef.current, enabled: archiveView.actionEnabled },
+          {
+            owner: "laptop_resume",
+            item: laptopResumeItemRef.current,
+            enabled: laptopResumeView.actionEnabled
+          }
+        ] as const;
+        const preferred = menuActions.find(
+          (action) => action.owner === returnFocusOwner.current && action.enabled
+        );
+        focusTarget = preferred?.item ??
+          menuActions.find((action) => action.enabled)?.item ??
+          hostItemRef.current;
+      } else if (mode === "host") {
+        focusTarget = backButtonRef.current;
+      } else if (mode === "laptop_resume") {
+        focusTarget = laptopResumeView.copyEnabled || laptopResumeView.refreshEnabled
+          ? laptopResumeActionRef.current
+          : contentRef.current;
+      } else if (isConfirmationMode(mode)) {
+        focusTarget = cancelButtonRef.current;
+      } else if (isResultMode(mode)) {
+        focusTarget = doneButtonRef.current;
+      }
       returnFocusOwner.current = null;
       focusTarget?.focus();
     });
-  }, [archiveView.actionEnabled, dialogOpen, mode, view.actionEnabled]);
+  }, [
+    archiveView.actionEnabled,
+    dialogOpen,
+    laptopResumeView.actionEnabled,
+    laptopResumeView.copyEnabled,
+    laptopResumeView.refreshEnabled,
+    mode,
+    view.actionEnabled
+  ]);
 
   const setOpen = (open: boolean) => {
     if (open) {
@@ -227,6 +262,7 @@ export function SessionActionsSheet({
     if (closeDisabled) return;
     controller.dismiss();
     archive.dismiss();
+    laptopResume.dismiss();
     setPage("menu");
     setDialogOpen(false);
   };
@@ -239,6 +275,9 @@ export function SessionActionsSheet({
     } else if (page === "archive") {
       archive.cancelConfirmation();
       returnFocusOwner.current = "archive";
+    } else if (page === "laptop_resume") {
+      laptopResume.dismiss();
+      returnFocusOwner.current = "laptop_resume";
     }
     setPage("menu");
   };
@@ -247,6 +286,7 @@ export function SessionActionsSheet({
     if (busy) return;
     controller.dismiss();
     archive.dismiss();
+    laptopResume.dismiss();
     setPage("menu");
     setDialogOpen(false);
   };
@@ -255,6 +295,7 @@ export function SessionActionsSheet({
     if (busy) return;
     archive.dismiss();
     controller.dismiss();
+    laptopResume.dismiss();
     setPage("menu");
     setDialogOpen(false);
   };
@@ -264,6 +305,7 @@ export function SessionActionsSheet({
     archive.acknowledgeResult();
     archive.dismiss();
     controller.dismiss();
+    laptopResume.dismiss();
     setPage("menu");
     setDialogOpen(false);
     onArchiveSucceeded();
@@ -283,15 +325,25 @@ export function SessionActionsSheet({
     setPage("archive");
   };
 
+  const beginLaptopResume = () => {
+    if (!laptopResumeView.actionEnabled) return;
+    returnFocusOwner.current = "laptop_resume";
+    setPage("laptop_resume");
+    void laptopResume.open();
+  };
+
   const title = sessionActionsTitle(mode, view, archiveView);
   const interruptTargetLabel = view.targetLabel ?? view.target?.sessionLabel;
   const archiveTargetLabel = archiveView.targetLabel ?? archiveView.target?.sessionLabel;
+  const laptopResumeTargetLabel = laptopResumeView.targetLabel;
   const targetLabel = mode.startsWith("archive_")
     ? archiveTargetLabel ?? "current session"
     : mode.startsWith("interrupt_")
       ? interruptTargetLabel ?? "current session"
-      : interruptTargetLabel ?? archiveTargetLabel ?? "current session";
-  const tone = sessionActionsTone(mode, view, archiveView);
+      : mode === "laptop_resume"
+        ? laptopResumeTargetLabel ?? "current session"
+        : interruptTargetLabel ?? archiveTargetLabel ?? laptopResumeTargetLabel ?? "current session";
+  const tone = sessionActionsTone(mode, view, archiveView, laptopResumeView);
 
   return (
     <Dialog.Root open={dialogOpen} onOpenChange={setOpen}>
@@ -328,7 +380,7 @@ export function SessionActionsSheet({
           <span className="hostdeck-sheet__handle" aria-hidden="true" />
           <div className="hostdeck-sheet__header hostdeck-session-actions__header">
             <span className="hostdeck-session-actions__heading">
-              {mode === "host" || isConfirmationMode(mode) ? (
+              {mode === "host" || mode === "laptop_resume" || isConfirmationMode(mode) ? (
                 <button
                   ref={backButtonRef}
                   type="button"
@@ -369,9 +421,12 @@ export function SessionActionsSheet({
                 archiveView={archiveView}
                 hostItemRef={hostItemRef}
                 interruptItemRef={interruptItemRef}
+                laptopResumeItemRef={laptopResumeItemRef}
+                laptopResumeView={laptopResumeView}
                 onArchive={beginArchive}
                 onHostAccess={() => setPage("host")}
                 onInterrupt={beginInterrupt}
+                onLaptopResume={beginLaptopResume}
                 view={view}
               />
             ) : mode === "host" ? (
@@ -402,6 +457,12 @@ export function SessionActionsSheet({
               />
             ) : mode === "archive_pending" ? (
               <ArchivePending view={archiveView} />
+            ) : mode === "laptop_resume" ? (
+              <LaptopResumeSheetBody
+                copyButtonRef={laptopResumeActionRef}
+                controller={laptopResume}
+                view={laptopResumeView}
+              />
             ) : (
               <ArchiveResult
                 doneButtonRef={doneButtonRef}
@@ -422,18 +483,24 @@ function SessionActionsMenu({
   archiveView,
   hostItemRef,
   interruptItemRef,
+  laptopResumeItemRef,
+  laptopResumeView,
   onArchive,
   onHostAccess,
   onInterrupt,
+  onLaptopResume,
   view
 }: Readonly<{
   archiveItemRef: RefObject<HTMLButtonElement | null>;
   archiveView: ArchiveControlView;
   hostItemRef: RefObject<HTMLButtonElement | null>;
   interruptItemRef: RefObject<HTMLButtonElement | null>;
+  laptopResumeItemRef: RefObject<HTMLButtonElement | null>;
+  laptopResumeView: LaptopResumeControlView;
   onArchive: () => void;
   onHostAccess: () => void;
   onInterrupt: () => void;
+  onLaptopResume: () => void;
   view: InterruptControlView;
 }>) {
   const detail = view.actionEnabled && view.target !== null
@@ -465,6 +532,13 @@ function SessionActionsMenu({
             itemRef={archiveItemRef}
             onArchive={onArchive}
             view={archiveView}
+          />
+        </li>
+        <li>
+          <LaptopResumeActionItem
+            itemRef={laptopResumeItemRef}
+            onResume={onLaptopResume}
+            view={laptopResumeView}
           />
         </li>
         <li>
@@ -687,9 +761,11 @@ function InterruptTime({ value }: Readonly<{ value: string }>) {
 function sessionActionsMode(
   page: SessionActionsPage,
   view: InterruptControlView,
-  archiveView: ArchiveControlView
+  archiveView: ArchiveControlView,
+  laptopResumeView: LaptopResumeControlView
 ): SessionActionsMode {
   if (page === "host") return "host";
+  if (page === "laptop_resume" && laptopResumeView.sheetOpen) return "laptop_resume";
   if (page === "interrupt") {
     if (view.busy) return "interrupt_pending";
     if (view.resultOpen && view.result !== null) return "interrupt_result";
@@ -713,6 +789,7 @@ function sessionActionsTitle(
   if (mode === "interrupt_result") return view.result?.label ?? "Interrupt result";
   if (mode === "interrupt_pending") return "Interrupt active turn";
   if (mode === "interrupt_confirmation") return "Interrupt active turn?";
+  if (mode === "laptop_resume") return "Resume on laptop";
   if (mode === "archive_result") return archiveView.result?.label ?? "Archive result";
   if (mode === "archive_pending") return "Archive session";
   return "Archive session?";
@@ -721,13 +798,16 @@ function sessionActionsTitle(
 function sessionActionsTone(
   mode: SessionActionsMode,
   view: InterruptControlView,
-  archiveView: ArchiveControlView
-): InterruptControlTone | ArchiveControlTone {
+  archiveView: ArchiveControlView,
+  laptopResumeView: LaptopResumeControlView
+): InterruptControlTone | ArchiveControlTone | LaptopResumeControlTone {
   if (mode.startsWith("archive_")) return archiveView.tone;
   if (mode.startsWith("interrupt_")) return view.tone;
+  if (mode === "laptop_resume") return laptopResumeView.tone;
   if (mode === "host") return "focus";
   if (view.actionEnabled) return view.tone;
-  return archiveView.actionEnabled ? archiveView.tone : "attention";
+  if (archiveView.actionEnabled) return archiveView.tone;
+  return laptopResumeView.actionEnabled ? laptopResumeView.tone : "attention";
 }
 
 function isConfirmationMode(mode: SessionActionsMode): boolean {

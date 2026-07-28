@@ -326,7 +326,12 @@ describe("Session Detail screen", () => {
       Array.from(menu.querySelectorAll(".hostdeck-utility-menu__item strong"), (item) =>
         item.textContent
       )
-    ).toEqual(["Interrupt active turn", "Archive session", "Host & access"]);
+    ).toEqual([
+      "Interrupt active turn",
+      "Archive session",
+      "Resume on laptop",
+      "Host & access"
+    ]);
     fireEvent.click(screen.getByRole("button", { name: /Interrupt active turn/iu }));
     expect(screen.getByRole("dialog", { name: "Interrupt active turn?" }).textContent).toContain(
       exactTurnId
