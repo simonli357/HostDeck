@@ -25,12 +25,19 @@ import {
   computeFileIdentity,
   computeManifestSha256,
   computeOwnedOutputIdentity,
+  createProductionWebManifest,
   inspectProductionPackageTree,
   productionPackageManifestName,
   productionPackageSourceCount,
   productionPackageVerifierName,
+  productionWebBrowserRoutes,
+  productionWebLimits,
+  productionWebManifestName,
+  productionWebMediaType,
+  productionWebViteVersion,
   sha256Hex,
-  verifyProductionPackage
+  verifyProductionPackage,
+  verifyProductionWebAssets
 } from "./verify-production-package.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
@@ -48,7 +55,6 @@ const expectedExternalModules = [
   "zod"
 ];
 const downstreamDeferrals = [
-  "IFC-V1-053",
   "IFC-V1-056",
   "IFC-V1-057",
   "IFC-V1-058"
@@ -149,9 +155,16 @@ export function buildProductionPackage(options = {}) {
   const emitRoot = join(stagingRoot, "emit");
   const deployRoot = join(stagingRoot, "deploy");
   const packageRoot = join(stagingRoot, "package");
+  const webBuildRoot = join(stagingRoot, "web-build");
   try {
     compileSelectedSources(repositoryRoot, stagingRoot, emitRoot, sources);
     assertExactCompilerOutput(emitRoot, sources);
+    buildProductionWebAssets({
+      packageVersion,
+      repositoryRoot,
+      rootManifest,
+      webBuildRoot
+    });
     deployProductionDependencies(repositoryRoot, deployRoot);
     cpSync(deployRoot, packageRoot, {
       dereference: false,
@@ -169,6 +182,13 @@ export function buildProductionPackage(options = {}) {
       repositoryRoot,
       sourceCounts
     });
+    cpSync(webBuildRoot, join(packageRoot, "web"), {
+      dereference: false,
+      errorOnExist: true,
+      force: false,
+      recursive: true,
+      verbatimSymlinks: true
+    });
     removePackageManagerMetadata(packageRoot);
     pruneNativeBuildIntermediates(packageRoot);
     copyFileSync(
@@ -180,11 +200,16 @@ export function buildProductionPackage(options = {}) {
     normalizePackageModes(packageRoot, new Set(executableFiles));
     const command = collectHostDeckCommand(packageRoot, packageVersion);
     const serviceHost = collectHostDeckServiceHost(packageRoot, packageVersion);
+    const web = verifyProductionWebAssets(join(packageRoot, "web"), {
+      browserRoutes: productionWebBrowserRoutes,
+      packageVersion,
+      viteVersion: productionWebViteVersion
+    });
     const nativeModules = collectRequiredNativeModules(packageRoot, executableFiles);
     const ownedOutput = computeOwnedOutputIdentity(packageRoot, descriptors);
     const content = inspectProductionPackageTree(packageRoot, executableFiles);
     const manifest = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       name: "hostdeck-production-package",
       packageVersion,
       packageManager: `pnpm@${runtime.pnpm}`,
@@ -199,6 +224,7 @@ export function buildProductionPackage(options = {}) {
       packages: descriptors,
       nativeModules,
       executableFiles,
+      web,
       deferrals: downstreamDeferrals
     };
     manifest.manifestSha256 = computeManifestSha256(manifest);
@@ -214,7 +240,10 @@ export function buildProductionPackage(options = {}) {
       outputCount: verification.outputCount,
       outputRoot,
       packageVersion,
-      sourceCount: sources.length
+      sourceCount: sources.length,
+      webBytes: web.bytes,
+      webFileCount: web.fileCount,
+      webSha256: web.sha256
     });
   } finally {
     removeTree(stagingRoot);
@@ -307,6 +336,292 @@ function assertBuildRuntime(repositoryRoot, rootManifest) {
     platform: process.platform,
     pnpm: observedPnpm
   });
+}
+
+function buildProductionWebAssets(input) {
+  const configuredViteVersion = parseExactVersion(
+    input.rootManifest.devDependencies?.vite,
+    "Required Vite version"
+  );
+  if (configuredViteVersion !== productionWebViteVersion) {
+    throw new Error(
+      `Production web build requires Vite ${productionWebViteVersion}; configured ${configuredViteVersion}.`
+    );
+  }
+  const environment = createProductionWebBuildEnvironment();
+  runPnpm(
+    input.repositoryRoot,
+    [
+      "--filter",
+      "@hostdeck/web",
+      "exec",
+      "vite",
+      "build",
+      "--config",
+      "vite.config.ts",
+      "--outDir",
+      input.webBuildRoot,
+      "--emptyOutDir",
+      "--manifest",
+      ".hostdeck-vite-manifest.json"
+    ],
+    "Production Vite web build",
+    { env: environment.env }
+  );
+  const viteManifestPath = join(input.webBuildRoot, ".hostdeck-vite-manifest.json");
+  const viteManifest = readBoundedJson(viteManifestPath, 1_048_576, "Vite web manifest");
+  const inventory = inspectViteManifest(viteManifest, input.webBuildRoot);
+  rmSync(viteManifestPath);
+
+  const indexPath = join(input.webBuildRoot, "index.html");
+  const assets = inventory.assetPaths.map((path) => ({
+    content: readFileSync(join(input.webBuildRoot, ...path.split("/"))),
+    path
+  }));
+  const manifest = createProductionWebManifest({
+    assets,
+    browserRoutes: productionWebBrowserRoutes,
+    entryAssets: inventory.entryAssets,
+    index: { content: readFileSync(indexPath), path: "index.html" },
+    packageVersion: input.packageVersion,
+    viteVersion: productionWebViteVersion
+  });
+  writeJson(join(input.webBuildRoot, productionWebManifestName), manifest);
+  scanProductionWebOutput(input.webBuildRoot, environment.privateValues);
+}
+
+export function inspectViteManifest(candidate, webBuildRoot) {
+  if (!isPlainRecord(candidate)) throw new TypeError("Vite web manifest must be an object.");
+  const records = Object.entries(candidate).sort(([left], [right]) => left.localeCompare(right));
+  if (records.length < 1 || records.length > productionWebLimits.maxAssetFiles) {
+    throw new TypeError("Vite web manifest entry count is invalid.");
+  }
+  const allowedKeys = new Set([
+    "assets",
+    "css",
+    "dynamicImports",
+    "file",
+    "imports",
+    "isDynamicEntry",
+    "isEntry",
+    "name",
+    "names",
+    "src"
+  ]);
+  const recordKeys = new Set(records.map(([key]) => key));
+  const parsedRecords = new Map();
+  const claimedFiles = new Set();
+  let entryKey = null;
+  for (const [key, rawRecord] of records) {
+    if (key.length < 1 || key.length > 4_096 || key.includes("\0")) {
+      throw new TypeError("Vite manifest record key is invalid.");
+    }
+    if (!isPlainRecord(rawRecord)) throw new TypeError(`Vite manifest entry is invalid: ${key}`);
+    if (Object.keys(rawRecord).some((field) => !allowedKeys.has(field))) {
+      throw new TypeError(`Vite manifest entry fields are invalid: ${key}`);
+    }
+    for (const field of ["isDynamicEntry", "isEntry"]) {
+      if (rawRecord[field] !== undefined && typeof rawRecord[field] !== "boolean") {
+        throw new TypeError(`Vite ${field} flag is invalid: ${key}`);
+      }
+    }
+    for (const field of ["name", "src"]) {
+      if (
+        rawRecord[field] !== undefined &&
+        (typeof rawRecord[field] !== "string" ||
+          rawRecord[field].length < 1 ||
+          rawRecord[field].length > 4_096 ||
+          rawRecord[field].includes("\0"))
+      ) {
+        throw new TypeError(`Vite ${field} value is invalid: ${key}`);
+      }
+    }
+    if (
+      rawRecord.names !== undefined &&
+      (!Array.isArray(rawRecord.names) ||
+        rawRecord.names.some(
+          (name) => typeof name !== "string" || name.length < 1 || name.length > 4_096
+        ))
+    ) {
+      throw new TypeError(`Vite names inventory is invalid: ${key}`);
+    }
+    const file = parseViteOutputPath(rawRecord.file, "Vite output file");
+    if (claimedFiles.has(file)) {
+      throw new TypeError(`Vite output file is claimed by multiple records: ${file}`);
+    }
+    claimedFiles.add(file);
+    const associated = [];
+    for (const field of ["css", "assets"]) {
+      const paths = rawRecord[field] ?? [];
+      if (!Array.isArray(paths)) throw new TypeError(`Vite ${field} inventory is invalid.`);
+      const parsed = paths.map((path) => parseViteOutputPath(path, `Vite ${field} path`));
+      if (new Set(parsed).size !== parsed.length) {
+        throw new TypeError(`Vite ${field} inventory contains duplicates: ${key}`);
+      }
+      for (const path of parsed) {
+        if (claimedFiles.has(path)) {
+          throw new TypeError(`Vite output file is claimed by multiple records: ${path}`);
+        }
+        claimedFiles.add(path);
+      }
+      associated.push(...parsed);
+    }
+    const references = [];
+    for (const field of ["imports", "dynamicImports"]) {
+      const rawReferences = rawRecord[field] ?? [];
+      if (
+        !Array.isArray(rawReferences) ||
+        rawReferences.some(
+          (reference) => typeof reference !== "string" || !recordKeys.has(reference)
+        ) ||
+        new Set(rawReferences).size !== rawReferences.length
+      ) {
+        throw new TypeError(`Vite ${field} references are invalid.`);
+      }
+      references.push(...rawReferences);
+    }
+    if (rawRecord.isEntry === true) {
+      if (
+        entryKey !== null ||
+        rawRecord.src !== "index.html" ||
+        rawRecord.isDynamicEntry === true
+      ) {
+        throw new TypeError("Vite web manifest must contain one index entry.");
+      }
+      entryKey = key;
+    }
+    parsedRecords.set(key, Object.freeze({
+      associated: Object.freeze(associated),
+      file,
+      references: Object.freeze(references)
+    }));
+  }
+  if (entryKey === null) throw new TypeError("Vite web manifest omits its index entry.");
+
+  const reachable = new Set();
+  const pending = [entryKey];
+  while (pending.length > 0) {
+    const key = pending.pop();
+    if (reachable.has(key)) continue;
+    reachable.add(key);
+    const record = parsedRecords.get(key);
+    if (record === undefined) throw new TypeError("Vite manifest graph is internally inconsistent.");
+    pending.push(...record.references);
+  }
+  if (reachable.size !== parsedRecords.size) {
+    throw new TypeError("Vite web manifest contains an unreachable output record.");
+  }
+
+  const emitted = new Set();
+  for (const key of reachable) {
+    const record = parsedRecords.get(key);
+    emitted.add(record.file);
+    for (const path of record.associated) emitted.add(path);
+  }
+  const assetPaths = [...emitted].sort((left, right) => left.localeCompare(right));
+  const actualPaths = listRegularFiles(webBuildRoot)
+    .map((path) => portable(relative(webBuildRoot, path)))
+    .filter((path) => path !== ".hostdeck-vite-manifest.json" && path !== "index.html")
+    .sort((left, right) => left.localeCompare(right));
+  if (!sameArray(assetPaths, actualPaths)) {
+    throw new TypeError("Vite web manifest does not exactly describe emitted assets.");
+  }
+  const entryRecord = parsedRecords.get(entryKey);
+  const entryAssets = [entryRecord.file, ...entryRecord.associated]
+    .filter((path) => path.endsWith(".js") || path.endsWith(".css"))
+    .sort((left, right) => left.localeCompare(right));
+  return Object.freeze({ assetPaths, entryAssets: Object.freeze(entryAssets) });
+}
+
+function parseViteOutputPath(candidate, label) {
+  if (
+    typeof candidate !== "string" ||
+    !candidate.startsWith("assets/") ||
+    candidate.length > 4_096 ||
+    candidate.includes("\\") ||
+    candidate.includes("\0") ||
+    portable(resolve("/", candidate).slice(1)) !== candidate ||
+    !/-[a-zA-Z0-9_-]{8,}(?:\.[a-zA-Z0-9]+)+$/u.test(basename(candidate))
+  ) {
+    throw new TypeError(`${label} is invalid.`);
+  }
+  productionWebMediaType(candidate);
+  return candidate;
+}
+
+export function createProductionWebBuildEnvironment(sourceEnvironment = process.env) {
+  const path = sourceEnvironment.PATH;
+  if (
+    typeof path !== "string" ||
+    path.length < 1 ||
+    Buffer.byteLength(path, "utf8") > 32_768 ||
+    path.includes("\0")
+  ) {
+    throw new TypeError("Production web build PATH is invalid.");
+  }
+  const privateValues = [];
+  const privateKeyPattern = /(?:^VITE_|^HOSTDECK_|^CODEX_|^TAILSCALE_|AUTHORIZATION|COOKIE|CREDENTIAL|PASSWORD|PRIVATE|PROXY|SECRET|SESSION|TOKEN)/iu;
+  for (const [key, value] of Object.entries(sourceEnvironment)) {
+    if (value === undefined) continue;
+    if (privateKeyPattern.test(key)) {
+      if (Buffer.byteLength(value, "utf8") >= 12) privateValues.push(Buffer.from(value));
+    }
+  }
+  const env = {
+    CI: "1",
+    LANG: "C",
+    LC_ALL: "C",
+    NODE_ENV: "production",
+    NO_UPDATE_NOTIFIER: "1",
+    PATH: path,
+    TZ: "UTC",
+    npm_config_offline: "true"
+  };
+  return Object.freeze({ env: Object.freeze(env), privateValues: Object.freeze(privateValues) });
+}
+
+function scanProductionWebOutput(root, privateValues) {
+  const forbiddenText = [
+    Buffer.from("/src/"),
+    Buffer.from("@vite/client"),
+    Buffer.from("vite/hmr"),
+    Buffer.from("sourceMappingURL"),
+    Buffer.from("BEGIN PRIVATE KEY"),
+    Buffer.from("BEGIN OPENSSH PRIVATE KEY")
+  ];
+  for (const path of listRegularFiles(root)) {
+    const relativePath = portable(relative(root, path));
+    if (/\.(?:map|ts|tsx)$/iu.test(relativePath) || relativePath.startsWith(".")) {
+      throw new Error(`Production web output contains source or development content: ${relativePath}.`);
+    }
+    const content = readFileSync(path);
+    if (forbiddenText.some((token) => content.includes(token))) {
+      throw new Error(`Production web output contains a source or development reference: ${relativePath}.`);
+    }
+    if (privateValues.some((token) => content.includes(token))) {
+      throw new Error(`Production web output contains a private build value: ${relativePath}.`);
+    }
+  }
+}
+
+function readBoundedJson(path, maximumBytes, label) {
+  const stats = lstatSync(path);
+  if (!stats.isFile() || stats.isSymbolicLink() || stats.nlink !== 1 || stats.size < 1 || stats.size > maximumBytes) {
+    throw new TypeError(`${label} must be one bounded regular file.`);
+  }
+  try {
+    return JSON.parse(
+      new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(path))
+    );
+  } catch (cause) {
+    throw new TypeError(`${label} is invalid JSON or UTF-8.`, { cause });
+  }
+}
+
+function isPlainRecord(candidate) {
+  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) return false;
+  const prototype = Object.getPrototypeOf(candidate);
+  return prototype === Object.prototype || prototype === null;
 }
 
 function compileSelectedSources(repositoryRoot, stagingRoot, emitRoot, sources) {
@@ -633,20 +948,20 @@ function countSourcesByPackage(sources) {
   return counts;
 }
 
-function runPnpm(repositoryRoot, args, label = "pnpm") {
+function runPnpm(repositoryRoot, args, label = "pnpm", options = {}) {
   const npmExecPath = process.env.npm_execpath;
   if (typeof npmExecPath === "string" && existsSync(npmExecPath)) {
-    return runChecked(process.execPath, [npmExecPath, ...args], repositoryRoot, label);
+    return runChecked(process.execPath, [npmExecPath, ...args], repositoryRoot, label, options);
   }
-  return runChecked("pnpm", args, repositoryRoot, label);
+  return runChecked("pnpm", args, repositoryRoot, label, options);
 }
 
-function runChecked(command, args, cwd, label) {
+function runChecked(command, args, cwd, label, options = {}) {
   const result = spawnSync(command, args, {
     cwd,
     encoding: "utf8",
     env: {
-      ...process.env,
+      ...(options.env ?? process.env),
       CI: "1",
       NO_UPDATE_NOTIFIER: "1",
       npm_config_offline: "true"
@@ -744,7 +1059,7 @@ if (invokedPath === import.meta.url) {
   try {
     const result = buildProductionPackage();
     console.log(
-      `HostDeck package built: ${result.sourceCount} sources, ${result.outputCount} owned outputs, ${result.entryCount} entries, sha256:${result.contentSha256}.`
+      `HostDeck package built: ${result.sourceCount} sources, ${result.outputCount} owned outputs, ${result.entryCount} entries, ${result.webFileCount} web files (${result.webBytes} bytes, sha256:${result.webSha256}), package sha256:${result.contentSha256}.`
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

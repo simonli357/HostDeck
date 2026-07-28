@@ -4,11 +4,13 @@ import { defaultResourceBudget } from "@hostdeck/contracts";
 import {
   assertHostDeckProductionServiceServe,
   type HostDeckProductionServiceServe,
+  hostDeckProductionBrowserRoutes,
   type StartHostDeckProductionServiceServeInput,
   startHostDeckProductionServiceServe
 } from "@hostdeck/server";
 import {
   loadCliConfig,
+  loadRuntimePackageVersion,
   resolveCanonicalRuntimePackageRoot,
   resolveHostDeckCodexExecutable
 } from "./config.js";
@@ -27,10 +29,6 @@ const serviceHostModulePackageRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   ".."
 );
-const selectedBrowserRoutes = Object.freeze([
-  "/",
-  "/sessions/:session_id"
-] as const);
 const maximumServiceOutputBytes = 1_024;
 const serviceFailureOutput =
   "HostDeck service failed to start or stop cleanly.\n";
@@ -55,7 +53,7 @@ export async function runHostDeckServiceHost(
   );
   const codexBin = resolveHostDeckCodexExecutable(env);
   const input: StartHostDeckProductionServiceServeInput = {
-    browser_routes: selectedBrowserRoutes,
+    browser_routes: hostDeckProductionBrowserRoutes,
     codex_bin: codexBin,
     config_dir: config.configDir,
     database_path: config.databasePath,
@@ -65,6 +63,7 @@ export async function runHostDeckServiceHost(
     runtime_dir: config.runtimeDir,
     state_dir: config.stateDir,
     static_build_root: join(packageRoot, "web"),
+    static_package_version: loadRuntimePackageVersion(packageRoot),
     ...(options.signal === undefined ? {} : { signal: options.signal })
   };
   const start = options.startService ?? startHostDeckProductionServiceServe;

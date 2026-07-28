@@ -102,6 +102,7 @@ export interface StartHostDeckProductionForegroundServeInput
     issue: HostDeckProductionForegroundServeIssue
   ) => void;
   readonly static_build_root: string;
+  readonly static_package_version: string;
 }
 
 export interface HostDeckProductionForegroundServeSnapshot {
@@ -188,6 +189,7 @@ interface ParsedServeInput {
   readonly signal: AbortSignal | undefined;
   readonly stateDir: string;
   readonly staticBuildRoot: string;
+  readonly staticPackageVersion: string;
 }
 
 interface ParsedServeDependencies {
@@ -224,7 +226,8 @@ const inputKeys = [
   "runtime_dir",
   "signal",
   "state_dir",
-  "static_build_root"
+  "static_build_root",
+  "static_package_version"
 ] as const;
 const requiredInputKeys = inputKeys.filter((key) => key !== "signal");
 const dependencyKeys = [
@@ -399,7 +402,8 @@ async function startHostDeckProductionServe(
       browser_routes: parsed.browserRoutes,
       observe_issue: (issue) => report(issue.source, issue.code),
       resources,
-      static_build_root: parsed.staticBuildRoot
+      static_build_root: parsed.staticBuildRoot,
+      static_package_version: parsed.staticPackageVersion
     });
 
     stage = "listener";
@@ -708,7 +712,8 @@ function parseServeInput(input: unknown): ParsedServeInput {
     "database_path",
     "runtime_dir",
     "state_dir",
-    "static_build_root"
+    "static_build_root",
+    "static_package_version"
   ] as const;
   for (const key of stringKeys) {
     if (typeof values[key] !== "string") {
@@ -743,7 +748,8 @@ function parseServeInput(input: unknown): ParsedServeInput {
   createHostDeckStaticBoundaryRegistration({
     browserRoutes,
     buildRoot: values.static_build_root as string,
-    id: hostDeckProductionStaticRegistrationId
+    id: hostDeckProductionStaticRegistrationId,
+    packageVersion: values.static_package_version as string
   });
   return Object.freeze({
     browserRoutes,
@@ -757,7 +763,8 @@ function parseServeInput(input: unknown): ParsedServeInput {
     runtimeDir: values.runtime_dir as string,
     signal: values.signal as AbortSignal | undefined,
     stateDir: values.state_dir as string,
-    staticBuildRoot: values.static_build_root as string
+    staticBuildRoot: values.static_build_root as string,
+    staticPackageVersion: values.static_package_version as string
   });
 }
 

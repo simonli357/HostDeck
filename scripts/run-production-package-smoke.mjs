@@ -1,20 +1,23 @@
 import assert from "node:assert/strict";
 import {
   closeSync,
-  mkdirSync,
   mkdtempSync,
   openSync,
   readFileSync,
   realpathSync,
   rmSync,
-  statSync,
-  writeFileSync
+  statSync
 } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+
+import {
+  assertProductionWebHttpSurface,
+  loadProductionWebSmokeIdentity
+} from "./production-web-smoke-support.mjs";
 
 const packageRootArgument = process.argv[2];
 if (packageRootArgument === undefined) {
@@ -24,6 +27,7 @@ if (packageRootArgument === undefined) {
 const packageRoot = realpathSync(resolve(packageRootArgument));
 const requireReadOnly = process.argv.includes("--read-only");
 const manifest = JSON.parse(readFileSync(join(packageRoot, "hostdeck-package.json"), "utf8"));
+const webIdentity = loadProductionWebSmokeIdentity(packageRoot);
 const temporaryRoot = mkdtempSync(join(tmpdir(), "hostdeck-package-runtime-"));
 
 try {
@@ -146,9 +150,10 @@ async function assertFastifyLifecycle(server, contracts) {
       createRequestAuthenticationPolicy: () => authentication,
       createRoutePlugins: () => [
         server.createHostDeckStaticBoundaryRegistration({
-          browserRoutes: ["/"],
+          browserRoutes: webIdentity.browserRoutes,
           buildRoot: missingStatic,
-          id: "package-missing-static"
+          id: "package-missing-static",
+          packageVersion: webIdentity.packageVersion
         })
       ],
       observeInternalError: () => undefined,
@@ -160,12 +165,7 @@ async function assertFastifyLifecycle(server, contracts) {
   const released = await listenOn(rejectedPort);
   await closeServer(released);
 
-  const staticRoot = join(temporaryRoot, "static");
-  mkdirSync(join(staticRoot, "assets"), { recursive: true });
-  writeFileSync(join(staticRoot, "index.html"), "<!doctype html><p>PACKAGE_STATIC_SHELL</p>", { mode: 0o600 });
-  writeFileSync(join(staticRoot, "assets", "app-12345678.js"), "globalThis.hostDeckPackage = true;\n", {
-    mode: 0o600
-  });
+  const staticRoot = join(packageRoot, "web");
   const port = await getAvailablePort();
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -174,9 +174,10 @@ async function assertFastifyLifecycle(server, contracts) {
       createRoutePlugins: () => [
         probeRegistration(z),
         server.createHostDeckStaticBoundaryRegistration({
-          browserRoutes: ["/"],
+          browserRoutes: webIdentity.browserRoutes,
           buildRoot: staticRoot,
-          id: "package-static"
+          id: "package-static",
+          packageVersion: webIdentity.packageVersion
         })
       ],
       observeInternalError: () => undefined,
@@ -190,9 +191,11 @@ async function assertFastifyLifecycle(server, contracts) {
       });
       assert.equal(response.status, 200);
       assert.deepEqual(await response.json(), { ok: true });
-      const shell = await fetch(lifecycle.baseUrl, { headers: { connection: "close" } });
-      assert.equal(shell.status, 200);
-      assert.match(await shell.text(), /PACKAGE_STATIC_SHELL/u);
+      await assertProductionWebHttpSurface(
+        lifecycle.baseUrl,
+        webIdentity,
+        (url) => fetch(url, { headers: { connection: "close" } })
+      );
     } finally {
       await lifecycle.close();
     }

@@ -17,10 +17,13 @@ import {
   writeFileSync
 } from "node:fs";
 import { createConnection, createServer } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-
+import {
+  assertProductionWebHttpSurface,
+  loadProductionWebSmokeIdentity
+} from "./production-web-smoke-support.mjs";
 import { verifyProductionPackage } from "./verify-production-package.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
@@ -41,7 +44,7 @@ const managerUnitRoot = join(runtimeHome, "systemd", "user");
 const runtimeDir = join(runtimeHome, "hostdeck");
 const socketPath = join(runtimeDir, "app-server.sock");
 const unitNames = ["hostdeck-codex.service", "hostdeck.service"];
-const root = mkdtempSync(join(tmpdir(), "hostdeck-systemd-units-"));
+const root = mkdtempSync(join(homedir(), ".hostdeck-systemd-units-"));
 const packageRoot = join(root, "package");
 const homeDir = join(root, "home");
 const configHome = join(root, "config-home");
@@ -54,7 +57,6 @@ const commandDir = join(root, "bin");
 const environmentRoot = join(root, "environment");
 const environmentFile = join(environmentRoot, "hostdeck.env");
 const generatedUnitRoot = join(root, "units");
-const staticMarker = "SYSTEMD_USER_UNITS_SMOKE";
 const linkedUnitPaths = unitNames.map((name) => join(managerUnitRoot, name));
 let unitsLinked = false;
 let cleanupError = null;
@@ -75,7 +77,8 @@ try {
     verbatimSymlinks: true
   });
   chmodSync(packageRoot, 0o755);
-  createStaticFixture(join(packageRoot, "web"));
+  normalizePackageModes(packageRoot, new Set(sourceManifest.executableFiles));
+  const webIdentity = loadProductionWebSmokeIdentity(packageRoot);
   for (const path of [
     homeDir,
     configHome,
@@ -118,17 +121,16 @@ try {
   });
   verifyGeneratedUnits(generatedUnitPaths);
   makeReadOnly(packageRoot, new Set(sourceManifest.executableFiles));
-
   runSystemctl(["--runtime", "link", ...generatedUnitPaths]);
   unitsLinked = true;
   runSystemctl(["daemon-reload"]);
   assertLinkedUnits(generatedUnitPaths);
 
   runSystemctl(["start", "hostdeck.service"]);
-  await waitForUnitsReady(port);
+  await waitForUnitsReady(port, webIdentity);
   let codex = await requireActiveUnit("hostdeck-codex.service");
   let hostDeck = await requireActiveUnit("hostdeck.service");
-  await requireSingleMainProcess(codex);
+  await requireCodexLauncherProcessTree(codex);
   await requireSingleMainProcess(hostDeck);
   assertUnprivilegedProcess(codex.mainPid);
   assertUnprivilegedProcess(hostDeck.mainPid);
@@ -144,7 +146,7 @@ try {
   assert.equal(codex.mainPid, firstCodexPid);
   assert.equal(hostDeck.mainPid, firstHostDeckPid);
   assert.equal(socketIdentity(), firstSocketIdentity);
-  await requireSingleMainProcess(codex);
+  await requireCodexLauncherProcessTree(codex);
   await requireSingleMainProcess(hostDeck);
 
   runSystemctl(["restart", "hostdeck.service"]);
@@ -153,7 +155,7 @@ try {
   assert.equal(codex.mainPid, firstCodexPid);
   assert.equal(socketIdentity(), firstSocketIdentity);
   await eventuallyReady(port, 30_000);
-  await requireSingleMainProcess(codex);
+  await requireCodexLauncherProcessTree(codex);
   await requireSingleMainProcess(hostDeck);
   const secondHostDeckPid = hostDeck.mainPid;
 
@@ -164,7 +166,7 @@ try {
   await waitForSocketIdentityChange(firstSocketIdentity, 30_000);
   await assertPrivateSocket();
   await eventuallyReady(port, 30_000);
-  await requireSingleMainProcess(codex);
+  await requireCodexLauncherProcessTree(codex);
   await requireSingleMainProcess(hostDeck);
   const secondCodexPid = codex.mainPid;
 
@@ -194,7 +196,7 @@ try {
   await assertLoopbackPortAvailable(port);
 
   runSystemctl(["start", "hostdeck.service"]);
-  await waitForUnitsReady(port);
+  await waitForUnitsReady(port, webIdentity);
   codex = await requireActiveUnit("hostdeck-codex.service");
   hostDeck = await requireActiveUnit("hostdeck.service");
   assert.equal(codex.mainPid, thirdCodexPid);
@@ -218,16 +220,25 @@ try {
   assert.equal(codex.mainPid, leaseCodexPid);
   assert.equal(hostDeck.mainPid, leaseHostDeckPid);
   assert.equal(socketIdentity(), leaseSocketIdentity);
-  await requireSingleMainProcess(codex);
+  await requireCodexLauncherProcessTree(codex);
   await requireSingleMainProcess(hostDeck);
-  await assertLocalSurface(port);
+  await assertLocalSurface(port, webIdentity);
 
   const security = inspectUnitSecurity();
   assert.equal(security.length, 2);
   assert.deepEqual(observeTailscaleIdentity(), initialTailscaleIdentity);
-  assert.equal(
-    findFiles(codexHome).some((path) => path.endsWith(".jsonl")),
-    false
+  assert.deepEqual(
+    findFiles(codexHome)
+      .map((path) => relative(codexHome, path).split("\\").join("/"))
+      .filter(
+        (path) =>
+          path === "history.jsonl" ||
+          path.startsWith("sessions/") ||
+          path.startsWith("archived_sessions/")
+      )
+      .sort((left, right) => left.localeCompare(right)),
+    [],
+    "Codex app-server created unexpected model-turn state."
   );
 
   await cleanupUnits();
@@ -304,26 +315,20 @@ function inspectUnitSecurity() {
   });
 }
 
-async function waitForUnitsReady(port) {
+async function waitForUnitsReady(port, webIdentity) {
   await requireActiveUnit("hostdeck-codex.service");
   await requireActiveUnit("hostdeck.service");
   await assertPrivateSocket();
-  await assertLocalSurface(port);
+  await assertLocalSurface(port, webIdentity);
 }
 
-async function assertLocalSurface(port) {
+async function assertLocalSurface(port, webIdentity) {
   await eventuallyLive(port, 30_000);
   await eventuallyReady(port, 30_000);
-  const index = await fetchWithTimeout(`http://127.0.0.1:${port}/`);
-  assert.equal(index.status, 200);
-  assert.match(await index.text(), new RegExp(staticMarker, "u"));
-  const asset = await fetchWithTimeout(
-    `http://127.0.0.1:${port}/assets/app-12345678.js`
-  );
-  assert.equal(asset.status, 200);
-  assert.equal(
-    asset.headers.get("cache-control"),
-    "public, max-age=31536000, immutable"
+  await assertProductionWebHttpSurface(
+    `http://127.0.0.1:${port}`,
+    webIdentity,
+    fetchWithTimeout
   );
 }
 
@@ -445,15 +450,34 @@ function unitSnapshot(name) {
 
 async function requireSingleMainProcess(snapshot) {
   await eventually(async () => {
-    const path = join("/sys/fs/cgroup", snapshot.controlGroup, "cgroup.procs");
-    const pids = readFileSync(path, "utf8")
-      .trim()
-      .split("\n")
-      .filter(Boolean)
-      .map(Number)
-      .sort((left, right) => left - right);
+    const pids = readControlGroupPids(snapshot.controlGroup);
     return pids.length === 1 && pids[0] === snapshot.mainPid;
   }, 10_000, `${snapshot.name} did not settle to one main process.`);
+}
+
+async function requireCodexLauncherProcessTree(snapshot) {
+  await eventually(async () => {
+    const pids = readControlGroupPids(snapshot.controlGroup);
+    if (pids.length !== 2 || !pids.includes(snapshot.mainPid)) return false;
+    const childPid = pids.find((pid) => pid !== snapshot.mainPid);
+    return childPid !== undefined && processParentPid(childPid) === snapshot.mainPid;
+  }, 10_000, `${snapshot.name} did not settle to one launcher-owned native child.`);
+}
+
+function readControlGroupPids(controlGroup) {
+  const path = join("/sys/fs/cgroup", controlGroup, "cgroup.procs");
+  return readFileSync(path, "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map(Number)
+    .sort((left, right) => left - right);
+}
+
+function processParentPid(pid) {
+  const status = readFileSync(`/proc/${pid}/status`, "utf8");
+  const match = status.match(/^PPid:\s+(\d+)$/mu);
+  return match === null ? null : Number(match[1]);
 }
 
 function assertUnprivilegedProcess(pid) {
@@ -759,18 +783,6 @@ function requireRuntimeHome(selectedUid) {
   return path;
 }
 
-function createStaticFixture(buildRoot) {
-  mkdirSync(join(buildRoot, "assets"), { mode: 0o755, recursive: true });
-  writeFileSync(
-    join(buildRoot, "index.html"),
-    `<!doctype html><html><body>${staticMarker}</body></html>\n`,
-    { mode: 0o644 }
-  );
-  writeFileSync(join(buildRoot, "assets", "app-12345678.js"), "export {};\n", {
-    mode: 0o644
-  });
-}
-
 async function availableLoopbackPort() {
   const server = createServer();
   await new Promise((resolveListen, rejectListen) => {
@@ -838,6 +850,22 @@ function makeReadOnly(path, executableFiles) {
     } else if (stats.isFile()) {
       const logical = relative(path, entry).split("/").join("/");
       chmodSync(entry, executableFiles.has(logical) ? 0o555 : 0o444);
+    }
+  }
+}
+
+function normalizePackageModes(path, executableFiles) {
+  const entries = findEntries(path).sort((left, right) => right.length - left.length);
+  for (const entry of entries) {
+    const stats = lstatSync(entry);
+    if (stats.isSymbolicLink()) continue;
+    if (stats.isDirectory()) {
+      chmodSync(entry, 0o755);
+      continue;
+    }
+    if (stats.isFile()) {
+      const relativePath = relative(path, entry).split("\\").join("/");
+      chmodSync(entry, executableFiles.has(relativePath) ? 0o755 : 0o644);
     }
   }
 }

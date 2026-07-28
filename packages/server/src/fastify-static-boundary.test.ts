@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import {
   linkSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   truncateSync,
@@ -24,7 +26,8 @@ import { createHostDeckRequestTrustPolicy } from "./fastify-request-trust.js";
 import {
   type CreateHostDeckStaticBoundaryRegistrationInput,
   createHostDeckStaticBoundaryRegistration,
-  hostDeckStaticBoundaryLimits
+  hostDeckStaticBoundaryLimits,
+  hostDeckStaticContentSecurityPolicy
 } from "./fastify-static-boundary.js";
 import { testRequestAuthenticationPolicy } from "./test-request-authentication.js";
 
@@ -32,7 +35,7 @@ const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
   allowedOrigin: hostDeckLoopbackTestOrigin
 });
 
-const indexBody = "<!doctype html><html><body>HOSTDECK_STATIC_INDEX_SENTINEL</body></html>";
+const indexBody = '<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"><meta name="theme-color" content="#121313"><meta name="hostdeck-package-version" content="0.0.0"><title>HostDeck</title><script type="module" src="/assets/app-ABC123xy.js"></script><link rel="stylesheet" href="/assets/styles-12345678.css"></head><body><div id="root"></div>HOSTDECK_STATIC_INDEX_SENTINEL</body></html>';
 const javascriptBody = "globalThis.__hostdeckStaticFixture = true;\n";
 const temporaryDirectories = new Set<string>();
 
@@ -45,12 +48,13 @@ afterEach(() => {
 
 describe("explicit Fastify static-dashboard boundary", () => {
   it("rejects ambiguous registration input and copies an exact browser route allowlist", async () => {
-    const buildRoot = createBuildFixture();
+    const buildRoot = createBuildFixture(["/", "/sessions/:session_id", "/settings"]);
     const browserRoutes: `/${string}`[] = ["/", "/sessions/:session_id", "/settings"];
     const registration = createHostDeckStaticBoundaryRegistration({
       browserRoutes,
       buildRoot,
-      id: "dashboard-static"
+      id: "dashboard-static",
+      packageVersion: "0.0.0"
     });
     expect(Object.isFrozen(registration)).toBe(true);
     expect(registration).toMatchObject({ id: "dashboard-static", surface: "static" });
@@ -68,7 +72,8 @@ describe("explicit Fastify static-dashboard boundary", () => {
     const base: CreateHostDeckStaticBoundaryRegistrationInput = {
       browserRoutes: ["/"],
       buildRoot,
-      id: "dashboard-static"
+      id: "dashboard-static",
+      packageVersion: "0.0.0"
     };
     const invalidInputs: readonly [unknown, string][] = [
       [null, "must be an object"],
@@ -132,13 +137,14 @@ describe("explicit Fastify static-dashboard boundary", () => {
   });
 
   it("serves only explicit browser routes and validated assets with deterministic response policy", async () => {
-    const buildRoot = createBuildFixture();
+    const buildRoot = createBuildFixture(["/", "/sessions/:session_id", "/settings"]);
     const observations: HostDeckInternalErrorObservation[] = [];
     const app = createStaticApp(
       createHostDeckStaticBoundaryRegistration({
         browserRoutes: ["/", "/sessions/:session_id", "/settings"],
         buildRoot,
-        id: "dashboard-static"
+        id: "dashboard-static",
+        packageVersion: "0.0.0"
       }),
       observations
     );
@@ -151,6 +157,9 @@ describe("explicit Fastify static-dashboard boundary", () => {
         expect(response.body).toBe(indexBody);
         expect(response.headers["content-type"]).toContain("text/html");
         expect(response.headers["cache-control"]).toBe("no-store");
+        expect(response.headers["content-security-policy"]).toBe(
+          hostDeckStaticContentSecurityPolicy
+        );
         expect(response.headers["x-content-type-options"]).toBe("nosniff");
       }
 
@@ -172,21 +181,16 @@ describe("explicit Fastify static-dashboard boundary", () => {
       expect(stylesheet.headers["content-type"]).toContain("text/css");
       expect(stylesheet.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
 
-      const unhashed = await injectHostDeckLoopback(app, "/assets/plain.txt");
-      expect(unhashed.statusCode).toBe(200);
-      expect(unhashed.body).toBe("plain-static-fixture\n");
-      expect(unhashed.headers["content-type"]).toContain("text/plain");
-      expect(unhashed.headers["cache-control"]).toBe("no-store");
+      const text = await injectHostDeckLoopback(app, "/assets/plain-12345678.txt");
+      expect(text.statusCode).toBe(200);
+      expect(text.body).toBe("plain-static-fixture\n");
+      expect(text.headers["content-type"]).toContain("text/plain");
+      expect(text.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
 
-      const nested = await injectHostDeckLoopback(app, "/assets/nested/manifest.json");
+      const nested = await injectHostDeckLoopback(app, "/assets/nested/manifest-12345678.json");
       expect(nested.statusCode).toBe(200);
       expect(nested.json()).toEqual({ fixture: true });
-      expect(nested.headers["cache-control"]).toBe("no-store");
-
-      const hashedHtml = await injectHostDeckLoopback(app, "/assets/fragment-12345678.html");
-      expect(hashedHtml.statusCode).toBe(200);
-      expect(hashedHtml.headers["content-type"]).toContain("text/html");
-      expect(hashedHtml.headers["cache-control"]).toBe("no-store");
+      expect(nested.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
 
       const assetHead = await injectHostDeckLoopback(app, { method: "HEAD", url: "/assets/app-ABC123xy.js" });
       expect(assetHead.statusCode).toBe(200);
@@ -222,34 +226,43 @@ describe("explicit Fastify static-dashboard boundary", () => {
       createHostDeckStaticBoundaryRegistration({
         browserRoutes: ["/"],
         buildRoot,
-        id: "dashboard-static"
+        id: "dashboard-static",
+        packageVersion: "0.0.0"
       })
     );
     await app.ready();
     writeFileSync(join(buildRoot, "assets", ".secret"), "STATIC_SECRET_SENTINEL", { mode: 0o600 });
     writeFileSync(join(buildRoot, "assets", "late-added.txt"), "LATE_STATIC_SENTINEL", { mode: 0o600 });
     writeFileSync(join(buildRoot, "outside.txt"), "OUTSIDE_STATIC_SENTINEL", { mode: 0o600 });
-    rmSync(join(buildRoot, "assets", "plain.txt"));
-    symlinkSync("../index.html", join(buildRoot, "assets", "plain.txt"));
+    rmSync(join(buildRoot, "assets", "plain-12345678.txt"));
+    symlinkSync("../index.html", join(buildRoot, "assets", "plain-12345678.txt"));
     rmSync(join(buildRoot, "index.html"));
     symlinkSync("outside.txt", join(buildRoot, "index.html"));
+    writeFileSync(
+      join(buildRoot, "assets", "app-ABC123xy.js"),
+      "globalThis.__hostDeckMutated = true;\n",
+      { mode: 0o600 }
+    );
+    rmSync(join(buildRoot, "assets", "styles-12345678.css"));
 
     try {
       expectJsonError(await injectHostDeckLoopback(app, "/"), 404, "route_not_found");
       const deniedTargets = [
         "/assets",
         "/assets/",
-        "/assets//plain.txt",
+        "/assets//plain-12345678.txt",
         "/assets/.secret",
         "/assets/late-added.txt",
-        "/assets/plain.txt",
+        "/assets/app-ABC123xy.js",
+        "/assets/plain-12345678.txt",
+        "/assets/styles-12345678.css",
         "/assets/%2esecret",
         "/assets/%252esecret",
         "/assets/%252e%252e%252findex.html",
-        "/assets/nested%2f..%2fplain.txt",
+        "/assets/nested%2f..%2fplain-12345678.txt",
         "/assets/..%5cindex.html",
         "/assets/%252e%252e%255cindex.html",
-        "/assets/plain%00.txt",
+        "/assets/plain%00-12345678.txt",
         "/assets/%25/anything"
       ];
       for (const url of deniedTargets) {
@@ -268,8 +281,8 @@ describe("explicit Fastify static-dashboard boundary", () => {
       for (const path of [
         "/assets/../index.html",
         "/assets/%2e%2e/index.html",
-        "/assets/nested/../plain.txt",
-        "/assets/nested/%2e%2e/plain.txt"
+        "/assets/nested/../plain-12345678.txt",
+        "/assets/nested/%2e%2e/plain-12345678.txt"
       ]) {
         const response = await rawHttpGet(address.port, path);
         expect([400, 404], `${path} returned ${response.statusCode}`).toContain(response.statusCode);
@@ -290,7 +303,7 @@ describe("explicit Fastify static-dashboard boundary", () => {
     const missingIndex = createTemporaryDirectory("hostdeck-static-no-index-");
     mkdirSync(join(missingIndex, "assets"));
     writeFileSync(join(missingIndex, "assets", "app.js"), "asset", { mode: 0o600 });
-    await expectStaticBuildRejected(missingIndex, "ENOENT");
+    await expectStaticBuildRejected(missingIndex, "root inventory");
 
     const emptyIndex = createBuildFixture();
     truncateSync(join(emptyIndex, "index.html"), 0);
@@ -302,7 +315,7 @@ describe("explicit Fastify static-dashboard boundary", () => {
 
     const missingAssets = createTemporaryDirectory("hostdeck-static-no-assets-");
     writeFileSync(join(missingAssets, "index.html"), indexBody, { mode: 0o600 });
-    await expectStaticBuildRejected(missingAssets, "ENOENT");
+    await expectStaticBuildRejected(missingAssets, "root inventory");
 
     const emptyAssets = createBuildFixture();
     rmSync(join(emptyAssets, "assets"), { recursive: true });
@@ -317,24 +330,26 @@ describe("explicit Fastify static-dashboard boundary", () => {
 
     const linkedIndex = createBuildFixture();
     rmSync(join(linkedIndex, "index.html"));
-    writeFileSync(join(linkedIndex, "linked-index-source.html"), indexBody, { mode: 0o600 });
-    symlinkSync("linked-index-source.html", join(linkedIndex, "index.html"));
+    const linkedIndexSource = createTemporaryDirectory("hostdeck-static-index-target-");
+    writeFileSync(join(linkedIndexSource, "index.html"), indexBody, { mode: 0o600 });
+    symlinkSync(join(linkedIndexSource, "index.html"), join(linkedIndex, "index.html"));
     await expectStaticBuildRejected(linkedIndex, "nonempty bounded regular file");
 
-    const linkedAssetsRoot = createTemporaryDirectory("hostdeck-static-assets-link-");
-    writeFileSync(join(linkedAssetsRoot, "index.html"), indexBody, { mode: 0o600 });
+    const linkedAssetsRoot = createBuildFixture();
+    rmSync(join(linkedAssetsRoot, "assets"), { recursive: true });
     const externalAssets = createTemporaryDirectory("hostdeck-static-assets-target-");
     writeFileSync(join(externalAssets, "app.js"), "asset", { mode: 0o600 });
     symlinkSync(externalAssets, join(linkedAssetsRoot, "assets"), "dir");
     await expectStaticBuildRejected(linkedAssetsRoot, "must be a real directory");
 
     const linkedAsset = createBuildFixture();
-    symlinkSync("plain.txt", join(linkedAsset, "assets", "linked.txt"));
+    symlinkSync("plain-12345678.txt", join(linkedAsset, "assets", "linked-12345678.txt"));
     await expectStaticBuildRejected(linkedAsset, "cannot contain symbolic links");
 
     const hardLinkedAsset = createBuildFixture();
-    writeFileSync(join(hardLinkedAsset, "hard-link-source.txt"), "linked", { mode: 0o600 });
-    linkSync(join(hardLinkedAsset, "hard-link-source.txt"), join(hardLinkedAsset, "assets", "linked.txt"));
+    const hardLinkSource = createTemporaryDirectory("hostdeck-static-hard-link-");
+    writeFileSync(join(hardLinkSource, "source.txt"), "linked", { mode: 0o600 });
+    linkSync(join(hardLinkSource, "source.txt"), join(hardLinkedAsset, "assets", "linked-12345678.txt"));
     await expectStaticBuildRejected(hardLinkedAsset, "regular non-linked file");
 
     const hiddenAsset = createBuildFixture();
@@ -347,8 +362,8 @@ describe("explicit Fastify static-dashboard boundary", () => {
       deepDirectory = join(deepDirectory, `level-${depth}`);
       mkdirSync(deepDirectory);
     }
-    writeFileSync(join(deepDirectory, "deep.txt"), "deep", { mode: 0o600 });
-    await expectStaticBuildRejected(deepAssets, "directory depth exceeds");
+    writeFileSync(join(deepDirectory, "deep-12345678.txt"), "deep", { mode: 0o600 });
+    await expectStaticBuildRejected(deepAssets, "undeclared directory");
 
     const oversizedAsset = createBuildFixture();
     truncateSync(
@@ -359,11 +374,124 @@ describe("explicit Fastify static-dashboard boundary", () => {
 
     const oversizedTree = createBuildFixture();
     for (let index = 0; index < 8; index += 1) {
-      const path = join(oversizedTree, "assets", `large-${index}.bin`);
+      const path = join(oversizedTree, "assets", `large-${index}-12345678.txt`);
       writeFileSync(path, "", { mode: 0o600 });
       truncateSync(path, hostDeckStaticBoundaryLimits.maxAssetFileBytes);
     }
-    await expectStaticBuildRejected(oversizedTree, "total bytes exceed");
+    await expectStaticBuildRejected(oversizedTree, "undeclared file");
+  });
+
+  it("fails startup for manifest, descriptor, route, and resigned index drift", async () => {
+    const invalidJson = createBuildFixture();
+    writeFileSync(join(invalidJson, "hostdeck-web.json"), "{", { mode: 0o600 });
+    await expectStaticBuildRejected(invalidJson, "invalid JSON");
+
+    const extraField = createBuildFixture();
+    mutateBuildManifest(extraField, (manifest) => {
+      (manifest as MutableWebManifest & { unexpected?: boolean }).unexpected = true;
+    });
+    await expectStaticBuildRejected(extraField, "fields are invalid");
+
+    const schemaDrift = createBuildFixture();
+    mutateBuildManifest(schemaDrift, (manifest) => {
+      manifest.schemaVersion += 1;
+    });
+    await expectStaticBuildRejected(schemaDrift, "version identity is inconsistent");
+
+    const packageDrift = createBuildFixture();
+    mutateBuildManifest(packageDrift, (manifest) => {
+      manifest.packageVersion = "9.9.9";
+    });
+    await expectStaticBuildRejected(packageDrift, "version identity is inconsistent");
+
+    const routeDrift = createBuildFixture();
+    mutateBuildManifest(routeDrift, (manifest) => {
+      manifest.browserRoutes = ["/settings"];
+    });
+    await expectStaticBuildRejected(routeDrift, "browser routes are inconsistent");
+
+    const orderDrift = createBuildFixture();
+    mutateBuildManifest(orderDrift, (manifest) => {
+      manifest.assets.reverse();
+    });
+    await expectStaticBuildRejected(orderDrift, "descriptors must be sorted");
+
+    const countDrift = createBuildFixture();
+    mutateBuildManifest(countDrift, (manifest) => {
+      manifest.content.count += 1;
+    });
+    await expectStaticBuildRejected(countDrift, "content identity is inconsistent");
+
+    const descriptorDrift = createBuildFixture();
+    mutateBuildManifest(descriptorDrift, (manifest) => {
+      manifest.index.sha256 = "0".repeat(64);
+    });
+    await expectStaticBuildRejected(descriptorDrift, "index.html identity");
+
+    const referenceDrift = createBuildFixture();
+    mutateBuildManifest(referenceDrift, (manifest) => {
+      manifest.entryAssets = manifest.entryAssets.filter((path) => path.endsWith(".js"));
+    });
+    await expectStaticBuildRejected(referenceDrift, "entry references are inconsistent");
+
+    const markerDrift = createBuildFixture();
+    resignBuildIndex(markerDrift, (index) =>
+      index.replace('content="0.0.0"', 'content="9.9.9"')
+    );
+    await expectStaticBuildRejected(markerDrift, "invalid version");
+
+    const externalReference = createBuildFixture();
+    resignBuildIndex(externalReference, (index) =>
+      index.replace(
+        "/assets/app-ABC123xy.js",
+        "https://example.invalid/app-ABC123xy.js"
+      )
+    );
+    await expectStaticBuildRejected(externalReference, "external reference");
+
+    const inlineScript = createBuildFixture();
+    resignBuildIndex(inlineScript, (index) => `${index}<script>void 0</script>`);
+    await expectStaticBuildRejected(inlineScript, "inline executable script");
+
+    const duplicateMarker = createBuildFixture();
+    resignBuildIndex(duplicateMarker, (index) =>
+      index.replace(
+        "</head>",
+        '<meta name="hostdeck-package-version" content="0.0.0"></head>'
+      )
+    );
+    await expectStaticBuildRejected(duplicateMarker, "invalid version");
+
+    const documentDrift = createBuildFixture();
+    resignBuildIndex(documentDrift, (index) =>
+      index.replace("<title>HostDeck</title>", "")
+    );
+    await expectStaticBuildRejected(documentDrift, "document structure");
+
+    const foreignReference = createBuildFixture();
+    resignBuildIndex(foreignReference, (index) =>
+      index.replace("</body>", '<img src="/foreign.png"></body>')
+    );
+    await expectStaticBuildRejected(foreignReference, "entry references");
+
+    const invalidUtf8 = createBuildFixture();
+    resignBuildIndexBytes(invalidUtf8, (index) =>
+      Buffer.concat([index, Buffer.from([0xff])])
+    );
+    await expectStaticBuildRejected(invalidUtf8, "not valid UTF-8");
+
+    const caseCollision = createBuildFixture();
+    mutateBuildManifest(caseCollision, (manifest) => {
+      const source = manifest.assets.find(
+        (asset) => asset.path === "assets/app-ABC123xy.js"
+      );
+      if (source === undefined) throw new TypeError("Static test asset is missing.");
+      manifest.assets = [
+        ...manifest.assets,
+        { ...source, path: "assets/APP-ABC123xy.js" }
+      ].sort((left, right) => left.path.localeCompare(right.path));
+    });
+    await expectStaticBuildRejected(caseCollision, "case-unique");
   });
 });
 
@@ -380,22 +508,128 @@ function createStaticApp(
   });
 }
 
-function createBuildFixture(): string {
+function createBuildFixture(
+  browserRoutes: readonly `/${string}`[] = ["/"]
+): string {
   const buildRoot = createTemporaryDirectory("hostdeck-static-build-");
   mkdirSync(join(buildRoot, "assets", "nested"), { recursive: true });
-  writeFileSync(join(buildRoot, "index.html"), indexBody, { mode: 0o600 });
-  writeFileSync(join(buildRoot, "assets", "app-ABC123xy.js"), javascriptBody, { mode: 0o600 });
-  writeFileSync(join(buildRoot, "assets", "styles-12345678.css"), "body { color: black; }\n", {
-    mode: 0o600
-  });
-  writeFileSync(join(buildRoot, "assets", "plain.txt"), "plain-static-fixture\n", { mode: 0o600 });
-  writeFileSync(join(buildRoot, "assets", "fragment-12345678.html"), "<p>fragment fixture</p>\n", {
-    mode: 0o600
-  });
-  writeFileSync(join(buildRoot, "assets", "nested", "manifest.json"), '{"fixture":true}\n', {
-    mode: 0o600
-  });
+  const files = [
+    { cacheControl: "no-store", content: indexBody, mediaType: "text/html", path: "index.html" },
+    { cacheControl: "public, max-age=31536000, immutable", content: javascriptBody, mediaType: "text/javascript", path: "assets/app-ABC123xy.js" },
+    { cacheControl: "public, max-age=31536000, immutable", content: '{"fixture":true}\n', mediaType: "application/json", path: "assets/nested/manifest-12345678.json" },
+    { cacheControl: "public, max-age=31536000, immutable", content: "plain-static-fixture\n", mediaType: "text/plain", path: "assets/plain-12345678.txt" },
+    { cacheControl: "public, max-age=31536000, immutable", content: "body { color: black; }\n", mediaType: "text/css", path: "assets/styles-12345678.css" }
+  ] as const;
+  for (const file of files) {
+    writeFileSync(join(buildRoot, ...file.path.split("/")), file.content, { mode: 0o600 });
+  }
+  const descriptors = files.map((file) => ({
+    cacheControl: file.cacheControl,
+    mediaType: file.mediaType,
+    path: file.path,
+    sha256: sha256(file.content),
+    size: Buffer.byteLength(file.content)
+  }));
+  const content = staticIdentity(files.map((file) => ({ content: Buffer.from(file.content), path: file.path })));
+  writeFileSync(
+    join(buildRoot, "hostdeck-web.json"),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      name: "hostdeck-production-web",
+      packageVersion: "0.0.0",
+      viteVersion: "8.1.4",
+      browserRoutes,
+      entryAssets: ["assets/app-ABC123xy.js", "assets/styles-12345678.css"].sort(),
+      index: descriptors[0],
+      assets: descriptors.slice(1).sort((left, right) => left.path.localeCompare(right.path)),
+      content
+    }, null, 2)}\n`,
+    { mode: 0o600 }
+  );
   return buildRoot;
+}
+
+function staticIdentity(
+  entries: readonly { readonly content: Buffer; readonly path: string }[]
+): { readonly bytes: number; readonly count: number; readonly sha256: string } {
+  const hash = createHash("sha256");
+  let bytes = 0;
+  for (const entry of [...entries].sort((left, right) => left.path.localeCompare(right.path))) {
+    for (const value of ["file", entry.path, String(entry.content.length)]) {
+      const framed = Buffer.from(value);
+      hash.update(String(framed.length));
+      hash.update(":");
+      hash.update(framed);
+      hash.update(";");
+    }
+    hash.update(entry.content);
+    bytes += entry.content.length;
+  }
+  return Object.freeze({ bytes, count: entries.length, sha256: hash.digest("hex") });
+}
+
+function sha256(content: string | Buffer): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+interface MutableWebFileDescriptor {
+  cacheControl: string;
+  mediaType: string;
+  path: string;
+  sha256: string;
+  size: number;
+}
+
+interface MutableWebManifest {
+  assets: MutableWebFileDescriptor[];
+  browserRoutes: string[];
+  content: { bytes: number; count: number; sha256: string };
+  entryAssets: string[];
+  index: MutableWebFileDescriptor;
+  name: string;
+  packageVersion: string;
+  schemaVersion: number;
+  viteVersion: string;
+}
+
+function mutateBuildManifest(
+  buildRoot: string,
+  mutate: (manifest: MutableWebManifest) => void
+): void {
+  const path = join(buildRoot, "hostdeck-web.json");
+  const manifest = JSON.parse(readFileSync(path, "utf8")) as MutableWebManifest;
+  mutate(manifest);
+  writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
+}
+
+function resignBuildIndex(
+  buildRoot: string,
+  mutate: (index: string) => string
+): void {
+  resignBuildIndexBytes(buildRoot, (index) =>
+    Buffer.from(mutate(new TextDecoder("utf-8", { fatal: true }).decode(index)))
+  );
+}
+
+function resignBuildIndexBytes(
+  buildRoot: string,
+  mutate: (index: Buffer) => Buffer
+): void {
+  const indexPath = join(buildRoot, "index.html");
+  const changed = mutate(readFileSync(indexPath));
+  writeFileSync(indexPath, changed, { mode: 0o600 });
+  mutateBuildManifest(buildRoot, (manifest) => {
+    manifest.index.sha256 = sha256(changed);
+    manifest.index.size = changed.length;
+    const entries = [
+      { content: changed, path: "index.html" },
+      ...manifest.assets.map((asset) => ({
+        content: readFileSync(join(buildRoot, ...asset.path.split("/"))),
+        path: asset.path
+      }))
+    ];
+    manifest.content = staticIdentity(entries);
+  });
 }
 
 function createTemporaryDirectory(prefix: string): string {
@@ -409,7 +643,8 @@ async function expectStaticBuildRejected(buildRoot: string, causeFragment: strin
     createHostDeckStaticBoundaryRegistration({
       browserRoutes: ["/"],
       buildRoot,
-      id: "rejected-static"
+      id: "rejected-static",
+      packageVersion: "0.0.0"
     })
   );
   let failure: unknown;

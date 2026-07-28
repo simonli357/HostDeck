@@ -8,8 +8,7 @@ import {
   mkdirSync,
   mkdtempSync,
   realpathSync,
-  rmSync,
-  writeFileSync
+  rmSync
 } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -31,6 +30,7 @@ import {
   createHostDeckProductionApplication,
   type HostDeckProductionApplication
 } from "./production-application-composition.js";
+import { writeProductionWebTestFixture } from "./production-web-assets.test-support.js";
 
 const requireSmoke =
   process.env.HOSTDECK_REQUIRE_PRODUCTION_COMPOSITION_SMOKE === "1";
@@ -82,7 +82,8 @@ describe.skipIf(!requireSmoke)("exact production application composition smoke",
           browser_routes: ["/"],
           observe_issue: () => undefined,
           resources,
-          static_build_root: buildRoot
+          static_build_root: buildRoot,
+          static_package_version: "0.0.0"
         });
 
         const started = await withStartupDeadline((deadline) =>
@@ -322,17 +323,15 @@ function requireExactCodexBinary(candidate: string | undefined): string {
 }
 
 function createStaticFixture(buildRoot: string): void {
-  mkdirSync(join(buildRoot, "assets"), {
-    recursive: true,
-    mode: 0o700
-  });
-  writeFileSync(
-    join(buildRoot, "index.html"),
-    "<!doctype html><html><body>production composition smoke</body></html>\n",
-    { mode: 0o600 }
-  );
-  writeFileSync(join(buildRoot, "assets", "app-12345678.js"), "export {};\n", {
-    mode: 0o600
+  writeProductionWebTestFixture(buildRoot, {
+    assets: [
+      {
+        content: "export {};\n",
+        path: "assets/app-12345678.js"
+      }
+    ],
+    indexBody:
+      '<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"><meta name="theme-color" content="#121313"><meta name="hostdeck-package-version" content="0.0.0"><title>HostDeck</title><script type="module" src="/assets/app-12345678.js"></script></head><body><div id="root"></div>production composition smoke</body></html>\n'
   });
 }
 

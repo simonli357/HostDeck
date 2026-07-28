@@ -76,6 +76,7 @@ export type SessionDetailTurnState =
   | "unknown";
 
 export interface SessionDetailApiOptions {
+  readonly configuredOrigin?: string;
   readonly initialEvents?: readonly SessionDetailEventFixture[];
   readonly retentionBoundaryCursor?: number;
   readonly streamEvents?: readonly SessionDetailEventFixture[];
@@ -117,6 +118,7 @@ export async function installSessionDetailApi(
     | ((outcome: Exclude<SessionDetailCsrfOutcome, "pending">) => void)
     | null = null;
   const requests: Request[] = [];
+  const configuredOrigin = options.configuredOrigin ?? origin;
   const initialEvents = options.initialEvents === undefined
     ? eventsForVariant(initialVariant)
     : Object.freeze(
@@ -178,10 +180,10 @@ export async function installSessionDetailApi(
       await fulfillJson(
         route,
         variant === "denied"
-          ? deniedAccess("revoked_device")
+          ? deniedAccess("revoked_device", configuredOrigin)
           : variant === "expired"
-            ? deniedAccess("expired_device")
-            : pairedAccess(variant)
+            ? deniedAccess("expired_device", configuredOrigin)
+            : pairedAccess(variant, configuredOrigin)
       );
       return;
     }
@@ -696,7 +698,10 @@ async function fulfillPromptOutcome(
   await fulfillJson(route, response, 202);
 }
 
-function pairedAccess(variant: SessionDetailApiVariant) {
+function pairedAccess(
+  variant: SessionDetailApiVariant,
+  configuredOrigin: string
+) {
   const readOnly = variant === "read_only";
   const locked = variant === "locked";
   return {
@@ -704,7 +709,7 @@ function pairedAccess(variant: SessionDetailApiVariant) {
     device_id: "device_detail_phone",
     permission: readOnly ? "read" : "write",
     device_expires_at: "2026-10-22T18:00:00.000Z",
-    configured_origin: origin,
+    configured_origin: configuredOrigin,
     network_mode: "loopback",
     transport: "http",
     locked,
@@ -716,14 +721,15 @@ function pairedAccess(variant: SessionDetailApiVariant) {
 }
 
 function deniedAccess(
-  authenticationState: "expired_device" | "revoked_device"
+  authenticationState: "expired_device" | "revoked_device",
+  configuredOrigin: string
 ) {
   return {
     authentication_state: authenticationState,
     device_id: null,
     permission: null,
     device_expires_at: null,
-    configured_origin: origin,
+    configured_origin: configuredOrigin,
     network_mode: "loopback",
     transport: "http",
     locked: false,

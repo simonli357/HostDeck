@@ -356,6 +356,17 @@ function createFixture() {
   const codexBin = join(commandDir, "codex");
   mkdirSync(packageRoot, { mode: 0o700, recursive: true });
   mkdirSync(commandDir, { mode: 0o700, recursive: true });
+  writeFileSync(
+    join(packageRoot, "package.json"),
+    `${JSON.stringify({
+      name: "@hostdeck/cli",
+      version: "0.0.0",
+      private: true,
+      type: "module",
+      bin: { codexdeck: "./dist/shell.js" }
+    })}\n`,
+    { mode: 0o600 }
+  );
   writeFileSync(codexBin, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
   chmodSync(codexBin, 0o700);
   return {

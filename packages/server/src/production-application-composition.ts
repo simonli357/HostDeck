@@ -178,6 +178,7 @@ export interface CreateHostDeckProductionApplicationInput {
   readonly observe_issue: (issue: HostDeckProductionApplicationIssue) => void;
   readonly resources: HostDeckProductionResources;
   readonly static_build_root: string;
+  readonly static_package_version: string;
 }
 
 export interface HostDeckProductionListenerHealthPort {
@@ -221,6 +222,7 @@ interface ParsedCompositionInput {
   readonly observeIssue: CreateHostDeckProductionApplicationInput["observe_issue"];
   readonly resources: HostDeckProductionResources;
   readonly staticBuildRoot: string;
+  readonly staticPackageVersion: string;
 }
 
 interface IssueRuntime {
@@ -242,7 +244,8 @@ const inputKeys = [
   "browser_routes",
   "observe_issue",
   "resources",
-  "static_build_root"
+  "static_build_root",
+  "static_package_version"
 ] as const;
 const runtimeStartKeys = ["deadline", "resourceBudget"] as const;
 const issueCodePattern = /^[a-z][a-z0-9_]{0,119}$/u;
@@ -255,7 +258,8 @@ export function createHostDeckProductionApplication(
   const staticRoute = createHostDeckStaticBoundaryRegistration({
     browserRoutes: parsed.browserRoutes,
     buildRoot: parsed.staticBuildRoot,
-    id: hostDeckProductionStaticRegistrationId
+    id: hostDeckProductionStaticRegistrationId,
+    packageVersion: parsed.staticPackageVersion
   });
   const resources = parsed.resources;
   const budget = resources.resource_budget;
@@ -1018,14 +1022,18 @@ function parseCompositionInput(input: unknown): ParsedCompositionInput {
       "HostDeck production application issue observer is invalid."
     );
   }
-  if (typeof values.static_build_root !== "string") {
+  if (
+    typeof values.static_build_root !== "string" ||
+    typeof values.static_package_version !== "string"
+  ) {
     throw new TypeError("HostDeck production static build root is invalid.");
   }
   return Object.freeze({
     browserRoutes: copyBrowserRoutes(values.browser_routes),
     observeIssue: values.observe_issue as ParsedCompositionInput["observeIssue"],
     resources,
-    staticBuildRoot: values.static_build_root
+    staticBuildRoot: values.static_build_root,
+    staticPackageVersion: values.static_package_version
   });
 }
 

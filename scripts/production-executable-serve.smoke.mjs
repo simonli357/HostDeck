@@ -11,15 +11,17 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
-  symlinkSync,
-  writeFileSync
+  symlinkSync
 } from "node:fs";
 import { request as requestHttp } from "node:http";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-
+import {
+  assertProductionWebHttpSurface,
+  loadProductionWebSmokeIdentity
+} from "./production-web-smoke-support.mjs";
 import { verifyProductionPackage } from "./verify-production-package.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
@@ -58,16 +60,16 @@ try {
     recursive: true,
     verbatimSymlinks: true
   });
-  createStaticFixture(join(packageRoot, "web"));
+  const manifest = JSON.parse(
+    readFileSync(join(packageRoot, "hostdeck-package.json"), "utf8")
+  );
+  makeReadOnly(packageRoot, new Set(manifest.executableFiles));
+  const webIdentity = loadProductionWebSmokeIdentity(packageRoot);
   for (const path of [homeDir, runtimeHome, codexHome, commandDir]) {
     mkdirSync(path, { mode: 0o700, recursive: true });
     chmodSync(path, 0o700);
   }
   symlinkSync(process.execPath, join(commandDir, "node"));
-  const manifest = JSON.parse(
-    readFileSync(join(packageRoot, "hostdeck-package.json"), "utf8")
-  );
-  makeReadOnly(packageRoot, new Set(manifest.executableFiles));
   const command = join(packageRoot, manifest.command.path);
   const port = await availableLoopbackPort();
 
@@ -80,16 +82,10 @@ try {
     );
     assert.equal(live.status, 200);
     assert.deepEqual(await live.json(), { status: "alive" });
-    const index = await fetchWithTimeout(`http://127.0.0.1:${port}/`);
-    assert.equal(index.status, 200);
-    assert.match(await index.text(), /EXECUTABLE_SERVE_SMOKE/u);
-    const asset = await fetchWithTimeout(
-      `http://127.0.0.1:${port}/assets/app-12345678.js`
-    );
-    assert.equal(asset.status, 200);
-    assert.equal(
-      asset.headers.get("cache-control"),
-      "public, max-age=31536000, immutable"
+    await assertProductionWebHttpSurface(
+      `http://127.0.0.1:${port}`,
+      webIdentity,
+      fetchWithTimeout
     );
     const localAdminHeaders = {
       "x-hostdeck-local-admin": "cli-v1"
@@ -348,20 +344,6 @@ function requireCodexBinary(candidate, expectedVersion, diagnostic) {
     );
   }
   return Object.freeze({ path, version: observedVersion });
-}
-
-function createStaticFixture(buildRoot) {
-  mkdirSync(join(buildRoot, "assets"), { mode: 0o755, recursive: true });
-  writeFileSync(
-    join(buildRoot, "index.html"),
-    "<!doctype html><html><body>EXECUTABLE_SERVE_SMOKE</body></html>\n",
-    { mode: 0o644 }
-  );
-  writeFileSync(
-    join(buildRoot, "assets", "app-12345678.js"),
-    "export {};\n",
-    { mode: 0o644 }
-  );
 }
 
 async function availableLoopbackPort() {

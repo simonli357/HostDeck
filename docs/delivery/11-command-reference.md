@@ -42,6 +42,7 @@ dist/hostdeck/dist/shell.js --help
 dist/hostdeck/dist/shell.js --version
 pnpm test:package
 node dist/hostdeck/verify.mjs dist/hostdeck
+pnpm test:browser:package
 pnpm test:browser:pairing
 pnpm exec vitest run packages/cli/src/remote-control-client.test.ts packages/cli/src/remote-cli.test.ts
 pnpm exec vitest run packages/cli/src/start-client.test.ts packages/cli/src/start-cli.test.ts packages/server/src/selected-write-audit-executor.test.ts packages/server/src/session-start-routes.test.ts packages/server/src/managed-thread-service.test.ts packages/storage/src/session-start-audit-catalog-migration.test.ts

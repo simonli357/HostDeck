@@ -16,8 +16,8 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-053` Build and serve real deterministic Vite dashboard assets from the production package | in_progress | none | `WAP-01` to `WAP-24` are frozen; implement and prove the web/package manifest, fail-closed static startup, relocated serving, and packaged Chromium path before persistent service/install leaves. |
-| 2 | `FE-V1-040` Run the supported mobile/desktop browser interaction matrix and record explicit limitations | ready | none | `FE-V1-039` completed this leaf's final dependency; prove current Chromium plus one second engine before visual-fidelity and phone module acceptance. |
+| 1 | `FE-V1-040` Run the supported mobile/desktop browser interaction matrix and record explicit limitations | ready | none | `IFC-V1-053` now proves the real packaged Chromium path; prove current Chromium plus one second engine before visual-fidelity and phone module acceptance. |
+| 2 | `IFC-V1-056` Implement install/upgrade/status/start/stop/restart service commands with an owned manifest | ready | none | Real assets, the runnable CLI, and exact user units are complete; persistent service lifecycle is now dependency-ready. |
 
 ## Intentional Blockers
 

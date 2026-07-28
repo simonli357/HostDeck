@@ -115,6 +115,7 @@ import QRCode from "qrcode";
 import { build as viteBuild } from "vite";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { writeProductionWebTestManifest } from "../../server/src/production-web-assets.test-support.js";
 import { cliExitCodes } from "./exit-codes.js";
 import { createBoundedLoopbackFetch } from "./loopback-http.js";
 import { runCli } from "./shell.js";
@@ -1198,7 +1199,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
               createHostDeckStaticBoundaryRegistration({
                 browserRoutes: ["/", "/sessions/:session_id"],
                 buildRoot: requireProductionBuildRoot(productionBuildRoot),
-                id: "physical-production-browser"
+                id: "physical-production-browser",
+                packageVersion: "0.0.0"
               }),
               physicalPageRoute(browserBundle, {
                 id: "physical-production-cleanup-page",
@@ -2119,6 +2121,10 @@ async function buildProductionBrowserApp(directory: string): Promise<string> {
       outDir: buildRoot,
       sourcemap: false
     }
+  });
+  writeProductionWebTestManifest(buildRoot, {
+    browserRoutes: ["/", "/sessions/:session_id"],
+    packageVersion: "0.0.0"
   });
   const indexPath = join(buildRoot, "index.html");
   const assetsRoot = join(buildRoot, "assets");

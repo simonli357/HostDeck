@@ -11,14 +11,16 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
-  symlinkSync,
-  writeFileSync
+  symlinkSync
 } from "node:fs";
 import { createConnection, createServer } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-
+import {
+  assertProductionWebHttpSurface,
+  loadProductionWebSmokeIdentity
+} from "./production-web-smoke-support.mjs";
 import { verifyProductionPackage } from "./verify-production-package.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
@@ -32,7 +34,7 @@ const codexBin = requireExactCodexBinary(
   process.env.HOSTDECK_CODEX_BIN,
   sourceManifest.codex.codexVersion
 );
-const root = mkdtempSync(join(tmpdir(), "hostdeck-service-host-"));
+const root = mkdtempSync(join(homedir(), ".hostdeck-service-host-"));
 const packageRoot = join(root, "package");
 const homeDir = join(root, "home");
 const configHome = join(root, "config-home");
@@ -42,7 +44,6 @@ const runtimeDir = join(runtimeHome, "hostdeck");
 const socketPath = join(runtimeDir, "app-server.sock");
 const codexHome = join(root, "codex-home");
 const commandDir = join(root, "bin");
-const staticMarker = "SERVICE_HOST_SMOKE";
 let appServer = null;
 let hostDeck = null;
 
@@ -54,7 +55,11 @@ try {
     recursive: true,
     verbatimSymlinks: true
   });
-  createStaticFixture(join(packageRoot, "web"));
+  const manifest = JSON.parse(
+    readFileSync(join(packageRoot, "hostdeck-package.json"), "utf8")
+  );
+  makeReadOnly(packageRoot, new Set(manifest.executableFiles));
+  const webIdentity = loadProductionWebSmokeIdentity(packageRoot);
   for (const path of [
     homeDir,
     configHome,
@@ -68,12 +73,8 @@ try {
     chmodSync(path, 0o700);
   }
   symlinkSync(process.execPath, join(commandDir, "node"));
-  const manifest = JSON.parse(
-    readFileSync(join(packageRoot, "hostdeck-package.json"), "utf8")
-  );
   assert.equal(manifest.serviceHost.path, "dist/service-host.js");
   assert.equal(manifest.executableFiles.includes(manifest.serviceHost.path), false);
-  makeReadOnly(packageRoot, new Set(manifest.executableFiles));
   const serviceHostPath = join(packageRoot, manifest.serviceHost.path);
   const port = await availableLoopbackPort();
   const environment = {
@@ -94,7 +95,7 @@ try {
 
   hostDeck = startServiceHost(serviceHostPath, environment, port);
   await withTimeout(hostDeck.ready, 30_000, "Service HostDeck A did not become ready.");
-  await assertLocalSurface(port);
+  await assertLocalSurface(port, webIdentity);
 
   const firstAppServerPid = requireRunningPid(appServer.child, "app-server A");
   await stopChild(appServer, "SIGTERM", 30_000, "app-server A");
@@ -122,7 +123,7 @@ try {
 
   hostDeck = startServiceHost(serviceHostPath, environment, port);
   await withTimeout(hostDeck.ready, 30_000, "Service HostDeck B did not become ready.");
-  await assertLocalSurface(port);
+  await assertLocalSurface(port, webIdentity);
   await stopChild(hostDeck, "SIGTERM", 30_000, "HostDeck B");
   hostDeck = null;
   assert.equal(requireRunningPid(appServer.child, "app-server B"), secondAppServerPid);
@@ -339,16 +340,18 @@ async function assertPrivateExternalSocket(path) {
   assert.equal(await probeSocket(path), true);
 }
 
-async function assertLocalSurface(port) {
+async function assertLocalSurface(port, webIdentity) {
   const live = await fetchWithTimeout(
     `http://127.0.0.1:${port}/api/v1/health/live`
   );
   assert.equal(live.status, 200);
   assert.deepEqual(await live.json(), { status: "alive" });
   await eventuallyReady(port, 30_000);
-  const index = await fetchWithTimeout(`http://127.0.0.1:${port}/`);
-  assert.equal(index.status, 200);
-  assert.match(await index.text(), new RegExp(staticMarker, "u"));
+  await assertProductionWebHttpSurface(
+    `http://127.0.0.1:${port}`,
+    webIdentity,
+    fetchWithTimeout
+  );
 }
 
 async function eventuallyReady(port, timeoutMs) {
@@ -391,18 +394,6 @@ function requireExactCodexBinary(candidate, expectedVersion) {
     throw new TypeError("Service-host smoke Codex version is unsupported.");
   }
   return path;
-}
-
-function createStaticFixture(buildRoot) {
-  mkdirSync(join(buildRoot, "assets"), { mode: 0o755, recursive: true });
-  writeFileSync(
-    join(buildRoot, "index.html"),
-    `<!doctype html><html><body>${staticMarker}</body></html>\n`,
-    { mode: 0o644 }
-  );
-  writeFileSync(join(buildRoot, "assets", "app-12345678.js"), "export {};\n", {
-    mode: 0o644
-  });
 }
 
 async function availableLoopbackPort() {

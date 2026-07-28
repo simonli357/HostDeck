@@ -2,7 +2,6 @@
 
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
-import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
@@ -85,6 +84,7 @@ import {
   assertHostDeckProductionForegroundServe,
   type HostDeckProductionForegroundServe,
   HostDeckProductionForegroundServeError,
+  hostDeckProductionBrowserRoutes,
   type StartHostDeckProductionForegroundServeInput,
   startHostDeckProductionForegroundServe
 } from "@hostdeck/server";
@@ -107,6 +107,7 @@ import {
 import {
   type LoadCliConfigOptions,
   loadCliConfig,
+  loadRuntimePackageVersion,
   resolveCanonicalRuntimePackageRoot,
   resolveHostDeckCodexExecutable
 } from "./config.js";
@@ -292,12 +293,6 @@ const cliModulePackageRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   ".."
 );
-const selectedBrowserRoutes = Object.freeze([
-  "/",
-  "/sessions/:session_id"
-] as const);
-const exactPackageVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
-const maximumPackageManifestBytes = 65_536;
 
 export async function runCli(args: readonly string[], options: CliRunOptions = {}): Promise<CliRunResult> {
   try {
@@ -1671,7 +1666,7 @@ async function runForegroundServeCommand(
   const codexBin = resolveHostDeckCodexExecutable(env);
   const loopbackPort = Number(config.baseUrl.port);
   const input: StartHostDeckProductionForegroundServeInput = {
-    browser_routes: selectedBrowserRoutes,
+    browser_routes: hostDeckProductionBrowserRoutes,
     codex_bin: codexBin,
     config_dir: config.configDir,
     database_path: config.databasePath,
@@ -1681,6 +1676,7 @@ async function runForegroundServeCommand(
     runtime_dir: config.runtimeDir,
     state_dir: config.stateDir,
     static_build_root: join(packageRoot, "web"),
+    static_package_version: loadRuntimePackageVersion(packageRoot),
     ...(options.signal === undefined ? {} : { signal: options.signal })
   };
   const start = options.startForegroundServe ?? startHostDeckProductionForegroundServe;
@@ -1795,55 +1791,6 @@ function combineProcessBoundaryErrors(
         [primary, cleanup],
         "HostDeck foreground process boundary and cleanup failed."
       );
-}
-
-function loadRuntimePackageVersion(packageRoot: string): string {
-  try {
-    const manifestPath = join(
-      resolveCanonicalRuntimePackageRoot(packageRoot),
-      "package.json"
-    );
-    const stats = lstatSync(manifestPath);
-    if (
-      !stats.isFile() ||
-      stats.isSymbolicLink() ||
-      stats.nlink !== 1 ||
-      stats.size < 1 ||
-      stats.size > maximumPackageManifestBytes ||
-      realpathSync.native(manifestPath) !== manifestPath
-    ) {
-      throw new TypeError();
-    }
-    const parsed: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
-    if (
-      parsed === null ||
-      typeof parsed !== "object" ||
-      Array.isArray(parsed) ||
-      Object.getPrototypeOf(parsed) !== Object.prototype
-    ) {
-      throw new TypeError();
-    }
-    const manifest = parsed as Record<string, unknown>;
-    const bin = manifest.bin;
-    if (
-      manifest.name !== "@hostdeck/cli" ||
-      typeof manifest.version !== "string" ||
-      !exactPackageVersionPattern.test(manifest.version) ||
-      bin === null ||
-      typeof bin !== "object" ||
-      Array.isArray(bin) ||
-      Object.keys(bin).length !== 1 ||
-      (bin as Record<string, unknown>).codexdeck !== "./dist/shell.js"
-    ) {
-      throw new TypeError();
-    }
-    return manifest.version;
-  } catch (error) {
-    throw internalFailure(
-      "HostDeck runtime package identity is invalid.",
-      error
-    );
-  }
 }
 
 if (import.meta.main) {

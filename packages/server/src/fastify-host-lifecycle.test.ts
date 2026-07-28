@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
@@ -28,6 +28,7 @@ import {
 } from "./fastify-host-lifecycle.js";
 import { createHostDeckSseTransportRegistration } from "./fastify-sse-transport.js";
 import { createHostDeckStaticBoundaryRegistration } from "./fastify-static-boundary.js";
+import { writeProductionWebTestFixture } from "./production-web-assets.test-support.js";
 import { testRequestAuthenticationPolicy } from "./test-request-authentication.js";
 
 const temporaryDirectories = new Set<string>();
@@ -253,7 +254,8 @@ describe("selected Fastify host lifecycle", () => {
           createHostDeckStaticBoundaryRegistration({
             browserRoutes: ["/"],
             buildRoot: staticBuild,
-            id: "lifecycle-static"
+            id: "lifecycle-static",
+            packageVersion: "0.0.0"
           })
         ];
       },
@@ -313,7 +315,7 @@ describe("selected Fastify host lifecycle", () => {
     const shell = await fetch(service.baseUrl);
     expect(shell.status).toBe(200);
     expect(await shell.text()).toContain("LIFECYCLE_STATIC_SHELL");
-    const asset = await fetch(new URL("/assets/app-12345678.js", service.baseUrl));
+    const asset = await fetch(new URL("/assets/app-ABC123xy.js", service.baseUrl));
     expect(asset.status).toBe(200);
     expect(asset.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
     expect(
@@ -1085,12 +1087,9 @@ function temporaryDirectory(prefix: string): string {
 
 function staticBuildFixture(): string {
   const root = temporaryDirectory("hostdeck-lifecycle-static-");
-  mkdirSync(join(root, "assets"));
-  writeFileSync(join(root, "index.html"), "<!doctype html><p>LIFECYCLE_STATIC_SHELL</p>", {
-    mode: 0o600
-  });
-  writeFileSync(join(root, "assets", "app-12345678.js"), "globalThis.hostDeck = true;\n", {
-    mode: 0o600
+  writeProductionWebTestFixture(root, {
+    indexBody:
+      '<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"><meta name="theme-color" content="#121313"><meta name="hostdeck-package-version" content="0.0.0"><title>HostDeck</title><script type="module" src="/assets/app-ABC123xy.js"></script></head><body><div id="root"></div><p>LIFECYCLE_STATIC_SHELL</p></body></html>'
   });
   return root;
 }

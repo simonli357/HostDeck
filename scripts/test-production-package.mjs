@@ -40,12 +40,34 @@ try {
   assert.equal(lstatOrNull(staleSentinel), null, "clean build must replace stale output");
   const firstManifestText = readFileSync(join(outputRoot, "hostdeck-package.json"), "utf8");
   const firstManifest = JSON.parse(firstManifestText);
+  const firstWebManifestText = readFileSync(
+    join(outputRoot, firstManifest.web.manifestPath),
+    "utf8"
+  );
+  assert.equal(firstManifest.schemaVersion, 4);
+  assert.equal(firstManifest.web.sha256, first.webSha256);
+  assert.equal(firstManifest.web.fileCount, first.webFileCount);
+  assert.equal(firstManifest.web.bytes, first.webBytes);
+  assert.deepEqual(firstManifest.deferrals, [
+    "IFC-V1-056",
+    "IFC-V1-057",
+    "IFC-V1-058"
+  ]);
 
   const second = buildProductionPackage({ repositoryRoot });
   const secondManifestText = readFileSync(join(outputRoot, "hostdeck-package.json"), "utf8");
   const secondManifest = JSON.parse(secondManifestText);
+  const secondWebManifestText = readFileSync(
+    join(outputRoot, secondManifest.web.manifestPath),
+    "utf8"
+  );
   assert.deepEqual(second, first, "two unchanged builds must return identical identities");
   assert.equal(secondManifestText, firstManifestText, "two unchanged builds must emit the same manifest bytes");
+  assert.equal(
+    secondWebManifestText,
+    firstWebManifestText,
+    "two unchanged builds must emit the same runtime web-manifest bytes"
+  );
   assert.deepEqual(secondManifest, firstManifest);
   assert.deepEqual(
     readdirSync(distRoot).filter((name) => name.startsWith(".hostdeck")),
@@ -65,6 +87,14 @@ try {
   });
   const smokeScript = join(acceptanceRoot, "run-package-smoke.mjs");
   copyFileSync(join(scriptDirectory, "run-production-package-smoke.mjs"), smokeScript);
+  copyFileSync(
+    join(scriptDirectory, "production-web-smoke-support.mjs"),
+    join(acceptanceRoot, "production-web-smoke-support.mjs")
+  );
+  copyFileSync(
+    join(scriptDirectory, "verify-production-package.mjs"),
+    join(acceptanceRoot, "verify-production-package.mjs")
+  );
   const unrelatedCwd = join(acceptanceRoot, "unrelated-cwd");
   mkdirSync(unrelatedCwd, { recursive: true });
 
@@ -99,6 +129,142 @@ try {
       return () => writeFileSync(path, original);
     },
     /manifest fields are invalid/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "missing root web descriptor",
+    () => {
+      const path = join(relocated, "hostdeck-package.json");
+      return mutateJson(path, (value) => {
+        delete value.web;
+      });
+    },
+    /manifest fields are invalid/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "changed root web descriptor",
+    () => {
+      const path = join(relocated, "hostdeck-package.json");
+      return mutateJson(path, (value) => {
+        value.web.sha256 = "0".repeat(64);
+        value.manifestSha256 = computeManifestSha256(value);
+      });
+    },
+    /web descriptor (?:identity|sha256)|production web content/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "missing runtime web manifest",
+    () => temporarilyRename(join(relocated, relocatedManifest.web.manifestPath)),
+    /web manifest.*missing|web root inventory/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "runtime web schema drift",
+    () =>
+      mutateJson(join(relocated, relocatedManifest.web.manifestPath), (value) => {
+        value.schemaVersion += 1;
+      }),
+    /web-manifest schema/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "runtime web package-version drift",
+    () =>
+      mutateJson(join(relocated, relocatedManifest.web.manifestPath), (value) => {
+        value.packageVersion = "9.9.9";
+      }),
+    /web package version/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "runtime web route drift",
+    () =>
+      mutateJson(join(relocated, relocatedManifest.web.manifestPath), (value) => {
+        value.browserRoutes = ["/"];
+      }),
+    /web browser routes|web manifest.*identity/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "runtime web aggregate-count drift",
+    () =>
+      mutateJson(join(relocated, relocatedManifest.web.manifestPath), (value) => {
+        value.content.count += 1;
+      }),
+    /web content count/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "runtime web descriptor order drift",
+    () =>
+      mutateJson(join(relocated, relocatedManifest.web.manifestPath), (value) => {
+        value.assets.reverse();
+      }),
+    /web asset inventory must be sorted/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "changed production index",
+    () => mutateFile(join(relocated, "web", "index.html"), (content) =>
+      Buffer.from(content.toString("utf8").replace("<div id=\"root\"></div>", "<div id=\"root\">drift</div>"))
+    ),
+    /web file identity|web descriptor identity|package content/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "unsafe production index mode",
+    () => mutateMode(join(relocated, "web", "index.html"), 0o664, 0o644),
+    /file mode is invalid/iu
+  );
+  const runtimeWebManifest = JSON.parse(
+    readFileSync(join(relocated, relocatedManifest.web.manifestPath), "utf8")
+  );
+  const selectedWebAsset = runtimeWebManifest.assets[0];
+  assert.ok(selectedWebAsset !== undefined);
+  const selectedWebAssetPath = join(relocated, "web", ...selectedWebAsset.path.split("/"));
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "changed production asset",
+    () => mutateFile(selectedWebAssetPath, (content) => Buffer.concat([content, Buffer.from("\n")])),
+    /web file identity|web descriptor identity|package content/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "unsafe production asset mode",
+    () => mutateMode(selectedWebAssetPath, 0o666, 0o644),
+    /file mode is invalid/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "missing production asset",
+    () => temporarilyRename(selectedWebAssetPath),
+    /web file inventory|missing|unreadable/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "extra production asset",
+    () => {
+      const path = join(relocated, "web", "assets", "late-12345678.js");
+      writeFileSync(path, "export {};\n", { mode: 0o644 });
+      return () => rmSync(path, { force: true });
+    },
+    /web file inventory|web descriptor identity|package content/iu
   );
   runMutationProbe(
     relocated,
@@ -274,7 +440,7 @@ try {
   verifyProductionPackage(relocated);
 
   console.log(
-    `HostDeck package acceptance passed: two deterministic builds, ${second.entryCount} entries, relocated read-only runtime, runtime/config/static/integrity rejection.`
+    `HostDeck package acceptance passed: two deterministic builds, ${second.entryCount} entries, ${second.webFileCount} web files (${second.webBytes} bytes, sha256:${second.webSha256}), relocated read-only runtime, runtime/config/static/web-integrity rejection.`
   );
 } finally {
   if (acceptanceRoot !== null) {
@@ -459,6 +625,27 @@ function mutateJson(path, change) {
   change(value);
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
   return () => writeFileSync(path, original);
+}
+
+function mutateFile(path, change) {
+  const original = readFileSync(path);
+  const mode = lstatSync(path).mode & 0o777;
+  writeFileSync(path, change(original), { mode });
+  return () => {
+    writeFileSync(path, original);
+    chmodSync(path, mode);
+  };
+}
+
+function mutateMode(path, changedMode, originalMode) {
+  chmodSync(path, changedMode);
+  return () => chmodSync(path, originalMode);
+}
+
+function temporarilyRename(path) {
+  const missing = `${path}.missing`;
+  renameSync(path, missing);
+  return () => renameSync(missing, path);
 }
 
 function runRuntimeMismatchProbe(root, cwd) {

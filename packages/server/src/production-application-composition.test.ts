@@ -1,6 +1,5 @@
 import {
   chmodSync,
-  mkdirSync,
   mkdtempSync,
   rmSync,
   writeFileSync
@@ -44,6 +43,7 @@ import {
   type HostDeckProductionApplication,
   hostDeckProductionStaticRegistrationId
 } from "./production-application-composition.js";
+import { writeProductionWebTestFixture } from "./production-web-assets.test-support.js";
 import { hostDeckSelectedApiRouteCompositionDescriptor } from "./selected-api-route-composition.js";
 import { selectedApiRouteManifest } from "./selected-api-route-manifest.js";
 
@@ -174,7 +174,8 @@ describe("IFC-V1-082 production application composition", () => {
       browser_routes: ["/"],
       observe_issue: observe,
       resources: fixture.resources,
-      static_build_root: fixture.buildRoot
+      static_build_root: fixture.buildRoot,
+      static_package_version: "0.0.0"
     };
     let topLevelAccessorRead = false;
     const topLevelAccessor = Object.defineProperty(
@@ -625,14 +626,8 @@ async function createFixture(
     `#!/bin/sh\nprintf 'codex-cli ${options.codexVersion ?? "0.144.0"}\\n'\n`,
     { mode: 0o700 }
   );
-  mkdirSync(join(buildRoot, "assets"), { recursive: true, mode: 0o700 });
-  writeFileSync(
-    join(buildRoot, "index.html"),
-    `<!doctype html><html><body>${indexSentinel}</body></html>\n`,
-    { mode: 0o600 }
-  );
-  writeFileSync(join(buildRoot, "assets", "app-12345678.js"), "export {};\n", {
-    mode: 0o600
+  writeProductionWebTestFixture(buildRoot, {
+    indexBody: `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"><meta name="theme-color" content="#121313"><meta name="hostdeck-package-version" content="0.0.0"><title>HostDeck</title><script type="module" src="/assets/app-ABC123xy.js"></script></head><body><div id="root"></div>${indexSentinel}</body></html>\n`
   });
   const runtime = fakeRuntime();
   const resources = await startHostDeckForegroundResources(
@@ -668,7 +663,8 @@ function compose(
     browser_routes: ["/"],
     observe_issue: observeIssue,
     resources: fixture.resources,
-    static_build_root: fixture.buildRoot
+    static_build_root: fixture.buildRoot,
+    static_package_version: "0.0.0"
   });
   fixture.application = application;
   return application;

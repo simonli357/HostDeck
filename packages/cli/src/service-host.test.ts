@@ -189,6 +189,17 @@ function fixtureLayout(label: string): FixtureLayout {
   for (const path of [packageRoot, configHome, stateHome, runtimeHome, home]) {
     mkdirSync(path, { mode: 0o700 });
   }
+  writeFileSync(
+    join(packageRoot, "package.json"),
+    `${JSON.stringify({
+      name: "@hostdeck/cli",
+      version: "0.0.0",
+      private: true,
+      type: "module",
+      bin: { codexdeck: "./dist/shell.js" }
+    })}\n`,
+    { mode: 0o600 }
+  );
   const codexBin = join(root, "codex");
   writeFileSync(codexBin, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
   chmodSync(codexBin, 0o700);

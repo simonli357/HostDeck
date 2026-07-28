@@ -774,7 +774,8 @@ function validInput(): StartHostDeckProductionForegroundServeInput {
     resource_budget: defaultResourceBudget,
     runtime_dir: "/tmp/hostdeck-production-serve-runtime",
     state_dir: "/tmp/hostdeck-production-serve-state",
-    static_build_root: "/tmp/hostdeck-production-serve-build"
+    static_build_root: "/tmp/hostdeck-production-serve-build",
+    static_package_version: "0.0.0"
   };
 }
 

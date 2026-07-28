@@ -10,8 +10,7 @@ import {
   readdirSync,
   realpathSync,
   rmSync,
-  symlinkSync,
-  writeFileSync
+  symlinkSync
 } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { createServer } from "node:net";
@@ -40,6 +39,7 @@ import {
   type HostDeckProductionForegroundServe,
   startHostDeckProductionForegroundServe
 } from "./production-foreground-serve.js";
+import { writeProductionWebTestFixture } from "./production-web-assets.test-support.js";
 
 const requireSmoke =
   process.env.HOSTDECK_REQUIRE_PRODUCTION_SERVE_SMOKE === "1";
@@ -121,7 +121,8 @@ describe.skipIf(!requireSmoke)("exact production foreground serve smoke", () => 
               resource_budget: budget,
               runtime_dir: runtimeDir,
               state_dir: stateDir,
-              static_build_root: buildRoot
+              static_build_root: buildRoot,
+              static_package_version: "0.0.0"
             },
             signalDependencies
           );
@@ -329,17 +330,16 @@ function requireExactCodexBinary(candidate: string | undefined): string {
 }
 
 function createStaticFixture(buildRoot: string): void {
-  mkdirSync(join(buildRoot, "assets"), {
-    recursive: true,
-    mode: 0o700
-  });
-  writeFileSync(
-    join(buildRoot, "index.html"),
-    "<!doctype html><html><body>PRODUCTION_SERVE_SMOKE</body></html>\n",
-    { mode: 0o600 }
-  );
-  writeFileSync(join(buildRoot, "assets", "app-12345678.js"), "export {};\n", {
-    mode: 0o600
+  writeProductionWebTestFixture(buildRoot, {
+    assets: [
+      {
+        content: "export {};\n",
+        path: "assets/app-12345678.js"
+      }
+    ],
+    browserRoutes: ["/", "/sessions/:session_id"],
+    indexBody:
+      '<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"><meta name="theme-color" content="#121313"><meta name="hostdeck-package-version" content="0.0.0"><title>HostDeck</title><script type="module" src="/assets/app-12345678.js"></script></head><body><div id="root"></div>PRODUCTION_SERVE_SMOKE</body></html>\n'
   });
 }
 

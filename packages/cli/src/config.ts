@@ -16,7 +16,7 @@ import {
   sep
 } from "node:path";
 import { hostDeckLoopbackOriginSchema } from "@hostdeck/contracts";
-import { configFailure } from "./errors.js";
+import { configFailure, internalFailure } from "./errors.js";
 
 export interface CliConfigFlags {
   readonly apiUrl?: string;
@@ -66,6 +66,8 @@ const rawConfigKeys = [
 const maximumExecutablePathBytes = 4_096;
 const maximumPathEnvironmentBytes = 32_768;
 const maximumPathEntries = 256;
+const exactPackageVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
+const maximumPackageManifestBytes = 65_536;
 
 export function loadCliConfig(options: LoadCliConfigOptions = {}): CliConfig {
   const flags = options.flags ?? {};
@@ -151,6 +153,55 @@ export function resolveCanonicalRuntimePackageRoot(candidate: string): string {
     throw configFailure(
       "HostDeck runtime package root is unavailable or noncanonical.",
       "package_root"
+    );
+  }
+}
+
+export function loadRuntimePackageVersion(packageRoot: string): string {
+  try {
+    const manifestPath = join(
+      resolveCanonicalRuntimePackageRoot(packageRoot),
+      "package.json"
+    );
+    const stats = lstatSync(manifestPath);
+    if (
+      !stats.isFile() ||
+      stats.isSymbolicLink() ||
+      stats.nlink !== 1 ||
+      stats.size < 1 ||
+      stats.size > maximumPackageManifestBytes ||
+      realpathSync.native(manifestPath) !== manifestPath
+    ) {
+      throw new TypeError();
+    }
+    const parsed: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed) ||
+      Object.getPrototypeOf(parsed) !== Object.prototype
+    ) {
+      throw new TypeError();
+    }
+    const manifest = parsed as Record<string, unknown>;
+    const bin = manifest.bin;
+    if (
+      manifest.name !== "@hostdeck/cli" ||
+      typeof manifest.version !== "string" ||
+      !exactPackageVersionPattern.test(manifest.version) ||
+      bin === null ||
+      typeof bin !== "object" ||
+      Array.isArray(bin) ||
+      Object.keys(bin).length !== 1 ||
+      (bin as Record<string, unknown>).codexdeck !== "./dist/shell.js"
+    ) {
+      throw new TypeError();
+    }
+    return manifest.version;
+  } catch (error) {
+    throw internalFailure(
+      "HostDeck runtime package identity is invalid.",
+      error
     );
   }
 }

@@ -301,7 +301,7 @@ describe("IFC-V1-055 systemd user-unit generator", () => {
       ["manifest-mode", (layout) => chmodSync(layout.manifestPath, 0o600)],
       ["manifest-hardlink", (layout) => linkSync(layout.manifestPath, `${layout.manifestPath}.copy`)],
       ["manifest-json", (layout) => rewriteManifestRaw(layout, "not-json\n")],
-      ["manifest-schema", (layout) => mutateManifest(layout, { schemaVersion: 4 })],
+      ["manifest-schema", (layout) => mutateManifest(layout, { schemaVersion: 3 })],
       ["manifest-name", (layout) => mutateManifest(layout, { name: "other" })],
       ["manifest-version", (layout) => mutateManifest(layout, { packageVersion: "9.9.9" })],
       [
@@ -523,7 +523,7 @@ function writeManifest(path: string, serviceHostContent: string): void {
       {
         name: "hostdeck-production-package",
         packageVersion: version,
-        schemaVersion: 3,
+        schemaVersion: 4,
         serviceHost: {
           package: "@hostdeck/cli",
           path: "dist/service-host.js",

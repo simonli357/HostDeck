@@ -2,7 +2,7 @@
 
 Date: 2026-07-28
 
-Status: criteria frozen; implementation pending.
+Status: complete; `WAP-01` to `WAP-24` pass.
 
 ## Scope
 
@@ -181,7 +181,25 @@ Excluded: UI redesign or new dashboard behavior; source-map publication; code-sp
 
 ## Implementation Status
 
-- Pending after criteria commit.
+- `pnpm build` runs a fresh pinned Vite 8.1.4 build, consumes one strict reachable Vite graph, and atomically publishes schema-4 `dist/hostdeck` with a schema-1 `web/hostdeck-web.json` identity.
+- The dependency-free package verifier enforces exact package/web identity, modes, bounds, canonical inventory, hashes, and selected document/response metadata. Fastify startup independently rechecks expected version/routes, strict UTF-8 document structure, safe case-unique hashed assets, bounds, canonical inventory, hashes, media/cache policy, and aggregate identity.
+- Foreground, service-host, and user-unit paths use the same package-owned browser routes, expected package version, and read-only web root. Synthetic post-verification assets were removed from every production smoke.
+- Static responses revalidate startup-owned files, expose only `/` and `/sessions/:session_id` as browser routes, never fall back for API/unknown paths, and apply exact no-store/immutable, MIME, nosniff, and CSP policy.
+- The web entry configures Zod's CSP-safe JIT-less mode before application modules evaluate; packaged Chromium executes Mission Control and Session Detail with no `unsafe-eval` or other CSP violation.
+
+## Validation Evidence
+
+| Evidence | Result |
+| --- | --- |
+| Final package identity | 614 sources; 1,235 owned outputs; 6,455 entries; 40,010,806 bytes; schema 4; SHA-256 `9d6245f8fd710cedb5a3dfae550b704b6b09bff72a495eb2e727214de89b8c54`; root manifest SHA-256 `f43d822d9e43417a0d635e1348a845efc9944111c6b0b3f4ed5d925864163c25`. |
+| Final web identity | 3 files; 1,211,359 bytes; SHA-256 `09c04fc54c8d88ded7dff55f54e8228fc65e6eb01e851a65674bf920a3461752`; manifest 1,142 bytes, SHA-256 `a7ade3f058a5eb8b66d6b9293abeee806c6e2b27250f9c7724004ec45000cb90`. |
+| Emitted files | `index.html`: 574 bytes, `3c42c78da55a914c6ebf85e822529548c2386ec868bc4ce4c76587a93f48f995`; `index-3LzRk23X.css`: 115,247 bytes, `cb7969b8b54e43913bf68787b4f76f57dae04fe6744362b602a8065d80375740`; `index-B1DO8ZXw.js`: 1,095,538 bytes, `7510091f740a5baf4315d4724bde930115cb25e024c62138e940f39e0f37684d`. |
+| Determinism and mutations | `pnpm test:package` passes two byte-identical clean builds, unrelated-cwd read-only relocation, runtime imports, and root/web/schema/version/route/order/count/index/asset/mode/inventory/native/config/link mutation rejection. The focused Node suite passes 26 checks, including Vite graph reachability and unique ownership, bounded process/env-file/config discovery, strict document and UTF-8, exact directory inventory, root-symlink rejection, and coherently resigned mutations. |
+| Runtime/static | Focused affected Vitest: 53 passed, 2 intentional opt-in skips; direct static suite: 5 passed. Exact 0.144.0 executable, service-host, and systemd user-unit smokes pass real package assets; systemd security scores are `9.7/9.7`. |
+| Browser | Packaged mobile Chromium: 1 passed through relocated compiled Fastify with exact headers/assets, direct detail navigation, API non-fallback, and zero external request, storage, console, page, or CSP violation. Full production shell Chromium: 168 passed; all generated artifacts were removed and 18 pre-existing user PNG changes remained byte-identical and unstaged. |
+| Repository gates | Unit 2,806 passed/28 intentional skips; contract 245; integration 36; web 920; typecheck, lint/8-package exports, scaffold 8 packages/21 scripts, planning 220 tasks/84 requirements/683 dependencies, and selected runtime 614 modules/22 externals pass. |
+| Reproducibility and supply chain | Nine-workspace offline frozen install passes. Production audit reports 0 vulnerabilities across 184 dependencies. License inventory contains 172 permissive package records across 175 paths. Exact Codex 0.144.0 binding verifies 671 files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`; default 0.145.0 remains correctly rejected as exact evidence. |
+| Reviewed limitation | Vite reports the existing 1,095,538-byte JavaScript chunk advisory (276.57 kB gzip). Code splitting remains an explicit unmeasured optimization outside this leaf; no runtime or package failure is hidden. |
 
 ## Remaining Scope
 

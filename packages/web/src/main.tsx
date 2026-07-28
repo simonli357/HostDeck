@@ -1,3 +1,4 @@
+import "./zod-csp-runtime.js";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { HostDeckBrowserApp } from "./app-shell.js";

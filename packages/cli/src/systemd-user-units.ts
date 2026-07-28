@@ -304,7 +304,7 @@ function parsePackageManifest(
   }
   if (!isRecord(parsed)) fail("package_invalid", "package");
   if (
-    parsed.schemaVersion !== 3 ||
+    parsed.schemaVersion !== 4 ||
     parsed.name !== "hostdeck-production-package" ||
     parsed.packageVersion !== expectedVersion
   ) {
