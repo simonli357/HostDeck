@@ -1,0 +1,74 @@
+{
+  "measurements": [
+    {
+      "viewport": {
+        "width": 320,
+        "height": 480
+      },
+      "document": {
+        "clientWidth": 320,
+        "scrollWidth": 320
+      },
+      "dialog": {
+        "bottom": 480,
+        "height": 394,
+        "left": 0,
+        "right": 320,
+        "top": 86,
+        "width": 320
+      },
+      "body": {
+        "bottom": 456,
+        "height": 297,
+        "left": 17,
+        "right": 303,
+        "top": 159,
+        "width": 286,
+        "clientHeight": 297,
+        "overflowY": "auto",
+        "scrollHeight": 1928
+      },
+      "footer": null,
+      "buttonCount": 5,
+      "minimumButtonHeight": 44,
+      "scrollOwners": [
+        "hostdeck-sheet__body"
+      ]
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "document": {
+        "clientWidth": 1280,
+        "scrollWidth": 1280
+      },
+      "dialog": {
+        "bottom": 800,
+        "height": 656,
+        "left": 360,
+        "right": 920,
+        "top": 144,
+        "width": 560
+      },
+      "body": {
+        "bottom": 776,
+        "height": 559,
+        "left": 377,
+        "right": 903,
+        "top": 217,
+        "width": 526,
+        "clientHeight": 559,
+        "overflowY": "auto",
+        "scrollHeight": 1626
+      },
+      "footer": null,
+      "buttonCount": 5,
+      "minimumButtonHeight": 44,
+      "scrollOwners": [
+        "hostdeck-sheet__body"
+      ]
+    }
+  ]
+}

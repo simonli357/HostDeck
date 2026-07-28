@@ -16,7 +16,8 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-016` Harden responsive layout, containment, keyboard, safe-area, and viewport behavior | in_progress | none | Implement frozen `RSP-01` to `RSP-24`, beginning with the request-free retained Mission context, selected 1280 split, centralized inset tokens, and executable 141-state layout ledger. |
+| 1 | `FE-V1-039` Harden semantic accessibility, keyboard/focus, reflow, contrast, touch targets, live regions, and reduced motion | ready | none | `FE-V1-016` is complete; freeze executable accessibility criteria and close automation plus manual keyboard/screen-reader evidence before browser and pixel-fidelity acceptance. |
+| 2 | `IFC-V1-053` Build and serve real deterministic Vite dashboard assets from the production package | ready | none | `FE-V1-016` also completed this leaf's final dependency; execute after UI module hardening so the package binds the accepted dashboard rather than an intermediate surface. |
 
 ## Intentional Blockers
 

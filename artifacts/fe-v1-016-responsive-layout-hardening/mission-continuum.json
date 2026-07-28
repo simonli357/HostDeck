@@ -1,0 +1,156 @@
+{
+  "measurements": [
+    {
+      "viewport": {
+        "width": 320,
+        "height": 800
+      },
+      "document": {
+        "clientHeight": 800,
+        "clientWidth": 320,
+        "scrollHeight": 893,
+        "scrollWidth": 320
+      },
+      "route": {
+        "bottom": 893,
+        "height": 837,
+        "left": 0,
+        "right": 320,
+        "top": 56,
+        "width": 320
+      },
+      "fontSize": "24px"
+    },
+    {
+      "viewport": {
+        "width": 360,
+        "height": 800
+      },
+      "document": {
+        "clientHeight": 800,
+        "clientWidth": 360,
+        "scrollHeight": 863,
+        "scrollWidth": 360
+      },
+      "route": {
+        "bottom": 863,
+        "height": 807,
+        "left": 0,
+        "right": 360,
+        "top": 56,
+        "width": 360
+      },
+      "fontSize": "24px"
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "document": {
+        "clientHeight": 844,
+        "clientWidth": 390,
+        "scrollHeight": 851,
+        "scrollWidth": 390
+      },
+      "route": {
+        "bottom": 851,
+        "height": 795,
+        "left": 0,
+        "right": 390,
+        "top": 56,
+        "width": 390
+      },
+      "fontSize": "24px"
+    },
+    {
+      "viewport": {
+        "width": 412,
+        "height": 915
+      },
+      "document": {
+        "clientHeight": 915,
+        "clientWidth": 412,
+        "scrollHeight": 915,
+        "scrollWidth": 412
+      },
+      "route": {
+        "bottom": 851,
+        "height": 795,
+        "left": 0,
+        "right": 412,
+        "top": 56,
+        "width": 412
+      },
+      "fontSize": "24px"
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "document": {
+        "clientHeight": 1024,
+        "clientWidth": 768,
+        "scrollHeight": 1024,
+        "scrollWidth": 768
+      },
+      "route": {
+        "bottom": 853,
+        "height": 797,
+        "left": 0,
+        "right": 768,
+        "top": 56,
+        "width": 768
+      },
+      "fontSize": "24px"
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "document": {
+        "clientHeight": 800,
+        "clientWidth": 1280,
+        "scrollHeight": 853,
+        "scrollWidth": 1280
+      },
+      "route": {
+        "bottom": 853,
+        "height": 797,
+        "left": 190,
+        "right": 1090,
+        "top": 56,
+        "width": 900
+      },
+      "fontSize": "24px"
+    }
+  ],
+  "firstViewport": {
+    "status": {
+      "bottom": 112,
+      "height": 56,
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "width": 390
+    },
+    "secondPriorityRow": {
+      "bottom": 426,
+      "height": 96,
+      "left": 19,
+      "right": 374,
+      "top": 330,
+      "width": 355
+    },
+    "priorityRowCount": 4
+  },
+  "requestPaths": [
+    "/api/v1/access",
+    "/api/v1/host/status",
+    "/api/v1/sessions",
+    "/api/v1/access/devices",
+    "/api/v1/access/csrf"
+  ]
+}

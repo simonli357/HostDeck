@@ -1,0 +1,112 @@
+{
+  "measurements": [
+    {
+      "viewport": {
+        "width": 320,
+        "height": 480
+      },
+      "document": {
+        "clientWidth": 320,
+        "scrollHeight": 548,
+        "scrollWidth": 320
+      },
+      "appBar": {
+        "bottom": 88,
+        "height": 88,
+        "left": 0,
+        "right": 320,
+        "top": 0,
+        "width": 320
+      },
+      "main": {
+        "bottom": 548,
+        "height": 460,
+        "left": 0,
+        "right": 320,
+        "top": 88,
+        "width": 320
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 420
+      },
+      "document": {
+        "clientWidth": 390,
+        "scrollHeight": 556,
+        "scrollWidth": 390
+      },
+      "appBar": {
+        "bottom": 56,
+        "height": 56,
+        "left": 0,
+        "right": 390,
+        "top": 0,
+        "width": 390
+      },
+      "main": {
+        "bottom": 556,
+        "height": 500,
+        "left": 0,
+        "right": 390,
+        "top": 56,
+        "width": 390
+      }
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 360
+      },
+      "document": {
+        "clientWidth": 800,
+        "scrollHeight": 707,
+        "scrollWidth": 800
+      },
+      "appBar": {
+        "bottom": 56,
+        "height": 56,
+        "left": 0,
+        "right": 800,
+        "top": 0,
+        "width": 800
+      },
+      "main": {
+        "bottom": 707,
+        "height": 651,
+        "left": 140,
+        "right": 660,
+        "top": 56,
+        "width": 520
+      }
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "document": {
+        "clientWidth": 1280,
+        "scrollHeight": 800,
+        "scrollWidth": 1280
+      },
+      "appBar": {
+        "bottom": 56,
+        "height": 56,
+        "left": 0,
+        "right": 1280,
+        "top": 0,
+        "width": 1280
+      },
+      "main": {
+        "bottom": 800,
+        "height": 744,
+        "left": 380,
+        "right": 900,
+        "top": 56,
+        "width": 520
+      }
+    }
+  ]
+}

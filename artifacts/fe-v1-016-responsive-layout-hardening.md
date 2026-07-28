@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: criteria frozen; implementation pending.
+Status: complete.
 
 ## Scope
 
@@ -114,12 +114,71 @@ An executable ledger must map every one of the 141 trace IDs to exactly one prim
 
 ## Implementation Record
 
-Pending.
+Criteria were frozen in `b98af51`; production implementation is `91d9650`.
+
+- Added a pure page-memory responsive Mission context with strict snapshot validation, immutable replacement, current/stale labelling, synchronous authority-loss/close purge, and deterministic subscriber lifecycle. It observes the existing coordinator only while that coordinator has readable authority; it owns no client, request, timer, retry, storage, credential, or public coordinator-contract expansion.
+- Mounted one context owner at the app-shell boundary. Normal Mission-to-detail navigation can therefore render the selected retained-list/live-detail split at desktop width, while direct detail entry renders an explicit Mission-context fallback. Phone and tablet keep the original single-route hierarchy and history behavior.
+- Rendered the retained Mission pane with canonical grouping/order, an explicit selected row, retained/stale source truth, and navigation-only controls. It cannot refresh, paginate, mutate, or fabricate list state.
+- Centralized top and bottom safe-area values, separated phone document scrolling from bounded desktop pane scrolling, attached the detail controls to the live detail pane, and hardened sheets, Host & access, long values, landscape, short-height, and 200 percent reflow containment.
+- Added an executable 141-trace layout ledger and representative production-shell/pairing browser scenarios. The ledger maps every frozen state to one layout family and its existing behavior owner; the browser matrix records geometry, scroll ownership, request paths/counts, storage/privacy, errors, and screenshots.
+
+### Issue And Fix Inventory
+
+| Finding | Root cause | Resolution |
+| --- | --- | --- |
+| The selected 1280 grouped-list/timeline composition did not exist. | Mission and detail were independent centered routes pending this leaf. | Added a request-free retained Mission navigation pane around the existing live detail route. |
+| A desktop list could have become a hidden second read owner or outlived authority. | No bounded cross-route list-context contract existed. | Added exact Mission-only admission, immutable page memory, and synchronous purge for access loss, mismatch, limited authority, and close. |
+| Direct detail entry had no truthful left-pane state. | There is no prior authorized Mission snapshot after deep link/reload. | Rendered an explicit unavailable-context message and one Mission Control link with zero fabricated rows/counts. |
+| Safe-area geometry could not be exercised deterministically. | Insets were repeated direct `env()` expressions. | Centralized public top/bottom tokens backed by `env()` and tested 32 px/24 px overrides. |
+| Detail content and fixed controls competed for scroll ownership at extreme heights. | One route wrapper served both phone document flow and desktop bounded composition. | Split scroll ownership: document flow below desktop, one bounded scroller per desktop pane, controls attached outside the detail scroller. |
+| Host & access exceeded a 320 x 480 viewport with maximum origin content. | Its short-height body was not the sole bounded row in the sheet. | Fixed the sheet to a three-row header/body/footer grid with one body scroller and stable actions. |
+| Pairing browser fixtures bypassed the current coordinator interface. | The fixture retained a stale cast after host-lock/device capabilities landed. | Implemented the exact fixture interface so the dedicated pairing matrix exercises production composition without an unsafe cast. |
+
+No dependency, API, route, capability, persistence, setup, command, Tailscale, pairing, or runtime contract changed.
 
 ## Validation
 
-Pending.
+| Gate | Result |
+| --- | --- |
+| Focused logic/component | 8 files and 143 tests pass, including retained-context admission/purge/lifecycle and all 141 ledger rows. |
+| Aggregate web | `pnpm test:web`: 50 files, 909 tests passed. |
+| Aggregate unit | `pnpm test:unit`: 244 files/2,794 tests passed; 27 files/28 intentional external or device tests skipped. |
+| Contract/integration | `pnpm test:contract`: 34 files/245 tests; `pnpm test:integration`: 21 files/36 tests. |
+| Chromium shell/pairing | Focused responsive shell 9/9 and pairing 2/2; complete `pnpm test:browser:shell` 152/152 and `pnpm test:browser:pairing` 8/8. Existing owner screenshots were restored after each aggregate and the 871-file backup manifest reverified. |
+| Static/boundary | Root typecheck; Biome over 737 files plus eight package-export checks; scaffold 8 packages/21 scripts; runtime boundary 7 tests and exact 614 production modules/22 externals; planning 220 tasks/84 requirements/683 dependencies/two queued tasks. |
+| Reviewed runtime | Isolated exact Codex 0.144.0 verifies all 671 generated binding files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. Installed 0.145.0 correctly remains ineligible for this exact gate. |
+| Build/package | Vite production build transforms 2,053 modules. Root build contains 614 sources, 1,235 owned outputs, and 6,449 entries; package unit 6/6, two-build deterministic acceptance, relocated read-only/runtime/config/static/integrity rejection, and independent verifier pass at `35f41f5daccab92d6ded30bf1de374d5451e1ce81282e1136a2452f7810a3ace`. |
+| Reproducibility/supply chain | Frozen offline install is unchanged; production audit reports no known vulnerability; 172 production entries across eight permissive license expressions were inspected. |
+| Visual/evidence | 41 decoded nonblank PNGs have exact declared dimensions and 41 unique SHA-256 identities; ten JSON records capture geometry/request facts. Full-size and four contact-sheet reviews preserve Focus Rail and show no overlap, clipping, nested-card, terminal/editor, Signal Ledger, or desktop-console drift. |
+| Privacy/residue/diff | Known private-machine/credential/key/token scan is empty; request/storage/console/page-error assertions pass; `git diff --check` passes; no Playwright, Vitest, Vite preview, or browser-test process remains. |
+
+The production Vite build retains its existing greater-than-500-kB chunk advisory; no dependency or loading contract changed in this leaf. No new physical-phone run is claimed: final physical module acceptance remains `FE-V1-090`, full accessibility acceptance remains `FE-V1-039`, second-engine support remains `FE-V1-040`, and target/current pixel-diff closure remains `FE-V1-017`.
 
 ## Completion Record
 
-Pending.
+| Criterion | Evidence and disposition |
+| --- | --- |
+| `RSP-01` | Pass: executable ledger covers exactly 141 traces, 15 surfaces, 12 journeys, five reference viewports, and eight layout families with one declared existing behavior owner per row. |
+| `RSP-02` | Pass: exact 320/360/390/412/768/1280 production-shell captures decode at declared dimensions and are nonblank. |
+| `RSP-03` | Pass: representative routes, controls, sheets, confirmations, pairing, and errors assert document width, viewport bounds, visibility, and reachability with no collision or clipped required action. |
+| `RSP-04` | Pass: 390 x 844 Mission evidence contains the complete status rail and four priority rows in the recorded first viewport. |
+| `RSP-05` | Pass: maximum session/model/skill/origin and 12,000-character event fixtures wrap or remain inside their declared body scroller. |
+| `RSP-06` | Pass: measured sheet and command targets remain at least 44 px; complete browser regressions cover stable interactive geometry. |
+| `RSP-07` | Pass: Mission continuum and detail stress captures preserve the compact app-bar/status/heading/notice hierarchy at every required regime. |
+| `RSP-08` | Pass: detail remains one semantic timeline; the maximum event expands inside the diagnostic owner while phone/tablet keep document flow. |
+| `RSP-09` | Pass: model, goal, Plan, utility, composer, and status controls remain attached to the one live detail pane and do not hide final timeline content. |
+| `RSP-10` | Pass: 320 x 480, 390 x 420, 800 x 360, and 915 x 412 evidence keeps composer, sheet header/body/footer, and actions reachable. |
+| `RSP-11` | Pass: centralized 32 px top/24 px bottom override evidence applies each inset once to app-bar and bottom-owned surfaces. |
+| `RSP-12` | Pass: model, utility, action, diagnostic, Host/access, lock, and device owner regressions plus new geometry records prove one body scroller with stable header/footer. |
+| `RSP-13` | Pass: approval, interrupt, archive, lock, and revoke aggregate regressions preserve distinct safe/destructive actions, consequences, pending truth, and fixed targets. |
+| `RSP-14` | Pass: maximum Host/access origin content is reachable through the same single sheet at phone and desktop widths; no tablet inspector was added. |
+| `RSP-15` | Pass: normal 1280 Mission navigation renders the approved grouped retained queue and live timeline split with selected row and pane-aligned fixed controls. |
+| `RSP-16` | Pass: direct store tests prove exact coordinator-Mission admission, zero owned I/O, page-memory-only retention, canonical order, immutable data, and synchronous purge for every frozen authority-loss/close class. |
+| `RSP-17` | Pass: direct/reloaded detail shows explicit unavailable Mission context and one link with no row/count/current fabrication; retained navigation is absent below desktop. |
+| `RSP-18` | Pass: 768 portrait and both landscape regimes preserve source order, routes, controls, bounded width, and the same information architecture. |
+| `RSP-19` | Pass: DPR2/200-percent reflow evidence reaches the 320-content regime, naturally removes the split, preserves 24 px stable heading type, and has no horizontal scroll. |
+| `RSP-20` | Pass for this leaf: browser assertions preserve one main landmark, labelled regions/dialogs/toolbars, logical DOM order, unique visible controls, and hidden-pane exclusion. Full acceptance remains `FE-V1-039`. |
+| `RSP-21` | Pass for layout ownership: reduced-motion and dynamic-state regressions show no scroll hijack, required-target movement, or fixed-region collision. Announcement quality remains `FE-V1-039`. |
+| `RSP-22` | Pass: full-size and contact-sheet review against all seven selected Focus Rail targets records no prohibited borrowing or unapproved structural drift. |
+| `RSP-23` | Pass: JSON/browser evidence records geometry, scroll owners, visibility, target size, request paths/counts, authority purge, storage/privacy, errors, dimensions/hashes, and cleanup. |
+| `RSP-24` | Pass: all focused, aggregate, Chromium, static, boundary, exact-runtime, build/package, install, audit/license, privacy, diff, residue, documentation, commit-scope, and push-preparation gates agree. The 18 pre-existing user-owned screenshot modifications were excluded, restored after browser runs, and hash-verified. |

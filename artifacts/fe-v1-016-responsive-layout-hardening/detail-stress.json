@@ -1,0 +1,168 @@
+{
+  "measurements": [
+    {
+      "viewport": {
+        "width": 320,
+        "height": 480
+      },
+      "document": {
+        "clientHeight": 480,
+        "clientWidth": 320,
+        "scrollHeight": 814,
+        "scrollWidth": 320
+      },
+      "controls": {
+        "bottom": 480,
+        "height": 199,
+        "left": 0,
+        "right": 320,
+        "top": 281,
+        "width": 320
+      },
+      "composer": {
+        "bottom": 480,
+        "height": 143,
+        "left": 0,
+        "right": 320,
+        "top": 337,
+        "width": 320
+      },
+      "scrollOwnerDisplay": "contents",
+      "controlsOverflowY": "auto"
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 420
+      },
+      "document": {
+        "clientHeight": 420,
+        "clientWidth": 390,
+        "scrollHeight": 814,
+        "scrollWidth": 390
+      },
+      "controls": {
+        "bottom": 420,
+        "height": 199,
+        "left": 0,
+        "right": 390,
+        "top": 221,
+        "width": 390
+      },
+      "composer": {
+        "bottom": 420,
+        "height": 143,
+        "left": 0,
+        "right": 390,
+        "top": 277,
+        "width": 390
+      },
+      "scrollOwnerDisplay": "contents",
+      "controlsOverflowY": "auto"
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 360
+      },
+      "document": {
+        "clientHeight": 360,
+        "clientWidth": 800,
+        "scrollHeight": 770,
+        "scrollWidth": 800
+      },
+      "controls": {
+        "bottom": 360,
+        "height": 199,
+        "left": 0,
+        "right": 800,
+        "top": 161,
+        "width": 800
+      },
+      "composer": {
+        "bottom": 360,
+        "height": 143,
+        "left": 0,
+        "right": 800,
+        "top": 217,
+        "width": 800
+      },
+      "scrollOwnerDisplay": "contents",
+      "controlsOverflowY": "auto"
+    },
+    {
+      "viewport": {
+        "width": 915,
+        "height": 412
+      },
+      "document": {
+        "clientHeight": 412,
+        "clientWidth": 915,
+        "scrollHeight": 770,
+        "scrollWidth": 915
+      },
+      "controls": {
+        "bottom": 412,
+        "height": 199,
+        "left": 48,
+        "right": 868,
+        "top": 213,
+        "width": 820
+      },
+      "composer": {
+        "bottom": 412,
+        "height": 143,
+        "left": 48,
+        "right": 868,
+        "top": 269,
+        "width": 820
+      },
+      "scrollOwnerDisplay": "contents",
+      "controlsOverflowY": "auto"
+    }
+  ],
+  "inset": {
+    "appBar": {
+      "bottom": 88,
+      "height": 88,
+      "left": 0,
+      "right": 390,
+      "top": 0,
+      "width": 390
+    },
+    "main": {
+      "bottom": 870,
+      "height": 782,
+      "left": 0,
+      "right": 390,
+      "top": 88,
+      "width": 390
+    },
+    "back": {
+      "bottom": 82,
+      "height": 44,
+      "left": 12,
+      "right": 56,
+      "top": 38,
+      "width": 44
+    },
+    "send": {
+      "bottom": 769,
+      "height": 56,
+      "left": 321,
+      "right": 373,
+      "top": 713,
+      "width": 52
+    }
+  },
+  "reflow": {
+    "effectiveViewport": {
+      "height": 400,
+      "width": 640
+    },
+    "physicalViewport": {
+      "width": 1280,
+      "height": 800
+    }
+  }
+}

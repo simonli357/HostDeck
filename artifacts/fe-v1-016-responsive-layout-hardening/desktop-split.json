@@ -1,0 +1,60 @@
+{
+  "split": {
+    "document": {
+      "clientHeight": 800,
+      "scrollHeight": 800
+    },
+    "layout": {
+      "bottom": 800,
+      "height": 744,
+      "left": 32,
+      "right": 1248,
+      "top": 56,
+      "width": 1216
+    },
+    "mission": {
+      "bottom": 784,
+      "height": 712,
+      "left": 32,
+      "right": 412,
+      "top": 72,
+      "width": 380
+    },
+    "detail": {
+      "bottom": 784,
+      "height": 712,
+      "left": 428,
+      "right": 1248,
+      "top": 72,
+      "width": 820
+    },
+    "controls": {
+      "bottom": 784,
+      "height": 199,
+      "left": 428,
+      "right": 1248,
+      "top": 585,
+      "width": 820
+    },
+    "missionOverflowY": "auto",
+    "detailOverflowY": "auto"
+  },
+  "missionRequestPaths": [
+    "/api/v1/access",
+    "/api/v1/host/status",
+    "/api/v1/sessions",
+    "/api/v1/access/devices",
+    "/api/v1/access/csrf",
+    "/api/v1/access",
+    "/api/v1/host/status",
+    "/api/v1/sessions/sess_detail_browser_active",
+    "/api/v1/access/devices",
+    "/api/v1/sessions/sess_detail_browser_active/approvals",
+    "/api/v1/access"
+  ],
+  "detailRequestPaths": [
+    "/api/v1/sessions/sess_detail_browser_active",
+    "/api/v1/sessions/sess_detail_browser_active/approvals"
+  ],
+  "retainedAfterAuthorityLoss": 0
+}
