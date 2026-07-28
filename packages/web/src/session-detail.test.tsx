@@ -8,6 +8,7 @@ import {
   modelControlSnapshotSchema,
   pendingApprovalListResponseSchema,
   type SelectedAccessStateResponse,
+  type SelectedHostStatusResponse,
   type SelectedProjectionEvent,
   type SkillsSnapshot,
   selectedAccessStateResponseSchema,
@@ -175,6 +176,8 @@ describe("Session Detail projection", () => {
     expect(failedProjection.empty).toBe(false);
 
     const notFound = detailSnapshot({
+      causes: ["host_not_ready"],
+      host: versionDriftHostStatus(),
       phase: "not_found",
       targetData: false,
       targetState: "not_found",
@@ -183,6 +186,33 @@ describe("Session Detail projection", () => {
     expect(projectSessionDetail(notFound, sessionId, emptyFeed, nowMs).notices[0]?.title).toBe(
       "Session unavailable"
     );
+  });
+
+  it("keeps diagnostic session data readable below exact update-required truth", () => {
+    const feed = appendSessionDetailEvent(
+      createSessionDetailFeed(sessionId),
+      messageEvent(1, "Readable diagnostic activity")
+    );
+    const state = detailSnapshot({
+      phase: "incompatible",
+      host: versionDriftHostStatus(),
+      causes: ["host_not_ready"]
+    });
+    const projection = projectSessionDetail(state, sessionId, feed, nowMs);
+
+    expect(projection.canDisclose).toBe(true);
+    expect(projection.notices[0]).toMatchObject({
+      title: "Codex update required",
+      tone: "danger",
+      urgent: true
+    });
+    expect(projection.notices[0]?.body).toContain("Codex 0.145.0");
+    expect(projection.notices[0]?.body).toContain("HostDeck supports 0.144.0");
+    expect(projection.timeline.map(({ body }) => body)).toContain("Readable diagnostic activity");
+    expect(state.writeEligibility).toMatchObject({
+      eligible: false,
+      causes: ["host_not_ready"]
+    });
   });
 
   it("keeps initial replay pending only until the detail baseline is observed", () => {
@@ -730,6 +760,7 @@ function detailSnapshot(
       readonly reason: "retention" | "disconnect" | "restart" | "schema_change";
     } | null;
     readonly causes?: readonly BrowserConnectionWriteBlockCause[];
+    readonly host?: SelectedHostStatusResponse | null;
   } = {}
 ): BrowserConnectionSnapshot {
   const access = options.access === undefined ? pairedAccess() : options.access;
@@ -757,7 +788,7 @@ function detailSnapshot(
       access,
       accessState === "failed" ? browserFailure("access") : null
     ),
-    host: resource("current", null, null),
+    host: resource("current", options.host ?? null, null),
     targetState: resource(
       targetState,
       options.targetData === false || targetState === "not_found"
@@ -1065,6 +1096,70 @@ function coordinatorHarness(
       for (const listener of listeners) listener();
     }
   };
+}
+
+function versionDriftHostStatus(): SelectedHostStatusResponse {
+  return selectedHostStatusResponseSchema.parse({
+    local: {
+      generation: 2,
+      state: "failed",
+      readiness: "not_ready",
+      updated_at: timestamp,
+      components: selectedHostLocalHealthComponents.map((component) =>
+        component === "runtime"
+          ? {
+              component,
+              state: "failed",
+              checked_at: timestamp,
+              causes: ["runtime_failed"]
+            }
+          : component === "compatibility"
+            ? {
+                component,
+                state: "failed",
+                checked_at: timestamp,
+                causes: ["runtime_incompatible"]
+              }
+            : {
+                component,
+                state: "ready",
+                checked_at: timestamp,
+                causes: []
+              }
+      ),
+      mutation_admission: "closed"
+    },
+    compatibility: {
+      state: "version_drift",
+      evidence: "current",
+      observed_version: "0.145.0",
+      supported_version: "0.144.0",
+      capability_state: "blocked",
+      checked_at: timestamp,
+      recorded_at: timestamp
+    },
+    remote: {
+      generation: 1,
+      state_generation: 1,
+      availability: "ready",
+      cause: null,
+      external_origin: remoteOrigin,
+      laptop_action_required: false,
+      observed_at: timestamp,
+      checked_at: timestamp,
+      updated_at: timestamp
+    },
+    access: {
+      mode: "paired_write",
+      network_mode: "remote",
+      transport: "https",
+      write_eligibility: {
+        scope: "host_health_and_authority",
+        eligible: false,
+        causes: ["host_not_ready"]
+      }
+    }
+  });
 }
 
 function interruptHostStatus() {

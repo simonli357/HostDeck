@@ -5389,6 +5389,137 @@ textarea:focus-visible {
   cursor: wait;
 }
 
+.hostdeck-runtime-compatibility {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 18px 0 18px 14px;
+  border-top: 1px solid var(--hostdeck-divider);
+  border-bottom: 1px solid var(--hostdeck-divider);
+  border-left: 3px solid currentColor;
+}
+
+.hostdeck-runtime-compatibility__owner {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.hostdeck-runtime-compatibility__owner > span {
+  color: currentColor;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 18px;
+  text-transform: uppercase;
+}
+
+.hostdeck-runtime-compatibility__owner > small {
+  min-width: 0;
+  color: var(--hostdeck-muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-runtime-compatibility__state {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.hostdeck-runtime-compatibility__state > svg {
+  margin-top: 2px;
+}
+
+.hostdeck-runtime-compatibility__copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.hostdeck-runtime-compatibility__state h2,
+.hostdeck-runtime-compatibility__state p {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-runtime-compatibility__state h2 {
+  color: var(--hostdeck-ink);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 22px;
+}
+
+.hostdeck-runtime-compatibility__state p {
+  color: var(--hostdeck-muted);
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.hostdeck-runtime-compatibility__facts {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 18px;
+  margin: 0 0 0 38px;
+}
+
+.hostdeck-runtime-compatibility__facts > div {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 2px;
+  padding: 9px 0;
+  border-top: 1px solid var(--hostdeck-divider);
+}
+
+.hostdeck-runtime-compatibility__facts dt,
+.hostdeck-runtime-compatibility__facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-runtime-compatibility__facts dt {
+  color: var(--hostdeck-muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 17px;
+  text-transform: uppercase;
+}
+
+.hostdeck-runtime-compatibility__facts dd {
+  color: var(--hostdeck-ink);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 19px;
+}
+
+.hostdeck-runtime-compatibility__facts small {
+  color: var(--hostdeck-muted);
+  font-size: 11px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+.hostdeck-runtime-compatibility__action {
+  min-width: 0;
+  max-width: 240px;
+  margin-left: 38px;
+  justify-self: start;
+  white-space: nowrap;
+}
+
+.hostdeck-runtime-compatibility__action:disabled {
+  cursor: wait;
+}
+
 @media (max-width: 520px) {
   .hostdeck-remote-recovery__owner {
     display: grid;
@@ -5401,6 +5532,26 @@ textarea:focus-visible {
   }
 
   .hostdeck-remote-recovery__action {
+    width: calc(100% - 38px);
+    max-width: none;
+    justify-self: stretch;
+  }
+
+  .hostdeck-runtime-compatibility__owner {
+    display: grid;
+    justify-content: stretch;
+    gap: 1px;
+  }
+
+  .hostdeck-runtime-compatibility__owner > small {
+    text-align: left;
+  }
+
+  .hostdeck-runtime-compatibility__facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hostdeck-runtime-compatibility__action {
     width: calc(100% - 38px);
     max-width: none;
     justify-self: stretch;

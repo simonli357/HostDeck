@@ -35,6 +35,7 @@ import {
   projectHostLockState
 } from "./host-lock-state.js";
 import { projectRemoteConnectionRecovery } from "./remote-connection-recovery-state.js";
+import { projectRuntimeCompatibility } from "./runtime-compatibility-state.js";
 
 export type MissionQueueId = "act_now" | "in_progress" | "quiet";
 export type MissionTone = "connected" | "attention" | "danger" | "muted";
@@ -573,6 +574,25 @@ function dataStatus(
   ) {
     return { value: "Stale", tone: "attention", icon: Clock3 };
   }
+  const compatibility = projectRuntimeCompatibility(snapshot);
+  if (compatibility.routeVisible) {
+    switch (compatibility.state) {
+      case "version_drift":
+        return { value: "Update required", tone: "danger", icon: AlertTriangle };
+      case "incompatible":
+        return { value: "Incompatible", tone: "danger", icon: AlertTriangle };
+      case "unknown":
+        return { value: "Unknown", tone: "attention", icon: AlertTriangle };
+      case "disconnected":
+        return { value: "Disconnected", tone: "attention", icon: WifiOff };
+      case "degraded":
+        return { value: "Degraded", tone: "attention", icon: AlertTriangle };
+      case "supported":
+        return { value: "Compatibility stale", tone: "attention", icon: Clock3 };
+      case null:
+        return { value: "Unavailable", tone: "danger", icon: AlertTriangle };
+    }
+  }
   if (snapshot.phase === "offline") {
     return { value: "Runtime offline", tone: "danger", icon: WifiOff };
   }
@@ -627,13 +647,13 @@ function projectNotice(
       true
     );
   }
-  if (snapshot.phase === "incompatible") {
-    return notice(
-      "Codex is incompatible",
-      "Update the laptop's Codex runtime before using HostDeck controls.",
-      "danger",
-      false
-    );
+  const compatibility = projectRuntimeCompatibility(snapshot);
+  if (
+    compatibility.routeVisible &&
+    compatibility.state !== null &&
+    compatibility.state !== "supported"
+  ) {
+    return compatibilityMissionNotice(compatibility);
   }
   if (snapshot.phase === "offline") {
     return notice(
@@ -685,6 +705,17 @@ function projectNotice(
     );
   }
   return null;
+}
+
+function compatibilityMissionNotice(
+  view: ReturnType<typeof projectRuntimeCompatibility>
+): MissionNotice {
+  return notice(
+    view.title,
+    view.detail,
+    view.tone === "connected" ? "muted" : view.tone,
+    view.urgent
+  );
 }
 
 function accessNotice(

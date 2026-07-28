@@ -81,6 +81,7 @@ import {
 } from "./prompt-composer.js";
 import type { PromptComposerController } from "./prompt-composer-state.js";
 import { projectRemoteConnectionRecovery } from "./remote-connection-recovery-state.js";
+import { projectRuntimeCompatibility } from "./runtime-compatibility-state.js";
 import {
   appendSessionDetailEvent,
   createSessionDetailFeed,
@@ -1056,6 +1057,14 @@ function projectDetailNotices(
     const unavailable = unavailableNotice(snapshot);
     return unavailable === null ? Object.freeze([]) : Object.freeze([unavailable]);
   }
+  const compatibility = projectRuntimeCompatibility(snapshot);
+  if (
+    compatibility.routeVisible &&
+    compatibility.state !== null &&
+    compatibility.state !== "supported"
+  ) {
+    notices.push(compatibilityDetailNotice(compatibility));
+  }
   if (stale) {
     notices.push({
       title: "Showing stale session state",
@@ -1124,7 +1133,7 @@ function unavailableNotice(snapshot: BrowserConnectionSnapshot): SessionDetailNo
     case "offline":
       return notice("Codex runtime is offline", "Session activity is unavailable until the laptop runtime recovers.", "attention", false);
     case "incompatible":
-      return notice("Codex is incompatible", "Update the laptop runtime before using this session.", "danger", true);
+      return notice("Codex compatibility unavailable", "Check the laptop runtime before using this session.", "danger", true);
     case "fatal":
     case "degraded":
       return notice("Session Detail is unavailable", "Reload after the HostDeck service recovers.", "danger", true);
@@ -1132,6 +1141,17 @@ function unavailableNotice(snapshot: BrowserConnectionSnapshot): SessionDetailNo
     case "closed":
       return notice("Session Detail is unavailable", "Return to Mission Control and try again.", "danger", true);
   }
+}
+
+function compatibilityDetailNotice(
+  view: ReturnType<typeof projectRuntimeCompatibility>
+): SessionDetailNotice {
+  return notice(
+    view.title,
+    view.detail,
+    view.tone === "connected" ? "muted" : view.tone,
+    view.urgent
+  );
 }
 
 function notice(

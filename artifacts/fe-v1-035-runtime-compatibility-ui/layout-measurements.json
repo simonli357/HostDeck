@@ -1,0 +1,603 @@
+[
+  {
+    "viewport": {
+      "width": 320,
+      "height": 800
+    },
+    "documentClientWidth": 320,
+    "documentScrollWidth": 320,
+    "dialog": {
+      "top": 144,
+      "right": 320,
+      "bottom": 800,
+      "left": 0,
+      "width": 320,
+      "height": 656
+    },
+    "rail": {
+      "top": -46,
+      "right": 303,
+      "bottom": 552,
+      "left": 17,
+      "width": 286,
+      "height": 598
+    },
+    "action": {
+      "top": 489,
+      "right": 303,
+      "bottom": 533,
+      "left": 72,
+      "width": 231,
+      "height": 44
+    },
+    "close": {
+      "top": -1239.5,
+      "right": 303,
+      "bottom": -1195.5,
+      "left": 259,
+      "width": 44,
+      "height": 44
+    },
+    "facts": [
+      {
+        "top": 192,
+        "right": 303,
+        "bottom": 268,
+        "left": 72,
+        "width": 231,
+        "height": 76
+      },
+      {
+        "top": 268,
+        "right": 303,
+        "bottom": 344,
+        "left": 72,
+        "width": 231,
+        "height": 76
+      },
+      {
+        "top": 344,
+        "right": 303,
+        "bottom": 401,
+        "left": 72,
+        "width": 231,
+        "height": 57
+      },
+      {
+        "top": 401,
+        "right": 303,
+        "bottom": 477,
+        "left": 72,
+        "width": 231,
+        "height": 76
+      }
+    ],
+    "scrollOwnerCount": 1
+  },
+  {
+    "viewport": {
+      "width": 360,
+      "height": 800
+    },
+    "documentClientWidth": 360,
+    "documentScrollWidth": 360,
+    "dialog": {
+      "top": 144,
+      "right": 360,
+      "bottom": 800,
+      "left": 0,
+      "width": 360,
+      "height": 656
+    },
+    "rail": {
+      "top": -8,
+      "right": 343,
+      "bottom": 571,
+      "left": 17,
+      "width": 326,
+      "height": 579
+    },
+    "action": {
+      "top": 508,
+      "right": 343,
+      "bottom": 552,
+      "left": 72,
+      "width": 271,
+      "height": 44
+    },
+    "close": {
+      "top": -1164.5,
+      "right": 343,
+      "bottom": -1120.5,
+      "left": 299,
+      "width": 44,
+      "height": 44
+    },
+    "facts": [
+      {
+        "top": 211,
+        "right": 343,
+        "bottom": 287,
+        "left": 72,
+        "width": 271,
+        "height": 76
+      },
+      {
+        "top": 287,
+        "right": 343,
+        "bottom": 363,
+        "left": 72,
+        "width": 271,
+        "height": 76
+      },
+      {
+        "top": 363,
+        "right": 343,
+        "bottom": 420,
+        "left": 72,
+        "width": 271,
+        "height": 57
+      },
+      {
+        "top": 420,
+        "right": 343,
+        "bottom": 496,
+        "left": 72,
+        "width": 271,
+        "height": 76
+      }
+    ],
+    "scrollOwnerCount": 1
+  },
+  {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "documentClientWidth": 390,
+    "documentScrollWidth": 390,
+    "dialog": {
+      "top": 164,
+      "right": 390,
+      "bottom": 844,
+      "left": 0,
+      "width": 390,
+      "height": 680
+    },
+    "rail": {
+      "top": 55,
+      "right": 373,
+      "bottom": 615,
+      "left": 17,
+      "width": 356,
+      "height": 560
+    },
+    "action": {
+      "top": 552,
+      "right": 373,
+      "bottom": 596,
+      "left": 72,
+      "width": 301,
+      "height": 44
+    },
+    "close": {
+      "top": -1082.5,
+      "right": 373,
+      "bottom": -1038.5,
+      "left": 329,
+      "width": 44,
+      "height": 44
+    },
+    "facts": [
+      {
+        "top": 255,
+        "right": 373,
+        "bottom": 331,
+        "left": 72,
+        "width": 301,
+        "height": 76
+      },
+      {
+        "top": 331,
+        "right": 373,
+        "bottom": 407,
+        "left": 72,
+        "width": 301,
+        "height": 76
+      },
+      {
+        "top": 407,
+        "right": 373,
+        "bottom": 464,
+        "left": 72,
+        "width": 301,
+        "height": 57
+      },
+      {
+        "top": 464,
+        "right": 373,
+        "bottom": 540,
+        "left": 72,
+        "width": 301,
+        "height": 76
+      }
+    ],
+    "scrollOwnerCount": 1
+  },
+  {
+    "viewport": {
+      "width": 412,
+      "height": 915
+    },
+    "documentClientWidth": 412,
+    "documentScrollWidth": 412,
+    "dialog": {
+      "top": 235,
+      "right": 412,
+      "bottom": 915,
+      "left": 0,
+      "width": 412,
+      "height": 680
+    },
+    "rail": {
+      "top": 126,
+      "right": 395,
+      "bottom": 686,
+      "left": 17,
+      "width": 378,
+      "height": 560
+    },
+    "action": {
+      "top": 623,
+      "right": 395,
+      "bottom": 667,
+      "left": 72,
+      "width": 323,
+      "height": 44
+    },
+    "close": {
+      "top": -1011.5,
+      "right": 395,
+      "bottom": -967.5,
+      "left": 351,
+      "width": 44,
+      "height": 44
+    },
+    "facts": [
+      {
+        "top": 326,
+        "right": 395,
+        "bottom": 402,
+        "left": 72,
+        "width": 323,
+        "height": 76
+      },
+      {
+        "top": 402,
+        "right": 395,
+        "bottom": 478,
+        "left": 72,
+        "width": 323,
+        "height": 76
+      },
+      {
+        "top": 478,
+        "right": 395,
+        "bottom": 535,
+        "left": 72,
+        "width": 323,
+        "height": 57
+      },
+      {
+        "top": 535,
+        "right": 395,
+        "bottom": 611,
+        "left": 72,
+        "width": 323,
+        "height": 76
+      }
+    ],
+    "scrollOwnerCount": 1
+  },
+  {
+    "viewport": {
+      "width": 768,
+      "height": 1024
+    },
+    "documentClientWidth": 768,
+    "documentScrollWidth": 768,
+    "dialog": {
+      "top": 344,
+      "right": 664,
+      "bottom": 1024,
+      "left": 104,
+      "width": 560,
+      "height": 680
+    },
+    "rail": {
+      "top": 444,
+      "right": 647,
+      "bottom": 814,
+      "left": 121,
+      "width": 526,
+      "height": 370
+    },
+    "action": {
+      "top": 751,
+      "right": 388.3125,
+      "bottom": 795,
+      "left": 176,
+      "width": 212.3125,
+      "height": 44
+    },
+    "close": {
+      "top": -654.5,
+      "right": 647,
+      "bottom": -610.5,
+      "left": 603,
+      "width": 44,
+      "height": 44
+    },
+    "facts": [
+      {
+        "top": 587,
+        "right": 402.5,
+        "bottom": 663,
+        "left": 176,
+        "width": 226.5,
+        "height": 76
+      },
+      {
+        "top": 587,
+        "right": 647,
+        "bottom": 663,
+        "left": 420.5,
+        "width": 226.5,
+        "height": 76
+      },
+      {
+        "top": 663,
+        "right": 402.5,
+        "bottom": 739,
+        "left": 176,
+        "width": 226.5,
+        "height": 76
+      },
+      {
+        "top": 663,
+        "right": 647,
+        "bottom": 739,
+        "left": 420.5,
+        "width": 226.5,
+        "height": 76
+      }
+    ],
+    "scrollOwnerCount": 1
+  },
+  {
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "documentClientWidth": 1280,
+    "documentScrollWidth": 1280,
+    "dialog": {
+      "top": 144,
+      "right": 920,
+      "bottom": 800,
+      "left": 360,
+      "width": 560,
+      "height": 656
+    },
+    "rail": {
+      "top": 220,
+      "right": 903,
+      "bottom": 590,
+      "left": 377,
+      "width": 526,
+      "height": 370
+    },
+    "action": {
+      "top": 527,
+      "right": 644.3125,
+      "bottom": 571,
+      "left": 432,
+      "width": 212.3125,
+      "height": 44
+    },
+    "close": {
+      "top": -878.5,
+      "right": 903,
+      "bottom": -834.5,
+      "left": 859,
+      "width": 44,
+      "height": 44
+    },
+    "facts": [
+      {
+        "top": 363,
+        "right": 658.5,
+        "bottom": 439,
+        "left": 432,
+        "width": 226.5,
+        "height": 76
+      },
+      {
+        "top": 363,
+        "right": 903,
+        "bottom": 439,
+        "left": 676.5,
+        "width": 226.5,
+        "height": 76
+      },
+      {
+        "top": 439,
+        "right": 658.5,
+        "bottom": 515,
+        "left": 432,
+        "width": 226.5,
+        "height": 76
+      },
+      {
+        "top": 439,
+        "right": 903,
+        "bottom": 515,
+        "left": 676.5,
+        "width": 226.5,
+        "height": 76
+      }
+    ],
+    "scrollOwnerCount": 1
+  },
+  {
+    "viewport": {
+      "width": 390,
+      "height": 420
+    },
+    "documentClientWidth": 390,
+    "documentScrollWidth": 390,
+    "dialog": {
+      "top": 75.609375,
+      "right": 390,
+      "bottom": 420,
+      "left": 0,
+      "width": 390,
+      "height": 344.390625
+    },
+    "rail": {
+      "top": -270.390625,
+      "right": 373,
+      "bottom": 289.609375,
+      "left": 17,
+      "width": 356,
+      "height": 560
+    },
+    "action": {
+      "top": 226.609375,
+      "right": 373,
+      "bottom": 270.609375,
+      "left": 72,
+      "width": 301,
+      "height": 44
+    },
+    "close": {
+      "top": -1407.890625,
+      "right": 373,
+      "bottom": -1363.890625,
+      "left": 329,
+      "width": 44,
+      "height": 44
+    },
+    "facts": [
+      {
+        "top": -70.390625,
+        "right": 373,
+        "bottom": 5.609375,
+        "left": 72,
+        "width": 301,
+        "height": 76
+      },
+      {
+        "top": 5.609375,
+        "right": 373,
+        "bottom": 81.609375,
+        "left": 72,
+        "width": 301,
+        "height": 76
+      },
+      {
+        "top": 81.609375,
+        "right": 373,
+        "bottom": 138.609375,
+        "left": 72,
+        "width": 301,
+        "height": 57
+      },
+      {
+        "top": 138.609375,
+        "right": 373,
+        "bottom": 214.609375,
+        "left": 72,
+        "width": 301,
+        "height": 76
+      }
+    ],
+    "scrollOwnerCount": 1
+  },
+  {
+    "viewport": {
+      "width": 1280,
+      "height": 800,
+      "zoom": 2
+    },
+    "documentClientWidth": 1280,
+    "documentScrollWidth": 1280,
+    "dialog": {
+      "top": -512,
+      "right": 1200,
+      "bottom": 800,
+      "left": 80,
+      "width": 1120,
+      "height": 1312
+    },
+    "rail": {
+      "top": -360,
+      "right": 1166,
+      "bottom": 380,
+      "left": 114,
+      "width": 1052,
+      "height": 740
+    },
+    "action": {
+      "top": 254,
+      "right": 648.609375,
+      "bottom": 342,
+      "left": 224,
+      "width": 424.609375,
+      "height": 88
+    },
+    "close": {
+      "top": -2557,
+      "right": 1166,
+      "bottom": -2469,
+      "left": 1078,
+      "width": 88,
+      "height": 88
+    },
+    "facts": [
+      {
+        "top": -74,
+        "right": 677,
+        "bottom": 78,
+        "left": 224,
+        "width": 453,
+        "height": 152
+      },
+      {
+        "top": -74,
+        "right": 1166,
+        "bottom": 78,
+        "left": 713,
+        "width": 453,
+        "height": 152
+      },
+      {
+        "top": 78,
+        "right": 677,
+        "bottom": 230,
+        "left": 224,
+        "width": 453,
+        "height": 152
+      },
+      {
+        "top": 78,
+        "right": 1166,
+        "bottom": 230,
+        "left": 713,
+        "width": 453,
+        "height": 152
+      }
+    ],
+    "scrollOwnerCount": 1
+  }
+]

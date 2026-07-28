@@ -251,6 +251,31 @@ describe("Mission Control projection", () => {
     expect(screen.getByText("Showing stale session state")).toBeTruthy();
     expect(screen.queryByText("Live")).toBeNull();
   });
+
+  it("projects exact version drift without hiding readable sessions", () => {
+    const state = currentSnapshot({
+      host: hostStatus({ localCause: "runtime_incompatible", versionDrift: true }),
+      phase: "incompatible",
+      causes: ["host_not_ready"],
+      sessions: [sessionItem("sess_mission_drift", "drift-readable")]
+    });
+    const projection = projectMissionControl(state, nowMs);
+
+    expect(projection.statusCells[2]?.value).toBe("Update required");
+    expect(projection.notice).toMatchObject({
+      title: "Codex update required",
+      tone: "danger",
+      urgent: true
+    });
+    expect(projection.notice?.body).toContain("Codex 0.145.0");
+    expect(projection.notice?.body).toContain("HostDeck supports 0.144.0");
+    expect(projection.sections.flatMap(({ rows }) => rows).map(({ item }) => item.session.name))
+      .toContain("drift-readable");
+    expect(state.writeEligibility).toMatchObject({
+      eligible: false,
+      causes: ["host_not_ready"]
+    });
+  });
 });
 
 describe("Mission Control screen states and interaction", () => {
@@ -375,7 +400,7 @@ describe("Mission Control screen states and interaction", () => {
           host: hostStatus({ localCause: "runtime_disconnected" }),
           phase: "offline"
         }),
-      expected: "Codex runtime is offline"
+      expected: "Codex runtime disconnected"
     },
     {
       label: "incompatible",
@@ -384,7 +409,7 @@ describe("Mission Control screen states and interaction", () => {
           host: hostStatus({ localCause: "runtime_incompatible" }),
           phase: "incompatible"
         }),
-      expected: "Codex is incompatible"
+      expected: "Codex interface incompatible"
     },
     {
       label: "degraded",
@@ -393,7 +418,7 @@ describe("Mission Control screen states and interaction", () => {
           host: hostStatus({ localCause: "runtime_reconciling" }),
           phase: "degraded"
         }),
-      expected: "Host health is degraded"
+      expected: "Codex compatibility limited"
     },
     {
       label: "fatal",
@@ -741,6 +766,7 @@ function hostStatus(
     readonly mode?: SelectedHostAccessMode;
     readonly localCause?: "runtime_disconnected" | "runtime_incompatible" | "runtime_reconciling";
     readonly remoteCause?: "profile_other";
+    readonly versionDrift?: boolean;
   } = {}
 ): SelectedHostStatusResponse {
   const components = selectedHostLocalHealthComponents.map((component) => {
@@ -774,7 +800,7 @@ function hostStatus(
       components,
       mutation_admission: localReady ? "open" : "closed"
     },
-    compatibility: hostCompatibility(options.localCause),
+    compatibility: hostCompatibility(options.localCause, options.versionDrift ?? false),
     remote: {
       generation: 1,
       state_generation: 1,
@@ -830,7 +856,8 @@ function localComponentOverride(
 }
 
 function hostCompatibility(
-  cause: "runtime_disconnected" | "runtime_incompatible" | "runtime_reconciling" | undefined
+  cause: "runtime_disconnected" | "runtime_incompatible" | "runtime_reconciling" | undefined,
+  versionDrift: boolean
 ): SelectedHostStatusResponse["compatibility"] {
   if (cause === "runtime_disconnected") {
     return {
@@ -856,9 +883,9 @@ function hostCompatibility(
   }
   if (cause === "runtime_incompatible") {
     return {
-      state: "incompatible",
+      state: versionDrift ? "version_drift" : "incompatible",
       evidence: "current",
-      observed_version: "0.144.0",
+      observed_version: versionDrift ? "0.145.0" : "0.144.0",
       supported_version: "0.144.0",
       capability_state: "blocked",
       checked_at: compatibilityTimestamp,

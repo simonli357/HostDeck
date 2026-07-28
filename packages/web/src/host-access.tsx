@@ -53,6 +53,11 @@ import {
   type RemoteConnectionRecoveryPhase,
   type RemoteConnectionRecoveryView
 } from "./remote-connection-recovery-state.js";
+import {
+  RuntimeCompatibilityPanel,
+  useRuntimeCompatibilityController
+} from "./runtime-compatibility.js";
+import { projectRuntimeCompatibility } from "./runtime-compatibility-state.js";
 
 export type HostAccessTone = "connected" | "attention" | "danger" | "muted";
 
@@ -115,6 +120,12 @@ export function ConnectedHostAccess({
     remoteController.snapshot,
     remoteController.snapshot
   );
+  const compatibilityController = useRuntimeCompatibilityController(coordinator, snapshot);
+  const compatibility = useSyncExternalStore(
+    compatibilityController.subscribe,
+    compatibilityController.snapshot,
+    compatibilityController.snapshot
+  );
   const deviceController = usePairedDeviceManagementController(coordinator, snapshot);
   const devices = useSyncExternalStore(
     deviceController.subscribe,
@@ -128,6 +139,10 @@ export function ConnectedHostAccess({
         projection={projectHostAccess(snapshot, nowMs, recovery, remote)}
         onRecover={recoveryController.recover}
         onCheckRemote={remoteController.check}
+      />
+      <RuntimeCompatibilityPanel
+        view={compatibility}
+        onCheck={compatibilityController.check}
       />
       <HostLockPanel binding={hostLock} />
       <PairedDeviceManagementPanel controller={deviceController} view={devices} />
@@ -727,6 +742,22 @@ function hostFact(snapshot: BrowserConnectionSnapshot): HostAccessFact {
   }
   if (snapshot.host.state !== "current") {
     return fact("host", "Laptop host", "Stale", "Writes remain blocked", "attention");
+  }
+  const compatibility = projectRuntimeCompatibility(snapshot);
+  if (compatibility.state === "version_drift") {
+    return fact("host", "Laptop host", "Update required", "Codex controls are blocked", "danger");
+  }
+  if (compatibility.state === "incompatible") {
+    return fact("host", "Laptop host", "Incompatible", "Codex controls are blocked", "danger");
+  }
+  if (compatibility.state === "unknown") {
+    return fact("host", "Laptop host", "Compatibility unknown", "Writes remain blocked", "attention");
+  }
+  if (compatibility.state === "disconnected") {
+    return fact("host", "Laptop host", "Runtime disconnected", "Last known compatibility only", "attention");
+  }
+  if (compatibility.state === "degraded") {
+    return fact("host", "Laptop host", "Compatibility limited", "Writes remain blocked", "attention");
   }
   const host = snapshot.host.data;
   if (snapshot.phase === "incompatible") {

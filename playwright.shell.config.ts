@@ -19,6 +19,7 @@ export default defineConfig({
     "plan-control.spec.ts",
     "prompt-composer.spec.ts",
     "remote-connection-recovery.spec.ts",
+    "runtime-compatibility.spec.ts",
     "session-detail.spec.ts",
     "skills-control.spec.ts",
     "usage-control.spec.ts"

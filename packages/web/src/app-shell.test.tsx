@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
 
+import {
+  selectedHostLocalHealthComponents,
+  selectedHostStatusResponseSchema
+} from "@hostdeck/contracts";
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { StrictMode } from "react";
@@ -712,36 +716,50 @@ function recoveryConnectionSnapshot(
     can_lock: true,
     can_unlock: false
   });
-  const host = Object.freeze({
-    local: Object.freeze({
+  const host = selectedHostStatusResponseSchema.parse({
+    local: {
       generation: 1,
-      state: "ready" as const,
-      readiness: "ready" as const,
+      state: "ready",
+      readiness: "ready",
       updated_at: timestamp,
-      components: Object.freeze([]),
-      mutation_admission: "open" as const
-    }),
-    remote: Object.freeze({
+      components: selectedHostLocalHealthComponents.map((component) => ({
+        component,
+        state: "ready",
+        checked_at: timestamp,
+        causes: []
+      })),
+      mutation_admission: "open"
+    },
+    compatibility: {
+      state: "supported",
+      evidence: "current",
+      observed_version: "0.144.0",
+      supported_version: "0.144.0",
+      capability_state: "verified",
+      checked_at: timestamp,
+      recorded_at: timestamp
+    },
+    remote: {
       generation: 1,
       state_generation: 1,
-      availability: "ready" as const,
+      availability: "ready",
       cause: null,
       external_origin: origin,
       laptop_action_required: false,
       observed_at: timestamp,
       checked_at: timestamp,
       updated_at: timestamp
-    }),
-    access: Object.freeze({
-      mode: "paired_write" as const,
-      network_mode: "remote" as const,
-      transport: "https" as const,
-      write_eligibility: Object.freeze({
-        scope: "host_health_and_authority" as const,
+    },
+    access: {
+      mode: "paired_write",
+      network_mode: "remote",
+      transport: "https",
+      write_eligibility: {
+        scope: "host_health_and_authority",
         eligible: true,
-        causes: Object.freeze([])
-      })
-    })
+        causes: []
+      }
+    }
   });
   const resource = <Data,>(data: Data) => Object.freeze({
     state: "current" as const,
