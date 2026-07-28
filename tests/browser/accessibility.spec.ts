@@ -1,3 +1,5 @@
+import { mkdir } from "node:fs/promises";
+import { resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import {
   expectAxeClean,
@@ -43,10 +45,15 @@ import {
 import { installSkillsControlApi } from "./skills-control-fixture.js";
 
 const detailPath = `/sessions/${sessionDetailBrowserSessionId}`;
+const artifactDirectory = resolve("artifacts/fe-v1-039-semantic-accessibility-hardening");
 const visualReviewTime = new Date("2026-07-27T20:00:00.000Z");
 const approvalReviewTime = new Date("2026-07-22T22:00:00.000Z");
 
 test.describe.configure({ timeout: 90_000 });
+
+test.beforeAll(async () => {
+  await mkdir(artifactDirectory, { recursive: true });
+});
 
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(visualReviewTime);
@@ -76,6 +83,8 @@ test("audits Mission, route focus, retained detail, and error recovery", async (
 
   const sourceRow = page.getByRole("link", { name: /^android-release/u });
   await sourceRow.focus();
+  await expectFocusInViewport(page);
+  await capture(page, "mission-row-focus-390x844.png");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp(`${detailPath}$`, "u"));
   await expect(page.getByRole("main")).toBeFocused();
@@ -93,11 +102,14 @@ test("audits Mission, route focus, retained detail, and error recovery", async (
   await expectNoHorizontalOverflow(page);
   await expectAxeClean(page, "retained desktop Session Detail");
 
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/not-a-hostdeck-route");
   await expectPageSemantics(page, "Page not found | HostDeck");
   await expectAxeClean(page, "not-found route");
   const recovery = page.getByRole("link", { name: "Mission Control" });
   await recovery.focus();
+  await expectFocusInViewport(page);
+  await capture(page, "not-found-focus-390x844.png");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/$/u);
   await expect(page.getByRole("main")).toBeFocused();
@@ -213,6 +225,7 @@ test("audits approval confirmation focus and restoration", async ({ page }) => {
   await expect(confirmation.getByRole("button", { name: "Cancel" })).toBeFocused();
   await expectDialogFocusCycle(page, confirmation);
   await expectAxeClean(page, "approval confirmation");
+  await capture(page, "approval-confirmation-focus-390x844.png");
   await page.keyboard.press("Escape");
   await expect(trigger).toBeFocused();
   await expectFocusInViewport(page);
@@ -430,11 +443,35 @@ test("audits reduced-motion loading and 320 reflow without focus clipping", asyn
   await expectReducedMotion(page);
   await expectNoHorizontalOverflow(page);
   await expectDisabledContrastPolicy(page);
-  await expect(dialog.getByRole("button", { name: "Close model control" })).toBeFocused();
+  const body = dialog.getByRole("region", { name: "Model settings" });
+  const status = dialog.getByRole("status");
+  await status.scrollIntoViewIfNeeded();
+  expect(await isContainedBy(status, body)).toBe(true);
+  const close = dialog.getByRole("button", { name: "Close model control" });
+  await close.focus();
+  await expect(close).toBeFocused();
   await expectFocusInViewport(page);
   await expectAxeClean(page, "reduced-motion short-height loading sheet");
+  await capture(page, "model-loading-focus-320x480.png");
   api.releaseModelRead();
 });
+
+async function capture(page: Page, name: string): Promise<void> {
+  await page.screenshot({
+    path: resolve(artifactDirectory, name),
+    animations: "disabled",
+    fullPage: false
+  });
+}
+
+async function isContainedBy(subject: ReturnType<Page["locator"]>, owner: ReturnType<Page["locator"]>) {
+  const [subjectBox, ownerBox] = await Promise.all([subject.boundingBox(), owner.boundingBox()]);
+  if (subjectBox === null || ownerBox === null) return false;
+  return (
+    subjectBox.y >= ownerBox.y &&
+    subjectBox.y + subjectBox.height <= ownerBox.y + ownerBox.height
+  );
+}
 
 async function installLiveMutationRecorder(page: Page, selector: string): Promise<void> {
   await page.evaluate((targetSelector) => {
