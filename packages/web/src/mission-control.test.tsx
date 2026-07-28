@@ -240,6 +240,12 @@ describe("Mission Control projection", () => {
 
     expect(projection.stale).toBe(true);
     expect(projection.notice?.title).toBe("Showing stale session state");
+    expect(projection.notice?.body).toContain(
+      "Session list last confirmed Jul 22, 2026, 18:00 UTC."
+    );
+    expect(projection.notice?.body).toContain(
+      "Access last confirmed Jul 22, 2026, 18:00 UTC."
+    );
     expect(projection.statusCells.map((cell) => cell.value)).toEqual([
       "Reconnecting",
       "Access stale",
@@ -250,6 +256,35 @@ describe("Mission Control projection", () => {
     expect(screen.getAllByText("stale-session")).toHaveLength(2);
     expect(screen.getByText("Showing stale session state")).toBeTruthy();
     expect(screen.queryByText("Live")).toBeNull();
+  });
+
+  it("keeps a same-target recovered failure visible until ownership changes", () => {
+    const previousFailure = Object.freeze({
+      ...browserFailure("session_list"),
+      epoch: 1
+    });
+    const recovered = currentSnapshot({
+      epoch: 2,
+      lastFailure: previousFailure,
+      sessions: [sessionItem("sess_mission_recovered", "recovered-session")]
+    });
+    const projection = projectMissionControl(recovered, nowMs);
+
+    expect(projection.recoveredFailure).toEqual({
+      title: "Previous session-list issue recovered",
+      body: "Issue observed Jul 22, 2026, 18:00 UTC. Session list is current again. This prior issue remains visible until the target or authority changes.",
+      tone: "attention",
+      urgent: false
+    });
+    expect(projection.notice).toBeNull();
+
+    renderScreen(recovered);
+    expect(screen.getByText("Previous session-list issue recovered")).toBeTruthy();
+    expect(screen.getByText("Current", { exact: true })).toBeTruthy();
+
+    cleanup();
+    const changedOwner = currentSnapshot({ epoch: 3, lastFailure: null });
+    expect(projectMissionControl(changedOwner, nowMs).recoveredFailure).toBeNull();
   });
 
   it("projects exact version drift without hiding readable sessions", () => {
@@ -630,6 +665,8 @@ function currentSnapshot(
     readonly sessions?: readonly SelectedSessionReadItem[];
     readonly hasMore?: boolean;
     readonly causes?: readonly BrowserConnectionWriteBlockCause[];
+    readonly epoch?: number;
+    readonly lastFailure?: BrowserConnectionFailure | null;
   } = {}
 ): BrowserConnectionSnapshot {
   const access = options.access === undefined ? pairedAccess("write") : options.access;
@@ -646,7 +683,7 @@ function currentSnapshot(
         ? ["read_only_access" as const]
         : []);
   return Object.freeze({
-    epoch: 1,
+    epoch: options.epoch ?? 1,
     target: Object.freeze({ kind: "mission_control" as const }),
     phase: options.phase ?? "ready",
     access: resource(accessState, access, accessState === "failed" ? browserFailure("access") : null),
@@ -688,7 +725,7 @@ function currentSnapshot(
       eligible: causes.length === 0,
       causes: Object.freeze([...causes])
     }),
-    lastFailure: failure
+    lastFailure: options.lastFailure === undefined ? failure : options.lastFailure
   });
 }
 

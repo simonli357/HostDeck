@@ -7,6 +7,7 @@ export * from "./archive-control-state.js";
 export * from "./compact-control.js";
 export * from "./compact-control-state.js";
 export * from "./connection-state.js";
+export * from "./cross-screen-failure-state.js";
 export * from "./csrf-client.js";
 export * from "./event-diagnostics.js";
 export * from "./event-diagnostics-state.js";

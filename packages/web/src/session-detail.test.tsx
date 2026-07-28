@@ -116,6 +116,15 @@ describe("Session Detail projection", () => {
       "Showing stale session state",
       "Activity stream reconnecting"
     ]);
+    expect(projection.notices[0]?.body).toContain(
+      "Session detail last confirmed Jul 22, 2026, 18:00 UTC."
+    );
+    expect(projection.notices[0]?.body).toContain(
+      "Access last confirmed Jul 22, 2026, 18:00 UTC."
+    );
+    expect(projection.notices[0]?.body).toContain(
+      "Session projection last confirmed Jul 22, 2026, 18:00 UTC."
+    );
     expect(projection.timeline[0]?.title).toBe("Earlier activity unavailable");
     expect(projection.contextCells[2]).toMatchObject({
       label: "Stream",
@@ -128,6 +137,41 @@ describe("Session Detail projection", () => {
     expect(screen.getByText("Activity stream reconnecting")).toBeTruthy();
     expect(screen.getByText("Earlier activity unavailable")).toBeTruthy();
     expect(screen.queryByText("Live")).toBeNull();
+  });
+
+  it("shows recovered stream history beside current retained-boundary truth", () => {
+    const feed = appendSessionDetailEvent(
+      createSessionDetailFeed(sessionId),
+      messageEvent(2, "Current activity after reconnect")
+    );
+    const previousFailure = Object.freeze({
+      ...browserFailure("session_stream"),
+      epoch: 1
+    });
+    const snapshot = detailSnapshot({
+      boundary: { after: 0, cursor: 1, reason: "disconnect" },
+      epoch: 2,
+      lastFailure: previousFailure,
+      streamCursor: 2
+    });
+    const projection = projectSessionDetail(snapshot, sessionId, feed, nowMs);
+
+    expect(projection.contextCells[2]).toMatchObject({
+      value: "Current",
+      detail: "History limited"
+    });
+    expect(projection.timeline[0]?.title).toBe("Activity continuity interrupted");
+    expect(projection.notices.at(-1)).toEqual({
+      title: "Previous activity-stream issue recovered",
+      body: "Issue observed Jul 22, 2026, 18:00 UTC. Activity stream is current again. This prior issue remains visible until the target or authority changes.",
+      tone: "attention",
+      urgent: false
+    });
+
+    renderDetail(snapshot, feed);
+    expect(screen.getByText("Previous activity-stream issue recovered")).toBeTruthy();
+    expect(screen.getByText("Activity continuity interrupted")).toBeTruthy();
+    expect(screen.getByText("History limited", { exact: true })).toBeTruthy();
   });
 
   it.each([
@@ -761,6 +805,8 @@ function detailSnapshot(
     } | null;
     readonly causes?: readonly BrowserConnectionWriteBlockCause[];
     readonly host?: SelectedHostStatusResponse | null;
+    readonly epoch?: number;
+    readonly lastFailure?: BrowserConnectionFailure | null;
   } = {}
 ): BrowserConnectionSnapshot {
   const access = options.access === undefined ? pairedAccess() : options.access;
@@ -780,7 +826,7 @@ function detailSnapshot(
   const streamFailure = streamState === "failed" ? browserFailure("session_stream") : null;
   const causes = options.causes ?? [];
   return Object.freeze({
-    epoch: 1,
+    epoch: options.epoch ?? 1,
     target: Object.freeze({ kind: "session_detail" as const, sessionId }),
     phase: options.phase ?? "ready",
     access: resource(
@@ -831,7 +877,10 @@ function detailSnapshot(
       eligible: causes.length === 0,
       causes: Object.freeze([...causes])
     }),
-    lastFailure: targetFailure ?? streamFailure
+    lastFailure:
+      options.lastFailure === undefined
+        ? targetFailure ?? streamFailure
+        : options.lastFailure
   });
 }
 

@@ -51,6 +51,11 @@ import type {
   BrowserConnectionStateCoordinator
 } from "./connection-state.js";
 import {
+  formatCrossScreenObservationFacts,
+  projectCrossScreenRecoveredFailure,
+  projectCrossScreenStaleObservations
+} from "./cross-screen-failure-state.js";
+import {
   EventDiagnosticsAction,
   EventDiagnosticsSheet,
   useEventDiagnosticsController
@@ -1066,9 +1071,12 @@ function projectDetailNotices(
     notices.push(compatibilityDetailNotice(compatibility));
   }
   if (stale) {
+    const observation = formatCrossScreenObservationFacts(
+      projectCrossScreenStaleObservations(snapshot, "session_detail")
+    );
     notices.push({
       title: "Showing stale session state",
-      body: "The last confirmed detail is retained while current state is unavailable.",
+      body: `The last confirmed detail is retained while current state is unavailable. ${observation ?? "Last-confirmed time unavailable."}`,
       tone: "attention",
       urgent: false
     });
@@ -1100,6 +1108,15 @@ function projectDetailNotices(
       body: "The retained feed may be incomplete. Refresh the session to retry.",
       tone: "danger",
       urgent: true
+    });
+  }
+  const recovered = projectCrossScreenRecoveredFailure(snapshot);
+  if (recovered !== null) {
+    notices.push({
+      title: recovered.title,
+      body: recovered.detail,
+      tone: "attention",
+      urgent: false
     });
   }
   return Object.freeze(notices.map((notice) => Object.freeze(notice)));

@@ -1,0 +1,666 @@
+[
+  {
+    "name": "mission-failure-family-390x844.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 844,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "bottom": 736,
+      "width": 390,
+      "height": 680
+    },
+    "controls": null,
+    "firstNotice": null,
+    "statusCount": 0,
+    "alertCount": 0,
+    "disabledControlCount": 0,
+    "visibleControlCount": 8
+  },
+  {
+    "name": "mission-stale-390x844.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 864,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "bottom": 864,
+      "width": 390,
+      "height": 808
+    },
+    "controls": null,
+    "firstNotice": null,
+    "statusCount": 1,
+    "alertCount": 0,
+    "disabledControlCount": 0,
+    "visibleControlCount": 8
+  },
+  {
+    "name": "mission-recovered-390x844.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 846,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "bottom": 846,
+      "width": 390,
+      "height": 790
+    },
+    "controls": null,
+    "firstNotice": null,
+    "statusCount": 1,
+    "alertCount": 0,
+    "disabledControlCount": 0,
+    "visibleControlCount": 8
+  },
+  {
+    "name": "mission-authority-purged-390x844.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 844,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "bottom": 292,
+      "width": 390,
+      "height": 236
+    },
+    "controls": null,
+    "firstNotice": null,
+    "statusCount": 1,
+    "alertCount": 0,
+    "disabledControlCount": 0,
+    "visibleControlCount": 3
+  },
+  {
+    "name": "mission-generic-api-failure-390x844.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 844,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "bottom": 317,
+      "width": 390,
+      "height": 261
+    },
+    "controls": null,
+    "firstNotice": null,
+    "statusCount": 1,
+    "alertCount": 0,
+    "disabledControlCount": 0,
+    "visibleControlCount": 3
+  },
+  {
+    "name": "session-unknown-390x844.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 844,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "bottom": 799,
+      "width": 390,
+      "height": 743
+    },
+    "controls": {
+      "top": 645,
+      "bottom": 844,
+      "height": 199
+    },
+    "firstNotice": null,
+    "statusCount": 0,
+    "alertCount": 0,
+    "disabledControlCount": 2,
+    "visibleControlCount": 13
+  },
+  {
+    "name": "session-failed-390x844.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 844,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "bottom": 799,
+      "width": 390,
+      "height": 743
+    },
+    "controls": {
+      "top": 645,
+      "bottom": 844,
+      "height": 199
+    },
+    "firstNotice": null,
+    "statusCount": 0,
+    "alertCount": 0,
+    "disabledControlCount": 1,
+    "visibleControlCount": 13
+  },
+  {
+    "name": "session-interrupted-390x844.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 844,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "bottom": 799,
+      "width": 390,
+      "height": 743
+    },
+    "controls": {
+      "top": 645,
+      "bottom": 844,
+      "height": 199
+    },
+    "firstNotice": null,
+    "statusCount": 0,
+    "alertCount": 0,
+    "disabledControlCount": 1,
+    "visibleControlCount": 13
+  },
+  {
+    "name": "session-stale-access-390x844.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 844,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "bottom": 778,
+      "width": 390,
+      "height": 722
+    },
+    "controls": {
+      "top": 645,
+      "bottom": 844,
+      "height": 199
+    },
+    "firstNotice": {
+      "top": 148,
+      "bottom": 260,
+      "height": 112
+    },
+    "statusCount": 1,
+    "alertCount": 0,
+    "disabledControlCount": 5,
+    "visibleControlCount": 10
+  },
+  {
+    "name": "session-recovered-access-390x844.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 909,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "bottom": 909,
+      "width": 390,
+      "height": 853
+    },
+    "controls": {
+      "top": 645,
+      "bottom": 844,
+      "height": 199
+    },
+    "firstNotice": {
+      "top": 148,
+      "bottom": 242,
+      "height": 94
+    },
+    "statusCount": 1,
+    "alertCount": 0,
+    "disabledControlCount": 1,
+    "visibleControlCount": 13
+  },
+  {
+    "name": "session-boundary-reconnecting-390x844.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 1246,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "bottom": 1246,
+      "width": 390,
+      "height": 1190
+    },
+    "controls": {
+      "top": 645,
+      "bottom": 844,
+      "height": 199
+    },
+    "firstNotice": {
+      "top": 148,
+      "bottom": 224,
+      "height": 76
+    },
+    "statusCount": 2,
+    "alertCount": 0,
+    "disabledControlCount": 2,
+    "visibleControlCount": 14
+  },
+  {
+    "name": "mission-runtime-degraded-390x844.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 961,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "bottom": 961,
+      "width": 390,
+      "height": 905
+    },
+    "controls": null,
+    "firstNotice": null,
+    "statusCount": 1,
+    "alertCount": 0,
+    "disabledControlCount": 0,
+    "visibleControlCount": 8
+  },
+  {
+    "name": "mission-runtime-incompatible-390x844.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 979,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "bottom": 979,
+      "width": 390,
+      "height": 923
+    },
+    "controls": null,
+    "firstNotice": null,
+    "statusCount": 0,
+    "alertCount": 1,
+    "disabledControlCount": 0,
+    "visibleControlCount": 8
+  },
+  {
+    "name": "mission-runtime-disconnected-390x844.png",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 961,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": 56,
+      "bottom": 961,
+      "width": 390,
+      "height": 905
+    },
+    "controls": null,
+    "firstNotice": null,
+    "statusCount": 1,
+    "alertCount": 0,
+    "disabledControlCount": 0,
+    "visibleControlCount": 8
+  },
+  {
+    "name": "session-stale-320x480.png",
+    "viewport": {
+      "width": 320,
+      "height": 480,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "scrollHeight": 942,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 320,
+      "top": 56,
+      "bottom": 942,
+      "width": 320,
+      "height": 886
+    },
+    "controls": {
+      "top": 281,
+      "bottom": 480,
+      "height": 199
+    },
+    "firstNotice": {
+      "top": 163,
+      "bottom": 275,
+      "height": 112
+    },
+    "statusCount": 1,
+    "alertCount": 0,
+    "disabledControlCount": 2,
+    "visibleControlCount": 13
+  },
+  {
+    "name": "session-stale-390x420.png",
+    "viewport": {
+      "width": 390,
+      "height": 420,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "scrollHeight": 909,
+      "scrollY": 84,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 390,
+      "top": -28,
+      "bottom": 825,
+      "width": 390,
+      "height": 853
+    },
+    "controls": {
+      "top": 221,
+      "bottom": 420,
+      "height": 199
+    },
+    "firstNotice": {
+      "top": 64,
+      "bottom": 158,
+      "height": 94
+    },
+    "statusCount": 1,
+    "alertCount": 0,
+    "disabledControlCount": 2,
+    "visibleControlCount": 13
+  },
+  {
+    "name": "session-stale-360x800.png",
+    "viewport": {
+      "width": 360,
+      "height": 800,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 360,
+      "scrollWidth": 360,
+      "scrollHeight": 942,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 360,
+      "top": 56,
+      "bottom": 942,
+      "width": 360,
+      "height": 886
+    },
+    "controls": {
+      "top": 601,
+      "bottom": 800,
+      "height": 199
+    },
+    "firstNotice": {
+      "top": 163,
+      "bottom": 275,
+      "height": 112
+    },
+    "statusCount": 1,
+    "alertCount": 0,
+    "disabledControlCount": 2,
+    "visibleControlCount": 13
+  },
+  {
+    "name": "session-stale-412x915.png",
+    "viewport": {
+      "width": 412,
+      "height": 915,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 412,
+      "scrollWidth": 412,
+      "scrollHeight": 915,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 412,
+      "top": 56,
+      "bottom": 909,
+      "width": 412,
+      "height": 853
+    },
+    "controls": {
+      "top": 716,
+      "bottom": 915,
+      "height": 199
+    },
+    "firstNotice": {
+      "top": 148,
+      "bottom": 242,
+      "height": 94
+    },
+    "statusCount": 1,
+    "alertCount": 0,
+    "disabledControlCount": 2,
+    "visibleControlCount": 13
+  },
+  {
+    "name": "session-stale-768x1024.png",
+    "viewport": {
+      "width": 768,
+      "height": 1024,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 768,
+      "scrollWidth": 768,
+      "scrollHeight": 1024,
+      "scrollY": 0,
+      "zoom": "1"
+    },
+    "route": {
+      "left": 0,
+      "right": 768,
+      "top": 56,
+      "bottom": 840,
+      "width": 768,
+      "height": 784
+    },
+    "controls": {
+      "top": 825,
+      "bottom": 1024,
+      "height": 199
+    },
+    "firstNotice": {
+      "top": 141,
+      "bottom": 217,
+      "height": 76
+    },
+    "statusCount": 1,
+    "alertCount": 0,
+    "disabledControlCount": 2,
+    "visibleControlCount": 13
+  },
+  {
+    "name": "session-stale-zoom-200-1280x800.png",
+    "viewport": {
+      "width": 1280,
+      "height": 800,
+      "devicePixelRatio": 1
+    },
+    "document": {
+      "clientWidth": 1280,
+      "scrollWidth": 1280,
+      "scrollHeight": 1680,
+      "scrollY": 162,
+      "zoom": "2"
+    },
+    "route": {
+      "left": 0,
+      "right": 1280,
+      "top": -50,
+      "bottom": 1518,
+      "width": 1280,
+      "height": 1568
+    },
+    "controls": {
+      "top": 403,
+      "bottom": 800,
+      "height": 397
+    },
+    "firstNotice": {
+      "top": 120,
+      "bottom": 272,
+      "height": 152
+    },
+    "statusCount": 1,
+    "alertCount": 0,
+    "disabledControlCount": 2,
+    "visibleControlCount": 13
+  }
+]

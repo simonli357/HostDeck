@@ -29,6 +29,12 @@ import type {
   BrowserConnectionSnapshot,
   BrowserConnectionStateCoordinator
 } from "./connection-state.js";
+import {
+  formatCrossScreenObservationFacts,
+  projectCrossScreenRecoveredFailure,
+  projectCrossScreenStaleHostObservation,
+  projectCrossScreenStaleObservations
+} from "./cross-screen-failure-state.js";
 import { HostLockRouteRail } from "./host-lock.js";
 import {
   type HostLockProjection,
@@ -81,6 +87,7 @@ export interface MissionControlProjection {
   readonly statusCells: readonly MissionStatusCell[];
   readonly lock: HostLockProjection;
   readonly notice: MissionNotice | null;
+  readonly recoveredFailure: MissionNotice | null;
   readonly sections: readonly MissionQueueSection[];
   readonly hasMore: boolean;
 }
@@ -231,6 +238,9 @@ export function MissionControlScreen({
       )}
 
       {view.notice === null ? null : <MissionNoticeView notice={view.notice} />}
+      {view.recoveredFailure === null ? null : (
+        <MissionNoticeView notice={view.recoveredFailure} />
+      )}
 
       {view.loading ? (
         <MissionQueueLoading />
@@ -328,6 +338,7 @@ export function projectMissionControl(
     statusCells: Object.freeze(projectStatusCells(snapshot)),
     lock: projectHostLockState(snapshot),
     notice: projectNotice(snapshot, canDisclose, stale, loading),
+    recoveredFailure: recoveredFailureNotice(snapshot),
     sections: Object.freeze(sections),
     hasMore: canDisclose && missionData.hasMore
   });
@@ -666,18 +677,26 @@ function projectNotice(
     );
   }
   if (stale) {
+    const observation = formatCrossScreenObservationFacts(
+      projectCrossScreenStaleObservations(snapshot, "mission_control")
+    );
     return notice(
       "Showing stale session state",
-      "The last readable session list is preserved while HostDeck reconnects. Refresh does not retry automatically.",
+      `The last readable session list is preserved while HostDeck reconnects. ${observation ?? "Last-confirmed time unavailable."} Refresh does not retry automatically.`,
       "attention",
       false
     );
   }
 
   if (canDisclose && snapshot.host.data !== null && snapshot.host.state !== "current") {
+    const observation = formatCrossScreenObservationFacts(
+      [projectCrossScreenStaleHostObservation(snapshot)].filter(
+        (fact): fact is NonNullable<typeof fact> => fact !== null
+      )
+    );
     return notice(
       "Host status is stale",
-      "The session list is current, but laptop health could not be refreshed. Writes remain unavailable.",
+      `The session list is current, but laptop health could not be refreshed. ${observation ?? "Last-confirmed time unavailable."} Writes remain unavailable.`,
       "attention",
       false
     );
@@ -705,6 +724,15 @@ function projectNotice(
     );
   }
   return null;
+}
+
+function recoveredFailureNotice(
+  snapshot: BrowserConnectionSnapshot
+): MissionNotice | null {
+  const recovered = projectCrossScreenRecoveredFailure(snapshot);
+  return recovered === null
+    ? null
+    : notice(recovered.title, recovered.detail, "attention", false);
 }
 
 function compatibilityMissionNotice(

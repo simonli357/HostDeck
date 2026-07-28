@@ -1,12 +1,19 @@
 import type { Page, Request } from "@playwright/test";
-import { selectedHostStatusResponseSchema } from "../../packages/contracts/src/index.js";
+import {
+  compareSelectedSessionListOrder,
+  selectedHostStatusResponseSchema,
+  selectedSessionListResponseSchema,
+  selectedSessionReadItemSchema
+} from "../../packages/contracts/src/index.js";
 
 export type MissionApiVariant =
   | "mixed"
+  | "failure_matrix"
   | "long"
   | "read_only"
   | "locked"
   | "host_unavailable"
+  | "session_unavailable"
   | "denied"
   | "unavailable";
 
@@ -94,7 +101,22 @@ export async function installMissionControlApi(
       return;
     }
     if (url.pathname === "/api/v1/sessions" && request.method() === "GET") {
-      await fulfillJson(route, sessionList(variant));
+      if (variant === "session_unavailable") {
+        await route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          headers: { "cache-control": "no-store" },
+          body: JSON.stringify({
+            error: {
+              code: "daemon_unavailable",
+              message: "The selected session projection is unavailable.",
+              retryable: true
+            }
+          })
+        });
+        return;
+      }
+      await fulfillJson(route, missionSessionListFixture(variant));
       return;
     }
     if (url.pathname === "/api/v1/access/csrf" && request.method() === "POST") {
@@ -218,8 +240,57 @@ function readyHostStatus(variant: MissionApiVariant) {
   });
 }
 
-function sessionList(variant: MissionApiVariant) {
-  const sessions = variant === "long"
+export function missionSessionListFixture(variant: MissionApiVariant) {
+  const sessions = variant === "failure_matrix"
+    ? [
+        session(
+          "sess_mission_matrix_unknown",
+          "state-unknown",
+          "unknown",
+          "unknown",
+          {
+            sessionState: "unknown",
+            summary: "Current session state could not be established."
+          }
+        ),
+        session(
+          "sess_mission_matrix_failed",
+          "state-failed",
+          "failed",
+          "failed",
+          { summary: "The selected turn failed with bounded error truth." }
+        ),
+        session(
+          "sess_mission_matrix_interrupted",
+          "state-interrupted",
+          "stuck",
+          "interrupted",
+          { summary: "The selected turn was interrupted." }
+        ),
+        session(
+          "sess_mission_matrix_incompatible",
+          "state-incompatible",
+          "unknown",
+          "unknown",
+          {
+            freshness: "incompatible",
+            sessionState: "incompatible",
+            summary: "The selected runtime interface is incompatible."
+          }
+        ),
+        session(
+          "sess_mission_matrix_stale",
+          "state-stale",
+          "unknown",
+          "unknown",
+          {
+            freshness: "stale",
+            sessionState: "stale",
+            summary: "The retained projection is stale."
+          }
+        )
+      ]
+    : variant === "long"
     ? [
         session(
           "sess_mission_long_approval",
@@ -278,22 +349,27 @@ function sessionList(variant: MissionApiVariant) {
           { summary: "Contract validation completed." }
         )
       ];
-  return {
+  const orderedSessions = variant === "failure_matrix"
+    ? [...sessions].sort((left, right) =>
+        compareSelectedSessionListOrder(left.session, right.session)
+      )
+    : sessions;
+  return selectedSessionListResponseSchema.parse({
     access: {
       mode: variant === "read_only" ? "paired_read" : "paired_write",
       network_mode: "loopback",
       transport: "http"
     },
-    sessions,
+    sessions: orderedSessions,
     next_cursor: null,
     has_more: false
-  };
+  });
 }
 
 function session(
   id: string,
   name: string,
-  attention: "none" | "watch" | "needs_input" | "needs_approval" | "failed" | "stuck",
+  attention: "none" | "watch" | "needs_input" | "needs_approval" | "failed" | "stuck" | "unknown",
   turnState:
     | "idle"
     | "in_progress"
@@ -301,14 +377,19 @@ function session(
     | "waiting_for_approval"
     | "completed"
     | "interrupted"
-    | "failed",
+    | "failed"
+    | "unknown",
   options: {
     readonly cwd?: string;
     readonly branch?: string;
     readonly summary?: string;
+    readonly freshness?: "current" | "stale" | "disconnected" | "incompatible";
+    readonly sessionState?: "starting" | "active" | "archived" | "stale" | "incompatible" | "unknown";
   } = {}
 ) {
-  return {
+  const freshness = options.freshness ?? "current";
+  const sessionState = options.sessionState ?? "active";
+  return selectedSessionReadItemSchema.parse({
     session: {
       id,
       name,
@@ -317,12 +398,12 @@ function session(
       runtime_source: "codex_app_server",
       runtime_version: "0.144.0",
       created_at: timestamp,
-      archived_at: null,
-      session_state: "active",
+      archived_at: sessionState === "archived" ? timestamp : null,
+      session_state: sessionState,
       turn_state: turnState,
       attention,
-      freshness: "current",
-      freshness_reason: null,
+      freshness,
+      freshness_reason: freshness === "current" ? null : "Projection is not current.",
       updated_at: timestamp,
       last_activity_at: timestamp,
       branch: options.branch ?? "main",
@@ -338,5 +419,5 @@ function session(
       earliest_retained_cursor: null,
       boundary_cursor: null
     }
-  };
+  });
 }

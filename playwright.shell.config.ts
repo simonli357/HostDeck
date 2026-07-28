@@ -8,6 +8,7 @@ export default defineConfig({
     "archive-control.spec.ts",
     "approval-decisions.spec.ts",
     "compact-control.spec.ts",
+    "cross-screen-failure-states.spec.ts",
     "event-diagnostics.spec.ts",
     "mission-control.spec.ts",
     "goal-control.spec.ts",

@@ -59,6 +59,7 @@ export interface SessionDetailApiController {
   readonly setCsrfOutcome: (outcome: SessionDetailCsrfOutcome | null) => void;
   readonly setPromptOutcome: (outcome: SessionDetailPromptOutcome) => void;
   readonly setSessionListEmpty: (empty: boolean) => void;
+  readonly setTurnState: (state: SessionDetailTurnState | undefined) => void;
   readonly setVariant: (variant: SessionDetailApiVariant) => void;
   readonly streamRequestUrls: () => Promise<readonly string[]>;
 }
@@ -111,6 +112,7 @@ export async function installSessionDetailApi(
   let pendingAccessResolution: ((outcome: SessionDetailAccessOutcome) => void) | null = null;
   let csrfOutcomeOverride: SessionDetailCsrfOutcome | null = null;
   let sessionListEmpty = false;
+  let turnStateOverride = options.turnState;
   let pendingCsrfResolution:
     | ((outcome: Exclude<SessionDetailCsrfOutcome, "pending">) => void)
     | null = null;
@@ -209,7 +211,7 @@ export async function installSessionDetailApi(
           variant,
           selectedEvents(),
           selectedRetentionBoundary(),
-          options.turnState
+          turnStateOverride
         )
       );
       return;
@@ -227,7 +229,7 @@ export async function installSessionDetailApi(
           variant,
           selectedEvents(),
           selectedRetentionBoundary(),
-          options.turnState
+          turnStateOverride
         );
         await fulfillJson(route, {
           access: detail.access,
@@ -243,7 +245,7 @@ export async function installSessionDetailApi(
           variant,
           selectedEvents(),
           selectedRetentionBoundary(),
-          options.turnState
+          turnStateOverride
         )
       );
       return;
@@ -388,6 +390,9 @@ export async function installSessionDetailApi(
     },
     setSessionListEmpty(empty: boolean) {
       sessionListEmpty = empty;
+    },
+    setTurnState(state: SessionDetailTurnState | undefined) {
+      turnStateOverride = state;
     },
     setVariant(nextVariant: SessionDetailApiVariant) {
       variant = nextVariant;
@@ -537,7 +542,14 @@ async function installSessionEventStream(
         return originalFetch(input, init);
       }
 
-      const seedConnection = requests.length === 0;
+      const afterParameter = requestUrl.searchParams.get("after");
+      const after = afterParameter === null ? null : Number(afterParameter);
+      if (after !== null && (!Number.isSafeInteger(after) || after < 0)) {
+        throw new TypeError("Session detail fixture received an invalid event cursor.");
+      }
+      const replayEvents = seedEvents.filter(
+        (event) => after === null || event.cursor > after
+      );
       requests.push(requestUrl.href);
       if (stallConnections) {
         return new Promise<Response>((_resolve, reject) => {
@@ -552,8 +564,8 @@ async function installSessionEventStream(
           activeController = controller;
           controllers.add(controller);
           controller.enqueue(encoder.encode(": heartbeat\n\n"));
-          if (seedConnection) {
-            for (const event of seedEvents) controller.enqueue(encoder.encode(frame(event)));
+          for (const event of replayEvents) {
+            controller.enqueue(encoder.encode(frame(event)));
           }
         },
         cancel() {
