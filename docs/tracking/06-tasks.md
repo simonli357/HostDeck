@@ -16,8 +16,8 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-039` Harden semantic accessibility, keyboard/focus, reflow, contrast, touch targets, live regions, and reduced motion | in_progress | none | Implement frozen `A11Y-01` to `A11Y-24`, beginning with the complete coverage ledger, pinned axe harness, semantic/focus/live-region root fixes, and exact contrast/zoom evidence. |
-| 2 | `IFC-V1-053` Build and serve real deterministic Vite dashboard assets from the production package | ready | none | `FE-V1-016` also completed this leaf's final dependency; execute after UI module hardening so the package binds the accepted dashboard rather than an intermediate surface. |
+| 1 | `IFC-V1-053` Build and serve real deterministic Vite dashboard assets from the production package | ready | none | Responsive and semantic accessibility hardening are complete; bind the accepted dashboard into the deterministic package before persistent service/install leaves. |
+| 2 | `FE-V1-040` Run the supported mobile/desktop browser interaction matrix and record explicit limitations | ready | none | `FE-V1-039` completed this leaf's final dependency; prove current Chromium plus one second engine before visual-fidelity and phone module acceptance. |
 
 ## Intentional Blockers
 

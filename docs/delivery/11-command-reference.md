@@ -35,6 +35,8 @@ pnpm test:web
 pnpm --filter @hostdeck/web test
 pnpm --filter @hostdeck/web build
 pnpm test:browser:shell
+pnpm test:accessibility:zoom
+pnpm test:accessibility:orca
 pnpm build
 dist/hostdeck/dist/shell.js --help
 dist/hostdeck/dist/shell.js --version

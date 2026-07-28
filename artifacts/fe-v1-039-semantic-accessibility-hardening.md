@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: criteria frozen; implementation pending.
+Status: complete.
 
 ## Scope
 
@@ -114,12 +114,57 @@ An executable ledger must map every one of the 141 mobile state traces and all 3
 
 ## Implementation Record
 
-Pending.
+- Added an executable accessibility ledger for all 141 state traces and 39 interactions. It preserves the 15 frozen surfaces, 12 journeys, five reference viewports, eight accessibility families, existing behavior owners, and explicit semantic, keyboard, announcement, and audit policies.
+- Pinned `@axe-core/playwright@4.12.1` as test-only tooling and added production-shell and pairing audit matrices without global rule suppression. Added custom assertions for headings/landmarks, definition and list ownership, route/dialog focus, keyboard order, live-region deltas, target geometry, computed contrast, reduced motion, reflow, privacy, and cleanup.
+- Repaired invalid definition-list ownership, desktop heading order, document titles, skip/route focus, exact Mission-row restoration, pairing current-step truth, dialog/scroller focus, icon/region names, and the dock's semantic contract. The dock now exposes its implemented native group/Tab behavior rather than claiming an unimplemented toolbar pattern.
+- Added restrained approval and unpinned-activity announcements, bounded pairing announcements, and consistent polite-versus-alert urgency. Approval handles become seen only after they are actionable, while initial baseline and replay remain silent.
+- Replaced the failing primary/disabled/control/focus color pairs and opacity dilution with exact selected-theme tokens. Browser math proves 5.83:1 primary text, 6.60:1 minimum disabled text, 3.23:1 disabled boundaries, 3.31:1 control boundaries, and 5.41:1 focus indicators.
+- Added true native Chrome zoom and Orca 46.1 runners. The zoom runner drives a physical 640 x 800 window to DPR 2 and a 320 x 400 CSS viewport; the Orca runner commits only bounded booleans and deletes raw output.
+- Added four deterministic full-size focus/error captures and one contact sheet. The short-height model capture first scrolls the loading status fully inside its keyboard-owned body, asserts both vertical edges are contained, and restores visible close-button focus before capture.
+- Aggregate validation found and closed three release-gate defects: the runtime-boundary allowlist and test-fixture root exports had drifted (`80c82f0`), the compatibility browser helper flattened a valid value/detail definition (`1809ac0`), and long Host/access values squeezed the `Secure writes` term below one word at 390 px (`b96dae3`). The final fact grid keeps a 112 px term track and passed 390/320 visual review.
+- Product/API/runtime/Tailscale/pairing authority and route contracts did not change. The only dependency addition is the pinned test-only axe adapter.
 
 ## Validation
 
-Pending.
+| Gate | Result |
+| --- | --- |
+| Coverage and focused web | Ledger assertions cover exactly 141 states, 39 interactions, 15 surfaces, 12 journeys, five viewports, and eight families. Focused accessibility shell 16/16, pairing 3/3, native zoom 1/1, Orca 1/1, and `pnpm test:web` 52 files/920 tests pass. |
+| Aggregate repository | `pnpm test:unit`: 246 files/2,805 passed with 27 files/28 intentional external or device skips; contract 34 files/245; integration 21 files/36. |
+| Complete Chromium | Final `pnpm test:browser:shell` passes 168/168 on evidence revision `4a79877`; final `pnpm test:browser:pairing` passes 11/11 on the final product revision. Earlier complete runs exposed the two stale-test/layout defects recorded above; focused fixes and complete reruns pass without retries. |
+| Native zoom and contrast | A headed 640 x 800 Chrome window reaches exact DPR 2 and 320 x 400 CSS geometry with 16 px root type, 312 px client/scroll width, bounded dialog/focus, and all five exact contrast thresholds passing. Both committed X-root captures are nonblank 640 x 800 PNGs with distinct hashes. |
+| Visual evidence | Seven committed PNGs have exact declared dimensions, nonzero means, and unique SHA-256 identities: six full-size Mission row, approval confirmation, route error, short-height model, and native-zoom captures plus one 1,008 x 832 contact sheet. Manual review finds visible focus, complete text/actions, correct scroller ownership, no overlap/clipping, and no Focus Rail drift. |
+| Keyboard and Orca | Sanitized keyboard evidence passes nine complete journeys at five viewport regimes. Orca 46.1 observes Mission/page headings, row, detail timeline, form, model dialog, approval, error recovery, focus, and speech output; no protected marker or raw log is retained. Host D-Bus/FUSE/portal startup and shutdown warnings remain environmental noise and did not prevent AT-SPI or product assertions. |
+| Static and runtime boundaries | Root typecheck; Biome over 751 files plus eight package exports; scaffold eight packages/21 scripts; planning 220 tasks/84 requirements/683 dependencies/two queued before closure; and runtime boundary seven tests plus 614 production modules/22 externals pass. Exact isolated Codex 0.144.0 verifies 671 binding files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`; default 0.145.0 correctly rejects the exact gate. |
+| Build, package, and supply chain | Frozen offline install passes. Vite transforms 2,054 modules. Root build/package acceptance and independent verification pass at 614 sources, 1,235 outputs, 6,449 entries, and SHA-256 `35f41f5daccab92d6ded30bf1de374d5451e1ce81282e1136a2452f7810a3ace`. Production audit reports no known vulnerabilities; 172 entries across 175 paths use the eight reviewed permissive license expressions. |
+| Privacy, evidence, and residue | Task JSON predicates, PNG dimensions/nonblank hashes, and private-marker scan pass. No browser-test listener, process, raw Orca log, or task temporary output remains. `git diff --check` passes, and all 18 excluded user-owned screenshots match the pre-run backup byte-for-byte and remain outside task commits. |
+
+The existing greater-than-500-kB Vite chunk advisory is unchanged. Physical Android TalkBack and final phone acceptance remain `FE-V1-090`; second-engine support remains `FE-V1-040`; target/current pixel-diff closure remains `FE-V1-017`; copy/workflow acceptance remains `FE-V1-018`. This leaf is not a V1 release-readiness claim.
 
 ## Completion Record
 
-Pending.
+| Criterion | Evidence and disposition |
+| --- | --- |
+| `A11Y-01` | Pass: the executable ledger has exact state, interaction, surface, journey, viewport, family, behavior-owner, and policy cardinality with no missing, duplicate, or invented IDs. |
+| `A11Y-02` | Pass: all representative shell and pairing families run axe 4.12.1 with the frozen WCAG/best-practice tags, zero applicable violations, and no broad suppression. |
+| `A11Y-03` | Pass: phone, reflow, and desktop split have one main, one page `h1`, ordered headings, unique labelled regions, and route-specific titles. |
+| `A11Y-04` | Pass: session, activity, pairing, and menu lists plus all six repaired definition-list families expose valid ownership, order, state, and term/description relationships. |
+| `A11Y-05` | Pass: controls and overflow owners have exact names/roles/states; decorative icons are hidden; status remains textual; full values remain accessible. |
+| `A11Y-06` | Pass: fields, fieldsets, radio choices, constraints, errors, descriptions, pending/current truth, and disabled causes have complete valid relationships. |
+| `A11Y-07` | Pass: the skip link becomes visible and focuses unobscured main content without initial-load focus theft. |
+| `A11Y-08` | Pass: Mission/detail navigation focuses main, Back restores the exact surviving row, and direct/invalid/replaced/pairing paths use the documented fallback. |
+| `A11Y-09` | Pass: every enabled action is keyboard reachable/operable in logical order with no positive tabindex, hidden duplicate, mouse-only action, dead end, or trap. |
+| `A11Y-10` | Pass: the dock exposes a labelled native group/fieldset and ordinary Tab order, matching its implemented contract at every regime. |
+| `A11Y-11` | Pass: every sheet/confirmation proves labelled initial focus, forward/reverse cycle, Escape/outside policy, nested transition, terminal closure, and connected-trigger restoration. |
+| `A11Y-12` | Pass: computed focus contrast exceeds 3:1 and browser traces show no clipping at app bar, sheet scroller, fixed controls, viewport edge, or native zoom. |
+| `A11Y-13` | Pass: ordinary changes are atomic/polite, urgent failures assertive, and static/replayed/streaming content does not duplicate or spam announcements. |
+| `A11Y-14` | Pass: each newly actionable approval and increasing unpinned count announces once; baseline, disabled, replayed, reordered, and resolved items remain silent. |
+| `A11Y-15` | Pass: pairing exposes one current step, bounded phase/result announcements, stable action focus, and truthful Mission focus transfer. |
+| `A11Y-16` | Pass: exact selected-theme text pairs meet WCAG AA; the former 3.19:1 primary-button pair is removed. |
+| `A11Y-17` | Pass: required boundaries/icons/focus exceed 3:1 and visible disabled text exceeds 4.5:1 without whole-control opacity dilution. |
+| `A11Y-18` | Pass: core targets meet the frozen 44 px rule and never fall below 40 px; inline exceptions and destructive/send/approve separation pass browser geometry. |
+| `A11Y-19` | Pass: independent 320 x 800 plus true 200 percent/320 x 400 native evidence preserves one-column flow, stable type, full actions, focus, and zero horizontal overflow. |
+| `A11Y-20` | Pass: reduced motion removes nonessential animation and scripted smooth scrolling while preserving visible progress and interaction. |
+| `A11Y-21` | Pass: loading, stale, stream, operation, approval, lock, pairing, and list changes preserve identity or use one documented focus handoff without incoherent jumps. |
+| `A11Y-22` | Pass: sanitized keyboard review covers pairing, Mission/detail/back, prompt/approval, all sheet families, Host/access/device/lock/recovery, diagnostics, and errors at all frozen regimes. |
+| `A11Y-23` | Pass: sanitized Orca 46.1 evidence confirms representative reading order, semantics, state, focus, announcement restraint, and zero protected/raw disclosure. |
+| `A11Y-24` | Pass: focused/aggregate/browser/native, static/runtime, build/package/install, audit/license, privacy/diff/evidence/residue, owner-doc, commit/push, limitation, and 18-file exclusion truth agree. Criteria `8eb2c43`; ledger/tooling `c78bc97`; implementation `4903e3d`; boundary/test/layout corrections `80c82f0`, `1809ac0`, `b96dae3`; visual evidence `4a79877`. |
