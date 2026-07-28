@@ -42,11 +42,11 @@ Requirement refs: `FR-002`, `FR-005` to `FR-010`, `FR-016`, `NFR-004`, `IR-001` 
 | Human selection | `FE-V1-003` | Done; Focus Rail and all seven current Option B assets are selected with no cross-option borrowing or additional structural drift. |
 | Phone-first shell and typed HTTP/SSE/CSRF/state clients | `FE-V1-010`, `FE-V1-019`, `FE-V1-023` to `FE-V1-025` | Complete: shell, exact bounded JSON/SSE clients, page-memory CSRF, and the access-first shared connection-state coordinator pass their strict module evidence. |
 | Mission Control and structured Session Detail | `FE-V1-011`, `FE-V1-012` | Complete: production inventory and bounded recent-replay-to-live detail routes pass exact state, privacy, responsive, accessibility, and Focus Rail evidence. |
-| Prompt, model, goal, plan, utilities, and inline approval | `FE-V1-020` to `FE-V1-022`, `FE-V1-026` to `FE-V1-030` | Each leaf consumes its exact structured API/runtime port. |
-| Host access, QR pairing, CSRF reload, devices, lock, remote profile/Serve, and compatibility UI | `FE-V1-013`, `FE-V1-031` to `FE-V1-035` | `FE-V1-013` is complete under `PHA-01` to `PHA-20` with production, responsive, privacy, and physical cellular-plus-Tailscale evidence; the five separately scoped trust/recovery leaves are ready. |
-| Event diagnostics, interrupt, archive, and TUI-resume affordances | `FE-V1-014`, `FE-V1-036` to `FE-V1-038` | Ready on completed Session Detail and exact operation routes. |
-| Cross-screen failure and continuity matrix | `FE-V1-015` | Blocked by complete stream, health, and compatibility state. |
-| Responsive, accessibility, and browser matrices | `FE-V1-016`, `FE-V1-039`, `FE-V1-040` | Ordered after every required implemented state/action. |
+| Prompt, model, goal, plan, utilities, and inline approval | `FE-V1-020` to `FE-V1-022`, `FE-V1-026` to `FE-V1-030` | Complete against the exact structured API/runtime ports with Focus Rail state, failure, responsive, and accessibility evidence. |
+| Host access, QR pairing, CSRF reload, devices, lock, remote profile/Serve, and compatibility UI | `FE-V1-013`, `FE-V1-031` to `FE-V1-035` | Complete with exact trust/recovery ownership, responsive/accessibility evidence, and focused physical cellular-plus-Tailscale evidence. |
+| Event diagnostics, interrupt, archive, and TUI-resume affordances | `FE-V1-014`, `FE-V1-036` to `FE-V1-038` | Complete against the exact event/control routes with bounded failure and no-resend behavior. |
+| Cross-screen failure and continuity matrix | `FE-V1-015` | Complete across both production routes and every required control admission state. |
+| Responsive, accessibility, and browser matrices | `FE-V1-016`, `FE-V1-039`, `FE-V1-040` | Responsive and semantic-accessibility hardening are complete; the supported second-engine browser interaction matrix remains `FE-V1-040`. |
 | Fidelity, copy/workflow review, and module hardening | `FE-V1-017`, `FE-V1-018`, `FE-V1-090` | Blocked by selected mockups, browser evidence, and complete screens. |
 
 Owning backlog: `docs/tracking/backlog/web-dashboard.md`.
