@@ -16,8 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-038` Implement laptop-resume affordance | in_progress | none | Implement frozen `LTR-01` to `LTR-24` exact read, clipboard-only handoff, and Focus Rail criteria. |
-| 2 | `FE-V1-035` Implement compatibility and update-required UI | ready | none | Consume the proven production compatibility projection without unsafe fallback or fabricated recovery. |
+| 1 | `FE-V1-035` Implement compatibility and update-required UI | ready | none | Consume the proven production compatibility projection without unsafe fallback or fabricated recovery. |
 
 ## Intentional Blockers
 
