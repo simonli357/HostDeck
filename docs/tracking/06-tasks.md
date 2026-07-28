@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-035` Implement compatibility and update-required UI | in_progress | none | Implement frozen `RCU-01` to `RCU-24` over the proven production compatibility projection without unsafe fallback or fabricated recovery. |
+| 1 | `FE-V1-015` Close the cross-screen failure-state acceptance matrix | ready | none | All implemented screen groups and coordinated host/event truth now exist; run the production-hardening matrix before aggregate responsive/accessibility work. |
 
 ## Intentional Blockers
 

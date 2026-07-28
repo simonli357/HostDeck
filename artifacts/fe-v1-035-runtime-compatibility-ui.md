@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: criteria frozen; implementation in progress.
+Status: complete; `RCU-01` to `RCU-24` pass.
 
 ## Scope
 
@@ -91,12 +91,31 @@ Excluded: changing the reviewed Codex 0.144.0 binding, accepting a new runtime v
 
 ## Implementation Record
 
-Pending.
+- Added one strict immutable projector over the seven-field protected compatibility contract. It preserves all six states and all valid current/last-known/unobserved evidence products, downgrades retained browser data, and purges protected detail on authority loss or close.
+- Added one shell-lifetime controller whose sole action delegates to exactly one coordinator refresh. Duplicate activation coalesces; target, authority, epoch, and close races suppress settlement; failure requires a new human attempt; recovery from recorded non-supported truth requires a newer current supported revision.
+- Added one flat `Codex runtime` Focus Rail section inside Host & access with exact installed/supported version, aggregate control capability, evidence/check time, semantic status/alert behavior, and a 44 px read-only check action. It adds no route, modal, terminal, command, update action, persistence, or production dependency.
+- Mission Control and Session Detail reuse the same projector for exact update-required, incompatible, degraded, unknown, disconnected, and stale copy. The three-cell Mission Control rail is unchanged, readable Session Detail diagnostics remain visible, and existing coordinator write eligibility continues to disable unsafe controls.
+- Added deterministic strict fixtures and production-shell coverage for every valid state/evidence product, stale browser overlay, authority purge, pending/failed/same-revision/newer-revision checks, readable blocked Session Detail, privacy/request boundaries, long semver content, all selected widths, short height, reduced motion, and 200 percent reflow.
 
 ## Validation
 
-Pending.
+| Gate | Result |
+| --- | --- |
+| Focused web | Six affected state/component/route/shell files pass 91 tests. |
+| Aggregate web and unit | 46 web files/836 tests pass; 239 unit files/2,713 tests pass with 27 files/28 tests intentionally skipped. |
+| Contract and integration | 34 contract files/245 tests and 21 integration files/36 tests pass. |
+| Chromium | All six dedicated compatibility scenarios and the complete 137-scenario production shell pass. |
+| Static and boundary | Root/web TypeScript, Biome and eight-package exports, 715-file lint, scaffold, planning, diff check, and the 614-module/22-external selected runtime boundary pass. The default Codex 0.145.0 correctly rejects the reviewed gate; the isolated exact 0.144.0 binary verifies all 671 reviewed files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. |
+| Build and package | Vite and production builds pass; six structural package tests, deterministic/relocated package acceptance, and independent verification pass at 614 sources, 1,235 owned outputs, 6,449 entries, and SHA-256 `35f41f5daccab92d6ded30bf1de374d5451e1ce81282e1136a2452f7810a3ace`. |
+| Supply chain | Frozen offline install passes, production audit reports no known vulnerabilities, and the unchanged production dependency inventory uses the existing permissive license set. |
+| Visual, accessibility, privacy | 23 reviewed captures and eight layout records prove the approved flat Focus Rail hierarchy, exact state distinctions, reachable close/action controls, 44 px targets, one sheet scroller, no overlap/clipping/document overflow, reduced-motion-safe busy state, keyboard focus, private-free DOM/history/storage, read-only request ownership, and no retry or residue. |
+
+The existing Vite large-chunk advisory remains downstream performance-hardening scope. This leaf does not change or accept the reviewed runtime binding, so the laptop's default 0.145.0 binary remains expected update-required input rather than supported-runtime evidence.
 
 ## Completion Record
 
-Pending.
+- `RCU-01` to `RCU-24` are implemented and validated.
+- Criteria commit: `a05bd23`. Implementation and evidence commit: `3382dec`.
+- No dependency, lockfile, command, setup, service, Tailscale profile/Serve, browser storage, or phone state changed.
+- The 18 pre-existing user-owned screenshot modifications were excluded from staging and restored byte-identically after aggregate browser validation.
+- Remaining cross-screen state hardening, aggregate responsive/accessibility/browser hardening, packaged assets, physical-device acceptance, and release readiness remain owned by `FE-V1-015`, `FE-V1-016`, `FE-V1-039`, `FE-V1-040`, `FE-V1-090`, and release leaves.
