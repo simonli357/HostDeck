@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-040` Run the supported mobile/desktop browser interaction matrix and record explicit limitations | ready | none | `IFC-V1-053` now proves the real packaged Chromium path; prove current Chromium plus one second engine before visual-fidelity and phone module acceptance. |
+| 1 | `FE-V1-040` Run the supported mobile/desktop browser interaction matrix and record explicit limitations | in_progress | none | Criteria `BRM-01` to `BRM-24` are frozen; implement the four-project packaged Chromium/Firefox matrix and sanitized interaction evidence before visual-fidelity and phone module acceptance. |
 | 2 | `IFC-V1-056` Implement install/upgrade/status/start/stop/restart service commands with an owned manifest | ready | none | Real assets, the runnable CLI, and exact user units are complete; persistent service lifecycle is now dependency-ready. |
 
 ## Intentional Blockers
