@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-015` Close the cross-screen failure-state acceptance matrix | ready | none | All implemented screen groups and coordinated host/event truth now exist; run the production-hardening matrix before aggregate responsive/accessibility work. |
+| 1 | `FE-V1-015` Close the cross-screen failure-state acceptance matrix | in_progress | none | Implement frozen `CFS-01` to `CFS-24`, beginning with stale-time and recovered-failure truth, then prove every route/control admission through the production shell. |
 
 ## Intentional Blockers
 
