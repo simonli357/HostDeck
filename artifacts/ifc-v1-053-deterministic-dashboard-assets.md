@@ -4,6 +4,8 @@ Date: 2026-07-28
 
 Status: complete; `WAP-01` to `WAP-24` pass.
 
+Criteria commit: `c3f04f7`. Implementation commit: `dad4ddf`.
+
 ## Scope
 
 Build the completed Focus Rail React dashboard with the pinned Vite toolchain, place only its deployable output in `dist/hostdeck/web`, bind that output into the production package manifest and verifier, and serve it through the selected Fastify static boundary in both foreground and service-owned modes.
