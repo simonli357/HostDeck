@@ -5,7 +5,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 ## Snapshot
 
 - Phase: M3 production remote host-interface integration after completing the selected runtime milestone.
-- Active task: `FE-V1-035` compatibility and update-required UI is the next ready leaf. The next action is to audit its proven production compatibility projection and freeze harsh Focus Rail criteria before product code.
+- Active task: `FE-V1-035` compatibility and update-required UI is in progress under frozen `RCU-01` to `RCU-24`. The next action is the strict projector/check-owner implementation, shared Focus Rail route integration, and deterministic browser evidence.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's default 0.145.0 binary remains ineligible as exact-runtime evidence but now passes the required no-runtime diagnostic path; the isolated exact 0.144.0 binary passes the supported-path regression.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: the 141-state/39-interaction phone contract and both replacement sets are complete. Under `DEC-028`, the human selected all seven current Focus Rail assets with no Signal Ledger borrowing or additional structural drift; both legacy desktop-led boards remain rejected.
