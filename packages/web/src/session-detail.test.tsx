@@ -13,6 +13,7 @@ import {
   selectedAccessStateResponseSchema,
   selectedHostLocalHealthComponents,
   selectedHostStatusResponseSchema,
+  selectedOperationDispatchSchema,
   selectedProjectionEventSchema,
   selectedSessionDetailResponseSchema,
   selectedSessionReadItemSchema,
@@ -21,7 +22,7 @@ import {
   usageSnapshotSchema
 } from "@hostdeck/contracts";
 import type { SessionId } from "@hostdeck/core";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StrictMode } from "react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -325,7 +326,7 @@ describe("Session Detail screen", () => {
       Array.from(menu.querySelectorAll(".hostdeck-utility-menu__item strong"), (item) =>
         item.textContent
       )
-    ).toEqual(["Interrupt active turn", "Host & access"]);
+    ).toEqual(["Interrupt active turn", "Archive session", "Host & access"]);
     fireEvent.click(screen.getByRole("button", { name: /Interrupt active turn/iu }));
     expect(screen.getByRole("dialog", { name: "Interrupt active turn?" }).textContent).toContain(
       exactTurnId
@@ -356,6 +357,91 @@ describe("Session Detail screen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(harness.requestProtected).toHaveBeenCalledTimes(1);
+  });
+
+  it("composes one exact archive and navigates only after correlated success acknowledgement", async () => {
+    const idleSession = sessionItem({ cursor: null, turnState: "idle", attention: "none" });
+    const connected = Object.freeze({
+      ...detailSnapshot({ session: idleSession, streamCursor: null }),
+      host: resource("current", interruptHostStatus(), null)
+    });
+    const initial = Object.freeze({
+      ...detailSnapshot({ session: idleSession, streamState: "idle", streamCursor: null }),
+      host: resource("current", interruptHostStatus(), null)
+    });
+    const harness = coordinatorHarness(initial);
+    harness.requestProtected.mockImplementation(async (_routeId, request) => {
+      const body = (request as { readonly body: { readonly operation_id: string } }).body;
+      return Object.freeze({
+        status: 202 as const,
+        data: selectedOperationDispatchSchema.parse({
+          operation_id: body.operation_id,
+          kind: "archive",
+          target: {
+            type: "managed_session",
+            session_id: sessionId,
+            codex_thread_id: "thread-private-detail"
+          },
+          state: "accepted",
+          accepted_at: laterTimestamp,
+          audit_record_id: "audit-session-detail-archive-private"
+        })
+      });
+    });
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={[`/sessions/${sessionId}`]}>
+          <HostDeckRoutes
+            coordinator={harness.coordinator}
+            outlets={{ hostAccess: <p>Production Host access fixture</p> }}
+          />
+        </MemoryRouter>
+      </StrictMode>
+    );
+
+    await waitFor(() => expect(harness.connect).toHaveBeenCalled());
+    harness.publish(connected);
+    fireEvent.click(await screen.findByRole("button", { name: "Open session actions" }));
+    expect((screen.getByRole("button", {
+      name: /Interrupt active turn/iu
+    }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /Archive session/iu }));
+    expect(screen.getByRole("dialog", { name: "Archive session?" }).textContent)
+      .toContain("api-refactor");
+    expect(harness.requestProtected).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Archive session" }));
+    await waitFor(() => expect(harness.requestProtected).toHaveBeenCalledTimes(1));
+    const call = harness.requestProtected.mock.calls[0];
+    if (call === undefined) throw new TypeError("Archive request call is missing.");
+    expect(call[0]).toBe("session_archive");
+    expect(call[1]).toEqual({
+      params: { session_id: sessionId },
+      body: {
+        operation_id: expect.stringMatching(/^op_browser_archive_/u),
+        kind: "archive",
+        confirm: true
+      }
+    });
+    expect(Object.keys((call[1] as { body: object }).body)).toEqual([
+      "operation_id",
+      "kind",
+      "confirm"
+    ]);
+    expect(JSON.stringify((call[1] as { body: object }).body)).not.toContain("thread-private");
+    expect(call[2]).toEqual({ signal: expect.any(AbortSignal) });
+
+    const result = await screen.findByRole("dialog", { name: "Session archived" });
+    expect((within(result).getByRole("button", {
+      name: "Close session actions"
+    }) as HTMLButtonElement).disabled).toBe(true);
+    expect(harness.setTarget).not.toHaveBeenCalledWith({ kind: "mission_control" });
+    fireEvent.click(within(result).getByRole("button", { name: "Back to sessions" }));
+    expect(await screen.findByRole("heading", { name: "Mission Control" })).toBeTruthy();
+    await waitFor(() =>
+      expect(harness.setTarget).toHaveBeenCalledWith({ kind: "mission_control" })
+    );
     expect(harness.requestProtected).toHaveBeenCalledTimes(1);
   });
 

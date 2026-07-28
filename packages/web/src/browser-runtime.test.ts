@@ -36,6 +36,9 @@ describe("secure browser runtime composition", () => {
     expect(createSecureBrowserOperationId("compact")).toBe(
       "op_browser_compact_1234567812344abc8def1234567890ab"
     );
+    expect(createSecureBrowserOperationId("archive")).toBe(
+      "op_browser_archive_1234567812344abc8def1234567890ab"
+    );
     expect(createSecureBrowserOperationId("approval")).toBe(
       "op_browser_approval_1234567812344abc8def1234567890ab"
     );

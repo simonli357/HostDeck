@@ -3095,20 +3095,25 @@ textarea:focus-visible {
   padding-top: 16px;
 }
 
-.hostdeck-session-actions__interrupt {
+.hostdeck-session-actions__interrupt,
+.hostdeck-session-actions__archive {
   color: var(--hostdeck-danger);
 }
 
 .hostdeck-session-actions__interrupt strong,
-.hostdeck-session-actions__interrupt small {
+.hostdeck-session-actions__interrupt small,
+.hostdeck-session-actions__archive strong,
+.hostdeck-session-actions__archive small {
   color: inherit;
 }
 
-.hostdeck-session-actions__interrupt:disabled {
+.hostdeck-session-actions__interrupt:disabled,
+.hostdeck-session-actions__archive:disabled {
   color: var(--hostdeck-muted);
 }
 
-.hostdeck-session-actions__interrupt:disabled .hostdeck-utility-menu__reason {
+.hostdeck-session-actions__interrupt:disabled .hostdeck-utility-menu__reason,
+.hostdeck-session-actions__archive:disabled .hostdeck-utility-menu__reason {
   color: var(--hostdeck-attention);
 }
 
@@ -3126,7 +3131,9 @@ textarea:focus-visible {
 }
 
 .hostdeck-interrupt-risk,
-.hostdeck-interrupt-status {
+.hostdeck-interrupt-status,
+.hostdeck-archive-risk,
+.hostdeck-archive-status {
   display: grid;
   min-width: 0;
   grid-template-columns: 24px minmax(0, 1fr);
@@ -3136,17 +3143,22 @@ textarea:focus-visible {
   border-bottom: 1px solid var(--hostdeck-divider);
 }
 
-.hostdeck-interrupt-risk {
+.hostdeck-interrupt-risk,
+.hostdeck-archive-risk {
   color: var(--hostdeck-danger);
 }
 
 .hostdeck-interrupt-risk > svg,
-.hostdeck-interrupt-status > svg {
+.hostdeck-interrupt-status > svg,
+.hostdeck-archive-risk > svg,
+.hostdeck-archive-status > svg {
   margin-top: 1px;
 }
 
 .hostdeck-interrupt-risk > span,
-.hostdeck-interrupt-status > span {
+.hostdeck-interrupt-status > span,
+.hostdeck-archive-risk > span,
+.hostdeck-archive-status > span {
   display: grid;
   min-width: 0;
   gap: 2px;
@@ -3155,13 +3167,19 @@ textarea:focus-visible {
 .hostdeck-interrupt-risk strong,
 .hostdeck-interrupt-risk small,
 .hostdeck-interrupt-status strong,
-.hostdeck-interrupt-status small {
+.hostdeck-interrupt-status small,
+.hostdeck-archive-risk strong,
+.hostdeck-archive-risk small,
+.hostdeck-archive-status strong,
+.hostdeck-archive-status small {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 .hostdeck-interrupt-risk strong,
-.hostdeck-interrupt-status strong {
+.hostdeck-interrupt-status strong,
+.hostdeck-archive-risk strong,
+.hostdeck-archive-status strong {
   color: currentColor;
   font-size: 14px;
   font-weight: 650;
@@ -3169,19 +3187,23 @@ textarea:focus-visible {
 }
 
 .hostdeck-interrupt-risk small,
-.hostdeck-interrupt-status small {
+.hostdeck-interrupt-status small,
+.hostdeck-archive-risk small,
+.hostdeck-archive-status small {
   color: var(--hostdeck-muted);
   font-size: 12px;
   line-height: 17px;
 }
 
-.hostdeck-interrupt-facts {
+.hostdeck-interrupt-facts,
+.hostdeck-archive-facts {
   display: grid;
   gap: 0;
   margin: 12px 0 0;
 }
 
-.hostdeck-interrupt-facts > div {
+.hostdeck-interrupt-facts > div,
+.hostdeck-archive-facts > div {
   display: grid;
   min-width: 0;
   grid-template-columns: minmax(72px, 0.32fr) minmax(0, 1fr);
@@ -3193,36 +3215,59 @@ textarea:focus-visible {
 }
 
 .hostdeck-interrupt-facts dt,
-.hostdeck-interrupt-facts dd {
+.hostdeck-interrupt-facts dd,
+.hostdeck-archive-facts dt,
+.hostdeck-archive-facts dd {
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
 }
 
-.hostdeck-interrupt-facts dt {
+.hostdeck-interrupt-facts dt,
+.hostdeck-archive-facts dt {
   color: var(--hostdeck-muted);
 }
 
-.hostdeck-interrupt-facts dd {
+.hostdeck-interrupt-facts dd,
+.hostdeck-archive-facts dd {
   color: var(--hostdeck-ink);
 }
 
-.hostdeck-interrupt-status {
+.hostdeck-interrupt-status,
+.hostdeck-archive-status {
   margin-top: 14px;
   border-bottom: 0;
   color: var(--hostdeck-focus);
 }
 
-.hostdeck-interrupt-status--attention {
+.hostdeck-interrupt-status--attention,
+.hostdeck-archive-status--attention {
   color: var(--hostdeck-attention);
 }
 
-.hostdeck-interrupt-status--danger {
+.hostdeck-interrupt-status--danger,
+.hostdeck-archive-status--danger {
   color: var(--hostdeck-danger);
 }
 
-.hostdeck-interrupt-status--connected {
+.hostdeck-interrupt-status--connected,
+.hostdeck-archive-status--connected {
   color: var(--hostdeck-connected);
+}
+
+.hostdeck-archive-consequence {
+  min-width: 0;
+  margin-top: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hostdeck-divider);
+  color: var(--hostdeck-ink);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.hostdeck-archive-consequence strong {
+  font-weight: 650;
+  overflow-wrap: anywhere;
 }
 
 .hostdeck-session-actions__footer {

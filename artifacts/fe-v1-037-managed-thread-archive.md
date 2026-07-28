@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: criteria frozen before product code. `MTA-01` through `MTA-24` are required.
+Status: complete. `MTA-01` through `MTA-24` pass.
 
 ## Scope
 
@@ -101,3 +101,40 @@ Excluded: archive from Mission Control rows, bulk archive, delete/unarchive/rest
 Reuse `archiveSessionRequestSchema`, `selectedOperationDispatchSchema`, the typed `session_archive` browser route, coordinator protected-write authority, selected Session Detail projection, secure browser operation-id helper, shared host-lock copy, `FE-V1-036` Session actions sheet, existing Host/access content, Radix Dialog, Lucide icons, Focus Rail sheet primitives, production browser fixture, and approved `mobile-session-detail-active.png`, `mobile-approval-boundary-states.png`, `primary-controls.png`, and Option B design system. Add no production dependency or generated asset.
 
 `FE-V1-037` owns browser archive admission/confirmation/one-attempt state, strict result and remote/local persistence truth, Session actions integration, success-only route handoff, accessibility, and responsive visual evidence. `IFC-V1-061` retains API/service/audit/persistence truth; `FE-V1-036` retains interrupt and the shared menu foundation; `FE-V1-012` retains detail/feed/SSE; `FE-V1-033` retains host lock; `FE-V1-035` retains compatibility UI; `FE-V1-038` adds laptop resume; `FE-V1-015`, `FE-V1-039`, `FE-V1-016`, and release leaves retain aggregate hardening, physical-phone acceptance, packaging, and go/no-go.
+
+## Completion Evidence
+
+### Implemented Behavior
+
+- One strict headless archive owner derives and freezes the exact current idle managed-session identity and write authority, invokes only `session_archive`, parses the exact correlated accepted receipt, and permanently prevents resend after invocation.
+- Admission fails closed for every missing, foreign, stale, archived, active-turn, incompatible, disconnected, reconnecting, read-only, locked, CSRF-invalid, or continuity-unproven state before operation-id creation.
+- The shared Session actions sheet now presents Interrupt, Archive, and Host/access in the approved order. Archive owns explicit confirmation, dismissal-locked pending, blocked, not-completed, unknown, inconsistent, and confirmed states without nesting another dialog.
+- Confirmed archive remains visible until `Back to sessions`; that acknowledgement performs replace navigation to Mission Control and relies on its fresh authoritative list read. No optimistic row removal, local archive fabrication, operation polling, browser persistence, or retry path exists.
+- Public UI copy distinguishes archive from deletion and interruption, preserves retained-history truth, states the V1 no-undo boundary, and never renders operation, audit, thread, path, or other private identifiers.
+
+### Automated Validation
+
+| Gate | Result |
+| --- | --- |
+| Focused archive state/component | 46 tests pass, including 32 direct headless cases. |
+| Final affected web unit slice | 88 tests pass across archive, interrupt, browser-runtime, and Session Detail files. |
+| Aggregate web | 42 files and 768 tests pass. |
+| Aggregate unit | 235 files pass, 27 files skip explicitly; 2,645 tests pass and 28 skip explicitly. |
+| Contract and integration | 34 contract files/245 tests and 21 integration files/36 tests pass. |
+| Chromium | 17 dedicated archive scenarios, 38 affected archive/interrupt scenarios, and the full 123-scenario production shell pass. |
+| Static and boundary | Scaffold, planning, TypeScript, Biome lint, diff check, selected-runtime boundary, and exact Codex 0.144.0 binding pass. The binding inspects 671 files at `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. |
+| Build and package | Production build, shell help/version, six structural package tests, deterministic and relocated package acceptance, and independent package verification pass. The verified 6,449-entry package hash is `35f41f5daccab92d6ded30bf1de374d5451e1ce81282e1136a2452f7810a3ace`. |
+| Supply chain | Frozen offline install succeeds, production audit reports no known vulnerabilities, and all 172 production packages have permissive recorded licenses. |
+
+### Visual, Accessibility, And Privacy Inspection
+
+- `artifacts/fe-v1-037-managed-thread-archive/` contains 36 inspected screenshots and 14 layout records covering the menu, all result classes, disabled authority/continuity states, confirmed Mission Control return, 320/360/390/412/768/1280 widths, 390 x 420 short height, and actual 200 percent reflow.
+- Layout records show no horizontal overflow or sheet escape, one bounded body scroller, fixed-footer containment, and no target below 44 px. The short-height and zoom scrolled captures prove the full consequence text and terminal actions remain reachable.
+- Keyboard/focus, modal ownership, pending dismissal lock, success-only navigation, history replacement, storage, DOM, request-shape/count, no-resend, and private-sentinel assertions pass. Manual source/artifact review found no rendered or persisted thread, audit, operation, filesystem, credential, or user-secret value.
+- The shared sheet remains visually consistent with the selected Focus Rail assets and does not alter Mission Control, the prompt composer, primary `/model`, `/goal`, `/plan` controls, or the compact utility surface.
+
+### Remaining Scope
+
+- Physical-phone aggregate acceptance, cross-screen state hardening, final responsive/accessibility/browser matrices, package/service release acceptance, and go/no-go remain owned by their downstream leaves; this task does not claim release readiness.
+- Laptop resume remains `FE-V1-038`; compatibility/update-required presentation remains `FE-V1-035`. No placeholder or fallback for either was added.
+- Vite retains its existing large-chunk advisory. This leaf adds no production dependency; aggregate bundle/performance disposition remains downstream hardening work.

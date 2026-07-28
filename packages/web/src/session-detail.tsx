@@ -41,6 +41,8 @@ import {
   useApprovalDecisionController,
   useApprovalDecisionView
 } from "./approval-decisions.js";
+import { useArchiveControlController } from "./archive-control.js";
+import type { ArchiveControlController } from "./archive-control-state.js";
 import { useCompactControlController } from "./compact-control.js";
 import type { CompactControlController } from "./compact-control-state.js";
 import type {
@@ -147,6 +149,7 @@ export interface SessionDetailControllerState {
   readonly approvals: ApprovalDecisionController;
   readonly eventDiagnostics: EventDiagnosticsController;
   readonly interrupt: InterruptControlController;
+  readonly archive: ArchiveControlController;
 }
 
 export interface UseSessionDetailControllerOptions {
@@ -238,6 +241,11 @@ export function useSessionDetailController(
     snapshot,
     feed,
     snapshot.stream.boundary
+  );
+  const archive = useArchiveControlController(
+    coordinator,
+    sessionId,
+    snapshot
   );
 
   const resetFeed = useCallback(() => {
@@ -338,7 +346,8 @@ export function useSessionDetailController(
     skills,
     approvals,
     eventDiagnostics,
-    interrupt
+    interrupt,
+    archive
   });
 }
 

@@ -2,6 +2,8 @@ export * from "./app-shell.js";
 export * from "./app-startup.js";
 export * from "./approval-decision-state.js";
 export * from "./approval-decisions.js";
+export * from "./archive-control.js";
+export * from "./archive-control-state.js";
 export * from "./compact-control.js";
 export * from "./compact-control-state.js";
 export * from "./connection-state.js";

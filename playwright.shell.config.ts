@@ -5,6 +5,7 @@ export default defineConfig({
   testMatch: [
     "access-recovery.spec.ts",
     "app-shell.spec.ts",
+    "archive-control.spec.ts",
     "approval-decisions.spec.ts",
     "compact-control.spec.ts",
     "event-diagnostics.spec.ts",

@@ -351,6 +351,7 @@ function ConnectedSessionDetailRoute({
   hostAccess: ReactNode | undefined;
   sessionId: SessionId;
 }>) {
+  const navigate = useNavigate();
   const controller = useSessionDetailController(coordinator, sessionId);
   const projection = projectSessionDetail(
     controller.snapshot,
@@ -362,8 +363,10 @@ function ConnectedSessionDetailRoute({
     <HostDeckFrame
       action={
         <SessionActionsSheet
+          archive={controller.archive}
           controller={controller.interrupt}
           hostAccess={hostAccess ?? <HostAccessLoading />}
+          onArchiveSucceeded={() => navigate(missionControlPath, { replace: true })}
         />
       }
       back={<SessionBackButton />}

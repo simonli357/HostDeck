@@ -43,6 +43,7 @@ test("keeps one mobile Session actions sheet and preserves Host access and routi
   const dialog = actionsDialog(page, "Session actions");
   await expect(dialog.locator(".hostdeck-utility-menu__item strong")).toHaveText([
     "Interrupt active turn",
+    "Archive session",
     "Host & access"
   ]);
   const interrupt = interruptAction(dialog);

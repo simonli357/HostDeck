@@ -1,0 +1,828 @@
+{
+  "measurements": [
+    {
+      "state": "menu",
+      "requestedViewport": {
+        "width": 320,
+        "height": 800
+      },
+      "geometry": {
+        "viewport": {
+          "height": 800,
+          "width": 320
+        },
+        "document": {
+          "clientWidth": 320,
+          "scrollWidth": 320
+        },
+        "sheet": {
+          "bottom": 800,
+          "height": 359,
+          "left": 0,
+          "right": 320,
+          "scrollWidth": 318,
+          "clientWidth": 318,
+          "top": 441
+        },
+        "body": {
+          "overflow": "hidden",
+          "scrollWidth": 286,
+          "clientWidth": 286
+        },
+        "scroller": {
+          "bottom": 788,
+          "overflowY": "auto",
+          "scrollWidth": 286,
+          "clientWidth": 286,
+          "top": 525
+        },
+        "footer": null,
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 76,
+            "width": 286
+          },
+          {
+            "height": 85,
+            "width": 286
+          },
+          {
+            "height": 85,
+            "width": 286
+          }
+        ]
+      }
+    },
+    {
+      "state": "menu",
+      "requestedViewport": {
+        "width": 360,
+        "height": 800
+      },
+      "geometry": {
+        "viewport": {
+          "height": 800,
+          "width": 360
+        },
+        "document": {
+          "clientWidth": 360,
+          "scrollWidth": 360
+        },
+        "sheet": {
+          "bottom": 800,
+          "height": 350,
+          "left": 0,
+          "right": 360,
+          "scrollWidth": 358,
+          "clientWidth": 358,
+          "top": 450
+        },
+        "body": {
+          "overflow": "hidden",
+          "scrollWidth": 326,
+          "clientWidth": 326
+        },
+        "scroller": {
+          "bottom": 788,
+          "overflowY": "auto",
+          "scrollWidth": 326,
+          "clientWidth": 326,
+          "top": 534
+        },
+        "footer": null,
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 76,
+            "width": 326
+          },
+          {
+            "height": 85,
+            "width": 326
+          },
+          {
+            "height": 76,
+            "width": 326
+          }
+        ]
+      }
+    },
+    {
+      "state": "menu",
+      "requestedViewport": {
+        "width": 390,
+        "height": 844
+      },
+      "geometry": {
+        "viewport": {
+          "height": 844,
+          "width": 390
+        },
+        "document": {
+          "clientWidth": 390,
+          "scrollWidth": 390
+        },
+        "sheet": {
+          "bottom": 844,
+          "height": 341,
+          "left": 0,
+          "right": 390,
+          "scrollWidth": 388,
+          "clientWidth": 388,
+          "top": 503
+        },
+        "body": {
+          "overflow": "hidden",
+          "scrollWidth": 356,
+          "clientWidth": 356
+        },
+        "scroller": {
+          "bottom": 832,
+          "overflowY": "auto",
+          "scrollWidth": 356,
+          "clientWidth": 356,
+          "top": 587
+        },
+        "footer": null,
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 76,
+            "width": 356
+          },
+          {
+            "height": 76,
+            "width": 356
+          },
+          {
+            "height": 76,
+            "width": 356
+          }
+        ]
+      }
+    },
+    {
+      "state": "menu",
+      "requestedViewport": {
+        "width": 412,
+        "height": 915
+      },
+      "geometry": {
+        "viewport": {
+          "height": 915,
+          "width": 412
+        },
+        "document": {
+          "clientWidth": 412,
+          "scrollWidth": 412
+        },
+        "sheet": {
+          "bottom": 915,
+          "height": 341,
+          "left": 0,
+          "right": 412,
+          "scrollWidth": 410,
+          "clientWidth": 410,
+          "top": 574
+        },
+        "body": {
+          "overflow": "hidden",
+          "scrollWidth": 378,
+          "clientWidth": 378
+        },
+        "scroller": {
+          "bottom": 903,
+          "overflowY": "auto",
+          "scrollWidth": 378,
+          "clientWidth": 378,
+          "top": 658
+        },
+        "footer": null,
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 76,
+            "width": 378
+          },
+          {
+            "height": 76,
+            "width": 378
+          },
+          {
+            "height": 76,
+            "width": 378
+          }
+        ]
+      }
+    },
+    {
+      "state": "menu",
+      "requestedViewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "geometry": {
+        "viewport": {
+          "height": 1024,
+          "width": 768
+        },
+        "document": {
+          "clientWidth": 768,
+          "scrollWidth": 768
+        },
+        "sheet": {
+          "bottom": 1024,
+          "height": 330,
+          "left": 104,
+          "right": 664,
+          "scrollWidth": 558,
+          "clientWidth": 558,
+          "top": 694
+        },
+        "body": {
+          "overflow": "hidden",
+          "scrollWidth": 526,
+          "clientWidth": 526
+        },
+        "scroller": {
+          "bottom": 1012,
+          "overflowY": "auto",
+          "scrollWidth": 526,
+          "clientWidth": 526,
+          "top": 767
+        },
+        "footer": null,
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 76,
+            "width": 526
+          },
+          {
+            "height": 76,
+            "width": 526
+          },
+          {
+            "height": 76,
+            "width": 526
+          }
+        ]
+      }
+    },
+    {
+      "state": "menu",
+      "requestedViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "geometry": {
+        "viewport": {
+          "height": 800,
+          "width": 1280
+        },
+        "document": {
+          "clientWidth": 1280,
+          "scrollWidth": 1280
+        },
+        "sheet": {
+          "bottom": 800,
+          "height": 330,
+          "left": 360,
+          "right": 920,
+          "scrollWidth": 558,
+          "clientWidth": 558,
+          "top": 470
+        },
+        "body": {
+          "overflow": "hidden",
+          "scrollWidth": 526,
+          "clientWidth": 526
+        },
+        "scroller": {
+          "bottom": 788,
+          "overflowY": "auto",
+          "scrollWidth": 526,
+          "clientWidth": 526,
+          "top": 543
+        },
+        "footer": null,
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 76,
+            "width": 526
+          },
+          {
+            "height": 76,
+            "width": 526
+          },
+          {
+            "height": 76,
+            "width": 526
+          }
+        ]
+      }
+    },
+    {
+      "state": "confirmation",
+      "requestedViewport": {
+        "width": 320,
+        "height": 800
+      },
+      "geometry": {
+        "viewport": {
+          "height": 800,
+          "width": 320
+        },
+        "document": {
+          "clientWidth": 320,
+          "scrollWidth": 320
+        },
+        "sheet": {
+          "bottom": 800,
+          "height": 644,
+          "left": 0,
+          "right": 320,
+          "scrollWidth": 318,
+          "clientWidth": 318,
+          "top": 156
+        },
+        "body": {
+          "overflow": "hidden",
+          "scrollWidth": 286,
+          "clientWidth": 286
+        },
+        "scroller": {
+          "bottom": 669,
+          "overflowY": "auto",
+          "scrollWidth": 286,
+          "clientWidth": 286,
+          "top": 229
+        },
+        "footer": {
+          "bottom": 788,
+          "top": 669
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 286
+          },
+          {
+            "height": 48,
+            "width": 286
+          }
+        ]
+      }
+    },
+    {
+      "state": "confirmation",
+      "requestedViewport": {
+        "width": 360,
+        "height": 800
+      },
+      "geometry": {
+        "viewport": {
+          "height": 800,
+          "width": 360
+        },
+        "document": {
+          "clientWidth": 360,
+          "scrollWidth": 360
+        },
+        "sheet": {
+          "bottom": 800,
+          "height": 551,
+          "left": 0,
+          "right": 360,
+          "scrollWidth": 358,
+          "clientWidth": 358,
+          "top": 249
+        },
+        "body": {
+          "overflow": "hidden",
+          "scrollWidth": 326,
+          "clientWidth": 326
+        },
+        "scroller": {
+          "bottom": 727,
+          "overflowY": "auto",
+          "scrollWidth": 326,
+          "clientWidth": 326,
+          "top": 322
+        },
+        "footer": {
+          "bottom": 788,
+          "top": 727
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 126.390625
+          },
+          {
+            "height": 48,
+            "width": 189.609375
+          }
+        ]
+      }
+    },
+    {
+      "state": "confirmation",
+      "requestedViewport": {
+        "width": 390,
+        "height": 844
+      },
+      "geometry": {
+        "viewport": {
+          "height": 844,
+          "width": 390
+        },
+        "document": {
+          "clientWidth": 390,
+          "scrollWidth": 390
+        },
+        "sheet": {
+          "bottom": 844,
+          "height": 534,
+          "left": 0,
+          "right": 390,
+          "scrollWidth": 388,
+          "clientWidth": 388,
+          "top": 310
+        },
+        "body": {
+          "overflow": "hidden",
+          "scrollWidth": 356,
+          "clientWidth": 356
+        },
+        "scroller": {
+          "bottom": 771,
+          "overflowY": "auto",
+          "scrollWidth": 356,
+          "clientWidth": 356,
+          "top": 383
+        },
+        "footer": {
+          "bottom": 832,
+          "top": 771
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 138.390625
+          },
+          {
+            "height": 48,
+            "width": 207.609375
+          }
+        ]
+      }
+    },
+    {
+      "state": "confirmation",
+      "requestedViewport": {
+        "width": 412,
+        "height": 915
+      },
+      "geometry": {
+        "viewport": {
+          "height": 915,
+          "width": 412
+        },
+        "document": {
+          "clientWidth": 412,
+          "scrollWidth": 412
+        },
+        "sheet": {
+          "bottom": 915,
+          "height": 534,
+          "left": 0,
+          "right": 412,
+          "scrollWidth": 410,
+          "clientWidth": 410,
+          "top": 381
+        },
+        "body": {
+          "overflow": "hidden",
+          "scrollWidth": 378,
+          "clientWidth": 378
+        },
+        "scroller": {
+          "bottom": 842,
+          "overflowY": "auto",
+          "scrollWidth": 378,
+          "clientWidth": 378,
+          "top": 454
+        },
+        "footer": {
+          "bottom": 903,
+          "top": 842
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 147.1875
+          },
+          {
+            "height": 48,
+            "width": 220.8125
+          }
+        ]
+      }
+    },
+    {
+      "state": "confirmation",
+      "requestedViewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "geometry": {
+        "viewport": {
+          "height": 1024,
+          "width": 768
+        },
+        "document": {
+          "clientWidth": 768,
+          "scrollWidth": 768
+        },
+        "sheet": {
+          "bottom": 1024,
+          "height": 498,
+          "left": 104,
+          "right": 664,
+          "scrollWidth": 558,
+          "clientWidth": 558,
+          "top": 526
+        },
+        "body": {
+          "overflow": "hidden",
+          "scrollWidth": 526,
+          "clientWidth": 526
+        },
+        "scroller": {
+          "bottom": 951,
+          "overflowY": "auto",
+          "scrollWidth": 526,
+          "clientWidth": 526,
+          "top": 599
+        },
+        "footer": {
+          "bottom": 1012,
+          "top": 951
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 206.390625
+          },
+          {
+            "height": 48,
+            "width": 309.609375
+          }
+        ]
+      }
+    },
+    {
+      "state": "confirmation",
+      "requestedViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "geometry": {
+        "viewport": {
+          "height": 800,
+          "width": 1280
+        },
+        "document": {
+          "clientWidth": 1280,
+          "scrollWidth": 1280
+        },
+        "sheet": {
+          "bottom": 800,
+          "height": 498,
+          "left": 360,
+          "right": 920,
+          "scrollWidth": 558,
+          "clientWidth": 558,
+          "top": 302
+        },
+        "body": {
+          "overflow": "hidden",
+          "scrollWidth": 526,
+          "clientWidth": 526
+        },
+        "scroller": {
+          "bottom": 727,
+          "overflowY": "auto",
+          "scrollWidth": 526,
+          "clientWidth": 526,
+          "top": 375
+        },
+        "footer": {
+          "bottom": 788,
+          "top": 727
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 206.390625
+          },
+          {
+            "height": 48,
+            "width": 309.609375
+          }
+        ]
+      }
+    },
+    {
+      "state": "confirmation-short",
+      "requestedViewport": {
+        "width": 390,
+        "height": 420
+      },
+      "geometry": {
+        "viewport": {
+          "height": 420,
+          "width": 390
+        },
+        "document": {
+          "clientWidth": 390,
+          "scrollWidth": 390
+        },
+        "sheet": {
+          "bottom": 420,
+          "height": 412,
+          "left": 0,
+          "right": 390,
+          "scrollWidth": 388,
+          "clientWidth": 388,
+          "top": 8
+        },
+        "body": {
+          "overflow": "hidden",
+          "scrollWidth": 356,
+          "clientWidth": 356
+        },
+        "scroller": {
+          "bottom": 347,
+          "overflowY": "auto",
+          "scrollWidth": 356,
+          "clientWidth": 356,
+          "top": 81
+        },
+        "footer": {
+          "bottom": 408,
+          "top": 347
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 138.390625
+          },
+          {
+            "height": 48,
+            "width": 207.609375
+          }
+        ]
+      }
+    },
+    {
+      "state": "confirmation-zoom-200",
+      "requestedViewport": {
+        "width": 1280,
+        "height": 800,
+        "effectiveWidth": 640,
+        "effectiveHeight": 400
+      },
+      "geometry": {
+        "viewport": {
+          "height": 400,
+          "width": 640
+        },
+        "document": {
+          "clientWidth": 640,
+          "scrollWidth": 640
+        },
+        "sheet": {
+          "bottom": 400,
+          "height": 392,
+          "left": 40,
+          "right": 600,
+          "scrollWidth": 558,
+          "clientWidth": 558,
+          "top": 8
+        },
+        "body": {
+          "overflow": "hidden",
+          "scrollWidth": 526,
+          "clientWidth": 526
+        },
+        "scroller": {
+          "bottom": 327,
+          "overflowY": "auto",
+          "scrollWidth": 526,
+          "clientWidth": 526,
+          "top": 81
+        },
+        "footer": {
+          "bottom": 388,
+          "top": 327
+        },
+        "targets": [
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 44,
+            "width": 44
+          },
+          {
+            "height": 48,
+            "width": 206.390625
+          },
+          {
+            "height": 48,
+            "width": 309.609375
+          }
+        ]
+      }
+    }
+  ]
+}

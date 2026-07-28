@@ -3,6 +3,10 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type {
+  ArchiveControlController,
+  ArchiveControlView
+} from "./archive-control-state.js";
 import { SessionActionsSheet } from "./interrupt-control.js";
 import type {
   InterruptControlController,
@@ -32,7 +36,7 @@ describe("SessionActionsSheet", () => {
       Array.from(dialog.querySelectorAll(".hostdeck-utility-menu__item strong"), (item) =>
         item.textContent
       )
-    ).toEqual(["Interrupt active turn", "Host & access"]);
+    ).toEqual(["Interrupt active turn", "Archive session", "Host & access"]);
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
     const interrupt = within(dialog).getByRole("button", { name: /Interrupt active turn/iu });
     await waitFor(() => expect(document.activeElement).toBe(interrupt));
@@ -154,7 +158,7 @@ describe("SessionActionsSheet", () => {
 
     await user.click(screen.getByRole("button", { name: "Open session actions" }));
 
-    expect(screen.getByText("Session details are not available.")).toBeTruthy();
+    expect(screen.getAllByText("Session details are not available.")).toHaveLength(2);
     expect(document.body.textContent).not.toContain(turnId);
     expect(document.body.textContent).not.toContain("android-release");
     await user.click(screen.getByRole("button", { name: /Host & access/iu }));
@@ -165,10 +169,70 @@ describe("SessionActionsSheet", () => {
 function renderSheet(controller: InterruptControlController) {
   return render(
     <SessionActionsSheet
+      archive={unavailableArchiveController(!controller.snapshot().visible)}
       controller={controller}
       hostAccess={<p>Paired Xiaomi fixture</p>}
+      onArchiveSucceeded={vi.fn()}
     />
   );
+}
+
+function unavailableArchiveController(hidden = false): ArchiveControlController {
+  const listeners = new Set<() => void>();
+  let current = archiveView(hidden ? {
+    visible: false,
+    phase: "hidden",
+    target: null,
+    targetLabel: null,
+    actionDisabledReason: "Session details are not available."
+  } : {});
+  const publish = (next: ArchiveControlView) => {
+    current = next;
+    for (const listener of [...listeners]) listener();
+    return current;
+  };
+  return Object.freeze({
+    snapshot: () => current,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    updateContext: () => current,
+    open: () => publish(archiveView({
+      ...current,
+      sheetOpen: true,
+      phase: hidden ? "hidden" : "unavailable"
+    })),
+    beginConfirmation: () => current,
+    cancelConfirmation: () => current,
+    confirm: async () => current,
+    acknowledgeResult: () => current,
+    dismiss: () => publish(archiveView({ ...current, sheetOpen: false, phase: "closed" })),
+    close: () => publish(archiveView({ visible: false, phase: "hidden", targetLabel: null }))
+  });
+}
+
+function archiveView(overrides: Partial<ArchiveControlView> = {}): ArchiveControlView {
+  return Object.freeze({
+    visible: true,
+    sheetOpen: false,
+    phase: "closed",
+    tone: "attention",
+    title: "Archive session",
+    status: "Session actions closed",
+    statusDetail: "Finish or interrupt the active turn before archiving.",
+    targetLabel: "android-release",
+    target: Object.freeze({ sessionLabel: "android-release" }),
+    actionEnabled: false,
+    actionDisabledReason: "Finish or interrupt the active turn before archiving.",
+    confirmationOpen: false,
+    confirmEnabled: false,
+    busy: false,
+    closeDisabled: false,
+    resultOpen: false,
+    result: null,
+    ...overrides
+  });
 }
 
 function uiController(options: Readonly<{

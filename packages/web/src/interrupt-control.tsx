@@ -23,6 +23,18 @@ import {
   useState,
   useSyncExternalStore
 } from "react";
+import {
+  ArchiveActionItem,
+  ArchiveConfirmation,
+  ArchivePending,
+  ArchiveResult,
+  useArchiveControlView
+} from "./archive-control.js";
+import type {
+  ArchiveControlController,
+  ArchiveControlTone,
+  ArchiveControlView
+} from "./archive-control-state.js";
 import { createSecureBrowserOperationId } from "./browser-operation-id.js";
 import type {
   BrowserConnectionSnapshot,
@@ -31,6 +43,7 @@ import type {
 import {
   createInterruptControlController, 
   type InterruptControlController,
+  type InterruptControlTone,
   type InterruptControlView,
   type InterruptResultView
 } from "./interrupt-control-state.js";
@@ -44,12 +57,23 @@ export interface UseInterruptControlControllerOptions {
 }
 
 export interface SessionActionsSheetProps {
+  readonly archive: ArchiveControlController;
   readonly controller: InterruptControlController;
   readonly hostAccess: ReactNode;
+  readonly onArchiveSucceeded: () => void;
 }
 
-type SessionActionsPage = "menu" | "host";
-type SessionActionsMode = "menu" | "host" | "confirmation" | "pending" | "result";
+type SessionActionsPage = "menu" | "host" | "interrupt" | "archive";
+type SessionActionsMode =
+  | "menu"
+  | "host"
+  | "interrupt_confirmation"
+  | "interrupt_pending"
+  | "interrupt_result"
+  | "archive_confirmation"
+  | "archive_pending"
+  | "archive_result";
+type SessionActionFocusOwner = "interrupt" | "archive";
 
 const timestampFormatter = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -138,68 +162,136 @@ export function useInterruptControlView(
 }
 
 export function SessionActionsSheet({
+  archive,
   controller,
-  hostAccess
+  hostAccess,
+  onArchiveSucceeded
 }: SessionActionsSheetProps) {
   const view = useInterruptControlView(controller);
+  const archiveView = useArchiveControlView(archive);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [page, setPage] = useState<SessionActionsPage>("menu");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const interruptItemRef = useRef<HTMLButtonElement | null>(null);
+  const archiveItemRef = useRef<HTMLButtonElement | null>(null);
   const hostItemRef = useRef<HTMLButtonElement | null>(null);
   const backButtonRef = useRef<HTMLButtonElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const doneButtonRef = useRef<HTMLButtonElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const returnFocusOwner = useRef<SessionActionFocusOwner | null>(null);
   const descriptionId = useId();
-  const mode = sessionActionsMode(page, view);
+  const mode = sessionActionsMode(page, view, archiveView);
+  const closeDisabled = view.closeDisabled || archiveView.closeDisabled;
+  const busy = view.busy || archiveView.busy;
 
   useLayoutEffect(() => {
     if (!dialogOpen) return;
     queueMicrotask(() => {
       const focusTarget = mode === "menu"
-        ? view.actionEnabled
+        ? returnFocusOwner.current === "interrupt"
           ? interruptItemRef.current
-          : hostItemRef.current
+          : returnFocusOwner.current === "archive"
+            ? archiveItemRef.current
+            : view.actionEnabled
+              ? interruptItemRef.current
+              : archiveView.actionEnabled
+                ? archiveItemRef.current
+                : hostItemRef.current
         : mode === "host"
           ? backButtonRef.current
-          : mode === "confirmation"
+          : isConfirmationMode(mode)
             ? cancelButtonRef.current
-            : mode === "result"
+            : isResultMode(mode)
               ? doneButtonRef.current
               : contentRef.current;
+      returnFocusOwner.current = null;
       focusTarget?.focus();
     });
-  }, [dialogOpen, mode, view.actionEnabled]);
+  }, [archiveView.actionEnabled, dialogOpen, mode, view.actionEnabled]);
 
   const setOpen = (open: boolean) => {
     if (open) {
-      setPage("menu");
       setDialogOpen(true);
-      controller.open();
+      const interruptNext = controller.open();
+      const archiveNext = archive.open();
+      setPage(
+        archiveNext.resultOpen
+          ? "archive"
+          : interruptNext.resultOpen
+            ? "interrupt"
+            : "menu"
+      );
       return;
     }
-    if (view.closeDisabled) return;
+    if (closeDisabled) return;
     controller.dismiss();
+    archive.dismiss();
     setPage("menu");
     setDialogOpen(false);
   };
 
   const returnToMenu = () => {
-    if (view.busy) return;
-    controller.cancelConfirmation();
+    if (busy) return;
+    if (page === "interrupt") {
+      controller.cancelConfirmation();
+      returnFocusOwner.current = "interrupt";
+    } else if (page === "archive") {
+      archive.cancelConfirmation();
+      returnFocusOwner.current = "archive";
+    }
     setPage("menu");
   };
 
-  const finish = () => {
-    if (view.busy) return;
+  const finishInterrupt = () => {
+    if (busy) return;
+    controller.dismiss();
+    archive.dismiss();
+    setPage("menu");
+    setDialogOpen(false);
+  };
+
+  const finishArchive = () => {
+    if (busy) return;
+    archive.dismiss();
     controller.dismiss();
     setPage("menu");
     setDialogOpen(false);
   };
 
-  const title = sessionActionsTitle(mode, view);
-  const targetLabel = view.targetLabel ?? view.target?.sessionLabel ?? "current session";
+  const finishArchiveSuccess = () => {
+    if (busy || archiveView.result?.returnToSessions !== true) return;
+    archive.acknowledgeResult();
+    archive.dismiss();
+    controller.dismiss();
+    setPage("menu");
+    setDialogOpen(false);
+    onArchiveSucceeded();
+  };
+
+  const beginInterrupt = () => {
+    const next = controller.beginConfirmation();
+    if (!next.confirmationOpen) return;
+    returnFocusOwner.current = "interrupt";
+    setPage("interrupt");
+  };
+
+  const beginArchive = () => {
+    const next = archive.beginConfirmation();
+    if (!next.confirmationOpen) return;
+    returnFocusOwner.current = "archive";
+    setPage("archive");
+  };
+
+  const title = sessionActionsTitle(mode, view, archiveView);
+  const interruptTargetLabel = view.targetLabel ?? view.target?.sessionLabel;
+  const archiveTargetLabel = archiveView.targetLabel ?? archiveView.target?.sessionLabel;
+  const targetLabel = mode.startsWith("archive_")
+    ? archiveTargetLabel ?? "current session"
+    : mode.startsWith("interrupt_")
+      ? interruptTargetLabel ?? "current session"
+      : interruptTargetLabel ?? archiveTargetLabel ?? "current session";
+  const tone = sessionActionsTone(mode, view, archiveView);
 
   return (
     <Dialog.Root open={dialogOpen} onOpenChange={setOpen}>
@@ -219,15 +311,15 @@ export function SessionActionsSheet({
         <Dialog.Overlay className="hostdeck-sheet-overlay" />
         <Dialog.Content
           ref={contentRef}
-          className={`hostdeck-sheet hostdeck-session-actions-sheet hostdeck-session-actions-sheet--${view.tone}`}
+          className={`hostdeck-sheet hostdeck-session-actions-sheet hostdeck-session-actions-sheet--${tone}`}
           aria-describedby={descriptionId}
           tabIndex={-1}
           onOpenAutoFocus={(event) => event.preventDefault()}
           onEscapeKeyDown={(event) => {
-            if (view.busy) event.preventDefault();
+            if (closeDisabled) event.preventDefault();
           }}
           onPointerDownOutside={(event) => {
-            if (view.busy) event.preventDefault();
+            if (closeDisabled) event.preventDefault();
           }}
         >
           <Dialog.Description id={descriptionId} className="hostdeck-visually-hidden">
@@ -236,14 +328,14 @@ export function SessionActionsSheet({
           <span className="hostdeck-sheet__handle" aria-hidden="true" />
           <div className="hostdeck-sheet__header hostdeck-session-actions__header">
             <span className="hostdeck-session-actions__heading">
-              {mode === "host" || mode === "confirmation" ? (
+              {mode === "host" || isConfirmationMode(mode) ? (
                 <button
                   ref={backButtonRef}
                   type="button"
                   className="hostdeck-icon-button"
                   aria-label="Back to session actions"
                   title="Back to session actions"
-                  disabled={view.busy}
+                  disabled={busy}
                   onClick={returnToMenu}
                 >
                   <ArrowLeft size={22} strokeWidth={2} aria-hidden="true" />
@@ -263,7 +355,7 @@ export function SessionActionsSheet({
               className="hostdeck-icon-button"
               aria-label="Close session actions"
               title="Close session actions"
-              disabled={view.closeDisabled}
+              disabled={closeDisabled}
               onClick={() => setOpen(false)}
             >
               <X size={22} strokeWidth={2} aria-hidden="true" />
@@ -273,27 +365,50 @@ export function SessionActionsSheet({
           <div className="hostdeck-session-actions__body">
             {mode === "menu" ? (
               <SessionActionsMenu
+                archiveItemRef={archiveItemRef}
+                archiveView={archiveView}
                 hostItemRef={hostItemRef}
                 interruptItemRef={interruptItemRef}
+                onArchive={beginArchive}
                 onHostAccess={() => setPage("host")}
-                onInterrupt={() => controller.beginConfirmation()}
+                onInterrupt={beginInterrupt}
                 view={view}
               />
             ) : mode === "host" ? (
               <div className="hostdeck-session-actions__scroller hostdeck-session-actions__host">
                 {hostAccess}
               </div>
-            ) : mode === "confirmation" ? (
+            ) : mode === "interrupt_confirmation" ? (
               <InterruptConfirmation
                 cancelButtonRef={cancelButtonRef}
                 onCancel={returnToMenu}
                 onConfirm={() => void controller.confirm()}
                 view={view}
               />
-            ) : mode === "pending" ? (
+            ) : mode === "interrupt_pending" ? (
               <InterruptPending view={view} />
+            ) : mode === "interrupt_result" ? (
+              <InterruptResult
+                doneButtonRef={doneButtonRef}
+                onDone={finishInterrupt}
+                view={view}
+              />
+            ) : mode === "archive_confirmation" ? (
+              <ArchiveConfirmation
+                cancelButtonRef={cancelButtonRef}
+                onCancel={returnToMenu}
+                onConfirm={() => void archive.confirm()}
+                view={archiveView}
+              />
+            ) : mode === "archive_pending" ? (
+              <ArchivePending view={archiveView} />
             ) : (
-              <InterruptResult doneButtonRef={doneButtonRef} onDone={finish} view={view} />
+              <ArchiveResult
+                doneButtonRef={doneButtonRef}
+                onDone={finishArchive}
+                onReturnToSessions={finishArchiveSuccess}
+                view={archiveView}
+              />
             )}
           </div>
         </Dialog.Content>
@@ -303,14 +418,20 @@ export function SessionActionsSheet({
 }
 
 function SessionActionsMenu({
+  archiveItemRef,
+  archiveView,
   hostItemRef,
   interruptItemRef,
+  onArchive,
   onHostAccess,
   onInterrupt,
   view
 }: Readonly<{
+  archiveItemRef: RefObject<HTMLButtonElement | null>;
+  archiveView: ArchiveControlView;
   hostItemRef: RefObject<HTMLButtonElement | null>;
   interruptItemRef: RefObject<HTMLButtonElement | null>;
+  onArchive: () => void;
   onHostAccess: () => void;
   onInterrupt: () => void;
   view: InterruptControlView;
@@ -338,6 +459,13 @@ function SessionActionsMenu({
             </span>
             <ChevronRight size={20} strokeWidth={2} aria-hidden="true" />
           </button>
+        </li>
+        <li>
+          <ArchiveActionItem
+            itemRef={archiveItemRef}
+            onArchive={onArchive}
+            view={archiveView}
+          />
         </li>
         <li>
           <button
@@ -558,21 +686,56 @@ function InterruptTime({ value }: Readonly<{ value: string }>) {
 
 function sessionActionsMode(
   page: SessionActionsPage,
-  view: InterruptControlView
+  view: InterruptControlView,
+  archiveView: ArchiveControlView
 ): SessionActionsMode {
   if (page === "host") return "host";
-  if (view.busy) return "pending";
-  if (view.resultOpen && view.result !== null) return "result";
-  if (view.confirmationOpen) return "confirmation";
+  if (page === "interrupt") {
+    if (view.busy) return "interrupt_pending";
+    if (view.resultOpen && view.result !== null) return "interrupt_result";
+    if (view.confirmationOpen) return "interrupt_confirmation";
+  }
+  if (page === "archive") {
+    if (archiveView.busy) return "archive_pending";
+    if (archiveView.resultOpen && archiveView.result !== null) return "archive_result";
+    if (archiveView.confirmationOpen) return "archive_confirmation";
+  }
   return "menu";
 }
 
-function sessionActionsTitle(mode: SessionActionsMode, view: InterruptControlView): string {
+function sessionActionsTitle(
+  mode: SessionActionsMode,
+  view: InterruptControlView,
+  archiveView: ArchiveControlView
+): string {
   if (mode === "host") return "Host & access";
   if (mode === "menu") return "Session actions";
-  if (mode === "result") return view.result?.label ?? "Interrupt result";
-  if (mode === "pending") return "Interrupt active turn";
-  return "Interrupt active turn?";
+  if (mode === "interrupt_result") return view.result?.label ?? "Interrupt result";
+  if (mode === "interrupt_pending") return "Interrupt active turn";
+  if (mode === "interrupt_confirmation") return "Interrupt active turn?";
+  if (mode === "archive_result") return archiveView.result?.label ?? "Archive result";
+  if (mode === "archive_pending") return "Archive session";
+  return "Archive session?";
+}
+
+function sessionActionsTone(
+  mode: SessionActionsMode,
+  view: InterruptControlView,
+  archiveView: ArchiveControlView
+): InterruptControlTone | ArchiveControlTone {
+  if (mode.startsWith("archive_")) return archiveView.tone;
+  if (mode.startsWith("interrupt_")) return view.tone;
+  if (mode === "host") return "focus";
+  if (view.actionEnabled) return view.tone;
+  return archiveView.actionEnabled ? archiveView.tone : "attention";
+}
+
+function isConfirmationMode(mode: SessionActionsMode): boolean {
+  return mode === "interrupt_confirmation" || mode === "archive_confirmation";
+}
+
+function isResultMode(mode: SessionActionsMode): boolean {
+  return mode === "interrupt_result" || mode === "archive_result";
 }
 
 function interruptOutcomeLabel(

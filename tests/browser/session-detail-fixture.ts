@@ -58,6 +58,7 @@ export interface SessionDetailApiController {
   readonly holdNextAccess: () => void;
   readonly setCsrfOutcome: (outcome: SessionDetailCsrfOutcome | null) => void;
   readonly setPromptOutcome: (outcome: SessionDetailPromptOutcome) => void;
+  readonly setSessionListEmpty: (empty: boolean) => void;
   readonly setVariant: (variant: SessionDetailApiVariant) => void;
   readonly streamRequestUrls: () => Promise<readonly string[]>;
 }
@@ -109,6 +110,7 @@ export async function installSessionDetailApi(
   let holdAccess = false;
   let pendingAccessResolution: ((outcome: SessionDetailAccessOutcome) => void) | null = null;
   let csrfOutcomeOverride: SessionDetailCsrfOutcome | null = null;
+  let sessionListEmpty = false;
   let pendingCsrfResolution:
     | ((outcome: Exclude<SessionDetailCsrfOutcome, "pending">) => void)
     | null = null;
@@ -220,6 +222,21 @@ export async function installSessionDetailApi(
       return;
     }
     if (url.pathname === "/api/v1/sessions" && request.method() === "GET") {
+      if (sessionListEmpty) {
+        const detail = sessionDetail(
+          variant,
+          selectedEvents(),
+          selectedRetentionBoundary(),
+          options.turnState
+        );
+        await fulfillJson(route, {
+          access: detail.access,
+          sessions: [],
+          next_cursor: null,
+          has_more: false
+        });
+        return;
+      }
       await fulfillJson(
         route,
         sessionList(
@@ -368,6 +385,9 @@ export async function installSessionDetailApi(
     },
     setPromptOutcome(nextOutcome: SessionDetailPromptOutcome) {
       promptOutcome = nextOutcome;
+    },
+    setSessionListEmpty(empty: boolean) {
+      sessionListEmpty = empty;
     },
     setVariant(nextVariant: SessionDetailApiVariant) {
       variant = nextVariant;
