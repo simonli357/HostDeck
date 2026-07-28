@@ -55,6 +55,7 @@ export interface SessionDetailApiController {
   readonly releasePendingCsrf: (
     outcome?: Exclude<SessionDetailCsrfOutcome, "pending">
   ) => void;
+  readonly resumeStream: () => Promise<void>;
   readonly holdNextAccess: () => void;
   readonly setCsrfOutcome: (outcome: SessionDetailCsrfOutcome | null) => void;
   readonly setPromptOutcome: (outcome: SessionDetailPromptOutcome) => void;
@@ -375,6 +376,17 @@ export async function installSessionDetailApi(
       }
       pendingCsrfResolution(outcome);
     },
+    async resumeStream() {
+      await page.evaluate(() => {
+        const runtime = (
+          window as typeof window & {
+            __hostdeckSessionDetailSse?: { readonly resumeStream: () => void };
+          }
+        ).__hostdeckSessionDetailSse;
+        if (runtime === undefined) throw new TypeError("Session Detail SSE fixture is missing.");
+        runtime.resumeStream();
+      });
+    },
     holdNextAccess() {
       if (holdAccess || pendingAccessResolution !== null) {
         throw new TypeError("A Session Detail access request is already held.");
@@ -529,6 +541,9 @@ async function installSessionEventStream(
             }
           }
           controllers.clear();
+        },
+        resumeStream() {
+          stallConnections = false;
         }
       })
     });

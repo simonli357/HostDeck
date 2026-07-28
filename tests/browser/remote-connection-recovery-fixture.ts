@@ -36,6 +36,11 @@ export interface RemoteHostOverlayController {
   readonly requests: readonly Request[];
 }
 
+export interface RemoteRecoveryApiOptions {
+  readonly configuredOrigin?: string;
+  readonly proxyPrivateOrigin?: boolean;
+}
+
 export const remoteRecoveryLoopbackOrigin = "http://127.0.0.1:4175";
 export const remoteRecoveryPrivateOrigin =
   "https://hostdeck-recovery.fixture-tailnet.ts.net";
@@ -45,13 +50,20 @@ const timestamp = "2026-07-26T16:00:00.000Z";
 export async function installRemoteRecoveryApi(
   page: Page,
   mode: RemoteRecoveryBrowserMode,
-  initialState: RemoteRecoveryState = "ready"
+  initialState: RemoteRecoveryState = "ready",
+  options: RemoteRecoveryApiOptions = {}
 ): Promise<RemoteRecoveryApiController> {
-  if (mode === "remote") await installPrivateOriginProxy(page);
+  if (mode === "remote" && options.proxyPrivateOrigin !== false) {
+    await installPrivateOriginProxy(page);
+  }
+  const configuredOrigin = options.configuredOrigin ?? (
+    mode === "remote" ? remoteRecoveryPrivateOrigin : remoteRecoveryLoopbackOrigin
+  );
 
   let available = true;
   let deviceId = "device_remote_recovery_phone";
   let remoteState = initialState;
+  let remoteGeneration = initialState === "not_observed" ? 0 : 7;
   let statusOutcome: RemoteStatusOutcome = "success";
   let pendingStatusResolution:
     | ((outcome: Exclude<RemoteStatusOutcome, "pending">) => void)
@@ -68,11 +80,14 @@ export async function installRemoteRecoveryApi(
       return;
     }
     if (path === "/api/v1/access" && request.method() === "GET") {
-      await fulfillJson(route, accessState(mode, deviceId));
+      await fulfillJson(route, accessState(mode, deviceId, configuredOrigin));
       return;
     }
     if (path === "/api/v1/host/status" && request.method() === "GET") {
-      await fulfillJson(route, hostStatus(mode, remoteState));
+      await fulfillJson(
+        route,
+        hostStatus(mode, remoteState, undefined, remoteGeneration, configuredOrigin)
+      );
       return;
     }
     if (path === "/api/v1/sessions" && request.method() === "GET") {
@@ -105,7 +120,10 @@ export async function installRemoteRecoveryApi(
         await fulfillError(route, 503, "runtime_unavailable", true);
         return;
       }
-      await fulfillJson(route, publicRemoteState(remoteState));
+      await fulfillJson(
+        route,
+        publicRemoteState(remoteState, remoteGeneration, configuredOrigin)
+      );
       return;
     }
 
@@ -135,6 +153,9 @@ export async function installRemoteRecoveryApi(
       deviceId = next;
     },
     setRemoteState(next: RemoteRecoveryState) {
+      if (next !== remoteState) {
+        remoteGeneration = Math.max(remoteGeneration + 1, 1);
+      }
       remoteState = next;
     },
     setRemoteStatusOutcome(next: RemoteStatusOutcome) {
@@ -158,25 +179,32 @@ export async function installRemoteHostOverlay(
   return Object.freeze({ requests });
 }
 
-async function installPrivateOriginProxy(page: Page): Promise<void> {
+export async function installPrivateOriginProxy(page: Page): Promise<void> {
   await page.route(`${remoteRecoveryPrivateOrigin}/**`, async (route) => {
-    const source = new URL(route.request().url());
+    const request = route.request();
+    const source = new URL(request.url());
     const local = `${remoteRecoveryLoopbackOrigin}${source.pathname}${source.search}`;
-    const response = await route.fetch({ url: local });
+    const headers = { ...request.headers() };
+    delete headers.host;
+    delete headers.origin;
+    delete headers.referer;
+    const response = await route.fetch({ url: local, headers });
     await route.fulfill({ response });
   });
 }
 
-function accessState(mode: RemoteRecoveryBrowserMode, deviceId: string) {
+function accessState(
+  mode: RemoteRecoveryBrowserMode,
+  deviceId: string,
+  configuredOrigin: string
+) {
   const remote = mode === "remote";
   return selectedAccessStateResponseSchema.parse({
     authentication_state: remote ? "paired_device" : "unpaired",
     device_id: remote ? deviceId : null,
     permission: remote ? "read" : null,
     device_expires_at: remote ? "2026-10-26T16:00:00.000Z" : null,
-    configured_origin: remote
-      ? remoteRecoveryPrivateOrigin
-      : remoteRecoveryLoopbackOrigin,
+    configured_origin: configuredOrigin,
     network_mode: mode,
     transport: remote ? "https" : "http",
     locked: false,
@@ -190,7 +218,11 @@ function accessState(mode: RemoteRecoveryBrowserMode, deviceId: string) {
 function hostStatus(
   mode: RemoteRecoveryBrowserMode,
   state: RemoteRecoveryState,
-  accessMode?: "loopback_read" | "paired_read"
+  accessMode?: "loopback_read" | "paired_read",
+  remoteGeneration = state === "not_observed" ? 0 : 7,
+  configuredOrigin = mode === "remote"
+    ? remoteRecoveryPrivateOrigin
+    : remoteRecoveryLoopbackOrigin
 ) {
   const remote = mode === "remote";
   return selectedHostStatusResponseSchema.parse({
@@ -216,7 +248,7 @@ function hostStatus(
       checked_at: timestamp,
       recorded_at: timestamp
     },
-    remote: hostRemoteState(state),
+    remote: hostRemoteState(state, remoteGeneration, configuredOrigin),
     access: {
       mode: accessMode ?? (remote ? "paired_read" : "loopback_read"),
       network_mode: mode,
@@ -230,7 +262,11 @@ function hostStatus(
   });
 }
 
-function hostRemoteState(state: RemoteRecoveryState) {
+function hostRemoteState(
+  state: RemoteRecoveryState,
+  generation = 7,
+  configuredOrigin = remoteRecoveryPrivateOrigin
+) {
   if (state === "not_observed") {
     return {
       generation: 0,
@@ -246,11 +282,11 @@ function hostRemoteState(state: RemoteRecoveryState) {
   }
   if (state === "ready") {
     return {
-      generation: 7,
-      state_generation: 7,
+      generation,
+      state_generation: generation,
       availability: "ready",
       cause: null,
-      external_origin: remoteRecoveryPrivateOrigin,
+      external_origin: configuredOrigin,
       laptop_action_required: false,
       observed_at: timestamp,
       checked_at: timestamp,
@@ -259,8 +295,8 @@ function hostRemoteState(state: RemoteRecoveryState) {
   }
   const disabled = state === "remote_disabled" || state === "cleanup_incomplete";
   return {
-    generation: 7,
-    state_generation: 7,
+    generation,
+    state_generation: generation,
     availability: disabled ? "disabled" : "unavailable",
     cause: state,
     external_origin: null,
@@ -271,8 +307,12 @@ function hostRemoteState(state: RemoteRecoveryState) {
   } as const;
 }
 
-function publicRemoteState(state: RemoteRecoveryState) {
-  const remote = hostRemoteState(state);
+function publicRemoteState(
+  state: RemoteRecoveryState,
+  generation = 7,
+  configuredOrigin = remoteRecoveryPrivateOrigin
+) {
+  const remote = hostRemoteState(state, generation, configuredOrigin);
   return remoteIngressPublicStateSchema.parse({
     generation: remote.state_generation ?? 0,
     availability: remote.availability,

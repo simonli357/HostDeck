@@ -1,0 +1,380 @@
+{
+  "schema_version": 1,
+  "task_id": "FE-V1-040",
+  "status": "passed",
+  "project_id": "firefox-phone",
+  "engine": {
+    "browser_name": "firefox",
+    "browser_version": "151.0",
+    "revision": "1532"
+  },
+  "playwright_version": "1.61.1",
+  "platform": "linux",
+  "architecture": "x64",
+  "regime": "phone",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "has_touch": true,
+  "is_mobile": false,
+  "input_modes": [
+    "keyboard",
+    "pointer",
+    "touch"
+  ],
+  "package": {
+    "version": "0.0.0",
+    "content_sha256": "9d6245f8fd710cedb5a3dfae550b704b6b09bff72a495eb2e727214de89b8c54",
+    "manifest_sha256": "f43d822d9e43417a0d635e1348a845efc9944111c6b0b3f4ed5d925864163c25",
+    "web_sha256": "09c04fc54c8d88ded7dff55f54e8228fc65e6eb01e851a65674bf920a3461752",
+    "web_manifest_sha256": "a7ade3f058a5eb8b66d6b9293abeee806c6e2b27250f9c7724004ec45000cb90"
+  },
+  "scenario_count": 19,
+  "interaction_ids": [
+    "archive_session",
+    "bootstrap_csrf",
+    "bootstrap_shell",
+    "claim_pairing",
+    "consume_pairing_fragment",
+    "copy_resume_command",
+    "interrupt_turn",
+    "lock_host",
+    "mutate_goal",
+    "navigate_back",
+    "open_session",
+    "read_approvals",
+    "read_compact",
+    "read_devices",
+    "read_event_details",
+    "read_goal",
+    "read_host_access",
+    "read_host_status",
+    "read_model",
+    "read_plan",
+    "read_remote_status",
+    "read_resume_metadata",
+    "read_session_detail",
+    "read_sessions",
+    "read_skills",
+    "read_usage",
+    "reconnect_stream",
+    "respond_approval",
+    "revoke_device",
+    "select_model",
+    "select_plan",
+    "send_prompt",
+    "start_compact",
+    "stream_events"
+  ],
+  "total_request_count": 80,
+  "total_mutation_count": 13,
+  "duration_ms": 48274,
+  "diagnostics": {
+    "cache_entries": 0,
+    "expected_http_failures": 1,
+    "console_errors": 0,
+    "csp_violations": 0,
+    "external_requests": 0,
+    "indexeddb_databases": 0,
+    "unexpected_network_failures": 0,
+    "page_errors": 0,
+    "pending_request_overflow": 0,
+    "service_workers": 0,
+    "storage_entries": 0
+  },
+  "limitations": {
+    "physical_mobile_device_proven": false,
+    "firefox_android_proven": false,
+    "tailscale_serve_certificate_trust_proven": false,
+    "tailscale_serve_routing_proven": false,
+    "safari_ios_supported": false
+  },
+  "scenarios": [
+    {
+      "id": "package_navigation",
+      "status": "passed",
+      "interactions": [
+        "bootstrap_shell",
+        "read_host_access",
+        "read_host_status",
+        "read_sessions",
+        "open_session",
+        "read_session_detail",
+        "navigate_back"
+      ],
+      "request_count": 20,
+      "mutation_count": 0,
+      "duration_ms": 3309,
+      "observations": {
+        "css_platform_features": true,
+        "desktop_split": false,
+        "primary_activation": "touch",
+        "reduced_motion": true
+      }
+    },
+    {
+      "id": "pairing_reload",
+      "status": "passed",
+      "interactions": [
+        "consume_pairing_fragment",
+        "claim_pairing",
+        "bootstrap_csrf"
+      ],
+      "request_count": 9,
+      "mutation_count": 2,
+      "duration_ms": 5284,
+      "observations": {
+        "claim_replayed": false,
+        "fragment_scrubbed": true,
+        "history_back_steps": 2,
+        "history_preserved": true
+      }
+    },
+    {
+      "id": "stream_continuity",
+      "status": "passed",
+      "interactions": [
+        "stream_events",
+        "reconnect_stream"
+      ],
+      "request_count": 2,
+      "mutation_count": 0,
+      "duration_ms": 2292,
+      "observations": {
+        "duplicate_events": false,
+        "highest_cursor": 3,
+        "reconnect_visible": true,
+        "resumed_after_cursor": 3
+      }
+    },
+    {
+      "id": "prompt",
+      "status": "passed",
+      "interactions": [
+        "send_prompt"
+      ],
+      "request_count": 1,
+      "mutation_count": 1,
+      "duration_ms": 980,
+      "observations": {
+        "duplicate_submit": false,
+        "event_confirmed": true
+      }
+    },
+    {
+      "id": "model_control",
+      "status": "passed",
+      "interactions": [
+        "read_model",
+        "select_model"
+      ],
+      "request_count": 2,
+      "mutation_count": 1,
+      "duration_ms": 1986,
+      "observations": {
+        "has_selector_applied": true,
+        "native_radio_keyboard": true
+      }
+    },
+    {
+      "id": "goal_control",
+      "status": "passed",
+      "interactions": [
+        "read_goal",
+        "mutate_goal"
+      ],
+      "request_count": 2,
+      "mutation_count": 1,
+      "duration_ms": 965,
+      "observations": {
+        "paused_without_turn": true
+      }
+    },
+    {
+      "id": "plan_control",
+      "status": "passed",
+      "interactions": [
+        "read_plan",
+        "select_plan"
+      ],
+      "request_count": 2,
+      "mutation_count": 1,
+      "duration_ms": 1503,
+      "observations": {
+        "native_radio_keyboard": true
+      }
+    },
+    {
+      "id": "usage_utility",
+      "status": "passed",
+      "interactions": [
+        "read_usage"
+      ],
+      "request_count": 1,
+      "mutation_count": 0,
+      "duration_ms": 876,
+      "observations": {
+        "utility_focus_restored": true
+      }
+    },
+    {
+      "id": "compact_utility",
+      "status": "passed",
+      "interactions": [
+        "read_compact",
+        "start_compact"
+      ],
+      "request_count": 2,
+      "mutation_count": 1,
+      "duration_ms": 1975,
+      "observations": {
+        "confirmation_required": true
+      }
+    },
+    {
+      "id": "skills_utility",
+      "status": "passed",
+      "interactions": [
+        "read_skills"
+      ],
+      "request_count": 1,
+      "mutation_count": 0,
+      "duration_ms": 1926,
+      "observations": {
+        "local_search": true
+      }
+    },
+    {
+      "id": "approval",
+      "status": "passed",
+      "interactions": [
+        "read_approvals",
+        "respond_approval"
+      ],
+      "request_count": 4,
+      "mutation_count": 1,
+      "duration_ms": 1545,
+      "observations": {
+        "duplicate_response": false,
+        "terminal_confirmed": true
+      }
+    },
+    {
+      "id": "event_diagnostics",
+      "status": "passed",
+      "interactions": [
+        "read_event_details"
+      ],
+      "request_count": 1,
+      "mutation_count": 0,
+      "duration_ms": 1163,
+      "observations": {
+        "bounded_projection": true
+      }
+    },
+    {
+      "id": "interrupt",
+      "status": "passed",
+      "interactions": [
+        "interrupt_turn"
+      ],
+      "request_count": 1,
+      "mutation_count": 1,
+      "duration_ms": 1345,
+      "observations": {
+        "exact_turn_confirmed": true
+      }
+    },
+    {
+      "id": "archive",
+      "status": "passed",
+      "interactions": [
+        "archive_session"
+      ],
+      "request_count": 1,
+      "mutation_count": 1,
+      "duration_ms": 1432,
+      "observations": {
+        "retained_history_not_deleted": true
+      }
+    },
+    {
+      "id": "laptop_resume",
+      "status": "passed",
+      "interactions": [
+        "read_resume_metadata",
+        "copy_resume_command"
+      ],
+      "request_count": 1,
+      "mutation_count": 0,
+      "duration_ms": 1685,
+      "observations": {
+        "clipboard_outcome": "copied"
+      }
+    },
+    {
+      "id": "device_revoke",
+      "status": "passed",
+      "interactions": [
+        "read_devices",
+        "revoke_device"
+      ],
+      "request_count": 2,
+      "mutation_count": 1,
+      "duration_ms": 2057,
+      "observations": {
+        "confirmation_required": true
+      }
+    },
+    {
+      "id": "host_lock",
+      "status": "passed",
+      "interactions": [
+        "lock_host"
+      ],
+      "request_count": 1,
+      "mutation_count": 1,
+      "duration_ms": 1744,
+      "observations": {
+        "local_unlock_only": true,
+        "writes_purged": true
+      }
+    },
+    {
+      "id": "remote_recovery",
+      "status": "passed",
+      "interactions": [
+        "read_remote_status"
+      ],
+      "request_count": 14,
+      "mutation_count": 0,
+      "duration_ms": 3026,
+      "observations": {
+        "automatic_profile_switch": false,
+        "polling": false,
+        "profile_return_observed": true
+      }
+    },
+    {
+      "id": "https_cookie",
+      "status": "passed",
+      "interactions": [],
+      "request_count": 13,
+      "mutation_count": 1,
+      "duration_ms": 2961,
+      "observations": {
+        "certificate_trust_proven": false,
+        "credential_storage_entries": 0,
+        "cross_site_suppressed": true,
+        "http_only": true,
+        "host_only": true,
+        "javascript_invisible": true,
+        "packaged_document": true,
+        "reload_persistent": true,
+        "same_site_strict": true,
+        "secure": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "name": "hostdeck-supported-browser-matrix",
+  "task_id": "FE-V1-040",
+  "playwright_version": "1.61.1",
+  "platform": "linux",
+  "architecture": "x64",
+  "evidence_schema_version": 1,
+  "package": {
+    "package_version": "0.0.0",
+    "content_sha256": "9d6245f8fd710cedb5a3dfae550b704b6b09bff72a495eb2e727214de89b8c54",
+    "manifest_sha256": "f43d822d9e43417a0d635e1348a845efc9944111c6b0b3f4ed5d925864163c25",
+    "web_sha256": "09c04fc54c8d88ded7dff55f54e8228fc65e6eb01e851a65674bf920a3461752",
+    "web_manifest_sha256": "a7ade3f058a5eb8b66d6b9293abeee806c6e2b27250f9c7724004ec45000cb90"
+  },
+  "engines": [
+    {
+      "browser_name": "chromium",
+      "browser_version": "149.0.7827.55",
+      "revision": "1228",
+      "executable_directory_markers": [
+        "chromium-1228",
+        "chromium_headless_shell-1228"
+      ]
+    },
+    {
+      "browser_name": "firefox",
+      "browser_version": "151.0",
+      "revision": "1532",
+      "executable_directory_markers": [
+        "firefox-1532"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "id": "chromium-phone",
+      "browser_name": "chromium",
+      "regime": "phone",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "has_touch": true,
+      "is_mobile": true,
+      "input_modes": [
+        "keyboard",
+        "pointer",
+        "touch"
+      ]
+    },
+    {
+      "id": "chromium-desktop",
+      "browser_name": "chromium",
+      "regime": "desktop",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "has_touch": false,
+      "is_mobile": false,
+      "input_modes": [
+        "keyboard",
+        "pointer"
+      ]
+    },
+    {
+      "id": "firefox-phone",
+      "browser_name": "firefox",
+      "regime": "phone",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "has_touch": true,
+      "is_mobile": false,
+      "input_modes": [
+        "keyboard",
+        "pointer",
+        "touch"
+      ]
+    },
+    {
+      "id": "firefox-desktop",
+      "browser_name": "firefox",
+      "regime": "desktop",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "has_touch": false,
+      "is_mobile": false,
+      "input_modes": [
+        "keyboard",
+        "pointer"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "package_navigation",
+      "interaction_ids": [
+        "bootstrap_shell",
+        "read_host_access",
+        "read_host_status",
+        "read_sessions",
+        "open_session",
+        "read_session_detail",
+        "navigate_back"
+      ]
+    },
+    {
+      "id": "pairing_reload",
+      "interaction_ids": [
+        "consume_pairing_fragment",
+        "claim_pairing",
+        "bootstrap_csrf"
+      ]
+    },
+    {
+      "id": "stream_continuity",
+      "interaction_ids": ["stream_events", "reconnect_stream"]
+    },
+    { "id": "prompt", "interaction_ids": ["send_prompt"] },
+    {
+      "id": "model_control",
+      "interaction_ids": ["read_model", "select_model"]
+    },
+    {
+      "id": "goal_control",
+      "interaction_ids": ["read_goal", "mutate_goal"]
+    },
+    {
+      "id": "plan_control",
+      "interaction_ids": ["read_plan", "select_plan"]
+    },
+    { "id": "usage_utility", "interaction_ids": ["read_usage"] },
+    {
+      "id": "compact_utility",
+      "interaction_ids": ["read_compact", "start_compact"]
+    },
+    { "id": "skills_utility", "interaction_ids": ["read_skills"] },
+    {
+      "id": "approval",
+      "interaction_ids": ["read_approvals", "respond_approval"]
+    },
+    { "id": "event_diagnostics", "interaction_ids": ["read_event_details"] },
+    { "id": "interrupt", "interaction_ids": ["interrupt_turn"] },
+    { "id": "archive", "interaction_ids": ["archive_session"] },
+    {
+      "id": "laptop_resume",
+      "interaction_ids": ["read_resume_metadata", "copy_resume_command"]
+    },
+    {
+      "id": "device_revoke",
+      "interaction_ids": ["read_devices", "revoke_device"]
+    },
+    { "id": "host_lock", "interaction_ids": ["lock_host"] },
+    { "id": "remote_recovery", "interaction_ids": ["read_remote_status"] },
+    { "id": "https_cookie", "interaction_ids": [] }
+  ],
+  "automated_interaction_ids": [
+    "bootstrap_shell",
+    "consume_pairing_fragment",
+    "claim_pairing",
+    "bootstrap_csrf",
+    "read_remote_status",
+    "read_host_access",
+    "read_host_status",
+    "read_sessions",
+    "open_session",
+    "read_session_detail",
+    "navigate_back",
+    "stream_events",
+    "reconnect_stream",
+    "send_prompt",
+    "read_model",
+    "select_model",
+    "read_goal",
+    "mutate_goal",
+    "read_plan",
+    "select_plan",
+    "read_usage",
+    "read_compact",
+    "start_compact",
+    "read_skills",
+    "read_approvals",
+    "respond_approval",
+    "read_event_details",
+    "interrupt_turn",
+    "archive_session",
+    "read_resume_metadata",
+    "copy_resume_command",
+    "read_devices",
+    "revoke_device",
+    "lock_host"
+  ]
+}
