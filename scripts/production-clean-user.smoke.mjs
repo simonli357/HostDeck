@@ -403,9 +403,7 @@ async function runForegroundAcceptance(port, packageEvidenceValue) {
       manifest.bounds.readiness_ms,
       "Foreground process/socket cleanup did not settle."
     );
-    assert.equal(statSync(runtimeRoot).uid, process.getuid());
-    assert.equal(mode(runtimeRoot), 0o700);
-    assert.deepEqual(readdirSync(runtimeRoot), []);
+    assertEmptyRuntimeRoot();
     assertNoListener(port);
     assertNoHostDeckProcesses();
     return Object.freeze({
@@ -1191,8 +1189,8 @@ function assertLifecycleCoordinationOnly() {
     sha256: hash(""),
     uid: manifest.container.uid
   });
+  assertEmptyRuntimeRoot();
   for (const path of [
-    runtimeRoot,
     join(configHome, "systemd", "user", "hostdeck.service"),
     join(configHome, "systemd", "user", "hostdeck-codex.service"),
     join(manifest.container.home, ".local", "bin", "codexdeck")
@@ -1204,6 +1202,14 @@ function assertLifecycleCoordinationOnly() {
     assert.equal(state.LoadState, "not-found");
     assert.equal(state.ActiveState, "inactive");
   }
+}
+
+function assertEmptyRuntimeRoot() {
+  const runtime = statSync(runtimeRoot);
+  assert.equal(runtime.isDirectory(), true);
+  assert.equal(runtime.uid, manifest.container.uid);
+  assert.equal(runtime.mode & 0o7777, 0o700);
+  assert.deepEqual(readdirSync(runtimeRoot), []);
 }
 
 function assertNoSystemInstallation() {
