@@ -2313,7 +2313,6 @@ function ensureLifecycleRoots(layout: HostDeckServiceInstallLayout): void {
   assertOwnedDirectory(layout.home_dir, false);
   ensureOwnedDirectory(dirname(layout.data_root), false);
   ensureOwnedDirectory(layout.data_root, true);
-  ensureOwnedDirectory(layout.releases_dir, true);
 }
 
 function ensureOwnedDirectory(path: string, exactMode: boolean): void {

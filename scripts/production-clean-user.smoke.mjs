@@ -543,7 +543,7 @@ function assertInvalidLifecycleOrdering(command, port) {
     result.stderr,
     "HostDeck CLI error (runtime_unavailable): HostDeck service is not installed.\n"
   );
-  assertNoInstalledProduct();
+  assertLifecycleCoordinationOnly();
 }
 
 async function runObservedServiceAcceptance(port, packages, initialService) {
@@ -1165,6 +1165,33 @@ function assertFinalProductCleanup(port) {
 function assertNoInstalledProduct() {
   for (const path of [
     installDataRoot,
+    runtimeRoot,
+    join(configHome, "systemd", "user", "hostdeck.service"),
+    join(configHome, "systemd", "user", "hostdeck-codex.service"),
+    join(manifest.container.home, ".local", "bin", "codexdeck")
+  ]) {
+    assert.equal(existsNoFollow(path), false);
+  }
+  for (const name of ["hostdeck.service", "hostdeck-codex.service"]) {
+    const state = unitState(name);
+    assert.equal(state.LoadState, "not-found");
+    assert.equal(state.ActiveState, "inactive");
+  }
+}
+
+function assertLifecycleCoordinationOnly() {
+  const dataRoot = lstatSync(installDataRoot);
+  assert.equal(dataRoot.isDirectory(), true);
+  assert.equal(dataRoot.uid, manifest.container.uid);
+  assert.equal(dataRoot.mode & 0o7777, 0o700);
+  assert.deepEqual(readdirSync(installDataRoot), ["lifecycle.lock"]);
+  assert.deepEqual(regularFileIdentity(join(installDataRoot, "lifecycle.lock")), {
+    mode: 0o600,
+    nlink: 1,
+    sha256: hash(""),
+    uid: manifest.container.uid
+  });
+  for (const path of [
     runtimeRoot,
     join(configHome, "systemd", "user", "hostdeck.service"),
     join(configHome, "systemd", "user", "hostdeck-codex.service"),

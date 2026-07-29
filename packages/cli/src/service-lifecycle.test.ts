@@ -47,6 +47,26 @@ afterEach(() => {
 });
 
 describe("IFC-V1-056 service lifecycle owner", () => {
+  it("rejects start before install with lifecycle coordination only", async () => {
+    const fixture = createFixture();
+    const source = createSourcePackage(fixture, "1.0.0", "0");
+    const lifecycle = createLifecycle(fixture, source);
+
+    await expect(lifecycle.execute("start")).rejects.toMatchObject({
+      code: "not_installed",
+      stage: "status"
+    });
+    expect(fixture.manager.calls).toEqual([]);
+    expect(readdirSync(fixture.layout.data_root)).toEqual(["lifecycle.lock"]);
+    expect(mode(fixture.layout.lifecycle_lock)).toBe(0o600);
+    expect(existsSync(fixture.layout.releases_dir)).toBe(false);
+
+    await expect(lifecycle.execute("install")).resolves.toMatchObject({
+      action: "install",
+      install_state: "coherent"
+    });
+  });
+
   it("installs without start, stays idempotent, then starts, restarts HostDeck only, reports, and stops both", async () => {
     const fixture = createFixture();
     const source = createSourcePackage(fixture, "1.0.0", "1");
