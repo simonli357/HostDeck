@@ -202,11 +202,12 @@ function isSafeAbsolutePath(candidate: unknown): candidate is string {
 function assertVerifier(path: string): void {
   try {
     const metadata = lstatSync(path);
+    const mode = metadata.mode & 0o7777;
     if (
       metadata.isSymbolicLink() ||
       !metadata.isFile() ||
       metadata.nlink !== 1 ||
-      (metadata.mode & 0o7777) !== 0o644 ||
+      (mode !== 0o644 && mode !== 0o444) ||
       realpathSync.native(path) !== path
     ) {
       throw new TypeError();

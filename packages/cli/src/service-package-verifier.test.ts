@@ -36,6 +36,19 @@ describe("IFC-V1-056 package-verifier process boundary", () => {
     await expect(run(root)).resolves.toBeUndefined();
   });
 
+  it("accepts only normal and relocated read-only verifier modes", async () => {
+    const root = packageFixture("console.log('HostDeck package verified.');");
+    const verifier = join(root, "verify.mjs");
+
+    chmodSync(verifier, 0o444);
+    await expect(run(root)).resolves.toBeUndefined();
+
+    for (const mode of [0o400, 0o544, 0o640, 0o664]) {
+      chmodSync(verifier, mode);
+      await expect(run(root)).rejects.toMatchObject({ code: "invalid_input" });
+    }
+  });
+
   it("sanitizes command failure and bounds timeout, abort, and aggregate output", async () => {
     const failed = packageFixture(
       "process.stderr.write('private /home/user secret'); process.exit(7);"
