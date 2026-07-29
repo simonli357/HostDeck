@@ -2,7 +2,7 @@
 
 Date: 2026-07-28
 
-Status: criteria frozen; implementation in progress.
+Status: complete; `BRM-01` to `BRM-24` pass.
 
 ## Scope
 
@@ -12,15 +12,17 @@ This leaf owns the supported browser declaration, exact engine/version inventory
 
 Excluded: visual pixel-diff closure owned by `FE-V1-017`; copy/workflow acceptance owned by `FE-V1-018`; physical TalkBack/VoiceOver and aggregate phone module acceptance owned by `FE-V1-090`; live Tailscale Serve/profile/device acceptance owned by `FE-V1-090` and `REL-V1-006`; clean-package aggregate browser acceptance owned by `REL-V1-007`; UI redesign, new routes/capabilities, server trust-policy changes, or a Safari/iOS support claim.
 
-## Audit Findings
+## Criteria-Freeze Audit Findings
 
-- `pnpm test:e2e` is still an intentional `REL-V1-007` placeholder, even though the test plan assigns it to both `IFC-V1-046` and `FE-V1-040`. No executable supported-browser command exists.
+These findings describe the repository state at criteria freeze and are retained as the implementation rationale.
+
+- `pnpm test:e2e` was an intentional `REL-V1-007` placeholder, even though the test plan assigned it to both `IFC-V1-046` and `FE-V1-040`. No executable supported-browser command existed.
 - All current Playwright configs hard-code Chromium. The source-preview shell suite proves 168 Chromium cases and the pairing suite proves 11 Chromium cases, but neither declares nor executes a second engine.
 - `IFC-V1-053` adds one real relocated-package Chromium smoke. It proves package/static identity, CSP, cache/MIME policy, basic Mission/detail navigation, and selected API reads, but it does not exercise pairing, SSE recovery, writes, controls, approvals, lock, or profile-return behavior.
 - Existing feature-owner browser specs are intentionally broad visual/state suites. Running them under a second engine would rewrite task-owned screenshots, including 18 user-modified protected files, and would still not provide one versioned support declaration or interaction-to-engine coverage record.
 - Pairing bootstrap currently runs through a separate Vite test entry. Cross-engine completion must drive the production package entry so fragment scrubbing, claim, CSRF bootstrap, route continuation, reload, and history share the shipped graph.
 - The production app uses browser-sensitive behavior including `crypto.randomUUID`, streamed Fetch `ReadableStream`, `TextDecoder`, `history.replaceState`, Clipboard API, native dialog/radio/focus behavior, `100dvh`, `:has()`, `color-mix()`, sticky/fixed positioning, safe-area variables, and touch/pointer input. Chromium-only component and screenshot evidence cannot establish their Firefox behavior.
-- The pinned `@playwright/test` version is 1.61.1. Its managed Chromium 149.0.7827.55 is installed; its managed Firefox 151.0 is not installed. Browser installation must be an explicit prerequisite and may not occur silently during acceptance.
+- The pinned `@playwright/test` version was 1.61.1. Its managed Chromium 149.0.7827.55 was installed; its managed Firefox 151.0 was not installed. Browser installation therefore had to become an explicit prerequisite and could not occur silently during acceptance.
 - Playwright Firefox cannot claim a real Firefox Android device from Linux emulation. A 390 x 844 touch-capable Firefox context can prove narrow-layout and interaction semantics, but only physical-device evidence can close mobile browser/platform integration.
 - Current package browser evidence is loopback HTTP. It cannot by itself prove a browser's trust in a real Tailscale Serve certificate or end-to-end proxy behavior. An isolated HTTPS fixture may prove `Secure`/`HttpOnly`/`SameSite` cookie semantics without installing a CA, but its ignored test certificate is not live Serve evidence.
 - No current artifact records exact browser revisions, project options, interaction coverage, per-project request/action counts, storage/cookie observations, diagnostics, or a release limitation in one machine-checked identity.
@@ -62,6 +64,16 @@ An executable ledger must map exactly all 39 `mobileInteractionIds` and all 12 m
 | Host security | list/revoke a device and lock writes once; expose local-only unlock truth | nested sheet state, confirmation, authority purge, protected Fetch |
 | Remote recovery | current ready state, simulated disconnect/profile-away, stale purge, explicit check, profile-return recovery | aborted reads/stream, no polling, same-origin recovery, focus/state continuity |
 
+## Implementation Result
+
+- `tests/browser/supported-browser-manifest.json` and its strict parser pin Playwright 1.61.1, Linux x64, Chromium 149.0.7827.55/revision 1228, Firefox 151.0/revision 1532, four exact projects, package hashes, 19 scenarios, 34 automated interactions, and evidence schema 1.
+- `packages/test-fixtures/src/browser-compatibility-matrix.ts` maps all 39 mobile interaction IDs, all 12 journeys, ten portability families, all four projects, existing behavior owners, and five explicit local-only boundaries without an unsupported browser claim.
+- `pnpm test:e2e` builds and independently verifies the 614-source production package, checks the exact managed browser identities before execution, creates one ephemeral task-owned HTTPS certificate, runs 76 no-retry Playwright cases through the compiled package boundary, validates strict reports, closes ports 4175 to 4177, removes temporary output, and only then replaces the evidence directory.
+- Every project passes the same 19 scenarios. Chromium projects record 78 bounded requests each; Firefox projects record 80 each because their fragment-history path has two additional reads. Every project records 13 exact mutations, zero unexpected browser diagnostics, and all 34 automated interactions.
+- The HTTPS case uses a real cross-site top-level navigation between separate public-suffix sites to prove `SameSite=Strict` suppression, plus same-origin inclusion, `Secure`, `HttpOnly`, host-only scope, reload persistence, JavaScript invisibility, and zero credential storage. The ignored ephemeral certificate remains fixture-only evidence.
+- The aggregate evidence records 316 requests and 52 mutations against package SHA-256 `9d6245f8fd710cedb5a3dfae550b704b6b09bff72a495eb2e727214de89b8c54` and web SHA-256 `09c04fc54c8d88ded7dff55f54e8228fc65e6eb01e851a65674bf920a3461752`.
+- Physical Android, Firefox Android, live Tailscale Serve routing/certificate trust, and Safari/iOS remain explicitly unproven and downstream. No existing screenshot was generated, replaced, or staged.
+
 ## Strict Success Criteria
 
 - `BRM-01`: one executable support manifest pins Playwright 1.61.1, Chromium 149.0.7827.55/revision 1228, Firefox 151.0/revision 1532, Linux platform/architecture, project options, package identity, and evidence schema; unexpected or missing browser identity fails before test execution.
@@ -98,3 +110,17 @@ An executable ledger must map exactly all 39 `mobileInteractionIds` and all 12 m
 - Four sanitized per-project JSON traces plus one aggregate identity/report manifest under `artifacts/fe-v1-040-supported-browser-interaction-matrix/`.
 - Browser/version/executable inspection, request/action/stream/cookie/storage diagnostics, privacy scans, process/listener/temp cleanup, and protected-artifact hash comparison.
 - Full selected repository validation and a staged scope containing only FE-V1-040 implementation, tests, task-owned evidence, and owning documentation.
+
+## Validation
+
+| Gate | Result |
+| --- | --- |
+| Supported-browser focused contracts | 11 passed across the manifest, preflight, portability ledger, strict report parser, complete publication, and replacement-path tests. |
+| `pnpm test:e2e` | 76/76 passed in 2.9 minutes across Chromium phone/desktop and Firefox phone/desktop; four reports and one aggregate manifest published after cleanup. |
+| Evidence audit | Four report hashes match the aggregate; 19 scenarios and 34 automated interactions per project; 316 requests; 52 mutations; zero unexpected console/page/CSP/network/storage/cache/service-worker diagnostics; all three cleanup flags true. |
+| Aggregate tests | Unit 2,817 passed with 28 intentional external skips; contract 245; integration 36; web 920; Chromium shell 168; pairing Chromium 11; relocated packaged Chromium 1. |
+| Static/package/runtime | Typecheck; lint/exports; scaffold; planning; runtime boundary; exact Codex 0.144.0 binding; deterministic build/package/install; zero-vulnerability production audit; permissive-license inventory; privacy/diff/residue checks pass. |
+| Package identity | 614 sources, 1,235 owned outputs, 6,455 entries, and three web files at the package/web hashes recorded above. |
+| Protected evidence | All 18 pre-existing modified PNGs remain unstaged and byte-identical to the preserved backup after every browser run. |
+
+Criteria commit: `845b85b`. Implementation and generated evidence commit: `869ab75`.

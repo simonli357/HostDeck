@@ -13,7 +13,7 @@ Owns setup context, environment policy, services, and operational notes.
 | Required Codex for selected adapter work | Exact `codex-cli 0.144.0` must be on `PATH`; `HOSTDECK_CODEX_BIN` may name another executable for binding/smoke commands. The reviewed V1 binding uses experimental API for `/plan`. |
 | Linux command sandbox | Command-backed exact-Codex smokes require Bubblewrap to create an unprivileged user namespace. Ubuntu 24.04 hosts with `kernel.apparmor_restrict_unprivileged_userns=1` require the packaged `bwrap-userns-restrict` AppArmor profile to be installed and loaded. Do not replace this prerequisite with a sandbox or approval downgrade. |
 | Tmux | Optional and test-only. Exact thread/TUI smokes use `tmux 3.4` as an isolated terminal emulator; no HostDeck production package, service, or command depends on it. |
-| Browser validation | Playwright 1.61.1 with its Chromium 1228 bundle is required for the phone-shell and fragment/history pairing suites. |
+| Browser validation | Playwright 1.61.1 with managed Chromium 149.0.7827.55/revision 1228 and Firefox 151.0/revision 1532 is required. `pnpm test:e2e` supports Linux x64, verifies both identities before execution, and requires the `openssl` CLI for its ephemeral fixture-only certificate. |
 | Hosted services | None. HostDeck is local-first and stores state locally. |
 
 ## Setup
@@ -21,7 +21,7 @@ Owns setup context, environment policy, services, and operational notes.
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
-pnpm exec playwright install chromium
+pnpm exec playwright install chromium firefox
 ```
 
 The frozen offline install was revalidated for the current workspace on 2026-07-22. If a previous install skipped an approved native build, remove `node_modules/` and rerun the frozen install.
@@ -69,9 +69,9 @@ This host has Bubblewrap 0.9.0, `apparmor-profiles`, and `apparmor-utils`. The p
 | Production package verify | `node dist/hostdeck/verify.mjs dist/hostdeck` | Checks package/runtime/native/content identity; exact command/bin/shebang/mode and service-host identity; strict web manifest, routes, document, asset inventory/modes/hashes; runtime manifests; and contained relative links without workspace dependencies. |
 | Phone-shell browser tests | `pnpm test:browser:shell` | Builds the web package and runs the 390 x 844 Chromium route/history/sheet/focus/overflow/no-network smoke with task screenshots. |
 | Pairing browser tests | `pnpm test:browser:pairing` | Runs the real Chromium history/referrer/reload/two-tab/failure boundary; requires the Playwright Chromium bundle. |
+| Supported browser interaction matrix | `pnpm test:e2e` | Builds and independently verifies the exact production package, preflights both pinned browser bundles, then runs 19 no-retry interaction scenarios in Chromium and Firefox at phone and desktop regimes. It publishes four strict sanitized reports plus an aggregate only after ports/processes/temp output are removed. Fixtures are isolated and do not mutate Tailscale, install a CA, use a physical phone, prove live Serve trust/routing, or claim Safari/iOS or `REL-V1-007` release aggregation. |
 | Pairing UI Android acceptance | `pnpm smoke:pairing-android` | Clean-commit `FE-V1-013` run through private Serve HTTPS on one unlocked authorized Android phone. Requires exact Tailscale 1.98.8, the active dedicated profile with absent Serve root, Chrome, USB debugging, and cellular data; temporarily disables/restores Wi-Fi, hands the one-time link to Chrome through bounded stdin-only ADB, exercises the real production pairing/Mission Control/Host-access UI, reloads fragment-free, self-revokes, and removes private screenshots/UI hierarchy during cleanup. |
 | Remote Android acceptance | `HOSTDECK_REMOTE_CONTROL_DEDICATED_PROFILE_ID=DEDICATED_ID HOSTDECK_REMOTE_CONTROL_AWAY_PROFILE_ID=AWAY_ID pnpm smoke:remote-android` | Strict no-retry `IFC-V1-079` run from a clean commit. Requires exact Tailscale 1.98.8, two distinct authorized saved profiles, and one unlocked authorized Android device with Tailscale, Chrome, USB debugging, and working cellular data. |
-| Later E2E tests | `pnpm test:e2e` | Placeholder; fails loudly until `REL-V1-007` implements it. |
 | Later release smoke | `pnpm smoke:local` | Placeholder; fails loudly until `REL-V1-006` implements it. |
 
 Vite source development requires available inotify watchers. If `dev` exits with `ENOSPC` because the host-wide watcher limit is already exhausted, close unrelated watcher-heavy processes or use the built `preview` command for read-only inspection; do not raise system limits as part of HostDeck startup.

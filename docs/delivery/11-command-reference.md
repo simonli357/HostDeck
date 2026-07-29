@@ -7,7 +7,7 @@ Copy-paste commands only. Put explanation in `docs/delivery/09-developer-guide.m
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
-pnpm exec playwright install chromium
+pnpm exec playwright install chromium firefox
 ```
 
 ## Run
@@ -44,6 +44,7 @@ pnpm test:package
 node dist/hostdeck/verify.mjs dist/hostdeck
 pnpm test:browser:package
 pnpm test:browser:pairing
+pnpm test:e2e
 pnpm exec vitest run packages/cli/src/remote-control-client.test.ts packages/cli/src/remote-cli.test.ts
 pnpm exec vitest run packages/cli/src/start-client.test.ts packages/cli/src/start-cli.test.ts packages/server/src/selected-write-audit-executor.test.ts packages/server/src/session-start-routes.test.ts packages/server/src/managed-thread-service.test.ts packages/storage/src/session-start-audit-catalog-migration.test.ts
 pnpm exec vitest run packages/cli/src/config.test.ts packages/cli/src/host-lock-client.test.ts packages/cli/src/host-lock-cli.test.ts packages/cli/src/pairing-link-client.test.ts packages/cli/src/selected-api-route-inventory.test.ts packages/cli/src/legacy-session-admin.test.ts packages/storage/src/legacy-session-repository.test.ts
@@ -136,6 +137,5 @@ pnpm generate:codex-bindings
 
 ## Explicit Gaps
 
-- CLI install/assets: `pnpm build` emits one verified `dist/hostdeck/dist/shell.js` `codexdeck` entry, the non-executable service host, and the exact pure user-unit generator. The ordinary package intentionally has no real `web/` tree until `IFC-V1-053`, so production `serve` startup is not yet a user workflow; service actions and persistent installation remain explicit non-success until `IFC-V1-056` to `IFC-V1-058`.
-- E2E validation: `pnpm test:e2e` intentionally exits nonzero until `REL-V1-007` implements it.
+- CLI install/service lifecycle: `pnpm build` emits one verified `dist/hostdeck/dist/shell.js` `codexdeck` entry, the non-executable service host, exact pure user-unit generator, and manifest-verified dashboard assets. Service actions and persistent installation remain explicit non-success until `IFC-V1-056` to `IFC-V1-058`.
 - Local release smoke: `pnpm smoke:local` intentionally exits nonzero until `REL-V1-006` implements it.
