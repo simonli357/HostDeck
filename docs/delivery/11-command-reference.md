@@ -33,6 +33,55 @@ dist/hostdeck/dist/shell.js service stop --json
 dist/hostdeck/dist/shell.js service uninstall --json
 ```
 
+## Installed User Workflow
+
+```bash
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" /absolute/path/to/hostdeck/dist/shell.js service install
+~/.local/bin/codexdeck service start
+~/.local/bin/codexdeck service status
+~/.local/bin/codexdeck status
+```
+
+```bash
+tailscale status
+tailscale switch --list
+tailscale switch HOSTDECK_PROFILE_ID
+~/.local/bin/codexdeck remote enable
+~/.local/bin/codexdeck remote status
+```
+
+```bash
+~/.local/bin/codexdeck pair --label "Android phone" --write
+~/.local/bin/codexdeck pair --label "Monitor only" --read-only
+```
+
+```bash
+~/.local/bin/codexdeck start --name "Session name" --cwd /absolute/project/path
+~/.local/bin/codexdeck list
+~/.local/bin/codexdeck devices --limit 20
+~/.local/bin/codexdeck revoke DEVICE_ID --confirm
+~/.local/bin/codexdeck lock
+~/.local/bin/codexdeck unlock
+```
+
+```bash
+tailscale serve status --json
+~/.local/bin/codexdeck remote status
+~/.local/bin/codexdeck remote enable
+```
+
+```bash
+tailscale switch COMPANY_PROFILE_ID
+tailscale switch HOSTDECK_PROFILE_ID
+~/.local/bin/codexdeck remote status
+```
+
+```bash
+~/.local/bin/codexdeck remote disable
+~/.local/bin/codexdeck service stop
+~/.local/bin/codexdeck service uninstall
+```
+
 ## Validate
 
 ```bash
