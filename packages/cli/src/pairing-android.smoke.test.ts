@@ -396,6 +396,15 @@ describe("physical Android phone-driver protocol", () => {
     }
   });
 
+  it("uses visible attention truth before revealing the quiet dashboard target", () => {
+    expect(missionControlInitialViewportText("dashboard_attention")).toBe(
+      "ACT NOW"
+    );
+    expect(missionControlInitialViewportText("single_session")).toBe(
+      physicalUiSessionName
+    );
+  });
+
   it("holds and resolves every deterministic dashboard control transition", async () => {
     const directory = mkdtempSync(join(tmpdir(), "hostdeck-dashboard-controls-"));
     const opened = openMigratedDatabase(join(directory, "hostdeck.sqlite"));
@@ -5152,7 +5161,7 @@ async function runProductionPairingUiSequence(
   await openProductionMissionControl(input, {
     missionControl: "fe013-02-mission-control.png",
     paired: "fe013-01-paired.png"
-  });
+  }, "single_session");
 
   const accessTrigger = await waitForAndroidUiNode(
     "description",
@@ -5235,9 +5244,10 @@ async function runProductionPairingUiSequence(
     45_000,
     "Fragment-free Android reload did not restore ordinary app authority."
   );
-  await waitForAndroidUiNode(
+  await revealAndroidUiNode(
     "text",
     physicalUiSessionName,
+    "forward",
     30_000,
     "Fragment-free Android reload did not restore Mission Control."
   );
@@ -5267,7 +5277,8 @@ async function openProductionMissionControl(
     readonly appOnly?: boolean;
     readonly missionControl: string | null;
     readonly paired: string | null;
-  }>
+  }>,
+  initialViewport: PhysicalMissionControlInitialViewport
 ): Promise<void> {
   const paired = await waitForAndroidUiNode(
     "text",
@@ -5325,9 +5336,9 @@ async function openProductionMissionControl(
   try {
     await waitForAndroidUiNode(
       "text",
-      physicalUiSessionName,
+      missionControlInitialViewportText(initialViewport),
       30_000,
-      "Production Mission Control did not render the authenticated session."
+      "Production Mission Control did not render its authenticated first viewport."
     );
   } catch {
     throw new Error(
@@ -5345,6 +5356,16 @@ async function openProductionMissionControl(
       await capturePhysicalScreenshot(path);
     }
   }
+}
+
+type PhysicalMissionControlInitialViewport =
+  | "dashboard_attention"
+  | "single_session";
+
+function missionControlInitialViewportText(
+  viewport: PhysicalMissionControlInitialViewport
+): string {
+  return viewport === "dashboard_attention" ? "ACT NOW" : physicalUiSessionName;
 }
 
 async function runProductionDashboardUiSequence(
@@ -5395,7 +5416,7 @@ async function runProductionDashboardUiSequence(
     appOnly: true,
     missionControl: "fe090-02-mission-control.png",
     paired: "fe090-01-paired.png"
-  });
+  }, "dashboard_attention");
   screenshotNames.push("fe090-01-paired.png", "fe090-02-mission-control.png");
   input.driver.recordCheckpoint("paired");
   await waitForAndroidUiText("ACT NOW", 30_000, "Physical Mission Control lost ACT NOW hierarchy.");
@@ -5417,8 +5438,10 @@ async function runProductionDashboardUiSequence(
     45_000,
     "Physical dashboard fragment-free reload did not read sessions."
   );
-  await waitForAndroidUiText(
+  await revealAndroidUiNode(
+    "text",
     physicalUiSessionName,
+    "forward",
     30_000,
     "Physical dashboard fragment-free reload lost paired authority."
   );
@@ -7306,7 +7329,7 @@ async function runProductionRemoteRecoveryUiSequence(
   await openProductionMissionControl(input, {
     missionControl: null,
     paired: null
-  });
+  }, "single_session");
   const managerAttemptsBeforeSwitch = input.manager.snapshot().command_attempts;
   requireCondition(
     managerAttemptsBeforeSwitch === 1,
@@ -7658,14 +7681,15 @@ async function runProductionPromptUiSequence(
     await openProductionMissionControl(input, {
       missionControl: "fe020-02-mission-control.png",
       paired: "fe020-01-paired.png"
-    });
+    }, "single_session");
   }
   const inputLabel = `Prompt for ${physicalUiSessionName}`;
   const sendLabel = `Send prompt to ${physicalUiSessionName}`;
   if (options.sessionAlreadyOpen !== true) {
-    const sessionLink = await waitForAndroidUiNode(
+    const sessionLink = await revealAndroidUiNode(
       "text",
       physicalUiSessionName,
+      "forward",
       30_000,
       "Physical prompt session link was unavailable on Android."
     );

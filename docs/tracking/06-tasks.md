@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-090` Harden the complete mobile dashboard on the real phone | blocked | Target Android phone is not ADB-visible and its Tailscale peer is offline. | Criteria, harness, package, and browser inputs are ready; resume physical preflight immediately when the phone is connected, unlocked, and online. |
+| 1 | `FE-V1-090` Harden the complete mobile dashboard on the real phone | in_progress | none | The phone prerequisite is satisfied. Fix and validate `BUG-018`, then run the corrected clean physical sequence and retained deployment. |
 
 ## Intentional Blockers
 

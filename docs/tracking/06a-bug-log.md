@@ -23,6 +23,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-015 | The selected mobile access fixture requires browser state that the selected APIs cannot produce and permits implicit loopback writes. | High | Backlog bugfix | Closed | `FE-V1-025` | Route-backed coordinator contract and regressions; implementation `888abf1`. |
 | BUG-016 | Newly published production advisories affect the selected router, static plugin, browser router, and transitive glob graph. | High | Release blocker | Closed | Supply chain / `FE-V1-020` validation | Exact patched versions, zero-vulnerability audit, and full workspace/package/browser gates. |
 | BUG-017 | Production substitutes the reviewed Codex version for a real probe and exits before it can serve an incompatible-runtime diagnostic UI. | Critical | Release blocker | Closed | `IFC-V1-087` | Real probe, diagnostic-ready listener, durable/public truth, aggregate and clean exact/drift process evidence; implementation `ceb339e`. |
+| BUG-018 | Physical dashboard acceptance treats the intentionally below-fold quiet session as a failed initial Mission Control load after all protected reads return 200. | High | Release blocker | In progress | `FE-V1-090` | First clean physical attempt reached paired production Mission Control over cellular/Tailscale, then failed the incorrect visibility oracle; exact cleanup passed. Focused regression/type/lint pass; corrected clean physical acceptance pending. |
 
 ## Routing
 
@@ -255,3 +256,16 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Fix: boundedly probe the configured binary, skip runtime start/attachment for a valid version mismatch, persist current incompatibility, seal durable projections disconnected, permit only the proven diagnostic-ready listener with mutation admission closed, and expose a strict sanitized compatibility projection through the existing protected host-status response.
 - Validation: `PCD-01` to `PCD-24` pass through hostile fake ports, 2,393 unit/28 skips, 245 contract, 36 integration, 516 web, full static/install/audit/package gates, clean committed exact/mismatched real process/listener smokes, durable boundary/privacy inspection, and zero residue.
 - Closed by: `IFC-V1-087`; criteria `0fa8b18`, implementation `ceb339e`, and evidence in `artifacts/ifc-v1-087-production-compatibility-diagnostics.md`.
+
+### BUG-018 Offscreen Quiet Session Misclassified As Load Failure
+
+- Symptom: the first clean `FE-V1-090` physical run paired successfully and received one `200` response each from access, host status, and session list, but the harness reported that Mission Control did not load.
+- Impact: valid production UI/network/auth behavior fails before the 39-interaction sequence because the physical oracle requires a quiet session to be visible in the first viewport, contradicting the required two-item `ACT NOW` hierarchy.
+- Route: release blocker and small validation-harness fix inside the active physical hardening leaf; no product, UX, security, or architecture contract changes.
+- Related requirements: `NFR-004`, `PR-005`, `MDH-02`, `MDH-06`, `MDH-21`, `MDH-24`.
+- Affected / owning task: `FE-V1-090`.
+- Blocks: the corrected clean no-retry physical acceptance and all downstream release tasks.
+- Root cause: the dashboard fixture deliberately orders `release-approval` and `migration-input` in `ACT NOW`, while `physical-pairing-review` has no attention and appears below the fold. `openProductionMissionControl` used the quiet session as its universal first-viewport readiness node instead of the visible attention heading, and later target acquisition did not scroll.
+- Fix: require every caller to declare either `dashboard_attention` or `single_session` initial-viewport truth; validate `ACT NOW` for the dashboard; retain the exact session check for single-session fixtures; and use bounded forward reveal before dashboard reload and prompt target acquisition.
+- Validation: focused physical ledger/driver 29 passed with one device-gated case, typecheck, lint/exports, exact cleanup after the failed attempt, and a regression for both initial-viewport modes pass. Corrected clean physical acceptance remains pending.
+- Closed by: pending the corrected `FE-V1-090` physical artifact and commit.
