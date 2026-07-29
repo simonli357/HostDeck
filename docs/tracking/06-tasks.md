@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-056` Implement install/upgrade/status/start/stop/restart service commands with an owned manifest | in_progress | none | Real assets, the runnable CLI, and exact user units are complete; audit the current package/install boundaries and freeze executable criteria before implementing persistent service lifecycle. |
+| 1 | `IFC-V1-056` Implement install/upgrade/status/start/stop/restart service commands with an owned manifest | in_progress | none | `SLC-01` to `SLC-24` freeze the verified release selector, owner manifest, transactional install/upgrade, exact manager adapter, API-readiness lifecycle, rollback, and evidence contract; implementation is next. |
 | 2 | `FE-V1-017` Capture screenshot/diff evidence against selected replacement mockups | ready | none | Responsive, accessibility, and the exact four-project supported-browser matrix are complete; fidelity closure is dependency-ready behind the active service-lifecycle leaf. |
 
 ## Intentional Blockers
