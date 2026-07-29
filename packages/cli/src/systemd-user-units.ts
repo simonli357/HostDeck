@@ -48,6 +48,11 @@ export interface GenerateHostDeckSystemdUserUnitsInput {
   readonly package_root: string;
 }
 
+export interface GenerateHostDeckSystemdUserUnitsForInstallInput
+  extends GenerateHostDeckSystemdUserUnitsInput {
+  readonly verification_package_root: string;
+}
+
 export interface HostDeckSystemdUserUnitDescriptor {
   readonly content: string;
   readonly mode: typeof hostDeckSystemdUserUnitMode;
@@ -87,6 +92,10 @@ const inputKeys = Object.freeze([
   "node_bin",
   "package_root"
 ] as const);
+const installInputKeys = Object.freeze([
+  ...inputKeys,
+  "verification_package_root"
+] as const);
 const manifestName = "hostdeck-package.json";
 const serviceHostRelativePath = "dist/service-host.js";
 const maximumPathBytes = 4096;
@@ -117,7 +126,18 @@ interface ServiceHostManifest {
 export function generateHostDeckSystemdUserUnits(
   candidate: unknown
 ): HostDeckSystemdUserUnitBundle {
-  const input = validateInput(candidate);
+  const input = validateInput(candidate, false);
+  return generateBundle(input);
+}
+
+export function generateHostDeckSystemdUserUnitsForInstall(
+  candidate: unknown
+): HostDeckSystemdUserUnitBundle {
+  const input = validateInput(candidate, true);
+  return generateBundle(input);
+}
+
+function generateBundle(input: ValidatedInput): HostDeckSystemdUserUnitBundle {
   const codexContent = renderCodexUnit(input);
   const hostDeckContent = renderHostDeckUnit(input);
   const units = Object.freeze([
@@ -146,10 +166,16 @@ export function assertHostDeckSystemdUserUnitBundle(
   }
 }
 
-function validateInput(candidate: unknown): ValidatedInput {
-  let values: Readonly<Record<(typeof inputKeys)[number], unknown>>;
+function validateInput(
+  candidate: unknown,
+  forInstall: boolean
+): ValidatedInput {
+  let values: Readonly<Record<string, unknown>>;
   try {
-    values = readExactDataObject(candidate, inputKeys);
+    values = readExactDataObject(
+      candidate,
+      forInstall ? installInputKeys : inputKeys
+    );
   } catch {
     fail("invalid_input", "input");
   }
@@ -162,6 +188,13 @@ function validateInput(candidate: unknown): ValidatedInput {
     "package_invalid",
     "package"
   );
+  const verificationPackageRoot = forInstall
+    ? parsePath(
+        values.verification_package_root,
+        "package_invalid",
+        "package"
+      )
+    : packageRoot;
   const environmentFile =
     values.environment_file === null
       ? null
@@ -173,8 +206,11 @@ function validateInput(candidate: unknown): ValidatedInput {
 
   validateExecutable(nodeBin, "node_invalid", "node");
   validateExecutable(codexBin, "codex_invalid", "codex");
-  const serviceHostPath = validatePackage(packageRoot, packageVersion);
-  if (environmentFile !== null) validateEnvironmentFile(environmentFile);
+  validatePackage(verificationPackageRoot, packageVersion);
+  const serviceHostPath = join(packageRoot, serviceHostRelativePath);
+  if (environmentFile !== null) {
+    validateEnvironmentFile(environmentFile, forInstall);
+  }
 
   return Object.freeze({
     codexBin,
@@ -339,10 +375,20 @@ function parsePackageManifest(
   });
 }
 
-function validateEnvironmentFile(path: string): void {
+function validateEnvironmentFile(path: string, allowMissingParent: boolean): void {
   try {
     const parent = dirname(path);
-    if (parent === path || realpathSync.native(parent) !== parent) {
+    if (parent === path) {
+      fail("environment_file_invalid", "environment_file");
+    }
+    if (!pathExists(parent)) {
+      if (!allowMissingParent) {
+        fail("environment_file_invalid", "environment_file");
+      }
+      validateMissingEnvironmentParent(parent);
+      return;
+    }
+    if (realpathSync.native(parent) !== parent) {
       fail("environment_file_invalid", "environment_file");
     }
     const parentStats = lstatSync(parent);
@@ -377,6 +423,38 @@ function validateEnvironmentFile(path: string): void {
   } catch (error) {
     if (error instanceof HostDeckSystemdUserUnitError) throw error;
     fail("environment_file_invalid", "environment_file");
+  }
+}
+
+function validateMissingEnvironmentParent(path: string): void {
+  let cursor = path;
+  while (!pathExists(cursor)) {
+    const parent = dirname(cursor);
+    if (parent === cursor) {
+      fail("environment_file_invalid", "environment_file");
+    }
+    cursor = parent;
+  }
+  const metadata = lstatSync(cursor);
+  const uid = currentUid();
+  if (
+    metadata.isSymbolicLink() ||
+    !metadata.isDirectory() ||
+    (metadata.uid !== uid && metadata.uid !== 0) ||
+    (metadata.mode & 0o022) !== 0 ||
+    realpathSync.native(cursor) !== cursor
+  ) {
+    fail("environment_file_invalid", "environment_file");
+  }
+}
+
+function pathExists(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return false;
+    throw error;
   }
 }
 

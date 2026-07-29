@@ -186,6 +186,7 @@ import {
   renderFailure,
   renderGoalSnapshot,
   renderHelp,
+  renderHostDeckServiceLifecycle,
   renderHostLockState,
   renderHostStatus,
   renderInterruptResponse,
@@ -212,6 +213,12 @@ import {
   type HostDeckResumeLauncher
 } from "./resume-launcher.js";
 import {
+  assertHostDeckServiceLifecycleResult,
+  createHostDeckServiceLifecycle,
+  type HostDeckServiceLifecycle,
+  HostDeckServiceLifecycleError
+} from "./service-lifecycle.js";
+import {
   createHostDeckSessionListClient,
   type HostDeckSessionListClient,
   type HostDeckSessionListClientInput
@@ -224,6 +231,7 @@ import {
   createHostDeckStartClient,
   type HostDeckStartClient
 } from "./start-client.js";
+import { HostDeckSystemdManagerError } from "./systemd-user-manager.js";
 import {
   createHostDeckUsageClient,
   type HostDeckUsageClient
@@ -260,6 +268,7 @@ export interface CliRunOptions {
   readonly resumeLauncher?: HostDeckResumeLauncher;
   readonly sessionListClient?: HostDeckSessionListClient;
   readonly skillsClient?: HostDeckSkillsClient;
+  readonly serviceLifecycle?: HostDeckServiceLifecycle;
   readonly startClient?: HostDeckStartClient;
   readonly usageClient?: HostDeckUsageClient;
   readonly createOperationId?: (
@@ -310,10 +319,13 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
       return success(renderVersion(version));
     }
 
-    if (parsed.command.kind === "service") {
+    if (
+      parsed.command.kind === "service" &&
+      parsed.command.action === "uninstall"
+    ) {
       throw clientOperationFailure(
         "capability_unavailable",
-        "Service lifecycle commands are not available in this build."
+        "Service uninstall is not available in this build."
       );
     }
 
@@ -334,6 +346,46 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     const config = loadCliConfig(configOptions);
+    if (parsed.command.kind === "service") {
+      if (parsed.command.action === "uninstall") {
+        throw clientOperationFailure(
+          "capability_unavailable",
+          "Service uninstall is not available in this build."
+        );
+      }
+      const env = options.env ?? process.env;
+      const serviceFetch =
+        options.fetch ??
+        createBoundedLoopbackFetch(
+          options.signal === undefined ? {} : { signal: options.signal }
+        );
+      const statusClient =
+        options.hostStatusClient ??
+        createHostDeckHostStatusClient({
+          baseUrl: config.baseUrl,
+          fetch: serviceFetch
+        });
+      const lifecycle =
+        options.serviceLifecycle ??
+        createHostDeckServiceLifecycle({
+          base_url: config.baseUrl,
+          ...(parsed.command.action === "install"
+            ? { codex_bin: resolveHostDeckCodexExecutable(env) }
+            : {}),
+          database_path: config.databasePath,
+          env,
+          node_bin: process.execPath,
+          package_root: options.packageRoot ?? cliModulePackageRoot,
+          read_host_status: async () => await statusClient.read(),
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+          state_dir: config.stateDir
+        });
+      const result = await lifecycle.execute(parsed.command.action);
+      assertHostDeckServiceLifecycleResult(result);
+      return success(
+        renderHostDeckServiceLifecycle(result, parsed.command.json)
+      );
+    }
     if (parsed.command.kind === "serve") {
       return success(await runForegroundServeCommand(config, options));
     }
@@ -681,7 +733,96 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
 
     return failure(toCliFailure(new Error("Unsupported HostDeck CLI command.")));
   } catch (error) {
-    return failure(toCliFailure(error));
+    return failure(
+      toCliFailure(
+        error instanceof HostDeckServiceLifecycleError
+          ? mapServiceLifecycleFailure(error)
+          : error instanceof HostDeckSystemdManagerError
+            ? mapSystemdManagerFailure(error)
+          : error
+      )
+    );
+  }
+}
+
+function mapSystemdManagerFailure(
+  error: HostDeckSystemdManagerError
+): ReturnType<typeof clientOperationFailure> {
+  const stage = error.stage.replaceAll("_", " ");
+  if (
+    error.code === "manager_unavailable" ||
+    error.code === "timed_out" ||
+    error.code === "aborted"
+  ) {
+    return clientOperationFailure(
+      "runtime_unavailable",
+      `HostDeck systemd user manager failed during ${stage} (${error.code}).`,
+      error.code !== "aborted"
+    );
+  }
+  return clientOperationFailure(
+    "internal_error",
+    `HostDeck systemd user manager rejected ${stage} (${error.code}).`
+  );
+}
+
+function mapServiceLifecycleFailure(
+  error: HostDeckServiceLifecycleError
+): ReturnType<typeof clientOperationFailure> {
+  const rollback =
+    error.rollback === "succeeded"
+      ? " The prior service release was restored."
+      : error.rollback === "failed"
+        ? " Automatic rollback failed; service recovery is required."
+        : "";
+  switch (error.code) {
+    case "lock_held":
+      return clientOperationFailure(
+        "operation_conflict",
+        "Another HostDeck service lifecycle operation is active.",
+        true
+      );
+    case "not_installed":
+      return clientOperationFailure(
+        "runtime_unavailable",
+        "HostDeck service is not installed."
+      );
+    case "readiness_failed":
+      return clientOperationFailure(
+        "runtime_unavailable",
+        "HostDeck service did not reach local API readiness."
+      );
+    case "already_installed":
+      return clientOperationFailure(
+        "operation_conflict",
+        "A different HostDeck release is installed; use service upgrade."
+      );
+    case "upgrade_invalid":
+      return clientOperationFailure(
+        "operation_conflict",
+        "HostDeck service upgrade requires a strictly newer verified release."
+      );
+    case "package_invalid":
+      return clientOperationFailure(
+        "invalid_config",
+        "HostDeck production package verification failed."
+      );
+    case "recovery_required":
+      return clientOperationFailure(
+        "operation_conflict",
+        "HostDeck service has an incomplete lifecycle transaction and requires recovery."
+      );
+    case "install_invalid":
+      return clientOperationFailure(
+        "invalid_config",
+        "HostDeck service installation state is invalid."
+      );
+    case "lifecycle_failed":
+    case "rollback_failed":
+      return clientOperationFailure(
+        "internal_error",
+        `HostDeck service lifecycle operation failed.${rollback}`
+      );
   }
 }
 

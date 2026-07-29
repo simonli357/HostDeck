@@ -57,6 +57,10 @@ import type { CliFailure } from "./errors.js";
 import { internalFailure } from "./errors.js";
 import type { LegacySessionResetResult, LegacySessionSummary } from "./legacy-session-admin.js";
 import type { PairingLinkCommandResult } from "./pairing-link-client.js";
+import {
+  assertHostDeckServiceLifecycleResult,
+  type HostDeckServiceLifecycleResult
+} from "./service-lifecycle.js";
 
 export type TerminalQrRenderer = (link: string) => Promise<string>;
 
@@ -397,6 +401,33 @@ export function renderHostStatus(
   return output;
 }
 
+export function renderHostDeckServiceLifecycle(
+  candidate: HostDeckServiceLifecycleResult,
+  json: boolean
+): string {
+  try {
+    assertHostDeckServiceLifecycleResult(candidate);
+  } catch {
+    throw internalFailure("Service lifecycle rendering input is invalid.");
+  }
+  const output = json
+    ? `${JSON.stringify(candidate, null, 2)}\n`
+    : [
+        `Service action: ${candidate.action}`,
+        `Installation: ${candidate.install_state}`,
+        `Release: ${candidate.package_version === null ? "none" : `${candidate.package_version} (${candidate.release_id})`}`,
+        `Enabled: ${candidate.enabled ? "yes" : "no"}`,
+        `Changed: ${candidate.changed ? "yes" : "no"}`,
+        `API readiness: ${candidate.api_state}`,
+        `HostDeck unit: ${renderServiceUnit(candidate.units.hostdeck)}`,
+        `Codex unit: ${renderServiceUnit(candidate.units.codex)}`,
+        `Rollback: ${candidate.rollback.replaceAll("_", " ")}`,
+        ""
+      ].join("\n");
+  requireBoundedRender(output, "Service lifecycle");
+  return output;
+}
+
 export function renderSessionList(
   candidate: SelectedSessionListResponse,
   json: boolean
@@ -717,6 +748,18 @@ function renderHostStatusText(status: SelectedHostStatusResponse): string {
     ""
   );
   return lines.join("\n");
+}
+
+function renderServiceUnit(
+  unit: HostDeckServiceLifecycleResult["units"]["hostdeck"]
+): string {
+  return [
+    `${unit.active_state}/${unit.sub_state}`,
+    `load=${unit.load_state}`,
+    `file=${unit.unit_file_state === "" ? "none" : unit.unit_file_state}`,
+    `pid=${unit.main_pid}`,
+    `reload=${unit.need_daemon_reload ? "needed" : "no"}`
+  ].join("; ");
 }
 
 function renderSessionListText(response: SelectedSessionListResponse): string {

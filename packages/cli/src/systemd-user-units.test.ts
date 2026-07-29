@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   chmodSync,
+  existsSync,
   linkSync,
   lstatSync,
   mkdirSync,
@@ -19,6 +20,7 @@ import {
   assertHostDeckSystemdUserUnitBundle,
   type GenerateHostDeckSystemdUserUnitsInput,
   generateHostDeckSystemdUserUnits,
+  generateHostDeckSystemdUserUnitsForInstall,
   HostDeckSystemdUserUnitError,
   type HostDeckSystemdUserUnitErrorCode,
   type HostDeckSystemdUserUnitErrorStage,
@@ -78,6 +80,59 @@ describe("IFC-V1-055 systemd user-unit generator", () => {
       assertHostDeckSystemdUserUnitBundle(structuredClone(first))
     ).toThrow("bundle is invalid");
     expect(snapshotFiles(layout.root)).toEqual(before);
+  });
+
+  it("verifies a staged package while rendering only its final release path", () => {
+    const layout = fixture("install-staging", "present");
+    const finalPackageRoot = join(
+      layout.root,
+      "releases",
+      "1.2.3-final",
+      "package"
+    );
+    const bundle = generateHostDeckSystemdUserUnitsForInstall({
+      ...layout.input,
+      package_root: finalPackageRoot,
+      verification_package_root: layout.packageRoot
+    });
+
+    expect(bundle.service_host_path).toBe(
+      join(finalPackageRoot, "dist", "service-host.js")
+    );
+    expect(bundle.units[1].content).toContain(finalPackageRoot);
+    expect(bundle.units[1].content).not.toContain(layout.packageRoot);
+  });
+
+  it("accepts an unpublished private environment parent only for install staging", () => {
+    const layout = fixture("install-environment-staging", "missing");
+    const environmentRoot = dirname(layout.environmentFile);
+    rmSync(environmentRoot, { recursive: true });
+
+    expect(() => generateHostDeckSystemdUserUnits(layout.input)).toThrowError(
+      expect.objectContaining({
+        code: "environment_file_invalid",
+        stage: "environment_file"
+      })
+    );
+    const bundle = generateHostDeckSystemdUserUnitsForInstall({
+      ...layout.input,
+      verification_package_root: layout.packageRoot
+    });
+    expect(bundle.units[0].content).toContain(layout.environmentFile);
+    expect(existsSync(environmentRoot)).toBe(false);
+
+    chmodSync(dirname(environmentRoot), 0o720);
+    expect(() =>
+      generateHostDeckSystemdUserUnitsForInstall({
+        ...layout.input,
+        verification_package_root: layout.packageRoot
+      })
+    ).toThrowError(
+      expect.objectContaining({
+        code: "environment_file_invalid",
+        stage: "environment_file"
+      })
+    );
   });
 
   it("emits only the frozen ownership, dependency, and lifecycle policy", () => {

@@ -5,7 +5,7 @@ import {
   encodeSelectedSessionListCursor,
   sessionIdSchema
 } from "@hostdeck/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CliFailure, internalFailure } from "./errors.js";
 import { cliExitCodes } from "./exit-codes.js";
 import type { LegacySessionAdmin } from "./legacy-session-admin.js";
@@ -15,6 +15,11 @@ import {
   renderLegacySessionReset,
   renderLegacySessionStatus
 } from "./render.js";
+import type {
+  HostDeckServiceAction,
+  HostDeckServiceLifecycle,
+  HostDeckServiceLifecycleResult
+} from "./service-lifecycle.js";
 import { runCli } from "./shell.js";
 
 const sessionListCursor = encodeSelectedSessionListCursor({
@@ -284,34 +289,65 @@ describe("selected CLI shell contract", () => {
     }
   });
 
-  it("reports staged commands unavailable without config, filesystem, network, or process work", async () => {
-    for (const args of [
-      ["service", "install"],
-      ["service", "upgrade"],
-      ["service", "status"],
-      ["service", "start"],
-      ["service", "stop"],
-      ["service", "restart"],
-      ["service", "uninstall"]
+  it("dispatches implemented service commands once and keeps uninstall unavailable before side effects", async () => {
+    for (const action of [
+      "install",
+      "upgrade",
+      "status",
+      "start",
+      "stop",
+      "restart"
     ] as const) {
       let configReads = 0;
-      let fetchCalls = 0;
-      const result = await runCli(args, {
+      const execute = vi.fn(async () => serviceResult(action));
+      const lifecycle: HostDeckServiceLifecycle = { execute };
+      const result = await runCli(
+        ["--config", "/tmp/hostdeck-service-config.json", "service", action, "--json"],
+        {
         env: {},
         readFile: () => {
           configReads += 1;
-          throw new Error("reserved command must not load config");
+          return "{}";
+        },
+        serviceLifecycle: lifecycle
+        }
+      );
+      expect(result.exitCode, action).toBe(cliExitCodes.ok);
+      expect(JSON.parse(result.stdout), action).toMatchObject({ action });
+      expect(result.stderr, action).toBe("");
+      expect(execute, action).toHaveBeenCalledTimes(1);
+      expect(execute, action).toHaveBeenCalledWith(action);
+      expect(configReads, action).toBe(1);
+    }
+
+    let configReads = 0;
+    let fetchCalls = 0;
+    const execute = vi.fn();
+    const unavailable = await runCli(
+      [
+        "--config",
+        "/tmp/hostdeck-service-config.json",
+        "service",
+        "uninstall"
+      ],
+      {
+        env: {},
+        readFile: () => {
+          configReads += 1;
+          throw new Error("uninstall must not load config");
         },
         fetch: async () => {
           fetchCalls += 1;
-          throw new Error("reserved command must not use the network");
-        }
-      });
-      expect(result.exitCode, args.join(" ")).toBe(cliExitCodes.apiError);
-      expect(result.stderr, args.join(" ")).toContain("capability_unavailable");
-      expect(configReads, args.join(" ")).toBe(0);
-      expect(fetchCalls, args.join(" ")).toBe(0);
-    }
+          throw new Error("uninstall must not use network");
+        },
+        serviceLifecycle: { execute }
+      }
+    );
+    expect(unavailable.exitCode).toBe(cliExitCodes.apiError);
+    expect(unavailable.stderr).toContain("capability_unavailable");
+    expect(configReads).toBe(0);
+    expect(fetchCalls).toBe(0);
+    expect(execute).not.toHaveBeenCalled();
   });
 
   it("reports and resets legacy rows through bounded local-only output", async () => {
@@ -500,6 +536,37 @@ describe("selected CLI shell contract", () => {
     );
   });
 });
+
+function serviceResult(
+  action: HostDeckServiceAction
+): HostDeckServiceLifecycleResult {
+  const active = action === "start" || action === "restart";
+  const unit = (
+    unitFileState: "enabled" | "linked",
+    mainPid: number
+  ) => ({
+    active_state: mainPid > 0 ? "active" : "inactive",
+    load_state: "loaded",
+    main_pid: mainPid,
+    need_daemon_reload: false,
+    sub_state: mainPid > 0 ? "running" : "dead",
+    unit_file_state: unitFileState
+  });
+  return {
+    action,
+    api_state: active ? "ready" : "not_probed",
+    changed: action !== "status",
+    enabled: true,
+    install_state: "coherent",
+    package_version: "1.2.3",
+    release_id: `1.2.3-${"a".repeat(64)}`,
+    rollback: "not_required",
+    units: {
+      codex: unit("linked", active ? 357358 : 0),
+      hostdeck: unit("enabled", active ? 357357 : 0)
+    }
+  };
+}
 
 function fakeLegacyAdmin(): LegacySessionAdmin {
   return {

@@ -14,6 +14,7 @@ export * from "./codex-runtime-reconciliation-lifecycle.js";
 export * from "./codex-runtime-supervisor.js";
 export * from "./codex-skills-control-service.js";
 export * from "./codex-usage-control-service.js";
+export * from "./codex-version-probe.js";
 export * from "./compact-routes.js";
 export * from "./csrf-routes.js";
 export * from "./device-authority-lifecycle.js";

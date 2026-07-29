@@ -10,7 +10,7 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } 
 import { pathToFileURL } from "node:url";
 
 export const productionPackageManifestName = "hostdeck-package.json";
-export const productionPackageSourceCount = 614;
+export const productionPackageSourceCount = 619;
 export const productionPackageVerifierName = "verify.mjs";
 export const productionWebManifestName = "hostdeck-web.json";
 export const productionWebManifestSchemaVersion = 1;
@@ -38,7 +38,6 @@ const expectedPackageNames = [
   "@hostdeck/cli"
 ];
 const expectedDeferrals = [
-  "IFC-V1-056",
   "IFC-V1-057",
   "IFC-V1-058"
 ];

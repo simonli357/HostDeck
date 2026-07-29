@@ -49,7 +49,6 @@ try {
   assert.equal(firstManifest.web.fileCount, first.webFileCount);
   assert.equal(firstManifest.web.bytes, first.webBytes);
   assert.deepEqual(firstManifest.deferrals, [
-    "IFC-V1-056",
     "IFC-V1-057",
     "IFC-V1-058"
   ]);
@@ -568,9 +567,9 @@ function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {
   );
 
   const service = runCommand(
-    "reserved service command",
+    "deferred service uninstall command",
     command,
-    ["service", "start"],
+    ["service", "uninstall"],
     unrelatedCwd,
     true
   );

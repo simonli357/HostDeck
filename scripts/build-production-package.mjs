@@ -55,7 +55,6 @@ const expectedExternalModules = [
   "zod"
 ];
 const downstreamDeferrals = [
-  "IFC-V1-056",
   "IFC-V1-057",
   "IFC-V1-058"
 ];
@@ -139,7 +138,14 @@ function createRuntimeCliBin(candidate) {
 
 export function buildProductionPackage(options = {}) {
   const repositoryRoot = realpathSync(resolve(options.repositoryRoot ?? defaultRepositoryRoot));
-  const outputRoot = join(repositoryRoot, "dist", "hostdeck");
+  const distRoot = join(repositoryRoot, "dist");
+  const outputRoot = resolve(options.outputRoot ?? join(distRoot, "hostdeck"));
+  if (
+    dirname(outputRoot) !== distRoot ||
+    !basename(outputRoot).startsWith("hostdeck")
+  ) {
+    throw new TypeError("Production package output must be one HostDeck dist child.");
+  }
   const rootManifest = readJson(join(repositoryRoot, "package.json"));
   const runtime = assertBuildRuntime(repositoryRoot, rootManifest);
   const sources = selectedProductionSources(repositoryRoot);
@@ -148,8 +154,10 @@ export function buildProductionPackage(options = {}) {
   );
   const sourceCounts = countSourcesByPackage(sources);
   const codex = readCodexBindingIdentity(repositoryRoot);
-  const packageVersion = parseExactVersion(rootManifest.version, "Root package version");
-  const distRoot = join(repositoryRoot, "dist");
+  const packageVersion = parseExactVersion(
+    options.packageVersion ?? rootManifest.version,
+    "Package version"
+  );
   mkdirSync(distRoot, { mode: 0o755, recursive: true });
   const stagingRoot = mkdtempSync(join(distRoot, ".hostdeck-build-"));
   const emitRoot = join(stagingRoot, "emit");
@@ -180,6 +188,7 @@ export function buildProductionPackage(options = {}) {
       packageRoot,
       packageVersion,
       repositoryRoot,
+      sourcePackageVersion: rootManifest.version,
       sourceCounts
     });
     cpSync(webBuildRoot, join(packageRoot, "web"), {
@@ -374,6 +383,19 @@ function buildProductionWebAssets(input) {
   rmSync(viteManifestPath);
 
   const indexPath = join(input.webBuildRoot, "index.html");
+  if (input.packageVersion !== input.rootManifest.version) {
+    const index = readFileSync(indexPath, "utf8");
+    const expected = `name="hostdeck-package-version" content="${input.rootManifest.version}"`;
+    if (
+      index.split(expected).length !== 2 ||
+      index.includes(
+        `name="hostdeck-package-version" content="${input.packageVersion}"`
+      )
+    ) {
+      throw new Error("Production web package-version marker cannot be rewritten safely.");
+    }
+    writeFileSync(indexPath, index.replace(expected, `name="hostdeck-package-version" content="${input.packageVersion}"`));
+  }
   const assets = inventory.assetPaths.map((path) => ({
     content: readFileSync(join(input.webBuildRoot, ...path.split("/"))),
     path
@@ -713,7 +735,7 @@ function installCompiledPackages(input) {
     const output = join(target, "dist");
     cpSync(emitted, output, { dereference: false, errorOnExist: true, force: false, recursive: true });
     const sourceManifest = readJson(join(input.repositoryRoot, "packages", name, "package.json"));
-    if (sourceManifest.version !== input.packageVersion) {
+    if (sourceManifest.version !== input.sourcePackageVersion) {
       throw new Error(`@hostdeck/${name} version differs from the root package version.`);
     }
     const runtimeManifest = createRuntimePackageManifest(
