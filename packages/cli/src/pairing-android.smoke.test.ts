@@ -5677,10 +5677,13 @@ async function runProductionDashboardUiSequence(
     30_000,
     "Physical Session Detail did not drain its bounded replay into one live subscriber."
   );
-  await waitForAndroidUiText(
+  await revealAndroidUiNode(
+    "text",
     "Current",
+    "backward",
     30_000,
-    "Physical Session Detail did not render current replay-to-live truth."
+    "Physical Session Detail did not reveal current replay-to-live truth.",
+    "fully_visible"
   );
   await capture("fe090-03-session-detail.png");
 
