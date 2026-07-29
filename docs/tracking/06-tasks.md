@@ -16,8 +16,8 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-058` Run clean-checkout package, foreground, user-service, upgrade, restart, and uninstall parity acceptance | in_progress | none | `CEP-01` to `CEP-24` are frozen; implement the pinned Noble clean-user harness and close only evidence-proven package/service gaps. |
-| 2 | `FE-V1-018` Review copy and complete workflows against mobile mission-control non-goals | ready | none | Selected-target fidelity is complete; copy/workflow review can now distinguish accepted, running, completed, failed, and bounded recovery truth before real-phone aggregate hardening. |
+| 1 | `FE-V1-018` Review copy and complete workflows against mobile mission-control non-goals | in_progress | none | Clean package/service parity and selected-target fidelity are complete; close copy and workflow ambiguity before aggregate real-phone hardening. |
+| 2 | `IFC-V1-091` Harden the selected production interface module | ready | none | Clean parity now completes its dependency set; run the full production API/SSE/remote-security/CLI/package/service failure matrix after the active copy/workflow leaf. |
 
 ## Intentional Blockers
 

@@ -1,0 +1,244 @@
+{
+  "schema_version": 1,
+  "task_id": "IFC-V1-058",
+  "criteria_commit": "2aa21e98a68aeccaa5b5ac4d6f0a0aa654eed7a5",
+  "source_commit": "eb77647e8b1e77e42b16fef21b65da0d1b65ea8e",
+  "host": {
+    "architecture": "x64",
+    "docker_server_version": "29.6.2",
+    "excluded_uncommitted_png_count": 18,
+    "kernel_shared": true,
+    "os": "ubuntu",
+    "os_version": "24.04"
+  },
+  "container": {
+    "architecture": "amd64",
+    "base_digest": "sha256:786a8b558f7be160c6c8c4a54f9a57274f3b4fb1491cf65146521ae77ff1dc54",
+    "cgroup_namespace": "private",
+    "image_id": "sha256:b02f0f4a09374f63e76013adf29d85b180f74a4ba2fb5b0a02e6e0eab0e00347",
+    "mounts": [
+      {
+        "destination": "/evidence",
+        "read_only": false,
+        "type": "bind"
+      },
+      {
+        "destination": "/host-tailscale",
+        "read_only": true,
+        "type": "bind"
+      },
+      {
+        "destination": "/source",
+        "read_only": true,
+        "type": "bind"
+      }
+    ],
+    "network_mode": "default_bridge",
+    "os": "ubuntu",
+    "os_version": "24.04",
+    "pid_namespace": "private",
+    "privileged_validation_infrastructure": true,
+    "root_bootstrap": {
+      "actions": [
+        "install_os_prerequisites",
+        "verify_node_archive",
+        "install_tailscale_client",
+        "disable_tailscale_daemon",
+        "start_uid_1000_manager"
+      ],
+      "node_archive_sha256": "88fd1ce767091fd8d4a99fdb2356e98c819f93f3b1f8663853a2dee9b438068a",
+      "product_lifecycle_actions": 0,
+      "tailscale_daemon": "disabled_inactive",
+      "tailscale_package_version": "1.98.8",
+      "uid": 1000
+    },
+    "system_manager": "running",
+    "systemd_version": "systemd 255 (255.4-1ubuntu8.16)",
+    "uid": 1000,
+    "user_manager": "running"
+  },
+  "toolchain": {
+    "codex": "0.144.0",
+    "codex_integrity_verified": true,
+    "corepack": "0.34.6",
+    "git": "2.43.0",
+    "native_modules_loaded": true,
+    "node": "22.22.2",
+    "npm": "10.9.7",
+    "pnpm": "10.29.2",
+    "systemd": "systemd 255 (255.4-1ubuntu8.16)",
+    "tailscale": "1.98.8"
+  },
+  "clean_source": {
+    "commit": "eb77647e8b1e77e42b16fef21b65da0d1b65ea8e",
+    "dist_preexisting": false,
+    "frozen_install": true,
+    "git_tracked_clean": true,
+    "host_build_output_mounted": false,
+    "host_dependency_tree_mounted": false,
+    "lockfile_sha256": "119300eac327459aa4fbef5ea0eb72678bf0b6a3244af1be33c98aa3dce14752",
+    "node_modules_preexisting": false,
+    "bootstrap": {
+      "codex_install_ms": 30719,
+      "corepack_ms": 4043,
+      "direct_contract_test_ms": 539,
+      "frozen_install_ms": 33578,
+      "allowed_network_warning_count": 2,
+      "install_warning_count": 2,
+      "unsupported_warning_count": 0,
+      "node_extract_ms": 2523,
+      "source_clone_ms": 3022,
+      "total_ms": 74668
+    },
+    "source_bundle_bytes": 94778358,
+    "source_bundle_sha256": "a3c05f0e67136527fba23d906fc46dac2ed0900edb30c0aa6ccd8dddf7aa945b"
+  },
+  "packages": {
+    "deterministic_primary": true,
+    "primary": {
+      "content_sha256": "8cef325231d5f5ed0a1ed0f08ac7c810c1674fde17219977f266884d1513bc57",
+      "deferrals": [],
+      "duration_ms": 11777,
+      "entry_count": 6466,
+      "manifest_sha256": "bc001f6a7ba91636e343ae4808f0052a7ee9315cda8fb29f7bccbf3cea7e3484",
+      "output_count": 1245,
+      "package_version": "1.0.0",
+      "source_count": 619,
+      "verified_entry_count": 6466,
+      "web_file_count": 3,
+      "web_manifest_sha256": "18e86e60e5c43f29de7e7988a04a4ada1cd9e328147aaa53023267e3564c7588",
+      "web_sha256": "aeaaee4655c109d6c2c6d60b54aa2a8bd4d744a086cc70e52778a1c1d2d79d8e"
+    },
+    "upgrade": {
+      "content_sha256": "58bc1a21b771f4774dbf589b23dc585db97ef73591ea781d47ddd5ed4d35fcbe",
+      "deferrals": [],
+      "duration_ms": 9325,
+      "entry_count": 6466,
+      "manifest_sha256": "14469928dd8e8581564553eee64971cae594755eb3e61d061729d47ef8db1521",
+      "output_count": 1245,
+      "package_version": "1.1.0",
+      "source_count": 619,
+      "verified_entry_count": 6466,
+      "web_file_count": 3,
+      "web_manifest_sha256": "221690087f5b15a5d3ebc7cc0b3e4397bb2a24898756fa33f450e7f4f3d44e4b",
+      "web_sha256": "3da4e5e518f446d867802dde5f9105006567e1f2a28ea9315103cb4477495a82"
+    }
+  },
+  "foreground": {
+    "duration_ms": 2278,
+    "local_ready": true,
+    "package_version": "1.0.0",
+    "processes": {
+      "app_server_launcher_trees": 1,
+      "app_server_processes": 2,
+      "app_server_tree_processes": 5,
+      "arguments_verified": true,
+      "hostdeck_main_pid": 1021,
+      "hostdeck_main_processes": 1,
+      "uid": 1000,
+      "zero_capabilities": true
+    },
+    "remote_unavailable": true,
+    "socket_mode": "0600",
+    "tcp_listener": "127.0.0.1",
+    "web_manifest_sha256": "18e86e60e5c43f29de7e7988a04a4ada1cd9e328147aaa53023267e3564c7588",
+    "web_sha256": "aeaaee4655c109d6c2c6d60b54aa2a8bd4d744a086cc70e52778a1c1d2d79d8e",
+    "http": {
+      "compatibility": "supported",
+      "index_sha256": "27847c6be279c70056c007851c2603065a2f637e704a5aa735c09d1863b34ffe",
+      "local_ready": true,
+      "no_store_status": true,
+      "package_version": "1.0.0",
+      "remote_ready": false,
+      "security_headers": true,
+      "web_identity_sha256": "aeaaee4655c109d6c2c6d60b54aa2a8bd4d744a086cc70e52778a1c1d2d79d8e",
+      "web_manifest_sha256": "18e86e60e5c43f29de7e7988a04a4ada1cd9e328147aaa53023267e3564c7588"
+    }
+  },
+  "service": {
+    "active_checkpoint": true,
+    "codex_pid_after_restart": 1569,
+    "codex_pid_initial": 1277,
+    "codex_loss_reported_not_ready": true,
+    "codex_restart_changed_pid": true,
+    "duration_ms": 21534,
+    "exact_install_inventory": true,
+    "foreground_service_http_parity": true,
+    "hostdeck_pid_after_restart": 1423,
+    "hostdeck_pid_initial": 1278,
+    "hostdeck_restart_preserved_codex": true,
+    "idempotent_install_start_stop": true,
+    "install_initially_inactive": true,
+    "invalid_lifecycle_order_rejected": true,
+    "package_version": "1.0.0",
+    "root_install_absent": true,
+    "socket_changed_on_codex_restart": true,
+    "socket_preserved_on_hostdeck_restart": true,
+    "unit_inventory": {
+      "codex_cgroup_processes": 6,
+      "codex_control_group": "/app.slice/hostdeck-codex.service",
+      "codex_main_pid": 1277,
+      "hostdeck_cgroup_processes": 1,
+      "hostdeck_control_group": "/app.slice/hostdeck.service",
+      "hostdeck_main_pid": 1278,
+      "listener_count": 1,
+      "socket_owner_uid": 1000,
+      "zero_capabilities": true
+    },
+    "user_manager": "running",
+    "active_upgrade": true,
+    "active_upgrade_hostdeck_restarted": true,
+    "active_upgrade_preserved_codex": true,
+    "active_upgrade_preserved_socket": true,
+    "installed_command_used_for_uninstall": true,
+    "observed_restart_preserved_codex": true,
+    "release_retention_count": 2,
+    "repeated_uninstall_unchanged": true,
+    "state_config_codex_preserved": true,
+    "tailscale_observation_restart_ready": true,
+    "uninstall_not_found_units": true,
+    "uninstall_product_residue": 0,
+    "upgrade_package_version": "1.1.0",
+    "upgrade_web_sha256": "3da4e5e518f446d867802dde5f9105006567e1f2a28ea9315103cb4477495a82",
+    "upgraded_http": {
+      "compatibility": "supported",
+      "index_sha256": "93ecc5bef07f5a6b992f19b0ddf538e315794523dfe7fcd827c1327ee76f5eb9",
+      "local_ready": true,
+      "no_store_status": true,
+      "package_version": "1.1.0",
+      "remote_ready": false,
+      "security_headers": true,
+      "web_identity_sha256": "3da4e5e518f446d867802dde5f9105006567e1f2a28ea9315103cb4477495a82",
+      "web_manifest_sha256": "221690087f5b15a5d3ebc7cc0b3e4397bb2a24898756fa33f450e7f4f3d44e4b"
+    },
+    "unavailable_phase_ms": 61670,
+    "observed_phase_ms": 17213
+  },
+  "tailscale": {
+    "client_version": "1.98.8",
+    "initial_daemon_unavailable": true,
+    "observed_identity_sha256": "d9e059027450d0c3ab32e891621c12d977ea9de888391a82f20270b5e6af70e3",
+    "observation_only": true,
+    "profile_switch_calls": 0,
+    "serve_mutation_calls": 0,
+    "host_after_sha256": "d9e059027450d0c3ab32e891621c12d977ea9de888391a82f20270b5e6af70e3",
+    "host_before_sha256": "d9e059027450d0c3ab32e891621c12d977ea9de888391a82f20270b5e6af70e3",
+    "host_identity_unchanged": true,
+    "raw_profile_data_recorded": false
+  },
+  "cleanup": {
+    "complete": true,
+    "installed_command_absent": true,
+    "lifecycle_coordination_retained": true,
+    "product_complete": true,
+    "processes_absent": true,
+    "runtime_absent": true,
+    "units_not_found": true
+  },
+  "limits": {
+    "independent_kernel_or_vm": false,
+    "phone_tested": false,
+    "release_ready": false,
+    "shared_kernel": true
+  }
+}

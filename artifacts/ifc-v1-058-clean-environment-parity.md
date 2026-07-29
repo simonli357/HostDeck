@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Freeze the clean-source, supported-Ubuntu, toolchain, foreground/service parity, restart, upgrade, uninstall, Tailscale-noninterference, cleanup, and evidence contract before implementing the acceptance harness. This leaf proves the packaged HostDeck host surface on a fresh Ubuntu user. It does not claim aggregate interface hardening, the full release smoke, or a new physical-phone run; those remain `IFC-V1-091`, `REL-V1-006`, and `FE-V1-090`.
+Record the clean-source, supported-Ubuntu, toolchain, foreground/service parity, restart, upgrade, uninstall, Tailscale-noninterference, cleanup, and evidence acceptance for the packaged HostDeck host surface. This leaf does not claim aggregate interface hardening, the full release smoke, or a new physical-phone run; those remain `IFC-V1-091`, `REL-V1-006`, and `FE-V1-090`.
 
 ## Audited Baseline
 
@@ -51,12 +51,24 @@ Freeze the clean-source, supported-Ubuntu, toolchain, foreground/service parity,
 | `CEP-23` | Direct tests cover manifest validation, command construction without shell interpolation, source/commit and image identity, UID/capability/root separation, timeout/output/redaction, host Tailscale snapshot comparison, evidence schema, failure cleanup, and exact success parsing. The real acceptance runs once without in-place retry; focused/package/lifecycle plus complete workspace/static/supply-chain/browser regressions pass after implementation. |
 | `CEP-24` | Publish a sanitized commit-bound artifact only after success and complete cleanup. It records criteria/implementation/evidence/closure commits, host and image identities, exact OS/tool versions, clean-clone proof, command stages/durations, package hashes/counts, foreground/service parity, unit/process/socket/listener/file observations, restart/upgrade/uninstall outcomes, Tailscale identity hashes, preserved/removed inventories, regressions, and explicit Docker-userspace/phone/release limits without auth, tokens, raw profile JSON, source-private paths, or false release readiness. |
 
-## Implementation Plan
+## Implementation And Result
 
-1. Add a strict clean-environment manifest/parser and direct tests.
-2. Add a bounded host runner that clones the committed source into a pinned Noble systemd substrate, snapshots Tailscale identity, and owns teardown/evidence publication.
-3. Add a UID-1000 in-container acceptance driver that installs, builds, verifies, and exercises direct package and real-user-service parity without source runtime dependencies.
-4. Remove the package's `IFC-V1-058` deferral only when the clean run passes, then run aggregate regression and manual inspection.
+1. One strict schema-1 manifest, parser, Dockerfile renderer, bounded host runner, and ordinary-user acceptance driver own the complete run.
+2. The host runner bundles the exact committed source, starts the pinned Noble systemd substrate, snapshots host Tailscale identity, and publishes evidence only after teardown.
+3. UID/GID 1000 alone performs the frozen install, two deterministic builds, package verification, foreground execution, service lifecycle, active upgrade, retention, and uninstall.
+4. The package has no clean-environment deferral. Invalid configuration, lifecycle order, package identity, privacy, or cleanup remains terminal.
+
+## Acceptance Evidence
+
+| Area | Result |
+| --- | --- |
+| Authoritative run | One no-retry `pnpm smoke:clean-environment` run passed from source commit `eb77647e8b1e77e42b16fef21b65da0d1b65ea8e`; sanitized evidence is `artifacts/ifc-v1-058-clean-environment-parity/evidence.json`. |
+| Substrate/toolchain | Pinned Ubuntu 24.04 digest, systemd 255, private cgroup/PID namespaces, real UID-1000 user manager, Node 22.22.2, pnpm 10.29.2, Codex 0.144.0, and Tailscale 1.98.8 passed. Root performed bootstrap only; product processes had UID 1000 and zero capabilities. |
+| Package | Two deterministic builds each contained 619 sources, 1,245 outputs, 6,466 verified entries, and three dashboard files. Independent verification, immutable relocation, manifest/content/web identity, and source/runtime isolation passed. |
+| Runtime/lifecycle | Foreground and real systemd user-service paths matched HTTP, dashboard, compatibility, process, socket, and listener truth. Independent HostDeck/Codex restarts, app-server-loss recovery, active upgrade, two-release retention, active uninstall, repeated uninstall, and invalid pre-install ordering passed. |
+| Tailscale/cleanup | Local operation passed with no daemon socket. Later read-only host-socket observation left the profile/Serve identity hash unchanged. No test container, image, process, listener, runtime, installed command, unit, or Serve configuration remained. |
+| Aggregate regressions | Direct clean contract 11; package direct 41 plus deterministic package acceptance; unit 2,880/28 intentional external skips; contract 245; integration 36; web 920; shell Chromium 168; relocated packaged Chromium 1; supported Chromium/Firefox phone/desktop 76. Root/eight-package typechecks, lint/exports over 809 files, scaffold, planning, 619-module runtime boundary, frozen offline install, zero-vulnerability production audit, and 172-record permissive license inventory passed. |
+| Limits | Docker shares the host kernel; no independent VM/kernel, new physical-phone run, aggregate interface hardening, or release readiness is claimed. The host-default Codex 0.145.0 remains ineligible for exact-runtime evidence; the clean run used exact 0.144.0. |
 
 ## Manual Inspection
 
@@ -66,13 +78,15 @@ Freeze the clean-source, supported-Ubuntu, toolchain, foreground/service parity,
 - Compare pre/post host Tailscale identity hashes and inspect every runner/product argument for profile-switch or Serve mutation verbs.
 - Inspect uninstall and final container/host residue, sanitized output, evidence schema, and failure cleanup; do not treat Docker userspace as a physical-phone or independent-kernel release pass.
 
-## Known Boundary Before Implementation
+## Remaining Boundary
 
-- No clean-environment entrypoint or evidence schema exists yet; `IFC-V1-058` remains the sole package deferral.
-- The proven substrate reuses the host kernel and Docker daemon. `REL-V1-006` still owns the full release smoke and real packaged phone workflow; this task must state that limit even after passing.
+- The proven substrate reuses the host kernel and Docker daemon. `REL-V1-006` still owns the full release smoke and real packaged phone workflow.
+- `IFC-V1-091` still owns aggregate production interface hardening, and `FE-V1-090` still owns complete physical-device mobile hardening.
 
 ## Commit Record
 
-- Criteria: pending.
-- Implementation/evidence: pending.
-- Closure: pending.
+- Criteria: `2aa21e9`.
+- Harness and production corrections: `d070796` through `eb77647`.
+- Authoritative clean evidence source: `eb77647`.
+- Supported-browser package repin and aggregate evidence: `eda62ae`.
+- Owner-doc closure: pending this closure commit.

@@ -55,6 +55,7 @@ dist/hostdeck/dist/shell.js --version
 pnpm test:package
 node dist/hostdeck/verify.mjs dist/hostdeck
 pnpm test:browser:package
+pnpm smoke:clean-environment
 pnpm test:browser:pairing
 pnpm test:ui-fidelity
 pnpm test:e2e
@@ -151,5 +152,4 @@ pnpm generate:codex-bindings
 
 ## Explicit Gaps
 
-- CLI service lifecycle: the verified package supports persistent `service install|upgrade|status|start|stop|restart|uninstall`; clean-machine parity remains `IFC-V1-058`.
 - Local release smoke: `pnpm smoke:local` intentionally exits nonzero until `REL-V1-006` implements it.
