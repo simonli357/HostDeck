@@ -103,11 +103,11 @@ test("sends one exact interrupt, locks pending dismissal, and renders terminal A
   await confirmation.getByRole("button", { name: "Interrupt turn" }).click();
   await expect.poll(fixture.interrupt.hasPendingRequest).toBe(true);
   const pending = actionsDialog(page, "Interrupt active turn");
-  await expect(pending.getByText("Waiting for terminal proof", { exact: true }).first())
+  await expect(pending.getByText("Waiting for confirmed result", { exact: true }).first())
     .toBeVisible();
   await expect(pending).not.toContainText(/accepted|request completed/iu);
   await expect(pending.getByRole("button", { name: "Close session actions" })).toBeDisabled();
-  await expect(pending.getByRole("button", { name: "Waiting for terminal proof" })).toBeDisabled();
+  await expect(pending.getByRole("button", { name: "Waiting for confirmed result" })).toBeDisabled();
   expect(fixture.interrupt.requests()).toHaveLength(1);
   expectInterruptRequest(requiredRequest(fixture.interrupt.requests(), 0), interruptBrowserTurnId);
   await capture(page, "pending-390x844.png");

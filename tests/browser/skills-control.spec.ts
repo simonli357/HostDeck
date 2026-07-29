@@ -167,7 +167,7 @@ test("renders empty, partial, error, unsupported, malformed, foreign, and failur
 
   await closeSkills(page);
   api.setReadOutcome("unsupported");
-  await captureSkillsState(page, "Structured Skills unsupported", "unsupported-390x844.png");
+  await captureSkillsState(page, "Skills unavailable", "unsupported-390x844.png");
   await expect(page.getByRole("button", { name: "Refresh Skills" })).toBeDisabled();
 
   await closeSkills(page);

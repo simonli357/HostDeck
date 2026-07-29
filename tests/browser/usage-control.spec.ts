@@ -102,7 +102,7 @@ test("owns loading, one in-flight read, stale capture, and explicit refresh", as
   const usage = page.getByRole("dialog", { name: "/usage" });
   await expect(usage.getByText("Loading usage", { exact: true })).toBeVisible();
   await expect.poll(() => api.hasPendingRead()).toBe(true);
-  const loadingRefresh = usage.getByRole("button", { name: "Refresh structured usage" });
+  const loadingRefresh = usage.getByRole("button", { name: "Refresh usage" });
   await expect(loadingRefresh).toBeDisabled();
   await loadingRefresh.evaluate((button) => (button as HTMLButtonElement).click());
   await page.setViewportSize({ width: 390, height: 843 });
@@ -126,7 +126,7 @@ test("owns loading, one in-flight read, stale capture, and explicit refresh", as
   });
 
   api.setReadOutcome("pending");
-  const refresh = usage.getByRole("button", { name: "Refresh structured usage" });
+  const refresh = usage.getByRole("button", { name: "Refresh usage" });
   await refresh.click();
   await expect(usage.getByText("Refreshing usage", { exact: true })).toBeVisible();
   await expect(refresh).toBeDisabled();
@@ -185,8 +185,8 @@ test("renders the complete empty, null, reset, limit, unsupported, and failure m
 
   await closeUsage(page);
   api.setReadOutcome("unsupported");
-  await captureUsageState(page, "Structured usage unsupported", "unsupported-390x844.png");
-  await expect(page.getByRole("button", { name: "Refresh structured usage" })).toBeDisabled();
+  await captureUsageState(page, "Usage unavailable", "unsupported-390x844.png");
+  await expect(page.getByRole("button", { name: "Refresh usage" })).toBeDisabled();
 
   await closeUsage(page);
   api.setReadOutcome("known_failure");
@@ -283,7 +283,7 @@ test("contains long usage across mobile, desktop, short-height, and 200 percent 
     element.scrollTop = element.scrollHeight;
   });
   await expect(page.getByRole("heading", { name: "Rate limits" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Refresh structured usage" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh usage" })).toBeVisible();
   await page.screenshot({
     path: resolve(artifactDirectory, "long-scrolled-320x800.png"),
     animations: "disabled"
@@ -500,7 +500,7 @@ async function expectUsageGeometry(page: Page) {
     const status = document.querySelector(".hostdeck-usage-status");
     const back = document.querySelector('[aria-label="Back to session utilities"]');
     const close = document.querySelector('[aria-label="Close Usage utility"]');
-    const refresh = document.querySelector('[aria-label="Refresh structured usage"]');
+    const refresh = document.querySelector('[aria-label="Refresh usage"]');
     const summary = document.querySelector(".hostdeck-usage-summary");
     if (
       !(dialog instanceof HTMLElement) ||

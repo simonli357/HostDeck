@@ -138,7 +138,22 @@ test("audits the inline approval card", async ({ page }) => {
   await page.clock.setFixedTime(approvalReviewTime);
   await installApprovalDecisionsApi(page, { snapshotVariant: "elevated" });
   await page.goto(detailPath);
-  await expect(page.getByRole("button", { name: "Review & approve" })).toBeVisible();
+  const approval = page.locator(".hostdeck-approval-item");
+  await expect(approval.getByRole("button", { name: "Review & approve" })).toBeVisible();
+  await approval.evaluate((element) => {
+    const appBar = document.querySelector(".hostdeck-app-bar");
+    if (!(appBar instanceof HTMLElement)) {
+      throw new TypeError("HostDeck app bar is unavailable.");
+    }
+    window.scrollBy(0, element.getBoundingClientRect().top - appBar.getBoundingClientRect().bottom - 8);
+  });
+  const appBarBox = await page.locator(".hostdeck-app-bar").boundingBox();
+  const approvalBox = await approval.boundingBox();
+  expect(appBarBox).not.toBeNull();
+  expect(approvalBox).not.toBeNull();
+  expect(approvalBox?.y ?? 0).toBeGreaterThanOrEqual(
+    (appBarBox?.y ?? 0) + (appBarBox?.height ?? 0) + 7
+  );
   await expectLiveRegionContract(page);
   await expectAxeClean(page, "inline approval card");
 });
@@ -318,7 +333,7 @@ test("audits event diagnostic details", async ({ page }) => {
   const eventTrigger = page.getByRole("button", { name: "View event details" }).first();
   await eventTrigger.click();
   const dialog = page.getByRole("dialog", { name: "Event details" });
-  await expect(dialog.getByText("Event verification current", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Event details current", { exact: true })).toBeVisible();
   await expectAxeClean(page, "event diagnostic sheet");
   await page.keyboard.press("Escape");
   await expect(eventTrigger).toBeFocused();

@@ -82,7 +82,7 @@ test("approves and denies one exact request through the protected production pat
   api.releaseResponse("terminal");
   await expect(dialog).toBeHidden();
   await expect(item.getByText("Approved once", { exact: true })).toBeVisible();
-  await expect(item.getByText("The exact request was approved once.", { exact: true }))
+  await expect(item.getByText("The selected request was approved once.", { exact: true }))
     .toBeVisible();
   await captureItem(page, item, "approved-390x844.png");
 
@@ -187,7 +187,7 @@ test("shows list loading, empty, unsupported, read failure, known rejection, and
   await page.getByRole("button", { name: "Approve once" }).click();
   await expect(page.getByText("Approval unsupported", { exact: true })).toBeVisible();
   await expect(page.getByText(
-    "The installed Codex runtime does not support structured approvals.",
+    "The installed Codex runtime does not support approval controls.",
     { exact: true }
   )).toBeVisible();
   await captureApprovalStatus(page, "decision-unsupported-390x844.png");
@@ -208,7 +208,7 @@ test("shows list loading, empty, unsupported, read failure, known rejection, and
   api.setRespondOutcome("correlation_mismatch");
   await page.getByRole("button", { name: "Approve once" }).click();
   await expect(page.getByText("Decision outcome unknown", { exact: true })).toBeVisible();
-  await expect(page.getByText("The exact request was approved once.", { exact: true }))
+  await expect(page.getByText("The selected request was approved once.", { exact: true }))
     .toHaveCount(0);
   expect(api.approvalRespondRequests()).toHaveLength(4);
   expect(api.approvalReadRequests()).toHaveLength(7);

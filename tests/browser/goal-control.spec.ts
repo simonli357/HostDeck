@@ -283,7 +283,7 @@ test("renders the complete deterministic goal state and read-authority matrix", 
     },
     {
       variant: "uncertain_conflict",
-      status: "Goal reconciliation conflict",
+      status: "Goal result conflict",
       artifact: "uncertain-conflict-390x844.png"
     }
   ] as const) {

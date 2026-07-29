@@ -34,12 +34,12 @@ test("verifies every normalized event variant and limitation through one exact r
 
   const states = [
     ["Replay boundary", "Content truncated", "replay-boundary"],
-    ["Message event", "Bounded projection", "message"],
+    ["Message event", "Bounded event summary", "message"],
     ["Turn event", "Content redacted", "turn"],
     ["Activity event", "Content truncated", "activity"],
     ["Approval event", "Content redacted and truncated", "approval"],
-    ["Control event", "Bounded projection", "control"],
-    ["Runtime event", "Bounded projection", "runtime"],
+    ["Control event", "Bounded event summary", "control"],
+    ["Runtime event", "Bounded event summary", "runtime"],
     ["Unrecognized optional event", "Unrecognized optional event", "unknown-optional"]
   ] as const;
 
@@ -52,11 +52,11 @@ test("verifies every normalized event variant and limitation through one exact r
 
     const dialog = eventDialog(page);
     await expect(dialog.getByRole("heading", { name: heading, exact: true })).toBeVisible();
-    await expect(dialog.getByText("Event verification current", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Event details current", { exact: true })).toBeVisible();
     await expect(
       dialog.locator(".hostdeck-event-limitation").getByText(limitation, { exact: true })
     ).toBeVisible();
-    await expect(dialog.getByText("HostDeck projection", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("HostDeck summary", { exact: true })).toBeVisible();
     await expect(page.locator('[role="dialog"]')).toHaveCount(1);
     await expect(dialog.getByRole("button", { name: "Close event details" })).toBeFocused();
     expectEventRequest(requiredRequest(api.requests(), index), index + 1, index);
@@ -97,7 +97,7 @@ test("keeps loading, stale, retry, malformed, mismatch, and pruned truth distinc
   await capture(page, "state-loading-390x844.png");
 
   api.releaseRead();
-  await expect(dialog.getByText("Event verification current", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Event details current", { exact: true })).toBeVisible();
   await capture(page, "state-current-390x844.png");
   await closeEventDialog(page);
 
@@ -105,7 +105,7 @@ test("keeps loading, stale, retry, malformed, mismatch, and pruned truth distinc
   await page.reload();
   await action.click();
   await expect(dialog.getByText("Retained event detail", { exact: true })).toBeVisible();
-  await expect(dialog.getByText(/Current session-read authority is unavailable/iu)).toBeVisible();
+  await expect(dialog.getByText(/Current session access is unavailable/iu)).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Retry" })).toBeDisabled();
   expect(api.requests()).toHaveLength(1);
   await capture(page, "state-stale-390x844.png");
@@ -125,7 +125,7 @@ test("keeps loading, stale, retry, malformed, mismatch, and pruned truth distinc
 
   api.setReadOutcome("success");
   await dialog.getByRole("button", { name: "Retry" }).click();
-  await expect(dialog.getByText("Event verification current", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Event details current", { exact: true })).toBeVisible();
   await capture(page, "state-retried-current-390x844.png");
   await closeEventDialog(page);
 
@@ -171,7 +171,7 @@ test("verifies a persisted boundary whose prior cursor is not reported", async (
   await expect(actions).toHaveCount(1);
   await actions.click();
   const dialog = eventDialog(page);
-  await expect(dialog.getByText("Event verification current", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Event details current", { exact: true })).toBeVisible();
   await expect(dialog.getByText("Persisted normalized event", { exact: true })).toBeVisible();
   await expect(dialog.getByText("Not reported", { exact: true }).first()).toBeVisible();
   expect(api.requests()).toHaveLength(1);
@@ -296,7 +296,7 @@ test("contains maximum payload across responsive, short-height, scrolled, and zo
   await page.getByRole("button", { name: "View event details" }).click();
 
   const dialog = eventDialog(page);
-  await expect(dialog.getByText("Event verification current", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Event details current", { exact: true })).toBeVisible();
   const textValue = dialog.locator(".hostdeck-event-field").filter({ hasText: "Text" }).locator("dd");
   await expect(textValue).toHaveText(text);
   await expect(dialog.locator("script, a")).toHaveCount(0);

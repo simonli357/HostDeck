@@ -258,7 +258,7 @@ test("renders every process-live, stale, unsupported, and read-failure state", a
   await closeCompact(page);
   api.setReadOutcome("unsupported");
   compact = await openCompact(page, false);
-  await expect(compact.getByText("Structured Compact unsupported", { exact: true })).toBeVisible();
+  await expect(compact.getByText("Compact unavailable", { exact: true })).toBeVisible();
   await expect(compact.getByRole("button", { name: "Check Compact progress" })).toBeDisabled();
   await page.screenshot({
     path: resolve(artifactDirectory, "unsupported-390x844.png"),
@@ -306,7 +306,7 @@ test("separates read visibility from lock, write, and turn authority", async ({ 
     },
     {
       variant: "turn_unknown" as const,
-      reason: "Turn state is not proven idle or terminal. Refresh before compacting context.",
+      reason: "The turn is not confirmed idle or finished. Refresh before compacting context.",
       artifact: "unknown-turn-390x844.png"
     }
   ]) {

@@ -150,7 +150,7 @@ test("retains exact stale times and prior access failure until authority or targ
   await expect(page.getByText("Showing stale session state", { exact: true })).toBeVisible();
   await expect(page.getByText(/Session detail last confirmed/u)).toBeVisible();
   await expect(page.getByText(/Access last confirmed/u)).toBeVisible();
-  await expect(page.getByText(/Session projection last confirmed/u)).toHaveCount(0);
+  await expect(page.getByText(/Session state last confirmed/u)).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "Prompt for android-release" }))
     .toBeDisabled();
   expect(requestCount(api, "/api/v1/access")).toBe(accessReadsBeforeFailure + 1);
@@ -235,7 +235,7 @@ test("contains the densest stale detail state across selected stress viewports",
   });
   await page.goto(detailPath);
   await expect(page.getByText("Showing stale session state", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Session projection last confirmed/u)).toBeVisible();
+  await expect(page.getByText(/Session state last confirmed/u)).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Prompt for android-release" }))
     .toBeDisabled();
   await expect(page.getByRole("button", { name: "/model for android-release" }))

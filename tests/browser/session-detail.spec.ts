@@ -148,7 +148,7 @@ test("renders an honest empty state and does not invent downstream controls", as
   await page.goto(detailPath);
 
   await expect(page.getByRole("heading", { name: "No activity recorded" })).toBeVisible();
-  await expect(page.getByText("This session has no retained structured activity.")).toBeVisible();
+  await expect(page.getByText("This session has no retained activity.")).toBeVisible();
   await expect(page.getByRole("list", { name: "Session activity" })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "Prompt for android-release" }))
     .toBeDisabled();

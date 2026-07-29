@@ -152,7 +152,7 @@ test("recovers stale-generation authority through one refresh and one bootstrap 
   const textarea = page.getByRole("textbox", { name: "Prompt for android-release" });
   await textarea.fill("This failed prompt must not be replayed by access recovery.");
   await page.getByRole("button", { name: "Send prompt to android-release" }).click();
-  await expect(page.getByText("Another prompt operation is still being reconciled.", { exact: true }))
+  await expect(page.getByText("Another prompt is still being checked.", { exact: true }))
     .toBeVisible();
   expect(api.promptRequests()).toHaveLength(1);
 
@@ -200,7 +200,7 @@ test("retains stale read-only truth after an explicit offline access check", asy
   const textarea = page.getByRole("textbox", { name: "Prompt for android-release" });
   await textarea.fill("One request only.");
   await page.getByRole("button", { name: "Send prompt to android-release" }).click();
-  await expect(page.getByText("Another prompt operation is still being reconciled.", { exact: true }))
+  await expect(page.getByText("Another prompt is still being checked.", { exact: true }))
     .toBeVisible();
 
   await openHostAccess(page);
@@ -236,7 +236,7 @@ test("suppresses recovered copy for an old target while shared page setup settle
   const textarea = page.getByRole("textbox", { name: "Prompt for android-release" });
   await textarea.fill("Target replacement must not replay this request.");
   await page.getByRole("button", { name: "Send prompt to android-release" }).click();
-  await expect(page.getByText("Another prompt operation is still being reconciled.", { exact: true }))
+  await expect(page.getByText("Another prompt is still being checked.", { exact: true }))
     .toBeVisible();
 
   await openHostAccess(page);

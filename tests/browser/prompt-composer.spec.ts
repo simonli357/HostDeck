@@ -286,7 +286,7 @@ test("renders distinct authority, host, CSRF, turn, and freshness disabled famil
     },
     {
       variant: "waiting_input" as const,
-      detail: "Respond through the structured input request first.",
+      detail: "Respond to the pending input request first.",
       artifact: "disabled-needs-input-390x844.png"
     },
     {

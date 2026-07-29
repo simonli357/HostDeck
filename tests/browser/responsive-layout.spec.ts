@@ -366,7 +366,7 @@ test("contains a maximum event payload in the diagnostic sheet", async ({ page }
   await page.goto(detailPath);
   await page.getByRole("button", { name: "View event details" }).click();
   const dialog = page.getByRole("dialog", { name: "Event details" });
-  await expect(dialog.getByText("Event verification current", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Event details current", { exact: true })).toBeVisible();
 
   const measurements = [];
   for (const viewport of [

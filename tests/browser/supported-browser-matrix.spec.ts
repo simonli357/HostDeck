@@ -773,7 +773,7 @@ test("event diagnostics performs one exact read", async ({ page }, testInfo) => 
   await page.goto(detailPath);
   await page.getByRole("button", { name: "View event details" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Event details" });
-  await expect(dialog.getByText("Event verification current", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Event details current", { exact: true })).toBeVisible();
   expect(api.requests()).toHaveLength(1);
   await dialog.getByRole("button", { name: "Close event details" }).click();
   await expectCleanBrowser(page, diagnostics);
