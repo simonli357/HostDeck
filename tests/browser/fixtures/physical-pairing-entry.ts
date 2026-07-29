@@ -37,6 +37,7 @@ const requestBase = Object.freeze({
   referrerPolicy: "no-referrer" as const
 });
 const commandPath = "/__physical/command";
+const clipboardPath = "/__physical/clipboard";
 const cleanupPath = "/__physical/cleanup";
 const protectedPath = "/__physical/protected";
 let activeEventSource: EventSource | null = null;
@@ -54,7 +55,9 @@ if (initialFragment !== "") {
 }
 
 void (fragmentScrubbed
-  ? runPhysicalAcceptance(initialFragment)
+  ? window.location.pathname === clipboardPath
+    ? runClipboardCleanup()
+    : runPhysicalAcceptance(initialFragment)
   : Promise.reject(new Error("Pairing fragment could not be removed.")))
   .catch(() => renderFailure())
   .finally(() => {
@@ -84,6 +87,35 @@ async function runPhysicalAcceptance(fragment: string): Promise<void> {
   );
   await sendCheckpoint("reloaded");
   await waitForStartOrCleanup();
+}
+
+async function runClipboardCleanup(): Promise<void> {
+  requireCondition(initialFragment === "", "Clipboard cleanup received a fragment.");
+  await requireSecretFreeBrowserState();
+  renderState(
+    "Clear copied command",
+    "Remove the temporary laptop command from this phone.",
+    "clipboard_cleanup"
+  );
+  const button = requireStartButton();
+  button.textContent = "Clear clipboard";
+  button.hidden = false;
+  await new Promise<void>((resolve, reject) => {
+    button.addEventListener(
+      "click",
+      () => {
+        void navigator.clipboard.writeText("").then(resolve, reject);
+      },
+      { once: true }
+    );
+  });
+  button.hidden = true;
+  renderState(
+    "Clipboard cleared",
+    "The temporary laptop command was removed.",
+    "clipboard_cleared"
+  );
+  await afterPaint();
 }
 
 async function runPairingEntry(fragment: string): Promise<void> {
@@ -499,6 +531,7 @@ async function requireSecretFreeBrowserState(): Promise<void> {
   requireCondition(
     window.location.hash === "" &&
       (window.location.pathname === "/" ||
+        window.location.pathname === clipboardPath ||
         window.location.pathname === cleanupPath) &&
       window.location.search === "" &&
       document.cookie === "" &&

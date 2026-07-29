@@ -263,6 +263,7 @@ describe("physical Android phone-driver protocol", () => {
     const bundle = await buildPhysicalBrowserBundle();
 
     expect(bundle).toContain("/__physical/checkpoint/");
+    expect(bundle).toContain("/__physical/clipboard");
     expect(bundle).toContain("/__physical/cleanup");
     expect(bundle).toContain("requestFullscreen");
     expect(bundle).not.toMatch(
@@ -1573,6 +1574,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
                 buildRoot: requireProductionBuildRoot(productionBuildRoot),
                 id: "physical-production-browser",
                 packageVersion: "0.0.0"
+              }),
+              physicalPageRoute(browserBundle, {
+                id: "physical-production-clipboard-page",
+                path: "/__physical/clipboard"
               }),
               physicalPageRoute(browserBundle, {
                 id: "physical-production-cleanup-page",
@@ -3365,7 +3370,9 @@ function physicalPageRoute(
 ): HostDeckRoutePluginRegistration {
   requireCondition(
     /^[a-z0-9][a-z0-9_-]{0,63}$/u.test(options.id) &&
-      (options.path === "/" || options.path === "/__physical/cleanup"),
+      (options.path === "/" ||
+        options.path === "/__physical/clipboard" ||
+        options.path === "/__physical/cleanup"),
     "Physical browser page route options are invalid."
   );
   const nonce = randomBytes(18).toString("base64url");
@@ -6294,7 +6301,9 @@ async function returnToPhysicalSessionUtilities(): Promise<void> {
 }
 
 async function runPhysicalLaptopResume(
-  _input: ProductionUiEntryInput,
+  input: ProductionUiEntryInput & {
+    readonly prompt: PhysicalPromptRuntime;
+  },
   capture: PhysicalDashboardCapture,
   measure: PhysicalDashboardMeasure
 ): Promise<"copied" | "unavailable"> {
@@ -6351,7 +6360,10 @@ async function runPhysicalLaptopResume(
     return false;
   }, 30_000, "Physical laptop Resume copy outcome was unavailable.");
   requireCondition(outcome !== null, "Physical laptop Resume copy did not settle.");
-  if (outcome === "copied") clearPhysicalAndroidClipboard();
+  if (outcome === "copied") {
+    await clearPhysicalAndroidClipboard(input);
+    return outcome;
+  }
   const back = await waitForAndroidUiNodePresent(
     "description",
     "Back to session actions",
@@ -6370,17 +6382,42 @@ async function runPhysicalLaptopResume(
   return outcome;
 }
 
-function clearPhysicalAndroidClipboard(): void {
-  const cleared = adbWithStatus([
-    "shell",
-    "cmd",
-    "clipboard",
-    "set",
-    ""
-  ]);
-  requireCondition(
-    cleared.status === 0 && cleared.stderr === "",
-    "Physical clipboard could not be cleared after Resume handoff."
+async function clearPhysicalAndroidClipboard(
+  input: ProductionUiEntryInput & {
+    readonly prompt: PhysicalPromptRuntime;
+  }
+): Promise<void> {
+  openChromePath(input.externalOrigin, "/__physical/clipboard");
+  const clear = await waitForAndroidUiNodePresent(
+    "text",
+    "Clear clipboard",
+    30_000,
+    "Physical clipboard cleanup action was unavailable."
+  );
+  await tapAndroidNodeOnceAndWait(
+    clear,
+    async () =>
+      (await readAndroidUiNodes()).some(
+        (node) => node.text === "Clipboard cleared"
+      ),
+    "Physical clipboard cleanup did not complete."
+  );
+  const detailReadsBefore = input.requestInspection.sessionDetailRequests;
+  openChromePath(
+    input.externalOrigin,
+    `/sessions/${physicalUiSessionId}`
+  );
+  await waitFor(
+    () =>
+      input.requestInspection.sessionDetailRequests > detailReadsBefore &&
+      input.prompt.subscribers.snapshot().active_subscribers === 1,
+    45_000,
+    "Physical clipboard cleanup did not return to Session Detail."
+  );
+  await waitForAndroidUiText(
+    "Ready to send",
+    30_000,
+    "Physical clipboard cleanup lost the selected session."
   );
 }
 
@@ -8987,7 +9024,7 @@ function assertPhysicalDashboardAudit(
 ): void {
   requireCondition(
     inspection.claimRequests === 1 &&
-      inspection.csrfRequests === 8 &&
+      inspection.csrfRequests === 9 &&
       inspection.promptRequests === 1 &&
       inspection.promptNoReferrerRequests === 1 &&
       inspection.revokeRequests === 2 &&
@@ -9018,7 +9055,7 @@ function assertPhysicalDashboardAuditRows(
     ["approval_response", 1],
     ["archive", 1],
     ["compact", 1],
-    ["csrf_bootstrap", 8],
+    ["csrf_bootstrap", 9],
     ["device_revoke", 2],
     ["goal", 1],
     ["interrupt", 1],
