@@ -1,0 +1,743 @@
+{
+  "schema_version": 1,
+  "task": "REL-V1-005",
+  "criteria": [
+    {
+      "id": "SPR-01",
+      "requirements": [
+        "NFR-001",
+        "NFR-013"
+      ],
+      "threat_classes": [
+        "evidence_support_disclosure"
+      ],
+      "trust_boundaries": [
+        "release_input_to_verified_package"
+      ],
+      "evidence_ids": [
+        "criteria",
+        "ledger_validator",
+        "requirements"
+      ]
+    },
+    {
+      "id": "SPR-02",
+      "requirements": [
+        "NFR-001",
+        "NFR-013",
+        "SFR-012",
+        "SFR-015"
+      ],
+      "threat_classes": [
+        "supply_chain_package_tampering",
+        "compatibility_config_downgrade"
+      ],
+      "trust_boundaries": [
+        "release_input_to_verified_package"
+      ],
+      "evidence_ids": [
+        "ledger_validator",
+        "route_manifest",
+        "interface_hardening",
+        "lockfile"
+      ]
+    },
+    {
+      "id": "SPR-03",
+      "requirements": [
+        "NFR-001",
+        "SFR-001",
+        "SFR-002",
+        "SFR-012"
+      ],
+      "threat_classes": [
+        "proxy_header_spoofing",
+        "application_authorization_bypass"
+      ],
+      "trust_boundaries": [
+        "local_user_cli_to_loopback_admin",
+        "tailscale_serve_to_loopback_proxy",
+        "unpaired_browser_to_pair_claim",
+        "paired_browser_to_protected_api"
+      ],
+      "evidence_ids": [
+        "foundation_hardening",
+        "interface_hardening"
+      ]
+    },
+    {
+      "id": "SPR-04",
+      "requirements": [
+        "NFR-001",
+        "SFR-009",
+        "SFR-012",
+        "SFR-015"
+      ],
+      "threat_classes": [
+        "public_network_exposure",
+        "arbitrary_execution_legacy_bypass"
+      ],
+      "trust_boundaries": [
+        "hostdeck_to_codex_unix_socket",
+        "tailscale_serve_to_loopback_proxy"
+      ],
+      "evidence_ids": [
+        "runtime_boundary",
+        "package_contract",
+        "clean_user_acceptance"
+      ]
+    },
+    {
+      "id": "SPR-05",
+      "requirements": [
+        "SFR-001",
+        "SFR-002",
+        "SFR-012",
+        "SFR-013"
+      ],
+      "threat_classes": [
+        "proxy_header_spoofing",
+        "origin_dns_cors_confusion"
+      ],
+      "trust_boundaries": [
+        "tailscale_serve_to_loopback_proxy"
+      ],
+      "evidence_ids": [
+        "request_trust",
+        "remote_security"
+      ]
+    },
+    {
+      "id": "SPR-06",
+      "requirements": [
+        "SFR-001",
+        "SFR-007",
+        "SFR-012",
+        "SFR-014",
+        "SFR-018"
+      ],
+      "threat_classes": [
+        "origin_dns_cors_confusion",
+        "csrf_cookie_browser_storage"
+      ],
+      "trust_boundaries": [
+        "tailscale_serve_to_loopback_proxy",
+        "unpaired_browser_to_pair_claim"
+      ],
+      "evidence_ids": [
+        "request_trust",
+        "request_authentication",
+        "browser_matrix"
+      ]
+    },
+    {
+      "id": "SPR-07",
+      "requirements": [
+        "SFR-001",
+        "SFR-002",
+        "SFR-007",
+        "SFR-013",
+        "SFR-014",
+        "SFR-018"
+      ],
+      "threat_classes": [
+        "pairing_theft_replay",
+        "csrf_cookie_browser_storage"
+      ],
+      "trust_boundaries": [
+        "unpaired_browser_to_pair_claim"
+      ],
+      "evidence_ids": [
+        "storage_hardening",
+        "request_authentication",
+        "remote_security"
+      ]
+    },
+    {
+      "id": "SPR-08",
+      "requirements": [
+        "SFR-001",
+        "SFR-002",
+        "SFR-010"
+      ],
+      "threat_classes": [
+        "application_authorization_bypass",
+        "permission_lock_revocation_race"
+      ],
+      "trust_boundaries": [
+        "paired_browser_to_protected_api"
+      ],
+      "evidence_ids": [
+        "request_authentication",
+        "write_admission",
+        "remote_security"
+      ]
+    },
+    {
+      "id": "SPR-09",
+      "requirements": [
+        "SFR-002",
+        "SFR-007",
+        "SFR-013",
+        "SFR-014"
+      ],
+      "threat_classes": [
+        "csrf_cookie_browser_storage",
+        "permission_lock_revocation_race"
+      ],
+      "trust_boundaries": [
+        "paired_browser_to_protected_api",
+        "application_to_local_state_audit"
+      ],
+      "evidence_ids": [
+        "storage_hardening",
+        "request_authentication",
+        "browser_matrix"
+      ]
+    },
+    {
+      "id": "SPR-10",
+      "requirements": [
+        "SFR-002",
+        "SFR-004",
+        "SFR-016"
+      ],
+      "threat_classes": [
+        "permission_lock_revocation_race",
+        "target_replay_audit_contradiction"
+      ],
+      "trust_boundaries": [
+        "local_user_cli_to_loopback_admin",
+        "paired_browser_to_protected_api"
+      ],
+      "evidence_ids": [
+        "storage_hardening",
+        "write_admission",
+        "remote_security"
+      ]
+    },
+    {
+      "id": "SPR-11",
+      "requirements": [
+        "SFR-003",
+        "SFR-005",
+        "SFR-010",
+        "SFR-016"
+      ],
+      "threat_classes": [
+        "target_replay_audit_contradiction"
+      ],
+      "trust_boundaries": [
+        "paired_browser_to_protected_api",
+        "application_to_local_state_audit"
+      ],
+      "evidence_ids": [
+        "write_admission",
+        "interface_hardening",
+        "browser_matrix"
+      ]
+    },
+    {
+      "id": "SPR-12",
+      "requirements": [
+        "SFR-002",
+        "SFR-005",
+        "SFR-010",
+        "SFR-016"
+      ],
+      "threat_classes": [
+        "target_replay_audit_contradiction",
+        "compatibility_config_downgrade"
+      ],
+      "trust_boundaries": [
+        "hostdeck_to_codex_unix_socket",
+        "application_to_local_state_audit"
+      ],
+      "evidence_ids": [
+        "runtime_hardening",
+        "write_admission",
+        "interface_hardening"
+      ]
+    },
+    {
+      "id": "SPR-13",
+      "requirements": [
+        "SFR-005",
+        "SFR-008",
+        "SFR-016"
+      ],
+      "threat_classes": [
+        "tailscale_profile_serve_mutation",
+        "target_replay_audit_contradiction"
+      ],
+      "trust_boundaries": [
+        "local_user_cli_to_loopback_admin",
+        "tailscale_serve_to_loopback_proxy"
+      ],
+      "evidence_ids": [
+        "remote_control",
+        "remote_lifecycle",
+        "remote_android_acceptance"
+      ]
+    },
+    {
+      "id": "SPR-14",
+      "requirements": [
+        "NFR-001",
+        "SFR-005",
+        "SFR-008",
+        "SFR-017"
+      ],
+      "threat_classes": [
+        "tailscale_profile_serve_mutation",
+        "resource_exhaustion_slow_client"
+      ],
+      "trust_boundaries": [
+        "tailscale_serve_to_loopback_proxy"
+      ],
+      "evidence_ids": [
+        "remote_control",
+        "remote_lifecycle",
+        "remote_security"
+      ]
+    },
+    {
+      "id": "SPR-15",
+      "requirements": [
+        "SFR-002",
+        "SFR-009",
+        "SFR-010",
+        "SFR-012"
+      ],
+      "threat_classes": [
+        "arbitrary_execution_legacy_bypass",
+        "compatibility_config_downgrade"
+      ],
+      "trust_boundaries": [
+        "local_user_cli_to_loopback_admin",
+        "hostdeck_to_codex_unix_socket",
+        "paired_browser_to_protected_api"
+      ],
+      "evidence_ids": [
+        "route_manifest",
+        "runtime_boundary",
+        "package_contract"
+      ]
+    },
+    {
+      "id": "SPR-16",
+      "requirements": [
+        "NFR-013",
+        "SFR-006",
+        "SFR-015"
+      ],
+      "threat_classes": [
+        "local_permission_secret_retention",
+        "process_service_persistence"
+      ],
+      "trust_boundaries": [
+        "verified_package_to_current_user_install",
+        "hostdeck_to_codex_unix_socket",
+        "application_to_local_state_audit"
+      ],
+      "evidence_ids": [
+        "storage_hardening",
+        "service_lifecycle",
+        "clean_user_acceptance"
+      ]
+    },
+    {
+      "id": "SPR-17",
+      "requirements": [
+        "NFR-013",
+        "SFR-006",
+        "SFR-007",
+        "SFR-014",
+        "SFR-018"
+      ],
+      "threat_classes": [
+        "local_permission_secret_retention",
+        "evidence_support_disclosure"
+      ],
+      "trust_boundaries": [
+        "application_to_local_state_audit",
+        "runtime_output_to_ui_evidence_support"
+      ],
+      "evidence_ids": [
+        "storage_hardening",
+        "interface_hardening",
+        "release_review_evidence"
+      ]
+    },
+    {
+      "id": "SPR-18",
+      "requirements": [
+        "SFR-005",
+        "SFR-013",
+        "SFR-017"
+      ],
+      "threat_classes": [
+        "resource_exhaustion_slow_client"
+      ],
+      "trust_boundaries": [
+        "tailscale_serve_to_loopback_proxy",
+        "paired_browser_to_protected_api"
+      ],
+      "evidence_ids": [
+        "resource_stress",
+        "remote_security",
+        "interface_hardening"
+      ]
+    },
+    {
+      "id": "SPR-19",
+      "requirements": [
+        "NFR-013",
+        "SFR-015",
+        "SFR-017"
+      ],
+      "threat_classes": [
+        "process_service_persistence",
+        "local_permission_secret_retention"
+      ],
+      "trust_boundaries": [
+        "verified_package_to_current_user_install",
+        "hostdeck_to_codex_unix_socket"
+      ],
+      "evidence_ids": [
+        "service_lifecycle",
+        "clean_user_acceptance"
+      ]
+    },
+    {
+      "id": "SPR-20",
+      "requirements": [
+        "NFR-001",
+        "NFR-013",
+        "SFR-006",
+        "SFR-015"
+      ],
+      "threat_classes": [
+        "supply_chain_package_tampering",
+        "local_permission_secret_retention"
+      ],
+      "trust_boundaries": [
+        "release_input_to_verified_package",
+        "verified_package_to_current_user_install"
+      ],
+      "evidence_ids": [
+        "lockfile",
+        "package_contract",
+        "release_review_evidence"
+      ]
+    },
+    {
+      "id": "SPR-21",
+      "requirements": [
+        "SFR-002",
+        "SFR-005",
+        "SFR-009",
+        "SFR-010"
+      ],
+      "threat_classes": [
+        "compatibility_config_downgrade",
+        "arbitrary_execution_legacy_bypass"
+      ],
+      "trust_boundaries": [
+        "release_input_to_verified_package",
+        "hostdeck_to_codex_unix_socket"
+      ],
+      "evidence_ids": [
+        "runtime_hardening",
+        "interface_hardening",
+        "runtime_boundary"
+      ]
+    },
+    {
+      "id": "SPR-22",
+      "requirements": [
+        "NFR-001",
+        "NFR-013",
+        "SFR-001",
+        "SFR-002",
+        "SFR-004",
+        "SFR-008",
+        "SFR-011",
+        "SFR-012",
+        "SFR-018"
+      ],
+      "threat_classes": [
+        "public_network_exposure",
+        "application_authorization_bypass",
+        "tailscale_profile_serve_mutation"
+      ],
+      "trust_boundaries": [
+        "verified_package_to_current_user_install",
+        "tailscale_serve_to_loopback_proxy",
+        "paired_browser_to_protected_api"
+      ],
+      "evidence_ids": [
+        "clean_user_acceptance",
+        "remote_android_acceptance"
+      ]
+    },
+    {
+      "id": "SPR-23",
+      "requirements": [
+        "NFR-001",
+        "SFR-001",
+        "SFR-005",
+        "SFR-006",
+        "SFR-008",
+        "SFR-018"
+      ],
+      "threat_classes": [
+        "pairing_theft_replay",
+        "evidence_support_disclosure"
+      ],
+      "trust_boundaries": [
+        "local_user_cli_to_loopback_admin",
+        "runtime_output_to_ui_evidence_support"
+      ],
+      "evidence_ids": [
+        "user_guide",
+        "command_reference",
+        "remote_android_acceptance"
+      ]
+    },
+    {
+      "id": "SPR-24",
+      "requirements": [
+        "NFR-001",
+        "NFR-013",
+        "SFR-005",
+        "SFR-006",
+        "SFR-016"
+      ],
+      "threat_classes": [
+        "evidence_support_disclosure",
+        "supply_chain_package_tampering"
+      ],
+      "trust_boundaries": [
+        "release_input_to_verified_package",
+        "runtime_output_to_ui_evidence_support"
+      ],
+      "evidence_ids": [
+        "criteria",
+        "ledger_validator",
+        "release_review_evidence"
+      ]
+    }
+  ],
+  "requirements": [
+    "NFR-001",
+    "NFR-013",
+    "SFR-001",
+    "SFR-002",
+    "SFR-003",
+    "SFR-004",
+    "SFR-005",
+    "SFR-006",
+    "SFR-007",
+    "SFR-008",
+    "SFR-009",
+    "SFR-010",
+    "SFR-011",
+    "SFR-012",
+    "SFR-013",
+    "SFR-014",
+    "SFR-015",
+    "SFR-016",
+    "SFR-017",
+    "SFR-018"
+  ],
+  "threat_classes": [
+    "public_network_exposure",
+    "proxy_header_spoofing",
+    "origin_dns_cors_confusion",
+    "application_authorization_bypass",
+    "pairing_theft_replay",
+    "csrf_cookie_browser_storage",
+    "permission_lock_revocation_race",
+    "target_replay_audit_contradiction",
+    "tailscale_profile_serve_mutation",
+    "arbitrary_execution_legacy_bypass",
+    "local_permission_secret_retention",
+    "resource_exhaustion_slow_client",
+    "process_service_persistence",
+    "supply_chain_package_tampering",
+    "evidence_support_disclosure",
+    "compatibility_config_downgrade"
+  ],
+  "trust_boundaries": [
+    "release_input_to_verified_package",
+    "verified_package_to_current_user_install",
+    "local_user_cli_to_loopback_admin",
+    "hostdeck_to_codex_unix_socket",
+    "tailscale_serve_to_loopback_proxy",
+    "unpaired_browser_to_pair_claim",
+    "paired_browser_to_protected_api",
+    "application_to_local_state_audit",
+    "runtime_output_to_ui_evidence_support"
+  ],
+  "evidence": [
+    {
+      "id": "criteria",
+      "level": "L1",
+      "path": "artifacts/rel-v1-005-security-privacy-release-review.md",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "ledger_validator",
+      "level": "L1",
+      "path": "packages/test-fixtures/src/release-security-review.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "requirements",
+      "level": "L1",
+      "path": "docs/planning/02-requirements.md",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "foundation_hardening",
+      "level": "L2",
+      "path": "artifacts/fnd-v1-092-remote-ingress-hardening.md",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "storage_hardening",
+      "level": "L2",
+      "path": "artifacts/dat-v1-092-remote-storage-hardening.md",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "runtime_hardening",
+      "level": "L3",
+      "path": "artifacts/int-v1-091-selected-runtime-hardening.md",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "interface_hardening",
+      "level": "L3",
+      "path": "artifacts/ifc-v1-091-selected-production-interface-hardening/evidence.json",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "route_manifest",
+      "level": "L1",
+      "path": "packages/server/src/selected-api-route-manifest.contract.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "request_trust",
+      "level": "L2",
+      "path": "packages/server/src/fastify-request-trust.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "request_authentication",
+      "level": "L2",
+      "path": "packages/server/src/fastify-request-authentication.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "remote_security",
+      "level": "L2",
+      "path": "packages/server/src/remote-ingress-security-acceptance.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "write_admission",
+      "level": "L2",
+      "path": "packages/server/src/selected-write-gate.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "remote_control",
+      "level": "L2",
+      "path": "packages/server/src/remote-ingress-control-service.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "remote_lifecycle",
+      "level": "L2",
+      "path": "packages/server/src/remote-ingress-lifecycle.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "resource_stress",
+      "level": "L2",
+      "path": "tests/production-resource-stress.integration.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "runtime_boundary",
+      "level": "L2",
+      "path": "scripts/check-selected-runtime-boundary.test.mjs",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "service_lifecycle",
+      "level": "L3",
+      "path": "artifacts/ifc-v1-057-safe-uninstall-retention.md",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "package_contract",
+      "level": "L3",
+      "path": "scripts/production-package.test.mjs",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "browser_matrix",
+      "level": "L3",
+      "path": "artifacts/fe-v1-040-supported-browser-interaction-matrix/manifest.json",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "user_guide",
+      "level": "L3",
+      "path": "docs/delivery/08-user-guide.md",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "command_reference",
+      "level": "L3",
+      "path": "docs/delivery/11-command-reference.md",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "lockfile",
+      "level": "L1",
+      "path": "pnpm-lock.yaml",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "clean_user_acceptance",
+      "level": "L4",
+      "path": "artifacts/ifc-v1-058-clean-environment-parity/evidence.json",
+      "disposition": "accepted_input",
+      "task": "IFC-V1-058",
+      "task_field": "task_id",
+      "commit": "eb77647e8b1e77e42b16fef21b65da0d1b65ea8e",
+      "commit_field": "source_commit"
+    },
+    {
+      "id": "remote_android_acceptance",
+      "level": "L4",
+      "path": "artifacts/ifc-v1-079-device/evidence.json",
+      "disposition": "accepted_input",
+      "task": "IFC-V1-079",
+      "task_field": "task",
+      "commit": "b4078b6d411267dec9701ed5ae67037567a9dee9",
+      "commit_field": "commit"
+    },
+    {
+      "id": "release_review_evidence",
+      "level": "L4",
+      "path": "artifacts/rel-v1-005-security-privacy-release-review/evidence.json",
+      "disposition": "fresh_required"
+    }
+  ]
+}
