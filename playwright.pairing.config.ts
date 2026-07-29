@@ -4,6 +4,7 @@ export default defineConfig({
   testDir: "./tests/browser",
   testMatch: [
     "accessibility-pairing.spec.ts",
+    "copy-workflow-pairing.spec.ts",
     "pairing-bootstrap.spec.ts",
     "pairing-access.spec.ts",
     "responsive-pairing-layout.spec.ts"

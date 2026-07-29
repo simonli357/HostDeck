@@ -1,0 +1,364 @@
+{
+  "fixed_time": "2026-07-28T14:00:00.000Z",
+  "evidence": [
+    {
+      "id": "mission-entry",
+      "file": "mission-entry-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "document": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "clientHeight": 844,
+        "scrollHeight": 851
+      },
+      "visibleDialog": null,
+      "primaryControls": null
+    },
+    {
+      "id": "session-ready",
+      "file": "session-ready-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "document": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "clientHeight": 844,
+        "scrollHeight": 844
+      },
+      "visibleDialog": null,
+      "primaryControls": {
+        "top": 701,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 143
+      }
+    },
+    {
+      "id": "prompt-pending",
+      "file": "prompt-pending-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "document": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "clientHeight": 844,
+        "scrollHeight": 844
+      },
+      "visibleDialog": null,
+      "primaryControls": {
+        "top": 701,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 143
+      }
+    },
+    {
+      "id": "prompt-completed",
+      "file": "prompt-completed-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "document": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "clientHeight": 844,
+        "scrollHeight": 921
+      },
+      "visibleDialog": null,
+      "primaryControls": {
+        "top": 701,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 143
+      }
+    },
+    {
+      "id": "approval-confirmation",
+      "file": "approval-confirmation-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "document": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "clientHeight": 844,
+        "scrollHeight": 1524
+      },
+      "visibleDialog": {
+        "top": 303,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 541
+      },
+      "primaryControls": {
+        "top": 686,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 158
+      }
+    },
+    {
+      "id": "approval-pending",
+      "file": "approval-pending-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "document": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "clientHeight": 844,
+        "scrollHeight": 1496
+      },
+      "visibleDialog": {
+        "top": 286,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 558
+      },
+      "primaryControls": {
+        "top": 686,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 158
+      }
+    },
+    {
+      "id": "approval-confirmed",
+      "file": "approval-confirmed-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "document": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "clientHeight": 844,
+        "scrollHeight": 1496
+      },
+      "visibleDialog": null,
+      "primaryControls": {
+        "top": 686,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 158
+      }
+    },
+    {
+      "id": "interrupt-confirmation",
+      "file": "interrupt-confirmation-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "document": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "clientHeight": 844,
+        "scrollHeight": 844
+      },
+      "visibleDialog": {
+        "top": 363,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 481
+      },
+      "primaryControls": {
+        "top": 701,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 143
+      }
+    },
+    {
+      "id": "boundary-reflow",
+      "file": "boundary-reflow-320x800.png",
+      "viewport": {
+        "width": 320,
+        "height": 800
+      },
+      "document": {
+        "clientWidth": 320,
+        "scrollWidth": 320,
+        "clientHeight": 800,
+        "scrollHeight": 1244
+      },
+      "visibleDialog": null,
+      "primaryControls": {
+        "top": 642,
+        "right": 320,
+        "bottom": 800,
+        "left": 0,
+        "width": 320,
+        "height": 158
+      }
+    },
+    {
+      "id": "session-stale",
+      "file": "session-stale-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "document": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "clientHeight": 844,
+        "scrollHeight": 923
+      },
+      "visibleDialog": null,
+      "primaryControls": {
+        "top": 701,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 143
+      }
+    },
+    {
+      "id": "remote-profile-other-overview",
+      "file": "remote-profile-other-overview-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "document": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "clientHeight": 844,
+        "scrollHeight": 844
+      },
+      "visibleDialog": {
+        "top": 164,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 680
+      },
+      "primaryControls": null
+    },
+    {
+      "id": "remote-profile-other",
+      "file": "remote-profile-other-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "document": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "clientHeight": 844,
+        "scrollHeight": 844
+      },
+      "visibleDialog": {
+        "top": 164,
+        "right": 390,
+        "bottom": 844,
+        "left": 0,
+        "width": 390,
+        "height": 680
+      },
+      "primaryControls": null
+    },
+    {
+      "id": "remote-profile-other-reflow",
+      "file": "remote-profile-other-320x800.png",
+      "viewport": {
+        "width": 320,
+        "height": 800
+      },
+      "document": {
+        "clientWidth": 320,
+        "scrollWidth": 320,
+        "clientHeight": 800,
+        "scrollHeight": 800
+      },
+      "visibleDialog": {
+        "top": 144,
+        "right": 320,
+        "bottom": 800,
+        "left": 0,
+        "width": 320,
+        "height": 656
+      },
+      "primaryControls": null
+    },
+    {
+      "id": "remote-profile-other-short",
+      "file": "remote-profile-other-short-390x420.png",
+      "viewport": {
+        "width": 390,
+        "height": 420
+      },
+      "document": {
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "clientHeight": 420,
+        "scrollHeight": 488
+      },
+      "visibleDialog": {
+        "top": 76,
+        "right": 390,
+        "bottom": 420,
+        "left": 0,
+        "width": 390,
+        "height": 344
+      },
+      "primaryControls": null
+    },
+    {
+      "id": "remote-profile-other-zoom",
+      "file": "remote-profile-other-zoom-200-1280x800.png",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "document": {
+        "clientWidth": 1280,
+        "scrollWidth": 1280,
+        "clientHeight": 800,
+        "scrollHeight": 1600
+      },
+      "visibleDialog": {
+        "top": -512,
+        "right": 1200,
+        "bottom": 800,
+        "left": 80,
+        "width": 1120,
+        "height": 1312
+      },
+      "primaryControls": null
+    }
+  ]
+}

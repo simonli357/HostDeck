@@ -1,0 +1,53 @@
+{
+  "fixed_time": "2026-07-28T14:00:00.000Z",
+  "evidence": [
+    {
+      "state": "claiming",
+      "file": "pairing-claiming-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "rail": {
+        "top": 80,
+        "right": 374,
+        "bottom": 272,
+        "left": 16,
+        "width": 358,
+        "height": 192
+      }
+    },
+    {
+      "state": "paired",
+      "file": "pairing-paired-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "rail": {
+        "top": 80,
+        "right": 374,
+        "bottom": 272,
+        "left": 16,
+        "width": 358,
+        "height": 192
+      }
+    },
+    {
+      "state": "claim_unknown",
+      "file": "pairing-unknown-390x844.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "rail": {
+        "top": 80,
+        "right": 374,
+        "bottom": 272,
+        "left": 16,
+        "width": 358,
+        "height": 192
+      }
+    }
+  ]
+}
