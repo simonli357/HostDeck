@@ -125,6 +125,7 @@ HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:e
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/unsupported-codex)" HOSTDECK_EXPECT_DIAGNOSTIC=1 pnpm smoke:executable-serve
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:service-host
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:systemd-user-units
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:service-lifecycle
 ```
 
 `HOSTDECK_EXPECT_DIAGNOSTIC=1` is validation-only. It requires a valid Codex semver different from the reviewed version and proves the packaged listener remains read-only and reachable without app-server admission; ordinary HostDeck startup never reads this variable.
@@ -137,5 +138,5 @@ pnpm generate:codex-bindings
 
 ## Explicit Gaps
 
-- CLI install/service lifecycle: `pnpm build` emits one verified `dist/hostdeck/dist/shell.js` `codexdeck` entry, the non-executable service host, exact pure user-unit generator, and manifest-verified dashboard assets. Service actions and persistent installation remain explicit non-success until `IFC-V1-056` to `IFC-V1-058`.
+- CLI service cleanup: the verified package supports persistent `service install|upgrade|status|start|stop|restart`. `service uninstall` remains explicit non-success until `IFC-V1-057`; clean-machine parity remains `IFC-V1-058`.
 - Local release smoke: `pnpm smoke:local` intentionally exits nonzero until `REL-V1-006` implements it.

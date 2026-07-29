@@ -100,3 +100,40 @@ The active selector is the only release pointer changed by upgrade. Unit, comman
 - Installed owner-manifest/package/unit hashes and manager/API state transitions using redacted paths.
 - Real manager process/socket/listener, Codex continuity, rollback, Tailscale noninterference, and residue results.
 - Remaining `IFC-V1-057`, `IFC-V1-058`, and release-readiness limits without a clean-machine or release claim.
+
+## Implemented Surface
+
+- `codexdeck service install|upgrade|status|start|stop|restart` now dispatches through one strict lifecycle owner. `uninstall` remains a side-effect-free `capability_unavailable` result owned by `IFC-V1-057`.
+- Schema-1 install manifests bind immutable verified releases, generated units, the preserved service environment, exact Node/Codex identities, stable anchors, enablement, and the atomic `current` selector.
+- Install and upgrade use a nonblocking advisory lock, same-filesystem staged publication, a bounded write-ahead transaction, exact manager read-back, active/inactive upgrade paths, and rollback to the prior verified selector.
+- The direct user-manager adapter executes canonical `systemctl` without a shell under a fixed minimal environment, bounded output/deadlines, process-group cleanup, strict result parsing, and fixed HostDeck unit names.
+- Start, stop, restart, and status validate installation and manager identity before action. Readiness comes from the loopback host-status API; HostDeck restart preserves an already-running Codex PID and socket.
+- The package builder supports isolated versioned fixtures for the real upgrade/rollback smoke while preserving ordinary deterministic package behavior. Package metadata now defers only uninstall and clean-machine parity to `IFC-V1-057` and `IFC-V1-058`.
+
+## Hardening Findings Closed
+
+- Real systemd reports linked generated units as `linked`, not the fake manager's earlier `static` assumption. The parser and postconditions now require the real state.
+- `systemctl stop` can return before a unit leaves `deactivating`. Stop now requires bounded consecutive inactive/zero-PID observations instead of trusting one snapshot.
+- Lifecycle mutations now reject manager identity drift before start, stop, or restart and re-check exact active/inactive, PID, API-readiness, selector, and rollback postconditions after each transition.
+- Semantic-version comparison handles prerelease precedence without unsafe numeric coercion. Manifests and manager records reject accessors, extras, unsafe overlap, oversized values, and insecure ancestors.
+- Package verification and manager execution reject stderr-on-success, malformed UTF-8, aggregate output overflow, timeout/abort leaks, and descendants that outlive the bounded process group.
+- Active and inactive upgrade paths preserve config, SQLite sidecars, runtime identity, Codex continuity, Tailscale profile/Serve state, enabled state, and the prior release needed for rollback.
+
+## Validation Evidence
+
+| Gate | Result |
+| --- | --- |
+| Focused lifecycle | 49 tests pass across manifest, lock, lifecycle, package verifier, direct manager, manager contract, and generated-unit suites. |
+| Workspace | Unit: 2,856 passed/28 intentional skips; contract: 245; explicit CLI contract: 12; integration: 36; web: 920. Root/package typechecks and lint/exports pass. |
+| Static planning/boundary | Scaffold: 8 packages/21 scripts; planning: 220 tasks/84 requirements/683 dependencies; runtime boundary: 619 production modules/22 externals. |
+| Package | Two deterministic builds, relocation/read-only acceptance, verifier negatives, packaged browser smoke, and 6,466-entry package acceptance pass. The three-file web identity remains SHA-256 `09c04fc54c8d88ded7dff55f54e8228fc65e6eb01e851a65674bf920a3461752`. |
+| Runtime binding | Isolated exact Codex 0.144.0 passes 671-file binding SHA-256 `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`; the host-default 0.145.0 binary is correctly rejected as unsupported evidence. |
+| Real user manager | Two consecutive full lifecycle runs pass actual install/idempotence/start/status/restart/stop, inactive and active upgrades, injected real-manager rollback, stable Codex PID/socket, private output, and exact unit/enablement read-back. The lower-level user-unit smoke remains 9.7/9.7 under `systemd-analyze security`. |
+| Noninterference and cleanup | Config/state/database/Codex sentinels, stable Tailscale backend/tailnet/profile/Serve identity, and the pre-existing failed-unit set remain unchanged. Both exact units finish `not-found`; no owned install, runtime, process, listener, transaction, staging, or temporary-home residue remains. |
+| Supply chain and source hygiene | Frozen offline install, production audit with zero known vulnerabilities, production-license inventory, diff check, and protected pre-existing mockup byte comparison pass. |
+
+## Closure
+
+- `SLC-01` to `SLC-24` are satisfied for the supported current-user Linux/systemd environment.
+- This does not claim safe uninstall, clean-machine parity, release readiness, or store/device deployment. Those remain owned by `IFC-V1-057`, `IFC-V1-058`, and release tasks.
+- Criteria commit: `8ff639b`. Implementation and hardening commit: `c9845c3`. The task-closing documentation commit is recorded in a follow-up traceability entry after its id exists.

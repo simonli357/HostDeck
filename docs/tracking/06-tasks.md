@@ -16,8 +16,8 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-056` Implement install/upgrade/status/start/stop/restart service commands with an owned manifest | in_progress | none | `SLC-01` to `SLC-24` freeze the verified release selector, owner manifest, transactional install/upgrade, exact manager adapter, API-readiness lifecycle, rollback, and evidence contract; implementation is next. |
-| 2 | `FE-V1-017` Capture screenshot/diff evidence against selected replacement mockups | ready | none | Responsive, accessibility, and the exact four-project supported-browser matrix are complete; fidelity closure is dependency-ready behind the active service-lifecycle leaf. |
+| 1 | `FE-V1-017` Capture screenshot/diff evidence against selected replacement mockups | ready | none | Responsive, accessibility, and the exact four-project supported-browser matrix are complete; fidelity closure is now the first dependency-ready leaf. |
+| 2 | `IFC-V1-057` Implement safe uninstall and version-retention cleanup for only HostDeck-owned files | ready | none | The owned manifest and persistent lifecycle are complete, so destructive ownership and retained-release cleanup can now be frozen and implemented. |
 
 ## Intentional Blockers
 
