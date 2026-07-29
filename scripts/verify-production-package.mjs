@@ -378,6 +378,7 @@ export function inspectProductionPackageTree(root, executableFiles = []) {
       const relativePath = toPortablePath(
         relativeDirectory.length === 0 ? entry.name : join(relativeDirectory, entry.name)
       );
+      assertProductionPackagePathPolicy(relativePath);
       if (relativePath === productionPackageManifestName) continue;
       const stats = lstatSync(path);
       entryCount += 1;
@@ -427,6 +428,23 @@ export function inspectProductionPackageTree(root, executableFiles = []) {
     if (!seenExecutables.has(path)) throw new TypeError(`Declared executable file is missing: ${path}`);
   }
   return Object.freeze({ bytes, entryCount, sha256: hash.digest("hex") });
+}
+
+function assertProductionPackagePathPolicy(relativePath) {
+  const name = basename(relativePath).toLowerCase();
+  if (name.endsWith(".map")) {
+    throw new TypeError(`Package contains a forbidden source map: ${relativePath}`);
+  }
+  if (name === ".env" || name.startsWith(".env.")) {
+    throw new TypeError(`Package contains a forbidden environment file: ${relativePath}`);
+  }
+  if (
+    name === ".netrc" ||
+    name === ".npmrc" ||
+    /\.(?:cer|crt|key|p12|pem|pfx)$/u.test(name)
+  ) {
+    throw new TypeError(`Package contains a forbidden credential file: ${relativePath}`);
+  }
 }
 
 export function computeOwnedOutputIdentity(root, packageDescriptors) {

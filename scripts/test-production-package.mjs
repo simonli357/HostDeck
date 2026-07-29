@@ -265,6 +265,28 @@ try {
   runMutationProbe(
     relocated,
     unrelatedCwd,
+    "reintroduced dependency source map",
+    () => {
+      const path = join(relocated, "node_modules", "late-runtime.js.map");
+      writeFileSync(path, "{}\n", { mode: 0o644 });
+      return () => rmSync(path, { force: true });
+    },
+    /forbidden source map/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "reintroduced environment file",
+    () => {
+      const path = join(relocated, ".env.production");
+      writeFileSync(path, "PRIVATE=value\n", { mode: 0o644 });
+      return () => rmSync(path, { force: true });
+    },
+    /forbidden environment file/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
     "missing CLI bin metadata",
     () => mutateJson(join(relocated, "package.json"), (value) => delete value.bin),
     /package\.json fields are invalid|runtime manifest is inconsistent/iu

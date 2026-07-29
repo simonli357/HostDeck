@@ -209,6 +209,7 @@ export function buildProductionPackage(options = {}) {
       verbatimSymlinks: true
     });
     removePackageManagerMetadata(packageRoot);
+    pruneProductionSourceMaps(packageRoot);
     pruneNativeBuildIntermediates(packageRoot);
     copyFileSync(
       join(scriptDirectory, "verify-production-package.mjs"),
@@ -961,6 +962,23 @@ function removePackageManagerMetadata(root) {
   for (const path of listDirectories(root).filter((directory) => basename(directory) === ".bin")) {
     rmSync(path, { force: true, recursive: true });
   }
+}
+
+export function pruneProductionSourceMaps(root) {
+  if (typeof root !== "string" || !isAbsolute(root)) {
+    throw new TypeError("Production package root must be absolute.");
+  }
+  const packageRoot = realpathSync(resolve(root));
+  const removedPaths = listRegularFiles(packageRoot)
+    .filter((path) => extname(path).toLowerCase() === ".map")
+    .map((path) => portable(relative(packageRoot, path)))
+    .sort();
+  for (const path of removedPaths) {
+    rmSync(join(packageRoot, ...path.split("/")), { force: false });
+  }
+  return Object.freeze({
+    removedPaths: Object.freeze(removedPaths)
+  });
 }
 
 function collectExecutableFiles(root) {

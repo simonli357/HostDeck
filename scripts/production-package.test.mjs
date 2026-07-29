@@ -25,6 +25,7 @@ import {
   inspectViteManifest,
   normalizeDeployedWorkspaceLayout,
   productionBuildIdentity,
+  pruneProductionSourceMaps,
   publishCompletedPackage,
   selectedProductionSources
 } from "./build-production-package.mjs";
@@ -32,6 +33,7 @@ import {
   computeFileIdentity,
   computeManifestSha256,
   createProductionWebManifest,
+  inspectProductionPackageTree,
   productionPackageSourceCount,
   productionWebBrowserRoutes,
   productionWebManifestName,
@@ -188,6 +190,44 @@ test("uses the frozen shared-lockfile production deploy path", () => {
     () => createProductionDependencyDeployArguments("relative/deploy"),
     /must be absolute/u
   );
+});
+
+test("prunes dependency source maps and rejects sensitive package paths", (context) => {
+  const root = mkdtempSync(join(tmpdir(), "hostdeck-package-path-policy-"));
+  context.after(() => rmSync(root, { force: true, recursive: true }));
+  chmodSync(root, 0o755);
+  const dependencyRoot = join(root, "node_modules", "dependency");
+  mkdirSync(dependencyRoot, { mode: 0o755, recursive: true });
+  writeFileSync(join(dependencyRoot, "runtime.js"), "export {};\n", {
+    mode: 0o644
+  });
+  writeFileSync(join(dependencyRoot, "runtime.js.map"), "{}\n", {
+    mode: 0o644
+  });
+  writeFileSync(join(dependencyRoot, "types.d.ts.map"), "{}\n", {
+    mode: 0o644
+  });
+
+  const result = pruneProductionSourceMaps(root);
+  assert.deepEqual(result.removedPaths, [
+    "node_modules/dependency/runtime.js.map",
+    "node_modules/dependency/types.d.ts.map"
+  ]);
+  assert.equal(Object.isFrozen(result), true);
+  assert.equal(Object.isFrozen(result.removedPaths), true);
+  assert.deepEqual(pruneProductionSourceMaps(root).removedPaths, []);
+  assert.doesNotThrow(() => inspectProductionPackageTree(root));
+
+  for (const [name, message] of [
+    ["late.js.map", /forbidden source map/u],
+    [".env.production", /forbidden environment file/u],
+    ["private.pem", /forbidden credential file/u]
+  ]) {
+    const path = join(dependencyRoot, name);
+    writeFileSync(path, "private\n", { mode: 0o644 });
+    assert.throws(() => inspectProductionPackageTree(root), message);
+    rmSync(path);
+  }
 });
 
 test("compares repeat builds by package identity rather than output location", () => {
