@@ -410,9 +410,13 @@ describe("bounded projection subscriber streams", () => {
 
     for (let cursor = 1; cursor <= 8; cursor += 1) {
       const next = healthyIterator.next();
-      const startedAt = performance.now();
       harness.publish(activityEvent(sessionA, cursor));
-      expect(performance.now() - startedAt).toBeLessThan(50);
+      expect(slow.queued_event_count).toBe(cursor);
+      expect(healthy.queued_event_count).toBe(0);
+      expect(harness.service.snapshot()).toMatchObject({
+        active_subscribers: 2,
+        queued_events: cursor
+      });
       await expect(next).resolves.toMatchObject({
         done: false,
         value: { cursor }
@@ -477,10 +481,16 @@ describe("bounded projection subscriber streams", () => {
     for (let cursor = 1; cursor <= 8; cursor += 1) {
       const nextA = iteratorA.next();
       const nextB = iteratorB.next();
-      const startedAt = performance.now();
       harness.publish(activityEvent(sessionA, cursor));
       harness.publish(activityEvent(sessionB, cursor));
-      expect(performance.now() - startedAt).toBeLessThan(50);
+      expect(slowA.queued_event_count).toBe(cursor);
+      expect(slowB.queued_event_count).toBe(cursor);
+      expect(healthyA.queued_event_count).toBe(0);
+      expect(healthyB.queued_event_count).toBe(0);
+      expect(harness.service.snapshot()).toMatchObject({
+        active_subscribers: 4,
+        queued_events: cursor * 2
+      });
       await expect(nextA).resolves.toMatchObject({ value: { cursor } });
       await expect(nextB).resolves.toMatchObject({ value: { cursor } });
     }
