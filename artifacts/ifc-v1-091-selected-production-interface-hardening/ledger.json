@@ -1,0 +1,1155 @@
+{
+  "schema_version": 1,
+  "task": "IFC-V1-091",
+  "criteria": [
+    {
+      "id": "PIH-01",
+      "requirements": [
+        "FR-012",
+        "PR-004"
+      ],
+      "dimensions": [
+        "identity_and_composition"
+      ],
+      "evidence_ids": [
+        "criteria",
+        "ledger_validator",
+        "route_manifest"
+      ]
+    },
+    {
+      "id": "PIH-02",
+      "requirements": [
+        "FR-012",
+        "FR-018",
+        "PR-002",
+        "PR-004",
+        "PR-010"
+      ],
+      "dimensions": [
+        "identity_and_composition"
+      ],
+      "evidence_ids": [
+        "route_composition",
+        "application_composition",
+        "runtime_boundary"
+      ]
+    },
+    {
+      "id": "PIH-03",
+      "requirements": [
+        "FR-012",
+        "NFR-005",
+        "SFR-005"
+      ],
+      "dimensions": [
+        "http_contracts"
+      ],
+      "evidence_ids": [
+        "route_composition",
+        "resource_aggregate"
+      ]
+    },
+    {
+      "id": "PIH-04",
+      "requirements": [
+        "NFR-010",
+        "NFR-011",
+        "SFR-017"
+      ],
+      "dimensions": [
+        "resource_limits"
+      ],
+      "evidence_ids": [
+        "resource_aggregate",
+        "deadline_aggregate",
+        "sse_backpressure"
+      ]
+    },
+    {
+      "id": "PIH-05",
+      "requirements": [
+        "NFR-002",
+        "SFR-005",
+        "SFR-013",
+        "SFR-016"
+      ],
+      "dimensions": [
+        "operation_consistency"
+      ],
+      "evidence_ids": [
+        "resource_aggregate",
+        "write_gate",
+        "deadline_aggregate"
+      ]
+    },
+    {
+      "id": "PIH-06",
+      "requirements": [
+        "SFR-002",
+        "SFR-003",
+        "SFR-004",
+        "SFR-005",
+        "SFR-016"
+      ],
+      "dimensions": [
+        "operation_consistency",
+        "application_security"
+      ],
+      "evidence_ids": [
+        "write_gate",
+        "remote_security_aggregate"
+      ]
+    },
+    {
+      "id": "PIH-07",
+      "requirements": [
+        "FR-012",
+        "NFR-011",
+        "SFR-017"
+      ],
+      "dimensions": [
+        "sse"
+      ],
+      "evidence_ids": [
+        "sse_transport",
+        "projection_lifecycle"
+      ]
+    },
+    {
+      "id": "PIH-08",
+      "requirements": [
+        "NFR-002",
+        "NFR-010",
+        "SFR-017"
+      ],
+      "dimensions": [
+        "sse",
+        "shutdown"
+      ],
+      "evidence_ids": [
+        "sse_backpressure",
+        "projection_lifecycle",
+        "application_shutdown"
+      ]
+    },
+    {
+      "id": "PIH-09",
+      "requirements": [
+        "NFR-001",
+        "PR-002",
+        "SFR-012",
+        "SFR-018"
+      ],
+      "dimensions": [
+        "ingress_trust"
+      ],
+      "evidence_ids": [
+        "request_trust",
+        "remote_security_aggregate"
+      ]
+    },
+    {
+      "id": "PIH-10",
+      "requirements": [
+        "SFR-001",
+        "SFR-002",
+        "SFR-003",
+        "SFR-004",
+        "SFR-007",
+        "SFR-013",
+        "SFR-014",
+        "SFR-018"
+      ],
+      "dimensions": [
+        "application_security"
+      ],
+      "evidence_ids": [
+        "request_authentication",
+        "remote_security_aggregate"
+      ]
+    },
+    {
+      "id": "PIH-11",
+      "requirements": [
+        "SFR-006",
+        "SFR-007",
+        "SFR-014",
+        "SFR-018"
+      ],
+      "dimensions": [
+        "privacy"
+      ],
+      "evidence_ids": [
+        "remote_security_aggregate",
+        "production_package"
+      ]
+    },
+    {
+      "id": "PIH-12",
+      "requirements": [
+        "NFR-001",
+        "PR-003",
+        "PR-007",
+        "SFR-008"
+      ],
+      "dimensions": [
+        "remote_observation"
+      ],
+      "evidence_ids": [
+        "tailscale_observer",
+        "remote_lifecycle"
+      ]
+    },
+    {
+      "id": "PIH-13",
+      "requirements": [
+        "FR-011",
+        "PR-003",
+        "SFR-005",
+        "SFR-008",
+        "SFR-016"
+      ],
+      "dimensions": [
+        "remote_control"
+      ],
+      "evidence_ids": [
+        "remote_control",
+        "tailscale_manager",
+        "live_remote_control"
+      ]
+    },
+    {
+      "id": "PIH-14",
+      "requirements": [
+        "NFR-002",
+        "PR-003",
+        "PR-007",
+        "SFR-008"
+      ],
+      "dimensions": [
+        "network_recovery"
+      ],
+      "evidence_ids": [
+        "remote_lifecycle",
+        "remote_security_aggregate",
+        "remote_android_acceptance"
+      ]
+    },
+    {
+      "id": "PIH-15",
+      "requirements": [
+        "FR-017",
+        "IR-006",
+        "IR-008",
+        "NFR-005",
+        "NFR-012",
+        "PR-007"
+      ],
+      "dimensions": [
+        "compatibility_and_health"
+      ],
+      "evidence_ids": [
+        "compatibility_diagnostic",
+        "production_application_smoke"
+      ]
+    },
+    {
+      "id": "PIH-16",
+      "requirements": [
+        "NFR-005",
+        "NFR-010",
+        "PR-007",
+        "SFR-015"
+      ],
+      "dimensions": [
+        "startup"
+      ],
+      "evidence_ids": [
+        "application_composition",
+        "resource_aggregate",
+        "production_application_smoke"
+      ]
+    },
+    {
+      "id": "PIH-17",
+      "requirements": [
+        "NFR-002",
+        "NFR-010",
+        "SFR-016",
+        "SFR-017"
+      ],
+      "dimensions": [
+        "shutdown"
+      ],
+      "evidence_ids": [
+        "application_shutdown",
+        "resource_aggregate"
+      ]
+    },
+    {
+      "id": "PIH-18",
+      "requirements": [
+        "FR-011",
+        "NFR-005",
+        "PR-009",
+        "SFR-005",
+        "SFR-008"
+      ],
+      "dimensions": [
+        "cli"
+      ],
+      "evidence_ids": [
+        "cli_grammar",
+        "cli_transport",
+        "cli_executable",
+        "live_remote_control"
+      ]
+    },
+    {
+      "id": "PIH-19",
+      "requirements": [
+        "NFR-009",
+        "PR-004",
+        "PR-012"
+      ],
+      "dimensions": [
+        "package_and_service"
+      ],
+      "evidence_ids": [
+        "production_package",
+        "production_foreground"
+      ]
+    },
+    {
+      "id": "PIH-20",
+      "requirements": [
+        "FR-018",
+        "NFR-009",
+        "NFR-010",
+        "PR-008",
+        "PR-012",
+        "SFR-015"
+      ],
+      "dimensions": [
+        "package_and_service"
+      ],
+      "evidence_ids": [
+        "service_lifecycle",
+        "production_service_host",
+        "systemd_units",
+        "service_manager",
+        "clean_user_acceptance"
+      ]
+    },
+    {
+      "id": "PIH-21",
+      "requirements": [
+        "FR-012",
+        "NFR-005",
+        "NFR-010",
+        "NFR-011",
+        "SFR-005",
+        "SFR-017"
+      ],
+      "dimensions": [
+        "identity_and_composition",
+        "resource_limits",
+        "operation_consistency",
+        "sse"
+      ],
+      "evidence_ids": [
+        "resource_aggregate",
+        "remote_security_aggregate",
+        "route_composition"
+      ]
+    },
+    {
+      "id": "PIH-22",
+      "requirements": [
+        "FR-017",
+        "FR-018",
+        "PR-002",
+        "PR-004",
+        "PR-008",
+        "PR-010",
+        "PR-012"
+      ],
+      "dimensions": [
+        "compatibility_and_health",
+        "package_and_service"
+      ],
+      "evidence_ids": [
+        "production_application_smoke",
+        "production_foreground",
+        "production_service_host"
+      ]
+    },
+    {
+      "id": "PIH-23",
+      "requirements": [
+        "NFR-001",
+        "NFR-009",
+        "PR-003",
+        "PR-005",
+        "PR-011",
+        "SFR-001",
+        "SFR-008",
+        "SFR-012",
+        "SFR-018"
+      ],
+      "dimensions": [
+        "ingress_trust",
+        "network_recovery",
+        "package_and_service"
+      ],
+      "evidence_ids": [
+        "clean_user_acceptance",
+        "remote_android_acceptance"
+      ]
+    },
+    {
+      "id": "PIH-24",
+      "requirements": [
+        "NFR-005",
+        "SFR-005",
+        "SFR-006",
+        "SFR-015",
+        "SFR-016"
+      ],
+      "dimensions": [
+        "privacy",
+        "startup",
+        "shutdown"
+      ],
+      "evidence_ids": [
+        "criteria",
+        "ledger_validator",
+        "runtime_boundary"
+      ]
+    }
+  ],
+  "dimensions": [
+    "identity_and_composition",
+    "http_contracts",
+    "resource_limits",
+    "operation_consistency",
+    "sse",
+    "ingress_trust",
+    "application_security",
+    "privacy",
+    "remote_observation",
+    "remote_control",
+    "network_recovery",
+    "compatibility_and_health",
+    "startup",
+    "shutdown",
+    "cli",
+    "package_and_service"
+  ],
+  "evidence": [
+    {
+      "id": "criteria",
+      "level": "L1",
+      "path": "artifacts/ifc-v1-091-selected-production-interface-hardening.md",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "ledger_validator",
+      "level": "L1",
+      "path": "packages/server/src/production-interface-hardening-manifest.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "route_manifest",
+      "level": "L1",
+      "path": "packages/server/src/selected-api-route-manifest.contract.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "route_composition",
+      "level": "L2",
+      "path": "packages/server/src/selected-api-route-composition.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "application_composition",
+      "level": "L2",
+      "path": "packages/server/src/production-application-composition.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "resource_aggregate",
+      "level": "L2",
+      "path": "tests/production-resource-stress.integration.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "remote_security_aggregate",
+      "level": "L2",
+      "path": "packages/server/src/remote-ingress-security-acceptance.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "request_trust",
+      "level": "L2",
+      "path": "packages/server/src/fastify-request-trust.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "request_authentication",
+      "level": "L2",
+      "path": "packages/server/src/fastify-request-authentication.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "sse_transport",
+      "level": "L2",
+      "path": "packages/server/src/fastify-sse-transport.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "sse_backpressure",
+      "level": "L2",
+      "path": "packages/server/src/fastify-sse-heartbeat-backpressure.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "projection_lifecycle",
+      "level": "L2",
+      "path": "packages/server/src/projection-lifecycle-acceptance.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "write_gate",
+      "level": "L2",
+      "path": "packages/server/src/selected-write-gate.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "deadline_aggregate",
+      "level": "L2",
+      "path": "packages/server/src/codex-request-deadline-aggregate.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "remote_control",
+      "level": "L2",
+      "path": "packages/server/src/remote-ingress-control-service.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "remote_lifecycle",
+      "level": "L2",
+      "path": "packages/server/src/remote-ingress-lifecycle.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "tailscale_observer",
+      "level": "L2",
+      "path": "packages/server/src/tailscale-observer.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "tailscale_manager",
+      "level": "L2",
+      "path": "packages/server/src/tailscale-serve-manager.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "compatibility_diagnostic",
+      "level": "L2",
+      "path": "packages/server/src/runtime-compatibility-status.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "application_shutdown",
+      "level": "L2",
+      "path": "packages/server/src/application-shutdown-real.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "cli_transport",
+      "level": "L2",
+      "path": "packages/cli/src/loopback-http.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "cli_grammar",
+      "level": "L1",
+      "path": "packages/cli/src/cli.contract.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "cli_executable",
+      "level": "L2",
+      "path": "packages/cli/src/executable-cli.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "service_lifecycle",
+      "level": "L2",
+      "path": "packages/cli/src/service-lifecycle.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "runtime_boundary",
+      "level": "L2",
+      "path": "scripts/check-selected-runtime-boundary.test.mjs",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "production_package",
+      "level": "L3",
+      "path": "scripts/production-package.test.mjs",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "production_foreground",
+      "level": "L3",
+      "path": "scripts/production-executable-serve.smoke.mjs",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "production_service_host",
+      "level": "L3",
+      "path": "scripts/production-service-host.smoke.mjs",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "production_application_smoke",
+      "level": "L3",
+      "path": "packages/server/src/production-application-composition.smoke.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "live_remote_control",
+      "level": "L3",
+      "path": "packages/cli/src/remote-control.smoke.test.ts",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "systemd_units",
+      "level": "L3",
+      "path": "scripts/production-systemd-user-units.smoke.mjs",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "service_manager",
+      "level": "L3",
+      "path": "scripts/production-service-lifecycle.smoke.mjs",
+      "disposition": "fresh_required"
+    },
+    {
+      "id": "clean_user_acceptance",
+      "level": "L4",
+      "path": "artifacts/ifc-v1-058-clean-environment-parity/evidence.json",
+      "task": "IFC-V1-058",
+      "task_field": "task_id",
+      "commit": "eb77647e8b1e77e42b16fef21b65da0d1b65ea8e",
+      "commit_field": "source_commit",
+      "disposition": "accepted_input"
+    },
+    {
+      "id": "remote_android_acceptance",
+      "level": "L4",
+      "path": "artifacts/ifc-v1-079-device/evidence.json",
+      "task": "IFC-V1-079",
+      "task_field": "task",
+      "commit": "b4078b6d411267dec9701ed5ae67037567a9dee9",
+      "commit_field": "commit",
+      "disposition": "accepted_input"
+    }
+  ],
+  "registrations": [
+    {
+      "id": "selected-health-status",
+      "surface": "api",
+      "route_ids": [
+        "health_liveness",
+        "health_readiness",
+        "host_status"
+      ]
+    },
+    {
+      "id": "selected-session-read",
+      "surface": "api",
+      "route_ids": [
+        "session_list",
+        "session_detail"
+      ]
+    },
+    {
+      "id": "selected-session-start",
+      "surface": "api",
+      "route_ids": [
+        "session_start"
+      ]
+    },
+    {
+      "id": "selected-projected-event-read",
+      "surface": "api",
+      "route_ids": [
+        "session_events"
+      ]
+    },
+    {
+      "id": "selected-projection-event-stream",
+      "surface": "sse",
+      "route_ids": [
+        "session_event_stream"
+      ]
+    },
+    {
+      "id": "selected-managed-thread-resume",
+      "surface": "api",
+      "route_ids": [
+        "session_resume_metadata"
+      ]
+    },
+    {
+      "id": "selected-session-archive",
+      "surface": "api",
+      "route_ids": [
+        "session_archive"
+      ]
+    },
+    {
+      "id": "selected-prompt-dispatch",
+      "surface": "api",
+      "route_ids": [
+        "prompt_dispatch"
+      ]
+    },
+    {
+      "id": "selected-model-control",
+      "surface": "api",
+      "route_ids": [
+        "model_read",
+        "model_select"
+      ]
+    },
+    {
+      "id": "selected-goal-control",
+      "surface": "api",
+      "route_ids": [
+        "goal_read",
+        "goal_mutate"
+      ]
+    },
+    {
+      "id": "selected-plan-control",
+      "surface": "api",
+      "route_ids": [
+        "plan_read",
+        "plan_select"
+      ]
+    },
+    {
+      "id": "selected-usage-read",
+      "surface": "api",
+      "route_ids": [
+        "usage_read"
+      ]
+    },
+    {
+      "id": "selected-compact-control",
+      "surface": "api",
+      "route_ids": [
+        "compact_read",
+        "compact_start"
+      ]
+    },
+    {
+      "id": "selected-skills-read",
+      "surface": "api",
+      "route_ids": [
+        "skills_read"
+      ]
+    },
+    {
+      "id": "selected-approval-control",
+      "surface": "api",
+      "route_ids": [
+        "approval_list",
+        "approval_respond"
+      ]
+    },
+    {
+      "id": "selected-interrupt-control",
+      "surface": "api",
+      "route_ids": [
+        "turn_interrupt"
+      ]
+    },
+    {
+      "id": "selected-pairing",
+      "surface": "api",
+      "route_ids": [
+        "pair_request",
+        "pair_claim"
+      ]
+    },
+    {
+      "id": "selected-csrf-bootstrap",
+      "surface": "api",
+      "route_ids": [
+        "csrf_bootstrap"
+      ]
+    },
+    {
+      "id": "selected-host-lock",
+      "surface": "api",
+      "route_ids": [
+        "access_state",
+        "host_lock",
+        "host_unlock"
+      ]
+    },
+    {
+      "id": "selected-device-list",
+      "surface": "api",
+      "route_ids": [
+        "device_list"
+      ]
+    },
+    {
+      "id": "selected-device-revoke",
+      "surface": "api",
+      "route_ids": [
+        "device_revoke"
+      ]
+    },
+    {
+      "id": "selected-remote-ingress-control",
+      "surface": "api",
+      "route_ids": [
+        "remote_status",
+        "remote_enable",
+        "remote_disable"
+      ]
+    }
+  ],
+  "requirements": [
+    "FR-011",
+    "FR-012",
+    "FR-017",
+    "FR-018",
+    "IR-006",
+    "IR-008",
+    "NFR-001",
+    "NFR-002",
+    "NFR-005",
+    "NFR-009",
+    "NFR-010",
+    "NFR-011",
+    "NFR-012",
+    "PR-002",
+    "PR-003",
+    "PR-004",
+    "PR-005",
+    "PR-007",
+    "PR-008",
+    "PR-009",
+    "PR-010",
+    "PR-011",
+    "PR-012",
+    "SFR-001",
+    "SFR-002",
+    "SFR-003",
+    "SFR-004",
+    "SFR-005",
+    "SFR-006",
+    "SFR-007",
+    "SFR-008",
+    "SFR-012",
+    "SFR-013",
+    "SFR-014",
+    "SFR-015",
+    "SFR-016",
+    "SFR-017",
+    "SFR-018"
+  ],
+  "routes": [
+    {
+      "id": "health_liveness",
+      "family": "health",
+      "method": "GET",
+      "path": "/api/v1/health/live",
+      "transport": "json",
+      "owner_task": "IFC-V1-039"
+    },
+    {
+      "id": "health_readiness",
+      "family": "health",
+      "method": "GET",
+      "path": "/api/v1/health/ready",
+      "transport": "json",
+      "owner_task": "IFC-V1-039"
+    },
+    {
+      "id": "host_status",
+      "family": "health",
+      "method": "GET",
+      "path": "/api/v1/host/status",
+      "transport": "json",
+      "owner_task": "IFC-V1-039"
+    },
+    {
+      "id": "session_list",
+      "family": "sessions",
+      "method": "GET",
+      "path": "/api/v1/sessions",
+      "transport": "json",
+      "owner_task": "IFC-V1-068"
+    },
+    {
+      "id": "session_start",
+      "family": "sessions",
+      "method": "POST",
+      "path": "/api/v1/sessions",
+      "transport": "json",
+      "owner_task": "IFC-V1-040"
+    },
+    {
+      "id": "session_detail",
+      "family": "sessions",
+      "method": "GET",
+      "path": "/api/v1/sessions/:session_id",
+      "transport": "json",
+      "owner_task": "IFC-V1-068"
+    },
+    {
+      "id": "session_events",
+      "family": "events",
+      "method": "GET",
+      "path": "/api/v1/sessions/:session_id/events",
+      "transport": "json",
+      "owner_task": "IFC-V1-069"
+    },
+    {
+      "id": "session_event_stream",
+      "family": "events",
+      "method": "GET",
+      "path": "/api/v1/sessions/:session_id/events/stream",
+      "transport": "sse",
+      "owner_task": "IFC-V1-035"
+    },
+    {
+      "id": "session_resume_metadata",
+      "family": "sessions",
+      "method": "GET",
+      "path": "/api/v1/sessions/:session_id/resume",
+      "transport": "json",
+      "owner_task": "IFC-V1-060"
+    },
+    {
+      "id": "session_archive",
+      "family": "sessions",
+      "method": "POST",
+      "path": "/api/v1/sessions/:session_id/archive",
+      "transport": "json",
+      "owner_task": "IFC-V1-061"
+    },
+    {
+      "id": "prompt_dispatch",
+      "family": "controls",
+      "method": "POST",
+      "path": "/api/v1/sessions/:session_id/prompts",
+      "transport": "json",
+      "owner_task": "IFC-V1-041"
+    },
+    {
+      "id": "model_read",
+      "family": "controls",
+      "method": "GET",
+      "path": "/api/v1/sessions/:session_id/model",
+      "transport": "json",
+      "owner_task": "IFC-V1-042"
+    },
+    {
+      "id": "model_select",
+      "family": "controls",
+      "method": "POST",
+      "path": "/api/v1/sessions/:session_id/model",
+      "transport": "json",
+      "owner_task": "IFC-V1-042"
+    },
+    {
+      "id": "goal_read",
+      "family": "controls",
+      "method": "GET",
+      "path": "/api/v1/sessions/:session_id/goal",
+      "transport": "json",
+      "owner_task": "IFC-V1-062"
+    },
+    {
+      "id": "goal_mutate",
+      "family": "controls",
+      "method": "POST",
+      "path": "/api/v1/sessions/:session_id/goal",
+      "transport": "json",
+      "owner_task": "IFC-V1-062"
+    },
+    {
+      "id": "plan_read",
+      "family": "controls",
+      "method": "GET",
+      "path": "/api/v1/sessions/:session_id/plan",
+      "transport": "json",
+      "owner_task": "IFC-V1-063"
+    },
+    {
+      "id": "plan_select",
+      "family": "controls",
+      "method": "POST",
+      "path": "/api/v1/sessions/:session_id/plan",
+      "transport": "json",
+      "owner_task": "IFC-V1-063"
+    },
+    {
+      "id": "usage_read",
+      "family": "controls",
+      "method": "GET",
+      "path": "/api/v1/sessions/:session_id/usage",
+      "transport": "json",
+      "owner_task": "IFC-V1-043"
+    },
+    {
+      "id": "compact_read",
+      "family": "controls",
+      "method": "GET",
+      "path": "/api/v1/sessions/:session_id/compact",
+      "transport": "json",
+      "owner_task": "IFC-V1-064"
+    },
+    {
+      "id": "compact_start",
+      "family": "controls",
+      "method": "POST",
+      "path": "/api/v1/sessions/:session_id/compact",
+      "transport": "json",
+      "owner_task": "IFC-V1-064"
+    },
+    {
+      "id": "skills_read",
+      "family": "controls",
+      "method": "GET",
+      "path": "/api/v1/sessions/:session_id/skills",
+      "transport": "json",
+      "owner_task": "IFC-V1-065"
+    },
+    {
+      "id": "approval_list",
+      "family": "approvals",
+      "method": "GET",
+      "path": "/api/v1/sessions/:session_id/approvals",
+      "transport": "json",
+      "owner_task": "IFC-V1-044"
+    },
+    {
+      "id": "approval_respond",
+      "family": "approvals",
+      "method": "POST",
+      "path": "/api/v1/sessions/:session_id/approvals/:request_id/respond",
+      "transport": "json",
+      "owner_task": "IFC-V1-044"
+    },
+    {
+      "id": "turn_interrupt",
+      "family": "controls",
+      "method": "POST",
+      "path": "/api/v1/sessions/:session_id/turns/:turn_id/interrupt",
+      "transport": "json",
+      "owner_task": "IFC-V1-045"
+    },
+    {
+      "id": "pair_request",
+      "family": "access",
+      "method": "POST",
+      "path": "/api/v1/access/pairing-codes",
+      "transport": "json",
+      "owner_task": "IFC-V1-028"
+    },
+    {
+      "id": "pair_claim",
+      "family": "access",
+      "method": "POST",
+      "path": "/api/v1/access/pairing-claims",
+      "transport": "json",
+      "owner_task": "IFC-V1-028"
+    },
+    {
+      "id": "csrf_bootstrap",
+      "family": "access",
+      "method": "POST",
+      "path": "/api/v1/access/csrf",
+      "transport": "json",
+      "owner_task": "IFC-V1-027"
+    },
+    {
+      "id": "access_state",
+      "family": "access",
+      "method": "GET",
+      "path": "/api/v1/access",
+      "transport": "json",
+      "owner_task": "IFC-V1-030"
+    },
+    {
+      "id": "device_list",
+      "family": "access",
+      "method": "GET",
+      "path": "/api/v1/access/devices",
+      "transport": "json",
+      "owner_task": "IFC-V1-029"
+    },
+    {
+      "id": "device_revoke",
+      "family": "access",
+      "method": "POST",
+      "path": "/api/v1/access/devices/:device_id/revoke",
+      "transport": "json",
+      "owner_task": "IFC-V1-059"
+    },
+    {
+      "id": "host_lock",
+      "family": "access",
+      "method": "POST",
+      "path": "/api/v1/access/lock",
+      "transport": "json",
+      "owner_task": "IFC-V1-030"
+    },
+    {
+      "id": "host_unlock",
+      "family": "access",
+      "method": "POST",
+      "path": "/api/v1/access/unlock",
+      "transport": "json",
+      "owner_task": "IFC-V1-030"
+    },
+    {
+      "id": "remote_status",
+      "family": "remote",
+      "method": "GET",
+      "path": "/api/v1/remote/status",
+      "transport": "json",
+      "owner_task": "IFC-V1-076"
+    },
+    {
+      "id": "remote_enable",
+      "family": "remote",
+      "method": "POST",
+      "path": "/api/v1/remote/enable",
+      "transport": "json",
+      "owner_task": "IFC-V1-076"
+    },
+    {
+      "id": "remote_disable",
+      "family": "remote",
+      "method": "POST",
+      "path": "/api/v1/remote/disable",
+      "transport": "json",
+      "owner_task": "IFC-V1-076"
+    }
+  ]
+}
