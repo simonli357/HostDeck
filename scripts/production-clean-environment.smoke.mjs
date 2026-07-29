@@ -138,7 +138,7 @@ export async function runCleanEnvironmentAcceptance() {
 
     const containerInspect = inspectDockerContainer();
     if (
-      containerInspect.host_config.network_mode !== "default" ||
+      containerInspect.host_config.network_mode !== "bridge" ||
       containerInspect.host_config.pid_mode !== "" ||
       containerInspect.host_config.cgroupns_mode !== "private" ||
       containerInspect.host_config.privileged !== true
