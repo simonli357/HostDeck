@@ -21,6 +21,18 @@ pnpm check:runtime-boundary
 pnpm check:codex-bindings
 ```
 
+## Packaged Service Lifecycle
+
+```bash
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" dist/hostdeck/dist/shell.js service install --json
+dist/hostdeck/dist/shell.js service status --json
+dist/hostdeck/dist/shell.js service start --json
+dist/hostdeck/dist/shell.js service restart --json
+dist/hostdeck/dist/shell.js service stop --json
+/absolute/path/to/new/hostdeck/dist/shell.js service upgrade --json
+dist/hostdeck/dist/shell.js service uninstall --json
+```
+
 ## Validate
 
 ```bash
@@ -139,5 +151,5 @@ pnpm generate:codex-bindings
 
 ## Explicit Gaps
 
-- CLI service cleanup: the verified package supports persistent `service install|upgrade|status|start|stop|restart`. `service uninstall` remains explicit non-success until `IFC-V1-057`; clean-machine parity remains `IFC-V1-058`.
+- CLI service lifecycle: the verified package supports persistent `service install|upgrade|status|start|stop|restart|uninstall`; clean-machine parity remains `IFC-V1-058`.
 - Local release smoke: `pnpm smoke:local` intentionally exits nonzero until `REL-V1-006` implements it.

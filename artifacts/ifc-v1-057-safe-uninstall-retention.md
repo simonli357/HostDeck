@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Freeze the destructive ownership, process/manager ordering, retained-release policy, recovery, preservation, and evidence contract before implementing `codexdeck service uninstall`. This task owns safe removal of the installed HostDeck service surface and bounded cleanup of obsolete verified releases. Clean-machine parity remains `IFC-V1-058`; remote Serve mutation remains the explicit `remote disable` command.
+`IFC-V1-057` is complete. The packaged CLI removes only a fully proven HostDeck service installation, preserves user state/config/Codex/Tailscale, resumes journaled partial removal forward, retains only active plus immediate-previous releases after successful upgrades, and refuses ambiguous ownership before destructive work. Clean-machine parity remains `IFC-V1-058`; remote Serve mutation remains the explicit `remote disable` command.
 
 ## Audited Baseline
 
 - `IFC-V1-056` installs immutable verified releases under one owner-only data root, selects one release through an atomic `current` symlink, and binds the environment, command, unit, manifest, enablement, runtime, and package identities in a canonical schema-1 manifest.
-- Install, upgrade, status, start, stop, and restart already share one nonblocking advisory lifecycle lock and bounded no-shell `systemctl --user` adapter. `service uninstall` is currently reserved but fails before config, filesystem, network, or manager access.
-- Upgrade deliberately retains prior and failed-attempt release directories. No retention bound or old-release collector exists yet.
+- Install, upgrade, status, start, stop, restart, and uninstall share one nonblocking advisory lifecycle lock and bounded no-shell `systemctl --user` adapter.
+- Successful version-changing upgrade retains only the active and immediate-previous verified releases. A failed attempt remains available for inspection until the next successful upgrade removes it with older releases.
 - The configured HostDeck state directory/database, general HostDeck config, Codex home/thread data, Tailscale daemon/account/node/profile/Serve state, and source checkout/package are not installer-owned deletion targets.
 - The lifecycle lock lives inside the installer-owned data root. Removing that inode while another process can open a replacement would split serialization, so successful uninstall retains only the exact `0700` lifecycle root and exact locked `0600` coordination file.
 
@@ -58,6 +58,31 @@ Freeze the destructive ownership, process/manager ordering, retained-release pol
 | `UNS-23` | Focused lifecycle/CLI/manager tests, complete unit/contract/integration/web suites, exact runtime binding, scaffold/planning/runtime-boundary/typecheck/lint, deterministic build/package/browser acceptance, frozen offline install, production audit/licenses, privacy/fallback scans, and residue checks pass after implementation. |
 | `UNS-24` | Closure records criteria/implementation/evidence/closure commits, exact command counts, retention and failure-phase inventories, manifest/package hashes, real-manager observations, removed and preserved paths, Tailscale noninterference, remaining clean-machine limitation, and no claim beyond this uninstall/retention leaf. |
 
+## Implementation And Inspection
+
+- One discriminated schema-1 lifecycle journal owns install/upgrade and the six monotonic uninstall phases `prepared`, `stopped`, `disabled`, `anchors_removed`, `releases_removed`, and `manager_reloaded` under the existing lifecycle lock.
+- Fresh and resumed uninstall prove exact release/package/unit/environment/link ownership, manager fragment and enablement identity, coherent PID/state truth, preservation-path separation, and the complete data-root inventory before deletion.
+- Uninstall stops HostDeck before Codex, requires two consecutive inactive/zero-PID observations, disables only `hostdeck.service`, removes exact anchors/releases, reloads the user manager, and returns strict `not_installed`/`not-found` public truth. The retained empty `0700` data root plus `0600` lock prevents split-lock races and supports reinstall.
+- Successful version-changing upgrade retains the active release and immediate previous release. Same-identity upgrade is mutation-free; a failed attempt remains inspectable until the next successful upgrade removes it with older releases.
+- Manual code/output review found no force-delete fallback, broad catch-and-ignore cleanup, API/Tailscale/Codex dependency, private path in lifecycle output, source-loader/helper-shell dependency, or mutation outside the exact HostDeck ownership set.
+
+## Validation Evidence
+
+| Layer | Result |
+| --- | --- |
+| Direct lifecycle | 27 tests pass, including active/inactive/failed state, absence/repetition/reinstall, lock contention, all six journal phases, manager/read-back failures, malformed journal, path/link/mode/hard-link/content/fragment drift, retention ordering/no-op/failure, missing Codex, and API independence. |
+| Workspace | Unit 2,875 passed/28 intentional external-device skips; contract 245; integration 36; web 920; focused CLI contract 12; root typecheck and Biome/package exports over 803 files pass. |
+| Package | Two deterministic builds and package acceptance pass across relocated read-only, package-manager, packed, global-style, and installed-command invocation. Build identity is 619 sources, 1,245 outputs, 6,466 entries, content SHA-256 `7d7566dc2bbae73acdee8f30f8eb7264a2306f15fd4df55aefb3e51a1fba92bf`, manifest SHA-256 `555c00d3d317d3db851d5e033ac9aab357d3a5d3a5e1ca8d468d08cc3317eb83`, unchanged web SHA-256 `09c04fc54c8d88ded7dff55f54e8228fc65e6eb01e851a65674bf920a3461752`, and only `IFC-V1-058` deferred. |
+| Browsers | Repinned exact package passes 76/76 Chromium 149 and Firefox 151 phone/desktop cases; four sanitized reports record 316 bounded requests and 52 exact mutations. |
+| Real user manager | One final no-retry 22-operation lifecycle run covers four installs, four starts, two statuses, one restart, two stops, three upgrades including injected rollback, and six uninstalls including active/inactive/repeated/injected recovery. Exact 0.144.0 Codex PID/socket continuity, active and inactive upgraded uninstall, reinstall, state/config/Codex sentinels, pre-existing failed units, Tailscale profile/Serve identity, not-found units, absent runtime/install residue, and cleanup pass. |
+| Static/supply chain | Planning 220 tasks/84 requirements/683 dependencies/two queued, scaffold eight packages/21 scripts, runtime boundary 619 modules/22 externals, exact Codex binding 671 files, frozen offline install, zero known production vulnerabilities, 172 production license entries across eight groups, privacy scan, diff check, and 18 protected PNG byte comparisons pass. |
+
+The first aggregate suite attempt duplicated React tests concurrently and produced timeout-only failures; the four affected files passed 82/82 immediately and clean sequential unit/web reruns passed. Early smoke iterations exposed one stale release-count assertion and the test harness exceeding the unit start-limit with a sixth synthetic start; the final harness checks retention truth and resets only already-uninstalled HostDeck unit counters between accelerated reinstall rounds. Three final cleanups left both units `not-found`, no runtime root, and no lifecycle temp root.
+
+## Remaining Boundary
+
+- `IFC-V1-058` owns clean-checkout/package/foreground/service parity on a clean supported Ubuntu environment. This task does not claim that release gate or phone acceptance.
+
 ## Manual Inspection
 
 - Review deletion and preservation sets against a real installed manifest and filesystem tree.
@@ -68,6 +93,6 @@ Freeze the destructive ownership, process/manager ordering, retained-release pol
 
 ## Commit Record
 
-- Criteria: pending.
-- Implementation/evidence: pending.
+- Criteria: `aef65e4`.
+- Implementation/evidence: `af45ec4`.
 - Closure: pending.
