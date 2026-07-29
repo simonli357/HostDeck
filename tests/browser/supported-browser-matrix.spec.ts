@@ -405,6 +405,7 @@ test("fragment pairing scrubs, claims once, reloads, and preserves history", asy
   await expectCleanBrowser(page, diagnostics, {
     allowedFragments: [pairingCode],
     allowedAbortedRequests: [
+      { method: "POST", path: "/api/v1/access/pairing-claims" },
       { method: "GET", path: "/events/stream" },
       { method: "GET", path: "/approvals" }
     ]
@@ -497,6 +498,9 @@ test("prompt owns one keyboard submission and event-confirmed turn", async ({ pa
     text: "Run the supported browser interaction check."
   });
   await expectCleanBrowser(page, diagnostics, {
+    allowedAbortedRequests: [
+      exactInterceptedMutationAbort(api.promptRequests()[0])
+    ],
     forbiddenBodyValues: ["Run the supported browser interaction check."]
   });
   recordScenario(testInfo, started, {
@@ -546,7 +550,11 @@ test("model selection uses native choice and one protected write", async ({ page
   expectProtectedMutation(api.modelSelectRequests()[0], "POST");
   await page.keyboard.press("Escape");
   await expect(trigger).toBeFocused();
-  await expectCleanBrowser(page, diagnostics);
+  await expectCleanBrowser(page, diagnostics, {
+    allowedAbortedRequests: [
+      exactInterceptedMutationAbort(api.modelSelectRequests()[0])
+    ]
+  });
   recordScenario(testInfo, started, {
     id: "model_control",
     interactions: ["read_model", "select_model"],
@@ -582,7 +590,11 @@ test("goal control creates one paused goal", async ({ page }, testInfo) => {
   expectProtectedMutation(api.goalMutateRequests()[0], "POST");
   await page.keyboard.press("Escape");
   await expect(trigger).toBeFocused();
-  await expectCleanBrowser(page, diagnostics);
+  await expectCleanBrowser(page, diagnostics, {
+    allowedAbortedRequests: [
+      exactInterceptedMutationAbort(api.goalMutateRequests()[0])
+    ]
+  });
   recordScenario(testInfo, started, {
     id: "goal_control",
     interactions: ["read_goal", "mutate_goal"],
@@ -620,7 +632,11 @@ test("Plan selection uses native choice and one protected write", async ({ page 
   expectProtectedMutation(api.planSelectRequests()[0], "POST");
   await page.keyboard.press("Escape");
   await expect(trigger).toBeFocused();
-  await expectCleanBrowser(page, diagnostics);
+  await expectCleanBrowser(page, diagnostics, {
+    allowedAbortedRequests: [
+      exactInterceptedMutationAbort(api.planSelectRequests()[0])
+    ]
+  });
   recordScenario(testInfo, started, {
     id: "plan_control",
     interactions: ["read_plan", "select_plan"],
@@ -689,7 +705,11 @@ test("Compact confirms and starts exactly once", async ({ page }, testInfo) => {
   await compact.getByRole("button", { name: "Back to session utilities" }).click();
   await page.keyboard.press("Escape");
   await expect(more).toBeFocused();
-  await expectCleanBrowser(page, diagnostics);
+  await expectCleanBrowser(page, diagnostics, {
+    allowedAbortedRequests: [
+      exactInterceptedMutationAbort(api.startRequests()[0])
+    ]
+  });
   recordScenario(testInfo, started, {
     id: "compact_utility",
     interactions: ["read_compact", "start_compact"],
@@ -756,7 +776,11 @@ test("approval response is confirmed once", async ({ page }, testInfo) => {
   expect(api.approvalReadRequests()).toHaveLength(3);
   expect(api.approvalRespondRequests()).toHaveLength(1);
   expectProtectedMutation(api.approvalRespondRequests()[0], "POST");
-  await expectCleanBrowser(page, diagnostics);
+  await expectCleanBrowser(page, diagnostics, {
+    allowedAbortedRequests: [
+      exactInterceptedMutationAbort(api.approvalRespondRequests()[0])
+    ]
+  });
   recordScenario(testInfo, started, {
     id: "approval",
     interactions: ["read_approvals", "respond_approval"],
@@ -805,7 +829,11 @@ test("interrupt confirms and sends one exact turn mutation", async ({ page }, te
   await expect(page.getByRole("dialog", { name: "Turn interrupted" })).toBeVisible();
   expect(interrupt.requests()).toHaveLength(1);
   expectProtectedMutation(interrupt.requests()[0], "POST");
-  await expectCleanBrowser(page, diagnostics);
+  await expectCleanBrowser(page, diagnostics, {
+    allowedAbortedRequests: [
+      exactInterceptedMutationAbort(interrupt.requests()[0])
+    ]
+  });
   recordScenario(testInfo, started, {
     id: "interrupt",
     interactions: ["interrupt_turn"],
@@ -833,7 +861,11 @@ test("archive confirms and sends one exact session mutation", async ({ page }, t
   await expect(page.getByRole("dialog", { name: "Session archived" })).toBeVisible();
   expect(archive.requests()).toHaveLength(1);
   expectProtectedMutation(archive.requests()[0], "POST");
-  await expectCleanBrowser(page, diagnostics);
+  await expectCleanBrowser(page, diagnostics, {
+    allowedAbortedRequests: [
+      exactInterceptedMutationAbort(archive.requests()[0])
+    ]
+  });
   recordScenario(testInfo, started, {
     id: "archive",
     interactions: ["archive_session"],
@@ -895,7 +927,11 @@ test("paired-device revoke confirms and sends once", async ({ page }, testInfo) 
   expect(devices.listRequests()).toHaveLength(1);
   expect(devices.revokeRequests()).toHaveLength(1);
   expectProtectedMutation(devices.revokeRequests()[0], "POST");
-  await expectCleanBrowser(page, diagnostics);
+  await expectCleanBrowser(page, diagnostics, {
+    allowedAbortedRequests: [
+      exactInterceptedMutationAbort(devices.revokeRequests()[0])
+    ]
+  });
   recordScenario(testInfo, started, {
     id: "device_revoke",
     interactions: ["read_devices", "revoke_device"],
@@ -925,7 +961,11 @@ test("host lock confirms, purges writes, and exposes local unlock", async ({ pag
   await expect(lockSection.getByRole("button", { name: /unlock/iu })).toHaveCount(0);
   expect(lock.lockRequests()).toHaveLength(1);
   expectProtectedMutation(lock.lockRequests()[0], "POST");
-  await expectCleanBrowser(page, diagnostics);
+  await expectCleanBrowser(page, diagnostics, {
+    allowedAbortedRequests: [
+      exactInterceptedMutationAbort(lock.lockRequests()[0])
+    ]
+  });
   recordScenario(testInfo, started, {
     id: "host_lock",
     interactions: ["lock_host"],
@@ -1165,6 +1205,10 @@ async function expectCleanBrowser(
   }> = {}
 ): Promise<void> {
   await expectNoHorizontalOverflow(page);
+  await expect.poll(() => [...diagnostics.pendingRequests]
+    .map((request) => new URL(request.url()).pathname)
+    .filter((path) => !path.endsWith("/events/stream") && !path.endsWith("/approvals")))
+    .toEqual([]);
   await expect.poll(() => diagnostics.pageErrors).toEqual([]);
   const allowedStatuses = new Set(options.allowedNetworkStatuses ?? []);
   for (const failure of diagnostics.httpFailures) {
@@ -1201,10 +1245,6 @@ async function expectCleanBrowser(
       `${failure.method} ${failure.path}:${failure.error}`
     ).toBe(true);
   }
-  await expect.poll(() => [...diagnostics.pendingRequests]
-    .map((request) => new URL(request.url()).pathname)
-    .filter((path) => !path.endsWith("/events/stream") && !path.endsWith("/approvals")))
-    .toEqual([]);
   const retainedOwners = [...diagnostics.pendingRequests]
     .map((request) => new URL(request.url()).pathname)
     .filter((path) => path.endsWith("/events/stream") || path.endsWith("/approvals"));
@@ -1309,6 +1349,23 @@ function expectProtectedMutation(
   expect(headers["x-hostdeck-csrf-generation"]).toBe("1");
   expect(headers["x-hostdeck-local-admin"]).toBeUndefined();
   expect(request.postData()).not.toBeNull();
+}
+
+function exactInterceptedMutationAbort(
+  request: Request | undefined
+): Readonly<{ method: "POST"; path: string }> {
+  if (request === undefined) throw new TypeError("Browser matrix mutation is missing.");
+  const url = new URL(request.url());
+  if (
+    request.method() !== "POST" ||
+    url.origin !== packageOrigin ||
+    !url.pathname.startsWith("/api/v1/") ||
+    url.search !== "" ||
+    url.hash !== ""
+  ) {
+    throw new TypeError("Browser matrix intercepted mutation allowance is invalid.");
+  }
+  return Object.freeze({ method: "POST", path: url.pathname });
 }
 
 function parseRuntimeInspection(candidate: string | undefined) {
