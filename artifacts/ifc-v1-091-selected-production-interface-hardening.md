@@ -1,7 +1,7 @@
 # IFC-V1-091 Selected Production Interface Hardening
 
 Date: 2026-07-29
-Status: strict criteria frozen before implementation changes
+Status: complete; all 24 frozen criteria pass
 
 ## Objective
 
@@ -70,3 +70,48 @@ Primary owners: `docs/planning/04-technical-plan.md`, `docs/planning/04a-impleme
 ## Documentation Impact
 
 Tier 1 task/evidence update under `docs/README.md`: this artifact and the owning backlog row while criteria are frozen. Planning, architecture, delivery, command, and status owners change only if audit or implementation changes their facts.
+
+## Findings And Corrections
+
+| Finding | Severity | Root cause | Correction and regression |
+| --- | --- | --- | --- |
+| `PIH-FINDING-01` | High | The exact-runtime composition smoke put its Codex home below the temporary directory. Exact Codex 0.144.0 emitted a PATH-alias warning, and the strict version probe correctly rejected stderr. | Move the owner-private smoke root below the current user home without weakening stderr validation. The exact production composition smoke now passes and removes its root. Commit `4735abc`. |
+| `PIH-FINDING-02` | High | A stale background observation timer could wake immediately after explicit remote status and compete with the next profile mutation. | Explicit enable, disable, and status now defer the next observer poll while true concurrent operations still reject. A scheduler regression and one live no-retry profile-away/return/observe/disable run pass. Commit `d91c090`. |
+
+One overloaded noncanonical threaded focused invocation terminated before producing a report and left three task-owned temporary roots; the roots were inspected and removed, and the same groups passed as forked single-worker runs. A separate concurrent full-suite invocation caused two five-second web timeouts under host contention; both cases and the complete web suite passed serially. Neither result is counted as canonical success or hidden as a product pass.
+
+## Current Production Identity
+
+| Boundary | Verified identity |
+| --- | --- |
+| API composition | 35 manifest routes through 22 unique registrations; 34 JSON and one SSE. |
+| Runtime binding | Exact Codex 0.144.0; 671 files; tree `e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24`. |
+| Source/output | 619 sources at `24755ebc362bef92172ffaabc6ce917439d9da653f1a063e60ad48b172372390`; 1,245 outputs at `44974ce48ab2280b5742cb4d37723fd711bf9c19f954ee80cef1b2e8bbf4714f`. |
+| Package content | 6,466 entries and 40,187,711 bytes at `fe12493f8398b482330d9aa19a085b710a5b441f722f20d18f566943ec4f9ebb`; schema-4 manifest `62293b5f6cdd61ecfe0da5d8ddafd220507e54d9f19e88509f80a26bb3ff77dd`. |
+| Dashboard | Three files and 1,210,747 bytes at `5e96b3c87b6e5c942426bbd0748c1f7b36325a4c597199545871a08a55024ae5`. |
+
+## Validation
+
+| Layer | Current result |
+| --- | --- |
+| Canonical workspace | Unit 260 files/2,896 pass plus 27 files/28 intentional skips; contract 34/245; integration 21/36; web 54/932; typecheck pass; lint 819 files plus eight export owners; scaffold eight packages/22 scripts; planning 220 tasks/84 requirements/683 dependencies. |
+| Interface aggregates | Ledger/composition 15; remote security 4; production resource stress 6; trust 46; SSE 47; remote 117; lifecycle 19 plus one opt-in physical skip; CLI 93. |
+| Runtime and package | Exact application composition, executable serve, service host, generated user units, and persistent service lifecycle pass. Package acceptance passes 41 direct tests plus deterministic build/verification; current packaged Chromium smoke passes 1/1. |
+| Supply chain | Offline frozen install passes across nine workspaces with pnpm 10.29.2. Production audit covers 184 dependencies with zero vulnerabilities. All 172 production-license records use one of eight accepted permissive expressions. |
+| Live remote control | One no-retry explicit enable, profile-away, profile-return, observation-only recovery, and disable run passes against two saved profiles. Foreign Serve state remains unchanged and final HostDeck Serve state is empty. |
+
+The exact package/service runs cover relocation, direct foreground startup, service-owned startup, independent recovery, unit security scoring, install/idempotence/start/status/restart/stop, active and inactive upgrade, rollback, retention, repeated uninstall/reinstall, Codex process/socket ownership, Tailscale noninterference, and zero final owned state. No model turn was used by these interface smokes.
+
+## Inspection And Cleanup
+
+- No HostDeck listener or process remains. Both user units are absent/inactive, and HostDeck persistent, config, state, runtime, and lifecycle-temporary roots are absent.
+- Tailscale is running and online with two saved profiles and exactly one selected profile. Final Serve status is the empty configuration.
+- Exact supported Codex 0.144.0 remains available for the next acceptance task. The package contains no source loader, historical production transport, or alternate public listener path.
+- A repository/artifact scan found none of the known private account, node, tailnet, address, credential, or pairing values. Evidence retains only normalized counts and booleans.
+- All 18 pre-existing unstaged user PNG changes remain byte-identical to the protected backup and were neither staged nor rewritten.
+
+## Final Disposition
+
+The machine-readable record at `artifacts/ifc-v1-091-selected-production-interface-hardening/evidence.json` lists each criterion independently. `PIH-01` through `PIH-24` all pass against implementation commit `d91c090`; no criterion is blocked or treated as not applicable. Accepted L4 inputs are clean-environment package/service commit `eb77647e8b1e77e42b16fef21b65da0d1b65ea8e` and physical remote-phone commit `b4078b6d411267dec9701ed5ae67037567a9dee9`, both verified ancestors with unchanged owning boundaries.
+
+Fresh full-dashboard physical Android acceptance is deliberately not claimed here. It is the immediately following `FE-V1-090` owner and does not leave an interface-hardening gap.

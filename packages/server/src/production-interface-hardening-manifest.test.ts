@@ -22,9 +22,16 @@ const ledgerPath = resolve(
   repositoryRoot,
   "artifacts/ifc-v1-091-selected-production-interface-hardening/ledger.json"
 );
+const evidencePath = resolve(
+  repositoryRoot,
+  "artifacts/ifc-v1-091-selected-production-interface-hardening/evidence.json"
+);
 const requirementPath = resolve(repositoryRoot, "docs/planning/02-requirements.md");
 const forbiddenEvidencePattern =
   /(?:ifc-v1-0(?:15|33)|direct[-_ ]lan|custom[-_ ]ca|certificate|tmux)/iu;
+const privateEvidencePattern =
+  /(?:[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|(?:\d{1,3}\.){3}\d{1,3}|[a-z0-9-]+\.ts\.net)/iu;
+const sha256Pattern = /^[a-f0-9]{64}$/u;
 
 describe("IFC-V1-091 production interface hardening ledger", () => {
   it("binds the stored ledger to exact production routes and registrations", () => {
@@ -105,5 +112,74 @@ describe("IFC-V1-091 production interface hardening ledger", () => {
       ).not.toThrow();
     }
     expect([...levels].sort()).toEqual(["L1", "L2", "L3", "L4"]);
+  });
+
+  it("binds the final all-pass disposition to current identities and clean ownership", () => {
+    const rawEvidence = readFileSync(evidencePath, "utf8");
+    expect(rawEvidence).not.toMatch(privateEvidencePattern);
+    const evidence = JSON.parse(rawEvidence) as {
+      task: string;
+      status: string;
+      implementation_commits: string[];
+      production_identity: Record<string, unknown>;
+      accepted_l4_inputs: Array<{ task: string; commit: string }>;
+      manual_inspection: Record<string, unknown>;
+      criteria: Array<{ id: string; status: string }>;
+      privacy: Record<string, unknown>;
+    };
+
+    expect(evidence.task).toBe("IFC-V1-091");
+    expect(evidence.status).toBe("pass");
+    expect(evidence.criteria).toEqual(
+      productionInterfaceHardeningCriterionIds.map((id) => ({ id, status: "pass" }))
+    );
+    expect(evidence.production_identity.route_count).toBe(35);
+    expect(evidence.production_identity.registration_count).toBe(22);
+    expect(evidence.production_identity.codex_version).toBe("0.144.0");
+    for (const [key, value] of Object.entries(evidence.production_identity)) {
+      if (key.endsWith("_sha256")) expect(value, key).toMatch(sha256Pattern);
+    }
+    for (const commit of evidence.implementation_commits) {
+      expect(() =>
+        execFileSync("git", ["merge-base", "--is-ancestor", commit, "HEAD"], {
+          cwd: repositoryRoot,
+          stdio: "ignore",
+          timeout: 10_000
+        })
+      ).not.toThrow();
+    }
+    expect(evidence.accepted_l4_inputs).toEqual([
+      {
+        task: "IFC-V1-058",
+        commit: "eb77647e8b1e77e42b16fef21b65da0d1b65ea8e",
+        disposition: "accepted_unchanged_clean_environment_boundary"
+      },
+      {
+        task: "IFC-V1-079",
+        commit: "b4078b6d411267dec9701ed5ae67037567a9dee9",
+        disposition: "accepted_unchanged_remote_phone_boundary"
+      }
+    ]);
+    expect(evidence.manual_inspection).toMatchObject({
+      hostdeck_listener_count: 0,
+      hostdeck_process_count: 0,
+      hostdeck_user_unit_count: 0,
+      owned_persistent_path_count: 0,
+      owned_runtime_path_count: 0,
+      owned_temporary_root_count: 0,
+      saved_profile_count: 2,
+      selected_profile_count: 1,
+      serve_configuration_empty: true,
+      private_identifier_match_count: 0,
+      protected_user_artifact_count: 18,
+      protected_user_artifact_changes: 0
+    });
+    expect(evidence.privacy).toEqual({
+      private_identity_retained: false,
+      credential_retained: false,
+      pairing_secret_retained: false,
+      raw_command_output_retained: false,
+      legacy_fallback_reachable: false
+    });
   });
 });

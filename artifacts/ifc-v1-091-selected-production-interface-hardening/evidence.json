@@ -1,0 +1,220 @@
+{
+  "schema_version": 1,
+  "task": "IFC-V1-091",
+  "status": "pass",
+  "observed_date": "2026-07-29",
+  "implementation_commits": [
+    "ad74557",
+    "9eb43d9",
+    "4735abc",
+    "d91c090"
+  ],
+  "production_identity": {
+    "implementation_commit": "d91c090",
+    "route_count": 35,
+    "registration_count": 22,
+    "codex_version": "0.144.0",
+    "binding_file_count": 671,
+    "binding_tree_sha256": "e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24",
+    "package_schema_version": 4,
+    "source_file_count": 619,
+    "source_tree_sha256": "24755ebc362bef92172ffaabc6ce917439d9da653f1a063e60ad48b172372390",
+    "output_file_count": 1245,
+    "output_tree_sha256": "44974ce48ab2280b5742cb4d37723fd711bf9c19f954ee80cef1b2e8bbf4714f",
+    "content_entry_count": 6466,
+    "content_bytes": 40187711,
+    "content_tree_sha256": "fe12493f8398b482330d9aa19a085b710a5b441f722f20d18f566943ec4f9ebb",
+    "manifest_sha256": "62293b5f6cdd61ecfe0da5d8ddafd220507e54d9f19e88509f80a26bb3ff77dd",
+    "web_file_count": 3,
+    "web_bytes": 1210747,
+    "web_tree_sha256": "5e96b3c87b6e5c942426bbd0748c1f7b36325a4c597199545871a08a55024ae5"
+  },
+  "canonical_validation": [
+    {
+      "command": "pnpm test:unit",
+      "status": "pass",
+      "files_passed": 260,
+      "files_skipped": 27,
+      "tests_passed": 2896,
+      "tests_skipped": 28
+    },
+    {
+      "command": "pnpm test:contract",
+      "status": "pass",
+      "files_passed": 34,
+      "tests_passed": 245
+    },
+    {
+      "command": "pnpm test:integration",
+      "status": "pass",
+      "files_passed": 21,
+      "tests_passed": 36
+    },
+    {
+      "command": "pnpm test:web",
+      "status": "pass",
+      "files_passed": 54,
+      "tests_passed": 932
+    },
+    {
+      "command": "pnpm typecheck",
+      "status": "pass"
+    },
+    {
+      "command": "pnpm lint",
+      "status": "pass",
+      "files_checked": 819,
+      "package_exports_checked": 8
+    },
+    {
+      "command": "pnpm check:scaffold",
+      "status": "pass",
+      "packages_checked": 8,
+      "root_scripts_checked": 22
+    },
+    {
+      "command": "pnpm check:planning",
+      "status": "pass",
+      "task_count": 220,
+      "requirement_count": 84,
+      "dependency_count": 683
+    },
+    {
+      "command": "pnpm check:codex-bindings",
+      "status": "pass",
+      "files_checked": 671
+    },
+    {
+      "command": "pnpm install --offline --frozen-lockfile",
+      "status": "pass",
+      "workspace_count": 9,
+      "package_manager": "pnpm 10.29.2"
+    },
+    {
+      "command": "pnpm audit --prod --json",
+      "status": "pass",
+      "dependencies_checked": 184,
+      "vulnerability_count": 0
+    },
+    {
+      "command": "pnpm test:package",
+      "status": "pass",
+      "direct_tests_passed": 41,
+      "deterministic_acceptance": true
+    },
+    {
+      "command": "pnpm test:browser:package",
+      "status": "pass",
+      "tests_passed": 1
+    }
+  ],
+  "focused_validation": {
+    "ledger_and_composition_tests_passed": 15,
+    "remote_security_aggregate_tests_passed": 4,
+    "production_resource_stress_tests_passed": 6,
+    "trust_tests_passed": 46,
+    "sse_tests_passed": 47,
+    "remote_tests_passed": 117,
+    "lifecycle_tests_passed": 19,
+    "lifecycle_tests_intentionally_skipped": 1,
+    "cli_tests_passed": 93,
+    "exact_application_smokes_passed": 1,
+    "live_profile_switch_smokes_passed": 1,
+    "executable_serve_smokes_passed": 1,
+    "service_host_smokes_passed": 1,
+    "systemd_unit_smokes_passed": 1,
+    "persistent_service_lifecycle_smokes_passed": 1
+  },
+  "accepted_l4_inputs": [
+    {
+      "task": "IFC-V1-058",
+      "commit": "eb77647e8b1e77e42b16fef21b65da0d1b65ea8e",
+      "disposition": "accepted_unchanged_clean_environment_boundary"
+    },
+    {
+      "task": "IFC-V1-079",
+      "commit": "b4078b6d411267dec9701ed5ae67037567a9dee9",
+      "disposition": "accepted_unchanged_remote_phone_boundary"
+    }
+  ],
+  "findings": [
+    {
+      "id": "PIH-FINDING-01",
+      "severity": "high",
+      "status": "fixed",
+      "root_cause": "The exact-runtime smoke placed the Codex home under the temporary directory, causing the supported binary to emit an alias warning that the strict version probe correctly rejected.",
+      "resolution": "Use an owner-private smoke root under the current user home and retain strict stderr rejection.",
+      "regression": "Exact production application composition smoke passes with the supported binary and leaves no owned residue."
+    },
+    {
+      "id": "PIH-FINDING-02",
+      "severity": "high",
+      "status": "fixed",
+      "root_cause": "A stale background observation timer could begin immediately after an explicit remote status call and race the following profile mutation.",
+      "resolution": "Defer the next background poll after every explicit enable, disable, or status operation while preserving true overlap rejection.",
+      "regression": "A focused scheduler regression and one live no-retry profile-away, return, observation, and disable run pass without foreign configuration mutation."
+    }
+  ],
+  "validation_observations": [
+    {
+      "kind": "noncanonical_runner_failure",
+      "disposition": "not_product_failure",
+      "detail": "One overloaded threaded focused invocation terminated before a report; the same groups passed in isolated forked single-worker runs and its three exact temporary roots were inspected and removed."
+    },
+    {
+      "kind": "noncanonical_host_contention",
+      "disposition": "not_product_failure",
+      "detail": "Two five-second web-test timeouts occurred only while full contract, integration, and web suites competed concurrently; both tests and the complete 932-test web suite passed serially."
+    }
+  ],
+  "manual_inspection": {
+    "hostdeck_listener_count": 0,
+    "hostdeck_process_count": 0,
+    "hostdeck_user_unit_count": 0,
+    "owned_persistent_path_count": 0,
+    "owned_runtime_path_count": 0,
+    "owned_temporary_root_count": 0,
+    "saved_profile_count": 2,
+    "selected_profile_count": 1,
+    "tailscale_backend_running": true,
+    "tailscale_self_online": true,
+    "serve_configuration_empty": true,
+    "private_identifier_match_count": 0,
+    "protected_user_artifact_count": 18,
+    "protected_user_artifact_changes": 0
+  },
+  "criteria": [
+    { "id": "PIH-01", "status": "pass" },
+    { "id": "PIH-02", "status": "pass" },
+    { "id": "PIH-03", "status": "pass" },
+    { "id": "PIH-04", "status": "pass" },
+    { "id": "PIH-05", "status": "pass" },
+    { "id": "PIH-06", "status": "pass" },
+    { "id": "PIH-07", "status": "pass" },
+    { "id": "PIH-08", "status": "pass" },
+    { "id": "PIH-09", "status": "pass" },
+    { "id": "PIH-10", "status": "pass" },
+    { "id": "PIH-11", "status": "pass" },
+    { "id": "PIH-12", "status": "pass" },
+    { "id": "PIH-13", "status": "pass" },
+    { "id": "PIH-14", "status": "pass" },
+    { "id": "PIH-15", "status": "pass" },
+    { "id": "PIH-16", "status": "pass" },
+    { "id": "PIH-17", "status": "pass" },
+    { "id": "PIH-18", "status": "pass" },
+    { "id": "PIH-19", "status": "pass" },
+    { "id": "PIH-20", "status": "pass" },
+    { "id": "PIH-21", "status": "pass" },
+    { "id": "PIH-22", "status": "pass" },
+    { "id": "PIH-23", "status": "pass" },
+    { "id": "PIH-24", "status": "pass" }
+  ],
+  "privacy": {
+    "private_identity_retained": false,
+    "credential_retained": false,
+    "pairing_secret_retained": false,
+    "raw_command_output_retained": false,
+    "legacy_fallback_reachable": false
+  },
+  "remaining_gap": "Fresh full-dashboard physical Android acceptance is owned exclusively by FE-V1-090."
+}
