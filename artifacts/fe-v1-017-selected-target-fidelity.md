@@ -71,6 +71,6 @@ Close the aggregate visual-fidelity gate between the seven human-selected Focus 
 
 ## Commit Record
 
-- Criteria: pending.
+- Criteria: `92673a8`.
 - Implementation/evidence: pending.
 - Closure: pending.

@@ -53,6 +53,7 @@
     "test:browser:shell": "pnpm --filter @hostdeck/web build && playwright test --config playwright.shell.config.ts",
     "test:browser:package": "node scripts/test-production-browser-package.mjs",
     "test:browser:pairing": "playwright test --config playwright.pairing.config.ts",
+    "test:ui-fidelity": "vitest run packages/test-fixtures/src/ui-fidelity-matrix.test.ts && node --test scripts/ui-fidelity-evidence.test.mjs && node scripts/test-ui-fidelity.mjs",
     "test:accessibility:zoom": "pnpm --filter @hostdeck/web build && xvfb-run -a --server-args='-screen 0 640x800x24' playwright test --config playwright.accessibility-zoom.config.ts",
     "test:accessibility:orca": "pnpm --filter @hostdeck/web build && dbus-run-session -- xvfb-run -a --server-args='-screen 0 1280x900x24' playwright test --config playwright.accessibility-orca.config.ts",
     "test:e2e": "node scripts/test-supported-browser-matrix.mjs",
