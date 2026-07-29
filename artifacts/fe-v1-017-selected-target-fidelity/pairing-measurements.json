@@ -1,0 +1,72 @@
+{
+  "fixed_time": "2026-07-22T20:00:00.000Z",
+  "measurements": [
+    {
+      "id": "pairing-claiming",
+      "rail": {
+        "bottom": 272,
+        "height": 192,
+        "left": 16,
+        "right": 374,
+        "top": 80,
+        "width": 358
+      },
+      "result": {
+        "bottom": 440,
+        "height": 144,
+        "left": 16,
+        "right": 374,
+        "top": 296,
+        "width": 358
+      },
+      "document": {
+        "clientHeight": 844,
+        "clientWidth": 390,
+        "scrollHeight": 844,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "id": "pairing-paired",
+      "rail": {
+        "bottom": 272,
+        "height": 192,
+        "left": 16,
+        "right": 374,
+        "top": 80,
+        "width": 358
+      },
+      "result": {
+        "bottom": 683,
+        "height": 387,
+        "left": 16,
+        "right": 374,
+        "top": 296,
+        "width": 358
+      },
+      "document": {
+        "clientHeight": 844,
+        "clientWidth": 390,
+        "scrollHeight": 844,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "id": "access-locked",
+      "dialog": {
+        "bottom": 844,
+        "height": 680,
+        "left": 0,
+        "right": 390,
+        "top": 164,
+        "width": 390
+      },
+      "document": {
+        "clientHeight": 844,
+        "clientWidth": 390,
+        "scrollHeight": 844,
+        "scrollWidth": 390
+      }
+    }
+  ]
+}

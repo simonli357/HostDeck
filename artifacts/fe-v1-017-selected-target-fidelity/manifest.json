@@ -1,0 +1,568 @@
+{
+  "schema_version": 1,
+  "task_id": "FE-V1-017",
+  "criteria_revision": "92673a8",
+  "implementation_revision": "27fd8f7a6a67c2396f08e2caca7ff87921baa960",
+  "source_scope": {
+    "clean": true,
+    "dirty_override": false,
+    "implementation_status": []
+  },
+  "build": {
+    "command": "pnpm --filter @hostdeck/web build",
+    "directory": "packages/web/dist",
+    "file_count": 3,
+    "sha256": "0f45b7fcbcc18025937c7f2cedd4486824182bb6b618914163ed99b802ea918e"
+  },
+  "browser": {
+    "engine": "chromium",
+    "version": "149.0.7827.55",
+    "playwright_version": "1.61.1",
+    "device_scale_factor": 1,
+    "retries": 0
+  },
+  "coverage": {
+    "canonical_states": 141,
+    "interactions": 39,
+    "journeys": 12,
+    "surfaces": 15,
+    "reference_viewports": [
+      {
+        "width": 360,
+        "height": 800
+      },
+      {
+        "width": 390,
+        "height": 844
+      },
+      {
+        "width": 412,
+        "height": 915
+      },
+      {
+        "width": 768,
+        "height": 1024
+      },
+      {
+        "width": 1280,
+        "height": 800
+      }
+    ],
+    "executable_ledger": "packages/test-fixtures/src/ui-fidelity-matrix.ts"
+  },
+  "generation": {
+    "independent_runs": 2,
+    "deterministic": true,
+    "fixed_fixture_times": {
+      "approval": "2026-07-22T22:00:00.000Z",
+      "detail": "2026-07-22T22:00:00.000Z",
+      "mission": "2026-07-22T20:00:00.000Z",
+      "model_goal": "2026-07-25T20:00:00.000Z",
+      "pairing": "2026-07-22T20:00:00.000Z",
+      "plan": "2026-07-26T02:00:00.000Z",
+      "recovery": "2026-07-26T16:00:00.000Z"
+    },
+    "animations": "disabled",
+    "caret": "hidden",
+    "fonts": "awaited",
+    "local_requests_only": true
+  },
+  "diagnostics": {
+    "unexpected_console_errors": 0,
+    "unexpected_page_errors": 0,
+    "unexpected_external_requests": 0,
+    "horizontal_overflow_failures": 0,
+    "undersized_visible_control_failures": 0
+  },
+  "targets": [
+    {
+      "id": "mission_control",
+      "path": "assets/ui-concepts/option-b/mobile-mission-control-mixed.png",
+      "width": 853,
+      "height": 1844,
+      "sha256": "b8b81bf3090af4829c1ed934c47f7adba6b70aeda6befdd56934dfb1f9de18e3",
+      "landmarks": [
+        "compact_app_bar",
+        "host_status_rail",
+        "grouped_attention_queue",
+        "semantic_state_rail",
+        "whole_session_target"
+      ],
+      "bytes": 1123662
+    },
+    {
+      "id": "session_detail",
+      "path": "assets/ui-concepts/option-b/mobile-session-detail-active.png",
+      "width": 852,
+      "height": 1846,
+      "sha256": "19811f479b1e00df02da61f44ed50b72fd3363a349ad8aa87b7a5d63eee9f2ce",
+      "landmarks": [
+        "compact_app_bar",
+        "event_timeline",
+        "semantic_state_rail",
+        "sticky_primary_dock",
+        "sticky_prompt_composer"
+      ],
+      "bytes": 1189476
+    },
+    {
+      "id": "approval_boundary",
+      "path": "assets/ui-concepts/option-b/mobile-approval-boundary-states.png",
+      "width": 1672,
+      "height": 941,
+      "sha256": "13d74ceb058bbf87e1a2cd266e0ba1ddfe37c3b3e56a27375d1cb62dee114b39",
+      "landmarks": [
+        "event_timeline",
+        "broken_timeline_boundary",
+        "inline_approval",
+        "risk_confirmation_sheet"
+      ],
+      "bytes": 1574368
+    },
+    {
+      "id": "pairing_journey",
+      "path": "assets/ui-concepts/option-b/pairing-journey.png",
+      "width": 1672,
+      "height": 941,
+      "sha256": "01987fafdd9beed382cf9377199fb45489cdec75710c721bfc4474aabd81c637",
+      "landmarks": [
+        "compact_app_bar",
+        "pairing_progress_rail",
+        "pairing_dominant_state"
+      ],
+      "bytes": 1211805
+    },
+    {
+      "id": "access_recovery",
+      "path": "assets/ui-concepts/option-b/access-recovery-states.png",
+      "width": 1672,
+      "height": 941,
+      "sha256": "62d3a688dbc22bc207033ee770f86bd367b76bcb9d4c802c21b13aab3c784bf7",
+      "landmarks": [
+        "recovery_owner_label",
+        "recovery_state_rail",
+        "host_status_rail"
+      ],
+      "bytes": 1389331
+    },
+    {
+      "id": "primary_controls",
+      "path": "assets/ui-concepts/option-b/primary-controls.png",
+      "width": 1672,
+      "height": 941,
+      "sha256": "b9407bc4f5d11d2ef07aac2db15545ff47d9f920fdf015afac445e8bd879aef2",
+      "landmarks": [
+        "compact_app_bar",
+        "current_next_turn_rail",
+        "objective_execution_rail",
+        "risk_confirmation_sheet"
+      ],
+      "bytes": 1233282
+    },
+    {
+      "id": "responsive_continuum",
+      "path": "assets/ui-concepts/option-b/responsive-continuum.png",
+      "width": 1672,
+      "height": 941,
+      "sha256": "ea950d9fe7e3a8ecd91324bf56697e123c5654f9ed46a0b9fcdb46699eb49626",
+      "landmarks": [
+        "phone_single_column",
+        "tablet_bounded_context",
+        "desktop_list_detail_split",
+        "grouped_attention_queue",
+        "event_timeline"
+      ],
+      "bytes": 1592337
+    }
+  ],
+  "captures": [
+    {
+      "file": "mission-360x800.png",
+      "target": "mission_control",
+      "viewport": {
+        "width": 360,
+        "height": 800
+      },
+      "route": "/",
+      "state": "mission_mixed_attention",
+      "bytes": 66468,
+      "sha256": "1939f962ba218da912ca81196d79f4214aa0abfda01739fb9034f5b6062514c3"
+    },
+    {
+      "file": "mission-390x844.png",
+      "target": "mission_control",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/",
+      "state": "mission_mixed_attention",
+      "bytes": 67943,
+      "sha256": "bedfcc49cdd11a6a4eed088f2982fa5cf6864f8a2580cdec789725dba26e2de1"
+    },
+    {
+      "file": "mission-412x915.png",
+      "target": "mission_control",
+      "viewport": {
+        "width": 412,
+        "height": 915
+      },
+      "route": "/",
+      "state": "mission_mixed_attention",
+      "bytes": 68399,
+      "sha256": "494c642bb18155d72495b175a471616b13567dc21cd4b8607cbe48fe578dd700"
+    },
+    {
+      "file": "mission-768x1024.png",
+      "target": "mission_control",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "route": "/",
+      "state": "mission_mixed_attention",
+      "bytes": 72442,
+      "sha256": "71ca90eb4c7e531a686167c9e8a084f796da815f89c13cefee61c38b6741f104"
+    },
+    {
+      "file": "mission-1280x800.png",
+      "target": "mission_control",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "route": "/",
+      "state": "mission_mixed_attention",
+      "bytes": 72577,
+      "sha256": "df0ac37ff571eda96026cb693d3466ddb59df5058d4cad0b8157ae95751e7b27"
+    },
+    {
+      "file": "session-detail-360x800.png",
+      "target": "session_detail",
+      "viewport": {
+        "width": 360,
+        "height": 800
+      },
+      "route": "/sessions/android-release",
+      "state": "detail_active_writable",
+      "bytes": 60563,
+      "sha256": "f1c805216e385141f0f47010e35455bdc235e7e137f23d10b347b89865dff0a6"
+    },
+    {
+      "file": "session-detail-390x844.png",
+      "target": "session_detail",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/sessions/android-release",
+      "state": "detail_active_writable",
+      "bytes": 61790,
+      "sha256": "35745d863195e75d26e45ae2775043c3567ad796f353736e90e96f2922458356"
+    },
+    {
+      "file": "session-detail-412x915.png",
+      "target": "session_detail",
+      "viewport": {
+        "width": 412,
+        "height": 915
+      },
+      "route": "/sessions/android-release",
+      "state": "detail_active_writable",
+      "bytes": 62074,
+      "sha256": "b08e0dbb80571de2b3db4f7f7817ca8828fd45e5944452ce6a26cc7ae058349f"
+    },
+    {
+      "file": "session-detail-768x1024.png",
+      "target": "session_detail",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "route": "/sessions/android-release",
+      "state": "detail_active_writable",
+      "bytes": 65964,
+      "sha256": "2794a425b67d10af8f203512bb30d73935f93703e025f8274cda5b7f01c4a67a"
+    },
+    {
+      "file": "session-detail-1280x800.png",
+      "target": "responsive_continuum",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "route": "/sessions/android-release",
+      "state": "detail_desktop_expansion",
+      "bytes": 101579,
+      "sha256": "227e3459542c33c34e9cff02a8f676c954a45ed3892ecfc3856f453eee8dc30c"
+    },
+    {
+      "file": "approval-boundary-390x844.png",
+      "target": "approval_boundary",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/sessions/android-release",
+      "state": "detail_replay_boundary",
+      "bytes": 73932,
+      "sha256": "e92ce87caebe4d458f67a1d57b6cb79b244042c3a1ec7260192b4a1304955af4"
+    },
+    {
+      "file": "approval-pending-390x844.png",
+      "target": "approval_boundary",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/sessions/android-release",
+      "state": "approval_pending",
+      "bytes": 72674,
+      "sha256": "8434f093e4492ee3adf44c587dca9003f9f0c5feafe2da54b3bb459e52e7d9d1"
+    },
+    {
+      "file": "approval-elevated-confirmation-390x844.png",
+      "target": "approval_boundary",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/sessions/android-release",
+      "state": "approval_elevated_confirmation",
+      "bytes": 69222,
+      "sha256": "7ea9314828fd37918eb512b3be3e50d1c345e99ce01061470b0dce97a12ac994"
+    },
+    {
+      "file": "pairing-claiming-390x844.png",
+      "target": "pairing_journey",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/pairing-access.html?view=pairing&state=claiming",
+      "state": "pair_claiming",
+      "bytes": 29205,
+      "sha256": "b60b929a7e5b817ab227ad9b110040d2d5789e79a86c07db265b63b2e0855b08"
+    },
+    {
+      "file": "pairing-paired-390x844.png",
+      "target": "pairing_journey",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/pairing-access.html?view=pairing&state=paired",
+      "state": "pair_paired",
+      "bytes": 42271,
+      "sha256": "fe4cc38e46645d46d10c16a0e7c27d939ee8154b9fd85dd545fe5a632f7d263e"
+    },
+    {
+      "file": "access-locked-390x844.png",
+      "target": "access_recovery",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/pairing-access.html?view=access&state=locked",
+      "state": "access_locked",
+      "bytes": 57552,
+      "sha256": "7f9a43470ce325fe2694992a921fec7e18ec57f207a25827581c7a0f7969531a"
+    },
+    {
+      "file": "access-remote-disabled-390x844.png",
+      "target": "access_recovery",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/",
+      "state": "access_remote_disabled",
+      "bytes": 56043,
+      "sha256": "f2ce9780a7f43b93400406eb89e04d1691a25b19f62c2a63e1d161acca59e879"
+    },
+    {
+      "file": "access-client-stopped-390x844.png",
+      "target": "access_recovery",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/",
+      "state": "access_tailscale_stopped",
+      "bytes": 55504,
+      "sha256": "cf289e6192238ce7b3ef65fbf3ffc4930bfdfe323e747e15a464fcd66ef476c7"
+    },
+    {
+      "file": "access-profile-other-390x844.png",
+      "target": "access_recovery",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/",
+      "state": "access_profile_mismatch",
+      "bytes": 57776,
+      "sha256": "862152a90edea2e8d6981d22bcded821ba019beb15e96fa480c90872a87930b3"
+    },
+    {
+      "file": "access-serve-colliding-390x844.png",
+      "target": "access_recovery",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/",
+      "state": "access_serve_conflict",
+      "bytes": 57655,
+      "sha256": "9d7bfb717ee3920ea5b1b2f18b7df68c3c7dd885ad5758b31feff44dfc7d58ba"
+    },
+    {
+      "file": "primary-model-390x844.png",
+      "target": "primary_controls",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/sessions/android-release",
+      "state": "model_current",
+      "bytes": 55729,
+      "sha256": "b2ecc482738fb6905b1c36e0c39337cb915ed6adc0bb437dfd50327faf654aec"
+    },
+    {
+      "file": "primary-goal-390x844.png",
+      "target": "primary_controls",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/sessions/android-release",
+      "state": "goal_current",
+      "bytes": 54692,
+      "sha256": "07031f8059cefebce197251442641284abe04dd9985336bb88431213ce1bb574"
+    },
+    {
+      "file": "primary-plan-390x844.png",
+      "target": "primary_controls",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "route": "/sessions/android-release",
+      "state": "plan_current",
+      "bytes": 56735,
+      "sha256": "80cbf652a6432d6e5e0c6361a24169eb5d1ca442580a3a663b6bfbf143a0d361"
+    }
+  ],
+  "comparisons": [
+    {
+      "file": "comparison-mission-control.png",
+      "kind": "direct",
+      "target": "mission_control",
+      "width": 1200,
+      "height": 1009,
+      "bytes": 517193,
+      "sha256": "dd5389d7a975c45aab0824d3bc905a5879e7cb0e80cbfb7f8dfbf3702534700f"
+    },
+    {
+      "file": "comparison-session-detail.png",
+      "kind": "direct",
+      "target": "session_detail",
+      "width": 1200,
+      "height": 1009,
+      "bytes": 449460,
+      "sha256": "f773a6455b8ac88a547ac3aecea99076426bc66ca6410476152a632a2833f4ea"
+    },
+    {
+      "file": "comparison-approval-boundary.png",
+      "kind": "composite",
+      "target": "approval_boundary",
+      "width": 1200,
+      "height": 1669,
+      "bytes": 1043243,
+      "sha256": "120a67d043aa295a67371eeb7016bc34655e9995ea842d95529a600ee944b6a1"
+    },
+    {
+      "file": "comparison-pairing-journey.png",
+      "kind": "composite",
+      "target": "pairing_journey",
+      "width": 1200,
+      "height": 1791,
+      "bytes": 706599,
+      "sha256": "66e1e7db15a7f987f6fcbab06a67ade5564611907368b55ab645f221ae02dca2"
+    },
+    {
+      "file": "comparison-access-recovery.png",
+      "kind": "composite",
+      "target": "access_recovery",
+      "width": 1200,
+      "height": 2620,
+      "bytes": 1064189,
+      "sha256": "10263dfda9f6d89a7eb27ce6f524a2c40c907ebd46737fb9180102275d74cbc5"
+    },
+    {
+      "file": "comparison-primary-controls.png",
+      "kind": "composite",
+      "target": "primary_controls",
+      "width": 1200,
+      "height": 1669,
+      "bytes": 810155,
+      "sha256": "58b4e87c0cf1e27b23699f02a1a7a302b60e61bc1e96123d1d1f2d6c8bebf5ff"
+    },
+    {
+      "file": "comparison-responsive-continuum.png",
+      "kind": "composite",
+      "target": "responsive_continuum",
+      "width": 1200,
+      "height": 2235,
+      "bytes": 1124421,
+      "sha256": "90b9300f3e48e03871d088f318d57def6c4c101e9b2497f61fc606934490aba2"
+    }
+  ],
+  "supplemental": [
+    {
+      "file": "pairing-measurements.json",
+      "bytes": 1397,
+      "sha256": "e124944f5d8ff393e73758030077a4787805bf20124202b13c67ecb27da43f3a"
+    },
+    {
+      "file": "shell-measurements.json",
+      "bytes": 9296,
+      "sha256": "cdbcd8e0c2a1dc8acadc5c6735b0bcc56c6834f0e626c57f49f1030e5a369639"
+    },
+    {
+      "file": "manual-review.md",
+      "bytes": 4766,
+      "sha256": "9e58c30b963d9a62bde298de6de8df79b60dbdc94f32429e0ec573171fda04ec"
+    }
+  ],
+  "artifact_guard": {
+    "atomic_publish": true,
+    "upstream_task_artifacts_unchanged": true,
+    "ports_checked_before_and_after": [
+      4175,
+      4179
+    ],
+    "tailscale_mutated": false,
+    "adb_mutated": false,
+    "physical_phone_used": false
+  },
+  "authorized_divergences": [
+    "runtime-backed copy and typed fixtures replace illustrative raster text",
+    "Lucide icons and semantic accessibility replace generated icon details",
+    "local CLI owns QR creation",
+    "fragment-scrubbed phone claim is automatic and has no second submit",
+    "origin-unreachable remains browser-owned before app load",
+    "controls reflect actual runtime capabilities"
+  ],
+  "limitations": [
+    "Absolute raster differences are diagnostic and are not a pass threshold.",
+    "This visual gate does not repeat physical-device, Tailscale, Serve, or installed-service acceptance."
+  ],
+  "privacy": {
+    "contains_private_origin": false,
+    "contains_real_user_or_device_identity": false,
+    "contains_prompt_or_credential": false,
+    "fixtures_only": true
+  },
+  "manifest_sha256": "e968d52e9e45eaec83939362e6b3ada782ce74a47e21864b5c96a6c3c95593b5"
+}
