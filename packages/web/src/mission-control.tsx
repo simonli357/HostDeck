@@ -643,6 +643,7 @@ function MissionRowList({
                 data-hostdeck-session-path={sessionDetailPath(row.item.session.id)}
                 to={sessionDetailPath(row.item.session.id)}
                 replace
+                aria-label={row.item.session.name}
                 aria-current={selected ? "page" : undefined}
               >
                 {content}
@@ -651,6 +652,7 @@ function MissionRowList({
               <SessionRouteLink
                 className="hostdeck-session-row__link"
                 sessionId={row.item.session.id}
+                aria-label={row.item.session.name}
               >
                 {content}
               </SessionRouteLink>

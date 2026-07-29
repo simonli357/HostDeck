@@ -394,6 +394,10 @@ describe("Mission Control screen states and interaction", () => {
     expect(screen.getByText("Write")).toBeTruthy();
     expect(screen.getByText("Current")).toBeTruthy();
     expect(screen.getAllByRole("link")).toHaveLength(3);
+    expect(screen.getByRole("link", { name: "approval" }).getAttribute("aria-label"))
+      .toBe("approval");
+    expect(screen.getByRole("link", { name: "input" }).getAttribute("aria-label"))
+      .toBe("input");
 
     const quietDisclosure = screen.getByRole("button", {
       name: "Expand quiet sessions (1)"
@@ -677,9 +681,11 @@ describe("responsive retained Mission navigation", () => {
     expect(navigation.querySelectorAll("li")).toHaveLength(3);
     expect(screen.queryByRole("button", { name: /refresh|load more/i })).toBeNull();
 
-    const selected = screen.getByRole("link", { name: /running/i });
+    const selected = screen.getByRole("link", { name: "running" });
+    expect(selected.getAttribute("aria-label")).toBe("running");
     expect(selected.getAttribute("aria-current")).toBe("page");
-    const replacement = screen.getByRole("link", { name: /approval/i });
+    const replacement = screen.getByRole("link", { name: "approval" });
+    expect(replacement.getAttribute("aria-label")).toBe("approval");
     expect(replacement.getAttribute("aria-current")).toBeNull();
 
     fireEvent.click(replacement);

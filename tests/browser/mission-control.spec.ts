@@ -30,7 +30,9 @@ test("renders the production mixed queue across the approved responsive continuu
   const diagnostics = observePage(page);
   const api = await installMissionControlApi(page);
   await page.goto("/");
-  await expect(page.getByRole("link", { name: /^release-approval/u })).toBeVisible();
+  const releaseApproval = page.getByRole("link", { name: /^release-approval/u });
+  await expect(releaseApproval).toBeVisible();
+  await expect(releaseApproval).toHaveAccessibleName("release-approval");
   await expect(page.getByRole("heading", { level: 2, name: "ACT NOW" })).toBeVisible();
   await expect(page.getByText("Laptop", { exact: true })).toBeVisible();
   await expect(page.getByText("Write", { exact: true })).toBeVisible();

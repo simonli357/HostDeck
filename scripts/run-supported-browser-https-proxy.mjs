@@ -142,17 +142,23 @@ tunnelServer.on("connect", (request, clientSocket, head) => {
     clientSocket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
     return;
   }
-  const upstreamSocket = connect({ host: "127.0.0.1", port });
-  sockets.add(upstreamSocket);
-  upstreamSocket.once("close", () => sockets.delete(upstreamSocket));
+  const upstreamSocket = trackSocket(connect({ host: "127.0.0.1", port }));
+  clientSocket.once("close", () => upstreamSocket.destroy());
+  upstreamSocket.once("close", () => clientSocket.destroy());
   upstreamSocket.once("connect", () => {
+    if (clientSocket.destroyed) {
+      upstreamSocket.destroy();
+      return;
+    }
     clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
     if (head.byteLength > 0) upstreamSocket.write(head);
     clientSocket.pipe(upstreamSocket);
     upstreamSocket.pipe(clientSocket);
   });
-  upstreamSocket.once("error", () => {
-    clientSocket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n");
+  upstreamSocket.on("error", () => {
+    if (!clientSocket.destroyed && !clientSocket.writableEnded) {
+      clientSocket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n");
+    }
   });
 });
 tunnelServer.on("clientError", (_error, socket) => socket.destroy());
@@ -162,13 +168,11 @@ server.requestTimeout = 10_000;
 server.keepAliveTimeout = 1_000;
 server.maxHeadersCount = 64;
 server.on("connection", (socket) => {
-  sockets.add(socket);
-  socket.once("close", () => sockets.delete(socket));
+  trackSocket(socket);
 });
 server.on("clientError", (_error, socket) => socket.destroy());
 tunnelServer.on("connection", (socket) => {
-  sockets.add(socket);
-  socket.once("close", () => sockets.delete(socket));
+  trackSocket(socket);
 });
 
 await Promise.all([
@@ -218,6 +222,13 @@ function send(response, status, headers, body = "") {
     ...headers
   });
   response.end(body);
+}
+
+function trackSocket(socket) {
+  sockets.add(socket);
+  socket.on("error", () => socket.destroy());
+  socket.once("close", () => sockets.delete(socket));
+  return socket;
 }
 
 function hasRequestBody(request) {

@@ -58,7 +58,7 @@
     "test:ui-fidelity": "vitest run packages/test-fixtures/src/ui-fidelity-matrix.test.ts && node --test scripts/ui-fidelity-evidence.test.mjs && node scripts/test-ui-fidelity.mjs",
     "test:accessibility:zoom": "pnpm --filter @hostdeck/web build && xvfb-run -a --server-args='-screen 0 640x800x24' playwright test --config playwright.accessibility-zoom.config.ts",
     "test:accessibility:orca": "pnpm --filter @hostdeck/web build && dbus-run-session -- xvfb-run -a --server-args='-screen 0 1280x900x24' playwright test --config playwright.accessibility-orca.config.ts",
-    "test:e2e": "node scripts/test-supported-browser-matrix.mjs",
+    "test:e2e": "node --test scripts/supported-browser-https-proxy.test.mjs && node scripts/test-supported-browser-matrix.mjs",
     "build": "node scripts/build-production-package.mjs",
     "smoke:local": "node scripts/not-implemented.mjs smoke:local REL-V1-006"
   },

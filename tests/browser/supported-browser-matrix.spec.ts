@@ -8,7 +8,10 @@ import {
   type TestInfo,
   test
 } from "@playwright/test";
-import { selectedPairClaimRequestSchema } from "../../packages/contracts/src/index.js";
+import {
+  selectedCsrfBootstrapRequestSchema,
+  selectedPairClaimRequestSchema
+} from "../../packages/contracts/src/index.js";
 import type { MobileInteractionId } from "../../packages/test-fixtures/src/index.js";
 import { installApprovalDecisionsApi } from "./approval-decisions-fixture.js";
 import { installArchiveApi } from "./archive-control-fixture.js";
@@ -101,9 +104,12 @@ interface BrowserDiagnostics {
     path: string;
     method: string;
     error: string;
+    request: Request;
   }>>;
   readonly pendingRequests: Set<Request>;
   readonly pageErrors: string[];
+  readonly requests: Request[];
+  readonly successfulResponses: Map<Request, number>;
 }
 
 interface ScenarioEvidence {
@@ -1140,7 +1146,9 @@ async function observePage(
     httpFailures: [],
     networkFailures: [],
     pendingRequests: new Set<Request>(),
-    pageErrors: []
+    pageErrors: [],
+    requests: [],
+    successfulResponses: new Map<Request, number>()
   };
   await page.addInitScript(() => {
     const violations: string[] = [];
@@ -1167,6 +1175,7 @@ async function observePage(
     const url = new URL(request.url());
     if (url.protocol === "http:" || url.protocol === "https:") {
       diagnostics.pendingRequests.add(request);
+      diagnostics.requests.push(request);
     }
     if (url.protocol.startsWith("http") && !allowedOrigins.includes(url.origin)) {
       diagnostics.externalRequests.push(`${request.method()} ${url.origin}${url.pathname}`);
@@ -1179,11 +1188,15 @@ async function observePage(
     diagnostics.networkFailures.push({
       path: url.pathname,
       method: request.method(),
-      error: request.failure()?.errorText ?? "unknown"
+      error: request.failure()?.errorText ?? "unknown",
+      request
     });
   });
   page.on("response", (response) => {
-    if (response.status() < 400) return;
+    if (response.status() < 400) {
+      diagnostics.successfulResponses.set(response.request(), response.status());
+      return;
+    }
     const url = new URL(response.url());
     diagnostics.httpFailures.push({
       path: url.pathname,
@@ -1236,12 +1249,15 @@ async function expectCleanBrowser(
       failure.method === "GET" &&
       failure.path.startsWith("/api/v1/") &&
       aborted;
+    const expectedCsrfBootstrapCompletion =
+      aborted && isProvenInterceptedCsrfBootstrapCompletion(failure, diagnostics);
     expect(
       (aborted &&
         allowedAbortedRequests.some(({ method, path }) =>
           failure.method === method && failure.path === path
         )) ||
-        expectedReadCancellation,
+        expectedReadCancellation ||
+        expectedCsrfBootstrapCompletion,
       `${failure.method} ${failure.path}:${failure.error}`
     ).toBe(true);
   }
@@ -1366,6 +1382,46 @@ function exactInterceptedMutationAbort(
     throw new TypeError("Browser matrix intercepted mutation allowance is invalid.");
   }
   return Object.freeze({ method: "POST", path: url.pathname });
+}
+
+function isProvenInterceptedCsrfBootstrapCompletion(
+  failure: BrowserDiagnostics["networkFailures"][number],
+  diagnostics: BrowserDiagnostics
+): boolean {
+  const url = new URL(failure.request.url());
+  if (
+    failure.method !== "POST" ||
+    failure.path !== "/api/v1/access/csrf" ||
+    url.origin !== packageOrigin ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    diagnostics.successfulResponses.get(failure.request) !== 200
+  ) {
+    return false;
+  }
+  const matchingRequests = diagnostics.requests.filter((request) => {
+    const candidate = new URL(request.url());
+    return request.method() === "POST" && candidate.pathname === failure.path;
+  });
+  if (matchingRequests.length !== 1 || matchingRequests[0] !== failure.request) {
+    return false;
+  }
+  const headers = failure.request.headers();
+  if (
+    !/^application\/json(?:;|$)/u.test(headers["content-type"] ?? "") ||
+    headers["x-hostdeck-csrf"] !== undefined ||
+    headers["x-hostdeck-csrf-generation"] !== undefined ||
+    headers["x-hostdeck-local-admin"] !== undefined
+  ) {
+    return false;
+  }
+  try {
+    return selectedCsrfBootstrapRequestSchema.safeParse(
+      failure.request.postDataJSON()
+    ).success;
+  } catch {
+    return false;
+  }
 }
 
 function parseRuntimeInspection(candidate: string | undefined) {

@@ -25,10 +25,10 @@
   ],
   "package": {
     "version": "0.0.0",
-    "content_sha256": "f1d2f387dcc2de4bc66f72bae399aec0d7a64a15efb1ba1a18f739b6b03d1c1f",
-    "manifest_sha256": "e479251783c2c46dba2551762c2001c078dee25d375cece00677c69af78b1a27",
-    "web_sha256": "67d9295b4b8cd0ed57b65165ced86f8914d9c0785f87a2687cb0b39d2162444a",
-    "web_manifest_sha256": "c6b3f3a291116f52734412793de2519a8617c6002e99b4ff786027093f0994a2"
+    "content_sha256": "55ee52d7cd834250e90532dfa6aee5583a5fe6626af2923e95ebb3cd997a82c3",
+    "manifest_sha256": "a40f157604bdbeff29f0cb6b7c48c9780ff34011e90cb8e256e7c152f8563ec8",
+    "web_sha256": "b028a833b2e93c8a007884614e91f8ef7feb5ed58232090cf96aaa3a1c6e67b1",
+    "web_manifest_sha256": "460ebc3ed095d80f02d8fe3d609ccf46fc371899776799306b91f440bb87ac49"
   },
   "scenario_count": 19,
   "interaction_ids": [
@@ -69,7 +69,7 @@
   ],
   "total_request_count": 78,
   "total_mutation_count": 13,
-  "duration_ms": 41934,
+  "duration_ms": 29593,
   "diagnostics": {
     "cache_entries": 0,
     "expected_http_failures": 1,
@@ -105,7 +105,7 @@
       ],
       "request_count": 20,
       "mutation_count": 0,
-      "duration_ms": 3305,
+      "duration_ms": 2325,
       "observations": {
         "css_platform_features": true,
         "desktop_split": false,
@@ -123,7 +123,7 @@
       ],
       "request_count": 7,
       "mutation_count": 2,
-      "duration_ms": 6066,
+      "duration_ms": 2987,
       "observations": {
         "claim_replayed": false,
         "fragment_scrubbed": true,
@@ -140,7 +140,7 @@
       ],
       "request_count": 2,
       "mutation_count": 0,
-      "duration_ms": 2791,
+      "duration_ms": 2426,
       "observations": {
         "duplicate_events": false,
         "highest_cursor": 3,
@@ -156,7 +156,7 @@
       ],
       "request_count": 1,
       "mutation_count": 1,
-      "duration_ms": 1984,
+      "duration_ms": 1630,
       "observations": {
         "duplicate_submit": false,
         "event_confirmed": true
@@ -171,7 +171,7 @@
       ],
       "request_count": 2,
       "mutation_count": 1,
-      "duration_ms": 1814,
+      "duration_ms": 1408,
       "observations": {
         "has_selector_applied": true,
         "native_radio_keyboard": true
@@ -186,7 +186,7 @@
       ],
       "request_count": 2,
       "mutation_count": 1,
-      "duration_ms": 1265,
+      "duration_ms": 1003,
       "observations": {
         "paused_without_turn": true
       }
@@ -200,7 +200,7 @@
       ],
       "request_count": 2,
       "mutation_count": 1,
-      "duration_ms": 1167,
+      "duration_ms": 902,
       "observations": {
         "native_radio_keyboard": true
       }
@@ -213,7 +213,7 @@
       ],
       "request_count": 1,
       "mutation_count": 0,
-      "duration_ms": 1047,
+      "duration_ms": 1350,
       "observations": {
         "utility_focus_restored": true
       }
@@ -227,7 +227,7 @@
       ],
       "request_count": 2,
       "mutation_count": 1,
-      "duration_ms": 1361,
+      "duration_ms": 1366,
       "observations": {
         "confirmation_required": true
       }
@@ -240,7 +240,7 @@
       ],
       "request_count": 1,
       "mutation_count": 0,
-      "duration_ms": 1350,
+      "duration_ms": 1087,
       "observations": {
         "local_search": true
       }
@@ -254,7 +254,7 @@
       ],
       "request_count": 4,
       "mutation_count": 1,
-      "duration_ms": 1400,
+      "duration_ms": 835,
       "observations": {
         "duplicate_response": false,
         "terminal_confirmed": true
@@ -268,7 +268,7 @@
       ],
       "request_count": 1,
       "mutation_count": 0,
-      "duration_ms": 1915,
+      "duration_ms": 936,
       "observations": {
         "bounded_projection": true
       }
@@ -281,7 +281,7 @@
       ],
       "request_count": 1,
       "mutation_count": 1,
-      "duration_ms": 2032,
+      "duration_ms": 942,
       "observations": {
         "exact_turn_confirmed": true
       }
@@ -294,7 +294,7 @@
       ],
       "request_count": 1,
       "mutation_count": 1,
-      "duration_ms": 1776,
+      "duration_ms": 965,
       "observations": {
         "retained_history_not_deleted": true
       }
@@ -308,7 +308,7 @@
       ],
       "request_count": 1,
       "mutation_count": 0,
-      "duration_ms": 1155,
+      "duration_ms": 1106,
       "observations": {
         "clipboard_outcome": "unavailable"
       }
@@ -322,7 +322,7 @@
       ],
       "request_count": 2,
       "mutation_count": 1,
-      "duration_ms": 1086,
+      "duration_ms": 1340,
       "observations": {
         "confirmation_required": true
       }
@@ -335,7 +335,7 @@
       ],
       "request_count": 1,
       "mutation_count": 1,
-      "duration_ms": 1192,
+      "duration_ms": 1102,
       "observations": {
         "local_unlock_only": true,
         "writes_purged": true
@@ -349,7 +349,7 @@
       ],
       "request_count": 14,
       "mutation_count": 0,
-      "duration_ms": 2026,
+      "duration_ms": 1378,
       "observations": {
         "automatic_profile_switch": false,
         "polling": false,
@@ -362,7 +362,7 @@
       "interactions": [],
       "request_count": 13,
       "mutation_count": 1,
-      "duration_ms": 3745,
+      "duration_ms": 1873,
       "observations": {
         "certificate_trust_proven": false,
         "credential_storage_entries": 0,

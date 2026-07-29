@@ -400,8 +400,14 @@ describe("physical Android phone-driver protocol", () => {
     expect(missionControlInitialViewportText("dashboard_attention")).toBe(
       "ACT NOW"
     );
+    expect(missionControlInitialViewportField("dashboard_attention")).toBe(
+      "text"
+    );
     expect(missionControlInitialViewportText("single_session")).toBe(
       physicalUiSessionName
+    );
+    expect(missionControlInitialViewportField("single_session")).toBe(
+      "description"
     );
   });
 
@@ -427,6 +433,32 @@ describe("physical Android phone-driver protocol", () => {
             physicalQuietQueueDisclosureLabel(false)
           )
     ).toBe(true);
+  });
+
+  it("acquires the named whole-session target instead of its text fragment", () => {
+    const nodes = parseAndroidUiNodes(
+      '<hierarchy><node text="" class="android.view.View" ' +
+        `content-desc="${physicalUiSessionName}" clickable="true" ` +
+        'bounds="[0,400][1080,688]" />' +
+        `<node text="${physicalUiSessionName}" class="android.view.View" ` +
+        'content-desc="" clickable="false" bounds="[24,424][558,487]" />' +
+        '</hierarchy>'
+    );
+    const target = nodes.find((node) =>
+      matchesAndroidUiNode(
+        node,
+        "description",
+        physicalUiSessionName
+      )
+    );
+    const fragment = nodes.find((node) =>
+      matchesAndroidUiNode(node, "text", physicalUiSessionName)
+    );
+
+    expect(target).toBeDefined();
+    expect(fragment).toBeDefined();
+    expect(target === undefined ? 0 : androidUiNodeHeight(target)).toBe(288);
+    expect(fragment === undefined ? 0 : androidUiNodeHeight(fragment)).toBe(63);
   });
 
   it("holds and resolves every deterministic dashboard control transition", async () => {
@@ -5269,7 +5301,7 @@ async function runProductionPairingUiSequence(
     "Fragment-free Android reload did not restore ordinary app authority."
   );
   await revealAndroidUiNode(
-    "text",
+    "description",
     physicalUiSessionName,
     "forward",
     30_000,
@@ -5359,7 +5391,7 @@ async function openProductionMissionControl(
   );
   try {
     await waitForAndroidUiNode(
-      "text",
+      missionControlInitialViewportField(initialViewport),
       missionControlInitialViewportText(initialViewport),
       30_000,
       "Production Mission Control did not render its authenticated first viewport."
@@ -5390,6 +5422,12 @@ function missionControlInitialViewportText(
   viewport: PhysicalMissionControlInitialViewport
 ): string {
   return viewport === "dashboard_attention" ? "ACT NOW" : physicalUiSessionName;
+}
+
+function missionControlInitialViewportField(
+  viewport: PhysicalMissionControlInitialViewport
+): AndroidUiNodeField {
+  return viewport === "dashboard_attention" ? "text" : "description";
 }
 
 function physicalQuietQueueDisclosureLabel(open: boolean): string {
@@ -5494,7 +5532,7 @@ async function runProductionDashboardUiSequence(
       "Physical dashboard quiet-session control remained collapsed after two bounded taps."
   });
   await revealAndroidUiNode(
-    "text",
+    "description",
     physicalUiSessionName,
     "forward",
     30_000,
@@ -5508,7 +5546,7 @@ async function runProductionDashboardUiSequence(
   input.driver.recordCheckpoint("reloaded");
 
   const sessionTarget = await waitForAndroidUiNodePresent(
-    "text",
+    "description",
     physicalUiSessionName,
     30_000,
     "Physical dashboard selected session target was unavailable."
@@ -6738,7 +6776,7 @@ async function runPhysicalHostAccessControls(
     "Physical Mission Control remained unavailable after local unlock."
   );
   const selected = await waitForAndroidUiNodePresent(
-    "text",
+    "description",
     physicalUiSessionName,
     30_000,
     "Physical unlocked selected session was unavailable."
@@ -6962,7 +7000,7 @@ async function runPhysicalTalkBackTraversal(
     await collectPhysicalTalkBackLabels(labels, 10);
 
     const session = await waitForAndroidUiNodePresent(
-      "text",
+      "description",
       physicalUiSessionName,
       30_000,
       "TalkBack traversal could not find the selected session."
@@ -7180,7 +7218,7 @@ async function runPhysicalArchiveControl(
   measure: PhysicalDashboardMeasure
 ): Promise<void> {
   const session = await waitForAndroidUiNodePresent(
-    "text",
+    "description",
     physicalUiSessionName,
     30_000,
     "Physical archive target session was unavailable."
@@ -7498,7 +7536,7 @@ async function runProductionRemoteRecoveryUiSequence(
     "Production recovery did not refresh lifecycle-owned host truth after profile return."
   );
   await waitForAndroidUiNode(
-    "text",
+    "description",
     physicalUiSessionName,
     30_000,
     "Production recovery did not restore Mission Control without re-pairing."
@@ -7742,7 +7780,7 @@ async function runProductionPromptUiSequence(
   const sendLabel = `Send prompt to ${physicalUiSessionName}`;
   if (options.sessionAlreadyOpen !== true) {
     const sessionLink = await revealAndroidUiNode(
-      "text",
+      "description",
       physicalUiSessionName,
       "forward",
       30_000,
@@ -7750,7 +7788,7 @@ async function runProductionPromptUiSequence(
     );
     await performVerifiedAndroidTap({
       initialTrigger: sessionLink,
-      triggerField: "text",
+      triggerField: "description",
       triggerValue: physicalUiSessionName,
       completed: () =>
         input.requestInspection.sessionDetailRequests >= 1 &&
