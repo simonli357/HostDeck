@@ -4,8 +4,8 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Snapshot
 
-- Phase: M4 aggregate physical mobile-dashboard hardening after completing the selected runtime and production remote-interface milestones.
-- Active task: `FE-V1-090` complete mobile-dashboard hardening is in progress. The next action is to freeze strict physical acceptance criteria, verify the current package/browser identity, deploy through the selected Tailscale Serve HTTPS path, and execute the Android state, interaction, accessibility, recovery, and fidelity matrix.
+- Phase: M4 aggregate physical mobile-dashboard hardening with independent M5 security/privacy review running while the device gate is unavailable.
+- Active task: `REL-V1-005` security/privacy release review is in progress under frozen `SPR-01` to `SPR-24`. `FE-V1-090` criteria, harness, package, and browser inputs are ready, but physical acceptance is blocked because the target phone is not ADB-visible and its Tailscale peer is offline; resume device preflight immediately when it is connected, unlocked, and online.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's default 0.145.0 binary remains ineligible as exact-runtime evidence but now passes the required no-runtime diagnostic path; the isolated exact 0.144.0 binary passes the supported-path regression.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server remains private on a Unix socket. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: selected-target fidelity and copy/workflow review are complete across all seven Focus Rail assets, 141 states, 39 interactions, 15 surfaces, 12 journeys, five viewports, and the exact Chromium/Firefox package matrix. Real-phone aggregate hardening remains open; both legacy desktop-led boards remain rejected.
