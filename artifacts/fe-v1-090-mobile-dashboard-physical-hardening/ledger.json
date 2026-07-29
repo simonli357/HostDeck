@@ -1,0 +1,1274 @@
+{
+  "schema_version": 1,
+  "task": "FE-V1-090",
+  "decision": "DEC-028",
+  "criteria": [
+    {
+      "id": "MDH-01"
+    },
+    {
+      "id": "MDH-02"
+    },
+    {
+      "id": "MDH-03"
+    },
+    {
+      "id": "MDH-04"
+    },
+    {
+      "id": "MDH-05"
+    },
+    {
+      "id": "MDH-06"
+    },
+    {
+      "id": "MDH-07"
+    },
+    {
+      "id": "MDH-08"
+    },
+    {
+      "id": "MDH-09"
+    },
+    {
+      "id": "MDH-10"
+    },
+    {
+      "id": "MDH-11"
+    },
+    {
+      "id": "MDH-12"
+    },
+    {
+      "id": "MDH-13"
+    },
+    {
+      "id": "MDH-14"
+    },
+    {
+      "id": "MDH-15"
+    },
+    {
+      "id": "MDH-16"
+    },
+    {
+      "id": "MDH-17"
+    },
+    {
+      "id": "MDH-18"
+    },
+    {
+      "id": "MDH-19"
+    },
+    {
+      "id": "MDH-20"
+    },
+    {
+      "id": "MDH-21"
+    },
+    {
+      "id": "MDH-22"
+    },
+    {
+      "id": "MDH-23"
+    },
+    {
+      "id": "MDH-24"
+    }
+  ],
+  "requirements": [
+    "FR-002",
+    "FR-005",
+    "FR-006",
+    "FR-007",
+    "FR-008",
+    "FR-009",
+    "FR-010",
+    "FR-016",
+    "IR-001",
+    "IR-002",
+    "IR-003",
+    "IR-004",
+    "IR-005",
+    "IR-006",
+    "IR-007",
+    "IR-008",
+    "IR-009",
+    "IR-010",
+    "IR-011",
+    "IR-012",
+    "NFR-001",
+    "NFR-002",
+    "NFR-004",
+    "NFR-005",
+    "NFR-011",
+    "PR-005",
+    "SFR-001",
+    "SFR-002",
+    "SFR-003",
+    "SFR-004",
+    "SFR-009",
+    "SFR-018"
+  ],
+  "counts": {
+    "criteria": 24,
+    "requirements": 32,
+    "journeys": 12,
+    "workflow_paths": 17,
+    "surfaces": 15,
+    "states": 141,
+    "physical_states": 59,
+    "interactions": 39,
+    "package_browser_interactions": 34,
+    "physical_interactions": 39,
+    "selected_targets": 7
+  },
+  "targets": [
+    {
+      "id": "mission_control",
+      "path": "assets/ui-concepts/option-b/mobile-mission-control-mixed.png",
+      "sha256": "b8b81bf3090af4829c1ed934c47f7adba6b70aeda6befdd56934dfb1f9de18e3",
+      "landmarks": [
+        "compact_app_bar",
+        "host_status_rail",
+        "grouped_attention_queue",
+        "semantic_state_rail",
+        "whole_session_target"
+      ]
+    },
+    {
+      "id": "session_detail",
+      "path": "assets/ui-concepts/option-b/mobile-session-detail-active.png",
+      "sha256": "19811f479b1e00df02da61f44ed50b72fd3363a349ad8aa87b7a5d63eee9f2ce",
+      "landmarks": [
+        "compact_app_bar",
+        "event_timeline",
+        "semantic_state_rail",
+        "sticky_primary_dock",
+        "sticky_prompt_composer"
+      ]
+    },
+    {
+      "id": "approval_boundary",
+      "path": "assets/ui-concepts/option-b/mobile-approval-boundary-states.png",
+      "sha256": "13d74ceb058bbf87e1a2cd266e0ba1ddfe37c3b3e56a27375d1cb62dee114b39",
+      "landmarks": [
+        "event_timeline",
+        "broken_timeline_boundary",
+        "inline_approval",
+        "risk_confirmation_sheet"
+      ]
+    },
+    {
+      "id": "pairing_journey",
+      "path": "assets/ui-concepts/option-b/pairing-journey.png",
+      "sha256": "01987fafdd9beed382cf9377199fb45489cdec75710c721bfc4474aabd81c637",
+      "landmarks": [
+        "compact_app_bar",
+        "pairing_progress_rail",
+        "pairing_dominant_state"
+      ]
+    },
+    {
+      "id": "access_recovery",
+      "path": "assets/ui-concepts/option-b/access-recovery-states.png",
+      "sha256": "62d3a688dbc22bc207033ee770f86bd367b76bcb9d4c802c21b13aab3c784bf7",
+      "landmarks": [
+        "recovery_owner_label",
+        "recovery_state_rail",
+        "host_status_rail"
+      ]
+    },
+    {
+      "id": "primary_controls",
+      "path": "assets/ui-concepts/option-b/primary-controls.png",
+      "sha256": "b9407bc4f5d11d2ef07aac2db15545ff47d9f920fdf015afac445e8bd879aef2",
+      "landmarks": [
+        "compact_app_bar",
+        "current_next_turn_rail",
+        "objective_execution_rail",
+        "risk_confirmation_sheet"
+      ]
+    },
+    {
+      "id": "responsive_continuum",
+      "path": "assets/ui-concepts/option-b/responsive-continuum.png",
+      "sha256": "ea950d9fe7e3a8ecd91324bf56697e123c5654f9ed46a0b9fcdb46699eb49626",
+      "landmarks": [
+        "phone_single_column",
+        "tablet_bounded_context",
+        "desktop_list_detail_split",
+        "grouped_attention_queue",
+        "event_timeline"
+      ]
+    }
+  ],
+  "journeys": [
+    {
+      "id": "UX-001",
+      "workflow_paths": [
+        "pair_phone"
+      ]
+    },
+    {
+      "id": "UX-002",
+      "workflow_paths": [
+        "scan_sessions"
+      ]
+    },
+    {
+      "id": "UX-003",
+      "workflow_paths": [
+        "read_and_prompt"
+      ]
+    },
+    {
+      "id": "UX-004",
+      "workflow_paths": [
+        "change_model"
+      ]
+    },
+    {
+      "id": "UX-005",
+      "workflow_paths": [
+        "manage_goal",
+        "manage_plan"
+      ]
+    },
+    {
+      "id": "UX-006",
+      "workflow_paths": [
+        "read_usage",
+        "compact_context",
+        "read_skills"
+      ]
+    },
+    {
+      "id": "UX-007",
+      "workflow_paths": [
+        "handle_approval"
+      ]
+    },
+    {
+      "id": "UX-008",
+      "workflow_paths": [
+        "interrupt_turn",
+        "archive_session"
+      ]
+    },
+    {
+      "id": "UX-009",
+      "workflow_paths": [
+        "recover_stream"
+      ]
+    },
+    {
+      "id": "UX-010",
+      "workflow_paths": [
+        "resume_on_laptop"
+      ]
+    },
+    {
+      "id": "UX-011",
+      "workflow_paths": [
+        "revoke_device",
+        "lock_host"
+      ]
+    },
+    {
+      "id": "UX-012",
+      "workflow_paths": [
+        "recover_remote_access"
+      ]
+    }
+  ],
+  "surfaces": [
+    "browser_preload",
+    "mission_control",
+    "session_detail",
+    "composer",
+    "host_access",
+    "pairing",
+    "model",
+    "goal",
+    "plan",
+    "usage",
+    "compact",
+    "skills",
+    "approval",
+    "event_details",
+    "confirmation"
+  ],
+  "states": [
+    {
+      "id": "preload_phone_network_unavailable",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "preload_remote_origin_unreachable",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "mission_loading",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "mission_empty",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "mission_mixed_attention",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "mission_all_quiet",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "mission_read_only",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "mission_locked",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "mission_runtime_offline",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "mission_runtime_incompatible",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "mission_runtime_degraded",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "mission_fatal",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "mission_unpaired",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "mission_expired",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "mission_revoked",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "mission_remote_disabled",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "mission_tailscale_unavailable",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "mission_profile_mismatch",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "mission_serve_conflict",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "mission_long_content",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "mission_desktop_expansion",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "detail_loading",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "detail_active_writable",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "detail_needs_input",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "detail_approval",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "detail_completed",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "detail_interrupted",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "detail_failed",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "detail_unknown",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "detail_stale",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "detail_stream_reconnecting",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "detail_replay_boundary",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "detail_compacting",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "detail_rate_limit",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "detail_read_only",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "detail_locked",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "detail_not_found",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "detail_runtime_incompatible",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "detail_long_content",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "detail_desktop_expansion",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "composer_empty",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "composer_composing",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "composer_keyboard_open",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "composer_submitting",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "composer_accepted",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "composer_running",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "composer_completed",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "composer_failed_retryable",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "composer_failed_nonretryable",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "composer_disabled_unpaired",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "composer_disabled_read_only",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "composer_disabled_locked",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "composer_disabled_runtime",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "composer_disabled_session",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "composer_disabled_stream",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "access_remote_ready",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "access_loopback_ready",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "access_unpaired",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "access_expired",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "access_revoked",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "access_read_only",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "access_locked",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "access_remote_disabled",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "access_tailscale_absent",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "access_tailscale_stopped",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "access_tailscale_signed_out",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "access_profile_mismatch",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "access_serve_absent",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "access_remote_checking",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "access_serve_conflict",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "access_profile_switch_boundary",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "access_csrf_bootstrap",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "access_csrf_failure",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "access_stream_unavailable",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "access_runtime_incompatible",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "access_device_list",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "pair_fragment_ready",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "pair_claiming",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "pair_paired",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "pair_invalid",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "pair_expired",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "pair_used",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "pair_rate_limited",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "pair_remote_unreachable",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "model_current",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "model_loading",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "model_unsupported",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "model_conflict",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "model_accepted",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "model_success",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "model_failure",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "goal_current",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "goal_loading",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "goal_unsupported",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "goal_conflict",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "goal_accepted",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "goal_success",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "goal_failure",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "plan_current",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "plan_loading",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "plan_unsupported",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "plan_conflict",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "plan_accepted",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "plan_success",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "plan_failure",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "usage_loading",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "usage_content",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "usage_empty",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "usage_stale",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "usage_unsupported",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "usage_failure",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "compact_confirmation",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "compact_accepted",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "compact_running",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "compact_completed",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "compact_conflict",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "compact_unsupported",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "compact_failure",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "skills_loading",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "skills_content",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "skills_empty",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "skills_partial",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "skills_unsupported",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "skills_failure",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "approval_pending",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "approval_elevated_confirmation",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "approval_responding",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "approval_approved",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "approval_denied",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "approval_expired",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "approval_superseded",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "approval_reconnecting",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "event_complete",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "event_truncated",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "event_boundary",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "event_redacted",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "event_unknown",
+      "package_browser_required": true,
+      "physical_checkpoint_required": false
+    },
+    {
+      "id": "confirm_interrupt",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "confirm_archive",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "confirm_lock",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    },
+    {
+      "id": "confirm_revoke",
+      "package_browser_required": true,
+      "physical_checkpoint_required": true
+    }
+  ],
+  "interactions": [
+    {
+      "id": "bootstrap_shell",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "create_pairing_link",
+      "package_browser_required": false,
+      "physical_android_required": true
+    },
+    {
+      "id": "consume_pairing_fragment",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "claim_pairing",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "bootstrap_csrf",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_remote_status",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "enable_remote_local",
+      "package_browser_required": false,
+      "physical_android_required": true
+    },
+    {
+      "id": "disable_remote_local",
+      "package_browser_required": false,
+      "physical_android_required": true
+    },
+    {
+      "id": "switch_tailscale_profile_local",
+      "package_browser_required": false,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_host_access",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_host_status",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_sessions",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "open_session",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_session_detail",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "navigate_back",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "stream_events",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "reconnect_stream",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "send_prompt",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_model",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "select_model",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_goal",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "mutate_goal",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_plan",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "select_plan",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_usage",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_compact",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "start_compact",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_skills",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_approvals",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "respond_approval",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_event_details",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "interrupt_turn",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "archive_session",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_resume_metadata",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "copy_resume_command",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "read_devices",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "revoke_device",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "lock_host",
+      "package_browser_required": true,
+      "physical_android_required": true
+    },
+    {
+      "id": "unlock_host_local",
+      "package_browser_required": false,
+      "physical_android_required": true
+    }
+  ],
+  "evidence": [
+    {
+      "id": "state-contract",
+      "level": "L1",
+      "status": "complete",
+      "path": "artifacts/fe-v1-004-mobile-state-interaction-contract.md"
+    },
+    {
+      "id": "selected-fidelity",
+      "level": "L3",
+      "status": "complete",
+      "path": "artifacts/fe-v1-017-selected-target-fidelity.md"
+    },
+    {
+      "id": "copy-workflow",
+      "level": "L3",
+      "status": "complete",
+      "path": "artifacts/fe-v1-018-copy-workflow-review.md"
+    },
+    {
+      "id": "supported-browser",
+      "level": "L3",
+      "status": "complete",
+      "path": "artifacts/fe-v1-040-supported-browser-interaction-matrix/manifest.json"
+    },
+    {
+      "id": "interface-hardening",
+      "level": "L3",
+      "status": "complete",
+      "path": "artifacts/ifc-v1-091-selected-production-interface-hardening/evidence.json"
+    },
+    {
+      "id": "pairing-phone",
+      "level": "L4",
+      "status": "complete",
+      "path": "artifacts/fe-v1-013-pairing-host-access.md"
+    },
+    {
+      "id": "prompt-phone",
+      "level": "L4",
+      "status": "complete",
+      "path": "artifacts/fe-v1-020-selected-session-prompt-composer/physical-android.json"
+    },
+    {
+      "id": "recovery-phone",
+      "level": "L4",
+      "status": "complete",
+      "path": "artifacts/fe-v1-034-remote-connection-recovery/physical-android/evidence.json"
+    },
+    {
+      "id": "remote-security-phone",
+      "level": "L4",
+      "status": "complete",
+      "path": "artifacts/ifc-v1-079-device/evidence.json"
+    },
+    {
+      "id": "aggregate-phone",
+      "level": "L4",
+      "status": "pending",
+      "path": "artifacts/fe-v1-090-mobile-dashboard-physical-hardening/evidence.json"
+    },
+    {
+      "id": "final-deployment",
+      "level": "L4",
+      "status": "pending",
+      "path": "artifacts/fe-v1-090-mobile-dashboard-physical-hardening/deployment.json"
+    }
+  ]
+}

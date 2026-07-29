@@ -47,7 +47,7 @@ Requirement refs: `FR-002`, `FR-005` to `FR-010`, `FR-016`, `NFR-004`, `IR-001` 
 | Event diagnostics, interrupt, archive, and TUI-resume affordances | `FE-V1-014`, `FE-V1-036` to `FE-V1-038` | Complete against the exact event/control routes with bounded failure and no-resend behavior. |
 | Cross-screen failure and continuity matrix | `FE-V1-015` | Complete across both production routes and every required control admission state. |
 | Responsive, accessibility, and browser matrices | `FE-V1-016`, `FE-V1-039`, `FE-V1-040` | Responsive and semantic-accessibility hardening are complete; the supported second-engine browser interaction matrix remains `FE-V1-040`. |
-| Fidelity, copy/workflow review, and module hardening | `FE-V1-017`, `FE-V1-018`, `FE-V1-090` | Blocked by selected mockups, browser evidence, and complete screens. |
+| Fidelity, copy/workflow review, and module hardening | `FE-V1-017`, `FE-V1-018`, `FE-V1-090` | Fidelity and copy/workflow review are complete. `FE-V1-090` is in progress under frozen `MDH-01` to `MDH-24` aggregate package/browser/physical criteria. |
 
 Owning backlog: `docs/tracking/backlog/web-dashboard.md`.
 
