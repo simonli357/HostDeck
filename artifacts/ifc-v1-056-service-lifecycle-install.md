@@ -136,4 +136,4 @@ The active selector is the only release pointer changed by upgrade. Unit, comman
 
 - `SLC-01` to `SLC-24` are satisfied for the supported current-user Linux/systemd environment.
 - This does not claim safe uninstall, clean-machine parity, release readiness, or store/device deployment. Those remain owned by `IFC-V1-057`, `IFC-V1-058`, and release tasks.
-- Criteria commit: `8ff639b`. Implementation and hardening commit: `c9845c3`. The task-closing documentation commit is recorded in a follow-up traceability entry after its id exists.
+- Criteria commit: `8ff639b`. Implementation and hardening commit: `c9845c3`. Closure transition: `ae6de4b`.
