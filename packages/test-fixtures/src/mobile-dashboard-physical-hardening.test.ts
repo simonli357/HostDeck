@@ -7,6 +7,7 @@ import {
   createMobileDashboardPhysicalHardeningLedger,
   mobileDashboardLocalLaptopInteractionIds,
   mobileDashboardPackageBrowserInteractionIds,
+  mobileDashboardPackageOnlyTransportStateIds,
   mobileDashboardPhysicalHardeningCriterionIds,
   mobileDashboardPhysicalHardeningEvidence,
   mobileDashboardPhysicalHardeningRequirementIds,
@@ -68,7 +69,16 @@ describe("FE-V1-090 physical mobile-dashboard hardening ledger", () => {
     expect(new Set(mobileDashboardPhysicalStateIds).size).toBe(
       mobileDashboardPhysicalStateIds.length
     );
+    expect(mobileDashboardPhysicalStateIds).toHaveLength(54);
+    expect(mobileDashboardPackageOnlyTransportStateIds).toHaveLength(5);
+    const physicalStateIds = new Set<string>(mobileDashboardPhysicalStateIds);
+    expect(
+      mobileDashboardPackageOnlyTransportStateIds.filter((id) => physicalStateIds.has(id))
+    ).toEqual([]);
     for (const id of mobileDashboardPhysicalStateIds) {
+      expect(mobileStateTraceIds).toContain(id);
+    }
+    for (const id of mobileDashboardPackageOnlyTransportStateIds) {
       expect(mobileStateTraceIds).toContain(id);
     }
   });

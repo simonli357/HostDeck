@@ -56,14 +56,20 @@ export const mobileDashboardPhysicalInteractionIds = Object.freeze([
   ...mobileInteractionIds
 ]);
 
+export const mobileDashboardPackageOnlyTransportStateIds = Object.freeze([
+  "mission_remote_disabled",
+  "mission_profile_mismatch",
+  "access_remote_disabled",
+  "access_tailscale_stopped",
+  "access_profile_mismatch"
+] as const satisfies readonly MobileStateTraceId[]);
+
 export const mobileDashboardPhysicalStateIds = Object.freeze([
   "preload_remote_origin_unreachable",
   "mission_loading",
   "mission_mixed_attention",
   "mission_locked",
   "mission_runtime_incompatible",
-  "mission_remote_disabled",
-  "mission_profile_mismatch",
   "detail_active_writable",
   "detail_approval",
   "detail_interrupted",
@@ -80,9 +86,6 @@ export const mobileDashboardPhysicalStateIds = Object.freeze([
   "access_unpaired",
   "access_revoked",
   "access_locked",
-  "access_remote_disabled",
-  "access_tailscale_stopped",
-  "access_profile_mismatch",
   "access_remote_checking",
   "access_profile_switch_boundary",
   "access_csrf_bootstrap",
@@ -169,8 +172,11 @@ export const mobileDashboardPhysicalHardeningEvidence = Object.freeze([
 
 export function createMobileDashboardPhysicalHardeningLedger(): Readonly<Record<string, unknown>> {
   const physicalStates = new Set<MobileStateTraceId>(mobileDashboardPhysicalStateIds);
+  const packageOnlyTransportStates = new Set<MobileStateTraceId>(
+    mobileDashboardPackageOnlyTransportStateIds
+  );
   return deepFreeze({
-    schema_version: 1,
+    schema_version: 2,
     task: "FE-V1-090",
     decision: "DEC-028",
     criteria: mobileDashboardPhysicalHardeningCriterionIds.map((id) => ({ id })),
@@ -183,6 +189,7 @@ export function createMobileDashboardPhysicalHardeningLedger(): Readonly<Record<
       surfaces: mobileSurfaceIds.length,
       states: mobileStateTraceIds.length,
       physical_states: mobileDashboardPhysicalStateIds.length,
+      package_only_transport_states: mobileDashboardPackageOnlyTransportStateIds.length,
       interactions: mobileInteractionIds.length,
       package_browser_interactions: mobileDashboardPackageBrowserInteractionIds.length,
       physical_interactions: mobileDashboardPhysicalInteractionIds.length,
@@ -204,7 +211,10 @@ export function createMobileDashboardPhysicalHardeningLedger(): Readonly<Record<
     states: mobileStateTraceIds.map((id) => ({
       id,
       package_browser_required: true,
-      physical_checkpoint_required: physicalStates.has(id)
+      physical_checkpoint_required: physicalStates.has(id),
+      ...(packageOnlyTransportStates.has(id)
+        ? { physical_exclusion: "transport_self_invalidating" }
+        : {})
     })),
     interactions: mobileInteractionIds.map((id) => ({
       id,

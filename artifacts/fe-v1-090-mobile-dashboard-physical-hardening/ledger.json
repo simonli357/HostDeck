@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "task": "FE-V1-090",
   "decision": "DEC-028",
   "criteria": [
@@ -117,7 +117,8 @@
     "workflow_paths": 17,
     "surfaces": 15,
     "states": 141,
-    "physical_states": 59,
+    "physical_states": 54,
+    "package_only_transport_states": 5,
     "interactions": 39,
     "package_browser_interactions": 34,
     "physical_interactions": 39,
@@ -378,7 +379,8 @@
     {
       "id": "mission_remote_disabled",
       "package_browser_required": true,
-      "physical_checkpoint_required": true
+      "physical_checkpoint_required": false,
+      "physical_exclusion": "transport_self_invalidating"
     },
     {
       "id": "mission_tailscale_unavailable",
@@ -388,7 +390,8 @@
     {
       "id": "mission_profile_mismatch",
       "package_browser_required": true,
-      "physical_checkpoint_required": true
+      "physical_checkpoint_required": false,
+      "physical_exclusion": "transport_self_invalidating"
     },
     {
       "id": "mission_serve_conflict",
@@ -613,7 +616,8 @@
     {
       "id": "access_remote_disabled",
       "package_browser_required": true,
-      "physical_checkpoint_required": true
+      "physical_checkpoint_required": false,
+      "physical_exclusion": "transport_self_invalidating"
     },
     {
       "id": "access_tailscale_absent",
@@ -623,7 +627,8 @@
     {
       "id": "access_tailscale_stopped",
       "package_browser_required": true,
-      "physical_checkpoint_required": true
+      "physical_checkpoint_required": false,
+      "physical_exclusion": "transport_self_invalidating"
     },
     {
       "id": "access_tailscale_signed_out",
@@ -633,7 +638,8 @@
     {
       "id": "access_profile_mismatch",
       "package_browser_required": true,
-      "physical_checkpoint_required": true
+      "physical_checkpoint_required": false,
+      "physical_exclusion": "transport_self_invalidating"
     },
     {
       "id": "access_serve_absent",
