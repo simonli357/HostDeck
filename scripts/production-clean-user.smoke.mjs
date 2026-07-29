@@ -32,7 +32,8 @@ import {
 } from "./clean-environment-contract.mjs";
 import {
   assertProductionWebHttpSurface,
-  loadProductionWebSmokeIdentity
+  loadProductionWebSmokeIdentity,
+  productionWebContentSecurityPolicy
 } from "./production-web-smoke-support.mjs";
 import { verifyProductionPackage } from "./verify-production-package.mjs";
 
@@ -702,7 +703,10 @@ async function inspectHttpSurface(port, packagePath, packageManifest) {
   const indexBytes = new Uint8Array(await index.arrayBuffer());
   assert(indexBytes.byteLength > 0);
   assert(indexBytes.byteLength <= manifest.bounds.http_body_bytes);
-  assert.match(index.headers.get("content-security-policy") ?? "", /default-src 'self'/u);
+  assert.equal(
+    index.headers.get("content-security-policy"),
+    productionWebContentSecurityPolicy
+  );
   return Object.freeze({
     compatibility: "supported",
     index_sha256: hash(indexBytes),
