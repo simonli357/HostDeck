@@ -1195,6 +1195,44 @@ describe("physical Android phone-driver protocol", () => {
     expect(subscribers.snapshot().active_subscribers).toBe(0);
     expect(subscribers.close()).toBe(0);
   });
+
+  it("opens the complete physical dashboard boundary replay through the strict subscriber contract", async () => {
+    const events = physicalDashboardSeedEvents("2026-07-25T00:00:00.000Z");
+    const handoff = new PhysicalPromptHandoffService(events);
+    const failures: unknown[] = [];
+    const subscribers = createProjectionSubscriberStreamService({
+      handoff: Object.freeze({
+        open: (input: unknown) => handoff.open(input)
+      }),
+      observe_failure: (failure) => failures.push(failure),
+      resource_budget: defaultResourceBudget
+    });
+    const stream = subscribers.open({
+      after: 0,
+      authorization: Object.freeze({ state: "local_admin" }),
+      device_id: null,
+      session_id: physicalUiSessionId,
+      signal: new AbortController().signal,
+      subscriber_id: "physical-dashboard-contract"
+    });
+
+    const iterator = stream[Symbol.asyncIterator]();
+    for (const event of events) {
+      await expect(iterator.next()).resolves.toEqual({
+        done: false,
+        value: event
+      });
+    }
+    expect(failures).toEqual([]);
+    expect(stream.replay_event_count).toBe(events.length);
+    expect(subscribers.snapshot().active_subscribers).toBe(1);
+    const pending = iterator.next();
+    await Promise.resolve();
+    expect(stream.close()).toBe(true);
+    await expect(pending).resolves.toEqual({ done: true, value: undefined });
+    expect(subscribers.snapshot().active_subscribers).toBe(0);
+    expect(subscribers.close()).toBe(0);
+  });
 });
 
 describePhysical("selected remote-ingress physical Android acceptance", () => {
@@ -3311,18 +3349,19 @@ class PhysicalPromptHandoffService
   >();
 
   constructor(events: readonly SelectedProjectionEvent[]) {
-    this.events = [...events];
+    this.events = events.map(freezePhysicalProjectionEvent);
   }
 
   publish(event: SelectedProjectionEvent): void {
+    const frozenEvent = freezePhysicalProjectionEvent(event);
     const previous = this.events.at(-1);
     requireCondition(
-      event.session_id === physicalUiSessionId &&
-        (previous === undefined || event.cursor === previous.cursor + 1),
+      frozenEvent.session_id === physicalUiSessionId &&
+        (previous === undefined || frozenEvent.cursor === previous.cursor + 1),
       "Physical prompt event cursor was invalid."
     );
-    this.events.push(event);
-    for (const entry of [...this.live.values()]) entry.sink(event);
+    this.events.push(frozenEvent);
+    for (const entry of [...this.live.values()]) entry.sink(frozenEvent);
   }
 
   disconnectAll(): void {
@@ -3425,9 +3464,22 @@ class PhysicalPromptHandoffService
         return closed ? "closed" : activated ? "live" : "paused";
       },
       subscriber_id: input.subscriber_id,
-      truncated: false
+      truncated: replay[0]?.type === "replay_boundary"
     });
   }
+}
+
+function freezePhysicalProjectionEvent(
+  event: SelectedProjectionEvent
+): SelectedProjectionEvent {
+  return deepFreezePhysicalData(selectedProjectionEventSchema.parse(event));
+}
+
+function deepFreezePhysicalData<Value>(value: Value): Value {
+  if (value === null || typeof value !== "object") return value;
+  for (const child of Object.values(value)) deepFreezePhysicalData(child);
+  Object.freeze(value);
+  return value;
 }
 
 function physicalProjectionWireByteLength(
