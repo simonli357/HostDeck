@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-017` Capture screenshot/diff evidence against selected replacement mockups | ready | none | Responsive, accessibility, and the exact four-project supported-browser matrix are complete; fidelity closure is now the first dependency-ready leaf. |
+| 1 | `FE-V1-017` Capture screenshot/diff evidence against selected replacement mockups | in_progress | none | `FID-01` to `FID-24` freeze exact target identity, complete state mapping, fresh deterministic comparisons, measurable fidelity rules, drift disposition, regressions, and cleanup. |
 | 2 | `IFC-V1-057` Implement safe uninstall and version-retention cleanup for only HostDeck-owned files | ready | none | The owned manifest and persistent lifecycle are complete, so destructive ownership and retained-release cleanup can now be frozen and implemented. |
 
 ## Intentional Blockers
