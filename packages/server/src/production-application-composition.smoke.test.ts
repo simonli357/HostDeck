@@ -11,7 +11,7 @@ import {
   rmSync
 } from "node:fs";
 import { createServer } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import {
   codexBindingDescriptor,
@@ -42,7 +42,9 @@ describe.skipIf(!requireSmoke)("exact production application composition smoke",
       const codexBin = requireExactCodexBinary(
         process.env.HOSTDECK_CODEX_BIN
       );
-      const root = mkdtempSync(join(tmpdir(), "hd-pg-"));
+      const root = mkdtempSync(
+        join(homedir(), ".hostdeck-production-composition-")
+      );
       chmodSync(root, 0o700);
       const configDir = join(root, "config");
       const stateDir = join(root, "state");
