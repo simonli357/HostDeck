@@ -89,4 +89,4 @@ Record the clean-source, supported-Ubuntu, toolchain, foreground/service parity,
 - Harness and production corrections: `d070796` through `eb77647`.
 - Authoritative clean evidence source: `eb77647`.
 - Supported-browser package repin and aggregate evidence: `eda62ae`.
-- Owner-doc closure: pending this closure commit.
+- Owner-doc closure: `1ab8570`.
