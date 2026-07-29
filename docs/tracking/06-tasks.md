@@ -17,7 +17,6 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
 | 1 | `FE-V1-090` Harden the complete mobile dashboard on the real phone | blocked | Target Android phone is not ADB-visible and its Tailscale peer is offline. | Criteria, harness, package, and browser inputs are ready; resume physical preflight immediately when the phone is connected, unlocked, and online. |
-| 2 | `REL-V1-005` Run the security/privacy release review | in_progress | none | Execute the independent current-code/evidence audit while `FE-V1-090` waits on its external device prerequisite. |
 
 ## Intentional Blockers
 

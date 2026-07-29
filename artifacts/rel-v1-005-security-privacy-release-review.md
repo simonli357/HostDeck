@@ -1,7 +1,7 @@
 # REL-V1-005 Security And Privacy Release Review
 
 Date: 2026-07-29
-Status: strict criteria frozen before release review changes
+Status: complete; `SPR-01` to `SPR-24` pass with zero unresolved security/privacy blocker
 
 ## Objective
 
@@ -70,8 +70,139 @@ Requirement refs: `NFR-001`, `NFR-013`, and `SFR-001` to `SFR-018`.
 | Prior physical evidence is narrow and aggregate dashboard acceptance is still open. | Accept only the unchanged security boundary proved by `IFC-V1-079`; keep `FE-V1-090` and release-device work explicitly open. |
 | Release docs include a newly completed user guide, while repo/status/delivery truth still has downstream owners. | Inspect all security-sensitive guidance now; route non-security release-doc drift to its owning later task without hiding it. |
 
+## Threat And Boundary Review
+
+Protected assets are the paired-device authority, CSRF state, exact operation
+target, audit truth, Codex socket/runtime, HostDeck database and service state,
+selected saved-profile/Serve ownership, release package, and sanitized support
+evidence. Actors are the current laptop user, an unpaired or paired remote
+browser, a stale/revoked browser, another same-tailnet device, a local process,
+an untrusted network peer, and a release-package consumer. Entry points are the
+35 selected HTTP routes, pairing fragment and claim, SSE stream, local CLI,
+service lifecycle, Codex socket, Tailscale CLI observation/control adapter,
+package/install boundary, and retained evidence.
+
+| Threat class | Disposition and proof |
+| --- | --- |
+| `public_network_exposure` | Pass: the app owns exact IPv4 loopback only; Tailscale Serve is the sole selected remote ingress; no Funnel, LAN listener, router rule, HostDeck TLS owner, telemetry, or cloud dependency exists. |
+| `proxy_header_spoofing` | Pass: direct, partial, duplicate, malformed, stale-generation, wrong-source, and non-Serve proxy contexts fail before disclosure or mutation. |
+| `origin_dns_cors_confusion` | Pass: exact configured HTTPS origin, Host, proxy target, TLS, source, credentialed CORS, and DNS-rebinding cases are mutation-closed. |
+| `application_authorization_bypass` | Pass: admitted ingress, paired cookie authority, permissions, current generation, CSRF, lock, and exact target compose on every protected route. |
+| `pairing_theft_replay` | Pass: 128-bit fragment-only one-time codes have bounded lifetime, source/global limits, timing-safe hash comparison, immediate invalidation, and no automatic retry. |
+| `csrf_cookie_browser_storage` | Pass: host-only Secure/HttpOnly/SameSite=Strict cookies and page-memory CSRF state survive only the intended authority lifecycle; no durable browser secret store is used. |
+| `permission_lock_revocation_race` | Pass: lock/revoke/profile/ingress generations synchronously purge clients, close streams, and prevent accepted or queued writes from crossing the boundary. |
+| `target_replay_audit_contradiction` | Pass: risky writes bind immutable targets, confirmations, operation ids, dispatch state, and durable audit terminal truth under replay/concurrency/failure cases. |
+| `tailscale_profile_serve_mutation` | Pass: the bounded adapter observes exact read-only state and can mutate only HostDeck's exact Serve path on the already selected profile; it cannot switch, log in/out, reset, repair globally, or enable Funnel. |
+| `arbitrary_execution_legacy_bypass` | Pass: the exact 35-route manifest exposes no shell, terminal, file/editor, app-server, LAN, debug, or validation-bypass product surface. Child processes use exact executables/arguments without a shell. |
+| `local_permission_secret_retention` | Pass: canonical current-user paths and restrictive modes cover state, database sidecars, runtime, socket, environment, lock, units, and release files; Tailscale credentials and raw account/profile identity are not retained. |
+| `resource_exhaustion_slow_client` | Pass: request, pairing, source/device/global mutation, SSE subscriber/queue, output, retention, process, and evidence bounds reject overflow, slow, abort, and shutdown cases with deterministic accounting. |
+| `process_service_persistence` | Pass: ordinary-user units have no root/capability/firewall/certificate/login-shell authority; one lease, exact package executables, ordered cleanup, rollback, retention, and uninstall are independently proven. |
+| `supply_chain_package_tampering` | Pass after `SPR-FINDING-01`: frozen install, zero known production vulnerabilities, reviewed permissive licenses, deterministic package identity, independent mutation closure, no source maps/secrets, and declared executable modes. |
+| `evidence_support_disclosure` | Pass: package, reports, JSON/Markdown, screenshots, support guidance, temp/residue, and current runtime inventories were scanned and manually inspected without retained credentials, prompts, transcripts, or private network/account identity. |
+| `compatibility_config_downgrade` | Pass: schema/platform/runtime/config/path drift fails loudly; the supported Codex binding passes and the newer default binary is rejected with a bounded diagnostic rather than silently accepted. |
+
+| Trust boundary | Result |
+| --- | --- |
+| `release_input_to_verified_package` | Deterministic two-build identity and independent package mutation verifier pass. |
+| `verified_package_to_current_user_install` | Read-only relocation, installed/global-style execution, modes, lifecycle, rollback, retention, and uninstall contracts pass. |
+| `local_user_cli_to_loopback_admin` | Fixed loopback target, bounded transport, exact route set, no retrying writes, and privacy-safe output pass. |
+| `hostdeck_to_codex_unix_socket` | Exact Codex 0.144.0 generated binding, canonical private socket, child lifecycle, reconciliation, and incompatibility closure pass. |
+| `tailscale_serve_to_loopback_proxy` | Exact profile/Serve ownership, normalized proxy admission, selected HTTPS origin, failure/race closure, and independent local health pass. |
+| `unpaired_browser_to_pair_claim` | Fragment scrub, one-time claim, rate/concurrency/expiry/reuse/revoke limits, and no pre-auth disclosure pass. |
+| `paired_browser_to_protected_api` | Cookie/CSRF/permission/lock/target/generation admission plus 76-case two-engine package evidence pass. |
+| `application_to_local_state_audit` | Guarded SQLite ownership, schema checks, durable operation/audit consistency, retention, and restart reconciliation pass. |
+| `runtime_output_to_ui_evidence_support` | Bounded projections, errors, diagnostics, browser state, reports, screenshots, and support-doc privacy scans pass. |
+
+## Findings And Fixes
+
+| ID | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| `SPR-FINDING-01` | Medium | The production dependency closure retained 235 third-party source-map files, violating `SPR-20` and increasing disclosure/package surface. | Fixed in `fcfc957`: production publication deterministically prunes source maps; the independent verifier now rejects any reintroduced `.map`, `.env*`, `.npmrc`, `.netrc`, or credential-suffix file. Direct and relocated mutation tests pass. |
+| `SPR-FINDING-02` | Low | One subscriber-isolation regression used a fixed 50 ms wall-clock oracle that failed under aggregate scheduler load without a product failure. | Fixed in `d3d9e0d`: exact event queue/accounting assertions now prove slow-subscriber isolation deterministically; focused stream and production resource-stress suites pass. |
+
+No finding was waived, deferred, or accepted as release risk. The installed
+default Codex 0.146.0 failing the exact 0.144.0 gate is an expected compatibility
+diagnostic, not a hidden fallback or supported-runtime claim.
+
+## Criterion Disposition
+
+| Criteria | Status | Release-owned evidence |
+| --- | --- | --- |
+| `SPR-01` to `SPR-03` | Pass | Immutable 24-criterion ledger; exact 20 requirements, 16 threats, nine boundaries, selected evidence owners, current source and accepted L4 ancestry. |
+| `SPR-04` to `SPR-07` | Pass | Listener/process/route inspection; ingress/proxy/origin hostile matrices; exact cookie/CSRF and bounded one-time pairing contracts. |
+| `SPR-08` to `SPR-12` | Pass | Protected read/write admission, lock/revoke races, immutable target/confirmation, operation/audit consistency, SSE closure, and stale/conflict matrices. |
+| `SPR-13` to `SPR-15` | Pass | Observation-first saved-profile/Serve adapter and lifecycle matrices; no profile switching/global repair; exact API/CLI/product-route and child-process review. |
+| `SPR-16` to `SPR-19` | Pass | Path/mode/state/database/service inspection, privacy scan, cross-owner resource stress, exact user-unit security and lifecycle/uninstall evidence. |
+| `SPR-20` to `SPR-21` | Pass | Fixed supply-chain/package finding; frozen install, audit/license inventory, deterministic verifier, runtime/config/schema/version drift closure. |
+| `SPR-22` to `SPR-23` | Pass | Exact unchanged clean-user and Android security-boundary inputs plus selected-path user, command, recovery, privacy, and support guidance review. |
+| Final closure (`SPR-24`) | Pass | This artifact and strict private-free `evidence.json` record all dispositions, findings, identities, validation, accepted limits, blockers, and push state. |
+
+The machine record lists every `SPR-01` to `SPR-24` disposition individually;
+all are `pass`, and `unresolved_security_blockers` is zero.
+
+## Current Validation
+
+| Gate | Result |
+| --- | --- |
+| Ledger/final evidence | Six focused tests pass with the strict final-evidence gate enabled; exact 24/20/16/9 inventories and accepted L4 ancestors validate. |
+| Unit | 2,909 passed across 262 files; 29 intentional environment/device-gated skips were enumerated, including this review's normally disabled final-evidence gate. |
+| Contract / integration / web | 245 / 36 / 932 passed. |
+| Static | Typecheck passes; lint checks 828 files and eight package export surfaces. |
+| Runtime boundary | Seven hostile mutations, 619-source/22-registration boundary, and exact isolated Codex 0.144.0 binding over 671 generated files pass; default 0.146.0 fails the exact gate as required. |
+| Package | 42 direct cases plus acceptance pass over two deterministic builds, immutable relocation, installed/global-style execution, full tamper matrix, and independent verification. |
+| Browser package | 76/76 no-retry cases pass in pinned Chromium 149 and Firefox 151 at phone and desktop regimes; 316 requests, 52 mutations, zero unexpected diagnostics, four reports, and aggregate privacy/cleanup checks pass. |
+| Supply chain | Frozen offline install covers nine workspaces; 184 production dependencies have zero known vulnerabilities; 172 records resolve to eight reviewed permissive license expressions. |
+| Package identity | 619 sources, 1,245 owned outputs, 6,231 entries, 35,830,356 bytes; content `903df036e5f71db5406f591fabbe1e838125fa43317715331d8251e5e35f9a21`; manifest `60933a5050c1be5cda6dc29382687b78ec346602219aaa63dc93fc5a3a1ff0ad`. |
+| Web identity | Three files, 1,210,747 bytes; content `5e96b3c87b6e5c942426bbd0748c1f7b36325a4c597199545871a08a55024ae5`; manifest `4d6b1bb607ce4b9e80239f2115cb452b998e46a9c5fa25de8a962b5d78df2017`. |
+| Host inspection | No HostDeck process, listener, owned Serve path, installed user unit, or owned runtime residue remained; Tailscale stayed independent with exactly one selected saved profile and one preserved alternate profile. |
+| Protected artifacts | The 18 pre-existing modified PNGs remain unstaged and outside every task commit. |
+
+## Manual Inspection
+
+- Environment flow is bounded to required current-user/runtime/package values.
+  The service environment allowlist excludes network and browser authority; the
+  Codex child inherits the intentional same-user developer boundary and uses an
+  exact executable with `shell: false`.
+- The Tailscale adapter invokes only the exact local binary with a minimal
+  environment, timeout, and output cap. Reads are status/version/profile/Serve
+  observations. Mutations are only exact HostDeck Serve-path enable/disable.
+- Generated systemd units run as the ordinary user with no capabilities, root
+  service, login-shell edit, firewall/certificate ownership, Tailscale lifecycle
+  mutation, or unrelated-unit repair. The remaining systemd-analyze exposure is
+  the intentional same-user Codex development authority.
+- Duplicate cookies, invalid authority, stale admission generations, and active
+  lease races fail closed. Pairing and high-entropy session secrets are hashed
+  and timing-safe compared; browser credentials are not placed in URLs or
+  durable JavaScript-readable storage.
+- Source and package searches found no shell execution flag, dynamic code
+  evaluation, dangerous HTML sink, telemetry, external cloud fetch, hidden
+  product route, environment weakening switch, or raw shell/file/editor surface.
+- Privacy inspection covered package paths/content, database/audit/error
+  projections, process arguments/environment contracts, browser storage/history,
+  support docs, reports, screenshots, and temp/residue cleanup. Three lexical
+  hostname-model matches were bounded semantic/device-model text, not retained
+  network, account, credential, or authorization data.
+
+## Accepted L4 Limits And Remaining Gates
+
+- `IFC-V1-058` at `eb77647e8b1e77e42b16fef21b65da0d1b65ea8e`
+  remains accepted only for unchanged ordinary-user clean-install/security
+  boundaries.
+- `IFC-V1-079` at `b4078b6d411267dec9701ed5ae67037567a9dee9`
+  remains accepted only for unchanged remote Android HTTPS/app-auth/profile
+  noninterference security boundaries.
+- Neither input is upgraded into current aggregate phone evidence. The target
+  phone was offline during closure, so `FE-V1-090` remains blocked and
+  `REL-V1-006` through `REL-V1-010` remain downstream release gates.
+- Security/privacy blockers: zero. Overall V1 release state: no-go pending those
+  non-security release gates and human acceptance.
+
+Implementation and validation through `d3d9e0d`; package hardening `fcfc957`;
+browser evidence refresh `ee31ea7`. Closure commit and push state are recorded
+in the owning backlog/status after publication.
+
 ## Documentation Impact
 
-Tier 1 hardening criteria: this artifact and the owning `REL-V1-005` task/queue.
-Planning, architecture, requirements, and delivery owners change only if the review
-finds a contract or behavior mismatch.
+Tier 3 release-gate update: this artifact, machine evidence, owning task/queue,
+status, release block, and delivery gate change from open to complete. No product,
+UX, requirements, architecture, setup, or command behavior changed.

@@ -68,10 +68,10 @@ An executable ledger must map exactly all 39 `mobileInteractionIds` and all 12 m
 
 - `tests/browser/supported-browser-manifest.json` and its strict parser pin Playwright 1.61.1, Linux x64, Chromium 149.0.7827.55/revision 1228, Firefox 151.0/revision 1532, four exact projects, package hashes, 19 scenarios, 34 automated interactions, and evidence schema 1.
 - `packages/test-fixtures/src/browser-compatibility-matrix.ts` maps all 39 mobile interaction IDs, all 12 journeys, ten portability families, all four projects, existing behavior owners, and five explicit local-only boundaries without an unsupported browser claim.
-- `pnpm test:e2e` builds and independently verifies the 614-source production package, checks the exact managed browser identities before execution, creates one ephemeral task-owned HTTPS certificate, runs 76 no-retry Playwright cases through the compiled package boundary, validates strict reports, closes ports 4175 to 4177, removes temporary output, and only then replaces the evidence directory.
+- `pnpm test:e2e` builds and independently verifies the current 619-source production package, checks the exact managed browser identities before execution, creates one ephemeral task-owned HTTPS certificate, runs 76 no-retry Playwright cases through the compiled package boundary, validates strict reports, closes ports 4175 to 4177, removes temporary output, and only then replaces the evidence directory.
 - Every project passes the same 19 scenarios. Chromium projects record 78 bounded requests each; Firefox projects record 80 each because their fragment-history path has two additional reads. Every project records 13 exact mutations, zero unexpected browser diagnostics, and all 34 automated interactions.
 - The HTTPS case uses a real cross-site top-level navigation between separate public-suffix sites to prove `SameSite=Strict` suppression, plus same-origin inclusion, `Secure`, `HttpOnly`, host-only scope, reload persistence, JavaScript invisibility, and zero credential storage. The ignored ephemeral certificate remains fixture-only evidence.
-- The aggregate evidence records 316 requests and 52 mutations against package SHA-256 `9d6245f8fd710cedb5a3dfae550b704b6b09bff72a495eb2e727214de89b8c54` and web SHA-256 `09c04fc54c8d88ded7dff55f54e8228fc65e6eb01e851a65674bf920a3461752`.
+- The current aggregate evidence records 316 requests and 52 mutations against package SHA-256 `903df036e5f71db5406f591fabbe1e838125fa43317715331d8251e5e35f9a21` and web SHA-256 `5e96b3c87b6e5c942426bbd0748c1f7b36325a4c597199545871a08a55024ae5`.
 - Physical Android, Firefox Android, live Tailscale Serve routing/certificate trust, and Safari/iOS remain explicitly unproven and downstream. No existing screenshot was generated, replaced, or staged.
 
 ## Strict Success Criteria
@@ -116,11 +116,13 @@ An executable ledger must map exactly all 39 `mobileInteractionIds` and all 12 m
 | Gate | Result |
 | --- | --- |
 | Supported-browser focused contracts | 11 passed across the manifest, preflight, portability ledger, strict report parser, complete publication, and replacement-path tests. |
-| `pnpm test:e2e` | 76/76 passed in 2.9 minutes across Chromium phone/desktop and Firefox phone/desktop; four reports and one aggregate manifest published after cleanup. |
+| `pnpm test:e2e` | 76/76 passed in 2.5 minutes across Chromium phone/desktop and Firefox phone/desktop; four reports and one aggregate manifest published after cleanup. |
 | Evidence audit | Four report hashes match the aggregate; 19 scenarios and 34 automated interactions per project; 316 requests; 52 mutations; zero unexpected console/page/CSP/network/storage/cache/service-worker diagnostics; all three cleanup flags true. |
-| Aggregate tests | Unit 2,817 passed with 28 intentional external skips; contract 245; integration 36; web 920; Chromium shell 168; pairing Chromium 11; relocated packaged Chromium 1. |
+| Aggregate tests | Current release-review rerun: unit 2,909 passed with 29 intentional environment/device-gated skips; contract 245; integration 36; web 932; relocated packaged Chromium 1. |
 | Static/package/runtime | Typecheck; lint/exports; scaffold; planning; runtime boundary; exact Codex 0.144.0 binding; deterministic build/package/install; zero-vulnerability production audit; permissive-license inventory; privacy/diff/residue checks pass. |
-| Package identity | 614 sources, 1,235 owned outputs, 6,455 entries, and three web files at the package/web hashes recorded above. |
+| Package identity | 619 sources, 1,245 owned outputs, 6,231 entries, and three web files at the package/web hashes recorded above. The lower entry count reflects release hardening that prunes and rejects dependency source maps. |
 | Protected evidence | All 18 pre-existing modified PNGs remain unstaged and byte-identical to the preserved backup after every browser run. |
 
-Criteria commit: `845b85b`. Implementation and generated evidence commit: `869ab75`.
+Criteria commit: `845b85b`. Implementation and initial generated evidence commit:
+`869ab75`. The current release package was repinned and all 76 cases were rerun
+without scenario, engine, viewport, or support-scope changes in `ee31ea7`.

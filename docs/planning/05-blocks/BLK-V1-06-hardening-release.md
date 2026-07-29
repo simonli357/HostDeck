@@ -32,9 +32,9 @@ Requirement refs: all `NFR-*`, `PR-*`, `SFR-*` release gates and all requirement
 | Work | Tasks | Status |
 | --- | --- | --- |
 | Historical validation/developer/command wiring | `REL-V1-001` to `REL-V1-003` | Retained; docs must be refreshed after selected path exists. |
-| User guide | `REL-V1-004` | Blocked by completed UI/production service. |
-| Security/privacy review | `REL-V1-005` | Blocked by current module hardening and phone transport. |
-| Clean Ubuntu/package/service/phone smoke | `REL-V1-006` | Blocked by build/service/UI. |
+| User guide | `REL-V1-004` | Complete for the selected Tailscale-first path. |
+| Security/privacy review | `REL-V1-005` | Complete; `SPR-01` to `SPR-24` pass with zero unresolved security/privacy blocker. |
+| Clean Ubuntu/package/service/phone smoke | `REL-V1-006` | Blocked by `FE-V1-090` aggregate physical phone acceptance. |
 | Aggregate validation | `REL-V1-007` | Blocked by module/device smoke. |
 | Completion matrix and delivery truth | `REL-V1-008`, `REL-V1-009` | Blocked by aggregate evidence. |
 | Go/no-go | `REL-V1-010` | Blocked by all release gates and human acceptance. |
