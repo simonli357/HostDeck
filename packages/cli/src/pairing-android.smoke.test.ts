@@ -437,7 +437,13 @@ describe("physical Android phone-driver protocol", () => {
 
   it("acquires the named whole-session target instead of its text fragment", () => {
     const nodes = parseAndroidUiNodes(
-      '<hierarchy><node text="" class="android.view.View" ' +
+      '<hierarchy><node text="" class="android.view.ViewGroup" ' +
+        `content-desc="" resource-id="${chromeToolbarResourceId}" ` +
+        'bounds="[0,0][1080,240]" />' +
+        '<node text="" class="android.widget.FrameLayout" ' +
+        `content-desc="" resource-id="${chromeCompositorResourceId}" ` +
+        'bounds="[0,0][1080,2200]" />' +
+        '<node text="" class="android.view.View" ' +
         `content-desc="${physicalUiSessionName}" clickable="true" ` +
         'bounds="[0,400][1080,688]" />' +
         `<node text="${physicalUiSessionName}" class="android.view.View" ` +
@@ -459,6 +465,26 @@ describe("physical Android phone-driver protocol", () => {
     expect(fragment).toBeDefined();
     expect(target === undefined ? 0 : androidUiNodeHeight(target)).toBe(288);
     expect(fragment === undefined ? 0 : androidUiNodeHeight(fragment)).toBe(63);
+    expect(
+      target === undefined
+        ? false
+        : androidUiNodeIsFullyInsideChromePage(target, nodes)
+    ).toBe(true);
+    expect(
+      target === undefined
+        ? true
+        : androidUiNodeIsFullyInsideChromePage(
+            Object.freeze({
+              ...target,
+              bounds: Object.freeze({
+                ...target.bounds,
+                bottom: 2300,
+                top: 2012
+              })
+            }),
+            nodes
+          )
+    ).toBe(false);
   });
 
   it("holds and resolves every deterministic dashboard control transition", async () => {
@@ -1238,6 +1264,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       mkdirSync(screenshotDirectory, { mode: 0o700 });
       let host: HostDeckFastifyLifecycle<PhysicalRuntimeContext> | null = null;
       let lifecycleManager: TailscaleServeManager | null = null;
+      let cleanupRemote: HostDeckRemoteIngressLifecycle | null = null;
       let display: QrDisplay | null = null;
       let remoteEnabled = false;
       let fallbackCleanup: CleanupTarget | null = null;
@@ -1398,6 +1425,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           },
           health
         });
+        cleanupRemote = selectedRemote;
         const auth = createAuthDeviceRepository(opened.db);
         const authenticationPolicy = createHostDeckRequestAuthenticationPolicy({
           authenticateDeviceToken: (input) =>
@@ -2308,17 +2336,20 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             cleanupErrors
           );
         }
+        const cleanupRemoteLifecycle = cleanupRemote;
         if (
           remoteEnabled &&
           env !== null &&
           host !== null &&
           externalOrigin !== null &&
           localOrigin !== null &&
+          cleanupRemoteLifecycle !== null &&
           selectedProfile === "dedicated"
         ) {
           await collectPhysicalCleanupError(
             "Physical cleanup could not disable remote access through the selected lifecycle.",
             async () => {
+              await waitForFreshLifecycleIdle(cleanupRemoteLifecycle);
               assertRemoteCliResult(
                 await runCli(["remote", "disable", "--json"], {
                   createOperationId: () =>
@@ -5200,6 +5231,7 @@ interface PngConstructor {
 }
 
 type AndroidUiNodeField = "className" | "description" | "semantic" | "text";
+type AndroidUiNodeVisibility = "fully_visible" | "present";
 type AndroidVerticalRevealDirection = "backward" | "forward";
 
 interface ProductionUiEntryInput {
@@ -5531,12 +5563,13 @@ async function runProductionDashboardUiSequence(
     terminalFailureMessage:
       "Physical dashboard quiet-session control remained collapsed after two bounded taps."
   });
-  await revealAndroidUiNode(
+  const sessionTarget = await revealAndroidUiNode(
     "description",
     physicalUiSessionName,
     "forward",
     30_000,
-    "Physical dashboard fragment-free reload lost paired authority."
+    "Physical dashboard fragment-free reload lost paired authority.",
+    "fully_visible"
   );
   requireCondition(
     input.requestInspection.claimRequests === 1 &&
@@ -5545,12 +5578,6 @@ async function runProductionDashboardUiSequence(
   );
   input.driver.recordCheckpoint("reloaded");
 
-  const sessionTarget = await waitForAndroidUiNodePresent(
-    "description",
-    physicalUiSessionName,
-    30_000,
-    "Physical dashboard selected session target was unavailable."
-  );
   measure(sessionTarget, "open-session");
   await tapAndroidNodeOnceAndWait(
     sessionTarget,
@@ -5772,7 +5799,17 @@ async function tapAndroidNodeOnceAndWait(
   timeoutMs = 30_000
 ): Promise<void> {
   tapAndroidUiNode(node);
-  await waitFor(completed, timeoutMs, message);
+  try {
+    await waitFor(completed, timeoutMs, message);
+  } catch {
+    let summary = "hierarchy=unavailable";
+    try {
+      summary = androidUiStateSummary(await readAndroidUiNodes(), node);
+    } catch {
+      // The bounded fallback still reports unavailable post-tap hierarchy.
+    }
+    throw new Error(`${message} (${summary}).`);
+  }
 }
 
 async function closePhysicalDialog(description: string): Promise<void> {
@@ -7693,6 +7730,29 @@ function selectPrivateFreeProductionScreenshotRegion(
   nodes: readonly AndroidUiNode[],
   externalOrigin: string
 ): PhysicalScreenshotRegion {
+  const region = selectChromePageViewport(nodes);
+  const origin = new URL(externalOrigin);
+  requireCondition(
+    nodes
+      .filter((node) => androidNodeIntersectsRegion(node, region))
+      .every((node) =>
+        [node.text, node.description].every(
+          (value) =>
+            !value.includes(origin.origin) &&
+            !value.includes(origin.hostname) &&
+            [...deviceForbiddenValues].every(
+              (privateValue) => !value.includes(privateValue)
+            )
+        )
+      ),
+    "Physical production screenshot page viewport retained private browser material."
+  );
+  return region;
+}
+
+function selectChromePageViewport(
+  nodes: readonly AndroidUiNode[]
+): PhysicalScreenshotRegion {
   const toolbarNodes = nodes.filter(
     (node) => node.resourceId === chromeToolbarResourceId
   );
@@ -7728,23 +7788,20 @@ function selectPrivateFreeProductionScreenshotRegion(
       region.height <= 8_192,
     "Physical production screenshot page viewport was outside bounded dimensions."
   );
-  const origin = new URL(externalOrigin);
-  requireCondition(
-    nodes
-      .filter((node) => androidNodeIntersectsRegion(node, region))
-      .every((node) =>
-        [node.text, node.description].every(
-          (value) =>
-            !value.includes(origin.origin) &&
-            !value.includes(origin.hostname) &&
-            [...deviceForbiddenValues].every(
-              (privateValue) => !value.includes(privateValue)
-            )
-        )
-      ),
-    "Physical production screenshot page viewport retained private browser material."
-  );
   return region;
+}
+
+function androidUiNodeIsFullyInsideChromePage(
+  node: AndroidUiNode,
+  nodes: readonly AndroidUiNode[]
+): boolean {
+  const region = selectChromePageViewport(nodes);
+  return (
+    node.bounds.left >= region.left &&
+    node.bounds.right <= region.left + region.width &&
+    node.bounds.top >= region.top &&
+    node.bounds.bottom <= region.top + region.height
+  );
 }
 
 function androidNodeIntersectsRegion(
@@ -8243,7 +8300,8 @@ async function revealAndroidUiNode(
   value: string,
   direction: AndroidVerticalRevealDirection,
   timeoutMs: number,
-  message: string
+  message: string,
+  visibility: AndroidUiNodeVisibility = "present"
 ): Promise<AndroidUiNode> {
   let found: AndroidUiNode | null = null;
   let swipeCount = 0;
@@ -8256,7 +8314,13 @@ async function revealAndroidUiNode(
       matches.length <= 1,
       `Android UI hierarchy duplicated ${field} ${value}.`
     );
-    found = matches[0] ?? null;
+    const match = matches[0];
+    found =
+      match !== undefined &&
+      (visibility === "present" ||
+        androidUiNodeIsFullyInsideChromePage(match, nodes))
+        ? match
+        : null;
     if (found !== null) return true;
     if (swipeCount < 4) {
       swipeAndroidViewport(nodes, direction);
