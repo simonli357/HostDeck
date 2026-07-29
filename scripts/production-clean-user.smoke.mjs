@@ -372,7 +372,7 @@ async function buildAndRelocatePackages() {
 async function runForegroundAcceptance(port, packageEvidenceValue) {
   const started = performance.now();
   const packageManifest = readPackageManifest(primaryPackage);
-  assert.equal(packageManifest.contentSha256, packageEvidenceValue.content_sha256);
+  assert.equal(packageManifest.content.sha256, packageEvidenceValue.content_sha256);
   const command = packageCommand(primaryPackage, packageManifest);
   const child = spawn(
     command,
@@ -1033,7 +1033,7 @@ function assertInstalledInventory(layout, packageManifest, owner) {
   assert.equal(owner.release.package_version, packageManifest.packageVersion);
   assert.equal(
     owner.release.package_content_sha256,
-    packageManifest.contentSha256
+    packageManifest.content.sha256
   );
   assert.equal(
     owner.release.package_manifest_sha256,
@@ -1256,8 +1256,16 @@ function snapshotContainerTailscale() {
 }
 
 function packageEvidence(build, verification, packageManifest, durationMs) {
+  assert.equal(packageManifest.content.sha256, build.contentSha256);
+  assert.equal(packageManifest.content.sha256, verification.contentSha256);
+  assert.equal(packageManifest.content.entryCount, build.entryCount);
+  assert.equal(packageManifest.content.entryCount, verification.entryCount);
+  assert.equal(packageManifest.output.count, build.outputCount);
+  assert.equal(packageManifest.output.count, verification.outputCount);
+  assert.equal(packageManifest.source.count, build.sourceCount);
+  assert.equal(packageManifest.source.count, verification.sourceCount);
   return Object.freeze({
-    content_sha256: packageManifest.contentSha256,
+    content_sha256: packageManifest.content.sha256,
     deferrals: [...packageManifest.deferrals],
     duration_ms: durationMs,
     entry_count: build.entryCount,
