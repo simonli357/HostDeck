@@ -758,7 +758,7 @@ export const mobileStateTraces: readonly MobileStateTrace[] = Object.freeze([
       "copy_resume_command"
     ],
     ["FE-V1-012", "FE-V1-020", "FE-V1-021", "FE-V1-026", "FE-V1-027"],
-    { journeys: ["UX-003", "UX-004", "UX-005", "UX-010"], mockupRequired: true }
+    { journeys: ["UX-003", "UX-004", "UX-005", "UX-009", "UX-010"], mockupRequired: true }
   ),
   detailTrace("detail_needs_input", "waiting for user input", "session_detail_needs_input", "needs_input", ["stream_events", "send_prompt"], ["FE-V1-012", "FE-V1-020"], {
     journeys: ["UX-003"]
@@ -769,9 +769,13 @@ export const mobileStateTraces: readonly MobileStateTrace[] = Object.freeze([
     mockupRequired: true
   }),
   detailTrace("detail_completed", "turn completed", "session_detail_completed", "completed", ["stream_events", "send_prompt"], ["FE-V1-012", "FE-V1-020"]),
-  detailTrace("detail_interrupted", "turn interrupted", "session_detail_interrupted", "interrupted", ["stream_events", "send_prompt"], ["FE-V1-012", "FE-V1-015", "FE-V1-036"]),
+  detailTrace("detail_interrupted", "turn interrupted", "session_detail_interrupted", "interrupted", ["stream_events", "send_prompt", "interrupt_turn"], ["FE-V1-012", "FE-V1-015", "FE-V1-036"], {
+    journeys: ["UX-003", "UX-008"]
+  }),
   detailTrace("detail_failed", "turn failed", "session_detail_failed", "failed", ["stream_events", "send_prompt"], ["FE-V1-012", "FE-V1-015", "FE-V1-020"]),
-  detailTrace("detail_unknown", "unknown structured event or state", "session_detail_unknown", "unknown_optional", ["stream_events", "read_event_details"], ["FE-V1-012", "FE-V1-014", "FE-V1-015"]),
+  detailTrace("detail_unknown", "unknown structured event or state", "session_detail_unknown", "unknown_optional", ["stream_events", "read_event_details"], ["FE-V1-012", "FE-V1-014", "FE-V1-015"], {
+    journeys: ["UX-003", "UX-008"]
+  }),
   detailTrace("detail_stale", "stale retained projection", "session_detail_stale", "disconnect", ["reconnect_stream", "read_event_details"], ["FE-V1-012", "FE-V1-015", "FE-V1-023", "FE-V1-025"], {
     journeys: ["UX-009"]
   }),
@@ -795,10 +799,13 @@ export const mobileStateTraces: readonly MobileStateTrace[] = Object.freeze([
     journeys: ["UX-011"],
     mockupRequired: true
   }),
-  detailTrace("detail_not_found", "authorized session not found or archived", "session_detail_not_found", null, ["navigate_back"], ["FE-V1-012", "FE-V1-025"], {
-    dataDisclosure: "access_only"
+  detailTrace("detail_not_found", "authorized session not found or archived", "session_detail_not_found", null, ["navigate_back", "archive_session", "read_resume_metadata"], ["FE-V1-012", "FE-V1-025", "FE-V1-037", "FE-V1-038"], {
+    dataDisclosure: "access_only",
+    journeys: ["UX-003", "UX-008", "UX-010"]
   }),
-  detailTrace("detail_runtime_incompatible", "session retained but runtime incompatible", "session_detail_incompatible", "incompatible", ["read_event_details", "read_resume_metadata"], ["FE-V1-012", "FE-V1-035"]),
+  detailTrace("detail_runtime_incompatible", "session retained but runtime incompatible", "session_detail_incompatible", "incompatible", ["read_event_details", "read_resume_metadata"], ["FE-V1-012", "FE-V1-035", "FE-V1-038"], {
+    journeys: ["UX-003", "UX-010"]
+  }),
   detailTrace("detail_long_content", "maximum bounded feed, labels, paths, model, goal, and error copy", "session_detail_long_content", "long_content", ["stream_events", "read_event_details"], ["FE-V1-012", "FE-V1-014", "FE-V1-016", "FE-V1-039"], {
     viewports: allReferenceViewports
   }),
@@ -816,9 +823,9 @@ export const mobileStateTraces: readonly MobileStateTrace[] = Object.freeze([
     diagnosisSource: "hostdeck_local_observation",
     journeys: ["UX-001", "UX-011", "UX-012"]
   }),
-  accessTrace("access_unpaired", "reachable remote origin without app pairing", [selectedMobile("mission_control_unpaired")], ["consume_pairing_fragment", "claim_pairing"], ["FE-V1-013"], {
+  accessTrace("access_unpaired", "reachable remote origin without app pairing", [selectedMobile("mission_control_unpaired")], ["consume_pairing_fragment", "claim_pairing", "revoke_device"], ["FE-V1-013", "FE-V1-032"], {
     diagnosisSource: "application_authority",
-    journeys: ["UX-001"],
+    journeys: ["UX-001", "UX-011"],
     mockupRequired: true
   }),
   accessTrace("access_expired", "paired-device authority expired", [selectedMobile("mission_control_expired")], ["claim_pairing"], ["FE-V1-013", "FE-V1-031"], {
