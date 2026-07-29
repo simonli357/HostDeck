@@ -381,7 +381,7 @@ describe("approval-decision state", () => {
       expect(controller.snapshot()).toMatchObject({
         phase: "unsupported",
         status: "Approval unsupported",
-        statusDetail: "The installed Codex runtime does not support structured approvals.",
+        statusDetail: "The installed Codex runtime does not support approval controls.",
         refreshEnabled: true
       });
       expect(requiredItem(controller).actionable).toBe(false);

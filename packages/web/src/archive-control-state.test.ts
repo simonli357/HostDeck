@@ -72,15 +72,15 @@ describe("archive control state", () => {
       [context({ permission: "read" }), "Read-only"],
       [context({ locked: true }), "locked"],
       [context({ accessState: "stale" }), "not current"],
-      [context({ hostState: "stale" }), "authority"],
+      [context({ hostState: "stale" }), "access"],
       [context({ targetState: "stale" }), "not current"],
       [context({ freshness: "stale" }), "stale"],
       [context({ streamState: "reconnecting" }), "reconnecting"],
       [context({ streamState: "failed" }), "unavailable"],
       [context({ continuity: "unproven" }), "not proven"],
-      [context({ csrfPhase: "failed", csrfGeneration: null }), "authority"],
-      [context({ hostCompatibility: "incompatible" }), "authority"],
-      [context({ hostCompatibility: "disconnected" }), "authority"]
+      [context({ csrfPhase: "failed", csrfGeneration: null }), "access"],
+      [context({ hostCompatibility: "incompatible" }), "access"],
+      [context({ hostCompatibility: "disconnected" }), "access"]
     ];
     for (const [initialContext, copy] of cases) {
       const port = archivePort();

@@ -250,7 +250,7 @@ function EventIdentity({
         title={view.title}
       />
       <dl className="hostdeck-event-identity">
-        <IdentityRow label="Cursor" value={String(identity.cursor)} />
+        <IdentityRow label="Event position" value={String(identity.cursor)} />
         <IdentityRow label="Normalized type" value={identity.normalizedType} />
         <IdentityRow label="Captured at" value={identity.capturedAt} />
         <IdentityRow label="Upstream at" value={identity.upstreamAt} />

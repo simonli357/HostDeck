@@ -738,7 +738,7 @@ function SessionDetailEmpty() {
       <History size={24} strokeWidth={2} aria-hidden="true" />
       <div>
         <h2>No activity recorded</h2>
-        <p>This session has no retained structured activity.</p>
+        <p>This session has no retained activity.</p>
       </div>
     </div>
   );
@@ -1186,7 +1186,7 @@ function unavailableNotice(snapshot: BrowserConnectionSnapshot): SessionDetailNo
       case "paired_device":
       case "local_admin":
       case undefined:
-        return notice("Session access unavailable", "Current authority does not allow this session to be read.", "danger", true);
+        return notice("Session access unavailable", "Current access does not allow this session to be read.", "danger", true);
     }
   }
   switch (snapshot.phase) {

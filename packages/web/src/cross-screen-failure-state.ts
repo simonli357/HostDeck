@@ -68,7 +68,7 @@ export function projectCrossScreenStaleObservations(
   ) {
     facts.push(
       observationFact(
-        "Session projection",
+        "Session state",
         targetData.response.session.session.updated_at
       )
     );
@@ -119,7 +119,7 @@ export function projectCrossScreenRecoveredFailure(
   return Object.freeze({
     source: failure.source,
     title: copy.title,
-    detail: `${observedCopy} ${copy.currentLabel} is current again. This prior issue remains visible until the target or authority changes.`,
+    detail: `${observedCopy} ${copy.currentLabel} is current again. This prior issue remains visible until the target or access changes.`,
     observedAt
   });
 }

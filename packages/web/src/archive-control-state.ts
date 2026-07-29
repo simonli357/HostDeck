@@ -464,10 +464,10 @@ function deriveAvailability(
   const authorityKey = writeAuthorityKey(snapshot);
   if (reason === null) reason = writeEligibilityReason(snapshot.writeEligibility.causes[0]);
   if (reason === null && !snapshot.writeEligibility.eligible) {
-    reason = "Secure write authority is not ready.";
+    reason = "Secure write access is not ready.";
   }
   if (reason === null && authorityKey === null) {
-    reason = "Current archive authority is not available.";
+    reason = "Current archive access is not available.";
   }
   const target = reason === null ? exactTarget(detail, sessionId) : null;
 
@@ -571,7 +571,7 @@ function blockedResult(code: string | null): ArchiveResultView {
     ? "Read-only access cannot archive a session. HostDeck sent no retry."
     : code === "host_locked"
       ? `${hostLockWriteReason("host_locked")} HostDeck sent no retry.`
-      : "Current secure archive authority was rejected. HostDeck sent no retry.";
+      : "Current secure archive access was rejected. HostDeck sent no retry.";
   return deepFreeze({
     kind: "blocked" as const,
     source: "browser" as const,
@@ -603,7 +603,7 @@ function outcomeUnknownResult(): ArchiveResultView {
     kind: "outcome_unknown" as const,
     source: "browser" as const,
     label: "Archive outcome not confirmed",
-    detail: "The laptop may have archived the thread, or local archive state may still require reconciliation.",
+    detail: "The laptop may have archived the thread, or HostDeck may still need to check local archive state.",
     consequence: "This session remains on screen. HostDeck sent no retry.",
     returnToSessions: false
   });

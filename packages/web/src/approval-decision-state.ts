@@ -1031,7 +1031,7 @@ function globalStatus(
   detail: string | null;
 }> {
   if (input.mutationState.phase === "submitting") {
-    return status("submitting", "attention", "Confirming decision", "HostDeck is waiting for the exact terminal approval result.");
+    return status("submitting", "attention", "Confirming decision", "HostDeck sent one decision and is waiting for the confirmed approval result.");
   }
   if (confirmation !== null) {
     return status("confirming", confirmation.tone, "Approval confirmation open", "No response is sent until Approve once is submitted.");
@@ -1048,12 +1048,12 @@ function globalStatus(
   if (input.mutationState.phase === "result") {
     const approved = input.mutationState.decision === "approve";
     const readDetail = input.readState.phase === "failure"
-      ? "The decision is terminal, but the current approval list could not be refreshed."
-      : "The exact request reached a terminal audited result.";
+      ? "The decision is confirmed, but the current approval list could not be refreshed."
+      : "The decision was confirmed and recorded.";
     return status(approved ? "approved" : "denied", approved ? "connected" : "danger", approved ? "Approved once" : "Denied", readDetail);
   }
   if (input.readState.phase === "loading" && input.list === null) {
-    return status("loading", "attention", "Loading approvals", "Checking current process-live approval state.");
+    return status("loading", "attention", "Loading approvals", "Checking current laptop approval state.");
   }
   if (input.readState.phase === "failure") {
     const failure = input.readState.failure;
@@ -1065,7 +1065,7 @@ function globalStatus(
     );
   }
   if (records.length === 0) {
-    return status("empty", "muted", "No current approvals", "No process-live approval requests are visible for this session.");
+    return status("empty", "muted", "No current approvals", "No current approval requests are visible for this session.");
   }
   const actionable = records.filter((record) => record.view.actionable).length;
   const detail = input.readState.phase === "loading"
@@ -1096,7 +1096,7 @@ function confirmationView(
     grantLabel: "One time" as const,
     expiresAt: item.expiresAt,
     confirmEnabled: item.actionable && !submitting,
-    disabledReason: submitting ? "Waiting for the exact terminal decision." : item.disabledReason
+    disabledReason: submitting ? "Waiting for the confirmed decision." : item.disabledReason
   });
 }
 
@@ -1108,24 +1108,24 @@ function approvalStatusDetail(
   handle: string
 ): string {
   if (mutationState.phase === "submitting" && mutationState.attempt.handle === handle) {
-    return "Decision sent; waiting for the exact terminal result.";
+    return "Decision sent; waiting for the confirmed result.";
   }
   if (state === "pending") {
     if (readState.phase === "loading") return "Current status is being refreshed.";
     return grantScope === "one_time"
-      ? "One exact response is required before this work can continue."
+      ? "One decision is required before this work can continue."
       : "This request cannot be answered through the selected one-time V1 flow.";
   }
-  if (state === "event_only") return "The timeline request is retained, but process-live state is not verified.";
+  if (state === "event_only") return "The timeline request is retained, but current approval state is not verified.";
   if (state === "due") return readState.phase === "loading"
     ? "The expiry time was reached; server status is being checked."
     : "The expiry time was reached; check current server status.";
   if (state === "responding") return "A response may already have been sent. HostDeck will not send another.";
-  if (state === "approved") return "The exact request was approved once.";
-  if (state === "denied") return "The exact request was denied.";
+  if (state === "approved") return "The selected request was approved once.";
+  if (state === "denied") return "The selected request was denied.";
   if (state === "expired") return "The request expired without a recorded user decision.";
   if (state === "superseded") return "The request ended without a recorded user decision.";
-  return "Event and process-live approval details disagree. Refresh before continuing.";
+  return "Timeline and current approval details disagree. Refresh before continuing.";
 }
 
 function approvalStateLabel(state: ApprovalDecisionItemState): string {
@@ -1188,7 +1188,7 @@ function deriveAvailability(snapshot: BrowserConnectionSnapshot, sessionId: Sess
   const readEnabled = snapshot.access.state === "current" && snapshot.targetState.state === "current";
   const readReason = readEnabled
     ? null
-    : "Session authority is not current. Refresh Session Detail.";
+    : "Session access is not current. Refresh Session Detail.";
   const writeCause = snapshot.writeEligibility.causes[0];
   let writeReason = snapshot.writeEligibility.eligible && writeCause === undefined
     ? null
@@ -1343,7 +1343,7 @@ function classifyReadFailure(error: unknown): ApprovalFailure {
       kind: "known" as const,
       message: error.reason === "closed"
         ? "HostDeck closed before approvals could be loaded. Reload to continue."
-        : "Session authority is not current. Refresh Session Detail.",
+        : "Session access is not current. Refresh Session Detail.",
       retryable: false,
       requiresRefresh: true
     });
@@ -1359,7 +1359,7 @@ function classifyReadFailure(error: unknown): ApprovalFailure {
 
 function classifyDecisionFailure(error: unknown): ApprovalFailure {
   if (error instanceof HostDeckBrowserConnectionError) {
-    return decisionFailure("known", "Approval authority is not current. Check current status.", false, true);
+    return decisionFailure("known", "Approval access is not current. Check current status.", false, true);
   }
   if (error instanceof HostDeckBrowserCsrfError) {
     if (error.apiError !== null) {
@@ -1376,7 +1376,7 @@ function classifyDecisionFailure(error: unknown): ApprovalFailure {
       );
     }
     if (["client_contract", "not_ready", "bootstrap_unavailable"].includes(error.reason)) {
-      return decisionFailure("known", "Secure approval authority is not ready. Check current status.", false, true);
+      return decisionFailure("known", "Secure approval access is not ready. Check current status.", false, true);
     }
   }
   return unknownDecisionFailure();
@@ -1413,7 +1413,7 @@ function apiFailureMessage(error: ApiErrorEnvelope, operation: "read" | "decisio
       : "This phone has read-only approval access.";
     case "runtime_unavailable": return "The Codex runtime is unavailable. Check the laptop and refresh.";
     case "incompatible_runtime":
-    case "capability_unavailable": return "The installed Codex runtime does not support structured approvals.";
+    case "capability_unavailable": return "The installed Codex runtime does not support approval controls.";
     case "operation_conflict": return "Another decision won or approval state changed. Check current status.";
     case "operation_timeout": return "HostDeck could not prove the approval outcome.";
     case "rate_limited": return "Approval requests are temporarily rate limited.";

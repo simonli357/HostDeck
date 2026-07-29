@@ -133,7 +133,7 @@ describe("inline approval decisions", () => {
     expect(normalPort.respond).toHaveBeenCalledTimes(1);
     expect(normalPort.respond.mock.calls[0]?.[0].request.decision).toBe("approve");
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(await screen.findByText("The exact request was approved once.")).toBeTruthy();
+    expect(await screen.findByText("The selected request was approved once.")).toBeTruthy();
 
     normalView.unmount();
     const elevated = approval({ risk: "elevated" });
@@ -150,7 +150,7 @@ describe("inline approval decisions", () => {
     expect(elevatedPort.respond).toHaveBeenCalledTimes(1);
     expect(elevatedPort.respond.mock.calls[0]?.[0].request.decision).toBe("deny");
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(await screen.findByText("The exact request was denied.")).toBeTruthy();
+    expect(await screen.findByText("The selected request was denied.")).toBeTruthy();
   });
 
   it("shows exact elevated facts, sends nothing on cancel, and restores originating focus", async () => {
@@ -180,7 +180,7 @@ describe("inline approval decisions", () => {
     expect(document.body.innerHTML).not.toContain(threadId);
   });
 
-  it("keeps broad confirmation modal and single-flight until exact terminal proof arrives", async () => {
+  it("keeps broad confirmation modal and single-flight until the confirmed result arrives", async () => {
     const user = userEvent.setup();
     const response = deferred<ReturnType<typeof terminalResponse>>();
     const entry = approval({ risk: "broad" });
@@ -210,7 +210,7 @@ describe("inline approval decisions", () => {
     if (request === undefined) throw new TypeError("Approval request was not captured.");
     response.resolve(terminalResponse(entry, request.operation_id, "approve"));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(await screen.findByText("The exact request was approved once.")).toBeTruthy();
+    expect(await screen.findByText("The selected request was approved once.")).toBeTruthy();
     expect(port.respond).toHaveBeenCalledTimes(1);
   });
 
@@ -263,7 +263,7 @@ describe("approval production hook", () => {
     );
 
     expect(await screen.findByText("Approval status checking")).toBeTruthy();
-    expect(screen.getByText("The timeline request is retained, but process-live state is not verified."))
+    expect(screen.getByText("The timeline request is retained, but current approval state is not verified."))
       .toBeTruthy();
     expect(requestSelectedSessionRead).toHaveBeenCalledTimes(2);
   });
@@ -315,7 +315,7 @@ describe("approval production hook", () => {
     );
     await user.click(await screen.findByRole("button", { name: "Review & approve" }));
     await user.click(screen.getByRole("button", { name: "Approve once" }));
-    expect(await screen.findByText("The exact request was approved once.")).toBeTruthy();
+    expect(await screen.findByText("The selected request was approved once.")).toBeTruthy();
 
     await waitFor(() => expect(requestSelectedSessionRead).toHaveBeenCalledTimes(2));
     for (const call of requestSelectedSessionRead.mock.calls) {
@@ -371,7 +371,7 @@ describe("approval production hook", () => {
 
     expect(requestProtected).not.toHaveBeenCalled();
     expect(await screen.findByText("Decision not sent")).toBeTruthy();
-    expect(screen.getByText("Approval authority is not current. Check current status.")).toBeTruthy();
+    expect(screen.getByText("Approval access is not current. Check current status.")).toBeTruthy();
   });
 
   it("treats a successful response as unknown when the coordinator target moves in flight", async () => {
@@ -406,7 +406,7 @@ describe("approval production hook", () => {
     release.resolve(undefined);
 
     expect(await screen.findByText("Decision outcome unknown")).toBeTruthy();
-    expect(screen.queryByText("The exact request was approved once.")).toBeNull();
+    expect(screen.queryByText("The selected request was approved once.")).toBeNull();
     expect(requestProtected).toHaveBeenCalledTimes(1);
   });
 });

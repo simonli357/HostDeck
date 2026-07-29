@@ -734,7 +734,7 @@ function classifyReadFailure(error: unknown): LaptopResumeReadFailure {
       kind: "access_denied" as const,
       message: error.reason === "closed"
         ? "HostDeck closed before the laptop command was loaded. Reload to continue."
-        : "Selected-session read authority is not current. Refresh Session Detail."
+        : "Selected-session access is not current. Refresh Session Detail."
     });
   }
   if (error instanceof TypeError) {

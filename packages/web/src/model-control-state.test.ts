@@ -156,7 +156,7 @@ describe("model-control state", () => {
       expect(controller.snapshot().pending).toMatchObject({ phase });
       expect(controller.snapshot().selectionEnabled).toBe(false);
       expect(controller.snapshot().submitEnabled).toBe(false);
-      expect(controller.snapshot().selectionDisabledReason).toContain("being applied or reconciled");
+      expect(controller.snapshot().selectionDisabledReason).toContain("being applied or checked");
     }
   );
 

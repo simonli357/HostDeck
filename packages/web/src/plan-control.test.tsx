@@ -296,7 +296,7 @@ describe("PlanControl", () => {
 
     expect(requestProtected).not.toHaveBeenCalled();
     expect(await screen.findByText("Plan selection was not saved")).toBeTruthy();
-    expect(screen.getByText("Plan authority is not current. Refresh Session Detail.")).toBeTruthy();
+    expect(screen.getByText("Plan access is not current. Refresh Session Detail.")).toBeTruthy();
   });
 
   it("suppresses a successful Plan response when the coordinator target moves in flight", async () => {

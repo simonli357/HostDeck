@@ -504,7 +504,7 @@ function projectAbsentAccess(
   ) {
     return projection(
       "Checking access",
-      "HostDeck is resolving this browser's current authority.",
+      "HostDeck is checking this browser's current access.",
       "muted",
       false,
       [
@@ -517,7 +517,7 @@ function projectAbsentAccess(
   }
   return projection(
     "Access unavailable",
-    "HostDeck could not read a current access state. No session authority is assumed.",
+    "HostDeck could not read a current access state. No session access is assumed.",
     "danger",
     true,
     [
@@ -561,7 +561,7 @@ function accessSummary(
     case "revoked_device":
       return deniedSummary("Device access was revoked");
     case "local_admin":
-      return deniedSummary("Invalid browser authority");
+      return deniedSummary("Invalid browser access");
     case "paired_device":
       if (access.locked) {
         return {
@@ -582,7 +582,7 @@ function accessSummary(
       return snapshot.writeEligibility.eligible
         ? {
             title: "Secure control ready",
-            body: "Private connection, writer permission, host health, and page authority are current.",
+            body: "Private connection, writer permission, host health, and page protection are current.",
             tone: "connected",
             urgent: false
           }
@@ -634,7 +634,7 @@ function permissionFact(
       case "revoked_device":
         return "Revoked";
       case "local_admin":
-        return "Invalid browser authority";
+        return "Invalid browser access";
     }
   })();
   const allowed =
@@ -645,7 +645,7 @@ function permissionFact(
     "permission",
     "Permission",
     value,
-    current ? "Current device authority" : "Last known device authority",
+    current ? "Current device access" : "Last known device access",
     allowed ? "connected" : current ? "danger" : "attention"
   );
 }
@@ -673,7 +673,7 @@ function expiryFact(
 
 function writeFact(snapshot: BrowserConnectionSnapshot): HostAccessFact {
   if (snapshot.writeEligibility.eligible) {
-    return fact("writes", "Secure writes", "Ready", "Current page authority", "connected");
+    return fact("writes", "Secure writes", "Ready", "Page protection current", "connected");
   }
   const pageSecurityBlocked = primaryWriteCause(snapshot.writeEligibility.causes) === "csrf_not_ready";
   return fact(
@@ -704,7 +704,7 @@ function pageSecurityWriteLabel(snapshot: BrowserConnectionSnapshot): string {
 
 function pageSecurityWriteDetail(snapshot: BrowserConnectionSnapshot): string {
   if (snapshot.csrf.phase === "bootstrapping") {
-    return "Secure page authority is being established.";
+    return "Secure page protection is being established.";
   }
   if (snapshot.csrf.phase === "failed") {
     return "Secure page setup was not confirmed.";
@@ -713,7 +713,7 @@ function pageSecurityWriteDetail(snapshot: BrowserConnectionSnapshot): string {
     snapshot.csrf.phase === "idle" &&
     snapshot.csrf.invalidationReason === "not_bootstrapped"
   ) {
-    return "Secure page authority is starting.";
+    return "Secure page protection is starting.";
   }
   if (snapshot.csrf.phase === "closed") return "The browser connection is closed.";
   return "Page security must be renewed.";
@@ -868,7 +868,7 @@ function writeBlockSummary(causes: readonly BrowserConnectionWriteBlockCause[]):
     case "host_not_ready":
       return "Current laptop health is required before a write.";
     case "csrf_not_ready":
-      return "Secure page authority is not ready.";
+      return "Secure page protection is not ready.";
     case null:
       return "Secure writes are blocked.";
   }

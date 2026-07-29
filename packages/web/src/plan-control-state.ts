@@ -435,7 +435,7 @@ export function createPlanControlController(
           : failureOperation({
               source: "read",
               kind: "known",
-              message: "Session authority changed. Check current Plan state.",
+              message: "Session access changed. Check current Plan state.",
               retryable: false,
               requiresRefresh: true,
               mode: null
@@ -447,7 +447,7 @@ export function createPlanControlController(
         operation = failureOperation({
           source: "read",
           kind: "known",
-          message: "Session authority is not current. Refresh Session Detail.",
+          message: "Session access is not current. Refresh Session Detail.",
           retryable: false,
           requiresRefresh: true,
           mode: null
@@ -663,7 +663,7 @@ function deriveStatus(
     );
   }
   if (data === null) {
-    return status("ready", "muted", "Plan data unavailable", "Load structured Plan state to continue.");
+    return status("ready", "muted", "Plan data unavailable", "Load current Plan state to continue.");
   }
   const pending = data.pending;
   if (pending === null) {
@@ -675,7 +675,7 @@ function deriveStatus(
     case "pending":
       return status("staged", "attention", `${modeLabel(pending.mode, data)} staged for next turn`, "The confirmed current mode and current turn have not changed.");
     case "dispatching":
-      return status("dispatching", "attention", "Preparing next-turn Plan settings", "Selection is locked while the turn request is composed.");
+      return status("dispatching", "attention", "Preparing next-turn Plan settings", "Selection is locked while HostDeck prepares the next turn.");
     case "awaiting_confirmation":
       return status("awaiting_confirmation", "attention", "Turn accepted; awaiting Plan confirmation", "The runtime has not confirmed the selected collaboration mode yet.");
     case "unknown":
@@ -812,7 +812,7 @@ function classifyReadFailure(error: unknown): PlanControlFailure {
       message:
         error.reason === "closed"
           ? "HostDeck closed before Plan state could be loaded. Reload to continue."
-          : "Session authority is not current. Refresh Session Detail.",
+          : "Session access is not current. Refresh Session Detail.",
       retryable: false,
       requiresRefresh: true
     });
@@ -820,7 +820,7 @@ function classifyReadFailure(error: unknown): PlanControlFailure {
   return failure({
     source: "read",
     kind: "known",
-    message: "Structured Plan state could not be loaded. Check the connection and try again.",
+    message: "Plan state could not be loaded. Check the connection and try again.",
     retryable: true,
     requiresRefresh: false
   });
@@ -831,7 +831,7 @@ function classifySelectFailure(error: unknown, mode: PlanMode): PlanControlFailu
     return failure({
       source: "select",
       kind: "known",
-      message: "Plan authority is not current. Refresh Session Detail.",
+      message: "Plan access is not current. Refresh Session Detail.",
       retryable: false,
       requiresRefresh: true,
       mode
@@ -858,7 +858,7 @@ function classifySelectFailure(error: unknown, mode: PlanMode): PlanControlFailu
       return failure({
         source: "select",
         kind: "known",
-        message: "Secure Plan authority is not ready. Refresh Session Detail.",
+        message: "Secure Plan access is not ready. Refresh Session Detail.",
         retryable: false,
         requiresRefresh: true,
         mode
@@ -898,7 +898,7 @@ function apiFailureMessage(error: ApiErrorEnvelope, operation: "read" | "select"
       return "The Codex runtime is unavailable. Check the laptop and refresh.";
     case "incompatible_runtime":
     case "capability_unavailable":
-      return "The installed Codex runtime does not support structured Plan control.";
+      return "The installed Codex runtime does not support Plan control.";
     case "operation_conflict":
       return "Pending Plan state changed. Refresh before continuing.";
     case "operation_timeout":
@@ -915,7 +915,7 @@ function apiFailureMessage(error: ApiErrorEnvelope, operation: "read" | "select"
     case "validation_error":
       return "The Plan catalog changed. Refresh before continuing.";
     case "protocol_error":
-      return "Codex Plan state failed protocol validation.";
+      return "The laptop returned invalid Codex Plan state.";
     default:
       return operation === "read"
         ? "HostDeck could not read Plan state."
@@ -941,7 +941,7 @@ function selectionReason(
   if (data === null) return "Load Plan state before selecting.";
   if (data.modes.length === 0) return "The runtime exposed no Plan modes.";
   if (nonReplaceablePending) {
-    return "The pending Plan mode is already being dispatched or reconciled.";
+    return "The pending Plan mode is already being applied or checked.";
   }
   return null;
 }

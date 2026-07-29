@@ -211,7 +211,7 @@ describe("GoalControl", () => {
     render(<GoalControl controller={controller} />);
     await user.click(screen.getByRole("button", { name: "/goal for android-release" }));
 
-    expect(await screen.findByText("Goal reconciliation conflict")).toBeTruthy();
+    expect(await screen.findByText("Goal result conflict")).toBeTruthy();
     expect(screen.getByText(/Conflict: Resume goal/)).toBeTruthy();
     expect(document.body.textContent).not.toContain("private runtime conflict detail");
     expect(document.body.textContent).not.toContain(initialRevision);

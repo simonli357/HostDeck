@@ -59,7 +59,7 @@ export interface EventDiagnosticsIdentityView {
   readonly upstreamAt: string | null;
   readonly codexEventId: string | null;
   readonly codexEventType: string | null;
-  readonly source: "HostDeck projection";
+  readonly source: "HostDeck summary";
 }
 
 export interface EventDiagnosticsFieldView {
@@ -188,7 +188,7 @@ class EventDiagnosticsVerificationError extends Error {
 const maximumSubscribers = 32;
 const fieldDisclosureThreshold = 240;
 const boundedProjectionNotice =
-  "This is one bounded normalized projection, not complete Codex history or raw runtime output.";
+  "This is one bounded HostDeck event summary, not complete Codex history or full runtime output.";
 
 export function createEventDiagnosticsController(
   candidateOptions: CreateEventDiagnosticsControllerOptions
@@ -546,7 +546,7 @@ function projectSelection(selection: EventDiagnosticsSelection): Readonly<{
         upstreamAt: null,
         codexEventId: null,
         codexEventType: null,
-        source: "HostDeck projection" as const
+        source: "HostDeck summary" as const
       },
       fields: boundaryFields(selection.boundary),
       limitation: {
@@ -584,7 +584,7 @@ function projectSelection(selection: EventDiagnosticsSelection): Readonly<{
       upstreamAt: event.upstream_at,
       codexEventId: event.codex_event_id,
       codexEventType: event.codex_event_type,
-      source: "HostDeck projection" as const
+      source: "HostDeck summary" as const
     },
     fields: projectPayloadFields(event),
     limitation: limitationForEvent(event),
@@ -657,9 +657,9 @@ function boundaryFields(
   boundary: SessionDetailContinuityBoundary
 ): readonly EventDiagnosticsFieldView[] {
   return fields([
-    field("after", "Prior cursor", boundary.after),
-    field("boundary-cursor", "Boundary cursor", boundary.cursor),
-    field("next-cursor", "Next cursor", boundary.cursor),
+    field("after", "Prior event position", boundary.after),
+    field("boundary-cursor", "Boundary position", boundary.cursor),
+    field("next-cursor", "Next event position", boundary.cursor),
     field("reason", "Reason", boundary.reason)
   ]);
 }
@@ -692,7 +692,7 @@ function limitationForEvent(event: SelectedProjectionEvent): EventDiagnosticsLim
       ? "Replay boundary visible"
       : event.type === "unknown_optional"
         ? "Unrecognized optional event"
-        : "Bounded projection"
+        : "Bounded event summary"
     : event.content_state === "redacted"
       ? "Content redacted"
       : event.content_state === "truncated"
@@ -888,28 +888,28 @@ function deriveStatus(
     return status(
       "attention",
       "Verifying event",
-      "The retained projection remains stale until this exact read succeeds."
+      "The retained event remains stale until this read succeeds."
     );
   }
   if (phase === "failure" && operation.phase === "failure") {
     return status("danger", "Event verification failed", operation.failure.message);
   }
   if (phase === "current") {
-    return status("connected", "Event verification current", "One exact retained event was verified.");
+    return status("connected", "Event details current", "The selected retained event was verified.");
   }
   if (localOnly) {
     return status(
       "attention",
       "Local evidence only",
-      "This evidence cannot be addressed as one exact event-page read."
+      "This event cannot be verified with one bounded detail read."
     );
   }
   return status(
     "attention",
     "Retained event detail",
     readEnabled
-      ? "Retry to verify this retained projection against current event storage."
-      : "Current session-read authority is unavailable; retained projection evidence remains stale."
+      ? "Retry to verify this retained event against current event storage."
+      : "Current session access is unavailable; retained event details remain stale."
   );
 }
 
@@ -918,7 +918,7 @@ function classifyReadFailure(error: unknown): EventDiagnosticsFailure {
     return failure(
       error.kind,
       error.kind === "malformed"
-        ? "HostDeck returned an invalid event page. The retained projection remains stale."
+        ? "HostDeck returned invalid event details. The retained event remains stale."
         : "The current event page no longer matches this retained event."
     );
   }
@@ -947,7 +947,7 @@ function classifyReadFailure(error: unknown): EventDiagnosticsFailure {
       "permission",
       error.reason === "closed"
         ? "HostDeck closed before the event could be verified."
-        : "Current session-read authority changed before verification completed."
+        : "Current session access changed before verification completed."
     );
   }
   if (isAbortError(error)) {
@@ -1195,16 +1195,16 @@ function boundaryReasonLabel(reason: SessionDetailContinuityBoundary["reason"]):
     case "retention": return "Retention";
     case "disconnect": return "Disconnect";
     case "restart": return "Runtime restart";
-    case "schema_change": return "Schema change";
+    case "schema_change": return "Data format change";
   }
 }
 
 function boundaryReason(reason: SessionDetailContinuityBoundary["reason"]): string {
   switch (reason) {
-    case "retention": return "Earlier events are outside the retained projection.";
+    case "retention": return "Earlier events are outside retained history.";
     case "disconnect": return "Event continuity was interrupted by a runtime disconnect.";
     case "restart": return "Event continuity was interrupted by a runtime restart.";
-    case "schema_change": return "Event continuity was interrupted by a projection schema change.";
+    case "schema_change": return "Event continuity was interrupted by a data format change.";
   }
 }
 

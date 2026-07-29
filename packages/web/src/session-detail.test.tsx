@@ -123,7 +123,7 @@ describe("Session Detail projection", () => {
       "Access last confirmed Jul 22, 2026, 18:00 UTC."
     );
     expect(projection.notices[0]?.body).toContain(
-      "Session projection last confirmed Jul 22, 2026, 18:00 UTC."
+      "Session state last confirmed Jul 22, 2026, 18:00 UTC."
     );
     expect(projection.timeline[0]?.title).toBe("Earlier activity unavailable");
     expect(projection.contextCells[2]).toMatchObject({
@@ -163,7 +163,7 @@ describe("Session Detail projection", () => {
     expect(projection.timeline[0]?.title).toBe("Activity continuity interrupted");
     expect(projection.notices.at(-1)).toEqual({
       title: "Previous activity-stream issue recovered",
-      body: "Issue observed Jul 22, 2026, 18:00 UTC. Activity stream is current again. This prior issue remains visible until the target or authority changes.",
+      body: "Issue observed Jul 22, 2026, 18:00 UTC. Activity stream is current again. This prior issue remains visible until the target or access changes.",
       tone: "attention",
       urgent: false
     });

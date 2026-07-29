@@ -241,7 +241,7 @@ describe("plan-control state", () => {
       });
       expect(controller.snapshot().selectionEnabled).toBe(false);
       expect(controller.snapshot().submitEnabled).toBe(false);
-      expect(controller.snapshot().selectionDisabledReason).toContain("dispatched or reconciled");
+      expect(controller.snapshot().selectionDisabledReason).toContain("being applied or checked");
     }
   );
 
@@ -411,7 +411,7 @@ describe("plan-control state", () => {
       execution: null,
       selectionEnabled: false,
       refreshEnabled: true,
-      statusDetail: "Session authority changed. Check current Plan state."
+      statusDetail: "Session access changed. Check current Plan state."
     });
     readResponse.resolve(snapshot({ currentMode: "plan" }));
     await opening;

@@ -206,7 +206,7 @@ describe("interrupt control state", () => {
       busy: true,
       closeDisabled: true,
       confirmationOpen: false,
-      status: "Waiting for terminal proof"
+      status: "Waiting for confirmed result"
     });
     expect(controller.snapshot().statusDetail).not.toMatch(/accepted|completed/iu);
     expect(controller.dismiss()).toBe(controller.snapshot());

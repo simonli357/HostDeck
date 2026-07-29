@@ -350,7 +350,7 @@ describe("skills-control state", () => {
       await controller.open();
       expect(controller.snapshot()).toMatchObject({
         phase: "unsupported",
-        status: "Structured Skills unsupported",
+        status: "Skills unavailable",
         refreshEnabled: false
       });
     }

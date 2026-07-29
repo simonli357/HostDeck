@@ -603,7 +603,7 @@ function turnEventStatus(
     case "in_progress":
       return status("running", "connected", "Turn running", "Runtime progress is current.");
     case "waiting_for_input":
-      return status("needs_input", "attention", "Turn needs input", "Respond through the structured request.");
+      return status("needs_input", "attention", "Turn needs input", "Respond to the pending input request.");
     case "waiting_for_approval":
       return status("needs_approval", "attention", "Turn needs approval", "Resolve the pending approval first.");
     case "completed":
@@ -636,13 +636,13 @@ function classifyDispatchFailure(error: unknown, submittedText: string): PromptC
       );
     }
     if (error.reason === "client_contract" || error.reason === "not_ready") {
-      return knownFailure("Secure prompt authority is not ready. Refresh the session.", false, submittedText);
+      return knownFailure("Secure prompt access is not ready. Refresh the session.", false, submittedText);
     }
     if (error.reason === "bootstrap_unavailable") {
       return knownFailure("Secure write setup is unavailable. Reload HostDeck.", false, submittedText);
     }
     if (error.reason === "stale_generation" || error.reason === "authority_rejected") {
-      return knownFailure("Prompt authority changed. Refresh access before trying again.", false, submittedText);
+      return knownFailure("Prompt access changed. Refresh access before trying again.", false, submittedText);
     }
   }
   return deepFreeze({
@@ -673,7 +673,7 @@ function apiFailureMessage(code: string): string {
     case "capability_unavailable":
       return "The current Codex runtime cannot accept this prompt.";
     case "operation_conflict":
-      return "Another prompt operation is still being reconciled.";
+      return "Another prompt is still being checked.";
     case "operation_timeout":
       return "HostDeck timed out before accepting the prompt.";
     case "rate_limited":
@@ -751,7 +751,7 @@ function disabledReason(cause: PromptComposerDisabledCause): string {
     case "session_not_writable":
       return "This session cannot accept a prompt now.";
     case "turn_needs_input":
-      return "Respond through the structured input request first.";
+      return "Respond to the pending input request first.";
     case "turn_needs_approval":
       return "Resolve the pending approval first.";
     case "turn_unknown":

@@ -396,7 +396,7 @@ function deriveAvailability(
     authorityKey !== null;
   let readReason: string | null = null;
   if (detail.archived_at !== null || detail.session_state === "archived") {
-    readReason = "Archived sessions do not have current structured Skills.";
+    readReason = "Archived sessions do not have current Skills data.";
   } else if (detail.session_state !== "active" || detail.freshness !== "current") {
     readReason = "Session state is stale. Refresh Session Detail before loading Skills.";
   } else if (!currentConnection) {
@@ -437,12 +437,12 @@ function deriveStatus(input: Readonly<{
   }
   if (input.operation.phase === "loading") {
     return input.data === null
-      ? status("loading", "attention", "Loading Skills", "Reading one current structured snapshot.")
+      ? status("loading", "attention", "Loading Skills", "Reading current Skills data.")
       : status("stale", "attention", "Refreshing Skills", "The previous capture remains stale until this read succeeds.");
   }
   if (input.operation.phase === "failure") {
     return input.operation.failure.kind === "unsupported"
-      ? status("unsupported", "attention", "Structured Skills unsupported", input.operation.failure.message)
+      ? status("unsupported", "attention", "Skills unavailable", input.operation.failure.message)
       : status(
           "failure",
           "danger",
@@ -465,7 +465,7 @@ function deriveStatus(input: Readonly<{
         `${input.data.skills.length} structured ${input.data.skills.length === 1 ? "skill" : "skills"} reported.`
       );
     case "empty":
-      return status("empty", "muted", "No skills reported", "The current structured snapshot contains no skills or reported errors.");
+      return status("empty", "muted", "No skills reported", "The current Skills data contains no skills or reported errors.");
     case "partial":
       return status(
         "partial",
@@ -581,12 +581,12 @@ function classifyReadFailure(error: unknown): SkillsControlFailure {
       kind: "failure" as const,
       message: error.reason === "closed"
         ? "HostDeck closed before Skills could be loaded. Reload to continue."
-        : "Session authority is not current. Refresh Session Detail before trying again."
+        : "Session access is not current. Refresh Session Detail before trying again."
     });
   }
   return deepFreeze({
     kind: "failure" as const,
-    message: "Structured Skills could not be loaded. Check the connection and try again."
+    message: "Skills could not be loaded. Check the connection and try again."
   });
 }
 
@@ -605,7 +605,7 @@ function skillsReadFailureMessage(error: ApiErrorEnvelope): string {
       return "The Codex runtime is unavailable. Check the laptop and try again.";
     case "incompatible_runtime":
     case "capability_unavailable":
-      return "The installed Codex runtime does not support structured Skills.";
+      return "The installed Codex runtime does not support Skills.";
     case "operation_timeout":
       return "The Skills read timed out.";
     case "rate_limited":
@@ -613,12 +613,12 @@ function skillsReadFailureMessage(error: ApiErrorEnvelope): string {
     case "service_overloaded":
       return "HostDeck is temporarily too busy to read Skills.";
     case "protocol_error":
-      return "Structured Skills data failed validation.";
+      return "The laptop returned invalid Skills data.";
     case "invalid_origin":
     case "insecure_transport":
       return "Secure Skills access was rejected.";
     default:
-      return "HostDeck could not verify structured Skills data.";
+      return "HostDeck could not verify current Skills data.";
   }
 }
 

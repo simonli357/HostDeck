@@ -174,7 +174,7 @@ describe("CompactControl", () => {
     renderUtilities(compactController(port));
     await openCompact(user);
 
-    expect(await screen.findByText("Structured Compact unsupported", { exact: true })).toBeTruthy();
+    expect(await screen.findByText("Compact unavailable", { exact: true })).toBeTruthy();
     expect(document.body.textContent).not.toContain("private runtime capability detail");
     expect(
       (screen.getByRole("button", { name: "Check Compact progress" }) as HTMLButtonElement)

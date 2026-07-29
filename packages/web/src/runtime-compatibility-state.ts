@@ -496,7 +496,7 @@ function compatibilityPresentation(
       return evidence === "current"
         ? presentation(
             "Codex compatibility limited",
-            "The laptop check is current, but HostDeck controls remain limited while the runtime starts or reconciles.",
+            "The laptop check is current, but HostDeck controls remain limited while the runtime starts or restores saved state.",
             "attention",
             false,
             true
@@ -622,7 +622,7 @@ function hiddenView(snapshot: BrowserConnectionSnapshot): RuntimeCompatibilityVi
     title: loading ? "Checking Codex access" : "Codex compatibility unavailable",
     detail: loading
       ? "HostDeck is resolving whether this browser may read laptop compatibility status."
-      : "Current session-read authority is required before laptop compatibility status can be shown.",
+      : "Current session access is required before laptop compatibility status can be shown.",
     tone: "muted",
     urgent: false,
     ownerLabel: "HOSTDECK",

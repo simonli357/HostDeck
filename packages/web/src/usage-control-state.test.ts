@@ -422,7 +422,7 @@ describe("usage-control state", () => {
       await controller.open();
       expect(controller.snapshot()).toMatchObject({
         phase: "unsupported",
-        status: "Structured usage unsupported",
+        status: "Usage unavailable",
         refreshEnabled: false
       });
     }

@@ -72,7 +72,7 @@ describe("cross-screen failure-state projection", () => {
         projectCrossScreenStaleObservations(snapshot, "session_detail")
       )
     ).toBe(
-      "Session detail last confirmed Jul 22, 2026, 18:01 UTC. Access last confirmed Jul 22, 2026, 18:00 UTC. Session projection last confirmed Jul 22, 2026, 17:59 UTC."
+      "Session detail last confirmed Jul 22, 2026, 18:01 UTC. Access last confirmed Jul 22, 2026, 18:00 UTC. Session state last confirmed Jul 22, 2026, 17:59 UTC."
     );
   });
 
@@ -88,7 +88,7 @@ describe("cross-screen failure-state projection", () => {
 
     expect(facts.map((fact) => fact.observedAt)).toEqual([null, null, null]);
     expect(formatCrossScreenObservationFacts(facts)).toBe(
-      "Session detail confirmation time unavailable. Access confirmation time unavailable. Session projection confirmation time unavailable."
+      "Session detail confirmation time unavailable. Access confirmation time unavailable. Session state confirmation time unavailable."
     );
   });
 
@@ -137,7 +137,7 @@ describe("cross-screen failure-state projection", () => {
       expect(projectCrossScreenRecoveredFailure(snapshot)).toEqual({
         source,
         title,
-        detail: `Issue observed Jul 22, 2026, 18:00 UTC. ${currentLabel} is current again. This prior issue remains visible until the target or authority changes.`,
+        detail: `Issue observed Jul 22, 2026, 18:00 UTC. ${currentLabel} is current again. This prior issue remains visible until the target or access changes.`,
         observedAt
       });
     }
@@ -229,7 +229,7 @@ describe("cross-screen failure-state projection", () => {
 
     expect(recovered?.observedAt).toBeNull();
     expect(recovered?.detail).toBe(
-      "Issue time unavailable. Session list is current again. This prior issue remains visible until the target or authority changes."
+      "Issue time unavailable. Session list is current again. This prior issue remains visible until the target or access changes."
     );
     expect(JSON.stringify(recovered)).not.toContain("private-invalid-time");
     expect(Object.isFrozen(recovered)).toBe(true);

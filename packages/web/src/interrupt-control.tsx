@@ -651,7 +651,7 @@ function InterruptPending({ view }: Readonly<{ view: InterruptControlView }>) {
       <div className="hostdeck-session-actions__footer hostdeck-session-actions__footer--single">
         <button type="button" className="hostdeck-danger-button" disabled>
           <LoaderCircle className="hostdeck-spin" size={19} strokeWidth={2} aria-hidden="true" />
-          Waiting for terminal proof
+          Waiting for confirmed result
         </button>
       </div>
     </div>

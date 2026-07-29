@@ -453,11 +453,11 @@ function result(kind: ArchiveResultView["kind"]): ArchiveResultView {
   const detail = succeeded
     ? "The laptop confirmed the Codex thread is archived and HostDeck saved the local archive state."
     : kind === "blocked"
-      ? "Current secure archive authority was rejected. HostDeck sent no retry."
+      ? "Current secure archive access was rejected. HostDeck sent no retry."
       : kind === "not_completed"
         ? "The managed session was no longer current and idle for archive."
         : kind === "outcome_unknown"
-          ? "The laptop may have archived the thread, or local archive state may still require reconciliation."
+          ? "The laptop may have archived the thread, or HostDeck may still need to check local archive state."
           : "The selected session identity changed while the archive result was settling.";
   return Object.freeze({
     kind,

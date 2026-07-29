@@ -294,7 +294,7 @@ export function createUsageControlController(
       if (!availability.readEnabled || availability.authorityKey === null) {
         operation = failureOperation(
           "failure",
-          "Session authority changed before usage could be confirmed. Refresh Session Detail."
+          "Session access changed before usage could be confirmed. Refresh Session Detail."
         );
         clearCapture();
         return publish();
@@ -419,7 +419,7 @@ function deriveAvailability(
     authorityKey !== null;
   let readReason: string | null = null;
   if (detail.archived_at !== null || detail.session_state === "archived") {
-    readReason = "Archived sessions do not have current structured usage.";
+    readReason = "Archived sessions do not have current usage data.";
   } else if (detail.freshness !== "current") {
     readReason = "Session state is stale. Refresh Session Detail before loading usage.";
   } else if (!currentConnection) {
@@ -459,12 +459,12 @@ function deriveStatus(
   }
   if (operation.phase === "loading") {
     return data === null
-      ? status("loading", "attention", "Loading usage", "Reading one current structured snapshot.")
+      ? status("loading", "attention", "Loading usage", "Reading current usage data.")
       : status("stale", "attention", "Refreshing usage", "The previous capture remains visible as stale until this read succeeds.");
   }
   if (operation.phase === "failure") {
     return operation.failure.kind === "unsupported"
-      ? status("unsupported", "attention", "Structured usage unsupported", operation.failure.message)
+      ? status("unsupported", "attention", "Usage unavailable", operation.failure.message)
       : status(
           "failure",
           "danger",
@@ -475,7 +475,7 @@ function deriveStatus(
         );
   }
   if (data === null) {
-    return status("loading", "muted", "Usage data unavailable", "Open this utility again to load a structured snapshot.");
+    return status("loading", "muted", "Usage data unavailable", "Open this utility again to load current usage.");
   }
   if (stale) {
     return status("stale", "attention", "Usage capture is stale", "Refresh to read current account, thread, and rate-limit observations.");
@@ -695,12 +695,12 @@ function failureFromError(error: unknown): UsageControlOperation {
       "failure",
       error.reason === "closed"
         ? "HostDeck closed before usage could be loaded. Reload to continue."
-        : "Session authority is not current. Refresh Session Detail before trying again."
+        : "Session access is not current. Refresh Session Detail before trying again."
     );
   }
   return failureOperation(
     "failure",
-    "The structured usage snapshot could not be loaded. Check the connection and try again."
+    "Usage data could not be loaded. Check the connection and try again."
   );
 }
 
@@ -709,7 +709,7 @@ function usageApiFailureMessage(error: ApiErrorEnvelope): string {
     case "session_not_found":
       return "This session no longer exists.";
     case "session_not_writable":
-      return "Archived sessions do not have current structured usage.";
+      return "Archived sessions do not have current usage data.";
     case "stale_session":
     case "invalid_session_id":
       return "Session state changed. Refresh Session Detail before trying again.";
@@ -720,7 +720,7 @@ function usageApiFailureMessage(error: ApiErrorEnvelope): string {
       return "The Codex runtime is unavailable. Check the laptop and try again.";
     case "incompatible_runtime":
     case "capability_unavailable":
-      return "The installed Codex runtime does not support structured usage.";
+      return "The installed Codex runtime does not support usage controls.";
     case "operation_timeout":
       return "The usage read timed out before HostDeck received a complete snapshot.";
     case "rate_limited":
@@ -733,9 +733,9 @@ function usageApiFailureMessage(error: ApiErrorEnvelope): string {
     case "protocol_error":
     case "storage_error":
     case "internal_error":
-      return "HostDeck could not verify a complete structured usage snapshot.";
+      return "HostDeck could not verify complete usage data.";
     default:
-      return "HostDeck could not read structured usage.";
+      return "HostDeck could not read usage data.";
   }
 }
 

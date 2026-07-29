@@ -121,10 +121,10 @@ export function useApprovalDecisionController(
             try {
               responseEpoch = currentApprovalWriteEpoch(coordinator.snapshot(), input.sessionId);
             } catch {
-              throw new Error("HostDeck approval authority changed after dispatch.");
+              throw new Error("HostDeck approval access changed after dispatch.");
             }
             if (responseEpoch !== requestEpoch) {
-              throw new Error("HostDeck approval authority changed after dispatch.");
+              throw new Error("HostDeck approval access changed after dispatch.");
             }
             return response.data;
           }

@@ -278,7 +278,7 @@ describe("Mission Control projection", () => {
 
     expect(projection.recoveredFailure).toEqual({
       title: "Previous session-list issue recovered",
-      body: "Issue observed Jul 22, 2026, 18:00 UTC. Session list is current again. This prior issue remains visible until the target or authority changes.",
+      body: "Issue observed Jul 22, 2026, 18:00 UTC. Session list is current again. This prior issue remains visible until the target or access changes.",
       tone: "attention",
       urgent: false
     });

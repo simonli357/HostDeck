@@ -808,7 +808,7 @@ function phaseCopy(input: BuildViewInput): {
           ? "danger"
           : "muted",
         detail: input.result?.kind === "self_revoked" || input.result?.kind === "uncertain"
-          ? "This browser no longer has current paired-device authority."
+          ? "This browser no longer has current paired-device access."
           : "Pair this browser to inspect devices."
       };
     case "loading":

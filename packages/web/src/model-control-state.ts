@@ -670,11 +670,11 @@ function deriveStatus(
     case "pending":
       return status("staged", "attention", "Model staged for next turn", "The confirmed runtime setting has not changed yet.");
     case "dispatching":
-      return status("dispatching", "attention", "Preparing next-turn settings", "Selection is locked while the turn request is composed.");
+      return status("dispatching", "attention", "Preparing next-turn settings", "Selection is locked while HostDeck prepares the next turn.");
     case "awaiting_confirmation":
       return status("awaiting_confirmation", "attention", "Turn accepted; awaiting model confirmation", "The runtime has not confirmed the selected settings yet.");
     case "unknown":
-      return status("pending_unknown", "danger", "Model confirmation unknown", "Refresh to reconcile runtime state before another selection.");
+      return status("pending_unknown", "danger", "Model confirmation unknown", "Refresh current runtime state before another selection.");
     case "conflict":
       return status("conflict", "danger", "Pending model conflict", "Refresh or replace the pending selection using the current catalog.");
   }
@@ -834,7 +834,7 @@ function classifyReadFailure(error: unknown): ModelControlFailure {
       message:
         error.reason === "closed"
           ? "HostDeck closed before models could be loaded. Reload to continue."
-          : "Session authority is not current. Refresh Session Detail.",
+          : "Session access is not current. Refresh Session Detail.",
       retryable: false,
       requiresRefresh: true
     });
@@ -857,7 +857,7 @@ function classifySelectFailure(
     return failure({
       source: "select",
       kind: "known",
-      message: "Model selection authority is not current. Refresh Session Detail.",
+      message: "Model access is not current. Refresh Session Detail.",
       retryable: false,
       requiresRefresh: true,
       modelId,
@@ -895,7 +895,7 @@ function classifySelectFailure(
       return failure({
         source: "select",
         kind: "known",
-        message: "Secure model authority is not ready. Refresh Session Detail.",
+        message: "Secure model access is not ready. Refresh Session Detail.",
         retryable: false,
         requiresRefresh: true,
         modelId,
@@ -937,7 +937,7 @@ function apiFailureMessage(error: ApiErrorEnvelope, operation: "read" | "select"
       return "The Codex runtime is unavailable. Check the laptop and refresh.";
     case "incompatible_runtime":
     case "capability_unavailable":
-      return "The installed Codex runtime does not support structured model control.";
+      return "The installed Codex runtime does not support model control.";
     case "operation_conflict":
       return "Model state changed during this selection. Refresh before continuing.";
     case "operation_timeout":
@@ -978,7 +978,7 @@ function selectionReason(
   if (data === null) return "Load model settings before selecting.";
   if (data.models.length === 0) return "The runtime exposed no selectable models.";
   if (nonReplaceablePending) {
-    return "The pending model is already being applied or reconciled.";
+    return "The pending model is already being applied or checked.";
   }
   return null;
 }

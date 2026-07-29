@@ -210,7 +210,7 @@ export function createInterruptControlController(
     const actionDisabledReason = actionEnabled
       ? null
       : attempt?.phase === "submitting"
-        ? "One interrupt request is already waiting for terminal proof."
+        ? "One interrupt request is already waiting for a confirmed result."
         : attemptedCurrentTarget
           ? "An interrupt was already submitted for this exact turn."
           : waitingForPriorResult
@@ -552,10 +552,10 @@ function deriveAvailability(
     reason = writeEligibilityReason(snapshot.writeEligibility.causes[0]);
   }
   if (reason === null && !snapshot.writeEligibility.eligible) {
-    reason = "Secure write authority is not ready.";
+    reason = "Secure write access is not ready.";
   }
   if (reason === null && authorityKey === null) {
-    reason = "Current interrupt authority is not available.";
+    reason = "Current interrupt access is not available.";
   }
 
   return availability(
@@ -767,7 +767,7 @@ function classifyAttemptFailure(error: unknown): InterruptResultView {
         ? "Read-only access cannot interrupt a turn. No retry was sent."
         : apiError.code === "host_locked"
           ? `${hostLockWriteReason("host_locked")} No retry was sent.`
-          : "Current secure interrupt authority was rejected. No retry was sent.",
+          : "Current secure interrupt access was rejected. No retry was sent.",
       terminalState: null,
       updatedAt: null
     });
@@ -780,7 +780,7 @@ function classifyAttemptFailure(error: unknown): InterruptResultView {
       kind: "blocked" as const,
       source: "browser" as const,
       label: "Interrupt blocked",
-      detail: "Current interrupt authority was not available. HostDeck sent no retry.",
+      detail: "Current interrupt access was not available. HostDeck sent no retry.",
       terminalState: null,
       updatedAt: null
     });
@@ -854,7 +854,7 @@ function deriveStatus(input: Readonly<{
       "submitting",
       "attention",
       "Interrupt active turn?",
-      "Waiting for terminal proof",
+      "Waiting for confirmed result",
       "HostDeck sent one interrupt request and is waiting for the exact turn result."
     );
   }

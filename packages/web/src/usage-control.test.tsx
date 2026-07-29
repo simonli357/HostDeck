@@ -224,7 +224,7 @@ describe("UsageControl", () => {
     controller.updateContext(controlContext({ epoch: 2 }));
     expect(await screen.findByText("Usage capture is stale", { exact: true })).toBeTruthy();
 
-    const refreshButton = screen.getByRole("button", { name: "Refresh structured usage" });
+    const refreshButton = screen.getByRole("button", { name: "Refresh usage" });
     await user.click(refreshButton);
     expect(screen.getByText("Refreshing usage", { exact: true })).toBeTruthy();
     expect(screen.getAllByText("1,000", { exact: true })).toHaveLength(3);
@@ -238,7 +238,7 @@ describe("UsageControl", () => {
   });
 
   it.each([
-    ["unsupported", "Structured usage unsupported"],
+    ["unsupported", "Usage unavailable"],
     ["failure", "Usage could not be loaded"]
   ] as const)("renders sanitized %s state", async (kind, expected) => {
     const user = userEvent.setup();
@@ -255,7 +255,7 @@ describe("UsageControl", () => {
 
     expect(await screen.findByText(expected, { exact: true })).toBeTruthy();
     expect(document.body.textContent).not.toContain("private usage failure");
-    expect((screen.getByRole("button", { name: "Refresh structured usage" }) as HTMLButtonElement).disabled)
+    expect((screen.getByRole("button", { name: "Refresh usage" }) as HTMLButtonElement).disabled)
       .toBe(kind === "unsupported");
   });
 

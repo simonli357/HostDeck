@@ -501,7 +501,7 @@ export function createGoalControlController(
         operation = failureOperation({
           source: "read",
           kind: "known",
-          message: "Session authority is not current. Refresh Session Detail.",
+          message: "Session access is not current. Refresh Session Detail.",
           retryable: false,
           requiresRefresh: true,
           action: null
@@ -670,7 +670,7 @@ function deriveStatus(
     );
   }
   if (operation.phase === "loading") {
-    return status("loading", "attention", "Loading goal", "Reading the current structured goal state.");
+    return status("loading", "attention", "Loading goal", "Reading the current goal state.");
   }
   if (operation.phase === "submitting") {
     return status(
@@ -704,12 +704,12 @@ function deriveStatus(
           "uncertain_unknown",
           "danger",
           "Prior goal outcome unknown",
-          "Refresh after HostDeck reconciles the attempted action. No goal action will be retried."
+          "Refresh after HostDeck checks the attempted action. No goal action will be retried."
         )
       : status(
           "uncertain_conflict",
           "danger",
-          "Goal reconciliation conflict",
+          "Goal result conflict",
           "Observed goal state conflicts with the attempted action. Goal changes remain locked."
         );
   }
@@ -753,7 +753,7 @@ function projectUncertainty(uncertain: UncertainGoalMutation): GoalControlUncert
     phaseLabel: conflict ? "Conflict" : "Outcome unknown",
     detail: conflict
       ? "Observed state contradicts this attempted action."
-      : "HostDeck has not reconciled this attempted action.",
+      : "HostDeck has not confirmed this attempted action.",
     requestedObjective: uncertain.requested_objective,
     requestedStatus: uncertain.requested_status,
     requestedAt: uncertain.requested_at,
@@ -801,7 +801,7 @@ function commonMutationReason(
   if (data === null) return "Load the current goal state before changing it.";
   if (data.uncertain_mutation !== null) {
     return data.uncertain_mutation.phase === "unknown"
-      ? "A prior goal outcome is unknown. Refresh after HostDeck reconciles it."
+      ? "A prior goal outcome is unknown. Refresh after HostDeck checks it."
       : "A prior goal action conflicts with observed state. Goal changes remain locked.";
   }
   if (confirmation !== null) return "Finish or cancel the current confirmation.";
@@ -1027,7 +1027,7 @@ function classifyReadFailure(error: unknown): GoalControlFailure {
       message:
         error.reason === "closed"
           ? "HostDeck closed before the goal could be loaded. Reload to continue."
-          : "Session authority is not current. Refresh Session Detail.",
+          : "Session access is not current. Refresh Session Detail.",
       retryable: false,
       requiresRefresh: true
     });
@@ -1035,7 +1035,7 @@ function classifyReadFailure(error: unknown): GoalControlFailure {
   return failure({
     source: "read",
     kind: "known",
-    message: "The structured goal could not be loaded. Check the connection and try again.",
+    message: "The goal could not be loaded. Check the connection and try again.",
     retryable: true,
     requiresRefresh: false
   });
@@ -1049,7 +1049,7 @@ function classifyMutationFailure(
     return failure({
       source: "mutate",
       kind: "known",
-      message: "Goal authority is not current. Refresh Session Detail.",
+      message: "Goal access is not current. Refresh Session Detail.",
       retryable: false,
       requiresRefresh: true,
       action
@@ -1087,7 +1087,7 @@ function classifyMutationFailure(
       return failure({
         source: "mutate",
         kind: "known",
-        message: "Secure goal authority is not ready. Refresh Session Detail.",
+        message: "Secure goal access is not ready. Refresh Session Detail.",
         retryable: false,
         requiresRefresh: true,
         action
@@ -1127,7 +1127,7 @@ function apiFailureMessage(error: ApiErrorEnvelope, operation: "read" | "mutate"
       return "The Codex runtime is unavailable. Check the laptop and refresh.";
     case "incompatible_runtime":
     case "capability_unavailable":
-      return "The installed Codex runtime does not support structured goal control.";
+      return "The installed Codex runtime does not support goal control.";
     case "operation_conflict":
       return "Goal state changed or this action conflicts with current execution. Refresh before continuing.";
     case "operation_timeout":

@@ -260,7 +260,7 @@ function UsageThread({
         <Activity size={19} strokeWidth={2} aria-hidden="true" />
         <span>
           <h2 id="hostdeck-usage-thread-title">This thread</h2>
-          <small>{thread.state === "observed" ? <UsageTime value={thread.observedAt} /> : "No same-generation observation"}</small>
+          <small>{thread.state === "observed" ? <UsageTime value={thread.observedAt} /> : "No current observation"}</small>
         </span>
       </div>
       {thread.state === "not_observed" ? (
@@ -287,7 +287,7 @@ function UsageRateLimits({
         <TimerReset size={19} strokeWidth={2} aria-hidden="true" />
         <span>
           <h2 id="hostdeck-usage-rates-title">Rate limits</h2>
-          <small>{rateLimits.state === "observed" ? <UsageTime value={rateLimits.observedAt} /> : "No same-generation observation"}</small>
+          <small>{rateLimits.state === "observed" ? <UsageTime value={rateLimits.observedAt} /> : "No current observation"}</small>
         </span>
       </div>
       {rateLimits.state === "not_observed" ? (
@@ -412,8 +412,8 @@ function UsageStatus({
       <button
         type="button"
         className="hostdeck-icon-button hostdeck-usage-status__refresh"
-        aria-label="Refresh structured usage"
-        title="Refresh structured usage"
+        aria-label="Refresh usage"
+        title="Refresh usage"
         disabled={!view.refreshEnabled}
         onClick={() => void controller.refresh()}
       >

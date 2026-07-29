@@ -401,7 +401,7 @@ function projectRecovery(
       checking ? "checking_access" : "securing_page",
       "attention",
       checking ? "Checking" : "Securing",
-      checking ? "Refreshing current authority." : "Establishing page protection.",
+      checking ? "Refreshing current access." : "Establishing page protection.",
       checking ? "Checking current access" : "Securing this page",
       checking
         ? "Confirming this device, laptop, and selected session state."
@@ -427,7 +427,7 @@ function projectRecovery(
           "Checking",
           "Waiting for current access.",
           "Checking page security",
-          "HostDeck is confirming this browser's current authority.",
+          "HostDeck is confirming this browser's current access.",
           null,
           false
         )
@@ -437,7 +437,7 @@ function projectRecovery(
           "Unavailable",
           "Current access is not confirmed.",
           "Page security unavailable",
-          "No page authority is assumed until current access can be loaded.",
+          "No page access is assumed until current access can be loaded.",
           null,
           false
         );
@@ -454,7 +454,7 @@ function projectRecovery(
         "Unavailable",
         "This device has read-only access.",
         "Page security unavailable",
-        "Secure write authority is not available to this device.",
+        "Secure write access is not available to this device.",
         null,
         false
       );
@@ -487,7 +487,7 @@ function projectRecovery(
       "Checking",
       "Waiting for current laptop and session state.",
       "Checking page security",
-      "Current authority is still loading.",
+      "Current access is still loading.",
       null,
       false
     );
@@ -499,7 +499,7 @@ function projectRecovery(
       failedRefresh ? "refresh_failed" : "stale",
       failedRefresh ? "danger" : "attention",
       "Check required",
-      "Previously verified authority is stale.",
+      "Previously verified access is stale.",
       failedRefresh ? "Access check not confirmed" : "Current access must be checked",
       failedRefresh
         ? "Previously verified access remains stale. Check the connection and try again."
@@ -514,7 +514,7 @@ function projectRecovery(
       "unavailable",
       "attention",
       "Unavailable",
-      "Current write authority is not available.",
+      "Current write access is not available.",
       "Page security unavailable",
       "Current device, laptop, and selected-session truth is required.",
       null,
@@ -546,7 +546,7 @@ function projectRecovery(
       "Securing",
       "Waiting for initial page protection.",
       "Securing this page",
-      "Current writer authority is confirmed and initial setup is starting.",
+      "Current writer access is confirmed and initial setup is starting.",
       null,
       false,
       true
@@ -565,7 +565,7 @@ function projectRecovery(
       : "Page protection must be renewed.",
     failedBootstrap ? "Secure setup not confirmed" : "Page security needs attention",
     failedBootstrap
-      ? "No page authority is retained. Try secure setup again."
+      ? "No page access is retained. Try secure setup again."
       : "Renew secure write protection for this page before using controls.",
     failedBootstrap ? "retry_setup" : "secure_page",
     failedBootstrap
@@ -707,7 +707,7 @@ function pairingRequiredView(
     "pairing_required",
     "danger",
     "Unavailable",
-    "Current paired authority is unavailable.",
+    "Current paired access is unavailable.",
     "Page security unavailable",
     detail,
     null,

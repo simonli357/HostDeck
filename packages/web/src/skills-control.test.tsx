@@ -238,7 +238,7 @@ describe("SkillsControl", () => {
   });
 
   it.each([
-    ["unsupported", "Structured Skills unsupported", true],
+    ["unsupported", "Skills unavailable", true],
     ["failure", "Skills could not be loaded", false]
   ] as const)("renders one sanitized %s read state", async (kind, status, refreshDisabled) => {
     const user = userEvent.setup();

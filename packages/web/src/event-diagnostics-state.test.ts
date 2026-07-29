@@ -46,7 +46,7 @@ describe("event-diagnostics state", () => {
         upstreamAt: upstreamTimestamp,
         codexEventId: "codex-event-2",
         codexEventType: "item/message",
-        source: "HostDeck projection"
+        source: "HostDeck summary"
       }
     });
 
@@ -60,7 +60,7 @@ describe("event-diagnostics state", () => {
     });
     expect(view).toMatchObject({
       phase: "current",
-      status: "Event verification current",
+      status: "Event details current",
       freshness: "current",
       selectionRevision: 1,
       captureRevision: 1,
@@ -113,13 +113,13 @@ describe("event-diagnostics state", () => {
       diagnostics: {
         projection_complete: false,
         boundary_visible: true,
-        incomplete_reason: "Earlier events are outside the retained projection."
+        incomplete_reason: "Earlier events are outside retained history."
       }
     });
     expect(view.fields?.map((field) => [field.label, field.value, field.state])).toEqual([
-      ["Prior cursor", null, "not_reported"],
-      ["Boundary cursor", "1", "reported"],
-      ["Next cursor", "1", "reported"],
+      ["Prior event position", null, "not_reported"],
+      ["Boundary position", "1", "reported"],
+      ["Next event position", "1", "reported"],
       ["Reason", "retention", "reported"]
     ]);
   });
@@ -404,7 +404,7 @@ describe("event-diagnostics state", () => {
 
     expect(controller.snapshot()).toMatchObject({
       phase: "failure",
-      statusDetail: "HostDeck returned an invalid event page. The retained projection remains stale."
+      statusDetail: "HostDeck returned invalid event details. The retained event remains stale."
     });
     expect(JSON.stringify(controller.snapshot())).not.toContain("/private/runtime/frame");
   });
@@ -446,7 +446,7 @@ describe("event-diagnostics state", () => {
   });
 
   it.each([
-    ["complete", null, true, false, "Bounded projection"],
+    ["complete", null, true, false, "Bounded event summary"],
     ["redacted", "Redacted by projection policy.", false, true, "Content redacted"],
     ["truncated", "Truncated at the event limit.", false, false, "Content truncated"],
     [

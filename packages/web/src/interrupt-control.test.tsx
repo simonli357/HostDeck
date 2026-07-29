@@ -89,7 +89,7 @@ describe("SessionActionsSheet", () => {
     await user.click(within(dialog).getByRole("button", { name: "Interrupt turn" }));
     expect(harness.confirm).toHaveBeenCalledTimes(1);
     dialog = screen.getByRole("dialog", { name: "Interrupt active turn" });
-    expect(within(dialog).getAllByText("Waiting for terminal proof").length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText("Waiting for confirmed result").length).toBeGreaterThan(0);
     expect(dialog.textContent).not.toMatch(/accepted|request completed|retry/iu);
     expect(
       (within(dialog).getByRole("button", { name: "Close session actions" }) as HTMLButtonElement)
@@ -339,7 +339,7 @@ function uiController(options: Readonly<{
       phase: "submitting",
       tone: "attention",
       title: "Interrupt active turn?",
-      status: "Waiting for terminal proof",
+      status: "Waiting for confirmed result",
       statusDetail: "HostDeck sent one interrupt request and is waiting for the exact turn result.",
       confirmationOpen: false,
       confirmEnabled: false,
@@ -469,7 +469,7 @@ function result(
       : kind === "not_interrupted"
         ? `Session activity confirms this turn ${terminalState ?? "ended"} without a confirmed interrupt result.`
         : kind === "blocked"
-          ? "Current secure interrupt authority was rejected. No retry was sent."
+          ? "Current secure interrupt access was rejected. No retry was sent."
           : kind === "outcome_unknown"
             ? "HostDeck could not confirm this exact turn outcome and will not resend the interrupt request."
             : "The response and retained turn activity do not agree. HostDeck will not resend this request.";

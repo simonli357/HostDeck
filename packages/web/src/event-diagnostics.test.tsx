@@ -80,10 +80,10 @@ describe("event diagnostics UI", () => {
       "android-event-release"
     );
     expect(within(dialog).getByRole("heading", { name: "Message event" })).toBeTruthy();
-    expect(within(dialog).getByText("Bounded projection")).toBeTruthy();
-    expect(within(dialog).getByText("HostDeck projection")).toBeTruthy();
+    expect(within(dialog).getByText("Bounded event summary")).toBeTruthy();
+    expect(within(dialog).getByText("HostDeck summary")).toBeTruthy();
     expect(within(dialog).getByText("Bounded UI event detail.")).toBeTruthy();
-    expect(await within(dialog).findByText("Event verification current")).toBeTruthy();
+    expect(await within(dialog).findByText("Event details current")).toBeTruthy();
     await waitFor(() => {
       expect(document.activeElement).toBe(
         within(dialog).getByRole("button", { name: "Close event details" })
@@ -169,7 +169,7 @@ describe("event diagnostics UI", () => {
 
     await user.click(within(dialog).getByRole("button", { name: "Retry" }));
     expect(requestSelectedSessionRead).toHaveBeenCalledTimes(2);
-    expect(await within(dialog).findByText("Event verification current")).toBeTruthy();
+    expect(await within(dialog).findByText("Event details current")).toBeTruthy();
   });
 
   it("discloses long hostile-looking text without link, script, copy, or download semantics", async () => {

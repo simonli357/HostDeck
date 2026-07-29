@@ -656,7 +656,7 @@ function unavailableDetail(connection: LockConnectionState): string {
     access.permission === "write" &&
     connection.csrfPhase !== "ready"
   ) {
-    return "Secure page authority is required before this phone can lock writes.";
+    return "Secure page access is required before this phone can lock writes.";
   }
   return "A current paired-writer connection is required to lock remote writes.";
 }

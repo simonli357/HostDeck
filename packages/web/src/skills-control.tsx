@@ -228,7 +228,7 @@ function SkillsStateBoundary({
   const Icon = state === "error" || state === "partial" ? AlertTriangle : Info;
   const summary = view.summary;
   const copy = state === "empty"
-    ? "No structured skills or reported errors are present in this capture."
+    ? "No skills or reported errors are present in this result."
     : state === "partial"
       ? `${summary?.errorCount ?? 0} reported ${summary?.errorCount === 1 ? "error is" : "errors are"} redacted; readable skills remain listed.`
       : `${summary?.errorCount ?? 0} reported ${summary?.errorCount === 1 ? "error is" : "errors are"} redacted; no readable skills were returned.`;

@@ -822,7 +822,7 @@ function projectNotice(
   if (snapshot.phase === "fatal" || snapshot.phase === "closed") {
     return notice(
       "Mission Control is unavailable",
-      "HostDeck could not read a valid session projection. Refresh after the host is healthy.",
+      "HostDeck could not read valid session state. Refresh after the laptop recovers.",
       "danger",
       true
     );
@@ -951,7 +951,7 @@ function accessNotice(
     case "paired_device":
       return notice(
         "Session access is unavailable",
-        "The current browser authority cannot read sessions.",
+        "The current browser access cannot read sessions.",
         "danger",
         true
       );

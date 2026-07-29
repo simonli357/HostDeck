@@ -447,7 +447,7 @@ export function createCompactControlController(
         confirmationOpen = false;
         operation = failureOperation({
           kind: "start",
-          message: "Secure Compact operation setup is unavailable. Reload HostDeck."
+          message: "Secure Compact request setup is unavailable. Reload HostDeck."
         });
         return publish();
       }
@@ -625,13 +625,13 @@ function deriveStatus(input: Readonly<{
   }
   if (input.operation.phase === "loading") {
     return input.data === null
-      ? status("loading", "attention", "Loading Compact progress", "Reading one current process-live state.")
+      ? status("loading", "attention", "Loading Compact progress", "Reading current laptop state.")
       : status("stale", "attention", "Checking Compact progress", "The previous result remains stale until this read succeeds.");
   }
   if (input.operation.phase === "failure") {
     switch (input.operation.failure.kind) {
       case "unsupported":
-        return status("unsupported", "attention", "Structured Compact unsupported", input.operation.failure.message);
+        return status("unsupported", "attention", "Compact unavailable", input.operation.failure.message);
       case "conflict":
         return status("conflict", "attention", "Compaction conflicts with current state", input.operation.failure.message);
       case "unknown":
@@ -654,9 +654,9 @@ function deriveStatus(input: Readonly<{
   }
   switch (progress.state) {
     case "accepted":
-      return status("accepted", "attention", "Compaction accepted", "Runtime compaction has not been proven to start or complete.");
+      return status("accepted", "attention", "Compaction accepted", "The laptop accepted this request; start and completion are not confirmed yet.");
     case "running":
-      return status("running", "focus", "Compacting context", "The exact context-compaction item is running; completion is not yet proven.");
+      return status("running", "focus", "Compacting context", "Context compaction is running; completion is not confirmed yet.");
     case "completed":
       return status("completed", "connected", "Compaction completed", "Runtime item and turn completion were both confirmed.");
     case "interrupted":
@@ -664,7 +664,7 @@ function deriveStatus(input: Readonly<{
     case "failed":
       return status("failed", "danger", "Compaction failed", progressErrorMessage(progress.error));
     case "incomplete":
-      return status("incomplete", "danger", "Compaction outcome incomplete", "HostDeck cannot prove a terminal result. Check progress; do not resend.");
+      return status("incomplete", "danger", "Compaction outcome incomplete", "HostDeck cannot confirm a final result. Check progress; do not resend.");
   }
 }
 
@@ -719,9 +719,9 @@ function progressStatus(
 ): Readonly<{ label: string; detail: string; tone: CompactControlTone }> {
   switch (progress.state) {
     case "accepted":
-      return Object.freeze({ label: "Accepted", detail: "Waiting for exact runtime compaction evidence", tone: "attention" });
+      return Object.freeze({ label: "Accepted", detail: "Waiting for runtime progress", tone: "attention" });
     case "running":
-      return Object.freeze({ label: "Compacting", detail: "Context-compaction item observed", tone: "focus" });
+      return Object.freeze({ label: "Compacting", detail: "Context compaction is running", tone: "focus" });
     case "completed":
       return Object.freeze({ label: "Completed", detail: "Item and turn completion confirmed", tone: "connected" });
     case "interrupted":
@@ -729,7 +729,7 @@ function progressStatus(
     case "failed":
       return Object.freeze({ label: "Failed", detail: progressErrorMessage(progress.error), tone: "danger" });
     case "incomplete":
-      return Object.freeze({ label: "Incomplete", detail: "Terminal outcome could not be proven", tone: "danger" });
+      return Object.freeze({ label: "Incomplete", detail: "Final result could not be confirmed", tone: "danger" });
   }
 }
 
@@ -756,12 +756,12 @@ function classifyReadFailure(error: unknown): CompactControlFailure {
       kind: "read" as const,
       message: error.reason === "closed"
         ? "HostDeck closed before Compact progress could be loaded. Reload to continue."
-        : "Session authority is not current. Refresh Session Detail before trying again."
+        : "Session access is not current. Refresh Session Detail before trying again."
     });
   }
   return deepFreeze({
     kind: "read" as const,
-    message: "Structured Compact progress could not be loaded. Check the connection and try again."
+    message: "Compact progress could not be loaded. Check the connection and try again."
   });
 }
 
@@ -781,7 +781,7 @@ function classifyStartFailure(error: unknown): CompactControlFailure {
   if (error instanceof HostDeckBrowserConnectionError) {
     return deepFreeze({
       kind: "start" as const,
-      message: "Compact write authority was not ready. Check current progress before trying again."
+      message: "Compact write access was not ready. Check current progress before trying again."
     });
   }
   if (
@@ -790,7 +790,7 @@ function classifyStartFailure(error: unknown): CompactControlFailure {
   ) {
     return deepFreeze({
       kind: "start" as const,
-      message: "Secure Compact authority was not ready. Check current progress before trying again."
+      message: "Secure Compact access was not ready. Check current progress before trying again."
     });
   }
   return unknownStartFailure();
@@ -805,7 +805,7 @@ function browserApiError(error: unknown): ApiErrorEnvelope | null {
 function unknownStartFailure(): CompactControlFailure {
   return deepFreeze({
     kind: "unknown" as const,
-    message: "HostDeck will not resend this request. Check exact Compact progress before any new attempt."
+    message: "HostDeck will not resend this request. Check current Compact progress before any new attempt."
   });
 }
 
@@ -824,7 +824,7 @@ function compactReadFailureMessage(error: ApiErrorEnvelope): string {
       return "The Codex runtime is unavailable. Check the laptop and try again.";
     case "incompatible_runtime":
     case "capability_unavailable":
-      return "The installed Codex runtime does not support structured Compact control.";
+      return "The installed Codex runtime does not support Compact control.";
     case "operation_timeout":
       return "The Compact progress read timed out.";
     case "rate_limited":
@@ -835,14 +835,14 @@ function compactReadFailureMessage(error: ApiErrorEnvelope): string {
     case "insecure_transport":
       return "Secure Compact access was rejected.";
     default:
-      return "HostDeck could not verify structured Compact progress.";
+      return "HostDeck could not verify current Compact progress.";
   }
 }
 
 function compactStartFailureMessage(error: ApiErrorEnvelope): string {
   switch (error.code) {
     case "permission_denied":
-      return "Compact write authority is no longer valid. Check current progress.";
+      return "Compact write access is no longer valid. Check current progress.";
     case "read_only":
       return "Read-only access cannot start context compaction.";
     case "host_locked":
@@ -851,7 +851,7 @@ function compactStartFailureMessage(error: ApiErrorEnvelope): string {
       return "This session no longer exists.";
     case "validation_error":
     case "invalid_session_id":
-      return "The Compact request was rejected before dispatch. Reload HostDeck.";
+      return "The Compact request was rejected before it was sent. Reload HostDeck.";
     case "rate_limited":
       return "Compact starts are temporarily rate limited. Check progress before trying again.";
     case "service_overloaded":
@@ -870,7 +870,7 @@ function progressErrorMessage(error: ApiErrorEnvelope | null): string {
     case "operation_conflict":
       return "Runtime progress conflicts with the observed compaction lifecycle.";
     case "protocol_error":
-      return "Runtime compaction progress failed protocol validation.";
+      return "The laptop returned invalid compaction progress.";
     case "runtime_unavailable":
       return "Runtime continuity was lost during compaction.";
     case "session_not_writable":
@@ -878,7 +878,7 @@ function progressErrorMessage(error: ApiErrorEnvelope | null): string {
       return "The selected session became unavailable during compaction.";
     default:
       return error.retryable
-        ? "Compaction failed with a retryable bounded result. Check current state before another attempt."
+        ? "Compaction failed with a result that permits another attempt. Refresh current state first."
         : "Compaction failed and cannot be retried from this result.";
   }
 }
@@ -960,7 +960,7 @@ function turnWriteReason(turnState: string): string {
     case "waiting_for_approval":
       return "Resolve the pending approval before compacting context.";
     default:
-      return "Turn state is not proven idle or terminal. Refresh before compacting context.";
+      return "The turn is not confirmed idle or finished. Refresh before compacting context.";
   }
 }
 

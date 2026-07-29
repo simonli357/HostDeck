@@ -431,7 +431,7 @@ function projectView(
       ownerLabel: "HOSTDECK",
       sourceLabel: "Remote status hidden",
       title: "Remote status unavailable",
-      detail: "Current session-read authority is required before laptop remote status can be shown.",
+      detail: "Current session access is required before laptop remote status can be shown.",
       tone: "muted",
       urgent: false,
       current: false,
@@ -648,7 +648,7 @@ function reasonPresentation(
     case "command_timeout":
       return danger(
         "Remote setup timed out",
-        "Inspect the laptop state before starting one new local operation."
+        "Inspect the laptop state before starting one new local action."
       );
     case "output_oversized":
       return danger(

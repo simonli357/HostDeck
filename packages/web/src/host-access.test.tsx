@@ -99,8 +99,8 @@ describe("host and access projection", () => {
       snapshot({ authenticationState: "local_admin", writeCauses: ["permission_denied"] }),
       nowMs
     );
-    expect(localAdmin.title).toBe("Invalid browser authority");
-    expect(factValues(localAdmin).permission).toBe("Invalid browser authority");
+    expect(localAdmin.title).toBe("Invalid browser access");
+    expect(factValues(localAdmin).permission).toBe("Invalid browser access");
     expect(factValues(localAdmin).reads).toBe("Blocked");
     expect(factValues(localAdmin).host).toBe("Hidden until authorized");
     expect(

@@ -181,7 +181,7 @@ function CompactCurrentState({
         <strong>{progress?.label ?? "No tracked compaction"}</strong>
         <span>
           {progress === null ? (
-            view.captureFreshness === "stale" ? "Previous read is stale" : "Current process-live read"
+            view.captureFreshness === "stale" ? "Previous read is stale" : "Current laptop read"
           ) : (
             <>
               <CompactTime value={progress.updatedAt} />
@@ -385,7 +385,7 @@ function progressProof(
     case "running":
       return Object.freeze({
         label: "Compaction evidence active",
-        detail: "The exact context-compaction item started; terminal proof is pending.",
+        detail: "Context compaction started; completion confirmation is pending.",
         tone: "focus"
       });
     case "completed":
@@ -396,20 +396,20 @@ function progressProof(
       });
     case "interrupted":
       return Object.freeze({
-        label: "Interrupted terminal result",
+        label: "Interrupted result",
         detail: "The compaction turn ended as interrupted, not completed.",
         tone: "attention"
       });
     case "failed":
       return Object.freeze({
-        label: "Failed terminal result",
+        label: "Failed result",
         detail: "The compaction turn failed; no context-reduction claim is made.",
         tone: "danger"
       });
     case "incomplete":
       return Object.freeze({
         label: "Completion unproven",
-        detail: "The operation remains blocked from resend until exact reconciliation.",
+        detail: "Another attempt remains blocked until current progress is checked.",
         tone: "danger"
       });
   }
