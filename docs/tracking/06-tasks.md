@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-090` Harden the complete mobile dashboard on the real phone | in_progress | none | The phone prerequisite is satisfied. Fix and validate `BUG-018`, then run the corrected clean physical sequence and retained deployment. |
+| 1 | `FE-V1-090` Harden the complete mobile dashboard on the real phone | in_progress | none | The phone prerequisite is satisfied. Close `BUG-019` with a corrected clean physical sequence, full evidence review, and retained deployment. |
 
 ## Intentional Blockers
 

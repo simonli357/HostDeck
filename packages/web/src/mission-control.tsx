@@ -570,7 +570,10 @@ function QuietQueueSection({
         open={open}
         onToggle={(event) => setOpen(event.currentTarget.open)}
       >
-        <summary className="hostdeck-queue-group__heading">
+        <summary
+          className="hostdeck-queue-group__heading"
+          aria-label={`${open ? "Collapse" : "Expand"} quiet sessions (${section.rows.length})`}
+        >
           <span>{section.label}</span>
           <span className="hostdeck-queue-disclosure__count">{section.rows.length}</span>
           <ChevronDown

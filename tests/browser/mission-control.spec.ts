@@ -156,6 +156,7 @@ test("passes reflow, keyboard, reduced-motion, and contrast checks", async ({ pa
   const quietSummary = page.locator(".hostdeck-queue-disclosure > summary");
   const quietSummaryBox = await quietSummary.boundingBox();
   expect(quietSummaryBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await expect(quietSummary).toHaveAccessibleName("Expand quiet sessions (1)");
 
   await expectNextKeyboardFocus(page, page.getByRole("link", { name: "Skip to content" }));
   await expectNextKeyboardFocus(page, page.getByRole("button", { name: "Open Host and access" }));
@@ -169,6 +170,7 @@ test("passes reflow, keyboard, reduced-motion, and contrast checks", async ({ pa
   await expectVisibleFocus(quietSummary);
   await page.keyboard.press("Enter");
   await expect(page.locator(".hostdeck-queue-disclosure")).toHaveAttribute("open", "");
+  await expect(quietSummary).toHaveAccessibleName("Collapse quiet sessions (1)");
 
   const disclosureTransition = await page
     .locator(".hostdeck-queue-disclosure__icon")
@@ -186,6 +188,7 @@ test("passes reflow, keyboard, reduced-motion, and contrast checks", async ({ pa
   await expectTokenContrast(page);
   await page.keyboard.press("Enter");
   await expect(page.locator(".hostdeck-queue-disclosure")).not.toHaveAttribute("open", "");
+  await expect(quietSummary).toHaveAccessibleName("Expand quiet sessions (1)");
   await page.evaluate(() => {
     window.scrollTo(0, 0);
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();

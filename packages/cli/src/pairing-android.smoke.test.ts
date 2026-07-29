@@ -405,6 +405,15 @@ describe("physical Android phone-driver protocol", () => {
     );
   });
 
+  it("opens the collapsed quiet queue before acquiring its physical target", () => {
+    expect(physicalQuietQueueDisclosureLabel(false)).toBe(
+      "Expand quiet sessions (1)"
+    );
+    expect(physicalQuietQueueDisclosureLabel(true)).toBe(
+      "Collapse quiet sessions (1)"
+    );
+  });
+
   it("holds and resolves every deterministic dashboard control transition", async () => {
     const directory = mkdtempSync(join(tmpdir(), "hostdeck-dashboard-controls-"));
     const opened = openMigratedDatabase(join(directory, "hostdeck.sqlite"));
@@ -5368,6 +5377,10 @@ function missionControlInitialViewportText(
   return viewport === "dashboard_attention" ? "ACT NOW" : physicalUiSessionName;
 }
 
+function physicalQuietQueueDisclosureLabel(open: boolean): string {
+  return `${open ? "Collapse" : "Expand"} quiet sessions (1)`;
+}
+
 async function runProductionDashboardUiSequence(
   input: ProductionUiEntryInput & {
     readonly controls: PhysicalDashboardControls;
@@ -5438,6 +5451,33 @@ async function runProductionDashboardUiSequence(
     45_000,
     "Physical dashboard fragment-free reload did not read sessions."
   );
+  const quietDisclosure = await revealAndroidUiNode(
+    "description",
+    physicalQuietQueueDisclosureLabel(false),
+    "forward",
+    30_000,
+    "Physical dashboard reload omitted the collapsed quiet-session control."
+  );
+  measure(quietDisclosure, "expand-quiet-sessions");
+  await performVerifiedAndroidTap({
+    initialTrigger: quietDisclosure,
+    triggerField: "description",
+    triggerValue: physicalQuietQueueDisclosureLabel(false),
+    completed: async () =>
+      (await readAndroidUiNodes()).some((node) =>
+        matchesAndroidUiNode(
+          node,
+          "description",
+          physicalQuietQueueDisclosureLabel(true)
+        )
+      ),
+    completionFailureMessage:
+      "Physical dashboard quiet-session control did not expand.",
+    reacquireFailureMessage:
+      "Physical dashboard could not reacquire the collapsed quiet-session control.",
+    terminalFailureMessage:
+      "Physical dashboard quiet-session control remained collapsed after two bounded taps."
+  });
   await revealAndroidUiNode(
     "text",
     physicalUiSessionName,

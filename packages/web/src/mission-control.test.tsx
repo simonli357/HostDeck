@@ -395,6 +395,25 @@ describe("Mission Control screen states and interaction", () => {
     expect(screen.getByText("Current")).toBeTruthy();
     expect(screen.getAllByRole("link")).toHaveLength(4);
 
+    const quietDisclosure = document.querySelector(
+      "details.hostdeck-queue-disclosure > summary"
+    );
+    expect(quietDisclosure?.getAttribute("aria-label")).toBe(
+      "Expand quiet sessions (1)"
+    );
+    fireEvent.click(quietDisclosure as HTMLElement);
+    await waitFor(() =>
+      expect(quietDisclosure?.getAttribute("aria-label")).toBe(
+        "Collapse quiet sessions (1)"
+      )
+    );
+    fireEvent.click(quietDisclosure as HTMLElement);
+    await waitFor(() =>
+      expect(quietDisclosure?.getAttribute("aria-label")).toBe(
+        "Expand quiet sessions (1)"
+      )
+    );
+
     fireEvent.click(screen.getByRole("link", { name: /approval/i }));
     expect((await screen.findByTestId("selected-location")).textContent).toBe(
       "/sessions/sess_mission_route_a"
