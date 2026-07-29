@@ -578,8 +578,13 @@ function bootstrapCleanUser(sourceCommit) {
 }
 
 function assertNoBootstrapWarning(result, label) {
-  if (result.stderr !== "" || /\bwarn(?:ing)?\b/iu.test(result.stdout)) {
-    throw new Error(`${label} emitted an unsupported warning.`);
+  const combined = `${result.stderr}\n${result.stdout}`;
+  if (/\bwarn(?:ing)?\b/iu.test(combined)) {
+    const detail = redactCleanDiagnostic(result.stdout, result.stderr, [
+      repositoryRoot,
+      manifest.container.home
+    ]);
+    throw new Error(`${label} emitted an unsupported warning (${detail}).`);
   }
 }
 
