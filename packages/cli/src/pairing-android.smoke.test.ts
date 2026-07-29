@@ -1243,7 +1243,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         sessionEventRequests: 0,
         sessionListRequests: 0,
         sessionListResponseStatuses: [],
-        sessionStreamRequests: 0
+        sessionStreamRequests: 0,
+        sessionStreamResponseStatuses: []
       };
       const driverRuntime = createPhysicalDriverRuntime();
       const dashboardPairingGate = requireDashboardUiAcceptance
@@ -2486,6 +2487,7 @@ interface RequestInspection {
   sessionListRequests: number;
   sessionListResponseStatuses: number[];
   sessionStreamRequests: number;
+  sessionStreamResponseStatuses: number[];
 }
 
 interface PairingRenderCapture {
@@ -3787,6 +3789,18 @@ function installRequestInspection(
     }
   });
   app.addHook("onSend", async (request, _reply, payload) => {
+    if (
+      request.url ===
+        `/api/v1/sessions/${physicalUiSessionId}/events/stream` ||
+      request.url.startsWith(
+        `/api/v1/sessions/${physicalUiSessionId}/events/stream?`
+      )
+    ) {
+      recordPhysicalResponseStatus(
+        inspection.sessionStreamResponseStatuses,
+        _reply.statusCode
+      );
+    }
     if (
       request.url !== "/api/v1/remote/enable" &&
       request.url !== "/api/v1/remote/disable"
@@ -5600,8 +5614,7 @@ async function runProductionDashboardUiSequence(
       input.prompt.subscribers.snapshot().active_subscribers === 1,
     () =>
       "Physical dashboard Session Detail did not open " +
-      `(detail_requests=${input.requestInspection.sessionDetailRequests};` +
-      `active_subscribers=${input.prompt.subscribers.snapshot().active_subscribers}).`
+      physicalPromptStreamDiagnostic(input)
   );
   await waitForAndroidUiText("Ready to send", 45_000, "Physical Session Detail was not writable.");
   await waitForAndroidUiText(
@@ -7892,18 +7905,9 @@ async function runProductionPromptUiSequence(
       "Physical prompt detail did not establish one current production stream."
     );
   } catch {
-    const snapshot = input.prompt.subscribers.snapshot();
-    const failures = input.prompt.streamFailureCodes;
     throw new Error(
       "Physical prompt detail did not establish one current production stream " +
-        `(detail=${input.requestInspection.sessionDetailRequests};` +
-        `event_page=${input.requestInspection.sessionEventRequests};` +
-        `stream=${input.requestInspection.sessionStreamRequests};` +
-        `active=${snapshot.active_subscribers};opened=${snapshot.opened_subscribers};` +
-        `aborted=${snapshot.aborted_subscribers};explicit=${snapshot.explicit_closures};` +
-        `source_failed=${snapshot.source_failed_subscribers};` +
-        `open_failed=${snapshot.source_open_failures};` +
-        `failures=${failures.length === 0 ? "none" : failures.join("|")}).`
+        physicalPromptStreamDiagnostic(input)
     );
   }
   await waitForAndroidUiNode(
@@ -8097,6 +8101,28 @@ async function runProductionPromptUiSequence(
     sendAction: "start",
     sentOnce: true
   });
+}
+
+function physicalPromptStreamDiagnostic(
+  input: Readonly<{
+    readonly prompt: PhysicalPromptRuntime;
+    readonly requestInspection: RequestInspection;
+  }>
+): string {
+  const snapshot = input.prompt.subscribers.snapshot();
+  const failures = input.prompt.streamFailureCodes;
+  const statuses = input.requestInspection.sessionStreamResponseStatuses;
+  return (
+    `(detail=${input.requestInspection.sessionDetailRequests};` +
+    `event_page=${input.requestInspection.sessionEventRequests};` +
+    `stream=${input.requestInspection.sessionStreamRequests};` +
+    `statuses=${statuses.length === 0 ? "none" : statuses.join("|")};` +
+    `active=${snapshot.active_subscribers};opened=${snapshot.opened_subscribers};` +
+    `aborted=${snapshot.aborted_subscribers};explicit=${snapshot.explicit_closures};` +
+    `source_failed=${snapshot.source_failed_subscribers};` +
+    `open_failed=${snapshot.source_open_failures};` +
+    `failures=${failures.length === 0 ? "none" : failures.join("|")}).`
+  );
 }
 
 async function cleanProductionUiAuthority(
@@ -8514,6 +8540,9 @@ function androidUiStateSummary(
     "Loading session",
     "Detail unavailable",
     "Earlier activity unavailable",
+    "Live activity could not start. Refresh the session to retry.",
+    "Activity stream reconnecting",
+    "Live activity stopped",
     "Open Host and access",
     "Host & access",
     "Close Host and access",
