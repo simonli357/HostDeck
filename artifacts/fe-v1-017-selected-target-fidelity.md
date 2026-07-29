@@ -62,15 +62,28 @@ Close the aggregate visual-fidelity gate between the seven human-selected Focus 
 | `FID-23` | Evidence generation leaves no preview/browser/process/listener/temp residue, does not mutate Tailscale/Serve/profile/phone/ADB state, and leaves all upstream task artifacts byte-identical. |
 | `FID-24` | Closure records exact criteria/implementation/evidence commits, commands/counts, target and evidence hashes, corrected drift, authorized divergences, remaining physical-device limitations, and no claim beyond visual-fidelity scope. |
 
-## Planned Evidence
+## Recorded Evidence
 
-- `packages/test-fixtures/src/ui-fidelity-matrix.ts` and focused contract tests.
-- A dedicated Playwright capture configuration and deterministic comparison/manifest validator.
-- `artifacts/fe-v1-017-selected-target-fidelity/` screenshots, comparison sheets, measurements, manifest, and manual review ledger.
-- Focused UI fixes only where the current build visibly violates the selected targets or design-system rules.
+- The immutable ledger maps all 141 canonical states exactly once across 39 interactions, 12 journeys, 15 surfaces, seven selected target families, and five reference viewports.
+- `artifacts/fe-v1-017-selected-target-fidelity/` contains 34 deterministic files: 23 current-build captures, seven comparison boards, two measurement ledgers, one manual review, and one canonical manifest.
+- The manifest binds all seven selected target rasters and 33 task-owned support files by size and SHA-256. Its canonical SHA-256 is `e968d52e9e45eaec83939362e6b3ada782ce74a47e21864b5c96a6c3c95593b5`.
+- Two independent no-retry generations produced identical PNGs and canonical manifests from clean revision `27fd8f7`, pinned Chromium 149.0.7827.55, Playwright 1.61.1, device scale factor 1, fixed fixtures, local-only requests, and the same three-file web build.
+- Full-resolution review records every selected landmark as a match or one of six contract-authorized divergences. No unresolved overlap, clipping, hierarchy, density, asset, or structural drift remains, and no aggregate product correction was required.
+- The gate did not use or mutate ADB, the physical phone, Tailscale, Serve, or saved profiles. Real-device closure remains owned by `FE-V1-090`.
+
+## Validation
+
+- Fidelity: `pnpm test:ui-fidelity` passed five ledger tests, four evidence-module tests, eight shell captures, two pairing captures, deterministic two-run publication, and 34-file verification.
+- Static and contracts: scaffold, planning (220 tasks, 84 requirements, 683 dependencies), runtime boundary (619 modules, 22 externals), typecheck, lint (803 files), unit (2,861 passed, 28 intentional skips), contract (245), integration (36), and web (920) passed.
+- Browser and accessibility: shell Chromium (168), pairing Chromium (11), native 200 percent zoom (1), Orca (1), packaged Chromium (1), and the repinned Chromium/Firefox phone/desktop matrix (76) passed.
+- Package: deterministic production build and acceptance passed at 619 sources, 1,245 owned outputs, 6,466 entries, package SHA-256 `092e2fb808e396bdaf7ce2c2acad1c2b2a0d84cd47cfa1f1241a0d51c15bbdc9`, and unchanged web SHA-256 `09c04fc54c8d88ded7dff55f54e8228fc65e6eb01e851a65674bf920a3461752`.
+- Exact Codex 0.144.0 isolated binding verification passed; default 0.145.0 remained rejected as expected by the frozen runtime contract.
+- Manual inspection covered all seven comparison boards, 40 bound target/current/support files, privacy, cleanup, and byte preservation of upstream task artifacts.
 
 ## Commit Record
 
 - Criteria: `92673a8`.
-- Implementation/evidence: pending.
+- Implementation: `27fd8f7`.
+- Package-browser evidence refresh: `59ba87e`.
+- Evidence: `908a995`.
 - Closure: pending.

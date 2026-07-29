@@ -16,8 +16,8 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-017` Capture screenshot/diff evidence against selected replacement mockups | in_progress | none | `FID-01` to `FID-24` freeze exact target identity, complete state mapping, fresh deterministic comparisons, measurable fidelity rules, drift disposition, regressions, and cleanup. |
-| 2 | `IFC-V1-057` Implement safe uninstall and version-retention cleanup for only HostDeck-owned files | ready | none | The owned manifest and persistent lifecycle are complete, so destructive ownership and retained-release cleanup can now be frozen and implemented. |
+| 1 | `IFC-V1-057` Implement safe uninstall and version-retention cleanup for only HostDeck-owned files | in_progress | none | Freeze destructive ownership, preservation, repetition, tamper refusal, retention, rollback, real-user-manager, and Tailscale-noninterference criteria before implementation. |
+| 2 | `FE-V1-018` Review copy and complete workflows against mobile mission-control non-goals | ready | none | Selected-target fidelity is complete; copy/workflow review can now distinguish accepted, running, completed, failed, and bounded recovery truth before real-phone aggregate hardening. |
 
 ## Intentional Blockers
 
