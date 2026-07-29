@@ -534,11 +534,15 @@ function assertInvalidLifecycleOrdering(command, port) {
   const result = runCommand(
     command,
     [...baseArguments(port), "service", "start", "--json"],
-    { cwd: unrelatedRoot, env: userEnvironment, statuses: [1] }
+    { cwd: unrelatedRoot, env: userEnvironment, statuses: [70] }
   );
   assertPrivateOutput(result.stdout);
   assertPrivateOutput(result.stderr);
-  assert.match(`${result.stdout}\n${result.stderr}`, /service is not installed/iu);
+  assert.equal(result.stdout, "");
+  assert.equal(
+    result.stderr,
+    "HostDeck CLI error (runtime_unavailable): HostDeck service is not installed.\n"
+  );
   assertNoInstalledProduct();
 }
 
