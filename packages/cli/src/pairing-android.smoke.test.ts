@@ -412,6 +412,21 @@ describe("physical Android phone-driver protocol", () => {
     expect(physicalQuietQueueDisclosureLabel(true)).toBe(
       "Collapse quiet sessions (1)"
     );
+    const [trigger] = parseAndroidUiNodes(
+      '<hierarchy><node text="" class="android.widget.Button" ' +
+        'content-desc="Expand quiet sessions (1)" clickable="true" ' +
+        'bounds="[0,400][1080,560]" /></hierarchy>'
+    );
+    expect(trigger?.className).toBe("android.widget.Button");
+    expect(
+      trigger === undefined
+        ? false
+        : matchesAndroidUiNode(
+            trigger,
+            "description",
+            physicalQuietQueueDisclosureLabel(false)
+          )
+    ).toBe(true);
   });
 
   it("holds and resolves every deterministic dashboard control transition", async () => {

@@ -393,26 +393,34 @@ describe("Mission Control screen states and interaction", () => {
     expect(screen.getByText("Remote ready")).toBeTruthy();
     expect(screen.getByText("Write")).toBeTruthy();
     expect(screen.getByText("Current")).toBeTruthy();
-    expect(screen.getAllByRole("link")).toHaveLength(4);
+    expect(screen.getAllByRole("link")).toHaveLength(3);
 
-    const quietDisclosure = document.querySelector(
-      "details.hostdeck-queue-disclosure > summary"
-    );
-    expect(quietDisclosure?.getAttribute("aria-label")).toBe(
-      "Expand quiet sessions (1)"
-    );
-    fireEvent.click(quietDisclosure as HTMLElement);
+    const quietDisclosure = screen.getByRole("button", {
+      name: "Expand quiet sessions (1)"
+    });
+    const quietListId = quietDisclosure.getAttribute("aria-controls");
+    const quietList = quietListId === null ? null : document.getElementById(quietListId);
+    expect(quietDisclosure.getAttribute("aria-expanded")).toBe("false");
+    expect(quietList).toBeInstanceOf(HTMLUListElement);
+    expect((quietList as HTMLUListElement).hidden).toBe(true);
+    fireEvent.click(quietDisclosure);
     await waitFor(() =>
-      expect(quietDisclosure?.getAttribute("aria-label")).toBe(
+      expect(quietDisclosure.getAttribute("aria-label")).toBe(
         "Collapse quiet sessions (1)"
       )
     );
-    fireEvent.click(quietDisclosure as HTMLElement);
+    expect(quietDisclosure.getAttribute("aria-expanded")).toBe("true");
+    expect((quietList as HTMLUListElement).hidden).toBe(false);
+    expect(screen.getAllByRole("link")).toHaveLength(4);
+    fireEvent.click(quietDisclosure);
     await waitFor(() =>
-      expect(quietDisclosure?.getAttribute("aria-label")).toBe(
+      expect(quietDisclosure.getAttribute("aria-label")).toBe(
         "Expand quiet sessions (1)"
       )
     );
+    expect(quietDisclosure.getAttribute("aria-expanded")).toBe("false");
+    expect((quietList as HTMLUListElement).hidden).toBe(true);
+    expect(screen.getAllByRole("link")).toHaveLength(3);
 
     fireEvent.click(screen.getByRole("link", { name: /approval/i }));
     expect((await screen.findByTestId("selected-location")).textContent).toBe(
@@ -434,11 +442,12 @@ describe("Mission Control screen states and interaction", () => {
         ]
       })
     );
-    const disclosure = document.querySelector("details.hostdeck-queue-disclosure");
-    expect(disclosure).toBeInstanceOf(HTMLDetailsElement);
-    expect((disclosure as HTMLDetailsElement).open).toBe(true);
-    fireEvent.click((disclosure as HTMLDetailsElement).querySelector("summary") as HTMLElement);
-    expect((disclosure as HTMLDetailsElement).open).toBe(false);
+    const disclosure = screen.getByRole("button", {
+      name: "Collapse quiet sessions (2)"
+    });
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(disclosure);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByText("ACT NOW")).toBeNull();
   });
 

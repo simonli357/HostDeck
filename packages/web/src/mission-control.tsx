@@ -552,6 +552,7 @@ function QuietQueueSection({
   selectedSessionId?: string | null;
 }>) {
   const headingId = `${headingIdPrefix}-quiet`;
+  const listId = `${headingId}-sessions`;
   const retained = navigationMode === "retained";
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -565,14 +566,14 @@ function QuietQueueSection({
           {section.label}
         </h2>
       )}
-      <details
-        className="hostdeck-queue-disclosure"
-        open={open}
-        onToggle={(event) => setOpen(event.currentTarget.open)}
-      >
-        <summary
-          className="hostdeck-queue-group__heading"
+      <div className="hostdeck-queue-disclosure">
+        <button
+          type="button"
+          className="hostdeck-queue-group__heading hostdeck-queue-disclosure__trigger"
           aria-label={`${open ? "Collapse" : "Expand"} quiet sessions (${section.rows.length})`}
+          aria-controls={listId}
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
         >
           <span>{section.label}</span>
           <span className="hostdeck-queue-disclosure__count">{section.rows.length}</span>
@@ -582,28 +583,34 @@ function QuietQueueSection({
             strokeWidth={2}
             aria-hidden="true"
           />
-        </summary>
+        </button>
         <MissionRowList
+          id={listId}
+          hidden={!open}
           rows={section.rows}
           navigationMode={navigationMode}
           selectedSessionId={selectedSessionId}
         />
-      </details>
+      </div>
     </section>
   );
 }
 
 function MissionRowList({
+  hidden = false,
+  id,
   rows,
   navigationMode = "mission",
   selectedSessionId = null
 }: Readonly<{
+  hidden?: boolean;
+  id?: string;
   rows: readonly MissionSessionRow[];
   navigationMode?: "mission" | "retained";
   selectedSessionId?: string | null;
 }>) {
   return (
-    <ul className="hostdeck-session-list">
+    <ul id={id} className="hostdeck-session-list" hidden={hidden}>
       {rows.map((row) => {
         const selected = row.item.session.id === selectedSessionId;
         const content = (

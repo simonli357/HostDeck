@@ -520,6 +520,10 @@ textarea:focus-visible {
   list-style: none;
 }
 
+.hostdeck-session-list[hidden] {
+  display: none;
+}
+
 .hostdeck-queue-group--attention .hostdeck-session-list {
   border-left-color: var(--hostdeck-attention);
 }
@@ -654,14 +658,15 @@ textarea:focus-visible {
   -webkit-line-clamp: 2;
 }
 
-.hostdeck-queue-disclosure > summary {
+.hostdeck-queue-disclosure__trigger {
+  width: 100%;
   min-height: 44px;
+  padding: 0 4px 6px 10px;
+  border: 0;
+  appearance: none;
+  background: transparent;
   cursor: pointer;
-  list-style: none;
-}
-
-.hostdeck-queue-disclosure > summary::-webkit-details-marker {
-  display: none;
+  text-align: left;
 }
 
 .hostdeck-queue-disclosure__count {
@@ -673,7 +678,8 @@ textarea:focus-visible {
   transition: rotate 120ms ease;
 }
 
-.hostdeck-queue-disclosure[open] .hostdeck-queue-disclosure__icon {
+.hostdeck-queue-disclosure__trigger[aria-expanded="true"]
+  .hostdeck-queue-disclosure__icon {
   rotate: 180deg;
 }
 

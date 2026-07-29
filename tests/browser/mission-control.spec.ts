@@ -153,10 +153,13 @@ test("passes reflow, keyboard, reduced-motion, and contrast checks", async ({ pa
   await expectStableTargets(page);
   await expectNoClippedText(page.locator(".hostdeck-status-rail dt, .hostdeck-status-rail dd"));
 
-  const quietSummary = page.locator(".hostdeck-queue-disclosure > summary");
-  const quietSummaryBox = await quietSummary.boundingBox();
-  expect(quietSummaryBox?.height ?? 0).toBeGreaterThanOrEqual(44);
-  await expect(quietSummary).toHaveAccessibleName("Expand quiet sessions (1)");
+  const quietTrigger = page.getByRole("button", { name: /quiet sessions \(1\)/u });
+  const quietList = page.locator("#mission-group-quiet-sessions");
+  const quietTriggerBox = await quietTrigger.boundingBox();
+  expect(quietTriggerBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await expect(quietTrigger).toHaveAccessibleName("Expand quiet sessions (1)");
+  await expect(quietTrigger).toHaveAttribute("aria-expanded", "false");
+  await expect(quietList).toBeHidden();
 
   await expectNextKeyboardFocus(page, page.getByRole("link", { name: "Skip to content" }));
   await expectNextKeyboardFocus(page, page.getByRole("button", { name: "Open Host and access" }));
@@ -166,11 +169,12 @@ test("passes reflow, keyboard, reduced-motion, and contrast checks", async ({ pa
     page.getByRole("link", { name: /^release-approval/u })
   );
 
-  await quietSummary.focus();
-  await expectVisibleFocus(quietSummary);
+  await quietTrigger.focus();
+  await expectVisibleFocus(quietTrigger);
   await page.keyboard.press("Enter");
-  await expect(page.locator(".hostdeck-queue-disclosure")).toHaveAttribute("open", "");
-  await expect(quietSummary).toHaveAccessibleName("Collapse quiet sessions (1)");
+  await expect(quietTrigger).toHaveAccessibleName("Collapse quiet sessions (1)");
+  await expect(quietTrigger).toHaveAttribute("aria-expanded", "true");
+  await expect(quietList).toBeVisible();
 
   const disclosureTransition = await page
     .locator(".hostdeck-queue-disclosure__icon")
@@ -187,8 +191,9 @@ test("passes reflow, keyboard, reduced-motion, and contrast checks", async ({ pa
 
   await expectTokenContrast(page);
   await page.keyboard.press("Enter");
-  await expect(page.locator(".hostdeck-queue-disclosure")).not.toHaveAttribute("open", "");
-  await expect(quietSummary).toHaveAccessibleName("Expand quiet sessions (1)");
+  await expect(quietTrigger).toHaveAccessibleName("Expand quiet sessions (1)");
+  await expect(quietTrigger).toHaveAttribute("aria-expanded", "false");
+  await expect(quietList).toBeHidden();
   await page.evaluate(() => {
     window.scrollTo(0, 0);
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
