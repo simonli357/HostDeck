@@ -399,10 +399,13 @@ async function runForegroundAcceptance(port, packageEvidenceValue) {
     assert.equal(exit.code, 0);
     assert.equal(exit.signal, null);
     await eventually(
-      () => !isProcessAlive(child.pid) && !existsSync(runtimeRoot),
+      () => !isProcessAlive(child.pid) && !existsSync(socketPath),
       manifest.bounds.readiness_ms,
-      "Foreground cleanup did not settle."
+      "Foreground process/socket cleanup did not settle."
     );
+    assert.equal(statSync(runtimeRoot).uid, process.getuid());
+    assert.equal(mode(runtimeRoot), 0o700);
+    assert.deepEqual(readdirSync(runtimeRoot), []);
     assertNoListener(port);
     assertNoHostDeckProcesses();
     return Object.freeze({
