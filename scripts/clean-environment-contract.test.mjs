@@ -258,6 +258,17 @@ test("accepts strict sanitized complete evidence and rejects gaps or secrets", (
       }),
     /private or host-specific data at \$\.host\.os \(email\)/u
   );
+  const hostSpecificCgroup = structuredClone(evidence);
+  hostSpecificCgroup.service.unit_inventory.codex_control_group =
+    "/user.slice/user-1000.slice/user@1000.service/app.slice/hostdeck-codex.service";
+  assert.throws(
+    () =>
+      parseCleanUserEvidence(hostSpecificCgroup, manifest, {
+        criteria_commit: commit,
+        source_commit: commit
+      }),
+    /private or host-specific data at \$\.service\.unit_inventory\.codex_control_group \(email\)/u
+  );
   const falseSuccess = structuredClone(evidence);
   falseSuccess.service.active_upgrade = false;
   assert.throws(
@@ -515,10 +526,10 @@ function serviceEvidence(hash, upgradedHttp) {
     uninstall_product_residue: 0,
     unit_inventory: {
       codex_cgroup_processes: 2,
-      codex_control_group: "/user.slice/app.slice/hostdeck-codex.service",
+      codex_control_group: "/app.slice/hostdeck-codex.service",
       codex_main_pid: 200,
       hostdeck_cgroup_processes: 1,
-      hostdeck_control_group: "/user.slice/app.slice/hostdeck.service",
+      hostdeck_control_group: "/app.slice/hostdeck.service",
       hostdeck_main_pid: 100,
       listener_count: 1,
       socket_owner_uid: 1000,

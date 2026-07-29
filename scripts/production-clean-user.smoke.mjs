@@ -798,12 +798,16 @@ function inspectServiceProcesses(result, port, layout, owner) {
   }
   assertPrivateSocket();
   assertLoopbackListener(port);
+  const codexControlGroup = "/app.slice/hostdeck-codex.service";
+  const hostDeckControlGroup = "/app.slice/hostdeck.service";
+  assert.equal(codexUnit.control_group.endsWith(codexControlGroup), true);
+  assert.equal(hostDeckUnit.control_group.endsWith(hostDeckControlGroup), true);
   return Object.freeze({
     codex_cgroup_processes: 1 + codexDescendants.length,
-    codex_control_group: codexUnit.control_group,
+    codex_control_group: codexControlGroup,
     codex_main_pid: codexPid,
     hostdeck_cgroup_processes: 1,
-    hostdeck_control_group: hostDeckUnit.control_group,
+    hostdeck_control_group: hostDeckControlGroup,
     hostdeck_main_pid: hostDeckPid,
     listener_count: 1,
     socket_owner_uid: manifest.container.uid,
