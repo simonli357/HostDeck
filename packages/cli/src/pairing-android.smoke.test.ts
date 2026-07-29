@@ -463,6 +463,8 @@ describe("physical Android phone-driver protocol", () => {
 
     expect(target).toBeDefined();
     expect(fragment).toBeDefined();
+    expect(target?.clickable).toBe(true);
+    expect(fragment?.clickable).toBe(false);
     expect(target === undefined ? 0 : androidUiNodeHeight(target)).toBe(288);
     expect(fragment === undefined ? 0 : androidUiNodeHeight(fragment)).toBe(63);
     expect(
@@ -951,6 +953,7 @@ describe("physical Android phone-driver protocol", () => {
       {
         bounds: { bottom: 180, left: 0, right: 720, top: 80 },
         className: "",
+        clickable: false,
         description: "",
         resourceId: "",
         text: "Host & access"
@@ -958,6 +961,7 @@ describe("physical Android phone-driver protocol", () => {
       {
         bounds: { bottom: 180, left: 620, right: 720, top: 80 },
         className: "",
+        clickable: false,
         description: "Open Host and access",
         resourceId: "",
         text: ""
@@ -965,6 +969,7 @@ describe("physical Android phone-driver protocol", () => {
       {
         bounds: { bottom: 320, left: 20, right: 700, top: 200 },
         className: androidEditTextClass,
+        clickable: false,
         description: "",
         resourceId: "",
         text: ""
@@ -972,6 +977,7 @@ describe("physical Android phone-driver protocol", () => {
       {
         bounds: { bottom: 180, left: 0, right: 720, top: 80 },
         className: "android.view.ViewGroup",
+        clickable: false,
         description: "",
         resourceId: chromeToolbarResourceId,
         text: ""
@@ -979,6 +985,7 @@ describe("physical Android phone-driver protocol", () => {
       {
         bounds: { bottom: 1280, left: 0, right: 720, top: 80 },
         className: "android.widget.FrameLayout",
+        clickable: false,
         description: "",
         resourceId: chromeCompositorResourceId,
         text: ""
@@ -1047,6 +1054,7 @@ describe("physical Android phone-driver protocol", () => {
           Object.freeze({
             bounds: Object.freeze({ bottom: 500, left: 0, right: 720, top: 440 }),
             className: "",
+            clickable: false,
             description: "",
             resourceId: "",
             text: "private.example.ts.net"
@@ -5204,6 +5212,7 @@ interface AndroidUiNode {
     readonly top: number;
   }>;
   readonly className: string;
+  readonly clickable: boolean;
   readonly description: string;
   readonly resourceId: string;
   readonly text: string;
@@ -5579,12 +5588,20 @@ async function runProductionDashboardUiSequence(
   input.driver.recordCheckpoint("reloaded");
 
   measure(sessionTarget, "open-session");
+  requireCondition(
+    input.requestInspection.sessionDetailRequests === 0 &&
+      input.prompt.subscribers.snapshot().active_subscribers === 0,
+    "Physical dashboard Session Detail transition began with retained activity."
+  );
   await tapAndroidNodeOnceAndWait(
     sessionTarget,
     () =>
       input.requestInspection.sessionDetailRequests >= 1 &&
       input.prompt.subscribers.snapshot().active_subscribers === 1,
-    "Physical dashboard Session Detail did not open."
+    () =>
+      "Physical dashboard Session Detail did not open " +
+      `(detail_requests=${input.requestInspection.sessionDetailRequests};` +
+      `active_subscribers=${input.prompt.subscribers.snapshot().active_subscribers}).`
   );
   await waitForAndroidUiText("Ready to send", 45_000, "Physical Session Detail was not writable.");
   await waitForAndroidUiText(
@@ -5795,12 +5812,18 @@ async function waitForAndroidUiNodePresent(
 async function tapAndroidNodeOnceAndWait(
   node: AndroidUiNode,
   completed: () => boolean | Promise<boolean>,
-  message: string,
+  message: string | (() => string),
   timeoutMs = 30_000
 ): Promise<void> {
   tapAndroidUiNode(node);
   try {
-    await waitFor(completed, timeoutMs, message);
+    await waitFor(
+      completed,
+      timeoutMs,
+      typeof message === "string"
+        ? message
+        : "Android UI one-tap transition did not complete."
+    );
   } catch {
     let summary = "hierarchy=unavailable";
     try {
@@ -5808,7 +5831,8 @@ async function tapAndroidNodeOnceAndWait(
     } catch {
       // The bounded fallback still reports unavailable post-tap hierarchy.
     }
-    throw new Error(`${message} (${summary}).`);
+    const resolvedMessage = typeof message === "string" ? message : message();
+    throw new Error(`${resolvedMessage} (${summary}).`);
   }
 }
 
@@ -8185,6 +8209,14 @@ function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
     const description = attributes.get("content-desc") ?? "";
     const className = attributes.get("class") ?? "";
     const resourceId = attributes.get("resource-id") ?? "";
+    const clickableAttribute = attributes.get("clickable");
+    requireCondition(
+      clickableAttribute === undefined ||
+        clickableAttribute === "true" ||
+        clickableAttribute === "false",
+      "Android UI hierarchy clickable state was invalid."
+    );
+    const clickable = clickableAttribute === "true";
     if (
       text === "" &&
       description === "" &&
@@ -8198,6 +8230,7 @@ function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
       Object.freeze({
         bounds: Object.freeze({ bottom, left, right, top }),
         className,
+        clickable,
         description,
         resourceId,
         text
@@ -8476,6 +8509,11 @@ function androidUiStateSummary(
     "Open Mission Control",
     "Mission Control",
     "physical-pairing-review",
+    "Back to Mission Control",
+    "Ready to send",
+    "Loading session",
+    "Detail unavailable",
+    "Earlier activity unavailable",
     "Open Host and access",
     "Host & access",
     "Close Host and access",
@@ -8487,9 +8525,27 @@ function androidUiStateSummary(
       (node) => node.text === label || node.description === label
     )
   );
+  const semanticValue = trigger.description || trigger.text;
+  const current = nodes
+    .filter(
+      (node) =>
+        semanticValue !== "" &&
+        (node.description === semanticValue || node.text === semanticValue)
+    )
+    .sort(
+      (left, right) =>
+        androidUiNodeWidth(right) * androidUiNodeHeight(right) -
+        androidUiNodeWidth(left) * androidUiNodeHeight(left)
+    )[0];
+  const currentState =
+    current === undefined
+      ? "none"
+      : `${current.bounds.left},${current.bounds.top},` +
+        `${current.bounds.right},${current.bounds.bottom},${current.clickable}`;
   return (
     `bounds=${trigger.bounds.left},${trigger.bounds.top},` +
     `${trigger.bounds.right},${trigger.bounds.bottom};` +
+    `clickable=${trigger.clickable};current=${currentState};` +
     `known=${visible.length === 0 ? "none" : visible.join("|")}`
   );
 }
