@@ -400,6 +400,52 @@ export function redactCleanDiagnostic(stdout, stderr, privateValues) {
   return value.trim().replace(/[\r\n]+/gu, " | ").slice(0, 2_000);
 }
 
+export function classifyCleanInstallWarnings(stdout, stderr, allowNetworkTelemetry) {
+  if (
+    typeof stdout !== "string" ||
+    typeof stderr !== "string" ||
+    typeof allowNetworkTelemetry !== "boolean"
+  ) {
+    throw new TypeError("Clean install warning input is invalid.");
+  }
+  const warningLines = `${stderr}\n${stdout}`
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /\bwarn(?:ing)?\b/iu.test(line));
+  let allowedNetworkWarningCount = 0;
+  for (const line of warningLines) {
+    const match = /^WARN\s+Tarball download average speed \d+(?:\.\d+)? KiB\/s \(size \d+(?:\.\d+)? KiB\) is below \d+(?:\.\d+)? KiB\/s: (https:\/\/\S+) \(GET\)$/u.exec(
+      line
+    );
+    if (!allowNetworkTelemetry || match?.[1] === undefined) {
+      throw new TypeError("Clean install emitted an unsupported warning.");
+    }
+    let url;
+    try {
+      url = new URL(match[1]);
+    } catch {
+      throw new TypeError("Clean install emitted an unsupported warning.");
+    }
+    if (
+      url.protocol !== "https:" ||
+      url.hostname !== "registry.npmjs.org" ||
+      url.username !== "" ||
+      url.password !== "" ||
+      url.search !== "" ||
+      url.hash !== "" ||
+      url.pathname === "/"
+    ) {
+      throw new TypeError("Clean install emitted an unsupported warning.");
+    }
+    allowedNetworkWarningCount += 1;
+  }
+  return Object.freeze({
+    allowed_network_warning_count: allowedNetworkWarningCount,
+    install_warning_count: warningLines.length,
+    unsupported_warning_count: 0
+  });
+}
+
 export function parseCleanUserEvidence(candidate, manifest, expected) {
   const parsedManifest = parseCleanEnvironmentManifest(manifest);
   requireRecord(expected, "Expected evidence identity");
@@ -639,17 +685,28 @@ function validateCleanSourceEvidence(value) {
       "corepack_ms",
       "direct_contract_test_ms",
       "frozen_install_ms",
+      "allowed_network_warning_count",
       "install_warning_count",
       "node_extract_ms",
       "source_clone_ms",
-      "total_ms"
+      "total_ms",
+      "unsupported_warning_count"
     ],
     "Bootstrap evidence"
   );
   for (const [field, duration] of Object.entries(value.bootstrap)) {
     requireNonNegativeInteger(duration, `Bootstrap ${field}`);
   }
-  requireExact(value.bootstrap.install_warning_count, 0, "Bootstrap warning count");
+  requireExact(
+    value.bootstrap.install_warning_count,
+    value.bootstrap.allowed_network_warning_count,
+    "Bootstrap classified warning count"
+  );
+  requireExact(
+    value.bootstrap.unsupported_warning_count,
+    0,
+    "Bootstrap unsupported warning count"
+  );
 }
 
 function validatePackageEvidence(value, manifest) {

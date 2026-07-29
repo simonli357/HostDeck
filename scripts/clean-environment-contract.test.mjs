@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   assertTailscaleSnapshotsEqual,
+  classifyCleanInstallWarnings,
   collectCleanupErrors,
   createCleanEnvironmentDockerfile,
   createCleanEnvironmentDockerRunArgs,
@@ -164,6 +165,32 @@ test("bounds and redacts command diagnostics", () => {
   assert(output.length <= 2_000);
   assert.match(output, /<private-path>/u);
   assert.throws(() => redactCleanDiagnostic("", "", []), TypeError);
+});
+
+test("classifies only exact pnpm HTTPS download telemetry as allowed", () => {
+  const warning =
+    "\u2009WARN\u2009 Tarball download average speed 40 KiB/s (size 43 KiB) is below 50 KiB/s: https://registry.npmjs.org/bidi-js/-/bidi-js-1.0.3.tgz (GET)";
+  assert.deepEqual(classifyCleanInstallWarnings(warning, "", true), {
+    allowed_network_warning_count: 1,
+    install_warning_count: 1,
+    unsupported_warning_count: 0
+  });
+  assert.deepEqual(classifyCleanInstallWarnings("normal output", "progress", false), {
+    allowed_network_warning_count: 0,
+    install_warning_count: 0,
+    unsupported_warning_count: 0
+  });
+  for (const [output, allowed] of [
+    [warning, false],
+    ["warning: native compiler drift", true],
+    [warning.replace("https:", "http:"), true],
+    [warning.replace("registry.npmjs.org", "example.com"), true]
+  ]) {
+    assert.throws(
+      () => classifyCleanInstallWarnings(output, "", allowed),
+      TypeError
+    );
+  }
 });
 
 test("hashes Tailscale observations and rejects identity drift", () => {
@@ -342,14 +369,16 @@ function validEvidence() {
     },
     clean_source: {
       bootstrap: {
+        allowed_network_warning_count: 2,
         codex_install_ms: 1,
         corepack_ms: 1,
         direct_contract_test_ms: 1,
         frozen_install_ms: 1,
-        install_warning_count: 0,
+        install_warning_count: 2,
         node_extract_ms: 1,
         source_clone_ms: 1,
-        total_ms: 7
+        total_ms: 7,
+        unsupported_warning_count: 0
       },
       commit,
       dist_preexisting: false,

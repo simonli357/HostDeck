@@ -18,6 +18,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   assertTailscaleSnapshotsEqual,
+  classifyCleanInstallWarnings,
   collectCleanupErrors,
   createCleanEnvironmentDockerfile,
   createCleanEnvironmentDockerRunArgs,
@@ -475,8 +476,8 @@ function bootstrapCleanUser(sourceCommit) {
     `pnpm@${manifest.pnpm_version}`,
     "--activate"
   ], { label: "activate pinned pnpm" });
-  assertNoBootstrapWarning(corepackEnable, "Corepack enable");
-  assertNoBootstrapWarning(corepackPrepare, "Corepack prepare");
+  inspectBootstrapWarnings(corepackEnable, "Corepack enable", false);
+  inspectBootstrapWarnings(corepackPrepare, "Corepack prepare", false);
   const corepackMs = elapsed(corepackStarted);
   const codexStarted = performance.now();
   const codexInstall = userExec(nodeBin("npm"), [
@@ -492,7 +493,7 @@ function bootstrapCleanUser(sourceCommit) {
     label: "install pinned Codex",
     timeout: manifest.bounds.bootstrap_ms
   });
-  assertNoBootstrapWarning(codexInstall, "Codex install");
+  inspectBootstrapWarnings(codexInstall, "Codex install", false);
   const codexInstallMs = elapsed(codexStarted);
   const cloneStarted = performance.now();
   userExec("git", [
@@ -541,7 +542,11 @@ function bootstrapCleanUser(sourceCommit) {
     label: "install frozen dependency graph",
     timeout: manifest.bounds.bootstrap_ms
   });
-  assertNoBootstrapWarning(frozenInstall, "Frozen install");
+  const installWarnings = inspectBootstrapWarnings(
+    frozenInstall,
+    "Frozen install",
+    true
+  );
   const frozenInstallMs = elapsed(installStarted);
   const dirty = userExec("git", [
     "-C",
@@ -570,16 +575,21 @@ function bootstrapCleanUser(sourceCommit) {
     corepack_ms: corepackMs,
     direct_contract_test_ms: elapsed(contractTestStarted),
     frozen_install_ms: frozenInstallMs,
-    install_warning_count: 0,
+    ...installWarnings,
     node_extract_ms: nodeExtractMs,
     source_clone_ms: cloneMs,
     total_ms: elapsed(started)
   });
 }
 
-function assertNoBootstrapWarning(result, label) {
-  const combined = `${result.stderr}\n${result.stdout}`;
-  if (/\bwarn(?:ing)?\b/iu.test(combined)) {
+function inspectBootstrapWarnings(result, label, allowNetworkTelemetry) {
+  try {
+    return classifyCleanInstallWarnings(
+      result.stdout,
+      result.stderr,
+      allowNetworkTelemetry
+    );
+  } catch {
     const detail = redactCleanDiagnostic(result.stdout, result.stderr, [
       repositoryRoot,
       manifest.container.home
