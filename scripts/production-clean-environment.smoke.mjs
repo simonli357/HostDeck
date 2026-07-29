@@ -813,7 +813,8 @@ function userExec(file, args, options = {}) {
     dockerArgs.push("--env", `${name}=${value}`);
   }
   dockerArgs.push(manifest.container.name, file, ...args);
-  return runCommand("docker", dockerArgs, options);
+  const { cwd: _containerCwd, env: _containerEnv, ...hostOptions } = options;
+  return runCommand("docker", dockerArgs, hostOptions);
 }
 
 function git(args, options = {}) {
