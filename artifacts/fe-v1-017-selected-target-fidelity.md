@@ -86,4 +86,4 @@ Close the aggregate visual-fidelity gate between the seven human-selected Focus 
 - Implementation: `27fd8f7`.
 - Package-browser evidence refresh: `59ba87e`.
 - Evidence: `908a995`.
-- Closure: pending.
+- Closure: `8399c31`.
