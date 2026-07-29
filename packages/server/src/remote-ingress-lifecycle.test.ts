@@ -248,6 +248,35 @@ describe("remote ingress lifecycle", () => {
     await closeLifecycle(harness);
   });
 
+  it("defers redundant polling after explicit status before the next mutation", async () => {
+    const harness = createHarness();
+    harness.lifecycle.start();
+    await flushMicrotasks();
+    await harness.lifecycle.control.enable(enableRequest(22));
+
+    harness.clock.advanceTo(1_600);
+    await expect(harness.lifecycle.control.readStatus()).resolves.toMatchObject({
+      availability: "ready"
+    });
+    const configuredCalls = harness.calls.configured;
+    harness.setConfiguredHandler(() =>
+      Promise.reject(new Error("Unexpected redundant background poll."))
+    );
+
+    harness.clock.advanceTo(1_666);
+    await flushMicrotasks();
+    expect(harness.calls.configured).toBe(configuredCalls);
+    expect(harness.lifecycle.snapshot()).toMatchObject({
+      active_control_operations: 0,
+      poll_cycles: 1
+    });
+    await expect(
+      harness.lifecycle.control.disable(disableRequest(22))
+    ).resolves.toMatchObject({ availability: "disabled" });
+    expect(harness.lifecycle.control.snapshot().busy_rejections).toBe(0);
+    await closeLifecycle(harness);
+  });
+
   it("fails closed on observer rejection and reopens only after a fresh exact observation", async () => {
     const harness = createHarness();
     harness.lifecycle.start();

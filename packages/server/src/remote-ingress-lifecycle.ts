@@ -235,6 +235,7 @@ export function createHostDeckRemoteIngressLifecycle(
   let guardToken = 0;
   let loopPromise: Promise<void> | null = null;
   let closePromise: Promise<void> | null = null;
+  let nextPollNotBefore: number | null = null;
   let observedControlClockFailures = initialized.controlClockFailures;
 
   const nextSourceGeneration = (): number => {
@@ -444,15 +445,33 @@ export function createHostDeckRemoteIngressLifecycle(
     publishFailure();
   };
 
+  const deferNextPoll = (): void => {
+    const now = monotonicNow();
+    const deadline = now + refreshDelay;
+    if (!Number.isFinite(deadline) || deadline <= now) {
+      throw new HostDeckRemoteIngressLifecycleError("clock_invalid");
+    }
+    nextPollNotBefore = Math.max(nextPollNotBefore ?? 0, deadline);
+  };
+
+  const waitForPollWindow = async (): Promise<void> => {
+    while (phase === "running" && nextPollNotBefore !== null) {
+      const remaining = nextPollNotBefore - monotonicNow();
+      if (remaining <= 0) return;
+      await clock.sleep(Math.max(1, Math.ceil(remaining)), rootController.signal);
+    }
+  };
+
   const runControl = <T extends RemoteIngressPublicState>(
-    operation: () => Promise<T>
+    operation: () => Promise<T>,
+    deferPoll: boolean
   ): Promise<T> => {
     if (phase !== "running") {
       return Promise.reject(
         new HostDeckRemoteIngressLifecycleError("lifecycle_closed")
       );
     }
-    const promise = Promise.resolve()
+    const operationPromise = Promise.resolve()
       .then(operation)
       .then(
         (state) => {
@@ -482,6 +501,17 @@ export function createHostDeckRemoteIngressLifecycle(
           throw error;
         }
       );
+    const promise = deferPoll
+      ? operationPromise.finally(() => {
+          if (phase !== "running") return;
+          try {
+            deferNextPoll();
+          } catch (error) {
+            failPermanently(toLifecycleFailure(error));
+            throw error;
+          }
+        })
+      : operationPromise;
     activeControlOperations.add(promise);
     void promise.finally(() => activeControlOperations.delete(promise)).catch(
       () => undefined
@@ -491,13 +521,13 @@ export function createHostDeckRemoteIngressLifecycle(
 
   const control: HostDeckRemoteIngressLifecycleControl = Object.freeze({
     disable(request: RemoteDisableRequest) {
-      return runControl(() => rawControl.disable(request));
+      return runControl(() => rawControl.disable(request), true);
     },
     enable(request: RemoteEnableRequest) {
-      return runControl(() => rawControl.enable(request));
+      return runControl(() => rawControl.enable(request), true);
     },
     readStatus() {
-      return runControl(() => rawControl.readStatus());
+      return runControl(() => rawControl.readStatus(), true);
     },
     snapshot() {
       return rawControl.snapshot();
@@ -506,22 +536,35 @@ export function createHostDeckRemoteIngressLifecycle(
   acceptedControls.add(control);
 
   const runPollLoop = async (): Promise<void> => {
+    let initialPoll = true;
     while (phase === "running") {
+      if (!initialPoll) {
+        try {
+          await waitForPollWindow();
+        } catch {
+          if (rootController.signal.aborted) return;
+          const failure = new HostDeckRemoteIngressLifecycleError(
+            "scheduler_failed"
+          );
+          failPermanently(failure);
+          return;
+        }
+      }
+      initialPoll = false;
+      if (phase !== "running") return;
       counters.pollCycles = increment(counters.pollCycles);
       try {
-        await control.readStatus();
+        await runControl(() => rawControl.readStatus(), false);
       } catch {
         counters.pollFailures = increment(counters.pollFailures);
       }
       if (phase !== "running") return;
       try {
-        await clock.sleep(refreshDelay, rootController.signal);
+        deferNextPoll();
       } catch {
-        if (rootController.signal.aborted) return;
-        const failure = new HostDeckRemoteIngressLifecycleError(
-          "scheduler_failed"
+        failPermanently(
+          new HostDeckRemoteIngressLifecycleError("scheduler_failed")
         );
-        failPermanently(failure);
         return;
       }
     }
