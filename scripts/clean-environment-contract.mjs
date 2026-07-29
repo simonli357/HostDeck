@@ -1150,28 +1150,49 @@ export function sha256(value) {
 }
 
 function assertNoPrivateEvidence(candidate) {
-  const text = canonicalJson(candidate);
-  const forbidden = [
-    "auth.json",
-    "device_token",
-    "csrf_token",
-    "nodekey:",
-    "privatekey:"
-  ];
-  const containsForbiddenMarker = forbidden.some((value) =>
-    text.toLowerCase().includes(value)
+  const finding = findPrivateEvidence(candidate, "$");
+  if (finding === null) return;
+  throw new TypeError(
+    `Clean-user evidence contains private or host-specific data at ${finding.path} (${finding.category}).`
   );
-  const containsPrivatePath = text.includes("/home/");
-  const containsEmail = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/iu.test(text);
-  const containsTailnetName = /[A-Z0-9-]+\.ts\.net\b/iu.test(text);
-  if (
-    containsForbiddenMarker ||
-    containsPrivatePath ||
-    containsEmail ||
-    containsTailnetName
-  ) {
-    throw new TypeError("Clean-user evidence contains private or host-specific data.");
+}
+
+function findPrivateEvidence(candidate, path) {
+  if (typeof candidate === "string") {
+    const lower = candidate.toLowerCase();
+    if (
+      ["auth.json", "device_token", "csrf_token", "nodekey:", "privatekey:"].some(
+        (marker) => lower.includes(marker)
+      )
+    ) {
+      return { category: "forbidden_marker", path };
+    }
+    if (candidate.includes("/home/")) return { category: "private_path", path };
+    if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/iu.test(candidate)) {
+      return { category: "email", path };
+    }
+    if (/[A-Z0-9-]+\.ts\.net\b/iu.test(candidate)) {
+      return { category: "tailnet_name", path };
+    }
+    return null;
   }
+  if (Array.isArray(candidate)) {
+    for (let index = 0; index < candidate.length; index += 1) {
+      const finding = findPrivateEvidence(candidate[index], `${path}[${index}]`);
+      if (finding !== null) return finding;
+    }
+    return null;
+  }
+  if (candidate === null || typeof candidate !== "object") return null;
+  for (const [key, value] of Object.entries(candidate)) {
+    const segment = /^[a-z][a-z0-9_]*$/u.test(key) ? key : "<dynamic>";
+    const childPath = `${path}.${segment}`;
+    const keyFinding = findPrivateEvidence(key, childPath);
+    if (keyFinding !== null) return keyFinding;
+    const finding = findPrivateEvidence(value, childPath);
+    if (finding !== null) return finding;
+  }
+  return null;
 }
 
 function normalizeTailscaleStdout(args, stdout) {

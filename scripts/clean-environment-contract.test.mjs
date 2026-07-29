@@ -256,7 +256,7 @@ test("accepts strict sanitized complete evidence and rejects gaps or secrets", (
         criteria_commit: commit,
         source_commit: commit
       }),
-    /private or host-specific/u
+    /private or host-specific data at \$\.host\.os \(email\)/u
   );
   const falseSuccess = structuredClone(evidence);
   falseSuccess.service.active_upgrade = false;
