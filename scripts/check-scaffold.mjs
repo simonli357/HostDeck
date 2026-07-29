@@ -39,6 +39,7 @@ const requiredScripts = [
   "smoke:codex-ipc",
   "smoke:codex-lifecycle",
   "smoke:codex-threads",
+  "smoke:clean-environment",
   "test:web",
   "test:e2e",
   "build",

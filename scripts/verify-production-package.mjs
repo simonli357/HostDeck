@@ -37,9 +37,7 @@ const expectedPackageNames = [
   "@hostdeck/server",
   "@hostdeck/cli"
 ];
-const expectedDeferrals = [
-  "IFC-V1-058"
-];
+const expectedDeferrals = [];
 const supportedBuildRuntime = Object.freeze({
   architecture: "x64",
   node: "22.22.2",

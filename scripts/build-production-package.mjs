@@ -54,9 +54,7 @@ const expectedExternalModules = [
   "ws",
   "zod"
 ];
-const downstreamDeferrals = [
-  "IFC-V1-058"
-];
+const downstreamDeferrals = [];
 const exactVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 
 export function selectedProductionSources(repositoryRoot = defaultRepositoryRoot) {

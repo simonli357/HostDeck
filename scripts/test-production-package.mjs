@@ -48,9 +48,7 @@ try {
   assert.equal(firstManifest.web.sha256, first.webSha256);
   assert.equal(firstManifest.web.fileCount, first.webFileCount);
   assert.equal(firstManifest.web.bytes, first.webBytes);
-  assert.deepEqual(firstManifest.deferrals, [
-    "IFC-V1-058"
-  ]);
+  assert.deepEqual(firstManifest.deferrals, []);
 
   const second = buildProductionPackage({ repositoryRoot });
   const secondManifestText = readFileSync(join(outputRoot, "hostdeck-package.json"), "utf8");

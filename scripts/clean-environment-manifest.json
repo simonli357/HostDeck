@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "task_id": "IFC-V1-058",
+  "contracts": {
+    "package_manifest_schema": 4,
+    "source_lockfile": "pnpm-lock.yaml",
+    "required_host_commands": [
+      "docker",
+      "git",
+      "sha256sum"
+    ],
+    "required_user_commands": [
+      "corepack",
+      "git",
+      "node",
+      "npm",
+      "pnpm",
+      "systemctl",
+      "tailscale"
+    ]
+  },
+  "base_image": {
+    "reference": "ubuntu@sha256:786a8b558f7be160c6c8c4a54f9a57274f3b4fb1491cf65146521ae77ff1dc54",
+    "digest": "sha256:786a8b558f7be160c6c8c4a54f9a57274f3b4fb1491cf65146521ae77ff1dc54",
+    "os": "ubuntu",
+    "version": "24.04",
+    "architecture": "amd64"
+  },
+  "node": {
+    "version": "22.22.2",
+    "archive_url": "https://nodejs.org/dist/v22.22.2/node-v22.22.2-linux-x64.tar.xz",
+    "archive_sha256": "88fd1ce767091fd8d4a99fdb2356e98c819f93f3b1f8663853a2dee9b438068a"
+  },
+  "pnpm_version": "10.29.2",
+  "codex": {
+    "package": "@openai/codex",
+    "version": "0.144.0",
+    "integrity": "sha512-QFh6f+v5QUx/Vg0HjIl9HB94p7aDLBDkZjc4IXX5RXUcXHPVCZNb6Hl2R49Og/fqW7orgZkeDcgWfRANUa1WoQ=="
+  },
+  "tailscale": {
+    "version": "1.98.8",
+    "deb_url": "https://pkgs.tailscale.com/stable/ubuntu/pool/tailscale_1.98.8_amd64.deb",
+    "deb_sha256": "036af7f0f3ed78ecf091bffbe3518f57a76c576d2ffa8d70e41d79d290878189"
+  },
+  "package_versions": [
+    "1.0.0",
+    "1.1.0"
+  ],
+  "container": {
+    "name": "hostdeck-ifc-v1-058",
+    "image_tag_prefix": "hostdeck-ifc-v1-058",
+    "user": "ubuntu",
+    "uid": 1000,
+    "gid": 1000,
+    "home": "/home/ubuntu",
+    "checkout": "/home/ubuntu/HostDeck",
+    "runtime_dir": "/run/user/1000",
+    "evidence_dir": "/evidence",
+    "tailscale_mount": "/host-tailscale"
+  },
+  "bounds": {
+    "command_output_bytes": 1048576,
+    "http_body_bytes": 2097152,
+    "host_command_ms": 120000,
+    "image_build_ms": 1200000,
+    "bootstrap_ms": 900000,
+    "acceptance_ms": 1800000,
+    "readiness_ms": 90000,
+    "poll_ms": 100,
+    "container_stop_seconds": 30
+  },
+  "evidence_fields": [
+    "schema_version",
+    "task_id",
+    "criteria_commit",
+    "source_commit",
+    "host",
+    "container",
+    "toolchain",
+    "clean_source",
+    "packages",
+    "foreground",
+    "service",
+    "tailscale",
+    "cleanup",
+    "limits"
+  ]
+}
