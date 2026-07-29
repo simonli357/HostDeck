@@ -103,6 +103,27 @@ describe("IFC-V1-055 systemd user-unit generator", () => {
     expect(bundle.units[1].content).not.toContain(layout.packageRoot);
   });
 
+  it("verifies an immutable read-only staged package", () => {
+    const layout = fixture("install-read-only", "present");
+    const distRoot = dirname(layout.serviceHostPath);
+    chmodSync(layout.manifestPath, 0o444);
+    chmodSync(layout.serviceHostPath, 0o444);
+    chmodSync(distRoot, 0o555);
+    chmodSync(layout.packageRoot, 0o555);
+
+    try {
+      expect(() =>
+        generateHostDeckSystemdUserUnitsForInstall({
+          ...layout.input,
+          verification_package_root: layout.packageRoot
+        })
+      ).not.toThrow();
+    } finally {
+      chmodSync(layout.packageRoot, 0o755);
+      chmodSync(distRoot, 0o755);
+    }
+  });
+
   it("accepts an unpublished private environment parent only for install staging", () => {
     const layout = fixture("install-environment-staging", "missing");
     const environmentRoot = dirname(layout.environmentFile);

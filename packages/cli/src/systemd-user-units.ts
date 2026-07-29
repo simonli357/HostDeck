@@ -102,6 +102,7 @@ const maximumPathBytes = 4096;
 const maximumManifestBytes = 65_536;
 const maximumServiceHostBytes = 16_777_216;
 const maximumEnvironmentFileBytes = 1_048_576;
+const packageFileModes = Object.freeze([0o444, 0o644] as const);
 const exactVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 const sha256Pattern = /^[a-f0-9]{64}$/u;
 const generatedBundles = new WeakSet<HostDeckSystemdUserUnitBundle>();
@@ -295,7 +296,7 @@ function validatePackage(packageRoot: string, expectedVersion: string): string {
     assertContained(packageRoot, manifestPath);
     const manifestBytes = readSecureRegularFile(
       manifestPath,
-      0o644,
+      packageFileModes,
       maximumManifestBytes,
       true,
       "package_invalid",
@@ -309,7 +310,7 @@ function validatePackage(packageRoot: string, expectedVersion: string): string {
     }
     const serviceHostBytes = readSecureRegularFile(
       serviceHostPath,
-      0o644,
+      packageFileModes,
       manifest.size,
       true,
       "package_invalid",
@@ -460,7 +461,7 @@ function pathExists(path: string): boolean {
 
 function readSecureRegularFile(
   path: string,
-  mode: number,
+  modes: number | readonly number[],
   maximumBytes: number,
   requireCurrentOwner: boolean,
   code: HostDeckSystemdUserUnitErrorCode,
@@ -473,7 +474,7 @@ function readSecureRegularFile(
       !before.isFile() ||
       before.isSymbolicLink() ||
       before.nlink !== 1 ||
-      (before.mode & 0o7777) !== mode ||
+      !matchesMode(before.mode & 0o7777, modes) ||
       (requireCurrentOwner && before.uid !== currentUid()) ||
       before.size > maximumBytes
     ) {
@@ -516,6 +517,10 @@ function readSecureRegularFile(
       }
     }
   }
+}
+
+function matchesMode(actual: number, expected: number | readonly number[]): boolean {
+  return typeof expected === "number" ? actual === expected : expected.includes(actual);
 }
 
 function renderCodexUnit(input: ValidatedInput): string {

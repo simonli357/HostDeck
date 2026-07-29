@@ -67,6 +67,31 @@ describe("IFC-V1-056 service lifecycle owner", () => {
     });
   });
 
+  it("removes immutable staging after package preparation fails", async () => {
+    const fixture = createFixture();
+    const source = createSourcePackage(fixture, "1.0.0", "f");
+    const sourceDist = join(source.root, "dist");
+    chmodSync(join(source.root, "hostdeck-package.json"), 0o444);
+    chmodSync(join(sourceDist, "shell.js"), 0o555);
+    chmodSync(sourceDist, 0o555);
+    chmodSync(source.root, 0o555);
+
+    try {
+      await expect(
+        createLifecycle(fixture, source, {
+          generateUnits: () => {
+            throw new Error("injected package preparation failure");
+          }
+        }).execute("install")
+      ).rejects.toMatchObject({ code: "install_invalid", stage: "install" });
+      expect(existsSync(fixture.layout.transaction_file)).toBe(false);
+      expect(readdirSync(fixture.layout.releases_dir)).toEqual([]);
+    } finally {
+      chmodSync(source.root, 0o755);
+      chmodSync(sourceDist, 0o755);
+    }
+  });
+
   it("installs without start, stays idempotent, then starts, restarts HostDeck only, reports, and stops both", async () => {
     const fixture = createFixture();
     const source = createSourcePackage(fixture, "1.0.0", "1");
@@ -1247,6 +1272,7 @@ function createLifecycle(
   source: SourcePackage,
   overrides: {
     readonly includeCodex?: boolean;
+    readonly generateUnits?: typeof fakeUnitGenerator;
     readonly readHostStatus?: () => Promise<SelectedHostStatusResponse>;
     readonly verify?: (root: string) => Promise<HostDeckProductionPackageIdentity>;
   } = {}
@@ -1259,7 +1285,7 @@ function createLifecycle(
       : { codex_bin: fixture.codexBin }),
     database_path: fixture.databasePath,
     env: fixture.env,
-    generate_units: fakeUnitGenerator,
+    generate_units: overrides.generateUnits ?? fakeUnitGenerator,
     manager: fixture.manager,
     node_bin: fixture.nodeBin,
     package_root: source.root,

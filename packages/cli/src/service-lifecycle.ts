@@ -1625,9 +1625,7 @@ async function prepareRelease(
     });
   } catch (error) {
     if (!releasePublished && existsNoFollow(stagingRoot)) {
-      assertOwnedDirectory(stagingRoot, true);
-      rmSync(stagingRoot, { force: false, recursive: true });
-      fsyncDirectory(context.layout.releases_dir);
+      removeOwnedStagingTree(stagingRoot, context.layout.releases_dir);
     }
     if (releasePublished) {
       throw lifecycleError("recovery_required", "recovery", error);
@@ -2977,9 +2975,29 @@ function removeTransactionStaging(
     transaction.staging_name
   );
   if (!existsNoFollow(stagingRoot)) return;
-  assertOwnedDirectory(stagingRoot, true);
-  rmSync(stagingRoot, { force: false, recursive: true });
-  fsyncDirectory(context.layout.releases_dir);
+  removeOwnedStagingTree(stagingRoot, context.layout.releases_dir);
+}
+
+function removeOwnedStagingTree(root: string, parent: string): void {
+  assertOwnedDirectory(root, true);
+  makeOwnedStagingTreeRemovable(root);
+  rmSync(root, { force: false, recursive: true });
+  fsyncDirectory(parent);
+}
+
+function makeOwnedStagingTreeRemovable(path: string): void {
+  const metadata = lstatSync(path);
+  if (metadata.uid !== process.getuid?.()) {
+    throw lifecycleError("recovery_required", "recovery");
+  }
+  if (metadata.isSymbolicLink() || metadata.isFile()) return;
+  if (!metadata.isDirectory()) {
+    throw lifecycleError("recovery_required", "recovery");
+  }
+  chmodSync(path, hostDeckServiceDirectoryMode);
+  for (const entry of readdirSync(path)) {
+    makeOwnedStagingTreeRemovable(join(path, entry));
+  }
 }
 
 function updateTransactionPhase(
