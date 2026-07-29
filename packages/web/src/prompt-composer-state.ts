@@ -605,7 +605,12 @@ function turnEventStatus(
     case "waiting_for_input":
       return status("needs_input", "attention", "Turn needs input", "Respond to the pending input request.");
     case "waiting_for_approval":
-      return status("needs_approval", "attention", "Turn needs approval", "Resolve the pending approval first.");
+      return status(
+        "needs_approval",
+        "attention",
+        "Prompt paused",
+        "The turn still reports waiting for approval. Refresh before sending."
+      );
     case "completed":
       return status("completed", "connected", "Turn completed", "Completion was confirmed by session activity.");
     case "interrupted":
@@ -753,7 +758,7 @@ function disabledReason(cause: PromptComposerDisabledCause): string {
     case "turn_needs_input":
       return "Respond to the pending input request first.";
     case "turn_needs_approval":
-      return "Resolve the pending approval first.";
+      return "The turn still reports waiting for approval. Refresh before sending.";
     case "turn_unknown":
       return "Turn state is unknown. Refresh before sending.";
     case "activity_loading":

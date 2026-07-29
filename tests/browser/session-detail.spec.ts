@@ -48,7 +48,10 @@ test("renders the production structured feed across the approved responsive cont
   const composer = page.getByRole("textbox", { name: "Prompt for android-release" });
   await expect(composer).toBeVisible();
   await expect(composer).toBeDisabled();
-  await expect(page.getByText("Resolve the pending approval first.", { exact: true }))
+  await expect(page.getByText(
+    "The turn still reports waiting for approval. Refresh before sending.",
+    { exact: true }
+  ))
     .toBeVisible();
 
   expect(await api.streamRequestUrls()).toEqual([

@@ -188,7 +188,12 @@ describe("prompt composer projection", () => {
       if (state === "waiting_for_approval") {
         expect(view).toMatchObject({
           disabledCause: "turn_needs_approval",
+          disabledReason:
+            "The turn still reports waiting for approval. Refresh before sending.",
           inputDisabled: true,
+          status: "Prompt paused",
+          statusDetail:
+            "The turn still reports waiting for approval. Refresh before sending.",
           sendEnabled: false
         });
       }
