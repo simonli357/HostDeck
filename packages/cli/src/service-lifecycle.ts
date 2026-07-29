@@ -13,6 +13,7 @@ import {
   readlinkSync,
   realpathSync,
   renameSync,
+  rmdirSync,
   rmSync,
   symlinkSync,
   unlinkSync,
@@ -61,6 +62,7 @@ export type HostDeckServiceAction =
   | "start"
   | "status"
   | "stop"
+  | "uninstall"
   | "upgrade";
 
 export type HostDeckServiceInstallState =
@@ -150,6 +152,7 @@ export type HostDeckServiceLifecycleErrorCode =
   | "readiness_failed"
   | "recovery_required"
   | "rollback_failed"
+  | "uninstall_invalid"
   | "upgrade_invalid";
 
 export type HostDeckServiceLifecycleStage =
@@ -158,10 +161,12 @@ export type HostDeckServiceLifecycleStage =
   | "package"
   | "readiness"
   | "recovery"
+  | "retention"
   | "restart"
   | "start"
   | "status"
   | "stop"
+  | "uninstall"
   | "upgrade";
 
 export class HostDeckServiceLifecycleError extends Error {
@@ -217,7 +222,7 @@ interface LifecycleContext {
   readonly verifyPackage: VerifyHostDeckProductionPackage;
 }
 
-interface LifecycleTransaction {
+interface InstallUpgradeLifecycleTransaction {
   readonly name: "hostdeck-service-transaction";
   readonly next_selector: string;
   readonly operation: "install" | "upgrade";
@@ -232,7 +237,34 @@ interface LifecycleTransaction {
   readonly was_active: boolean;
 }
 
-const transactionKeys = Object.freeze([
+interface UninstallLifecycleTransaction {
+  readonly active_selector: string | null;
+  readonly environment_sha256: string | null;
+  readonly name: "hostdeck-service-transaction";
+  readonly operation: "uninstall";
+  readonly phase:
+    | "prepared"
+    | "stopped"
+    | "disabled"
+    | "anchors_removed"
+    | "releases_removed"
+    | "manager_reloaded";
+  readonly release_selectors: readonly string[];
+  readonly schema_version: 1;
+}
+
+type UninstallLifecyclePhase = UninstallLifecycleTransaction["phase"];
+
+type LifecycleTransaction =
+  | InstallUpgradeLifecycleTransaction
+  | UninstallLifecycleTransaction;
+
+interface PublishedReleaseSet {
+  readonly manifests: readonly HostDeckServiceInstallManifest[];
+  readonly selectors: readonly string[];
+}
+
+const installUpgradeTransactionKeys = Object.freeze([
   "name",
   "next_selector",
   "operation",
@@ -242,14 +274,32 @@ const transactionKeys = Object.freeze([
   "staging_name",
   "was_active"
 ] as const);
+const uninstallTransactionKeys = Object.freeze([
+  "active_selector",
+  "environment_sha256",
+  "name",
+  "operation",
+  "phase",
+  "release_selectors",
+  "schema_version"
+] as const);
 const maximumPackageManifestBytes = 65_536;
 const maximumTransactionBytes = 16_384;
 const maximumPathBytes = 4_096;
+const maximumPublishedReleases = 64;
 const incompleteReleaseMarkerName = ".hostdeck-incomplete";
 const sha256Pattern = /^[a-f0-9]{64}$/u;
 const maximumVersionBytes = 256;
 const versionPattern = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|(?=[0-9A-Za-z-]*[A-Za-z-])[0-9A-Za-z-]+)(?:\.(?:0|[1-9][0-9]*|(?=[0-9A-Za-z-]*[A-Za-z-])[0-9A-Za-z-]+))*)?$/u;
 const stagingNamePattern = /^\.hostdeck-release-[a-f0-9]{32}$/u;
+const uninstallPhaseOrder = Object.freeze([
+  "prepared",
+  "stopped",
+  "disabled",
+  "anchors_removed",
+  "releases_removed",
+  "manager_reloaded"
+] as const);
 let temporaryCounter = 0;
 
 export function createHostDeckServiceLifecycle(
@@ -265,6 +315,7 @@ export function createHostDeckServiceLifecycle(
           action !== "status" &&
           action !== "start" &&
           action !== "stop" &&
+          action !== "uninstall" &&
           action !== "restart"
         ) {
           throw new TypeError("HostDeck service lifecycle action is invalid.");
@@ -274,6 +325,7 @@ export function createHostDeckServiceLifecycle(
         }
         if (action === "install") return await installService(context);
         if (action === "upgrade") return await upgradeService(context);
+        if (action === "uninstall") return await uninstallService(context);
         return await withLifecycleLock(context, async () => {
           await recoverPendingTransaction(context);
           const inspection = await inspectInstallation(context, true);
@@ -324,6 +376,8 @@ export function createHostDeckServiceLifecycle(
         throw lifecycleError(
           action === "install" || action === "upgrade"
             ? "install_invalid"
+            : action === "uninstall"
+              ? "uninstall_invalid"
             : "lifecycle_failed",
           action,
           error
@@ -348,7 +402,15 @@ export function assertHostDeckServiceLifecycleResult(
     "units"
   ]);
   if (
-    !["install", "upgrade", "status", "start", "stop", "restart"].includes(
+    ![
+      "install",
+      "upgrade",
+      "status",
+      "start",
+      "stop",
+      "restart",
+      "uninstall"
+    ].includes(
       String(value.action)
     ) ||
     !["not_probed", "not_ready", "ready", "unreachable"].includes(
@@ -391,7 +453,26 @@ export function assertHostDeckServiceLifecycleResult(
     (value.api_state === "ready" && hostDeck.active_state !== "active") ||
     (value.api_state === "not_probed" && hostDeck.active_state === "active") ||
     (value.action === "stop" &&
-      (hostDeck.active_state === "active" || codex.active_state === "active"))
+      (hostDeck.active_state === "active" || codex.active_state === "active")) ||
+    (value.action === "uninstall" &&
+      (value.install_state !== "not_installed" ||
+        value.enabled ||
+        value.api_state !== "not_probed" ||
+        value.package_version !== null ||
+        value.release_id !== null ||
+        value.rollback !== "not_required" ||
+        hostDeck.load_state !== "not-found" ||
+        codex.load_state !== "not-found" ||
+        hostDeck.active_state !== "inactive" ||
+        codex.active_state !== "inactive" ||
+        hostDeck.main_pid !== 0 ||
+        codex.main_pid !== 0 ||
+        hostDeck.need_daemon_reload ||
+        codex.need_daemon_reload ||
+        hostDeck.sub_state !== "dead" ||
+        codex.sub_state !== "dead" ||
+        hostDeck.unit_file_state !== "" ||
+        codex.unit_file_state !== ""))
   ) {
     throw new TypeError("HostDeck service lifecycle state is contradictory.");
   }
@@ -495,6 +576,7 @@ async function installService(
     if (existing.state !== "not_installed") {
       throw lifecycleError("install_invalid", "install");
     }
+    const publishedBeforeInstall = await inspectPublishedReleases(context);
     requireAbsent(context.layout.enablement_link);
     await assertManagerHasNoHostDeckUnits(context.manager);
     const transaction: LifecycleTransaction = {
@@ -565,6 +647,11 @@ async function installService(
       await context.manager.enableHostDeck();
       canonicalizeManagerEnablement(prepared.manifest);
       await requireInstalledStopped(context, prepared.manifest, "install");
+      await prunePublishedReleases(
+        context,
+        publishedBeforeInstall,
+        new Set([prepared.manifest.release.selector_target])
+      );
       removeTransaction(context.layout.transaction_file);
       return await readLifecycleResult(
         context,
@@ -648,6 +735,14 @@ async function upgradeService(
     await recoverPendingTransaction(context);
     const inspection = await inspectInstallation(context, true);
     const previous = requireCoherentInstallation(inspection);
+    const publishedBeforeUpgrade = await inspectPublishedReleases(context);
+    if (
+      !publishedBeforeUpgrade.selectors.includes(
+        previous.release.selector_target
+      )
+    ) {
+      throw lifecycleError("install_invalid", "retention");
+    }
     const comparison = compareVersions(
       source.package_version,
       previous.release.package_version
@@ -758,6 +853,14 @@ async function upgradeService(
           beforeCodex
         );
       }
+      await prunePublishedReleases(
+        context,
+        publishedBeforeUpgrade,
+        new Set([
+          previous.release.selector_target,
+          prepared.manifest.release.selector_target
+        ])
+      );
       removeTransaction(context.layout.transaction_file);
       return await readLifecycleResult(
         context,
@@ -797,6 +900,607 @@ async function upgradeService(
           "failed"
         );
       }
+    }
+  });
+}
+
+async function uninstallService(
+  context: LifecycleContext
+): Promise<HostDeckServiceLifecycleResult> {
+  if (!existsNoFollow(context.layout.data_root)) {
+    assertExternalUninstallPathsAbsent(context.layout);
+    return await readUninstallLifecycleResult(context, false);
+  }
+  return await withExistingLifecycleLock(context, async () => {
+    let transaction: UninstallLifecycleTransaction | null = null;
+    if (existsNoFollow(context.layout.transaction_file)) {
+      let pending: LifecycleTransaction;
+      try {
+        pending = readTransaction(context.layout.transaction_file);
+      } catch (error) {
+        throw lifecycleError("recovery_required", "recovery", error);
+      }
+      if (pending.operation === "uninstall") {
+        transaction = pending;
+      } else {
+        await recoverPendingTransaction(context);
+      }
+    }
+    if (transaction === null) {
+      const prepared = await prepareUninstallTransaction(context);
+      if (prepared === null) {
+        return await readUninstallLifecycleResult(context, false);
+      }
+      writeTransaction(context.layout.transaction_file, prepared);
+      transaction = prepared;
+    }
+    return await executeUninstallTransaction(context, transaction);
+  });
+}
+
+async function prepareUninstallTransaction(
+  context: LifecycleContext
+): Promise<UninstallLifecycleTransaction | null> {
+  assertUninstallDataRootEntries(context.layout, false);
+  const releases = await inspectUninstallPublishedReleases(context);
+  const environmentSha256 = consistentEnvironmentSha256(releases.manifests);
+  const activeSelector = inspectOptionalUninstallAnchors(
+    context.layout,
+    releases,
+    environmentSha256
+  );
+  assertPreservedPathsOutsideReleases(context, releases.manifests);
+  const [hostDeck, codex] = await Promise.all([
+    context.manager.show(hostDeckSystemdUnitName),
+    context.manager.show(hostDeckCodexSystemdUnitName)
+  ]);
+  assertUninstallManagerIdentity(context.layout, hostDeck, codex, "fresh");
+  const hasOwnedArtifacts =
+    releases.selectors.length > 0 ||
+    existsNoFollow(context.layout.releases_dir) ||
+    uninstallAnchorPaths(context.layout).some(existsNoFollow) ||
+    hostDeck.load_state !== "not-found" ||
+    codex.load_state !== "not-found";
+  if (!hasOwnedArtifacts) return null;
+  return deepFreeze({
+    active_selector: activeSelector,
+    environment_sha256: environmentSha256,
+    name: "hostdeck-service-transaction" as const,
+    operation: "uninstall" as const,
+    phase: "prepared" as const,
+    release_selectors: releases.selectors.slice().sort(),
+    schema_version: 1 as const
+  });
+}
+
+async function executeUninstallTransaction(
+  context: LifecycleContext,
+  initialTransaction: UninstallLifecycleTransaction
+): Promise<HostDeckServiceLifecycleResult> {
+  let transaction = initialTransaction;
+  try {
+    await assertUninstallTransactionOwnership(context, transaction);
+  } catch (error) {
+    if (
+      error instanceof HostDeckServiceLifecycleError &&
+      error.code === "recovery_required"
+    ) {
+      throw error;
+    }
+    throw lifecycleError("recovery_required", "recovery", error);
+  }
+
+  const beforeStop = await readUninstallManagerStates(context);
+  assertUninstallManagerIdentity(
+    context.layout,
+    beforeStop.hostdeck,
+    beforeStop.codex,
+    transaction.phase
+  );
+  if (!isUninstallStopped(beforeStop.hostdeck)) {
+    await context.manager.stopHostDeck();
+  }
+  if (!isUninstallStopped(beforeStop.codex)) {
+    await context.manager.stopCodex();
+  }
+  await requireUninstallStopped(context, transaction.phase);
+  transaction = advanceUninstallTransactionPhase(
+    transaction,
+    context.layout.transaction_file,
+    "stopped"
+  );
+
+  const beforeDisable = await readUninstallManagerStates(context);
+  assertUninstallManagerIdentity(
+    context.layout,
+    beforeDisable.hostdeck,
+    beforeDisable.codex,
+    transaction.phase
+  );
+  if (
+    existsNoFollow(context.layout.enablement_link) ||
+    beforeDisable.hostdeck.unit_file_state === "enabled"
+  ) {
+    await context.manager.disableHostDeck();
+  }
+  requireAbsent(context.layout.enablement_link);
+  await requireUninstallDisabled(context, transaction.phase);
+  transaction = advanceUninstallTransactionPhase(
+    transaction,
+    context.layout.transaction_file,
+    "disabled"
+  );
+
+  removeUninstallAnchors(context.layout, transaction);
+  transaction = advanceUninstallTransactionPhase(
+    transaction,
+    context.layout.transaction_file,
+    "anchors_removed"
+  );
+
+  for (const selector of transaction.release_selectors) {
+    await removeUninstallPublishedRelease(context, selector);
+  }
+  removeEmptyReleasesDirectory(context.layout);
+  transaction = advanceUninstallTransactionPhase(
+    transaction,
+    context.layout.transaction_file,
+    "releases_removed"
+  );
+
+  await context.manager.daemonReload();
+  await requireUninstallNotFound(context);
+  transaction = advanceUninstallTransactionPhase(
+    transaction,
+    context.layout.transaction_file,
+    "manager_reloaded"
+  );
+  assertUninstallDataRootEntries(context.layout, true);
+  removeTransaction(context.layout.transaction_file);
+  assertCompletedUninstallDataRoot(context.layout);
+  return await readUninstallLifecycleResult(context, true);
+}
+
+function assertExternalUninstallPathsAbsent(
+  layout: HostDeckServiceInstallLayout
+): void {
+  for (const path of uninstallAnchorPaths(layout)) requireAbsent(path);
+}
+
+function uninstallAnchorPaths(
+  layout: HostDeckServiceInstallLayout
+): readonly string[] {
+  return Object.freeze([
+    layout.current_link,
+    layout.manifest_link,
+    layout.environment_file,
+    layout.command_path,
+    layout.enablement_link,
+    ...Object.values(layout.unit_paths)
+  ]);
+}
+
+function assertUninstallDataRootEntries(
+  layout: HostDeckServiceInstallLayout,
+  expectTransaction: boolean
+): void {
+  assertOwnedDirectory(layout.data_root, true);
+  inspectRegularFile(layout.lifecycle_lock, 0o600, sha256(""));
+  const allowed = new Set([
+    "current",
+    "install.json",
+    "lifecycle.lock",
+    "lifecycle-transaction.json",
+    "releases"
+  ]);
+  const entries = readdirSync(layout.data_root).sort();
+  if (entries.some((entry) => !allowed.has(entry))) {
+    throw lifecycleError("uninstall_invalid", "uninstall");
+  }
+  if (expectTransaction !== entries.includes("lifecycle-transaction.json")) {
+    throw lifecycleError("recovery_required", "recovery");
+  }
+}
+
+function consistentEnvironmentSha256(
+  manifests: readonly HostDeckServiceInstallManifest[]
+): string | null {
+  const hashes = [...new Set(manifests.map(({ environment }) => environment.sha256))];
+  if (hashes.length > 1) {
+    throw lifecycleError("uninstall_invalid", "uninstall");
+  }
+  return hashes[0] ?? null;
+}
+
+function inspectOptionalUninstallAnchors(
+  layout: HostDeckServiceInstallLayout,
+  releases: PublishedReleaseSet,
+  environmentSha256: string | null
+): string | null {
+  const expectedCommandTarget = join(
+    layout.current_link,
+    "package",
+    "dist",
+    "shell.js"
+  );
+  if (existsNoFollow(layout.manifest_link)) {
+    requireSymlink(layout.manifest_link, "current/install.json");
+  }
+  if (existsNoFollow(layout.command_path)) {
+    requireSymlink(layout.command_path, expectedCommandTarget);
+  }
+  for (const [name, path] of Object.entries(layout.unit_paths)) {
+    if (existsNoFollow(path)) {
+      requireSymlink(path, join(layout.current_link, "units", name));
+    }
+  }
+  let activeSelector: string | null = null;
+  if (existsNoFollow(layout.current_link)) {
+    activeSelector = requireExactSymlink(layout.current_link);
+    if (!releases.selectors.includes(activeSelector)) {
+      throw lifecycleError("uninstall_invalid", "uninstall");
+    }
+  }
+  if (existsNoFollow(layout.environment_file)) {
+    if (environmentSha256 === null) {
+      throw lifecycleError("uninstall_invalid", "uninstall");
+    }
+    inspectRegularFile(
+      layout.environment_file,
+      hostDeckServiceEnvironmentMode,
+      environmentSha256
+    );
+  }
+  if (existsNoFollow(layout.enablement_link)) {
+    const observed = requireExactSymlink(layout.enablement_link);
+    const allowedTargets = new Set([
+      layout.unit_paths[hostDeckSystemdUnitName],
+      ...releases.manifests.map(managerEnablementTarget)
+    ]);
+    if (!allowedTargets.has(observed)) {
+      throw lifecycleError("uninstall_invalid", "uninstall");
+    }
+  }
+  return activeSelector;
+}
+
+function assertPreservedPathsOutsideReleases(
+  context: LifecycleContext,
+  manifests: readonly HostDeckServiceInstallManifest[]
+): void {
+  const codexHome = context.env.CODEX_HOME;
+  const preservedPaths = [
+    context.stateDir,
+    context.databasePath,
+    ...(codexHome === undefined
+      ? []
+      : [parseAbsolutePath(codexHome, "CODEX_HOME")]),
+    ...manifests.flatMap(({ runtime }) => [
+      runtime.codex_bin,
+      runtime.node_bin
+    ])
+  ];
+  const removedPaths = [
+    context.layout.releases_dir,
+    context.layout.transaction_file,
+    ...uninstallAnchorPaths(context.layout)
+  ];
+  for (const preserved of preservedPaths) {
+    for (const removed of removedPaths) {
+      if (
+        preserved === removed ||
+        isDescendant(preserved, removed) ||
+        isDescendant(removed, preserved)
+      ) {
+        throw lifecycleError("uninstall_invalid", "uninstall");
+      }
+    }
+  }
+}
+
+async function assertUninstallTransactionOwnership(
+  context: LifecycleContext,
+  transaction: UninstallLifecycleTransaction
+): Promise<void> {
+  assertUninstallDataRootEntries(context.layout, true);
+  const releases = await inspectUninstallPublishedReleases(context);
+  if (
+    releases.selectors.some(
+      (selector) => !transaction.release_selectors.includes(selector)
+    ) ||
+    releases.manifests.some(
+      ({ environment }) =>
+        transaction.environment_sha256 !== null &&
+        environment.sha256 !== transaction.environment_sha256
+    )
+  ) {
+    throw lifecycleError("recovery_required", "recovery");
+  }
+  inspectTransactionOwnedAnchors(context.layout, transaction, releases);
+  assertPreservedPathsOutsideReleases(context, releases.manifests);
+}
+
+function inspectTransactionOwnedAnchors(
+  layout: HostDeckServiceInstallLayout,
+  transaction: UninstallLifecycleTransaction,
+  releases: PublishedReleaseSet
+): void {
+  const expectedCommandTarget = join(
+    layout.current_link,
+    "package",
+    "dist",
+    "shell.js"
+  );
+  for (const [path, target] of [
+    [layout.manifest_link, "current/install.json"],
+    [layout.command_path, expectedCommandTarget],
+    ...Object.entries(layout.unit_paths).map(([name, path]) =>
+      [path, join(layout.current_link, "units", name)] as const
+    )
+  ] as const) {
+    if (existsNoFollow(path)) requireSymlink(path, target);
+  }
+  if (existsNoFollow(layout.current_link)) {
+    if (transaction.active_selector === null) {
+      throw lifecycleError("recovery_required", "recovery");
+    }
+    requireSymlink(layout.current_link, transaction.active_selector);
+  }
+  if (existsNoFollow(layout.environment_file)) {
+    if (transaction.environment_sha256 === null) {
+      throw lifecycleError("recovery_required", "recovery");
+    }
+    inspectRegularFile(
+      layout.environment_file,
+      hostDeckServiceEnvironmentMode,
+      transaction.environment_sha256
+    );
+  }
+  if (existsNoFollow(layout.enablement_link)) {
+    const target = requireExactSymlink(layout.enablement_link);
+    const allowedTargets = new Set([
+      layout.unit_paths[hostDeckSystemdUnitName],
+      ...releases.manifests.map(managerEnablementTarget)
+    ]);
+    if (!allowedTargets.has(target)) {
+      throw lifecycleError("recovery_required", "recovery");
+    }
+  }
+}
+
+async function readUninstallManagerStates(
+  context: LifecycleContext
+): Promise<Readonly<{
+  codex: HostDeckSystemdUnitState;
+  hostdeck: HostDeckSystemdUnitState;
+}>> {
+  const [hostdeck, codex] = await Promise.all([
+    context.manager.show(hostDeckSystemdUnitName),
+    context.manager.show(hostDeckCodexSystemdUnitName)
+  ]);
+  return Object.freeze({ codex, hostdeck });
+}
+
+function assertUninstallManagerIdentity(
+  layout: HostDeckServiceInstallLayout,
+  hostDeck: HostDeckSystemdUnitState,
+  codex: HostDeckSystemdUnitState,
+  phase: UninstallLifecyclePhase | "fresh"
+): void {
+  const allowReloadRequired =
+    phase !== "fresh" &&
+    uninstallPhaseOrder.indexOf(phase) >= uninstallPhaseOrder.indexOf("stopped");
+  const anchorsMayBeRemoved =
+    phase !== "fresh" &&
+    uninstallPhaseOrder.indexOf(phase) >=
+      uninstallPhaseOrder.indexOf("anchors_removed");
+  assertUninstallManagerUnit(
+    hostDeck,
+    layout.unit_paths[hostDeckSystemdUnitName],
+    allowReloadRequired,
+    anchorsMayBeRemoved ? ["bad", "disabled", "enabled", "linked"] : ["disabled", "enabled"]
+  );
+  assertUninstallManagerUnit(
+    codex,
+    layout.unit_paths[hostDeckCodexSystemdUnitName],
+    allowReloadRequired,
+    anchorsMayBeRemoved ? ["bad", "disabled", "linked"] : ["linked"]
+  );
+}
+
+function assertUninstallManagerUnit(
+  state: HostDeckSystemdUnitState,
+  expectedFragment: string,
+  allowReloadRequired: boolean,
+  allowedUnitFileStates: readonly string[]
+): void {
+  if (state.load_state === "not-found") {
+    if (
+      state.fragment_path !== "" ||
+      state.active_state !== "inactive" ||
+      state.main_pid !== 0 ||
+      state.need_daemon_reload ||
+      state.sub_state !== "dead" ||
+      state.unit_file_state !== ""
+    ) {
+      throw lifecycleError("uninstall_invalid", "uninstall");
+    }
+    return;
+  }
+  const stableStoppedState =
+    state.active_state === "inactive" || state.active_state === "failed";
+  if (
+    state.load_state !== "loaded" ||
+    state.fragment_path !== expectedFragment ||
+    (!allowReloadRequired && state.need_daemon_reload) ||
+    !allowedUnitFileStates.includes(state.unit_file_state) ||
+    ![
+      "active",
+      "activating",
+      "deactivating",
+      "failed",
+      "inactive"
+    ].includes(state.active_state) ||
+    (state.active_state === "active" && state.main_pid < 1) ||
+    (stableStoppedState && state.main_pid !== 0) ||
+    !Number.isSafeInteger(state.main_pid) ||
+    state.main_pid < 0
+  ) {
+    throw lifecycleError("uninstall_invalid", "uninstall");
+  }
+}
+
+function isUninstallStopped(state: HostDeckSystemdUnitState): boolean {
+  return (
+    (state.load_state === "not-found" || state.active_state === "inactive") &&
+    state.main_pid === 0
+  );
+}
+
+async function requireUninstallStopped(
+  context: LifecycleContext,
+  phase: UninstallLifecyclePhase
+): Promise<void> {
+  const started = Date.now();
+  let consecutive = 0;
+  while (Date.now() - started <= context.readinessTimeoutMs) {
+    const states = await readUninstallManagerStates(context);
+    assertUninstallManagerIdentity(
+      context.layout,
+      states.hostdeck,
+      states.codex,
+      phase
+    );
+    if (
+      isUninstallStopped(states.hostdeck) &&
+      isUninstallStopped(states.codex)
+    ) {
+      consecutive += 1;
+      if (consecutive >= 2) return;
+    } else {
+      consecutive = 0;
+    }
+    if (Date.now() - started >= context.readinessTimeoutMs) break;
+    await context.sleep(Math.min(250, context.readinessTimeoutMs));
+  }
+  throw lifecycleError("lifecycle_failed", "uninstall");
+}
+
+async function requireUninstallDisabled(
+  context: LifecycleContext,
+  phase: UninstallLifecyclePhase
+): Promise<void> {
+  const states = await readUninstallManagerStates(context);
+  assertUninstallManagerIdentity(
+    context.layout,
+    states.hostdeck,
+    states.codex,
+    phase
+  );
+  if (
+    states.hostdeck.unit_file_state === "enabled" ||
+    states.codex.unit_file_state === "enabled"
+  ) {
+    throw lifecycleError("lifecycle_failed", "uninstall");
+  }
+}
+
+function removeUninstallAnchors(
+  layout: HostDeckServiceInstallLayout,
+  transaction: UninstallLifecycleTransaction
+): void {
+  requireAbsent(layout.enablement_link);
+  for (const [name, path] of Object.entries(layout.unit_paths).reverse()) {
+    removeExactSymlink(path, join(layout.current_link, "units", name));
+  }
+  removeExactSymlink(
+    layout.command_path,
+    join(layout.current_link, "package", "dist", "shell.js")
+  );
+  removeExactSymlink(layout.manifest_link, "current/install.json");
+  if (transaction.active_selector === null) {
+    requireAbsent(layout.current_link);
+  } else {
+    removeExactSymlink(layout.current_link, transaction.active_selector);
+  }
+  if (transaction.environment_sha256 === null) {
+    requireAbsent(layout.environment_file);
+  } else {
+    removeExactRegularFile(
+      layout.environment_file,
+      hostDeckServiceEnvironmentMode,
+      transaction.environment_sha256
+    );
+  }
+}
+
+function removeEmptyReleasesDirectory(
+  layout: HostDeckServiceInstallLayout
+): void {
+  if (!existsNoFollow(layout.releases_dir)) return;
+  assertOwnedDirectory(layout.releases_dir, true);
+  if (readdirSync(layout.releases_dir).length !== 0) {
+    throw lifecycleError("recovery_required", "recovery");
+  }
+  rmdirSync(layout.releases_dir);
+  fsyncDirectory(layout.data_root);
+}
+
+async function requireUninstallNotFound(context: LifecycleContext): Promise<void> {
+  const states = await readUninstallManagerStates(context);
+  assertUninstallManagerIdentity(
+    context.layout,
+    states.hostdeck,
+    states.codex,
+    "manager_reloaded"
+  );
+  if (
+    states.hostdeck.load_state !== "not-found" ||
+    states.codex.load_state !== "not-found"
+  ) {
+    throw lifecycleError("lifecycle_failed", "uninstall");
+  }
+}
+
+function assertCompletedUninstallDataRoot(
+  layout: HostDeckServiceInstallLayout
+): void {
+  assertOwnedDirectory(layout.data_root, true);
+  if (readdirSync(layout.data_root).join("\0") !== "lifecycle.lock") {
+    throw lifecycleError("recovery_required", "recovery");
+  }
+  inspectRegularFile(layout.lifecycle_lock, 0o600, sha256(""));
+}
+
+async function readUninstallLifecycleResult(
+  context: LifecycleContext,
+  changed: boolean
+): Promise<HostDeckServiceLifecycleResult> {
+  const states = await readUninstallManagerStates(context);
+  assertUninstallManagerIdentity(
+    context.layout,
+    states.hostdeck,
+    states.codex,
+    "manager_reloaded"
+  );
+  if (
+    states.hostdeck.load_state !== "not-found" ||
+    states.codex.load_state !== "not-found"
+  ) {
+    throw lifecycleError("uninstall_invalid", "uninstall");
+  }
+  return deepFreeze({
+    action: "uninstall" as const,
+    api_state: "not_probed" as const,
+    changed,
+    enabled: false,
+    install_state: "not_installed" as const,
+    package_version: null,
+    release_id: null,
+    rollback: "not_required" as const,
+    units: {
+      codex: publicUnitState(states.codex),
+      hostdeck: publicUnitState(states.hostdeck)
     }
   });
 }
@@ -1301,6 +2005,9 @@ async function recoverPendingTransaction(
   } catch (error) {
     throw lifecycleError("recovery_required", "recovery", error);
   }
+  if (transaction.operation === "uninstall") {
+    throw lifecycleError("recovery_required", "recovery");
+  }
   try {
     const nextReleaseRoot = join(
       context.layout.data_root,
@@ -1439,6 +2146,23 @@ async function withLifecycleLock<T>(
   operation: () => Promise<T>
 ): Promise<T> {
   ensureLifecycleRoots(context.layout);
+  return await withAcquiredLifecycleLock(context, operation, "install_invalid");
+}
+
+async function withExistingLifecycleLock<T>(
+  context: LifecycleContext,
+  operation: () => Promise<T>
+): Promise<T> {
+  assertOwnedDirectory(context.layout.home_dir, false);
+  assertOwnedDirectory(context.layout.data_root, true);
+  return await withAcquiredLifecycleLock(context, operation, "uninstall_invalid");
+}
+
+async function withAcquiredLifecycleLock<T>(
+  context: LifecycleContext,
+  operation: () => Promise<T>,
+  invalidCode: "install_invalid" | "uninstall_invalid"
+): Promise<T> {
   let lease: HostDeckServiceLifecycleLock;
   try {
     lease = acquireHostDeckServiceLifecycleLock(context.layout.lifecycle_lock);
@@ -1449,7 +2173,7 @@ async function withLifecycleLock<T>(
     ) {
       throw lifecycleError("lock_held", "lock", error);
     }
-    throw lifecycleError("install_invalid", "lock", error);
+    throw lifecycleError(invalidCode, "lock", error);
   }
   try {
     const result = await operation();
@@ -2064,6 +2788,136 @@ async function verifyReleasePackage(
   }
 }
 
+async function inspectPublishedReleases(
+  context: LifecycleContext
+): Promise<PublishedReleaseSet> {
+  const root = context.layout.releases_dir;
+  if (!existsNoFollow(root)) {
+    return deepFreeze({ manifests: [], selectors: [] });
+  }
+  assertOwnedDirectory(root, true);
+  const entries = readdirSync(root, { withFileTypes: true }).sort((left, right) =>
+    left.name.localeCompare(right.name)
+  );
+  if (entries.length > maximumPublishedReleases) {
+    throw lifecycleError("install_invalid", "retention");
+  }
+  const manifests: HostDeckServiceInstallManifest[] = [];
+  for (const entry of entries) {
+    if (
+      !entry.isDirectory() ||
+      entry.isSymbolicLink() ||
+      entry.name.startsWith(".hostdeck-release-")
+    ) {
+      throw lifecycleError("install_invalid", "retention");
+    }
+    const releaseRoot = join(root, entry.name);
+    const manifest = readReleaseManifest(releaseRoot, context.layout);
+    if (manifest.release.id !== entry.name) {
+      throw lifecycleError("install_invalid", "retention");
+    }
+    assertPublishedReleaseTree(manifest);
+    await verifyReleasePackage(context, manifest);
+    manifests.push(manifest);
+  }
+  const selectors = manifests.map(({ release }) => release.selector_target);
+  if (new Set(selectors).size !== selectors.length) {
+    throw lifecycleError("install_invalid", "retention");
+  }
+  return deepFreeze({ manifests, selectors });
+}
+
+async function inspectUninstallPublishedReleases(
+  context: LifecycleContext
+): Promise<PublishedReleaseSet> {
+  try {
+    return await inspectPublishedReleases(context);
+  } catch (error) {
+    if (
+      error instanceof HostDeckServiceLifecycleError &&
+      error.code === "recovery_required"
+    ) {
+      throw error;
+    }
+    throw lifecycleError("uninstall_invalid", "uninstall", error);
+  }
+}
+
+function assertPublishedReleaseTree(
+  manifest: HostDeckServiceInstallManifest
+): void {
+  assertOwnedDirectory(manifest.release.root, true);
+  const rootEntries = readdirSync(manifest.release.root).sort();
+  if (
+    rootEntries.join("\0") !==
+    ["install.json", "package", "units"].sort().join("\0")
+  ) {
+    throw lifecycleError("install_invalid", "retention");
+  }
+  const unitsRoot = join(manifest.release.root, "units");
+  assertOwnedDirectory(unitsRoot, true);
+  const unitEntries = readdirSync(unitsRoot).sort();
+  if (
+    unitEntries.join("\0") !==
+    manifest.units.map(({ name }) => name).sort().join("\0")
+  ) {
+    throw lifecycleError("install_invalid", "retention");
+  }
+  assertUnitFilesFromManifest(manifest);
+}
+
+async function prunePublishedReleases(
+  context: LifecycleContext,
+  inspected: PublishedReleaseSet,
+  retainedSelectors: ReadonlySet<string>
+): Promise<void> {
+  for (const selector of retainedSelectors) {
+    if (!isSafeRelativeSelector(selector)) {
+      throw lifecycleError("install_invalid", "retention");
+    }
+  }
+  for (const manifest of inspected.manifests) {
+    if (retainedSelectors.has(manifest.release.selector_target)) continue;
+    await removePublishedRelease(context, manifest.release.selector_target);
+  }
+  const observed = await inspectPublishedReleases(context);
+  const expected = [...retainedSelectors].sort();
+  if (observed.selectors.slice().sort().join("\0") !== expected.join("\0")) {
+    throw lifecycleError("install_invalid", "retention");
+  }
+}
+
+async function removePublishedRelease(
+  context: LifecycleContext,
+  selector: string
+): Promise<void> {
+  if (!isSafeRelativeSelector(selector)) {
+    throw lifecycleError("install_invalid", "retention");
+  }
+  const releaseRoot = join(context.layout.data_root, selector);
+  if (!existsNoFollow(releaseRoot)) return;
+  const manifest = readReleaseManifest(releaseRoot, context.layout);
+  if (manifest.release.selector_target !== selector) {
+    throw lifecycleError("install_invalid", "retention");
+  }
+  assertPublishedReleaseTree(manifest);
+  await verifyReleasePackage(context, manifest);
+  assertOwnedDirectory(releaseRoot, true);
+  rmSync(releaseRoot, { force: false, recursive: true });
+  fsyncDirectory(context.layout.releases_dir);
+}
+
+async function removeUninstallPublishedRelease(
+  context: LifecycleContext,
+  selector: string
+): Promise<void> {
+  try {
+    await removePublishedRelease(context, selector);
+  } catch (error) {
+    throw lifecycleError("uninstall_invalid", "uninstall", error);
+  }
+}
+
 async function verifyPackageThroughPort(
   context: LifecycleContext,
   root: string
@@ -2114,7 +2968,7 @@ function releaseSelector(identity: HostDeckProductionPackageIdentity): string {
 
 function removeTransactionStaging(
   context: LifecycleContext,
-  transaction: LifecycleTransaction
+  transaction: InstallUpgradeLifecycleTransaction
 ): void {
   if (!stagingNamePattern.test(transaction.staging_name)) {
     throw lifecycleError("recovery_required", "recovery");
@@ -2131,10 +2985,40 @@ function removeTransactionStaging(
 
 function updateTransactionPhase(
   path: string,
-  phase: LifecycleTransaction["phase"]
+  phase: InstallUpgradeLifecycleTransaction["phase"]
 ): void {
   const transaction = readTransaction(path);
+  if (transaction.operation === "uninstall") {
+    throw new TypeError("HostDeck service transaction operation is invalid.");
+  }
   writeAtomicRegularFile(path, renderTransaction({ ...transaction, phase }), 0o600);
+}
+
+function updateUninstallTransactionPhase(
+  path: string,
+  phase: UninstallLifecycleTransaction["phase"]
+): UninstallLifecycleTransaction {
+  const transaction = readTransaction(path);
+  if (transaction.operation !== "uninstall") {
+    throw new TypeError("HostDeck service transaction operation is invalid.");
+  }
+  const updated = deepFreeze({ ...transaction, phase });
+  writeAtomicRegularFile(path, renderTransaction(updated), 0o600);
+  return updated;
+}
+
+function advanceUninstallTransactionPhase(
+  transaction: UninstallLifecycleTransaction,
+  path: string,
+  phase: UninstallLifecycleTransaction["phase"]
+): UninstallLifecycleTransaction {
+  const currentIndex = uninstallPhaseOrder.indexOf(transaction.phase);
+  const nextIndex = uninstallPhaseOrder.indexOf(phase);
+  if (currentIndex < 0 || nextIndex < 0) {
+    throw new TypeError("HostDeck service uninstall phase is invalid.");
+  }
+  if (currentIndex >= nextIndex) return transaction;
+  return updateUninstallTransactionPhase(path, phase);
 }
 
 function readTransaction(path: string): LifecycleTransaction {
@@ -2161,13 +3045,67 @@ function readTransaction(path: string): LifecycleTransaction {
     value === null ||
     typeof value !== "object" ||
     Array.isArray(value) ||
-    Object.getPrototypeOf(value) !== Object.prototype ||
-    Object.keys(value).sort().join("\0") !==
-      [...transactionKeys].sort().join("\0")
+    Object.getPrototypeOf(value) !== Object.prototype
   ) {
     throw new TypeError("HostDeck service transaction shape is invalid.");
   }
   const transaction = value as Record<string, unknown>;
+  if (transaction.operation === "uninstall") {
+    if (
+      Object.keys(value).sort().join("\0") !==
+        [...uninstallTransactionKeys].sort().join("\0") ||
+      transaction.schema_version !== 1 ||
+      transaction.name !== "hostdeck-service-transaction" ||
+      (transaction.phase !== "prepared" &&
+        transaction.phase !== "stopped" &&
+        transaction.phase !== "disabled" &&
+        transaction.phase !== "anchors_removed" &&
+        transaction.phase !== "releases_removed" &&
+        transaction.phase !== "manager_reloaded") ||
+      (transaction.active_selector !== null &&
+        !isSafeRelativeSelector(transaction.active_selector)) ||
+      (transaction.environment_sha256 !== null &&
+        (typeof transaction.environment_sha256 !== "string" ||
+          !sha256Pattern.test(transaction.environment_sha256))) ||
+      !Array.isArray(transaction.release_selectors) ||
+      transaction.release_selectors.length > maximumPublishedReleases ||
+      (transaction.release_selectors.length === 0) !==
+        (transaction.environment_sha256 === null) ||
+      transaction.release_selectors.some(
+        (selector) => !isSafeRelativeSelector(selector)
+      )
+    ) {
+      throw new TypeError("HostDeck service uninstall transaction is invalid.");
+    }
+    const releaseSelectors = [...transaction.release_selectors].sort();
+    if (
+      new Set(releaseSelectors).size !== releaseSelectors.length ||
+      releaseSelectors.join("\0") !== transaction.release_selectors.join("\0") ||
+      (transaction.active_selector !== null &&
+        !releaseSelectors.includes(transaction.active_selector))
+    ) {
+      throw new TypeError("HostDeck service uninstall transaction is invalid.");
+    }
+    const parsed = deepFreeze({
+      active_selector: transaction.active_selector,
+      environment_sha256: transaction.environment_sha256,
+      name: "hostdeck-service-transaction" as const,
+      operation: "uninstall" as const,
+      phase: transaction.phase,
+      release_selectors: releaseSelectors,
+      schema_version: 1 as const
+    }) as UninstallLifecycleTransaction;
+    if (renderTransaction(parsed) !== content) {
+      throw new TypeError("HostDeck service transaction is not canonical.");
+    }
+    return parsed;
+  }
+  if (
+    Object.keys(value).sort().join("\0") !==
+    [...installUpgradeTransactionKeys].sort().join("\0")
+  ) {
+    throw new TypeError("HostDeck service transaction shape is invalid.");
+  }
   if (
     transaction.schema_version !== 1 ||
     transaction.name !== "hostdeck-service-transaction" ||
@@ -2198,7 +3136,7 @@ function readTransaction(path: string): LifecycleTransaction {
     schema_version: 1 as const,
     staging_name: transaction.staging_name,
     was_active: transaction.was_active
-  }) as LifecycleTransaction;
+  }) as InstallUpgradeLifecycleTransaction;
   if (renderTransaction(parsed) !== content) {
     throw new TypeError("HostDeck service transaction is not canonical.");
   }

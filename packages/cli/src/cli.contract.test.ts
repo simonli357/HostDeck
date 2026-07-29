@@ -289,14 +289,15 @@ describe("selected CLI shell contract", () => {
     }
   });
 
-  it("dispatches implemented service commands once and keeps uninstall unavailable before side effects", async () => {
+  it("dispatches every implemented service command exactly once", async () => {
     for (const action of [
       "install",
       "upgrade",
       "status",
       "start",
       "stop",
-      "restart"
+      "restart",
+      "uninstall"
     ] as const) {
       let configReads = 0;
       const execute = vi.fn(async () => serviceResult(action));
@@ -319,35 +320,6 @@ describe("selected CLI shell contract", () => {
       expect(execute, action).toHaveBeenCalledWith(action);
       expect(configReads, action).toBe(1);
     }
-
-    let configReads = 0;
-    let fetchCalls = 0;
-    const execute = vi.fn();
-    const unavailable = await runCli(
-      [
-        "--config",
-        "/tmp/hostdeck-service-config.json",
-        "service",
-        "uninstall"
-      ],
-      {
-        env: {},
-        readFile: () => {
-          configReads += 1;
-          throw new Error("uninstall must not load config");
-        },
-        fetch: async () => {
-          fetchCalls += 1;
-          throw new Error("uninstall must not use network");
-        },
-        serviceLifecycle: { execute }
-      }
-    );
-    expect(unavailable.exitCode).toBe(cliExitCodes.apiError);
-    expect(unavailable.stderr).toContain("capability_unavailable");
-    expect(configReads).toBe(0);
-    expect(fetchCalls).toBe(0);
-    expect(execute).not.toHaveBeenCalled();
   });
 
   it("reports and resets legacy rows through bounded local-only output", async () => {
@@ -540,6 +512,27 @@ describe("selected CLI shell contract", () => {
 function serviceResult(
   action: HostDeckServiceAction
 ): HostDeckServiceLifecycleResult {
+  if (action === "uninstall") {
+    const unit = {
+      active_state: "inactive",
+      load_state: "not-found",
+      main_pid: 0,
+      need_daemon_reload: false,
+      sub_state: "dead",
+      unit_file_state: ""
+    };
+    return {
+      action,
+      api_state: "not_probed",
+      changed: true,
+      enabled: false,
+      install_state: "not_installed",
+      package_version: null,
+      release_id: null,
+      rollback: "not_required",
+      units: { codex: unit, hostdeck: unit }
+    };
+  }
   const active = action === "start" || action === "restart";
   const unit = (
     unitFileState: "enabled" | "linked",

@@ -319,16 +319,6 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
       return success(renderVersion(version));
     }
 
-    if (
-      parsed.command.kind === "service" &&
-      parsed.command.action === "uninstall"
-    ) {
-      throw clientOperationFailure(
-        "capability_unavailable",
-        "Service uninstall is not available in this build."
-      );
-    }
-
     const configOptions: LoadCliConfigOptions = {
       flags: parsed.configFlags
     };
@@ -347,12 +337,6 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
 
     const config = loadCliConfig(configOptions);
     if (parsed.command.kind === "service") {
-      if (parsed.command.action === "uninstall") {
-        throw clientOperationFailure(
-          "capability_unavailable",
-          "Service uninstall is not available in this build."
-        );
-      }
       const env = options.env ?? process.env;
       const serviceFetch =
         options.fetch ??
@@ -816,6 +800,11 @@ function mapServiceLifecycleFailure(
       return clientOperationFailure(
         "invalid_config",
         "HostDeck service installation state is invalid."
+      );
+    case "uninstall_invalid":
+      return clientOperationFailure(
+        "operation_conflict",
+        "HostDeck service ownership could not be proven for safe uninstall."
       );
     case "lifecycle_failed":
     case "rollback_failed":

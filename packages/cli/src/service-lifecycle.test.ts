@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -20,6 +21,7 @@ import type { SelectedHostStatusResponse } from "@hostdeck/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolveHostDeckServiceInstallLayout } from "./service-install-manifest.js";
 import {
+  assertHostDeckServiceLifecycleResult,
   createHostDeckServiceLifecycle,
   type HostDeckProductionPackageIdentity
 } from "./service-lifecycle.js";
@@ -550,6 +552,597 @@ describe("IFC-V1-056 service lifecycle owner", () => {
   });
 });
 
+describe("IFC-V1-057 safe uninstall and retention", () => {
+  it("uninstalls an active service, preserves user data, repeats without mutation, and reinstalls", async () => {
+    const fixture = createFixture();
+    const source = createSourcePackage(fixture, "1.0.0", "1");
+    mkdirSync(fixture.stateDir, { mode: 0o700 });
+    writeFileSync(fixture.databasePath, "database-sentinel\n", { mode: 0o600 });
+    const configRoot = join(fixture.home, "config", "hostdeck");
+    mkdirSync(configRoot, { mode: 0o700, recursive: true });
+    const configSentinel = join(configRoot, "config.json");
+    writeFileSync(configSentinel, "config-sentinel\n", { mode: 0o600 });
+    const lifecycle = createLifecycle(fixture, source);
+    await lifecycle.execute("install");
+    await lifecycle.execute("start");
+    const stateHash = sha256(readFileSync(fixture.databasePath));
+    const configHash = sha256(readFileSync(configSentinel));
+    const callsBefore = fixture.manager.calls.length;
+
+    const uninstalled = await lifecycle.execute("uninstall");
+
+    expect(uninstalled).toMatchObject({
+      action: "uninstall",
+      api_state: "not_probed",
+      changed: true,
+      enabled: false,
+      install_state: "not_installed",
+      package_version: null,
+      release_id: null,
+      units: {
+        codex: { active_state: "inactive", load_state: "not-found", main_pid: 0 },
+        hostdeck: { active_state: "inactive", load_state: "not-found", main_pid: 0 }
+      }
+    });
+    expect(readdirSync(fixture.layout.data_root)).toEqual(["lifecycle.lock"]);
+    for (const path of [
+      fixture.layout.current_link,
+      fixture.layout.manifest_link,
+      fixture.layout.environment_file,
+      fixture.layout.command_path,
+      fixture.layout.enablement_link,
+      ...Object.values(fixture.layout.unit_paths)
+    ]) {
+      expect(existsNoFollow(path), path).toBe(false);
+    }
+    expect(sha256(readFileSync(fixture.databasePath))).toBe(stateHash);
+    expect(sha256(readFileSync(configSentinel))).toBe(configHash);
+    const uninstallCalls = fixture.manager.calls.slice(callsBefore);
+    expect(uninstallCalls.indexOf("stop_hostdeck")).toBeLessThan(
+      uninstallCalls.indexOf("stop_codex")
+    );
+    expect(uninstallCalls.indexOf("stop_codex")).toBeLessThan(
+      uninstallCalls.indexOf("disable_hostdeck")
+    );
+    expect(uninstallCalls.indexOf("disable_hostdeck")).toBeLessThan(
+      uninstallCalls.lastIndexOf("daemon_reload")
+    );
+
+    const mutationsBeforeRepeat = managerMutations(fixture.manager);
+    const repeated = await lifecycle.execute("uninstall");
+    expect(repeated).toMatchObject({ action: "uninstall", changed: false });
+    expect(managerMutations(fixture.manager)).toEqual(mutationsBeforeRepeat);
+    expect(readdirSync(fixture.layout.data_root)).toEqual(["lifecycle.lock"]);
+
+    const reinstalled = await lifecycle.execute("install");
+    expect(reinstalled).toMatchObject({
+      action: "install",
+      changed: true,
+      install_state: "coherent"
+    });
+  });
+
+  it("retains only active and immediately previous releases and removes failed attempts on the next upgrade", async () => {
+    const fixture = createFixture();
+    const first = createSourcePackage(fixture, "1.0.0", "1");
+    const second = createSourcePackage(fixture, "1.1.0", "2");
+    const third = createSourcePackage(fixture, "1.2.0", "3");
+    const failed = createSourcePackage(fixture, "1.3.0", "4");
+    const fifth = createSourcePackage(fixture, "1.4.0", "5");
+    await createLifecycle(fixture, first).execute("install");
+    await createLifecycle(fixture, second).execute("upgrade");
+    await createLifecycle(fixture, third).execute("upgrade");
+    expect(readdirSync(fixture.layout.releases_dir).sort()).toEqual([
+      releaseId(second),
+      releaseId(third)
+    ]);
+
+    await createLifecycle(fixture, third).execute("start");
+    fixture.manager.failNextRestart = true;
+    await expect(
+      createLifecycle(fixture, failed).execute("upgrade")
+    ).rejects.toMatchObject({ rollback: "succeeded", stage: "upgrade" });
+    expect(readdirSync(fixture.layout.releases_dir)).toContain(releaseId(failed));
+
+    await createLifecycle(fixture, fifth).execute("upgrade");
+    expect(readdirSync(fixture.layout.releases_dir).sort()).toEqual([
+      releaseId(third),
+      releaseId(fifth)
+    ]);
+  });
+
+  it("resumes forward after disable failure and accepts a missing exact anchor", async () => {
+    const fixture = createFixture();
+    const source = createSourcePackage(fixture, "1.0.0", "6");
+    const lifecycle = createLifecycle(fixture, source);
+    await lifecycle.execute("install");
+    await lifecycle.execute("start");
+    unlinkSync(fixture.layout.command_path);
+    fixture.manager.failDisable = true;
+
+    await expect(lifecycle.execute("uninstall")).rejects.toMatchObject({
+      code: "uninstall_invalid",
+      stage: "uninstall"
+    });
+    const pending = JSON.parse(
+      readFileSync(fixture.layout.transaction_file, "utf8")
+    ) as Record<string, unknown>;
+    expect(pending).toMatchObject({ operation: "uninstall", phase: "stopped" });
+    expect(fixture.manager.hostDeck.active_state).toBe("inactive");
+    expect(fixture.manager.codex.active_state).toBe("inactive");
+
+    fixture.manager.failDisable = false;
+    await expect(lifecycle.execute("uninstall")).resolves.toMatchObject({
+      action: "uninstall",
+      changed: true,
+      install_state: "not_installed"
+    });
+    expect(existsNoFollow(fixture.layout.transaction_file)).toBe(false);
+  });
+
+  it("refuses foreign and modified ownership before manager mutation", async () => {
+    const fixture = createFixture();
+    const source = createSourcePackage(fixture, "1.0.0", "7");
+    const lifecycle = createLifecycle(fixture, source);
+    await lifecycle.execute("install");
+    const selector = readlinkSync(fixture.layout.current_link);
+    const unitPath = join(
+      fixture.layout.data_root,
+      selector,
+      "units",
+      hostDeckSystemdUnitName
+    );
+    writeFileSync(unitPath, "modified unit\n", { mode: 0o644 });
+    writeFileSync(join(fixture.layout.data_root, "foreign.txt"), "foreign\n", {
+      mode: 0o600
+    });
+    const mutationsBefore = managerMutations(fixture.manager);
+
+    await expect(lifecycle.execute("uninstall")).rejects.toMatchObject({
+      code: "uninstall_invalid",
+      stage: "uninstall"
+    });
+    expect(managerMutations(fixture.manager)).toEqual(mutationsBefore);
+    expect(existsNoFollow(fixture.layout.transaction_file)).toBe(false);
+    expect(existsNoFollow(fixture.layout.current_link)).toBe(true);
+  });
+
+  it("returns unchanged for a genuinely absent installation without creating lifecycle state", async () => {
+    const fixture = createFixture();
+    const source = createSourcePackage(fixture, "1.0.0", "8");
+    const before = snapshotTree(fixture.home);
+
+    const result = await createLifecycle(fixture, source).execute("uninstall");
+
+    expect(result).toMatchObject({
+      action: "uninstall",
+      changed: false,
+      install_state: "not_installed"
+    });
+    expect(snapshotTree(fixture.home)).toEqual(before);
+    expect(managerMutations(fixture.manager)).toEqual([]);
+  });
+
+  it("rejects contradictory public uninstall completion truth", async () => {
+    const fixture = createFixture();
+    const source = createSourcePackage(fixture, "1.0.0", "81");
+    const valid = await createLifecycle(fixture, source).execute("uninstall");
+    assertHostDeckServiceLifecycleResult(valid);
+
+    for (const mutate of [
+      (candidate: Record<string, unknown>) => {
+        candidate.rollback = "succeeded";
+      },
+      (candidate: Record<string, unknown>) => {
+        const units = candidate.units as Record<string, Record<string, unknown>>;
+        if (units.hostdeck === undefined) throw new TypeError();
+        units.hostdeck.need_daemon_reload = true;
+      },
+      (candidate: Record<string, unknown>) => {
+        const units = candidate.units as Record<string, Record<string, unknown>>;
+        if (units.codex === undefined) throw new TypeError();
+        units.codex.unit_file_state = "disabled";
+      }
+    ]) {
+      const candidate = JSON.parse(JSON.stringify(valid)) as Record<
+        string,
+        unknown
+      >;
+      mutate(candidate);
+      expect(() => assertHostDeckServiceLifecycleResult(candidate)).toThrow();
+    }
+  });
+
+  it("does not require the installed Codex executable or probe the HostDeck API", async () => {
+    const fixture = createFixture();
+    const source = createSourcePackage(fixture, "1.0.0", "9");
+    await createLifecycle(fixture, source).execute("install");
+    unlinkSync(fixture.codexBin);
+    let apiReads = 0;
+    const lifecycle = createLifecycle(fixture, source, {
+      includeCodex: false,
+      readHostStatus: async () => {
+        apiReads += 1;
+        throw new Error("uninstall must not read the HostDeck API");
+      }
+    });
+
+    await expect(lifecycle.execute("uninstall")).resolves.toMatchObject({
+      action: "uninstall",
+      install_state: "not_installed"
+    });
+    expect(apiReads).toBe(0);
+  });
+
+  it("serializes uninstall with every other lifecycle operation", async () => {
+    const fixture = createFixture();
+    const source = createSourcePackage(fixture, "1.0.0", "a1");
+    const lifecycle = createLifecycle(fixture, source);
+    await lifecycle.execute("install");
+    const lease = acquireHostDeckServiceLifecycleLock(
+      fixture.layout.lifecycle_lock
+    );
+    const mutationsBefore = managerMutations(fixture.manager);
+    try {
+      await expect(lifecycle.execute("uninstall")).rejects.toMatchObject({
+        code: "lock_held",
+        stage: "lock"
+      });
+    } finally {
+      lease.release();
+    }
+    expect(managerMutations(fixture.manager)).toEqual(mutationsBefore);
+    expect(existsNoFollow(fixture.layout.transaction_file)).toBe(false);
+  });
+
+  it("rejects contradictory or foreign manager identity before destructive work", async () => {
+    const scenarios = [
+      {
+        label: "foreign fragment",
+        mutate: (fixture: Fixture) => {
+          fixture.manager.hostDeck = {
+            ...fixture.manager.hostDeck,
+            fragment_path: join(fixture.root, "foreign.service")
+          };
+        }
+      },
+      {
+        label: "inactive unit with a live pid",
+        mutate: (fixture: Fixture) => {
+          fixture.manager.hostDeck = {
+            ...fixture.manager.hostDeck,
+            active_state: "inactive",
+            main_pid: 12_345
+          };
+        }
+      },
+      {
+        label: "unexpected Codex enablement",
+        mutate: (fixture: Fixture) => {
+          fixture.manager.codex = {
+            ...fixture.manager.codex,
+            unit_file_state: "enabled"
+          };
+        }
+      },
+      {
+        label: "unexplained manager reload drift",
+        mutate: (fixture: Fixture) => {
+          fixture.manager.hostDeck = {
+            ...fixture.manager.hostDeck,
+            need_daemon_reload: true
+          };
+        }
+      }
+    ] as const;
+
+    for (const scenario of scenarios) {
+      const fixture = createFixture();
+      const source = createSourcePackage(fixture, "1.0.0", sha256(scenario.label)[0] ?? "b");
+      const lifecycle = createLifecycle(fixture, source);
+      await lifecycle.execute("install");
+      scenario.mutate(fixture);
+      const mutationsBefore = managerMutations(fixture.manager);
+
+      await expect(
+        lifecycle.execute("uninstall"),
+        scenario.label
+      ).rejects.toMatchObject({
+        code: "uninstall_invalid",
+        stage: "uninstall"
+      });
+      expect(managerMutations(fixture.manager), scenario.label).toEqual(
+        mutationsBefore
+      );
+      expect(
+        existsNoFollow(fixture.layout.transaction_file),
+        scenario.label
+      ).toBe(false);
+    }
+  });
+
+  it("rejects hostile filesystem ownership before manager mutation", async () => {
+    const scenarios = [
+      {
+        label: "foreign data-root entry",
+        mutate: (fixture: Fixture) => {
+          writeFileSync(join(fixture.layout.data_root, "foreign"), "x\n", {
+            mode: 0o600
+          });
+        }
+      },
+      {
+        label: "selector target drift",
+        mutate: (fixture: Fixture) => {
+          unlinkSync(fixture.layout.current_link);
+          symlinkSync("releases/foreign", fixture.layout.current_link);
+        }
+      },
+      {
+        label: "environment hard link",
+        mutate: (fixture: Fixture) => {
+          linkSync(
+            fixture.layout.environment_file,
+            join(fixture.layout.config_root, "environment-hardlink")
+          );
+        }
+      },
+      {
+        label: "modified generated unit",
+        mutate: (fixture: Fixture) => {
+          const selector = readlinkSync(fixture.layout.current_link);
+          writeFileSync(
+            join(
+              fixture.layout.data_root,
+              selector,
+              "units",
+              hostDeckSystemdUnitName
+            ),
+            "modified\n",
+            { mode: 0o644 }
+          );
+        }
+      },
+      {
+        label: "foreign release entry",
+        mutate: (fixture: Fixture) => {
+          const selector = readlinkSync(fixture.layout.current_link);
+          writeFileSync(
+            join(fixture.layout.data_root, selector, "foreign"),
+            "x\n",
+            { mode: 0o600 }
+          );
+        }
+      },
+      {
+        label: "unsafe lifecycle lock mode",
+        mutate: (fixture: Fixture) => {
+          chmodSync(fixture.layout.lifecycle_lock, 0o644);
+        }
+      }
+    ] as const;
+
+    for (let index = 0; index < scenarios.length; index += 1) {
+      const scenario = scenarios[index];
+      if (scenario === undefined) throw new TypeError();
+      const fixture = createFixture();
+      const source = createSourcePackage(fixture, "1.0.0", String(index + 1));
+      const lifecycle = createLifecycle(fixture, source);
+      await lifecycle.execute("install");
+      scenario.mutate(fixture);
+      const mutationsBefore = managerMutations(fixture.manager);
+
+      await expect(
+        lifecycle.execute("uninstall"),
+        scenario.label
+      ).rejects.toMatchObject({
+        code: "uninstall_invalid"
+      });
+      expect(managerMutations(fixture.manager), scenario.label).toEqual(
+        mutationsBefore
+      );
+      expect(existsNoFollow(fixture.layout.current_link), scenario.label).toBe(
+        true
+      );
+    }
+  });
+
+  it("journals and resumes manager failures at prepared, stopped, and releases-removed boundaries", async () => {
+    const scenarios = [
+      {
+        expectedPhase: "prepared",
+        label: "HostDeck stop failure",
+        prepare: (manager: FakeManager) => {
+          manager.failStopHostDeck = true;
+        },
+        recover: (manager: FakeManager) => {
+          manager.failStopHostDeck = false;
+        }
+      },
+      {
+        expectedPhase: "prepared",
+        label: "Codex stop failure",
+        prepare: (manager: FakeManager) => {
+          manager.failStopCodex = true;
+        },
+        recover: (manager: FakeManager) => {
+          manager.failStopCodex = false;
+        }
+      },
+      {
+        expectedPhase: "stopped",
+        label: "disable failure",
+        prepare: (manager: FakeManager) => {
+          manager.failDisable = true;
+        },
+        recover: (manager: FakeManager) => {
+          manager.failDisable = false;
+        }
+      },
+      {
+        expectedPhase: "stopped",
+        label: "disable read-back remains enabled",
+        prepare: (manager: FakeManager) => {
+          manager.leaveEnabledAfterDisable = true;
+        },
+        recover: (manager: FakeManager) => {
+          manager.leaveEnabledAfterDisable = false;
+        }
+      },
+      {
+        expectedPhase: "releases_removed",
+        label: "daemon reload failure",
+        prepare: (manager: FakeManager) => {
+          manager.failNextDaemonReload = true;
+        },
+        recover: () => undefined
+      }
+    ] as const;
+
+    for (let index = 0; index < scenarios.length; index += 1) {
+      const scenario = scenarios[index];
+      if (scenario === undefined) throw new TypeError();
+      const fixture = createFixture();
+      const source = createSourcePackage(fixture, "1.0.0", String(index + 1));
+      const lifecycle = createLifecycle(fixture, source);
+      await lifecycle.execute("install");
+      await lifecycle.execute("start");
+      scenario.prepare(fixture.manager);
+
+      await expect(
+        lifecycle.execute("uninstall"),
+        scenario.label
+      ).rejects.toBeDefined();
+      expect(
+        readTransactionPhase(fixture),
+        scenario.label
+      ).toBe(scenario.expectedPhase);
+
+      scenario.recover(fixture.manager);
+      await expect(lifecycle.execute("uninstall"), scenario.label).resolves.toMatchObject({
+        action: "uninstall",
+        install_state: "not_installed"
+      });
+      expect(existsNoFollow(fixture.layout.transaction_file)).toBe(false);
+    }
+  });
+
+  it("resumes each forward-only destructive phase after exact remediation", async () => {
+    {
+      const fixture = createFixture();
+      const source = createSourcePackage(fixture, "1.0.0", "c1");
+      const lifecycle = createLifecycle(fixture, source);
+      await lifecycle.execute("install");
+      const expectedTarget = readlinkSync(fixture.layout.command_path);
+      fixture.manager.afterDisable = () => {
+        unlinkSync(fixture.layout.command_path);
+        symlinkSync("foreign", fixture.layout.command_path);
+      };
+      await expect(lifecycle.execute("uninstall")).rejects.toBeDefined();
+      expect(readTransactionPhase(fixture)).toBe("disabled");
+      unlinkSync(fixture.layout.command_path);
+      symlinkSync(expectedTarget, fixture.layout.command_path);
+      await expect(lifecycle.execute("uninstall")).resolves.toMatchObject({
+        install_state: "not_installed"
+      });
+    }
+
+    {
+      const fixture = createFixture();
+      const source = createSourcePackage(fixture, "1.0.0", "c2");
+      await createLifecycle(fixture, source).execute("install");
+      let verificationCalls = 0;
+      const interrupted = createLifecycle(fixture, source, {
+        verify: async (root) => {
+          verificationCalls += 1;
+          if (verificationCalls === 3) throw new Error("injected removal proof failure");
+          return verifyFixturePackage(root);
+        }
+      });
+      await expect(interrupted.execute("uninstall")).rejects.toBeDefined();
+      expect(readTransactionPhase(fixture)).toBe("anchors_removed");
+      await expect(
+        createLifecycle(fixture, source).execute("uninstall")
+      ).resolves.toMatchObject({ install_state: "not_installed" });
+    }
+
+    {
+      const fixture = createFixture();
+      const source = createSourcePackage(fixture, "1.0.0", "c3");
+      const lifecycle = createLifecycle(fixture, source);
+      await lifecycle.execute("install");
+      const foreign = join(fixture.layout.data_root, "post-reload-foreign");
+      fixture.manager.afterDaemonReload = () => {
+        writeFileSync(foreign, "x\n", { mode: 0o600 });
+      };
+      await expect(lifecycle.execute("uninstall")).rejects.toBeDefined();
+      expect(readTransactionPhase(fixture)).toBe("manager_reloaded");
+      unlinkSync(foreign);
+      await expect(lifecycle.execute("uninstall")).resolves.toMatchObject({
+        install_state: "not_installed"
+      });
+    }
+  });
+
+  it("rejects malformed uninstall journals as explicit recovery-required state", async () => {
+    const fixture = createFixture();
+    const source = createSourcePackage(fixture, "1.0.0", "d1");
+    const lifecycle = createLifecycle(fixture, source);
+    await lifecycle.execute("install");
+    writeFileSync(fixture.layout.transaction_file, "{\"operation\":\"uninstall\"}\n", {
+      mode: 0o600
+    });
+    const mutationsBefore = managerMutations(fixture.manager);
+
+    await expect(lifecycle.execute("uninstall")).rejects.toMatchObject({
+      code: "recovery_required",
+      stage: "recovery"
+    });
+    expect(managerMutations(fixture.manager)).toEqual(mutationsBefore);
+    expect(existsNoFollow(fixture.layout.current_link)).toBe(true);
+  });
+
+  it("preflights retention candidates and leaves same-identity upgrades mutation-free", async () => {
+    const fixture = createFixture();
+    const first = createSourcePackage(fixture, "1.0.0", "e1");
+    const second = createSourcePackage(fixture, "1.1.0", "e2");
+    const third = createSourcePackage(fixture, "1.2.0", "e3");
+    await createLifecycle(fixture, first).execute("install");
+    const secondLifecycle = createLifecycle(fixture, second);
+    await secondLifecycle.execute("upgrade");
+    const beforeNoOp = snapshotTree(fixture.layout.data_root).filter(
+      (line) => !line.includes("lifecycle.lock")
+    );
+    const mutationsBeforeNoOp = managerMutations(fixture.manager);
+    await expect(secondLifecycle.execute("upgrade")).resolves.toMatchObject({
+      action: "upgrade",
+      changed: false
+    });
+    expect(
+      snapshotTree(fixture.layout.data_root).filter(
+        (line) => !line.includes("lifecycle.lock")
+      )
+    ).toEqual(beforeNoOp);
+    expect(managerMutations(fixture.manager)).toEqual(mutationsBeforeNoOp);
+
+    const firstRelease = join(
+      fixture.layout.releases_dir,
+      releaseId(first)
+    );
+    writeFileSync(join(firstRelease, "foreign"), "x\n", { mode: 0o600 });
+    const selectorBefore = readlinkSync(fixture.layout.current_link);
+    const mutationsBeforeFailure = managerMutations(fixture.manager);
+    await expect(
+      createLifecycle(fixture, third).execute("upgrade")
+    ).rejects.toMatchObject({
+      code: "install_invalid",
+      stage: "retention"
+    });
+    expect(readlinkSync(fixture.layout.current_link)).toBe(selectorBefore);
+    expect(managerMutations(fixture.manager)).toEqual(mutationsBeforeFailure);
+  });
+});
+
 interface Fixture {
   readonly codexBin: string;
   readonly databasePath: string;
@@ -633,25 +1226,17 @@ function createLifecycle(
   fixture: Fixture,
   source: SourcePackage,
   overrides: {
+    readonly includeCodex?: boolean;
+    readonly readHostStatus?: () => Promise<SelectedHostStatusResponse>;
     readonly verify?: (root: string) => Promise<HostDeckProductionPackageIdentity>;
   } = {}
 ) {
-  const verify =
-    overrides.verify ??
-    (async (root: string) => {
-      const manifest = JSON.parse(
-        readFileSync(join(root, "hostdeck-package.json"), "utf8")
-      ) as Record<string, string>;
-      return Object.freeze({
-        codex_version: manifest.codex_version as string,
-        content_sha256: manifest.content_sha256 as string,
-        manifest_sha256: manifest.manifest_sha256 as string,
-        package_version: manifest.package_version as string
-      });
-    });
+  const verify = overrides.verify ?? verifyFixturePackage;
   return createHostDeckServiceLifecycle({
     base_url: new URL("http://127.0.0.1:3777"),
-    codex_bin: fixture.codexBin,
+    ...(overrides.includeCodex === false
+      ? {}
+      : { codex_bin: fixture.codexBin }),
     database_path: fixture.databasePath,
     env: fixture.env,
     generate_units: fakeUnitGenerator,
@@ -659,19 +1244,35 @@ function createLifecycle(
     node_bin: fixture.nodeBin,
     package_root: source.root,
     probe_codex_version: async () => source.codex_version,
-    read_host_status: async () =>
-      ({
-        local: {
-          readiness:
-            fixture.manager.hostDeck.active_state === "active"
-              ? "ready"
-              : "not_ready"
-        }
-      }) as unknown as SelectedHostStatusResponse,
+    read_host_status:
+      overrides.readHostStatus ??
+      (async () =>
+        ({
+          local: {
+            readiness:
+              fixture.manager.hostDeck.active_state === "active"
+                ? "ready"
+                : "not_ready"
+          }
+        }) as unknown as SelectedHostStatusResponse),
     readiness_timeout_ms: 10,
     sleep: async () => {},
     state_dir: fixture.stateDir,
     verify_package: verify
+  });
+}
+
+async function verifyFixturePackage(
+  root: string
+): Promise<HostDeckProductionPackageIdentity> {
+  const manifest = JSON.parse(
+    readFileSync(join(root, "hostdeck-package.json"), "utf8")
+  ) as Record<string, string>;
+  return Object.freeze({
+    codex_version: manifest.codex_version as string,
+    content_sha256: manifest.content_sha256 as string,
+    manifest_sha256: manifest.manifest_sha256 as string,
+    package_version: manifest.package_version as string
   });
 }
 
@@ -703,13 +1304,19 @@ function fakeUnitGenerator(
 }
 
 class FakeManager implements HostDeckSystemdUserManager {
+  afterDaemonReload: (() => void) | null = null;
+  afterDisable: (() => void) | null = null;
   readonly calls: string[] = [];
   codex = notFound();
   failEnable = false;
   failEnableAfterLink = false;
   failDisable = false;
+  failNextDaemonReload = false;
   failNextRestart = false;
+  failStopCodex = false;
+  failStopHostDeck = false;
   hostDeck = notFound();
+  leaveEnabledAfterDisable = false;
   stopObservationDelay = 0;
   private codexStopObservations = 0;
   private hostDeckStopObservations = 0;
@@ -720,6 +1327,10 @@ class FakeManager implements HostDeckSystemdUserManager {
 
   async daemonReload(): Promise<void> {
     this.calls.push("daemon_reload");
+    if (this.failNextDaemonReload) {
+      this.failNextDaemonReload = false;
+      throw new Error("daemon reload failed");
+    }
     if (existsSync(this.layout.current_link)) {
       this.hostDeck = {
         ...this.hostDeck,
@@ -747,6 +1358,9 @@ class FakeManager implements HostDeckSystemdUserManager {
       this.hostDeck = notFound();
       this.codex = notFound();
     }
+    const afterReload = this.afterDaemonReload;
+    this.afterDaemonReload = null;
+    afterReload?.();
   }
 
   async disableHostDeck(): Promise<void> {
@@ -755,9 +1369,15 @@ class FakeManager implements HostDeckSystemdUserManager {
     if (existsNoFollow(this.layout.enablement_link)) {
       unlinkSync(this.layout.enablement_link);
     }
-    if (this.hostDeck.load_state === "loaded") {
+    if (
+      this.hostDeck.load_state === "loaded" &&
+      !this.leaveEnabledAfterDisable
+    ) {
       this.hostDeck = { ...this.hostDeck, unit_file_state: "disabled" };
     }
+    const afterDisable = this.afterDisable;
+    this.afterDisable = null;
+    afterDisable?.();
   }
 
   async enableHostDeck(): Promise<void> {
@@ -817,6 +1437,7 @@ class FakeManager implements HostDeckSystemdUserManager {
 
   async stopCodex(): Promise<void> {
     this.calls.push("stop_codex");
+    if (this.failStopCodex) throw new Error("Codex stop failed");
     if (this.stopObservationDelay > 0) {
       this.codex = {
         ...this.codex,
@@ -831,6 +1452,7 @@ class FakeManager implements HostDeckSystemdUserManager {
 
   async stopHostDeck(): Promise<void> {
     this.calls.push("stop_hostdeck");
+    if (this.failStopHostDeck) throw new Error("HostDeck stop failed");
     if (this.stopObservationDelay > 0) {
       this.hostDeck = {
         ...this.hostDeck,
@@ -888,6 +1510,21 @@ function executable(path: string): string {
   writeFileSync(path, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   chmodSync(path, 0o755);
   return realpathSync.native(path);
+}
+
+function managerMutations(manager: FakeManager): string[] {
+  return manager.calls.filter((call) => !call.startsWith("show:"));
+}
+
+function releaseId(source: SourcePackage): string {
+  return `${source.package_version}-${source.manifest_sha256}`;
+}
+
+function readTransactionPhase(fixture: Fixture): string {
+  const transaction = JSON.parse(
+    readFileSync(fixture.layout.transaction_file, "utf8")
+  ) as Record<string, unknown>;
+  return String(transaction.phase);
 }
 
 function sha256(value: string | Buffer): string {

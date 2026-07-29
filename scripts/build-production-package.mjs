@@ -55,7 +55,6 @@ const expectedExternalModules = [
   "zod"
 ];
 const downstreamDeferrals = [
-  "IFC-V1-057",
   "IFC-V1-058"
 ];
 const exactVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;

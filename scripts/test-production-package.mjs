@@ -49,7 +49,6 @@ try {
   assert.equal(firstManifest.web.fileCount, first.webFileCount);
   assert.equal(firstManifest.web.bytes, first.webBytes);
   assert.deepEqual(firstManifest.deferrals, [
-    "IFC-V1-057",
     "IFC-V1-058"
   ]);
 
@@ -488,6 +487,15 @@ function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {
     runCommand("direct executable version", command, ["version"], unrelatedCwd),
     manifest.packageVersion
   );
+  assertUninstallResult(
+    runCommand(
+      "read-only relocated service uninstall",
+      command,
+      ["service", "uninstall", "--json"],
+      unrelatedCwd
+    ),
+    "read-only relocated service uninstall"
+  );
 
   const managerProject = join(acceptanceRoot, "package-manager-install");
   mkdirSync(managerProject, { recursive: true });
@@ -507,6 +515,14 @@ function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {
       managerProject
     ),
     manifest.packageVersion
+  );
+  assertUninstallResult(
+    runPnpm(
+      "package-manager service uninstall",
+      ["exec", "codexdeck", "service", "uninstall", "--json"],
+      managerProject
+    ),
+    "package-manager service uninstall"
   );
 
   const archive = join(acceptanceRoot, "hostdeck-runtime.tgz");
@@ -538,6 +554,15 @@ function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {
       unrelatedCwd
     )
   );
+  assertUninstallResult(
+    runCommand(
+      "packed runtime service uninstall",
+      join(packedPackage, packedManifest.command.path),
+      ["service", "uninstall", "--json"],
+      unrelatedCwd
+    ),
+    "packed runtime service uninstall"
+  );
 
   const globalPrefix = join(acceptanceRoot, "global-prefix");
   const globalPackage = join(
@@ -565,16 +590,33 @@ function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {
     ),
     manifest.packageVersion
   );
-
-  const service = runCommand(
-    "deferred service uninstall command",
-    command,
-    ["service", "uninstall"],
-    unrelatedCwd,
-    true
+  assertUninstallResult(
+    runCommand(
+      "global-style service uninstall",
+      globalBin,
+      ["service", "uninstall", "--json"],
+      unrelatedCwd
+    ),
+    "global-style service uninstall"
   );
-  assert.equal(service.status, 70);
-  assert.match(service.stderr, /capability_unavailable/u);
+
+  const installedCommand = join(
+    acceptanceRoot,
+    "installed-command",
+    "bin",
+    "codexdeck"
+  );
+  mkdirSync(dirname(installedCommand), { recursive: true });
+  symlinkSync(relative(dirname(installedCommand), command), installedCommand);
+  assertUninstallResult(
+    runCommand(
+      "installed-command service uninstall",
+      installedCommand,
+      ["service", "uninstall", "--json"],
+      unrelatedCwd
+    ),
+    "installed-command service uninstall"
+  );
   const missingConfig = join(acceptanceRoot, "private-missing-config.json");
   const config = runCommand(
     "missing config command",
@@ -603,6 +645,53 @@ function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {
   assert.equal(serve.status, 78);
   assert.match(serve.stderr, /XDG_RUNTIME_DIR is required/u);
   assert.equal(existsSync(serveRoot), false);
+}
+
+function assertUninstallResult(result, label) {
+  assert.equal(result.status, 0, `${label} must succeed`);
+  assert.equal(result.stderr, "", `${label} must not write stderr`);
+  const parsed = JSON.parse(result.stdout);
+  assert.deepEqual(
+    {
+      action: parsed.action,
+      api_state: parsed.api_state,
+      changed: parsed.changed,
+      enabled: parsed.enabled,
+      install_state: parsed.install_state,
+      package_version: parsed.package_version,
+      release_id: parsed.release_id,
+      rollback: parsed.rollback,
+      codex: parsed.units?.codex,
+      hostdeck: parsed.units?.hostdeck
+    },
+    {
+      action: "uninstall",
+      api_state: "not_probed",
+      changed: false,
+      enabled: false,
+      install_state: "not_installed",
+      package_version: null,
+      release_id: null,
+      rollback: "not_required",
+      codex: {
+        active_state: "inactive",
+        load_state: "not-found",
+        main_pid: 0,
+        need_daemon_reload: false,
+        sub_state: "dead",
+        unit_file_state: ""
+      },
+      hostdeck: {
+        active_state: "inactive",
+        load_state: "not-found",
+        main_pid: 0,
+        need_daemon_reload: false,
+        sub_state: "dead",
+        unit_file_state: ""
+      }
+    },
+    `${label} result must be exact`
+  );
 }
 
 function assertHelpResult(result) {

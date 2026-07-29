@@ -290,7 +290,7 @@ try {
   assert.equal(afterRollback.units.codex.main_pid, upgradeCodexPid);
   assert.equal(socketIdentity(), upgradeSocket);
   assertPreservedUserState();
-  assert.equal(readdirSync(layout.releases_dir).length, 4);
+  assert.equal(readdirSync(layout.releases_dir).length, 3);
   assert.equal(
     readdirSync(layout.releases_dir).some((name) =>
       name.startsWith(".hostdeck-release-")
@@ -298,10 +298,120 @@ try {
     false
   );
 
-  runLifecycle(packages[2], baseArgs, environment, "stop");
+  const activeUninstall = runLifecycle(
+    packages[3],
+    baseArgs,
+    environment,
+    "uninstall"
+  );
+  assertUninstallResult(activeUninstall, true);
+  assertUninstalledInventory(layout);
+  assert.deepEqual(tailscaleIdentity(), initialTailscale);
+  const treeAfterActiveUninstall = uninstalledTreeIdentity(layout);
+
+  const repeatedUninstall = runLifecycle(
+    packages[3],
+    baseArgs,
+    environment,
+    "uninstall"
+  );
+  assertUninstallResult(repeatedUninstall, false);
+  assert.deepEqual(uninstalledTreeIdentity(layout), treeAfterActiveUninstall);
+  const uninstallText = runLifecycleText(
+    packages[3],
+    baseArgs,
+    environment,
+    "uninstall"
+  );
+  assert.match(uninstallText, /Installation: not_installed/u);
+  assert.match(uninstallText, /Changed: no/u);
+  assert.doesNotMatch(
+    uninstallText,
+    new RegExp(
+      [escapeRegExp(home), escapeRegExp(smokeRoot), escapeRegExp(codexBin)].join(
+        "|"
+      ),
+      "u"
+    )
+  );
+  resetOwnedUnitRateLimits();
+
+  const reinstalled = runLifecycle(
+    packages[0],
+    baseArgs,
+    environment,
+    "install"
+  );
+  assertLifecycle(reinstalled, {
+    action: "install",
+    api_state: "not_probed",
+    changed: true,
+    install_state: "coherent",
+    package_version: "1.0.0"
+  });
+  const secondInactiveUpgrade = runLifecycle(
+    packages[1],
+    baseArgs,
+    environment,
+    "upgrade"
+  );
+  assert.equal(secondInactiveUpgrade.package_version, "2.0.0");
+  assert.equal(secondInactiveUpgrade.api_state, "not_probed");
+  const inactiveUninstall = runLifecycle(
+    packages[1],
+    baseArgs,
+    environment,
+    "uninstall"
+  );
+  assertUninstallResult(inactiveUninstall, true);
+  assertUninstalledInventory(layout);
+  resetOwnedUnitRateLimits();
+
+  runLifecycle(packages[2], baseArgs, environment, "install");
+  runLifecycle(packages[2], baseArgs, environment, "start");
+  let disableCalls = 0;
+  const uninstallFailureManager = Object.freeze({
+    ...realManager,
+    async disableHostDeck() {
+      disableCalls += 1;
+      if (disableCalls === 1) throw new Error("injected disable failure");
+      await realManager.disableHostDeck();
+    }
+  });
+  const uninstallFailureLifecycle = lifecycleModule.createHostDeckServiceLifecycle({
+    base_url: baseUrl,
+    database_path: databasePath,
+    env: environment,
+    manager: uninstallFailureManager,
+    node_bin: nodeBin,
+    package_root: packages[3],
+    read_host_status: async () => await statusClient.read(),
+    readiness_timeout_ms: 90_000,
+    state_dir: stateDir
+  });
+  const uninstallError = await capture(
+    uninstallFailureLifecycle.execute("uninstall")
+  );
+  assert(
+    uninstallError instanceof lifecycleModule.HostDeckServiceLifecycleError
+  );
+  assert.equal(uninstallError.code, "uninstall_invalid");
+  assert.equal(disableCalls, 1);
+  assert.equal(
+    JSON.parse(readFileSync(layout.transaction_file, "utf8")).phase,
+    "stopped"
+  );
   assertUnitsInactive();
-  assert.equal(existsSync(runtimeRoot), false);
   assertPreservedUserState();
+
+  const recoveredUninstall = runLifecycle(
+    packages[3],
+    baseArgs,
+    environment,
+    "uninstall"
+  );
+  assertUninstallResult(recoveredUninstall, true);
+  assertUninstalledInventory(layout);
   assert.deepEqual(tailscaleIdentity(), initialTailscale);
 } catch (error) {
   primaryError = error;
@@ -326,7 +436,7 @@ assert.deepEqual(listFailedUnits(), initialFailedUnits);
 assert.deepEqual(tailscaleIdentity(), initialTailscale);
 assert.equal(existsSync(runtimeRoot), false);
 console.log(
-  "HostDeck persistent service lifecycle smoke passed: install/idempotence/start/status/restart/stop, inactive and active upgrades, real-manager rollback, stable Codex process/socket, private output, Tailscale noninterference, and zero owned residue."
+  "HostDeck persistent service lifecycle smoke passed: install/idempotence/start/status/restart/stop, inactive and active upgrades, rollback/retention, active/inactive/repeated/recovered uninstall, reinstall, stable Codex process/socket, private output, Tailscale noninterference, and zero owned residue."
 );
 
 function lifecycleEnvironment() {
@@ -377,6 +487,62 @@ function assertLifecycle(actual, expected) {
   }
 }
 
+function assertUninstallResult(actual, changed) {
+  assertLifecycle(actual, {
+    action: "uninstall",
+    api_state: "not_probed",
+    changed,
+    enabled: false,
+    install_state: "not_installed",
+    package_version: null,
+    release_id: null,
+    rollback: "not_required"
+  });
+  for (const unit of [actual.units.hostdeck, actual.units.codex]) {
+    assert.equal(unit.active_state, "inactive");
+    assert.equal(unit.load_state, "not-found");
+    assert.equal(unit.main_pid, 0);
+    assert.equal(unit.need_daemon_reload, false);
+  }
+}
+
+function assertUninstalledInventory(layout) {
+  assert.deepEqual(readdirSync(layout.data_root), ["lifecycle.lock"]);
+  assert.deepEqual(regularFileIdentity(layout.lifecycle_lock), {
+    mode: 0o600,
+    nlink: 1,
+    sha256: sha256(""),
+    uid
+  });
+  for (const path of [
+    layout.current_link,
+    layout.manifest_link,
+    layout.transaction_file,
+    layout.releases_dir,
+    layout.environment_file,
+    layout.command_path,
+    layout.enablement_link,
+    ...Object.values(layout.unit_paths)
+  ]) {
+    assert.equal(existsNoFollow(path), false, `Uninstall residue: ${path}`);
+  }
+  for (const name of unitNames) {
+    const state = unitSnapshot(name);
+    assert.equal(state.loadState, "not-found");
+    assert.equal(state.activeState, "inactive");
+    assert.equal(state.mainPid, 0);
+  }
+  assert.equal(existsSync(runtimeRoot), false);
+  assertPreservedUserState();
+}
+
+function uninstalledTreeIdentity(layout) {
+  return Object.freeze({
+    entries: readdirSync(layout.data_root),
+    lock: regularFileIdentity(layout.lifecycle_lock)
+  });
+}
+
 function assertInstalledInventory(layout, manifest) {
   assert.equal(readlinkSync(layout.current_link), manifest.release.selector_target);
   assert.equal(readlinkSync(layout.manifest_link), manifest.manifest_link.target);
@@ -398,6 +564,10 @@ function assertUnitsInactive() {
     assert.equal(state.activeState, "inactive");
     assert.equal(state.mainPid, 0);
   }
+}
+
+function resetOwnedUnitRateLimits() {
+  runSystemctl(["reset-failed", ...unitNames], [0, 1, 5]);
 }
 
 function unitSnapshot(name) {
