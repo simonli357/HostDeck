@@ -198,8 +198,8 @@ all are `pass`, and `unresolved_security_blockers` is zero.
   non-security release gates and human acceptance.
 
 Implementation and validation through `d3d9e0d`; package hardening `fcfc957`;
-browser evidence refresh `ee31ea7`. Closure commit and push state are recorded
-in the owning backlog/status after publication.
+browser evidence refresh `ee31ea7`; closure evidence `0459c7e`. All are pushed
+to `origin/main`.
 
 ## Documentation Impact
 
