@@ -1625,7 +1625,7 @@ async function prepareRelease(
     });
   } catch (error) {
     if (!releasePublished && existsNoFollow(stagingRoot)) {
-      removeOwnedStagingTree(stagingRoot, context.layout.releases_dir);
+      removeOwnedLifecycleTree(stagingRoot, context.layout.releases_dir);
     }
     if (releasePublished) {
       throw lifecycleError("recovery_required", "recovery", error);
@@ -2900,8 +2900,7 @@ async function removePublishedRelease(
   assertPublishedReleaseTree(manifest);
   await verifyReleasePackage(context, manifest);
   assertOwnedDirectory(releaseRoot, true);
-  rmSync(releaseRoot, { force: false, recursive: true });
-  fsyncDirectory(context.layout.releases_dir);
+  removeOwnedLifecycleTree(releaseRoot, context.layout.releases_dir);
 }
 
 async function removeUninstallPublishedRelease(
@@ -2975,10 +2974,10 @@ function removeTransactionStaging(
     transaction.staging_name
   );
   if (!existsNoFollow(stagingRoot)) return;
-  removeOwnedStagingTree(stagingRoot, context.layout.releases_dir);
+  removeOwnedLifecycleTree(stagingRoot, context.layout.releases_dir);
 }
 
-function removeOwnedStagingTree(root: string, parent: string): void {
+function removeOwnedLifecycleTree(root: string, parent: string): void {
   assertOwnedDirectory(root, true);
   makeOwnedStagingTreeRemovable(root);
   rmSync(root, { force: false, recursive: true });

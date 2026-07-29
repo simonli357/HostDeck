@@ -92,6 +92,33 @@ describe("IFC-V1-056 service lifecycle owner", () => {
     }
   });
 
+  it("uninstalls an immutable published package tree", async () => {
+    const fixture = createFixture();
+    const source = createSourcePackage(fixture, "1.0.0", "e");
+    const sourceDist = join(source.root, "dist");
+    chmodSync(join(source.root, "hostdeck-package.json"), 0o444);
+    chmodSync(join(sourceDist, "shell.js"), 0o555);
+    chmodSync(sourceDist, 0o555);
+    chmodSync(source.root, 0o555);
+
+    try {
+      const lifecycle = createLifecycle(fixture, source);
+      await expect(lifecycle.execute("install")).resolves.toMatchObject({
+        install_state: "coherent"
+      });
+      await expect(lifecycle.execute("uninstall")).resolves.toMatchObject({
+        action: "uninstall",
+        changed: true,
+        install_state: "not_installed"
+      });
+      expect(existsSync(fixture.layout.releases_dir)).toBe(false);
+      expect(readdirSync(fixture.layout.data_root)).toEqual(["lifecycle.lock"]);
+    } finally {
+      chmodSync(source.root, 0o755);
+      chmodSync(sourceDist, 0o755);
+    }
+  });
+
   it("installs without start, stays idempotent, then starts, restarts HostDeck only, reports, and stops both", async () => {
     const fixture = createFixture();
     const source = createSourcePackage(fixture, "1.0.0", "1");
