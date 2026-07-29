@@ -999,6 +999,19 @@ describe("physical Android phone-driver protocol", () => {
     ]);
   });
 
+  it("opens private Chrome paths without placing the origin in ADB arguments or stdin", () => {
+    const target =
+      "https://hostdeck-laptop.example.ts.net/sessions/sess_physical_pairing_ui";
+    const handoff = createPrivateChromePathHandoff(target);
+
+    expect(handoff.adbArgs).toEqual(["shell"]);
+    expect(handoff.adbArgs.join("\u0000")).not.toContain(target);
+    expect(handoff.stdin).not.toContain(target);
+    expect(handoff.stdin).toContain(
+      Buffer.from(target, "utf8").toString("base64")
+    );
+  });
+
   it("reports physical cleanup failures without retaining private causes", async () => {
     const errors: unknown[] = [];
     await collectPhysicalCleanupError(
@@ -1191,14 +1204,17 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           requireCleanAcceptanceWorktree();
           requireNoAdbApplicationTunnels();
           initialStayAwakeSetting = readAndroidStayAwakeSetting();
-          await enforceAndroidAwakeAndUnlocked(initialStayAwakeSetting);
           initialWifiEnabled = readAndroidWifiEnabled();
           initialMobileDataEnabled = readAndroidMobileDataEnabled();
-          await enforceUnrelatedAndroidNetwork(
-            initialWifiEnabled,
-            initialMobileDataEnabled
-          );
           environmentFacts = readPhysicalEnvironmentFacts();
+          requireCondition(
+            isAndroidAwakeAndUnlocked(),
+            "Physical acceptance requires an awake and unlocked phone before mutation."
+          );
+          if (requireDashboardUiAcceptance) {
+            requireAndroidTalkBackService();
+            requireReadableAndroidAccessibilitySettings();
+          }
         }
         if (
           requireRemoteAndroidAcceptance ||
@@ -1210,6 +1226,19 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
               profileSwitch?.dedicatedProfileId,
             "Physical acceptance must start on the dedicated saved profile."
           );
+        }
+        if (requireProductionUiAcceptance || requireRemoteAndroidAcceptance) {
+          await enforceAndroidAwakeAndUnlocked(initialStayAwakeSetting as number);
+          await enforceUnrelatedAndroidNetwork(
+            initialWifiEnabled as boolean,
+            initialMobileDataEnabled as boolean
+          );
+        }
+        if (
+          requireRemoteAndroidAcceptance ||
+          requireDashboardUiAcceptance ||
+          requireRecoveryUiAcceptance
+        ) {
           await switchSavedProfile(profileSwitch?.awayProfileId as string);
           selectedProfile = "away";
           foreignServeBefore = await readServeStatusFingerprint();
@@ -2102,6 +2131,9 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             initialStayAwakeSetting as number
           );
           initialStayAwakeSetting = null;
+          requirePhysicalDashboardDisplaySettingsUnchanged(
+            environmentFacts as PhysicalEnvironmentFacts
+          );
           requireNoAdbApplicationTunnels();
           publishPhysicalDashboardEvidence({
             completedAt: new Date().toISOString(),
@@ -5531,6 +5563,17 @@ function readAndroidPhysicalDensity(): number {
   return value;
 }
 
+function requirePhysicalDashboardDisplaySettingsUnchanged(
+  environment: PhysicalEnvironmentFacts
+): void {
+  requireCondition(
+    readAndroidDisplaySize() === environment.display_size &&
+      readAndroidSetting("system", "font_scale") === environment.font_scale &&
+      readAndroidPhysicalDensity() === environment.physical_density,
+    "Physical dashboard acceptance changed Android display or font settings."
+  );
+}
+
 function roundPhysicalCssPixels(value: number): number {
   requireCondition(Number.isFinite(value) && value > 0, "Physical CSS size was invalid.");
   return Math.round(value * 10) / 10;
@@ -6908,6 +6951,28 @@ function requireAndroidTalkBackService(): string {
   return service;
 }
 
+function requireReadableAndroidAccessibilitySettings(): void {
+  const enabled = readAndroidSetting(
+    "secure",
+    "enabled_accessibility_services"
+  );
+  const accessibility = readAndroidSetting(
+    "secure",
+    "accessibility_enabled"
+  );
+  const services = enabled === "null" || enabled === ""
+    ? []
+    : enabled.split(":");
+  requireCondition(
+    (accessibility === "0" || accessibility === "1") &&
+      services.length <= 32 &&
+      services.every((service) =>
+        /^[A-Za-z0-9_.]+\/[A-Za-z0-9_.$]+$/u.test(service)
+      ),
+    "Android accessibility settings were unavailable or malformed."
+  );
+}
+
 function readAndroidSetting(namespace: "secure" | "system", key: string): string {
   requireCondition(
     /^[a-z][a-z0-9_]{0,63}$/u.test(key),
@@ -8231,18 +8296,53 @@ function openChromePath(origin: string, path: `/${string}`): void {
       target.hash === "",
     "Physical Chrome path was invalid."
   );
-  adb([
-    "shell",
-    "am",
-    "start",
-    "-W",
-    "-a",
-    "android.intent.action.VIEW",
-    "-d",
-    target.toString(),
-    "-p",
-    "com.android.chrome"
-  ]);
+  const handoff = createPrivateChromePathHandoff(target.toString());
+  adbCommandCount += 1;
+  const output = execFileSync("adb", [...handoff.adbArgs], {
+    ...commandOptions(),
+    input: handoff.stdin
+  });
+  requireCondition(
+    output === "" && !output.includes(target.origin),
+    "Physical private Chrome navigation returned unexpected output."
+  );
+}
+
+function createPrivateChromePathHandoff(target: string): Readonly<{
+  adbArgs: readonly ["shell"];
+  stdin: string;
+}> {
+  const parsed = new URL(target);
+  requireCondition(
+    parsed.toString() === target &&
+      parsed.protocol === "https:" &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      parsed.search === "" &&
+      parsed.hash === "" &&
+      parsed.pathname.startsWith("/") &&
+      target.length <= 1_024,
+    "Physical private Chrome navigation target was invalid."
+  );
+  const encoded = Buffer.from(target, "utf8").toString("base64");
+  const adbArgs = Object.freeze(["shell"] as const);
+  const stdin = [
+    "set -eu",
+    "IFS= read -r url_b64",
+    encoded,
+    'url="$(printf \'%s\' "$url_b64" | base64 -d)"',
+    'am start --user 0 -W -a android.intent.action.VIEW -d "$url" -p com.android.chrome >/dev/null 2>&1',
+    "unset url_b64 url",
+    ""
+  ].join("\n");
+  requireCondition(
+    /^[A-Za-z0-9+/]+={0,2}$/u.test(encoded) &&
+      encoded !== target &&
+      Buffer.byteLength(stdin, "utf8") <= 2_048 &&
+      !stdin.includes(target),
+    "Physical private Chrome navigation handoff was invalid."
+  );
+  return Object.freeze({ adbArgs, stdin });
 }
 
 function decodeXmlAttribute(value: string): string {
