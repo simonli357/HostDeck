@@ -844,8 +844,31 @@ const invokedPath =
     : pathToFileURL(resolve(process.argv[1])).href;
 if (invokedPath === import.meta.url) {
   runCleanEnvironmentAcceptance().catch((error) => {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = formatFailure(error);
     console.error(`HostDeck clean-environment parity failed: ${message}`);
     process.exitCode = 1;
   });
+}
+
+function formatFailure(error) {
+  const pending = [error];
+  const messages = [];
+  while (pending.length > 0 && messages.length < 16) {
+    const current = pending.shift();
+    if (current instanceof AggregateError) {
+      messages.push(current.message);
+      pending.unshift(...current.errors);
+      continue;
+    }
+    if (current instanceof Error) {
+      messages.push(current.message);
+      if (current.cause !== undefined) pending.push(current.cause);
+      continue;
+    }
+    messages.push(String(current));
+  }
+  return redactCleanDiagnostic(messages.join("\n"), "", [
+    repositoryRoot,
+    manifest.container.home
+  ]);
 }
