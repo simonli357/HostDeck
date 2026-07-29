@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-058` Run clean-checkout package, foreground, user-service, upgrade, restart, and uninstall parity acceptance | ready | none | Safe uninstall and retention are complete; clean supported-environment parity is the final package/service dependency before interface hardening and release smoke. |
+| 1 | `IFC-V1-058` Run clean-checkout package, foreground, user-service, upgrade, restart, and uninstall parity acceptance | in_progress | none | `CEP-01` to `CEP-24` are frozen; implement the pinned Noble clean-user harness and close only evidence-proven package/service gaps. |
 | 2 | `FE-V1-018` Review copy and complete workflows against mobile mission-control non-goals | ready | none | Selected-target fidelity is complete; copy/workflow review can now distinguish accepted, running, completed, failed, and bounded recovery truth before real-phone aggregate hardening. |
 
 ## Intentional Blockers
