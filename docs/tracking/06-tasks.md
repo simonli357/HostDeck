@@ -16,8 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-018` Review copy and complete workflows against mobile mission-control non-goals | in_progress | none | Clean package/service parity and selected-target fidelity are complete; close copy and workflow ambiguity before aggregate real-phone hardening. |
-| 2 | `IFC-V1-091` Harden the selected production interface module | ready | none | Clean parity now completes its dependency set; run the full production API/SSE/remote-security/CLI/package/service failure matrix after the active copy/workflow leaf. |
+| 1 | `IFC-V1-091` Harden the selected production interface module | in_progress | none | Copy/workflow review and clean parity are complete; freeze and run the full production API/SSE/remote-security/CLI/package/service failure matrix. |
+| 2 | `FE-V1-090` Harden the complete mobile dashboard on the real phone | ready | none | Fidelity and copy/workflow dependencies are complete; run aggregate physical Android acceptance after the active interface hardening leaf. |
+| 3 | `REL-V1-004` Update the selected-path user guide and troubleshooting | ready | none | The packaged workflow, copy review, and remote-phone inputs are complete; document only verified selected-path behavior while hardening continues. |
 
 ## Intentional Blockers
 

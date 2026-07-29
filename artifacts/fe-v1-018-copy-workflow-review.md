@@ -61,4 +61,123 @@ Close the aggregate mobile copy and workflow gate after selected-target fidelity
 
 ## Implementation Record
 
-Pending criteria review and implementation.
+Complete. `CWR-01` to `CWR-24` pass without changing routes, runtime semantics,
+permissions, remote-ingress ownership, or the selected Focus Rail structure.
+
+## Executable Coverage
+
+| Contract input | Exact coverage | Executable owner |
+| --- | ---: | --- |
+| Canonical journeys | 12 | `mobileWorkflowPaths` covers every `UX-001` to `UX-012` journey with ordered success and recovery states. |
+| Canonical interactions | 39 | `copyWorkflowInteractionCoverageLedger` assigns copy, result, attempt, retry, recovery, target, and technical-language policy exactly once. |
+| Canonical surfaces | 15 | State-ledger surface coverage equals the immutable mobile design contract. |
+| Canonical states | 141 | `copyWorkflowStateCoverageLedger` preserves source order and classifies every state exactly once. |
+| Production copy owners | 40 | `mobile-copy-contract.test.ts` scans visible string/template/JSX literals with explicit bounded exceptions. |
+
+The ledger distinguishes `accepted`, `running`, terminal success, terminal
+interruption, terminal failure, conflict, and unknown outcomes. All 39 interactions
+disable automatic retry. Mutations use no-resend-until-observed or explicit
+local-laptop ownership; browser-preload failures remain owned by the browser or
+Tailscale.
+
+## Issue And Fix Inventory
+
+| ID | Finding | Resolution and proof |
+| --- | --- | --- |
+| `CWR-I01` | User-facing state and control copy leaked implementation terms such as authority, projection, terminal proof, process-live, reconciliation, and structured-operation labels. | Replaced the jargon at its production copy owners and synchronized exact component/browser expectations. The literal-aware source guard rejects recurrence across 40 owners. |
+| `CWR-I02` | Cross-module vocabulary was locally correct but lacked one executable aggregate owner for all states, interactions, journeys, outcomes, recovery owners, and attempt policies. | Added the immutable copy/workflow matrix and seven exact contract tests over 12 journeys, 39 interactions, 15 surfaces, and 141 states. |
+| `CWR-I03` | Technical language had no aggregate exception policy, risking either desktop-console drift or removal of required exact handoff/diagnostic detail. | Limited `thread` and terminal language to exact archive/runtime, local laptop handoff, and bounded event-diagnostic owners. Forbidden product surfaces are frozen and tested. |
+| `CWR-I04` | Pairing, browser-preload failure, app recovery, and local-laptop recovery needed one explicit ownership boundary. | Ledger policies separate browser/Tailscale, HostDeck observation, and local-laptop actions. Current pairing evidence contains no custom-CA, certificate, fragment, or repeated-successful-claim instruction. |
+| `CWR-I05` | After approval success, the approval row could say `Approved once` while a lagging turn snapshot told the user to resolve a supposedly pending approval. | Composer copy now says the turn still reports waiting for approval and directs a refresh before sending. Unit, browser, and approval-workflow evidence prove the non-contradictory lag state. |
+| `CWR-I06` | Exact browser assertions still encoded pre-review wording after production copy changed. | Updated the selected browser specifications and verified the complete 175-case shell suite, not only focused replacements. |
+| `CWR-I07` | Initial task evidence asserted a replay boundary and remote recovery in the DOM without reliably framing them in the screenshot after timeline auto-pin or sheet scrolling. | Evidence code now centers the boundary and fully contains the remote recovery section at 390, 320, short-height, and 200 percent zoom bounds. |
+| `CWR-I08` | The selected-runtime checker had not authorized the new exact fixture export or selected web tests. | Updated the fail-closed root-module and `test:web` allowlists; the 619-module/22-external boundary passes. |
+| `CWR-I09` | The supported-browser manifest correctly rejected the changed production web/package identity. | Repinned only the four verified package hashes, reran all 76 cases, and atomically refreshed four sanitized reports plus the aggregate manifest. |
+
+## Manual Review
+
+All 18 current-build PNGs under
+`artifacts/fe-v1-018-copy-workflow-review/` were inspected at original resolution.
+The two JSON records contain exact viewport, document, dialog, primary-control, and
+pairing-rail geometry for 15 app frames and three pairing frames.
+
+| Review group | Frames | Disposition |
+| --- | ---: | --- |
+| Pairing claim, success, and uncertain outcome | 3 | Conforming: phone-first progress, explicit result/recovery, no fragment or certificate instruction, and no repeated QR requirement. |
+| Mission Control entry | 1 | Conforming: attention-first scan order, exact project/session cues, and whole-row navigation remain primary. |
+| Prompt ready, pending, and completed | 3 | Conforming after copy correction: immutable target, one pending attempt, and event-confirmed completion remain distinct. |
+| Approval confirmation, pending, and confirmed | 3 | Corrected: exact consequence and one-time grant are clear; the confirmed/composer lag contradiction is removed. |
+| Interrupt confirmation | 1 | Conforming: exact turn target and non-delete consequence are visible before dispatch. |
+| Replay boundary and stale retained state | 2 | Corrected evidence framing: missing history, last-confirmed truth, and unavailable writes are visible at phone bounds. |
+| Remote profile recovery | 5 | Conforming: observed laptop state, local-laptop ownership, action, and page-security boundary fit at 390, 320, short height, and 200 percent zoom. |
+
+No frame has horizontal overflow, incoherent overlap, clipped required action,
+desktop-table/editor/terminal drift, color-only status, or unresolved V1 copy
+ambiguity. Literal `/model`, `/goal`, `/plan`, bounded Codex/Tailscale names, exact
+event detail, and the local terminal handoff are contract-authorized technical
+detail. No human decision remains open.
+
+## Criteria Disposition
+
+| Criterion | Disposition |
+| --- | --- |
+| `CWR-01` | Exact selected target and 12/39/15/141 source identities are asserted without reorder or extras. |
+| `CWR-02` | The immutable state and interaction ledgers assign every required policy exactly once. |
+| `CWR-03` | Twelve ordered workflow paths cover success and applicable recovery exits. |
+| `CWR-04` | Literal-aware production scanning limits `thread` to approved runtime/handoff owners. |
+| `CWR-05` | The eight canonical session labels are frozen; aggregate failure-state regressions pass. |
+| `CWR-06` | Prompt and Compact accepted/running/terminal/failed/interrupted/unknown semantics remain distinct. |
+| `CWR-07` | Existing exact Model, Goal, and Plan state/component/browser suites pass with corrected product copy. |
+| `CWR-08` | Every interaction has explicit pending/result/attempt policy and no automatic retry. |
+| `CWR-09` | Recovery owner and safe-attempt policy are explicit for every state and interaction. |
+| `CWR-10` | Browser-preload states remain generic and external; app evidence starts only after admission. |
+| `CWR-11` | Three pairing outcomes prove fragment-safe, certificate-free claim and reload language. |
+| `CWR-12` | Remote taxonomy regressions and five current recovery frames preserve local-laptop ownership. |
+| `CWR-13` | Full access, CSRF, permission, lock, expiry, and revoke browser groups pass independently. |
+| `CWR-14` | Mission entry evidence preserves the phone-first attention hierarchy. |
+| `CWR-15` | Session evidence preserves structured activity, approvals, boundary, composer, and primary dock. |
+| `CWR-16` | Slash labels remain literal while all operations stay typed and structured. |
+| `CWR-17` | Approval evidence covers consequence, target, one-time grant, pending lock, and terminal result. |
+| `CWR-18` | Interrupt evidence plus archive/resume/revoke/lock aggregate cases preserve exact targets and consequences. |
+| `CWR-19` | The complete state ledger and shell suite retain distinct unavailable, stale, failure, boundary, and recovered truth. |
+| `CWR-20` | Source guards and manual review find no unselected product surface. |
+| `CWR-21` | Source/rendered/evidence privacy guards find no secret, private identity, origin, path, or fabricated fallback. |
+| `CWR-22` | Geometry records, full responsive shell, pairing, native zoom, axe, and Orca gates pass. |
+| `CWR-23` | Contract tests, production tests, 18 task frames, 175 shell cases, and 12 pairing cases pass with zero unexpected diagnostics. |
+| `CWR-24` | This record contains fixes, manual disposition, exact gates, package/browser identity, residue, commits, push state, and physical-device deferral. |
+
+## Validation
+
+| Gate | Result |
+| --- | --- |
+| Focused copy/workflow contracts | 20 prompt/copy tests and seven workflow-matrix tests pass; focused browser-manifest/evidence/preflight/ledger tests pass 11. |
+| Static planning/runtime | Scaffold 8 packages/22 scripts; planning 220 tasks/84 requirements/683 dependencies; typecheck; lint 816 files and 8 package exports; runtime boundary 619 sources/22 externals. |
+| Unit/contracts/integration/web | Unit 2,892 passed/28 intentional skips; contract 245; integration 36; selected web 932. |
+| Production browser | Clean committed worktree: shell Chromium 175; pairing Chromium 12; native 200 percent zoom 1; Orca 46.1 reading/focus 1; relocated packaged Chromium 1. |
+| Package | Two deterministic builds pass at 619 sources, 1,245 owned outputs, 6,466 entries, and 3 web files/1,210,747 bytes. Package SHA-256 is `325f0a9fe1cfe36ffdd5255077d514cf39b922e1eaa905e5187a99386bd2ae82`; web SHA-256 is `5e96b3c87b6e5c942426bbd0748c1f7b36325a4c597199545871a08a55024ae5`. |
+| Supported engines | `pnpm test:e2e` passes 76/76 in 3.0 minutes across exact Chromium 149.0.7827.55 and Firefox 151.0 phone/desktop projects; reports contain 316 requests and 52 mutations. |
+| Evidence/privacy/residue | 18 PNG/2 JSON task files pass rendered-copy and geometry guards; secret/identity/origin/path scan is empty; validation ports 4175 to 4179 and browser/server processes are closed. |
+| Protected user work | All 18 pre-existing modified PNGs remain unstaged and byte-identical to the pre-task snapshot. |
+
+The existing Vite large-chunk advisory and non-failing Orca host portal/inotify
+warnings remain unchanged. Neither affects this copy/workflow result.
+
+## Remaining Scope
+
+`FE-V1-090` still owns aggregate physical Android evidence, including actual phone
+geometry/keyboard behavior, TalkBack, live private Serve HTTPS, fragment pairing,
+reload, prompt, approval, lock, disconnect/profile-switch recovery, and final visual
+drift. This task does not claim that physical-device release gate.
+
+## Commit Record
+
+- Criteria: `852c91c`.
+- Executable ledger: `89353ed`.
+- Production copy and source guard: `9bccc18`.
+- Browser contract alignment: `1072a8f`.
+- Approval lag correction: `f8b46ab`.
+- Task-owned visual evidence: `daac7ad`.
+- Selected-runtime boundary correction: `3034907`.
+- Supported-package repin: `b2acc63`.
+- Supported-browser evidence refresh: `936de0c`.
+- Push state: all commits above are on `origin/main`.
