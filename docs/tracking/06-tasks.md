@@ -17,8 +17,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
 | 1 | `FE-V1-090` Harden the complete mobile dashboard on the real phone | in_progress | none | Interface, fidelity, copy/workflow, and browser dependencies pass; freeze the aggregate criteria, deploy the current package, and run physical Android acceptance. |
-| 2 | `REL-V1-004` Update the selected-path user guide and troubleshooting | ready | none | The packaged workflow, copy review, and remote-phone inputs are complete; document only verified selected-path behavior while hardening continues. |
-| 3 | `REL-V1-005` Run the security/privacy release review | ready | none | All selected interface, runtime, state, remote-phone security, and UI authority inputs are complete; execute after the active phone module pass. |
+| 2 | `REL-V1-005` Run the security/privacy release review | ready | none | All selected interface, runtime, state, remote-phone security, and UI authority inputs are complete; execute after the active phone module pass. |
 
 ## Intentional Blockers
 
