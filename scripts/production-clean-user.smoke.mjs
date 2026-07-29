@@ -22,7 +22,10 @@ import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { buildProductionPackage } from "./build-production-package.mjs";
+import {
+  buildProductionPackage,
+  productionBuildIdentity
+} from "./build-production-package.mjs";
 import {
   createTailscaleSnapshot,
   loadCleanEnvironmentManifest
@@ -316,7 +319,11 @@ async function buildAndRelocatePackages() {
     packageVersion: primaryVersion,
     repositoryRoot
   });
-  assert.deepEqual(repeated, primary);
+  assert.notEqual(repeated.outputRoot, primary.outputRoot);
+  assert.deepEqual(
+    productionBuildIdentity(repeated),
+    productionBuildIdentity(primary)
+  );
   assert.equal(
     readFileSync(join(repeatedOutput, "hostdeck-package.json"), "utf8"),
     readFileSync(join(primaryOutput, "hostdeck-package.json"), "utf8")

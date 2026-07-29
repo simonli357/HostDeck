@@ -24,6 +24,7 @@ import {
   createRuntimePackageManifest,
   inspectViteManifest,
   normalizeDeployedWorkspaceLayout,
+  productionBuildIdentity,
   publishCompletedPackage,
   selectedProductionSources
 } from "./build-production-package.mjs";
@@ -186,6 +187,35 @@ test("uses the frozen shared-lockfile production deploy path", () => {
   assert.throws(
     () => createProductionDependencyDeployArguments("relative/deploy"),
     /must be absolute/u
+  );
+});
+
+test("compares repeat builds by package identity rather than output location", () => {
+  const first = {
+    contentSha256: "content",
+    entryCount: 3,
+    outputCount: 2,
+    outputRoot: join(tmpdir(), "hostdeck-first"),
+    packageVersion: "1.0.0",
+    sourceCount: 1,
+    webBytes: 5,
+    webFileCount: 1,
+    webSha256: "web"
+  };
+  const repeated = {
+    ...first,
+    outputRoot: join(tmpdir(), "hostdeck-repeated")
+  };
+  assert.deepEqual(productionBuildIdentity(repeated), productionBuildIdentity(first));
+  assert.equal("outputRoot" in productionBuildIdentity(first), false);
+  assert.equal(Object.isFrozen(productionBuildIdentity(first)), true);
+  assert.notDeepEqual(
+    productionBuildIdentity({ ...repeated, contentSha256: "changed" }),
+    productionBuildIdentity(first)
+  );
+  assert.throws(
+    () => productionBuildIdentity({ ...first, unexpected: true }),
+    /fields are invalid/u
   );
 });
 

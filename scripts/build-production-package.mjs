@@ -45,6 +45,17 @@ const defaultRepositoryRoot = resolve(scriptDirectory, "..");
 const packageNames = ["core", "contracts", "codex-adapter", "storage", "server", "cli"];
 const deployedWorkspacePackageNames = packageNames.filter((name) => name !== "cli");
 const deployedVirtualRootExternalPackageNames = ["fs-ext", "qrcode", "zod"];
+const productionBuildResultKeys = [
+  "contentSha256",
+  "entryCount",
+  "outputCount",
+  "outputRoot",
+  "packageVersion",
+  "sourceCount",
+  "webBytes",
+  "webFileCount",
+  "webSha256"
+];
 const expectedExternalModules = [
   "@fastify/sse",
   "@fastify/static",
@@ -256,6 +267,21 @@ export function buildProductionPackage(options = {}) {
   } finally {
     removeTree(stagingRoot);
   }
+}
+
+export function productionBuildIdentity(candidate) {
+  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) {
+    throw new TypeError("Production build result must be an object.");
+  }
+  const keys = Object.keys(candidate).sort();
+  if (!sameArray(keys, productionBuildResultKeys)) {
+    throw new TypeError("Production build result fields are invalid.");
+  }
+  if (typeof candidate.outputRoot !== "string" || !isAbsolute(candidate.outputRoot)) {
+    throw new TypeError("Production build output root must be absolute.");
+  }
+  const { outputRoot: _outputRoot, ...identity } = candidate;
+  return Object.freeze(identity);
 }
 
 function collectHostDeckServiceHost(root, packageVersion) {
