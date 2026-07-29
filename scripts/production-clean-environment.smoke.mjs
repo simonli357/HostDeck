@@ -248,15 +248,15 @@ export async function runCleanEnvironmentAcceptance() {
   } finally {
     cleanupErrors = [
       ...(await collectCleanupErrors([
-        () => {
+        async () => {
           if (!containerStarted) return;
-        stopContainer();
-        containerStarted = false;
+          await stopContainer();
+          containerStarted = false;
         },
         () => {
           if (!imageBuilt) return;
-        removeImage(source.image_tag);
-        imageBuilt = false;
+          removeImage(source.image_tag);
+          imageBuilt = false;
         },
         () => {
           const finalTailscale = snapshotHostTailscale();
@@ -454,7 +454,9 @@ function bootstrapCleanUser(sourceCommit) {
   const localNode = join(home, ".local", "node");
   const localCodex = join(home, ".local", "codex");
   const started = performance.now();
-  userExec("install", ["-d", "-m", "0700", localNode]);
+  userExec("install", ["-d", "-m", "0700", localNode], {
+    label: "create ordinary-user toolchain root"
+  });
   const nodeStarted = performance.now();
   userExec("tar", [
     "-xJf",
@@ -462,15 +464,17 @@ function bootstrapCleanUser(sourceCommit) {
     "-C",
     localNode,
     "--strip-components=1"
-  ]);
+  ], { label: "extract pinned Node archive" });
   const nodeExtractMs = elapsed(nodeStarted);
   const corepackStarted = performance.now();
-  const corepackEnable = userExec(nodeBin("corepack"), ["enable"]);
+  const corepackEnable = userExec(nodeBin("corepack"), ["enable"], {
+    label: "enable Corepack"
+  });
   const corepackPrepare = userExec(nodeBin("corepack"), [
     "prepare",
     `pnpm@${manifest.pnpm_version}`,
     "--activate"
-  ]);
+  ], { label: "activate pinned pnpm" });
   assertNoBootstrapWarning(corepackEnable, "Corepack enable");
   assertNoBootstrapWarning(corepackPrepare, "Corepack prepare");
   const corepackMs = elapsed(corepackStarted);
@@ -484,7 +488,10 @@ function bootstrapCleanUser(sourceCommit) {
     "--no-audit",
     "--no-fund",
     `${manifest.codex.package}@${manifest.codex.version}`
-  ], { timeout: manifest.bounds.bootstrap_ms });
+  ], {
+    label: "install pinned Codex",
+    timeout: manifest.bounds.bootstrap_ms
+  });
   assertNoBootstrapWarning(codexInstall, "Codex install");
   const codexInstallMs = elapsed(codexStarted);
   const cloneStarted = performance.now();
@@ -495,27 +502,30 @@ function bootstrapCleanUser(sourceCommit) {
     "--no-tags",
     "/source/HostDeck.bundle",
     manifest.container.checkout
-  ], { timeout: manifest.bounds.bootstrap_ms });
+  ], {
+    label: "clone committed source bundle",
+    timeout: manifest.bounds.bootstrap_ms
+  });
   userExec("git", [
     "-C",
     manifest.container.checkout,
     "checkout",
     "--detach",
     sourceCommit
-  ]);
+  ], { label: "detach exact source commit" });
   const actualCommit = userExec("git", [
     "-C",
     manifest.container.checkout,
     "rev-parse",
     "HEAD"
-  ]).stdout.trim();
+  ], { label: "inspect cloned source commit" }).stdout.trim();
   assert.equal(actualCommit, sourceCommit);
   for (const path of ["node_modules", "dist"]) {
     const absent = userExec("test", [
       "!",
       "-e",
       join(manifest.container.checkout, path)
-    ], { statuses: [0, 1] });
+    ], { label: "inspect clean checkout inputs", statuses: [0, 1] });
     if (absent.status !== 0) {
       throw new Error(`Clean checkout unexpectedly contains ${path}.`);
     }
@@ -528,6 +538,7 @@ function bootstrapCleanUser(sourceCommit) {
     "--reporter=append-only"
   ], {
     cwd: manifest.container.checkout,
+    label: "install frozen dependency graph",
     timeout: manifest.bounds.bootstrap_ms
   });
   assertNoBootstrapWarning(frozenInstall, "Frozen install");
@@ -538,7 +549,7 @@ function bootstrapCleanUser(sourceCommit) {
     "status",
     "--porcelain=v1",
     "--untracked-files=no"
-  ]).stdout;
+  ], { label: "inspect frozen-install source state" }).stdout;
   if (dirty !== "") {
     throw new Error("Frozen install changed tracked clean-checkout bytes.");
   }
@@ -550,7 +561,10 @@ function bootstrapCleanUser(sourceCommit) {
       "scripts",
       "clean-environment-contract.test.mjs"
     )
-  ], { cwd: manifest.container.checkout });
+  ], {
+    cwd: manifest.container.checkout,
+    label: "run clean-environment contract tests"
+  });
   return Object.freeze({
     codex_install_ms: codexInstallMs,
     corepack_ms: corepackMs,
@@ -617,8 +631,9 @@ async function waitForUserManager() {
   }, manifest.bounds.readiness_ms, "Container user manager did not become ready.");
 }
 
-function stopContainer() {
+async function stopContainer() {
   const errors = [];
+  let graceful = false;
   try {
     const stop = runCommand("docker", [
       "stop",
@@ -629,32 +644,49 @@ function stopContainer() {
     if (stop.status !== 0) {
       throw new Error("Clean container could not be stopped gracefully.");
     }
+    graceful = true;
   } catch (error) {
     errors.push(error);
   }
-  let inspect = runCommand(
-    "docker",
-    ["container", "inspect", manifest.container.name],
-    { statuses: [0, 1] }
-  );
-  if (inspect.status === 0) {
+  try {
+    await eventually(
+      () => !containerExists(),
+      manifest.bounds.readiness_ms,
+      "Clean container removal did not settle."
+    );
+  } catch (error) {
+    errors.push(error);
+  }
+  if (containerExists()) {
     try {
-      runCommand("docker", ["container", "rm", "--force", manifest.container.name]);
+      runCommand(
+        "docker",
+        ["container", "rm", "--force", manifest.container.name],
+        { statuses: [0, 1] }
+      );
+      await eventually(
+        () => !containerExists(),
+        manifest.bounds.readiness_ms,
+        "Forced clean-container removal did not settle."
+      );
     } catch (error) {
       errors.push(error);
     }
-    inspect = runCommand(
-      "docker",
-      ["container", "inspect", manifest.container.name],
-      { statuses: [0, 1] }
-    );
-    if (inspect.status === 0) {
+    if (containerExists()) {
       errors.push(new Error("Clean container remains after forced cleanup."));
     }
   }
-  if (errors.length > 0) {
+  if (!graceful || errors.length > 0) {
     throw new AggregateError(errors, "Clean container cleanup was not graceful.");
   }
+}
+
+function containerExists() {
+  return runCommand(
+    "docker",
+    ["container", "inspect", manifest.container.name],
+    { statuses: [0, 1] }
+  ).status === 0;
 }
 
 function removeImage(imageTag) {
@@ -801,7 +833,12 @@ function runCommand(file, args, options = {}) {
     timeout: options.timeout ?? manifest.bounds.host_command_ms
   });
   if (result.error !== undefined) {
-    throw new Error(`Bounded command failed to execute: ${file}.`);
+    const code =
+      typeof result.error.code === "string" ? result.error.code : "unknown";
+    const detail = boundedDiagnostic(result.stdout ?? "", result.stderr ?? "");
+    throw new Error(
+      `Bounded command failed to execute: ${options.label ?? file} (${code}; ${detail}).`
+    );
   }
   const status = result.status ?? -1;
   const statuses = options.statuses ?? [0];
