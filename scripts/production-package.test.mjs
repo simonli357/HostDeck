@@ -6,20 +6,24 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { resolveConfig } from "vite";
 
 import {
+  createProductionDependencyDeployArguments,
   createProductionWebBuildEnvironment,
   createRuntimePackageManifest,
   inspectViteManifest,
+  normalizeDeployedWorkspaceLayout,
   publishCompletedPackage,
   selectedProductionSources
 } from "./build-production-package.mjs";
@@ -34,6 +38,60 @@ import {
   stableJson,
   verifyProductionWebAssets
 } from "./verify-production-package.mjs";
+
+const deployedWorkspacePackageNames = ["core", "contracts", "codex-adapter", "storage", "server"];
+const deployedExternalPackageNames = ["fs-ext", "qrcode", "zod"];
+
+function createWorkspaceDeployEntry(root, name, index) {
+  const entryName = `@hostdeck+${name}@file++++private+checkout+packages+${name}_${index}`;
+  const packageRoot = join(
+    root,
+    "node_modules",
+    ".pnpm",
+    entryName,
+    "node_modules",
+    "@hostdeck",
+    name
+  );
+  mkdirSync(packageRoot, { recursive: true });
+  writeFileSync(join(packageRoot, "package.json"), `${JSON.stringify({ name: `@hostdeck/${name}` })}\n`);
+  return { entryName, packageRoot };
+}
+
+function createSharedDeployFixture(root, packageNames = deployedWorkspacePackageNames) {
+  const packages = new Map(
+    packageNames.map((name, index) => [name, createWorkspaceDeployEntry(root, name, index)])
+  );
+  let topLevelLink;
+  if (packages.has("contracts")) {
+    topLevelLink = join(root, "node_modules", "@hostdeck", "contracts");
+    mkdirSync(dirname(topLevelLink), { recursive: true });
+    symlinkSync(relative(dirname(topLevelLink), packages.get("contracts").packageRoot), topLevelLink, "dir");
+  }
+  let crossPackageLink;
+  if (packages.has("server") && packages.has("core")) {
+    crossPackageLink = join(packages.get("server").packageRoot, "node_modules", "@hostdeck", "core");
+    mkdirSync(dirname(crossPackageLink), { recursive: true });
+    symlinkSync(relative(dirname(crossPackageLink), packages.get("core").packageRoot), crossPackageLink, "dir");
+  }
+  for (const name of deployedExternalPackageNames) {
+    const packageRoot = join(root, "node_modules", ".pnpm", `${name}@1.0.0`, "node_modules", name);
+    const link = join(root, "node_modules", name);
+    mkdirSync(packageRoot, { recursive: true });
+    writeFileSync(join(packageRoot, "package.json"), `${JSON.stringify({ name })}\n`);
+    symlinkSync(relative(dirname(link), packageRoot), link, "dir");
+  }
+  writeFileSync(
+    join(root, "package.json"),
+    `${JSON.stringify({
+      dependencies: Object.fromEntries(deployedExternalPackageNames.map((name) => [name, "1.0.0"]))
+    })}\n`
+  );
+  return {
+    packageNames: [...packageNames],
+    topLevelLink
+  };
+}
 
 test("selects the exact non-web production closure", () => {
   const sources = selectedProductionSources();
@@ -109,6 +167,115 @@ test("rewrites source manifests to exact runtime-only package metadata", () => {
   });
   assert.equal("scripts" in manifest, false);
   assert.equal("devDependencies" in manifest, false);
+});
+
+test("uses the frozen shared-lockfile production deploy path", () => {
+  const deployRoot = join(tmpdir(), "hostdeck-production-deploy");
+  const args = createProductionDependencyDeployArguments(deployRoot);
+  assert.deepEqual(args, [
+    "--offline",
+    "--frozen-lockfile",
+    "--filter",
+    "@hostdeck/cli",
+    "deploy",
+    "--prod",
+    deployRoot
+  ]);
+  assert.equal(args.includes("--legacy"), false);
+  assert.equal(Object.isFrozen(args), true);
+  assert.throws(
+    () => createProductionDependencyDeployArguments("relative/deploy"),
+    /must be absolute/u
+  );
+});
+
+test("normalizes source-derived workspace deploy paths and links", (context) => {
+  const root = mkdtempSync(join(tmpdir(), "hostdeck-shared-deploy-"));
+  context.after(() => rmSync(root, { force: true, recursive: true }));
+  const fixture = createSharedDeployFixture(root);
+
+  const result = normalizeDeployedWorkspaceLayout(root);
+  assert.deepEqual(result.packageNames, fixture.packageNames);
+  assert.equal(result.rewrittenLinkCount, 2);
+  assert.equal(Object.isFrozen(result), true);
+  assert.equal(Object.isFrozen(result.packageNames), true);
+
+  const virtualStoreRoot = join(root, "node_modules", ".pnpm");
+  assert.deepEqual(
+    readdirSync(virtualStoreRoot)
+      .filter((name) => name.startsWith("@hostdeck+"))
+      .sort(),
+    fixture.packageNames
+      .map((name) => `@hostdeck+${name}@file+packages+${name}`)
+      .sort()
+  );
+  for (const name of fixture.packageNames) {
+    const packageRoot = join(
+      virtualStoreRoot,
+      `@hostdeck+${name}@file+packages+${name}`,
+      "node_modules",
+      "@hostdeck",
+      name
+    );
+    assert.equal(
+      realpathSync(join(virtualStoreRoot, "node_modules", "@hostdeck", name)),
+      packageRoot
+    );
+  }
+  assert.equal(readlinkSync(fixture.topLevelLink).includes("private+checkout"), false);
+  const normalizedCrossPackageLink = join(
+    virtualStoreRoot,
+    "@hostdeck+server@file+packages+server",
+    "node_modules",
+    "@hostdeck",
+    "server",
+    "node_modules",
+    "@hostdeck",
+    "core"
+  );
+  assert.equal(readlinkSync(normalizedCrossPackageLink).includes("private+checkout"), false);
+  assert.equal(normalizeDeployedWorkspaceLayout(root).rewrittenLinkCount, 0);
+});
+
+test("rejects incomplete, unexpected, duplicate, and dependency-drifted workspace deploy layouts", (context) => {
+  const incomplete = mkdtempSync(join(tmpdir(), "hostdeck-shared-incomplete-"));
+  const unexpected = mkdtempSync(join(tmpdir(), "hostdeck-shared-unexpected-"));
+  const duplicate = mkdtempSync(join(tmpdir(), "hostdeck-shared-duplicate-"));
+  const dependencyDrift = mkdtempSync(join(tmpdir(), "hostdeck-shared-dependency-drift-"));
+  context.after(() => {
+    for (const root of [incomplete, unexpected, duplicate, dependencyDrift]) {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  createSharedDeployFixture(incomplete, ["core"]);
+  assert.throws(
+    () => normalizeDeployedWorkspaceLayout(incomplete),
+    /package set is incomplete/u
+  );
+
+  createWorkspaceDeployEntry(unexpected, "unknown", 0);
+  assert.throws(
+    () => normalizeDeployedWorkspaceLayout(unexpected),
+    /unexpected package/u
+  );
+
+  createSharedDeployFixture(duplicate);
+  createWorkspaceDeployEntry(duplicate, "core", 99);
+  assert.throws(
+    () => normalizeDeployedWorkspaceLayout(duplicate),
+    /duplicate @hostdeck\/core/u
+  );
+
+  createSharedDeployFixture(dependencyDrift);
+  writeFileSync(
+    join(dependencyDrift, "package.json"),
+    `${JSON.stringify({ dependencies: { extra: "1.0.0" } })}\n`
+  );
+  assert.throws(
+    () => normalizeDeployedWorkspaceLayout(dependencyDrift),
+    /external dependencies changed/u
+  );
 });
 
 test("file identity is path-sensitive, ordered, and deterministic", () => {

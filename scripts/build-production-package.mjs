@@ -17,7 +17,7 @@ import {
   writeFileSync
 } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { validateSelectedRuntimeBoundary } from "./check-selected-runtime-boundary.mjs";
@@ -43,6 +43,8 @@ import {
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const defaultRepositoryRoot = resolve(scriptDirectory, "..");
 const packageNames = ["core", "contracts", "codex-adapter", "storage", "server", "cli"];
+const deployedWorkspacePackageNames = packageNames.filter((name) => name !== "cli");
+const deployedVirtualRootExternalPackageNames = ["fs-ext", "qrcode", "zod"];
 const expectedExternalModules = [
   "@fastify/sse",
   "@fastify/static",
@@ -685,24 +687,163 @@ function assertExactCompilerOutput(emitRoot, sources) {
   }
 }
 
-function deployProductionDependencies(repositoryRoot, deployRoot) {
-  runPnpm(repositoryRoot, [
+export function createProductionDependencyDeployArguments(deployRoot) {
+  if (typeof deployRoot !== "string" || !isAbsolute(deployRoot)) {
+    throw new TypeError("Production dependency deploy root must be absolute.");
+  }
+  return Object.freeze([
     "--offline",
     "--frozen-lockfile",
     "--filter",
     "@hostdeck/cli",
     "deploy",
-    "--legacy",
     "--prod",
     deployRoot
-  ], "Offline production dependency deploy");
+  ]);
+}
+
+function deployProductionDependencies(repositoryRoot, deployRoot) {
+  runPnpm(
+    repositoryRoot,
+    createProductionDependencyDeployArguments(deployRoot),
+    "Offline production dependency deploy"
+  );
   if (!existsSync(join(deployRoot, "node_modules", ".pnpm"))) {
     throw new Error("Offline production dependency deploy did not create the expected pnpm layout.");
   }
+  normalizeDeployedWorkspaceLayout(deployRoot);
+}
+
+function deployedWorkspaceEntryName(name) {
+  return `@hostdeck+${name}@file+packages+${name}`;
+}
+
+export function normalizeDeployedWorkspaceLayout(deployRoot) {
+  if (typeof deployRoot !== "string" || !isAbsolute(deployRoot)) {
+    throw new TypeError("Deployed workspace root must be absolute.");
+  }
+  const root = resolve(deployRoot);
+  const virtualStoreRoot = join(root, "node_modules", ".pnpm");
+  if (!lstatOrNull(virtualStoreRoot)?.isDirectory()) {
+    throw new Error("Deployed workspace virtual store is missing.");
+  }
+
+  const discovered = new Map();
+  for (const entry of readdirSync(virtualStoreRoot, { withFileTypes: true })) {
+    if (!entry.name.startsWith("@hostdeck+")) continue;
+    if (!entry.isDirectory() || entry.isSymbolicLink()) {
+      throw new Error(`Deployed workspace entry ${entry.name} is not a directory.`);
+    }
+    const scopeRoot = join(virtualStoreRoot, entry.name, "node_modules", "@hostdeck");
+    if (!lstatOrNull(scopeRoot)?.isDirectory()) {
+      throw new Error(`Deployed workspace entry ${entry.name} has no package scope.`);
+    }
+    const packageEntries = readdirSync(scopeRoot, { withFileTypes: true }).filter(
+      (candidate) => candidate.isDirectory() && !candidate.isSymbolicLink()
+    );
+    if (packageEntries.length !== 1) {
+      throw new Error(`Deployed workspace entry ${entry.name} has an invalid package count.`);
+    }
+    const name = packageEntries[0].name;
+    if (!deployedWorkspacePackageNames.includes(name)) {
+      throw new Error(`Deployed workspace contains unexpected package @hostdeck/${name}.`);
+    }
+    const manifest = readJson(join(scopeRoot, name, "package.json"));
+    if (manifest.name !== `@hostdeck/${name}`) {
+      throw new Error(`Deployed workspace package identity is invalid for @hostdeck/${name}.`);
+    }
+    if (discovered.has(name)) {
+      throw new Error(`Deployed workspace contains duplicate @hostdeck/${name} packages.`);
+    }
+    discovered.set(name, entry.name);
+  }
+
+  const missing = deployedWorkspacePackageNames.filter((name) => !discovered.has(name));
+  if (missing.length > 0 || discovered.size !== deployedWorkspacePackageNames.length) {
+    throw new Error(`Deployed workspace package set is incomplete: ${missing.join(", ") || "unknown"}.`);
+  }
+
+  const replacements = new Map();
+  for (const name of deployedWorkspacePackageNames) {
+    const current = discovered.get(name);
+    const canonical = deployedWorkspaceEntryName(name);
+    if (current === canonical) continue;
+    const destination = join(virtualStoreRoot, canonical);
+    if (lstatOrNull(destination) !== null) {
+      throw new Error(`Canonical deployed workspace entry already exists for @hostdeck/${name}.`);
+    }
+    renameSync(join(virtualStoreRoot, current), destination);
+    replacements.set(current, canonical);
+  }
+
+  let rewrittenLinkCount = 0;
+  for (const link of listSymbolicLinks(root)) {
+    const target = readlinkSync(link);
+    const rewritten = target
+      .split(sep)
+      .map((segment) => replacements.get(segment) ?? segment)
+      .join(sep);
+    if (rewritten === target) continue;
+    rmSync(link, { force: true });
+    symlinkSync(rewritten, link);
+    rewrittenLinkCount += 1;
+  }
+
+  const virtualScopeRoot = join(virtualStoreRoot, "node_modules", "@hostdeck");
+  mkdirSync(virtualScopeRoot, { recursive: true });
+  for (const name of deployedWorkspacePackageNames) {
+    const link = join(virtualScopeRoot, name);
+    if (lstatOrNull(link) !== null) rmSync(link, { force: true, recursive: true });
+    const target = join(
+      virtualStoreRoot,
+      deployedWorkspaceEntryName(name),
+      "node_modules",
+      "@hostdeck",
+      name
+    );
+    symlinkSync(portable(relative(dirname(link), target)), link, "dir");
+  }
+  const deployedManifest = readJson(join(root, "package.json"));
+  const directExternalPackageNames = Object.keys(deployedManifest.dependencies ?? {})
+    .filter((name) => !name.startsWith("@hostdeck/"))
+    .sort();
+  if (!sameArray(directExternalPackageNames, deployedVirtualRootExternalPackageNames)) {
+    throw new Error(
+      `Deployed CLI external dependencies changed: ${directExternalPackageNames.join(", ") || "none"}.`
+    );
+  }
+  for (const name of deployedVirtualRootExternalPackageNames) {
+    const source = realpathSync(join(root, "node_modules", name));
+    if (!isInside(root, source)) {
+      throw new Error(`Deployed external package ${name} escapes the staging tree.`);
+    }
+    const link = join(virtualStoreRoot, "node_modules", name);
+    if (lstatOrNull(link) !== null) rmSync(link, { force: true, recursive: true });
+    symlinkSync(portable(relative(dirname(link), source)), link, "dir");
+  }
+
+  for (const link of listSymbolicLinks(root)) {
+    const target = readlinkSync(link);
+    if (isAbsolute(target)) {
+      throw new Error(`Deployed dependency symlink is absolute at ${portable(relative(root, link))}.`);
+    }
+    const resolved = realpathSync(link);
+    if (!isInside(root, resolved)) {
+      throw new Error(`Deployed dependency symlink escapes at ${portable(relative(root, link))}.`);
+    }
+    if ([...replacements.keys()].some((entry) => target.split(sep).includes(entry))) {
+      throw new Error(`Deployed dependency symlink retains a source-derived workspace path.`);
+    }
+  }
+
+  return Object.freeze({
+    packageNames: Object.freeze([...deployedWorkspacePackageNames]),
+    rewrittenLinkCount
+  });
 }
 
 function pruneNativeBuildIntermediates(root) {
-  const fsExtRoot = realpathSync(join(root, "node_modules", ".pnpm", "node_modules", "fs-ext"));
+  const fsExtRoot = realpathSync(join(root, "node_modules", "fs-ext"));
   if (!isInside(root, fsExtRoot)) throw new Error("fs-ext package root escapes the staging tree.");
   const buildRoot = join(fsExtRoot, "build");
   const canonicalNative = join(buildRoot, "Release", "fs_ext.node");
@@ -716,7 +857,15 @@ function installCompiledPackages(input) {
   const roots = new Map();
   roots.set("cli", input.packageRoot);
   for (const name of packageNames.filter((candidate) => candidate !== "cli")) {
-    const locator = join(input.packageRoot, "node_modules", ".pnpm", "node_modules", "@hostdeck", name);
+    const locator = join(
+      input.packageRoot,
+      "node_modules",
+      ".pnpm",
+      deployedWorkspaceEntryName(name),
+      "node_modules",
+      "@hostdeck",
+      name
+    );
     const packagePath = realpathSync(locator);
     if (!isInside(input.packageRoot, packagePath)) {
       throw new Error(`Deployed @hostdeck/${name} package root escapes the staging tree.`);
@@ -776,7 +925,9 @@ function cleanOwnedPackageRoot(root) {
 
 function removePackageManagerMetadata(root) {
   const paths = [
+    join(root, "pnpm-lock.yaml"),
     join(root, "node_modules", ".modules.yaml"),
+    join(root, "node_modules", ".pnpm-workspace-state-v1.json"),
     join(root, "node_modules", ".pnpm", "lock.yaml"),
     join(root, "node_modules", ".pnpm", "node_modules", "@hostdeck", "cli")
   ];
