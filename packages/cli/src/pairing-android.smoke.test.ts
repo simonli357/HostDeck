@@ -5669,15 +5669,18 @@ async function runProductionDashboardUiSequence(
       physicalPromptStreamDiagnostic(input)
   );
   await waitForAndroidUiText("Ready to send", 45_000, "Physical Session Detail was not writable.");
-  await waitForAndroidUiText(
-    "Earlier activity unavailable",
+  await waitFor(
+    () => {
+      const snapshot = input.prompt.subscribers.snapshot();
+      return snapshot.active_subscribers === 1 && snapshot.replay_events === 0;
+    },
     30_000,
-    "Physical Session Detail omitted the replay boundary."
+    "Physical Session Detail did not drain its bounded replay into one live subscriber."
   );
   await waitForAndroidUiText(
-    "Physical dashboard event complete",
+    "Current",
     30_000,
-    "Physical Session Detail omitted the complete event."
+    "Physical Session Detail did not render current replay-to-live truth."
   );
   await capture("fe090-03-session-detail.png");
 
