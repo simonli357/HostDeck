@@ -685,9 +685,7 @@ async function inspectHttpSurface(port, packagePath, packageManifest) {
   assert.deepEqual(await live.json(), { status: "alive" });
   const ready = await boundedFetch(`${baseUrl}/api/v1/health/ready`);
   assert.equal(ready.status, 200);
-  const hostResponse = await boundedFetch(`${baseUrl}/api/v1/host/status`, {
-    headers: { "x-hostdeck-local-admin": "cli-v1" }
-  });
+  const hostResponse = await boundedFetch(`${baseUrl}/api/v1/host/status`);
   assert.equal(hostResponse.status, 200);
   assert.equal(hostResponse.headers.get("cache-control"), "no-store");
   const host = await hostResponse.json();
@@ -696,6 +694,9 @@ async function inspectHttpSurface(port, packagePath, packageManifest) {
   assert.equal(host.compatibility.state, "supported");
   assert.equal(host.compatibility.observed_version, manifest.codex.version);
   assert.equal(host.remote.availability === "ready", false);
+  assert.equal(host.access.mode, "loopback_read");
+  assert.equal(host.access.network_mode, "loopback");
+  assert.equal(host.access.transport, "http");
   const index = await boundedFetch(`${baseUrl}/`);
   assert.equal(index.status, 200);
   const indexBytes = new Uint8Array(await index.arrayBuffer());
