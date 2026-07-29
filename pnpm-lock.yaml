@@ -17,6 +17,9 @@ patchedDependencies:
   fastify@5.10.0:
     hash: 2714166e819688e6a7c985e36f170ee52d6a47cd3739429fdb7de0ccd023ded2
     path: patches/fastify@5.10.0.patch
+  fs-ext@2.1.1:
+    hash: aa4f96cfdc81e6b84fed03790938cb89e7eaddfac0abfc5c4e332473010822fc
+    path: patches/fs-ext@2.1.1.patch
 
 importers:
 
@@ -57,7 +60,7 @@ importers:
         version: link:../storage
       fs-ext:
         specifier: 2.1.1
-        version: 2.1.1
+        version: 2.1.1(patch_hash=aa4f96cfdc81e6b84fed03790938cb89e7eaddfac0abfc5c4e332473010822fc)
       qrcode:
         specifier: 1.5.4
         version: 1.5.4
@@ -148,7 +151,7 @@ importers:
         version: 12.11.1
       fs-ext:
         specifier: 2.1.1
-        version: 2.1.1
+        version: 2.1.1(patch_hash=aa4f96cfdc81e6b84fed03790938cb89e7eaddfac0abfc5c4e332473010822fc)
     devDependencies:
       '@types/better-sqlite3':
         specifier: 7.6.13
@@ -2663,7 +2666,7 @@ snapshots:
 
   fs-constants@1.0.0: {}
 
-  fs-ext@2.1.1:
+  fs-ext@2.1.1(patch_hash=aa4f96cfdc81e6b84fed03790938cb89e7eaddfac0abfc5c4e332473010822fc):
     dependencies:
       nan: 2.28.0
 

@@ -8,6 +8,7 @@ onlyBuiltDependencies:
 patchedDependencies:
   '@fastify/sse@0.5.0': patches/@fastify__sse@0.5.0.patch
   fastify@5.10.0: patches/fastify@5.10.0.patch
+  fs-ext@2.1.1: patches/fs-ext@2.1.1.patch
 
 overrides:
   brace-expansion: 5.0.8
