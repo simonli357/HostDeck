@@ -16,6 +16,7 @@ import {
   unlinkSync,
   writeFileSync
 } from "node:fs";
+import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
@@ -1303,10 +1304,14 @@ function createProductEnvironment() {
 }
 
 function requireNativeModules() {
-  const betterSqlite = realpathSync(
-    join(repositoryRoot, "node_modules", "better-sqlite3")
+  const storageRequire = createRequire(
+    join(repositoryRoot, "packages", "storage", "package.json")
   );
-  const fsExt = realpathSync(join(repositoryRoot, "node_modules", "fs-ext"));
+  const cliRequire = createRequire(
+    join(repositoryRoot, "packages", "cli", "package.json")
+  );
+  const betterSqlite = realpathSync(storageRequire.resolve("better-sqlite3"));
+  const fsExt = realpathSync(cliRequire.resolve("fs-ext"));
   const script =
     "import { createRequire } from 'node:module'; const require=createRequire(import.meta.url); require(process.argv[1]); require(process.argv[2]);";
   runCommand(process.execPath, ["--input-type=module", "--eval", script, betterSqlite, fsExt], {
