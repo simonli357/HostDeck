@@ -1944,6 +1944,128 @@ describe("physical Android phone-driver protocol", () => {
     ).toBeNull();
   });
 
+  it("selects only the destructive action owned by the archive dialog", () => {
+    const nodes = parseAndroidUiNodes(
+      '<hierarchy rotation="0">' +
+        '<node text="Archive session" content-desc="" class="android.widget.Button" ' +
+        'clickable="true" enabled="true" bounds="[40,300][680,380]" />' +
+        '<node text="Archive session?" content-desc="" class="android.widget.TextView" ' +
+        'bounds="[40,700][600,760]" />' +
+        '<node text="Cancel" content-desc="" class="android.widget.Button" ' +
+        'clickable="true" enabled="true" bounds="[40,1000][330,1080]" />' +
+        '<node text="Archive session" content-desc="" class="android.widget.Button" ' +
+        'clickable="true" enabled="true" bounds="[350,1000][690,1080]" />' +
+        '<node text="" content-desc="" class="android.view.ViewGroup" ' +
+        `resource-id="${chromeToolbarResourceId}" bounds="[0,0][720,180]" />` +
+        '<node text="" content-desc="" class="android.widget.FrameLayout" ' +
+        `resource-id="${chromeCompositorResourceId}" bounds="[0,0][720,1280]" />` +
+        "</hierarchy>"
+    );
+    const title = nodes.find((node) => node.text === "Archive session?");
+    const cancel = nodes.find((node) => node.text === "Cancel");
+    const actions = nodes.filter((node) => node.text === "Archive session");
+    const originAction = actions[0];
+    const confirmAction = actions[1];
+    requireCondition(
+      title !== undefined &&
+        cancel !== undefined &&
+        originAction !== undefined &&
+        confirmAction !== undefined,
+      "Physical archive confirmation fixture was incomplete."
+    );
+
+    expect(selectPhysicalArchiveConfirmationAction(nodes)).toBe(confirmAction);
+    expect(
+      physicalArchiveConfirmationSummary(nodes, confirmAction)
+    ).toContain("title=1;cancel=1;action=2;selected=350,1000,690,1080,click");
+    expect(
+      selectPhysicalArchiveConfirmationAction(
+        nodes.filter((node) => node !== title)
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalArchiveConfirmationAction([
+        ...nodes,
+        Object.freeze({ ...title })
+      ])
+    ).toBeNull();
+    expect(
+      selectPhysicalArchiveConfirmationAction(
+        nodes.filter((node) => node !== cancel)
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalArchiveConfirmationAction(
+        nodes.map((node) =>
+          node === cancel ? Object.freeze({ ...node, enabled: false }) : node
+        )
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalArchiveConfirmationAction(
+        nodes.map((node) =>
+          node === confirmAction
+            ? Object.freeze({ ...node, clickable: false })
+            : node
+        )
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalArchiveConfirmationAction(
+        nodes.map((node) =>
+          node === confirmAction
+            ? Object.freeze({ ...node, enabled: false })
+            : node
+        )
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalArchiveConfirmationAction(
+        nodes.map((node) =>
+          node === confirmAction
+            ? Object.freeze({
+                ...node,
+                bounds: Object.freeze({
+                  ...node.bounds,
+                  bottom: 900,
+                  top: 820
+                })
+              })
+            : node
+        )
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalArchiveConfirmationAction([
+        ...nodes,
+        Object.freeze({
+          ...confirmAction,
+          bounds: Object.freeze({
+            ...confirmAction.bounds,
+            left: 360,
+            right: 700
+          })
+        })
+      ])
+    ).toBeNull();
+    expect(
+      selectPhysicalArchiveConfirmationAction(
+        nodes.map((node) =>
+          node === confirmAction
+            ? Object.freeze({
+                ...node,
+                bounds: Object.freeze({
+                  ...node.bounds,
+                  bottom: 1300,
+                  top: 1220
+                })
+              })
+            : node
+        )
+      )
+    ).toBeNull();
+  });
+
   it("isolates the current physical Skills editor from Chrome and duplicate controls", () => {
     const nodes = parseAndroidUiNodes(
       '<hierarchy rotation="0">' +
@@ -9453,9 +9575,7 @@ async function runPhysicalArchiveControl(
     "Physical Archive session confirmation did not open."
   );
   await capture("fe090-40-archive-confirmation.png");
-  const confirm = await waitForLowestAndroidUiNode(
-    "text",
-    "Archive session",
+  const confirm = await waitForPhysicalArchiveConfirmationAction(
     30_000,
     "Physical Archive session final action was unavailable."
   );
@@ -9490,20 +9610,32 @@ async function runPhysicalArchiveControl(
   );
 }
 
-async function waitForLowestAndroidUiNode(
-  field: AndroidUiNodeField,
-  value: string,
+async function waitForPhysicalArchiveConfirmationAction(
   timeoutMs: number,
   message: string
 ): Promise<AndroidUiNode> {
   let found: AndroidUiNode | null = null;
-  await waitFor(async () => {
-    const matches = (await readAndroidUiNodes())
-      .filter((node) => matchesAndroidUiNode(node, field, value))
-      .sort((left, right) => right.bounds.top - left.bounds.top);
-    found = matches[0] ?? null;
-    return found !== null;
-  }, timeoutMs, message);
+  const observations: string[] = [];
+  try {
+    await waitFor(async () => {
+      const nodes = await readAndroidUiNodes();
+      found = selectPhysicalArchiveConfirmationAction(nodes);
+      const observation = physicalArchiveConfirmationSummary(nodes, found);
+      if (
+        observations.at(-1) !== observation &&
+        observations.length < 6
+      ) {
+        observations.push(observation);
+      }
+      return found !== null;
+    }, timeoutMs, message);
+  } catch {
+    throw new Error(
+      `${message} (states=${
+        observations.length === 0 ? "none" : observations.join("||")
+      }).`
+    );
+  }
   requireCondition(found !== null, message);
   return found;
 }
@@ -11242,6 +11374,28 @@ async function waitForPhysicalHostLockConfirmationAction(
 function selectPhysicalHostLockConfirmationAction(
   nodes: readonly AndroidUiNode[]
 ): AndroidUiNode | null {
+  return selectPhysicalConfirmationFooterAction(
+    nodes,
+    "Lock remote writes?",
+    "Lock writes"
+  );
+}
+
+function selectPhysicalArchiveConfirmationAction(
+  nodes: readonly AndroidUiNode[]
+): AndroidUiNode | null {
+  return selectPhysicalConfirmationFooterAction(
+    nodes,
+    "Archive session?",
+    "Archive session"
+  );
+}
+
+function selectPhysicalConfirmationFooterAction(
+  nodes: readonly AndroidUiNode[],
+  titleText: string,
+  actionText: string
+): AndroidUiNode | null {
   let page: PhysicalScreenshotRegion;
   try {
     page = selectChromePageViewport(nodes);
@@ -11250,7 +11404,7 @@ function selectPhysicalHostLockConfirmationAction(
   }
   const titles = nodes.filter(
     (node) =>
-      node.text === "Lock remote writes?" &&
+      node.text === titleText &&
       androidUiNodeIsFullyInsideRegion(node, page)
   );
   const cancels = nodes.filter(
@@ -11264,12 +11418,13 @@ function selectPhysicalHostLockConfirmationAction(
   const title = titles[0];
   const cancel = cancels[0];
   if (title === undefined || cancel === undefined) return null;
+  if (cancel.bounds.top < title.bounds.bottom) return null;
   const cancelCenterY = Math.floor(
     (cancel.bounds.top + cancel.bounds.bottom) / 2
   );
   const actions = nodes.filter((node) => {
     if (
-      node.text !== "Lock writes" ||
+      node.text !== actionText ||
       !node.clickable ||
       node.enabled === false ||
       !androidUiNodeIsFullyInsideRegion(node, page) ||
@@ -11286,6 +11441,18 @@ function selectPhysicalHostLockConfirmationAction(
     );
   });
   return actions.length === 1 ? actions[0] ?? null : null;
+}
+
+function physicalArchiveConfirmationSummary(
+  nodes: readonly AndroidUiNode[],
+  selected: AndroidUiNode | null
+): string {
+  return (
+    `title=${nodes.filter((node) => node.text === "Archive session?").length};` +
+    `cancel=${nodes.filter((node) => node.text === "Cancel").length};` +
+    `action=${nodes.filter((node) => node.text === "Archive session").length};` +
+    `selected=${selected === null ? "none" : androidUiNodeGeometry(selected)}`
+  );
 }
 
 function physicalHostLockConfirmationSummary(
