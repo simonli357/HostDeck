@@ -43,7 +43,14 @@ describe("archive Session actions", () => {
       "Host & access"
     ]);
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
-    const archive = within(dialog).getByRole("button", { name: /Archive session/iu });
+    const archive = within(dialog).getByRole("button", {
+      name: "Open Archive session"
+    });
+    const archiveDetailId = archive.getAttribute("aria-describedby");
+    expect(archiveDetailId).not.toBeNull();
+    expect(document.getElementById(archiveDetailId as string)?.textContent).toBe(
+      "Idle session - retained history stays available"
+    );
     expect((within(dialog).getByRole("button", {
       name: /Interrupt active turn/iu
     }) as HTMLButtonElement).disabled).toBe(true);

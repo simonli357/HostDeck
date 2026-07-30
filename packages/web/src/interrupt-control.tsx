@@ -503,6 +503,8 @@ function SessionActionsMenu({
   onLaptopResume: () => void;
   view: InterruptControlView;
 }>) {
+  const hostDetailId = useId();
+  const interruptDetailId = useId();
   const detail = view.actionEnabled && view.target !== null
     ? `${view.target.stateLabel} - ${view.target.turnId}`
     : view.actionDisabledReason ?? "Session details are not available.";
@@ -514,13 +516,18 @@ function SessionActionsMenu({
             ref={interruptItemRef}
             type="button"
             className="hostdeck-utility-menu__item hostdeck-session-actions__interrupt"
+            aria-describedby={interruptDetailId}
+            aria-label="Open Interrupt active turn"
             disabled={!view.actionEnabled}
             onClick={onInterrupt}
           >
             <CircleStop size={22} strokeWidth={2} aria-hidden="true" />
             <span>
               <strong>Interrupt active turn</strong>
-              <small className={view.actionEnabled ? undefined : "hostdeck-utility-menu__reason"}>
+              <small
+                id={interruptDetailId}
+                className={view.actionEnabled ? undefined : "hostdeck-utility-menu__reason"}
+              >
                 {detail}
               </small>
             </span>
@@ -546,12 +553,14 @@ function SessionActionsMenu({
             ref={hostItemRef}
             type="button"
             className="hostdeck-utility-menu__item"
+            aria-describedby={hostDetailId}
+            aria-label="Open Host and access"
             onClick={onHostAccess}
           >
             <ShieldCheck size={22} strokeWidth={2} aria-hidden="true" />
             <span>
               <strong>Host &amp; access</strong>
-              <small>Connection, pairing, and write-lock status</small>
+              <small id={hostDetailId}>Connection, pairing, and write-lock status</small>
             </span>
             <ChevronRight size={20} strokeWidth={2} aria-hidden="true" />
           </button>

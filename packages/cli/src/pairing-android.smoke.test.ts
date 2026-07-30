@@ -8051,11 +8051,14 @@ async function runPhysicalLaptopResume(
       ),
     "Physical session actions did not open."
   );
-  const resume = await waitForAndroidUiNodePresent(
-    "text",
-    "Resume on laptop",
+  const resume = await revealAndroidUiNode(
+    "description",
+    "Open Resume on laptop",
+    "forward",
     30_000,
-    "Physical laptop Resume action was unavailable."
+    "Physical laptop Resume action was unavailable.",
+    "fully_visible",
+    true
   );
   measure(resume, "resume-on-laptop");
   await tapAndroidNodeOnceAndWait(
@@ -8185,15 +8188,18 @@ async function runPhysicalInterruptControl(
     actions,
     async () =>
       (await readAndroidUiNodes()).some(
-        (node) => node.text === "Interrupt active turn"
+        (node) => node.text === "Session actions"
       ),
     "Physical interrupt action did not open."
   );
-  const interrupt = await waitForAndroidUiNodePresent(
-    "text",
-    "Interrupt active turn",
+  const interrupt = await revealAndroidUiNode(
+    "description",
+    "Open Interrupt active turn",
+    "forward",
     30_000,
-    "Physical interrupt action was unavailable."
+    "Physical interrupt action was unavailable.",
+    "fully_visible",
+    true
   );
   measure(interrupt, "interrupt-active-turn");
   await tapAndroidNodeOnceAndWait(
@@ -8851,15 +8857,18 @@ async function runPhysicalArchiveControl(
     actions,
     async () =>
       (await readAndroidUiNodes()).some(
-        (node) => node.text === "Archive session"
+        (node) => node.text === "Session actions"
       ),
     "Physical archive action did not open."
   );
-  const archive = await waitForAndroidUiNodePresent(
-    "text",
-    "Archive session",
+  const archive = await revealAndroidUiNode(
+    "description",
+    "Open Archive session",
+    "forward",
     30_000,
-    "Physical Archive session action was unavailable."
+    "Physical Archive session action was unavailable.",
+    "fully_visible",
+    true
   );
   measure(archive, "archive-session");
   await tapAndroidNodeOnceAndWait(

@@ -108,6 +108,7 @@ export function LaptopResumeActionItem({
   onResume: () => void;
   view: LaptopResumeControlView;
 }>) {
+  const detailId = useId();
   const detail = view.actionEnabled
     ? "Copy exact local TUI command"
     : view.actionDisabledReason ?? "Session details are not available.";
@@ -116,13 +117,18 @@ export function LaptopResumeActionItem({
       ref={itemRef}
       type="button"
       className="hostdeck-utility-menu__item hostdeck-session-actions__resume"
+      aria-describedby={detailId}
+      aria-label="Open Resume on laptop"
       disabled={!view.actionEnabled}
       onClick={onResume}
     >
       <Laptop size={22} strokeWidth={2} aria-hidden="true" />
       <span>
         <strong>Resume on laptop</strong>
-        <small className={view.actionEnabled ? undefined : "hostdeck-utility-menu__reason"}>
+        <small
+          id={detailId}
+          className={view.actionEnabled ? undefined : "hostdeck-utility-menu__reason"}
+        >
           {detail}
         </small>
       </span>

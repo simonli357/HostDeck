@@ -47,10 +47,26 @@ describe("SessionActionsSheet", () => {
       "Host & access"
     ]);
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
-    const interrupt = within(dialog).getByRole("button", { name: /Interrupt active turn/iu });
+    const interrupt = within(dialog).getByRole("button", {
+      name: "Open Interrupt active turn"
+    });
+    expect(
+      within(dialog).getByRole("button", { name: "Open Archive session" })
+    ).toBeTruthy();
+    expect(
+      within(dialog).getByRole("button", { name: "Open Resume on laptop" })
+    ).toBeTruthy();
+    const hostAccess = within(dialog).getByRole("button", {
+      name: "Open Host and access"
+    });
+    const hostDetailId = hostAccess.getAttribute("aria-describedby");
+    expect(hostDetailId).not.toBeNull();
+    expect(document.getElementById(hostDetailId as string)?.textContent).toBe(
+      "Connection, pairing, and write-lock status"
+    );
     await waitFor(() => expect(document.activeElement).toBe(interrupt));
 
-    await user.click(within(dialog).getByRole("button", { name: /Host & access/iu }));
+    await user.click(hostAccess);
     dialog = screen.getByRole("dialog", { name: "Host & access" });
     expect(within(dialog).getByText("Paired Xiaomi fixture")).toBeTruthy();
     const back = within(dialog).getByRole("button", { name: "Back to session actions" });
@@ -172,7 +188,9 @@ describe("SessionActionsSheet", () => {
     expect(screen.getAllByText("Session details are not available.")).toHaveLength(3);
     expect(document.body.textContent).not.toContain(turnId);
     expect(document.body.textContent).not.toContain("android-release");
-    await user.click(screen.getByRole("button", { name: /Host & access/iu }));
+    await user.click(
+      screen.getByRole("button", { name: "Open Host and access" })
+    );
     expect(screen.getByText("Paired Xiaomi fixture")).toBeTruthy();
   });
 });

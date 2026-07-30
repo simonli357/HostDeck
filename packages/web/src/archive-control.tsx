@@ -10,6 +10,7 @@ import {
 import {
   type RefObject,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -109,6 +110,7 @@ export function ArchiveActionItem({
   onArchive: () => void;
   view: ArchiveControlView;
 }>) {
+  const detailId = useId();
   const detail = view.actionEnabled
     ? "Idle session - retained history stays available"
     : view.actionDisabledReason ?? "Session details are not available.";
@@ -117,13 +119,18 @@ export function ArchiveActionItem({
       ref={itemRef}
       type="button"
       className="hostdeck-utility-menu__item hostdeck-session-actions__archive"
+      aria-describedby={detailId}
+      aria-label="Open Archive session"
       disabled={!view.actionEnabled}
       onClick={onArchive}
     >
       <ArchiveIcon size={22} strokeWidth={2} aria-hidden="true" />
       <span>
         <strong>Archive session</strong>
-        <small className={view.actionEnabled ? undefined : "hostdeck-utility-menu__reason"}>
+        <small
+          id={detailId}
+          className={view.actionEnabled ? undefined : "hostdeck-utility-menu__reason"}
+        >
           {detail}
         </small>
       </span>

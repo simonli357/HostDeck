@@ -44,7 +44,15 @@ describe("laptop-resume Session actions UI", () => {
       "Host & access"
     ]);
 
-    await user.click(within(dialog).getByRole("button", { name: /Resume on laptop/iu }));
+    const resumeAction = within(dialog).getByRole("button", {
+      name: "Open Resume on laptop"
+    });
+    const resumeDetailId = resumeAction.getAttribute("aria-describedby");
+    expect(resumeDetailId).not.toBeNull();
+    expect(document.getElementById(resumeDetailId as string)?.textContent).toBe(
+      "Copy exact local TUI command"
+    );
+    await user.click(resumeAction);
     dialog = screen.getByRole("dialog", { name: "Resume on laptop" });
     expect(within(dialog).getByText("Laptop terminal only")).toBeTruthy();
     expect(within(dialog).getAllByText("Reading laptop command")).toHaveLength(2);
@@ -212,7 +220,7 @@ describe("laptop-resume Session actions UI", () => {
       .toBeTruthy();
     await waitFor(() =>
       expect(document.activeElement).toBe(
-        within(dialog).getByRole("button", { name: /Host & access/iu })
+        within(dialog).getByRole("button", { name: "Open Host and access" })
       )
     );
     expect(harness.open).not.toHaveBeenCalled();
