@@ -7679,11 +7679,14 @@ async function runPhysicalSessionUtilities(
   );
   await capture("fe090-22-utilities-menu.png");
 
-  const usage = await waitForAndroidUiNodePresent(
+  const usage = await revealAndroidUiNode(
     "description",
     "Open /usage",
+    "forward",
     30_000,
-    "Physical /usage utility was unavailable."
+    "Physical /usage utility was unavailable.",
+    "fully_visible",
+    true
   );
   measure(usage, "open-usage");
   await tapAndroidNodeOnceAndWait(
@@ -7702,11 +7705,14 @@ async function runPhysicalSessionUtilities(
   await capture("fe090-23-usage.png");
   await returnToPhysicalSessionUtilities();
 
-  const compact = await waitForAndroidUiNodePresent(
+  const compact = await revealAndroidUiNode(
     "description",
     "Open /compact",
+    "forward",
     30_000,
-    "Physical /compact utility was unavailable."
+    "Physical /compact utility was unavailable.",
+    "fully_visible",
+    true
   );
   measure(compact, "open-compact");
   await tapAndroidNodeOnceAndWait(
@@ -7776,11 +7782,14 @@ async function runPhysicalSessionUtilities(
   await capture("fe090-27-compact-completed.png");
   await returnToPhysicalSessionUtilities();
 
-  const skills = await waitForAndroidUiNodePresent(
+  const skills = await revealAndroidUiNode(
     "description",
     "Open /skills",
+    "forward",
     30_000,
-    "Physical /skills utility was unavailable."
+    "Physical /skills utility was unavailable.",
+    "fully_visible",
+    true
   );
   measure(skills, "open-skills");
   await tapAndroidNodeOnceAndWait(
