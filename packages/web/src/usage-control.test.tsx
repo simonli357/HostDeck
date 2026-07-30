@@ -61,16 +61,19 @@ describe("UsageControl", () => {
     let dialog = screen.getByRole("dialog", { name: "Session utilities" });
     expect(dialog.textContent).toContain("Target: android-usage-release");
     expect(port.read).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: /usage/iu })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /compact/iu })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /skills/iu })).toBeTruthy();
+    const usage = screen.getByRole("button", { name: "Open /usage" });
+    expect(screen.getByRole("button", { name: "Open /compact" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open /skills" })).toBeTruthy();
+    expect(usage.getAttribute("aria-describedby")).toBe(
+      screen.getByText("Account, thread, context, and rate-limit observations").id
+    );
     expect(
       Array.from(dialog.querySelectorAll(".hostdeck-utility-menu__item strong"), (item) =>
         item.textContent
       )
     ).toEqual(["/usage", "/compact", "/skills"]);
 
-    await user.click(screen.getByRole("button", { name: /usage/iu }));
+    await user.click(usage);
     dialog = screen.getByRole("dialog", { name: "/usage" });
     expect(screen.getByText("Loading usage", { exact: true })).toBeTruthy();
     expect(port.read).toHaveBeenCalledTimes(1);

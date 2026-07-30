@@ -7680,8 +7680,8 @@ async function runPhysicalSessionUtilities(
   await capture("fe090-22-utilities-menu.png");
 
   const usage = await waitForAndroidUiNodePresent(
-    "text",
-    "/usage",
+    "description",
+    "Open /usage",
     30_000,
     "Physical /usage utility was unavailable."
   );
@@ -7703,8 +7703,8 @@ async function runPhysicalSessionUtilities(
   await returnToPhysicalSessionUtilities();
 
   const compact = await waitForAndroidUiNodePresent(
-    "text",
-    "/compact",
+    "description",
+    "Open /compact",
     30_000,
     "Physical /compact utility was unavailable."
   );
@@ -7777,8 +7777,8 @@ async function runPhysicalSessionUtilities(
   await returnToPhysicalSessionUtilities();
 
   const skills = await waitForAndroidUiNodePresent(
-    "text",
-    "/skills",
+    "description",
+    "Open /skills",
     30_000,
     "Physical /skills utility was unavailable."
   );

@@ -363,12 +363,20 @@ function UtilityMenuItem({
   label: "/usage" | "/compact" | "/skills";
   onClick: () => void;
 }>) {
+  const descriptionId = useId();
+  const reasonId = useId();
   return (
     <li>
       <button
         ref={itemRef}
         type="button"
         className="hostdeck-utility-menu__item"
+        aria-describedby={
+          actionDisabledReason === null
+            ? descriptionId
+            : `${descriptionId} ${reasonId}`
+        }
+        aria-label={`Open ${label}`}
         disabled={!actionEnabled}
         title={actionDisabledReason ?? `Open structured ${label.slice(1)}`}
         onClick={onClick}
@@ -376,9 +384,11 @@ function UtilityMenuItem({
         <Icon size={22} strokeWidth={2} aria-hidden="true" />
         <span>
           <strong>{label}</strong>
-          <small>{description}</small>
+          <small id={descriptionId}>{description}</small>
           {actionDisabledReason === null ? null : (
-            <small className="hostdeck-utility-menu__reason">{actionDisabledReason}</small>
+            <small id={reasonId} className="hostdeck-utility-menu__reason">
+              {actionDisabledReason}
+            </small>
           )}
         </span>
         <ChevronRight size={18} strokeWidth={2} aria-hidden="true" />
