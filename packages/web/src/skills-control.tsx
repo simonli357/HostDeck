@@ -276,7 +276,6 @@ function SkillsDiscovery({
         </span>
       </div>
       <div className="hostdeck-skills-search">
-        <label className="hostdeck-visually-hidden" htmlFor={searchId}>Search skills</label>
         <Search size={18} strokeWidth={2} aria-hidden="true" />
         <input
           id={searchId}
@@ -284,6 +283,7 @@ function SkillsDiscovery({
           value={query}
           maxLength={skillsSearchMaximumLength}
           placeholder="Search skills"
+          aria-label="Search skills"
           aria-describedby={resultsId}
           autoComplete="off"
           spellCheck={false}

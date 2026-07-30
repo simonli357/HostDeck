@@ -145,7 +145,11 @@ describe("SkillsControl", () => {
     await user.click(screen.getByRole("button", { name: "Show 1 more" }));
     expect(document.querySelectorAll(".hostdeck-skill-row")).toHaveLength(25);
 
-    const search = screen.getByRole("searchbox", { name: "Search skills" });
+    const search = screen.getByRole("searchbox", {
+      name: "Search skills"
+    }) as HTMLInputElement;
+    expect(search.getAttribute("aria-label")).toBe("Search skills");
+    expect(search.labels).toHaveLength(0);
     await user.type(search, "skill-025");
     expect(skillNames()).toEqual(["skill-025"]);
     expect(screen.getByText("1 matching", { exact: true })).toBeTruthy();
