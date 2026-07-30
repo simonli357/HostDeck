@@ -541,6 +541,60 @@ describe("physical Android phone-driver protocol", () => {
       startY: 1418,
       x: 540
     });
+    expect(selectPhysicalSessionContentSwipe(nodes, "backward")).toEqual({
+      endY: 1418,
+      startY: 784,
+      x: 540
+    });
+    const review = Object.freeze({
+      bounds: Object.freeze({ bottom: 1950, left: 630, right: 1035, top: 1800 }),
+      className: "android.widget.Button",
+      clickable: true,
+      description: "",
+      resourceId: "",
+      text: "Review & approve"
+    });
+    expect(
+      selectPhysicalSessionContentNode(
+        [...nodes, review],
+        "text",
+        "Review & approve",
+        true
+      )
+    ).toBeNull();
+    const safeReview = Object.freeze({
+      ...review,
+      bounds: Object.freeze({ ...review.bounds, bottom: 1600, top: 1450 })
+    });
+    expect(
+      selectPhysicalSessionContentNode(
+        [...nodes, safeReview],
+        "text",
+        "Review & approve",
+        true
+      )
+    ).toBe(safeReview);
+    expect(
+      selectPhysicalSessionContentNode(
+        [...nodes, safeReview, Object.freeze({ ...safeReview })],
+        "text",
+        "Review & approve",
+        true
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalSessionContentNode(
+        [
+          ...nodes.filter(
+            (node) => node.description !== physicalSessionControlDescriptions[3]
+          ),
+          safeReview
+        ],
+        "text",
+        "Review & approve",
+        true
+      )
+    ).toBeNull();
     const collapsedToolbar = nodes.filter(
       (node) => node.resourceId !== chromeToolbarResourceId
     );
@@ -6285,12 +6339,18 @@ async function runPhysicalApprovalControl(
   capture: PhysicalDashboardCapture,
   measure: PhysicalDashboardMeasure
 ): Promise<void> {
-  await revealAndroidUiNode(
+  const review = await revealPhysicalSessionContentNode(
     "text",
-    "Install the Android validation package",
+    "Review & approve",
     "forward",
     30_000,
-    "Physical pending approval action was unavailable."
+    "Physical pending approval action was unavailable outside the session dock.",
+    true
+  );
+  await waitForAndroidUiText(
+    "Install the Android validation package",
+    30_000,
+    "Physical pending approval request was unavailable."
   );
   await waitForAndroidUiText(
     "Connected test phone",
@@ -6301,12 +6361,6 @@ async function runPhysicalApprovalControl(
     "Elevated",
     30_000,
     "Physical pending approval omitted elevated risk."
-  );
-  const review = await waitForAndroidUiNodePresent(
-    "text",
-    "Review & approve",
-    30_000,
-    "Physical pending approval action was unavailable."
   );
   measure(review, "review-approval");
   await capture("fe090-07-approval-pending.png");
@@ -8350,10 +8404,30 @@ function selectPhysicalSessionContentRegion(
   });
 }
 
+function selectPhysicalSessionContentNode(
+  nodes: readonly AndroidUiNode[],
+  field: AndroidUiNodeField,
+  value: string,
+  requireClickable: boolean
+): AndroidUiNode | null {
+  const matches = nodes.filter((node) =>
+    matchesAndroidUiNode(node, field, value)
+  );
+  if (matches.length !== 1) return null;
+  const node = matches[0];
+  if (node === undefined || (requireClickable && !node.clickable)) return null;
+  const region = selectPhysicalSessionContentRegion(nodes);
+  if (region === null || !androidUiNodeIsFullyInsideRegion(node, region)) {
+    return null;
+  }
+  return node;
+}
+
 function swipeAndroidViewportAbovePhysicalSessionControls(
-  nodes: readonly AndroidUiNode[]
+  nodes: readonly AndroidUiNode[],
+  direction: AndroidVerticalRevealDirection = "forward"
 ): void {
-  const gesture = selectPhysicalSessionContentSwipe(nodes);
+  const gesture = selectPhysicalSessionContentSwipe(nodes, direction);
   requireCondition(
     gesture !== null,
     "Physical session-control dock left no bounded page swipe lane."
@@ -8371,13 +8445,18 @@ function swipeAndroidViewportAbovePhysicalSessionControls(
 }
 
 function selectPhysicalSessionContentSwipe(
-  nodes: readonly AndroidUiNode[]
+  nodes: readonly AndroidUiNode[],
+  direction: AndroidVerticalRevealDirection = "forward"
 ): Readonly<{ readonly endY: number; readonly startY: number; readonly x: number }> | null {
   const region = selectPhysicalSessionContentRegion(nodes);
   if (region === null) return null;
+  const upperY = region.top + Math.floor(region.height * 0.28);
+  const lowerY = region.top + Math.floor(region.height * 0.76);
+  const [startY, endY] =
+    direction === "forward" ? [lowerY, upperY] : [upperY, lowerY];
   return Object.freeze({
-    endY: region.top + Math.floor(region.height * 0.28),
-    startY: region.top + Math.floor(region.height * 0.76),
+    endY,
+    startY,
     x: region.left + Math.floor(region.width / 2)
   });
 }
@@ -8890,6 +8969,36 @@ async function waitForAndroidUiNode(
     );
     found = matches[0] ?? null;
     return found !== null;
+  }, timeoutMs, message);
+  requireCondition(found !== null, message);
+  return found;
+}
+
+async function revealPhysicalSessionContentNode(
+  field: AndroidUiNodeField,
+  value: string,
+  direction: AndroidVerticalRevealDirection,
+  timeoutMs: number,
+  message: string,
+  requireClickable = false
+): Promise<AndroidUiNode> {
+  let found: AndroidUiNode | null = null;
+  let swipeCount = 0;
+  await waitFor(async () => {
+    const nodes = await readAndroidUiNodes();
+    found = selectPhysicalSessionContentNode(
+      nodes,
+      field,
+      value,
+      requireClickable
+    );
+    if (found !== null) return true;
+    if (swipeCount < 4) {
+      swipeAndroidViewportAbovePhysicalSessionControls(nodes, direction);
+      swipeCount += 1;
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+    return false;
   }, timeoutMs, message);
   requireCondition(found !== null, message);
   return found;
