@@ -735,6 +735,23 @@ describe("physical Android phone-driver protocol", () => {
     ).toBeNull();
   });
 
+  it("holds exactly one armed reconnect request until explicit release", async () => {
+    const gate = new PhysicalStreamRecoveryGate();
+    await expect(gate.holdIfArmed()).resolves.toBeUndefined();
+    expect(gate.snapshot()).toEqual({ held_requests: 0, state: "idle" });
+
+    gate.arm();
+    const held = gate.holdIfArmed();
+    expect(gate.snapshot()).toEqual({ held_requests: 1, state: "holding" });
+    expect(() => gate.arm()).toThrow("armed more than once");
+    expect(() => gate.holdIfArmed()).toThrow("duplicate held request");
+    expect(gate.release()).toBe(true);
+    await expect(held).resolves.toBeUndefined();
+    expect(gate.snapshot()).toEqual({ held_requests: 1, state: "released" });
+    expect(gate.release()).toBe(false);
+    await expect(gate.holdIfArmed()).resolves.toBeUndefined();
+  });
+
   it("holds and resolves every deterministic dashboard control transition", async () => {
     const directory = mkdtempSync(join(tmpdir(), "hostdeck-dashboard-controls-"));
     const opened = openMigratedDatabase(join(directory, "hostdeck.sqlite"));
@@ -1942,6 +1959,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         sessionStreamRequests: 0,
         sessionStreamResponseStatuses: []
       };
+      const streamRecoveryGate = new PhysicalStreamRecoveryGate();
       const driverRuntime = createPhysicalDriverRuntime();
       const dashboardPairingGate = requireDashboardUiAcceptance
         ? new PhysicalPairingClaimGate()
@@ -2228,7 +2246,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           promptRuntime = createPhysicalPromptRuntime(
             selectedStates,
             now,
-            sessionFixture.streamSeedEvents
+            sessionFixture.streamSeedEvents,
+            streamRecoveryGate
           );
           promptSubscribers = promptRuntime.subscribers;
           if (requirePromptUiAcceptance) {
@@ -2399,7 +2418,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             "sse",
             sseRoutes,
             requestInspection,
-            secrets
+            secrets,
+            streamRecoveryGate
           ),
           composePhysicalRouteRegistration(
             "physical-remote-page",
@@ -3367,7 +3387,9 @@ type PhysicalOutputCursor = Exclude<
 interface PhysicalPromptRuntime {
   readonly advance: (state: "in_progress" | "completed") => Promise<void>;
   readonly disconnectForRecovery: () => void;
+  readonly recoverySnapshot: () => PhysicalStreamRecoveryGateSnapshot;
   readonly recordStreamFailure: (failure: unknown) => void;
+  readonly releaseRecovery: () => boolean;
   readonly service: CodexPromptControlService;
   readonly startCalls: readonly PhysicalPromptStartInput[];
   readonly streamFailureCount: number;
@@ -3375,6 +3397,13 @@ interface PhysicalPromptRuntime {
   readonly subscribers: ReturnType<
     typeof createProjectionSubscriberStreamService
   >;
+}
+
+type PhysicalStreamRecoveryGateState = "idle" | "armed" | "holding" | "released";
+
+interface PhysicalStreamRecoveryGateSnapshot {
+  readonly held_requests: number;
+  readonly state: PhysicalStreamRecoveryGateState;
 }
 
 interface PhysicalPromptSequenceResult {
@@ -3688,10 +3717,56 @@ function createPhysicalSessionReads(
   });
 }
 
+class PhysicalStreamRecoveryGate {
+  private heldRequests = 0;
+  private releaseHeldRequest: (() => void) | null = null;
+  private state: PhysicalStreamRecoveryGateState = "idle";
+
+  arm(): void {
+    requireCondition(
+      this.state === "idle",
+      "Physical stream recovery gate was armed more than once."
+    );
+    this.state = "armed";
+  }
+
+  holdIfArmed(): Promise<void> {
+    if (this.state === "idle" || this.state === "released") {
+      return Promise.resolve();
+    }
+    requireCondition(
+      this.state === "armed" && this.releaseHeldRequest === null,
+      "Physical stream recovery gate received a duplicate held request."
+    );
+    this.state = "holding";
+    this.heldRequests += 1;
+    return new Promise((resolve) => {
+      this.releaseHeldRequest = resolve;
+    });
+  }
+
+  release(): boolean {
+    if (this.state === "idle" || this.state === "released") return false;
+    const release = this.releaseHeldRequest;
+    this.releaseHeldRequest = null;
+    this.state = "released";
+    release?.();
+    return true;
+  }
+
+  snapshot(): PhysicalStreamRecoveryGateSnapshot {
+    return Object.freeze({
+      held_requests: this.heldRequests,
+      state: this.state
+    });
+  }
+}
+
 function createPhysicalPromptRuntime(
   states: ReturnType<typeof createSelectedStateRepository>,
   now: () => Date,
-  initialEvents: readonly SelectedProjectionEvent[]
+  initialEvents: readonly SelectedProjectionEvent[],
+  recoveryGate = new PhysicalStreamRecoveryGate()
 ): PhysicalPromptRuntime {
   const selected = states.require(physicalUiSessionId);
   selectedSessionMappingRecordSchema.parse(selected.mapping);
@@ -3741,10 +3816,12 @@ function createPhysicalPromptRuntime(
       phase = state;
     },
     disconnectForRecovery() {
-      handoff.failNextOpen();
+      recoveryGate.arm();
       handoff.disconnectAll();
     },
+    recoverySnapshot: () => recoveryGate.snapshot(),
     recordStreamFailure,
+    releaseRecovery: () => recoveryGate.release(),
     service,
     get startCalls() {
       return Object.freeze([...turns.startCalls]);
@@ -3990,7 +4067,6 @@ class PhysicalPromptHandoffService
   implements ProjectionReplayLiveHandoffService
 {
   private readonly events: SelectedProjectionEvent[];
-  private failOpen = false;
   private readonly live = new Map<
     string,
     {
@@ -4022,19 +4098,7 @@ class PhysicalPromptHandoffService
     }
   }
 
-  failNextOpen(): void {
-    requireCondition(!this.failOpen, "Physical prompt stream failure was duplicated.");
-    this.failOpen = true;
-  }
-
   open(candidate: unknown): ProjectionReplayLiveHandoff {
-    if (this.failOpen) {
-      this.failOpen = false;
-      throw new HostDeckProjectionHandoffError(
-        "storage_unavailable",
-        "Physical prompt stream recovery is temporarily unavailable."
-      );
-    }
     const input = candidate as OpenProjectionReplayLiveHandoffInput;
     if (input.session_id !== physicalUiSessionId) {
       throw new HostDeckProjectionHandoffError(
@@ -4147,7 +4211,8 @@ function composePhysicalRouteRegistration(
   surface: "api" | "sse" | "static",
   registrations: readonly HostDeckRoutePluginRegistration[],
   inspection: RequestInspection,
-  secrets: ReturnType<typeof createSecretRegistry>
+  secrets: ReturnType<typeof createSecretRegistry>,
+  streamRecoveryGate: PhysicalStreamRecoveryGate | null = null
 ): HostDeckRoutePluginRegistration {
   requireCondition(
     registrations.length > 0 &&
@@ -4158,7 +4223,7 @@ function composePhysicalRouteRegistration(
     id,
     surface,
     async register(app, context) {
-      installRequestInspection(app, inspection, secrets);
+      installRequestInspection(app, inspection, secrets, streamRecoveryGate);
       for (const registration of registrations) {
         await registration.register(app, context);
       }
@@ -4413,7 +4478,8 @@ function waitForAbort(signal: AbortSignal): Promise<void> {
 function installRequestInspection(
   app: HostDeckFastifyInstance,
   inspection: RequestInspection,
-  secrets: ReturnType<typeof createSecretRegistry>
+  secrets: ReturnType<typeof createSecretRegistry>,
+  streamRecoveryGate: PhysicalStreamRecoveryGate | null
 ): void {
   app.addHook("onRequest", async (request) => {
     const referrer = request.headers.referer;
@@ -4471,6 +4537,7 @@ function installRequestInspection(
       )
     ) {
       inspection.sessionStreamRequests += 1;
+      await streamRecoveryGate?.holdIfArmed();
     }
     if (
       request.url === `/api/v1/sessions/${physicalUiSessionId}/prompts`
@@ -6476,7 +6543,7 @@ async function runProductionDashboardUiSequence(
       input.prompt.startCalls.length === 1 &&
       input.prompt.streamFailureCount === 1 &&
       JSON.stringify(input.prompt.streamFailureCodes) ===
-        '["storage_unavailable"]' &&
+        '["source_failed"]' &&
       input.readProxyRejection() === null,
     "Physical dashboard control counters or terminal truth were inconsistent."
   );
@@ -6723,18 +6790,27 @@ async function runPhysicalStreamRecovery(
   const openedBefore = input.prompt.subscribers.snapshot().opened_subscribers;
   input.prompt.disconnectForRecovery();
   try {
+    await waitFor(
+      () => {
+        const recovery = input.prompt.recoverySnapshot();
+        return (
+          recovery.state === "holding" &&
+          recovery.held_requests === 1 &&
+          input.prompt.streamFailureCount === 1 &&
+          JSON.stringify(input.prompt.streamFailureCodes) === '["source_failed"]' &&
+          input.prompt.subscribers.snapshot().active_subscribers === 0 &&
+          input.requestInspection.sessionStreamRequests === requestsBefore + 1
+        );
+      },
+      30_000,
+      "Physical Session Detail did not enter one bounded reconnect attempt."
+    );
     await waitForAndroidUiText(
       "Session activity is reconnecting.",
       30_000,
       "Physical Session Detail did not expose reconnecting write-block truth."
     );
-    await waitFor(
-      () =>
-        input.prompt.streamFailureCount === 1 &&
-        input.requestInspection.sessionStreamRequests >= requestsBefore + 1,
-      30_000,
-      "Physical Session Detail did not record its bounded stream failure."
-    );
+    await capture("fe090-48-stream-reconnecting.png");
   } catch (error) {
     const message =
       error instanceof Error
@@ -6743,21 +6819,32 @@ async function runPhysicalStreamRecovery(
     throw new Error(`${message} ${physicalPromptStreamDiagnostic(input)}`, {
       cause: error
     });
+  } finally {
+    input.prompt.releaseRecovery();
   }
-  await capture("fe090-48-stream-reconnecting.png");
-  await waitFor(
-    () =>
-      input.prompt.subscribers.snapshot().active_subscribers === 1 &&
-      input.prompt.subscribers.snapshot().opened_subscribers > openedBefore &&
-      input.requestInspection.sessionStreamRequests >= requestsBefore + 2,
-    45_000,
-    "Physical Session Detail did not reconnect once after stream loss."
-  );
-  await waitForAndroidUiText(
-    "Current",
-    30_000,
-    "Physical Session Detail did not restore current stream truth."
-  );
+  try {
+    await waitFor(
+      () =>
+        input.prompt.subscribers.snapshot().active_subscribers === 1 &&
+        input.prompt.subscribers.snapshot().opened_subscribers === openedBefore + 1 &&
+        input.requestInspection.sessionStreamRequests === requestsBefore + 1,
+      45_000,
+      "Physical Session Detail did not reconnect exactly once after stream loss."
+    );
+    await waitForAndroidUiText(
+      "Current",
+      30_000,
+      "Physical Session Detail did not restore current stream truth."
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Physical Session Detail reconnect failed without an error object.";
+    throw new Error(`${message} ${physicalPromptStreamDiagnostic(input)}`, {
+      cause: error
+    });
+  }
 }
 
 async function runPhysicalDetailFailureStates(
@@ -9314,6 +9401,7 @@ function physicalPromptStreamDiagnostic(
   }>
 ): string {
   const snapshot = input.prompt.subscribers.snapshot();
+  const recovery = input.prompt.recoverySnapshot();
   const failures = input.prompt.streamFailureCodes;
   const statuses = input.requestInspection.sessionStreamResponseStatuses;
   return (
@@ -9325,6 +9413,7 @@ function physicalPromptStreamDiagnostic(
     `aborted=${snapshot.aborted_subscribers};explicit=${snapshot.explicit_closures};` +
     `source_failed=${snapshot.source_failed_subscribers};` +
     `open_failed=${snapshot.source_open_failures};` +
+    `recovery=${recovery.state}/${recovery.held_requests};` +
     `failures=${failures.length === 0 ? "none" : failures.join("|")}).`
   );
 }
