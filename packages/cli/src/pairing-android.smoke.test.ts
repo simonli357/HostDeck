@@ -2465,6 +2465,32 @@ describe("physical Android phone-driver protocol", () => {
     expect(selection.redactions.every(Object.isFrozen)).toBe(true);
   });
 
+  it("routes every Host-access checkpoint through mandatory origin redaction", async () => {
+    const calls: Array<
+      Readonly<{
+        name: string;
+        options: Readonly<{ readonly redactProductOrigin?: boolean }> | undefined;
+      }>
+    > = [];
+    await capturePhysicalHostAccessEvidence(
+      async (name, options) => {
+        calls.push(Object.freeze({ name, options }));
+      },
+      "fe090-39-profile-recovered.png"
+    );
+
+    expect(calls).toEqual([
+      {
+        name: "fe090-39-profile-recovered.png",
+        options: { redactProductOrigin: true }
+      }
+    ]);
+    expect(Object.isFrozen(calls[0]?.options)).toBe(true);
+    await expect(
+      capturePhysicalHostAccessEvidence(async () => undefined, "private-origin.png")
+    ).rejects.toThrow("Host-access evidence name was invalid");
+  });
+
   it("rejects every non-product or ambiguous private origin redaction", () => {
     const externalOrigin = "https://private.example.ts.net";
     const nodes = parseAndroidUiNodes(
@@ -7641,6 +7667,17 @@ type PhysicalDashboardCapture = (
 ) => Promise<void>;
 type PhysicalDashboardMeasure = (node: AndroidUiNode, label: string) => void;
 
+async function capturePhysicalHostAccessEvidence(
+  capture: PhysicalDashboardCapture,
+  name: string
+): Promise<void> {
+  requireCondition(
+    /^fe090-\d{2}-[a-z0-9-]+\.png$/u.test(name),
+    "Physical Host-access evidence name was invalid."
+  );
+  await capture(name, Object.freeze({ redactProductOrigin: true }));
+}
+
 function readAndroidPhysicalDensity(): number {
   const output = adb(["shell", "wm", "density"]);
   const matches = [...output.matchAll(/(?:Physical|Override) density:\s*(\d{2,4})/gu)];
@@ -9164,7 +9201,7 @@ async function runPhysicalHostAccessControls(
     30_000,
     "Physical Host and access omitted paired permission."
   );
-  await capture("fe090-32-host-access.png", { redactProductOrigin: true });
+  await capturePhysicalHostAccessEvidence(capture, "fe090-32-host-access.png");
 
   const officeRevoke = await revealAndroidUiNode(
     "description",
@@ -9182,9 +9219,10 @@ async function runPhysicalHostAccessControls(
       ),
     "Physical Office browser revoke confirmation did not open."
   );
-  await capture("fe090-33-revoke-confirmation.png", {
-    redactProductOrigin: true
-  });
+  await capturePhysicalHostAccessEvidence(
+    capture,
+    "fe090-33-revoke-confirmation.png"
+  );
   const confirmRevoke = await waitForAndroidUiNodePresent(
     "text",
     "Revoke device",
@@ -9204,9 +9242,7 @@ async function runPhysicalHostAccessControls(
     countMatchingRows(input.db, "auth_devices", "revoked_at IS NOT NULL") === 1,
     "Physical Office browser revoke did not revoke exactly one authority."
   );
-  await capture("fe090-34-device-revoked.png", {
-    redactProductOrigin: true
-  });
+  await capturePhysicalHostAccessEvidence(capture, "fe090-34-device-revoked.png");
 
   const lockAuditsBefore = countPhysicalAuditRows(input.db, "lock");
   requireCondition(
@@ -9250,9 +9286,10 @@ async function runPhysicalHostAccessControls(
     countPhysicalAuditRows(input.db, "lock") === lockAuditsBefore,
     "Physical Host-lock confirmation entry dispatched a lock mutation."
   );
-  await capture("fe090-35-lock-confirmation.png", {
-    redactProductOrigin: true
-  });
+  await capturePhysicalHostAccessEvidence(
+    capture,
+    "fe090-35-lock-confirmation.png"
+  );
   const confirmLock = await waitForPhysicalHostLockConfirmationAction(
     30_000,
     "Physical host-lock final action was unavailable."
@@ -9279,9 +9316,7 @@ async function runPhysicalHostAccessControls(
     ),
     "Physical locked UI exposed a forbidden remote unlock action."
   );
-  await capture("fe090-36-host-locked.png", {
-    redactProductOrigin: true
-  });
+  await capturePhysicalHostAccessEvidence(capture, "fe090-36-host-locked.png");
   await closePhysicalDialog("Close session actions");
   const missionBack = await waitForAndroidUiNodePresent(
     "description",
@@ -9452,7 +9487,10 @@ async function runPhysicalDashboardProfileSwitch(
     "Physical dashboard profile return omitted remote-ready truth."
   );
   await runOneProductionRemoteCheck(input.requestInspection);
-  await capture("fe090-39-profile-recovered.png");
+  await capturePhysicalHostAccessEvidence(
+    capture,
+    "fe090-39-profile-recovered.png"
+  );
   await closeProductionHostAccessSheet();
   requireCondition(
     input.requestInspection.claimRequests === 1 &&
