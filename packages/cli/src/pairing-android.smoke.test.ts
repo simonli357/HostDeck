@@ -7786,9 +7786,8 @@ async function runPhysicalSessionUtilities(
   await tapAndroidNodeOnceAndWait(
     skills,
     async () =>
-      (await readAndroidUiNodes()).some(
-        (node) => node.text === "Skills capture current"
-      ),
+      findAndroidPromptEditor(await readAndroidUiNodes(), "Search skills") !==
+      null,
     "Physical /skills did not render current skills."
   );
   const search = await waitForAndroidPromptEditor(
@@ -7812,6 +7811,11 @@ async function runPhysicalSessionUtilities(
     () => !isAndroidKeyboardVisible(),
     10_000,
     "Physical Skills search keyboard did not close."
+  );
+  await waitForAndroidUiText(
+    "1 matching",
+    15_000,
+    "Physical Skills search did not render its one matching result."
   );
   await capture("fe090-28-skills.png");
   await returnToPhysicalSessionUtilities();
