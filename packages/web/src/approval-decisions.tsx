@@ -432,6 +432,7 @@ export function ApprovalConfirmationDialog({
                 </Dialog.Close>
                 <button
                   type="submit"
+                  aria-label="Approve once"
                   className={confirmation.tone === "danger"
                     ? "hostdeck-danger-button"
                     : "hostdeck-primary-button"}

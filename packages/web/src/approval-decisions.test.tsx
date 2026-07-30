@@ -170,6 +170,11 @@ describe("inline approval decisions", () => {
     expect(dialog.textContent).toContain("The selected task requires a bounded file change.");
     expect(dialog.textContent).toContain("Elevated risk");
     expect(dialog.textContent).toContain("One time");
+    expect(
+      within(dialog)
+        .getByRole("button", { name: "Approve once" })
+        .getAttribute("aria-label")
+    ).toBe("Approve once");
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" })));
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
