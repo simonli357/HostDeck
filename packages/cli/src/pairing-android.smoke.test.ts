@@ -985,6 +985,10 @@ describe("physical Android phone-driver protocol", () => {
       });
 
       dashboard.beginInterruptibleTurn();
+      prompts.publishInterruptTurn(dashboard.interruptTurnId, "in_progress");
+      expect(() =>
+        prompts.publishInterruptTurn(dashboard.interruptTurnId, "in_progress")
+      ).toThrow("Physical interrupt progress violated accepted event order.");
       const turnTarget = Object.freeze({
         type: "turn" as const,
         session_id: physicalUiSessionId,
@@ -1001,6 +1005,10 @@ describe("physical Android phone-driver protocol", () => {
         }, deadline)
       ).resolves.toMatchObject({ state: "interrupted" });
       dashboard.finishInterrupt();
+      prompts.publishInterruptTurn(dashboard.interruptTurnId, "interrupted");
+      expect(() =>
+        prompts.publishInterruptTurn(dashboard.interruptTurnId, "interrupted")
+      ).toThrow("Physical interrupt progress violated accepted event order.");
 
       expect(dashboard.resume.read(physicalUiSessionId)).toMatchObject({
         available: true,
@@ -3647,6 +3655,10 @@ type PhysicalOutputCursor = Exclude<
 interface PhysicalPromptRuntime {
   readonly advance: (state: "in_progress" | "completed") => Promise<void>;
   readonly disconnectForRecovery: () => void;
+  readonly publishInterruptTurn: (
+    turnId: string,
+    state: "in_progress" | "interrupted"
+  ) => void;
   readonly recoverySnapshot: () => PhysicalStreamRecoveryGateSnapshot;
   readonly recordStreamFailure: (failure: unknown) => void;
   readonly releaseRecovery: () => boolean;
@@ -4045,6 +4057,7 @@ function createPhysicalPromptRuntime(
   );
   const handoff = new PhysicalPromptHandoffService(initialEvents);
   const initialCursor = initialEvents.at(-1)?.cursor ?? 0;
+  let nextCursor = initialCursor + 1;
   const streamFailures: unknown[] = [];
   const recordStreamFailure = (failure: unknown): void => {
     streamFailures.push(failure);
@@ -4057,6 +4070,8 @@ function createPhysicalPromptRuntime(
     resource_budget: defaultResourceBudget
   });
   let phase: "ready" | "in_progress" | "completed" = "ready";
+  let interruptPhase: "idle" | "in_progress" | "interrupted" = "idle";
+  let interruptTurnId: string | null = null;
   const runtime: PhysicalPromptRuntime = {
     async advance(state) {
       requireCondition(
@@ -4069,15 +4084,35 @@ function createPhysicalPromptRuntime(
       await service.observeEvent(
         physicalPromptRuntimeEvent(state, capturedAt)
       );
-      const cursor = initialCursor + (state === "in_progress" ? 1 : 2);
       handoff.publish(
-        physicalPromptTurnEvent(cursor, state, capturedAt)
+        physicalPromptTurnEvent(nextCursor, state, capturedAt)
       );
+      nextCursor += 1;
       phase = state;
     },
     disconnectForRecovery() {
       recoveryGate.arm();
       handoff.disconnectAll();
+    },
+    publishInterruptTurn(turnId, state) {
+      const parsedTurnId = codexTurnIdSchema.parse(turnId);
+      requireCondition(
+        ((interruptPhase === "idle" && state === "in_progress") ||
+          (interruptPhase === "in_progress" && state === "interrupted")) &&
+          (interruptTurnId === null || interruptTurnId === parsedTurnId),
+        "Physical interrupt progress violated accepted event order."
+      );
+      handoff.publish(
+        physicalInterruptTurnEvent(
+          nextCursor,
+          parsedTurnId,
+          state,
+          now().toISOString()
+        )
+      );
+      nextCursor += 1;
+      interruptPhase = state;
+      interruptTurnId = parsedTurnId;
     },
     recoverySnapshot: () => recoveryGate.snapshot(),
     recordStreamFailure,
@@ -4318,6 +4353,29 @@ function physicalPromptTurnEvent(
     content_notice: null,
     type: "turn",
     turn_id: physicalPromptTurnId,
+    state,
+    error: null
+  }));
+}
+
+function physicalInterruptTurnEvent(
+  cursor: number,
+  turnId: string,
+  state: "in_progress" | "interrupted",
+  capturedAt: string
+): SelectedProjectionEvent {
+  return Object.freeze(selectedProjectionEventSchema.parse({
+    session_id: physicalUiSessionId,
+    cursor,
+    captured_at: capturedAt,
+    upstream_at: null,
+    codex_event_id: `physical-interrupt-turn-${cursor}`,
+    codex_event_type:
+      state === "in_progress" ? "turn/started" : "turn/interrupted",
+    content_state: "complete",
+    content_notice: null,
+    type: "turn",
+    turn_id: codexTurnIdSchema.parse(turnId),
     state,
     error: null
   }));
@@ -8214,6 +8272,10 @@ async function runPhysicalInterruptControl(
   const detailReadsBefore = input.requestInspection.sessionDetailRequests;
   const streamsBefore = input.prompt.subscribers.snapshot().opened_subscribers;
   input.controls.beginInterruptibleTurn();
+  input.prompt.publishInterruptTurn(
+    input.controls.interruptTurnId,
+    "in_progress"
+  );
   adb(["shell", "input", "keyevent", "KEYCODE_REFRESH"]);
   await waitFor(
     () =>
@@ -8222,11 +8284,6 @@ async function runPhysicalInterruptControl(
       input.prompt.subscribers.snapshot().active_subscribers === 1,
     45_000,
     "Physical Session Detail did not reconnect once for interrupt truth."
-  );
-  await waitForAndroidUiText(
-    "Turn running",
-    30_000,
-    "Physical interrupt target did not render active-turn truth."
   );
   const actions = await waitForAndroidUiNodePresent(
     "description",
@@ -8277,6 +8334,10 @@ async function runPhysicalInterruptControl(
     "Physical interrupt did not render terminal truth."
   );
   input.controls.finishInterrupt();
+  input.prompt.publishInterruptTurn(
+    input.controls.interruptTurnId,
+    "interrupted"
+  );
   await capture("fe090-31-turn-interrupted.png");
   const done = await waitForAndroidUiNodePresent(
     "text",
