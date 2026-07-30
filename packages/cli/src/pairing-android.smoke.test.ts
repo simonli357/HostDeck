@@ -1337,7 +1337,7 @@ describe("physical Android phone-driver protocol", () => {
         '<node text="" content-desc="" class="android.widget.EditText" ' +
         'bounds="[20,200][700,320]" />' +
         '<node text="" content-desc="" class="android.widget.Button" ' +
-        'clickable="true" focused="true" bounds="[350,1100][700,1180]" />' +
+        'clickable="true" enabled="false" focused="true" bounds="[350,1100][700,1180]" />' +
         '<node text="" content-desc="" class="android.view.ViewGroup" ' +
         `resource-id="${chromeToolbarResourceId}" bounds="[0,80][720,180]" />` +
         '<node text="" content-desc="" class="android.widget.FrameLayout" ' +
@@ -1375,6 +1375,7 @@ describe("physical Android phone-driver protocol", () => {
         className: "android.widget.Button",
         clickable: true,
         description: "",
+        enabled: false,
         focused: true,
         resourceId: "",
         text: ""
@@ -1476,6 +1477,15 @@ describe("physical Android phone-driver protocol", () => {
     expect(
       selectAndroidUiNodeForReveal(
         [...nodes, Object.freeze({ ...textAction, clickable: false })],
+        "semantic",
+        "Approve once",
+        "fully_visible",
+        true
+      )
+    ).toBeNull();
+    expect(
+      selectAndroidUiNodeForReveal(
+        [...nodes, Object.freeze({ ...textAction, enabled: false })],
         "semantic",
         "Approve once",
         "fully_visible",
@@ -1817,6 +1827,121 @@ describe("physical Android phone-driver protocol", () => {
           'content-desc="" bounds="[0,0][100,100]" /></hierarchy>'
       )
     ).toThrow("retained pairing material");
+  });
+
+  it("selects only the destructive action owned by the Host-lock dialog", () => {
+    const nodes = parseAndroidUiNodes(
+      '<hierarchy rotation="0">' +
+        '<node text="Lock writes" content-desc="" class="android.widget.Button" ' +
+        'clickable="true" enabled="true" bounds="[40,300][680,380]" />' +
+        '<node text="Lock remote writes?" content-desc="" class="android.widget.TextView" ' +
+        'bounds="[40,700][600,760]" />' +
+        '<node text="Cancel" content-desc="" class="android.widget.Button" ' +
+        'clickable="true" enabled="true" bounds="[40,1000][330,1080]" />' +
+        '<node text="Lock writes" content-desc="" class="android.widget.Button" ' +
+        'clickable="true" enabled="true" bounds="[350,1000][690,1080]" />' +
+        '<node text="" content-desc="" class="android.view.ViewGroup" ' +
+        `resource-id="${chromeToolbarResourceId}" bounds="[0,0][720,180]" />` +
+        '<node text="" content-desc="" class="android.widget.FrameLayout" ' +
+        `resource-id="${chromeCompositorResourceId}" bounds="[0,0][720,1280]" />` +
+        "</hierarchy>"
+    );
+    const title = nodes.find((node) => node.text === "Lock remote writes?");
+    const cancel = nodes.find((node) => node.text === "Cancel");
+    const actions = nodes.filter((node) => node.text === "Lock writes");
+    const originAction = actions[0];
+    const confirmAction = actions[1];
+    requireCondition(
+      title !== undefined &&
+        cancel !== undefined &&
+        originAction !== undefined &&
+        confirmAction !== undefined,
+      "Physical Host-lock confirmation fixture was incomplete."
+    );
+
+    expect(selectPhysicalHostLockConfirmationAction(nodes)).toBe(confirmAction);
+    expect(
+      physicalHostLockConfirmationSummary(nodes, confirmAction)
+    ).toContain("title=1;cancel=1;action=2;selected=350,1000,690,1080,click");
+    expect(
+      selectPhysicalHostLockConfirmationAction(
+        nodes.filter((node) => node !== title)
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalHostLockConfirmationAction([
+        ...nodes,
+        Object.freeze({ ...title })
+      ])
+    ).toBeNull();
+    expect(
+      selectPhysicalHostLockConfirmationAction(
+        nodes.filter((node) => node !== cancel)
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalHostLockConfirmationAction(
+        nodes.map((node) =>
+          node === confirmAction
+            ? Object.freeze({ ...node, clickable: false })
+            : node
+        )
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalHostLockConfirmationAction(
+        nodes.map((node) =>
+          node === confirmAction
+            ? Object.freeze({ ...node, enabled: false })
+            : node
+        )
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalHostLockConfirmationAction(
+        nodes.map((node) =>
+          node === confirmAction
+            ? Object.freeze({
+                ...node,
+                bounds: Object.freeze({
+                  ...node.bounds,
+                  bottom: 900,
+                  top: 820
+                })
+              })
+            : node
+        )
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalHostLockConfirmationAction([
+        ...nodes,
+        Object.freeze({
+          ...confirmAction,
+          bounds: Object.freeze({
+            ...confirmAction.bounds,
+            left: 360,
+            right: 700
+          })
+        })
+      ])
+    ).toBeNull();
+    expect(
+      selectPhysicalHostLockConfirmationAction(
+        nodes.map((node) =>
+          node === confirmAction
+            ? Object.freeze({
+                ...node,
+                bounds: Object.freeze({
+                  ...node.bounds,
+                  bottom: 1300,
+                  top: 1220
+                })
+              })
+            : node
+        )
+      )
+    ).toBeNull();
   });
 
   it("isolates the current physical Skills editor from Chrome and duplicate controls", () => {
@@ -6594,6 +6719,7 @@ interface AndroidUiNode {
   readonly className: string;
   readonly clickable: boolean;
   readonly description: string;
+  readonly enabled?: false;
   readonly focused?: true;
   readonly resourceId: string;
   readonly text: string;
@@ -8724,28 +8850,54 @@ async function runPhysicalHostAccessControls(
     redactProductOrigin: true
   });
 
+  const lockAuditsBefore = countPhysicalAuditRows(input.db, "lock");
+  requireCondition(
+    lockAuditsBefore === 0,
+    "Physical Host-lock entry started with an unexpected lock audit."
+  );
   const lock = await revealAndroidUiNode(
     "text",
     "Lock writes",
     "forward",
     30_000,
-    "Physical Host and access lock action was unavailable."
+    "Physical Host and access lock action was unavailable.",
+    "fully_visible",
+    true
   );
   measure(lock, "lock-writes");
-  await tapAndroidNodeOnceAndWait(
-    lock,
-    async () =>
+  await performVerifiedAndroidTap({
+    initialTrigger: lock,
+    triggerField: "text",
+    triggerValue: "Lock writes",
+    completed: async () =>
       (await readAndroidUiNodes()).some(
         (node) => node.text === "Lock remote writes?"
       ),
-    "Physical host-lock confirmation did not open."
+    completionFailureMessage:
+      "Physical host-lock confirmation did not open.",
+    reacquireFailureMessage:
+      "Physical host-lock entry could not reacquire one current enabled action.",
+    selectReacquiredTrigger: (nodes) =>
+      countPhysicalAuditRows(input.db, "lock") === lockAuditsBefore
+        ? selectAndroidUiNodeForReveal(
+            nodes,
+            "text",
+            "Lock writes",
+            "fully_visible",
+            true
+          )
+        : null,
+    terminalFailureMessage:
+      "Physical host-lock confirmation remained closed after two bounded non-mutating taps."
+  });
+  requireCondition(
+    countPhysicalAuditRows(input.db, "lock") === lockAuditsBefore,
+    "Physical Host-lock confirmation entry dispatched a lock mutation."
   );
   await capture("fe090-35-lock-confirmation.png", {
     redactProductOrigin: true
   });
-  const confirmLock = await waitForAndroidUiNodePresent(
-    "text",
-    "Lock writes",
+  const confirmLock = await waitForPhysicalHostLockConfirmationAction(
     30_000,
     "Physical host-lock final action was unavailable."
   );
@@ -8757,6 +8909,10 @@ async function runPhysicalHostAccessControls(
         (node) => node.text === "Remote writes locked"
       ),
     "Physical host lock did not render locked truth."
+  );
+  requireCondition(
+    countPhysicalAuditRows(input.db, "lock") === 2,
+    "Physical host lock did not retain one accepted and terminal audit pair."
   );
   const lockedNodes = await readAndroidUiNodes();
   requireCondition(
@@ -10309,7 +10465,12 @@ function selectPhysicalSessionContentNode(
   );
   if (matches.length !== 1) return null;
   const node = matches[0];
-  if (node === undefined || (requireClickable && !node.clickable)) return null;
+  if (
+    node === undefined ||
+    (requireClickable && (!node.clickable || node.enabled === false))
+  ) {
+    return null;
+  }
   const region = selectPhysicalSessionContentRegion(nodes);
   if (region === null || !androidUiNodeIsFullyInsideRegion(node, region)) {
     return null;
@@ -10783,6 +10944,7 @@ function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
     const className = attributes.get("class") ?? "";
     const resourceId = attributes.get("resource-id") ?? "";
     const clickableAttribute = attributes.get("clickable");
+    const enabledAttribute = attributes.get("enabled");
     const focusedAttribute = attributes.get("focused");
     requireCondition(
       clickableAttribute === undefined ||
@@ -10791,12 +10953,19 @@ function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
       "Android UI hierarchy clickable state was invalid."
     );
     requireCondition(
+      enabledAttribute === undefined ||
+        enabledAttribute === "true" ||
+        enabledAttribute === "false",
+      "Android UI hierarchy enabled state was invalid."
+    );
+    requireCondition(
       focusedAttribute === undefined ||
         focusedAttribute === "true" ||
         focusedAttribute === "false",
       "Android UI hierarchy focused state was invalid."
     );
     const clickable = clickableAttribute === "true";
+    const enabled = enabledAttribute !== "false";
     const focused = focusedAttribute === "true";
     if (
       text === "" &&
@@ -10814,6 +10983,7 @@ function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
         className,
         clickable,
         description,
+        ...(enabled ? {} : { enabled: false as const }),
         ...(focused ? { focused: true as const } : {}),
         resourceId,
         text
@@ -11039,6 +11209,97 @@ async function revealAndroidUiNode(
   return found;
 }
 
+async function waitForPhysicalHostLockConfirmationAction(
+  timeoutMs: number,
+  message: string
+): Promise<AndroidUiNode> {
+  let found: AndroidUiNode | null = null;
+  const observations: string[] = [];
+  try {
+    await waitFor(async () => {
+      const nodes = await readAndroidUiNodes();
+      found = selectPhysicalHostLockConfirmationAction(nodes);
+      const observation = physicalHostLockConfirmationSummary(nodes, found);
+      if (
+        observations.at(-1) !== observation &&
+        observations.length < 6
+      ) {
+        observations.push(observation);
+      }
+      return found !== null;
+    }, timeoutMs, message);
+  } catch {
+    throw new Error(
+      `${message} (states=${
+        observations.length === 0 ? "none" : observations.join("||")
+      }).`
+    );
+  }
+  requireCondition(found !== null, message);
+  return found;
+}
+
+function selectPhysicalHostLockConfirmationAction(
+  nodes: readonly AndroidUiNode[]
+): AndroidUiNode | null {
+  let page: PhysicalScreenshotRegion;
+  try {
+    page = selectChromePageViewport(nodes);
+  } catch {
+    return null;
+  }
+  const titles = nodes.filter(
+    (node) =>
+      node.text === "Lock remote writes?" &&
+      androidUiNodeIsFullyInsideRegion(node, page)
+  );
+  const cancels = nodes.filter(
+    (node) =>
+      node.text === "Cancel" &&
+      node.clickable &&
+      node.enabled !== false &&
+      androidUiNodeIsFullyInsideRegion(node, page)
+  );
+  if (titles.length !== 1 || cancels.length !== 1) return null;
+  const title = titles[0];
+  const cancel = cancels[0];
+  if (title === undefined || cancel === undefined) return null;
+  const cancelCenterY = Math.floor(
+    (cancel.bounds.top + cancel.bounds.bottom) / 2
+  );
+  const actions = nodes.filter((node) => {
+    if (
+      node.text !== "Lock writes" ||
+      !node.clickable ||
+      node.enabled === false ||
+      !androidUiNodeIsFullyInsideRegion(node, page) ||
+      node.bounds.top < title.bounds.bottom
+    ) {
+      return false;
+    }
+    const actionCenterY = Math.floor(
+      (node.bounds.top + node.bounds.bottom) / 2
+    );
+    return (
+      Math.abs(actionCenterY - cancelCenterY) <= 128 &&
+      androidUiNodesShareControlRegion(node, cancel)
+    );
+  });
+  return actions.length === 1 ? actions[0] ?? null : null;
+}
+
+function physicalHostLockConfirmationSummary(
+  nodes: readonly AndroidUiNode[],
+  selected: AndroidUiNode | null
+): string {
+  return (
+    `title=${nodes.filter((node) => node.text === "Lock remote writes?").length};` +
+    `cancel=${nodes.filter((node) => node.text === "Cancel").length};` +
+    `action=${nodes.filter((node) => node.text === "Lock writes").length};` +
+    `selected=${selected === null ? "none" : androidUiNodeGeometry(selected)}`
+  );
+}
+
 async function waitForPhysicalApprovalConfirmationAction(
   input: Readonly<{
     readonly prompt: PhysicalPromptRuntime;
@@ -11146,6 +11407,9 @@ async function performVerifiedAndroidTap(input: {
   readonly completionFailureMessage: string;
   readonly initialTrigger: AndroidUiNode;
   readonly reacquireFailureMessage: string;
+  readonly selectReacquiredTrigger?: (
+    nodes: readonly AndroidUiNode[]
+  ) => AndroidUiNode | null;
   readonly terminalFailureMessage: string;
   readonly triggerField: AndroidUiNodeField;
   readonly triggerValue: string;
@@ -11169,6 +11433,7 @@ async function performVerifiedAndroidTap(input: {
             input.triggerField,
             input.triggerValue
           ) &&
+          node.enabled !== false &&
           (input.triggerField !== "className" ||
             androidUiNodesShareControlRegion(node, trigger))
       );
@@ -11181,8 +11446,11 @@ async function performVerifiedAndroidTap(input: {
           `${input.terminalFailureMessage} (${androidUiStateSummary(nodes, trigger)}).`
         );
       }
-      const reacquired = matches[0];
-      if (reacquired === undefined) {
+      const reacquired =
+        input.selectReacquiredTrigger === undefined
+          ? matches[0]
+          : input.selectReacquiredTrigger(nodes);
+      if (reacquired === undefined || reacquired === null) {
         throw new Error(
           `${input.reacquireFailureMessage} (${androidUiStateSummary(nodes, trigger)}).`
         );
@@ -11215,7 +11483,12 @@ function selectAndroidUiNodeForReveal(
   );
   if (matches.length !== 1) return null;
   const node = matches[0];
-  if (node === undefined || (requireClickable && !node.clickable)) return null;
+  if (
+    node === undefined ||
+    (requireClickable && (!node.clickable || node.enabled === false))
+  ) {
+    return null;
+  }
   if (
     visibility === "fully_visible" &&
     !androidUiNodeIsFullyInsideChromePage(node, nodes)
@@ -11481,7 +11754,9 @@ function androidUiStateSummary(
 function tapAndroidUiNode(node: AndroidUiNode): void {
   requireChromeForeground();
   requireCondition(
-    androidUiNodeWidth(node) >= 24 && androidUiNodeHeight(node) >= 24,
+    node.enabled !== false &&
+      androidUiNodeWidth(node) >= 24 &&
+      androidUiNodeHeight(node) >= 24,
     "Android UI tap target was not visibly actionable."
   );
   const x = Math.floor((node.bounds.left + node.bounds.right) / 2);
@@ -13323,6 +13598,19 @@ function countMatchingRows(
     db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${predicate}`).get() as {
       count: number;
     }
+  ).count;
+}
+
+function countPhysicalAuditRows(
+  db: ReturnType<typeof openMigratedDatabase>["db"],
+  action: "lock"
+): number {
+  return (
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM selected_audit_events WHERE action = ?"
+      )
+      .get(action) as { count: number }
   ).count;
 }
 
