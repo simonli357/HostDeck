@@ -8347,13 +8347,22 @@ async function runPhysicalInterruptControl(
   );
   await tapAndroidNodeOnceAndWait(
     done,
-    async () =>
-      (await readAndroidUiNodes()).some(
-        (node) => node.text === "Session actions"
-      ),
-    "Physical interrupt result did not return to session actions."
+    async () => {
+      const nodes = await readAndroidUiNodes();
+      return (
+        nodes.some(
+          (node) => node.description === "Open session actions"
+        ) &&
+        nodes.some((node) => node.text === "Ready to send") &&
+        nodes.every(
+          (node) =>
+            node.text !== "Session actions" &&
+            node.text !== "Turn interrupted"
+        )
+      );
+    },
+    "Physical interrupt result did not restore Session Detail."
   );
-  await closePhysicalDialog("Close session actions");
 }
 
 async function runPhysicalHostAccessControls(
