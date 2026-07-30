@@ -189,11 +189,22 @@ const physicalAndroidChromeStopCommandPlan = Object.freeze([
     "com.android.chrome"
   ] as const)
 ] as const);
-const physicalAndroidChromeBackCommandPlan = Object.freeze([
-  "shell",
-  "input",
-  "keyevent",
-  "KEYCODE_BACK"
+const physicalAndroidChromeRetainedTabCommandPlan = Object.freeze([
+  Object.freeze(["shell", "input", "keyevent", "KEYCODE_BACK"] as const),
+  Object.freeze([
+    "shell",
+    "am",
+    "start",
+    "--user",
+    "0",
+    "-W",
+    "-a",
+    "android.intent.action.MAIN",
+    "-c",
+    "android.intent.category.LAUNCHER",
+    "-n",
+    "com.android.chrome/com.google.android.apps.chrome.Main"
+  ] as const)
 ] as const);
 const pairingStartupDiagnosticLabels = Object.freeze([
   "Checking secure link",
@@ -1862,14 +1873,27 @@ describe("physical Android phone-driver protocol", () => {
     expect(Object.isFrozen(physicalAndroidChromeStopCommandPlan[1])).toBe(true);
   });
 
-  it("uses one explicit Android Back command for Chrome tab recovery", () => {
-    expect(physicalAndroidChromeBackCommandPlan).toEqual([
-      "shell",
-      "input",
-      "keyevent",
-      "KEYCODE_BACK"
+  it("closes the external Chrome tab before relaunching the retained tab", () => {
+    expect(physicalAndroidChromeRetainedTabCommandPlan).toEqual([
+      ["shell", "input", "keyevent", "KEYCODE_BACK"],
+      [
+        "shell",
+        "am",
+        "start",
+        "--user",
+        "0",
+        "-W",
+        "-a",
+        "android.intent.action.MAIN",
+        "-c",
+        "android.intent.category.LAUNCHER",
+        "-n",
+        "com.android.chrome/com.google.android.apps.chrome.Main"
+      ]
     ]);
-    expect(Object.isFrozen(physicalAndroidChromeBackCommandPlan)).toBe(true);
+    expect(Object.isFrozen(physicalAndroidChromeRetainedTabCommandPlan)).toBe(true);
+    expect(Object.isFrozen(physicalAndroidChromeRetainedTabCommandPlan[0])).toBe(true);
+    expect(Object.isFrozen(physicalAndroidChromeRetainedTabCommandPlan[1])).toBe(true);
   });
 
   it("matches physical session navigation authority exactly", () => {
@@ -7024,20 +7048,45 @@ async function runPhysicalDetailFailureStates(
     );
     await capture("fe090-50-detail-not-found.png");
 
-    adb([...physicalAndroidChromeBackCommandPlan]);
-    await waitForAndroidUiText(
-      "Ready to send",
-      30_000,
-      "Physical Session Detail did not return to the retained current tab."
+    const navigationWhileBackgrounded = Object.freeze({
+      ...navigationWhileMissing,
+      activeSubscribers: 0
+    });
+    adb([...physicalAndroidChromeRetainedTabCommandPlan[0]]);
+    await waitFor(
+      () =>
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          navigationWhileBackgrounded
+        ),
+      15_000,
+      "Physical Chrome Back did not close only the backgrounded selected-session stream."
+    );
+    const navigationAfterReturn = Object.freeze({
+      ...navigationWhileMissing,
+      openedSubscribers: navigationWhileMissing.openedSubscribers + 1,
+      streamRequests: navigationWhileMissing.streamRequests + 1
+    });
+    const launchOutput = adb([
+      ...physicalAndroidChromeRetainedTabCommandPlan[1]
+    ]);
+    requireCondition(
+      !launchOutput.includes("Error:") && !launchOutput.includes("Exception"),
+      "Physical Chrome launcher return failed."
     );
     await waitFor(
       () =>
         physicalSessionNavigationMatches(
           readPhysicalSessionNavigationSnapshot(input),
-          navigationWhileMissing
+          navigationAfterReturn
         ),
-      15_000,
-      "Physical Chrome Back changed retained selected-session stream authority."
+      45_000,
+      "Physical Chrome launcher return did not reopen exactly one selected-session stream."
+    );
+    await waitForAndroidUiText(
+      "Ready to send",
+      30_000,
+      "Physical Session Detail did not return to the retained current tab."
     );
   } catch (error) {
     const message =
