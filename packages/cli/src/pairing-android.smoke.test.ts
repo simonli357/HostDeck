@@ -549,23 +549,28 @@ describe("physical Android phone-driver protocol", () => {
     ).toBe(false);
   });
 
-  it("recognizes Plan current truth from its approved initial viewport", () => {
+  it("recognizes Plan lifecycle truth from its approved phone viewports", () => {
     const nodes = parseAndroidUiNodes(
-      '<hierarchy><node text="Default" bounds="[0,0][100,40]" />' +
-        '<node text="No pending change" bounds="[0,40][200,80]" />' +
-        '<node text="No observed Plan execution" bounds="[0,80][260,120]" />' +
+      '<hierarchy><node text="Current mode" bounds="[0,0][100,80]" />' +
+        '<node text="Default" bounds="[100,0][200,80]" />' +
+        '<node text="No pending change" bounds="[100,80][300,120]" />' +
+        '<node text="No observed Plan execution" bounds="[100,120][360,160]" />' +
+        '<node text="Plan" bounds="[100,200][200,240]" />' +
         '</hierarchy>'
     );
 
-    expect(physicalPlanCurrentTruthVisible(nodes)).toBe(true);
+    expect(physicalPlanCurrentTruthVisible(nodes, "Default")).toBe(true);
+    expect(physicalPlanCurrentTruthVisible(nodes, "Plan")).toBe(false);
     for (const missing of [
+      "Current mode",
       "Default",
       "No pending change",
       "No observed Plan execution"
     ]) {
       expect(
         physicalPlanCurrentTruthVisible(
-          nodes.filter((node) => node.text !== missing)
+          nodes.filter((node) => node.text !== missing),
+          "Default"
         )
       ).toBe(false);
     }
@@ -573,9 +578,37 @@ describe("physical Android phone-driver protocol", () => {
       physicalPlanCurrentTruthVisible(
         parseAndroidUiNodes(
           '<hierarchy><node text="Loading Plan state" bounds="[0,0][200,40]" /></hierarchy>'
-        )
+        ),
+        "Default"
       )
     ).toBe(false);
+
+    const submitting = parseAndroidUiNodes(
+      '<hierarchy><node text="A Plan selection is already being saved." bounds="[0,0][360,40]" /></hierarchy>'
+    );
+    expect(physicalPlanSubmittingTruthVisible(submitting)).toBe(true);
+    expect(physicalPlanSubmittingTruthVisible([])).toBe(false);
+
+    const staged = parseAndroidUiNodes(
+      '<hierarchy><node text="Next turn" bounds="[0,0][100,80]" />' +
+        '<node text="Plan" bounds="[100,0][200,40]" />' +
+        '<node text="Pending next turn: Staged in HostDeck" bounds="[100,40][380,80]" />' +
+        '<node text="No observed Plan execution" bounds="[100,80][360,120]" />' +
+        '</hierarchy>'
+    );
+    expect(physicalPlanStagedTruthVisible(staged)).toBe(true);
+    for (const missing of [
+      "Next turn",
+      "Plan",
+      "Pending next turn: Staged in HostDeck",
+      "No observed Plan execution"
+    ]) {
+      expect(
+        physicalPlanStagedTruthVisible(
+          staged.filter((node) => node.text !== missing)
+        )
+      ).toBe(false);
+    }
   });
 
   it("admits event diagnostics only above the complete fixed control dock", () => {
@@ -7507,7 +7540,7 @@ async function runPhysicalPlanControl(
     "Physical /plan trigger was unavailable."
   );
   measure(trigger, "open-plan");
-  await openPhysicalPlanSheet(trigger, input.requestInspection);
+  await openPhysicalPlanSheet(trigger, input.requestInspection, "Default");
   await waitForAndroidUiText(
     "Default",
     30_000,
@@ -7534,15 +7567,16 @@ async function runPhysicalPlanControl(
     () => input.controls.hasPendingPlan(),
     "Physical /plan selection did not enter one pending request."
   );
-  await waitForAndroidUiText(
-    "Saving next-turn mode",
+  await waitFor(
+    async () =>
+      physicalPlanSubmittingTruthVisible(await readAndroidUiNodes()),
     30_000,
     "Physical /plan did not render its submitting state."
   );
   await capture("fe090-19-plan-submitting.png");
   input.controls.releasePlan();
-  await waitForAndroidUiText(
-    "Plan staged for next turn",
+  await waitFor(
+    async () => physicalPlanStagedTruthVisible(await readAndroidUiNodes()),
     30_000,
     "Physical /plan did not render accepted next-turn truth."
   );
@@ -7555,14 +7589,15 @@ async function runPhysicalPlanControl(
     30_000,
     "Physical /plan trigger was unavailable after close."
   );
-  await openPhysicalPlanSheet(reopened, input.requestInspection);
+  await openPhysicalPlanSheet(reopened, input.requestInspection, "Plan");
   await capture("fe090-21-plan-applied.png");
   await closePhysicalDialog("Close Plan control");
 }
 
 async function openPhysicalPlanSheet(
   trigger: AndroidUiNode,
-  inspection: RequestInspection
+  inspection: RequestInspection,
+  expectedCurrentMode: "Default" | "Plan"
 ): Promise<void> {
   const readsBefore = inspection.planReadRequests;
   const triggerLabel = `/plan for ${physicalUiSessionName}`;
@@ -7571,7 +7606,10 @@ async function openPhysicalPlanSheet(
     triggerField: "description",
     triggerValue: triggerLabel,
     completed: async () =>
-      physicalPlanCurrentTruthVisible(await readAndroidUiNodes()),
+      physicalPlanCurrentTruthVisible(
+        await readAndroidUiNodes(),
+        expectedCurrentMode
+      ),
     completionFailureMessage:
       "Physical /plan did not render visible current-mode truth.",
     reacquireFailureMessage: "Physical /plan trigger could not be safely reacquired.",
@@ -7584,9 +7622,54 @@ async function openPhysicalPlanSheet(
   );
 }
 
-function physicalPlanCurrentTruthVisible(nodes: readonly AndroidUiNode[]): boolean {
-  return ["Default", "No pending change", "No observed Plan execution"].every(
-    (label) => nodes.some((node) => node.text === label)
+function physicalPlanCurrentTruthVisible(
+  nodes: readonly AndroidUiNode[],
+  expectedCurrentMode: "Default" | "Plan"
+): boolean {
+  return (
+    physicalPlanRailValueVisible(
+      nodes,
+      "Current mode",
+      expectedCurrentMode
+    ) &&
+    ["No pending change", "No observed Plan execution"].every((label) =>
+      nodes.some((node) => node.text === label)
+    )
+  );
+}
+
+function physicalPlanSubmittingTruthVisible(
+  nodes: readonly AndroidUiNode[]
+): boolean {
+  return nodes.some(
+    (node) => node.text === "A Plan selection is already being saved."
+  );
+}
+
+function physicalPlanStagedTruthVisible(nodes: readonly AndroidUiNode[]): boolean {
+  return (
+    physicalPlanRailValueVisible(nodes, "Next turn", "Plan") &&
+    [
+      "Pending next turn: Staged in HostDeck",
+      "No observed Plan execution"
+    ].every((label) => nodes.some((node) => node.text === label))
+  );
+}
+
+function physicalPlanRailValueVisible(
+  nodes: readonly AndroidUiNode[],
+  railLabel: "Current mode" | "Next turn",
+  value: "Default" | "Plan"
+): boolean {
+  const label = nodes.find((node) => node.text === railLabel);
+  return (
+    label !== undefined &&
+    nodes.some(
+      (node) =>
+        node.text === value &&
+        node.bounds.top < label.bounds.bottom &&
+        node.bounds.bottom > label.bounds.top
+    )
   );
 }
 
