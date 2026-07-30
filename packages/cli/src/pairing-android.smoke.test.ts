@@ -1809,6 +1809,59 @@ describe("physical Android phone-driver protocol", () => {
     ).toThrow("retained pairing material");
   });
 
+  it("isolates the current physical Skills editor from Chrome and duplicate controls", () => {
+    const nodes = parseAndroidUiNodes(
+      '<hierarchy rotation="0">' +
+        '<node text="" content-desc="" class="android.view.ViewGroup" ' +
+        `resource-id="${chromeToolbarResourceId}" bounds="[0,127][1080,288]" />` +
+        '<node text="" content-desc="" class="android.widget.FrameLayout" ' +
+        `resource-id="${chromeCompositorResourceId}" bounds="[0,127][1080,2355]" />` +
+        '<node text="private.example.ts.net" content-desc="" ' +
+        'class="android.widget.EditText" bounds="[225,127][664,285]" />' +
+        '<node text="/skills" content-desc="" bounds="[191,560][683,630]" />' +
+        '<node text="" content-desc="" class="android.widget.EditText" ' +
+        'clickable="true" bounds="[171,1480][992,1606]" />' +
+        '<node text="Skills capture current" content-desc="" ' +
+        'bounds="[129,2194][888,2250]" />' +
+        '<node text="25 structured skills reported." content-desc="" ' +
+        'bounds="[129,2250][888,2298]" />' +
+        "</hierarchy>"
+    );
+    const editor = nodes.find(
+      (node) =>
+        node.className === androidEditTextClass && node.bounds.top === 1480
+    );
+    requireCondition(editor !== undefined, "Physical Skills editor fixture was absent.");
+
+    expect(findPhysicalSkillsSearchEditor(nodes)).toBe(editor);
+    expect(
+      findPhysicalSkillsSearchEditor(
+        nodes.filter((node) => node.text !== "Skills capture current")
+      )
+    ).toBeNull();
+    expect(
+      findPhysicalSkillsSearchEditor(
+        nodes.filter((node) => node.text !== "25 structured skills reported.")
+      )
+    ).toBeNull();
+    expect(
+      findPhysicalSkillsSearchEditor([
+        ...nodes,
+        Object.freeze({
+          ...editor,
+          bounds: Object.freeze({ ...editor.bounds, bottom: 1800, top: 1674 })
+        })
+      ])
+    ).toBeNull();
+    expect(
+      findPhysicalSkillsSearchEditor(
+        nodes.map((node) =>
+          node === editor ? Object.freeze({ ...node, clickable: false }) : node
+        )
+      )
+    ).toBeNull();
+  });
+
   it("selects only the production page viewport for private-free evidence", () => {
     const nodes = parseAndroidUiNodes(
       '<hierarchy rotation="0">' +
@@ -7881,7 +7934,7 @@ async function revealPhysicalSkillsSearch(
       if (observations.at(-1) !== observation && observations.length < 6) {
         observations.push(observation);
       }
-      found = findAndroidPromptEditor(nodes, "Search skills");
+      found = findPhysicalSkillsSearchEditor(nodes);
       if (found !== null) return true;
       if (swipeCount < 4) {
         swipeAndroidViewport(nodes, "forward");
@@ -10139,6 +10192,50 @@ function findAndroidPromptEditor(
     "Android UI hierarchy duplicated the prompt editor control."
   );
   return editors[0] ?? null;
+}
+
+function findPhysicalSkillsSearchEditor(
+  nodes: readonly AndroidUiNode[]
+): AndroidUiNode | null {
+  const titles = nodes.filter((node) => node.text === "/skills");
+  const currentStatuses = nodes.filter(
+    (node) => node.text === "Skills capture current"
+  );
+  const reports = nodes.filter(
+    (node) => node.text === "25 structured skills reported."
+  );
+  if (
+    titles.length !== 1 ||
+    currentStatuses.length !== 1 ||
+    reports.length !== 1
+  ) {
+    return null;
+  }
+  const title = titles[0];
+  const current = currentStatuses[0];
+  if (title === undefined || current === undefined) return null;
+  let page: PhysicalScreenshotRegion;
+  try {
+    page = selectChromePageViewport(nodes);
+  } catch {
+    return null;
+  }
+  const editors = nodes.filter(
+    (node) =>
+      node.className === androidEditTextClass &&
+      node.clickable &&
+      androidUiNodeWidth(node) >= 120 &&
+      androidUiNodeHeight(node) >= 36 &&
+      androidUiNodeIsFullyInsideRegion(node, page) &&
+      node.bounds.top >= title.bounds.bottom &&
+      node.bounds.bottom <= current.bounds.top
+  );
+  if (editors.length !== 1) return null;
+  const editor = editors[0];
+  if (editor === undefined) return null;
+  const labelled = findAndroidPromptEditor(nodes, "Search skills");
+  if (labelled !== null) return labelled === editor ? editor : null;
+  return editor.text === "" && editor.description === "" ? editor : null;
 }
 
 function promptEditorIsNearLabel(
