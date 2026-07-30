@@ -1651,6 +1651,60 @@ describe("physical Android phone-driver protocol", () => {
         2
       )
     ).toBe(false);
+    expect(
+      physicalPromptCompletionRestored(
+        [Object.freeze({ ...confirmationReason, text: "Turn completed" })],
+        1
+      )
+    ).toBe(true);
+    for (const [nodes, activeSubscribers] of [
+      [[], 1],
+      [[Object.freeze({ ...confirmationReason, text: "Turn completed" })], 0],
+      [
+        [
+          Object.freeze({ ...confirmationReason, text: "Turn completed" }),
+          Object.freeze({ ...confirmationStatus, text: "Turn completed" })
+        ],
+        1
+      ],
+      [
+        [
+          Object.freeze({ ...confirmationReason, text: "Turn completed" }),
+          Object.freeze({
+            ...confirmationStatus,
+            text: "Activity stream reconnecting"
+          })
+        ],
+        1
+      ],
+      [
+        [
+          Object.freeze({ ...confirmationReason, text: "Turn completed" }),
+          Object.freeze({
+            ...confirmationStatus,
+            text: "Session activity is reconnecting."
+          })
+        ],
+        1
+      ],
+      [
+        [
+          Object.freeze({ ...confirmationReason, text: "Turn completed" }),
+          Object.freeze({ ...confirmationStatus, text: "Prompt unavailable" })
+        ],
+        1
+      ]
+    ] as const) {
+      expect(physicalPromptCompletionRestored(nodes, activeSubscribers)).toBe(
+        false
+      );
+    }
+    expect(
+      physicalPromptCompletionRestored(
+        [Object.freeze({ ...confirmationReason, text: "Turn completed" })],
+        2
+      )
+    ).toBe(false);
     expect(() =>
       parseAndroidUiNodes(
         `<hierarchy><node text="${selectedPairingFragmentPrefix}secret" ` +
@@ -6831,11 +6885,16 @@ async function runPhysicalStreamRecovery(
       45_000,
       "Physical Session Detail did not reconnect exactly once after stream loss."
     );
-    await waitForAndroidUiText(
-      "Current",
+    await waitFor(
+      async () =>
+        physicalPromptCompletionRestored(
+          await readAndroidUiNodes(),
+          input.prompt.subscribers.snapshot().active_subscribers
+        ),
       30_000,
-      "Physical Session Detail did not restore current stream truth."
+      "Physical Session Detail did not restore current completed-composer truth."
     );
+    await capture("fe090-48-stream-recovered.png");
   } catch (error) {
     const message =
       error instanceof Error
@@ -7063,6 +7122,21 @@ function physicalSessionWriteReady(
   return (
     activeSubscribers === 1 &&
     count("Ready to send") === 1 &&
+    count("Activity stream reconnecting") === 0 &&
+    count("Session activity is reconnecting.") === 0 &&
+    count("Prompt unavailable") === 0
+  );
+}
+
+function physicalPromptCompletionRestored(
+  nodes: readonly AndroidUiNode[],
+  activeSubscribers: number
+): boolean {
+  const count = (value: string): number =>
+    nodes.filter((node) => matchesAndroidUiNode(node, "semantic", value)).length;
+  return (
+    activeSubscribers === 1 &&
+    count("Turn completed") === 1 &&
     count("Activity stream reconnecting") === 0 &&
     count("Session activity is reconnecting.") === 0 &&
     count("Prompt unavailable") === 0
