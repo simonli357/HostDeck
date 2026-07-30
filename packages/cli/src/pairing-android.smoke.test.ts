@@ -8119,38 +8119,88 @@ async function clearPhysicalAndroidClipboard(
     readonly prompt: PhysicalPromptRuntime;
   }
 ): Promise<void> {
+  const navigationBefore = readPhysicalSessionNavigationSnapshot(input);
+  requireCondition(
+    navigationBefore.activeSubscribers === 1,
+    "Physical clipboard cleanup did not begin with one retained Session Detail subscriber."
+  );
   openChromePath(input.externalOrigin, "/__physical/clipboard");
-  const clear = await waitForAndroidUiNodePresent(
-    "text",
-    "Clear clipboard",
-    30_000,
-    "Physical clipboard cleanup action was unavailable."
-  );
-  await tapAndroidNodeOnceAndWait(
-    clear,
-    async () =>
-      (await readAndroidUiNodes()).some(
-        (node) => node.text === "Clipboard cleared"
-      ),
-    "Physical clipboard cleanup did not complete."
-  );
-  const detailReadsBefore = input.requestInspection.sessionDetailRequests;
-  openChromePath(
-    input.externalOrigin,
-    `/sessions/${physicalUiSessionId}`
-  );
-  await waitFor(
-    () =>
-      input.requestInspection.sessionDetailRequests > detailReadsBefore &&
-      input.prompt.subscribers.snapshot().active_subscribers === 1,
-    45_000,
-    "Physical clipboard cleanup did not return to Session Detail."
-  );
-  await waitForAndroidUiText(
-    "Ready to send",
-    30_000,
-    "Physical clipboard cleanup lost the selected session."
-  );
+  try {
+    const clear = await waitForAndroidUiNodePresent(
+      "text",
+      "Clear clipboard",
+      30_000,
+      "Physical clipboard cleanup action was unavailable."
+    );
+    await tapAndroidNodeOnceAndWait(
+      clear,
+      async () =>
+        (await readAndroidUiNodes()).some(
+          (node) => node.text === "Clipboard cleared"
+        ),
+      "Physical clipboard cleanup did not complete."
+    );
+    await waitFor(
+      () =>
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          navigationBefore
+        ),
+      15_000,
+      "Physical clipboard page changed retained Session Detail authority."
+    );
+
+    const navigationWhileBackgrounded = Object.freeze({
+      ...navigationBefore,
+      activeSubscribers: 0
+    });
+    adb([...physicalAndroidChromeRetainedTabCommandPlan[0]]);
+    await waitFor(
+      () =>
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          navigationWhileBackgrounded
+        ),
+      15_000,
+      "Physical clipboard Back did not close only the retained Session Detail stream."
+    );
+
+    const navigationAfterReturn = Object.freeze({
+      ...navigationBefore,
+      openedSubscribers: navigationBefore.openedSubscribers + 1,
+      selectedDetailRequests: navigationBefore.selectedDetailRequests + 1,
+      streamRequests: navigationBefore.streamRequests + 1
+    });
+    const launchOutput = adb([
+      ...physicalAndroidChromeRetainedTabCommandPlan[1]
+    ]);
+    requireCondition(
+      !launchOutput.includes("Error:") && !launchOutput.includes("Exception"),
+      "Physical clipboard Chrome launcher return failed."
+    );
+    await waitFor(
+      () =>
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          navigationAfterReturn
+        ),
+      45_000,
+      "Physical clipboard cleanup did not reopen exactly one retained Session Detail stream."
+    );
+    await waitForAndroidUiText(
+      "Ready to send",
+      30_000,
+      "Physical clipboard cleanup lost the retained selected session."
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Physical clipboard recovery failed without an error object.";
+    throw new Error(`${message} ${physicalPromptStreamDiagnostic(input)}`, {
+      cause: error
+    });
+  }
 }
 
 async function runPhysicalInterruptControl(
