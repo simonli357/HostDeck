@@ -2088,6 +2088,42 @@ describe("physical Android phone-driver protocol", () => {
     }
   });
 
+  it("reports rejected origin structure without retaining private values", () => {
+    const externalOrigin = "https://private.example.ts.net";
+    const privateValue = "private-diagnostic-value";
+    const nodes = parseAndroidUiNodes(
+      '<hierarchy rotation="0">' +
+        '<node text="Origin" content-desc="" class="android.view.View" ' +
+        'bounds="[60,440][240,480]" />' +
+        `<node text="${externalOrigin}" content-desc="${privateValue}" ` +
+        `class="${privateValue}" resource-id="${privateValue}" ` +
+        'bounds="[160,500][700,550]" />' +
+        '<node text="" content-desc="" class="android.widget.FrameLayout" ' +
+        `resource-id="${chromeCompositorResourceId}" bounds="[0,120][720,1280]" />` +
+        "</hierarchy>"
+    );
+    deviceForbiddenValues.add(privateValue);
+    try {
+      let message = "";
+      try {
+        selectPrivateFreeProductionScreenshotEvidence(
+          nodes,
+          externalOrigin,
+          { redactProductOrigin: true }
+        );
+      } catch (error) {
+        message = error instanceof Error ? error.message : String(error);
+      }
+      expect(message).toContain("private=1;nodes=n0=te,dn,th,dx,rx,rd,co");
+      expect(message).toContain("labels=l0=1/1,l1=0/0");
+      expect(message).not.toContain(externalOrigin);
+      expect(message).not.toContain(new URL(externalOrigin).hostname);
+      expect(message).not.toContain(privateValue);
+    } finally {
+      deviceForbiddenValues.delete(privateValue);
+    }
+  });
+
   it("crops physical PNG evidence to the exact selected pixel region", () => {
     const source = new Png({ height: 600, width: 320 });
     for (let y = 0; y < source.height; y += 1) {
@@ -9743,8 +9779,12 @@ function selectProductOriginScreenshotRedactions(
   page: PhysicalScreenshotRegion
 ): readonly PhysicalScreenshotRegion[] {
   if (privateNodes.length === 0) return Object.freeze([]);
-  const failure =
-    "Physical production screenshot page viewport retained private browser material.";
+  const failure = privateProductOriginRedactionFailure(
+    nodes,
+    privateNodes,
+    origin,
+    page
+  );
   requireCondition(privateNodes.length <= 2, failure);
   const labels = nodes.filter(
     (node) =>
@@ -9799,6 +9839,71 @@ function selectProductOriginScreenshotRedactions(
   });
   requireCondition(new Set(owningLabels).size === owningLabels.length, failure);
   return mergePhysicalScreenshotRegions(redactions);
+}
+
+function privateProductOriginRedactionFailure(
+  nodes: readonly AndroidUiNode[],
+  privateNodes: readonly AndroidUiNode[],
+  origin: URL,
+  page: PhysicalScreenshotRegion
+): string {
+  const labels = ["Origin", "Private address"].map((text, index) => {
+    const matches = nodes.filter((node) => node.text === text);
+    const eligible = matches.filter(
+      (node) =>
+        node.className === "android.view.View" &&
+        !node.clickable &&
+        node.description === "" &&
+        node.resourceId === "" &&
+        androidUiNodeIsFullyInsideRegion(node, page)
+    );
+    return `l${String(index)}=${String(matches.length)}/${String(eligible.length)}`;
+  });
+  const privateShape = privateNodes.slice(0, 4).map((node, index) => {
+    const registeredText = [...deviceForbiddenValues].some((value) =>
+      node.text.includes(value)
+    );
+    const registeredDescription = [...deviceForbiddenValues].some((value) =>
+      node.description.includes(value)
+    );
+    const classCategory =
+      node.className === "android.view.View"
+        ? "v"
+        : node.className === androidEditTextClass
+          ? "e"
+          : node.className === "android.widget.TextView"
+            ? "t"
+            : "o";
+    return (
+      `n${String(index)}=` +
+      `${node.text === origin.origin ? "te" : node.text.includes(origin.origin) ? "tc" : "tn"},` +
+      `${node.description === origin.origin ? "de" : node.description.includes(origin.origin) ? "dc" : "dn"},` +
+      `${node.text.includes(origin.hostname) ? "th" : "tx"},` +
+      `${node.description.includes(origin.hostname) ? "dh" : "dx"},` +
+      `${registeredText ? "rt" : "rx"},${registeredDescription ? "rd" : "rx"},` +
+      `c${classCategory},k${node.clickable ? "1" : "0"},` +
+      `d${node.description === "" ? "0" : "1"},r${node.resourceId === "" ? "0" : "1"},` +
+      `i${androidUiNodeIsFullyInsideRegion(node, page) ? "1" : "0"},` +
+      `${node.bounds.left},${node.bounds.top},${node.bounds.right},${node.bounds.bottom}`
+    );
+  });
+  const diagnostic =
+    `private=${String(privateNodes.length)};` +
+    `nodes=${privateShape.join("|") || "none"};labels=${labels.join(",")}`;
+  const privateValues = [
+    origin.origin,
+    origin.hostname,
+    ...deviceForbiddenValues
+  ];
+  const safeDiagnostic = privateValues.some(
+    (value) => value !== "" && diagnostic.includes(value)
+  )
+    ? "private-diagnostic-suppressed"
+    : diagnostic;
+  return (
+    "Physical production screenshot page viewport retained private browser material " +
+    `(${safeDiagnostic}).`
+  );
 }
 
 function androidProductOriginLabelOwnsNode(
