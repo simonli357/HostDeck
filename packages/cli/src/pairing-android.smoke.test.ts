@@ -6921,8 +6921,10 @@ async function runPhysicalDetailFailureStates(
     45_000,
     "Physical Session Detail did not reload stale projection truth."
   );
-  await waitForAndroidUiText(
+  await revealPhysicalSessionContentNode(
+    "text",
     "Showing stale session state",
+    "backward",
     30_000,
     "Physical Session Detail did not render stale truth."
   );

@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-090` Harden the complete mobile dashboard on the real phone | in_progress | none | The package prerequisite is satisfied and `BUG-024` to `BUG-030` plus `BUG-032` to `BUG-036` are closed. Close `BUG-031`, `BUG-037`, and `BUG-038`, then close `BUG-019`, `BUG-021`, and `BUG-022` with the corrected no-retry physical sequence, full evidence review, and retained deployment. |
+| 1 | `FE-V1-090` Harden the complete mobile dashboard on the real phone | in_progress | none | The package prerequisite is satisfied and `BUG-024` to `BUG-030` plus `BUG-032` to `BUG-038` are closed. Close `BUG-031` and `BUG-039`, then close `BUG-019`, `BUG-021`, and `BUG-022` with the corrected no-retry physical sequence, full evidence review, and retained deployment. |
 
 ## Intentional Blockers
 
