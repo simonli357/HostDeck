@@ -8375,7 +8375,43 @@ async function runPhysicalHostAccessControls(
   measure: PhysicalDashboardMeasure
 ): Promise<void> {
   const managerAttempts = input.manager.snapshot().command_attempts;
-  await openProductionHostAccessSheet();
+  const actions = await waitForAndroidUiNodePresent(
+    "description",
+    "Open session actions",
+    30_000,
+    "Physical Host and access session actions were unavailable."
+  );
+  await tapAndroidNodeOnceAndWait(
+    actions,
+    async () =>
+      (await readAndroidUiNodes()).some(
+        (node) => node.text === "Session actions"
+      ),
+    "Physical Host and access session actions did not open."
+  );
+  const hostAccess = await revealAndroidUiNode(
+    "description",
+    "Open Host and access",
+    "forward",
+    30_000,
+    "Physical Host and access action was unavailable in Session actions.",
+    "fully_visible",
+    true
+  );
+  measure(hostAccess, "open-session-host-access");
+  await tapAndroidNodeOnceAndWait(
+    hostAccess,
+    async () => {
+      const nodes = await readAndroidUiNodes();
+      return (
+        nodes.some((node) => node.text === "Host & access") &&
+        nodes.some(
+          (node) => node.description === "Back to session actions"
+        )
+      );
+    },
+    "Physical Host and access did not open from Session actions."
+  );
   await revealAndroidUiNode(
     "text",
     "Remote access ready",
@@ -8473,7 +8509,7 @@ async function runPhysicalHostAccessControls(
     "Physical locked UI exposed a forbidden remote unlock action."
   );
   await capture("fe090-36-host-locked.png");
-  await closeProductionHostAccessSheet();
+  await closePhysicalDialog("Close session actions");
   const missionBack = await waitForAndroidUiNodePresent(
     "description",
     "Back to Mission Control",
