@@ -189,6 +189,12 @@ const physicalAndroidChromeStopCommandPlan = Object.freeze([
     "com.android.chrome"
   ] as const)
 ] as const);
+const physicalAndroidChromeBackCommandPlan = Object.freeze([
+  "shell",
+  "input",
+  "keyevent",
+  "KEYCODE_BACK"
+] as const);
 const pairingStartupDiagnosticLabels = Object.freeze([
   "Checking secure link",
   "Pairing this phone",
@@ -1856,6 +1862,38 @@ describe("physical Android phone-driver protocol", () => {
     expect(Object.isFrozen(physicalAndroidChromeStopCommandPlan[1])).toBe(true);
   });
 
+  it("uses one explicit Android Back command for Chrome tab recovery", () => {
+    expect(physicalAndroidChromeBackCommandPlan).toEqual([
+      "shell",
+      "input",
+      "keyevent",
+      "KEYCODE_BACK"
+    ]);
+    expect(Object.isFrozen(physicalAndroidChromeBackCommandPlan)).toBe(true);
+  });
+
+  it("matches physical session navigation authority exactly", () => {
+    const expected: PhysicalSessionNavigationSnapshot = Object.freeze({
+      activeSubscribers: 1,
+      missingDetailRequests: 1,
+      openedSubscribers: 4,
+      selectedDetailRequests: 3,
+      streamRequests: 4
+    });
+
+    expect(physicalSessionNavigationMatches(expected, expected)).toBe(true);
+    for (const key of Object.keys(expected) as Array<
+      keyof PhysicalSessionNavigationSnapshot
+    >) {
+      expect(
+        physicalSessionNavigationMatches(
+          Object.freeze({ ...expected, [key]: expected[key] + 1 }),
+          expected
+        )
+      ).toBe(false);
+    }
+  });
+
   it("uses the authoritative Android keyboard request over stale view state", () => {
     expect(
       parseAndroidKeyboardVisibility(
@@ -2010,6 +2048,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         sessionEventRequests: 0,
         sessionListRequests: 0,
         sessionListResponseStatuses: [],
+        sessionMissingDetailRequests: 0,
         sessionStreamRequests: 0,
         sessionStreamResponseStatuses: []
       };
@@ -3249,8 +3288,17 @@ interface RequestInspection {
   sessionEventRequests: number;
   sessionListRequests: number;
   sessionListResponseStatuses: number[];
+  sessionMissingDetailRequests: number;
   sessionStreamRequests: number;
   sessionStreamResponseStatuses: number[];
+}
+
+interface PhysicalSessionNavigationSnapshot {
+  readonly activeSubscribers: number;
+  readonly missingDetailRequests: number;
+  readonly openedSubscribers: number;
+  readonly selectedDetailRequests: number;
+  readonly streamRequests: number;
 }
 
 interface PairingRenderCapture {
@@ -4574,6 +4622,9 @@ function installRequestInspection(
     }
     if (request.url === `/api/v1/sessions/${physicalUiSessionId}`) {
       inspection.sessionDetailRequests += 1;
+    }
+    if (request.url === "/api/v1/sessions/sess_physical_missing") {
+      inspection.sessionMissingDetailRequests += 1;
     }
     if (
       request.url === `/api/v1/sessions/${physicalUiSessionId}/events` ||
@@ -6946,42 +6997,47 @@ async function runPhysicalDetailFailureStates(
     "Physical Session Detail remained stale after current refresh."
   );
 
+  const navigationBefore = readPhysicalSessionNavigationSnapshot(input);
+  requireCondition(
+    navigationBefore.activeSubscribers === 1,
+    "Physical not-found navigation did not begin with one selected-session subscriber."
+  );
+  const navigationWhileMissing = Object.freeze({
+    ...navigationBefore,
+    missingDetailRequests: navigationBefore.missingDetailRequests + 1
+  });
   openChromePath(input.externalOrigin, "/sessions/sess_physical_missing");
-  await waitForAndroidUiText(
-    "Session unavailable",
-    30_000,
-    "Physical Session Detail did not render not-found truth."
-  );
-  await capture("fe090-50-detail-not-found.png");
-  await waitFor(
-    () => input.prompt.subscribers.snapshot().active_subscribers === 0,
-    15_000,
-    "Physical not-found navigation retained the prior session stream."
-  );
-  const returnDetailReadsBefore = input.requestInspection.sessionDetailRequests;
-  const returnStreamRequestsBefore = input.requestInspection.sessionStreamRequests;
-  const returnOpenedBefore = input.prompt.subscribers.snapshot().opened_subscribers;
-  openChromePath(
-    input.externalOrigin,
-    `/sessions/${physicalUiSessionId}`
-  );
   try {
+    await waitForAndroidUiText(
+      "Session unavailable",
+      30_000,
+      "Physical Session Detail did not render not-found truth."
+    );
     await waitFor(
       () =>
-        input.requestInspection.sessionDetailRequests ===
-          returnDetailReadsBefore + 1 &&
-        input.requestInspection.sessionStreamRequests ===
-          returnStreamRequestsBefore + 1 &&
-        input.prompt.subscribers.snapshot().opened_subscribers ===
-          returnOpenedBefore + 1 &&
-        input.prompt.subscribers.snapshot().active_subscribers === 1,
-      45_000,
-      "Physical Session Detail did not restore one fresh read and stream after not-found."
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          navigationWhileMissing
+        ),
+      15_000,
+      "Physical not-found navigation changed selected-session stream authority."
     );
+    await capture("fe090-50-detail-not-found.png");
+
+    adb([...physicalAndroidChromeBackCommandPlan]);
     await waitForAndroidUiText(
       "Ready to send",
       30_000,
-      "Physical Session Detail did not recover after direct not-found navigation."
+      "Physical Session Detail did not return to the retained current tab."
+    );
+    await waitFor(
+      () =>
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          navigationWhileMissing
+        ),
+      15_000,
+      "Physical Chrome Back changed retained selected-session stream authority."
     );
   } catch (error) {
     const message =
@@ -6992,6 +7048,35 @@ async function runPhysicalDetailFailureStates(
       cause: error
     });
   }
+}
+
+function readPhysicalSessionNavigationSnapshot(
+  input: Readonly<{
+    readonly prompt: PhysicalPromptRuntime;
+    readonly requestInspection: RequestInspection;
+  }>
+): PhysicalSessionNavigationSnapshot {
+  const subscribers = input.prompt.subscribers.snapshot();
+  return Object.freeze({
+    activeSubscribers: subscribers.active_subscribers,
+    missingDetailRequests: input.requestInspection.sessionMissingDetailRequests,
+    openedSubscribers: subscribers.opened_subscribers,
+    selectedDetailRequests: input.requestInspection.sessionDetailRequests,
+    streamRequests: input.requestInspection.sessionStreamRequests
+  });
+}
+
+function physicalSessionNavigationMatches(
+  actual: PhysicalSessionNavigationSnapshot,
+  expected: PhysicalSessionNavigationSnapshot
+): boolean {
+  return (
+    actual.activeSubscribers === expected.activeSubscribers &&
+    actual.missingDetailRequests === expected.missingDetailRequests &&
+    actual.openedSubscribers === expected.openedSubscribers &&
+    actual.selectedDetailRequests === expected.selectedDetailRequests &&
+    actual.streamRequests === expected.streamRequests
+  );
 }
 
 async function runPhysicalApprovalControl(
@@ -9507,6 +9592,7 @@ function physicalPromptStreamDiagnostic(
   const statuses = input.requestInspection.sessionStreamResponseStatuses;
   return (
     `(detail=${input.requestInspection.sessionDetailRequests};` +
+    `missing_detail=${input.requestInspection.sessionMissingDetailRequests};` +
     `event_page=${input.requestInspection.sessionEventRequests};` +
     `stream=${input.requestInspection.sessionStreamRequests};` +
     `statuses=${statuses.length === 0 ? "none" : statuses.join("|")};` +
