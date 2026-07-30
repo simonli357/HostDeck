@@ -1168,7 +1168,7 @@ describe("physical Android phone-driver protocol", () => {
         '<node text="" content-desc="" class="android.widget.EditText" ' +
         'bounds="[20,200][700,320]" />' +
         '<node text="" content-desc="" class="android.widget.Button" ' +
-        'clickable="true" bounds="[350,1100][700,1180]" />' +
+        'clickable="true" focused="true" bounds="[350,1100][700,1180]" />' +
         '<node text="" content-desc="" class="android.view.ViewGroup" ' +
         `resource-id="${chromeToolbarResourceId}" bounds="[0,80][720,180]" />` +
         '<node text="" content-desc="" class="android.widget.FrameLayout" ' +
@@ -1206,6 +1206,7 @@ describe("physical Android phone-driver protocol", () => {
         className: "android.widget.Button",
         clickable: true,
         description: "",
+        focused: true,
         resourceId: "",
         text: ""
       },
@@ -1337,7 +1338,11 @@ describe("physical Android phone-driver protocol", () => {
     expect(revealSummary).toContain(
       "match=1;text=0;description=1;first=20,200,300,260,click"
     );
+    expect(revealSummary).toContain("normalized=1;contains=1;cancel=0/0/0:none");
     expect(revealSummary).toContain("page=0,180,720,1100;eligible=yes");
+    expect(revealSummary).toContain(
+      "focused=1:350,1100,700,1180,click"
+    );
     expect(revealSummary).toContain(
       "clickable=2:20,200,300,260,click|350,1100,700,1180,click"
     );
@@ -5651,6 +5656,7 @@ interface AndroidUiNode {
   readonly className: string;
   readonly clickable: boolean;
   readonly description: string;
+  readonly focused?: true;
   readonly resourceId: string;
   readonly text: string;
 }
@@ -8988,13 +8994,21 @@ function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
     const className = attributes.get("class") ?? "";
     const resourceId = attributes.get("resource-id") ?? "";
     const clickableAttribute = attributes.get("clickable");
+    const focusedAttribute = attributes.get("focused");
     requireCondition(
       clickableAttribute === undefined ||
         clickableAttribute === "true" ||
         clickableAttribute === "false",
       "Android UI hierarchy clickable state was invalid."
     );
+    requireCondition(
+      focusedAttribute === undefined ||
+        focusedAttribute === "true" ||
+        focusedAttribute === "false",
+      "Android UI hierarchy focused state was invalid."
+    );
     const clickable = clickableAttribute === "true";
+    const focused = focusedAttribute === "true";
     if (
       text === "" &&
       description === "" &&
@@ -9011,6 +9025,7 @@ function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
         className,
         clickable,
         description,
+        ...(focused ? { focused: true as const } : {}),
         resourceId,
         text
       })
@@ -9346,6 +9361,28 @@ function androidUiRevealGeometrySummary(
     matchesAndroidUiNode(node, field, value)
   );
   const first = matches[0];
+  const normalize = (candidate: string): string =>
+    candidate.trim().replace(/\s+/gu, " ");
+  const normalizedMatches = nodes.filter(
+    (node) =>
+      normalize(node.text) === value ||
+      normalize(node.description) === value
+  );
+  const containingMatches = nodes.filter(
+    (node) => node.text.includes(value) || node.description.includes(value)
+  );
+  const cancelMatches = nodes.filter((node) =>
+    matchesAndroidUiNode(node, "semantic", "Cancel")
+  );
+  const normalizedCancelMatches = nodes.filter(
+    (node) =>
+      normalize(node.text) === "Cancel" ||
+      normalize(node.description) === "Cancel"
+  );
+  const containingCancelMatches = nodes.filter(
+    (node) => node.text.includes("Cancel") || node.description.includes("Cancel")
+  );
+  const focused = nodes.filter((node) => node.focused === true);
   const clickables = nodes
     .filter((node) => node.clickable)
     .sort(
@@ -9375,8 +9412,15 @@ function androidUiRevealGeometrySummary(
     `text=${nodes.filter((node) => node.text === value).length}`,
     `description=${nodes.filter((node) => node.description === value).length}`,
     `first=${first === undefined ? "none" : androidUiNodeGeometry(first)}`,
+    `normalized=${normalizedMatches.length}`,
+    `contains=${containingMatches.length}`,
+    `cancel=${cancelMatches.length}/${normalizedCancelMatches.length}/${containingCancelMatches.length}:${containingCancelMatches[0] === undefined ? "none" : androidUiNodeGeometry(containingCancelMatches[0])}`,
     `page=${page}`,
     `eligible=${eligible ? "yes" : "no"}`,
+    `focused=${focused.length}:${focused
+      .slice(-4)
+      .map(androidUiNodeGeometry)
+      .join("|") || "none"}`,
     `clickable=${clickables.length}:${clickables
       .slice(-6)
       .map(androidUiNodeGeometry)
