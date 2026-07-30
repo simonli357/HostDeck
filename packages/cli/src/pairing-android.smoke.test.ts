@@ -9922,9 +9922,7 @@ function findProductOriginScreenshotContext(
     ),
     backMatches: Object.freeze(backMatches),
     hostEligible: Object.freeze(
-      hostMatches.filter((node) =>
-        androidProductContextTextIsEligible(node, page)
-      )
+      hostMatches.filter((node) => androidNodeIntersectsRegion(node, page))
     ),
     hostMatches: Object.freeze(hostMatches),
     permissionEligible: Object.freeze(
