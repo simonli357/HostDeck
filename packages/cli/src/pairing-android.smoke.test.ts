@@ -7065,6 +7065,7 @@ async function runPhysicalDetailFailureStates(
     const navigationAfterReturn = Object.freeze({
       ...navigationWhileMissing,
       openedSubscribers: navigationWhileMissing.openedSubscribers + 1,
+      selectedDetailRequests: navigationWhileMissing.selectedDetailRequests + 1,
       streamRequests: navigationWhileMissing.streamRequests + 1
     });
     const launchOutput = adb([
