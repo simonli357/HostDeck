@@ -656,15 +656,20 @@ function physicalSkillsSnapshot(): SkillsSnapshot {
     connection_generation: 4,
     observed_at: timestamp,
     state: "content",
-    skills: Array.from({ length: 25 }, (_, index) => ({
-      name: index === 14 ? "release-readiness" : `physical-skill-${String(index + 1).padStart(2, "0")}`,
-      description:
-        index === 14
-          ? "Run bounded package and device release checks."
-          : `Deterministic physical skill ${index + 1}.`,
-      scope: (["repo", "user", "system", "admin"] as const)[index % 4],
-      enabled: index % 3 !== 0
-    })),
+    skills: [
+      ...Array.from({ length: 24 }, (_, index) => ({
+        name: `physical-skill-${String(index + 1).padStart(2, "0")}`,
+        description: `Deterministic physical skill ${index + 1}.`,
+        scope: (["repo", "user", "system", "admin"] as const)[index % 4],
+        enabled: index % 3 !== 0
+      })),
+      {
+        name: "release-readiness",
+        description: "Run bounded package and device release checks.",
+        scope: "repo",
+        enabled: true
+      }
+    ],
     error_count: 0
   });
 }

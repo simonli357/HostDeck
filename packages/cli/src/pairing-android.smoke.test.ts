@@ -857,6 +857,25 @@ describe("physical Android phone-driver protocol", () => {
         codex_thread_id: physicalUiThreadId
       });
 
+      const skills = await dashboard.controls.skills.list(
+        {
+          operation_id: "op_skills_read_00000000000000000000000000000001",
+          kind: "skills",
+          target
+        },
+        deadline
+      );
+      expect(skills).toMatchObject({
+        state: "content",
+        skills: expect.arrayContaining([
+          expect.objectContaining({ name: "release-readiness" })
+        ])
+      });
+      expect(skills.skills).toHaveLength(25);
+      expect(skills.skills.map((skill) => skill.name)).toEqual(
+        [...skills.skills.map((skill) => skill.name)].sort()
+      );
+
       const model = dashboard.controls.models.select({
         operation_id: "op_physical_model_unit_0001",
         kind: "model",
