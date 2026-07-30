@@ -35,6 +35,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
+  if (layoutMeasurements.length === 0) return;
   await writeFile(
     resolve(artifactDirectory, "layout-measurements.json"),
     `${JSON.stringify(layoutMeasurements, null, 2)}\n`,
@@ -174,6 +175,67 @@ test("owns one exact confirmation, pending latch, and correlated lock", async ({
   expect(lock.lockRequests()).toHaveLength(1);
   await expectNoUnlockSurfaceOrRequest(page, diagnostics);
   await expectPrivateFreeSurface(page, request?.postDataJSON().operation_id);
+  await expectCleanBrowser(page, diagnostics);
+});
+
+test("keeps the Host-lock touch target actionable after revoking another device", async ({
+  page
+}) => {
+  const diagnostics = observePage(page);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await installMissionControlApi(page);
+  const devices = await installPairedDeviceManagementApi(page, {
+    pages: [[
+      pairedDevice(pairedDeviceCurrentId, "Xiaomi 15 Pro", "write"),
+      pairedDevice("device_office_browser", "Office browser", "read")
+    ]]
+  });
+  const lock = await installHostLockApi(page);
+
+  await page.goto("/");
+  const sheet = await openHostSheet(page);
+  await expect(sheet.getByText("Office browser", { exact: true })).toBeVisible();
+  await sheet
+    .getByRole("button", { name: "Revoke Office browser, Device 2" })
+    .click();
+  const revokeConfirmation = page.getByRole("dialog", {
+    name: "Revoke paired device?"
+  });
+  await revokeConfirmation.getByRole("button", { name: "Revoke device" }).click();
+  await expect(sheet.getByText("Device revoked", { exact: true })).toBeVisible();
+  await expect(revokeConfirmation).toBeHidden();
+  expect(devices.revokeRequests()).toHaveLength(1);
+
+  const lockButton = sheet
+    .locator(".hostdeck-host-lock")
+    .getByRole("button", { name: "Lock writes" });
+  await lockButton.scrollIntoViewIfNeeded();
+  await expect(lockButton).toBeVisible();
+  await expect(lockButton).toBeEnabled();
+  const center = await lockButton.evaluate((button) => {
+    const bounds = button.getBoundingClientRect();
+    const x = bounds.left + bounds.width / 2;
+    const y = bounds.top + bounds.height / 2;
+    const topmost = document.elementFromPoint(x, y);
+    return {
+      receivesCenter: topmost === button || button.contains(topmost),
+      x,
+      y
+    };
+  });
+  expect(center.receivesCenter).toBe(true);
+
+  await page.touchscreen.tap(center.x, center.y);
+  const lockConfirmation = page.getByRole("dialog", {
+    name: "Lock remote writes?"
+  });
+  await expect(lockConfirmation).toBeVisible();
+  expect(lock.lockRequests()).toHaveLength(0);
+  await lockConfirmation.getByRole("button", { name: "Cancel" }).click();
+  await expect(lockConfirmation).toBeHidden();
+  await expect(sheet.getByText("Device revoked", { exact: true })).toBeVisible();
+
+  await expectPrivateFreeSurface(page);
   await expectCleanBrowser(page, diagnostics);
 });
 
