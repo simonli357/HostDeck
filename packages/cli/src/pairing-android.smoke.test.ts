@@ -6405,6 +6405,7 @@ async function runProductionDashboardUiSequence(
   await runPhysicalEventDiagnostic(
     input,
     capture,
+    "backward",
     "Earlier activity unavailable",
     "Replay boundary",
     "Content truncated",
@@ -6413,6 +6414,7 @@ async function runProductionDashboardUiSequence(
   await runPhysicalEventDiagnostic(
     input,
     capture,
+    "forward",
     "Physical dashboard event complete",
     "Message event",
     "Bounded event summary",
@@ -6421,6 +6423,7 @@ async function runProductionDashboardUiSequence(
   await runPhysicalEventDiagnostic(
     input,
     capture,
+    "forward",
     "Sensitive turn detail was redacted at projection time.",
     "Turn event",
     "Content redacted",
@@ -6645,6 +6648,7 @@ async function closePhysicalDialog(description: string): Promise<void> {
 async function runPhysicalEventDiagnostic(
   input: ProductionUiEntryInput,
   capture: PhysicalDashboardCapture,
+  direction: AndroidVerticalRevealDirection,
   timelineLabel: string,
   heading: string,
   limitation: string,
@@ -6652,6 +6656,7 @@ async function runPhysicalEventDiagnostic(
 ): Promise<void> {
   const target = await revealPhysicalEventDiagnosticTarget(
     timelineLabel,
+    direction,
     30_000,
     `Physical event row ${timelineLabel} had no unobscured diagnostic action.`
   );
@@ -6674,6 +6679,7 @@ async function runPhysicalEventDiagnostic(
 
 async function revealPhysicalEventDiagnosticTarget(
   timelineLabel: string,
+  direction: AndroidVerticalRevealDirection,
   timeoutMs: number,
   message: string
 ): Promise<PhysicalEventDiagnosticTarget> {
@@ -6694,7 +6700,7 @@ async function revealPhysicalEventDiagnosticTarget(
       found = selectPhysicalEventDiagnosticTarget(nodes, timelineLabel);
       if (found !== null) return true;
       if (swipeCount < 4) {
-        swipeAndroidViewportAbovePhysicalSessionControls(nodes);
+        swipeAndroidViewportAbovePhysicalSessionControls(nodes, direction);
         swipeCount += 1;
         await new Promise((resolve) => setTimeout(resolve, 350));
       }
@@ -6702,7 +6708,7 @@ async function revealPhysicalEventDiagnosticTarget(
     }, timeoutMs, message);
   } catch {
     throw new Error(
-      `${message} (swipes=${swipeCount};states=${observations.join(" -> ") || "none"}).`
+      `${message} (direction=${direction};swipes=${swipeCount};states=${observations.join(" -> ") || "none"}).`
     );
   }
   requireCondition(found !== null, message);
