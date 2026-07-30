@@ -231,6 +231,10 @@ const physicalSessionControlDescriptions = Object.freeze([
 ]);
 const physicalEventActionMaxDistancePx = 480;
 const physicalSessionOverlayGapPx = 24;
+const physicalApprovalConfirmationTitle = "Approve elevated request?";
+const physicalApprovalConfirmationReason =
+  "Continue the bounded release validation on the selected device.";
+const physicalApprovalConfirmationAction = "Approve once";
 const physicalPromptTurnId = "turn-physical-prompt-001";
 const physicalPromptText = "FE020_android_line_one\nFE020_android_line_two";
 const physicalGoalObjective = "Complete_FE090_device_acceptance";
@@ -1341,12 +1345,111 @@ describe("physical Android phone-driver protocol", () => {
     expect(revealSummary).toContain("normalized=1;contains=1;cancel=0/0/0:none");
     expect(revealSummary).toContain("page=0,180,720,1100;eligible=yes");
     expect(revealSummary).toContain(
-      "focused=1:350,1100,700,1180,click"
+      "focused=1:350,1100,700,1180,click,t0,d0"
     );
     expect(revealSummary).toContain(
-      "clickable=2:20,200,300,260,click|350,1100,700,1180,click"
+      "clickable=2:20,200,300,260,click,t0,d1|350,1100,700,1180,click,t0,d0"
     );
     expect(revealSummary).not.toContain("Approve once");
+    const confirmationContext = Object.freeze([
+      Object.freeze({
+        bounds: Object.freeze({ bottom: 380, left: 30, right: 500, top: 320 }),
+        className: "android.view.View",
+        clickable: false,
+        description: "",
+        resourceId: "",
+        text: physicalApprovalConfirmationTitle
+      }),
+      Object.freeze({
+        bounds: Object.freeze({ bottom: 780, left: 200, right: 680, top: 700 }),
+        className: "android.view.View",
+        clickable: false,
+        description: "",
+        resourceId: "",
+        text: physicalApprovalConfirmationReason
+      })
+    ]);
+    const confirmationTitle = confirmationContext[0];
+    requireCondition(
+      confirmationTitle !== undefined,
+      "Physical approval confirmation fixture was incomplete."
+    );
+    const unrelatedAction = Object.freeze({
+      bounds: Object.freeze({ bottom: 980, left: 30, right: 690, top: 900 }),
+      className: "android.widget.Button",
+      clickable: true,
+      description: "",
+      resourceId: "",
+      text: ""
+    });
+    const anonymousCancel = Object.freeze({
+      ...unrelatedAction,
+      bounds: Object.freeze({ bottom: 1180, left: 30, right: 588, top: 1100 })
+    });
+    const anonymousApprove = Object.freeze({
+      ...unrelatedAction,
+      bounds: Object.freeze({ bottom: 1180, left: 590, right: 690, top: 1100 })
+    });
+    const pageNodes = nodes.filter((node) => !node.clickable);
+    const anonymousConfirmation = Object.freeze([
+      ...pageNodes,
+      ...confirmationContext,
+      unrelatedAction,
+      anonymousCancel,
+      anonymousApprove
+    ]);
+    expect(
+      selectPhysicalApprovalConfirmationAction(anonymousConfirmation)
+    ).toBe(anonymousApprove);
+    expect(
+      selectPhysicalApprovalConfirmationAction([
+        ...pageNodes,
+        ...confirmationContext,
+        Object.freeze({
+          ...anonymousApprove,
+          description: physicalApprovalConfirmationAction
+        })
+      ])
+    ).toEqual(expect.objectContaining({
+      description: physicalApprovalConfirmationAction
+    }));
+    expect(
+      selectPhysicalApprovalConfirmationAction(
+        anonymousConfirmation.filter(
+          (node) => node.text !== physicalApprovalConfirmationReason
+        )
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalApprovalConfirmationAction(
+        anonymousConfirmation.filter((node) => node !== anonymousApprove)
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalApprovalConfirmationAction([
+        ...anonymousConfirmation,
+        Object.freeze({ ...confirmationTitle })
+      ])
+    ).toBeNull();
+    expect(
+      selectPhysicalApprovalConfirmationAction([
+        ...anonymousConfirmation,
+        Object.freeze({
+          ...anonymousApprove,
+          bounds: Object.freeze({
+            ...anonymousApprove.bounds,
+            left: 620,
+            right: 660
+          })
+        })
+      ])
+    ).toBeNull();
+    expect(
+      selectPhysicalApprovalConfirmationAction([
+        ...anonymousConfirmation.filter((node) => node !== anonymousApprove),
+        Object.freeze({ ...anonymousApprove, text: "Unexpected action" })
+      ])
+    ).toBeNull();
     expect(() =>
       parseAndroidUiNodes(
         `<hierarchy><node text="${selectedPairingFragmentPrefix}secret" ` +
@@ -6503,24 +6606,19 @@ async function runPhysicalApprovalControl(
     review,
     async () =>
       (await readAndroidUiNodes()).some(
-        (node) => node.text === "Approve elevated request?"
+        (node) => node.text === physicalApprovalConfirmationTitle
       ),
     "Physical elevated approval confirmation did not open."
   );
   await waitForAndroidUiText(
-    "Continue the bounded release validation on the selected device.",
+    physicalApprovalConfirmationReason,
     30_000,
     "Physical approval confirmation omitted its reason."
   );
   await capture("fe090-08-approval-confirmation.png");
-  const approve = await revealAndroidUiNode(
-    "semantic",
-    "Approve once",
-    "forward",
+  const approve = await waitForPhysicalApprovalConfirmationAction(
     30_000,
-    "Physical approval confirmation action was unavailable.",
-    "fully_visible",
-    true
+    "Physical approval confirmation action was unavailable."
   );
   measure(approve, "approve-once");
   await tapAndroidNodeOnceAndWait(
@@ -8479,6 +8577,13 @@ function androidUiNodeGeometry(node: AndroidUiNode): string {
   );
 }
 
+function privateFreeAndroidUiNodeGeometry(node: AndroidUiNode): string {
+  return (
+    `${androidUiNodeGeometry(node)},` +
+    `t${node.text === "" ? "0" : "1"},d${node.description === "" ? "0" : "1"}`
+  );
+}
+
 function physicalRegionGeometry(region: PhysicalScreenshotRegion): string {
   return `${region.left},${region.top},${region.width},${region.height}`;
 }
@@ -9206,6 +9311,43 @@ async function revealAndroidUiNode(
   return found;
 }
 
+async function waitForPhysicalApprovalConfirmationAction(
+  timeoutMs: number,
+  message: string
+): Promise<AndroidUiNode> {
+  let found: AndroidUiNode | null = null;
+  const observations: string[] = [];
+  try {
+    await waitFor(async () => {
+      const nodes = await readAndroidUiNodes();
+      found = selectPhysicalApprovalConfirmationAction(nodes);
+      const observation =
+        `${androidUiRevealGeometrySummary(
+          nodes,
+          "semantic",
+          physicalApprovalConfirmationAction,
+          "fully_visible",
+          true
+        )};footer=${found === null ? "blocked" : androidUiNodeGeometry(found)}`;
+      if (
+        observations.at(-1) !== observation &&
+        observations.length < 6
+      ) {
+        observations.push(observation);
+      }
+      return found !== null;
+    }, timeoutMs, message);
+  } catch {
+    throw new Error(
+      `${message} (states=${
+        observations.length === 0 ? "none" : observations.join("||")
+      }).`
+    );
+  }
+  requireCondition(found !== null, message);
+  return found;
+}
+
 function swipeAndroidViewport(
   nodes: readonly AndroidUiNode[],
   direction: AndroidVerticalRevealDirection
@@ -9350,6 +9492,93 @@ function selectAndroidUiNodeForReveal(
   return node;
 }
 
+function selectPhysicalApprovalConfirmationAction(
+  nodes: readonly AndroidUiNode[]
+): AndroidUiNode | null {
+  const contextLabels = [
+    physicalApprovalConfirmationTitle,
+    physicalApprovalConfirmationReason
+  ];
+  const contextNodes = contextLabels.map((label) =>
+    nodes.filter((node) => matchesAndroidUiNode(node, "semantic", label))
+  );
+  if (contextNodes.some((matches) => matches.length !== 1)) return null;
+
+  let page: PhysicalScreenshotRegion;
+  try {
+    page = selectChromePageViewport(nodes);
+  } catch {
+    return null;
+  }
+  if (
+    contextNodes.some(
+      (matches) =>
+        matches[0] === undefined ||
+        !androidUiNodeIsFullyInsideRegion(matches[0], page)
+    )
+  ) {
+    return null;
+  }
+
+  const semantic = selectAndroidUiNodeForReveal(
+    nodes,
+    "semantic",
+    physicalApprovalConfirmationAction,
+    "fully_visible",
+    true
+  );
+  if (semantic !== null) return semantic;
+
+  const pageClickables = nodes.filter(
+    (node) =>
+      node.clickable && androidUiNodeIsFullyInsideRegion(node, page)
+  );
+  if (pageClickables.length < 2) return null;
+  const footerTop = Math.max(...pageClickables.map((node) => node.bounds.top));
+  const footer = pageClickables
+    .filter(
+      (node) =>
+        Math.abs(node.bounds.top - footerTop) <= 8 &&
+        node.bounds.top >= page.top + Math.floor(page.height * 0.75)
+    )
+    .sort((left, right) => left.bounds.left - right.bounds.left);
+  if (footer.length !== 2) return null;
+  const cancel = footer[0];
+  const approve = footer[1];
+  if (
+    cancel === undefined ||
+    approve === undefined ||
+    [cancel, approve].some(
+      (node) =>
+        node.text !== "" ||
+        node.description !== "" ||
+        androidUiNodeWidth(node) < 44 ||
+        androidUiNodeHeight(node) < 44
+    ) ||
+    Math.abs(cancel.bounds.top - approve.bounds.top) > 8 ||
+    Math.abs(cancel.bounds.bottom - approve.bounds.bottom) > 8
+  ) {
+    return null;
+  }
+  const leftMargin = cancel.bounds.left - page.left;
+  const rightMargin = page.left + page.width - approve.bounds.right;
+  const seam = approve.bounds.left - cancel.bounds.right;
+  if (
+    leftMargin < 24 ||
+    rightMargin < 24 ||
+    leftMargin > page.width * 0.1 ||
+    rightMargin > page.width * 0.1 ||
+    Math.abs(leftMargin - rightMargin) > 16 ||
+    Math.abs(seam) > 8 ||
+    approve.bounds.left < page.left + Math.floor(page.width * 0.75) ||
+    Math.floor((approve.bounds.left + approve.bounds.right) / 2) <
+      page.left + Math.floor(page.width * 0.8)
+  ) {
+    return null;
+  }
+  return approve;
+}
+
 function androidUiRevealGeometrySummary(
   nodes: readonly AndroidUiNode[],
   field: AndroidUiNodeField,
@@ -9419,11 +9648,11 @@ function androidUiRevealGeometrySummary(
     `eligible=${eligible ? "yes" : "no"}`,
     `focused=${focused.length}:${focused
       .slice(-4)
-      .map(androidUiNodeGeometry)
+      .map(privateFreeAndroidUiNodeGeometry)
       .join("|") || "none"}`,
     `clickable=${clickables.length}:${clickables
       .slice(-6)
-      .map(androidUiNodeGeometry)
+      .map(privateFreeAndroidUiNodeGeometry)
       .join("|") || "none"}`
   ].join(";");
 }
