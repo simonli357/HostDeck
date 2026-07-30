@@ -6753,6 +6753,9 @@ async function runProductionDashboardUiSequence(
       controlSnapshot.calls.interrupt_turn === 1 &&
       controlSnapshot.calls.mutate_goal === 1 &&
       controlSnapshot.calls.respond_approval === 1 &&
+      controlSnapshot.calls.read_compact === 2 &&
+      controlSnapshot.calls.read_skills === 1 &&
+      controlSnapshot.calls.read_usage === 1 &&
       controlSnapshot.calls.select_model === 1 &&
       controlSnapshot.calls.select_plan === 1 &&
       controlSnapshot.calls.start_compact === 1 &&
@@ -7811,18 +7814,33 @@ async function runPhysicalSessionUtilities(
     true
   );
   measure(skills, "open-skills");
+  const skillsReadsBefore = physicalDashboardControlCallCount(
+    input.controls,
+    "read_skills"
+  );
+  requireCondition(
+    skillsReadsBefore === 0,
+    "Physical /skills had an unexpected prior read."
+  );
+  let skillsTransitionState = "unobserved";
   await tapAndroidNodeOnceAndWait(
     skills,
-    async () =>
-      findAndroidPromptEditor(await readAndroidUiNodes(), "Search skills") !==
-      null,
-    "Physical /skills did not render current skills."
+    async () => {
+      const nodes = await readAndroidUiNodes();
+      skillsTransitionState = physicalSkillsUiStateSummary(
+        nodes,
+        input.controls
+      );
+      return (
+        nodes.some((node) => node.text === "/skills") &&
+        physicalDashboardControlCallCount(input.controls, "read_skills") ===
+          skillsReadsBefore + 1
+      );
+    },
+    () =>
+      `Physical /skills did not enter its one-read surface (${skillsTransitionState}).`
   );
-  const search = await waitForAndroidPromptEditor(
-    "Search skills",
-    30_000,
-    "Physical Skills search was unavailable."
-  );
+  const search = await revealPhysicalSkillsSearch(input.controls);
   await tapAndroidNodeOnceAndWait(
     search,
     () => isAndroidKeyboardVisible(),
@@ -7848,6 +7866,97 @@ async function runPhysicalSessionUtilities(
   await capture("fe090-28-skills.png");
   await returnToPhysicalSessionUtilities();
   await closePhysicalDialog("Close session utilities");
+}
+
+async function revealPhysicalSkillsSearch(
+  controls: PhysicalDashboardControls
+): Promise<AndroidUiNode> {
+  let found: AndroidUiNode | null = null;
+  let swipeCount = 0;
+  const observations: string[] = [];
+  try {
+    await waitFor(async () => {
+      const nodes = await readAndroidUiNodes();
+      const observation = physicalSkillsUiStateSummary(nodes, controls);
+      if (observations.at(-1) !== observation && observations.length < 6) {
+        observations.push(observation);
+      }
+      found = findAndroidPromptEditor(nodes, "Search skills");
+      if (found !== null) return true;
+      if (swipeCount < 4) {
+        swipeAndroidViewport(nodes, "forward");
+        swipeCount += 1;
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      }
+      return false;
+    }, 30_000, "Physical Skills search was unavailable.");
+  } catch {
+    throw new Error(
+      `Physical Skills search was unavailable (swipes=${swipeCount};states=${
+        observations.length === 0 ? "none" : observations.join("||")
+      }).`
+    );
+  }
+  requireCondition(found !== null, "Physical Skills search was unavailable.");
+  return found;
+}
+
+function physicalSkillsUiStateSummary(
+  nodes: readonly AndroidUiNode[],
+  controls: PhysicalDashboardControls
+): string {
+  const labels = [
+    ["title", "/skills"],
+    ["loading", "Loading Skills"],
+    ["current", "Skills capture current"],
+    ["failure", "Skills could not be loaded"],
+    ["unavailable", "Skills unavailable"],
+    ["summary", "Skills summary"],
+    ["search", "Search skills"],
+    ["reported", "25 structured skills reported."]
+  ] as const;
+  const state = labels.map(([key, value]) => {
+    const matches = nodes.filter((node) =>
+      matchesAndroidUiNode(node, "semantic", value)
+    );
+    return `${key}=${matches.length}:${
+      matches[0] === undefined ? "none" : androidUiNodeGeometry(matches[0])
+    }`;
+  });
+  let pageEditors: readonly AndroidUiNode[] = [];
+  try {
+    const page = selectChromePageViewport(nodes);
+    pageEditors = nodes.filter(
+      (node) =>
+        node.className === androidEditTextClass &&
+        androidUiNodeIsFullyInsideRegion(node, page)
+    );
+  } catch {
+    // The bounded summary reports no page editor when Chrome geometry is invalid.
+  }
+  return [
+    `reads=${physicalDashboardControlCallCount(controls, "read_skills")}`,
+    ...state,
+    `editors=${pageEditors.length}:${
+      pageEditors
+        .slice(0, 2)
+        .map(privateFreeAndroidUiNodeGeometry)
+        .join("|") || "none"
+    }`
+  ].join(";");
+}
+
+function physicalDashboardControlCallCount(
+  controls: PhysicalDashboardControls,
+  name: string
+): number {
+  const count = controls.snapshot().calls[name];
+  requireCondition(
+    count === undefined ||
+      (Number.isSafeInteger(count) && count >= 0 && count <= 100),
+    "Physical dashboard control call count was invalid."
+  );
+  return count ?? 0;
 }
 
 async function returnToPhysicalSessionUtilities(): Promise<void> {
