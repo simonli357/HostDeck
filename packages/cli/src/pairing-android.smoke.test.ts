@@ -880,6 +880,97 @@ describe("physical Android phone-driver protocol", () => {
       x: 540
     });
 
+    const androidPresentationVariant = nodes.map((node) => {
+      if (node === title) {
+        return Object.freeze({
+          ...node,
+          className: "android.view.ViewGroup",
+          description: "Host & access",
+          resourceId: "web-generated-title-id"
+        });
+      }
+      if (node === back || node === close) {
+        return Object.freeze({
+          ...node,
+          resourceId: "web-generated-button-id",
+          text: node.description
+        });
+      }
+      return node;
+    });
+    expect(selectPhysicalHostAccessContentRegion(androidPresentationVariant)).toEqual({
+      height: 1_892,
+      left: 0,
+      top: 508,
+      width: 1_080
+    });
+
+    const observedPhoneGeometry = nodes.map((node) => {
+      if (node === title) {
+        return Object.freeze({
+          ...node,
+          bounds: Object.freeze({ bottom: 630, left: 191, right: 683, top: 560 })
+        });
+      }
+      if (node === back) {
+        return Object.freeze({
+          ...node,
+          bounds: Object.freeze({ bottom: 687, left: 45, right: 171, top: 560 })
+        });
+      }
+      if (node === close) {
+        return Object.freeze({
+          ...node,
+          bounds: Object.freeze({ bottom: 687, left: 908, right: 1_035, top: 560 })
+        });
+      }
+      if (node === lock) {
+        return Object.freeze({
+          ...node,
+          bounds: Object.freeze({ bottom: 751, left: 157, right: 1_029, top: 625 })
+        });
+      }
+      return node;
+    });
+    expect(
+      selectPhysicalHostAccessContentNode(
+        observedPhoneGeometry,
+        "text",
+        "Lock writes",
+        true
+      )
+    ).toBeNull();
+    expect(selectPhysicalHostAccessContentRegion(observedPhoneGeometry)).toEqual({
+      height: 1_689,
+      left: 0,
+      top: 711,
+      width: 1_080
+    });
+    expect(selectPhysicalHostAccessContentSwipe(observedPhoneGeometry, "backward")).toEqual({
+      endY: 1_994,
+      startY: 1_183,
+      x: 540
+    });
+    const revealedPhoneGeometry = observedPhoneGeometry.map((node) =>
+      node.text === "Lock writes"
+        ? Object.freeze({
+            ...node,
+            bounds: Object.freeze({ ...node.bounds, bottom: 861, top: 735 })
+          })
+        : node
+    );
+    const revealedPhoneLock = revealedPhoneGeometry.find(
+      (node) => node.text === "Lock writes"
+    );
+    expect(
+      selectPhysicalHostAccessContentNode(
+        revealedPhoneGeometry,
+        "text",
+        "Lock writes",
+        true
+      )
+    ).toBe(revealedPhoneLock);
+
     const visibleLock = Object.freeze({
       ...lock,
       bounds: Object.freeze({ ...lock.bounds, bottom: 658, top: 532 })
@@ -928,6 +1019,23 @@ describe("physical Android phone-driver protocol", () => {
     rejects(
       withVisibleLock.map((node) =>
         node === back ? Object.freeze({ ...node, clickable: false }) : node
+      )
+    );
+    rejects(
+      withVisibleLock.map((node) =>
+        node === close ? Object.freeze({ ...node, enabled: false }) : node
+      )
+    );
+    rejects(
+      withVisibleLock.map((node) =>
+        node === title ? Object.freeze({ ...node, clickable: true }) : node
+      )
+    );
+    rejects(
+      withVisibleLock.map((node) =>
+        node === title
+          ? Object.freeze({ ...node, description: "Unrelated sheet" })
+          : node
       )
     );
     rejects(
@@ -10683,7 +10791,7 @@ function selectPhysicalHostAccessContentRegion(
     title === undefined ||
     back === undefined ||
     close === undefined ||
-    !androidProductContextTextIsEligible(title, page) ||
+    !physicalHostAccessTitleIsEligible(title, page) ||
     !physicalHostAccessHeaderButtonIsEligible(back, page) ||
     !physicalHostAccessHeaderButtonIsEligible(close, page) ||
     !physicalHostAccessHeaderIsCoherent(title, back, close)
@@ -10703,17 +10811,34 @@ function selectPhysicalHostAccessContentRegion(
   });
 }
 
+function physicalHostAccessTitleIsEligible(
+  node: AndroidUiNode,
+  page: PhysicalScreenshotRegion
+): boolean {
+  return (
+    node.text === "Host & access" &&
+    (node.description === "" || node.description === "Host & access") &&
+    !node.clickable &&
+    node.enabled !== false &&
+    androidUiNodeWidth(node) >= 48 &&
+    androidUiNodeWidth(node) <= Math.floor(page.width * 0.8) &&
+    androidUiNodeHeight(node) >= 16 &&
+    androidUiNodeHeight(node) <= 160 &&
+    androidUiNodeIsFullyInsideRegion(node, page)
+  );
+}
+
 function physicalHostAccessHeaderButtonIsEligible(
   node: AndroidUiNode,
   page: PhysicalScreenshotRegion
 ): boolean {
   return (
-    node.text === "" &&
     node.clickable &&
     node.enabled !== false &&
-    node.resourceId === "" &&
     androidUiNodeWidth(node) >= 24 &&
+    androidUiNodeWidth(node) <= 256 &&
     androidUiNodeHeight(node) >= 24 &&
+    androidUiNodeHeight(node) <= 256 &&
     androidUiNodeIsFullyInsideRegion(node, page)
   );
 }
@@ -11634,9 +11759,38 @@ function physicalHostAccessContentSummary(
     `title=${titles.length}:${geometry(titles[0])}`,
     `back=${backs.length}:${geometry(backs[0])}`,
     `close=${closes.length}:${geometry(closes[0])}`,
+    `header=${physicalHostAccessHeaderSummary(nodes, titles[0], backs[0], closes[0])}`,
     `region=${region === null ? "blocked" : physicalRegionGeometry(region)}`,
     `selected=${selected === null ? "none" : androidUiNodeGeometry(selected)}`
   ].join(";");
+}
+
+function physicalHostAccessHeaderSummary(
+  nodes: readonly AndroidUiNode[],
+  title: AndroidUiNode | undefined,
+  back: AndroidUiNode | undefined,
+  close: AndroidUiNode | undefined
+): string {
+  let page: PhysicalScreenshotRegion;
+  try {
+    page = selectChromePageViewport(nodes);
+  } catch {
+    return "page-blocked";
+  }
+  return [
+    `p${physicalRegionGeometry(page)}`,
+    `t${title !== undefined && physicalHostAccessTitleIsEligible(title, page) ? "1" : "0"}`,
+    `b${back !== undefined && physicalHostAccessHeaderButtonIsEligible(back, page) ? "1" : "0"}`,
+    `c${close !== undefined && physicalHostAccessHeaderButtonIsEligible(close, page) ? "1" : "0"}`,
+    `g${
+      title !== undefined &&
+      back !== undefined &&
+      close !== undefined &&
+      physicalHostAccessHeaderIsCoherent(title, back, close)
+        ? "1"
+        : "0"
+    }`
+  ].join(",");
 }
 
 async function revealAndroidUiNode(
