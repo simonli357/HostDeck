@@ -235,6 +235,7 @@ const physicalApprovalConfirmationTitle = "Approve elevated request?";
 const physicalApprovalConfirmationReason =
   "Continue the bounded release validation on the selected device.";
 const physicalApprovalConfirmationAction = "Approve once";
+const physicalApprovalConfirmationStatus = "Approval confirmation open";
 const physicalPromptTurnId = "turn-physical-prompt-001";
 const physicalPromptText = "FE020_android_line_one\nFE020_android_line_two";
 const physicalGoalObjective = "Complete_FE090_device_acceptance";
@@ -1367,11 +1368,20 @@ describe("physical Android phone-driver protocol", () => {
         description: "",
         resourceId: "",
         text: physicalApprovalConfirmationReason
+      }),
+      Object.freeze({
+        bounds: Object.freeze({ bottom: 880, left: 30, right: 650, top: 820 }),
+        className: "android.view.View",
+        clickable: false,
+        description: "",
+        resourceId: "",
+        text: physicalApprovalConfirmationStatus
       })
     ]);
     const confirmationTitle = confirmationContext[0];
+    const confirmationReason = confirmationContext[1];
     requireCondition(
-      confirmationTitle !== undefined,
+      confirmationTitle !== undefined && confirmationReason !== undefined,
       "Physical approval confirmation fixture was incomplete."
     );
     const unrelatedAction = Object.freeze({
@@ -1381,6 +1391,10 @@ describe("physical Android phone-driver protocol", () => {
       description: "",
       resourceId: "",
       text: ""
+    });
+    const backgroundReason = Object.freeze({
+      ...confirmationReason,
+      bounds: Object.freeze({ bottom: 280, left: 200, right: 680, top: 200 })
     });
     const anonymousCancel = Object.freeze({
       ...unrelatedAction,
@@ -1394,6 +1408,7 @@ describe("physical Android phone-driver protocol", () => {
     const pageNodes = nodes.filter((node) => !node.clickable);
     const anonymousConfirmation = Object.freeze([
       ...pageNodes,
+      backgroundReason,
       ...confirmationContext,
       unrelatedAction,
       anonymousCancel,
@@ -6622,6 +6637,11 @@ async function runPhysicalApprovalControl(
     30_000,
     "Physical approval confirmation omitted its reason."
   );
+  await waitForAndroidUiText(
+    physicalApprovalConfirmationStatus,
+    30_000,
+    "Physical approval confirmation omitted its pending status."
+  );
   await capture("fe090-08-approval-confirmation.png");
   const approve = await waitForPhysicalApprovalConfirmationAction(
     30_000,
@@ -9335,7 +9355,8 @@ async function waitForPhysicalApprovalConfirmationAction(
           physicalApprovalConfirmationAction,
           "fully_visible",
           true
-        )};footer=${found === null ? "blocked" : androidUiNodeGeometry(found)}`;
+        )};context=${physicalApprovalConfirmationContextSummary(nodes)};` +
+        `footer=${found === null ? "blocked" : androidUiNodeGeometry(found)}`;
       if (
         observations.at(-1) !== observation &&
         observations.length < 6
@@ -9502,14 +9523,23 @@ function selectAndroidUiNodeForReveal(
 function selectPhysicalApprovalConfirmationAction(
   nodes: readonly AndroidUiNode[]
 ): AndroidUiNode | null {
-  const contextLabels = [
-    physicalApprovalConfirmationTitle,
-    physicalApprovalConfirmationReason
-  ];
-  const contextNodes = contextLabels.map((label) =>
-    nodes.filter((node) => matchesAndroidUiNode(node, "semantic", label))
+  const titleNodes = nodes.filter((node) =>
+    matchesAndroidUiNode(node, "semantic", physicalApprovalConfirmationTitle)
   );
-  if (contextNodes.some((matches) => matches.length !== 1)) return null;
+  const reasonNodes = nodes.filter((node) =>
+    matchesAndroidUiNode(node, "semantic", physicalApprovalConfirmationReason)
+  );
+  const statusNodes = nodes.filter((node) =>
+    matchesAndroidUiNode(node, "semantic", physicalApprovalConfirmationStatus)
+  );
+  if (
+    titleNodes.length !== 1 ||
+    reasonNodes.length < 1 ||
+    reasonNodes.length > 2 ||
+    statusNodes.length !== 1
+  ) {
+    return null;
+  }
 
   let page: PhysicalScreenshotRegion;
   try {
@@ -9517,15 +9547,23 @@ function selectPhysicalApprovalConfirmationAction(
   } catch {
     return null;
   }
+  const title = titleNodes[0];
+  const status = statusNodes[0];
   if (
-    contextNodes.some(
-      (matches) =>
-        matches[0] === undefined ||
-        !androidUiNodeIsFullyInsideRegion(matches[0], page)
-    )
+    title === undefined ||
+    status === undefined ||
+    !androidUiNodeIsFullyInsideRegion(title, page) ||
+    !androidUiNodeIsFullyInsideRegion(status, page)
   ) {
     return null;
   }
+  const modalReasons = reasonNodes.filter(
+    (node) =>
+      androidUiNodeIsFullyInsideRegion(node, page) &&
+      node.bounds.top >= title.bounds.bottom &&
+      node.bounds.bottom <= status.bounds.top
+  );
+  if (modalReasons.length !== 1) return null;
 
   const semantic = selectAndroidUiNodeForReveal(
     nodes,
@@ -9585,6 +9623,18 @@ function selectPhysicalApprovalConfirmationAction(
     return null;
   }
   return approve;
+}
+
+function physicalApprovalConfirmationContextSummary(
+  nodes: readonly AndroidUiNode[]
+): string {
+  const count = (value: string): number =>
+    nodes.filter((node) => matchesAndroidUiNode(node, "semantic", value)).length;
+  return [
+    count(physicalApprovalConfirmationTitle),
+    count(physicalApprovalConfirmationReason),
+    count(physicalApprovalConfirmationStatus)
+  ].join("/");
 }
 
 function androidUiRevealGeometrySummary(
