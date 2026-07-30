@@ -6953,20 +6953,45 @@ async function runPhysicalDetailFailureStates(
     "Physical Session Detail did not render not-found truth."
   );
   await capture("fe090-50-detail-not-found.png");
+  await waitFor(
+    () => input.prompt.subscribers.snapshot().active_subscribers === 0,
+    15_000,
+    "Physical not-found navigation retained the prior session stream."
+  );
+  const returnDetailReadsBefore = input.requestInspection.sessionDetailRequests;
+  const returnStreamRequestsBefore = input.requestInspection.sessionStreamRequests;
+  const returnOpenedBefore = input.prompt.subscribers.snapshot().opened_subscribers;
   openChromePath(
     input.externalOrigin,
     `/sessions/${physicalUiSessionId}`
   );
-  await waitForAndroidUiText(
-    "Ready to send",
-    45_000,
-    "Physical Session Detail did not recover after direct not-found navigation."
-  );
-  await waitFor(
-    () => input.prompt.subscribers.snapshot().active_subscribers === 1,
-    15_000,
-    "Physical Session Detail did not restore SSE after direct reload."
-  );
+  try {
+    await waitFor(
+      () =>
+        input.requestInspection.sessionDetailRequests ===
+          returnDetailReadsBefore + 1 &&
+        input.requestInspection.sessionStreamRequests ===
+          returnStreamRequestsBefore + 1 &&
+        input.prompt.subscribers.snapshot().opened_subscribers ===
+          returnOpenedBefore + 1 &&
+        input.prompt.subscribers.snapshot().active_subscribers === 1,
+      45_000,
+      "Physical Session Detail did not restore one fresh read and stream after not-found."
+    );
+    await waitForAndroidUiText(
+      "Ready to send",
+      30_000,
+      "Physical Session Detail did not recover after direct not-found navigation."
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Physical not-found recovery failed without an error object.";
+    throw new Error(`${message} ${physicalPromptStreamDiagnostic(input)}`, {
+      cause: error
+    });
+  }
 }
 
 async function runPhysicalApprovalControl(

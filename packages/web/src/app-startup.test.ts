@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   type BrowserAppStartupController,
+  bindBrowserAppPageLifecycle,
   createBrowserAppStartupController
 } from "./app-startup.js";
 import type { BrowserConnectionStateCoordinator } from "./connection-state.js";
@@ -221,6 +222,63 @@ describe("browser app startup controller", () => {
     expect(harness.close).toHaveBeenCalledTimes(1);
     expect(harness.startup.coordinator()).toBeNull();
   });
+
+  it("reloads a BFCache restoration after closing page-owned authority", async () => {
+    const harness = createHarness(pairedResult);
+    const target = new EventTarget();
+    const reload = vi.fn();
+    await settle();
+    harness.startup.continueToApp();
+    const unbind = bindBrowserAppPageLifecycle({
+      startup: harness.startup,
+      target,
+      reload
+    });
+
+    target.dispatchEvent(pageTransitionEvent("pageshow", false));
+    expect(reload).not.toHaveBeenCalled();
+    target.dispatchEvent(new Event("pagehide"));
+    expect(harness.close).toHaveBeenCalledTimes(1);
+    expect(harness.startup.snapshot().phase).toBe("closed");
+
+    target.dispatchEvent(pageTransitionEvent("pageshow", true));
+    target.dispatchEvent(pageTransitionEvent("pageshow", true));
+    expect(reload).toHaveBeenCalledTimes(1);
+
+    unbind();
+    unbind();
+    target.dispatchEvent(new Event("pagehide"));
+    target.dispatchEvent(pageTransitionEvent("pageshow", true));
+    expect(harness.close).toHaveBeenCalledTimes(1);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects malformed page lifecycle bindings", () => {
+    expect(() => bindBrowserAppPageLifecycle(null as never)).toThrow(TypeError);
+    expect(() =>
+      bindBrowserAppPageLifecycle({
+        startup: { close: vi.fn() },
+        target: {} as never,
+        reload: vi.fn()
+      })
+    ).toThrow(TypeError);
+
+    const removeEventListener = vi.fn();
+    expect(() =>
+      bindBrowserAppPageLifecycle({
+        startup: { close: vi.fn() },
+        target: {
+          addEventListener: vi.fn((type: string) => {
+            if (type === "pageshow") throw new Error("binding failed");
+          }),
+          removeEventListener
+        },
+        reload: vi.fn()
+      })
+    ).toThrow("binding failed");
+    expect(removeEventListener).toHaveBeenCalledTimes(1);
+    expect(removeEventListener.mock.calls[0]?.[0]).toBe("pagehide");
+  });
 });
 
 function createHarness(
@@ -284,4 +342,10 @@ function createDeferred<T>(): {
     resolve = innerResolve;
   });
   return { promise, resolve };
+}
+
+function pageTransitionEvent(type: "pageshow", persisted: boolean): Event {
+  const event = new Event(type);
+  Object.defineProperty(event, "persisted", { value: persisted });
+  return event;
 }

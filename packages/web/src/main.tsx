@@ -2,7 +2,10 @@ import "./zod-csp-runtime.js";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { HostDeckBrowserApp } from "./app-shell.js";
-import { createProductionBrowserAppStartup } from "./app-startup.js";
+import {
+  bindBrowserAppPageLifecycle,
+  createProductionBrowserAppStartup
+} from "./app-startup.js";
 import "./styles.css";
 
 const rootElement = document.getElementById("root");
@@ -12,7 +15,11 @@ if (!(rootElement instanceof HTMLElement)) {
 }
 
 const startup = createProductionBrowserAppStartup();
-globalThis.addEventListener("pagehide", () => startup.close(), { once: true });
+bindBrowserAppPageLifecycle({
+  startup,
+  target: globalThis,
+  reload: () => globalThis.location.reload()
+});
 
 createRoot(rootElement).render(
   <StrictMode>

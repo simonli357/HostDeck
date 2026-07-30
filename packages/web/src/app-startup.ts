@@ -61,6 +61,12 @@ export interface BrowserAppStartupController {
   readonly close: () => BrowserAppStartupSnapshot;
 }
 
+export interface BrowserAppPageLifecycleBindingOptions {
+  readonly startup: Pick<BrowserAppStartupController, "close">;
+  readonly target: Pick<EventTarget, "addEventListener" | "removeEventListener">;
+  readonly reload: () => void;
+}
+
 const optionKeys = ["bootstrapPairing", "createCoordinator", "reload"] as const;
 const coordinatorKeys = [
   "snapshot",
@@ -86,6 +92,57 @@ const reloadablePhases: readonly BrowserAppStartupPhase[] = Object.freeze([
   "paired_csrf_unavailable",
   "startup_failed"
 ]);
+
+export function bindBrowserAppPageLifecycle(
+  input: BrowserAppPageLifecycleBindingOptions
+): () => void {
+  if (
+    input === null ||
+    typeof input !== "object" ||
+    typeof input.startup?.close !== "function" ||
+    typeof input.target?.addEventListener !== "function" ||
+    typeof input.target?.removeEventListener !== "function" ||
+    typeof input.reload !== "function"
+  ) {
+    throw new TypeError("HostDeck browser page lifecycle binding is invalid.");
+  }
+  let active = true;
+  let reloadStarted = false;
+  const close = (): void => {
+    if (active) input.startup.close();
+  };
+  const restore = (event: Event): void => {
+    if (!active || reloadStarted || !isPersistedPageTransition(event)) return;
+    reloadStarted = true;
+    input.reload();
+  };
+  input.target.addEventListener("pagehide", close);
+  try {
+    input.target.addEventListener("pageshow", restore);
+  } catch (error) {
+    input.target.removeEventListener("pagehide", close);
+    throw error;
+  }
+  return () => {
+    if (!active) return;
+    active = false;
+    input.target.removeEventListener("pagehide", close);
+    input.target.removeEventListener("pageshow", restore);
+  };
+}
+
+function isPersistedPageTransition(event: Event): boolean {
+  let persisted: unknown;
+  try {
+    persisted = Reflect.get(event, "persisted");
+  } catch {
+    throw new TypeError("HostDeck browser page transition is invalid.");
+  }
+  if (persisted !== undefined && typeof persisted !== "boolean") {
+    throw new TypeError("HostDeck browser page transition is invalid.");
+  }
+  return persisted === true;
+}
 
 export function createBrowserAppStartupController(
   input: CreateBrowserAppStartupOptions
