@@ -155,6 +155,7 @@ describe("inline approval decisions", () => {
 
   it("shows exact elevated facts, sends nothing on cancel, and restores originating focus", async () => {
     const user = userEvent.setup();
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
     const entry = approval({ risk: "elevated" });
     const port = approvalPort({ read: async () => approvalList([entry]) });
     const controller = createController(port, context({ events: [approvalEvent()] }));
@@ -176,6 +177,7 @@ describe("inline approval decisions", () => {
         .getAttribute("aria-label")
     ).toBe("Approve once");
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" })));
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());

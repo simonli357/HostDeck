@@ -1449,11 +1449,23 @@ describe("physical Android phone-driver protocol", () => {
       bounds: Object.freeze({ bottom: 1180, left: 590, right: 690, top: 1100 }),
       description: "Opaque submit control"
     });
+    const closeConfirmation = Object.freeze({
+      ...unrelatedAction,
+      bounds: Object.freeze({ bottom: 380, left: 640, right: 690, top: 330 }),
+      description: "Close approval confirmation"
+    });
+    const riskMarker = Object.freeze({
+      ...confirmationReason,
+      bounds: Object.freeze({ bottom: 460, left: 30, right: 300, top: 400 }),
+      text: "Elevated risk"
+    });
     const pageNodes = nodes.filter((node) => !node.clickable);
     const anonymousConfirmation = Object.freeze([
       ...pageNodes,
       backgroundReason,
       ...confirmationContext,
+      closeConfirmation,
+      riskMarker,
       unrelatedAction,
       anonymousCancel,
       anonymousApprove
@@ -1464,7 +1476,8 @@ describe("physical Android phone-driver protocol", () => {
     expect(
       physicalApprovalConfirmationContextSummary(anonymousConfirmation)
     ).toBe(
-      "exact=1/2/1;status=1/1:30,820,650,880,static,t1,d0"
+      "exact=1/2/1;status=1/1:30,820,650,880,static,t1,d0;" +
+        "close=1:640,330,690,380,click,t0,d1;risk=1:30,400,300,460,static,t1,d0"
     );
     expect(
       physicalApprovalConfirmationContextSummary([
@@ -1479,7 +1492,8 @@ describe("physical Android phone-driver protocol", () => {
         })
       ])
     ).toBe(
-      "exact=1/2/0;status=0/1:30,820,650,880,static,t1,d0"
+      "exact=1/2/0;status=0/1:30,820,650,880,static,t1,d0;" +
+        "close=1:640,330,690,380,click,t0,d1;risk=1:30,400,300,460,static,t1,d0"
     );
     expect(
       selectPhysicalApprovalConfirmationAction([
@@ -9775,12 +9789,26 @@ function physicalApprovalConfirmationContextSummary(
     count(physicalApprovalConfirmationReason),
     count(physicalApprovalConfirmationStatus)
   ].join("/");
+  const observation = (value: string): string => {
+    const matches = nodes.filter((node) =>
+      matchesAndroidUiNode(node, "semantic", value)
+    );
+    return (
+      `${matches.length}:` +
+      `${matches
+        .slice(0, 2)
+        .map(privateFreeAndroidUiNodeGeometry)
+        .join("|") || "none"}`
+    );
+  };
   return (
     `exact=${exact};status=${normalizedStatus.length}/${containingStatus.length}:` +
     `${containingStatus
       .slice(0, 2)
       .map(privateFreeAndroidUiNodeGeometry)
       .join("|") || "none"}`
+    + `;close=${observation("Close approval confirmation")}`
+    + `;risk=${observation("Elevated risk")}`
   );
 }
 

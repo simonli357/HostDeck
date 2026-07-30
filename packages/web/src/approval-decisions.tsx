@@ -319,7 +319,7 @@ export function ApprovalConfirmationDialog({
             aria-describedby={`${targetDescriptionId} ${statusDescriptionId}`}
             onOpenAutoFocus={(event) => {
               event.preventDefault();
-              cancelRef.current?.focus();
+              cancelRef.current?.focus({ preventScroll: true });
             }}
             onEscapeKeyDown={(event) => {
               if (submitting) event.preventDefault();
