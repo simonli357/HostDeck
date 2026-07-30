@@ -266,6 +266,10 @@ const physicalEventActionMaxDistancePx = 480;
 const physicalSessionOverlayGapPx = 24;
 const physicalScreenshotRedactionInsetPx = 8;
 const physicalScreenshotRedactionRgba = Object.freeze([24, 28, 33, 255] as const);
+const physicalProductOriginLabelGroups = Object.freeze([
+  Object.freeze(["Origin"]),
+  Object.freeze(["Private address", "PRIVATE ADDRESS"])
+]);
 const physicalApprovalConfirmationTitle = "Approve elevated request?";
 const physicalApprovalConfirmationReason =
   "Continue the bounded release validation on the selected device.";
@@ -1951,9 +1955,9 @@ describe("physical Android phone-driver protocol", () => {
         'bounds="[60,440][240,480]" />' +
         `<node text="${externalOrigin}" content-desc="" class="android.view.View" ` +
         'bounds="[160,500][700,550]" />' +
-        '<node text="Private address" content-desc="" class="android.view.View" ' +
+        '<node text="PRIVATE ADDRESS" content-desc="" class="android.widget.TextView" ' +
         'bounds="[60,660][300,700]" />' +
-        `<node text="${externalOrigin}" content-desc="" class="android.view.View" ` +
+        `<node text="${externalOrigin}" content-desc="" class="android.widget.TextView" ` +
         'bounds="[160,720][700,770]" />' +
         '<node text="" content-desc="" class="android.view.ViewGroup" ' +
         `resource-id="${chromeToolbarResourceId}" bounds="[0,120][720,288]" />` +
@@ -9788,8 +9792,10 @@ function selectProductOriginScreenshotRedactions(
   requireCondition(privateNodes.length <= 2, failure);
   const labels = nodes.filter(
     (node) =>
-      (node.text === "Origin" || node.text === "Private address") &&
-      node.className === "android.view.View" &&
+      physicalProductOriginLabelGroups.some((group) =>
+        group.some((text) => node.text === text)
+      ) &&
+      androidUiNodeIsWebText(node) &&
       !node.clickable &&
       node.description === "" &&
       node.resourceId === "" &&
@@ -9799,7 +9805,7 @@ function selectProductOriginScreenshotRedactions(
   const redactions = privateNodes.map((node) => {
     requireCondition(
       node.text === origin.origin &&
-        node.className === "android.view.View" &&
+        androidUiNodeIsWebText(node) &&
         !node.clickable &&
         node.description === "" &&
         node.resourceId === "" &&
@@ -9847,11 +9853,13 @@ function privateProductOriginRedactionFailure(
   origin: URL,
   page: PhysicalScreenshotRegion
 ): string {
-  const labels = ["Origin", "Private address"].map((text, index) => {
-    const matches = nodes.filter((node) => node.text === text);
+  const labels = physicalProductOriginLabelGroups.map((group, index) => {
+    const matches = nodes.filter((node) =>
+      group.some((text) => node.text === text)
+    );
     const eligible = matches.filter(
       (node) =>
-        node.className === "android.view.View" &&
+        androidUiNodeIsWebText(node) &&
         !node.clickable &&
         node.description === "" &&
         node.resourceId === "" &&
@@ -9903,6 +9911,13 @@ function privateProductOriginRedactionFailure(
   return (
     "Physical production screenshot page viewport retained private browser material " +
     `(${safeDiagnostic}).`
+  );
+}
+
+function androidUiNodeIsWebText(node: AndroidUiNode): boolean {
+  return (
+    node.className === "android.view.View" ||
+    node.className === "android.widget.TextView"
   );
 }
 
