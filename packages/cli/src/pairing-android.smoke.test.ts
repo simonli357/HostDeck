@@ -209,6 +209,13 @@ const physicalDashboardEvidenceDirectory = join(
 const physicalUiSessionId = "sess_physical_pairing_ui";
 const physicalUiSessionName = "physical-pairing-review";
 const physicalUiThreadId = "thread-physical-pairing-ui";
+const physicalSessionControlDescriptions = Object.freeze([
+  `/model for ${physicalUiSessionName}`,
+  `/goal for ${physicalUiSessionName}`,
+  `/plan for ${physicalUiSessionName}`,
+  `More session utilities for ${physicalUiSessionName}`
+]);
+const physicalSessionOverlayGapPx = 24;
 const physicalPromptTurnId = "turn-physical-prompt-001";
 const physicalPromptText = "FE020_android_line_one\nFE020_android_line_two";
 const physicalGoalObjective = "Complete_FE090_device_acceptance";
@@ -487,6 +494,99 @@ describe("physical Android phone-driver protocol", () => {
             nodes
           )
     ).toBe(false);
+  });
+
+  it("admits event diagnostics only above the complete fixed control dock", () => {
+    const timelineLabel = "Sensitive turn detail was redacted at projection time.";
+    const controls = physicalSessionControlDescriptions
+      .map(
+        (description, index) =>
+          `<node text="" class="android.widget.Button" ` +
+          `content-desc="${description}" clickable="true" ` +
+          `bounds="[${index * 270},1760][${(index + 1) * 270},1900]" />`
+      )
+      .join("");
+    const nodes = parseAndroidUiNodes(
+      '<hierarchy><node text="" class="android.view.ViewGroup" ' +
+        `content-desc="" resource-id="${chromeToolbarResourceId}" ` +
+        'bounds="[0,80][1080,240]" />' +
+        '<node text="" class="android.widget.FrameLayout" ' +
+        `content-desc="" resource-id="${chromeCompositorResourceId}" ` +
+        'bounds="[0,80][1080,2400]" />' +
+        '<node text="" class="android.widget.Button" ' +
+        'content-desc="Back to Mission Control" clickable="true" ' +
+        'bounds="[0,250][160,390]" />' +
+        `<node text="${timelineLabel}" class="android.view.View" ` +
+        'content-desc="" bounds="[80,1200][820,1300]" />' +
+        '<node text="" class="android.widget.Button" ' +
+        'content-desc="View event details" clickable="true" ' +
+        'bounds="[900,1185][1040,1315]" />' +
+        controls +
+        '</hierarchy>'
+    );
+
+    const admitted = selectPhysicalEventDiagnosticTarget(nodes, timelineLabel);
+    expect(admitted?.action.description).toBe("View event details");
+    expect(admitted?.label.text).toBe(timelineLabel);
+    expect(selectPhysicalSessionContentSwipe(nodes)).toEqual({
+      endY: 784,
+      startY: 1418,
+      x: 540
+    });
+
+    const moveEventNode = (node: AndroidUiNode, top: number, bottom: number) =>
+      node.text === timelineLabel || node.description === "View event details"
+        ? Object.freeze({
+            ...node,
+            bounds: Object.freeze({ ...node.bounds, bottom, top })
+          })
+        : node;
+    expect(
+      selectPhysicalEventDiagnosticTarget(
+        nodes.map((node) => moveEventNode(node, 1880, 2010)),
+        timelineLabel
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalEventDiagnosticTarget(
+        nodes.map((node) => moveEventNode(node, 300, 420)),
+        timelineLabel
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalEventDiagnosticTarget(
+        nodes.filter(
+          (node) => node.description !== physicalSessionControlDescriptions[3]
+        ),
+        timelineLabel
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalEventDiagnosticTarget(
+        nodes.filter(
+          (node) => node.description !== "Back to Mission Control"
+        ),
+        timelineLabel
+      )
+    ).toBeNull();
+    const label = admitted?.label;
+    requireCondition(label !== undefined, "Event diagnostic fixture label was absent.");
+    expect(
+      selectPhysicalEventDiagnosticTarget(
+        [...nodes, Object.freeze({ ...label })],
+        timelineLabel
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalEventDiagnosticTarget(
+        nodes.map((node) =>
+          node.description === "View event details"
+            ? moveEventNode(node, 640, 770)
+            : node
+        ),
+        timelineLabel
+      )
+    ).toBeNull();
   });
 
   it("holds and resolves every deterministic dashboard control transition", async () => {
@@ -5291,6 +5391,11 @@ interface PhysicalScreenshotRegion {
   readonly width: number;
 }
 
+interface PhysicalEventDiagnosticTarget {
+  readonly action: AndroidUiNode;
+  readonly label: AndroidUiNode;
+}
+
 interface PngImage {
   readonly data: Buffer;
   readonly height: number;
@@ -5932,31 +6037,14 @@ async function runPhysicalEventDiagnostic(
   limitation: string,
   screenshot: string
 ): Promise<void> {
-  const label = await revealAndroidUiNode(
-    "text",
+  const target = await revealPhysicalEventDiagnosticTarget(
     timelineLabel,
-    "forward",
     30_000,
-    `Physical event row ${timelineLabel} was unavailable.`
-  );
-  const labelY = Math.floor((label.bounds.top + label.bounds.bottom) / 2);
-  const details = (await readAndroidUiNodes())
-    .filter((node) => node.description === "View event details")
-    .map((node) => ({
-      distance: Math.abs(
-        Math.floor((node.bounds.top + node.bounds.bottom) / 2) - labelY
-      ),
-      node
-    }))
-    .sort((left, right) => left.distance - right.distance);
-  const action = details[0];
-  requireCondition(
-    action !== undefined && action.distance <= 240,
-    `Physical event row ${timelineLabel} had no bounded diagnostic action.`
+    `Physical event row ${timelineLabel} had no unobscured diagnostic action.`
   );
   const readsBefore = input.requestInspection.sessionEventRequests;
   await tapAndroidNodeOnceAndWait(
-    action.node,
+    target.action,
     async () =>
       input.requestInspection.sessionEventRequests === readsBefore + 1 &&
       (await readAndroidUiNodes()).some((node) => node.text === heading),
@@ -5969,6 +6057,28 @@ async function runPhysicalEventDiagnostic(
   );
   await capture(screenshot);
   await closePhysicalDialog("Close event details");
+}
+
+async function revealPhysicalEventDiagnosticTarget(
+  timelineLabel: string,
+  timeoutMs: number,
+  message: string
+): Promise<PhysicalEventDiagnosticTarget> {
+  let found: PhysicalEventDiagnosticTarget | null = null;
+  let swipeCount = 0;
+  await waitFor(async () => {
+    const nodes = await readAndroidUiNodes();
+    found = selectPhysicalEventDiagnosticTarget(nodes, timelineLabel);
+    if (found !== null) return true;
+    if (swipeCount < 4) {
+      swipeAndroidViewportAbovePhysicalSessionControls(nodes);
+      swipeCount += 1;
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+    return false;
+  }, timeoutMs, message);
+  requireCondition(found !== null, message);
+  return found;
 }
 
 async function runPhysicalStreamRecovery(
@@ -7897,6 +8007,142 @@ function androidUiNodeIsFullyInsideChromePage(
     node.bounds.top >= region.top &&
     node.bounds.bottom <= region.top + region.height
   );
+}
+
+function selectPhysicalEventDiagnosticTarget(
+  nodes: readonly AndroidUiNode[],
+  timelineLabel: string
+): PhysicalEventDiagnosticTarget | null {
+  const labels = nodes.filter(
+    (node) => node.text === timelineLabel
+  );
+  if (labels.length !== 1) return null;
+  const label = labels[0];
+  if (label === undefined) return null;
+
+  const contentRegion = selectPhysicalSessionContentRegion(nodes);
+  if (contentRegion === null) return null;
+
+  const labelY = Math.floor((label.bounds.top + label.bounds.bottom) / 2);
+  const details = nodes
+    .filter(
+      (node) =>
+        node.description === "View event details" && node.clickable
+    )
+    .map((node) => ({
+      distance: Math.abs(
+        Math.floor((node.bounds.top + node.bounds.bottom) / 2) - labelY
+      ),
+      node
+    }))
+    .sort((left, right) => left.distance - right.distance);
+  const nearest = details[0];
+  if (
+    nearest === undefined ||
+    nearest.distance > 240 ||
+    details[1]?.distance === nearest.distance
+  ) {
+    return null;
+  }
+
+  const isUnobscured = (node: AndroidUiNode): boolean =>
+    node.bounds.left >= contentRegion.left &&
+    node.bounds.right <= contentRegion.left + contentRegion.width &&
+    node.bounds.top >= contentRegion.top &&
+    node.bounds.bottom <= contentRegion.top + contentRegion.height;
+  if (!isUnobscured(label) || !isUnobscured(nearest.node)) return null;
+  return Object.freeze({ action: nearest.node, label });
+}
+
+function selectPhysicalSessionControlDockTop(
+  nodes: readonly AndroidUiNode[]
+): number | null {
+  const dockControls = physicalSessionControlDescriptions.map((description) =>
+    nodes.filter((node) => node.description === description)
+  );
+  if (
+    dockControls.some(
+      (matches) => matches.length !== 1 || matches[0]?.clickable !== true
+    )
+  ) {
+    return null;
+  }
+  const controls = dockControls.flat();
+  const controlTops = controls.map((node) => node.bounds.top);
+  const dockTop = Math.min(...controlTops);
+  if (
+    !Number.isSafeInteger(dockTop) ||
+    Math.max(...controlTops) - dockTop > 64
+  ) {
+    return null;
+  }
+  return dockTop;
+}
+
+function selectPhysicalSessionContentRegion(
+  nodes: readonly AndroidUiNode[]
+): PhysicalScreenshotRegion | null {
+  const page = selectChromePageViewport(nodes);
+  const backButtons = nodes.filter(
+    (node) =>
+      node.description === "Back to Mission Control" && node.clickable
+  );
+  const dockTop = selectPhysicalSessionControlDockTop(nodes);
+  if (backButtons.length !== 1 || dockTop === null) return null;
+  const back = backButtons[0];
+  if (
+    back === undefined ||
+    !androidUiNodeIsFullyInsideChromePage(back, nodes)
+  ) {
+    return null;
+  }
+  const top = Math.max(
+    page.top,
+    back.bounds.bottom + physicalSessionOverlayGapPx
+  );
+  const bottom = Math.min(
+    page.top + page.height,
+    dockTop - physicalSessionOverlayGapPx
+  );
+  if (bottom - top < 320) return null;
+  return Object.freeze({
+    height: bottom - top,
+    left: page.left,
+    top,
+    width: page.width
+  });
+}
+
+function swipeAndroidViewportAbovePhysicalSessionControls(
+  nodes: readonly AndroidUiNode[]
+): void {
+  const gesture = selectPhysicalSessionContentSwipe(nodes);
+  requireCondition(
+    gesture !== null,
+    "Physical session-control dock left no bounded page swipe lane."
+  );
+  adb([
+    "shell",
+    "input",
+    "swipe",
+    String(gesture.x),
+    String(gesture.startY),
+    String(gesture.x),
+    String(gesture.endY),
+    "350"
+  ]);
+}
+
+function selectPhysicalSessionContentSwipe(
+  nodes: readonly AndroidUiNode[]
+): Readonly<{ readonly endY: number; readonly startY: number; readonly x: number }> | null {
+  const region = selectPhysicalSessionContentRegion(nodes);
+  if (region === null) return null;
+  return Object.freeze({
+    endY: region.top + Math.floor(region.height * 0.28),
+    startY: region.top + Math.floor(region.height * 0.76),
+    x: region.left + Math.floor(region.width / 2)
+  });
 }
 
 function androidNodeIntersectsRegion(
