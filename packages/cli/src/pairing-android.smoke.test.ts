@@ -1479,6 +1479,24 @@ describe("physical Android phone-driver protocol", () => {
       "exact=1/2/1;status=1/1:30,820,650,880,static,t1,d0;" +
         "close=1:640,330,690,380,click,t0,d1;risk=1:30,400,300,460,static,t1,d0"
     );
+    expect(physicalApprovalConfirmationTitleIsOpen([confirmationTitle])).toBe(
+      true
+    );
+    expect(
+      physicalApprovalConfirmationTitleIsOpen([
+        Object.freeze({
+          ...confirmationTitle,
+          description: physicalApprovalConfirmationTitle,
+          text: ""
+        })
+      ])
+    ).toBe(true);
+    expect(
+      physicalApprovalConfirmationTitleIsOpen([
+        confirmationTitle,
+        Object.freeze({ ...confirmationTitle })
+      ])
+    ).toBe(false);
     expect(
       physicalApprovalConfirmationContextSummary([
         ...anonymousConfirmation.filter(
@@ -6795,7 +6813,7 @@ async function runPhysicalApprovalControl(
   capture: PhysicalDashboardCapture,
   measure: PhysicalDashboardMeasure
 ): Promise<void> {
-  const review = await revealPhysicalSessionContentNode(
+  await revealPhysicalSessionContentNode(
     "text",
     "Review & approve",
     "forward",
@@ -6818,16 +6836,50 @@ async function runPhysicalApprovalControl(
     30_000,
     "Physical pending approval omitted elevated risk."
   );
-  measure(review, "review-approval");
-  await capture("fe090-04-approval-pending.png");
-  await tapAndroidNodeOnceAndWait(
-    review,
-    async () =>
-      (await readAndroidUiNodes()).some(
-        (node) => node.text === physicalApprovalConfirmationTitle
-      ),
-    "Physical elevated approval confirmation did not open."
+  await waitForPhysicalSessionWriteReady(
+    input,
+    "Physical approval row did not retain stable current write authority."
   );
+  await revealPhysicalSessionContentNode(
+    "text",
+    "Review & approve",
+    "forward",
+    30_000,
+    "Physical pending approval action moved outside the safe session region.",
+    true
+  );
+  await capture("fe090-04-approval-pending.png");
+  const review = selectPhysicalSessionContentNode(
+    await readAndroidUiNodes(),
+    "text",
+    "Review & approve",
+    true
+  );
+  requireCondition(
+    review !== null,
+    "Physical pending approval action was not current immediately before its one tap."
+  );
+  measure(review, "review-approval");
+  try {
+    await tapAndroidNodeOnceAndWait(
+      review,
+      async () =>
+        physicalApprovalConfirmationTitleIsOpen(await readAndroidUiNodes()),
+      "Physical elevated approval confirmation did not open."
+    );
+  } catch (error) {
+    const context = physicalApprovalConfirmationContextSummary(
+      await readAndroidUiNodes()
+    );
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Physical approval transition failed without an error object."
+    throw new Error(
+      `${message} ${context};${physicalPromptStreamDiagnostic(input)}`,
+      { cause: error }
+    );
+  }
   await waitForAndroidUiText(
     physicalApprovalConfirmationReason,
     30_000,
@@ -9847,6 +9899,16 @@ function selectPhysicalApprovalConfirmationAction(
     true
   );
   return semantic;
+}
+
+function physicalApprovalConfirmationTitleIsOpen(
+  nodes: readonly AndroidUiNode[]
+): boolean {
+  return (
+    nodes.filter((node) =>
+      matchesAndroidUiNode(node, "semantic", physicalApprovalConfirmationTitle)
+    ).length === 1
+  );
 }
 
 function physicalApprovalConfirmationContextSummary(
