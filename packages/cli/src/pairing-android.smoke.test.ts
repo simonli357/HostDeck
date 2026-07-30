@@ -2054,6 +2054,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         hostStatusRequests: 0,
         hostStatusResponseStatuses: [],
         noReferrerApiRequests: 0,
+        planReadRequests: 0,
         promptNoReferrerRequests: 0,
         promptRequests: 0,
         promptResponseStatuses: [],
@@ -3294,6 +3295,7 @@ interface RequestInspection {
   hostStatusRequests: number;
   hostStatusResponseStatuses: number[];
   noReferrerApiRequests: number;
+  planReadRequests: number;
   promptNoReferrerRequests: number;
   promptRequests: number;
   promptResponseStatuses: number[];
@@ -4637,6 +4639,12 @@ function installRequestInspection(
     }
     if (request.url === "/api/v1/remote/disable") {
       inspection.remoteDisableRequests += 1;
+    }
+    if (
+      request.method === "GET" &&
+      request.url === `/api/v1/sessions/${physicalUiSessionId}/plan`
+    ) {
+      inspection.planReadRequests += 1;
     }
     if (
       request.url === "/api/v1/sessions" ||
@@ -7470,14 +7478,7 @@ async function runPhysicalPlanControl(
     "Physical /plan trigger was unavailable."
   );
   measure(trigger, "open-plan");
-  await tapAndroidNodeOnceAndWait(
-    trigger,
-    async () =>
-      (await readAndroidUiNodes()).some(
-        (node) => node.text === "Plan control ready"
-      ),
-    "Physical /plan did not render current mode truth."
-  );
+  await openPhysicalPlanSheet(trigger, input.requestInspection);
   await waitForAndroidUiText(
     "Default",
     30_000,
@@ -7525,16 +7526,34 @@ async function runPhysicalPlanControl(
     30_000,
     "Physical /plan trigger was unavailable after close."
   );
-  await tapAndroidNodeOnceAndWait(
-    reopened,
-    async () =>
+  await openPhysicalPlanSheet(reopened, input.requestInspection);
+  await capture("fe090-21-plan-applied.png");
+  await closePhysicalDialog("Close Plan control");
+}
+
+async function openPhysicalPlanSheet(
+  trigger: AndroidUiNode,
+  inspection: RequestInspection
+): Promise<void> {
+  const readsBefore = inspection.planReadRequests;
+  const triggerLabel = `/plan for ${physicalUiSessionName}`;
+  await performVerifiedAndroidTap({
+    initialTrigger: trigger,
+    triggerField: "description",
+    triggerValue: triggerLabel,
+    completed: async () =>
       (await readAndroidUiNodes()).some(
         (node) => node.text === "Plan control ready"
       ),
-    "Physical /plan did not reopen with current state."
+    completionFailureMessage: "Physical /plan did not render current mode truth.",
+    reacquireFailureMessage: "Physical /plan trigger could not be safely reacquired.",
+    terminalFailureMessage:
+      "Physical /plan remained closed after two bounded non-mutating taps."
+  });
+  requireCondition(
+    inspection.planReadRequests === readsBefore + 1,
+    "Physical /plan did not issue exactly one current-mode read."
   );
-  await capture("fe090-21-plan-applied.png");
-  await closePhysicalDialog("Close Plan control");
 }
 
 async function runPhysicalSessionUtilities(
@@ -9644,6 +9663,7 @@ function physicalPromptStreamDiagnostic(
     `(detail=${input.requestInspection.sessionDetailRequests};` +
     `missing_detail=${input.requestInspection.sessionMissingDetailRequests};` +
     `event_page=${input.requestInspection.sessionEventRequests};` +
+    `plan_read=${input.requestInspection.planReadRequests};` +
     `stream=${input.requestInspection.sessionStreamRequests};` +
     `statuses=${statuses.length === 0 ? "none" : statuses.join("|")};` +
     `active=${snapshot.active_subscribers};opened=${snapshot.opened_subscribers};` +
