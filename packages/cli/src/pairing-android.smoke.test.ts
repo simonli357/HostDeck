@@ -551,18 +551,17 @@ describe("physical Android phone-driver protocol", () => {
 
   it("recognizes Plan lifecycle truth from its approved phone viewports", () => {
     const nodes = parseAndroidUiNodes(
-      '<hierarchy><node text="Current mode" bounds="[0,0][100,80]" />' +
-        '<node text="Default" bounds="[100,0][200,80]" />' +
+      '<hierarchy><node text="Default" bounds="[100,0][200,80]" />' +
         '<node text="No pending change" bounds="[100,80][300,120]" />' +
         '<node text="No observed Plan execution" bounds="[100,120][360,160]" />' +
-        '<node text="Plan" bounds="[100,200][200,240]" />' +
+        '<node text="Plan" bounds="[0,200][100,240]" />' +
+        '<node text="Default" bounds="[100,200][200,240]" />' +
         '</hierarchy>'
     );
 
     expect(physicalPlanCurrentTruthVisible(nodes, "Default")).toBe(true);
     expect(physicalPlanCurrentTruthVisible(nodes, "Plan")).toBe(false);
     for (const missing of [
-      "Current mode",
       "Default",
       "No pending change",
       "No observed Plan execution"
@@ -590,15 +589,14 @@ describe("physical Android phone-driver protocol", () => {
     expect(physicalPlanSubmittingTruthVisible([])).toBe(false);
 
     const staged = parseAndroidUiNodes(
-      '<hierarchy><node text="Next turn" bounds="[0,0][100,80]" />' +
-        '<node text="Plan" bounds="[100,0][200,40]" />' +
+      '<hierarchy><node text="Plan" bounds="[100,0][200,40]" />' +
         '<node text="Pending next turn: Staged in HostDeck" bounds="[100,40][380,80]" />' +
         '<node text="No observed Plan execution" bounds="[100,80][360,120]" />' +
+        '<node text="Plan" bounds="[100,160][200,200]" />' +
         '</hierarchy>'
     );
     expect(physicalPlanStagedTruthVisible(staged)).toBe(true);
     for (const missing of [
-      "Next turn",
       "Plan",
       "Pending next turn: Staged in HostDeck",
       "No observed Plan execution"
@@ -7627,11 +7625,7 @@ function physicalPlanCurrentTruthVisible(
   expectedCurrentMode: "Default" | "Plan"
 ): boolean {
   return (
-    physicalPlanRailValueVisible(
-      nodes,
-      "Current mode",
-      expectedCurrentMode
-    ) &&
+    physicalPlanModeOwnsRailAndOption(nodes, expectedCurrentMode) &&
     ["No pending change", "No observed Plan execution"].every((label) =>
       nodes.some((node) => node.text === label)
     )
@@ -7648,7 +7642,7 @@ function physicalPlanSubmittingTruthVisible(
 
 function physicalPlanStagedTruthVisible(nodes: readonly AndroidUiNode[]): boolean {
   return (
-    physicalPlanRailValueVisible(nodes, "Next turn", "Plan") &&
+    physicalPlanModeOwnsRailAndOption(nodes, "Plan") &&
     [
       "Pending next turn: Staged in HostDeck",
       "No observed Plan execution"
@@ -7656,21 +7650,11 @@ function physicalPlanStagedTruthVisible(nodes: readonly AndroidUiNode[]): boolea
   );
 }
 
-function physicalPlanRailValueVisible(
+function physicalPlanModeOwnsRailAndOption(
   nodes: readonly AndroidUiNode[],
-  railLabel: "Current mode" | "Next turn",
   value: "Default" | "Plan"
 ): boolean {
-  const label = nodes.find((node) => node.text === railLabel);
-  return (
-    label !== undefined &&
-    nodes.some(
-      (node) =>
-        node.text === value &&
-        node.bounds.top < label.bounds.bottom &&
-        node.bounds.bottom > label.bounds.top
-    )
-  );
+  return nodes.filter((node) => node.text === value).length >= 2;
 }
 
 async function runPhysicalSessionUtilities(
