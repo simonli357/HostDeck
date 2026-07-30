@@ -6887,6 +6887,7 @@ async function runPhysicalApprovalControl(
   );
   await capture("fe090-05-approval-confirmation.png");
   const approve = await waitForPhysicalApprovalConfirmationAction(
+    input,
     30_000,
     "Physical approval confirmation action was unavailable."
   );
@@ -9665,6 +9666,10 @@ async function revealAndroidUiNode(
 }
 
 async function waitForPhysicalApprovalConfirmationAction(
+  input: Readonly<{
+    readonly prompt: PhysicalPromptRuntime;
+    readonly requestInspection: RequestInspection;
+  }>,
   timeoutMs: number,
   message: string
 ): Promise<AndroidUiNode> {
@@ -9695,7 +9700,7 @@ async function waitForPhysicalApprovalConfirmationAction(
     throw new Error(
       `${message} (states=${
         observations.length === 0 ? "none" : observations.join("||")
-      }).`
+      }). ${physicalPromptStreamDiagnostic(input)}`
     );
   }
   requireCondition(found !== null, message);

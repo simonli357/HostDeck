@@ -98,9 +98,11 @@ export function createHostDeckSseTransportRegistration(
         },
         async (request, reply) => {
           const after = resolveRequestedCursor(request);
+          const responseCloseController = new AbortController();
           const requestSignal = AbortSignal.any([
             request.signal,
-            hostDeckRequestDeviceAuthoritySignal(request)
+            hostDeckRequestDeviceAuthoritySignal(request),
+            responseCloseController.signal
           ]);
           let iterable: AsyncIterable<unknown>;
           try {
@@ -160,13 +162,21 @@ export function createHostDeckSseTransportRegistration(
           const finishFiniteResponse = () => {
             if (!reply.raw.destroyed && !reply.raw.writableEnded) reply.raw.end();
           };
+          const abortDisconnectedResponse = () => {
+            if (!reply.raw.writableEnded && !responseCloseController.signal.aborted) {
+              responseCloseController.abort(new Error("SSE response disconnected."));
+            }
+          };
           readable.once("error", captureReadableFailure);
           readable.once("end", finishFiniteResponse);
+          reply.raw.once("close", abortDisconnectedResponse);
           deliverySignal.addEventListener("abort", destroyReadable, { once: true });
           reply.sse.onClose(destroyReadable);
-          if (deliverySignal.aborted) destroyReadable();
 
           try {
+            // Source opening is deadline-bound; a committed SSE response owns its longer lifecycle.
+            reply.sse.sendHeaders();
+            reply.hijack();
             await reply.sse.send(readable);
             if (readableFailure !== undefined) {
               if (!deliverySignal.aborted && !(readableFailure instanceof HostDeckSseAbortError)) {
@@ -199,6 +209,7 @@ export function createHostDeckSseTransportRegistration(
             }
             if (reply.sse.isConnected) reply.sse.close();
           } finally {
+            reply.raw.removeListener("close", abortDisconnectedResponse);
             deliverySignal.removeEventListener("abort", destroyReadable);
             readable.removeListener("error", captureReadableFailure);
             readable.removeListener("end", finishFiniteResponse);

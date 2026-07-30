@@ -279,6 +279,98 @@ describe("bounded Fastify SSE transport", () => {
     }
   });
 
+  it("keeps a committed real HTTP stream alive beyond the finite request deadline", async () => {
+    const budget = resolveResourceBudget({
+      http_headers_timeout_ms: 1_000,
+      http_request_deadline_ms: 2_000,
+      http_request_receive_timeout_ms: 1_000,
+      protocol_mutation_timeout_ms: 1_000,
+      protocol_read_timeout_ms: 1_000,
+      protocol_start_timeout_ms: 1_000,
+      sse_heartbeat_interval_ms: 1_000
+    });
+    let sourceSignal: AbortSignal | undefined;
+    const failures: HostDeckSseFailureObservation[] = [];
+    const internal: HostDeckInternalErrorObservation[] = [];
+    const app = createSseApp(
+      {
+        open(input) {
+          sourceSignal = input.signal;
+          return (async function* () {
+            yield projectionEvent(1, "before-request-deadline");
+            await wait(2_200);
+            yield projectionEvent(2, "after-request-deadline");
+          })();
+        }
+      },
+      failures,
+      internal,
+      budget
+    );
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+
+    try {
+      const response = await withTestTimeout(
+        readSseResponse(`${address}/api/sessions/${sessionId}/events`),
+        4_000,
+        "long-lived real SSE response"
+      );
+      expect(response.status).toBe(200);
+      expect(response.body).toContain("id: 1");
+      expect(response.body).toContain(": heartbeat");
+      expect(response.body).toContain("id: 2");
+      expect(sourceSignal?.aborted).toBe(false);
+      expect(failures).toEqual([]);
+      expect(internal).toEqual([]);
+      expect(hostDeckFastifyResourceSnapshot(app)).toMatchObject({
+        aborted_requests: 0,
+        in_flight_requests: 0,
+        timed_out_requests: 0
+      });
+    } finally {
+      await app.close();
+    }
+  }, 6_000);
+
+  it("settles an already-closed source lifecycle before streaming any event", async () => {
+    const sourceController = new AbortController();
+    sourceController.abort(new Error("source closed before commit"));
+    const failures: HostDeckSseFailureObservation[] = [];
+    const internal: HostDeckInternalErrorObservation[] = [];
+    const app = createSseApp(
+      {
+        open: () =>
+          registerHostDeckSseSourceLifecycle({
+            iterable: finiteEvents([projectionEvent(1, "must-not-stream")]),
+            signal: sourceController.signal
+          })
+      },
+      failures,
+      internal
+    );
+    await app.ready();
+
+    try {
+      const response = await withTestTimeout(
+        injectHostDeckLoopback(app, {
+          method: "GET",
+          url: `/api/sessions/${sessionId}/events`,
+          headers: { accept: "text/event-stream" }
+        }),
+        1_000,
+        "already-closed SSE response"
+      );
+      expect(response.statusCode).toBe(200);
+      expect(response.headers["content-type"]).toBe("text/event-stream");
+      expect(response.body).toBe("");
+      expect(failures).toEqual([]);
+      expect(internal).toEqual([]);
+      expect(hostDeckFastifyResourceSnapshot(app).in_flight_requests).toBe(0);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("ends a real HTTP response when a finite source completes naturally", async () => {
     let finalized = false;
     const app = createSseApp(
