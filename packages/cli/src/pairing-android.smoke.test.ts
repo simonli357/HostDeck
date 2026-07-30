@@ -263,6 +263,7 @@ const physicalSessionControlDescriptions = Object.freeze([
   `More session utilities for ${physicalUiSessionName}`
 ]);
 const physicalEventActionMaxDistancePx = 480;
+const physicalHostAccessHeaderGapPx = 24;
 const physicalSessionOverlayGapPx = 24;
 const physicalScreenshotRedactionInsetPx = 8;
 const physicalScreenshotRedactionRgba = Object.freeze([24, 28, 33, 255] as const);
@@ -812,6 +813,133 @@ describe("physical Android phone-driver protocol", () => {
         timelineLabel
       )
     ).toBeNull();
+  });
+
+  it("admits Host actions only below the complete Session Actions header", () => {
+    const nodes = parseAndroidUiNodes(
+      '<hierarchy><node text="" class="android.view.ViewGroup" ' +
+        `content-desc="" resource-id="${chromeToolbarResourceId}" ` +
+        'bounds="[0,80][1080,240]" />' +
+        '<node text="" class="android.widget.FrameLayout" ' +
+        `content-desc="" resource-id="${chromeCompositorResourceId}" ` +
+        'bounds="[0,80][1080,2400]" />' +
+        '<node text="" class="android.widget.Button" ' +
+        'content-desc="Back to session actions" clickable="true" enabled="true" ' +
+        'bounds="[40,360][164,484]" />' +
+        '<node text="Host &amp; access" class="android.view.View" ' +
+        'content-desc="" bounds="[190,370][720,450]" />' +
+        '<node text="" class="android.widget.Button" ' +
+        'content-desc="Close session actions" clickable="true" enabled="true" ' +
+        'bounds="[916,360][1040,484]" />' +
+        '<node text="Lock writes" class="android.widget.Button" content-desc="" ' +
+        'clickable="true" enabled="true" bounds="[157,440][1029,566]" />' +
+        '</hierarchy>'
+    );
+    const lock = nodes.find((node) => node.text === "Lock writes");
+    const title = nodes.find((node) => node.text === "Host & access");
+    const back = nodes.find(
+      (node) => node.description === "Back to session actions"
+    );
+    const close = nodes.find(
+      (node) => node.description === "Close session actions"
+    );
+    requireCondition(
+      lock !== undefined &&
+        title !== undefined &&
+        back !== undefined &&
+        close !== undefined,
+      "Host action geometry fixture was incomplete."
+    );
+
+    expect(
+      selectAndroidUiNodeForReveal(
+        nodes,
+        "text",
+        "Lock writes",
+        "fully_visible",
+        true
+      )
+    ).toBe(lock);
+    expect(
+      selectPhysicalHostAccessContentNode(
+        nodes,
+        "text",
+        "Lock writes",
+        true
+      )
+    ).toBeNull();
+    expect(selectPhysicalHostAccessContentRegion(nodes)).toEqual({
+      height: 1_892,
+      left: 0,
+      top: 508,
+      width: 1_080
+    });
+    expect(selectPhysicalHostAccessContentSwipe(nodes, "backward")).toEqual({
+      endY: 1_945,
+      startY: 1_037,
+      x: 540
+    });
+
+    const visibleLock = Object.freeze({
+      ...lock,
+      bounds: Object.freeze({ ...lock.bounds, bottom: 658, top: 532 })
+    });
+    const withVisibleLock = nodes.map((node) =>
+      node === lock ? visibleLock : node
+    );
+    expect(
+      selectPhysicalHostAccessContentNode(
+        withVisibleLock,
+        "text",
+        "Lock writes",
+        true
+      )
+    ).toBe(visibleLock);
+
+    const rejects = (candidateNodes: readonly AndroidUiNode[]) => {
+      expect(
+        selectPhysicalHostAccessContentNode(
+          candidateNodes,
+          "text",
+          "Lock writes",
+          true
+        )
+      ).toBeNull();
+    };
+    rejects(withVisibleLock.filter((node) => node !== title));
+    rejects(withVisibleLock.filter((node) => node !== back));
+    rejects(withVisibleLock.filter((node) => node !== close));
+    rejects([...withVisibleLock, Object.freeze({ ...title })]);
+    rejects([...withVisibleLock, Object.freeze({ ...visibleLock })]);
+    rejects(
+      withVisibleLock.map((node) =>
+        node === visibleLock
+          ? Object.freeze({ ...node, clickable: false })
+          : node
+      )
+    );
+    rejects(
+      withVisibleLock.map((node) =>
+        node === visibleLock
+          ? Object.freeze({ ...node, enabled: false })
+          : node
+      )
+    );
+    rejects(
+      withVisibleLock.map((node) =>
+        node === back ? Object.freeze({ ...node, clickable: false }) : node
+      )
+    );
+    rejects(
+      withVisibleLock.map((node) =>
+        node === visibleLock
+          ? Object.freeze({
+              ...node,
+              bounds: Object.freeze({ ...node.bounds, bottom: 2_440, top: 2_314 })
+            })
+          : node
+      )
+    );
   });
 
   it("holds exactly one armed reconnect request until explicit release", async () => {
@@ -8977,13 +9105,12 @@ async function runPhysicalHostAccessControls(
     lockAuditsBefore === 0,
     "Physical Host-lock entry started with an unexpected lock audit."
   );
-  const lock = await revealAndroidUiNode(
+  const lock = await revealPhysicalHostAccessContentNode(
     "text",
     "Lock writes",
-    "forward",
+    "backward",
     30_000,
     "Physical Host and access lock action was unavailable.",
-    "fully_visible",
     true
   );
   measure(lock, "lock-writes");
@@ -9001,11 +9128,10 @@ async function runPhysicalHostAccessControls(
       "Physical host-lock entry could not reacquire one current enabled action.",
     selectReacquiredTrigger: (nodes) =>
       countPhysicalAuditRows(input.db, "lock") === lockAuditsBefore
-        ? selectAndroidUiNodeForReveal(
+        ? selectPhysicalHostAccessContentNode(
             nodes,
             "text",
             "Lock writes",
-            "fully_visible",
             true
           )
         : null,
@@ -10527,6 +10653,150 @@ function physicalRegionGeometry(region: PhysicalScreenshotRegion): string {
   return `${region.left},${region.top},${region.width},${region.height}`;
 }
 
+function selectPhysicalHostAccessContentRegion(
+  nodes: readonly AndroidUiNode[]
+): PhysicalScreenshotRegion | null {
+  let page: PhysicalScreenshotRegion;
+  try {
+    page = selectChromePageViewport(nodes);
+  } catch {
+    return null;
+  }
+  const titles = nodes.filter((node) => node.text === "Host & access");
+  const backButtons = nodes.filter(
+    (node) => node.description === "Back to session actions"
+  );
+  const closeButtons = nodes.filter(
+    (node) => node.description === "Close session actions"
+  );
+  if (
+    titles.length !== 1 ||
+    backButtons.length !== 1 ||
+    closeButtons.length !== 1
+  ) {
+    return null;
+  }
+  const title = titles[0];
+  const back = backButtons[0];
+  const close = closeButtons[0];
+  if (
+    title === undefined ||
+    back === undefined ||
+    close === undefined ||
+    !androidProductContextTextIsEligible(title, page) ||
+    !physicalHostAccessHeaderButtonIsEligible(back, page) ||
+    !physicalHostAccessHeaderButtonIsEligible(close, page) ||
+    !physicalHostAccessHeaderIsCoherent(title, back, close)
+  ) {
+    return null;
+  }
+  const top =
+    Math.max(title.bounds.bottom, back.bounds.bottom, close.bounds.bottom) +
+    physicalHostAccessHeaderGapPx;
+  const bottom = page.top + page.height;
+  if (!Number.isSafeInteger(top) || bottom - top < 320) return null;
+  return Object.freeze({
+    height: bottom - top,
+    left: page.left,
+    top,
+    width: page.width
+  });
+}
+
+function physicalHostAccessHeaderButtonIsEligible(
+  node: AndroidUiNode,
+  page: PhysicalScreenshotRegion
+): boolean {
+  return (
+    node.text === "" &&
+    node.clickable &&
+    node.enabled !== false &&
+    node.resourceId === "" &&
+    androidUiNodeWidth(node) >= 24 &&
+    androidUiNodeHeight(node) >= 24 &&
+    androidUiNodeIsFullyInsideRegion(node, page)
+  );
+}
+
+function physicalHostAccessHeaderIsCoherent(
+  title: AndroidUiNode,
+  back: AndroidUiNode,
+  close: AndroidUiNode
+): boolean {
+  const centerX = (node: AndroidUiNode) =>
+    Math.floor((node.bounds.left + node.bounds.right) / 2);
+  const centerY = (node: AndroidUiNode) =>
+    Math.floor((node.bounds.top + node.bounds.bottom) / 2);
+  const centersY = [title, back, close].map(centerY);
+  return (
+    centerX(back) < centerX(title) &&
+    centerX(title) < centerX(close) &&
+    Math.max(...centersY) - Math.min(...centersY) <= 128 &&
+    Math.max(title.bounds.bottom, back.bounds.bottom, close.bounds.bottom) -
+      Math.min(title.bounds.top, back.bounds.top, close.bounds.top) <=
+      256
+  );
+}
+
+function selectPhysicalHostAccessContentNode(
+  nodes: readonly AndroidUiNode[],
+  field: AndroidUiNodeField,
+  value: string,
+  requireClickable: boolean
+): AndroidUiNode | null {
+  const matches = nodes.filter((node) =>
+    matchesAndroidUiNode(node, field, value)
+  );
+  if (matches.length !== 1) return null;
+  const node = matches[0];
+  if (
+    node === undefined ||
+    (requireClickable && (!node.clickable || node.enabled === false))
+  ) {
+    return null;
+  }
+  const region = selectPhysicalHostAccessContentRegion(nodes);
+  return region !== null && androidUiNodeIsFullyInsideRegion(node, region)
+    ? node
+    : null;
+}
+
+function selectPhysicalHostAccessContentSwipe(
+  nodes: readonly AndroidUiNode[],
+  direction: AndroidVerticalRevealDirection = "forward"
+): Readonly<{ readonly endY: number; readonly startY: number; readonly x: number }> | null {
+  const region = selectPhysicalHostAccessContentRegion(nodes);
+  if (region === null) return null;
+  const upperY = region.top + Math.floor(region.height * 0.28);
+  const lowerY = region.top + Math.floor(region.height * 0.76);
+  const [startY, endY] =
+    direction === "forward" ? [lowerY, upperY] : [upperY, lowerY];
+  return Object.freeze({
+    endY,
+    startY,
+    x: region.left + Math.floor(region.width / 2)
+  });
+}
+
+function swipePhysicalHostAccessContent(
+  nodes: readonly AndroidUiNode[],
+  direction: AndroidVerticalRevealDirection
+): boolean {
+  const gesture = selectPhysicalHostAccessContentSwipe(nodes, direction);
+  if (gesture === null) return false;
+  adb([
+    "shell",
+    "input",
+    "swipe",
+    String(gesture.x),
+    String(gesture.startY),
+    String(gesture.x),
+    String(gesture.endY),
+    "350"
+  ]);
+  return true;
+}
+
 function selectPhysicalSessionControlDockTop(
   nodes: readonly AndroidUiNode[]
 ): number | null {
@@ -11285,6 +11555,88 @@ async function revealPhysicalSessionContentNode(
   }, timeoutMs, message);
   requireCondition(found !== null, message);
   return found;
+}
+
+async function revealPhysicalHostAccessContentNode(
+  field: AndroidUiNodeField,
+  value: string,
+  direction: AndroidVerticalRevealDirection,
+  timeoutMs: number,
+  message: string,
+  requireClickable = false
+): Promise<AndroidUiNode> {
+  let found: AndroidUiNode | null = null;
+  let swipeCount = 0;
+  const observations: string[] = [];
+  try {
+    await waitFor(async () => {
+      const nodes = await readAndroidUiNodes();
+      found = selectPhysicalHostAccessContentNode(
+        nodes,
+        field,
+        value,
+        requireClickable
+      );
+      const observation = physicalHostAccessContentSummary(
+        nodes,
+        field,
+        value,
+        found
+      );
+      if (
+        observations.at(-1) !== observation &&
+        observations.length < 6
+      ) {
+        observations.push(observation);
+      }
+      if (found !== null) return true;
+      if (
+        swipeCount < 4 &&
+        swipePhysicalHostAccessContent(nodes, direction)
+      ) {
+        swipeCount += 1;
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      }
+      return false;
+    }, timeoutMs, message);
+  } catch {
+    throw new Error(
+      `${message} (swipes=${swipeCount};states=${
+        observations.length === 0 ? "none" : observations.join("||")
+      }).`
+    );
+  }
+  requireCondition(found !== null, message);
+  return found;
+}
+
+function physicalHostAccessContentSummary(
+  nodes: readonly AndroidUiNode[],
+  field: AndroidUiNodeField,
+  value: string,
+  selected: AndroidUiNode | null
+): string {
+  const geometry = (node: AndroidUiNode | undefined) =>
+    node === undefined ? "none" : androidUiNodeGeometry(node);
+  const matches = nodes.filter((node) =>
+    matchesAndroidUiNode(node, field, value)
+  );
+  const titles = nodes.filter((node) => node.text === "Host & access");
+  const backs = nodes.filter(
+    (node) => node.description === "Back to session actions"
+  );
+  const closes = nodes.filter(
+    (node) => node.description === "Close session actions"
+  );
+  const region = selectPhysicalHostAccessContentRegion(nodes);
+  return [
+    `target=${matches.length}:${geometry(matches[0])}`,
+    `title=${titles.length}:${geometry(titles[0])}`,
+    `back=${backs.length}:${geometry(backs[0])}`,
+    `close=${closes.length}:${geometry(closes[0])}`,
+    `region=${region === null ? "blocked" : physicalRegionGeometry(region)}`,
+    `selected=${selected === null ? "none" : androidUiNodeGeometry(selected)}`
+  ].join(";");
 }
 
 async function revealAndroidUiNode(
