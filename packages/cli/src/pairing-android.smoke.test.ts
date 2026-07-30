@@ -536,6 +536,28 @@ describe("physical Android phone-driver protocol", () => {
       startY: 1418,
       x: 540
     });
+    const collapsedToolbar = nodes.map((node) =>
+      node.resourceId === chromeToolbarResourceId
+        ? Object.freeze({
+            ...node,
+            bounds: Object.freeze({ ...node.bounds, bottom: 80, top: 80 })
+          })
+        : node
+    );
+    expect(() => selectChromePageViewport(collapsedToolbar)).toThrow(
+      "Chrome viewport geometry was invalid"
+    );
+    expect(
+      selectPhysicalEventDiagnosticTarget(collapsedToolbar, timelineLabel)
+        ?.action.description
+    ).toBe("View event details");
+    const collapsedSummary = physicalEventDiagnosticGeometrySummary(
+      collapsedToolbar,
+      timelineLabel
+    );
+    expect(collapsedSummary).toContain("target=admitted");
+    expect(collapsedSummary).toContain("page=invalid");
+    expect(collapsedSummary).not.toContain("content=unavailable");
 
     const moveEventNode = (node: AndroidUiNode, top: number, bottom: number) =>
       node.text === timelineLabel || node.description === "View event details"
@@ -8014,11 +8036,53 @@ function selectChromePageViewport(
   return region;
 }
 
+function selectChromeCompositorRegion(
+  nodes: readonly AndroidUiNode[]
+): PhysicalScreenshotRegion {
+  const compositorNodes = nodes.filter(
+    (node) => node.resourceId === chromeCompositorResourceId
+  );
+  requireCondition(
+    compositorNodes.length === 1,
+    "Physical interaction could not isolate the Chrome compositor."
+  );
+  const compositor = compositorNodes[0];
+  requireCondition(
+    compositor !== undefined,
+    "Physical interaction Chrome compositor was absent."
+  );
+  const region = Object.freeze({
+    height: compositor.bounds.bottom - compositor.bounds.top,
+    left: compositor.bounds.left,
+    top: compositor.bounds.top,
+    width: compositor.bounds.right - compositor.bounds.left
+  });
+  requireCondition(
+    region.left >= 0 &&
+      region.top >= 0 &&
+      region.width >= 320 &&
+      region.width <= 4_096 &&
+      region.height >= 480 &&
+      region.height <= 8_192,
+    "Physical interaction Chrome compositor was outside bounded dimensions."
+  );
+  return region;
+}
+
 function androidUiNodeIsFullyInsideChromePage(
   node: AndroidUiNode,
   nodes: readonly AndroidUiNode[]
 ): boolean {
-  const region = selectChromePageViewport(nodes);
+  return androidUiNodeIsFullyInsideRegion(
+    node,
+    selectChromePageViewport(nodes)
+  );
+}
+
+function androidUiNodeIsFullyInsideRegion(
+  node: AndroidUiNode,
+  region: PhysicalScreenshotRegion
+): boolean {
   return (
     node.bounds.left >= region.left &&
     node.bounds.right <= region.left + region.width &&
@@ -8112,6 +8176,10 @@ function physicalEventDiagnosticGeometrySummary(
   try {
     const selectedPage = selectChromePageViewport(nodes);
     page = physicalRegionGeometry(selectedPage);
+  } catch {
+    // The bounded summary reports invalid screenshot geometry without raw hierarchy data.
+  }
+  try {
     const selectedContent = selectPhysicalSessionContentRegion(nodes);
     if (selectedContent !== null) content = physicalRegionGeometry(selectedContent);
     const selectedGesture = selectPhysicalSessionContentSwipe(nodes);
@@ -8123,7 +8191,7 @@ function physicalEventDiagnosticGeometrySummary(
         ? "blocked"
         : "admitted";
   } catch {
-    // The bounded summary reports invalid geometry without retaining raw hierarchy data.
+    // The bounded summary reports invalid interaction geometry without raw hierarchy data.
   }
   return [
     `target=${target}`,
@@ -8176,7 +8244,7 @@ function selectPhysicalSessionControlDockTop(
 function selectPhysicalSessionContentRegion(
   nodes: readonly AndroidUiNode[]
 ): PhysicalScreenshotRegion | null {
-  const page = selectChromePageViewport(nodes);
+  const compositor = selectChromeCompositorRegion(nodes);
   const backButtons = nodes.filter(
     (node) =>
       node.description === "Back to Mission Control" && node.clickable
@@ -8186,24 +8254,24 @@ function selectPhysicalSessionContentRegion(
   const back = backButtons[0];
   if (
     back === undefined ||
-    !androidUiNodeIsFullyInsideChromePage(back, nodes)
+    !androidUiNodeIsFullyInsideRegion(back, compositor)
   ) {
     return null;
   }
   const top = Math.max(
-    page.top,
+    compositor.top,
     back.bounds.bottom + physicalSessionOverlayGapPx
   );
   const bottom = Math.min(
-    page.top + page.height,
+    compositor.top + compositor.height,
     dockTop - physicalSessionOverlayGapPx
   );
   if (bottom - top < 320) return null;
   return Object.freeze({
     height: bottom - top,
-    left: page.left,
+    left: compositor.left,
     top,
-    width: page.width
+    width: compositor.width
   });
 }
 
