@@ -528,6 +528,9 @@ describe("physical Android phone-driver protocol", () => {
     const admitted = selectPhysicalEventDiagnosticTarget(nodes, timelineLabel);
     expect(admitted?.action.description).toBe("View event details");
     expect(admitted?.label.text).toBe(timelineLabel);
+    expect(physicalEventDiagnosticGeometrySummary(nodes, timelineLabel)).toContain(
+      "target=admitted"
+    );
     expect(selectPhysicalSessionContentSwipe(nodes)).toEqual({
       endY: 784,
       startY: 1418,
@@ -6066,17 +6069,32 @@ async function revealPhysicalEventDiagnosticTarget(
 ): Promise<PhysicalEventDiagnosticTarget> {
   let found: PhysicalEventDiagnosticTarget | null = null;
   let swipeCount = 0;
-  await waitFor(async () => {
-    const nodes = await readAndroidUiNodes();
-    found = selectPhysicalEventDiagnosticTarget(nodes, timelineLabel);
-    if (found !== null) return true;
-    if (swipeCount < 4) {
-      swipeAndroidViewportAbovePhysicalSessionControls(nodes);
-      swipeCount += 1;
-      await new Promise((resolve) => setTimeout(resolve, 350));
-    }
-    return false;
-  }, timeoutMs, message);
+  const observations: string[] = [];
+  try {
+    await waitFor(async () => {
+      const nodes = await readAndroidUiNodes();
+      const observation = physicalEventDiagnosticGeometrySummary(
+        nodes,
+        timelineLabel
+      );
+      if (observations.at(-1) !== observation) {
+        observations.push(observation);
+        if (observations.length > 6) observations.shift();
+      }
+      found = selectPhysicalEventDiagnosticTarget(nodes, timelineLabel);
+      if (found !== null) return true;
+      if (swipeCount < 4) {
+        swipeAndroidViewportAbovePhysicalSessionControls(nodes);
+        swipeCount += 1;
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      }
+      return false;
+    }, timeoutMs, message);
+  } catch {
+    throw new Error(
+      `${message} (swipes=${swipeCount};states=${observations.join(" -> ") || "none"}).`
+    );
+  }
   requireCondition(found !== null, message);
   return found;
 }
@@ -8052,6 +8070,82 @@ function selectPhysicalEventDiagnosticTarget(
     node.bounds.bottom <= contentRegion.top + contentRegion.height;
   if (!isUnobscured(label) || !isUnobscured(nearest.node)) return null;
   return Object.freeze({ action: nearest.node, label });
+}
+
+function physicalEventDiagnosticGeometrySummary(
+  nodes: readonly AndroidUiNode[],
+  timelineLabel: string
+): string {
+  const labels = nodes.filter((node) => node.text === timelineLabel);
+  const label = labels[0];
+  const labelY =
+    label === undefined
+      ? null
+      : Math.floor((label.bounds.top + label.bounds.bottom) / 2);
+  const actions = nodes
+    .filter((node) => node.description === "View event details")
+    .map((node) => ({
+      distance:
+        labelY === null
+          ? null
+          : Math.abs(
+              Math.floor((node.bounds.top + node.bounds.bottom) / 2) - labelY
+            ),
+      node
+    }))
+    .sort(
+      (left, right) =>
+        (left.distance ?? Number.MAX_SAFE_INTEGER) -
+        (right.distance ?? Number.MAX_SAFE_INTEGER)
+    );
+  const back = nodes.filter(
+    (node) => node.description === "Back to Mission Control"
+  );
+  const controls = physicalSessionControlDescriptions.map((description) => {
+    const matches = nodes.filter((node) => node.description === description);
+    return `${matches.length}:${matches[0] === undefined ? "none" : androidUiNodeGeometry(matches[0])}`;
+  });
+  let page = "invalid";
+  let content = "unavailable";
+  let gesture = "unavailable";
+  let target = "invalid";
+  try {
+    const selectedPage = selectChromePageViewport(nodes);
+    page = physicalRegionGeometry(selectedPage);
+    const selectedContent = selectPhysicalSessionContentRegion(nodes);
+    if (selectedContent !== null) content = physicalRegionGeometry(selectedContent);
+    const selectedGesture = selectPhysicalSessionContentSwipe(nodes);
+    if (selectedGesture !== null) {
+      gesture = `${selectedGesture.x},${selectedGesture.startY},${selectedGesture.endY}`;
+    }
+    target =
+      selectPhysicalEventDiagnosticTarget(nodes, timelineLabel) === null
+        ? "blocked"
+        : "admitted";
+  } catch {
+    // The bounded summary reports invalid geometry without retaining raw hierarchy data.
+  }
+  return [
+    `target=${target}`,
+    `label=${labels.length}:${label === undefined ? "none" : androidUiNodeGeometry(label)}`,
+    `action=${actions.length}:${actions[0] === undefined ? "none" : `${actions[0].distance ?? "na"},${androidUiNodeGeometry(actions[0].node)}`}`,
+    `back=${back.length}:${back[0] === undefined ? "none" : androidUiNodeGeometry(back[0])}`,
+    `controls=${controls.join("|")}`,
+    `page=${page}`,
+    `content=${content}`,
+    `gesture=${gesture}`
+  ].join(";");
+}
+
+function androidUiNodeGeometry(node: AndroidUiNode): string {
+  return (
+    `${node.bounds.left},${node.bounds.top},${node.bounds.right},${node.bounds.bottom},` +
+    `${node.clickable ? "click" : "static"}`
+  );
+}
+
+function physicalRegionGeometry(region: PhysicalScreenshotRegion): string {
+  return `${region.left},${region.top},${region.width},${region.height}`;
 }
 
 function selectPhysicalSessionControlDockTop(
