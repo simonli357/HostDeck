@@ -6722,18 +6722,28 @@ async function runPhysicalStreamRecovery(
   const requestsBefore = input.requestInspection.sessionStreamRequests;
   const openedBefore = input.prompt.subscribers.snapshot().opened_subscribers;
   input.prompt.disconnectForRecovery();
-  await waitForAndroidUiText(
-    "Activity stream reconnecting",
-    30_000,
-    "Physical Session Detail did not render reconnecting stream truth."
-  );
-  await waitFor(
-    () =>
-      input.prompt.streamFailureCount === 1 &&
-      input.requestInspection.sessionStreamRequests >= requestsBefore + 1,
-    30_000,
-    "Physical Session Detail did not record its bounded stream failure."
-  );
+  try {
+    await waitForAndroidUiText(
+      "Session activity is reconnecting.",
+      30_000,
+      "Physical Session Detail did not expose reconnecting write-block truth."
+    );
+    await waitFor(
+      () =>
+        input.prompt.streamFailureCount === 1 &&
+        input.requestInspection.sessionStreamRequests >= requestsBefore + 1,
+      30_000,
+      "Physical Session Detail did not record its bounded stream failure."
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Physical Session Detail recovery failed without an error object.";
+    throw new Error(`${message} ${physicalPromptStreamDiagnostic(input)}`, {
+      cause: error
+    });
+  }
   await capture("fe090-48-stream-reconnecting.png");
   await waitFor(
     () =>
