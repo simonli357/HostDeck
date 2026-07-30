@@ -175,6 +175,20 @@ const androidMobileDataStateCommand =
 const chromeCompositorResourceId =
   "com.android.chrome:id/compositor_view_holder";
 const chromeToolbarResourceId = "com.android.chrome:id/toolbar_container";
+const physicalAndroidChromeStopCommandPlan = Object.freeze([
+  Object.freeze([
+    "shell",
+    "input",
+    "keyevent",
+    "KEYCODE_HOME"
+  ] as const),
+  Object.freeze([
+    "shell",
+    "am",
+    "force-stop",
+    "com.android.chrome"
+  ] as const)
+] as const);
 const tailscaleDnsServer = "100.100.100.100";
 const physicalPageMaxBytes = defaultResourceBudget.cli_response_max_bytes;
 const chromeForegroundAdbArgs = [
@@ -1153,6 +1167,8 @@ describe("physical Android phone-driver protocol", () => {
         '<node text="" content-desc="Open Host and access" bounds="[620,80][720,180]" />' +
         '<node text="" content-desc="" class="android.widget.EditText" ' +
         'bounds="[20,200][700,320]" />' +
+        '<node text="" content-desc="" class="android.widget.Button" ' +
+        'clickable="true" bounds="[350,1100][700,1180]" />' +
         '<node text="" content-desc="" class="android.view.ViewGroup" ' +
         `resource-id="${chromeToolbarResourceId}" bounds="[0,80][720,180]" />` +
         '<node text="" content-desc="" class="android.widget.FrameLayout" ' +
@@ -1181,6 +1197,14 @@ describe("physical Android phone-driver protocol", () => {
         bounds: { bottom: 320, left: 20, right: 700, top: 200 },
         className: androidEditTextClass,
         clickable: false,
+        description: "",
+        resourceId: "",
+        text: ""
+      },
+      {
+        bounds: { bottom: 1180, left: 350, right: 700, top: 1100 },
+        className: "android.widget.Button",
+        clickable: true,
         description: "",
         resourceId: "",
         text: ""
@@ -1303,6 +1327,21 @@ describe("physical Android phone-driver protocol", () => {
         true
       )
     ).toBeNull();
+    const revealSummary = androidUiRevealGeometrySummary(
+      [...nodes, descriptionAction],
+      "semantic",
+      "Approve once",
+      "fully_visible",
+      true
+    );
+    expect(revealSummary).toContain(
+      "match=1;text=0;description=1;first=20,200,300,260,click"
+    );
+    expect(revealSummary).toContain("page=0,180,720,1100;eligible=yes");
+    expect(revealSummary).toContain(
+      "clickable=2:20,200,300,260,click|350,1100,700,1180,click"
+    );
+    expect(revealSummary).not.toContain("Approve once");
     expect(() =>
       parseAndroidUiNodes(
         `<hierarchy><node text="${selectedPairingFragmentPrefix}secret" ` +
@@ -1442,6 +1481,16 @@ describe("physical Android phone-driver protocol", () => {
       new Error("Physical cleanup could not restore Android mobile-data state.")
     );
     expect(JSON.stringify(errors)).not.toContain("private device output");
+  });
+
+  it("returns Home before force-stopping Chrome during physical cleanup", () => {
+    expect(physicalAndroidChromeStopCommandPlan).toEqual([
+      ["shell", "input", "keyevent", "KEYCODE_HOME"],
+      ["shell", "am", "force-stop", "com.android.chrome"]
+    ]);
+    expect(Object.isFrozen(physicalAndroidChromeStopCommandPlan)).toBe(true);
+    expect(Object.isFrozen(physicalAndroidChromeStopCommandPlan[0])).toBe(true);
+    expect(Object.isFrozen(physicalAndroidChromeStopCommandPlan[1])).toBe(true);
   });
 
   it("uses the authoritative Android keyboard request over stale view state", () => {
@@ -2506,13 +2555,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           assertSecretsAbsentFromDatabase(dbPath, secrets.values());
         }
         fallbackCleanup = null;
-        adb(["shell", "am", "force-stop", "com.android.chrome"]);
-        adb(["shell", "input", "keyevent", "KEYCODE_HOME"]);
-        await waitFor(
-          () => isChromeStopped(),
-          10_000,
-          "Physical acceptance retained the Android Chrome process."
-        );
+        await stopPhysicalAndroidChrome();
         if (requirePromptUiAcceptance || requireDashboardUiAcceptance) {
           await waitFor(
             () => !isAndroidKeyboardVisible(),
@@ -2660,15 +2703,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         }
         await collectPhysicalCleanupError(
           "Physical cleanup could not stop Android Chrome.",
-          async () => {
-            adb(["shell", "am", "force-stop", "com.android.chrome"]);
-            adb(["shell", "input", "keyevent", "KEYCODE_HOME"]);
-            await waitFor(
-              () => isChromeStopped(),
-              10_000,
-              "Physical cleanup retained Android Chrome."
-            );
-          },
+          () => stopPhysicalAndroidChrome(),
           cleanupErrors
         );
         if (display !== null) {
@@ -2783,6 +2818,11 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         await collectPhysicalCleanupError(
           "Physical cleanup retained an ADB application tunnel.",
           () => requireNoAdbApplicationTunnels(),
+          cleanupErrors
+        );
+        await collectPhysicalCleanupError(
+          "Physical cleanup could not prove settled Android Chrome absence.",
+          () => stopPhysicalAndroidChrome(),
           cleanupErrors
         );
         deviceForbiddenValues.clear();
@@ -5540,6 +5580,22 @@ function isChromeStopped(): boolean {
     result.stdout,
     result.stderr
   ) === "stopped";
+}
+
+async function stopPhysicalAndroidChrome(): Promise<void> {
+  adb(physicalAndroidChromeStopCommandPlan[0]);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  adb(physicalAndroidChromeStopCommandPlan[1]);
+  await waitFor(
+    () => isChromeStopped(),
+    10_000,
+    "Physical Android Chrome did not stop."
+  );
+  await new Promise((resolve) => setTimeout(resolve, 1_000));
+  requireCondition(
+    isChromeStopped(),
+    "Physical Android Chrome restarted during settled cleanup verification."
+  );
 }
 
 function readChromeProcessState(
@@ -8942,6 +8998,7 @@ function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
     if (
       text === "" &&
       description === "" &&
+      !clickable &&
       className !== androidEditTextClass &&
       resourceId !== chromeToolbarResourceId &&
       resourceId !== chromeCompositorResourceId
@@ -9091,23 +9148,45 @@ async function revealAndroidUiNode(
 ): Promise<AndroidUiNode> {
   let found: AndroidUiNode | null = null;
   let swipeCount = 0;
-  await waitFor(async () => {
-    const nodes = await readAndroidUiNodes();
-    found = selectAndroidUiNodeForReveal(
-      nodes,
-      field,
-      value,
-      visibility,
-      requireClickable
+  const observations: string[] = [];
+  try {
+    await waitFor(async () => {
+      const nodes = await readAndroidUiNodes();
+      const observation = androidUiRevealGeometrySummary(
+        nodes,
+        field,
+        value,
+        visibility,
+        requireClickable
+      );
+      if (
+        observations.at(-1) !== observation &&
+        observations.length < 6
+      ) {
+        observations.push(observation);
+      }
+      found = selectAndroidUiNodeForReveal(
+        nodes,
+        field,
+        value,
+        visibility,
+        requireClickable
+      );
+      if (found !== null) return true;
+      if (swipeCount < 4) {
+        swipeAndroidViewport(nodes, direction);
+        swipeCount += 1;
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      }
+      return false;
+    }, timeoutMs, message);
+  } catch {
+    throw new Error(
+      `${message} (swipes=${swipeCount};states=${
+        observations.length === 0 ? "none" : observations.join("||")
+      }).`
     );
-    if (found !== null) return true;
-    if (swipeCount < 4) {
-      swipeAndroidViewport(nodes, direction);
-      swipeCount += 1;
-      await new Promise((resolve) => setTimeout(resolve, 350));
-    }
-    return false;
-  }, timeoutMs, message);
+  }
   requireCondition(found !== null, message);
   return found;
 }
@@ -9254,6 +9333,55 @@ function selectAndroidUiNodeForReveal(
     return null;
   }
   return node;
+}
+
+function androidUiRevealGeometrySummary(
+  nodes: readonly AndroidUiNode[],
+  field: AndroidUiNodeField,
+  value: string,
+  visibility: AndroidUiNodeVisibility,
+  requireClickable: boolean
+): string {
+  const matches = nodes.filter((node) =>
+    matchesAndroidUiNode(node, field, value)
+  );
+  const first = matches[0];
+  const clickables = nodes
+    .filter((node) => node.clickable)
+    .sort(
+      (left, right) =>
+        left.bounds.top - right.bounds.top ||
+        left.bounds.left - right.bounds.left ||
+        left.bounds.bottom - right.bounds.bottom ||
+        left.bounds.right - right.bounds.right
+    );
+  let page = "invalid";
+  let eligible = false;
+  try {
+    page = physicalRegionGeometry(selectChromePageViewport(nodes));
+    eligible =
+      selectAndroidUiNodeForReveal(
+        nodes,
+        field,
+        value,
+        visibility,
+        requireClickable
+      ) !== null;
+  } catch {
+    // The bounded summary reports invalid geometry without raw hierarchy data.
+  }
+  return [
+    `match=${matches.length}`,
+    `text=${nodes.filter((node) => node.text === value).length}`,
+    `description=${nodes.filter((node) => node.description === value).length}`,
+    `first=${first === undefined ? "none" : androidUiNodeGeometry(first)}`,
+    `page=${page}`,
+    `eligible=${eligible ? "yes" : "no"}`,
+    `clickable=${clickables.length}:${clickables
+      .slice(-6)
+      .map(androidUiNodeGeometry)
+      .join("|") || "none"}`
+  ].join(";");
 }
 
 function androidUiNodesShareControlRegion(
