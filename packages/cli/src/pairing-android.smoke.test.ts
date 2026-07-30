@@ -215,6 +215,7 @@ const physicalSessionControlDescriptions = Object.freeze([
   `/plan for ${physicalUiSessionName}`,
   `More session utilities for ${physicalUiSessionName}`
 ]);
+const physicalEventActionMaxDistancePx = 480;
 const physicalSessionOverlayGapPx = 24;
 const physicalPromptTurnId = "turn-physical-prompt-001";
 const physicalPromptText = "FE020_android_line_one\nFE020_android_line_two";
@@ -516,17 +517,21 @@ describe("physical Android phone-driver protocol", () => {
         '<node text="" class="android.widget.Button" ' +
         'content-desc="Back to Mission Control" clickable="true" ' +
         'bounds="[0,250][160,390]" />' +
+        '<node text="" class="android.widget.Button" ' +
+        'content-desc="View event details" clickable="true" ' +
+        'bounds="[900,985][1040,1115]" />' +
         `<node text="${timelineLabel}" class="android.view.View" ` +
         'content-desc="" bounds="[80,1200][820,1300]" />' +
         '<node text="" class="android.widget.Button" ' +
         'content-desc="View event details" clickable="true" ' +
-        'bounds="[900,1185][1040,1315]" />' +
+        'bounds="[900,1310][1040,1430]" />' +
         controls +
         '</hierarchy>'
     );
 
     const admitted = selectPhysicalEventDiagnosticTarget(nodes, timelineLabel);
     expect(admitted?.action.description).toBe("View event details");
+    expect(admitted?.action.bounds.top).toBe(985);
     expect(admitted?.label.text).toBe(timelineLabel);
     expect(physicalEventDiagnosticGeometrySummary(nodes, timelineLabel)).toContain(
       "target=admitted"
@@ -569,6 +574,12 @@ describe("physical Android phone-driver protocol", () => {
     expect(
       selectPhysicalEventDiagnosticTarget(
         nodes.map((node) => moveEventNode(node, 1880, 2010)),
+        timelineLabel
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalEventDiagnosticTarget(
+        nodes.filter((node) => node !== admitted?.action),
         timelineLabel
       )
     ).toBeNull();
@@ -8101,28 +8112,37 @@ function selectPhysicalEventDiagnosticTarget(
   if (labels.length !== 1) return null;
   const label = labels[0];
   if (label === undefined) return null;
+  const labelIndex = nodes.indexOf(label);
+  if (labelIndex < 0) return null;
 
   const contentRegion = selectPhysicalSessionContentRegion(nodes);
   if (contentRegion === null) return null;
 
   const labelY = Math.floor((label.bounds.top + label.bounds.bottom) / 2);
-  const details = nodes
+  const precedingActions = nodes
+    .map((node, index) => ({ index, node }))
     .filter(
-      (node) =>
-        node.description === "View event details" && node.clickable
+      ({ index, node }) =>
+        index < labelIndex &&
+        node.description === "View event details" &&
+        node.clickable
     )
-    .map((node) => ({
+    .map(({ index, node }) => ({
       distance: Math.abs(
         Math.floor((node.bounds.top + node.bounds.bottom) / 2) - labelY
       ),
+      index,
       node
     }))
-    .sort((left, right) => left.distance - right.distance);
-  const nearest = details[0];
+    .filter(
+      ({ node }) =>
+        Math.floor((node.bounds.top + node.bounds.bottom) / 2) <= labelY
+    )
+    .sort((left, right) => right.index - left.index);
+  const owner = precedingActions[0];
   if (
-    nearest === undefined ||
-    nearest.distance > 240 ||
-    details[1]?.distance === nearest.distance
+    owner === undefined ||
+    owner.distance > physicalEventActionMaxDistancePx
   ) {
     return null;
   }
@@ -8132,8 +8152,8 @@ function selectPhysicalEventDiagnosticTarget(
     node.bounds.right <= contentRegion.left + contentRegion.width &&
     node.bounds.top >= contentRegion.top &&
     node.bounds.bottom <= contentRegion.top + contentRegion.height;
-  if (!isUnobscured(label) || !isUnobscured(nearest.node)) return null;
-  return Object.freeze({ action: nearest.node, label });
+  if (!isUnobscured(label) || !isUnobscured(owner.node)) return null;
+  return Object.freeze({ action: owner.node, label });
 }
 
 function physicalEventDiagnosticGeometrySummary(
@@ -8147,14 +8167,16 @@ function physicalEventDiagnosticGeometrySummary(
       ? null
       : Math.floor((label.bounds.top + label.bounds.bottom) / 2);
   const actions = nodes
-    .filter((node) => node.description === "View event details")
-    .map((node) => ({
+    .map((node, index) => ({ index, node }))
+    .filter(({ node }) => node.description === "View event details")
+    .map(({ index, node }) => ({
       distance:
         labelY === null
           ? null
           : Math.abs(
               Math.floor((node.bounds.top + node.bounds.bottom) / 2) - labelY
             ),
+      index,
       node
     }))
     .sort(
@@ -8172,6 +8194,7 @@ function physicalEventDiagnosticGeometrySummary(
   let page = "invalid";
   let content = "unavailable";
   let gesture = "unavailable";
+  let owner = "none";
   let target = "invalid";
   try {
     const selectedPage = selectChromePageViewport(nodes);
@@ -8186,17 +8209,20 @@ function physicalEventDiagnosticGeometrySummary(
     if (selectedGesture !== null) {
       gesture = `${selectedGesture.x},${selectedGesture.startY},${selectedGesture.endY}`;
     }
-    target =
-      selectPhysicalEventDiagnosticTarget(nodes, timelineLabel) === null
-        ? "blocked"
-        : "admitted";
+    const selectedTarget = selectPhysicalEventDiagnosticTarget(
+      nodes,
+      timelineLabel
+    );
+    target = selectedTarget === null ? "blocked" : "admitted";
+    if (selectedTarget !== null) owner = androidUiNodeGeometry(selectedTarget.action);
   } catch {
     // The bounded summary reports invalid interaction geometry without raw hierarchy data.
   }
   return [
     `target=${target}`,
     `label=${labels.length}:${label === undefined ? "none" : androidUiNodeGeometry(label)}`,
-    `action=${actions.length}:${actions[0] === undefined ? "none" : `${actions[0].distance ?? "na"},${androidUiNodeGeometry(actions[0].node)}`}`,
+    `action=${actions.length}:${actions[0] === undefined ? "none" : `${actions[0].index},${actions[0].distance ?? "na"},${androidUiNodeGeometry(actions[0].node)}`}`,
+    `owner=${owner}`,
     `back=${back.length}:${back[0] === undefined ? "none" : androidUiNodeGeometry(back[0])}`,
     `controls=${controls.join("|")}`,
     `page=${page}`,
