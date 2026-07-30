@@ -1472,7 +1472,7 @@ describe("physical Android phone-driver protocol", () => {
     ]);
     expect(
       selectPhysicalApprovalConfirmationAction(anonymousConfirmation)
-    ).toBe(anonymousApprove);
+    ).toBeNull();
     expect(
       physicalApprovalConfirmationContextSummary(anonymousConfirmation)
     ).toBe(
@@ -1516,13 +1516,21 @@ describe("physical Android phone-driver protocol", () => {
     ).toBeNull();
     expect(
       selectPhysicalApprovalConfirmationAction(
-        anonymousConfirmation.filter((node) => node !== anonymousApprove)
+        anonymousConfirmation.filter((node) => node !== confirmationTitle)
       )
     ).toBeNull();
     expect(
       selectPhysicalApprovalConfirmationAction([
-        ...anonymousConfirmation.filter((node) => node !== anonymousApprove),
-        Object.freeze({ ...anonymousApprove, description: "" })
+        ...pageNodes,
+        ...confirmationContext,
+        Object.freeze({
+          ...anonymousApprove,
+          description: physicalApprovalConfirmationAction
+        }),
+        Object.freeze({
+          ...anonymousCancel,
+          text: physicalApprovalConfirmationAction
+        })
       ])
     ).toBeNull();
     expect(
@@ -1533,23 +1541,81 @@ describe("physical Android phone-driver protocol", () => {
     ).toBeNull();
     expect(
       selectPhysicalApprovalConfirmationAction([
-        ...anonymousConfirmation,
+        ...pageNodes,
+        confirmationTitle,
+        confirmationReason,
+        Object.freeze({
+          ...confirmationStatus,
+          text:
+            `${physicalApprovalConfirmationStatus}. ` +
+            "No response is sent until Approve once is submitted."
+        }),
         Object.freeze({
           ...anonymousApprove,
-          bounds: Object.freeze({
-            ...anonymousApprove.bounds,
-            left: 620,
-            right: 660
-          })
+          description: physicalApprovalConfirmationAction
         })
       ])
     ).toBeNull();
     expect(
-      selectPhysicalApprovalConfirmationAction([
-        ...anonymousConfirmation.filter((node) => node !== anonymousApprove),
-        Object.freeze({ ...anonymousApprove, text: "Unexpected action" })
-      ])
-    ).toBeNull();
+      physicalSessionWriteReady(
+        [Object.freeze({ ...confirmationReason, text: "Ready to send" })],
+        1
+      )
+    ).toBe(true);
+    expect(
+      physicalSessionWriteReady(
+        [
+          Object.freeze({ ...confirmationReason, text: "Ready to send" }),
+          Object.freeze({
+            ...confirmationReason,
+            text: "Activity stream reconnecting"
+          })
+        ],
+        1
+      )
+    ).toBe(false);
+    expect(
+      physicalSessionWriteReady(
+        [Object.freeze({ ...confirmationReason, text: "Ready to send" })],
+        0
+      )
+    ).toBe(false);
+    expect(
+      physicalSessionWriteReady(
+        [
+          Object.freeze({ ...confirmationReason, text: "Ready to send" }),
+          Object.freeze({ ...confirmationStatus, text: "Ready to send" })
+        ],
+        1
+      )
+    ).toBe(false);
+    expect(
+      physicalSessionWriteReady(
+        [
+          Object.freeze({ ...confirmationReason, text: "Ready to send" }),
+          Object.freeze({
+            ...confirmationReason,
+            text: "Session activity is reconnecting."
+          })
+        ],
+        1
+      )
+    ).toBe(false);
+    expect(
+      physicalSessionWriteReady(
+        [
+          Object.freeze({ ...confirmationReason, text: "Ready to send" }),
+          Object.freeze({ ...confirmationReason, text: "Prompt unavailable" })
+        ],
+        1
+      )
+    ).toBe(false);
+    expect(
+      physicalSessionWriteReady(
+        [Object.freeze({ ...confirmationReason, text: "Ready to send" })],
+        2
+      )
+    ).toBe(false);
     expect(() =>
       parseAndroidUiNodes(
         `<hierarchy><node text="${selectedPairingFragmentPrefix}secret" ` +
@@ -6312,13 +6378,19 @@ async function runProductionDashboardUiSequence(
   );
   await capture("fe090-03-session-detail.png");
 
+  await waitForPhysicalSessionWriteReady(
+    input,
+    "Physical approval did not receive stable current write authority."
+  );
+  await runPhysicalApprovalControl(input, capture, measure);
+
   await runPhysicalEventDiagnostic(
     input,
     capture,
     "Earlier activity unavailable",
     "Replay boundary",
     "Content truncated",
-    "fe090-04-event-boundary.png"
+    "fe090-08-event-boundary.png"
   );
   await runPhysicalEventDiagnostic(
     input,
@@ -6326,7 +6398,7 @@ async function runProductionDashboardUiSequence(
     "Physical dashboard event complete",
     "Message event",
     "Bounded event summary",
-    "fe090-05-event-complete.png"
+    "fe090-09-event-complete.png"
   );
   await runPhysicalEventDiagnostic(
     input,
@@ -6334,10 +6406,13 @@ async function runProductionDashboardUiSequence(
     "Sensitive turn detail was redacted at projection time.",
     "Turn event",
     "Content redacted",
-    "fe090-06-event-redacted.png"
+    "fe090-10-event-redacted.png"
   );
 
-  await runPhysicalApprovalControl(input, capture, measure);
+  await waitForPhysicalSessionWriteReady(
+    input,
+    "Physical prompt did not recover stable current write authority."
+  );
   await runProductionPromptUiSequence(input, {
     captureScreenshots: false,
     cleanup: false,
@@ -6713,7 +6788,10 @@ async function runPhysicalDetailFailureStates(
 }
 
 async function runPhysicalApprovalControl(
-  input: ProductionUiEntryInput & { readonly controls: PhysicalDashboardControls },
+  input: ProductionUiEntryInput & {
+    readonly controls: PhysicalDashboardControls;
+    readonly prompt: PhysicalPromptRuntime;
+  },
   capture: PhysicalDashboardCapture,
   measure: PhysicalDashboardMeasure
 ): Promise<void> {
@@ -6741,7 +6819,7 @@ async function runPhysicalApprovalControl(
     "Physical pending approval omitted elevated risk."
   );
   measure(review, "review-approval");
-  await capture("fe090-07-approval-pending.png");
+  await capture("fe090-04-approval-pending.png");
   await tapAndroidNodeOnceAndWait(
     review,
     async () =>
@@ -6755,7 +6833,7 @@ async function runPhysicalApprovalControl(
     30_000,
     "Physical approval confirmation omitted its reason."
   );
-  await capture("fe090-08-approval-confirmation.png");
+  await capture("fe090-05-approval-confirmation.png");
   const approve = await waitForPhysicalApprovalConfirmationAction(
     30_000,
     "Physical approval confirmation action was unavailable."
@@ -6771,14 +6849,68 @@ async function runPhysicalApprovalControl(
     30_000,
     "Physical approval did not render responding truth."
   );
-  await capture("fe090-09-approval-responding.png");
+  await capture("fe090-06-approval-responding.png");
   input.controls.releaseApproval();
   await waitForAndroidUiText(
     "Approved once",
     30_000,
     "Physical approval did not render terminal approved truth."
   );
-  await capture("fe090-10-approval-approved.png");
+  await capture("fe090-07-approval-approved.png");
+}
+
+async function waitForPhysicalSessionWriteReady(
+  input: Readonly<{
+    readonly prompt: PhysicalPromptRuntime;
+    readonly requestInspection: RequestInspection;
+  }>,
+  message: string
+): Promise<void> {
+  let stableSince: number | null = null;
+  let stableStreamRequests: number | null = null;
+  try {
+    await waitFor(async () => {
+      const activeSubscribers =
+        input.prompt.subscribers.snapshot().active_subscribers;
+      const streamRequests = input.requestInspection.sessionStreamRequests;
+      const ready = physicalSessionWriteReady(
+        await readAndroidUiNodes(),
+        activeSubscribers
+      );
+      if (!ready) {
+        stableSince = null;
+        stableStreamRequests = null;
+        return false;
+      }
+      if (
+        stableSince === null ||
+        stableStreamRequests === null ||
+        stableStreamRequests !== streamRequests
+      ) {
+        stableSince = performance.now();
+        stableStreamRequests = streamRequests;
+        return false;
+      }
+      return performance.now() - stableSince >= 2_000;
+    }, 45_000, message);
+  } catch {
+    throw new Error(`${message} ${physicalPromptStreamDiagnostic(input)}`);
+  }
+}
+
+function physicalSessionWriteReady(
+  nodes: readonly AndroidUiNode[],
+  activeSubscribers: number
+): boolean {
+  const count = (value: string): number =>
+    nodes.filter((node) => matchesAndroidUiNode(node, "semantic", value)).length;
+  return (
+    activeSubscribers === 1 &&
+    count("Ready to send") === 1 &&
+    count("Activity stream reconnecting") === 0 &&
+    count("Session activity is reconnecting.") === 0 &&
+    count("Prompt unavailable") === 0
+  );
 }
 
 async function runPhysicalModelControl(
@@ -9714,57 +9846,7 @@ function selectPhysicalApprovalConfirmationAction(
     "fully_visible",
     true
   );
-  if (semantic !== null) return semantic;
-
-  const pageClickables = nodes.filter(
-    (node) =>
-      node.clickable && androidUiNodeIsFullyInsideRegion(node, page)
-  );
-  if (pageClickables.length < 2) return null;
-  const footerTop = Math.max(...pageClickables.map((node) => node.bounds.top));
-  const footer = pageClickables
-    .filter(
-      (node) =>
-        Math.abs(node.bounds.top - footerTop) <= 8 &&
-        node.bounds.top >= page.top + Math.floor(page.height * 0.75)
-    )
-    .sort((left, right) => left.bounds.left - right.bounds.left);
-  if (footer.length !== 2) return null;
-  const cancel = footer[0];
-  const approve = footer[1];
-  if (
-    cancel === undefined ||
-    approve === undefined ||
-    cancel.text !== "" ||
-    cancel.description !== "" ||
-    approve.text !== "" ||
-    approve.description === "" ||
-    [cancel, approve].some(
-      (node) =>
-        androidUiNodeWidth(node) < 44 || androidUiNodeHeight(node) < 44
-    ) ||
-    Math.abs(cancel.bounds.top - approve.bounds.top) > 8 ||
-    Math.abs(cancel.bounds.bottom - approve.bounds.bottom) > 8
-  ) {
-    return null;
-  }
-  const leftMargin = cancel.bounds.left - page.left;
-  const rightMargin = page.left + page.width - approve.bounds.right;
-  const seam = approve.bounds.left - cancel.bounds.right;
-  if (
-    leftMargin < 24 ||
-    rightMargin < 24 ||
-    leftMargin > page.width * 0.1 ||
-    rightMargin > page.width * 0.1 ||
-    Math.abs(leftMargin - rightMargin) > 16 ||
-    Math.abs(seam) > 8 ||
-    approve.bounds.left < page.left + Math.floor(page.width * 0.75) ||
-    Math.floor((approve.bounds.left + approve.bounds.right) / 2) <
-      page.left + Math.floor(page.width * 0.8)
-  ) {
-    return null;
-  }
-  return approve;
+  return semantic;
 }
 
 function physicalApprovalConfirmationContextSummary(
