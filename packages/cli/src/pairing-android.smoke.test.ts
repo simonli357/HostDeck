@@ -1230,6 +1230,79 @@ describe("physical Android phone-driver protocol", () => {
       matchesAndroidUiNode(editNode, "className", androidEditTextClass)
     ).toBe(true);
     expect(findAndroidPromptEditor(nodes, "Host & access")).toBe(editNode);
+    const textAction = Object.freeze({
+      bounds: Object.freeze({ bottom: 260, left: 20, right: 300, top: 200 }),
+      className: "android.widget.Button",
+      clickable: true,
+      description: "",
+      resourceId: "",
+      text: "Approve once"
+    });
+    const descriptionAction = Object.freeze({
+      ...textAction,
+      description: "Approve once",
+      text: ""
+    });
+    expect(
+      selectAndroidUiNodeForReveal(
+        nodes,
+        "semantic",
+        "Approve once",
+        "fully_visible",
+        true
+      )
+    ).toBeNull();
+    expect(
+      selectAndroidUiNodeForReveal(
+        [...nodes, textAction],
+        "semantic",
+        "Approve once",
+        "fully_visible",
+        true
+      )
+    ).toBe(textAction);
+    expect(
+      selectAndroidUiNodeForReveal(
+        [...nodes, descriptionAction],
+        "semantic",
+        "Approve once",
+        "fully_visible",
+        true
+      )
+    ).toBe(descriptionAction);
+    expect(
+      selectAndroidUiNodeForReveal(
+        [...nodes, textAction, descriptionAction],
+        "semantic",
+        "Approve once",
+        "fully_visible",
+        true
+      )
+    ).toBeNull();
+    expect(
+      selectAndroidUiNodeForReveal(
+        [...nodes, Object.freeze({ ...textAction, clickable: false })],
+        "semantic",
+        "Approve once",
+        "fully_visible",
+        true
+      )
+    ).toBeNull();
+    expect(
+      selectAndroidUiNodeForReveal(
+        [
+          ...nodes,
+          Object.freeze({
+            ...textAction,
+            bounds: Object.freeze({ ...textAction.bounds, bottom: 160, top: 100 })
+          })
+        ],
+        "semantic",
+        "Approve once",
+        "fully_visible",
+        true
+      )
+    ).toBeNull();
     expect(() =>
       parseAndroidUiNodes(
         `<hierarchy><node text="${selectedPairingFragmentPrefix}secret" ` +
@@ -6378,11 +6451,14 @@ async function runPhysicalApprovalControl(
     "Physical approval confirmation omitted its reason."
   );
   await capture("fe090-08-approval-confirmation.png");
-  const approve = await waitForAndroidUiNodePresent(
-    "text",
+  const approve = await revealAndroidUiNode(
+    "semantic",
     "Approve once",
+    "forward",
     30_000,
-    "Physical approval confirmation action was unavailable."
+    "Physical approval confirmation action was unavailable.",
+    "fully_visible",
+    true
   );
   measure(approve, "approve-once");
   await tapAndroidNodeOnceAndWait(
@@ -9010,26 +9086,20 @@ async function revealAndroidUiNode(
   direction: AndroidVerticalRevealDirection,
   timeoutMs: number,
   message: string,
-  visibility: AndroidUiNodeVisibility = "present"
+  visibility: AndroidUiNodeVisibility = "present",
+  requireClickable = false
 ): Promise<AndroidUiNode> {
   let found: AndroidUiNode | null = null;
   let swipeCount = 0;
   await waitFor(async () => {
     const nodes = await readAndroidUiNodes();
-    const matches = nodes.filter((node) =>
-      matchesAndroidUiNode(node, field, value)
+    found = selectAndroidUiNodeForReveal(
+      nodes,
+      field,
+      value,
+      visibility,
+      requireClickable
     );
-    requireCondition(
-      matches.length <= 1,
-      `Android UI hierarchy duplicated ${field} ${value}.`
-    );
-    const match = matches[0];
-    found =
-      match !== undefined &&
-      (visibility === "present" ||
-        androidUiNodeIsFullyInsideChromePage(match, nodes))
-        ? match
-        : null;
     if (found !== null) return true;
     if (swipeCount < 4) {
       swipeAndroidViewport(nodes, direction);
@@ -9162,6 +9232,28 @@ function matchesAndroidUiNode(
   return field === "semantic"
     ? node.text === value || node.description === value
     : node[field] === value;
+}
+
+function selectAndroidUiNodeForReveal(
+  nodes: readonly AndroidUiNode[],
+  field: AndroidUiNodeField,
+  value: string,
+  visibility: AndroidUiNodeVisibility,
+  requireClickable: boolean
+): AndroidUiNode | null {
+  const matches = nodes.filter((node) =>
+    matchesAndroidUiNode(node, field, value)
+  );
+  if (matches.length !== 1) return null;
+  const node = matches[0];
+  if (node === undefined || (requireClickable && !node.clickable)) return null;
+  if (
+    visibility === "fully_visible" &&
+    !androidUiNodeIsFullyInsideChromePage(node, nodes)
+  ) {
+    return null;
+  }
+  return node;
 }
 
 function androidUiNodesShareControlRegion(
