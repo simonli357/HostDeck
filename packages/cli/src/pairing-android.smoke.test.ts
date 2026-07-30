@@ -549,6 +549,35 @@ describe("physical Android phone-driver protocol", () => {
     ).toBe(false);
   });
 
+  it("recognizes Plan current truth from its approved initial viewport", () => {
+    const nodes = parseAndroidUiNodes(
+      '<hierarchy><node text="Default" bounds="[0,0][100,40]" />' +
+        '<node text="No pending change" bounds="[0,40][200,80]" />' +
+        '<node text="No observed Plan execution" bounds="[0,80][260,120]" />' +
+        '</hierarchy>'
+    );
+
+    expect(physicalPlanCurrentTruthVisible(nodes)).toBe(true);
+    for (const missing of [
+      "Default",
+      "No pending change",
+      "No observed Plan execution"
+    ]) {
+      expect(
+        physicalPlanCurrentTruthVisible(
+          nodes.filter((node) => node.text !== missing)
+        )
+      ).toBe(false);
+    }
+    expect(
+      physicalPlanCurrentTruthVisible(
+        parseAndroidUiNodes(
+          '<hierarchy><node text="Loading Plan state" bounds="[0,0][200,40]" /></hierarchy>'
+        )
+      )
+    ).toBe(false);
+  });
+
   it("admits event diagnostics only above the complete fixed control dock", () => {
     const timelineLabel = "Sensitive turn detail was redacted at projection time.";
     const controls = physicalSessionControlDescriptions
@@ -7542,10 +7571,9 @@ async function openPhysicalPlanSheet(
     triggerField: "description",
     triggerValue: triggerLabel,
     completed: async () =>
-      (await readAndroidUiNodes()).some(
-        (node) => node.text === "Plan control ready"
-      ),
-    completionFailureMessage: "Physical /plan did not render current mode truth.",
+      physicalPlanCurrentTruthVisible(await readAndroidUiNodes()),
+    completionFailureMessage:
+      "Physical /plan did not render visible current-mode truth.",
     reacquireFailureMessage: "Physical /plan trigger could not be safely reacquired.",
     terminalFailureMessage:
       "Physical /plan remained closed after two bounded non-mutating taps."
@@ -7553,6 +7581,12 @@ async function openPhysicalPlanSheet(
   requireCondition(
     inspection.planReadRequests === readsBefore + 1,
     "Physical /plan did not issue exactly one current-mode read."
+  );
+}
+
+function physicalPlanCurrentTruthVisible(nodes: readonly AndroidUiNode[]): boolean {
+  return ["Default", "No pending change", "No observed Plan execution"].every(
+    (label) => nodes.some((node) => node.text === label)
   );
 }
 
