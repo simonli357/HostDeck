@@ -264,6 +264,8 @@ const physicalSessionControlDescriptions = Object.freeze([
 ]);
 const physicalEventActionMaxDistancePx = 480;
 const physicalSessionOverlayGapPx = 24;
+const physicalScreenshotRedactionInsetPx = 8;
+const physicalScreenshotRedactionRgba = Object.freeze([24, 28, 33, 255] as const);
 const physicalApprovalConfirmationTitle = "Approve elevated request?";
 const physicalApprovalConfirmationReason =
   "Continue the bounded release validation on the selected device.";
@@ -1939,6 +1941,153 @@ describe("physical Android phone-driver protocol", () => {
     ).toThrow("retained private browser material");
   });
 
+  it("selects bounded redactions for exact inert Host origin text", () => {
+    const externalOrigin = "https://private.example.ts.net";
+    const nodes = parseAndroidUiNodes(
+      '<hierarchy rotation="0">' +
+        '<node text="Host &amp; access" content-desc="" class="android.view.View" ' +
+        'bounds="[24,320][400,380]" />' +
+        '<node text="Origin" content-desc="" class="android.view.View" ' +
+        'bounds="[60,440][240,480]" />' +
+        `<node text="${externalOrigin}" content-desc="" class="android.view.View" ` +
+        'bounds="[160,500][700,550]" />' +
+        '<node text="Private address" content-desc="" class="android.view.View" ' +
+        'bounds="[60,660][300,700]" />' +
+        `<node text="${externalOrigin}" content-desc="" class="android.view.View" ` +
+        'bounds="[160,720][700,770]" />' +
+        '<node text="" content-desc="" class="android.view.ViewGroup" ' +
+        `resource-id="${chromeToolbarResourceId}" bounds="[0,120][720,288]" />` +
+        '<node text="" content-desc="" class="android.widget.FrameLayout" ' +
+        `resource-id="${chromeCompositorResourceId}" bounds="[0,120][720,1280]" />` +
+        "</hierarchy>"
+    );
+
+    expect(() =>
+      selectPrivateFreeProductionScreenshotEvidence(nodes, externalOrigin)
+    ).toThrow("retained private browser material");
+    const selection = selectPrivateFreeProductionScreenshotEvidence(
+      nodes,
+      externalOrigin,
+      { redactProductOrigin: true }
+    );
+    expect(selection).toEqual({
+      redactions: [
+        { height: 66, left: 152, top: 492, width: 556 },
+        { height: 66, left: 152, top: 712, width: 556 }
+      ],
+      region: { height: 992, left: 0, top: 288, width: 720 }
+    });
+    expect(Object.isFrozen(selection)).toBe(true);
+    expect(Object.isFrozen(selection.redactions)).toBe(true);
+    expect(selection.redactions.every(Object.isFrozen)).toBe(true);
+  });
+
+  it("rejects every non-product or ambiguous private origin redaction", () => {
+    const externalOrigin = "https://private.example.ts.net";
+    const nodes = parseAndroidUiNodes(
+      '<hierarchy rotation="0">' +
+        '<node text="Origin" content-desc="" class="android.view.View" ' +
+        'bounds="[60,440][240,480]" />' +
+        `<node text="${externalOrigin}" content-desc="" class="android.view.View" ` +
+        'bounds="[160,500][700,550]" />' +
+        '<node text="" content-desc="" class="android.widget.FrameLayout" ' +
+        `resource-id="${chromeCompositorResourceId}" bounds="[0,120][720,1280]" />` +
+        "</hierarchy>"
+    );
+    const label = nodes.find((node) => node.text === "Origin");
+    const value = nodes.find((node) => node.text === externalOrigin);
+    requireCondition(
+      label !== undefined && value !== undefined,
+      "Private origin rejection fixture was incomplete."
+    );
+    const rejects = (candidateNodes: readonly AndroidUiNode[]) => {
+      expect(() =>
+        selectPrivateFreeProductionScreenshotEvidence(
+          candidateNodes,
+          externalOrigin,
+          { redactProductOrigin: true }
+        )
+      ).toThrow("retained private browser material");
+    };
+    const replaceValue = (replacement: AndroidUiNode) =>
+      nodes.map((node) => (node === value ? replacement : node));
+
+    rejects(replaceValue(Object.freeze({ ...value, text: new URL(externalOrigin).hostname })));
+    rejects(replaceValue(Object.freeze({ ...value, className: androidEditTextClass })));
+    rejects(replaceValue(Object.freeze({ ...value, clickable: true })));
+    rejects(
+      replaceValue(
+        Object.freeze({
+          ...value,
+          description: externalOrigin,
+          text: ""
+        })
+      )
+    );
+    rejects(replaceValue(Object.freeze({ ...value, resourceId: "product-origin" })));
+    rejects(nodes.filter((node) => node !== label));
+    rejects(
+      nodes.map((node) =>
+        node === label
+          ? Object.freeze({
+              ...node,
+              bounds: Object.freeze({ ...node.bounds, bottom: 240, top: 200 })
+            })
+          : node
+      )
+    );
+    rejects([
+      ...nodes,
+      Object.freeze({
+        ...label,
+        bounds: Object.freeze({ ...label.bounds, bottom: 482, top: 442 })
+      })
+    ]);
+    rejects(
+      replaceValue(
+        Object.freeze({
+          ...value,
+          bounds: Object.freeze({ ...value.bounds, top: 270 })
+        })
+      )
+    );
+    rejects([
+      ...nodes,
+      Object.freeze({
+        ...label,
+        bounds: Object.freeze({ bottom: 700, left: 60, right: 300, top: 660 }),
+        text: "Private address"
+      }),
+      Object.freeze({
+        ...value,
+        bounds: Object.freeze({ bottom: 770, left: 160, right: 700, top: 720 })
+      }),
+      Object.freeze({
+        ...label,
+        bounds: Object.freeze({ bottom: 920, left: 60, right: 240, top: 880 })
+      }),
+      Object.freeze({
+        ...value,
+        bounds: Object.freeze({ bottom: 990, left: 160, right: 700, top: 940 })
+      })
+    ]);
+
+    const unknownPrivateValue = "device-private-value";
+    deviceForbiddenValues.add(unknownPrivateValue);
+    try {
+      rejects([
+        ...nodes,
+        Object.freeze({
+          ...value,
+          bounds: Object.freeze({ bottom: 650, left: 160, right: 500, top: 580 }),
+          text: unknownPrivateValue
+        })
+      ]);
+    } finally {
+      deviceForbiddenValues.delete(unknownPrivateValue);
+    }
+  });
+
   it("crops physical PNG evidence to the exact selected pixel region", () => {
     const source = new Png({ height: 600, width: 320 });
     for (let y = 0; y < source.height; y += 1) {
@@ -1971,6 +2120,50 @@ describe("physical Android phone-driver protocol", () => {
       150,
       255
     ]);
+  });
+
+  it("overwrites only admitted private pixels after the exact page crop", () => {
+    const source = new Png({ height: 600, width: 320 });
+    for (let y = 0; y < source.height; y += 1) {
+      for (let x = 0; x < source.width; x += 1) {
+        const offset = (y * source.width + x) * 4;
+        source.data[offset] = x % 256;
+        source.data[offset + 1] = y % 256;
+        source.data[offset + 2] = (x + y) % 256;
+        source.data[offset + 3] = 255;
+      }
+    }
+    const bytes = Png.sync.write(source);
+    const evidence = Png.sync.read(
+      preparePhysicalScreenshotEvidence(
+        bytes,
+        { height: 480, left: 0, top: 120, width: 320 },
+        [{ height: 8, left: 20, top: 150, width: 10 }]
+      )
+    );
+    const pixel = (x: number, y: number) => {
+      const offset = (y * evidence.width + x) * 4;
+      return [...evidence.data.subarray(offset, offset + 4)];
+    };
+
+    expect({ height: evidence.height, width: evidence.width }).toEqual({
+      height: 480,
+      width: 320
+    });
+    expect(pixel(20, 30)).toEqual(physicalScreenshotRedactionRgba);
+    expect(pixel(29, 37)).toEqual(physicalScreenshotRedactionRgba);
+    expect(pixel(19, 30)).toEqual([19, 150, 169, 255]);
+    expect(pixel(30, 37)).toEqual([30, 157, 187, 255]);
+    expect(() =>
+      preparePhysicalScreenshotEvidence(
+        bytes,
+        { height: 480, left: 0, top: 120, width: 320 },
+        [{ height: 8, left: 20, top: 116, width: 10 }]
+      )
+    ).toThrow("redaction exceeded the selected page viewport");
+    expect(() => redactPhysicalScreenshot(bytes, [])).toThrow(
+      "redaction exceeded the bounded image dimensions"
+    );
   });
 
   it("opens private Chrome paths without placing the origin in ADB arguments or stdin", () => {
@@ -6365,6 +6558,11 @@ interface PhysicalScreenshotRegion {
   readonly width: number;
 }
 
+interface PrivateFreeProductionScreenshotSelection {
+  readonly redactions: readonly PhysicalScreenshotRegion[];
+  readonly region: PhysicalScreenshotRegion;
+}
+
 interface PhysicalEventDiagnosticTarget {
   readonly action: AndroidUiNode;
   readonly label: AndroidUiNode;
@@ -6660,7 +6858,10 @@ async function runProductionDashboardUiSequence(
 ): Promise<PhysicalDashboardSequenceResult> {
   const screenshotNames: string[] = [...input.initialScreenshotNames];
   const targetMeasurements: PhysicalTargetMeasurement[] = [];
-  const capture = async (name: string): Promise<void> => {
+  const capture: PhysicalDashboardCapture = async (
+    name,
+    options = {}
+  ): Promise<void> => {
     requireCondition(
       /^fe090-[0-9]{2}-[a-z0-9-]+\.png$/u.test(name) &&
         !screenshotNames.includes(name),
@@ -6668,7 +6869,8 @@ async function runProductionDashboardUiSequence(
     );
     await capturePrivateFreeProductionScreenshot(
       join(input.screenshotDirectory, name),
-      input.externalOrigin
+      input.externalOrigin,
+      options
     );
     screenshotNames.push(name);
   };
@@ -6901,7 +7103,10 @@ async function runProductionDashboardUiSequence(
   });
 }
 
-type PhysicalDashboardCapture = (name: string) => Promise<void>;
+type PhysicalDashboardCapture = (
+  name: string,
+  options?: Readonly<{ readonly redactProductOrigin?: boolean }>
+) => Promise<void>;
 type PhysicalDashboardMeasure = (node: AndroidUiNode, label: string) => void;
 
 function readAndroidPhysicalDensity(): number {
@@ -8427,7 +8632,7 @@ async function runPhysicalHostAccessControls(
     30_000,
     "Physical Host and access omitted paired permission."
   );
-  await capture("fe090-32-host-access.png");
+  await capture("fe090-32-host-access.png", { redactProductOrigin: true });
 
   const officeRevoke = await revealAndroidUiNode(
     "description",
@@ -8445,7 +8650,9 @@ async function runPhysicalHostAccessControls(
       ),
     "Physical Office browser revoke confirmation did not open."
   );
-  await capture("fe090-33-revoke-confirmation.png");
+  await capture("fe090-33-revoke-confirmation.png", {
+    redactProductOrigin: true
+  });
   const confirmRevoke = await waitForAndroidUiNodePresent(
     "text",
     "Revoke device",
@@ -8465,7 +8672,9 @@ async function runPhysicalHostAccessControls(
     countMatchingRows(input.db, "auth_devices", "revoked_at IS NOT NULL") === 1,
     "Physical Office browser revoke did not revoke exactly one authority."
   );
-  await capture("fe090-34-device-revoked.png");
+  await capture("fe090-34-device-revoked.png", {
+    redactProductOrigin: true
+  });
 
   const lock = await revealAndroidUiNode(
     "text",
@@ -8483,7 +8692,9 @@ async function runPhysicalHostAccessControls(
       ),
     "Physical host-lock confirmation did not open."
   );
-  await capture("fe090-35-lock-confirmation.png");
+  await capture("fe090-35-lock-confirmation.png", {
+    redactProductOrigin: true
+  });
   const confirmLock = await waitForAndroidUiNodePresent(
     "text",
     "Lock writes",
@@ -8508,7 +8719,9 @@ async function runPhysicalHostAccessControls(
     ),
     "Physical locked UI exposed a forbidden remote unlock action."
   );
-  await capture("fe090-36-host-locked.png");
+  await capture("fe090-36-host-locked.png", {
+    redactProductOrigin: true
+  });
   await closePhysicalDialog("Close session actions");
   const missionBack = await waitForAndroidUiNodePresent(
     "description",
@@ -9457,38 +9670,193 @@ async function runOneProductionRemoteCheck(
 
 async function capturePrivateFreeProductionScreenshot(
   path: string,
-  externalOrigin: string
+  externalOrigin: string,
+  options: Readonly<{ readonly redactProductOrigin?: boolean }> = {}
 ): Promise<void> {
   const nodes = await readAndroidUiNodes();
-  const region = selectPrivateFreeProductionScreenshotRegion(
+  const selection = selectPrivateFreeProductionScreenshotEvidence(
     nodes,
-    externalOrigin
+    externalOrigin,
+    options
   );
-  await capturePhysicalScreenshot(path, region);
+  await capturePhysicalScreenshot(
+    path,
+    selection.region,
+    selection.redactions
+  );
 }
 
 function selectPrivateFreeProductionScreenshotRegion(
   nodes: readonly AndroidUiNode[],
   externalOrigin: string
 ): PhysicalScreenshotRegion {
+  return selectPrivateFreeProductionScreenshotEvidence(nodes, externalOrigin)
+    .region;
+}
+
+function selectPrivateFreeProductionScreenshotEvidence(
+  nodes: readonly AndroidUiNode[],
+  externalOrigin: string,
+  options: Readonly<{ readonly redactProductOrigin?: boolean }> = {}
+): PrivateFreeProductionScreenshotSelection {
   const region = selectChromePageViewport(nodes);
   const origin = new URL(externalOrigin);
-  requireCondition(
-    nodes
-      .filter((node) => androidNodeIntersectsRegion(node, region))
-      .every((node) =>
-        [node.text, node.description].every(
-          (value) =>
-            !value.includes(origin.origin) &&
-            !value.includes(origin.hostname) &&
-            [...deviceForbiddenValues].every(
-              (privateValue) => !value.includes(privateValue)
-            )
+  const privateNodes = nodes.filter(
+    (node) =>
+      androidNodeIntersectsRegion(node, region) &&
+      androidUiNodeContainsPrivateMaterial(node, origin)
+  );
+  const redactions =
+    options.redactProductOrigin === true
+      ? selectProductOriginScreenshotRedactions(
+          nodes,
+          privateNodes,
+          origin,
+          region
         )
-      ),
+      : Object.freeze([]);
+  requireCondition(
+    privateNodes.length === 0 || redactions.length > 0,
     "Physical production screenshot page viewport retained private browser material."
   );
-  return region;
+  return Object.freeze({ redactions, region });
+}
+
+function androidUiNodeContainsPrivateMaterial(
+  node: AndroidUiNode,
+  origin: URL
+): boolean {
+  return [node.text, node.description].some(
+    (value) =>
+      value.includes(origin.origin) ||
+      value.includes(origin.hostname) ||
+      [...deviceForbiddenValues].some(
+        (privateValue) => value.includes(privateValue)
+      )
+  );
+}
+
+function selectProductOriginScreenshotRedactions(
+  nodes: readonly AndroidUiNode[],
+  privateNodes: readonly AndroidUiNode[],
+  origin: URL,
+  page: PhysicalScreenshotRegion
+): readonly PhysicalScreenshotRegion[] {
+  if (privateNodes.length === 0) return Object.freeze([]);
+  const failure =
+    "Physical production screenshot page viewport retained private browser material.";
+  requireCondition(privateNodes.length <= 2, failure);
+  const labels = nodes.filter(
+    (node) =>
+      (node.text === "Origin" || node.text === "Private address") &&
+      node.className === "android.view.View" &&
+      !node.clickable &&
+      node.description === "" &&
+      node.resourceId === "" &&
+      androidUiNodeIsFullyInsideRegion(node, page)
+  );
+  const owningLabels: AndroidUiNode[] = [];
+  const redactions = privateNodes.map((node) => {
+    requireCondition(
+      node.text === origin.origin &&
+        node.className === "android.view.View" &&
+        !node.clickable &&
+        node.description === "" &&
+        node.resourceId === "" &&
+        androidUiNodeIsFullyInsideRegion(node, page),
+      failure
+    );
+    const matches = labels.filter((label) =>
+      androidProductOriginLabelOwnsNode(label, node)
+    );
+    requireCondition(matches.length === 1, failure);
+    const owner = matches[0];
+    requireCondition(owner !== undefined, failure);
+    owningLabels.push(owner);
+    const right = Math.min(
+      page.left + page.width,
+      node.bounds.right + physicalScreenshotRedactionInsetPx
+    );
+    const bottom = Math.min(
+      page.top + page.height,
+      node.bounds.bottom + physicalScreenshotRedactionInsetPx
+    );
+    const left = Math.max(
+      page.left,
+      node.bounds.left - physicalScreenshotRedactionInsetPx
+    );
+    const top = Math.max(
+      page.top,
+      node.bounds.top - physicalScreenshotRedactionInsetPx
+    );
+    requireCondition(right > left && bottom > top, failure);
+    return Object.freeze({
+      height: bottom - top,
+      left,
+      top,
+      width: right - left
+    });
+  });
+  requireCondition(new Set(owningLabels).size === owningLabels.length, failure);
+  return mergePhysicalScreenshotRegions(redactions);
+}
+
+function androidProductOriginLabelOwnsNode(
+  label: AndroidUiNode,
+  value: AndroidUiNode
+): boolean {
+  const verticalGap = value.bounds.top - label.bounds.bottom;
+  return (
+    value.bounds.top >= label.bounds.top &&
+    verticalGap >= -16 &&
+    verticalGap <= 192 &&
+    Math.abs(value.bounds.left - label.bounds.left) <= 192
+  );
+}
+
+function mergePhysicalScreenshotRegions(
+  regions: readonly PhysicalScreenshotRegion[]
+): readonly PhysicalScreenshotRegion[] {
+  const sorted = [...regions].sort(
+    (left, right) => left.top - right.top || left.left - right.left
+  );
+  const merged: PhysicalScreenshotRegion[] = [];
+  for (const region of sorted) {
+    const previous = merged.at(-1);
+    if (previous === undefined || !physicalScreenshotRegionsOverlap(previous, region)) {
+      merged.push(region);
+      continue;
+    }
+    const right = Math.max(
+      previous.left + previous.width,
+      region.left + region.width
+    );
+    const bottom = Math.max(
+      previous.top + previous.height,
+      region.top + region.height
+    );
+    const left = Math.min(previous.left, region.left);
+    const top = Math.min(previous.top, region.top);
+    merged[merged.length - 1] = Object.freeze({
+      height: bottom - top,
+      left,
+      top,
+      width: right - left
+    });
+  }
+  return Object.freeze(merged);
+}
+
+function physicalScreenshotRegionsOverlap(
+  left: PhysicalScreenshotRegion,
+  right: PhysicalScreenshotRegion
+): boolean {
+  return (
+    left.left <= right.left + right.width &&
+    left.left + left.width >= right.left &&
+    left.top <= right.top + right.height &&
+    left.top + left.height >= right.top
+  );
 }
 
 function selectChromePageViewport(
@@ -11287,7 +11655,8 @@ async function waitForFreshLifecycleIdle(
 
 async function capturePhysicalScreenshot(
   path: string,
-  region: PhysicalScreenshotRegion | null = null
+  region: PhysicalScreenshotRegion | null = null,
+  redactions: readonly PhysicalScreenshotRegion[] = []
 ): Promise<void> {
   requireChromeForeground();
   adbCommandCount += 1;
@@ -11306,10 +11675,43 @@ async function capturePhysicalScreenshot(
     });
   });
   requireValidPngBytes(bytes);
-  const evidenceBytes =
-    region === null ? bytes : cropPhysicalScreenshot(bytes, region);
+  const evidenceBytes = preparePhysicalScreenshotEvidence(
+    bytes,
+    region,
+    redactions
+  );
   requireValidPngBytes(evidenceBytes);
   writeFileSync(path, evidenceBytes, { flag: "wx", mode: 0o600 });
+}
+
+function preparePhysicalScreenshotEvidence(
+  bytes: Buffer,
+  region: PhysicalScreenshotRegion | null,
+  redactions: readonly PhysicalScreenshotRegion[]
+): Buffer {
+  const evidenceBytes =
+    region === null ? bytes : cropPhysicalScreenshot(bytes, region);
+  if (redactions.length === 0) return evidenceBytes;
+  requireCondition(
+    region !== null,
+    "Physical screenshot redaction requires a selected page viewport."
+  );
+  const translated = redactions.map((redaction) => {
+    requireCondition(
+      redaction.left >= region.left &&
+        redaction.top >= region.top &&
+        redaction.left + redaction.width <= region.left + region.width &&
+        redaction.top + redaction.height <= region.top + region.height,
+      "Physical screenshot redaction exceeded the selected page viewport."
+    );
+    return Object.freeze({
+      height: redaction.height,
+      left: redaction.left - region.left,
+      top: redaction.top - region.top,
+      width: redaction.width
+    });
+  });
+  return redactPhysicalScreenshot(evidenceBytes, translated);
 }
 
 function requireValidPngBytes(bytes: Buffer): void {
@@ -11365,6 +11767,59 @@ function cropPhysicalScreenshot(
     );
   }
   return Png.sync.write(target);
+}
+
+function redactPhysicalScreenshot(
+  bytes: Buffer,
+  redactions: readonly PhysicalScreenshotRegion[]
+): Buffer {
+  requireCondition(
+    bytes.length >= 24,
+    "Physical screenshot redaction dimensions were unavailable."
+  );
+  const encodedWidth = bytes.readUInt32BE(16);
+  const encodedHeight = bytes.readUInt32BE(20);
+  requireCondition(
+    redactions.length >= 1 &&
+      redactions.length <= 2 &&
+      encodedWidth >= 320 &&
+      encodedWidth <= 4_096 &&
+      encodedHeight >= 480 &&
+      encodedHeight <= 8_192 &&
+      redactions.every(
+        (region) =>
+          Number.isSafeInteger(region.left) &&
+          Number.isSafeInteger(region.top) &&
+          Number.isSafeInteger(region.width) &&
+          Number.isSafeInteger(region.height) &&
+          region.left >= 0 &&
+          region.top >= 0 &&
+          region.width > 0 &&
+          region.height > 0 &&
+          region.left + region.width <= encodedWidth &&
+          region.top + region.height <= encodedHeight
+      ),
+    "Physical screenshot redaction exceeded the bounded image dimensions."
+  );
+  const image = Png.sync.read(bytes);
+  requireCondition(
+    image.width === encodedWidth &&
+      image.height === encodedHeight &&
+      image.data.length === image.width * image.height * 4,
+    "Physical screenshot redaction decoded dimensions were invalid."
+  );
+  for (const region of redactions) {
+    for (let y = region.top; y < region.top + region.height; y += 1) {
+      for (let x = region.left; x < region.left + region.width; x += 1) {
+        const offset = (y * image.width + x) * 4;
+        image.data[offset] = physicalScreenshotRedactionRgba[0];
+        image.data[offset + 1] = physicalScreenshotRedactionRgba[1];
+        image.data[offset + 2] = physicalScreenshotRedactionRgba[2];
+        image.data[offset + 3] = physicalScreenshotRedactionRgba[3];
+      }
+    }
+  }
+  return Png.sync.write(image);
 }
 
 function assertPairingUiRuntimeTruth(
