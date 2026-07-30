@@ -87,6 +87,61 @@ describe("PromptComposer", () => {
     expect(dispatch).toHaveBeenCalledTimes(1);
   });
 
+  it("surfaces a reconnecting write block after acceptance and restores the result", async () => {
+    const user = userEvent.setup();
+    const controller = readyController(
+      vi.fn(async ({ request }: PromptComposerDispatchInput) =>
+        acceptedResponse(request.operation_id, "start")
+      ),
+      () => "op_prompt_component_reconnecting"
+    );
+    render(<PromptComposer controller={controller} />);
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Prompt for android-release" }),
+      "Run one accepted prompt"
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Send prompt to android-release" })
+    );
+    expect(await screen.findByText("New turn accepted", { exact: true })).toBeTruthy();
+
+    const current = context();
+    const reconnecting = Object.freeze({
+      snapshot: Object.freeze({
+        ...current.snapshot,
+        phase: "degraded" as const,
+        stream: Object.freeze({
+          ...current.snapshot.stream,
+          state: "reconnecting" as const
+        })
+      }),
+      feed: current.feed
+    });
+    act(() => {
+      controller.updateContext(reconnecting);
+    });
+
+    expect(
+      screen.getByText("Session activity is reconnecting.", { exact: true })
+    ).toBeTruthy();
+    expect(
+      (screen.getByRole("textbox", {
+        name: "Prompt for android-release"
+      }) as HTMLTextAreaElement).disabled
+    ).toBe(true);
+    expect(
+      (screen.getByRole("button", {
+        name: "Send prompt to android-release"
+      }) as HTMLButtonElement).disabled
+    ).toBe(true);
+
+    act(() => {
+      controller.updateContext(current);
+    });
+    expect(screen.getByText("New turn accepted", { exact: true })).toBeTruthy();
+  });
+
   it("preserves and locks an ambiguous draft behind explicit reload", async () => {
     const user = userEvent.setup();
     const reload = vi.fn();

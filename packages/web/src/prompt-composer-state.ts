@@ -543,6 +543,18 @@ function deriveStatus(
       operation.failure.message
     );
   }
+  if (!availability.visible) return status("hidden", "muted", "Prompt unavailable", null);
+  if (
+    !availability.enabled &&
+    !retainsAcceptedTurnProgress(operation, availability.cause)
+  ) {
+    return status(
+      "unavailable",
+      disabledTone(availability.cause),
+      "Prompt unavailable",
+      availability.reason
+    );
+  }
   if (operation.phase === "accepted") {
     const turnEvent = latestTurnEvent(
       feed.events,
@@ -557,7 +569,6 @@ function deriveStatus(
       "Runtime progress has not been observed yet."
     );
   }
-  if (!availability.visible) return status("hidden", "muted", "Prompt unavailable", null);
   if (!availability.enabled) {
     return status(
       "unavailable",
@@ -573,6 +584,18 @@ function deriveStatus(
     return status("composing", "connected", "Ready to send", "One prompt targets this session.");
   }
   return status("empty", "connected", "Ready to send", "One prompt targets this session.");
+}
+
+function retainsAcceptedTurnProgress(
+  operation: PromptComposerOperationState,
+  cause: PromptComposerDisabledCause | null
+): boolean {
+  return (
+    operation.phase === "accepted" &&
+    (cause === "turn_needs_input" ||
+      cause === "turn_needs_approval" ||
+      cause === "turn_unknown")
+  );
 }
 
 function latestTurnEvent(

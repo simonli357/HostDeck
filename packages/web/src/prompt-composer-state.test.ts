@@ -92,6 +92,22 @@ describe("prompt composer projection", () => {
       });
       expect(view.disabledReason).toBeTruthy();
       expect(view.disabledReason).not.toMatch(/device_prompt_private|thread-private/u);
+
+      const acceptedView = projectPromptComposer({
+        sessionId,
+        ...context,
+        draft: "A blocked follow-up",
+        operation: acceptedOperation("start")
+      });
+      expect(acceptedView).toMatchObject({
+        visible: true,
+        phase: "unavailable",
+        status: "Prompt unavailable",
+        disabledCause: cause,
+        inputDisabled: true,
+        sendEnabled: false
+      });
+      expect(acceptedView.statusDetail).toBe(acceptedView.disabledReason);
     }
   });
 
@@ -138,6 +154,27 @@ describe("prompt composer projection", () => {
           operation: idleOperation()
         })
       ).toMatchObject({ visible: true, disabledCause: cause, sendEnabled: false });
+      if (
+        cause !== "turn_needs_input" &&
+        cause !== "turn_needs_approval" &&
+        cause !== "turn_unknown"
+      ) {
+        const acceptedView = projectPromptComposer({
+          sessionId,
+          ...context,
+          draft: "A blocked follow-up",
+          operation: acceptedOperation("start")
+        });
+        expect(acceptedView).toMatchObject({
+          visible: true,
+          phase: "unavailable",
+          status: "Prompt unavailable",
+          disabledCause: cause,
+          inputDisabled: true,
+          sendEnabled: false
+        });
+        expect(acceptedView.statusDetail).toBe(acceptedView.disabledReason);
+      }
     }
 
     const hidden = projectPromptComposer({
@@ -147,6 +184,14 @@ describe("prompt composer projection", () => {
       operation: idleOperation()
     });
     expect(hidden).toMatchObject({ visible: false, phase: "hidden", targetLabel: null });
+    expect(
+      projectPromptComposer({
+        sessionId,
+        ...promptContext({ targetSessionId: otherSessionId }),
+        draft: "",
+        operation: acceptedOperation("start")
+      })
+    ).toMatchObject({ visible: false, phase: "hidden", targetLabel: null });
   });
 
   it("keeps input bounds and accepted-versus-event progress exact", () => {
@@ -247,6 +292,28 @@ describe("prompt composer projection", () => {
         operation: steerAfterRetained
       }).phase
     ).toBe("completed");
+
+    const reconnecting = promptContext({ streamState: "reconnecting" });
+    expect(
+      projectPromptComposer({
+        sessionId,
+        snapshot: reconnecting.snapshot,
+        feed: appendSessionDetailEvent(
+          reconnecting.feed,
+          turnEvent(2, "completed")
+        ),
+        draft: "A blocked follow-up",
+        operation: accepted
+      })
+    ).toMatchObject({
+      phase: "unavailable",
+      status: "Prompt unavailable",
+      statusDetail: "Session activity is reconnecting.",
+      disabledCause: "stream_reconnecting",
+      disabledReason: "Session activity is reconnecting.",
+      inputDisabled: true,
+      sendEnabled: false
+    });
 
     const tooLong = projectPromptComposer({
       sessionId,
