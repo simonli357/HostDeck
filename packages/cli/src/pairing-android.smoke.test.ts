@@ -541,17 +541,15 @@ describe("physical Android phone-driver protocol", () => {
       startY: 1418,
       x: 540
     });
-    const collapsedToolbar = nodes.map((node) =>
-      node.resourceId === chromeToolbarResourceId
-        ? Object.freeze({
-            ...node,
-            bounds: Object.freeze({ ...node.bounds, bottom: 80, top: 80 })
-          })
-        : node
+    const collapsedToolbar = nodes.filter(
+      (node) => node.resourceId !== chromeToolbarResourceId
     );
-    expect(() => selectChromePageViewport(collapsedToolbar)).toThrow(
-      "Chrome viewport geometry was invalid"
-    );
+    expect(selectChromePageViewport(collapsedToolbar)).toEqual({
+      height: 2320,
+      left: 0,
+      top: 80,
+      width: 1080
+    });
     expect(
       selectPhysicalEventDiagnosticTarget(collapsedToolbar, timelineLabel)
         ?.action.description
@@ -561,8 +559,31 @@ describe("physical Android phone-driver protocol", () => {
       timelineLabel
     );
     expect(collapsedSummary).toContain("target=admitted");
-    expect(collapsedSummary).toContain("page=invalid");
+    expect(collapsedSummary).toContain("page=0,80,1080,2320");
     expect(collapsedSummary).not.toContain("content=unavailable");
+
+    const malformedToolbar = nodes.map((node) =>
+      node.resourceId === chromeToolbarResourceId
+        ? Object.freeze({
+            ...node,
+            bounds: Object.freeze({ ...node.bounds, bottom: 80, top: 80 })
+          })
+        : node
+    );
+    expect(() => selectChromePageViewport(malformedToolbar)).toThrow(
+      "Chrome viewport geometry was invalid"
+    );
+    expect(
+      selectPhysicalEventDiagnosticTarget(malformedToolbar, timelineLabel)
+        ?.action.description
+    ).toBe("View event details");
+    const malformedSummary = physicalEventDiagnosticGeometrySummary(
+      malformedToolbar,
+      timelineLabel
+    );
+    expect(malformedSummary).toContain("target=admitted");
+    expect(malformedSummary).toContain("page=invalid");
+    expect(malformedSummary).not.toContain("content=unavailable");
 
     const moveEventNode = (node: AndroidUiNode, top: number, bottom: number) =>
       node.text === timelineLabel || node.description === "View event details"
@@ -1183,6 +1204,37 @@ describe("physical Android phone-driver protocol", () => {
         "https://private.example.ts.net"
       )
     ).toEqual({ height: 992, left: 0, top: 288, width: 720 });
+    const collapsed = nodes.filter(
+      (node) => node.resourceId !== chromeToolbarResourceId
+    );
+    expect(() =>
+      selectPrivateFreeProductionScreenshotRegion(
+        collapsed,
+        "https://private.example.ts.net"
+      )
+    ).toThrow("retained private browser material");
+    expect(
+      selectPrivateFreeProductionScreenshotRegion(
+        collapsed.filter((node) => node.text !== "private.example.ts.net"),
+        "https://private.example.ts.net"
+      )
+    ).toEqual({ height: 1160, left: 0, top: 120, width: 720 });
+    const toolbar = nodes.find(
+      (node) => node.resourceId === chromeToolbarResourceId
+    );
+    const compositor = nodes.find(
+      (node) => node.resourceId === chromeCompositorResourceId
+    );
+    requireCondition(
+      toolbar !== undefined && compositor !== undefined,
+      "Chrome screenshot geometry fixture was incomplete."
+    );
+    expect(() => selectChromePageViewport([...nodes, toolbar])).toThrow(
+      "ambiguous Chrome toolbar geometry"
+    );
+    expect(() => selectChromePageViewport([...nodes, compositor])).toThrow(
+      "could not isolate the Chrome compositor"
+    );
     expect(() =>
       selectPrivateFreeProductionScreenshotRegion(
         [
@@ -8009,33 +8061,30 @@ function selectPrivateFreeProductionScreenshotRegion(
 function selectChromePageViewport(
   nodes: readonly AndroidUiNode[]
 ): PhysicalScreenshotRegion {
+  const compositor = selectChromeCompositorRegion(nodes);
   const toolbarNodes = nodes.filter(
     (node) => node.resourceId === chromeToolbarResourceId
   );
-  const compositorNodes = nodes.filter(
-    (node) => node.resourceId === chromeCompositorResourceId
-  );
   requireCondition(
-    toolbarNodes.length === 1 && compositorNodes.length === 1,
-    "Physical production screenshot could not isolate the Chrome page viewport."
+    toolbarNodes.length <= 1,
+    "Physical production screenshot had ambiguous Chrome toolbar geometry."
   );
+  if (toolbarNodes.length === 0) return compositor;
   const toolbar = toolbarNodes[0];
-  const compositor = compositorNodes[0];
   requireCondition(
     toolbar !== undefined &&
-      compositor !== undefined &&
-      toolbar.bounds.left === compositor.bounds.left &&
-      toolbar.bounds.right === compositor.bounds.right &&
-      toolbar.bounds.top >= compositor.bounds.top &&
+      toolbar.bounds.left === compositor.left &&
+      toolbar.bounds.right === compositor.left + compositor.width &&
+      toolbar.bounds.top >= compositor.top &&
       toolbar.bounds.bottom > toolbar.bounds.top &&
-      toolbar.bounds.bottom < compositor.bounds.bottom,
+      toolbar.bounds.bottom < compositor.top + compositor.height,
     "Physical production screenshot Chrome viewport geometry was invalid."
   );
   const region = Object.freeze({
-    height: compositor.bounds.bottom - toolbar.bounds.bottom,
-    left: compositor.bounds.left,
+    height: compositor.top + compositor.height - toolbar.bounds.bottom,
+    left: compositor.left,
     top: toolbar.bounds.bottom,
-    width: compositor.bounds.right - compositor.bounds.left
+    width: compositor.width
   });
   requireCondition(
     region.width >= 320 &&
@@ -8055,12 +8104,12 @@ function selectChromeCompositorRegion(
   );
   requireCondition(
     compositorNodes.length === 1,
-    "Physical interaction could not isolate the Chrome compositor."
+    "Physical evidence could not isolate the Chrome compositor."
   );
   const compositor = compositorNodes[0];
   requireCondition(
     compositor !== undefined,
-    "Physical interaction Chrome compositor was absent."
+    "Physical evidence Chrome compositor was absent."
   );
   const region = Object.freeze({
     height: compositor.bounds.bottom - compositor.bounds.top,
@@ -8075,7 +8124,7 @@ function selectChromeCompositorRegion(
       region.width <= 4_096 &&
       region.height >= 480 &&
       region.height <= 8_192,
-    "Physical interaction Chrome compositor was outside bounded dimensions."
+    "Physical evidence Chrome compositor was outside bounded dimensions."
   );
   return region;
 }
