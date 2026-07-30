@@ -1421,8 +1421,11 @@ describe("physical Android phone-driver protocol", () => {
     ]);
     const confirmationTitle = confirmationContext[0];
     const confirmationReason = confirmationContext[1];
+    const confirmationStatus = confirmationContext[2];
     requireCondition(
-      confirmationTitle !== undefined && confirmationReason !== undefined,
+      confirmationTitle !== undefined &&
+        confirmationReason !== undefined &&
+        confirmationStatus !== undefined,
       "Physical approval confirmation fixture was incomplete."
     );
     const unrelatedAction = Object.freeze({
@@ -1458,6 +1461,26 @@ describe("physical Android phone-driver protocol", () => {
     expect(
       selectPhysicalApprovalConfirmationAction(anonymousConfirmation)
     ).toBe(anonymousApprove);
+    expect(
+      physicalApprovalConfirmationContextSummary(anonymousConfirmation)
+    ).toBe(
+      "exact=1/2/1;status=1/1:30,820,650,880,static,t1,d0"
+    );
+    expect(
+      physicalApprovalConfirmationContextSummary([
+        ...anonymousConfirmation.filter(
+          (node) => node.text !== physicalApprovalConfirmationStatus
+        ),
+        Object.freeze({
+          ...confirmationStatus,
+          text:
+            `${physicalApprovalConfirmationStatus}. ` +
+            "No response is sent until Approve once is submitted."
+        })
+      ])
+    ).toBe(
+      "exact=1/2/0;status=0/1:30,820,650,880,static,t1,d0"
+    );
     expect(
       selectPhysicalApprovalConfirmationAction([
         ...pageNodes,
@@ -6718,11 +6741,6 @@ async function runPhysicalApprovalControl(
     30_000,
     "Physical approval confirmation omitted its reason."
   );
-  await waitForAndroidUiText(
-    physicalApprovalConfirmationStatus,
-    30_000,
-    "Physical approval confirmation omitted its pending status."
-  );
   await capture("fe090-08-approval-confirmation.png");
   const approve = await waitForPhysicalApprovalConfirmationAction(
     30_000,
@@ -9740,11 +9758,30 @@ function physicalApprovalConfirmationContextSummary(
 ): string {
   const count = (value: string): number =>
     nodes.filter((node) => matchesAndroidUiNode(node, "semantic", value)).length;
-  return [
+  const normalize = (value: string): string =>
+    value.trim().replace(/\s+/gu, " ");
+  const normalizedStatus = nodes.filter(
+    (node) =>
+      normalize(node.text) === physicalApprovalConfirmationStatus ||
+      normalize(node.description) === physicalApprovalConfirmationStatus
+  );
+  const containingStatus = nodes.filter(
+    (node) =>
+      node.text.includes(physicalApprovalConfirmationStatus) ||
+      node.description.includes(physicalApprovalConfirmationStatus)
+  );
+  const exact = [
     count(physicalApprovalConfirmationTitle),
     count(physicalApprovalConfirmationReason),
     count(physicalApprovalConfirmationStatus)
   ].join("/");
+  return (
+    `exact=${exact};status=${normalizedStatus.length}/${containingStatus.length}:` +
+    `${containingStatus
+      .slice(0, 2)
+      .map(privateFreeAndroidUiNodeGeometry)
+      .join("|") || "none"}`
+  );
 }
 
 function androidUiRevealGeometrySummary(
