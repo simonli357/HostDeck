@@ -266,10 +266,6 @@ const physicalEventActionMaxDistancePx = 480;
 const physicalSessionOverlayGapPx = 24;
 const physicalScreenshotRedactionInsetPx = 8;
 const physicalScreenshotRedactionRgba = Object.freeze([24, 28, 33, 255] as const);
-const physicalProductOriginLabelGroups = Object.freeze([
-  Object.freeze(["Origin"]),
-  Object.freeze(["Private address", "PRIVATE ADDRESS"])
-]);
 const physicalApprovalConfirmationTitle = "Approve elevated request?";
 const physicalApprovalConfirmationReason =
   "Continue the bounded release validation on the selected device.";
@@ -1951,12 +1947,12 @@ describe("physical Android phone-driver protocol", () => {
       '<hierarchy rotation="0">' +
         '<node text="Host &amp; access" content-desc="" class="android.view.View" ' +
         'bounds="[24,320][400,380]" />' +
-        '<node text="Origin" content-desc="" class="android.view.View" ' +
-        'bounds="[60,440][240,480]" />' +
+        '<node text="" content-desc="Back to session actions" ' +
+        'class="android.widget.Button" clickable="true" bounds="[600,320][700,400]" />' +
+        '<node text="Read &amp; write" content-desc="" class="android.view.View" ' +
+        'bounds="[24,400][300,440]" />' +
         `<node text="${externalOrigin}" content-desc="" class="android.view.View" ` +
         'bounds="[160,500][700,550]" />' +
-        '<node text="PRIVATE ADDRESS" content-desc="" class="android.widget.TextView" ' +
-        'bounds="[60,660][300,700]" />' +
         `<node text="${externalOrigin}" content-desc="" class="android.widget.TextView" ` +
         'bounds="[160,720][700,770]" />' +
         '<node text="" content-desc="" class="android.view.ViewGroup" ' +
@@ -1990,18 +1986,29 @@ describe("physical Android phone-driver protocol", () => {
     const externalOrigin = "https://private.example.ts.net";
     const nodes = parseAndroidUiNodes(
       '<hierarchy rotation="0">' +
-        '<node text="Origin" content-desc="" class="android.view.View" ' +
-        'bounds="[60,440][240,480]" />' +
+        '<node text="Host &amp; access" content-desc="" class="android.view.View" ' +
+        'bounds="[24,320][400,380]" />' +
+        '<node text="" content-desc="Back to session actions" ' +
+        'class="android.widget.Button" clickable="true" bounds="[600,320][700,400]" />' +
+        '<node text="Read &amp; write" content-desc="" class="android.view.View" ' +
+        'bounds="[24,400][300,440]" />' +
         `<node text="${externalOrigin}" content-desc="" class="android.view.View" ` +
         'bounds="[160,500][700,550]" />' +
         '<node text="" content-desc="" class="android.widget.FrameLayout" ' +
         `resource-id="${chromeCompositorResourceId}" bounds="[0,120][720,1280]" />` +
         "</hierarchy>"
     );
-    const label = nodes.find((node) => node.text === "Origin");
+    const title = nodes.find((node) => node.text === "Host & access");
+    const back = nodes.find(
+      (node) => node.description === "Back to session actions"
+    );
+    const permission = nodes.find((node) => node.text === "Read & write");
     const value = nodes.find((node) => node.text === externalOrigin);
     requireCondition(
-      label !== undefined && value !== undefined,
+      title !== undefined &&
+        back !== undefined &&
+        permission !== undefined &&
+        value !== undefined,
       "Private origin rejection fixture was incomplete."
     );
     const rejects = (candidateNodes: readonly AndroidUiNode[]) => {
@@ -2029,13 +2036,14 @@ describe("physical Android phone-driver protocol", () => {
       )
     );
     rejects(replaceValue(Object.freeze({ ...value, resourceId: "product-origin" })));
-    rejects(nodes.filter((node) => node !== label));
+    rejects(nodes.filter((node) => node !== title));
+    rejects(nodes.filter((node) => node !== permission));
     rejects(
       nodes.map((node) =>
-        node === label
+        node === back
           ? Object.freeze({
               ...node,
-              bounds: Object.freeze({ ...node.bounds, bottom: 240, top: 200 })
+              clickable: false
             })
           : node
       )
@@ -2043,22 +2051,22 @@ describe("physical Android phone-driver protocol", () => {
     rejects([
       ...nodes,
       Object.freeze({
-        ...label,
-        bounds: Object.freeze({ ...label.bounds, bottom: 482, top: 442 })
+        ...title,
+        bounds: Object.freeze({ ...title.bounds, bottom: 500, top: 440 })
       })
     ]);
     rejects(
       replaceValue(
         Object.freeze({
           ...value,
-          bounds: Object.freeze({ ...value.bounds, top: 270 })
+          bounds: Object.freeze({ ...value.bounds, top: 80 })
         })
       )
     );
     rejects([
       ...nodes,
       Object.freeze({
-        ...label,
+        ...title,
         bounds: Object.freeze({ bottom: 700, left: 60, right: 300, top: 660 }),
         text: "Private address"
       }),
@@ -2067,7 +2075,7 @@ describe("physical Android phone-driver protocol", () => {
         bounds: Object.freeze({ bottom: 770, left: 160, right: 700, top: 720 })
       }),
       Object.freeze({
-        ...label,
+        ...title,
         bounds: Object.freeze({ bottom: 920, left: 60, right: 240, top: 880 })
       }),
       Object.freeze({
@@ -2119,7 +2127,7 @@ describe("physical Android phone-driver protocol", () => {
         message = error instanceof Error ? error.message : String(error);
       }
       expect(message).toContain("private=1;nodes=n0=te,dn,th,dx,rx,rd,co");
-      expect(message).toContain("labels=l0=1/1,l1=0/0");
+      expect(message).toContain("context=h0/0,b0/0,p0/0");
       expect(message).not.toContain(externalOrigin);
       expect(message).not.toContain(new URL(externalOrigin).hostname);
       expect(message).not.toContain(privateValue);
@@ -9790,18 +9798,13 @@ function selectProductOriginScreenshotRedactions(
     page
   );
   requireCondition(privateNodes.length <= 2, failure);
-  const labels = nodes.filter(
-    (node) =>
-      physicalProductOriginLabelGroups.some((group) =>
-        group.some((text) => node.text === text)
-      ) &&
-      androidUiNodeIsWebText(node) &&
-      !node.clickable &&
-      node.description === "" &&
-      node.resourceId === "" &&
-      androidUiNodeIsFullyInsideRegion(node, page)
+  const context = findProductOriginScreenshotContext(nodes, page);
+  requireCondition(
+    context.hostEligible.length === 1 &&
+      context.backEligible.length === 1 &&
+      context.permissionEligible.length === 1,
+    failure
   );
-  const owningLabels: AndroidUiNode[] = [];
   const redactions = privateNodes.map((node) => {
     requireCondition(
       node.text === origin.origin &&
@@ -9812,13 +9815,6 @@ function selectProductOriginScreenshotRedactions(
         androidUiNodeIsFullyInsideRegion(node, page),
       failure
     );
-    const matches = labels.filter((label) =>
-      androidProductOriginLabelOwnsNode(label, node)
-    );
-    requireCondition(matches.length === 1, failure);
-    const owner = matches[0];
-    requireCondition(owner !== undefined, failure);
-    owningLabels.push(owner);
     const right = Math.min(
       page.left + page.width,
       node.bounds.right + physicalScreenshotRedactionInsetPx
@@ -9843,7 +9839,6 @@ function selectProductOriginScreenshotRedactions(
       width: right - left
     });
   });
-  requireCondition(new Set(owningLabels).size === owningLabels.length, failure);
   return mergePhysicalScreenshotRegions(redactions);
 }
 
@@ -9853,20 +9848,7 @@ function privateProductOriginRedactionFailure(
   origin: URL,
   page: PhysicalScreenshotRegion
 ): string {
-  const labels = physicalProductOriginLabelGroups.map((group, index) => {
-    const matches = nodes.filter((node) =>
-      group.some((text) => node.text === text)
-    );
-    const eligible = matches.filter(
-      (node) =>
-        androidUiNodeIsWebText(node) &&
-        !node.clickable &&
-        node.description === "" &&
-        node.resourceId === "" &&
-        androidUiNodeIsFullyInsideRegion(node, page)
-    );
-    return `l${String(index)}=${String(matches.length)}/${String(eligible.length)}`;
-  });
+  const context = findProductOriginScreenshotContext(nodes, page);
   const privateShape = privateNodes.slice(0, 4).map((node, index) => {
     const registeredText = [...deviceForbiddenValues].some((value) =>
       node.text.includes(value)
@@ -9897,7 +9879,10 @@ function privateProductOriginRedactionFailure(
   });
   const diagnostic =
     `private=${String(privateNodes.length)};` +
-    `nodes=${privateShape.join("|") || "none"};labels=${labels.join(",")}`;
+    `nodes=${privateShape.join("|") || "none"};` +
+    `context=h${String(context.hostMatches.length)}/${String(context.hostEligible.length)},` +
+    `b${String(context.backMatches.length)}/${String(context.backEligible.length)},` +
+    `p${String(context.permissionMatches.length)}/${String(context.permissionEligible.length)}`;
   const privateValues = [
     origin.origin,
     origin.hostname,
@@ -9914,23 +9899,60 @@ function privateProductOriginRedactionFailure(
   );
 }
 
+function findProductOriginScreenshotContext(
+  nodes: readonly AndroidUiNode[],
+  page: PhysicalScreenshotRegion
+) {
+  const hostMatches = nodes.filter((node) => node.text === "Host & access");
+  const backMatches = nodes.filter(
+    (node) => node.description === "Back to session actions"
+  );
+  const permissionMatches = nodes.filter(
+    (node) => node.text === "Read & write"
+  );
+  return Object.freeze({
+    backEligible: Object.freeze(
+      backMatches.filter(
+        (node) =>
+          node.text === "" &&
+          node.clickable &&
+          node.resourceId === "" &&
+          androidUiNodeIsFullyInsideRegion(node, page)
+      )
+    ),
+    backMatches: Object.freeze(backMatches),
+    hostEligible: Object.freeze(
+      hostMatches.filter((node) =>
+        androidProductContextTextIsEligible(node, page)
+      )
+    ),
+    hostMatches: Object.freeze(hostMatches),
+    permissionEligible: Object.freeze(
+      permissionMatches.filter((node) =>
+        androidProductContextTextIsEligible(node, page)
+      )
+    ),
+    permissionMatches: Object.freeze(permissionMatches)
+  });
+}
+
+function androidProductContextTextIsEligible(
+  node: AndroidUiNode,
+  page: PhysicalScreenshotRegion
+): boolean {
+  return (
+    androidUiNodeIsWebText(node) &&
+    !node.clickable &&
+    node.description === "" &&
+    node.resourceId === "" &&
+    androidUiNodeIsFullyInsideRegion(node, page)
+  );
+}
+
 function androidUiNodeIsWebText(node: AndroidUiNode): boolean {
   return (
     node.className === "android.view.View" ||
     node.className === "android.widget.TextView"
-  );
-}
-
-function androidProductOriginLabelOwnsNode(
-  label: AndroidUiNode,
-  value: AndroidUiNode
-): boolean {
-  const verticalGap = value.bounds.top - label.bounds.bottom;
-  return (
-    value.bounds.top >= label.bounds.top &&
-    verticalGap >= -16 &&
-    verticalGap <= 192 &&
-    Math.abs(value.bounds.left - label.bounds.left) <= 192
   );
 }
 
