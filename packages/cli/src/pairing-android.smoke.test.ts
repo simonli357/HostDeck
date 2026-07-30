@@ -1388,7 +1388,8 @@ describe("physical Android phone-driver protocol", () => {
     });
     const anonymousApprove = Object.freeze({
       ...unrelatedAction,
-      bounds: Object.freeze({ bottom: 1180, left: 590, right: 690, top: 1100 })
+      bounds: Object.freeze({ bottom: 1180, left: 590, right: 690, top: 1100 }),
+      description: "Opaque submit control"
     });
     const pageNodes = nodes.filter((node) => !node.clickable);
     const anonymousConfirmation = Object.freeze([
@@ -1424,6 +1425,12 @@ describe("physical Android phone-driver protocol", () => {
       selectPhysicalApprovalConfirmationAction(
         anonymousConfirmation.filter((node) => node !== anonymousApprove)
       )
+    ).toBeNull();
+    expect(
+      selectPhysicalApprovalConfirmationAction([
+        ...anonymousConfirmation.filter((node) => node !== anonymousApprove),
+        Object.freeze({ ...anonymousApprove, description: "" })
+      ])
     ).toBeNull();
     expect(
       selectPhysicalApprovalConfirmationAction([
@@ -9548,12 +9555,13 @@ function selectPhysicalApprovalConfirmationAction(
   if (
     cancel === undefined ||
     approve === undefined ||
+    cancel.text !== "" ||
+    cancel.description !== "" ||
+    approve.text !== "" ||
+    approve.description === "" ||
     [cancel, approve].some(
       (node) =>
-        node.text !== "" ||
-        node.description !== "" ||
-        androidUiNodeWidth(node) < 44 ||
-        androidUiNodeHeight(node) < 44
+        androidUiNodeWidth(node) < 44 || androidUiNodeHeight(node) < 44
     ) ||
     Math.abs(cancel.bounds.top - approve.bounds.top) > 8 ||
     Math.abs(cancel.bounds.bottom - approve.bounds.bottom) > 8
