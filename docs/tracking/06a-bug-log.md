@@ -37,6 +37,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-029 | Inline approval review can be hierarchy-present beneath the fixed session-control dock. | High | Release blocker | Closed | `FE-V1-090` | The clean pushed `30f55f4` run safely revealed review, opened confirmation, verified its reason, and captured it. |
 | BUG-030 | Approval confirmation action is not admitted by exact semantic, clickable, fully visible reveal on the real hierarchy. | High | Release blocker | In progress | `FE-V1-090` | Clean pushed `0e1781a` matches the footer but exposes duplicate background/sheet reason text. Bind unique title/status plus exactly one between-title/status reason instead of requiring global reason uniqueness. |
 | BUG-031 | Failure cleanup can leave a background Android Chrome process after returning Home. | High | Release blocker | In progress | `FE-V1-090` | The clean pushed `1d37ef1` failed run ended with Serve absent, launcher foreground, Chrome stopped, dedicated profile selected, and clean worktree. Successful-run absence proof remains. |
+| BUG-032 | A production pairing-confirmation timeout reports no bounded claim/CSRF response or recognized UI-state evidence. | High | Release blocker | In progress | `FE-V1-090` | The clean pushed `43b27a5` run crossed the claim gate and consumed the pairing code, then timed out before `Phone paired`; private-free diagnostics and a corrected physical run remain. |
 
 ## Routing
 
@@ -468,4 +469,19 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Validation required: direct cleanup ordering/settled-observation regression where practical, focused driver tests, CLI typecheck, lint/static/planning checks, and both failed-run plus successful-run physical absence proof.
 - Fix: one frozen command plan now sends Home before force-stop. One helper waits for stopped state, waits a further second, requires stopped state again, and is reused in the success path, initial finalizer, and a final pass after profile/lifecycle/host/settings/tunnel cleanup.
 - Validation: direct regression freezes and asserts Home-before-force-stop ordering. Focused/static gates passed before the clean pushed runs; `1d37ef1`, `306859b`, `d57c523`, `868b15a`, and `0e1781a` each ended with Serve absent, launcher foreground, Chrome stopped, dedicated profile selected, and clean worktree. Successful-run physical absence proof remains pending.
+- Closed by: pending corrected physical evidence and implementation commit.
+
+### BUG-032 Pairing Confirmation Timeout Lacks Bounded Evidence
+
+- Symptom: the clean pushed `43b27a5` run passed the unrelated-network private-HTTPS preflight, entered and released the deliberate claim gate, consumed the pairing code, then timed out waiting for `Phone paired` before the approval candidate was exercised.
+- Impact: the existing failure cannot distinguish a completed claim with failed CSRF bootstrap, a recognized product failure state, an unknown browser page, or a missing response; blind reruns would weaken the no-retry physical gate.
+- Route: high release blocker and task-local physical observability correction inside `FE-V1-090`; no product, pairing, authorization, ingress, timeout, or retry behavior changes.
+- Related requirements: `NFR-004`, `PR-005`, `MDH-02`, `MDH-03`, `MDH-16`, `MDH-21`, `MDH-22`, `MDH-24`.
+- Affected / owning task: `FE-V1-090` production pairing entry and no-retry physical diagnosis.
+- Blocks: diagnosis of the pairing stop, corrected aggregate physical acceptance, retained phone deployment, and all downstream release tasks.
+- Root cause: the confirmation waiter retained only a generic missing-label message. Request inspection counted claim and CSRF starts but not their response statuses, and the failure path retained no allowlisted startup-state projection.
+- Harsh success criteria: retain claim and CSRF response statuses through the existing bounded status recorder; report only request/status counts, hardened-cookie presence, device/used-code counts, known proxy reason, and exact allowlisted pairing-state labels; classify all arbitrary hierarchy content as `unknown`; never emit the origin, fragment, token, device identifier, arbitrary UI text, or raw hierarchy; preserve the same single claim, timeouts, and no-retry behavior.
+- Validation required: direct arbitrary-content privacy regression, focused physical-driver tests, CLI typecheck, lint/static/planning checks, and one clean pushed no-retry phone run that either advances or supplies enough bounded evidence for a root fix.
+- Fix: the physical request inspector now records bounded claim/CSRF response statuses. Pairing-confirmation failure assembles a private-free diagnostic from those statuses, cookie issuance, database completion, proxy trust, and a frozen allowlist of product startup headings.
+- Validation: direct arbitrary-content exclusion passes with exact diagnostic output; focused 31/one intentional physical skip, CLI typecheck, lint across 829 files, package exports, and the 220-task/84-requirement/683-dependency planning graph pass. Commit/push and corrected physical evidence remain pending.
 - Closed by: pending corrected physical evidence and implementation commit.

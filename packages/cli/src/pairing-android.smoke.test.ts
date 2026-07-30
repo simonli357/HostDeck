@@ -189,6 +189,22 @@ const physicalAndroidChromeStopCommandPlan = Object.freeze([
     "com.android.chrome"
   ] as const)
 ] as const);
+const pairingStartupDiagnosticLabels = Object.freeze([
+  "Checking secure link",
+  "Pairing this phone",
+  "Phone paired",
+  "Pairing link is invalid",
+  "Secure entry failed",
+  "Pairing link was not accepted",
+  "Pairing address was rejected",
+  "Pairing attempts are limited",
+  "Pairing is temporarily unavailable",
+  "Pairing outcome is unknown",
+  "Phone paired, secure access incomplete",
+  "HostDeck could not start",
+  "Checking this phone",
+  "HostDeck is closed"
+] as const);
 const tailscaleDnsServer = "100.100.100.100";
 const physicalPageMaxBytes = defaultResourceBudget.cli_response_max_bytes;
 const chromeForegroundAdbArgs = [
@@ -951,6 +967,31 @@ describe("physical Android phone-driver protocol", () => {
     expect(() =>
       createPrivatePairingChromeHandoff(link, "com.android.chrome;id")
     ).toThrow("Physical Chrome activity was invalid.");
+  });
+
+  it("diagnoses a stalled pairing confirmation without emitting arbitrary UI content", () => {
+    const privateUiText = "private-host-and-pairing-material";
+    const diagnostic = pairingConfirmationFailure({
+      claimRequests: 1,
+      claimResponseStatuses: [201],
+      csrfRequests: 0,
+      csrfResponseStatuses: [],
+      devices: 2,
+      hardenedCookieObserved: true,
+      nodes: [
+        { description: "", text: privateUiText },
+        { description: "Pairing this phone", text: "" }
+      ],
+      proxyRejection: null,
+      usedPairingCodes: 1
+    });
+
+    expect(diagnostic).toBe(
+      "Production pairing confirmation did not render on Android " +
+        "(claim=1/201;csrf=0/none;cookie=set;devices=2;used_codes=1;" +
+        "proxy=none;ui=Pairing this phone)."
+    );
+    expect(diagnostic).not.toContain(privateUiText);
   });
 
   it("injects the two-line prompt without placing prompt text in ADB arguments or stdin", () => {
@@ -1750,7 +1791,9 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         accessRequests: 0,
         accessResponseStatuses: [],
         claimRequests: 0,
+        claimResponseStatuses: [],
         csrfRequests: 0,
+        csrfResponseStatuses: [],
         deletionCookieObserved: false,
         fragmentLeaks: 0,
         hardenedCookieObserved: false,
@@ -2984,7 +3027,9 @@ interface RequestInspection {
   accessRequests: number;
   accessResponseStatuses: number[];
   claimRequests: number;
+  claimResponseStatuses: number[];
   csrfRequests: number;
+  csrfResponseStatuses: number[];
   deletionCookieObserved: boolean;
   fragmentLeaks: number;
   hardenedCookieObserved: boolean;
@@ -4354,6 +4399,18 @@ function installRequestInspection(
     return payload;
   });
   app.addHook("onResponse", async (request, reply) => {
+    if (request.url === "/api/v1/access/pairing-claims") {
+      recordPhysicalResponseStatus(
+        inspection.claimResponseStatuses,
+        reply.statusCode
+      );
+    }
+    if (request.url === "/api/v1/access/csrf") {
+      recordPhysicalResponseStatus(
+        inspection.csrfResponseStatuses,
+        reply.statusCode
+      );
+    }
     if (request.url === "/api/v1/access") {
       recordPhysicalResponseStatus(
         inspection.accessResponseStatuses,
@@ -5950,12 +6007,36 @@ async function openProductionMissionControl(
   }>,
   initialViewport: PhysicalMissionControlInitialViewport
 ): Promise<void> {
-  const paired = await waitForAndroidUiNode(
-    "text",
-    "Phone paired",
-    30_000,
-    "Production pairing confirmation did not render on Android."
-  );
+  let paired: AndroidUiNode;
+  try {
+    paired = await waitForAndroidUiNode(
+      "text",
+      "Phone paired",
+      30_000,
+      "Production pairing confirmation did not render on Android."
+    );
+  } catch {
+    const nodes = await readAndroidUiNodes();
+    throw new Error(
+      pairingConfirmationFailure({
+        claimRequests: input.requestInspection.claimRequests,
+        claimResponseStatuses:
+          input.requestInspection.claimResponseStatuses,
+        csrfRequests: input.requestInspection.csrfRequests,
+        csrfResponseStatuses: input.requestInspection.csrfResponseStatuses,
+        devices: countRows(input.db, "auth_devices"),
+        hardenedCookieObserved:
+          input.requestInspection.hardenedCookieObserved,
+        nodes,
+        proxyRejection: input.readProxyRejection(),
+        usedPairingCodes: countMatchingRows(
+          input.db,
+          "pairing_codes",
+          "used_at IS NOT NULL"
+        )
+      })
+    );
+  }
   const continueButton = await waitForAndroidUiNode(
     "text",
     "Open Mission Control",
@@ -9054,6 +9135,35 @@ function missionControlRouteFailure(
     `host=${route(inspection.hostStatusRequests, inspection.hostStatusResponseStatuses)};` +
     `sessions=${route(inspection.sessionListRequests, inspection.sessionListResponseStatuses)};` +
     `proxy=${proxyRejection ?? "none"}).`
+  );
+}
+
+function pairingConfirmationFailure(input: Readonly<{
+  readonly claimRequests: number;
+  readonly claimResponseStatuses: readonly number[];
+  readonly csrfRequests: number;
+  readonly csrfResponseStatuses: readonly number[];
+  readonly devices: number;
+  readonly hardenedCookieObserved: boolean;
+  readonly nodes: readonly Pick<AndroidUiNode, "description" | "text">[];
+  readonly proxyRejection: string | null;
+  readonly usedPairingCodes: number;
+}>): string {
+  const route = (requests: number, statuses: readonly number[]): string =>
+    `${requests}/${statuses.length === 0 ? "none" : statuses.join(",")}`;
+  const knownStates = pairingStartupDiagnosticLabels.filter((label) =>
+    input.nodes.some(
+      (node) => node.text === label || node.description === label
+    )
+  );
+  return (
+    "Production pairing confirmation did not render on Android " +
+    `(claim=${route(input.claimRequests, input.claimResponseStatuses)};` +
+    `csrf=${route(input.csrfRequests, input.csrfResponseStatuses)};` +
+    `cookie=${input.hardenedCookieObserved ? "set" : "absent"};` +
+    `devices=${input.devices};used_codes=${input.usedPairingCodes};` +
+    `proxy=${input.proxyRejection ?? "none"};` +
+    `ui=${knownStates.length === 0 ? "unknown" : knownStates.join("|")}).`
   );
 }
 
