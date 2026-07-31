@@ -660,3 +660,17 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Harsh success criteria: every screenshot taken while Host & access is open must use one mandatory Host-evidence capture owner; admit redaction only under one unique recognized Host context; keep the raw screenshot unpublished on rejection, retain no private diagnostic, and prove the next clean no-retry phone run saves the recovered-profile checkpoint before continuing.
 - Validation required: direct redaction positive and hostile matrices, focused Android-driver suite, CLI typecheck, Biome, planning checks, one clean pushed physical crossing through `fe090-39-profile-recovered.png`, private scan, and exact success/failure cleanup.
 - Current state: the selector correction passes 62 focused tests with one intentional physical skip, typecheck, Biome, and diff checks; physical proof remains pending on a fresh committed candidate.
+
+### BUG-054 Incompatible Runtime Check Still Requires Ready Remote Copy
+
+- Symptom: clean candidate `0ac7b05` accepted all dashboard checkpoints through `fe090-39-profile-recovered.png`, then the physical runtime-compatibility branch failed after the deliberate incompatible refresh because the bounded oracle could not find `Remote access ready` after four swipes.
+- Impact: the aggregate run published no retained evidence and stopped before TalkBack, archive, and final cleanup assertions could close `FE-V1-090`.
+- Route: high release blocker and small physical-acceptance harness correction inside `FE-V1-090`; no product route, runtime, remote access, or user-facing contract change.
+- Related requirements: `NFR-004`, `PR-005`, `MDH-02`, `MDH-16`, `MDH-20`, `MDH-22`, `MDH-24`.
+- Affected / owning task: `FE-V1-090` physical runtime-compatibility state transition.
+- Blocks: trustworthy incompatible/recovered runtime evidence, final TalkBack/archive/revocation acceptance, retained deployment, and downstream release tasks.
+- Root cause: `runPhysicalRuntimeCompatibilityState()` intentionally changed the fixture's Codex collaboration modes so the refresh should replace ready compatibility with `Incompatible`, but `runOneProductionRemoteCheck()` unconditionally required the transient pre-refresh `Remote access ready` label after every status check. The failure was an impossible oracle requirement for the intentional incompatible branch, not a claimed remote-network failure.
+- Fix: make the post-check ready assertion explicit. All ordinary remote checks retain the strict ready-truth requirement; only the deliberate incompatible transition skips that transient label and then requires the authoritative Mission Control `Incompatible` state after the Host sheet closes. The status-then-refresh request counts and single-action tap proof remain mandatory.
+- Harsh success criteria: never infer compatibility from a request alone; require the exact status-then-refresh sequence, close the Host sheet through its owned control, and admit the incompatible and recovered Mission Control states exactly once without retry or remote mutation.
+- Validation required: focused Android-driver regression, CLI typecheck, Biome, planning checks, one fresh clean no-retry physical run from the pushed correction through TalkBack/archive/revocation/cleanup, private scan, and retained evidence inspection.
+- Current state: `0ac7b05` physical run passed 45 of 46 tests and proved the former privacy boundary; this correction is pending static validation, commit/push, and a fresh clean aggregate run.

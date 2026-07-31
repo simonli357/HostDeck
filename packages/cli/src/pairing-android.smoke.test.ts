@@ -9727,7 +9727,10 @@ async function runPhysicalRuntimeCompatibilityState(
     30_000,
     "Physical runtime compatibility check lost remote-ready truth."
   );
-  await runOneProductionRemoteCheck(input.requestInspection);
+  // The deliberate incompatibility replaces remote-ready truth; Mission Control owns that checkpoint.
+  await runOneProductionRemoteCheck(input.requestInspection, {
+    requireReadyAfterCheck: false
+  });
   await closeProductionHostAccessSheet();
   await waitForAndroidUiText(
     "Incompatible",
@@ -11248,7 +11251,8 @@ async function closeProductionHostAccessSheet(): Promise<void> {
 }
 
 async function runOneProductionRemoteCheck(
-  inspection: RequestInspection
+  inspection: RequestInspection,
+  options: Readonly<{ readonly requireReadyAfterCheck?: boolean }> = {}
 ): Promise<void> {
   const requestsBefore = Object.freeze({
     host: inspection.hostStatusRequests,
@@ -11275,13 +11279,15 @@ async function runOneProductionRemoteCheck(
     terminalFailureMessage:
       "Production remote check did not settle after two bounded taps."
   });
-  await revealAndroidUiNode(
-    "text",
-    "Remote access ready",
-    "backward",
-    30_000,
-    "Production remote check did not return to current ready truth."
-  );
+  if (options.requireReadyAfterCheck !== false) {
+    await revealAndroidUiNode(
+      "text",
+      "Remote access ready",
+      "backward",
+      30_000,
+      "Production remote check did not return to current ready truth."
+    );
+  }
 }
 
 async function capturePrivateFreeProductionScreenshot(
