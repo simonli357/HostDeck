@@ -9788,7 +9788,7 @@ async function runPhysicalRuntimeCompatibilityState(
   });
   await closeProductionHostAccessSheet();
   await waitForAndroidUiText(
-    "Incompatible",
+    "Codex interface incompatible",
     30_000,
     "Physical Mission Control did not render incompatible runtime truth."
   );
@@ -9806,10 +9806,13 @@ async function runPhysicalRuntimeCompatibilityState(
   await runOneProductionRemoteCheck(input.requestInspection);
   await closeProductionHostAccessSheet();
   await waitFor(
-    async () =>
-      (await readAndroidUiNodes()).every(
-        (node) => node.text !== "Incompatible"
-      ),
+    async () => {
+      const nodes = await readAndroidUiNodes();
+      return (
+        nodes.some((node) => node.text === "Codex compatible") &&
+        nodes.every((node) => node.text !== "Codex interface incompatible")
+      );
+    },
     30_000,
     "Physical Mission Control did not recover supported runtime truth."
   );
