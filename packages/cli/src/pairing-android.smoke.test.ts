@@ -180,6 +180,8 @@ const androidTailscaleComponent = "com.tailscale.ipn/.MainActivity";
 const androidEditTextClass = "android.widget.EditText";
 const androidMobileDataStateCommand =
   "dumpsys telephony.registry | grep -E '^ *mUserMobileDataState= *(true|false) *$'";
+const androidPowerPlugTypeCommand =
+  "dumpsys power | grep -E '^ *mPlugType=[0-7] *$'";
 const chromeCompositorResourceId =
   "com.android.chrome:id/compositor_view_holder";
 const chromeToolbarResourceId = "com.android.chrome:id/toolbar_container";
@@ -1603,6 +1605,9 @@ describe("physical Android phone-driver protocol", () => {
     );
     expect(() => parseAndroidPlugType("mPlugType=1\nmPlugType=2\n")).toThrow(
       "Android power plug observation was contradictory."
+    );
+    expect(() => parseAndroidPlugType("x".repeat(512 * 1024 + 1))).toThrow(
+      "Android power observation was invalid."
     );
   });
 
@@ -3149,9 +3154,14 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           );
         }
         if (requireProductionUiAcceptance || requireRemoteAndroidAcceptance) {
+          const plugType = activePlugType;
+          requireCondition(
+            plugType !== null,
+            "Android power plug type was unavailable before stay-awake enforcement."
+          );
           await enforceAndroidAwakeAndUnlocked(
             initialStayAwakeSetting as number,
-            activePlugType as number
+            plugType
           );
           await enforceUnrelatedAndroidNetwork(
             initialWifiEnabled as boolean,
@@ -6628,7 +6638,7 @@ function readAndroidStayAwakeSetting(): number {
 }
 
 function readAndroidPlugType(): number {
-  return parseAndroidPlugType(adb(["shell", "dumpsys", "power"]));
+  return parseAndroidPlugType(adb(["shell", androidPowerPlugTypeCommand]));
 }
 
 function parseAndroidPlugType(output: string): number {
