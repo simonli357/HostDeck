@@ -1591,6 +1591,21 @@ describe("physical Android phone-driver protocol", () => {
     ).toThrow("observation was contradictory");
   });
 
+  it("uses the active Android power plug bit for physical stay-awake enforcement", () => {
+    expect(parseAndroidPlugType("mPlugType=1\n")).toBe(1);
+    expect(parseAndroidPlugType("  mPlugType=2\n")).toBe(2);
+    expect(parseAndroidPlugType("mPlugType=4\n")).toBe(4);
+    expect(() => parseAndroidPlugType("mPlugType=0\n")).toThrow(
+      "Android power plug type was not active."
+    );
+    expect(() => parseAndroidPlugType("mPlugType=8\n")).toThrow(
+      "Android power plug type was invalid."
+    );
+    expect(() => parseAndroidPlugType("mPlugType=1\nmPlugType=2\n")).toThrow(
+      "Android power plug observation was contradictory."
+    );
+  });
+
   it("parses bounded Android semantic nodes without retaining pairing material", () => {
     const nodes = parseAndroidUiNodes(
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -3095,6 +3110,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       let initialWifiEnabled: boolean | null = null;
       let initialMobileDataEnabled: boolean | null = null;
       let initialStayAwakeSetting: number | null = null;
+      let activePlugType: number | null = null;
       let selectedProfile: "away" | "dedicated" = "dedicated";
       let internalErrorCount = 0;
       let acceptanceError: unknown = null;
@@ -3107,6 +3123,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           requireCleanAcceptanceWorktree();
           requireNoAdbApplicationTunnels();
           initialStayAwakeSetting = readAndroidStayAwakeSetting();
+          activePlugType = readAndroidPlugType();
           initialWifiEnabled = readAndroidWifiEnabled();
           initialMobileDataEnabled = readAndroidMobileDataEnabled();
           environmentFacts = readPhysicalEnvironmentFacts();
@@ -3132,7 +3149,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           );
         }
         if (requireProductionUiAcceptance || requireRemoteAndroidAcceptance) {
-          await enforceAndroidAwakeAndUnlocked(initialStayAwakeSetting as number);
+          await enforceAndroidAwakeAndUnlocked(
+            initialStayAwakeSetting as number,
+            activePlugType as number
+          );
           await enforceUnrelatedAndroidNetwork(
             initialWifiEnabled as boolean,
             initialMobileDataEnabled as boolean
@@ -6607,10 +6627,35 @@ function readAndroidStayAwakeSetting(): number {
   return Number(value);
 }
 
+function readAndroidPlugType(): number {
+  return parseAndroidPlugType(adb(["shell", "dumpsys", "power"]));
+}
+
+function parseAndroidPlugType(output: string): number {
+  requireCondition(
+    Buffer.byteLength(output, "utf8") <= 512 * 1024 && !output.includes("\u0000"),
+    "Android power observation was invalid."
+  );
+  const matches = [...output.matchAll(/^\s*mPlugType=(\d+)\s*$/gmu)];
+  requireCondition(
+    matches.length === 1,
+    "Android power plug observation was contradictory."
+  );
+  const value = Number(matches[0]?.[1]);
+  requireCondition(
+    Number.isSafeInteger(value) && value >= 1 && value <= 7,
+    value === 0
+      ? "Android power plug type was not active."
+      : "Android power plug type was invalid."
+  );
+  return value;
+}
+
 async function enforceAndroidAwakeAndUnlocked(
-  initialSetting: number
+  initialSetting: number,
+  activePlugType: number
 ): Promise<void> {
-  const requiredSetting = initialSetting | 2;
+  const requiredSetting = initialSetting | activePlugType;
   if (requiredSetting !== initialSetting) {
     adb([
       "shell",
