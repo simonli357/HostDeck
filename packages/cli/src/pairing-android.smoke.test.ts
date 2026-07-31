@@ -21,7 +21,7 @@ import { createServer, type Server as HttpServer } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { createRequire } from "node:module";
 import { type AddressInfo, createConnection } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
@@ -117,6 +117,14 @@ import QRCode from "qrcode";
 import { build as viteBuild } from "vite";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import {
+  type PhysicalTalkBackObserverCategory,
+  type PhysicalTalkBackObserverEvent,
+  type PhysicalTalkBackTranscriptSummary,
+  parsePhysicalTalkBackObserverLine,
+  runPhysicalTalkBackCleanupPlan,
+  validatePhysicalTalkBackTranscript
+} from "../../../tests/support/android-talkback.js";
 import {
   createPhysicalDashboardControls,
   type PhysicalDashboardControls
@@ -276,6 +284,25 @@ const physicalPromptTurnId = "turn-physical-prompt-001";
 const physicalPromptText = "FE020_android_line_one\nFE020_android_line_two";
 const physicalGoalObjective = "Complete_FE090_device_acceptance";
 const physicalSkillSearch = "release-readiness";
+const androidTalkBackPackage = "com.google.android.marvin.talkback";
+const androidTalkBackService =
+  `${androidTalkBackPackage}/${androidTalkBackPackage}.TalkBackService`;
+const physicalTalkBackDeviceDex = "/data/local/tmp/hostdeck-talkback.dex";
+const physicalTalkBackObserverClass =
+  "app.hostdeck.talkbackobserver.HostDeckTalkBackObserver";
+const physicalTalkBackTouchClass =
+  "app.hostdeck.talkbackobserver.HostDeckUhidTouch";
+const physicalTalkBackPermissions = Object.freeze([
+  "android.permission.POST_NOTIFICATIONS",
+  "android.permission.READ_PHONE_STATE"
+] as const);
+const physicalTalkBackMutablePermissionFlags = Object.freeze([
+  "review-required",
+  "revoked-compat",
+  "revoke-when-requested",
+  "user-fixed",
+  "user-set"
+] as const);
 const deviceForbiddenValues = new Set<string>();
 const { PNG: Png } = createRequire(import.meta.url)("pngjs") as unknown as {
   readonly PNG: PngConstructor;
@@ -2921,6 +2948,9 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       requireOneAuthorizedDevice();
       const controller = new AbortController();
       const directory = mkdtempSync(join(tmpdir(), "hostdeck-pairing-android-"));
+      const talkBackArtifacts = requireDashboardUiAcceptance
+        ? buildPhysicalTalkBackArtifacts(directory)
+        : null;
       const dbPath = join(directory, "hostdeck.sqlite");
       const opened = openMigratedDatabase(dbPath);
       const remoteStates = createRemoteIngressStateRepository(opened.db);
@@ -3038,6 +3068,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           if (requireDashboardUiAcceptance) {
             requireAndroidTalkBackService();
             requireReadableAndroidAccessibilitySettings();
+            requirePhysicalTalkBackDevicePreflight();
           }
         }
         if (
@@ -3650,7 +3681,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             selectedDashboardControls !== null &&
               selectedPromptRuntime !== null &&
               dashboardUiHost !== null &&
-              lifecycleManager !== null,
+              lifecycleManager !== null &&
+              talkBackArtifacts !== null,
             "Physical dashboard production runtime was unavailable."
           );
           dashboardResult = await runProductionDashboardUiSequence({
@@ -3673,7 +3705,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             },
             setRuntimeCompatible(compatible) {
               dashboardRuntimeCompatible = compatible;
-            }
+            },
+            talkBackArtifacts: talkBackArtifacts as PhysicalTalkBackArtifacts
           });
         } else if (requireRecoveryUiAcceptance) {
           const recoveryUiHost = host;
@@ -4382,9 +4415,39 @@ interface PhysicalDashboardSequenceResult {
 }
 
 interface PhysicalTalkBackResult {
-  readonly available: boolean;
+  readonly available: true;
+  readonly permissionStateRestored: true;
   readonly restored: true;
-  readonly traversedLabels: readonly string[];
+  readonly serviceBound: true;
+  readonly touchExplorationActive: true;
+  readonly transcript: PhysicalTalkBackTranscriptSummary;
+}
+
+interface PhysicalTalkBackArtifacts {
+  readonly dexPath: string;
+  readonly sha256: string;
+}
+
+interface AndroidAccessibilitySnapshot {
+  readonly accessibilityEnabled: string;
+  readonly enabledServices: string;
+  readonly touchExplorationEnabled: string;
+  readonly touchExplorationGrantedServices: string;
+}
+
+interface AndroidPermissionSnapshot {
+  readonly flags: readonly string[];
+  readonly granted: boolean;
+  readonly permission: (typeof physicalTalkBackPermissions)[number];
+}
+
+interface PhysicalTalkBackObserverRuntime {
+  readonly events: PhysicalTalkBackObserverEvent[];
+  readonly markStopping: () => void;
+  readonly process: ChildProcess;
+  readonly readFailure: () => Error | null;
+  readonly ready: () => boolean;
+  readonly stderr: () => string;
 }
 
 interface PhysicalTargetMeasurement {
@@ -4563,6 +4626,99 @@ async function buildProductionBrowserApp(directory: string): Promise<string> {
     "Physical production browser build was invalid."
   );
   return buildRoot;
+}
+
+function buildPhysicalTalkBackArtifacts(
+  directory: string
+): PhysicalTalkBackArtifacts {
+  const sdkRoot = [
+    process.env.ANDROID_SDK_ROOT,
+    process.env.ANDROID_HOME,
+    join(homedir(), "Android", "Sdk")
+  ].find((candidate): candidate is string =>
+    typeof candidate === "string" && candidate.length > 0 && existsSync(candidate)
+  );
+  requireCondition(
+    sdkRoot !== undefined,
+    "Physical TalkBack acceptance requires an Android SDK root."
+  );
+  const androidJar = join(sdkRoot, "platforms", "android-34", "android.jar");
+  const d8 = join(sdkRoot, "build-tools", "35.0.0", "d8");
+  const sourceRoot = fileURLToPath(
+    new URL("../test-support/android-talkback/", import.meta.url)
+  );
+  const sources = [
+    join(sourceRoot, "HostDeckTalkBackObserver.java"),
+    join(sourceRoot, "HostDeckUhidTouch.java")
+  ] as const;
+  requireCondition(
+    existsSync(androidJar) &&
+      existsSync(d8) &&
+      sources.every((source) => existsSync(source)),
+    "Physical TalkBack acceptance build inputs were unavailable."
+  );
+
+  const buildRoot = join(directory, "android-talkback");
+  const classesRoot = join(buildRoot, "classes");
+  const dexRoot = join(buildRoot, "dex");
+  const jarPath = join(buildRoot, "hostdeck-talkback.jar");
+  mkdirSync(classesRoot, { mode: 0o700, recursive: true });
+  mkdirSync(dexRoot, { mode: 0o700 });
+  const buildOptions = {
+    ...commandOptions(),
+    maxBuffer: 128 * 1024,
+    timeout: 45_000
+  } as const;
+  const javacOutput = execFileSync(
+    "javac",
+    [
+      "--release",
+      "17",
+      "-classpath",
+      androidJar,
+      "-d",
+      classesRoot,
+      ...sources
+    ],
+    buildOptions
+  );
+  const jarOutput = execFileSync(
+    "jar",
+    ["--create", "--file", jarPath, "-C", classesRoot, "."],
+    buildOptions
+  );
+  const d8Output = execFileSync(
+    d8,
+    [
+      "--lib",
+      androidJar,
+      "--min-api",
+      "33",
+      "--output",
+      dexRoot,
+      jarPath
+    ],
+    buildOptions
+  );
+  const dexPath = join(dexRoot, "classes.dex");
+  const bytes = readFileSync(dexPath);
+  const dexVersion = bytes.subarray(4, 7).toString("ascii");
+  requireCondition(
+    javacOutput === "" &&
+      jarOutput === "" &&
+      d8Output === "" &&
+      JSON.stringify(readdirSync(dexRoot)) === '["classes.dex"]' &&
+      bytes.length >= 1_024 &&
+      bytes.length <= 256 * 1024 &&
+      bytes.subarray(0, 4).equals(Buffer.from([100, 101, 120, 10])) &&
+      ["035", "037", "038", "039", "040", "041"].includes(dexVersion) &&
+      bytes[7] === 0,
+    "Physical TalkBack acceptance DEX was invalid."
+  );
+  return Object.freeze({
+    dexPath,
+    sha256: createHash("sha256").update(bytes).digest("hex")
+  });
 }
 
 function requireProductionBuildRoot(candidate: string | null): string {
@@ -7412,6 +7568,7 @@ async function runProductionDashboardUiSequence(
     readonly remote: HostDeckRemoteIngressLifecycle;
     readonly setSelectedProfile: (profile: "away" | "dedicated") => void;
     readonly setRuntimeCompatible: (compatible: boolean) => void;
+    readonly talkBackArtifacts: PhysicalTalkBackArtifacts;
   }
 ): Promise<PhysicalDashboardSequenceResult> {
   const screenshotNames: string[] = [...input.initialScreenshotNames];
@@ -7608,7 +7765,10 @@ async function runProductionDashboardUiSequence(
   await returnPhysicalDashboardToMissionControl(input);
   await runPhysicalDashboardProfileSwitch(input, capture);
   await runPhysicalRuntimeCompatibilityState(input, capture);
-  const talkBack = await runPhysicalTalkBackTraversal(input.externalOrigin);
+  const talkBack = await runPhysicalTalkBackTraversal(
+    input.externalOrigin,
+    input.talkBackArtifacts
+  );
   await runPhysicalArchiveControl(input, capture, measure);
   await runPhysicalSelfRevoke(input, capture, measure);
 
@@ -9550,23 +9710,31 @@ async function runPhysicalRuntimeCompatibilityState(
 }
 
 async function runPhysicalTalkBackTraversal(
-  externalOrigin: string
+  externalOrigin: string,
+  artifacts: PhysicalTalkBackArtifacts
 ): Promise<PhysicalTalkBackResult> {
   const service = requireAndroidTalkBackService();
-  const enabledServicesBefore = readAndroidSetting(
-    "secure",
-    "enabled_accessibility_services"
+  requireCondition(
+    new URL(externalOrigin).protocol === "https:",
+    "TalkBack traversal lost its private HTTPS origin."
   );
-  const accessibilityBefore = readAndroidSetting(
-    "secure",
-    "accessibility_enabled"
-  );
-  const labels = new Set<string>();
-  let restored = false;
+  requirePhysicalTalkBackDevicePreflight();
+  const accessibilityBefore = readAndroidAccessibilitySnapshot();
+  const permissionsBefore = readAndroidTalkBackPermissionSnapshots();
+  let cleanupErrors: readonly unknown[] = [];
+  let operationError: unknown = null;
+  let observer: PhysicalTalkBackObserverRuntime | null = null;
+  let pushed = false;
+  let transcript: PhysicalTalkBackTranscriptSummary | null = null;
   try {
-    const existing = enabledServicesBefore === "null" || enabledServicesBefore === ""
+    pushed = true;
+    pushPhysicalTalkBackDex(artifacts);
+    observer = await startPhysicalTalkBackObserver();
+    grantPhysicalTalkBackAcceptancePermissions(permissionsBefore);
+    const existing = accessibilityBefore.enabledServices === "null" ||
+        accessibilityBefore.enabledServices === ""
       ? []
-      : enabledServicesBefore.split(":");
+      : accessibilityBefore.enabledServices.split(":");
     const enabled = Object.freeze([...new Set([...existing, service])]);
     writeAndroidSetting(
       "secure",
@@ -9583,111 +9751,274 @@ async function runPhysicalTalkBackTraversal(
       10_000,
       "Android TalkBack did not become active."
     );
-    await collectPhysicalTalkBackLabels(labels, 10);
+    await waitForPhysicalTalkBackCondition(
+      observer,
+      () => physicalTalkBackServiceIsActive(service),
+      15_000,
+      "Android TalkBack did not bind with touch exploration and double-tap handling."
+    );
+    requireCondition(
+      readPhysicalTalkBackProcesses().filter((line) =>
+        line.includes(physicalTalkBackObserverClass)
+      ).length === 1,
+      "Physical TalkBack observer was not uniquely active."
+    );
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    observer.events.splice(0);
 
-    const session = await waitForAndroidUiNodePresent(
-      "description",
-      physicalUiSessionName,
-      30_000,
-      "TalkBack traversal could not find the selected session."
+    const initialRemote = await movePhysicalTalkBackFocus(
+      observer,
+      0,
+      "forward",
+      new Set(["remote_status"]),
+      24,
+      "TalkBack traversal did not reach current remote-access truth."
     );
-    await activatePhysicalTalkBackNode(
-      session,
-      "Ready to send",
-      "TalkBack did not activate Session Detail."
+    const initialMission = await movePhysicalTalkBackFocus(
+      observer,
+      initialRemote.sequence,
+      "forward",
+      new Set(["mission_control"]),
+      16,
+      "TalkBack traversal did not reach the Mission Control heading."
     );
-    await collectPhysicalTalkBackLabels(labels, 14);
-    const model = await waitForAndroidUiNodePresent(
-      "description",
-      `/model for ${physicalUiSessionName}`,
-      30_000,
-      "TalkBack traversal could not find /model."
+    const selectedSession = await movePhysicalTalkBackFocus(
+      observer,
+      initialMission.sequence,
+      "forward",
+      new Set(["selected_session"]),
+      48,
+      "TalkBack traversal did not reach the selected session."
     );
-    await activatePhysicalTalkBackNode(
-      model,
-      "Model control ready",
-      "TalkBack did not activate the model dialog."
+    const selectedSessionClick = await activatePhysicalTalkBackFocus(
+      observer,
+      selectedSession,
+      "TalkBack did not activate the selected session with double-tap-anywhere."
     );
-    await collectPhysicalTalkBackLabels(labels, 10);
-    adb(["shell", "input", "keyevent", "KEYCODE_BACK"]);
     await waitForAndroidUiText(
       "Ready to send",
       30_000,
-      "TalkBack did not close the model dialog."
+      "TalkBack did not open Session Detail."
     );
-    const mission = await waitForAndroidUiNodePresent(
-      "description",
-      "Back to Mission Control",
+    const sessionDetail = await movePhysicalTalkBackFocus(
+      observer,
+      selectedSessionClick.sequence,
+      "forward",
+      new Set(["session_detail"]),
+      20,
+      "TalkBack traversal did not reach the selected Session Detail heading."
+    );
+    const approvalResult = await movePhysicalTalkBackFocus(
+      observer,
+      sessionDetail.sequence,
+      "forward",
+      new Set(["approval_result"]),
+      64,
+      "TalkBack traversal did not reach prior approval outcome truth."
+    );
+    const modelTrigger = await movePhysicalTalkBackFocus(
+      observer,
+      approvalResult.sequence,
+      "forward",
+      new Set(["model_trigger"]),
+      64,
+      "TalkBack traversal did not reach the primary /model control."
+    );
+    const modelTriggerClick = await activatePhysicalTalkBackFocus(
+      observer,
+      modelTrigger,
+      "TalkBack did not activate /model with double-tap-anywhere."
+    );
+    await waitForAndroidUiText(
+      "Model control ready",
       30_000,
-      "TalkBack traversal could not find Mission Control navigation."
+      "TalkBack did not open the model dialog."
     );
-    await activatePhysicalTalkBackNode(
-      mission,
+    const modalCategories = new Set<PhysicalTalkBackObserverCategory>([
+      "model_close",
+      "model_dialog",
+      "model_settings",
+      "model_state"
+    ]);
+    const initialModalFocus = await waitForAutomaticPhysicalTalkBackFocus(
+      observer,
+      modelTriggerClick.sequence,
+      modalCategories,
+      "The model dialog did not establish an initial TalkBack focus."
+    );
+    const modalForward = await movePhysicalTalkBackFocus(
+      observer,
+      initialModalFocus.sequence,
+      "forward",
+      modalCategories,
+      1,
+      "TalkBack focus escaped the model dialog moving forward."
+    );
+    const modalBackward = await movePhysicalTalkBackFocus(
+      observer,
+      modalForward.sequence,
+      "backward",
+      modalCategories,
+      1,
+      "TalkBack focus escaped the model dialog moving backward."
+    );
+    const modelClose = modalBackward.category === "model_close"
+      ? modalBackward
+      : await movePhysicalTalkBackFocus(
+          observer,
+          modalBackward.sequence,
+          "backward",
+          new Set(["model_close"]),
+          8,
+          "TalkBack traversal did not reach the model close control."
+        );
+    const modelCloseClick = await activatePhysicalTalkBackFocus(
+      observer,
+      modelClose,
+      "TalkBack did not close /model with double-tap-anywhere."
+    );
+    await waitForAndroidUiText(
+      "Ready to send",
+      30_000,
+      "TalkBack model close did not restore Session Detail."
+    );
+    const returnedModelTrigger = await waitForAutomaticPhysicalTalkBackFocus(
+      observer,
+      modelCloseClick.sequence,
+      new Set(["model_trigger"]),
+      "The model dialog did not return TalkBack focus to /model."
+    );
+    const backToMission = await movePhysicalTalkBackFocus(
+      observer,
+      returnedModelTrigger.sequence,
+      "backward",
+      new Set(["back_to_mission"]),
+      64,
+      "TalkBack traversal did not reach Back to Mission Control."
+    );
+    const backToMissionClick = await activatePhysicalTalkBackFocus(
+      observer,
+      backToMission,
+      "TalkBack did not return to Mission Control with double-tap-anywhere."
+    );
+    await waitForAndroidUiText(
       "Mission Control",
-      "TalkBack did not return to Mission Control."
+      30_000,
+      "Physical dashboard did not return to Mission Control after TalkBack."
     );
-    await collectPhysicalTalkBackLabels(labels, 8);
+    const recoveredMission = await movePhysicalTalkBackFocus(
+      observer,
+      backToMissionClick.sequence,
+      "backward",
+      new Set(["mission_control"]),
+      12,
+      "TalkBack did not recover the Mission Control route heading."
+    );
+    await movePhysicalTalkBackFocus(
+      observer,
+      recoveredMission.sequence,
+      "backward",
+      new Set(["remote_status"]),
+      16,
+      "TalkBack did not recover current remote-access truth."
+    );
+    transcript = validatePhysicalTalkBackTranscript(
+      Object.freeze([...observer.events])
+    );
+  } catch (error) {
+    operationError = error;
   } finally {
-    restoreAndroidSetting(
-      "secure",
-      "enabled_accessibility_services",
-      enabledServicesBefore
-    );
-    restoreAndroidSetting(
-      "secure",
-      "accessibility_enabled",
-      accessibilityBefore
-    );
-    restored =
-      readAndroidSetting("secure", "enabled_accessibility_services") ===
-        enabledServicesBefore &&
-      readAndroidSetting("secure", "accessibility_enabled") ===
-        accessibilityBefore;
+    cleanupErrors = await runPhysicalTalkBackCleanupPlan([
+      async () => {
+        if (observer === null) return;
+        try {
+          await stopPhysicalTalkBackObserver(observer);
+        } catch {
+          throw new Error("Physical cleanup could not stop the TalkBack observer.");
+        }
+      },
+      () => {
+        try {
+          restoreAndroidAccessibilitySnapshot(accessibilityBefore);
+        } catch {
+          throw new Error(
+            "Physical cleanup could not restore Android accessibility settings."
+          );
+        }
+      },
+      () => {
+        try {
+          restoreAndroidTalkBackPermissionSnapshots(permissionsBefore);
+        } catch {
+          throw new Error(
+            "Physical cleanup could not restore TalkBack permission state."
+          );
+        }
+      },
+      () => {
+        if (!pushed) return;
+        try {
+          removePhysicalTalkBackDex();
+        } catch {
+          throw new Error("Physical cleanup could not remove the TalkBack DEX.");
+        }
+      },
+      () => {
+        try {
+          requirePhysicalTalkBackProcessAbsence();
+        } catch {
+          throw new Error(
+            "Physical cleanup retained a TalkBack observer or gesture process."
+          );
+        }
+      }
+    ]);
   }
-  requireCondition(restored, "Android TalkBack settings were not restored.");
+  if (operationError !== null && cleanupErrors.length > 0) {
+    throw new AggregateError(
+      [operationError, ...cleanupErrors],
+      "Physical TalkBack acceptance and cleanup failed."
+    );
+  }
+  if (operationError !== null) throw operationError;
+  if (cleanupErrors.length > 0) {
+    throw new AggregateError(
+      cleanupErrors,
+      "Physical TalkBack acceptance cleanup failed."
+    );
+  }
   requireCondition(
-    labels.size >= 8 &&
-      [...labels].some((label) => label.includes("Mission Control")) &&
-      [...labels].some((label) => label.includes(physicalUiSessionName)) &&
-      [...labels].some((label) => label.includes("model")),
-    "Android TalkBack transcript did not cover route, status, and controls."
-  );
-  requireCondition(
-    new URL(externalOrigin).protocol === "https:",
-    "TalkBack traversal lost its private HTTPS origin."
-  );
-  await waitForAndroidUiText(
-    "Mission Control",
-    30_000,
-    "Physical dashboard did not return to Mission Control after TalkBack."
+    transcript !== null,
+    "Physical TalkBack acceptance omitted its bounded transcript."
   );
   return Object.freeze({
     available: true,
+    permissionStateRestored: true,
     restored: true,
-    traversedLabels: Object.freeze([...labels].sort())
+    serviceBound: true,
+    touchExplorationActive: true,
+    transcript
   });
 }
 
 function requireAndroidTalkBackService(): string {
   const packages = adb(["shell", "pm", "list", "packages"]);
   requireCondition(
-    packages.split(/\r?\n/u).includes("package:com.google.android.marvin.talkback"),
+    packages.split(/\r?\n/u).includes(`package:${androidTalkBackPackage}`),
     "Android Accessibility Suite TalkBack is not installed on the target phone."
   );
-  const service =
-    "com.google.android.marvin.talkback/com.google.android.marvin.talkback.TalkBackService";
   const details = adb([
     "shell",
     "dumpsys",
     "package",
-    "com.google.android.marvin.talkback"
+    androidTalkBackPackage
   ]);
   requireCondition(
     details.includes("TalkBackService") &&
       Buffer.byteLength(details, "utf8") <= 4 * 1024 * 1024,
     "Android TalkBack service metadata was unavailable."
   );
-  return service;
+  return androidTalkBackService;
 }
 
 function requireReadableAndroidAccessibilitySettings(): void {
@@ -9751,48 +10082,676 @@ function restoreAndroidSetting(
   writeAndroidSetting(namespace, key, value);
 }
 
-async function collectPhysicalTalkBackLabels(
-  labels: Set<string>,
-  steps: number
-): Promise<void> {
+function requirePhysicalTalkBackDevicePreflight(): void {
+  const uhid = adbWithStatus(["shell", "test", "-w", "/dev/uhid"]);
   requireCondition(
-    Number.isSafeInteger(steps) && steps >= 1 && steps <= 20,
-    "TalkBack traversal count was invalid."
+    uhid.status === 0 && uhid.stdout === "" && uhid.stderr === "",
+    "Physical TalkBack acceptance requires shell access to /dev/uhid."
   );
-  for (let index = 0; index < steps; index += 1) {
-    for (const node of await readAndroidUiNodes()) {
-      for (const value of [node.text, node.description]) {
-        if (
-          value.length >= 1 &&
-          value.length <= 160 &&
-          !value.includes("://") &&
-          [...deviceForbiddenValues].every(
-            (privateValue) => !value.includes(privateValue)
-          )
-        ) {
-          labels.add(value);
-        }
-      }
-    }
-    adb(["shell", "input", "keyevent", "KEYCODE_TAB"]);
-    await new Promise((resolve) => setTimeout(resolve, 120));
+  const dex = adbWithStatus([
+    "shell",
+    "test",
+    "!",
+    "-e",
+    physicalTalkBackDeviceDex
+  ]);
+  requireCondition(
+    dex.status === 0 && dex.stdout === "" && dex.stderr === "",
+    "Physical TalkBack acceptance found a retained device DEX."
+  );
+  requirePhysicalTalkBackProcessAbsence();
+}
+
+function readAndroidAccessibilitySnapshot(): AndroidAccessibilitySnapshot {
+  return Object.freeze({
+    accessibilityEnabled: readAndroidSetting("secure", "accessibility_enabled"),
+    enabledServices: readAndroidSetting(
+      "secure",
+      "enabled_accessibility_services"
+    ),
+    touchExplorationEnabled: readAndroidSetting(
+      "secure",
+      "touch_exploration_enabled"
+    ),
+    touchExplorationGrantedServices: readAndroidSetting(
+      "secure",
+      "touch_exploration_granted_accessibility_services"
+    )
+  });
+}
+
+function restoreAndroidAccessibilitySnapshot(
+  snapshot: AndroidAccessibilitySnapshot
+): void {
+  restoreAndroidSetting(
+    "secure",
+    "enabled_accessibility_services",
+    snapshot.enabledServices
+  );
+  restoreAndroidSetting(
+    "secure",
+    "accessibility_enabled",
+    snapshot.accessibilityEnabled
+  );
+  restoreAndroidSetting(
+    "secure",
+    "touch_exploration_granted_accessibility_services",
+    snapshot.touchExplorationGrantedServices
+  );
+  restoreAndroidSetting(
+    "secure",
+    "touch_exploration_enabled",
+    snapshot.touchExplorationEnabled
+  );
+  requireCondition(
+    JSON.stringify(readAndroidAccessibilitySnapshot()) ===
+      JSON.stringify(snapshot),
+    "Android TalkBack accessibility settings were not restored exactly."
+  );
+}
+
+function readAndroidTalkBackPermissionSnapshots(): readonly AndroidPermissionSnapshot[] {
+  const details = adb(["shell", "dumpsys", "package", androidTalkBackPackage]);
+  const activePackage = details.split("\nHidden system packages:", 1)[0] ?? "";
+  requireCondition(
+    activePackage.length >= 1 &&
+      Buffer.byteLength(activePackage, "utf8") <= 4 * 1024 * 1024,
+    "Android TalkBack permission metadata was unavailable."
+  );
+  return Object.freeze(
+    physicalTalkBackPermissions.map((permission) => {
+      const prefix = `${permission}: granted=`;
+      const matches = activePackage
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith(prefix));
+      requireCondition(
+        matches.length === 1,
+        "Android TalkBack permission state was ambiguous."
+      );
+      const value = matches[0]?.slice(prefix.length) ?? "";
+      const parsed = /^(true|false), flags=\[([A-Z_| ]*)\]$/u.exec(value);
+      requireCondition(
+        parsed !== null,
+        "Android TalkBack permission state was malformed."
+      );
+      const flags = Object.freeze(
+        (parsed[2] ?? "")
+          .split(/[| ]+/u)
+          .filter((flag) => flag.length > 0)
+          .sort()
+      );
+      requireCondition(
+        flags.length <= 16 &&
+          new Set(flags).size === flags.length &&
+          flags.every((flag) => /^[A-Z_]{1,48}$/u.test(flag)),
+        "Android TalkBack permission flags were malformed."
+      );
+      return Object.freeze({
+        flags,
+        granted: parsed[1] === "true",
+        permission
+      });
+    })
+  );
+}
+
+function grantPhysicalTalkBackAcceptancePermissions(
+  snapshots: readonly AndroidPermissionSnapshot[]
+): void {
+  for (const snapshot of snapshots) {
+    if (snapshot.granted) continue;
+    const output = adb([
+      "shell",
+      "pm",
+      "grant",
+      "--user",
+      "0",
+      androidTalkBackPackage,
+      snapshot.permission
+    ]);
+    requireCondition(
+      output === "",
+      "Android TalkBack temporary permission grant was noisy."
+    );
   }
 }
 
-async function activatePhysicalTalkBackNode(
-  node: AndroidUiNode,
-  expectedText: string,
+function restoreAndroidTalkBackPermissionSnapshots(
+  snapshots: readonly AndroidPermissionSnapshot[]
+): void {
+  const flagNames = new Map<string, string>([
+    ["REVIEW_REQUIRED", "review-required"],
+    ["REVOKED_COMPAT", "revoked-compat"],
+    ["REVOKE_WHEN_REQUESTED", "revoke-when-requested"],
+    ["USER_FIXED", "user-fixed"],
+    ["USER_SET", "user-set"]
+  ]);
+  for (const snapshot of snapshots) {
+    const grantCommand = snapshot.granted ? "grant" : "revoke";
+    requireCondition(
+      adb([
+        "shell",
+        "pm",
+        grantCommand,
+        "--user",
+        "0",
+        androidTalkBackPackage,
+        snapshot.permission
+      ]) === "",
+      "Android TalkBack permission grant state was not restorable."
+    );
+    requireCondition(
+      adb([
+        "shell",
+        "pm",
+        "clear-permission-flags",
+        "--user",
+        "0",
+        androidTalkBackPackage,
+        snapshot.permission,
+        ...physicalTalkBackMutablePermissionFlags
+      ]) === "",
+      "Android TalkBack permission flags were not clearable."
+    );
+    const mutableFlags = snapshot.flags.flatMap((flag) => {
+      const value = flagNames.get(flag);
+      return value === undefined ? [] : [value];
+    });
+    if (mutableFlags.length > 0) {
+      requireCondition(
+        adb([
+          "shell",
+          "pm",
+          "set-permission-flags",
+          "--user",
+          "0",
+          androidTalkBackPackage,
+          snapshot.permission,
+          ...mutableFlags
+        ]) === "",
+        "Android TalkBack permission flags were not restorable."
+      );
+    }
+  }
+  requireCondition(
+    JSON.stringify(readAndroidTalkBackPermissionSnapshots()) ===
+      JSON.stringify(snapshots),
+    "Android TalkBack permission state was not restored exactly."
+  );
+}
+
+function pushPhysicalTalkBackDex(artifacts: PhysicalTalkBackArtifacts): void {
+  requireCondition(
+    /^[0-9a-f]{64}$/u.test(artifacts.sha256) && existsSync(artifacts.dexPath),
+    "Physical TalkBack DEX artifact was unavailable."
+  );
+  const push = adb(["push", artifacts.dexPath, physicalTalkBackDeviceDex]);
+  requireCondition(
+    Buffer.byteLength(push, "utf8") <= 4_096,
+    "Physical TalkBack DEX push output was invalid."
+  );
+  adb(["shell", "chmod", "600", physicalTalkBackDeviceDex]);
+  const remoteHash = adb([
+    "shell",
+    "sha256sum",
+    physicalTalkBackDeviceDex
+  ]).trim();
+  requireCondition(
+    remoteHash === `${artifacts.sha256}  ${physicalTalkBackDeviceDex}`,
+    "Physical TalkBack device DEX did not match its host artifact."
+  );
+}
+
+function removePhysicalTalkBackDex(): void {
+  const removed = adbWithStatus([
+    "shell",
+    "rm",
+    "-f",
+    physicalTalkBackDeviceDex
+  ]);
+  const absent = adbWithStatus([
+    "shell",
+    "test",
+    "!",
+    "-e",
+    physicalTalkBackDeviceDex
+  ]);
+  requireCondition(
+    removed.status === 0 &&
+      removed.stdout === "" &&
+      removed.stderr === "" &&
+      absent.status === 0 &&
+      absent.stdout === "" &&
+      absent.stderr === "",
+    "Physical TalkBack device DEX was retained."
+  );
+}
+
+async function startPhysicalTalkBackObserver(): Promise<PhysicalTalkBackObserverRuntime> {
+  adbCommandCount += 1;
+  const child = spawn(
+    "adb",
+    [
+      "shell",
+      `CLASSPATH=${physicalTalkBackDeviceDex}`,
+      "app_process",
+      "/system/bin",
+      physicalTalkBackObserverClass
+    ],
+    {
+      env: { HOME: process.env.HOME, PATH: process.env.PATH },
+      stdio: ["ignore", "pipe", "pipe"]
+    }
+  );
+  requireCondition(
+    child.stdout !== null && child.stderr !== null,
+    "Physical TalkBack observer streams were unavailable."
+  );
+  const events: PhysicalTalkBackObserverEvent[] = [];
+  let failure: Error | null = null;
+  let outputBytes = 0;
+  let ready = false;
+  let stderr = "";
+  let stopping = false;
+  let stdoutBuffer = "";
+  const fail = (message: string): void => {
+    failure ??= new Error(message);
+  };
+  const consumeLine = (line: string): void => {
+    try {
+      const record = parsePhysicalTalkBackObserverLine(line);
+      if (record === null) return;
+      if (record.kind === "ready") {
+        if (ready || events.length > 0) {
+          fail("Physical TalkBack observer emitted a duplicate ready record.");
+        }
+        ready = true;
+        return;
+      }
+      if (record.kind === "error" || record.kind === "overflow") {
+        fail("Physical TalkBack observer reported a bounded runtime failure.");
+        return;
+      }
+      if (!ready) {
+        fail("Physical TalkBack observer emitted an event before readiness.");
+        return;
+      }
+      const previous = events.at(-1);
+      if (
+        previous !== undefined &&
+        record.event.sequence !== previous.sequence + 1
+      ) {
+        fail("Physical TalkBack observer event order was not contiguous.");
+        return;
+      }
+      events.push(record.event);
+    } catch {
+      fail("Physical TalkBack observer emitted unrecognized output.");
+    }
+  };
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    outputBytes += Buffer.byteLength(chunk, "utf8");
+    if (
+      outputBytes > 64 * 1024 ||
+      [...deviceForbiddenValues].some((value) => chunk.includes(value))
+    ) {
+      fail("Physical TalkBack observer output violated its privacy bound.");
+      return;
+    }
+    stdoutBuffer += chunk;
+    const lines = stdoutBuffer.split("\n");
+    stdoutBuffer = lines.pop() ?? "";
+    for (const line of lines) consumeLine(line);
+  });
+  child.stderr.on("data", (chunk: string) => {
+    outputBytes += Buffer.byteLength(chunk, "utf8");
+    stderr += chunk;
+    if (outputBytes > 64 * 1024 || (!stopping && chunk.trim() !== "")) {
+      fail("Physical TalkBack observer emitted unexpected stderr."
+      );
+    }
+  });
+  child.once("error", () => {
+    fail("Physical TalkBack observer process could not start.");
+  });
+  child.once("exit", () => {
+    if (stdoutBuffer !== "") {
+      consumeLine(stdoutBuffer);
+      stdoutBuffer = "";
+    }
+    if (!stopping) {
+      fail("Physical TalkBack observer exited before cleanup."
+      );
+    }
+  });
+  const runtime = Object.freeze({
+    events,
+    markStopping() {
+      stopping = true;
+    },
+    process: child,
+    readFailure: () => failure,
+    ready: () => ready,
+    stderr: () => stderr
+  });
+  try {
+    await waitForPhysicalTalkBackCondition(
+      runtime,
+      runtime.ready,
+      10_000,
+      "Physical TalkBack observer did not become ready."
+    );
+  } catch (error) {
+    try {
+      await stopPhysicalTalkBackObserver(runtime);
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "Physical TalkBack observer startup and cleanup failed."
+      );
+    }
+    throw error;
+  }
+  return runtime;
+}
+
+async function stopPhysicalTalkBackObserver(
+  runtime: PhysicalTalkBackObserverRuntime
+): Promise<void> {
+  runtime.markStopping();
+  const running = readPhysicalTalkBackProcesses().some((line) =>
+    line.includes(physicalTalkBackObserverClass)
+  );
+  if (running) {
+    const kill = adbWithStatus([
+      "shell",
+      "pkill",
+      "-9",
+      "-f",
+      physicalTalkBackObserverClass
+    ]);
+    requireCondition(
+      (kill.status === 0 || kill.status === 137) &&
+        kill.stdout.trim() === "" &&
+        (kill.stderr.trim() === "" || kill.stderr.trim() === "Killed"),
+      "Physical TalkBack observer could not be terminated exactly."
+    );
+  }
+  requireCondition(
+    await waitForChildExit(runtime.process, 5_000),
+    "Physical TalkBack observer host process did not exit."
+  );
+  requireCondition(
+    runtime.stderr().trim() === "" || runtime.stderr().trim() === "Killed",
+    "Physical TalkBack observer retained unexpected stderr."
+  );
+  requirePhysicalTalkBackProcessAbsence();
+}
+
+function readPhysicalTalkBackProcesses(): readonly string[] {
+  const output = adb(["shell", "ps", "-A", "-o", "PID,ARGS"]);
+  requireCondition(
+    Buffer.byteLength(output, "utf8") >= 1 &&
+      Buffer.byteLength(output, "utf8") <= 256 * 1024,
+    "Physical TalkBack process inventory was invalid."
+  );
+  return Object.freeze(
+    output
+      .split(/\r?\n/u)
+      .filter(
+        (line) =>
+          line.includes(physicalTalkBackObserverClass) ||
+          line.includes(physicalTalkBackTouchClass)
+      )
+  );
+}
+
+function requirePhysicalTalkBackProcessAbsence(): void {
+  requireCondition(
+    readPhysicalTalkBackProcesses().length === 0,
+    "Physical TalkBack observer or gesture process was retained."
+  );
+}
+
+function physicalTalkBackServiceIsActive(service: string): boolean {
+  const output = adb([
+    "shell",
+    "dumpsys accessibility | head -n 60"
+  ]);
+  requireCondition(
+    Buffer.byteLength(output, "utf8") >= 1 &&
+      Buffer.byteLength(output, "utf8") <= 64 * 1024,
+    "Android accessibility service observation was invalid."
+  );
+  return (
+    output.includes("touchExplorationEnabled=true") &&
+    output.includes("serviceHandlesDoubleTap=true") &&
+    output.includes(service) &&
+    !output.includes("Bound services:{}")
+  );
+}
+
+async function waitForPhysicalTalkBackCondition(
+  runtime: PhysicalTalkBackObserverRuntime,
+  predicate: () => boolean,
+  timeoutMs: number,
   message: string
 ): Promise<void> {
-  tapAndroidUiNode(node);
-  adb(["shell", "input", "keyevent", "KEYCODE_ENTER"]);
-  try {
-    await waitForAndroidUiText(expectedText, 8_000, message);
-  } catch {
-    tapAndroidUiNode(node);
-    tapAndroidUiNode(node);
-    await waitForAndroidUiText(expectedText, 30_000, message);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const failure = runtime.readFailure();
+    if (failure !== null) throw failure;
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
+  throw new Error(message);
+}
+
+async function movePhysicalTalkBackFocus(
+  runtime: PhysicalTalkBackObserverRuntime,
+  afterSequence: number,
+  direction: "backward" | "forward",
+  targets: ReadonlySet<PhysicalTalkBackObserverCategory>,
+  maximumGestures: number,
+  message: string
+): Promise<PhysicalTalkBackObserverEvent> {
+  requireCondition(
+    Number.isSafeInteger(afterSequence) &&
+      afterSequence >= 0 &&
+      targets.size >= 1 &&
+      Number.isSafeInteger(maximumGestures) &&
+      maximumGestures >= 1 &&
+      maximumGestures <= 64,
+    "Physical TalkBack focus traversal arguments were invalid."
+  );
+  let cursor = afterSequence;
+  for (let gestureCount = 0; gestureCount <= maximumGestures; gestureCount += 1) {
+    const queued = runtime.events.find(
+      (event) => event.sequence > cursor && event.kind === "focus"
+    );
+    if (queued !== undefined) {
+      requirePhysicalTalkBackProductEvent(queued);
+      cursor = queued.sequence;
+      if (targets.has(queued.category)) return queued;
+      continue;
+    }
+    if (gestureCount === maximumGestures) break;
+    const checkpoint = runtime.events.at(-1)?.sequence ?? cursor;
+    runPhysicalTalkBackSwipe(direction);
+    await waitForPhysicalTalkBackCondition(
+      runtime,
+      () =>
+        runtime.events.some(
+          (event) => event.sequence > checkpoint && event.kind === "focus"
+        ),
+      4_000,
+      message
+    );
+  }
+  throw new Error(message);
+}
+
+async function waitForAutomaticPhysicalTalkBackFocus(
+  runtime: PhysicalTalkBackObserverRuntime,
+  afterSequence: number,
+  allowed: ReadonlySet<PhysicalTalkBackObserverCategory>,
+  message: string
+): Promise<PhysicalTalkBackObserverEvent> {
+  await waitForPhysicalTalkBackCondition(
+    runtime,
+    () =>
+      runtime.events.some(
+        (event) => event.sequence > afterSequence && event.kind === "focus"
+      ),
+    4_000,
+    message
+  );
+  const focus = runtime.events.find(
+    (event) => event.sequence > afterSequence && event.kind === "focus"
+  );
+  requireCondition(
+    focus !== undefined && allowed.has(focus.category),
+    message
+  );
+  requirePhysicalTalkBackProductEvent(focus);
+  return focus;
+}
+
+function requirePhysicalTalkBackProductEvent(
+  event: PhysicalTalkBackObserverEvent
+): void {
+  requireCondition(
+    event.category !== "unknown" &&
+      event.category !== "platform_deny" &&
+      event.category !== "platform_permission" &&
+      event.enabled &&
+      event.visible,
+    "Physical TalkBack focus entered an unknown or non-product surface."
+  );
+}
+
+async function activatePhysicalTalkBackFocus(
+  runtime: PhysicalTalkBackObserverRuntime,
+  focus: PhysicalTalkBackObserverEvent,
+  message: string
+): Promise<PhysicalTalkBackObserverEvent> {
+  requireCondition(
+    focus.kind === "focus" &&
+      focus.clickable &&
+      focus.focusable &&
+      focus.enabled &&
+      focus.visible,
+    "Physical TalkBack activation target was invalid."
+  );
+  const point = selectPhysicalTalkBackActivationPoint(focus);
+  const checkpoint = runtime.events.at(-1)?.sequence ?? focus.sequence;
+  runPhysicalTalkBackDoubleTap(point.x, point.y);
+  await waitForPhysicalTalkBackCondition(
+    runtime,
+    () =>
+      runtime.events.some(
+        (event) => event.sequence > checkpoint && event.kind === "click"
+      ),
+    4_000,
+    message
+  );
+  const click = runtime.events.find(
+    (event) => event.sequence > checkpoint && event.kind === "click"
+  );
+  requireCondition(
+    click !== undefined &&
+      click.category === focus.category &&
+      click.bounds.left === focus.bounds.left &&
+      click.bounds.top === focus.bounds.top &&
+      click.bounds.right === focus.bounds.right &&
+      click.bounds.bottom === focus.bounds.bottom,
+    message
+  );
+  return click;
+}
+
+function selectPhysicalTalkBackActivationPoint(
+  focus: PhysicalTalkBackObserverEvent
+): Readonly<{ readonly x: number; readonly y: number }> {
+  const [widthValue, heightValue] = readAndroidDisplaySize().split("x");
+  const width = Number(widthValue);
+  const height = Number(heightValue);
+  requireCondition(
+    Number.isSafeInteger(width) &&
+      Number.isSafeInteger(height) &&
+      width >= 320 &&
+      height >= 480,
+    "Physical TalkBack display geometry was invalid."
+  );
+  const candidates = [
+    Object.freeze({ x: 1_000, y: 1_000 }),
+    Object.freeze({ x: 9_000, y: 1_000 }),
+    Object.freeze({ x: 1_000, y: 9_000 }),
+    Object.freeze({ x: 9_000, y: 9_000 })
+  ] as const;
+  const selected = candidates.find((candidate) => {
+    const screenX = Math.round((candidate.x / 10_000) * width);
+    const screenY = Math.round((candidate.y / 10_000) * height);
+    return !(
+      screenX >= focus.bounds.left &&
+      screenX <= focus.bounds.right &&
+      screenY >= focus.bounds.top &&
+      screenY <= focus.bounds.bottom
+    );
+  });
+  requireCondition(
+    selected !== undefined,
+    "Physical TalkBack could not select an activation point outside the target."
+  );
+  return selected;
+}
+
+function runPhysicalTalkBackSwipe(direction: "backward" | "forward"): void {
+  const coordinates = direction === "forward"
+    ? ["2000", "5000", "8000", "5000"]
+    : ["8000", "5000", "2000", "5000"];
+  requireCondition(
+    adb([
+      "shell",
+      `CLASSPATH=${physicalTalkBackDeviceDex}`,
+      "app_process",
+      "/system/bin",
+      physicalTalkBackTouchClass,
+      "swipe",
+      ...coordinates,
+      "12",
+      "25"
+    ]) === "",
+    "Physical TalkBack swipe gesture emitted unexpected output."
+  );
+}
+
+function runPhysicalTalkBackDoubleTap(x: number, y: number): void {
+  requireCondition(
+    Number.isSafeInteger(x) &&
+      Number.isSafeInteger(y) &&
+      x >= 0 &&
+      x <= 10_000 &&
+      y >= 0 &&
+      y <= 10_000,
+    "Physical TalkBack double-tap coordinates were invalid."
+  );
+  requireCondition(
+    adb([
+      "shell",
+      `CLASSPATH=${physicalTalkBackDeviceDex}`,
+      "app_process",
+      "/system/bin",
+      physicalTalkBackTouchClass,
+      "doubletap",
+      String(x),
+      String(y)
+    ]) === "",
+    "Physical TalkBack double-tap gesture emitted unexpected output."
+  );
 }
 
 async function runPhysicalArchiveControl(
@@ -13523,7 +14482,12 @@ function publishPhysicalDashboardEvidence(input: {
       input.sequence.profileReturnRecovered &&
       input.sequence.selfRevoked &&
       input.sequence.talkBack.available &&
+      input.sequence.talkBack.permissionStateRestored &&
       input.sequence.talkBack.restored &&
+      input.sequence.talkBack.serviceBound &&
+      input.sequence.talkBack.touchExplorationActive &&
+      input.sequence.talkBack.transcript.clickCount === 4 &&
+      input.sequence.talkBack.transcript.focusCount >= 12 &&
       JSON.stringify(input.sequence.interactionIds) ===
         JSON.stringify(mobileInteractionIds) &&
       JSON.stringify(input.sequence.stateIds) ===
@@ -13541,7 +14505,7 @@ function publishPhysicalDashboardEvidence(input: {
   );
   const packageIdentity = readPhysicalDashboardPackageIdentity();
   const evidence = Object.freeze({
-    schema_version: 1,
+    schema_version: 2,
     task: "FE-V1-090",
     status: "machine_pass_pending_full_resolution_review",
     commit: input.environment.commit,
@@ -13597,7 +14561,9 @@ function publishPhysicalDashboardEvidence(input: {
       interactions: input.sequence.interactionIds.length,
       physical_states: input.sequence.stateIds.length,
       screenshots: input.screenshots.length,
-      talkback_labels: input.sequence.talkBack.traversedLabels.length,
+      talkback_click_events: input.sequence.talkBack.transcript.clickCount,
+      talkback_focus_events: input.sequence.talkBack.transcript.focusCount,
+      talkback_total_events: input.sequence.talkBack.transcript.eventCount,
       target_measurements: input.sequence.targetMeasurements.length
     }),
     sequence: input.sequence,
@@ -13629,6 +14595,7 @@ function publishPhysicalDashboardEvidence(input: {
       keyboard_closed: true,
       listener_open: false,
       mobile_data_restored: true,
+      talkback_permission_state_restored: true,
       saved_profile_restored: true,
       sse_active: 0,
       stay_awake_setting_restored: true,
