@@ -2492,6 +2492,55 @@ describe("physical Android phone-driver protocol", () => {
     expect(selection.redactions.every(Object.isFrozen)).toBe(true);
   });
 
+  it("selects bounded redactions for the global Host sheet context", () => {
+    const externalOrigin = "https://private.example.ts.net";
+    const nodes = parseAndroidUiNodes(
+      '<hierarchy rotation="0">' +
+        '<node text="Host &amp; access" content-desc="" class="android.view.View" ' +
+        'bounds="[24,320][400,380]" />' +
+        '<node text="" content-desc="Close Host and access" class="android.widget.Button" ' +
+        'clickable="true" bounds="[600,320][700,400]" />' +
+        `<node text="${externalOrigin}" content-desc="" class="android.view.View" ` +
+        'bounds="[160,500][700,550]" />' +
+        '<node text="" content-desc="" class="android.view.ViewGroup" ' +
+        `resource-id="${chromeToolbarResourceId}" bounds="[0,120][720,288]" />` +
+        '<node text="" content-desc="" class="android.widget.FrameLayout" ' +
+        `resource-id="${chromeCompositorResourceId}" bounds="[0,120][720,1280]" />` +
+        "</hierarchy>"
+    );
+
+    expect(
+      selectPrivateFreeProductionScreenshotEvidence(nodes, externalOrigin, {
+        redactProductOrigin: true
+      })
+    ).toEqual({
+      redactions: [{ height: 66, left: 152, top: 492, width: 556 }],
+      region: { height: 992, left: 0, top: 288, width: 720 }
+    });
+    const close = nodes.find(
+      (node) => node.description === "Close Host and access"
+    );
+    requireCondition(close !== undefined, "Global Host context fixture was incomplete.");
+    expect(() =>
+      selectPrivateFreeProductionScreenshotEvidence(
+        nodes.map((node) =>
+          node === close ? Object.freeze({ ...node, clickable: false }) : node
+        ),
+        externalOrigin,
+        { redactProductOrigin: true }
+      )
+    ).toThrow("retained private browser material");
+    const duplicateCloseNodes =
+      close === undefined ? nodes : [...nodes, Object.freeze({ ...close })];
+    expect(() =>
+      selectPrivateFreeProductionScreenshotEvidence(
+        duplicateCloseNodes,
+        externalOrigin,
+        { redactProductOrigin: true }
+      )
+    ).toThrow("retained private browser material");
+  });
+
   it("routes every Host-access checkpoint through mandatory origin redaction", async () => {
     const calls: Array<
       Readonly<{
@@ -11318,10 +11367,21 @@ function selectProductOriginScreenshotRedactions(
   );
   requireCondition(privateNodes.length <= 2, failure);
   const context = findProductOriginScreenshotContext(nodes, page);
-  requireCondition(
+  const hasSessionContext =
+    context.hostMatches.length === 1 &&
+    context.backMatches.length === 1 &&
+    context.permissionMatches.length === 1 &&
     context.hostEligible.length === 1 &&
-      context.backEligible.length === 1 &&
-      context.permissionEligible.length === 1,
+    context.backEligible.length === 1 &&
+    context.permissionEligible.length === 1;
+  const hasGlobalContext =
+    context.hostMatches.length === 1 &&
+    context.closeMatches.length === 1 &&
+    context.hostEligible.length === 1 &&
+    context.closeEligible.length === 1;
+  requireCondition(
+    (hasSessionContext && !hasGlobalContext) ||
+      (!hasSessionContext && hasGlobalContext),
     failure
   );
   const redactions = privateNodes.map((node) => {
@@ -11401,7 +11461,8 @@ function privateProductOriginRedactionFailure(
     `nodes=${privateShape.join("|") || "none"};` +
     `context=h${String(context.hostMatches.length)}/${String(context.hostEligible.length)},` +
     `b${String(context.backMatches.length)}/${String(context.backEligible.length)},` +
-    `p${String(context.permissionMatches.length)}/${String(context.permissionEligible.length)}`;
+    `p${String(context.permissionMatches.length)}/${String(context.permissionEligible.length)},` +
+    `c${String(context.closeMatches.length)}/${String(context.closeEligible.length)}`;
   const privateValues = [
     origin.origin,
     origin.hostname,
@@ -11429,6 +11490,9 @@ function findProductOriginScreenshotContext(
   const permissionMatches = nodes.filter(
     (node) => node.text === "Read & write"
   );
+  const closeMatches = nodes.filter(
+    (node) => node.description === "Close Host and access"
+  );
   return Object.freeze({
     backEligible: Object.freeze(
       backMatches.filter(
@@ -11440,6 +11504,16 @@ function findProductOriginScreenshotContext(
       )
     ),
     backMatches: Object.freeze(backMatches),
+    closeEligible: Object.freeze(
+      closeMatches.filter(
+        (node) =>
+          node.text === "" &&
+          node.clickable &&
+          node.resourceId === "" &&
+          androidUiNodeIsFullyInsideRegion(node, page)
+      )
+    ),
+    closeMatches: Object.freeze(closeMatches),
     hostEligible: Object.freeze(
       hostMatches.filter((node) => androidNodeIntersectsRegion(node, page))
     ),
