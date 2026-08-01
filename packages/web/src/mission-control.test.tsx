@@ -455,6 +455,22 @@ describe("Mission Control screen states and interaction", () => {
     expect(screen.queryByText("ACT NOW")).toBeNull();
   });
 
+  it("renders supported runtime recovery as current route truth without a detail notice", () => {
+    const snapshot = currentSnapshot();
+    const projection = projectMissionControl(snapshot, nowMs);
+
+    expect(projection.statusCells.map(({ value }) => value)).toEqual([
+      "Remote ready",
+      "Write",
+      "Current"
+    ]);
+    expect(projection.notice).toBeNull();
+    renderScreen(snapshot);
+    expect(screen.getByText("Current", { exact: true })).toBeTruthy();
+    expect(screen.queryByText("Codex compatible", { exact: true })).toBeNull();
+    expect(screen.queryByText("Codex interface incompatible", { exact: true })).toBeNull();
+  });
+
   it.each([
     {
       label: "read only",

@@ -278,6 +278,9 @@ const physicalSessionOverlayGapPx = 24;
 const physicalApprovalLifetimeMs = 30 * 60 * 1_000;
 const physicalScreenshotRedactionInsetPx = 8;
 const physicalScreenshotRedactionRgba = Object.freeze([24, 28, 33, 255] as const);
+const physicalRuntimeIncompatibleTitle = "Codex interface incompatible";
+const physicalRuntimeSupportedTitle = "Codex compatible";
+const physicalDashboardRemoteBrowserCheckCount = 4;
 const physicalApprovalConfirmationTitle = "Approve elevated request?";
 const physicalApprovalConfirmationReason =
   "Continue the bounded release validation on the selected device.";
@@ -3082,6 +3085,78 @@ describe("physical Android phone-driver protocol", () => {
         opened,
         Object.freeze({ ...before, activeSubscribers: 1 })
       )
+    ).toBe(false);
+  });
+
+  it("settles one remote check only after its exact successful host response", () => {
+    const before = physicalRemoteCheckBoundary(7, 9, 9, 200);
+    const settled = physicalRemoteCheckBoundary(8, 10, 10, 200);
+
+    expect(physicalRemoteCheckSettled(before, settled)).toBe(true);
+    expect(
+      physicalRemoteCheckSettled(
+        before,
+        physicalRemoteCheckBoundary(8, 10, 9, 200)
+      )
+    ).toBe(false);
+    expect(
+      physicalRemoteCheckSettled(
+        before,
+        physicalRemoteCheckBoundary(8, 10, 10, 500)
+      )
+    ).toBe(false);
+    expect(
+      physicalRemoteCheckSettled(
+        before,
+        physicalRemoteCheckBoundary(9, 10, 10, 200)
+      )
+    ).toBe(false);
+    expect(
+      physicalRemoteCheckSettled(
+        before,
+        physicalRemoteCheckBoundary(8, 11, 11, 200)
+      )
+    ).toBe(false);
+  });
+
+  it("requires the exact route-owned incompatible and supported runtime truth", () => {
+    const incompatible = physicalRuntimeRouteFixture("incompatible");
+    const supported = physicalRuntimeRouteFixture("supported");
+
+    expect(
+      physicalMissionRuntimeStateVisible(incompatible, 0, "incompatible")
+    ).toBe(true);
+    expect(
+      physicalMissionRuntimeStateVisible(supported, 0, "supported")
+    ).toBe(true);
+    expect(
+      physicalMissionRuntimeStateVisible(incompatible, 0, "supported")
+    ).toBe(false);
+    expect(
+      physicalMissionRuntimeStateVisible(supported, 0, "incompatible")
+    ).toBe(false);
+    expect(
+      physicalMissionRuntimeStateVisible(
+        Object.freeze([
+          ...supported,
+          physicalRuntimeFixtureNode({ text: physicalRuntimeSupportedTitle })
+        ]),
+        0,
+        "supported"
+      )
+    ).toBe(false);
+    expect(
+      physicalMissionRuntimeStateVisible(
+        Object.freeze([
+          ...incompatible,
+          physicalRuntimeFixtureNode({ description: "Close Host and access" })
+        ]),
+        0,
+        "incompatible"
+      )
+    ).toBe(false);
+    expect(
+      physicalMissionRuntimeStateVisible(incompatible, 1, "incompatible")
     ).toBe(false);
   });
 
@@ -10104,11 +10179,13 @@ async function runPhysicalDashboardProfileSwitch(
 
 async function runPhysicalRuntimeCompatibilityState(
   input: ProductionUiEntryInput & {
+    readonly prompt: PhysicalPromptRuntime;
     readonly requestInspection: RequestInspection;
     readonly setRuntimeCompatible: (compatible: boolean) => void;
   },
   capture: PhysicalDashboardCapture
 ): Promise<void> {
+  const browserChecksBefore = input.requestInspection.remoteBrowserStatusRequests;
   input.setRuntimeCompatible(false);
   await openProductionHostAccessSheet();
   await revealAndroidUiNode(
@@ -10118,14 +10195,13 @@ async function runPhysicalRuntimeCompatibilityState(
     30_000,
     "Physical runtime compatibility check lost remote-ready truth."
   );
-  // The deliberate incompatibility replaces remote-ready truth; Mission Control owns that checkpoint.
   await runOneProductionRemoteCheck(input.requestInspection, {
-    requireReadyAfterCheck: false
+    expectedRuntime: "incompatible"
   });
   await closeProductionHostAccessSheet();
-  await waitForAndroidUiText(
-    "Codex interface incompatible",
-    30_000,
+  await waitForPhysicalMissionRuntimeState(
+    input.prompt,
+    "incompatible",
     "Physical Mission Control did not render incompatible runtime truth."
   );
   await capture("fe090-51-runtime-incompatible.png");
@@ -10139,20 +10215,173 @@ async function runPhysicalRuntimeCompatibilityState(
     30_000,
     "Physical runtime recovery check lost remote-ready truth."
   );
-  await runOneProductionRemoteCheck(input.requestInspection);
+  await runOneProductionRemoteCheck(input.requestInspection, {
+    expectedRuntime: "supported"
+  });
   await closeProductionHostAccessSheet();
-  await waitFor(
-    async () => {
-      const nodes = await readAndroidUiNodes();
-      return (
-        nodes.some((node) => node.text === "Codex compatible") &&
-        nodes.every((node) => node.text !== "Codex interface incompatible")
-      );
-    },
-    30_000,
+  await waitForPhysicalMissionRuntimeState(
+    input.prompt,
+    "supported",
     "Physical Mission Control did not recover supported runtime truth."
   );
+  requireCondition(
+    input.requestInspection.remoteBrowserStatusRequests ===
+      browserChecksBefore + 2 &&
+      input.requestInspection.remoteBrowserMutationRequests === 0,
+    "Physical runtime compatibility checks did not retain exact read-only route ownership."
+  );
   await capture("fe090-52-runtime-supported.png");
+}
+
+type PhysicalRuntimeExpectation = "incompatible" | "supported";
+
+async function waitForPhysicalMissionRuntimeState(
+  prompt: PhysicalPromptRuntime,
+  expectation: PhysicalRuntimeExpectation,
+  message: string
+): Promise<void> {
+  await revealAndroidUiNode(
+    "text",
+    expectation === "incompatible"
+      ? physicalRuntimeIncompatibleTitle
+      : "Mission Control",
+    "backward",
+    30_000,
+    message,
+    "fully_visible"
+  );
+  const observations: string[] = [];
+  let stableSince: number | null = null;
+  let stableObservation: string | null = null;
+  try {
+    await waitFor(async () => {
+      const nodes = await readAndroidUiNodes();
+      const activeSubscribers = prompt.subscribers.snapshot().active_subscribers;
+      const observation = physicalMissionRuntimeStateSummary(
+        nodes,
+        activeSubscribers
+      );
+      if (observations.at(-1) !== observation && observations.length < 6) {
+        observations.push(observation);
+      }
+      if (
+        !physicalMissionRuntimeStateVisible(
+          nodes,
+          activeSubscribers,
+          expectation
+        )
+      ) {
+        stableSince = null;
+        stableObservation = null;
+        return false;
+      }
+      if (stableSince === null || stableObservation !== observation) {
+        stableSince = performance.now();
+        stableObservation = observation;
+        return false;
+      }
+      return performance.now() - stableSince >= 2_000;
+    }, 30_000, message);
+  } catch (error) {
+    throw new Error(
+      `${message} (states=${
+        observations.length === 0 ? "none" : observations.join("||")
+      }).`,
+      { cause: error }
+    );
+  }
+}
+
+function physicalMissionRuntimeStateVisible(
+  nodes: readonly AndroidUiNode[],
+  activeSubscribers: number,
+  expectation: PhysicalRuntimeExpectation
+): boolean {
+  const textCount = (value: string): number =>
+    nodes.filter((node) => node.text === value).length;
+  const descriptionCount = (value: string): number =>
+    nodes.filter((node) => node.description === value).length;
+  const common =
+    activeSubscribers === 0 &&
+    descriptionCount("Open Host and access") === 1 &&
+    descriptionCount("Close Host and access") === 0 &&
+    descriptionCount(physicalUiSessionName) === 1 &&
+    textCount("Mission Control") === 1 &&
+    textCount("Remote ready") === 1 &&
+    textCount("Write") === 1 &&
+    textCount("Remote writes locked") === 0 &&
+    textCount("Access stale") === 0 &&
+    textCount("Reconnecting") === 0 &&
+    textCount("Checking Codex compatibility") === 0 &&
+    textCount("Compatibility check not confirmed") === 0;
+  if (!common) return false;
+  if (expectation === "incompatible") {
+    return (
+      textCount(physicalRuntimeIncompatibleTitle) === 1 &&
+      textCount("Incompatible") === 1 &&
+      textCount("Current") === 0 &&
+      textCount(physicalRuntimeSupportedTitle) === 0
+    );
+  }
+  return (
+    textCount("Current") === 1 &&
+    textCount("Incompatible") === 0 &&
+    textCount(physicalRuntimeIncompatibleTitle) === 0 &&
+    textCount(physicalRuntimeSupportedTitle) === 0
+  );
+}
+
+function physicalMissionRuntimeStateSummary(
+  nodes: readonly AndroidUiNode[],
+  activeSubscribers: number
+): string {
+  const textCount = (value: string): number =>
+    nodes.filter((node) => node.text === value).length;
+  const descriptionCount = (value: string): number =>
+    nodes.filter((node) => node.description === value).length;
+  return [
+    `active=${activeSubscribers}`,
+    `mission=${textCount("Mission Control")}`,
+    `host=${descriptionCount("Open Host and access")}/${descriptionCount("Close Host and access")}`,
+    `remote=${textCount("Remote ready")}`,
+    `write=${textCount("Write")}`,
+    `state=${textCount("Current")}/${textCount("Incompatible")}`,
+    `runtime=${textCount(physicalRuntimeSupportedTitle)}/${textCount(physicalRuntimeIncompatibleTitle)}`,
+    `session=${descriptionCount(physicalUiSessionName)}`,
+    `pending=${textCount("Checking Codex compatibility")}/${textCount("Compatibility check not confirmed")}`
+  ].join(",");
+}
+
+function physicalRuntimeRouteFixture(
+  expectation: PhysicalRuntimeExpectation
+): readonly AndroidUiNode[] {
+  const nodes = [
+    physicalRuntimeFixtureNode({ description: "Open Host and access" }),
+    physicalRuntimeFixtureNode({ description: physicalUiSessionName }),
+    physicalRuntimeFixtureNode({ text: "Mission Control" }),
+    physicalRuntimeFixtureNode({ text: "Remote ready" }),
+    physicalRuntimeFixtureNode({ text: "Write" }),
+    physicalRuntimeFixtureNode({
+      text: expectation === "incompatible" ? "Incompatible" : "Current"
+    }),
+    ...(expectation === "incompatible"
+      ? [physicalRuntimeFixtureNode({ text: physicalRuntimeIncompatibleTitle })]
+      : [])
+  ];
+  return Object.freeze(nodes);
+}
+
+function physicalRuntimeFixtureNode(
+  input: Readonly<{ readonly description?: string; readonly text?: string }>
+): AndroidUiNode {
+  return Object.freeze({
+    bounds: Object.freeze({ bottom: 200, left: 20, right: 700, top: 100 }),
+    className: "android.view.View",
+    clickable: false,
+    description: input.description ?? "",
+    resourceId: "",
+    text: input.text ?? ""
+  });
 }
 
 async function runPhysicalTalkBackTraversal(
@@ -11208,16 +11437,33 @@ async function runPhysicalArchiveControl(
   capture: PhysicalDashboardCapture,
   measure: PhysicalDashboardMeasure
 ): Promise<void> {
-  const session = await waitForAndroidUiNodePresent(
+  await waitFor(
+    () => input.prompt.subscribers.snapshot().active_subscribers === 0,
+    15_000,
+    "Physical archive began before TalkBack Session Detail transport closed."
+  );
+  const navigationBefore = readPhysicalSessionNavigationSnapshot(input);
+  const session = await revealAndroidUiNode(
     "description",
     physicalUiSessionName,
+    "forward",
     30_000,
-    "Physical archive target session was unavailable."
+    "Physical archive target session was unavailable.",
+    "fully_visible",
+    true
   );
   await tapAndroidNodeOnceAndWait(
     session,
-    () => input.prompt.subscribers.snapshot().active_subscribers === 1,
-    "Physical archive target did not open Session Detail."
+    () =>
+      physicalSessionNavigationOpened(
+        readPhysicalSessionNavigationSnapshot(input),
+        navigationBefore
+      ),
+    "Physical archive target did not produce one new detail and stream generation."
+  );
+  await waitForPhysicalSessionWriteReady(
+    input,
+    "Physical archive Session Detail did not settle with current write authority."
   );
   const actions = await waitForAndroidUiNodePresent(
     "description",
@@ -11646,12 +11892,11 @@ async function closeProductionHostAccessSheet(): Promise<void> {
 
 async function runOneProductionRemoteCheck(
   inspection: RequestInspection,
-  options: Readonly<{ readonly requireReadyAfterCheck?: boolean }> = {}
+  options: Readonly<{
+    readonly expectedRuntime?: PhysicalRuntimeExpectation;
+  }> = {}
 ): Promise<void> {
-  const requestsBefore = Object.freeze({
-    host: inspection.hostStatusRequests,
-    remote: inspection.remoteBrowserStatusRequests
-  });
+  const before = readPhysicalRemoteCheckBoundary(inspection);
   const check = await revealAndroidUiNode(
     "text",
     "Check again",
@@ -11659,29 +11904,107 @@ async function runOneProductionRemoteCheck(
     30_000,
     "Production remote check action was unavailable on Android."
   );
-  await performVerifiedAndroidTap({
-    initialTrigger: check,
-    triggerField: "text",
-    triggerValue: "Check again",
-    completed: () =>
-      inspection.remoteBrowserStatusRequests === requestsBefore.remote + 1 &&
-      inspection.hostStatusRequests > requestsBefore.host,
-    completionFailureMessage:
-      "Production remote check did not complete its exact status-then-refresh sequence.",
-    reacquireFailureMessage:
-      "Production remote check action could not be reacquired on Android.",
-    terminalFailureMessage:
-      "Production remote check did not settle after two bounded taps."
-  });
-  if (options.requireReadyAfterCheck !== false) {
-    await revealAndroidUiNode(
-      "text",
-      "Remote access ready",
-      "backward",
-      30_000,
-      "Production remote check did not return to current ready truth."
+  try {
+    await performVerifiedAndroidTap({
+      initialTrigger: check,
+      triggerField: "text",
+      triggerValue: "Check again",
+      completed: () =>
+        physicalRemoteCheckSettled(
+          before,
+          readPhysicalRemoteCheckBoundary(inspection)
+        ),
+      completionFailureMessage:
+        "Production remote check did not complete its exact successful status-then-refresh sequence.",
+      reacquireFailureMessage:
+        "Production remote check action could not be reacquired on Android.",
+      terminalFailureMessage:
+        "Production remote check did not settle after two bounded taps."
+    });
+  } catch (error) {
+    throw new Error(
+      `Production remote check failed (${physicalRemoteCheckBoundarySummary(
+        before,
+        readPhysicalRemoteCheckBoundary(inspection)
+      )}).`,
+      { cause: error }
     );
   }
+  await revealAndroidUiNode(
+    "text",
+    "Remote access ready",
+    "backward",
+    30_000,
+    "Production remote check did not return to current ready truth."
+  );
+  if (options.expectedRuntime !== undefined) {
+    await revealAndroidUiNode(
+      "text",
+      options.expectedRuntime === "incompatible"
+        ? physicalRuntimeIncompatibleTitle
+        : physicalRuntimeSupportedTitle,
+      "forward",
+      30_000,
+      "Production remote check did not render exact compatibility truth.",
+      "fully_visible"
+    );
+  }
+}
+
+interface PhysicalRemoteCheckBoundary {
+  readonly hostRequests: number;
+  readonly hostResponseCount: number;
+  readonly hostResponseStatus: number | null;
+  readonly remoteBrowserRequests: number;
+}
+
+function readPhysicalRemoteCheckBoundary(
+  inspection: RequestInspection
+): PhysicalRemoteCheckBoundary {
+  return physicalRemoteCheckBoundary(
+    inspection.remoteBrowserStatusRequests,
+    inspection.hostStatusRequests,
+    inspection.hostStatusResponseStatuses.length,
+    inspection.hostStatusResponseStatuses.at(-1) ?? null
+  );
+}
+
+function physicalRemoteCheckBoundary(
+  remoteBrowserRequests: number,
+  hostRequests: number,
+  hostResponseCount: number,
+  hostResponseStatus: number | null
+): PhysicalRemoteCheckBoundary {
+  return Object.freeze({
+    hostRequests,
+    hostResponseCount,
+    hostResponseStatus,
+    remoteBrowserRequests
+  });
+}
+
+function physicalRemoteCheckSettled(
+  before: PhysicalRemoteCheckBoundary,
+  current: PhysicalRemoteCheckBoundary
+): boolean {
+  return (
+    current.remoteBrowserRequests === before.remoteBrowserRequests + 1 &&
+    current.hostRequests === before.hostRequests + 1 &&
+    current.hostResponseCount === before.hostResponseCount + 1 &&
+    current.hostResponseStatus === 200
+  );
+}
+
+function physicalRemoteCheckBoundarySummary(
+  before: PhysicalRemoteCheckBoundary,
+  current: PhysicalRemoteCheckBoundary
+): string {
+  return (
+    `remote=${current.remoteBrowserRequests - before.remoteBrowserRequests};` +
+    `host=${current.hostRequests - before.hostRequests};` +
+    `responses=${current.hostResponseCount - before.hostResponseCount}/` +
+    `${current.hostResponseStatus ?? "none"}`
+  );
 }
 
 async function capturePrivateFreeProductionScreenshot(
@@ -14853,7 +15176,8 @@ function assertPhysicalDashboardAudit(
       inspection.promptRequests === 1 &&
       inspection.promptNoReferrerRequests === 1 &&
       inspection.revokeRequests === 2 &&
-      inspection.remoteBrowserStatusRequests === 2 &&
+      inspection.remoteBrowserStatusRequests ===
+        physicalDashboardRemoteBrowserCheckCount &&
       inspection.remoteBrowserMutationRequests === 0 &&
       inspection.fragmentLeaks === 0 &&
       inspection.hardenedCookieObserved &&

@@ -59,6 +59,16 @@ describe("remote connection recovery state", () => {
       actionLabel: "Check again"
     });
 
+    const runtimeIncompatible = projectRemoteConnectionRecovery(
+      snapshot({ network: "remote", remote: "ready", phase: "incompatible" })
+    );
+    expect(runtimeIncompatible).toMatchObject({
+      phase: "ready",
+      source: "current_laptop_observation",
+      externalOrigin: remoteOrigin,
+      current: true
+    });
+
     const unknown = projectRemoteConnectionRecovery(
       snapshot({ network: "loopback", remote: "not_observed" })
     );
