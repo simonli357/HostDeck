@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-090` Harden the complete mobile dashboard on the real phone | in_progress | none | Run the pushed BUG-056/BUG-060/BUG-061 correction once through exact runtime incompatibility/recovery, the real TalkBack transcript in `BUG-052`, generation-bound strict archive crossing in `BUG-051`, self-revocation, final four-check aggregate, cleanup, evidence review, and retained deployment. |
+| 1 | `FE-V1-090` Harden the complete mobile dashboard on the real phone | in_progress | none | Restore Android USB transport, then run the pushed BUG-056/BUG-060/BUG-061/BUG-062 correction once through pairing-to-Mission-Control admission, exact runtime incompatibility/recovery, the real TalkBack transcript in `BUG-052`, generation-bound strict archive crossing in `BUG-051`, self-revocation, final four-check aggregate, cleanup, evidence review, and retained deployment. |
 
 ## Intentional Blockers
 

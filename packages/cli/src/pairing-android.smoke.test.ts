@@ -280,6 +280,10 @@ const physicalScreenshotRedactionInsetPx = 8;
 const physicalScreenshotRedactionRgba = Object.freeze([24, 28, 33, 255] as const);
 const physicalRuntimeIncompatibleTitle = "Codex interface incompatible";
 const physicalRuntimeSupportedTitle = "Codex compatible";
+const physicalGatedClaimAdmissionFailure =
+  "Physical pairing claim lost current remote admission while evidence was captured.";
+const physicalGatedClaimRefreshFailure =
+  "Physical pairing claim could not refresh its remote admission runway.";
 const physicalDashboardRemoteBrowserCheckCount = 4;
 const physicalApprovalConfirmationTitle = "Approve elevated request?";
 const physicalApprovalConfirmationReason =
@@ -3170,6 +3174,146 @@ describe("physical Android phone-driver protocol", () => {
     ).toBe(false);
   });
 
+  it("renews one gated pairing lease without accepting authority drift", async () => {
+    const currentAuthority = Object.freeze({
+      active_leases: 1,
+      generation: 7,
+      invalidations: 2,
+      phase: "open" as const,
+      signaled_leases: 1
+    });
+    const currentAdmission = Object.freeze({
+      admission: "open" as const,
+      external_origin: "https://hostdeck.example.ts.net",
+      generation: 7
+    });
+    let statusReads = 0;
+    let admissionReads = 0;
+    let authorityReads = 0;
+    await refreshPhysicalGatedClaimAdmission({
+      expectedExternalOrigin: currentAdmission.external_origin,
+      remote: {
+        control: {
+          async readStatus() {
+            statusReads += 1;
+          }
+        },
+        readAdmission() {
+          admissionReads += 1;
+          return currentAdmission;
+        },
+        requestAuthority: {
+          snapshot() {
+            authorityReads += 1;
+            return currentAuthority;
+          }
+        }
+      }
+    });
+    expect({ admissionReads, authorityReads, statusReads }).toEqual({
+      admissionReads: 1,
+      authorityReads: 2,
+      statusReads: 1
+    });
+
+    const hostileCases = Object.freeze([
+      Object.freeze({
+        admission: currentAdmission,
+        after: currentAuthority,
+        before: Object.freeze({ ...currentAuthority, active_leases: 0 }),
+        id: "missing gated request"
+      }),
+      Object.freeze({
+        admission: currentAdmission,
+        after: currentAuthority,
+        before: Object.freeze({ ...currentAuthority, active_leases: 2 }),
+        id: "duplicate gated request"
+      }),
+      Object.freeze({
+        admission: currentAdmission,
+        after: Object.freeze({ ...currentAuthority, active_leases: 0 }),
+        before: currentAuthority,
+        id: "request invalidated"
+      }),
+      Object.freeze({
+        admission: Object.freeze({
+          admission: "closed" as const,
+          external_origin: null,
+          generation: 7
+        }),
+        after: Object.freeze({
+          ...currentAuthority,
+          active_leases: 0,
+          phase: "closed" as const
+        }),
+        before: currentAuthority,
+        id: "admission closed"
+      }),
+      Object.freeze({
+        admission: Object.freeze({ ...currentAdmission, generation: 8 }),
+        after: Object.freeze({ ...currentAuthority, generation: 8 }),
+        before: currentAuthority,
+        id: "generation changed"
+      }),
+      Object.freeze({
+        admission: Object.freeze({
+          ...currentAdmission,
+          external_origin: "https://other.example.ts.net"
+        }),
+        after: currentAuthority,
+        before: currentAuthority,
+        id: "origin changed"
+      }),
+      Object.freeze({
+        admission: currentAdmission,
+        after: Object.freeze({ ...currentAuthority, invalidations: 3 }),
+        before: currentAuthority,
+        id: "invalidation observed"
+      }),
+      Object.freeze({
+        admission: currentAdmission,
+        after: Object.freeze({ ...currentAuthority, signaled_leases: 2 }),
+        before: currentAuthority,
+        id: "lease signal observed"
+      })
+    ]);
+    for (const testCase of hostileCases) {
+      let snapshotIndex = 0;
+      await expect(
+        refreshPhysicalGatedClaimAdmission({
+          expectedExternalOrigin: currentAdmission.external_origin,
+          remote: {
+            control: { readStatus: async () => undefined },
+            readAdmission: () => testCase.admission,
+            requestAuthority: {
+              snapshot: () =>
+                snapshotIndex++ === 0 ? testCase.before : testCase.after
+            }
+          }
+        }),
+        testCase.id
+      ).rejects.toThrow(physicalGatedClaimAdmissionFailure);
+    }
+
+    let failedStatusReads = 0;
+    await expect(
+      refreshPhysicalGatedClaimAdmission({
+        expectedExternalOrigin: currentAdmission.external_origin,
+        remote: {
+          control: {
+            async readStatus() {
+              failedStatusReads += 1;
+              throw new Error("untrusted observer detail");
+            }
+          },
+          readAdmission: () => currentAdmission,
+          requestAuthority: { snapshot: () => currentAuthority }
+        }
+      })
+    ).rejects.toThrow(physicalGatedClaimRefreshFailure);
+    expect(failedStatusReads).toBe(1);
+  });
+
   it("uses the authoritative Android keyboard request over stale view state", () => {
     expect(
       parseAndroidKeyboardVisibility(
@@ -3979,6 +4123,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             30_000,
             "Physical dashboard pairing claim did not enter its bounded gate."
           );
+          await refreshPhysicalGatedClaimAdmission({
+            expectedExternalOrigin: candidate.externalOrigin,
+            remote: selectedRemote
+          });
           await waitForAndroidUiText(
             "Pairing this phone",
             30_000,
@@ -3989,6 +4137,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             candidate.externalOrigin
           );
           dashboardPairingScreenshotNames.push("fe090-45-pair-claiming.png");
+          await refreshPhysicalGatedClaimAdmission({
+            expectedExternalOrigin: candidate.externalOrigin,
+            remote: selectedRemote
+          });
           dashboardPairingGate?.release();
         }
         await waitFor(
@@ -4621,6 +4773,26 @@ interface PhysicalRuntimeContext {
   readonly remote: HostDeckRemoteIngressLifecycle;
 }
 
+interface PhysicalGatedClaimAdmissionRemote {
+  readonly control: Readonly<{
+    readonly readStatus: () => Promise<unknown>;
+  }>;
+  readonly readAdmission: () => Readonly<{
+    readonly admission: "closed" | "open";
+    readonly external_origin: string | null;
+    readonly generation: number;
+  }>;
+  readonly requestAuthority: Readonly<{
+    readonly snapshot: () => Readonly<{
+      readonly active_leases: number;
+      readonly generation: number;
+      readonly invalidations: number;
+      readonly phase: "closed" | "open";
+      readonly signaled_leases: number;
+    }>;
+  }>;
+}
+
 interface PhysicalSseRuntime {
   active: number;
   closed: number;
@@ -4701,6 +4873,35 @@ class PhysicalPairingClaimGate {
     this.resolvePending = null;
     resolve();
   }
+}
+
+async function refreshPhysicalGatedClaimAdmission(input: Readonly<{
+  readonly expectedExternalOrigin: string;
+  readonly remote: PhysicalGatedClaimAdmissionRemote;
+}>): Promise<void> {
+  const before = input.remote.requestAuthority.snapshot();
+  requireCondition(
+    before.phase === "open" && before.active_leases === 1,
+    physicalGatedClaimAdmissionFailure
+  );
+  try {
+    await input.remote.control.readStatus();
+  } catch (error) {
+    throw new Error(physicalGatedClaimRefreshFailure, { cause: error });
+  }
+  const admission = input.remote.readAdmission();
+  const after = input.remote.requestAuthority.snapshot();
+  requireCondition(
+    admission.admission === "open" &&
+      admission.external_origin === input.expectedExternalOrigin &&
+      admission.generation === before.generation &&
+      after.phase === "open" &&
+      after.active_leases === 1 &&
+      after.generation === before.generation &&
+      after.invalidations === before.invalidations &&
+      after.signaled_leases === before.signaled_leases,
+    physicalGatedClaimAdmissionFailure
+  );
 }
 
 interface ProfileSwitchInput {
