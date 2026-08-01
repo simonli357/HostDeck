@@ -275,6 +275,7 @@ const physicalSessionControlDescriptions = Object.freeze([
 const physicalEventActionMaxDistancePx = 480;
 const physicalHostAccessHeaderGapPx = 24;
 const physicalSessionOverlayGapPx = 24;
+const physicalApprovalLifetimeMs = 30 * 60 * 1_000;
 const physicalScreenshotRedactionInsetPx = 8;
 const physicalScreenshotRedactionRgba = Object.freeze([24, 28, 33, 255] as const);
 const physicalApprovalConfirmationTitle = "Approve elevated request?";
@@ -482,6 +483,19 @@ describe("physical Android phone-driver protocol", () => {
         content_state: "redacted",
         state: "failed"
       });
+      const approvalEvent = fixture.streamSeedEvents[3];
+      requireCondition(
+        approvalEvent?.type === "approval" && fixture.approvalTiming !== null,
+        "Physical dashboard approval timing fixture was absent."
+      );
+      expect(fixture.approvalTiming).toEqual({
+        createdAt: approvalEvent.captured_at,
+        expiresAt: approvalEvent.expires_at
+      });
+      expect(
+        Date.parse(fixture.approvalTiming.expiresAt) -
+          Date.parse(fixture.approvalTiming.createdAt)
+      ).toBe(physicalApprovalLifetimeMs);
     } finally {
       opened.db.close();
       rmSync(directory, { force: true, recursive: true });
@@ -1208,7 +1222,12 @@ describe("physical Android phone-driver protocol", () => {
         now,
         fixture.streamSeedEvents
       );
+      requireCondition(
+        fixture.approvalTiming !== null,
+        "Physical dashboard control timing was unavailable."
+      );
       const dashboard = createPhysicalDashboardControls({
+        approval: fixture.approvalTiming,
         now,
         prompts: Object.freeze({
           dispatch: prompts.service.dispatch,
@@ -1315,7 +1334,11 @@ describe("physical Android phone-driver protocol", () => {
       dashboard.completeCompact();
 
       const [pendingApproval] = await dashboard.controls.approvals.list(target);
-      expect(pendingApproval).toMatchObject({ state: "pending" });
+      expect(pendingApproval).toMatchObject({
+        created_at: fixture.approvalTiming.createdAt,
+        expires_at: fixture.approvalTiming.expiresAt,
+        state: "pending"
+      });
       const responding = await dashboard.controls.approvals.respond({
         operation_id: "op_physical_approval_unit_0001",
         kind: "approval_response",
@@ -3071,7 +3094,21 @@ describe("physical Android phone-driver protocol", () => {
   });
 
   it("opens the complete physical dashboard boundary replay through the strict subscriber contract", async () => {
-    const events = physicalDashboardSeedEvents("2026-07-25T00:00:00.000Z");
+    expect(() => physicalApprovalTiming("not-a-timestamp")).toThrow(
+      "Physical approval fixture received an invalid creation time."
+    );
+    const timing = physicalApprovalTiming("2026-07-25T00:00:00.000Z");
+    expect(timing).toEqual({
+      createdAt: "2026-07-25T00:00:00.000Z",
+      expiresAt: "2026-07-25T00:30:00.000Z"
+    });
+    const events = physicalDashboardSeedEvents(timing);
+    expect(events[3]).toMatchObject({
+      captured_at: "2026-07-25T00:00:00.000Z",
+      expires_at: "2026-07-25T00:30:00.000Z",
+      state: "pending",
+      type: "approval"
+    });
     const handoff = new PhysicalPromptHandoffService(events);
     const failures: unknown[] = [];
     const subscribers = createProjectionSubscriberStreamService({
@@ -3506,10 +3543,13 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
               promptAuditExecutor !== null &&
               promptRuntime !== null &&
               promptSubscribers !== null &&
-              sessionReads !== null,
+              sessionReads !== null &&
+              sessionFixture !== null &&
+              sessionFixture.approvalTiming !== null,
             "Physical dashboard composition dependencies were unavailable."
           );
           dashboardControls = createPhysicalDashboardControls({
+            approval: sessionFixture.approvalTiming,
             now,
             prompts: Object.freeze({
               dispatch: promptRuntime.service.dispatch,
@@ -4907,7 +4947,13 @@ function requireProductionBuildRoot(candidate: string | null): string {
   return candidate;
 }
 
+type PhysicalApprovalTiming = Readonly<{
+  readonly createdAt: string;
+  readonly expiresAt: string;
+}>;
+
 interface PhysicalSessionReadFixture {
+  readonly approvalTiming: PhysicalApprovalTiming | null;
   readonly promptSeedEvent: SelectedProjectionEvent | null;
   readonly reads: ReturnType<typeof createSelectedSessionReadRepository>;
   readonly streamSeedEvents: readonly SelectedProjectionEvent[];
@@ -5025,8 +5071,11 @@ function createPhysicalSessionReads(
       );
     }
   }
-  const streamSeedEvents = seedMode === "dashboard"
-    ? physicalDashboardSeedEvents(updatedAt)
+  const approvalTiming = seedMode === "dashboard"
+    ? physicalApprovalTiming(updatedAt)
+    : null;
+  const streamSeedEvents = approvalTiming !== null
+    ? physicalDashboardSeedEvents(approvalTiming)
     : seedMode === "prompt"
       ? Object.freeze([physicalPromptSeedEvent(updatedAt)])
       : Object.freeze([]);
@@ -5067,6 +5116,7 @@ function createPhysicalSessionReads(
     }
   }
   return Object.freeze({
+    approvalTiming,
     promptSeedEvent,
     reads: createSelectedSessionReadRepository(db),
     streamSeedEvents
@@ -5357,12 +5407,12 @@ function physicalPromptSeedEvent(capturedAt: string): SelectedProjectionEvent {
 }
 
 function physicalDashboardSeedEvents(
-  capturedAt: string
+  approvalTiming: PhysicalApprovalTiming
 ): readonly SelectedProjectionEvent[] {
   const base = (cursor: number, content: Readonly<Record<string, unknown>>) => ({
     session_id: physicalUiSessionId,
     cursor,
-    captured_at: capturedAt,
+    captured_at: approvalTiming.createdAt,
     upstream_at: null,
     codex_event_id: `physical-dashboard-event-${cursor}`,
     codex_event_type: `physical/dashboard/${cursor}`,
@@ -5407,7 +5457,7 @@ function physicalDashboardSeedEvents(
       scope: "Connected test phone",
       reason: "Continue the bounded release validation on the selected device.",
       risk: "elevated",
-      expires_at: "2026-08-01T12:00:00.000Z",
+      expires_at: approvalTiming.expiresAt,
       decision: null
     })),
     selectedProjectionEventSchema.parse(base(5, {
@@ -5418,6 +5468,18 @@ function physicalDashboardSeedEvents(
       message: null
     }))
   ]);
+}
+
+function physicalApprovalTiming(createdAt: string): PhysicalApprovalTiming {
+  const createdAtMs = Date.parse(createdAt);
+  requireCondition(
+    Number.isSafeInteger(createdAtMs),
+    "Physical approval fixture received an invalid creation time."
+  );
+  return Object.freeze({
+    createdAt,
+    expiresAt: new Date(createdAtMs + physicalApprovalLifetimeMs).toISOString()
+  });
 }
 
 function physicalPromptTurnEvent(

@@ -86,6 +86,10 @@ export interface PhysicalDashboardControls {
 }
 
 export function createPhysicalDashboardControls(input: Readonly<{
+  approval: Readonly<{
+    readonly createdAt: string;
+    readonly expiresAt: string;
+  }>;
   now: () => Date;
   prompts: PromptControls;
   runtime: RuntimeCompatibility;
@@ -109,7 +113,7 @@ export function createPhysicalDashboardControls(input: Readonly<{
   let plan = initialPlanSnapshot();
   let planApplied = false;
   let compact: SelectedOperationProgress | null = null;
-  let approval = initialApproval();
+  let approval = initialApproval(input.approval);
   let interruptible = false;
   let archived = false;
 
@@ -585,7 +589,10 @@ function initialPlanSnapshot(): PlanControlSnapshot {
   });
 }
 
-function initialApproval(): PendingApproval {
+function initialApproval(timing: Readonly<{
+  readonly createdAt: string;
+  readonly expiresAt: string;
+}>): PendingApproval {
   return pendingApprovalSchema.parse({
     target: {
       type: "approval",
@@ -599,8 +606,8 @@ function initialApproval(): PendingApproval {
     risk: "elevated",
     grant_scope: "one_time",
     state: "pending",
-    created_at: timestamp,
-    expires_at: "2026-08-01T12:00:00.000Z",
+    created_at: timing.createdAt,
+    expires_at: timing.expiresAt,
     decision: null
   });
 }
