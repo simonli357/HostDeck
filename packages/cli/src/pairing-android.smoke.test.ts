@@ -698,47 +698,146 @@ describe("physical Android phone-driver protocol", () => {
       resourceId: "",
       text: "Review & approve"
     });
-    expect(
+    const reviewNodes = (
+      targets: readonly AndroidUiNode[],
+      base: readonly AndroidUiNode[] = nodes
+    ) => [...base, ...targets];
+    const selectReview = (
+      targets: readonly AndroidUiNode[],
+      base: readonly AndroidUiNode[] = nodes
+    ) =>
       selectPhysicalSessionContentNode(
-        [...nodes, review],
+        reviewNodes(targets, base),
         "text",
         "Review & approve",
         true
-      )
-    ).toBeNull();
+      );
+    const summarizeReview = (
+      targets: readonly AndroidUiNode[],
+      selected: AndroidUiNode | null = null,
+      base: readonly AndroidUiNode[] = nodes
+    ) =>
+      physicalSessionContentNodeSummary(
+        reviewNodes(targets, base),
+        "text",
+        "Review & approve",
+        true,
+        selected
+      );
+    expect(selectReview([review])).toBeNull();
+    expect(summarizeReview([review])).toContain("disposition=below");
     const safeReview = Object.freeze({
       ...review,
       bounds: Object.freeze({ ...review.bounds, bottom: 1600, top: 1450 })
     });
-    expect(
-      selectPhysicalSessionContentNode(
-        [...nodes, safeReview],
-        "text",
-        "Review & approve",
-        true
-      )
-    ).toBe(safeReview);
-    expect(
-      selectPhysicalSessionContentNode(
-        [...nodes, safeReview, Object.freeze({ ...safeReview })],
-        "text",
-        "Review & approve",
-        true
-      )
-    ).toBeNull();
-    expect(
-      selectPhysicalSessionContentNode(
-        [
-          ...nodes.filter(
-            (node) => node.description !== physicalSessionControlDescriptions[3]
-          ),
-          safeReview
-        ],
-        "text",
-        "Review & approve",
-        true
-      )
-    ).toBeNull();
+    expect(selectReview([safeReview])).toBe(safeReview);
+    expect(summarizeReview([safeReview], safeReview)).toContain(
+      "disposition=admitted"
+    );
+    const duplicateReviews = [safeReview, Object.freeze({ ...safeReview })];
+    expect(selectReview(duplicateReviews)).toBeNull();
+    expect(summarizeReview(duplicateReviews)).toContain(
+      "disposition=duplicate"
+    );
+    const incompleteDock = nodes.filter(
+      (node) => node.description !== physicalSessionControlDescriptions[3]
+    );
+    expect(selectReview([safeReview], incompleteDock)).toBeNull();
+    expect(summarizeReview([safeReview], null, incompleteDock)).toContain(
+      "disposition=content-blocked"
+    );
+    expect(summarizeReview([])).toContain("disposition=absent");
+    const disabledReview = Object.freeze({
+      ...safeReview,
+      enabled: false as const
+    });
+    expect(selectReview([disabledReview])).toBeNull();
+    expect(summarizeReview([disabledReview])).toContain(
+      "disposition=disabled"
+    );
+    const staticReview = Object.freeze({
+      ...safeReview,
+      clickable: false
+    });
+    expect(summarizeReview([staticReview])).toContain(
+      "disposition=not-clickable"
+    );
+    const clippedReview = Object.freeze({
+      ...safeReview,
+      bounds: Object.freeze({ ...safeReview.bounds, bottom: 1760, top: 1650 })
+    });
+    expect(summarizeReview([clippedReview])).toContain(
+      "disposition=clipped-bottom"
+    );
+    const aboveReview = Object.freeze({
+      ...safeReview,
+      bounds: Object.freeze({ ...safeReview.bounds, bottom: 400, top: 300 })
+    });
+    expect(summarizeReview([aboveReview])).toContain("disposition=above");
+    const clippedTopReview = Object.freeze({
+      ...safeReview,
+      bounds: Object.freeze({ ...safeReview.bounds, bottom: 460, top: 380 })
+    });
+    expect(summarizeReview([clippedTopReview])).toContain(
+      "disposition=clipped-top"
+    );
+    const outsideReview = Object.freeze({
+      ...safeReview,
+      bounds: Object.freeze({ ...safeReview.bounds, left: 1090, right: 1200 })
+    });
+    expect(summarizeReview([outsideReview])).toContain(
+      "disposition=horizontal-outside"
+    );
+    const clippedHorizontalReview = Object.freeze({
+      ...safeReview,
+      bounds: Object.freeze({ ...safeReview.bounds, left: 900, right: 1100 })
+    });
+    expect(summarizeReview([clippedHorizontalReview])).toContain(
+      "disposition=clipped-horizontal"
+    );
+    expect(summarizeReview([safeReview])).toContain(
+      "disposition=selector-blocked"
+    );
+    const initialScrollSummary = physicalSessionContentNodeSummary(
+      nodes,
+      "text",
+      "Review & approve",
+      true,
+      null
+    );
+    const shiftedScrollSummary = physicalSessionContentNodeSummary(
+      nodes.map((node) =>
+        node.text === timelineLabel || node.description === "View event details"
+          ? Object.freeze({
+              ...node,
+              bounds: Object.freeze({
+                ...node.bounds,
+                bottom: node.bounds.bottom - 120,
+                top: node.bounds.top - 120
+              })
+            })
+          : node
+      ),
+      "text",
+      "Review & approve",
+      true,
+      null
+    );
+    expect(initialScrollSummary).not.toBe(shiftedScrollSummary);
+    expect(initialScrollSummary).not.toContain(timelineLabel);
+    expect(initialScrollSummary).not.toContain("Review & approve");
+    const scrollWitness = /;scroll=\d+:([^;]+);gesture=/u.exec(
+      initialScrollSummary
+    )?.[1];
+    expect(scrollWitness?.split("|").length).toBeLessThanOrEqual(6);
+    const observations: string[] = [];
+    for (const observation of ["a", "a", "b", "c", "d", "e", "f", "g"]) {
+      retainPhysicalSessionContentObservation(observations, observation);
+    }
+    expect(observations).toEqual(["b", "c", "d", "e", "f", "g"]);
+    expect(() =>
+      retainPhysicalSessionContentObservation(observations, "x".repeat(4_097))
+    ).toThrow("observation exceeded its private-safe bound");
     const collapsedToolbar = nodes.filter(
       (node) => node.resourceId !== chromeToolbarResourceId
     );
@@ -12140,6 +12239,143 @@ function selectPhysicalSessionContentNode(
   return node;
 }
 
+function physicalSessionContentNodeSummary(
+  nodes: readonly AndroidUiNode[],
+  field: AndroidUiNodeField,
+  value: string,
+  requireClickable: boolean,
+  selected: AndroidUiNode | null
+): string {
+  const matches = nodes.filter((node) =>
+    matchesAndroidUiNode(node, field, value)
+  );
+  const target = matches[0];
+  const backs = nodes.filter(
+    (node) => node.description === "Back to Mission Control"
+  );
+  const controls = physicalSessionControlDescriptions.map((description) => {
+    const matchesForControl = nodes.filter(
+      (node) => node.description === description
+    );
+    const first = matchesForControl[0];
+    return (
+      `${matchesForControl.length}:` +
+      `${first === undefined ? "none" : androidUiNodeGeometry(first)}`
+    );
+  });
+  let region: PhysicalScreenshotRegion | null = null;
+  let gesture = "unavailable";
+  try {
+    region = selectPhysicalSessionContentRegion(nodes);
+    const selectedGesture = selectPhysicalSessionContentSwipe(nodes);
+    if (selectedGesture !== null) {
+      gesture = `${selectedGesture.x},${selectedGesture.startY},${selectedGesture.endY}`;
+    }
+  } catch {
+    // The bounded summary reports invalid interaction geometry without raw hierarchy data.
+  }
+  return [
+    `disposition=${physicalSessionContentNodeDisposition(
+      matches,
+      target,
+      region,
+      requireClickable,
+      selected
+    )}`,
+    `target=${matches.length}:${
+      target === undefined ? "none" : androidUiNodeGeometry(target)
+    }:${
+      target === undefined
+        ? "none"
+        : target.enabled === false
+          ? "disabled"
+          : "enabled"
+    }`,
+    `back=${backs.length}:${
+      backs[0] === undefined ? "none" : androidUiNodeGeometry(backs[0])
+    }`,
+    `controls=${controls.join("|")}`,
+    `content=${region === null ? "unavailable" : physicalRegionGeometry(region)}`,
+    `scroll=${physicalSessionContentScrollSummary(nodes, region)}`,
+    `gesture=${gesture}`,
+    `selected=${selected === null ? "none" : androidUiNodeGeometry(selected)}`
+  ].join(";");
+}
+
+function physicalSessionContentNodeDisposition(
+  matches: readonly AndroidUiNode[],
+  target: AndroidUiNode | undefined,
+  region: PhysicalScreenshotRegion | null,
+  requireClickable: boolean,
+  selected: AndroidUiNode | null
+): string {
+  if (matches.length === 0) return "absent";
+  if (matches.length !== 1 || target === undefined) return "duplicate";
+  if (requireClickable && !target.clickable) return "not-clickable";
+  if (requireClickable && target.enabled === false) return "disabled";
+  if (region === null) return "content-blocked";
+  if (selected === target) return "admitted";
+
+  const right = region.left + region.width;
+  const bottom = region.top + region.height;
+  if (target.bounds.right <= region.left || target.bounds.left >= right) {
+    return "horizontal-outside";
+  }
+  if (target.bounds.left < region.left || target.bounds.right > right) {
+    return "clipped-horizontal";
+  }
+  if (target.bounds.bottom <= region.top) return "above";
+  if (target.bounds.top < region.top) return "clipped-top";
+  if (target.bounds.top >= bottom) return "below";
+  if (target.bounds.bottom > bottom) return "clipped-bottom";
+  return "selector-blocked";
+}
+
+function physicalSessionContentScrollSummary(
+  nodes: readonly AndroidUiNode[],
+  region: PhysicalScreenshotRegion | null
+): string {
+  if (region === null) return "unavailable";
+  const witnesses = nodes
+    .filter(
+      (node) =>
+        androidNodeIntersectsRegion(node, region) &&
+        node.resourceId !== chromeToolbarResourceId &&
+        node.resourceId !== chromeCompositorResourceId &&
+        node.description !== "Back to Mission Control" &&
+        !physicalSessionControlDescriptions.includes(node.description)
+    )
+    .sort(
+      (left, right) =>
+        left.bounds.top - right.bounds.top ||
+        left.bounds.left - right.bounds.left ||
+        left.bounds.bottom - right.bounds.bottom ||
+        left.bounds.right - right.bounds.right
+    );
+  const bounded =
+    witnesses.length <= 6
+      ? witnesses
+      : [...witnesses.slice(0, 3), ...witnesses.slice(-3)];
+  return (
+    `${witnesses.length}:` +
+    `${bounded.map(privateFreeAndroidUiNodeGeometry).join("|") || "none"}`
+  );
+}
+
+function retainPhysicalSessionContentObservation(
+  observations: string[],
+  observation: string
+): void {
+  requireCondition(
+    Buffer.byteLength(observation, "utf8") >= 1 &&
+      Buffer.byteLength(observation, "utf8") <= 4_096,
+    "Physical session-content observation exceeded its private-safe bound."
+  );
+  if (observations.at(-1) === observation) return;
+  observations.push(observation);
+  if (observations.length > 6) observations.shift();
+}
+
 function swipeAndroidViewportAbovePhysicalSessionControls(
   nodes: readonly AndroidUiNode[],
   direction: AndroidVerticalRevealDirection = "forward"
@@ -12797,22 +13033,39 @@ async function revealPhysicalSessionContentNode(
 ): Promise<AndroidUiNode> {
   let found: AndroidUiNode | null = null;
   let swipeCount = 0;
-  await waitFor(async () => {
-    const nodes = await readAndroidUiNodes();
-    found = selectPhysicalSessionContentNode(
-      nodes,
-      field,
-      value,
-      requireClickable
+  const observations: string[] = [];
+  try {
+    await waitFor(async () => {
+      const nodes = await readAndroidUiNodes();
+      found = selectPhysicalSessionContentNode(
+        nodes,
+        field,
+        value,
+        requireClickable
+      );
+      const observation = physicalSessionContentNodeSummary(
+        nodes,
+        field,
+        value,
+        requireClickable,
+        found
+      );
+      retainPhysicalSessionContentObservation(observations, observation);
+      if (found !== null) return true;
+      if (swipeCount < 4) {
+        swipeAndroidViewportAbovePhysicalSessionControls(nodes, direction);
+        swipeCount += 1;
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      }
+      return false;
+    }, timeoutMs, message);
+  } catch {
+    throw new Error(
+      `${message} (direction=${direction};swipes=${swipeCount};states=${
+        observations.length === 0 ? "none" : observations.join(" -> ")
+      }).`
     );
-    if (found !== null) return true;
-    if (swipeCount < 4) {
-      swipeAndroidViewportAbovePhysicalSessionControls(nodes, direction);
-      swipeCount += 1;
-      await new Promise((resolve) => setTimeout(resolve, 350));
-    }
-    return false;
-  }, timeoutMs, message);
+  }
   requireCondition(found !== null, message);
   return found;
 }
