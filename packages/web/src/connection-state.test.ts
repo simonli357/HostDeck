@@ -1299,6 +1299,90 @@ describe("browser shell connection-state coordinator", () => {
     harness.coordinator.close();
   });
 
+  it("adopts a later local unlock across Mission Control refresh and Session Detail navigation", async () => {
+    const harness = createHarness(remoteOrigin);
+    enqueueRemoteWriterMission(
+      harness,
+      [sessionItem(firstSessionId)],
+      7,
+      1
+    );
+    await harness.coordinator.setTarget({ kind: "mission_control" });
+    harness.http.enqueue(
+      "mutation",
+      jsonResponse(200, pairedAccess(remoteOrigin, "write", true))
+    );
+    await harness.coordinator.requestHostLock({
+      body: { operation_id: "op_connection_lock_before_local_unlock", confirmed: true }
+    });
+    expect(harness.coordinator.snapshot()).toMatchObject({
+      access: { state: "current", data: { locked: true } },
+      writeEligibility: { eligible: false, causes: ["host_locked"] }
+    });
+
+    harness.http.enqueue(
+      "access",
+      jsonResponse(200, pairedAccess(remoteOrigin, "write", false))
+    );
+    harness.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({ mode: "paired_write", origin: remoteOrigin, remoteGeneration: 7 })
+      )
+    );
+    harness.http.enqueue(
+      "list",
+      jsonResponse(
+        200,
+        sessionList("paired_write", remoteOrigin, [sessionItem(firstSessionId)])
+      )
+    );
+    const mission = await harness.coordinator.refresh();
+    expect(mission).toMatchObject({
+      phase: "ready",
+      access: { state: "current", data: { locked: false, can_write_sessions: true } },
+      csrf: { phase: "ready", generation: 1 },
+      writeEligibility: { eligible: true, causes: [] }
+    });
+
+    harness.http.enqueue(
+      "access",
+      jsonResponse(200, pairedAccess(remoteOrigin, "write", false))
+    );
+    harness.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({ mode: "paired_write", origin: remoteOrigin, remoteGeneration: 7 })
+      )
+    );
+    harness.http.enqueue(
+      "detail",
+      jsonResponse(
+        200,
+        sessionDetail(
+          "paired_write",
+          remoteOrigin,
+          sessionItem(firstSessionId)
+        )
+      )
+    );
+    const detail = await harness.coordinator.setTarget({
+      kind: "session_detail",
+      sessionId: firstSessionId
+    });
+    expect(detail).toMatchObject({
+      phase: "ready",
+      target: { kind: "session_detail", sessionId: firstSessionId },
+      access: { state: "current", data: { locked: false, can_write_sessions: true } },
+      targetState: { state: "current", data: { kind: "session_detail" } },
+      csrf: { phase: "ready", generation: 1 },
+      writeEligibility: { eligible: true, causes: [] }
+    });
+    harness.coordinator.close();
+  });
+
   it("does not let a refresh begun during lock dispatch overwrite correlated success", async () => {
     const harness = createHarness(remoteOrigin);
     enqueueRemoteWriterMission(harness, [], 7, 1);

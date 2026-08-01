@@ -2172,6 +2172,33 @@ describe("physical Android phone-driver protocol", () => {
         2
       )
     ).toBe(false);
+    const unlockedMissionNodes = Object.freeze([
+      Object.freeze({ ...confirmationReason, text: "Mission Control" }),
+      Object.freeze({ ...confirmationReason, text: "Remote ready" }),
+      Object.freeze({ ...confirmationReason, text: "Write" }),
+      Object.freeze({
+        ...confirmationReason,
+        description: physicalUiSessionName,
+        text: ""
+      })
+    ]);
+    expect(physicalMissionControlWriteReady(unlockedMissionNodes, 0)).toBe(true);
+    expect(physicalMissionControlWriteReady(unlockedMissionNodes, 1)).toBe(false);
+    expect(
+      physicalMissionControlWriteReady(
+        [
+          ...unlockedMissionNodes,
+          Object.freeze({ ...confirmationReason, text: "Remote writes locked" })
+        ],
+        0
+      )
+    ).toBe(false);
+    expect(
+      physicalMissionControlWriteReady(
+        unlockedMissionNodes.filter((node) => node.text !== "Write"),
+        0
+      )
+    ).toBe(false);
     expect(
       physicalPromptCompletionRestored(
         [Object.freeze({ ...confirmationReason, text: "Turn completed" })],
@@ -3024,6 +3051,38 @@ describe("physical Android phone-driver protocol", () => {
         )
       ).toBe(false);
     }
+
+    const before: PhysicalSessionNavigationSnapshot = Object.freeze({
+      activeSubscribers: 0,
+      missingDetailRequests: 1,
+      openedSubscribers: 4,
+      selectedDetailRequests: 3,
+      streamRequests: 4
+    });
+    const opened: PhysicalSessionNavigationSnapshot = Object.freeze({
+      ...before,
+      activeSubscribers: 1,
+      openedSubscribers: 5,
+      selectedDetailRequests: 4,
+      streamRequests: 5
+    });
+    expect(physicalSessionNavigationOpened(opened, before)).toBe(true);
+    for (const key of Object.keys(opened) as Array<
+      keyof PhysicalSessionNavigationSnapshot
+    >) {
+      expect(
+        physicalSessionNavigationOpened(
+          Object.freeze({ ...opened, [key]: opened[key] + 1 }),
+          before
+        )
+      ).toBe(false);
+    }
+    expect(
+      physicalSessionNavigationOpened(
+        opened,
+        Object.freeze({ ...before, activeSubscribers: 1 })
+      )
+    ).toBe(false);
   });
 
   it("uses the authoritative Android keyboard request over stale view state", () => {
@@ -8529,6 +8588,20 @@ function physicalSessionNavigationMatches(
   );
 }
 
+function physicalSessionNavigationOpened(
+  actual: PhysicalSessionNavigationSnapshot,
+  before: PhysicalSessionNavigationSnapshot
+): boolean {
+  return (
+    before.activeSubscribers === 0 &&
+    actual.activeSubscribers === 1 &&
+    actual.missingDetailRequests === before.missingDetailRequests &&
+    actual.openedSubscribers === before.openedSubscribers + 1 &&
+    actual.selectedDetailRequests === before.selectedDetailRequests + 1 &&
+    actual.streamRequests === before.streamRequests + 1
+  );
+}
+
 async function runPhysicalApprovalControl(
   input: ProductionUiEntryInput & {
     readonly controls: PhysicalDashboardControls;
@@ -8634,6 +8707,103 @@ async function runPhysicalApprovalControl(
     "Physical approval did not render terminal approved truth."
   );
   await capture("fe090-07-approval-approved.png");
+}
+
+async function waitForPhysicalMissionControlWriteReady(
+  input: Readonly<{
+    readonly prompt: PhysicalPromptRuntime;
+    readonly requestInspection: RequestInspection;
+  }>,
+  before: Readonly<{
+    readonly accessRequests: number;
+    readonly hostStatusRequests: number;
+    readonly sessionListRequests: number;
+  }>,
+  message: string
+): Promise<void> {
+  const observations: string[] = [];
+  let stableSince: number | null = null;
+  let stableObservation: string | null = null;
+  try {
+    await waitFor(async () => {
+      const nodes = await readAndroidUiNodes();
+      const activeSubscribers =
+        input.prompt.subscribers.snapshot().active_subscribers;
+      const observation = [
+        `requests=${input.requestInspection.accessRequests - before.accessRequests}/` +
+          `${input.requestInspection.hostStatusRequests - before.hostStatusRequests}/` +
+          `${input.requestInspection.sessionListRequests - before.sessionListRequests}`,
+        physicalMissionControlWriteSummary(nodes, activeSubscribers)
+      ].join(";");
+      if (observations.at(-1) !== observation && observations.length < 6) {
+        observations.push(observation);
+      }
+      const ready =
+        input.requestInspection.accessRequests === before.accessRequests + 1 &&
+        input.requestInspection.hostStatusRequests === before.hostStatusRequests + 1 &&
+        input.requestInspection.sessionListRequests === before.sessionListRequests + 1 &&
+        physicalMissionControlWriteReady(nodes, activeSubscribers);
+      if (!ready) {
+        stableSince = null;
+        stableObservation = null;
+        return false;
+      }
+      if (stableSince === null || stableObservation !== observation) {
+        stableSince = performance.now();
+        stableObservation = observation;
+        return false;
+      }
+      return performance.now() - stableSince >= 2_000;
+    }, 45_000, message);
+  } catch (error) {
+    throw new Error(
+      `${message} (states=${
+        observations.length === 0 ? "none" : observations.join("||")
+      }) ${physicalPromptStreamDiagnostic(input)}`,
+      { cause: error }
+    );
+  }
+}
+
+function physicalMissionControlWriteReady(
+  nodes: readonly AndroidUiNode[],
+  activeSubscribers: number
+): boolean {
+  const textCount = (value: string): number =>
+    nodes.filter((node) => node.text === value).length;
+  const descriptionCount = (value: string): number =>
+    nodes.filter((node) => node.description === value).length;
+  return (
+    activeSubscribers === 0 &&
+    textCount("Mission Control") === 1 &&
+    textCount("Remote ready") === 1 &&
+    textCount("Write") === 1 &&
+    descriptionCount(physicalUiSessionName) === 1 &&
+    textCount("Remote writes locked") === 0 &&
+    textCount("Locked") === 0 &&
+    textCount("Access stale") === 0 &&
+    textCount("Reconnecting") === 0
+  );
+}
+
+function physicalMissionControlWriteSummary(
+  nodes: readonly AndroidUiNode[],
+  activeSubscribers: number
+): string {
+  const textCount = (value: string): number =>
+    nodes.filter((node) => node.text === value).length;
+  const descriptionCount = (value: string): number =>
+    nodes.filter((node) => node.description === value).length;
+  return [
+    `active=${activeSubscribers}`,
+    `mission=${textCount("Mission Control")}`,
+    `remote=${textCount("Remote ready")}`,
+    `write=${textCount("Write")}`,
+    `session=${descriptionCount(physicalUiSessionName)}`,
+    `locked=${textCount("Remote writes locked")}/${textCount("Locked")}`,
+    `stale=${textCount("Access stale")}`,
+    `reconnecting=${textCount("Reconnecting")}`
+  ].join(",");
 }
 
 async function waitForPhysicalSessionWriteReady(
@@ -9770,34 +9940,39 @@ async function runPhysicalHostAccessControls(
       input.manager.snapshot().command_attempts === managerAttempts,
     "Physical local unlock failed or mutated Serve state."
   );
-  const sessionsBefore = input.requestInspection.sessionListRequests;
+  const reloadBefore = Object.freeze({
+    accessRequests: input.requestInspection.accessRequests,
+    hostStatusRequests: input.requestInspection.hostStatusRequests,
+    sessionListRequests: input.requestInspection.sessionListRequests
+  });
   adb(["shell", "input", "keyevent", "KEYCODE_REFRESH"]);
-  await waitFor(
-    () =>
-      input.requestInspection.sessionListRequests > sessionsBefore,
-    45_000,
-    "Physical Mission Control did not refresh after local unlock."
+  await waitForPhysicalMissionControlWriteReady(
+    input,
+    reloadBefore,
+    "Physical Mission Control did not settle current write authority after local unlock."
   );
-  await waitForAndroidUiText(
-    physicalUiSessionName,
-    30_000,
-    "Physical Mission Control remained unavailable after local unlock."
-  );
-  const selected = await waitForAndroidUiNodePresent(
+  const navigationBefore = readPhysicalSessionNavigationSnapshot(input);
+  const selected = await revealAndroidUiNode(
     "description",
     physicalUiSessionName,
+    "forward",
     30_000,
-    "Physical unlocked selected session was unavailable."
+    "Physical unlocked selected session was unavailable.",
+    "fully_visible",
+    true
   );
   await tapAndroidNodeOnceAndWait(
     selected,
-    () => input.prompt.subscribers.snapshot().active_subscribers === 1,
-    "Physical unlocked selected session did not reopen."
+    () =>
+      physicalSessionNavigationOpened(
+        readPhysicalSessionNavigationSnapshot(input),
+        navigationBefore
+      ),
+    "Physical unlocked selected session did not produce one new detail and stream generation."
   );
-  await waitForAndroidUiText(
-    "Ready to send",
-    30_000,
-    "Physical Session Detail remained locked after local unlock."
+  await waitForPhysicalSessionWriteReady(
+    input,
+    "Physical Session Detail did not restore stable write authority after local unlock."
   );
   await capture("fe090-37-host-unlocked.png");
 }
