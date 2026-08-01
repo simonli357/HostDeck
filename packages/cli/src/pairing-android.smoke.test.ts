@@ -3122,12 +3122,22 @@ describe("physical Android phone-driver protocol", () => {
   it("requires the exact route-owned incompatible and supported runtime truth", () => {
     const incompatible = physicalRuntimeRouteFixture("incompatible");
     const supported = physicalRuntimeRouteFixture("supported");
+    const incompatibleWithSessionOffscreen = incompatible.filter(
+      (node) => node.description !== physicalUiSessionName
+    );
 
     expect(
       physicalMissionRuntimeStateVisible(incompatible, 0, "incompatible")
     ).toBe(true);
     expect(
       physicalMissionRuntimeStateVisible(supported, 0, "supported")
+    ).toBe(true);
+    expect(
+      physicalMissionRuntimeStateVisible(
+        incompatibleWithSessionOffscreen,
+        0,
+        "incompatible"
+      )
     ).toBe(true);
     expect(
       physicalMissionRuntimeStateVisible(incompatible, 0, "supported")
@@ -10305,7 +10315,6 @@ function physicalMissionRuntimeStateVisible(
     activeSubscribers === 0 &&
     descriptionCount("Open Host and access") === 1 &&
     descriptionCount("Close Host and access") === 0 &&
-    descriptionCount(physicalUiSessionName) === 1 &&
     textCount("Mission Control") === 1 &&
     textCount("Remote ready") === 1 &&
     textCount("Write") === 1 &&
@@ -10347,7 +10356,6 @@ function physicalMissionRuntimeStateSummary(
     `write=${textCount("Write")}`,
     `state=${textCount("Current")}/${textCount("Incompatible")}`,
     `runtime=${textCount(physicalRuntimeSupportedTitle)}/${textCount(physicalRuntimeIncompatibleTitle)}`,
-    `session=${descriptionCount(physicalUiSessionName)}`,
     `pending=${textCount("Checking Codex compatibility")}/${textCount("Compatibility check not confirmed")}`
   ].join(",");
 }
