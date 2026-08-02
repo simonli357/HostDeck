@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-090` Harden the complete mobile dashboard on the real phone | in_progress | none | Commit and push the validated BUG-063 transport-attribution/cleanup hardening, prove sustained healthy Tailscale and ADB reachability, then run the complete BUG-056/BUG-060/BUG-061/BUG-062/BUG-063 correction once through pairing, every dashboard system, exact runtime recovery, the real TalkBack transcript in `BUG-052`, generation-bound strict archive crossing in `BUG-051`, self-revocation, final aggregate, exact cleanup, private evidence review, and retained deployment. |
+| 1 | `FE-V1-090` Harden the complete mobile dashboard on the real phone | in_progress | none | Prove sustained healthy Tailscale and ADB reachability, then run pushed candidate `ecca780` with the complete BUG-056/BUG-060/BUG-061/BUG-062/BUG-063 correction once through pairing, every dashboard system, exact runtime recovery, the real TalkBack transcript in `BUG-052`, generation-bound strict archive crossing in `BUG-051`, self-revocation, final aggregate, exact cleanup, private evidence review, and retained deployment. |
 
 ## Intentional Blockers
 
