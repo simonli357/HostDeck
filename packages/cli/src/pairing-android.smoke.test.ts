@@ -35,6 +35,7 @@ import {
   defaultResourceBudget,
   type RemoteIngressObservationSnapshot,
   type RemoteServeDescriptor,
+  remoteIngressObservationSnapshotSchema,
   remoteProxyTrustRejectionReasons,
   remoteServeDescriptorSchema,
   runtimeCompatibilitySchema,
@@ -176,6 +177,8 @@ const overallTimeoutMs = requireRemoteAndroidAcceptance
     : 10 * 60_000;
 const claimTimeoutMs = 5 * 60_000;
 const automatedClaimTimeoutMs = 45_000;
+const physicalServeCleanupObservationAttempts = 12;
+const physicalServeCleanupObservationDelayMs = 5_000;
 const androidTailscaleComponent = "com.tailscale.ipn/.MainActivity";
 const androidEditTextClass = "android.widget.EditText";
 const androidMobileDataStateCommand =
@@ -2556,6 +2559,19 @@ describe("physical Android phone-driver protocol", () => {
         )
       )
     ).toBeNull();
+    const controls = Object.freeze({
+      snapshot: () => Object.freeze({ calls: Object.freeze({ read_skills: 0 }) })
+    }) as unknown as PhysicalDashboardControls;
+    const diagnostic = physicalSkillsUiStateSummary(nodes, controls, {
+      proxyRejection: "remote_generation_stale",
+      requests: 1,
+      responseStatuses: Object.freeze([403])
+    });
+    expect(diagnostic).toContain(
+      "reads=0;route_requests=1;route_statuses=403;" +
+        "proxy_rejection=remote_generation_stale"
+    );
+    expect(diagnostic).not.toContain("private.example.ts.net");
   });
 
   it("selects only the production page viewport for private-free evidence", () => {
@@ -3003,6 +3019,148 @@ describe("physical Android phone-driver protocol", () => {
       new Error("Physical cleanup could not restore Android mobile-data state.")
     );
     expect(JSON.stringify(errors)).not.toContain("private device output");
+  });
+
+  it("reconciles transient Serve cleanup with at most one actual mutation", async () => {
+    const exact = physicalServeCleanupFixture("exact");
+    const absent = physicalServeCleanupFixture("absent");
+    const transient = physicalServeCleanupFixture("transient");
+    const observations: Array<RemoteIngressObservationSnapshot | Error> = [
+      new Error("private transient observer cause"),
+      transient,
+      exact,
+      exact,
+      absent
+    ];
+    let observationIndex = 0;
+    let disableCalls = 0;
+    let sleeps = 0;
+
+    await reconcilePhysicalServeCleanup(
+      {
+        async disable() {
+          disableCalls += 1;
+          return { after: null, commandAttempted: true };
+        },
+        async observe() {
+          const observation = observations[observationIndex];
+          observationIndex += 1;
+          requireCondition(
+            observation !== undefined,
+            "Physical Serve cleanup test observation was unavailable."
+          );
+          if (observation instanceof Error) throw observation;
+          return observation;
+        }
+      },
+      {
+        attempts: 5,
+        async sleep() {
+          sleeps += 1;
+        }
+      }
+    );
+
+    expect({ disableCalls, observationIndex, sleeps }).toEqual({
+      disableCalls: 1,
+      observationIndex: 5,
+      sleeps: 4
+    });
+  });
+
+  it("retries only preflight-safe cleanup calls and rejects hostile Serve truth", async () => {
+    const exact = physicalServeCleanupFixture("exact");
+    const absent = physicalServeCleanupFixture("absent");
+    let absentDisableCalls = 0;
+    await reconcilePhysicalServeCleanup(
+      {
+        async disable() {
+          absentDisableCalls += 1;
+          return { after: null, commandAttempted: true };
+        },
+        async observe() {
+          return absent;
+        }
+      },
+      { attempts: 1, sleep: async () => undefined }
+    );
+    expect(absentDisableCalls).toBe(0);
+
+    let safeDisableCalls = 0;
+    await reconcilePhysicalServeCleanup(
+      {
+        async disable() {
+          safeDisableCalls += 1;
+          return safeDisableCalls === 1
+            ? { after: null, commandAttempted: false }
+            : { after: absent, commandAttempted: true };
+        },
+        async observe() {
+          return exact;
+        }
+      },
+      { attempts: 2, sleep: async () => undefined }
+    );
+    expect(safeDisableCalls).toBe(2);
+
+    let uncertainDisableCalls = 0;
+    await expect(
+      reconcilePhysicalServeCleanup(
+        {
+          async disable() {
+            uncertainDisableCalls += 1;
+            return { after: null, commandAttempted: true };
+          },
+          async observe() {
+            return exact;
+          }
+        },
+        { attempts: 3, sleep: async () => undefined }
+      )
+    ).rejects.toThrow("after its single mutation");
+    expect(uncertainDisableCalls).toBe(1);
+
+    let unsafeAfterDisableCalls = 0;
+    await expect(
+      reconcilePhysicalServeCleanup(
+        {
+          async disable() {
+            unsafeAfterDisableCalls += 1;
+            return {
+              after: physicalServeCleanupFixture("foreign"),
+              commandAttempted: true
+            };
+          },
+          async observe() {
+            return exact;
+          }
+        },
+        { attempts: 2, sleep: async () => undefined }
+      )
+    ).rejects.toThrow("ownership-safe Serve cleanup");
+    expect(unsafeAfterDisableCalls).toBe(1);
+
+    for (const hostile of [
+      physicalServeCleanupFixture("foreign"),
+      physicalServeCleanupFixture("wrong_profile")
+    ]) {
+      let hostileDisableCalls = 0;
+      await expect(
+        reconcilePhysicalServeCleanup(
+          {
+            async disable() {
+              hostileDisableCalls += 1;
+              return { after: null, commandAttempted: true };
+            },
+            async observe() {
+              return hostile;
+            }
+          },
+          { attempts: 2, sleep: async () => undefined }
+        )
+      ).rejects.toThrow("ownership-safe Serve cleanup");
+      expect(hostileDisableCalls).toBe(0);
+    }
   });
 
   it("returns Home before force-stopping Chrome during physical cleanup", () => {
@@ -3487,6 +3645,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         sessionListRequests: 0,
         sessionListResponseStatuses: [],
         sessionMissingDetailRequests: 0,
+        skillsRequests: 0,
+        skillsResponseStatuses: [],
         sessionStreamRequests: 0,
         sessionStreamResponseStatuses: []
       };
@@ -4629,6 +4789,15 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             cleanupErrors
           );
         }
+        if (cleanupRemoteLifecycle !== null) {
+          await collectPhysicalCleanupError(
+            "Physical cleanup could not drain the selected remote lifecycle.",
+            () => {
+              cleanupRemoteLifecycle.beginDrain();
+            },
+            cleanupErrors
+          );
+        }
         if (fallbackCleanup !== null) {
           await collectPhysicalCleanupError(
             "Physical cleanup could not prove or restore absent Serve state.",
@@ -4719,6 +4888,27 @@ interface CleanupTarget {
   readonly expectedServe: RemoteServeDescriptor;
 }
 
+interface PhysicalServeCleanupMutation {
+  readonly after: RemoteIngressObservationSnapshot | null;
+  readonly commandAttempted: boolean;
+}
+
+interface PhysicalServeCleanupPort {
+  readonly disable: () => Promise<PhysicalServeCleanupMutation>;
+  readonly observe: () => Promise<RemoteIngressObservationSnapshot>;
+}
+
+interface PhysicalServeCleanupSchedule {
+  readonly attempts: number;
+  readonly sleep: () => Promise<void>;
+}
+
+interface PhysicalSkillsRouteDiagnostic {
+  readonly proxyRejection: string | null;
+  readonly requests: number;
+  readonly responseStatuses: readonly number[];
+}
+
 interface RequestInspection {
   accessRequests: number;
   accessResponseStatuses: number[];
@@ -4752,6 +4942,8 @@ interface RequestInspection {
   sessionListRequests: number;
   sessionListResponseStatuses: number[];
   sessionMissingDetailRequests: number;
+  skillsRequests: number;
+  skillsResponseStatuses: number[];
   sessionStreamRequests: number;
   sessionStreamResponseStatuses: number[];
 }
@@ -6363,6 +6555,12 @@ function installRequestInspection(
       inspection.promptRequests += 1;
       if (referrer === undefined) inspection.promptNoReferrerRequests += 1;
     }
+    if (
+      request.method === "GET" &&
+      request.url === `/api/v1/sessions/${physicalUiSessionId}/skills`
+    ) {
+      inspection.skillsRequests += 1;
+    }
     if (request.url === "/__physical/protected") {
       inspection.protectedReadRequests += 1;
     }
@@ -6443,6 +6641,15 @@ function installRequestInspection(
     ) {
       recordPhysicalResponseStatus(
         inspection.promptResponseStatuses,
+        reply.statusCode
+      );
+    }
+    if (
+      request.method === "GET" &&
+      request.url === `/api/v1/sessions/${physicalUiSessionId}/skills`
+    ) {
+      recordPhysicalResponseStatus(
+        inspection.skillsResponseStatuses,
         reply.statusCode
       );
     }
@@ -8404,6 +8611,9 @@ async function runProductionDashboardUiSequence(
       input.prompt.streamFailureCount === 1 &&
       JSON.stringify(input.prompt.streamFailureCodes) ===
         '["source_failed"]' &&
+      input.requestInspection.skillsRequests === 1 &&
+      JSON.stringify(input.requestInspection.skillsResponseStatuses) ===
+        "[200]" &&
       input.readProxyRejection() === null,
     "Physical dashboard control counters or terminal truth were inconsistent."
   );
@@ -9584,8 +9794,13 @@ async function runPhysicalSessionUtilities(
     input.controls,
     "read_skills"
   );
+  const skillsRequestsBefore = input.requestInspection.skillsRequests;
+  const skillsResponseStatusesBefore =
+    input.requestInspection.skillsResponseStatuses.length;
   requireCondition(
-    skillsReadsBefore === 0,
+    skillsReadsBefore === 0 &&
+      skillsRequestsBefore === 0 &&
+      skillsResponseStatusesBefore === 0,
     "Physical /skills had an unexpected prior read."
   );
   let skillsTransitionState = "unobserved";
@@ -9595,7 +9810,12 @@ async function runPhysicalSessionUtilities(
       const nodes = await readAndroidUiNodes();
       skillsTransitionState = physicalSkillsUiStateSummary(
         nodes,
-        input.controls
+        input.controls,
+        physicalSkillsRouteDiagnostic(
+          input,
+          skillsRequestsBefore,
+          skillsResponseStatusesBefore
+        )
       );
       return (
         nodes.some((node) => node.text === "/skills") &&
@@ -9669,7 +9889,8 @@ async function revealPhysicalSkillsSearch(
 
 function physicalSkillsUiStateSummary(
   nodes: readonly AndroidUiNode[],
-  controls: PhysicalDashboardControls
+  controls: PhysicalDashboardControls,
+  route: PhysicalSkillsRouteDiagnostic | null = null
 ): string {
   const labels = [
     ["title", "/skills"],
@@ -9702,6 +9923,13 @@ function physicalSkillsUiStateSummary(
   }
   return [
     `reads=${physicalDashboardControlCallCount(controls, "read_skills")}`,
+    `route_requests=${route?.requests ?? 0}`,
+    `route_statuses=${
+      route === null || route.responseStatuses.length === 0
+        ? "none"
+        : route.responseStatuses.join(",")
+    }`,
+    `proxy_rejection=${route?.proxyRejection ?? "none"}`,
     ...state,
     `editors=${pageEditors.length}:${
       pageEditors
@@ -9710,6 +9938,29 @@ function physicalSkillsUiStateSummary(
         .join("|") || "none"
     }`
   ].join(";");
+}
+
+function physicalSkillsRouteDiagnostic(
+  input: ProductionUiEntryInput,
+  requestsBefore: number,
+  responseStatusesBefore: number
+): PhysicalSkillsRouteDiagnostic {
+  const requests = input.requestInspection.skillsRequests - requestsBefore;
+  const responseStatuses = input.requestInspection.skillsResponseStatuses.slice(
+    responseStatusesBefore
+  );
+  requireCondition(
+    Number.isSafeInteger(requests) &&
+      requests >= 0 &&
+      requests <= 4 &&
+      responseStatuses.length <= 4,
+    "Physical Skills route diagnostic exceeded its bounded contract."
+  );
+  return Object.freeze({
+    proxyRejection: input.readProxyRejection(),
+    requests,
+    responseStatuses: Object.freeze(responseStatuses)
+  });
 }
 
 function physicalDashboardControlCallCount(
@@ -16477,30 +16728,184 @@ async function proveOrRestoreAbsent(
   manager: TailscaleServeManager,
   fallback: CleanupTarget
 ): Promise<void> {
-  const current = await observer.observeConfigured({
-    expected_profile_key: fallback.expectedProfileKey,
-    expected_serve: fallback.expectedServe
+  const port: PhysicalServeCleanupPort = Object.freeze({
+    async disable() {
+      const attemptsBefore = manager.snapshot().command_attempts;
+      let result: Awaited<ReturnType<TailscaleServeManager["disable"]>> | null =
+        null;
+      try {
+        result = await manager.disable({
+          expected_profile_key: fallback.expectedProfileKey,
+          expected_serve: fallback.expectedServe
+        });
+      } catch {
+        // The command-attempt counter below distinguishes preflight failure
+        // from an uncertain mutation without retaining the private cause.
+      }
+      const attemptDelta = manager.snapshot().command_attempts - attemptsBefore;
+      requireCondition(
+        (attemptDelta === 0 || attemptDelta === 1) &&
+          (result === null ||
+            (attemptDelta === 1) === result.command_attempted),
+        "Physical Serve cleanup mutation accounting was invalid."
+      );
+      return Object.freeze({
+        after: result?.after ?? null,
+        commandAttempted: attemptDelta === 1
+      });
+    },
+    observe: () =>
+      observer.observeConfigured({
+        expected_profile_key: fallback.expectedProfileKey,
+        expected_serve: fallback.expectedServe
+      })
   });
-  requireCondition(
-    current.client === "available" &&
-      current.failure === null &&
-      current.profile.state === "dedicated" &&
-      current.profile.comparison.relation === "match" &&
-      (current.serve === "absent" || current.serve === "exact"),
-    "Physical pairing cannot prove ownership-safe Serve cleanup."
-  );
-  if (current.serve === "absent") return;
-  const removed = await manager.disable({
-    expected_profile_key: fallback.expectedProfileKey,
-    expected_serve: fallback.expectedServe
+  await reconcilePhysicalServeCleanup(port, {
+    attempts: physicalServeCleanupObservationAttempts,
+    sleep: () =>
+      new Promise((resolve) =>
+        setTimeout(resolve, physicalServeCleanupObservationDelayMs)
+      )
   });
+}
+
+async function reconcilePhysicalServeCleanup(
+  port: PhysicalServeCleanupPort,
+  schedule: PhysicalServeCleanupSchedule
+): Promise<void> {
   requireCondition(
-    removed.outcome === "succeeded" &&
-      removed.after !== null &&
-      removed.after.serve === "absent" &&
-      removed.after.failure === null,
-    "Physical pairing failed to remove its owned Serve state."
+    Number.isSafeInteger(schedule.attempts) &&
+      schedule.attempts >= 1 &&
+      schedule.attempts <= physicalServeCleanupObservationAttempts,
+    "Physical Serve cleanup schedule was invalid."
   );
+  let mutationAttempted = false;
+  for (let attempt = 0; attempt < schedule.attempts; attempt += 1) {
+    let observation: RemoteIngressObservationSnapshot | null = null;
+    try {
+      observation = await port.observe();
+    } catch {
+      // A bounded read-only retry may outlive a transient local Tailscale read.
+    }
+    if (observation !== null) {
+      const state = physicalServeCleanupObservationState(observation);
+      requireCondition(
+        state !== "unsafe",
+        "Physical pairing cannot prove ownership-safe Serve cleanup."
+      );
+      if (state === "absent") return;
+      if (state === "exact" && !mutationAttempted) {
+        const mutation = await port.disable();
+        mutationAttempted ||= mutation.commandAttempted;
+        if (mutation.after !== null) {
+          const afterState = physicalServeCleanupObservationState(
+            mutation.after
+          );
+          requireCondition(
+            afterState !== "unsafe",
+            "Physical pairing cannot prove ownership-safe Serve cleanup."
+          );
+          if (afterState === "absent") return;
+        }
+      }
+    }
+    if (attempt + 1 < schedule.attempts) {
+      try {
+        await schedule.sleep();
+      } catch {
+        throw new Error("Physical Serve cleanup reconciliation wait failed.");
+      }
+    }
+  }
+  throw new Error(
+    mutationAttempted
+      ? "Physical pairing could not prove owned Serve removal after its single mutation."
+      : "Physical pairing could not obtain a conclusive owned Serve cleanup observation."
+  );
+}
+
+function physicalServeCleanupObservationState(
+  snapshot: RemoteIngressObservationSnapshot
+): "absent" | "exact" | "transient" | "unsafe" {
+  if (
+    snapshot.client === "error" ||
+    (snapshot.client === "available" &&
+      snapshot.failure === "profile_changed")
+  ) {
+    return "transient";
+  }
+  if (
+    snapshot.client !== "available" ||
+    snapshot.failure !== null ||
+    snapshot.profile.state !== "dedicated" ||
+    snapshot.profile.comparison.relation !== "match"
+  ) {
+    return "unsafe";
+  }
+  if (snapshot.serve === "absent") return "absent";
+  if (snapshot.serve === "exact") return "exact";
+  return "unsafe";
+}
+
+function physicalServeCleanupFixture(
+  state: "absent" | "exact" | "foreign" | "transient" | "wrong_profile"
+): RemoteIngressObservationSnapshot {
+  const expectedProfileKey = `sha256:${"a".repeat(64)}`;
+  const otherProfileKey = `sha256:${"b".repeat(64)}`;
+  const observedAt = "2026-08-01T00:00:00.000Z";
+  if (state === "transient") {
+    return remoteIngressObservationSnapshotSchema.parse({
+      schema_version: 1,
+      client: "error",
+      profile: {
+        state: "unknown",
+        comparison: {
+          relation: "unknown",
+          expected_profile_key: expectedProfileKey,
+          active_profile_key: null
+        }
+      },
+      serve: null,
+      external_origin: null,
+      failure: "command_timeout",
+      observed_at: observedAt
+    });
+  }
+  if (state === "wrong_profile") {
+    return remoteIngressObservationSnapshotSchema.parse({
+      schema_version: 1,
+      client: "available",
+      profile: {
+        state: "other",
+        comparison: {
+          relation: "different",
+          expected_profile_key: expectedProfileKey,
+          active_profile_key: otherProfileKey
+        }
+      },
+      serve: null,
+      external_origin: null,
+      failure: null,
+      observed_at: observedAt
+    });
+  }
+  return remoteIngressObservationSnapshotSchema.parse({
+    schema_version: 1,
+    client: "available",
+    profile: {
+      state: "dedicated",
+      comparison: {
+        relation: "match",
+        expected_profile_key: expectedProfileKey,
+        active_profile_key: expectedProfileKey
+      }
+    },
+    serve: state,
+    external_origin:
+      state === "exact" ? "https://hostdeck.example.ts.net" : null,
+    failure: null,
+    observed_at: observedAt
+  });
 }
 
 async function reserveLoopbackPort(): Promise<number> {
