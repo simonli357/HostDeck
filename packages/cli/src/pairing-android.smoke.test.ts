@@ -179,6 +179,10 @@ const claimTimeoutMs = 5 * 60_000;
 const automatedClaimTimeoutMs = 45_000;
 const physicalServeCleanupObservationAttempts = 12;
 const physicalServeCleanupObservationDelayMs = 5_000;
+const physicalRemoteCheckResponseTimeoutMs = 45_000;
+const physicalAndroidChromeAbsenceSettleMs = 30_000;
+const physicalAndroidChromeStopTimeoutMs = 45_000;
+const physicalAndroidChromeProcessPollMs = 200;
 const androidTailscaleComponent = "com.tailscale.ipn/.MainActivity";
 const androidEditTextClass = "android.widget.EditText";
 const androidMobileDataStateCommand =
@@ -199,6 +203,8 @@ const physicalAndroidChromeStopCommandPlan = Object.freeze([
     "shell",
     "am",
     "force-stop",
+    "--user",
+    "0",
     "com.android.chrome"
   ] as const)
 ] as const);
@@ -3166,7 +3172,14 @@ describe("physical Android phone-driver protocol", () => {
   it("returns Home before force-stopping Chrome during physical cleanup", () => {
     expect(physicalAndroidChromeStopCommandPlan).toEqual([
       ["shell", "input", "keyevent", "KEYCODE_HOME"],
-      ["shell", "am", "force-stop", "com.android.chrome"]
+      [
+        "shell",
+        "am",
+        "force-stop",
+        "--user",
+        "0",
+        "com.android.chrome"
+      ]
     ]);
     expect(Object.isFrozen(physicalAndroidChromeStopCommandPlan)).toBe(true);
     expect(Object.isFrozen(physicalAndroidChromeStopCommandPlan[0])).toBe(true);
@@ -3279,6 +3292,41 @@ describe("physical Android phone-driver protocol", () => {
         physicalRemoteCheckBoundary(8, 11, 11, 200)
       )
     ).toBe(false);
+    expect(
+      physicalRemoteCheckBoundarySummary(
+        before,
+        physicalRemoteCheckBoundary(8, 10, 9, 200)
+      )
+    ).toBe(
+      "remote_requests=1;host_requests=1;host_responses=0;new_host_status=none"
+    );
+  });
+
+  it("owns an in-flight remote check through one bounded tap", async () => {
+    const before = physicalRemoteCheckBoundary(7, 9, 9, 200);
+    let current = before;
+    let tapBoundaryCalls = 0;
+    const check = physicalRuntimeFixtureNode({ text: "Check again" });
+
+    await settlePhysicalRemoteCheckAfterOneTap(
+      check,
+      before,
+      () => current,
+      async (node, completed, message, timeoutMs) => {
+        tapBoundaryCalls += 1;
+        expect(node).toBe(check);
+        expect(message).toBe(
+          "Production remote check did not complete its exact successful status-then-refresh sequence."
+        );
+        expect(timeoutMs).toBe(physicalRemoteCheckResponseTimeoutMs);
+        current = physicalRemoteCheckBoundary(8, 10, 9, 200);
+        expect(await completed()).toBe(false);
+        current = physicalRemoteCheckBoundary(8, 10, 10, 200);
+        expect(await completed()).toBe(true);
+      }
+    );
+
+    expect(tapBoundaryCalls).toBe(1);
   });
 
   it("requires the exact route-owned incompatible and supported runtime truth", () => {
@@ -3491,18 +3539,81 @@ describe("physical Android phone-driver protocol", () => {
     ).toThrow("visibility was contradictory");
   });
 
-  it("distinguishes a stopped Chrome package from malformed pid output", () => {
-    expect(readChromeProcessState(0, "123 456\n", "")).toBe("running");
-    expect(readChromeProcessState(1, "", "")).toBe("stopped");
-    expect(() => readChromeProcessState(0, "not-a-pid", "")).toThrow(
+  it("requires complete Chrome package-process absence", () => {
+    expect(
+      readChromePackageProcessState(
+        0,
+        "NAME\ninit\ncom.android.chrome\n",
+        ""
+      )
+    ).toBe("running");
+    expect(
+      readChromePackageProcessState(
+        0,
+        "NAME\ninit\ncom.android.chrome:privileged_process6\n",
+        ""
+      )
+    ).toBe("running");
+    expect(
+      readChromePackageProcessState(
+        0,
+        "NAME\ninit\ncom.android.chromedriver\n",
+        ""
+      )
+    ).toBe("stopped");
+    expect(() => readChromePackageProcessState(0, "not-name\n", "")).toThrow(
       "Chrome process state was invalid"
     );
-    expect(() => readChromeProcessState(1, "123", "")).toThrow(
+    expect(() => readChromePackageProcessState(1, "NAME\n", "")).toThrow(
       "Chrome process state was invalid"
     );
-    expect(() => readChromeProcessState(2, "", "failure")).toThrow(
+    expect(() => readChromePackageProcessState(0, "NAME\n", "failure")).toThrow(
       "Chrome process state was invalid"
     );
+  });
+
+  it("requires continuously settled Chrome absence and resets on reappearance", async () => {
+    let now = 0;
+    let observations = 0;
+    await waitForSettledChromeAbsence({
+      now: () => now,
+      observe: () => {
+        observations += 1;
+        return now !== 5_000;
+      },
+      sleep: async () => {
+        now += 5_000;
+      }
+    });
+    expect(now).toBe(40_000);
+    expect(observations).toBe(9);
+  });
+
+  it("fails Chrome settlement on timeout or malformed observation", async () => {
+    let now = 0;
+    await expect(
+      waitForSettledChromeAbsence({
+        now: () => now,
+        observe: () => false,
+        sleep: async () => {
+          now += 5_000;
+        }
+      })
+    ).rejects.toThrow("did not remain fully stopped");
+
+    let sleeps = 0;
+    await expect(
+      waitForSettledChromeAbsence({
+        now: () => 0,
+        observe: () => {
+          throw new Error("Android Chrome process state was invalid.");
+        },
+        sleep: async () => {
+          sleeps += 1;
+        }
+      })
+    ).rejects.toThrow("Chrome process state was invalid");
+    expect(sleeps).toBe(0);
   });
 
   it("opens the physical prompt replay through the strict subscriber contract", async () => {
@@ -7999,8 +8110,8 @@ function requireChromeRunning(): void {
 }
 
 function isChromeStopped(): boolean {
-  const result = adbWithStatus(["shell", "pidof", "com.android.chrome"]);
-  return readChromeProcessState(
+  const result = adbWithStatus(["shell", "ps", "-A", "-o", "NAME"]);
+  return readChromePackageProcessState(
     result.status,
     result.stdout,
     result.stderr
@@ -8011,30 +8122,80 @@ async function stopPhysicalAndroidChrome(): Promise<void> {
   adb(physicalAndroidChromeStopCommandPlan[0]);
   await new Promise((resolve) => setTimeout(resolve, 250));
   adb(physicalAndroidChromeStopCommandPlan[1]);
-  await waitFor(
-    () => isChromeStopped(),
-    10_000,
-    "Physical Android Chrome did not stop."
-  );
-  await new Promise((resolve) => setTimeout(resolve, 1_000));
-  requireCondition(
-    isChromeStopped(),
-    "Physical Android Chrome restarted during settled cleanup verification."
+  await waitForSettledChromeAbsence();
+}
+
+interface PhysicalChromeAbsenceRuntime {
+  readonly now: () => number;
+  readonly observe: () => boolean;
+  readonly sleep: (delayMs: number) => Promise<void>;
+}
+
+async function waitForSettledChromeAbsence(
+  runtime: PhysicalChromeAbsenceRuntime = {
+    now: () => performance.now(),
+    observe: () => isChromeStopped(),
+    sleep: (delayMs) =>
+      new Promise((resolve) => setTimeout(resolve, delayMs))
+  }
+): Promise<void> {
+  const startedAt = runtime.now();
+  const deadline = startedAt + physicalAndroidChromeStopTimeoutMs;
+  let absentSince: number | null = null;
+  let previousNow = startedAt;
+  while (true) {
+    const now = runtime.now();
+    requireCondition(
+      Number.isFinite(now) && now >= previousNow,
+      "Physical Android Chrome cleanup clock was invalid."
+    );
+    previousNow = now;
+    if (runtime.observe()) {
+      absentSince ??= now;
+      if (now - absentSince >= physicalAndroidChromeAbsenceSettleMs) return;
+    } else {
+      absentSince = null;
+    }
+    if (now >= deadline) break;
+    await runtime.sleep(
+      Math.min(physicalAndroidChromeProcessPollMs, deadline - now)
+    );
+  }
+  throw new Error(
+    "Physical Android Chrome did not remain fully stopped for 30 continuous seconds."
   );
 }
 
-function readChromeProcessState(
+function readChromePackageProcessState(
   status: number,
   stdout: string,
   stderr: string
 ): "running" | "stopped" {
-  const output = stdout.trim();
+  const output = stdout.trimEnd();
   const error = stderr.trim();
-  if (status === 0 && /^\d+(?:\s+\d+)*$/u.test(output) && error === "") {
-    return "running";
-  }
-  if (status === 1 && output === "" && error === "") return "stopped";
-  throw new Error("Android Chrome process state was invalid.");
+  const lines = output.split(/\r?\n/u).map((line) => line.trim());
+  requireCondition(
+    status === 0 &&
+      error === "" &&
+      output.length <= 256 * 1024 &&
+      lines.length >= 2 &&
+      lines.length <= 4_096 &&
+      lines[0] === "NAME" &&
+      lines.slice(1).every(
+        (name) =>
+          name.length >= 1 &&
+          name.length <= 256 &&
+          !hasControlCharacters(name)
+      ),
+    "Android Chrome process state was invalid."
+  );
+  return lines.slice(1).some(
+    (name) =>
+      name === "com.android.chrome" ||
+      name.startsWith("com.android.chrome:")
+  )
+    ? "running"
+    : "stopped";
 }
 
 function requireChromeForeground(): void {
@@ -12365,22 +12526,11 @@ async function runOneProductionRemoteCheck(
     "Production remote check action was unavailable on Android."
   );
   try {
-    await performVerifiedAndroidTap({
-      initialTrigger: check,
-      triggerField: "text",
-      triggerValue: "Check again",
-      completed: () =>
-        physicalRemoteCheckSettled(
-          before,
-          readPhysicalRemoteCheckBoundary(inspection)
-        ),
-      completionFailureMessage:
-        "Production remote check did not complete its exact successful status-then-refresh sequence.",
-      reacquireFailureMessage:
-        "Production remote check action could not be reacquired on Android.",
-      terminalFailureMessage:
-        "Production remote check did not settle after two bounded taps."
-    });
+    await settlePhysicalRemoteCheckAfterOneTap(
+      check,
+      before,
+      () => readPhysicalRemoteCheckBoundary(inspection)
+    );
   } catch (error) {
     throw new Error(
       `Production remote check failed (${physicalRemoteCheckBoundarySummary(
@@ -12409,6 +12559,27 @@ async function runOneProductionRemoteCheck(
       "fully_visible"
     );
   }
+}
+
+type PhysicalRemoteCheckTapBoundary = (
+  node: AndroidUiNode,
+  completed: () => boolean | Promise<boolean>,
+  message: string | (() => string),
+  timeoutMs?: number
+) => Promise<void>;
+
+async function settlePhysicalRemoteCheckAfterOneTap(
+  check: AndroidUiNode,
+  before: PhysicalRemoteCheckBoundary,
+  readCurrent: () => PhysicalRemoteCheckBoundary,
+  tapBoundary: PhysicalRemoteCheckTapBoundary = tapAndroidNodeOnceAndWait
+): Promise<void> {
+  await tapBoundary(
+    check,
+    () => physicalRemoteCheckSettled(before, readCurrent()),
+    "Production remote check did not complete its exact successful status-then-refresh sequence.",
+    physicalRemoteCheckResponseTimeoutMs
+  );
 }
 
 interface PhysicalRemoteCheckBoundary {
@@ -12459,11 +12630,15 @@ function physicalRemoteCheckBoundarySummary(
   before: PhysicalRemoteCheckBoundary,
   current: PhysicalRemoteCheckBoundary
 ): string {
+  const responseDelta =
+    current.hostResponseCount - before.hostResponseCount;
   return (
-    `remote=${current.remoteBrowserRequests - before.remoteBrowserRequests};` +
-    `host=${current.hostRequests - before.hostRequests};` +
-    `responses=${current.hostResponseCount - before.hostResponseCount}/` +
-    `${current.hostResponseStatus ?? "none"}`
+    `remote_requests=${current.remoteBrowserRequests - before.remoteBrowserRequests};` +
+    `host_requests=${current.hostRequests - before.hostRequests};` +
+    `host_responses=${responseDelta};` +
+    `new_host_status=${
+      responseDelta > 0 ? (current.hostResponseStatus ?? "none") : "none"
+    }`
   );
 }
 
