@@ -16,16 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-091` Correct physical Session Actions admission | in_progress | none | Fix the three independent-review blockers in candidate `d3da630`; do not rerun it. |
-| 2 | `FE-V1-092` Own destructive confirmations exactly | ready | none | Remove ambiguous or repeated taps from the highest-risk physical mutations. |
-| 3 | `FE-V1-093` Own route returns exactly | ready | none | Prove detail/result exits through route and authority transitions, not labels. |
-| 4 | `FE-V1-094` Own profile recovery exactly | ready | none | Replace range-based recovery with one-attempt admission and exact request generations. |
-| 5 | `FE-V1-095` Own dock and sheet boundaries exactly | ready | none | Remove broad trigger/close acquisition across the primary physical surfaces. |
-| 6 | `FE-V1-096` Own structured-control actions exactly | ready | none | Bind model, goal, plan, and compact actions to current sheets and exact counters. |
-| 7 | `FE-V1-097` Own utility and clipboard actions exactly | ready | none | Bind utility, Resume, and clipboard actions to their current route and authority. |
-| 8 | `FE-V1-098` Make physical transition deltas exact | ready | none | Remove remaining loose bootstrap, reload, detail, and reconnect success predicates. |
+| 1 | `FE-V1-100` Independent review of pre-phone batch | ready | none | Review the complete pushed `FE-V1-091` to `FE-V1-099` batch once; the implementation agent must not close this gate. |
 
-The implementation agent should complete this whole ordered batch without a phone run, then advance through dependent `FE-V1-099` and stop at independent review gate `FE-V1-100`. `FE-V1-090`, the phone, Tailscale, Serve state, package repinning, and failed candidates remain out of scope until that one consolidated review passes.
+The ordered pre-phone batch `FE-V1-091` to `FE-V1-099` is complete and pushed in `a746820` without a phone run. `FE-V1-100` is the next independent review gate. `FE-V1-090`, the phone, Tailscale, Serve state, package repinning, and failed candidates remain out of scope until that review passes.
 
 ## Intentional Blockers
 
