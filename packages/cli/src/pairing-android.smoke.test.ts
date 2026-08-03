@@ -271,6 +271,39 @@ const physicalSessionControlDescriptions = Object.freeze([
   `/plan for ${physicalUiSessionName}`,
   `More session utilities for ${physicalUiSessionName}`
 ]);
+const physicalSessionActionsTriggerDescription = "Open session actions";
+const physicalSessionActionsOverlayMarkers = Object.freeze([
+  "Session actions",
+  "Close session actions",
+  "Back to session actions",
+  "Host & access",
+  "Close Host and access",
+  "Open Resume on laptop",
+  "Resume on laptop",
+  "Laptop terminal only",
+  "Open Interrupt active turn",
+  "Interrupt active turn",
+  "Interrupt result",
+  "Interrupt active turn?",
+  "Turn interrupted",
+  "Turn ended as interrupted",
+  "Interrupt blocked",
+  "Outcome not confirmed",
+  "Interrupt state inconsistent",
+  "Secure interrupt setup unavailable",
+  "Open Archive session",
+  "Archive result",
+  "Archive session",
+  "Archive session?",
+  "Session archived",
+  "Archive blocked",
+  "Archive not completed",
+  "Archive outcome not confirmed",
+  "Archive state inconsistent",
+  "Secure archive setup unavailable"
+] as const);
+const physicalSessionActionsStableWindowMs = 2_000;
+const physicalSessionActionsPollMs = 200;
 const physicalEventActionMaxDistancePx = 480;
 const physicalHostAccessHeaderGapPx = 24;
 const physicalSessionOverlayGapPx = 24;
@@ -1209,6 +1242,218 @@ describe("physical Android phone-driver protocol", () => {
           : node
       )
     );
+  });
+
+  it("admits Session Actions only through the complete current phone shell", () => {
+    const nodes = physicalSessionActionsFixtureNodes();
+    const trigger = nodes.find(
+      (node) => node.description === physicalSessionActionsTriggerDescription
+    );
+    requireCondition(trigger !== undefined, "Session Actions fixture trigger was absent.");
+
+    expect(selectPhysicalSessionActionsTrigger(nodes, 1)).toBe(trigger);
+    expect(physicalSessionActionsStateSummary(nodes, 1, trigger)).toContain(
+      "admitted=yes"
+    );
+    expect(physicalSessionActionsStateSummary(nodes, 1)).not.toContain(
+      physicalSessionActionsTriggerDescription
+    );
+
+    const rejects = (candidateNodes: readonly AndroidUiNode[], active = 1) => {
+      expect(selectPhysicalSessionActionsTrigger(candidateNodes, active)).toBeNull();
+    };
+
+    rejects(nodes.filter((node) => node !== trigger));
+    rejects([...nodes, Object.freeze({ ...trigger })]);
+    rejects(
+      nodes.map((node) =>
+        node === trigger ? Object.freeze({ ...node, clickable: false }) : node
+      )
+    );
+    rejects(
+      nodes.map((node) =>
+        node === trigger ? Object.freeze({ ...node, enabled: false as const }) : node
+      )
+    );
+    rejects(
+      nodes.map((node) =>
+        node === trigger
+          ? Object.freeze({
+              ...node,
+              bounds: Object.freeze({ ...node.bounds, bottom: 2_401 })
+            })
+          : node
+      )
+    );
+    rejects(
+      nodes.map((node) =>
+        node.resourceId === chromeCompositorResourceId
+          ? Object.freeze({
+              ...node,
+              bounds: Object.freeze({ ...node.bounds, bottom: node.bounds.top })
+            })
+          : node
+      )
+    );
+    rejects(nodes.filter((node) => node.description !== "Back to Mission Control"));
+    rejects([
+      ...nodes,
+      Object.freeze({
+        ...nodes.find((node) => node.description === "Back to Mission Control"),
+        description: "Back to Mission Control"
+      }) as AndroidUiNode
+    ]);
+    for (const description of physicalSessionControlDescriptions) {
+      rejects(nodes.filter((node) => node.description !== description));
+      rejects([
+        ...nodes,
+        Object.freeze({
+          ...nodes.find((node) => node.description === description),
+          description
+        }) as AndroidUiNode
+      ]);
+    }
+    for (const marker of physicalSessionActionsOverlayMarkers) {
+      rejects([
+        ...nodes,
+        Object.freeze({
+          ...trigger,
+          className: "android.view.View",
+          clickable: false,
+          description: "",
+          text: marker
+        })
+      ]);
+    }
+    rejects(nodes, 0);
+    rejects(nodes, 2);
+    const disabledDock = nodes.map((node) =>
+      node.description === physicalSessionControlDescriptions[0]
+        ? Object.freeze({ ...node, enabled: false as const })
+        : node
+    );
+    rejects(disabledDock);
+    const offPageBack = nodes.map((node) =>
+      node.description === "Back to Mission Control"
+        ? Object.freeze({
+            ...node,
+            bounds: Object.freeze({ ...node.bounds, bottom: 2_401, top: 2_300 })
+          })
+        : node
+    );
+    rejects(offPageBack);
+  });
+
+  it("waits for a stable Session Actions boundary without rebasing authority", async () => {
+    const nodes = physicalSessionActionsFixtureNodes();
+    const finalNodes = nodes.map((node) =>
+      node.description === physicalSessionActionsTriggerDescription
+        ? Object.freeze({
+            ...node,
+            bounds: Object.freeze({ ...node.bounds, bottom: 900, top: 760 })
+          })
+        : node
+    );
+    const finalTrigger = finalNodes.find(
+      (node) => node.description === physicalSessionActionsTriggerDescription
+    );
+    requireCondition(finalTrigger !== undefined, "Final Session Actions trigger was absent.");
+    const navigation: PhysicalSessionNavigationSnapshot = Object.freeze({
+      activeSubscribers: 1,
+      missingDetailRequests: 1,
+      openedSubscribers: 4,
+      selectedDetailRequests: 3,
+      streamRequests: 4
+    });
+    let now = 0;
+    let currentNavigation = navigation;
+    let readIndex = 0;
+    const reads: readonly (readonly AndroidUiNode[] | "error")[] = [
+      nodes.filter(
+        (node) => node.description !== physicalSessionActionsTriggerDescription
+      ),
+      nodes,
+      "error",
+      ...Array.from({ length: 11 }, () => finalNodes)
+    ];
+    const source: PhysicalSessionActionsWaitSource = {
+      readNavigation: () => currentNavigation,
+      readNodes: async () => {
+        const next = reads[Math.min(readIndex, reads.length - 1)];
+        readIndex += 1;
+        currentNavigation = navigation;
+        if (next === "error") {
+          throw new Error("private hierarchy payload");
+        }
+        requireCondition(next !== undefined, "Session Actions test read was absent.");
+        return next;
+      }
+    };
+
+    const admitted = await waitForPhysicalSessionActions(
+      source,
+      5_000,
+      "Session Actions stability was not reached.",
+      {
+        now: () => now,
+        sleep: async (milliseconds) => {
+          now += milliseconds;
+        }
+      }
+    );
+    expect(admitted).toBe(finalTrigger);
+    expect(now).toBe(2_600);
+    expect(readIndex).toBe(14);
+
+    let driftReads = 0;
+    let driftNavigation = navigation;
+    const driftSource: PhysicalSessionActionsWaitSource = {
+      readNavigation: () => driftNavigation,
+      readNodes: async () => {
+        driftReads += 1;
+        if (driftReads === 2) {
+          driftNavigation = Object.freeze({
+            ...navigation,
+            streamRequests: navigation.streamRequests + 1
+          });
+        }
+        return nodes;
+      }
+    };
+    now = 0;
+    await expect(
+      waitForPhysicalSessionActions(
+        driftSource,
+        5_000,
+        "Session Actions drift was not rejected.",
+        { now: () => now, sleep: async (milliseconds) => { now += milliseconds; } }
+      )
+    ).rejects.toThrow("navigation-drift");
+
+    now = 0;
+    let caught: unknown = null;
+    try {
+      await waitForPhysicalSessionActions(
+        {
+          readNavigation: () => navigation,
+          readNodes: async () => {
+            throw new Error("private hierarchy payload");
+          }
+        },
+        800,
+        "Session Actions read errors were not bounded.",
+        { now: () => now, sleep: async (milliseconds) => { now += milliseconds; } }
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    const diagnostic = (caught as Error).message;
+    expect(diagnostic).toContain("read-error");
+    expect(diagnostic).toContain("states=");
+    expect(diagnostic).toContain("active=1");
+    expect(diagnostic).not.toContain("private hierarchy payload");
+    expect(diagnostic.length).toBeLessThan(4_096);
   });
 
   it("holds exactly one armed reconnect request until explicit release", async () => {
@@ -5097,6 +5342,16 @@ interface PhysicalSessionNavigationSnapshot {
   readonly streamRequests: number;
 }
 
+interface PhysicalSessionActionsWaitSource {
+  readonly readNavigation: () => PhysicalSessionNavigationSnapshot;
+  readonly readNodes: () => Promise<readonly AndroidUiNode[]>;
+}
+
+interface PhysicalSessionActionsWaitOptions {
+  readonly now?: () => number;
+  readonly sleep?: (milliseconds: number) => Promise<void>;
+}
+
 interface PhysicalMissionControlRequestSnapshot {
   readonly accessRequests: number;
   readonly hostStatusRequests: number;
@@ -8979,6 +9234,136 @@ async function waitForAndroidUiNodePresent(
   return found;
 }
 
+async function waitForPhysicalSessionActions(
+  source: PhysicalSessionActionsWaitSource,
+  timeoutMs: number,
+  message: string,
+  options: PhysicalSessionActionsWaitOptions = {}
+): Promise<AndroidUiNode> {
+  requireCondition(
+    Number.isSafeInteger(timeoutMs) && timeoutMs > 0,
+    "Physical Session Actions waiter timeout was invalid."
+  );
+  const now = options.now ?? Date.now;
+  const sleep = options.sleep ?? ((milliseconds: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+  const baseline = source.readNavigation();
+  const deadline = now() + timeoutMs;
+  const observations: string[] = [];
+  let stableSince: number | null = null;
+
+  while (now() < deadline) {
+    let nodes: readonly AndroidUiNode[];
+    try {
+      nodes = await source.readNodes();
+    } catch {
+      retainPhysicalSessionActionsObservation(
+        observations,
+        `read-error;authority=${physicalSessionNavigationSummary(baseline)}`
+      );
+      stableSince = null;
+      const remaining = deadline - now();
+      if (remaining <= 0) break;
+      await sleep(Math.min(physicalSessionActionsPollMs, remaining));
+      continue;
+    }
+
+    let navigation: PhysicalSessionNavigationSnapshot;
+    try {
+      navigation = source.readNavigation();
+    } catch {
+      retainPhysicalSessionActionsObservation(
+        observations,
+        `authority-read-error;authority=${physicalSessionNavigationSummary(baseline)}`
+      );
+      stableSince = null;
+      const remaining = deadline - now();
+      if (remaining <= 0) break;
+      await sleep(Math.min(physicalSessionActionsPollMs, remaining));
+      continue;
+    }
+    const selected = selectPhysicalSessionActionsTrigger(
+      nodes,
+      navigation.activeSubscribers
+    );
+    const observation =
+      `${physicalSessionActionsStateSummary(nodes, navigation.activeSubscribers, selected)};` +
+      `authority=${physicalSessionNavigationSummary(navigation)}`;
+    retainPhysicalSessionActionsObservation(observations, observation);
+    if (!physicalSessionNavigationMatches(navigation, baseline)) {
+      throw new Error(
+        `${message} (navigation-drift;states=${
+          observations.length === 0 ? "none" : observations.join("||")
+        }).`
+      );
+    }
+    if (selected === null) {
+      stableSince = null;
+    } else {
+      const observedAt = now();
+      if (stableSince === null) stableSince = observedAt;
+      if (observedAt - stableSince >= physicalSessionActionsStableWindowMs) {
+        return selected;
+      }
+    }
+    const remaining = deadline - now();
+    if (remaining <= 0) break;
+    await sleep(Math.min(physicalSessionActionsPollMs, remaining));
+  }
+
+  throw new Error(
+    `${message} (states=${
+      observations.length === 0 ? "none" : observations.join("||")
+    }).`
+  );
+}
+
+function physicalSessionNavigationSummary(
+  navigation: PhysicalSessionNavigationSnapshot
+): string {
+  return (
+    `active=${navigation.activeSubscribers};` +
+    `missing=${navigation.missingDetailRequests};` +
+    `opened=${navigation.openedSubscribers};` +
+    `detail=${navigation.selectedDetailRequests};` +
+    `stream=${navigation.streamRequests}`
+  );
+}
+
+function retainPhysicalSessionActionsObservation(
+  observations: string[],
+  observation: string
+): void {
+  requireCondition(
+    Buffer.byteLength(observation, "utf8") >= 1 &&
+      Buffer.byteLength(observation, "utf8") <= 4_096,
+    "Physical Session Actions observation exceeded its private-safe bound."
+  );
+  if (observations.at(-1) === observation) return;
+  observations.push(observation);
+  if (observations.length > 6) observations.shift();
+}
+
+async function tapPhysicalSessionActionsOnceAndWait(
+  node: AndroidUiNode,
+  completed: () => boolean | Promise<boolean>,
+  message: string,
+  timeoutMs = 30_000
+): Promise<void> {
+  tapAndroidUiNode(node);
+  try {
+    await waitFor(completed, timeoutMs, message);
+  } catch {
+    let summary = "hierarchy=unavailable";
+    try {
+      summary = androidUiStateSummary(await readAndroidUiNodes(), node);
+    } catch {
+      // The bounded fallback reports unavailable post-tap hierarchy.
+    }
+    throw new Error(`${message} (${summary}).`);
+  }
+}
+
 async function tapAndroidNodeOnceAndWait(
   node: AndroidUiNode,
   completed: () => boolean | Promise<boolean>,
@@ -10318,14 +10703,16 @@ async function runPhysicalLaptopResume(
   capture: PhysicalDashboardCapture,
   measure: PhysicalDashboardMeasure
 ): Promise<"copied" | "unavailable"> {
-  const actions = await waitForAndroidUiNodePresent(
-    "description",
-    "Open session actions",
+  const actions = await waitForPhysicalSessionActions(
+    {
+      readNavigation: () => readPhysicalSessionNavigationSnapshot(input),
+      readNodes: readAndroidUiNodes
+    },
     30_000,
     "Physical session actions trigger was unavailable."
   );
   measure(actions, "open-session-actions");
-  await tapAndroidNodeOnceAndWait(
+  await tapPhysicalSessionActionsOnceAndWait(
     actions,
     async () =>
       (await readAndroidUiNodes()).some(
@@ -10472,13 +10859,15 @@ async function runPhysicalInterruptControl(
     45_000,
     "Physical Session Detail did not reconnect once for interrupt truth."
   );
-  const actions = await waitForAndroidUiNodePresent(
-    "description",
-    "Open session actions",
+  const actions = await waitForPhysicalSessionActions(
+    {
+      readNavigation: () => readPhysicalSessionNavigationSnapshot(input),
+      readNodes: readAndroidUiNodes
+    },
     30_000,
     "Physical interrupt session actions were unavailable."
   );
-  await tapAndroidNodeOnceAndWait(
+  await tapPhysicalSessionActionsOnceAndWait(
     actions,
     async () =>
       (await readAndroidUiNodes()).some(
@@ -10537,9 +10926,6 @@ async function runPhysicalInterruptControl(
     async () => {
       const nodes = await readAndroidUiNodes();
       return (
-        nodes.some(
-          (node) => node.description === "Open session actions"
-        ) &&
         nodes.some((node) => node.text === "Ready to send") &&
         nodes.every(
           (node) =>
@@ -10549,6 +10935,14 @@ async function runPhysicalInterruptControl(
       );
     },
     "Physical interrupt result did not restore Session Detail."
+  );
+  await waitForPhysicalSessionActions(
+    {
+      readNavigation: () => readPhysicalSessionNavigationSnapshot(input),
+      readNodes: readAndroidUiNodes
+    },
+    30_000,
+    "Physical interrupt result did not settle Session Actions admission."
   );
 }
 
@@ -10562,13 +10956,15 @@ async function runPhysicalHostAccessControls(
   measure: PhysicalDashboardMeasure
 ): Promise<void> {
   const managerAttempts = input.manager.snapshot().command_attempts;
-  const actions = await waitForAndroidUiNodePresent(
-    "description",
-    "Open session actions",
+  const actions = await waitForPhysicalSessionActions(
+    {
+      readNavigation: () => readPhysicalSessionNavigationSnapshot(input),
+      readNodes: readAndroidUiNodes
+    },
     30_000,
     "Physical Host and access session actions were unavailable."
   );
-  await tapAndroidNodeOnceAndWait(
+  await tapPhysicalSessionActionsOnceAndWait(
     actions,
     async () =>
       (await readAndroidUiNodes()).some(
@@ -12206,13 +12602,15 @@ async function runPhysicalArchiveControl(
     input,
     "Physical archive Session Detail did not settle with current write authority."
   );
-  const actions = await waitForAndroidUiNodePresent(
-    "description",
-    "Open session actions",
+  const actions = await waitForPhysicalSessionActions(
+    {
+      readNavigation: () => readPhysicalSessionNavigationSnapshot(input),
+      readNodes: readAndroidUiNodes
+    },
     30_000,
     "Physical archive session actions were unavailable."
   );
-  await tapAndroidNodeOnceAndWait(
+  await tapPhysicalSessionActionsOnceAndWait(
     actions,
     async () =>
       (await readAndroidUiNodes()).some(
@@ -13469,6 +13867,146 @@ function swipePhysicalHostAccessContent(
     "350"
   ]);
   return true;
+}
+
+function selectPhysicalSessionActionsTrigger(
+  nodes: readonly AndroidUiNode[],
+  activeSubscribers: number
+): AndroidUiNode | null {
+  if (activeSubscribers !== 1) return null;
+  let page: PhysicalScreenshotRegion;
+  try {
+    page = selectChromePageViewport(nodes);
+  } catch {
+    return null;
+  }
+  const isEligible = (node: AndroidUiNode): boolean =>
+    node.clickable &&
+    node.enabled !== false &&
+    androidUiNodeIsFullyInsideRegion(node, page);
+  const backButtons = nodes.filter(
+    (node) => node.description === "Back to Mission Control"
+  );
+  if (
+    backButtons.length !== 1 ||
+    backButtons[0] === undefined ||
+    !isEligible(backButtons[0])
+  ) {
+    return null;
+  }
+  const dockControls = physicalSessionControlDescriptions.map((description) =>
+    nodes.filter((node) => node.description === description)
+  );
+  if (
+    dockControls.some(
+      (matches) => matches.length !== 1 || matches[0] === undefined || !isEligible(matches[0])
+    )
+  ) {
+    return null;
+  }
+  const dockNodes = dockControls.map((matches) => matches[0] as AndroidUiNode);
+  const dockTop = Math.min(...dockNodes.map((node) => node.bounds.top));
+  if (
+    !Number.isSafeInteger(dockTop) ||
+    Math.max(...dockNodes.map((node) => node.bounds.top)) - dockTop > 64
+  ) {
+    return null;
+  }
+  const triggers = nodes.filter(
+    (node) => node.description === physicalSessionActionsTriggerDescription
+  );
+  if (
+    triggers.length !== 1 ||
+    triggers[0] === undefined ||
+    !isEligible(triggers[0])
+  ) {
+    return null;
+  }
+  if (
+    physicalSessionActionsOverlayMarkers.some((marker) =>
+      nodes.some((node) => matchesAndroidUiNode(node, "semantic", marker))
+    )
+  ) {
+    return null;
+  }
+  return triggers[0];
+}
+
+function physicalSessionActionsStateSummary(
+  nodes: readonly AndroidUiNode[],
+  activeSubscribers: number,
+  selected: AndroidUiNode | null = null
+): string {
+  let page: PhysicalScreenshotRegion | null = null;
+  try {
+    page = selectChromePageViewport(nodes);
+  } catch {
+    // The bounded summary reports invalid Chrome geometry without raw hierarchy data.
+  }
+  const eligible = (node: AndroidUiNode): boolean =>
+    page !== null &&
+    node.clickable &&
+    node.enabled !== false &&
+    androidUiNodeIsFullyInsideRegion(node, page);
+  const geometry = (node: AndroidUiNode | undefined): string =>
+    node === undefined ? "none" : privateFreeAndroidUiNodeGeometry(node);
+  const backButtons = nodes.filter(
+    (node) => node.description === "Back to Mission Control"
+  );
+  const dock = physicalSessionControlDescriptions.map((description) => {
+    const matches = nodes.filter((node) => node.description === description);
+    return `${matches.length}/${matches.filter(eligible).length}:${geometry(matches[0])}`;
+  });
+  const triggers = nodes.filter(
+    (node) => node.description === physicalSessionActionsTriggerDescription
+  );
+  const overlays = nodes.filter((node) =>
+    physicalSessionActionsOverlayMarkers.some((marker) =>
+      matchesAndroidUiNode(node, "semantic", marker)
+    )
+  );
+  const dockTops = physicalSessionControlDescriptions.flatMap((description) =>
+    nodes
+      .filter((node) => node.description === description)
+      .map((node) => node.bounds.top)
+  );
+  const dockAligned =
+    dockTops.length === physicalSessionControlDescriptions.length &&
+    Math.max(...dockTops) - Math.min(...dockTops) <= 64;
+  return [
+    `page=${page === null ? "invalid" : physicalRegionGeometry(page)}`,
+    `active=${Number.isSafeInteger(activeSubscribers) ? activeSubscribers : "invalid"}`,
+    `back=${backButtons.length}/${backButtons.filter(eligible).length}:${geometry(backButtons[0])}`,
+    `dock=${dock.join("|")};aligned=${dockAligned ? "yes" : "no"}`,
+    `trigger=${triggers.length}/${triggers.filter(eligible).length}:${geometry(triggers[0])}`,
+    `overlays=${overlays.length}`,
+    `admitted=${selected === null ? "no" : "yes"}`
+  ].join(";");
+}
+
+function physicalSessionActionsFixtureNodes(): readonly AndroidUiNode[] {
+  const dock = physicalSessionControlDescriptions
+    .map(
+      (description, index) =>
+        `<node text="" class="android.widget.Button" ` +
+        `content-desc="${description}" clickable="true" enabled="true" ` +
+        `bounds="[${index * 270},2100][${(index + 1) * 270},2240]" />`
+    )
+    .join("");
+  return parseAndroidUiNodes(
+    '<hierarchy><node text="" class="android.view.ViewGroup" ' +
+      `resource-id="${chromeToolbarResourceId}" bounds="[0,80][1080,240]" />` +
+      '<node text="" class="android.widget.FrameLayout" ' +
+      `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
+      '<node text="" class="android.widget.Button" ' +
+      'content-desc="Back to Mission Control" clickable="true" enabled="true" ' +
+      'bounds="[32,300][180,424]" />' +
+      '<node text="" class="android.widget.Button" ' +
+      `content-desc="${physicalSessionActionsTriggerDescription}" clickable="true" enabled="true" ` +
+      'bounds="[200,700][880,840]" />' +
+      dock +
+      '</hierarchy>'
+  );
 }
 
 function selectPhysicalSessionControlDockTop(
