@@ -208,23 +208,13 @@ const physicalAndroidChromeStopCommandPlan = Object.freeze([
     "com.android.chrome"
   ] as const)
 ] as const);
-const physicalAndroidChromeRetainedTabCommandPlan = Object.freeze([
-  Object.freeze(["shell", "input", "keyevent", "KEYCODE_BACK"] as const),
-  Object.freeze([
-    "shell",
-    "am",
-    "start",
-    "--user",
-    "0",
-    "-W",
-    "-a",
-    "android.intent.action.MAIN",
-    "-c",
-    "android.intent.category.LAUNCHER",
-    "-n",
-    "com.android.chrome/com.google.android.apps.chrome.Main"
-  ] as const)
+const physicalAndroidChromeCloseExternalTabCommand = Object.freeze([
+  "shell",
+  "input",
+  "keyevent",
+  "KEYCODE_BACK"
 ] as const);
+const physicalMissionControlPath = "/" as const;
 const pairingStartupDiagnosticLabels = Object.freeze([
   "Checking secure link",
   "Pairing this phone",
@@ -555,6 +545,19 @@ describe("physical Android phone-driver protocol", () => {
             physicalQuietQueueDisclosureLabel(false)
           )
     ).toBe(true);
+    requireCondition(trigger !== undefined, "Quiet disclosure fixture was absent.");
+    expect(physicalQuietQueueDisclosureState([trigger])).toBe("collapsed");
+    const expanded = Object.freeze({
+      ...trigger,
+      description: physicalQuietQueueDisclosureLabel(true)
+    });
+    expect(physicalQuietQueueDisclosureState([expanded])).toBe("expanded");
+    expect(() =>
+      physicalQuietQueueDisclosureState([trigger, expanded])
+    ).toThrow("disclosure state was invalid");
+    expect(() => physicalQuietQueueDisclosureState([])).toThrow(
+      "disclosure state was invalid"
+    );
   });
 
   it("acquires the named whole-session target instead of its text fragment", () => {
@@ -2200,6 +2203,19 @@ describe("physical Android phone-driver protocol", () => {
     ]);
     expect(physicalMissionControlWriteReady(unlockedMissionNodes, 0)).toBe(true);
     expect(physicalMissionControlWriteReady(unlockedMissionNodes, 1)).toBe(false);
+    const missionWithoutSelectedSession = unlockedMissionNodes.filter(
+      (node) => node.description !== physicalUiSessionName
+    );
+    expect(
+      physicalMissionControlWriteReady(missionWithoutSelectedSession, 0)
+    ).toBe(false);
+    expect(
+      physicalMissionControlWriteReady(
+        missionWithoutSelectedSession,
+        0,
+        false
+      )
+    ).toBe(true);
     expect(
       physicalMissionControlWriteReady(
         [
@@ -3186,27 +3202,17 @@ describe("physical Android phone-driver protocol", () => {
     expect(Object.isFrozen(physicalAndroidChromeStopCommandPlan[1])).toBe(true);
   });
 
-  it("closes the external Chrome tab before relaunching the retained tab", () => {
-    expect(physicalAndroidChromeRetainedTabCommandPlan).toEqual([
-      ["shell", "input", "keyevent", "KEYCODE_BACK"],
-      [
-        "shell",
-        "am",
-        "start",
-        "--user",
-        "0",
-        "-W",
-        "-a",
-        "android.intent.action.MAIN",
-        "-c",
-        "android.intent.category.LAUNCHER",
-        "-n",
-        "com.android.chrome/com.google.android.apps.chrome.Main"
-      ]
+  it("closes the external Chrome tab before a canonical app return", () => {
+    expect(physicalAndroidChromeCloseExternalTabCommand).toEqual([
+      "shell",
+      "input",
+      "keyevent",
+      "KEYCODE_BACK"
     ]);
-    expect(Object.isFrozen(physicalAndroidChromeRetainedTabCommandPlan)).toBe(true);
-    expect(Object.isFrozen(physicalAndroidChromeRetainedTabCommandPlan[0])).toBe(true);
-    expect(Object.isFrozen(physicalAndroidChromeRetainedTabCommandPlan[1])).toBe(true);
+    expect(Object.isFrozen(physicalAndroidChromeCloseExternalTabCommand)).toBe(
+      true
+    );
+    expect(physicalMissionControlPath).toBe("/");
   });
 
   it("matches physical session navigation authority exactly", () => {
@@ -3261,6 +3267,30 @@ describe("physical Android phone-driver protocol", () => {
         Object.freeze({ ...before, activeSubscribers: 1 })
       )
     ).toBe(false);
+
+    const missionBefore: PhysicalMissionControlRequestSnapshot = Object.freeze({
+      accessRequests: 3,
+      hostStatusRequests: 4,
+      sessionListRequests: 5
+    });
+    const missionOpened: PhysicalMissionControlRequestSnapshot = Object.freeze({
+      accessRequests: 4,
+      hostStatusRequests: 5,
+      sessionListRequests: 6
+    });
+    expect(
+      physicalMissionControlRequestOpened(missionOpened, missionBefore)
+    ).toBe(true);
+    for (const key of Object.keys(missionOpened) as Array<
+      keyof PhysicalMissionControlRequestSnapshot
+    >) {
+      expect(
+        physicalMissionControlRequestOpened(
+          Object.freeze({ ...missionOpened, [key]: missionOpened[key] + 1 }),
+          missionBefore
+        )
+      ).toBe(false);
+    }
   });
 
   it("settles one remote check only after its exact successful host response", () => {
@@ -5065,6 +5095,12 @@ interface PhysicalSessionNavigationSnapshot {
   readonly openedSubscribers: number;
   readonly selectedDetailRequests: number;
   readonly streamRequests: number;
+}
+
+interface PhysicalMissionControlRequestSnapshot {
+  readonly accessRequests: number;
+  readonly hostStatusRequests: number;
+  readonly sessionListRequests: number;
 }
 
 interface PairingRenderCapture {
@@ -8534,6 +8570,36 @@ function physicalQuietQueueDisclosureLabel(open: boolean): string {
   return `${open ? "Collapse" : "Expand"} quiet sessions (1)`;
 }
 
+function physicalQuietQueueDisclosureState(
+  nodes: readonly AndroidUiNode[]
+): "collapsed" | "expanded" {
+  const collapsed = nodes.filter(
+    (node) =>
+      matchesAndroidUiNode(
+        node,
+        "description",
+        physicalQuietQueueDisclosureLabel(false)
+      ) &&
+      node.clickable &&
+      node.enabled !== false
+  );
+  const expanded = nodes.filter(
+    (node) =>
+      matchesAndroidUiNode(
+        node,
+        "description",
+        physicalQuietQueueDisclosureLabel(true)
+      ) &&
+      node.clickable &&
+      node.enabled !== false
+  );
+  requireCondition(
+    collapsed.length + expanded.length === 1,
+    "Physical quiet-session disclosure state was invalid."
+  );
+  return collapsed.length === 1 ? "collapsed" : "expanded";
+}
+
 async function runProductionDashboardUiSequence(
   input: ProductionUiEntryInput & {
     readonly controls: PhysicalDashboardControls;
@@ -9164,46 +9230,10 @@ async function runPhysicalDetailFailureStates(
     );
     await capture("fe090-50-detail-not-found.png");
 
-    const navigationWhileBackgrounded = Object.freeze({
-      ...navigationWhileMissing,
-      activeSubscribers: 0
-    });
-    adb([...physicalAndroidChromeRetainedTabCommandPlan[0]]);
-    await waitFor(
-      () =>
-        physicalSessionNavigationMatches(
-          readPhysicalSessionNavigationSnapshot(input),
-          navigationWhileBackgrounded
-        ),
-      15_000,
-      "Physical Chrome Back did not close only the backgrounded selected-session stream."
-    );
-    const navigationAfterReturn = Object.freeze({
-      ...navigationWhileMissing,
-      openedSubscribers: navigationWhileMissing.openedSubscribers + 1,
-      selectedDetailRequests: navigationWhileMissing.selectedDetailRequests + 1,
-      streamRequests: navigationWhileMissing.streamRequests + 1
-    });
-    const launchOutput = adb([
-      ...physicalAndroidChromeRetainedTabCommandPlan[1]
-    ]);
-    requireCondition(
-      !launchOutput.includes("Error:") && !launchOutput.includes("Exception"),
-      "Physical Chrome launcher return failed."
-    );
-    await waitFor(
-      () =>
-        physicalSessionNavigationMatches(
-          readPhysicalSessionNavigationSnapshot(input),
-          navigationAfterReturn
-        ),
-      45_000,
-      "Physical Chrome launcher return did not reopen exactly one selected-session stream."
-    );
-    await waitForAndroidUiText(
-      "Ready to send",
-      30_000,
-      "Physical Session Detail did not return to the retained current tab."
+    await returnPhysicalExternalPageToSelectedSession(
+      input,
+      navigationWhileMissing,
+      "not-found"
     );
   } catch (error) {
     const message =
@@ -9214,6 +9244,108 @@ async function runPhysicalDetailFailureStates(
       cause: error
     });
   }
+}
+
+type PhysicalExternalPageReturnContext = "clipboard" | "not-found";
+
+async function returnPhysicalExternalPageToSelectedSession(
+  input: ProductionUiEntryInput & { readonly prompt: PhysicalPromptRuntime },
+  externalNavigation: PhysicalSessionNavigationSnapshot,
+  context: PhysicalExternalPageReturnContext
+): Promise<void> {
+  requireCondition(
+    externalNavigation.activeSubscribers === 1 &&
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        externalNavigation
+      ),
+    `Physical ${context} return did not begin with exact selected-session authority.`
+  );
+  const navigationWhileBackgrounded = Object.freeze({
+    ...externalNavigation,
+    activeSubscribers: 0
+  });
+  adb([...physicalAndroidChromeCloseExternalTabCommand]);
+  await waitFor(
+    () =>
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        navigationWhileBackgrounded
+      ),
+    15_000,
+    `Physical ${context} Back did not close only the selected-session stream.`
+  );
+  const missionRequestsBefore = readPhysicalMissionControlRequestSnapshot(
+    input.requestInspection
+  );
+  openChromePath(input.externalOrigin, physicalMissionControlPath);
+  await waitForPhysicalMissionControlWriteReady(
+    input,
+    missionRequestsBefore,
+    `Physical ${context} return did not settle current Mission Control authority.`,
+    { requireSelectedSession: false }
+  );
+  requireCondition(
+    physicalSessionNavigationMatches(
+      readPhysicalSessionNavigationSnapshot(input),
+      navigationWhileBackgrounded
+    ),
+    `Physical ${context} Mission Control return changed selected-session authority.`
+  );
+  await ensurePhysicalQuietSessionQueueExpanded(context);
+  const selected = await revealAndroidUiNode(
+    "description",
+    physicalUiSessionName,
+    "forward",
+    30_000,
+    `Physical ${context} return omitted the selected session.`,
+    "fully_visible",
+    true
+  );
+  const navigationBeforeSelectedReturn =
+    readPhysicalSessionNavigationSnapshot(input);
+  await tapAndroidNodeOnceAndWait(
+    selected,
+    () =>
+      physicalSessionNavigationOpened(
+        readPhysicalSessionNavigationSnapshot(input),
+        navigationBeforeSelectedReturn
+      ),
+    `Physical ${context} return did not open exactly one selected-session stream.`
+  );
+  await waitForPhysicalSessionWriteReady(
+    input,
+    `Physical ${context} return did not restore current Session Detail authority.`
+  );
+}
+
+async function ensurePhysicalQuietSessionQueueExpanded(
+  context: PhysicalExternalPageReturnContext
+): Promise<void> {
+  if (physicalQuietQueueDisclosureState(await readAndroidUiNodes()) === "expanded") {
+    return;
+  }
+  const quietDisclosure = await revealAndroidUiNode(
+    "description",
+    physicalQuietQueueDisclosureLabel(false),
+    "forward",
+    30_000,
+    `Physical ${context} return omitted the collapsed quiet-session control.`
+  );
+  await performVerifiedAndroidTap({
+    initialTrigger: quietDisclosure,
+    triggerField: "description",
+    triggerValue: physicalQuietQueueDisclosureLabel(false),
+    completed: async () =>
+      physicalQuietQueueDisclosureState(await readAndroidUiNodes()) ===
+      "expanded",
+    completionFailureMessage:
+      `Physical ${context} return did not expand quiet sessions.`,
+    reacquireFailureMessage:
+      `Physical ${context} return could not reacquire the collapsed quiet-session control.`,
+    terminalFailureMessage:
+      `Physical ${context} return left quiet sessions collapsed after two bounded taps.`
+  });
 }
 
 function readPhysicalSessionNavigationSnapshot(
@@ -9371,12 +9503,9 @@ async function waitForPhysicalMissionControlWriteReady(
     readonly prompt: PhysicalPromptRuntime;
     readonly requestInspection: RequestInspection;
   }>,
-  before: Readonly<{
-    readonly accessRequests: number;
-    readonly hostStatusRequests: number;
-    readonly sessionListRequests: number;
-  }>,
-  message: string
+  before: PhysicalMissionControlRequestSnapshot,
+  message: string,
+  options: Readonly<{ readonly requireSelectedSession?: boolean }> = {}
 ): Promise<void> {
   const observations: string[] = [];
   let stableSince: number | null = null;
@@ -9396,10 +9525,15 @@ async function waitForPhysicalMissionControlWriteReady(
         observations.push(observation);
       }
       const ready =
-        input.requestInspection.accessRequests === before.accessRequests + 1 &&
-        input.requestInspection.hostStatusRequests === before.hostStatusRequests + 1 &&
-        input.requestInspection.sessionListRequests === before.sessionListRequests + 1 &&
-        physicalMissionControlWriteReady(nodes, activeSubscribers);
+        physicalMissionControlRequestOpened(
+          readPhysicalMissionControlRequestSnapshot(input.requestInspection),
+          before
+        ) &&
+        physicalMissionControlWriteReady(
+          nodes,
+          activeSubscribers,
+          options.requireSelectedSession ?? true
+        );
       if (!ready) {
         stableSince = null;
         stableObservation = null;
@@ -9424,7 +9558,8 @@ async function waitForPhysicalMissionControlWriteReady(
 
 function physicalMissionControlWriteReady(
   nodes: readonly AndroidUiNode[],
-  activeSubscribers: number
+  activeSubscribers: number,
+  requireSelectedSession = true
 ): boolean {
   const textCount = (value: string): number =>
     nodes.filter((node) => node.text === value).length;
@@ -9435,11 +9570,33 @@ function physicalMissionControlWriteReady(
     textCount("Mission Control") === 1 &&
     textCount("Remote ready") === 1 &&
     textCount("Write") === 1 &&
-    descriptionCount(physicalUiSessionName) === 1 &&
+    (!requireSelectedSession ||
+      descriptionCount(physicalUiSessionName) === 1) &&
     textCount("Remote writes locked") === 0 &&
     textCount("Locked") === 0 &&
     textCount("Access stale") === 0 &&
     textCount("Reconnecting") === 0
+  );
+}
+
+function readPhysicalMissionControlRequestSnapshot(
+  inspection: RequestInspection
+): PhysicalMissionControlRequestSnapshot {
+  return Object.freeze({
+    accessRequests: inspection.accessRequests,
+    hostStatusRequests: inspection.hostStatusRequests,
+    sessionListRequests: inspection.sessionListRequests
+  });
+}
+
+function physicalMissionControlRequestOpened(
+  current: PhysicalMissionControlRequestSnapshot,
+  before: PhysicalMissionControlRequestSnapshot
+): boolean {
+  return (
+    current.accessRequests === before.accessRequests + 1 &&
+    current.hostStatusRequests === before.hostStatusRequests + 1 &&
+    current.sessionListRequests === before.sessionListRequests + 1
   );
 }
 
@@ -10275,47 +10432,10 @@ async function clearPhysicalAndroidClipboard(
       "Physical clipboard page changed retained Session Detail authority."
     );
 
-    const navigationWhileBackgrounded = Object.freeze({
-      ...navigationBefore,
-      activeSubscribers: 0
-    });
-    adb([...physicalAndroidChromeRetainedTabCommandPlan[0]]);
-    await waitFor(
-      () =>
-        physicalSessionNavigationMatches(
-          readPhysicalSessionNavigationSnapshot(input),
-          navigationWhileBackgrounded
-        ),
-      15_000,
-      "Physical clipboard Back did not close only the retained Session Detail stream."
-    );
-
-    const navigationAfterReturn = Object.freeze({
-      ...navigationBefore,
-      openedSubscribers: navigationBefore.openedSubscribers + 1,
-      selectedDetailRequests: navigationBefore.selectedDetailRequests + 1,
-      streamRequests: navigationBefore.streamRequests + 1
-    });
-    const launchOutput = adb([
-      ...physicalAndroidChromeRetainedTabCommandPlan[1]
-    ]);
-    requireCondition(
-      !launchOutput.includes("Error:") && !launchOutput.includes("Exception"),
-      "Physical clipboard Chrome launcher return failed."
-    );
-    await waitFor(
-      () =>
-        physicalSessionNavigationMatches(
-          readPhysicalSessionNavigationSnapshot(input),
-          navigationAfterReturn
-        ),
-      45_000,
-      "Physical clipboard cleanup did not reopen exactly one retained Session Detail stream."
-    );
-    await waitForAndroidUiText(
-      "Ready to send",
-      30_000,
-      "Physical clipboard cleanup lost the retained selected session."
+    await returnPhysicalExternalPageToSelectedSession(
+      input,
+      navigationBefore,
+      "clipboard"
     );
   } catch (error) {
     const message =
