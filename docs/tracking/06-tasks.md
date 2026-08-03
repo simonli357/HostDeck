@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-091` Stabilize physical Session Actions admission | ready | none | Implement the bounded `BUG-067` driver-only handoff and hostile tests. Do not change product/UI behavior, touch the phone/Tailscale/Serve state, run the aggregate, or rerun failed candidates. |
+| 1 | `FE-V1-091` Stabilize physical Session Actions admission | in_progress | none | Review pushed candidate `d3da630` before closure. Do not start `FE-V1-090`, touch the phone/Tailscale/Serve state, run the aggregate, or rerun failed candidates. |
 
 ## Intentional Blockers
 
