@@ -16,16 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-091` Correct shared Session Actions handoff budget | ready | none | Preserve one authority owner without consuming the post-`Done` admission budget before the Interrupt workflow finishes; add an integrated handoff test. |
-| 2 | `FE-V1-092` Complete destructive mutation snapshots | ready | none | Prove zero pre-confirmation and exactly one final mutation locally for every destructive path. |
-| 3 | `FE-V1-093` Complete route-owned destination settlement | ready | none | Reject retained Session Detail/result controls, not only a stable Mission title and subscriber count. |
-| 4 | `FE-V1-094` Correct profile-away settlement | ready | none | Require zero host-received route generations while admission is closed and stable generic failure truth. |
-| 5 | `FE-V1-095` Separate every real sheet/header context | ready | none | Fix impossible global/nested Host, event-close, goal-close, and close-completion ownership. |
-| 6 | `FE-V1-096` Complete structured-control ownership and counters | ready | none | Bind goal/model/plan/Compact actions to exact current structure and local before/after counters. |
-| 7 | `FE-V1-097` Correct utility, Resume, and clipboard boundaries | ready | none | Use header-owned Back selectors, reject ambiguous outcomes, and preserve navigation authority. |
-| 8 | `FE-V1-098` Complete stable exact reload settlement | ready | none | Replace remaining stale/current one-sample completion and add missing hostile transition tests. |
+| 1 | `FE-V1-100` Independent pre-phone hardening review | ready | none | Review the complete corrected FE-V1-091 to FE-V1-099 batch, rerun the non-physical gates, and record any finding before physical execution. |
 
-Independent `FE-V1-100` review rejects `a746820` despite all non-physical checks passing. Delegate the complete `FE-V1-091` to `FE-V1-098` correction batch together, then complete dependent executable guard `FE-V1-099` and stop for a new independent `FE-V1-100` review. `FE-V1-090`, the phone, Tailscale, Serve state, package repinning, and failed candidates remain out of scope until that review passes.
+The corrected `FE-V1-091` to `FE-V1-099` batch is complete and pushed. `FE-V1-100` is the next independent review gate and is intentionally not closed by the implementation agent. `FE-V1-090`, the phone, Tailscale, Serve state, package repinning, and failed candidates remain out of scope until that review passes.
 
 ## Intentional Blockers
 
