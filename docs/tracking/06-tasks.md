@@ -16,9 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-090` Aggregate physical mobile-dashboard hardening | ready | none | Run one fresh clean no-retry Android candidate across all 39 interactions, recovery, TalkBack, cleanup, privacy, and retained deployment. |
+| 1 | `FE-V1-101` Current package/browser identity binding | in_progress | none | Correct the guaranteed aggregate evidence-publication mismatch and rerun the exact 76-case browser matrix before touching the phone. |
 
-Independent `FE-V1-100` review passes through pushed correction `1d678f8`. `FE-V1-090` is the next and only queue item. Prior failed or review-rejected candidates remain immutable and must not be rerun; only a fresh committed candidate may cross the phone once.
+Independent `FE-V1-100` review passes through pushed correction `1d678f8`. Host-only candidate preflight then found `BUG-072`: the current package, supported-browser manifest, and aggregate publisher reference three different package generations. `FE-V1-101` is the only executable queue item; `FE-V1-090` remains blocked and no phone candidate may start until package/browser identity is exact.
 
 ## Intentional Blockers
 
