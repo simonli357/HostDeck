@@ -16,9 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-100` Independent pre-phone batch review | ready | none | Review the corrected FE-V1-091 through FE-V1-099 implementation and hostile evidence before any phone or aggregate execution. |
+| 1 | `FE-V1-090` Aggregate physical mobile-dashboard hardening | ready | none | Run one fresh clean no-retry Android candidate across all 39 interactions, recovery, TalkBack, cleanup, privacy, and retained deployment. |
 
-The corrected FE-V1-092 through FE-V1-099 batch is pushed as `e70e19a`; the next and only queue item is independent `FE-V1-100` review. `FE-V1-090`, the phone, Tailscale, Serve state, package repinning, and failed candidates remain out of scope until that review passes.
+Independent `FE-V1-100` review passes through pushed correction `1d678f8`. `FE-V1-090` is the next and only queue item. Prior failed or review-rejected candidates remain immutable and must not be rerun; only a fresh committed candidate may cross the phone once.
 
 ## Intentional Blockers
 
