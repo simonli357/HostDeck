@@ -639,7 +639,8 @@ describe("physical Android phone-driver protocol", () => {
           index === 0
             ? Object.freeze({
                 ...entry,
-                selectorOwner: entry.transitionOracle as PhysicalAggregateExecutableOwner
+                selectorWaiter:
+                  entry.transitionExecutor as unknown as PhysicalAggregateSelectorWaiter
               })
             : entry
         )
@@ -651,7 +652,8 @@ describe("physical Android phone-driver protocol", () => {
           index === 0
             ? Object.freeze({
                 ...entry,
-                counterSourceOwner: entry.diagnosticSourceOwner
+                counterOracle:
+                  entry.diagnosticOwner as unknown as PhysicalAggregateCounterOracle
               })
             : entry
         )
@@ -663,7 +665,8 @@ describe("physical Android phone-driver protocol", () => {
           index === 0
             ? Object.freeze({
                 ...entry,
-                diagnosticSourceOwner: entry.counterSourceOwner
+                diagnosticOwner:
+                  entry.counterOracle as unknown as PhysicalAggregateDiagnosticOwner
               })
             : entry
         )
@@ -675,7 +678,8 @@ describe("physical Android phone-driver protocol", () => {
           index === 0
             ? Object.freeze({
                 ...entry,
-                selectorWaiter: entry.transitionOracle as PhysicalAggregateExecutableOwner
+                diagnosticOwner:
+                  entry.transitionExecutor as unknown as PhysicalAggregateDiagnosticOwner
               })
             : entry
         )
@@ -685,28 +689,7 @@ describe("physical Android phone-driver protocol", () => {
       physicalAggregateActionRegistryIsExact(
         physicalAggregateActionDefinitions.map((entry, index) =>
           index === 0
-            ? Object.freeze({ ...entry, counterOwner: entry.diagnosticOwner })
-            : entry
-        )
-      )
-    ).toBe(false);
-    expect(
-      physicalAggregateActionRegistryIsExact(
-        physicalAggregateActionDefinitions.map((entry, index) =>
-          index === 0
-            ? Object.freeze({
-                ...entry,
-                diagnosticOwner: entry.transitionOracle as PhysicalAggregateExecutableOwner
-              })
-            : entry
-        )
-      )
-    ).toBe(false);
-    expect(
-      physicalAggregateActionRegistryIsExact(
-        physicalAggregateActionDefinitions.map((entry, index) =>
-          index === 0
-            ? Object.freeze({ ...entry, transitionOracle: () => true })
+            ? Object.freeze({ ...entry, transitionExecutor: () => true })
             : entry
         )
       )
@@ -715,6 +698,13 @@ describe("physical Android phone-driver protocol", () => {
       physicalAggregateActionRegistryIsExact(
         physicalAggregateActionDefinitions.map((entry, index) =>
           index === 0 ? Object.freeze({ ...entry, maximumTaps: 0 }) : entry
+        )
+      )
+    ).toBe(false);
+    expect(
+      physicalAggregateActionRegistryIsExact(
+        physicalAggregateActionDefinitions.map((entry, index) =>
+          index === 0 ? Object.freeze({ ...entry, driver: "talkback" as const }) : entry
         )
       )
     ).toBe(false);
@@ -737,7 +727,7 @@ describe("physical Android phone-driver protocol", () => {
       routeOwner: "Model sheet"
     });
     expect(await definition.selectorWaiter(ownerContext)).toBe(syntheticNode);
-    expect(await definition.counterOwner(ownerContext)).toEqual({ synthetic: 0 });
+    expect(await definition.counterOracle(ownerContext)).toEqual({ synthetic: 0 });
     const diagnostic = await definition.diagnosticOwner(ownerContext);
     expect(diagnostic).toContain("action=model-open");
     const transitionContext: PhysicalAggregateTransitionContext = Object.freeze({
@@ -747,9 +737,9 @@ describe("physical Android phone-driver protocol", () => {
       diagnostic,
       selectorResult: syntheticNode
     });
-    expect(await definition.transitionOracle(transitionContext)).toBe(false);
+    expect(await definition.transitionExecutor(transitionContext)).toBe(false);
     expect(() =>
-      definition.transitionOracle(
+      definition.transitionExecutor(
         Object.freeze({ ...transitionContext, completed: () => true })
       )
     ).toThrow("unguarded completion callback");
@@ -772,17 +762,82 @@ describe("physical Android phone-driver protocol", () => {
     executableRegistry.assertConsumed(["model-open"]);
     expect(syntheticTapCount).toBe(1);
 
-    const ownerInvocationLog: string[] = [];
+    let syntheticTalkBackActivationCount = 0;
+    const talkBackRegistry = createPhysicalAggregateActionRegistry({
+      counterSnapshot: () => Object.freeze({ synthetic: 0 })
+    });
+    await talkBackRegistry.activate(
+      "talkback-model-open",
+      syntheticNode,
+      () => {
+        syntheticTalkBackActivationCount += 1;
+      },
+      () =>
+        syntheticTalkBackActivationCount === 1 &&
+        syntheticNode.clickable &&
+        syntheticNode.enabled !== false,
+      "synthetic TalkBack model action"
+    );
+    talkBackRegistry.assertConsumed(["talkback-model-open"]);
+    expect(syntheticTalkBackActivationCount).toBe(1);
+    await expect(
+      talkBackRegistry.activate(
+        "talkback-model-open",
+        syntheticNode,
+        () => {
+          syntheticTalkBackActivationCount += 1;
+        },
+        () => syntheticTalkBackActivationCount > 1,
+        "synthetic duplicate TalkBack model action"
+      )
+    ).rejects.toThrow("exceeded its one-tap boundary");
+    expect(syntheticTalkBackActivationCount).toBe(1);
+    await expect(
+      createPhysicalAggregateActionRegistry().tap(
+        "talkback-model-open",
+        syntheticNode,
+        () => syntheticNode.clickable,
+        "synthetic TalkBack tap bypass"
+      )
+    ).rejects.toThrow("was not a registered tap");
+    let wrongDriverActivationCount = 0;
+    await expect(
+      createPhysicalAggregateActionRegistry().activate(
+        "model-open",
+        syntheticNode,
+        () => {
+          wrongDriverActivationCount += 1;
+        },
+        () => wrongDriverActivationCount === 1,
+        "synthetic Android-node activation bypass"
+      )
+    ).rejects.toThrow("was not a registered TalkBack activation");
+    expect(wrongDriverActivationCount).toBe(0);
+
     const allActionsRegistry = createPhysicalAggregateActionRegistry({
       counterSnapshot: () => Object.freeze({ synthetic: 0 }),
-      ownerInvocationLog,
       tapNodeOnceAndWait: async (_node, completed) => {
         expect(await completed()).toBe(true);
       }
     });
     for (const action of physicalAggregateActionDefinitions) {
-      if (action.maximumTaps === 0) {
-        allActionsRegistry.consume(action.actionId);
+      if (action.driver === "observation") {
+        allActionsRegistry.consume(
+          action.actionId,
+          () => action.driver === "observation",
+          `synthetic ${action.actionId} observation`
+        );
+      } else if (action.driver === "talkback") {
+        let activated = false;
+        await allActionsRegistry.activate(
+          action.actionId,
+          syntheticNode,
+          () => {
+            activated = true;
+          },
+          () => activated && syntheticNode.clickable,
+          `synthetic ${action.actionId} TalkBack activation`
+        );
       } else {
         await allActionsRegistry.tap(
           action.actionId,
@@ -793,17 +848,28 @@ describe("physical Android phone-driver protocol", () => {
       }
     }
     allActionsRegistry.assertConsumed(physicalAggregateReachableActionIds);
-    for (const action of physicalAggregateReachableActionIds) {
-      expect(ownerInvocationLog).toContain(`selector-source:${action}`);
-      expect(ownerInvocationLog).toContain(`counter-source:${action}`);
-      expect(ownerInvocationLog).toContain(`diagnostic-source:${action}`);
-    }
 
     const registry = createPhysicalAggregateActionRegistry();
-    registry.consume("stream-recovery-observe");
-    expect(() => registry.consume("stream-recovery-observe")).toThrow(
+    let recoveryObservationCalls = 0;
+    registry.consume(
+      "stream-recovery-observe",
+      () => {
+        recoveryObservationCalls += 1;
+        return physicalAggregateReachableActionIds.length > 0;
+      },
+      "synthetic recovery observation"
+    );
+    expect(() => registry.consume(
+      "stream-recovery-observe",
+      () => {
+        recoveryObservationCalls += 1;
+        return physicalAggregateReachableActionIds.length > 0;
+      },
+      "synthetic duplicate recovery observation"
+    )).toThrow(
       "exceeded its one-tap boundary"
     );
+    expect(recoveryObservationCalls).toBe(1);
     expect(() => registry.tap(
       "stream-reconnect-observe",
       {} as AndroidUiNode,
@@ -812,7 +878,11 @@ describe("physical Android phone-driver protocol", () => {
     )).rejects.toThrow("was not a registered tap");
     expect(() => registry.assertConsumed(["stream-recovery-observe"])).not.toThrow();
     const incompleteRegistry = createPhysicalAggregateActionRegistry();
-    incompleteRegistry.consume("stream-recovery-observe");
+    incompleteRegistry.consume(
+      "stream-recovery-observe",
+      () => physicalAggregateReachableActionIds.length > 0,
+      "synthetic incomplete recovery observation"
+    );
     expect(() =>
       incompleteRegistry.assertConsumed([
         "stream-recovery-observe",
@@ -820,14 +890,38 @@ describe("physical Android phone-driver protocol", () => {
       ])
     ).toThrow("consumption was invalid");
     const reorderedRegistry = createPhysicalAggregateActionRegistry();
-    reorderedRegistry.consume("stream-reconnect-observe");
-    reorderedRegistry.consume("stream-recovery-observe");
+    reorderedRegistry.consume(
+      "stream-reconnect-observe",
+      () => physicalAggregateReachableActionIds.length > 0,
+      "synthetic reordered reconnect observation"
+    );
+    reorderedRegistry.consume(
+      "stream-recovery-observe",
+      () => physicalAggregateReachableActionIds.length > 0,
+      "synthetic reordered recovery observation"
+    );
     expect(() =>
       reorderedRegistry.assertConsumed([
         "stream-recovery-observe",
         "stream-reconnect-observe"
       ])
     ).toThrow("execution order was invalid");
+    expect(() =>
+      createPhysicalAggregateActionRegistry().consume(
+        "stream-recovery-observe",
+        () => true,
+        "synthetic unguarded observation"
+      )
+    ).toThrow("unguarded completion callback");
+    expect(() =>
+      createPhysicalAggregateActionRegistry({
+        counterSnapshot: () => Object.freeze({ invalid: -1 })
+      }).consume(
+        "stream-recovery-observe",
+        () => physicalAggregateReachableActionIds.length > 0,
+        "synthetic invalid observation counter"
+      )
+    ).toThrow("observed an invalid counter snapshot");
   });
 
   it("propagates selector and invariant failures through the physical poller", async () => {
@@ -844,12 +938,20 @@ describe("physical Android phone-driver protocol", () => {
 
   it("keeps every aggregate physical action registry-bound", () => {
     const source = readFileSync(fileURLToPath(import.meta.url), "utf8");
-    const implementation = source.slice(
-      source.indexOf("interface PairingRenderCapture")
+    const implementation = physicalAggregateImplementationSource(source);
+    requireCondition(
+      implementation !== null,
+      "Physical aggregate implementation source was absent."
     );
     const callSiteIds = new Set<string>();
     for (const match of implementation.matchAll(
       /(?:input\.)?actionRegistry\.tap\(\s*"([^"]+)"/gu
+    )) {
+      const actionId = match[1];
+      if (actionId !== undefined) callSiteIds.add(actionId);
+    }
+    for (const match of implementation.matchAll(
+      /(?:input\.)?actionRegistry\.activate\(\s*"([^"]+)"/gu
     )) {
       const actionId = match[1];
       if (actionId !== undefined) callSiteIds.add(actionId);
@@ -891,7 +993,7 @@ describe("physical Android phone-driver protocol", () => {
       callSiteIds.add("detail-expand-quiet");
       callSiteIds.add("archive-expand-quiet");
     }
-    expect(implementation.match(/tapAndroidNodeOnceAndWait\(/gu)).toHaveLength(2);
+    expect(implementation.match(/tapAndroidNodeOnceAndWait\(/gu)).toHaveLength(1);
     expect(physicalAggregateCallGraphIsExact(source)).toBe(true);
     const aggregateStart = source.indexOf(
       "async function runProductionPairingUiSequence" + "(\n"
@@ -907,6 +1009,42 @@ describe("physical Android phone-driver protocol", () => {
         )
       )
     ).toBe(false);
+    const selfRevokeMarker =
+      "async function runPhysicalSelfRevoke" + "(\n";
+    expect(
+      physicalAggregateCallGraphIsExact(
+        source.replace(
+          selfRevokeMarker,
+          `${selfRevokeMarker}  tapAndroidUiNode(hostileNode);\n`
+        )
+      )
+    ).toBe(false);
+    expect(
+      physicalAggregateCallGraphIsExact(
+        source.replace(
+          selfRevokeMarker,
+          `${selfRevokeMarker}  adb(["shell", "input", "tap", "1", "1"]);\n`
+        )
+      )
+    ).toBe(false);
+    const talkBackMarker =
+      "async function runPhysicalTalkBackTraversal" + "(\n";
+    expect(
+      physicalAggregateCallGraphIsExact(
+        source.replace(
+          talkBackMarker,
+          `${talkBackMarker}  runPhysicalTalkBackDoubleTap(1, 1);\n`
+        )
+      )
+    ).toBe(false);
+    expect(
+      physicalAggregateCallGraphIsExact(
+        source.replace(
+          selfRevokeMarker,
+          `${selfRevokeMarker}  if (input.requestInspection.accessRequests >= 1) return;\n`
+        )
+      )
+    ).toBe(false);
     expect(
       physicalAggregateCallGraphIsExact(
         source.replace(
@@ -915,8 +1053,16 @@ describe("physical Android phone-driver protocol", () => {
         )
       )
     ).toBe(false);
+    expect(
+      physicalAggregateCallGraphIsExact(
+        source.replace(
+          "async () => selectPhysicalHostAccessCloseAction(await readAndroidUiNodes(), \"global\") !== null",
+          "() => Boolean(1)"
+        )
+      )
+    ).toBe(false);
     expect(implementation).toContain(
-      String.raw`event-close-\${actionId.replace("event-open-", "")}`
+      "`event-close-" + "$" + '{actionId.replace("event-open-", "")}`'
     );
     expect(
       physicalAggregateReachableActionIds.filter(
@@ -925,6 +1071,41 @@ describe("physical Android phone-driver protocol", () => {
           !actionId.startsWith("event-close-")
       )
     ).toEqual([]);
+  });
+
+  it("snapshots both profile transitions before changing external state", () => {
+    const source = readFileSync(fileURLToPath(import.meta.url), "utf8");
+    const slices = [
+      source.slice(
+        source.lastIndexOf("async function runPhysicalDashboardProfileSwitch"),
+        source.lastIndexOf("async function runPhysicalRuntimeCompatibilityState")
+      ),
+      source.slice(
+        source.lastIndexOf("async function runProductionRemoteRecoveryUiSequence"),
+        source.lastIndexOf("function recoveryRequestSummary")
+      )
+    ];
+    for (const body of slices) {
+      const awaySnapshot = body.indexOf("const profileAwaySwitchBefore");
+      const awaySwitch = body.indexOf('"profile-switch-away"');
+      const awayExternal = body.indexOf(
+        "await switchSavedProfile(input.profileSwitch.awayProfileId)"
+      );
+      const awayRefreshSnapshot = body.indexOf("const profileAwayBefore");
+      const returnSnapshot = body.indexOf("const profileReturnBefore");
+      const returnSwitch = body.indexOf('"profile-switch-return"');
+      const returnExternal = body.indexOf(
+        "await switchSavedProfile(input.profileSwitch.dedicatedProfileId)"
+      );
+      expect(awaySnapshot).toBeGreaterThanOrEqual(0);
+      expect(awaySnapshot).toBeLessThan(awayExternal);
+      expect(awayExternal).toBeLessThan(awayRefreshSnapshot);
+      expect(awayRefreshSnapshot).toBeLessThan(awaySwitch);
+      expect(awayRefreshSnapshot).toBeLessThan(returnSnapshot);
+      expect(returnSnapshot).toBeGreaterThan(awaySwitch);
+      expect(returnSnapshot).toBeLessThan(returnExternal);
+      expect(returnExternal).toBeLessThan(returnSwitch);
+    }
   });
 
   it("removes legacy retry and largest-match driver helpers", () => {
@@ -1124,6 +1305,68 @@ describe("physical Android phone-driver protocol", () => {
       dockDescription
     );
     expect(dockAction).not.toBeNull();
+    const timelineModelCopy = Object.freeze({
+      bounds: Object.freeze({ bottom: 980, left: 80, right: 600, top: 900 }),
+      className: "android.view.View",
+      clickable: false,
+      description: "",
+      resourceId: "",
+      text: "/model"
+    });
+    expect(
+      selectPhysicalSessionActionsTrigger(
+        [...sessionNodes, timelineModelCopy],
+        1
+      )
+    ).not.toBeNull();
+    const modelOverlayClose = Object.freeze({
+      bounds: Object.freeze({ bottom: 1_000, left: 900, right: 1_040, top: 880 }),
+      className: "android.widget.Button",
+      clickable: true,
+      description: "Close model control",
+      resourceId: "",
+      text: ""
+    });
+    expect(
+      selectPhysicalSessionActionsTrigger(
+        [...sessionNodes, timelineModelCopy, modelOverlayClose],
+        1
+      )
+    ).toBeNull();
+    const interruptConfirmationNodes = [
+      Object.freeze({
+        ...timelineModelCopy,
+        text: "Interrupt active turn?"
+      }),
+      Object.freeze({
+        ...modelOverlayClose,
+        bounds: Object.freeze({
+          bottom: 1_400,
+          left: 80,
+          right: 500,
+          top: 1_280
+        }),
+        description: "",
+        text: "Cancel"
+      }),
+      Object.freeze({
+        ...modelOverlayClose,
+        bounds: Object.freeze({
+          bottom: 1_400,
+          left: 540,
+          right: 1_000,
+          top: 1_280
+        }),
+        description: "",
+        text: "Interrupt turn"
+      })
+    ];
+    expect(
+      selectPhysicalSessionActionsTrigger(
+        [...sessionNodes, ...interruptConfirmationNodes],
+        1
+      )
+    ).toBeNull();
     const sessionMenuNodes: readonly AndroidUiNode[] = [
       ...sessionNodes,
       Object.freeze({
@@ -1250,14 +1493,36 @@ describe("physical Android phone-driver protocol", () => {
         "/model"
       )
     ).toBeNull();
+    expect(
+      selectPhysicalSheetAction(
+        [
+          ...sheetNodes,
+          Object.freeze({
+            ...(sheetNodes.find((node) => node.text === "/model") as AndroidUiNode),
+            bounds: Object.freeze({ bottom: 1_420, left: 80, right: 700, top: 1_340 }),
+            text: "Turn completed"
+          })
+        ],
+        "text",
+        "Codex Fast",
+        "/model"
+      )
+    ).not.toBeNull();
 
     const resumeNodes = parseAndroidUiNodes(
       '<hierarchy><node text="" class="android.view.ViewGroup" ' +
         `resource-id="${chromeToolbarResourceId}" bounds="[0,80][1080,240]" />` +
         '<node text="" class="android.widget.FrameLayout" ' +
         `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
-        '<node text="Resume on laptop" bounds="[80,300][600,380]" />' +
-        '<node text="Laptop terminal only" bounds="[80,400][600,500]" />' +
+        '<node text="Resume on laptop" class="android.view.View" ' +
+        'bounds="[190,300][600,380]" />' +
+        '<node text="" class="android.widget.Button" ' +
+        'content-desc="Back to session actions" clickable="true" enabled="true" ' +
+        'bounds="[20,300][160,420]" />' +
+        '<node text="" class="android.widget.Button" ' +
+        'content-desc="Close session actions" clickable="true" enabled="true" ' +
+        'bounds="[900,300][1040,420]" />' +
+        '<node text="Laptop terminal only" bounds="[80,500][600,580]" />' +
         '<node text="Copy command" class="android.widget.Button" clickable="true" ' +
         'enabled="true" bounds="[80,620][600,760]" />' +
         '</hierarchy>'
@@ -1272,9 +1537,14 @@ describe("physical Android phone-driver protocol", () => {
     expect(
       selectPhysicalResumeCopyAction([
         ...resumeNodes,
-        Object.freeze({ ...resumeNodes[0], text: "/model" }) as AndroidUiNode,
         Object.freeze({
-          ...resumeNodes[4],
+          ...resumeNodes.find((node) => node.text === "Resume on laptop"),
+          text: "/model"
+        }) as AndroidUiNode,
+        Object.freeze({
+          ...resumeNodes.find(
+            (node) => node.description === "Close session actions"
+          ),
           description: "Close model control"
         }) as AndroidUiNode
       ])
@@ -1284,14 +1554,33 @@ describe("physical Android phone-driver protocol", () => {
         `resource-id="${chromeToolbarResourceId}" bounds="[0,80][1080,240]" />` +
         '<node text="" class="android.widget.FrameLayout" ' +
         `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
-        '<node text="/usage" bounds="[80,300][300,380]" />' +
+        '<node text="/usage" class="android.view.View" bounds="[80,300][300,380]" />' +
         '<node text="Lifetime tokens" bounds="[80,500][600,580]" />' +
+        '<node text="" class="android.widget.Button" ' +
+        'content-desc="Close Usage utility" clickable="true" enabled="true" ' +
+        'bounds="[900,300][1040,420]" />' +
         '<node text="" class="android.widget.Button" ' +
         'content-desc="Back to session utilities" clickable="true" enabled="true" ' +
         'bounds="[20,300][160,380]" />' +
         '</hierarchy>'
     );
+    const usageClose = utilityNodes.find(
+      (node) => node.description === "Close Usage utility"
+    );
+    requireCondition(usageClose !== undefined, "Usage owner close fixture was absent.");
     expect(selectPhysicalUtilityBackAction(utilityNodes, "/usage")).not.toBeNull();
+    expect(
+      selectPhysicalUtilityBackAction(
+        utilityNodes.filter((node) => node !== usageClose),
+        "/usage"
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalUtilityBackAction(
+        [...utilityNodes, Object.freeze({ ...usageClose })],
+        "/usage"
+      )
+    ).toBeNull();
     expect(
       selectPhysicalUtilityBackAction([
         ...utilityNodes,
@@ -1342,8 +1631,7 @@ describe("physical Android phone-driver protocol", () => {
       selectPhysicalSessionUtilityAction(
         utilitiesMenuNodes,
         "description",
-        "Open /usage",
-        "Session utilities"
+        "Open /usage"
       )
     ).not.toBeNull();
     expect(
@@ -1356,8 +1644,7 @@ describe("physical Android phone-driver protocol", () => {
           }) as AndroidUiNode
         ],
         "description",
-        "Open /usage",
-        "Session utilities"
+        "Open /usage"
       )
     ).toBeNull();
     const compactPageNodes = parseAndroidUiNodes(
@@ -1365,34 +1652,36 @@ describe("physical Android phone-driver protocol", () => {
         `resource-id="${chromeToolbarResourceId}" bounds="[0,80][1080,240]" />` +
         '<node text="" class="android.widget.FrameLayout" ' +
         `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
-        '<node text="/compact" bounds="[80,300][620,380]" />' +
+        '<node text="/compact" class="android.view.View" bounds="[80,300][620,380]" />' +
         '<node text="" class="android.widget.Button" content-desc="Back to session utilities" ' +
         'clickable="true" enabled="true" bounds="[20,300][160,380]" />' +
+        '<node text="" class="android.widget.Button" content-desc="Close Compact utility" ' +
+        'clickable="true" enabled="true" bounds="[900,300][1040,420]" />' +
         '<node text="No tracked compaction" bounds="[80,500][700,580]" />' +
         '<node text="" class="android.widget.Button" content-desc="Check Compact progress" ' +
         'clickable="true" enabled="true" bounds="[80,680][700,820]" />' +
         '</hierarchy>'
     );
     expect(
-      selectPhysicalSessionUtilityAction(
+      selectPhysicalUtilityPageAction(
         compactPageNodes,
+        "/compact",
         "description",
-        "Check Compact progress",
-        "No tracked compaction"
+        "Check Compact progress"
       )
     ).not.toBeNull();
     expect(
-      selectPhysicalSessionUtilityAction(
+      selectPhysicalUtilityPageAction(
         compactPageNodes.map((node) =>
           node.text === "No tracked compaction"
             ? Object.freeze({ ...node, bounds: Object.freeze({ ...node.bounds, top: 120, bottom: 200 }) })
             : node
         ),
+        "/compact",
         "description",
-        "Check Compact progress",
-        "No tracked compaction"
+        "Check Compact progress"
       )
-    ).toBeNull();
+    ).not.toBeNull();
     expect(
       selectPhysicalUtilityBackAction(
         utilityNodes.map((node) =>
@@ -1411,14 +1700,33 @@ describe("physical Android phone-driver protocol", () => {
         `resource-id="${chromeToolbarResourceId}" bounds="[0,80][1080,240]" />` +
         '<node text="" class="android.widget.FrameLayout" ' +
         `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
-        '<node text="Resume on laptop" bounds="[80,300][600,380]" />' +
-        '<node text="Laptop terminal only" bounds="[80,400][600,500]" />' +
+        '<node text="Resume on laptop" class="android.view.View" ' +
+        'bounds="[190,300][600,380]" />' +
+        '<node text="Laptop terminal only" bounds="[80,500][600,580]" />' +
         '<node text="" class="android.widget.Button" ' +
         'content-desc="Back to session actions" clickable="true" enabled="true" ' +
-        'bounds="[20,300][160,380]" />' +
+        'bounds="[20,300][160,420]" />' +
+        '<node text="" class="android.widget.Button" ' +
+        'content-desc="Close session actions" clickable="true" enabled="true" ' +
+        'bounds="[900,300][1040,420]" />' +
         '</hierarchy>'
     );
+    const resumeClose = resumeBackNodes.find(
+      (node) => node.description === "Close session actions"
+    );
+    requireCondition(resumeClose !== undefined, "Resume owner close fixture was absent.");
     expect(selectPhysicalResumeBackAction(resumeBackNodes)).not.toBeNull();
+    expect(
+      selectPhysicalResumeBackAction(
+        resumeBackNodes.filter((node) => node !== resumeClose)
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalResumeBackAction([
+        ...resumeBackNodes,
+        Object.freeze({ ...resumeClose })
+      ])
+    ).toBeNull();
     expect(
       selectPhysicalResumeBackAction(
         resumeBackNodes.map((node) =>
@@ -1482,7 +1790,9 @@ describe("physical Android phone-driver protocol", () => {
         `resource-id="${chromeToolbarResourceId}" bounds="[0,80][1080,240]" />` +
         '<node text="" class="android.widget.FrameLayout" ' +
         `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
-        '<node text="Clear copied command" class="android.view.View" bounds="[80,400][600,480]" />' +
+        '<node text="HostDeck" class="android.view.View" bounds="[80,280][400,340]" />' +
+        '<node text="Remote access check" class="android.view.View" ' +
+        'bounds="[80,400][700,480]" />' +
         '<node text="Clipboard cleared" class="android.view.View" bounds="[80,560][600,640]" />' +
         '<node text="The temporary laptop command was removed." class="android.view.View" ' +
         'bounds="[80,680][900,760]" />' +
@@ -1491,7 +1801,7 @@ describe("physical Android phone-driver protocol", () => {
     expect(physicalClipboardClearedTruthVisible(clipboardNodes)).toBe(true);
     expect(
       physicalClipboardClearedTruthVisible(
-        clipboardNodes.filter((node) => node.text !== "Clear copied command")
+        clipboardNodes.filter((node) => node.text !== "Remote access check")
       )
     ).toBe(false);
     expect(
@@ -1507,6 +1817,62 @@ describe("physical Android phone-driver protocol", () => {
         })
       ])
     ).toBe(false);
+    expect(
+      physicalClipboardClearedTruthVisible([
+        ...clipboardNodes,
+        Object.freeze({
+          ...(clipboardNodes.find(
+            (node) => node.text === "Clipboard cleared"
+          ) as AndroidUiNode),
+          text: "Clear copied command"
+        })
+      ])
+    ).toBe(false);
+
+    const clipboardReady = clipboardNodes
+      .filter((node) => node.text !== "Clipboard cleared")
+      .map((node) =>
+        node.text === "The temporary laptop command was removed."
+          ? Object.freeze({
+              ...node,
+              text: "Remove the temporary laptop command from this phone."
+            })
+          : node
+      );
+    const clipboardAction = Object.freeze({
+      bounds: Object.freeze({ bottom: 980, left: 80, right: 1000, top: 840 }),
+      className: "android.widget.Button",
+      clickable: true,
+      description: "",
+      resourceId: "",
+      text: "Clear clipboard"
+    });
+    const clipboardReadyWithAction = [
+      ...clipboardReady,
+      Object.freeze({
+        ...(clipboardNodes.find(
+          (node) => node.text === "Clipboard cleared"
+        ) as AndroidUiNode),
+        text: "Clear copied command"
+      }),
+      clipboardAction
+    ];
+    expect(
+      selectPhysicalExternalPageAction(clipboardReadyWithAction, "Clear clipboard")
+    ).toBe(clipboardAction);
+    expect(
+      selectPhysicalExternalPageAction(
+        [
+          ...clipboardReadyWithAction,
+          Object.freeze({
+            ...clipboardAction,
+            description: "Close session actions",
+            text: ""
+          })
+        ],
+        "Clear clipboard"
+      )
+    ).toBeNull();
   });
 
   it("acquires the named whole-session target instead of its text fragment", () => {
@@ -1577,6 +1943,8 @@ describe("physical Android phone-driver protocol", () => {
         '<node text="No observed Plan execution" bounds="[100,740][600,820]" />' +
         '<node text="Plan" bounds="[0,900][300,980]" />' +
         '<node text="Default" bounds="[100,1020][300,1100]" />' +
+        '<node text="Default" class="android.widget.RadioButton" clickable="true" ' +
+        'checked="true" enabled="true" bounds="[80,1000][760,1140]" />' +
         '</hierarchy>'
     );
 
@@ -1629,6 +1997,8 @@ describe("physical Android phone-driver protocol", () => {
         '<node text="No observed Plan execution" bounds="[100,620][600,700]" />' +
         '<node text="Plan" bounds="[100,820][300,900]" />' +
         '<node text="Plan" bounds="[100,940][300,1020]" />' +
+        '<node text="Plan" class="android.widget.RadioButton" clickable="true" ' +
+        'checked="true" enabled="true" bounds="[80,920][760,1060]" />' +
         '</hierarchy>'
     );
     expect(physicalPlanStagedTruthVisible(staged)).toBe(true);
@@ -2207,6 +2577,24 @@ describe("physical Android phone-driver protocol", () => {
     );
     expect(selectPhysicalHostAccessContentRegion(globalNodes, "nested")).toBeNull();
     expect(selectPhysicalHostAccessCloseAction(globalNodes, "nested")).toBeNull();
+    const globalResult = Object.freeze({
+      ...(globalNodes.find((node) => node.text === "Remote access ready") as AndroidUiNode),
+      text: "This phone was revoked"
+    });
+    expect(
+      physicalHostAccessTextVisible(
+        [...globalNodes, globalResult],
+        "global",
+        "This phone was revoked"
+      )
+    ).toBe(true);
+    expect(
+      physicalHostAccessTextVisible(
+        [...globalNodes, globalResult, Object.freeze({ ...globalResult })],
+        "global",
+        "This phone was revoked"
+      )
+    ).toBe(false);
 
     const globalClose = globalNodes.find(
       (node) => node.description === "Close Host and access"
@@ -2245,6 +2633,9 @@ describe("physical Android phone-driver protocol", () => {
         `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
         '<node text="Lock remote writes?" class="android.view.View" ' +
         'bounds="[80,400][700,500]" />' +
+        '<node text="" class="android.widget.Button" ' +
+        'content-desc="Close remote write lock confirmation" clickable="true" ' +
+        'enabled="true" bounds="[916,380][1040,504]" />' +
         '<node text="Cancel" class="android.widget.Button" clickable="true" ' +
         'enabled="true" bounds="[80,1800][540,1930]" />' +
         '<node text="Lock writes" class="android.widget.Button" clickable="true" ' +
@@ -2252,6 +2643,13 @@ describe("physical Android phone-driver protocol", () => {
         '</hierarchy>'
     );
     const lock = selectPhysicalHostLockConfirmationAction(confirmation);
+    const confirmationClose = confirmation.find(
+      (node) => node.description === "Close remote write lock confirmation"
+    );
+    requireCondition(
+      confirmationClose !== undefined,
+      "Physical confirmation owner close was absent."
+    );
     expect(lock).not.toBeNull();
     for (const malformed of [
       [...confirmation, Object.freeze({ ...confirmation.at(-1) }) as AndroidUiNode],
@@ -2280,7 +2678,17 @@ describe("physical Android phone-driver protocol", () => {
         node.text === "Lock remote writes?"
           ? Object.freeze({ ...node, text: "Old lock result" })
           : node
-      )
+      ),
+      confirmation.filter(
+        (node) => node.description !== "Close remote write lock confirmation"
+      ),
+      [
+        ...confirmation,
+        Object.freeze({
+          ...confirmationClose,
+          description: "Close device revocation"
+        })
+      ]
     ]) {
       expect(selectPhysicalHostLockConfirmationAction(malformed)).toBeNull();
     }
@@ -2291,10 +2699,28 @@ describe("physical Android phone-driver protocol", () => {
         '<node text="" class="android.widget.FrameLayout" ' +
         `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
         '<node text="Turn interrupted" class="android.view.View" ' +
+        'bounds="[190,370][720,450]" />' +
+        '<node text="" class="android.widget.Button" ' +
+        'content-desc="Close session actions" clickable="true" enabled="true" ' +
+        'bounds="[916,360][1040,484]" />' +
+        '<node text="Turn interrupted" class="android.view.View" ' +
         'bounds="[80,1600][600,1700]" />' +
         '<node text="Done" class="android.widget.Button" clickable="true" ' +
         'enabled="true" bounds="[580,1800][1000,1930]" />' +
         '</hierarchy>'
+    );
+    const resultHeader = result.find(
+      (node) => node.text === "Turn interrupted" && node.bounds.top < 1_000
+    );
+    const resultMarker = result.find(
+      (node) => node.text === "Turn interrupted" && node.bounds.top > 1_000
+    );
+    const resultClose = result.find(
+      (node) => node.description === "Close session actions"
+    );
+    requireCondition(
+      resultHeader !== undefined && resultMarker !== undefined && resultClose !== undefined,
+      "Physical result ownership fixture was incomplete."
     );
     expect(selectPhysicalResultAction(result, ["Turn interrupted"], "Done")).not.toBeNull();
     expect(
@@ -2306,13 +2732,174 @@ describe("physical Android phone-driver protocol", () => {
     ).toBeNull();
     expect(
       selectPhysicalResultAction(
-        result.map((node) =>
-          node.text === "Turn interrupted"
-            ? Object.freeze({ ...node, text: "Turn interrupted" })
-            : node
-        ).filter((_node, index) => index !== 2),
+        result.filter((node) => node !== resultHeader),
         ["Turn interrupted"],
         "Done"
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalResultAction(
+        result.filter((node) => node !== resultMarker),
+        ["Turn interrupted"],
+        "Done"
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalResultAction(
+        result.filter((node) => node !== resultClose),
+        ["Turn interrupted"],
+        "Done"
+      )
+    ).toBeNull();
+
+    const archiveResult = result.map((node) => {
+      if (node.text === "Turn interrupted") {
+        return Object.freeze({ ...node, text: "Session archived" });
+      }
+      if (node.text === "Done") {
+        return Object.freeze({ ...node, text: "Back to sessions" });
+      }
+      if (node.description === "Close session actions") {
+        return Object.freeze({ ...node, enabled: false as const });
+      }
+      return node;
+    });
+    expect(
+      selectPhysicalResultAction(
+        archiveResult,
+        ["Session archived"],
+        "Back to sessions"
+      )
+    ).not.toBeNull();
+    expect(
+      selectPhysicalResultAction(
+        archiveResult.filter((node) => node.text !== "Session archived"),
+        ["Session archived"],
+        "Back to sessions"
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalResultAction(
+        [
+          ...result,
+          Object.freeze({
+            ...resultHeader,
+            text: "Archive session?"
+          })
+        ],
+        ["Turn interrupted"],
+        "Done"
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalResultAction(result, ["Turn interrupted"], "Back to sessions")
+    ).toBeNull();
+  });
+
+  it("binds each destructive confirmation to its exact UI owner", () => {
+    const modal = parseAndroidUiNodes(
+      '<hierarchy><node text="" class="android.view.ViewGroup" ' +
+        `resource-id="${chromeToolbarResourceId}" bounds="[0,80][1080,240]" />` +
+        '<node text="" class="android.widget.FrameLayout" ' +
+        `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
+        '<node text="Revoke paired device?" class="android.view.View" ' +
+        'bounds="[80,400][700,500]" />' +
+        '<node text="" class="android.widget.Button" ' +
+        'content-desc="Close device revocation" clickable="true" enabled="true" ' +
+        'bounds="[916,380][1040,504]" />' +
+        '<node text="Cancel" class="android.widget.Button" clickable="true" ' +
+        'enabled="true" bounds="[80,1800][540,1930]" />' +
+        '<node text="Revoke device" class="android.widget.Button" clickable="true" ' +
+        'enabled="true" bounds="[500,1800][1000,1930]" />' +
+        '</hierarchy>'
+    );
+    const modalClose = modal.find(
+      (node) => node.description === "Close device revocation"
+    );
+    requireCondition(modalClose !== undefined, "Modal owner fixture close was absent.");
+    expect(
+      selectPhysicalConfirmationFooterAction(
+        modal,
+        "Revoke paired device?",
+        "Revoke device"
+      )
+    ).not.toBeNull();
+    expect(
+      selectPhysicalConfirmationFooterAction(
+        modal.map((node) =>
+          node.description === "Close device revocation"
+            ? Object.freeze({ ...node, description: "Close session actions" })
+            : node
+        ),
+        "Revoke paired device?",
+        "Revoke device"
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalConfirmationFooterAction(
+        [
+          ...modal,
+          Object.freeze({
+            ...modalClose,
+            description: "Back to session actions"
+          })
+        ],
+        "Revoke paired device?",
+        "Revoke device"
+      )
+    ).toBeNull();
+
+    const compact = parseAndroidUiNodes(
+      '<hierarchy><node text="" class="android.view.ViewGroup" ' +
+        `resource-id="${chromeToolbarResourceId}" bounds="[0,80][1080,240]" />` +
+        '<node text="" class="android.widget.FrameLayout" ' +
+        `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
+        '<node text="" class="android.widget.Button" ' +
+        'content-desc="Back to session utilities" clickable="true" enabled="true" ' +
+        'bounds="[40,360][164,484]" />' +
+        '<node text="/compact" class="android.view.View" ' +
+        'bounds="[190,370][720,450]" />' +
+        '<node text="" class="android.widget.Button" ' +
+        'content-desc="Close Compact utility" clickable="true" enabled="true" ' +
+        'bounds="[916,360][1040,484]" />' +
+        '<node text="Confirm context compaction" class="android.view.View" ' +
+        'bounds="[80,800][800,900]" />' +
+        '<node text="Cancel" class="android.widget.Button" clickable="true" ' +
+        'enabled="true" bounds="[80,1800][540,1930]" />' +
+        '<node text="Confirm compact" class="android.widget.Button" clickable="true" ' +
+        'enabled="true" bounds="[500,1800][1000,1930]" />' +
+        '</hierarchy>'
+    );
+    const compactBack = compact.find(
+      (node) => node.description === "Back to session utilities"
+    );
+    requireCondition(compactBack !== undefined, "Compact owner fixture back was absent.");
+    expect(
+      selectPhysicalConfirmationFooterAction(
+        compact,
+        "Confirm context compaction",
+        "Confirm compact"
+      )
+    ).not.toBeNull();
+    expect(
+      selectPhysicalConfirmationFooterAction(
+        compact.filter((node) => node.description !== "Back to session utilities"),
+        "Confirm context compaction",
+        "Confirm compact"
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalConfirmationFooterAction(
+        [
+          ...compact,
+          Object.freeze({
+            ...compactBack,
+            bounds: Object.freeze({ bottom: 504, left: 916, right: 1040, top: 380 }),
+            description: "Close session actions",
+          })
+        ],
+        "Confirm context compaction",
+        "Confirm compact"
       )
     ).toBeNull();
   });
@@ -2727,6 +3314,15 @@ describe("physical Android phone-driver protocol", () => {
       sessionStreamRequests: 0,
       sessionStreamResponseStatuses: []
     } satisfies RequestInspection;
+    const aggregateCounters = readPhysicalAggregateCounterSnapshot(
+      requestInspection
+    );
+    expect(Object.isFrozen(aggregateCounters)).toBe(true);
+    expect(Object.keys(aggregateCounters)).toHaveLength(
+      Object.keys(requestInspection).length
+    );
+    expect(aggregateCounters.plan_read_requests).toBe(0);
+    expect(aggregateCounters.remote_status_requests).toBe(4);
     const returnNodes = parseAndroidUiNodes(
       '<hierarchy><node text="" class="android.view.ViewGroup" ' +
         `resource-id="${chromeToolbarResourceId}" bounds="[0,80][1080,240]" />` +
@@ -2780,6 +3376,31 @@ describe("physical Android phone-driver protocol", () => {
       managerAttempts,
       requestInspection
     });
+    expect(Object.isFrozen(awayBefore)).toBe(true);
+    expect(Object.isFrozen(awayBefore.foreignServe)).toBe(true);
+    expect(Object.isFrozen(awayBefore.mission)).toBe(true);
+    requestInspection.remoteStatusRequests += 1;
+    const awaySwitchAfter = readPhysicalProfileAwaySnapshot({
+      foreignServe,
+      managerAttempts,
+      requestInspection
+    });
+    expect(
+      physicalProfileAwaySwitchBoundaryIsExact(awayBefore, awaySwitchAfter)
+    ).toBe(true);
+    requestInspection.remoteBrowserStatusRequests += 1;
+    expect(
+      physicalProfileAwaySwitchBoundaryIsExact(
+        awayBefore,
+        readPhysicalProfileAwaySnapshot({
+          foreignServe,
+          managerAttempts,
+          requestInspection
+        })
+      )
+    ).toBe(false);
+    requestInspection.remoteBrowserStatusRequests -= 1;
+    requestInspection.remoteStatusRequests -= 1;
     expect(await physicalProfileAwayTruthMatches(input, awayBefore, awayNodes)).toBe(true);
     admission = "open";
     expect(await physicalProfileAwayTruthMatches(input, awayBefore, awayNodes)).toBe(false);
@@ -2800,6 +3421,49 @@ describe("physical Android phone-driver protocol", () => {
       managerAttempts,
       requestInspection
     });
+    expect(Object.isFrozen(returnBefore)).toBe(true);
+    expect(Object.isFrozen(returnBefore.foreignServe)).toBe(true);
+    expect(Object.isFrozen(returnBefore.mission)).toBe(true);
+    const returnSwitchAfter = readPhysicalProfileReturnSnapshot({
+      foreignServe,
+      managerAttempts,
+      requestInspection
+    });
+    expect(
+      physicalProfileReturnSwitchBoundaryIsExact(returnBefore, returnSwitchAfter)
+    ).toBe(true);
+    for (const hostileReturnSwitch of [
+      Object.freeze({
+        ...returnSwitchAfter,
+        claimRequests: returnSwitchAfter.claimRequests + 1
+      }),
+      Object.freeze({
+        ...returnSwitchAfter,
+        foreignServe: Object.freeze({ bytes: 129, sha256: "serve-mutated" })
+      }),
+      Object.freeze({
+        ...returnSwitchAfter,
+        managerAttempts: returnSwitchAfter.managerAttempts + 1
+      }),
+      Object.freeze({
+        ...returnSwitchAfter,
+        mission: Object.freeze({
+          ...returnSwitchAfter.mission,
+          accessRequests: returnSwitchAfter.mission.accessRequests + 1
+        })
+      }),
+      Object.freeze({
+        ...returnSwitchAfter,
+        remoteStatusRequests: returnSwitchAfter.remoteStatusRequests + 1
+      })
+    ]) {
+      expect(
+        physicalProfileReturnSwitchBoundaryIsExact(
+          returnBefore,
+          hostileReturnSwitch
+        )
+      ).toBe(false);
+    }
     admission = "open";
     const setMissionGeneration = (
       accessDelta: number,
@@ -4069,6 +4733,27 @@ describe("physical Android phone-driver protocol", () => {
         0
       )
     ).toBe(false);
+    const recoveryNode = Object.freeze({
+      ...confirmationReason,
+      text: "Session activity is reconnecting."
+    });
+    expect(physicalPromptRecoveryHoldingVisible([recoveryNode], 0)).toBe(true);
+    expect(physicalPromptRecoveryHoldingVisible([recoveryNode], 1)).toBe(false);
+    for (const conflictingText of [
+      "Ready to send",
+      "Prompt unavailable",
+      "Session activity is reconnecting."
+    ]) {
+      expect(
+        physicalPromptRecoveryHoldingVisible(
+          [
+            recoveryNode,
+            Object.freeze({ ...confirmationStatus, text: conflictingText })
+          ],
+          0
+        )
+      ).toBe(false);
+    }
     expect(
       physicalPromptCompletionRestored(
         [Object.freeze({ ...confirmationReason, text: "Turn completed" })],
@@ -4138,6 +4823,9 @@ describe("physical Android phone-driver protocol", () => {
         'clickable="true" enabled="true" bounds="[40,300][680,380]" />' +
         '<node text="Lock remote writes?" content-desc="" class="android.widget.TextView" ' +
         'bounds="[40,700][600,760]" />' +
+        '<node text="" content-desc="Close remote write lock confirmation" ' +
+        'class="android.widget.Button" clickable="true" enabled="true" ' +
+        'bounds="[620,680][700,780]" />' +
         '<node text="Cancel" content-desc="" class="android.widget.Button" ' +
         'clickable="true" enabled="true" bounds="[40,1000][330,1080]" />' +
         '<node text="Lock writes" content-desc="" class="android.widget.Button" ' +
@@ -4149,12 +4837,16 @@ describe("physical Android phone-driver protocol", () => {
         "</hierarchy>"
     );
     const title = nodes.find((node) => node.text === "Lock remote writes?");
+    const close = nodes.find(
+      (node) => node.description === "Close remote write lock confirmation"
+    );
     const cancel = nodes.find((node) => node.text === "Cancel");
     const actions = nodes.filter((node) => node.text === "Lock writes");
     const originAction = actions[0];
     const confirmAction = actions[1];
     requireCondition(
       title !== undefined &&
+        close !== undefined &&
         cancel !== undefined &&
         originAction !== undefined &&
         confirmAction !== undefined,
@@ -4180,6 +4872,17 @@ describe("physical Android phone-driver protocol", () => {
       selectPhysicalHostLockConfirmationAction(
         nodes.filter((node) => node !== cancel)
       )
+    ).toBeNull();
+    expect(
+      selectPhysicalHostLockConfirmationAction(
+        nodes.filter((node) => node !== close)
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalHostLockConfirmationAction([
+        ...nodes,
+        Object.freeze({ ...close })
+      ])
     ).toBeNull();
     expect(
       selectPhysicalHostLockConfirmationAction(
@@ -4252,7 +4955,13 @@ describe("physical Android phone-driver protocol", () => {
         '<node text="Archive session" content-desc="" class="android.widget.Button" ' +
         'clickable="true" enabled="true" bounds="[40,300][680,380]" />' +
         '<node text="Archive session?" content-desc="" class="android.widget.TextView" ' +
-        'bounds="[40,700][600,760]" />' +
+        'bounds="[190,700][560,760]" />' +
+        '<node text="" content-desc="Back to session actions" ' +
+        'class="android.widget.Button" clickable="true" enabled="true" ' +
+        'bounds="[40,680][160,780]" />' +
+        '<node text="" content-desc="Close session actions" ' +
+        'class="android.widget.Button" clickable="true" enabled="true" ' +
+        'bounds="[620,680][700,780]" />' +
         '<node text="Cancel" content-desc="" class="android.widget.Button" ' +
         'clickable="true" enabled="true" bounds="[40,1000][330,1080]" />' +
         '<node text="Archive session" content-desc="" class="android.widget.Button" ' +
@@ -4264,12 +4973,20 @@ describe("physical Android phone-driver protocol", () => {
         "</hierarchy>"
     );
     const title = nodes.find((node) => node.text === "Archive session?");
+    const back = nodes.find(
+      (node) => node.description === "Back to session actions"
+    );
+    const close = nodes.find(
+      (node) => node.description === "Close session actions"
+    );
     const cancel = nodes.find((node) => node.text === "Cancel");
     const actions = nodes.filter((node) => node.text === "Archive session");
     const originAction = actions[0];
     const confirmAction = actions[1];
     requireCondition(
       title !== undefined &&
+        back !== undefined &&
+        close !== undefined &&
         cancel !== undefined &&
         originAction !== undefined &&
         confirmAction !== undefined,
@@ -4294,6 +5011,16 @@ describe("physical Android phone-driver protocol", () => {
     expect(
       selectPhysicalArchiveConfirmationAction(
         nodes.filter((node) => node !== cancel)
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalArchiveConfirmationAction(
+        nodes.filter((node) => node !== back)
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalArchiveConfirmationAction(
+        nodes.filter((node) => node !== close)
       )
     ).toBeNull();
     expect(
@@ -4377,7 +5104,14 @@ describe("physical Android phone-driver protocol", () => {
         `resource-id="${chromeCompositorResourceId}" bounds="[0,127][1080,2355]" />` +
         '<node text="private.example.ts.net" content-desc="" ' +
         'class="android.widget.EditText" bounds="[225,127][664,285]" />' +
-        '<node text="/skills" content-desc="" bounds="[191,560][683,630]" />' +
+        '<node text="/skills" content-desc="" class="android.view.View" ' +
+        'bounds="[191,560][683,630]" />' +
+        '<node text="" content-desc="Back to session utilities" ' +
+        'class="android.widget.Button" clickable="true" enabled="true" ' +
+        'bounds="[20,520][160,640]" />' +
+        '<node text="" content-desc="Close Skills utility" ' +
+        'class="android.widget.Button" clickable="true" enabled="true" ' +
+        'bounds="[920,520][1040,640]" />' +
         '<node text="" content-desc="" class="android.widget.EditText" ' +
         'clickable="true" bounds="[171,1480][992,1606]" />' +
         '<node text="Skills capture current" content-desc="" ' +
@@ -5105,6 +5839,52 @@ describe("physical Android phone-driver protocol", () => {
         Object.freeze({ ...before, activeSubscribers: 1 })
       )
     ).toBe(false);
+
+    const recoveryBefore: PhysicalSessionNavigationSnapshot = Object.freeze({
+      ...expected,
+      missingDetailRequests: 0
+    });
+    const recoveryHolding: PhysicalSessionNavigationSnapshot = Object.freeze({
+      ...recoveryBefore,
+      activeSubscribers: 0,
+      streamRequests: recoveryBefore.streamRequests + 1
+    });
+    const recoveryCompleted: PhysicalSessionNavigationSnapshot = Object.freeze({
+      ...recoveryBefore,
+      openedSubscribers: recoveryBefore.openedSubscribers + 1,
+      streamRequests: recoveryBefore.streamRequests + 1
+    });
+    expect(
+      physicalSessionNavigationRecoveryHolding(recoveryHolding, recoveryBefore)
+    ).toBe(true);
+    expect(
+      physicalSessionNavigationRecoveryCompleted(
+        recoveryCompleted,
+        recoveryBefore
+      )
+    ).toBe(true);
+    for (const key of Object.keys(recoveryHolding) as Array<
+      keyof PhysicalSessionNavigationSnapshot
+    >) {
+      expect(
+        physicalSessionNavigationRecoveryHolding(
+          Object.freeze({
+            ...recoveryHolding,
+            [key]: recoveryHolding[key] + 1
+          }),
+          recoveryBefore
+        )
+      ).toBe(false);
+      expect(
+        physicalSessionNavigationRecoveryCompleted(
+          Object.freeze({
+            ...recoveryCompleted,
+            [key]: recoveryCompleted[key] + 1
+          }),
+          recoveryBefore
+        )
+      ).toBe(false);
+    }
 
     const missionBefore: PhysicalMissionControlRequestSnapshot = Object.freeze({
       accessRequests: 3,
@@ -6947,25 +7727,70 @@ interface RequestInspection {
   sessionStreamResponseStatuses: number[];
 }
 
+const physicalAggregateCounterNameByInspectionKey = Object.freeze({
+  accessRequests: "access_requests",
+  accessResponseStatuses: "access_response_statuses",
+  claimRequests: "claim_requests",
+  claimResponseStatuses: "claim_response_statuses",
+  csrfRequests: "csrf_requests",
+  csrfResponseStatuses: "csrf_response_statuses",
+  deletionCookieObserved: "deletion_cookie_observed",
+  fragmentLeaks: "fragment_leaks",
+  hardenedCookieObserved: "hardened_cookie_observed",
+  hostStatusRequests: "host_status_requests",
+  hostStatusResponseStatuses: "host_status_response_statuses",
+  noReferrerApiRequests: "no_referrer_api_requests",
+  planReadRequests: "plan_read_requests",
+  promptNoReferrerRequests: "prompt_no_referrer_requests",
+  promptRequests: "prompt_requests",
+  promptResponseStatuses: "prompt_response_statuses",
+  protectedReadRejections: "protected_read_rejections",
+  protectedReadRequests: "protected_read_requests",
+  protectedReadSuccesses: "protected_read_successes",
+  rejectedRevokedCheckpoints: "rejected_revoked_checkpoints",
+  remoteBrowserMutationRequests: "remote_browser_mutation_requests",
+  remoteBrowserStatusRequests: "remote_browser_status_requests",
+  remoteDisableRequests: "remote_disable_requests",
+  remoteEnableRequests: "remote_enable_requests",
+  remoteStatusRequests: "remote_status_requests",
+  revokeRequests: "revoke_requests",
+  revokedCheckpointRequests: "revoked_checkpoint_requests",
+  sessionDetailRequests: "session_detail_requests",
+  sessionEventRequests: "session_event_requests",
+  sessionListRequests: "session_list_requests",
+  sessionListResponseStatuses: "session_list_response_statuses",
+  sessionMissingDetailRequests: "session_missing_detail_requests",
+  sessionStreamRequests: "session_stream_requests",
+  sessionStreamResponseStatuses: "session_stream_response_statuses",
+  skillsRequests: "skills_requests",
+  skillsResponseStatuses: "skills_response_statuses"
+} satisfies Record<keyof RequestInspection, string>);
+
 function readPhysicalAggregateCounterSnapshot(
   inspection: RequestInspection
 ): Readonly<Record<string, number>> {
-  return Object.freeze({
-    access_requests: inspection.accessRequests,
-    claim_requests: inspection.claimRequests,
-    csrf_requests: inspection.csrfRequests,
-    host_status_requests: inspection.hostStatusRequests,
-    remote_browser_mutation_requests: inspection.remoteBrowserMutationRequests,
-    remote_browser_status_requests: inspection.remoteBrowserStatusRequests,
-    remote_disable_requests: inspection.remoteDisableRequests,
-    remote_enable_requests: inspection.remoteEnableRequests,
-    remote_status_requests: inspection.remoteStatusRequests,
-    revoke_requests: inspection.revokeRequests,
-    session_detail_requests: inspection.sessionDetailRequests,
-    session_event_requests: inspection.sessionEventRequests,
-    session_list_requests: inspection.sessionListRequests,
-    session_stream_requests: inspection.sessionStreamRequests
-  });
+  const entries = Object.entries(physicalAggregateCounterNameByInspectionKey);
+  requireCondition(
+    new Set(entries.map(([, counterName]) => counterName)).size === entries.length,
+    "Physical aggregate counter names were not unique."
+  );
+  return Object.freeze(
+    Object.fromEntries(
+      entries.map(([inspectionKey, counterName]) => {
+        const value = inspection[inspectionKey as keyof RequestInspection];
+        const count = Array.isArray(value)
+          ? value.length
+          : typeof value === "boolean"
+            ? Number(value)
+            : value;
+        requireCondition(
+          Number.isSafeInteger(count) && count >= 0,
+          `Physical aggregate counter ${counterName} was invalid.`
+        );
+        return [counterName, count];
+      })
+    )
+  );
 }
 
 interface PhysicalSessionNavigationSnapshot {
@@ -7075,6 +7900,11 @@ type PhysicalAggregateActionTask =
   | "FE-V1-098"
   | "FE-V1-099";
 
+type PhysicalAggregateActionDriver =
+  | "android_node"
+  | "observation"
+  | "talkback";
+
 type PhysicalAggregateRouteOwner =
   | "Archive result"
   | "Event details"
@@ -7176,6 +8006,10 @@ const physicalAggregateReachableActionIds = Object.freeze([
   "runtime-incompatible-close",
   "runtime-supported-open",
   "runtime-supported-close",
+  "talkback-open-session",
+  "talkback-model-open",
+  "talkback-model-close",
+  "talkback-detail-back",
   "recovery-ready-open",
   "recovery-ready-close",
   "recovery-return-open",
@@ -7209,38 +8043,53 @@ interface PhysicalAggregateOwnerContext {
   readonly routeOwner: PhysicalAggregateRouteOwner;
 }
 
-type PhysicalAggregateExecutableOwner = (
+type PhysicalAggregateSelectorWaiter = (
   context: PhysicalAggregateOwnerContext
-) => unknown;
-type PhysicalAggregateDeclaredOwner = PhysicalAggregateExecutableOwner;
+) => AndroidUiNode;
+type PhysicalAggregateCounterOracle = (
+  context: PhysicalAggregateOwnerContext
+) => Readonly<Record<string, number>>;
+type PhysicalAggregateDiagnosticOwner = (
+  context: PhysicalAggregateOwnerContext
+) => string;
 
 interface PhysicalAggregateTransitionContext
   extends PhysicalAggregateOwnerContext {
   readonly completed: () => boolean | Promise<boolean>;
-  readonly counterBefore: unknown;
-  readonly diagnostic: unknown;
-  readonly selectorResult: unknown;
+  readonly counterBefore: Readonly<Record<string, number>>;
+  readonly diagnostic: string;
+  readonly selectorResult: AndroidUiNode;
 }
 
 interface PhysicalAggregateActionDefinition {
   readonly actionId: PhysicalAggregateActionId;
   readonly canonicalInteractionIds: readonly MobileInteractionId[];
-  readonly counterOwner: PhysicalAggregateExecutableOwner;
-  readonly counterSourceOwner: PhysicalAggregateDeclaredOwner;
-  readonly diagnosticOwner: PhysicalAggregateExecutableOwner;
-  readonly diagnosticSourceOwner: PhysicalAggregateDeclaredOwner;
+  readonly counterOracle: PhysicalAggregateCounterOracle;
+  readonly diagnosticOwner: PhysicalAggregateDiagnosticOwner;
+  readonly driver: PhysicalAggregateActionDriver;
   readonly maximumTaps: 0 | 1;
   readonly routeOwner: PhysicalAggregateRouteOwner;
-  readonly selectorOwner: PhysicalAggregateDeclaredOwner;
-  readonly selectorWaiter: PhysicalAggregateExecutableOwner;
+  readonly selectorWaiter: PhysicalAggregateSelectorWaiter;
   readonly task: PhysicalAggregateActionTask;
-  readonly transitionOracle: (
+  readonly transitionExecutor: (
     context: PhysicalAggregateTransitionContext
   ) => boolean | Promise<boolean>;
 }
 
 interface PhysicalAggregateActionRegistry {
-  readonly consume: (actionId: PhysicalAggregateActionId) => void;
+  readonly activate: (
+    actionId: PhysicalAggregateActionId,
+    node: AndroidUiNode,
+    activateOnce: () => void,
+    completed: () => boolean | Promise<boolean>,
+    message: string,
+    timeoutMs?: number
+  ) => Promise<void>;
+  readonly consume: (
+    actionId: PhysicalAggregateActionId,
+    completed: () => boolean,
+    message: string
+  ) => void;
   readonly assertConsumed: (
     expectedActionIds?: readonly PhysicalAggregateActionId[]
   ) => void;
@@ -7256,7 +8105,6 @@ interface PhysicalAggregateActionRegistry {
 interface PhysicalAggregateActionRegistryOptions {
   readonly counterSnapshot?: () => Readonly<Record<string, number>>;
   readonly expectedActionIds?: readonly PhysicalAggregateActionId[];
-  readonly ownerInvocationLog?: string[];
   readonly readNodes?: () => Promise<readonly AndroidUiNode[]>;
   readonly tapNodeOnceAndWait?: (
     node: AndroidUiNode,
@@ -7318,13 +8166,16 @@ const physicalAggregateCanonicalActionMap: Readonly<
     "archive-result-back",
     "clipboard-clear",
     "external-selected-clipboard",
-    "external-selected-not-found"
+    "external-selected-not-found",
+    "talkback-model-close",
+    "talkback-detail-back"
   ],
   open_session: [
     "dashboard-open-session",
     "unlocked-session-open",
     "archive-session-open",
-    "prompt-open-session"
+    "prompt-open-session",
+    "talkback-open-session"
   ],
   read_approvals: ["approval-open"],
   read_compact: ["compact-open", "compact-begin", "compact-check"],
@@ -7366,7 +8217,9 @@ const physicalAggregateCanonicalActionMap: Readonly<
     "model-open",
     "model-close",
     "model-reopen",
-    "model-close-reopen"
+    "model-close-reopen",
+    "talkback-model-open",
+    "talkback-model-close"
   ],
   read_plan: [
     "plan-open",
@@ -7375,7 +8228,11 @@ const physicalAggregateCanonicalActionMap: Readonly<
     "plan-close-reopen"
   ],
   read_remote_status: ["remote-check-profile"],
-  read_session_detail: ["dashboard-open-session", "unlocked-session-open"],
+  read_session_detail: [
+    "dashboard-open-session",
+    "unlocked-session-open",
+    "talkback-open-session"
+  ],
   read_sessions: [
     "dashboard-bootstrap",
     "dashboard-expand-quiet",
@@ -7491,6 +8348,10 @@ const physicalAggregateTaskByAction = Object.freeze({
   "runtime-incompatible-close": "FE-V1-095",
   "runtime-supported-open": "FE-V1-095",
   "runtime-supported-close": "FE-V1-095",
+  "talkback-open-session": "FE-V1-093",
+  "talkback-model-open": "FE-V1-095",
+  "talkback-model-close": "FE-V1-095",
+  "talkback-detail-back": "FE-V1-093",
   "recovery-ready-open": "FE-V1-094",
   "recovery-ready-close": "FE-V1-094",
   "recovery-return-open": "FE-V1-094",
@@ -7594,6 +8455,10 @@ const physicalAggregateRouteByAction = Object.freeze({
   "runtime-incompatible-close": "Host & access",
   "runtime-supported-open": "Host & access",
   "runtime-supported-close": "Host & access",
+  "talkback-open-session": "Mission Control",
+  "talkback-model-open": "Model sheet",
+  "talkback-model-close": "Model sheet",
+  "talkback-detail-back": "Session Detail",
   "recovery-ready-open": "Host & access",
   "recovery-ready-close": "Host & access",
   "recovery-return-open": "Host & access",
@@ -7628,12 +8493,6 @@ function physicalAggregateRouteForAction(
   return physicalAggregateRouteByAction[actionId];
 }
 
-
-function physicalAggregateSelectorOwnerForAction(
-  actionId: PhysicalAggregateActionId
-): PhysicalAggregateExecutableOwner {
-  return physicalAggregateSelectorOwnerByAction[actionId];
-}
 
 function physicalAggregateCanonicalIdsForAction(
   actionId: PhysicalAggregateActionId
@@ -7763,6 +8622,10 @@ const physicalAggregateMaximumTapsByAction = Object.freeze({
   "runtime-incompatible-close": 1,
   "runtime-supported-open": 1,
   "runtime-supported-close": 1,
+  "talkback-open-session": 1,
+  "talkback-model-open": 1,
+  "talkback-model-close": 1,
+  "talkback-detail-back": 1,
   "recovery-ready-open": 1,
   "recovery-ready-close": 1,
   "recovery-return-open": 1,
@@ -7791,6 +8654,24 @@ function physicalAggregateMaximumTapsForAction(
   return physicalAggregateMaximumTapsByAction[actionId];
 }
 
+const physicalAggregateTalkBackActionIds = Object.freeze([
+  "talkback-open-session",
+  "talkback-model-open",
+  "talkback-model-close",
+  "talkback-detail-back"
+] satisfies readonly PhysicalAggregateActionId[]);
+
+function physicalAggregateDriverForAction(
+  actionId: PhysicalAggregateActionId
+): PhysicalAggregateActionDriver {
+  if (physicalAggregateTalkBackActionIds.some((candidate) => candidate === actionId)) {
+    return "talkback";
+  }
+  return physicalAggregateMaximumTapsForAction(actionId) === 0
+    ? "observation"
+    : "android_node";
+}
+
 
 
 function physicalAggregateNodeMatches(
@@ -7806,7 +8687,11 @@ function physicalAggregateNodeMatches(
     left.resourceId === right.resourceId &&
     left.text === right.text &&
     left.description === right.description &&
-    left.clickable === right.clickable
+    left.clickable === right.clickable &&
+    left.checked === right.checked &&
+    left.enabled === right.enabled &&
+    left.focused === right.focused &&
+    left.selected === right.selected
   );
 }
 
@@ -7833,9 +8718,12 @@ function physicalAggregateSelectorOwner(
     matches.length === 1,
     `Physical aggregate action ${context.actionId} lost its unique selected node.`
   );
+  const driver = physicalAggregateDriverForAction(context.actionId);
   requireCondition(
-    context.node.clickable && context.node.enabled !== false,
-    `Physical aggregate action ${context.actionId} selected a non-action node.`
+    driver === "observation"
+      ? physicalAggregateObservationNodeMatches(context.node, context.actionId)
+      : context.node.clickable && context.node.enabled !== false,
+    `Physical aggregate action ${context.actionId} selected an invalid owner node.`
   );
   const selected = matches[0];
   requireCondition(
@@ -7843,6 +8731,37 @@ function physicalAggregateSelectorOwner(
     `Physical aggregate action ${context.actionId} selected no node.`
   );
   return selected;
+}
+
+function physicalAggregateObservationOwnerNode(
+  actionId: PhysicalAggregateActionId
+): AndroidUiNode {
+  return Object.freeze({
+    bounds: Object.freeze({ bottom: 1, left: 0, right: 1, top: 0 }),
+    className: "hostdeck.physical.Observation",
+    clickable: false,
+    description: actionId,
+    resourceId: "",
+    text: ""
+  });
+}
+
+function physicalAggregateObservationNodeMatches(
+  node: AndroidUiNode,
+  actionId: PhysicalAggregateActionId
+): boolean {
+  return (
+    node.className === "hostdeck.physical.Observation" &&
+    !node.clickable &&
+    node.enabled !== false &&
+    node.description === actionId &&
+    node.resourceId === "" &&
+    node.text === "" &&
+    node.bounds.left === 0 &&
+    node.bounds.top === 0 &&
+    node.bounds.right === 1 &&
+    node.bounds.bottom === 1
+  );
 }
 
 function physicalAggregateCounterOwner(
@@ -7868,182 +8787,44 @@ function physicalAggregateDiagnosticOwner(
   return diagnostic;
 }
 
-function createPhysicalAggregateOwnerMap(
-  factory: (actionId: PhysicalAggregateActionId) => PhysicalAggregateExecutableOwner
-): Readonly<Record<PhysicalAggregateActionId, PhysicalAggregateExecutableOwner>> {
-  return Object.freeze(
-    Object.fromEntries(
-      physicalAggregateReachableActionIds.map((actionId) => [
-        actionId,
-        factory(actionId)
-      ])
-    )
-  ) as Readonly<
-    Record<PhysicalAggregateActionId, PhysicalAggregateExecutableOwner>
-  >;
-}
-
-const physicalAggregateSelectorOwnerByAction = createPhysicalAggregateOwnerMap(
-  (actionId) => (context) => {
-    requireCondition(
-      context.actionId === actionId,
-      `Physical aggregate selector owner was used for ${context.actionId} instead of ${actionId}.`
-    );
-    return physicalAggregateSelectorOwner(context);
-  }
-);
-const physicalAggregateCounterOwnerByAction = createPhysicalAggregateOwnerMap(
-  (actionId) => (context) => {
-    requireCondition(
-      context.actionId === actionId,
-      `Physical aggregate counter owner was used for ${context.actionId} instead of ${actionId}.`
-    );
-    return physicalAggregateCounterOwner(context);
-  }
-);
-const physicalAggregateDiagnosticOwnerByAction =
-  createPhysicalAggregateOwnerMap((actionId) => (context) => {
-    requireCondition(
-      context.actionId === actionId,
-      `Physical aggregate diagnostic owner was used for ${context.actionId} instead of ${actionId}.`
-    );
-    return physicalAggregateDiagnosticOwner(context);
-  });
-
-type PhysicalAggregateSourceOwnerRole =
-  | "counter"
-  | "diagnostic"
-  | "selector";
-
-interface PhysicalAggregateSourceContract {
-  readonly actionId: PhysicalAggregateActionId;
-  readonly canonicalInteractionIds: readonly MobileInteractionId[];
-  readonly routeOwner: PhysicalAggregateRouteOwner;
-  readonly task: PhysicalAggregateActionTask;
-}
-
-const physicalAggregateSourceContractByAction = Object.freeze(
-  Object.fromEntries(
-    physicalAggregateReachableActionIds.map((actionId) => [
-      actionId,
-      Object.freeze({
-        actionId,
-        canonicalInteractionIds: Object.freeze(
-          physicalAggregateCanonicalIdsForAction(actionId)
-        ),
-        routeOwner: physicalAggregateRouteForAction(actionId),
-        task: physicalAggregateTaskForAction(actionId)
-      })
-    ])
-  )
-) as Readonly<Record<PhysicalAggregateActionId, PhysicalAggregateSourceContract>>;
-
-function physicalAggregateDeclaredSourceOwnerForAction(
-  actionId: PhysicalAggregateActionId,
-  role: PhysicalAggregateSourceOwnerRole
-): PhysicalAggregateDeclaredOwner {
-  return (context) => {
-    const contract = physicalAggregateSourceContractByAction[actionId];
-    requireCondition(
-      contract !== undefined &&
-        context.actionId === contract.actionId &&
-        context.routeOwner === contract.routeOwner &&
-        contract.task === physicalAggregateTaskForAction(actionId) &&
-        Object.isFrozen(contract.canonicalInteractionIds) &&
-        contract.canonicalInteractionIds.length ===
-          physicalAggregateCanonicalIdsForAction(actionId).length &&
-        contract.canonicalInteractionIds.every((interactionId, index) =>
-          physicalAggregateCanonicalIdsForAction(actionId)[index] === interactionId
-        ),
-      `Physical ${role} source owner contract was weakened for ${actionId}.`
-    );
-    if (role === "selector") return physicalAggregateSelectorOwner(context);
-    if (role === "counter") return physicalAggregateCounterOwner(context);
-    return physicalAggregateDiagnosticOwner(context);
-  };
-}
-
-const physicalAggregateDeclaredSelectorOwnerByAction = createPhysicalAggregateOwnerMap(
-  (actionId) => physicalAggregateDeclaredSourceOwnerForAction(actionId, "selector")
-);
-const physicalAggregateDeclaredCounterOwnerByAction = createPhysicalAggregateOwnerMap(
-  (actionId) => physicalAggregateDeclaredSourceOwnerForAction(actionId, "counter")
-);
-const physicalAggregateDeclaredDiagnosticOwnerByAction =
-  createPhysicalAggregateOwnerMap((actionId) =>
-    physicalAggregateDeclaredSourceOwnerForAction(actionId, "diagnostic")
+function physicalAggregateTransitionExecutor(
+  context: PhysicalAggregateTransitionContext
+): boolean | Promise<boolean> {
+  requireCondition(
+    physicalAggregateNodeMatches(context.selectorResult, context.node),
+    `Physical aggregate action ${context.actionId} did not retain its selected node.`
   );
-
-function physicalAggregateCounterOwnerForAction(
-  actionId: PhysicalAggregateActionId
-): PhysicalAggregateExecutableOwner {
-  return physicalAggregateCounterOwnerByAction[actionId];
-}
-
-function physicalAggregateDiagnosticOwnerForAction(
-  actionId: PhysicalAggregateActionId
-): PhysicalAggregateExecutableOwner {
-  return physicalAggregateDiagnosticOwnerByAction[actionId];
-}
-
-function physicalAggregateTransitionOwner(
-  actionId: PhysicalAggregateActionId
-): (context: PhysicalAggregateTransitionContext) => boolean | Promise<boolean> {
-  return (context) => {
-    requireCondition(
-      context.actionId === actionId,
-      `Physical aggregate transition owner was used for ${context.actionId} instead of ${actionId}.`
-    );
-    requireCondition(
-      context.selectorResult !== null &&
-        typeof context.selectorResult === "object" &&
-        physicalAggregateNodeMatches(
-          context.selectorResult as AndroidUiNode,
-          context.node
-        ),
-      `Physical aggregate action ${actionId} did not execute its selector owner.`
-    );
-    requireCondition(
-      context.counterBefore === context.counterSnapshot,
-      `Physical aggregate action ${actionId} rebased its counter snapshot.`
-    );
-    requireCondition(
+  requireCondition(
+    context.counterBefore === context.counterSnapshot &&
       physicalAggregateCounterSnapshotIsBounded(context.counterSnapshot),
-      `Physical aggregate action ${actionId} did not retain a valid counter snapshot.`
-    );
-    requireCondition(
-      typeof context.diagnostic === "string" &&
-        Buffer.byteLength(context.diagnostic, "utf8") >= 1 &&
-        Buffer.byteLength(context.diagnostic, "utf8") <= 4_096,
-      `Physical aggregate action ${actionId} did not retain a bounded diagnostic.`
-    );
-    const completionSource = Function.prototype.toString.call(context.completed);
-    requireCondition(
-      !/^\s*(?:async\s*)?(?:\(\s*\)|[A-Za-z_$][\w$]*)\s*=>\s*(?:true|Boolean\(\s*true\s*\))\s*;?\s*$/u.test(
-        completionSource
-      ) &&
-        !/^\s*function\s*\(\s*\)\s*\{\s*return\s+true\s*;?\s*\}\s*$/u.test(
-          completionSource
-        ),
-      `Physical aggregate action ${actionId} used an unguarded completion callback.`
-    );
-    return context.completed();
-  };
+    `Physical aggregate action ${context.actionId} rebased or invalidated its counter snapshot.`
+  );
+  requireCondition(
+    typeof context.diagnostic === "string" &&
+      Buffer.byteLength(context.diagnostic, "utf8") >= 1 &&
+      Buffer.byteLength(context.diagnostic, "utf8") <= 4_096,
+    `Physical aggregate action ${context.actionId} did not retain a bounded diagnostic.`
+  );
+  requireCondition(
+    physicalAggregateCompletionIsGuarded(context.completed),
+    `Physical aggregate action ${context.actionId} used an unguarded completion callback.`
+  );
+  return context.completed();
 }
 
-const physicalAggregateTransitionOracleByAction = Object.freeze(
-  Object.fromEntries(
-    physicalAggregateReachableActionIds.map((actionId) => [
-      actionId,
-      physicalAggregateTransitionOwner(actionId)
-    ])
-  )
-) as Readonly<
-  Record<
-    PhysicalAggregateActionId,
-    (context: PhysicalAggregateTransitionContext) => boolean | Promise<boolean>
-  >
->;
+function physicalAggregateCompletionIsGuarded(
+  completed: () => boolean | Promise<boolean>
+): boolean {
+  const source = Function.prototype.toString.call(completed);
+  return (
+    !/^\s*(?:async\s*)?(?:\(\s*\)|[A-Za-z_$][\w$]*)\s*=>\s*(?:true|Boolean\(\s*(?:true|1)\s*\)|1\s*===\s*1)\s*;?\s*$/u.test(
+      source
+    ) &&
+    !/^\s*function\s*\(\s*\)\s*\{\s*return\s+(?:true|Boolean\(\s*(?:true|1)\s*\)|1\s*===\s*1)\s*;?\s*\}\s*$/u.test(
+      source
+    )
+  );
+}
 
 const physicalAggregateActionDefinitions: readonly PhysicalAggregateActionDefinition[] =
   Object.freeze(
@@ -8053,17 +8834,14 @@ const physicalAggregateActionDefinitions: readonly PhysicalAggregateActionDefini
         canonicalInteractionIds: Object.freeze(
           physicalAggregateCanonicalIdsForAction(actionId)
         ),
-        counterOwner: physicalAggregateCounterOwnerForAction(actionId),
-        counterSourceOwner: physicalAggregateDeclaredCounterOwnerByAction[actionId],
-        diagnosticOwner: physicalAggregateDiagnosticOwnerForAction(actionId),
-        diagnosticSourceOwner:
-          physicalAggregateDeclaredDiagnosticOwnerByAction[actionId],
+        counterOracle: physicalAggregateCounterOwner,
+        diagnosticOwner: physicalAggregateDiagnosticOwner,
+        driver: physicalAggregateDriverForAction(actionId),
         maximumTaps: physicalAggregateMaximumTapsForAction(actionId),
         routeOwner: physicalAggregateRouteForAction(actionId),
-        selectorOwner: physicalAggregateDeclaredSelectorOwnerByAction[actionId],
-        selectorWaiter: physicalAggregateSelectorOwnerForAction(actionId),
+        selectorWaiter: physicalAggregateSelectorOwner,
         task: physicalAggregateTaskForAction(actionId),
-        transitionOracle: physicalAggregateTransitionOracleByAction[actionId]
+        transitionExecutor: physicalAggregateTransitionExecutor
       })
     )
   );
@@ -8092,99 +8870,32 @@ function physicalAggregateActionRegistryIsExact(
           interactionId !==
           physicalAggregateCanonicalIdsForAction(entry.actionId)[canonicalIndex]
       ) ||
-      entry.counterOwner !== physicalAggregateCounterOwnerForAction(entry.actionId) ||
-      entry.counterSourceOwner !==
-        physicalAggregateDeclaredCounterOwnerByAction[entry.actionId] ||
-      entry.diagnosticOwner !== physicalAggregateDiagnosticOwnerForAction(entry.actionId) ||
-      entry.diagnosticSourceOwner !==
-        physicalAggregateDeclaredDiagnosticOwnerByAction[entry.actionId] ||
-      entry.selectorWaiter !== physicalAggregateSelectorOwnerForAction(entry.actionId) ||
-      entry.transitionOracle !==
-        physicalAggregateTransitionOracleByAction[entry.actionId] ||
-      entry.selectorOwner !==
-        physicalAggregateDeclaredSelectorOwnerByAction[entry.actionId] ||
+      entry.counterOracle !== physicalAggregateCounterOwner ||
+      entry.diagnosticOwner !== physicalAggregateDiagnosticOwner ||
+      entry.driver !== physicalAggregateDriverForAction(entry.actionId) ||
+      entry.selectorWaiter !== physicalAggregateSelectorOwner ||
+      entry.transitionExecutor !== physicalAggregateTransitionExecutor ||
       entry.maximumTaps !== physicalAggregateMaximumTapsForAction(entry.actionId) ||
       entry.routeOwner !== physicalAggregateRouteForAction(entry.actionId) ||
       entry.task !== physicalAggregateTaskForAction(entry.actionId) ||
-      typeof entry.counterOwner !== "function" ||
-      typeof entry.counterSourceOwner !== "function" ||
+      typeof entry.counterOracle !== "function" ||
       typeof entry.diagnosticOwner !== "function" ||
-      typeof entry.diagnosticSourceOwner !== "function" ||
-      typeof entry.selectorOwner !== "function" ||
       typeof entry.selectorWaiter !== "function" ||
-      typeof entry.transitionOracle !== "function" ||
-      typeof physicalAggregateDeclaredSelectorOwnerByAction[entry.actionId] !==
-        "function" ||
-      typeof physicalAggregateDeclaredCounterOwnerByAction[entry.actionId] !==
-        "function" ||
-      typeof physicalAggregateDeclaredDiagnosticOwnerByAction[entry.actionId] !==
-        "function"
+      typeof entry.transitionExecutor !== "function"
     ) {
       return false;
     }
     seen.add(entry.actionId);
   }
-  const selectorOwners = physicalAggregateReachableActionIds.map(
-    (actionId) => physicalAggregateSelectorOwnerForAction(actionId)
-  );
-  const counterOwners = physicalAggregateReachableActionIds.map(
-    (actionId) => physicalAggregateCounterOwnerForAction(actionId)
-  );
-  const diagnosticOwners = physicalAggregateReachableActionIds.map(
-    (actionId) => physicalAggregateDiagnosticOwnerForAction(actionId)
-  );
-  const transitionOwners = physicalAggregateReachableActionIds.map(
-    (actionId) => physicalAggregateTransitionOracleByAction[actionId]
-  );
-  const sourceContractsAreExact = physicalAggregateReachableActionIds.every(
-    (actionId) => {
-      const contract = physicalAggregateSourceContractByAction[actionId];
-      return (
-        contract !== undefined &&
-        Object.isFrozen(contract) &&
-        contract.actionId === actionId &&
-        contract.routeOwner === physicalAggregateRouteForAction(actionId) &&
-        contract.task === physicalAggregateTaskForAction(actionId) &&
-        Object.isFrozen(contract.canonicalInteractionIds) &&
-        contract.canonicalInteractionIds.length ===
-          physicalAggregateCanonicalIdsForAction(actionId).length &&
-        contract.canonicalInteractionIds.every(
-          (interactionId, index) =>
-            interactionId === physicalAggregateCanonicalIdsForAction(actionId)[index]
-        )
-      );
-    }
-  );
   return (
     seen.size === physicalAggregateReachableActionIds.length &&
-    Object.isFrozen(physicalAggregateSelectorOwnerByAction) &&
-    Object.isFrozen(physicalAggregateCounterOwnerByAction) &&
-    Object.isFrozen(physicalAggregateDiagnosticOwnerByAction) &&
-    Object.isFrozen(physicalAggregateDeclaredSelectorOwnerByAction) &&
-    Object.isFrozen(physicalAggregateDeclaredCounterOwnerByAction) &&
-    Object.isFrozen(physicalAggregateDeclaredDiagnosticOwnerByAction) &&
-    Object.isFrozen(physicalAggregateSourceContractByAction) &&
-    sourceContractsAreExact &&
-    Object.isFrozen(physicalAggregateTransitionOracleByAction) &&
-    new Set(selectorOwners).size === physicalAggregateReachableActionIds.length &&
-    new Set(counterOwners).size === physicalAggregateReachableActionIds.length &&
-    new Set(diagnosticOwners).size === physicalAggregateReachableActionIds.length &&
-    new Set(transitionOwners).size === physicalAggregateReachableActionIds.length &&
-    new Set(
-      physicalAggregateReachableActionIds.map(
-        (actionId) => physicalAggregateDeclaredSelectorOwnerByAction[actionId]
-      )
-    ).size === physicalAggregateReachableActionIds.length &&
-    new Set(
-      physicalAggregateReachableActionIds.map(
-        (actionId) => physicalAggregateDeclaredCounterOwnerByAction[actionId]
-      )
-    ).size === physicalAggregateReachableActionIds.length &&
-    new Set(
-      physicalAggregateReachableActionIds.map(
-        (actionId) => physicalAggregateDeclaredDiagnosticOwnerByAction[actionId]
-      )
-    ).size === physicalAggregateReachableActionIds.length
+    definitions.every(
+      (entry) =>
+        entry.selectorWaiter === physicalAggregateSelectorOwner &&
+        entry.counterOracle === physicalAggregateCounterOwner &&
+        entry.diagnosticOwner === physicalAggregateDiagnosticOwner &&
+        entry.transitionExecutor === physicalAggregateTransitionExecutor
+    )
   );
 }
 
@@ -8324,6 +9035,10 @@ function physicalAggregateDashboardExpectedActionIdsFor(
     "runtime-supported-open",
     "remote-check-runtime-supported",
     "runtime-supported-close",
+    "talkback-open-session",
+    "talkback-model-open",
+    "talkback-model-close",
+    "talkback-detail-back",
     ...(options.archiveQuietExpanded
       ? (["archive-expand-quiet"] as const)
       : ([] as const)),
@@ -8351,93 +9066,11 @@ function createPhysicalAggregateActionRegistry(
   const consumed = new Map<PhysicalAggregateActionId, number>();
   const tapped = new Map<PhysicalAggregateActionId, number>();
   const consumedOrder: PhysicalAggregateActionId[] = [];
-  const recordOwnerInvocation = (
-    role:
-      | "counter-source"
-      | "counter"
-      | "diagnostic-source"
-      | "diagnostic"
-      | "selector-source"
-      | "selector-waiter",
-    actionId: PhysicalAggregateActionId
-  ): void => {
-    options.ownerInvocationLog?.push(`${role}:${actionId}`);
-  };
   const readCounterSnapshot = (): Readonly<Record<string, number>> =>
     Object.freeze({
       registry_observation: 0,
       ...(options.counterSnapshot?.() ?? {})
     });
-  const observationNode = Object.freeze({
-    bounds: Object.freeze({ bottom: 128, left: 0, right: 128, top: 0 }),
-    className: "android.widget.Button",
-    clickable: true,
-    description: "",
-    resourceId: "",
-    text: "Physical aggregate observation"
-  }) as AndroidUiNode;
-  const executeObservationOwners = (actionId: PhysicalAggregateActionId): void => {
-    const definition = definitions.get(actionId);
-    requireCondition(definition !== undefined, "Unregistered physical aggregate action.");
-    const context: PhysicalAggregateOwnerContext = Object.freeze({
-      actionId,
-      counterSnapshot: readCounterSnapshot(),
-      currentNodes: Object.freeze([observationNode]),
-      node: observationNode,
-      routeOwner: definition.routeOwner
-    });
-    recordOwnerInvocation("selector-source", actionId);
-    const sourceSelectorResult = definition.selectorOwner(context);
-    recordOwnerInvocation("selector-waiter", actionId);
-    const selectorResult = definition.selectorWaiter(context);
-    requireCondition(
-      sourceSelectorResult !== null &&
-        typeof sourceSelectorResult === "object" &&
-        physicalAggregateNodeMatches(
-          sourceSelectorResult as AndroidUiNode,
-          observationNode
-        ) &&
-        selectorResult !== null &&
-        typeof selectorResult === "object" &&
-        physicalAggregateNodeMatches(
-          selectorResult as AndroidUiNode,
-          observationNode
-        ),
-      `Physical aggregate action ${actionId} observation selector did not retain its node.`
-    );
-    recordOwnerInvocation("counter-source", actionId);
-    const sourceCounterBefore = definition.counterSourceOwner(context);
-    recordOwnerInvocation("counter", actionId);
-    const counterBefore = definition.counterOwner(context);
-    requireCondition(
-      sourceCounterBefore === counterBefore,
-      `Physical aggregate action ${actionId} counter source was bypassed.`
-    );
-    recordOwnerInvocation("diagnostic-source", actionId);
-    const sourceDiagnostic = definition.diagnosticSourceOwner(context);
-    recordOwnerInvocation("diagnostic", actionId);
-    const diagnostic = definition.diagnosticOwner(context);
-    requireCondition(
-      sourceDiagnostic === diagnostic,
-      `Physical aggregate action ${actionId} diagnostic source was bypassed.`
-    );
-    const observationCompleted = () =>
-      context.actionId === actionId &&
-      selectorResult === observationNode &&
-      context.counterSnapshot.registry_observation === 0 &&
-      physicalAggregateNodeMatches(selectorResult as AndroidUiNode, observationNode);
-    const transitionResult = definition.transitionOracle({
-      ...context,
-      completed: observationCompleted,
-      counterBefore,
-      diagnostic,
-      selectorResult
-    });
-    requireCondition(
-      transitionResult === true,
-      `Physical aggregate action ${actionId} observation transition did not settle.`
-    );
-  };
   const recordConsumedAction = (actionId: PhysicalAggregateActionId): void => {
     const count = (consumed.get(actionId) ?? 0) + 1;
     requireCondition(
@@ -8447,17 +9080,96 @@ function createPhysicalAggregateActionRegistry(
     consumed.set(actionId, count);
     consumedOrder.push(actionId);
   };
-  const consume = (actionId: PhysicalAggregateActionId): void => {
+  const consume = (
+    actionId: PhysicalAggregateActionId,
+    completed: () => boolean,
+    message: string
+  ): void => {
     const entry = definitions.get(actionId);
     requireCondition(entry !== undefined, "Unregistered physical aggregate action.");
     requireCondition(
-      entry.maximumTaps === 0,
+      entry.driver === "observation" && entry.maximumTaps === 0,
       `Physical aggregate action ${actionId} requires a physical tap.`
     );
-    executeObservationOwners(actionId);
+    requireCondition(
+      (consumed.get(actionId) ?? 0) === 0,
+      `Physical aggregate action ${actionId} exceeded its one-tap boundary.`
+    );
+    const node = physicalAggregateObservationOwnerNode(actionId);
+    const context: PhysicalAggregateOwnerContext = Object.freeze({
+      actionId,
+      counterSnapshot: readCounterSnapshot(),
+      currentNodes: Object.freeze([node]),
+      node,
+      routeOwner: entry.routeOwner
+    });
+    const selectorResult = entry.selectorWaiter(context);
+    const counterBefore = entry.counterOracle(context);
+    const diagnostic = entry.diagnosticOwner(context);
+    const result = entry.transitionExecutor(
+      Object.freeze({
+        ...context,
+        completed,
+        counterBefore,
+        diagnostic,
+        selectorResult
+      })
+    );
+    requireCondition(
+      typeof result === "boolean" && result,
+      `${message} (${diagnostic}).`
+    );
     recordConsumedAction(actionId);
   };
   return Object.freeze({
+    activate: async (
+      actionId: PhysicalAggregateActionId,
+      node: AndroidUiNode,
+      activateOnce: () => void,
+      completed: () => boolean | Promise<boolean>,
+      message: string,
+      timeoutMs = 30_000
+    ) => {
+      const definition = definitions.get(actionId);
+      requireCondition(
+        definition !== undefined &&
+          definition.driver === "talkback" &&
+          definition.maximumTaps === 1,
+        `Physical aggregate action ${actionId} was not a registered TalkBack activation.`
+      );
+      requireCondition(
+        (tapped.get(actionId) ?? 0) === 0,
+        `Physical aggregate action ${actionId} exceeded its one-tap boundary.`
+      );
+      tapped.set(actionId, 1);
+      const context: PhysicalAggregateOwnerContext = Object.freeze({
+        actionId,
+        counterSnapshot: readCounterSnapshot(),
+        currentNodes: Object.freeze([node]),
+        node,
+        routeOwner: definition.routeOwner
+      });
+      const selectorResult = definition.selectorWaiter(context);
+      requireCondition(
+        physicalAggregateNodeMatches(selectorResult, node),
+        `Physical aggregate action ${actionId} selector waiter did not retain the selected node.`
+      );
+      const counterBefore = definition.counterOracle(context);
+      const diagnostic = definition.diagnosticOwner(context);
+      const completeTransition = () =>
+        definition.transitionExecutor(
+          Object.freeze({
+            ...context,
+            completed,
+            counterBefore,
+            diagnostic,
+            selectorResult
+          })
+        );
+      activateOnce();
+      await waitFor(completeTransition, timeoutMs, `${message} (${diagnostic}).`);
+      recordConsumedAction(actionId);
+    },
     consume,
     assertConsumed: (
       expectedActionIds?: readonly PhysicalAggregateActionId[]
@@ -8488,6 +9200,7 @@ function createPhysicalAggregateActionRegistry(
         [...tapped.entries()].every(([actionId, count]) => {
           const definition = definitions.get(actionId);
           return definition !== undefined &&
+            definition.driver !== "observation" &&
             definition.maximumTaps === 1 &&
             count === definition.maximumTaps &&
             expectedSet.has(actionId);
@@ -8504,7 +9217,9 @@ function createPhysicalAggregateActionRegistry(
     ) => {
       const definition = definitions.get(actionId);
       requireCondition(
-        definition !== undefined && definition.maximumTaps === 1,
+        definition !== undefined &&
+          definition.driver === "android_node" &&
+          definition.maximumTaps === 1,
         `Physical aggregate action ${actionId} was not a registered tap.`
       );
       requireCondition(
@@ -8523,35 +9238,13 @@ function createPhysicalAggregateActionRegistry(
         node,
         routeOwner: definition.routeOwner
       });
-      recordOwnerInvocation("selector-source", actionId);
-      const sourceSelectorResult = definition.selectorOwner(context);
-      recordOwnerInvocation("selector-waiter", actionId);
       const selectorResult = definition.selectorWaiter(context);
       requireCondition(
-        sourceSelectorResult !== null &&
-          typeof sourceSelectorResult === "object" &&
-          physicalAggregateNodeMatches(sourceSelectorResult as AndroidUiNode, node) &&
-        selectorResult !== null &&
-          typeof selectorResult === "object" &&
-          physicalAggregateNodeMatches(selectorResult as AndroidUiNode, node),
-        `Physical aggregate action ${actionId} selector owner did not retain the selected node.`
+        physicalAggregateNodeMatches(selectorResult, node),
+        `Physical aggregate action ${actionId} selector waiter did not retain the selected node.`
       );
-      recordOwnerInvocation("counter-source", actionId);
-      const sourceCounterBefore = definition.counterSourceOwner(context);
-      recordOwnerInvocation("counter", actionId);
-      const counterBefore = definition.counterOwner(context);
-      requireCondition(
-        sourceCounterBefore === counterBefore,
-        `Physical aggregate action ${actionId} counter source was bypassed.`
-      );
-      recordOwnerInvocation("diagnostic-source", actionId);
-      const sourceDiagnostic = definition.diagnosticSourceOwner(context);
-      recordOwnerInvocation("diagnostic", actionId);
+      const counterBefore = definition.counterOracle(context);
       const diagnostic = definition.diagnosticOwner(context);
-      requireCondition(
-        sourceDiagnostic === diagnostic,
-        `Physical aggregate action ${actionId} diagnostic source was bypassed.`
-      );
       const completeTransition = () => {
         const transitionContext: PhysicalAggregateTransitionContext =
           Object.freeze({
@@ -8561,7 +9254,7 @@ function createPhysicalAggregateActionRegistry(
             diagnostic,
             selectorResult
           });
-        return definition.transitionOracle(transitionContext);
+        return definition.transitionExecutor(transitionContext);
       };
       if (options.tapNodeOnceAndWait === undefined) {
         await tapAndroidNodeOnceAndWait(
@@ -8583,20 +9276,70 @@ function createPhysicalAggregateActionRegistry(
   });
 }
 
+function physicalAggregateImplementationSource(source: string): string | null {
+  const marker = "\ninterface PairingRenderCapture {\n";
+  const start = source.lastIndexOf(marker);
+  return start < 0 ? null : source.slice(start + 1);
+}
+
 function physicalAggregateCallGraphIsExact(source: string): boolean {
-  const aggregateStart = source.indexOf(
-    "async function runProductionPairingUiSequence" + "(\n"
+  const implementation = physicalAggregateImplementationSource(source);
+  if (implementation === null) return false;
+  const directUiTapCalls = [...implementation.matchAll(/\btapAndroidUiNode\(/gu)];
+  const oneTapHelperCalls = [
+    ...implementation.matchAll(/\btapAndroidNodeOnceAndWait\(/gu)
+  ];
+  const rawAndroidTapCalls = [
+    ...implementation.matchAll(
+      /adb\(\[\s*"shell"\s*,\s*"input"\s*,\s*"tap"\s*,/gu
+    )
+  ];
+  const talkBackDoubleTapCalls = [
+    ...implementation.matchAll(/\brunPhysicalTalkBackDoubleTap\(/gu)
+  ];
+  const oneTapHelperStart = implementation.indexOf(
+    "async function tapAndroidNodeOnceAndWait" + "(\n"
   );
-  const aggregateEnd = source.indexOf(
-    "async function " + "tapAndroidNodeOnce" + "AndWait" + "(\n"
+  const oneTapHelperEnd = implementation.indexOf(
+    "\nasync function closePhysicalDialog" + "(\n",
+    oneTapHelperStart
   );
-  if (aggregateStart < 0 || aggregateEnd <= aggregateStart) return false;
-  const aggregate = source.slice(aggregateStart, aggregateEnd);
-  const tapHelperCall = "tapAndroidNodeOnce" + "AndWait(";
+  const oneTapHelper =
+    oneTapHelperStart < 0 || oneTapHelperEnd <= oneTapHelperStart
+      ? ""
+      : implementation.slice(oneTapHelperStart, oneTapHelperEnd);
+  const talkBackActivationHelperStart = implementation.indexOf(
+    "async function activatePhysicalTalkBackFocus" + "(\n"
+  );
+  const talkBackActivationHelperEnd = implementation.indexOf(
+    "\nfunction physicalTalkBackClickMatchesFocus" + "(\n",
+    talkBackActivationHelperStart
+  );
+  const talkBackActivationHelper =
+    talkBackActivationHelperStart < 0 ||
+      talkBackActivationHelperEnd <= talkBackActivationHelperStart
+      ? ""
+      : implementation.slice(
+          talkBackActivationHelperStart,
+          talkBackActivationHelperEnd
+        );
   return (
-    !aggregate.includes("tapAndroidUiNode(") &&
-    !aggregate.includes(tapHelperCall) &&
-    !/\(\s*\)\s*=>\s*true\b/u.test(aggregate)
+    directUiTapCalls.length === 2 &&
+    oneTapHelperCalls.length === 1 &&
+    rawAndroidTapCalls.length === 1 &&
+    talkBackDoubleTapCalls.length === 2 &&
+    oneTapHelper.includes("tapAndroidUiNode(node);") &&
+    talkBackActivationHelper.match(/\brunPhysicalTalkBackDoubleTap\(/gu)
+      ?.length === 1 &&
+    /function tapAndroidUiNode\(node: AndroidUiNode\): void/u.test(
+      implementation
+    ) &&
+    !/\(\s*\)\s*=>\s*(?:true|Boolean\(\s*(?:true|1)\s*\)|1\s*===\s*1)(?=\s*[,;)\n])/u.test(
+      implementation
+    ) &&
+    !/\b(?:[A-Za-z]+Requests|[A-Za-z]+Subscribers|[A-Za-z]+Calls)\s*(?:>=|<=|>|<)\s*\d/u.test(
+      implementation
+    )
   );
 }
 
@@ -11987,7 +12730,6 @@ async function openProductionMissionControl(
     input.requestInspection,
     requestsBeforeContinue
   );
-  input.actionRegistry.consume("dashboard-bootstrap");
   try {
     await waitForPhysicalMissionControlRouteReady(
       input.requestInspection,
@@ -12024,6 +12766,23 @@ async function openProductionMissionControl(
       { cause: error }
     );
   }
+  const missionControlNodes = await readAndroidUiNodes();
+  input.actionRegistry.consume(
+    "dashboard-bootstrap",
+    () =>
+      physicalMissionControlRequestOpened(
+        readPhysicalMissionControlRequestSnapshot(input.requestInspection),
+        requestsBeforeContinue
+      ) &&
+      selectPhysicalMissionControlDestination(missionControlNodes) !== null &&
+      (initialViewport === "dashboard_attention"
+        ? selectPhysicalChromePageText(
+            missionControlNodes,
+            missionControlInitialViewportText(initialViewport)
+          ) !== null
+        : selectPhysicalMissionControlSession(missionControlNodes) !== null),
+    "Production Mission Control bootstrap did not retain one exact loaded shell generation."
+  );
   if (screenshots.missionControl !== null) {
     const path = join(input.screenshotDirectory, screenshots.missionControl);
     if (screenshots.appOnly === true) {
@@ -12222,13 +12981,12 @@ function selectPhysicalMissionControlDestination(
     "Done"
   ]);
   const structuralSheetTitles = new Set([
-    "Session actions",
-    "Host & access",
-    "Event details",
-    "Resume on laptop",
-    "Archive session?",
-    "Interrupt result",
-    "Archive result"
+    ...physicalFixedSheetOwnerTitles,
+    "Confirm context compaction",
+    "Interrupt active turn?",
+    "Lock remote writes?",
+    "Revoke paired device?",
+    "Revoke this phone?"
   ]);
   if (
     nodes.some(
@@ -12344,28 +13102,7 @@ function selectPhysicalSessionActionsMenuAction(
 function selectPhysicalSessionActionsMenuRoot(
   nodes: readonly AndroidUiNode[]
 ): AndroidUiNode | null {
-  let page: PhysicalScreenshotRegion;
-  try {
-    page = selectChromePageViewport(nodes);
-  } catch {
-    return null;
-  }
-  const titles = nodes.filter(
-    (node) =>
-      node.text === "Session actions" &&
-      !node.clickable &&
-      node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
-  );
-  const closes = nodes.filter(
-    (node) =>
-      node.description === "Close session actions" &&
-      node.clickable &&
-      node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
-  );
-  if (titles.length !== 1 || closes.length !== 1) return null;
-  return titles[0] ?? null;
+  return selectPhysicalFixedSheetHeader(nodes, "Session actions")?.title ?? null;
 }
 
 interface PhysicalFixedSheetHeader {
@@ -12402,6 +13139,54 @@ const physicalFixedSheetOwnerTitles = new Set([
   "Session utilities"
 ]);
 
+const physicalSessionActionsModeTitles = new Set([
+  "Archive blocked",
+  "Archive not completed",
+  "Archive outcome not confirmed",
+  "Archive session",
+  "Archive session?",
+  "Archive state inconsistent",
+  "Interrupt active turn",
+  "Interrupt active turn?",
+  "Interrupt blocked",
+  "Interrupt state inconsistent",
+  "Outcome not confirmed",
+  "Secure archive setup unavailable",
+  "Secure interrupt setup unavailable",
+  "Session archived",
+  "Turn completed",
+  "Turn ended as interrupted",
+  "Turn failed",
+  "Turn interrupted"
+]);
+
+const physicalModalConfirmationTitles = new Set([
+  "Lock remote writes?",
+  "Revoke paired device?",
+  "Revoke this phone?"
+]);
+
+const physicalOwnedHeaderTitles = new Set([
+  ...physicalFixedSheetOwnerTitles,
+  ...physicalSessionActionsModeTitles,
+  ...physicalModalConfirmationTitles
+]);
+
+const physicalOwnedHeaderCloseDescriptions = new Set([
+  ...Object.values(physicalFixedSheetCloseDescriptions),
+  "Close Compact utility",
+  "Close Host and access",
+  "Close Skills utility",
+  "Close Usage utility",
+  "Close device revocation",
+  "Close remote write lock confirmation"
+]);
+
+const physicalOwnedHeaderBackDescriptions = new Set([
+  "Back to session actions",
+  "Back to session utilities"
+]);
+
 function selectPhysicalFixedSheetHeader(
   nodes: readonly AndroidUiNode[],
   ownerTitle: string
@@ -12432,26 +13217,24 @@ function selectPhysicalFixedSheetHeader(
       androidUiNodeIsFullyInsideRegion(node, page)
   );
   if (titles.length !== 1 || closes.length !== 1) return null;
+  const title = titles[0];
+  const close = closes[0];
+  if (title === undefined || close === undefined) return null;
   const competingTitles = nodes.filter(
     (node) =>
       node.text !== ownerTitle &&
-      physicalFixedSheetOwnerTitles.has(node.text) &&
-      !node.clickable &&
-      node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
+      physicalOwnedHeaderTitles.has(node.text) &&
+      physicalOwnedHeaderTitleIsEligible(node, page) &&
+      physicalOwnedHeaderIsCoherent(node, null, close)
   );
   const competingCloses = nodes.filter(
     (node) =>
       node.description !== closeDescription &&
-      Object.values(physicalFixedSheetCloseDescriptions).includes(node.description) &&
+      physicalOwnedHeaderCloseDescriptions.has(node.description) &&
       node.clickable &&
-      node.enabled !== false &&
       androidUiNodeIsFullyInsideRegion(node, page)
   );
   if (competingTitles.length !== 0 || competingCloses.length !== 0) return null;
-  const title = titles[0];
-  const close = closes[0];
-  if (title === undefined || close === undefined) return null;
   const titleCenterX = Math.floor((title.bounds.left + title.bounds.right) / 2);
   const closeCenterX = Math.floor((close.bounds.left + close.bounds.right) / 2);
   const titleCenterY = Math.floor((title.bounds.top + title.bounds.bottom) / 2);
@@ -12585,7 +13368,7 @@ function readPhysicalProfileAwaySnapshot(
   input: PhysicalProfileSnapshotInput
 ): PhysicalProfileAwaySnapshot {
   return Object.freeze({
-    foreignServe: input.foreignServe,
+    foreignServe: Object.freeze({ ...input.foreignServe }),
     managerAttempts: input.managerAttempts,
     mission: readPhysicalMissionControlRequestSnapshot(input.requestInspection),
     remoteBrowserMutationRequests:
@@ -12613,6 +13396,41 @@ function readPhysicalProfileReturnSnapshot(
     remoteEnableRequests: away.remoteEnableRequests,
     remoteStatusRequests: away.remoteStatusRequests
   });
+}
+
+function physicalProfileAwaySwitchBoundaryIsExact(
+  before: PhysicalProfileAwaySnapshot,
+  after: PhysicalProfileAwaySnapshot
+): boolean {
+  return (
+    physicalMissionControlRequestSnapshotMatches(after.mission, before.mission) &&
+    after.foreignServe.bytes === before.foreignServe.bytes &&
+    after.foreignServe.sha256 === before.foreignServe.sha256 &&
+    after.managerAttempts === before.managerAttempts &&
+    after.remoteBrowserMutationRequests === before.remoteBrowserMutationRequests &&
+    after.remoteBrowserStatusRequests === before.remoteBrowserStatusRequests &&
+    after.remoteDisableRequests === before.remoteDisableRequests &&
+    after.remoteEnableRequests === before.remoteEnableRequests &&
+    after.remoteStatusRequests === before.remoteStatusRequests + 1
+  );
+}
+
+function physicalProfileReturnSwitchBoundaryIsExact(
+  before: PhysicalProfileReturnSnapshot,
+  after: PhysicalProfileReturnSnapshot
+): boolean {
+  return (
+    physicalMissionControlRequestSnapshotMatches(after.mission, before.mission) &&
+    after.claimRequests === before.claimRequests &&
+    after.foreignServe.bytes === before.foreignServe.bytes &&
+    after.foreignServe.sha256 === before.foreignServe.sha256 &&
+    after.managerAttempts === before.managerAttempts &&
+    after.remoteBrowserMutationRequests === before.remoteBrowserMutationRequests &&
+    after.remoteBrowserStatusRequests === before.remoteBrowserStatusRequests &&
+    after.remoteDisableRequests === before.remoteDisableRequests &&
+    after.remoteEnableRequests === before.remoteEnableRequests &&
+    after.remoteStatusRequests === before.remoteStatusRequests
+  );
 }
 
 function physicalProfileAwayTruthMatches(
@@ -12808,98 +13626,37 @@ async function waitForStablePhysicalProfileReturnTruth(
 function selectPhysicalSessionUtilityAction(
   nodes: readonly AndroidUiNode[],
   field: AndroidUiNodeField,
-  value: string,
-  ownerTitle: string
+  value: string
 ): AndroidUiNode | null {
   const ownerRegion =
-    ownerTitle === "Session utilities"
-      ? selectPhysicalFixedSheetHeader(nodes, ownerTitle)?.body ?? null
-      : selectPhysicalUtilityPageBody(nodes, "/compact");
+    selectPhysicalFixedSheetHeader(nodes, "Session utilities")?.body ?? null;
   if (ownerRegion === null) return null;
-  const owners =
-    ownerTitle === "Session utilities"
-      ? []
-      : nodes.filter(
-          (node) =>
-            node.text === ownerTitle &&
-            !node.clickable &&
-            node.enabled !== false &&
-            androidUiNodeIsFullyInsideRegion(node, ownerRegion)
-        );
-  if (ownerTitle !== "Session utilities" && owners.length !== 1) return null;
   const selected = nodes.filter(
     (node) =>
       matchesAndroidUiNode(node, field, value) &&
       node.clickable &&
       node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, ownerRegion) &&
-      (ownerTitle === "Session utilities" ||
-        (owners[0] !== undefined && node.bounds.top >= owners[0].bounds.bottom))
+      androidUiNodeIsFullyInsideRegion(node, ownerRegion)
   );
-  if (selected.length !== 1) return null;
-  const selectedNode = selected[0];
-  if (selectedNode === undefined) return null;
-  return selectedNode;
+  return selected.length === 1 ? selected[0] ?? null : null;
 }
 
 function selectPhysicalUtilityPageBody(
   nodes: readonly AndroidUiNode[],
   pageTitle: "/compact" | "/skills" | "/usage"
 ): PhysicalScreenshotRegion | null {
-  let page: PhysicalScreenshotRegion;
-  try {
-    page = selectChromePageViewport(nodes);
-  } catch {
-    return null;
-  }
-  const titles = nodes.filter(
-    (node) =>
-      node.text === pageTitle &&
-      !node.clickable &&
-      node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
-  );
-  const backs = nodes.filter(
-    (node) =>
-      node.description === "Back to session utilities" &&
-      node.clickable &&
-      node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
-  );
-  const competingTitles = nodes.filter(
-    (node) =>
-      node.text !== pageTitle &&
-      physicalFixedSheetOwnerTitles.has(node.text) &&
-      !node.clickable &&
-      node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
-  );
-  const competingCloses = nodes.filter(
-    (node) =>
-      Object.values(physicalFixedSheetCloseDescriptions).includes(node.description) &&
-      node.clickable &&
-      node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
-  );
-  if (
-    titles.length !== 1 ||
-    backs.length !== 1 ||
-    competingTitles.length !== 0 ||
-    competingCloses.length !== 0
-  ) {
-    return null;
-  }
-  const title = titles[0];
-  const back = backs[0];
-  if (title === undefined || back === undefined) return null;
-  const bodyTop = Math.max(title.bounds.bottom, back.bounds.bottom) + physicalSessionOverlayGapPx;
-  const body = Object.freeze({
-    height: page.top + page.height - bodyTop,
-    left: page.left,
-    top: bodyTop,
-    width: page.width
-  });
-  return body.height >= 320 ? body : null;
+  const closeDescription = pageTitle === "/usage"
+    ? "Close Usage utility"
+    : pageTitle === "/compact"
+      ? "Close Compact utility"
+      : "Close Skills utility";
+  return selectPhysicalOwnedHeaderBody(
+    nodes,
+    pageTitle,
+    closeDescription,
+    "Back to session utilities",
+    false
+  )?.body ?? null;
 }
 
 function physicalUtilityPageTextVisible(
@@ -12918,6 +13675,51 @@ function physicalUtilityPageTextVisible(
   ).length === 1;
 }
 
+function selectPhysicalUtilityPageAction(
+  nodes: readonly AndroidUiNode[],
+  pageTitle: "/compact" | "/skills" | "/usage",
+  field: AndroidUiNodeField,
+  value: string
+): AndroidUiNode | null {
+  const body = selectPhysicalUtilityPageBody(nodes, pageTitle);
+  if (body === null) return null;
+  const matches = nodes.filter(
+    (node) =>
+      matchesAndroidUiNode(node, field, value) &&
+      node.clickable &&
+      node.enabled !== false &&
+      androidUiNodeIsFullyInsideRegion(node, body)
+  );
+  return matches.length === 1 ? matches[0] ?? null : null;
+}
+
+function selectPhysicalSheetEditor(
+  nodes: readonly AndroidUiNode[],
+  ownerTitle: "/goal",
+  label: string
+): AndroidUiNode | null {
+  const header = selectPhysicalFixedSheetHeader(nodes, ownerTitle);
+  if (header === null) return null;
+  const labels = nodes.filter(
+    (node) =>
+      matchesAndroidUiNode(node, "semantic", label) &&
+      node.enabled !== false &&
+      androidUiNodeIsFullyInsideRegion(node, header.body)
+  );
+  if (labels.length < 1 || labels.length > 2) return null;
+  const editors = nodes.filter(
+    (node) =>
+      node.className === androidEditTextClass &&
+      node.clickable &&
+      node.enabled !== false &&
+      androidUiNodeWidth(node) >= 120 &&
+      androidUiNodeHeight(node) >= 36 &&
+      androidUiNodeIsFullyInsideRegion(node, header.body) &&
+      labels.some((labelNode) => promptEditorIsNearLabel(node, labelNode))
+  );
+  return editors.length === 1 ? editors[0] ?? null : null;
+}
+
 function selectPhysicalResumePageBody(
   nodes: readonly AndroidUiNode[]
 ): Readonly<{
@@ -12932,46 +13734,25 @@ function selectPhysicalResumePageBody(
   } catch {
     return null;
   }
-  const titles = nodes.filter(
-    (node) =>
-      node.text === "Resume on laptop" &&
-      !node.clickable &&
-      node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
+  const owner = selectPhysicalOwnedHeaderBody(
+    nodes,
+    "Resume on laptop",
+    "Close session actions",
+    "Back to session actions",
+    false
   );
+  if (owner === null || owner.title === null) return null;
   const bodyTexts = nodes.filter(
     (node) =>
       node.text === "Laptop terminal only" &&
       !node.clickable &&
       node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
+      androidUiNodeIsFullyInsideRegion(node, owner.body)
   );
-  const competingTitles = nodes.filter(
-    (node) =>
-      node.text !== "Resume on laptop" &&
-      physicalFixedSheetOwnerTitles.has(node.text) &&
-      !node.clickable &&
-      node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
-  );
-  const competingCloses = nodes.filter(
-    (node) =>
-      Object.values(physicalFixedSheetCloseDescriptions).includes(node.description) &&
-      node.clickable &&
-      node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
-  );
-  if (
-    titles.length !== 1 ||
-    bodyTexts.length !== 1 ||
-    competingTitles.length !== 0 ||
-    competingCloses.length !== 0
-  ) {
-    return null;
-  }
-  const title = titles[0];
+  if (bodyTexts.length !== 1) return null;
+  const title = owner.title;
   const bodyText = bodyTexts[0];
-  if (title === undefined || bodyText === undefined) return null;
+  if (bodyText === undefined) return null;
   if (bodyText.bounds.top < title.bounds.bottom) return null;
   const bodyTop = bodyText.bounds.bottom;
   const body = Object.freeze({
@@ -13116,44 +13897,43 @@ function selectPhysicalResumeBackAction(
 function physicalClipboardClearedTruthVisible(
   nodes: readonly AndroidUiNode[]
 ): boolean {
-  let page: PhysicalScreenshotRegion;
-  try {
-    page = selectChromePageViewport(nodes);
-  } catch {
-    return false;
-  }
-  const title = nodes.filter(
-    (node) =>
-      node.text === "Clear copied command" &&
-      !node.clickable &&
-      node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
-  );
+  const owner = selectPhysicalExternalPageOwner(nodes);
+  if (owner === null) return false;
   const result = nodes.filter(
     (node) =>
       node.text === "Clipboard cleared" &&
       !node.clickable &&
       node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
+      androidUiNodeIsFullyInsideRegion(node, owner.body)
   );
   const detail = nodes.filter(
     (node) =>
       node.text === "The temporary laptop command was removed." &&
       !node.clickable &&
       node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
+      androidUiNodeIsFullyInsideRegion(node, owner.body)
+  );
+  const staleReadyState = nodes.filter(
+    (node) =>
+      node.text === "Clear copied command" &&
+      !node.clickable &&
+      androidUiNodeIsFullyInsideRegion(node, owner.body)
   );
   const clearAction = nodes.filter(
     (node) => node.text === "Clear clipboard" || node.description === "Clear clipboard"
   );
-  if (title.length !== 1 || result.length !== 1 || detail.length !== 1 || clearAction.length !== 0) {
+  if (
+    result.length !== 1 ||
+    detail.length !== 1 ||
+    staleReadyState.length !== 0 ||
+    clearAction.length !== 0
+  ) {
     return false;
   }
-  const titleNode = title[0];
   const resultNode = result[0];
   const detailNode = detail[0];
-  return titleNode !== undefined && resultNode !== undefined && detailNode !== undefined &&
-    resultNode.bounds.top >= titleNode.bounds.bottom &&
+  return resultNode !== undefined && detailNode !== undefined &&
+    resultNode.bounds.top >= owner.title.bounds.bottom &&
     detailNode.bounds.top >= resultNode.bounds.bottom;
 }
 
@@ -13179,32 +13959,111 @@ function selectPhysicalExternalPageAction(
   nodes: readonly AndroidUiNode[],
   text: string
 ): AndroidUiNode | null {
+  if (text !== "Clear clipboard") return null;
+  const owner = selectPhysicalExternalPageOwner(nodes);
+  if (owner === null) return null;
+  const states = nodes.filter(
+    (node) =>
+      node.text === "Clear copied command" &&
+      !node.clickable &&
+      node.enabled !== false &&
+      androidUiNodeIsFullyInsideRegion(node, owner.body)
+  );
+  const details = nodes.filter(
+    (node) =>
+      node.text === "Remove the temporary laptop command from this phone." &&
+      !node.clickable &&
+      node.enabled !== false &&
+      androidUiNodeIsFullyInsideRegion(node, owner.body)
+  );
+  if (states.length !== 1 || details.length !== 1) return null;
+  const state = states[0];
+  const detail = details[0];
+  if (
+    state === undefined ||
+    detail === undefined ||
+    state.bounds.top < owner.title.bounds.bottom ||
+    detail.bounds.top < state.bounds.bottom
+  ) {
+    return null;
+  }
+  const actions = nodes.filter(
+    (node) =>
+      node.text === text &&
+      node.clickable &&
+      node.enabled !== false &&
+      androidUiNodeIsFullyInsideRegion(node, owner.body) &&
+      node.bounds.top >= detail.bounds.bottom
+  );
+  return actions.length === 1 ? actions[0] ?? null : null;
+}
+
+interface PhysicalExternalPageOwner {
+  readonly body: PhysicalScreenshotRegion;
+  readonly title: AndroidUiNode;
+}
+
+function selectPhysicalExternalPageOwner(
+  nodes: readonly AndroidUiNode[]
+): PhysicalExternalPageOwner | null {
   let page: PhysicalScreenshotRegion;
   try {
     page = selectChromePageViewport(nodes);
   } catch {
     return null;
   }
-  const titleText = text === "Clear clipboard" ? "Clear copied command" : "Remote access check";
-  const titles = nodes.filter(
+  const brands = nodes.filter(
     (node) =>
-      node.text === titleText &&
+      node.text === "HostDeck" &&
       !node.clickable &&
       node.enabled !== false &&
+      androidUiNodeIsWebText(node) &&
       androidUiNodeIsFullyInsideRegion(node, page)
   );
-  if (titles.length !== 1) return null;
-  const title = titles[0];
-  if (title === undefined) return null;
-  const actions = nodes.filter(
+  const titles = nodes.filter(
     (node) =>
-      node.text === text &&
-      node.clickable &&
+      node.text === "Remote access check" &&
+      !node.clickable &&
       node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page) &&
-      node.bounds.top >= title.bounds.bottom
+      androidUiNodeIsWebText(node) &&
+      androidUiNodeWidth(node) >= 96 &&
+      androidUiNodeHeight(node) >= 24 &&
+      androidUiNodeIsFullyInsideRegion(node, page)
   );
-  return actions.length === 1 ? actions[0] ?? null : null;
+  if (brands.length !== 1 || titles.length !== 1) return null;
+  const brand = brands[0];
+  const title = titles[0];
+  if (
+    brand === undefined ||
+    title === undefined ||
+    title.bounds.top < brand.bounds.bottom
+  ) {
+    return null;
+  }
+  const competingHeaders = nodes.filter(
+    (node) =>
+      (physicalOwnedHeaderTitles.has(node.text) || node.text === "Mission Control") &&
+      !node.clickable &&
+      androidUiNodeIsFullyInsideRegion(node, page)
+  );
+  const competingControls = nodes.filter(
+    (node) =>
+      (physicalOwnedHeaderCloseDescriptions.has(node.description) ||
+        node.description === "Back to Mission Control" ||
+        node.description === "Back to session actions" ||
+        node.description === "Back to session utilities") &&
+      node.clickable &&
+      androidUiNodeIsFullyInsideRegion(node, page)
+  );
+  if (competingHeaders.length !== 0 || competingControls.length !== 0) return null;
+  const bodyTop = title.bounds.bottom + physicalSessionOverlayGapPx;
+  const body = Object.freeze({
+    height: page.top + page.height - bodyTop,
+    left: page.left,
+    top: bodyTop,
+    width: page.width
+  });
+  return body.height >= 320 ? Object.freeze({ body, title }) : null;
 }
 
 async function runProductionDashboardUiSequence(
@@ -13415,7 +14274,7 @@ async function runProductionDashboardUiSequence(
   await runPhysicalDashboardProfileSwitch(input, capture);
   await runPhysicalRuntimeCompatibilityState(input, capture);
   const talkBack = await runPhysicalTalkBackTraversal(
-    input.externalOrigin,
+    input,
     input.talkBackArtifacts
   );
   const archiveQuietExpanded = await runPhysicalArchiveControl(
@@ -13847,12 +14706,12 @@ function physicalDialogClosedOnSessionDetail(
     ownerRemaining.length === 0 &&
     closeRemaining.length === 0 &&
     backToMission.length === 1 &&
-    selectPhysicalSessionContentRegion(nodes) !== null
+    selectPhysicalSessionActionsTrigger(nodes, 1) !== null
   );
 }
 
 async function runPhysicalEventDiagnostic(
-  input: ProductionUiEntryInput,
+  input: ProductionUiEntryInput & { readonly prompt: PhysicalPromptRuntime },
   capture: PhysicalDashboardCapture,
   actionId: PhysicalAggregateActionId,
   direction: AndroidVerticalRevealDirection,
@@ -13861,6 +14720,7 @@ async function runPhysicalEventDiagnostic(
   limitation: string,
   screenshot: string
 ): Promise<void> {
+  const navigationBefore = readPhysicalSessionNavigationSnapshot(input);
   const target = await revealPhysicalEventDiagnosticTarget(
     timelineLabel,
     direction,
@@ -13871,21 +14731,42 @@ async function runPhysicalEventDiagnostic(
   await input.actionRegistry.tap(
     actionId,
     target.action,
-    async () =>
-      input.requestInspection.sessionEventRequests === readsBefore + 1 &&
-      (await readAndroidUiNodes()).some((node) => node.text === heading),
+    async () => {
+      const nodes = await readAndroidUiNodes();
+      return (
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          navigationBefore
+        ) &&
+        input.requestInspection.sessionEventRequests === readsBefore + 1 &&
+        physicalFixedSheetTextVisible(nodes, "Event details", heading)
+      );
+    },
     `Physical ${heading} diagnostic did not open exactly once.`
   );
-  await waitForAndroidUiText(
-    limitation,
+  await waitFor(
+    async () =>
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        navigationBefore
+      ) &&
+      physicalFixedSheetTextVisible(
+        await readAndroidUiNodes(),
+        "Event details",
+        limitation
+      ),
     30_000,
-    `Physical ${heading} diagnostic omitted ${limitation}.`
+    `Physical ${heading} diagnostic omitted owned ${limitation} truth.`
   );
   await capture(screenshot);
   await closePhysicalDialog(
     input.actionRegistry,
     `event-close-${actionId.replace("event-open-", "")}` as PhysicalAggregateActionId,
-    "Close event details"
+    "Close event details",
+    () => physicalSessionNavigationMatches(
+      readPhysicalSessionNavigationSnapshot(input),
+      navigationBefore
+    )
   );
 }
 
@@ -13932,9 +14813,11 @@ async function runPhysicalStreamRecovery(
   input: ProductionUiEntryInput & { readonly prompt: PhysicalPromptRuntime },
   capture: PhysicalDashboardCapture
 ): Promise<void> {
-  const requestsBefore = input.requestInspection.sessionStreamRequests;
-  const openedBefore = input.prompt.subscribers.snapshot().opened_subscribers;
-  input.actionRegistry.consume("stream-recovery-observe");
+  const navigationBefore = readPhysicalSessionNavigationSnapshot(input);
+  requireCondition(
+    navigationBefore.activeSubscribers === 1,
+    "Physical stream recovery did not begin with one selected-session subscriber."
+  );
   input.prompt.disconnectForRecovery();
   try {
     await waitFor(
@@ -13945,8 +14828,10 @@ async function runPhysicalStreamRecovery(
           recovery.held_requests === 1 &&
           input.prompt.streamFailureCount === 1 &&
           JSON.stringify(input.prompt.streamFailureCodes) === '["source_failed"]' &&
-          input.prompt.subscribers.snapshot().active_subscribers === 0 &&
-          input.requestInspection.sessionStreamRequests === requestsBefore + 1
+          physicalSessionNavigationRecoveryHolding(
+            readPhysicalSessionNavigationSnapshot(input),
+            navigationBefore
+          )
         );
       },
       30_000,
@@ -13955,9 +14840,31 @@ async function runPhysicalStreamRecovery(
     await waitForStablePhysicalPromptRecoveryTruth(
       input,
       "reconnecting",
-      requestsBefore + 1,
-      openedBefore,
+      navigationBefore,
       "Physical Session Detail did not expose stable reconnecting write-block truth."
+    );
+    const recoveryHoldingNodes = await readAndroidUiNodes();
+    input.actionRegistry.consume(
+      "stream-recovery-observe",
+      () => {
+        const recovery = input.prompt.recoverySnapshot();
+        const navigation = readPhysicalSessionNavigationSnapshot(input);
+        return (
+          recovery.state === "holding" &&
+          recovery.held_requests === 1 &&
+          input.prompt.streamFailureCount === 1 &&
+          JSON.stringify(input.prompt.streamFailureCodes) === '["source_failed"]' &&
+          physicalSessionNavigationRecoveryHolding(
+            navigation,
+            navigationBefore
+          ) &&
+          physicalPromptRecoveryHoldingVisible(
+            recoveryHoldingNodes,
+            navigation.activeSubscribers
+          )
+        );
+      },
+      "Physical stream-recovery observation did not retain its exact transition."
     );
     await capture("fe090-48-stream-reconnecting.png");
   } catch (error) {
@@ -13969,24 +14876,46 @@ async function runPhysicalStreamRecovery(
       cause: error
     });
   } finally {
-    input.actionRegistry.consume("stream-reconnect-observe");
     input.prompt.releaseRecovery();
   }
   try {
     await waitFor(
       () =>
-        input.prompt.subscribers.snapshot().active_subscribers === 1 &&
-        input.prompt.subscribers.snapshot().opened_subscribers === openedBefore + 1 &&
-        input.requestInspection.sessionStreamRequests === requestsBefore + 1,
+        physicalSessionNavigationRecoveryCompleted(
+          readPhysicalSessionNavigationSnapshot(input),
+          navigationBefore
+        ),
       45_000,
       "Physical Session Detail did not reconnect exactly once after stream loss."
     );
     await waitForStablePhysicalPromptRecoveryTruth(
       input,
       "completed",
-      requestsBefore + 1,
-      openedBefore + 1,
+      navigationBefore,
       "Physical Session Detail did not restore stable current completed-composer truth."
+    );
+    const recoveryCompletedNodes = await readAndroidUiNodes();
+    input.actionRegistry.consume(
+      "stream-reconnect-observe",
+      () => {
+        const recovery = input.prompt.recoverySnapshot();
+        const navigation = readPhysicalSessionNavigationSnapshot(input);
+        return (
+          recovery.state === "released" &&
+          recovery.held_requests === 1 &&
+          input.prompt.streamFailureCount === 1 &&
+          JSON.stringify(input.prompt.streamFailureCodes) === '["source_failed"]' &&
+          physicalSessionNavigationRecoveryCompleted(
+            navigation,
+            navigationBefore
+          ) &&
+          physicalPromptCompletionRestored(
+            recoveryCompletedNodes,
+            navigation.activeSubscribers
+          )
+        );
+      },
+      "Physical stream-reconnect observation did not retain its exact transition."
     );
     await capture("fe090-48-stream-recovered.png");
   } catch (error) {
@@ -14133,7 +15062,7 @@ async function returnPhysicalExternalPageToSelectedSession(
   );
   const quietExpanded = await ensurePhysicalQuietSessionQueueExpanded(
     context,
-    input.actionRegistry,
+    input,
     context === "not-found" ? "detail-expand-quiet" : "archive-expand-quiet"
   );
   const selected = await waitForPhysicalSelectedNode(
@@ -14162,23 +15091,39 @@ async function returnPhysicalExternalPageToSelectedSession(
 
 async function ensurePhysicalQuietSessionQueueExpanded(
   context: PhysicalExternalPageReturnContext,
-  actionRegistry: PhysicalAggregateActionRegistry,
+  input: ProductionUiEntryInput & { readonly prompt: PhysicalPromptRuntime },
   actionId: PhysicalAggregateActionId
 ): Promise<boolean> {
   const current = await readAndroidUiNodes();
   if (selectPhysicalQuietQueueDisclosure(current, true) !== null) {
     return false;
   }
+  const countersBefore = readPhysicalAggregateCounterSnapshot(
+    input.requestInspection
+  );
+  const navigationBefore = readPhysicalSessionNavigationSnapshot(input);
   const quietDisclosure = await waitForPhysicalSelectedNode(
     (nodes) => selectPhysicalQuietQueueDisclosure(nodes, false),
     30_000,
     `Physical ${context} return omitted the collapsed quiet-session control.`
   );
-  await actionRegistry.tap(
+  await input.actionRegistry.tap(
     actionId,
     quietDisclosure,
-    async () =>
-      selectPhysicalQuietQueueDisclosure(await readAndroidUiNodes(), true) !== null,
+    async () => {
+      const countersAfter = readPhysicalAggregateCounterSnapshot(
+        input.requestInspection
+      );
+      return (
+        selectPhysicalQuietQueueDisclosure(await readAndroidUiNodes(), true) !==
+          null &&
+        physicalExactNumericTransition(countersBefore, countersAfter, {}) &&
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          navigationBefore
+        )
+      );
+    },
     `Physical ${context} return did not expand quiet sessions.`
   );
   return true;
@@ -14237,6 +15182,34 @@ function physicalSessionNavigationReloaded(
     actual.missingDetailRequests === before.missingDetailRequests &&
     actual.openedSubscribers === before.openedSubscribers + 1 &&
     actual.selectedDetailRequests === before.selectedDetailRequests + 1 &&
+    actual.streamRequests === before.streamRequests + 1
+  );
+}
+
+function physicalSessionNavigationRecoveryHolding(
+  actual: PhysicalSessionNavigationSnapshot,
+  before: PhysicalSessionNavigationSnapshot
+): boolean {
+  return (
+    before.activeSubscribers === 1 &&
+    actual.activeSubscribers === 0 &&
+    actual.missingDetailRequests === before.missingDetailRequests &&
+    actual.openedSubscribers === before.openedSubscribers &&
+    actual.selectedDetailRequests === before.selectedDetailRequests &&
+    actual.streamRequests === before.streamRequests + 1
+  );
+}
+
+function physicalSessionNavigationRecoveryCompleted(
+  actual: PhysicalSessionNavigationSnapshot,
+  before: PhysicalSessionNavigationSnapshot
+): boolean {
+  return (
+    before.activeSubscribers === 1 &&
+    actual.activeSubscribers === 1 &&
+    actual.missingDetailRequests === before.missingDetailRequests &&
+    actual.openedSubscribers === before.openedSubscribers + 1 &&
+    actual.selectedDetailRequests === before.selectedDetailRequests &&
     actual.streamRequests === before.streamRequests + 1
   );
 }
@@ -14420,6 +15393,15 @@ async function runPhysicalApprovalControl(
   capture: PhysicalDashboardCapture,
   measure: PhysicalDashboardMeasure
 ): Promise<void> {
+  const navigationBefore = readPhysicalSessionNavigationSnapshot(input);
+  const approvalCallsBefore = physicalDashboardControlCallCount(
+    input.controls,
+    "respond_approval"
+  );
+  requireCondition(
+    navigationBefore.activeSubscribers === 1 && approvalCallsBefore === 0,
+    "Physical approval did not begin with exact selected-session and mutation authority."
+  );
   await revealPhysicalSessionContentNode(
     "text",
     "Review & approve",
@@ -14471,8 +15453,18 @@ async function runPhysicalApprovalControl(
     await input.actionRegistry.tap(
       "approval-open",
       review,
-      async () =>
-        physicalApprovalConfirmationTitleIsOpen(await readAndroidUiNodes()),
+      async () => {
+        const nodes = await readAndroidUiNodes();
+        return (
+          physicalSessionNavigationMatches(
+            readPhysicalSessionNavigationSnapshot(input),
+            navigationBefore
+          ) &&
+          physicalDashboardControlCallCount(input.controls, "respond_approval") ===
+            approvalCallsBefore &&
+          selectPhysicalApprovalConfirmationAction(nodes) !== null
+        );
+      },
       "Physical elevated approval confirmation did not open."
     );
   } catch (error) {
@@ -14503,20 +15495,55 @@ async function runPhysicalApprovalControl(
   await input.actionRegistry.tap(
     "approval-submit",
     approve,
-    () => input.controls.hasPendingApproval(),
+    () =>
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        navigationBefore
+      ) &&
+      input.controls.hasPendingApproval() &&
+      physicalDashboardControlCallCount(input.controls, "respond_approval") ===
+        approvalCallsBefore + 1,
     "Physical approval response did not enter one pending request."
   );
-  await waitForAndroidUiText(
-    "Confirming decision",
+  await waitFor(
+    async () => {
+      const nodes = await readAndroidUiNodes();
+      return (
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          navigationBefore
+        ) &&
+        selectPhysicalApprovalConfirmationAction(nodes) === null &&
+        selectPhysicalSessionContentNode(
+          nodes,
+          "text",
+          "Confirming decision",
+          false
+        ) !== null
+      );
+    },
     30_000,
-    "Physical approval did not render responding truth."
+    "Physical approval did not render owner-local responding truth."
   );
   await capture("fe090-06-approval-responding.png");
   input.controls.releaseApproval();
-  await waitForAndroidUiText(
-    "Approved once",
+  await waitFor(
+    async () => {
+      const nodes = await readAndroidUiNodes();
+      return (
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          navigationBefore
+        ) &&
+        physicalDashboardControlCallCount(input.controls, "respond_approval") ===
+          approvalCallsBefore + 1 &&
+        selectPhysicalApprovalConfirmationAction(nodes) === null &&
+        selectPhysicalSessionContentNode(nodes, "text", "Approved once", false) !==
+          null
+      );
+    },
     30_000,
-    "Physical approval did not render terminal approved truth."
+    "Physical approval did not render exact terminal approved truth."
   );
   await capture("fe090-07-approval-approved.png");
 }
@@ -14868,6 +15895,20 @@ function physicalSessionWriteReady(
   );
 }
 
+function physicalPromptRecoveryHoldingVisible(
+  nodes: readonly AndroidUiNode[],
+  activeSubscribers: number
+): boolean {
+  const count = (value: string): number =>
+    nodes.filter((node) => matchesAndroidUiNode(node, "semantic", value)).length;
+  return (
+    activeSubscribers === 0 &&
+    count("Session activity is reconnecting.") === 1 &&
+    count("Ready to send") === 0 &&
+    count("Prompt unavailable") === 0
+  );
+}
+
 function physicalPromptCompletionRestored(
   nodes: readonly AndroidUiNode[],
   activeSubscribers: number
@@ -14891,8 +15932,7 @@ async function waitForStablePhysicalPromptRecoveryTruth(
     readonly requestInspection: RequestInspection;
   }>,
   truth: PhysicalPromptRecoveryTruth,
-  expectedStreamRequests: number,
-  expectedOpenedSubscribers: number,
+  navigationBefore: PhysicalSessionNavigationSnapshot,
   message: string,
   timeoutMs = 30_000
 ): Promise<void> {
@@ -14910,23 +15950,29 @@ async function waitForStablePhysicalPromptRecoveryTruth(
     }
     const subscribers = input.prompt.subscribers.snapshot();
     const active = subscribers.active_subscribers;
-    const reconnecting =
-      selectPhysicalChromePageText(nodes, "Session activity is reconnecting.") !==
-        null &&
-      selectPhysicalChromePageText(nodes, "Ready to send") === null;
+    const navigation = readPhysicalSessionNavigationSnapshot(input);
+    const recovery = input.prompt.recoverySnapshot();
+    const reconnecting = physicalPromptRecoveryHoldingVisible(nodes, active);
     const completed = physicalPromptCompletionRestored(nodes, active);
     const visible = truth === "reconnecting" ? reconnecting : completed;
-    const exactCounters =
-      input.requestInspection.sessionStreamRequests === expectedStreamRequests &&
-      subscribers.opened_subscribers === expectedOpenedSubscribers;
+    const exactNavigation =
+      truth === "reconnecting"
+        ? physicalSessionNavigationRecoveryHolding(navigation, navigationBefore)
+        : physicalSessionNavigationRecoveryCompleted(navigation, navigationBefore);
+    const exactRecovery =
+      recovery.held_requests === 1 &&
+      recovery.state === (truth === "reconnecting" ? "holding" : "released") &&
+      input.prompt.streamFailureCount === 1 &&
+      JSON.stringify(input.prompt.streamFailureCodes) === '["source_failed"]';
     const observation =
       `truth=${truth};visible=${visible ? "yes" : "no"};` +
-      `active=${active};opened=${subscribers.opened_subscribers};` +
-      `stream=${input.requestInspection.sessionStreamRequests}`;
+      `${physicalSessionNavigationSummary(navigation)};` +
+      `recovery=${recovery.state}/${recovery.held_requests};` +
+      `failures=${input.prompt.streamFailureCount}`;
     if (observations.at(-1) !== observation && observations.length < 6) {
       observations.push(observation);
     }
-    if (!visible || !exactCounters) {
+    if (!visible || !exactNavigation || !exactRecovery) {
       stableSince = null;
       stableObservation = null;
       return false;
@@ -14976,12 +16022,11 @@ async function runPhysicalModelControl(
         readPhysicalSessionNavigationSnapshot(input),
         navigationBefore
       ) &&
-      selectPhysicalSheetAction(
+      physicalSheetChoiceSelected(
         await readAndroidUiNodes(),
-        "text",
+        "/model",
         "Codex Fast",
-        "/model"
-      ) !== null,
+      ),
     "Physical /model did not show current model truth."
   );
   const fast = await waitForPhysicalSelectedNode(
@@ -15155,22 +16200,44 @@ async function runPhysicalGoalControl(
     "Physical /goal did not render current objective truth."
   );
   await capture("fe090-15-goal-current.png");
-  const editor = await waitForAndroidPromptEditor(
-    "Goal objective",
+  const editor = await waitForPhysicalSelectedNode(
+    (nodes) => selectPhysicalSheetEditor(nodes, "/goal", "Goal objective"),
     30_000,
     "Physical Goal objective editor was unavailable."
   );
   await input.actionRegistry.tap(
     "goal-editor",
     editor,
-    () => isAndroidKeyboardVisible(),
+    () =>
+      isAndroidKeyboardVisible() &&
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        navigationBefore
+      ) &&
+      physicalDashboardControlCallCount(input.controls, "mutate_goal") ===
+        goalCallsBefore,
     "Physical Goal objective editor did not open the keyboard."
   );
   enterPhysicalSingleLineText(physicalGoalObjective);
-  await waitForAndroidUiText(
-    physicalGoalObjective,
+  await waitFor(
+    async () => {
+      const edited = selectPhysicalSheetEditor(
+        await readAndroidUiNodes(),
+        "/goal",
+        "Goal objective"
+      );
+      return (
+        edited?.text === physicalGoalObjective &&
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          navigationBefore
+        ) &&
+        physicalDashboardControlCallCount(input.controls, "mutate_goal") ===
+          goalCallsBefore
+      );
+    },
     15_000,
-    "Physical Goal objective did not retain edited text."
+    "Physical Goal objective did not retain owner-local edited text."
   );
   adb(["shell", "input", "keyevent", "KEYCODE_BACK"]);
   await waitFor(
@@ -15422,6 +16489,7 @@ function physicalPlanCurrentTruthVisible(
   if (header === null) return false;
   return (
     physicalPlanModeOwnsRailAndOption(nodes, expectedCurrentMode) &&
+    physicalSheetChoiceSelected(nodes, "/plan", expectedCurrentMode) &&
     ["No pending change", "No observed Plan execution"].every((label) =>
       nodes.filter(
         (node) =>
@@ -15449,6 +16517,7 @@ function physicalPlanStagedTruthVisible(nodes: readonly AndroidUiNode[]): boolea
   if (header === null) return false;
   return (
     physicalPlanModeOwnsRailAndOption(nodes, "Plan") &&
+    physicalSheetChoiceSelected(nodes, "/plan", "Plan") &&
     [
       "Pending next turn: Staged in HostDeck",
       "No observed Plan execution"
@@ -15534,8 +16603,7 @@ async function runPhysicalSessionUtilities(
       selectPhysicalSessionUtilityAction(
         nodes,
         "description",
-        "Open /usage",
-        "Session utilities"
+        "Open /usage"
       ),
     30_000,
     "Physical /usage utility was unavailable."
@@ -15555,10 +16623,19 @@ async function runPhysicalSessionUtilities(
       ) !== null,
     "Physical /usage did not render current bounded usage."
   );
-  await waitForAndroidUiText(
-    "Lifetime tokens",
+  await waitFor(
+    async () =>
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        navigationBefore
+      ) &&
+      physicalUtilityPageTextVisible(
+        await readAndroidUiNodes(),
+        "/usage",
+        "Lifetime tokens"
+      ),
     30_000,
-    "Physical /usage omitted account totals."
+    "Physical /usage omitted owned account totals."
   );
   await capture("fe090-23-usage.png");
   await returnToPhysicalSessionUtilities(
@@ -15576,8 +16653,7 @@ async function runPhysicalSessionUtilities(
       selectPhysicalSessionUtilityAction(
         nodes,
         "description",
-        "Open /compact",
-        "Session utilities"
+        "Open /compact"
       ),
     30_000,
     "Physical /compact utility was unavailable."
@@ -15597,17 +16673,17 @@ async function runPhysicalSessionUtilities(
           readPhysicalSessionNavigationSnapshot(input),
           navigationBefore
         ) &&
-        selectPhysicalSessionUtilityAction(
+        selectPhysicalUtilityPageAction(
           nodes,
+          "/compact",
           "description",
-          "Check Compact progress",
-          "No tracked compaction"
+          "Check Compact progress"
         ) === null &&
-        selectPhysicalSessionUtilityAction(
+        selectPhysicalUtilityPageAction(
           nodes,
+          "/compact",
           "text",
-          "Compact context",
-          "No tracked compaction"
+          "Compact context"
         ) !== null
         && physicalDashboardControlCallCount(input.controls, "read_compact") ===
           compactReadsBeforeOpen + 1
@@ -15617,11 +16693,11 @@ async function runPhysicalSessionUtilities(
   );
   const begin = await waitForPhysicalSelectedNode(
     (nodes) =>
-      selectPhysicalSessionUtilityAction(
+      selectPhysicalUtilityPageAction(
         nodes,
+        "/compact",
         "text",
-        "Compact context",
-        "No tracked compaction"
+        "Compact context"
       ),
     30_000,
     "Physical /compact action was unavailable."
@@ -15635,9 +16711,10 @@ async function runPhysicalSessionUtilities(
         readPhysicalSessionNavigationSnapshot(input),
         navigationBefore
       ) &&
-      selectPhysicalChromePageText(
+      selectPhysicalConfirmationFooterAction(
         await readAndroidUiNodes(),
-        "Confirm context compaction"
+        "Confirm context compaction",
+        "Confirm compact"
       ) !== null,
     "Physical /compact confirmation did not open."
   );
@@ -15690,9 +16767,9 @@ async function runPhysicalSessionUtilities(
         readPhysicalSessionNavigationSnapshot(input),
         navigationBefore
       ) &&
-      physicalFixedSheetTextVisible(
+      physicalUtilityPageTextVisible(
         await readAndroidUiNodes(),
-        "Session utilities",
+        "/compact",
         "Compaction accepted"
       ),
     30_000,
@@ -15706,11 +16783,11 @@ async function runPhysicalSessionUtilities(
   );
   const check = await waitForPhysicalSelectedNode(
     (nodes) =>
-      selectPhysicalSessionUtilityAction(
+      selectPhysicalUtilityPageAction(
         nodes,
+        "/compact",
         "description",
-        "Check Compact progress",
-        "Compaction accepted"
+        "Check Compact progress"
       ),
     30_000,
     "Physical /compact progress check was unavailable."
@@ -15747,8 +16824,7 @@ async function runPhysicalSessionUtilities(
       selectPhysicalSessionUtilityAction(
         nodes,
         "description",
-        "Open /skills",
-        "Session utilities"
+        "Open /skills"
       ),
     30_000,
     "Physical /skills utility was unavailable."
@@ -15787,9 +16863,12 @@ async function runPhysicalSessionUtilities(
           readPhysicalSessionNavigationSnapshot(input),
           navigationBefore
         ) &&
-        selectPhysicalChromePageText(nodes, "/skills") !== null &&
+        selectPhysicalUtilityPageBody(nodes, "/skills") !== null &&
         physicalDashboardControlCallCount(input.controls, "read_skills") ===
-          skillsReadsBefore + 1
+          skillsReadsBefore + 1 &&
+        input.requestInspection.skillsRequests === skillsRequestsBefore + 1 &&
+        input.requestInspection.skillsResponseStatuses.length ===
+          skillsResponseStatusesBefore + 1
       );
     },
     () =>
@@ -15807,10 +16886,20 @@ async function runPhysicalSessionUtilities(
     "Physical Skills search did not open the keyboard."
   );
   enterPhysicalSingleLineText(physicalSkillSearch);
-  await waitForAndroidUiText(
-    physicalSkillSearch,
+  await waitFor(
+    async () =>
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        navigationBefore
+      ) &&
+      selectPhysicalUtilityPageAction(
+        await readAndroidUiNodes(),
+        "/skills",
+        "text",
+        physicalSkillSearch
+      ) !== null,
     15_000,
-    "Physical Skills search did not retain its local filter."
+    "Physical Skills search did not retain its owned local filter."
   );
   adb(["shell", "input", "keyevent", "KEYCODE_BACK"]);
   await waitFor(
@@ -15818,10 +16907,19 @@ async function runPhysicalSessionUtilities(
     10_000,
     "Physical Skills search keyboard did not close."
   );
-  await waitForAndroidUiText(
-    "1 matching",
+  await waitFor(
+    async () =>
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        navigationBefore
+      ) &&
+      physicalUtilityPageTextVisible(
+        await readAndroidUiNodes(),
+        "/skills",
+        "1 matching"
+      ),
     15_000,
-    "Physical Skills search did not render its one matching result."
+    "Physical Skills search did not render its owned one matching result."
   );
   await capture("fe090-28-skills.png");
   await returnToPhysicalSessionUtilities(
@@ -16240,12 +17338,18 @@ async function runPhysicalInterruptControl(
     },
     30_000
   );
+  const navigationBeforeAction = admission.baseline;
   const actions = await admission.wait("Physical interrupt session actions were unavailable.");
   await tapPhysicalSessionActionsOnceAndWait(
     input.actionRegistry,
     "interrupt-session-actions",
     actions,
-    async () => selectPhysicalSessionActionsMenuRoot(await readAndroidUiNodes()) !== null,
+    async () =>
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        navigationBeforeAction
+      ) &&
+      selectPhysicalSessionActionsMenuRoot(await readAndroidUiNodes()) !== null,
     "Physical interrupt action did not open."
   );
   const interrupt = await waitForPhysicalSelectedNode(
@@ -16257,11 +17361,30 @@ async function runPhysicalInterruptControl(
   await input.actionRegistry.tap(
     "interrupt-open",
     interrupt,
-    async () =>
-      selectPhysicalChromePageText(
-        await readAndroidUiNodes(),
-        "Interrupt active turn?"
-      ) !== null,
+    async () => {
+      const nodes = await readAndroidUiNodes();
+      return (
+        selectPhysicalConfirmationFooterAction(
+          nodes,
+          "Interrupt active turn?",
+          "Interrupt turn"
+        ) !== null &&
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          navigationBeforeAction
+        ) &&
+        physicalExactNumericTransition(
+          interruptCounterBefore,
+          Object.freeze({
+            interrupt_turn: physicalDashboardControlCallCount(
+              input.controls,
+              "interrupt_turn"
+            )
+          }),
+          { interrupt_turn: 0 }
+        )
+      );
+    },
     "Physical interrupt confirmation did not open."
   );
   requireCondition(
@@ -16302,8 +17425,25 @@ async function runPhysicalInterruptControl(
     "interrupt-confirm",
     confirm,
     async () =>
-      selectPhysicalChromePageText(await readAndroidUiNodes(), "Turn interrupted") !==
-      null,
+      selectPhysicalResultAction(
+        await readAndroidUiNodes(),
+        ["Turn interrupted"],
+        "Done"
+      ) !== null &&
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        navigationBeforeAction
+      ) &&
+      physicalExactNumericTransition(
+        interruptCounterBefore,
+        Object.freeze({
+          interrupt_turn: physicalDashboardControlCallCount(
+            input.controls,
+            "interrupt_turn"
+          )
+        }),
+        { interrupt_turn: 1 }
+      ),
     "Physical interrupt did not render terminal truth."
   );
   input.controls.finishInterrupt();
@@ -16339,6 +17479,10 @@ async function runPhysicalInterruptControl(
           nodes,
           readPhysicalSessionNavigationSnapshot(input).activeSubscribers
         ) &&
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          navigationBeforeAction
+        ) &&
         selectPhysicalSessionActionsMenuRoot(nodes) === null &&
         selectPhysicalChromePageText(nodes, "Turn interrupted") === null
       );
@@ -16362,12 +17506,26 @@ async function runPhysicalHostAccessControls(
   handoff: PhysicalSessionActionsHandoff
 ): Promise<void> {
   const managerAttempts = input.manager.snapshot().command_attempts;
+  const selectedNavigation = handoff.admission.baseline;
+  requireCondition(
+    selectedNavigation.activeSubscribers === 1 &&
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        selectedNavigation
+      ),
+    "Physical Host and access did not begin with retained selected-session authority."
+  );
   const actions = handoff.node;
   await tapPhysicalSessionActionsOnceAndWait(
     input.actionRegistry,
     "host-session-actions",
     actions,
-    async () => selectPhysicalSessionActionsMenuRoot(await readAndroidUiNodes()) !== null,
+    async () =>
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        selectedNavigation
+      ) &&
+      selectPhysicalSessionActionsMenuRoot(await readAndroidUiNodes()) !== null,
     "Physical Host and access session actions did not open."
   );
   const hostAccess = await waitForPhysicalSelectedNode(
@@ -16382,6 +17540,10 @@ async function runPhysicalHostAccessControls(
     async () => {
       const nodes = await readAndroidUiNodes();
       return (
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          selectedNavigation
+        ) &&
         selectPhysicalHostAccessContentRegion(nodes, "nested") !== null &&
         selectPhysicalHostAccessCloseAction(nodes, "nested") !== null
       );
@@ -16396,6 +17558,13 @@ async function runPhysicalHostAccessControls(
     "Physical Host and access omitted remote-ready truth."
   );
   await runOneProductionRemoteCheck(input.actionRegistry, "remote-check-nested", input.requestInspection, { context: "nested" });
+  requireCondition(
+    physicalSessionNavigationMatches(
+      readPhysicalSessionNavigationSnapshot(input),
+      selectedNavigation
+    ),
+    "Physical nested remote check changed selected-session authority."
+  );
   await revealPhysicalHostAccessContentNode(
     "text",
     "Read & write",
@@ -16435,7 +17604,15 @@ async function runPhysicalHostAccessControls(
     async () => {
       const nodes = await readAndroidUiNodes();
       return (
-        selectPhysicalChromePageText(nodes, "Revoke paired device?") !== null &&
+        selectPhysicalConfirmationFooterAction(
+          nodes,
+          "Revoke paired device?",
+          "Revoke device"
+        ) !== null &&
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          selectedNavigation
+        ) &&
         input.requestInspection.revokeRequests === revokeRequestsBeforeConfirmation &&
         countMatchingRows(input.db, "auth_devices", "revoked_at IS NOT NULL") ===
           revokedDevicesBeforeConfirmation
@@ -16481,23 +17658,28 @@ async function runPhysicalHostAccessControls(
   await input.actionRegistry.tap(
     "revoke-confirm",
     confirmRevoke,
-    async () =>
-      selectPhysicalChromePageText(
-        await readAndroidUiNodes(),
-        "Device revoked"
-      ) !== null &&
-      physicalExactNumericTransition(
-        revokeCounterBefore,
-        Object.freeze({
-          revoke_requests: input.requestInspection.revokeRequests,
-          revoked_devices: countMatchingRows(
-            input.db,
-            "auth_devices",
-            "revoked_at IS NOT NULL"
-          )
-        }),
-        { revoke_requests: 1, revoked_devices: 1 }
-      ),
+    async () => {
+      const nodes = await readAndroidUiNodes();
+      return (
+        physicalHostAccessTextVisible(nodes, "nested", "Device revoked") &&
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          selectedNavigation
+        ) &&
+        physicalExactNumericTransition(
+          revokeCounterBefore,
+          Object.freeze({
+            revoke_requests: input.requestInspection.revokeRequests,
+            revoked_devices: countMatchingRows(
+              input.db,
+              "auth_devices",
+              "revoked_at IS NOT NULL"
+            )
+          }),
+          { revoke_requests: 1, revoked_devices: 1 }
+        )
+      );
+    },
     "Physical Office browser revoke did not render terminal truth."
   );
   requireCondition(
@@ -16536,10 +17718,16 @@ async function runPhysicalHostAccessControls(
     "host-lock-open",
     lock,
     async () =>
-      selectPhysicalChromePageText(
-        await readAndroidUiNodes(),
-        "Lock remote writes?"
-      ) !== null,
+      selectPhysicalHostLockConfirmationAction(await readAndroidUiNodes()) !== null &&
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        selectedNavigation
+      ) &&
+      physicalExactNumericTransition(
+        lockCounterBefore,
+        Object.freeze({ lock_audits: countPhysicalAuditRows(input.db, "lock") }),
+        { lock_audits: 0 }
+      ),
     "Physical host-lock confirmation did not open."
   );
   requireCondition(
@@ -16570,11 +17758,26 @@ async function runPhysicalHostAccessControls(
   await input.actionRegistry.tap(
     "host-lock-confirm",
     confirmLock,
-    async () =>
-      selectPhysicalChromePageText(
-        await readAndroidUiNodes(),
-        "Remote writes locked"
-      ) !== null,
+    async () => {
+      const nodes = await readAndroidUiNodes();
+      return (
+        physicalHostAccessTextVisible(
+          nodes,
+          "nested",
+          "Remote writes locked",
+          "codexdeck unlock"
+        ) &&
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          selectedNavigation
+        ) &&
+        physicalExactNumericTransition(
+          lockCounterBefore,
+          Object.freeze({ lock_audits: countPhysicalAuditRows(input.db, "lock") }),
+          { lock_audits: 2 }
+        )
+      );
+    },
     "Physical host lock did not render locked truth."
   );
   requireCondition(
@@ -16606,6 +17809,10 @@ async function runPhysicalHostAccessControls(
     async () => {
       const nodes = await readAndroidUiNodes();
       return (
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          selectedNavigation
+        ) &&
         selectPhysicalHostAccessContentRegion(nodes, "nested") === null &&
         selectPhysicalSessionActionsMenuRoot(nodes) !== null
       );
@@ -16613,6 +17820,13 @@ async function runPhysicalHostAccessControls(
     "Physical nested Host and access did not close."
   );
   const navigationBeforeMissionBack = readPhysicalSessionNavigationSnapshot(input);
+  requireCondition(
+    physicalSessionNavigationMatches(
+      navigationBeforeMissionBack,
+      selectedNavigation
+    ),
+    "Physical nested Host and access return rebased selected-session authority."
+  );
   const missionBack = await waitForPhysicalSelectedNode(
     (nodes) =>
       selectPhysicalSessionDetailBack(
@@ -16643,13 +17857,20 @@ async function runPhysicalHostAccessControls(
     "Physical Mission Control did not render locked truth."
   );
   await capture("fe090-47-mission-locked.png");
-  input.actionRegistry.consume("local-unlock");
   const localUnlock = await postLocalUnlock(input.env);
   requireCondition(
     localUnlock.status === 200 &&
       localUnlock.locked === false &&
       input.manager.snapshot().command_attempts === managerAttempts,
     "Physical local unlock failed or mutated Serve state."
+  );
+  input.actionRegistry.consume(
+    "local-unlock",
+    () =>
+      localUnlock.status === 200 &&
+      localUnlock.locked === false &&
+      input.manager.snapshot().command_attempts === managerAttempts,
+    "Physical local unlock observation did not retain exact local-only truth."
   );
   const reloadBefore = readPhysicalMissionControlRequestSnapshot(
     input.requestInspection
@@ -16727,7 +17948,11 @@ async function runPhysicalDashboardProfileSwitch(
     readForeignServe: readServeStatusFingerprint,
     readManagerAttempts: () => input.manager.snapshot().command_attempts
   });
-  input.actionRegistry.consume("profile-switch-away");
+  const profileAwaySwitchBefore = readPhysicalProfileAwaySnapshot({
+    foreignServe: input.foreignServeBefore,
+    managerAttempts,
+    requestInspection: input.requestInspection
+  });
   await switchSavedProfile(input.profileSwitch.awayProfileId);
   input.setSelectedProfile("away");
   await waitFor(
@@ -16749,16 +17974,34 @@ async function runPhysicalDashboardProfileSwitch(
     input.manager.snapshot().command_attempts === managerAttempts,
     "Physical dashboard profile-away mutated Serve state."
   );
+  const profileAwayBefore = readPhysicalProfileAwaySnapshot({
+    foreignServe: await readServeStatusFingerprint(),
+    managerAttempts: input.manager.snapshot().command_attempts,
+    requestInspection: input.requestInspection
+  });
+  requireCondition(
+    physicalProfileAwaySwitchBoundaryIsExact(
+      profileAwaySwitchBefore,
+      profileAwayBefore
+    ),
+    "Physical dashboard profile-away rebased unexpected browser or mutation traffic."
+  );
+  input.actionRegistry.consume(
+    "profile-switch-away",
+    () =>
+      input.remote.readAdmission().admission === "closed" &&
+      input.remote.snapshot().active_control_operations === 0 &&
+      physicalProfileAwaySwitchBoundaryIsExact(
+        profileAwaySwitchBefore,
+        profileAwayBefore
+      ),
+    "Physical dashboard profile-away observation was not exact."
+  );
   const refreshAway = await waitForPhysicalSelectedNode(
     selectPhysicalMissionControlRefresh,
     30_000,
     "Physical dashboard refresh was unavailable before profile-away observation."
   );
-  const profileAwayBefore = readPhysicalProfileAwaySnapshot({
-    foreignServe: input.foreignServeBefore,
-    managerAttempts: input.manager.snapshot().command_attempts,
-    requestInspection: input.requestInspection
-  });
   await input.actionRegistry.tap(
     "profile-away-refresh",
     refreshAway,
@@ -16778,7 +18021,11 @@ async function runPhysicalDashboardProfileSwitch(
   );
   await capture("fe090-38-profile-away.png");
 
-  input.actionRegistry.consume("profile-switch-return");
+  const profileReturnBefore = readPhysicalProfileReturnSnapshot({
+    foreignServe: input.foreignServeBefore,
+    managerAttempts,
+    requestInspection: input.requestInspection
+  });
   await switchSavedProfile(input.profileSwitch.dedicatedProfileId);
   input.setSelectedProfile("dedicated");
   await waitFor(
@@ -16788,11 +18035,22 @@ async function runPhysicalDashboardProfileSwitch(
     15_000,
     "Physical dashboard profile return did not reopen by observation."
   );
-  const profileReturnBefore = readPhysicalProfileReturnSnapshot({
-    foreignServe: input.foreignServeBefore,
+  const profileReturnSwitchAfter = readPhysicalProfileReturnSnapshot({
+    foreignServe: await readServeStatusFingerprint(),
     managerAttempts: input.manager.snapshot().command_attempts,
     requestInspection: input.requestInspection
   });
+  input.actionRegistry.consume(
+    "profile-switch-return",
+    () =>
+      input.remote.readAdmission().admission === "open" &&
+      input.remote.snapshot().active_control_operations === 0 &&
+      physicalProfileReturnSwitchBoundaryIsExact(
+        profileReturnBefore,
+        profileReturnSwitchAfter
+      ),
+    "Physical dashboard profile-return observation rebased browser or mutation traffic."
+  );
   const refreshReturn = await waitForPhysicalSelectedNode(
     selectPhysicalMissionControlRefresh,
     30_000,
@@ -17064,12 +18322,12 @@ function physicalRuntimeFixtureNode(
 }
 
 async function runPhysicalTalkBackTraversal(
-  externalOrigin: string,
+  input: ProductionUiEntryInput & { readonly prompt: PhysicalPromptRuntime },
   artifacts: PhysicalTalkBackArtifacts
 ): Promise<PhysicalTalkBackResult> {
   const service = requireAndroidTalkBackService();
   requireCondition(
-    new URL(externalOrigin).protocol === "https:",
+    new URL(input.externalOrigin).protocol === "https:",
     "TalkBack traversal lost its private HTTPS origin."
   );
   requirePhysicalTalkBackDevicePreflight();
@@ -17144,15 +18402,40 @@ async function runPhysicalTalkBackTraversal(
       48,
       "TalkBack traversal did not reach the selected session."
     );
+    const navigationBeforeSessionOpen = readPhysicalSessionNavigationSnapshot(input);
+    requireCondition(
+      navigationBeforeSessionOpen.activeSubscribers === 0,
+      "TalkBack selected-session traversal retained a background stream."
+    );
     const selectedSessionClick = await activatePhysicalTalkBackFocus(
       observer,
       selectedSession,
+      input.actionRegistry,
+      "talkback-open-session",
+      async () => {
+        const navigation = readPhysicalSessionNavigationSnapshot(input);
+        return (
+          physicalSessionNavigationOpened(navigation, navigationBeforeSessionOpen) &&
+          physicalSessionWriteReady(
+            await readAndroidUiNodes(),
+            navigation.activeSubscribers
+          )
+        );
+      },
       "TalkBack did not activate the selected session with double-tap-anywhere."
     );
     await waitForAndroidUiText(
       "Ready to send",
       30_000,
       "TalkBack did not open Session Detail."
+    );
+    const sessionNavigation = readPhysicalSessionNavigationSnapshot(input);
+    requireCondition(
+      physicalSessionNavigationOpened(
+        sessionNavigation,
+        navigationBeforeSessionOpen
+      ),
+      "TalkBack selected-session activation did not retain exact navigation truth."
     );
     const sessionDetail = await movePhysicalTalkBackFocus(
       observer,
@@ -17181,6 +18464,18 @@ async function runPhysicalTalkBackTraversal(
     const modelTriggerClick = await activatePhysicalTalkBackFocus(
       observer,
       modelTrigger,
+      input.actionRegistry,
+      "talkback-model-open",
+      async () =>
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          sessionNavigation
+        ) &&
+        physicalFixedSheetTextVisible(
+          await readAndroidUiNodes(),
+          "/model",
+          "Model control ready"
+        ),
       "TalkBack did not activate /model with double-tap-anywhere."
     );
     await waitForAndroidUiText(
@@ -17229,6 +18524,17 @@ async function runPhysicalTalkBackTraversal(
     const modelCloseClick = await activatePhysicalTalkBackFocus(
       observer,
       modelClose,
+      input.actionRegistry,
+      "talkback-model-close",
+      async () =>
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          sessionNavigation
+        ) &&
+        physicalDialogClosedOnSessionDetail(
+          await readAndroidUiNodes(),
+          "Close model control"
+        ),
       "TalkBack did not close /model with double-tap-anywhere."
     );
     await waitForAndroidUiText(
@@ -17253,6 +18559,15 @@ async function runPhysicalTalkBackTraversal(
     const backToMissionClick = await activatePhysicalTalkBackFocus(
       observer,
       backToMission,
+      input.actionRegistry,
+      "talkback-detail-back",
+      async () =>
+        physicalSessionNavigationBackgrounded(
+          readPhysicalSessionNavigationSnapshot(input),
+          sessionNavigation
+        ) &&
+        selectPhysicalMissionControlDestination(await readAndroidUiNodes()) !==
+          null,
       "TalkBack did not return to Mission Control with double-tap-anywhere."
     );
     await waitForAndroidUiText(
@@ -17990,6 +19305,9 @@ function requirePhysicalTalkBackProductEvent(
 async function activatePhysicalTalkBackFocus(
   runtime: PhysicalTalkBackObserverRuntime,
   focus: PhysicalTalkBackObserverEvent,
+  actionRegistry: PhysicalAggregateActionRegistry,
+  actionId: PhysicalAggregateActionId,
+  completed: () => boolean | Promise<boolean>,
   message: string
 ): Promise<PhysicalTalkBackObserverEvent> {
   requireCondition(
@@ -18002,29 +19320,67 @@ async function activatePhysicalTalkBackFocus(
   );
   const point = selectPhysicalTalkBackActivationPoint(focus);
   const checkpoint = runtime.events.at(-1)?.sequence ?? focus.sequence;
-  runPhysicalTalkBackDoubleTap(point.x, point.y);
-  await waitForPhysicalTalkBackCondition(
-    runtime,
-    () =>
-      runtime.events.some(
-        (event) => event.sequence > checkpoint && event.kind === "click"
-      ),
-    4_000,
+  const node = physicalTalkBackFocusOwnerNode(focus);
+  let click: PhysicalTalkBackObserverEvent | null = null;
+  await actionRegistry.activate(
+    actionId,
+    node,
+    () => runPhysicalTalkBackDoubleTap(point.x, point.y),
+    async () => {
+      const matchingClick = runtime.events.find(
+        (event) =>
+          event.sequence > checkpoint &&
+          physicalTalkBackClickMatchesFocus(event, focus)
+      );
+      if (matchingClick === undefined || !(await completed())) return false;
+      click = matchingClick;
+      return true;
+    },
     message
   );
-  const click = runtime.events.find(
-    (event) => event.sequence > checkpoint && event.kind === "click"
-  );
-  requireCondition(
-    click !== undefined &&
-      click.category === focus.category &&
-      click.bounds.left === focus.bounds.left &&
-      click.bounds.top === focus.bounds.top &&
-      click.bounds.right === focus.bounds.right &&
-      click.bounds.bottom === focus.bounds.bottom,
-    message
-  );
+  requireCondition(click !== null, message);
   return click;
+}
+
+function physicalTalkBackClickMatchesFocus(
+  event: PhysicalTalkBackObserverEvent,
+  focus: PhysicalTalkBackObserverEvent
+): boolean {
+  return (
+    event.kind === "click" &&
+    event.category === focus.category &&
+    event.bounds.left === focus.bounds.left &&
+    event.bounds.top === focus.bounds.top &&
+    event.bounds.right === focus.bounds.right &&
+    event.bounds.bottom === focus.bounds.bottom
+  );
+}
+
+function physicalTalkBackFocusOwnerNode(
+  focus: PhysicalTalkBackObserverEvent
+): AndroidUiNode {
+  const className = (() => {
+    switch (focus.className) {
+      case "button":
+        return "android.widget.Button";
+      case "edit":
+        return "android.widget.EditText";
+      case "text":
+        return "android.widget.TextView";
+      case "other":
+      case "view":
+        return "android.view.View";
+    }
+  })();
+  return Object.freeze({
+    bounds: Object.freeze({ ...focus.bounds }),
+    className,
+    clickable: focus.clickable,
+    description: `TalkBack focus ${focus.category}`,
+    focused: true,
+    resourceId: "",
+    text: ""
+  });
 }
 
 function selectPhysicalTalkBackActivationPoint(
@@ -18123,6 +19479,10 @@ async function runPhysicalArchiveControl(
   const archiveCounterBefore = Object.freeze({
     archive_session: archiveCallsBefore
   });
+  requireCondition(
+    archiveCallsBefore === 0,
+    "Physical Archive session started with a prechanged local mutation count."
+  );
   await waitFor(
     () => input.prompt.subscribers.snapshot().active_subscribers === 0,
     15_000,
@@ -18130,7 +19490,7 @@ async function runPhysicalArchiveControl(
   );
   const quietExpanded = await ensurePhysicalQuietSessionQueueExpanded(
     "archive",
-    input.actionRegistry,
+    input,
     "archive-expand-quiet"
   );
   const navigationBefore = readPhysicalSessionNavigationSnapshot(input);
@@ -18153,6 +19513,11 @@ async function runPhysicalArchiveControl(
     input,
     "Physical archive Session Detail did not settle with current write authority."
   );
+  const selectedNavigation = readPhysicalSessionNavigationSnapshot(input);
+  requireCondition(
+    selectedNavigation.activeSubscribers === 1,
+    "Physical Archive session did not retain one selected-session subscriber."
+  );
   const actions = await waitForPhysicalSessionActions(
     {
       readNavigation: () => readPhysicalSessionNavigationSnapshot(input),
@@ -18165,7 +19530,11 @@ async function runPhysicalArchiveControl(
     input.actionRegistry,
     "archive-session-actions",
     actions,
-    async () => selectPhysicalSessionActionsMenuRoot(await readAndroidUiNodes()) !== null,
+    async () =>
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        selectedNavigation
+      ) && selectPhysicalSessionActionsMenuRoot(await readAndroidUiNodes()) !== null,
     "Physical archive action did not open."
   );
   const archive = await waitForPhysicalSelectedNode(
@@ -18178,8 +19547,21 @@ async function runPhysicalArchiveControl(
     "archive-open",
     archive,
     async () =>
-      selectPhysicalChromePageText(await readAndroidUiNodes(), "Archive session?") !==
-      null,
+      selectPhysicalArchiveConfirmationAction(await readAndroidUiNodes()) !== null &&
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        selectedNavigation
+      ) &&
+      physicalExactNumericTransition(
+        archiveCounterBefore,
+        Object.freeze({
+          archive_session: physicalDashboardControlCallCount(
+            input.controls,
+            "archive_session"
+          )
+        }),
+        { archive_session: 0 }
+      ),
     "Physical Archive session confirmation did not open."
   );
   await capture("fe090-40-archive-confirmation.png");
@@ -18188,10 +19570,6 @@ async function runPhysicalArchiveControl(
     "Physical Archive session final action was unavailable."
   );
   measure(confirm, "confirm-archive");
-  requireCondition(
-    archiveCallsBefore === 0,
-    "Physical Archive session started with a prechanged local mutation count."
-  );
   requireCondition(
     physicalExactNumericTransition(
       archiveCounterBefore,
@@ -18221,21 +19599,30 @@ async function runPhysicalArchiveControl(
   await input.actionRegistry.tap(
     "archive-confirm",
     confirm,
-    async () =>
-      selectPhysicalChromePageText(
-        await readAndroidUiNodes(),
-        "Session archived"
-      ) !== null &&
-      physicalExactNumericTransition(
-        archiveCounterBefore,
-        Object.freeze({
-          archive_session: physicalDashboardControlCallCount(
-            input.controls,
-            "archive_session"
-          )
-        }),
-        { archive_session: 1 }
-      ),
+    async () => {
+      const nodes = await readAndroidUiNodes();
+      return (
+        selectPhysicalResultAction(
+          nodes,
+          ["Session archived"],
+          "Back to sessions"
+        ) !== null &&
+        physicalSessionNavigationMatches(
+          readPhysicalSessionNavigationSnapshot(input),
+          selectedNavigation
+        ) &&
+        physicalExactNumericTransition(
+          archiveCounterBefore,
+          Object.freeze({
+            archive_session: physicalDashboardControlCallCount(
+              input.controls,
+              "archive_session"
+            )
+          }),
+          { archive_session: 1 }
+        )
+      );
+    },
     "Physical Archive session did not render terminal truth."
   );
   await capture("fe090-41-session-archived.png");
@@ -18246,8 +19633,8 @@ async function runPhysicalArchiveControl(
   );
   const navigationBeforeBack = readPhysicalSessionNavigationSnapshot(input);
   requireCondition(
-    navigationBeforeBack.activeSubscribers === 1,
-    "Physical archived-session result lost Session Detail before its explicit return."
+    physicalSessionNavigationMatches(navigationBeforeBack, selectedNavigation),
+    "Physical archived-session result changed Session Detail authority before its explicit return."
   );
   const navigationAfterBack = Object.freeze({
     ...navigationBeforeBack,
@@ -18340,8 +19727,23 @@ async function runPhysicalSelfRevoke(
     "self-revoke-open",
     self,
     async () =>
-      selectPhysicalChromePageText(await readAndroidUiNodes(), "Revoke this phone?") !==
-      null,
+      selectPhysicalConfirmationFooterAction(
+        await readAndroidUiNodes(),
+        "Revoke this phone?",
+        "Revoke this phone"
+      ) !== null &&
+      physicalExactNumericTransition(
+        selfRevokeCounterBefore,
+        Object.freeze({
+          revoke_requests: input.requestInspection.revokeRequests,
+          revoked_devices: countMatchingRows(
+            input.db,
+            "auth_devices",
+            "revoked_at IS NOT NULL"
+          )
+        }),
+        { revoke_requests: 0, revoked_devices: 0 }
+      ),
     "Physical self-revoke confirmation did not open."
   );
   requireCondition(
@@ -18385,9 +19787,29 @@ async function runPhysicalSelfRevoke(
   await input.actionRegistry.tap(
     "self-revoke-confirm",
     confirm,
-    async () =>
-      selectPhysicalChromePageText(await readAndroidUiNodes(), "This phone was revoked") !==
-      null,
+    async () => {
+      const nodes = await readAndroidUiNodes();
+      return (
+        physicalHostAccessTextVisible(
+          nodes,
+          "global",
+          "This phone was revoked",
+          "Create a new pairing link on the laptop before using HostDeck here again."
+        ) &&
+        physicalExactNumericTransition(
+          selfRevokeCounterBefore,
+          Object.freeze({
+            revoke_requests: input.requestInspection.revokeRequests,
+            revoked_devices: countMatchingRows(
+              input.db,
+              "auth_devices",
+              "revoked_at IS NOT NULL"
+            )
+          }),
+          { revoke_requests: 1, revoked_devices: 1 }
+        )
+      );
+    },
     "Physical self-revoke did not render terminal loss of authority."
   );
   await waitFor(
@@ -18548,7 +19970,11 @@ async function runProductionRemoteRecoveryUiSequence(
     input.externalOrigin
   );
 
-  input.actionRegistry.consume("profile-switch-away");
+  const profileAwaySwitchBefore = readPhysicalProfileAwaySnapshot({
+    foreignServe: input.foreignServeBefore,
+    managerAttempts: managerAttemptsBeforeSwitch,
+    requestInspection: input.requestInspection
+  });
   await switchSavedProfile(input.profileSwitch.awayProfileId);
   input.setSelectedProfile("away");
   await waitFor(
@@ -18571,16 +19997,35 @@ async function runProductionRemoteRecoveryUiSequence(
     "Profile-away triggered an automatic Serve mutation."
   );
 
+  const profileAwayBefore = readPhysicalProfileAwaySnapshot({
+    foreignServe: await readServeStatusFingerprint(),
+    managerAttempts: input.manager.snapshot().command_attempts,
+    requestInspection: input.requestInspection
+  });
+  requireCondition(
+    physicalProfileAwaySwitchBoundaryIsExact(
+      profileAwaySwitchBefore,
+      profileAwayBefore
+    ),
+    "Production recovery profile-away rebased unexpected browser or mutation traffic."
+  );
+  input.actionRegistry.consume(
+    "profile-switch-away",
+    () =>
+      input.remote.readAdmission().admission === "closed" &&
+      input.remote.snapshot().active_control_operations === 0 &&
+      physicalProfileAwaySwitchBoundaryIsExact(
+        profileAwaySwitchBefore,
+        profileAwayBefore
+      ),
+    "Production recovery profile-away observation was not exact."
+  );
+
   const refreshAway = await waitForPhysicalSelectedNode(
     selectPhysicalMissionControlRefresh,
     30_000,
     "Production recovery refresh control was unavailable before profile-away observation."
   );
-  const profileAwayBefore = readPhysicalProfileAwaySnapshot({
-    foreignServe: input.foreignServeBefore,
-    managerAttempts: input.manager.snapshot().command_attempts,
-    requestInspection: input.requestInspection
-  });
   await input.actionRegistry.tap(
     "profile-away-refresh",
     refreshAway,
@@ -18603,7 +20048,11 @@ async function runProductionRemoteRecoveryUiSequence(
     input.externalOrigin
   );
 
-  input.actionRegistry.consume("profile-switch-return");
+  const profileReturnBefore = readPhysicalProfileReturnSnapshot({
+    foreignServe: input.foreignServeBefore,
+    managerAttempts: managerAttemptsBeforeSwitch,
+    requestInspection: input.requestInspection
+  });
   await switchSavedProfile(input.profileSwitch.dedicatedProfileId);
   input.setSelectedProfile("dedicated");
   await waitFor(
@@ -18613,11 +20062,22 @@ async function runProductionRemoteRecoveryUiSequence(
     15_000,
     "Production recovery profile return did not reopen by observation."
   );
-  const profileReturnBefore = readPhysicalProfileReturnSnapshot({
-    foreignServe: input.foreignServeBefore,
+  const profileReturnSwitchAfter = readPhysicalProfileReturnSnapshot({
+    foreignServe: await readServeStatusFingerprint(),
     managerAttempts: input.manager.snapshot().command_attempts,
     requestInspection: input.requestInspection
   });
+  input.actionRegistry.consume(
+    "profile-switch-return",
+    () =>
+      input.remote.readAdmission().admission === "open" &&
+      input.remote.snapshot().active_control_operations === 0 &&
+      physicalProfileReturnSwitchBoundaryIsExact(
+        profileReturnBefore,
+        profileReturnSwitchAfter
+      ),
+    "Production recovery profile-return observation rebased browser or mutation traffic."
+  );
   const refreshRecovered = await waitForPhysicalSelectedNode(
     selectPhysicalMissionControlRefresh,
     30_000,
@@ -19495,6 +20955,28 @@ function selectPhysicalHostAccessContentRegion(
   });
 }
 
+function physicalHostAccessTextVisible(
+  nodes: readonly AndroidUiNode[],
+  context: PhysicalHostAccessContext,
+  ...texts: readonly string[]
+): boolean {
+  const region = selectPhysicalHostAccessContentRegion(nodes, context);
+  return (
+    region !== null &&
+    texts.length > 0 &&
+    texts.every(
+      (text) =>
+        nodes.filter(
+          (node) =>
+            node.text === text &&
+            !node.clickable &&
+            node.enabled !== false &&
+            androidUiNodeIsFullyInsideRegion(node, region)
+        ).length === 1
+    )
+  );
+}
+
 function physicalHostAccessTitleIsEligible(
   node: AndroidUiNode,
   page: PhysicalScreenshotRegion
@@ -19730,6 +21212,17 @@ function selectPhysicalSessionActionsTrigger(
   return triggers[0];
 }
 
+function physicalSessionActionsOverlayMarkerValues(): ReadonlySet<string> {
+  return new Set([
+    ...physicalSessionActionsOverlayMarkers,
+    ...physicalFixedSheetOwnerTitles,
+    "Confirm context compaction",
+    "Lock remote writes?",
+    "Revoke paired device?",
+    "Revoke this phone?"
+  ]);
+}
+
 function physicalSessionActionsOverlayIsOpen(
   nodes: readonly AndroidUiNode[],
   page: PhysicalScreenshotRegion
@@ -19745,27 +21238,41 @@ function physicalSessionActionsOverlayIsOpen(
   } catch {
     return true;
   }
+  const overlayMarkerValues = physicalSessionActionsOverlayMarkerValues();
   const markers = nodes.filter((node) =>
-    physicalSessionActionsOverlayMarkers.some((marker) =>
+    [...overlayMarkerValues].some((marker) =>
       matchesAndroidUiNode(node, "semantic", marker)
     )
   );
   if (markers.length === 0) return false;
 
+  const structuralDescriptions = new Set([
+    ...Object.values(physicalFixedSheetCloseDescriptions),
+    "Back to session actions",
+    "Back to session utilities",
+    "Close Host and access"
+  ]);
   const structuralAnchors = nodes.filter(
     (node) =>
-      [
-        "Close session actions",
-        "Back to session actions",
-        "Close Host and access"
-      ].includes(node.description) &&
+      structuralDescriptions.has(node.description) &&
       node.clickable &&
       node.enabled !== false &&
       androidUiNodeIsFullyInsideRegion(node, page)
   );
-  const terminalActions = nodes.filter(
+  const structuralActionTexts = new Set([
+    "Archive session",
+    "Back to sessions",
+    "Cancel",
+    "Confirm compact",
+    "Done",
+    "Interrupt turn",
+    "Lock writes",
+    "Revoke device",
+    "Revoke this phone"
+  ]);
+  const structuralActions = nodes.filter(
     (node) =>
-      node.text === "Done" &&
+      structuralActionTexts.has(node.text) &&
       node.clickable &&
       node.enabled !== false &&
       androidUiNodeIsFullyInsideRegion(node, page)
@@ -19776,7 +21283,7 @@ function physicalSessionActionsOverlayIsOpen(
       structuralAnchors.some((anchor) =>
         physicalAndroidNodesAreNear(anchor, marker, 640)
       ) ||
-      terminalActions.some((action) =>
+      structuralActions.some((action) =>
         physicalAndroidNodesAreNear(action, marker, 640)
       )
     );
@@ -19827,7 +21334,7 @@ function physicalSessionActionsStateSummary(
     (node) => node.description === physicalSessionActionsTriggerDescription
   );
   const overlays = nodes.filter((node) =>
-    physicalSessionActionsOverlayMarkers.some((marker) =>
+    [...physicalSessionActionsOverlayMarkerValues()].some((marker) =>
       matchesAndroidUiNode(node, "semantic", marker)
     )
   );
@@ -20191,6 +21698,15 @@ async function runProductionPromptUiSequence(
     input,
     "Physical prompt detail did not establish one current production stream."
   );
+  const selectedNavigation = readPhysicalSessionNavigationSnapshot(input);
+  const promptRequestsAtEntry = input.requestInspection.promptRequests;
+  const promptCallsAtEntry = input.prompt.startCalls.length;
+  requireCondition(
+    selectedNavigation.activeSubscribers === 1 &&
+      promptRequestsAtEntry === 0 &&
+      promptCallsAtEntry === 0,
+    "Physical prompt did not begin with exact selected-session and dispatch authority."
+  );
   const textarea = await waitForAndroidPromptEditor(
     inputLabel,
     30_000,
@@ -20199,7 +21715,14 @@ async function runProductionPromptUiSequence(
   await input.actionRegistry.tap(
     "prompt-editor",
     textarea,
-    () => isAndroidKeyboardVisible(),
+    () =>
+      isAndroidKeyboardVisible() &&
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        selectedNavigation
+      ) &&
+      input.requestInspection.promptRequests === promptRequestsAtEntry &&
+      input.prompt.startCalls.length === promptCallsAtEntry,
     "Physical prompt textarea did not open the Android keyboard."
   );
   await waitFor(
@@ -20224,7 +21747,13 @@ async function runProductionPromptUiSequence(
     (node) => node.className === androidEditTextClass
   ).length;
   requireCondition(
-    promptTargetVisible && promptEditorVisible && promptSendVisible,
+    promptTargetVisible &&
+      promptEditorVisible &&
+      promptSendVisible &&
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        selectedNavigation
+      ),
     "Physical prompt controls were not all visible above the Android keyboard " +
       `(target=${promptTargetVisible};label=${promptLabelVisible};` +
       `editor=${promptEditorVisible};send=${promptSendVisible};` +
@@ -20256,14 +21785,25 @@ async function runProductionPromptUiSequence(
   await input.actionRegistry.tap(
     "prompt-send",
     send,
-    () => input.requestInspection.promptRequests === promptRequestsBefore + 1,
+    () =>
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        selectedNavigation
+      ) &&
+      input.requestInspection.promptRequests === promptRequestsBefore + 1 &&
+      input.prompt.startCalls.length === promptCallsAtEntry + 1,
     "Physical prompt send did not issue exactly one protected request."
   );
-  await waitForAndroidUiNode(
-    "text",
-    "New turn accepted",
+  await waitFor(
+    async () =>
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        selectedNavigation
+      ) &&
+      selectPhysicalChromePageText(await readAndroidUiNodes(), "New turn accepted") !==
+        null,
     30_000,
-    "Physical prompt accepted state did not render on Android."
+    "Physical prompt accepted state did not render on Android with retained authority."
   );
   const acceptedNodes = await readAndroidUiNodes();
   const promptLines = physicalPromptText.split("\n");
@@ -20292,12 +21832,16 @@ async function runProductionPromptUiSequence(
   );
   const scrubbedNodes = await readAndroidUiNodes();
   requireCondition(
-    scrubbedNodes.every((node) =>
-      promptLines.every(
-        (line) =>
-          !node.text.includes(line) && !node.description.includes(line)
-      )
-    ),
+    physicalSessionNavigationMatches(
+      readPhysicalSessionNavigationSnapshot(input),
+      selectedNavigation
+    ) &&
+      scrubbedNodes.every((node) =>
+        promptLines.every(
+          (line) =>
+            !node.text.includes(line) && !node.description.includes(line)
+        )
+      ),
     "Physical prompt text remained visible after accepted-state keyboard cleanup."
   );
   for (const line of promptLines) {
@@ -20310,11 +21854,15 @@ async function runProductionPromptUiSequence(
   }
 
   await input.prompt.advance("in_progress");
-  await waitForAndroidUiNode(
-    "text",
-    "Turn running",
+  await waitFor(
+    async () =>
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        selectedNavigation
+      ) &&
+      selectPhysicalChromePageText(await readAndroidUiNodes(), "Turn running") !== null,
     30_000,
-    "Physical prompt running event did not render on Android."
+    "Physical prompt running event did not render with retained authority on Android."
   );
   if (options.captureScreenshots !== false) {
     await capturePhysicalScreenshot(
@@ -20322,11 +21870,16 @@ async function runProductionPromptUiSequence(
     );
   }
   await input.prompt.advance("completed");
-  await waitForAndroidUiNode(
-    "text",
-    "Turn completed",
+  await waitFor(
+    async () =>
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        selectedNavigation
+      ) &&
+      selectPhysicalChromePageText(await readAndroidUiNodes(), "Turn completed") !==
+        null,
     30_000,
-    "Physical prompt completion event did not render on Android."
+    "Physical prompt completion event did not render with retained authority on Android."
   );
   if (options.captureScreenshots !== false) {
     await capturePhysicalScreenshot(
@@ -20336,7 +21889,11 @@ async function runProductionPromptUiSequence(
   requireCondition(
     input.requestInspection.promptRequests === 1 &&
       input.prompt.startCalls.length === 1 &&
-      input.prompt.streamFailureCount === 0,
+      input.prompt.streamFailureCount === 0 &&
+      physicalSessionNavigationMatches(
+        readPhysicalSessionNavigationSnapshot(input),
+        selectedNavigation
+      ),
     "Physical prompt progress introduced a duplicate dispatch or stream failure."
   );
 
@@ -20647,6 +22204,8 @@ function findAndroidPromptEditor(
 function findPhysicalSkillsSearchEditor(
   nodes: readonly AndroidUiNode[]
 ): AndroidUiNode | null {
+  const body = selectPhysicalUtilityPageBody(nodes, "/skills");
+  if (body === null) return null;
   const titles = nodes.filter((node) => node.text === "/skills");
   const currentStatuses = nodes.filter(
     (node) => node.text === "Skills capture current"
@@ -20664,19 +22223,13 @@ function findPhysicalSkillsSearchEditor(
   const title = titles[0];
   const current = currentStatuses[0];
   if (title === undefined || current === undefined) return null;
-  let page: PhysicalScreenshotRegion;
-  try {
-    page = selectChromePageViewport(nodes);
-  } catch {
-    return null;
-  }
   const editors = nodes.filter(
     (node) =>
       node.className === androidEditTextClass &&
       node.clickable &&
       androidUiNodeWidth(node) >= 120 &&
       androidUiNodeHeight(node) >= 36 &&
-      androidUiNodeIsFullyInsideRegion(node, page) &&
+      androidUiNodeIsFullyInsideRegion(node, body) &&
       node.bounds.top >= title.bounds.bottom &&
       node.bounds.bottom <= current.bounds.top
   );
@@ -21016,28 +22569,30 @@ function selectPhysicalConfirmationFooterAction(
   titleText: string,
   actionText: string
 ): AndroidUiNode | null {
-  let page: PhysicalScreenshotRegion;
-  try {
-    page = selectChromePageViewport(nodes);
-  } catch {
-    return null;
-  }
+  const owner = selectPhysicalConfirmationOwner(nodes, titleText);
+  if (owner === null) return null;
   const titles = nodes.filter(
     (node) =>
       node.text === titleText &&
       !node.clickable &&
       node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
+      androidUiNodeIsFullyInsideRegion(node, owner.body)
   );
   const cancels = nodes.filter(
     (node) =>
       node.text === "Cancel" &&
       node.clickable &&
       node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
+      androidUiNodeIsFullyInsideRegion(node, owner.body)
   );
-  if (titles.length !== 1 || cancels.length !== 1) return null;
-  const title = titles[0];
+  const inlineTitle = owner.title === null ? titles[0] : owner.title;
+  if (
+    (owner.title === null ? titles.length !== 1 : titles.length !== 0) ||
+    cancels.length !== 1
+  ) {
+    return null;
+  }
+  const title = inlineTitle;
   const cancel = cancels[0];
   if (title === undefined || cancel === undefined) return null;
   if (cancel.bounds.top < title.bounds.bottom) return null;
@@ -21049,7 +22604,7 @@ function selectPhysicalConfirmationFooterAction(
       node.text !== actionText ||
       !node.clickable ||
       node.enabled === false ||
-      !androidUiNodeIsFullyInsideRegion(node, page) ||
+      !androidUiNodeIsFullyInsideRegion(node, owner.body) ||
       node.bounds.top < title.bounds.bottom
     ) {
       return false;
@@ -21070,33 +22625,231 @@ function selectPhysicalResultAction(
   resultMarkers: readonly string[],
   actionText: string
 ): AndroidUiNode | null {
-  let page: PhysicalScreenshotRegion;
-  try {
-    page = selectChromePageViewport(nodes);
-  } catch {
-    return null;
-  }
+  if (resultMarkers.length !== 1) return null;
+  const resultTitle = resultMarkers[0];
+  const expectedAction = resultTitle === "Turn interrupted"
+    ? "Done"
+    : resultTitle === "Session archived"
+      ? "Back to sessions"
+      : null;
+  if (resultTitle === undefined || actionText !== expectedAction) return null;
+  const owner = selectPhysicalOwnedHeaderBody(
+    nodes,
+    resultTitle,
+    "Close session actions",
+    null,
+    true
+  );
+  if (owner === null) return null;
   const markers = nodes.filter(
     (node) =>
-      resultMarkers.includes(node.text) &&
+      node.text === resultTitle &&
       !node.clickable &&
-      androidUiNodeIsFullyInsideRegion(node, page)
+      node.enabled !== false &&
+      androidUiNodeIsFullyInsideRegion(node, owner.body)
   );
   const actions = nodes.filter(
     (node) =>
       node.text === actionText &&
       node.clickable &&
       node.enabled !== false &&
-      androidUiNodeIsFullyInsideRegion(node, page)
+      androidUiNodeIsFullyInsideRegion(node, owner.body)
   );
   if (markers.length !== 1 || actions.length !== 1) return null;
   const marker = markers[0];
   const action = actions[0];
   if (marker === undefined || action === undefined) return null;
   return action.bounds.top >= marker.bounds.bottom &&
-    androidUiNodesShareControlRegion(action, marker)
+    androidUiNodeWidth(action) >= 72 &&
+    androidUiNodeHeight(action) >= 36
     ? action
     : null;
+}
+
+interface PhysicalActionOwner {
+  readonly body: PhysicalScreenshotRegion;
+  readonly title: AndroidUiNode | null;
+}
+
+function selectPhysicalConfirmationOwner(
+  nodes: readonly AndroidUiNode[],
+  titleText: string
+): PhysicalActionOwner | null {
+  if (titleText === "Confirm context compaction") {
+    const body = selectPhysicalUtilityPageBody(nodes, "/compact");
+    if (body === null) return null;
+    const titles = nodes.filter(
+      (node) =>
+        node.text === titleText &&
+        !node.clickable &&
+        node.enabled !== false &&
+        androidUiNodeIsWebText(node) &&
+        androidUiNodeWidth(node) >= 48 &&
+        androidUiNodeHeight(node) >= 16 &&
+        androidUiNodeIsFullyInsideRegion(node, body)
+    );
+    return titles.length === 1
+      ? Object.freeze({ body, title: null })
+      : null;
+  }
+  if (titleText === "Interrupt active turn?" || titleText === "Archive session?") {
+    return selectPhysicalOwnedHeaderBody(
+      nodes,
+      titleText,
+      "Close session actions",
+      "Back to session actions",
+      false
+    );
+  }
+  if (titleText === "Lock remote writes?") {
+    return selectPhysicalOwnedHeaderBody(
+      nodes,
+      titleText,
+      "Close remote write lock confirmation",
+      null,
+      false
+    );
+  }
+  if (titleText === "Revoke paired device?" || titleText === "Revoke this phone?") {
+    return selectPhysicalOwnedHeaderBody(
+      nodes,
+      titleText,
+      "Close device revocation",
+      null,
+      false
+    );
+  }
+  return null;
+}
+
+function selectPhysicalOwnedHeaderBody(
+  nodes: readonly AndroidUiNode[],
+  titleText: string,
+  closeDescription: string,
+  backDescription: string | null,
+  allowDisabledClose: boolean
+): PhysicalActionOwner | null {
+  let page: PhysicalScreenshotRegion;
+  try {
+    page = selectChromePageViewport(nodes);
+  } catch {
+    return null;
+  }
+  const closes = nodes.filter(
+    (node) =>
+      node.description === closeDescription &&
+      physicalOwnedHeaderButtonIsEligible(node, page, allowDisabledClose)
+  );
+  const ownedBacks = nodes.filter(
+    (node) =>
+      physicalOwnedHeaderBackDescriptions.has(node.description) &&
+      physicalOwnedHeaderButtonIsEligible(node, page, false)
+  );
+  const backs = backDescription === null
+    ? []
+    : ownedBacks.filter((node) => node.description === backDescription);
+  if (
+    closes.length !== 1 ||
+    (backDescription === null
+      ? ownedBacks.length !== 0
+      : backs.length !== 1 || ownedBacks.length !== 1)
+  ) {
+    return null;
+  }
+  const close = closes[0];
+  const back = backs[0];
+  if (close === undefined || (backDescription !== null && back === undefined)) {
+    return null;
+  }
+  const titleCandidates = nodes.filter(
+    (node) =>
+      node.text === titleText &&
+      physicalOwnedHeaderTitleIsEligible(node, page) &&
+      physicalOwnedHeaderIsCoherent(node, backDescription === null ? null : back, close)
+  );
+  if (titleCandidates.length !== 1) return null;
+  const title = titleCandidates[0];
+  if (title === undefined) return null;
+  const competingCloses = nodes.filter(
+    (node) =>
+      node.description !== closeDescription &&
+      physicalOwnedHeaderCloseDescriptions.has(node.description) &&
+      node.clickable &&
+      androidUiNodeIsFullyInsideRegion(node, page)
+  );
+  const competingTitles = nodes.filter(
+    (node) =>
+      node.text !== titleText &&
+      physicalOwnedHeaderTitles.has(node.text) &&
+      physicalOwnedHeaderTitleIsEligible(node, page) &&
+      physicalOwnedHeaderIsCoherent(node, backDescription === null ? null : back, close)
+  );
+  if (competingCloses.length !== 0 || competingTitles.length !== 0) return null;
+  const bodyTop = Math.max(
+    title.bounds.bottom,
+    close.bounds.bottom,
+    ...(backDescription === null || back === undefined ? [] : [back.bounds.bottom])
+  ) + physicalSessionOverlayGapPx;
+  const body = Object.freeze({
+    height: page.top + page.height - bodyTop,
+    left: page.left,
+    top: bodyTop,
+    width: page.width
+  });
+  return body.height >= 320 ? Object.freeze({ body, title }) : null;
+}
+
+function physicalOwnedHeaderTitleIsEligible(
+  node: AndroidUiNode,
+  page: PhysicalScreenshotRegion
+): boolean {
+  return (
+    !node.clickable &&
+    node.enabled !== false &&
+    androidUiNodeIsWebText(node) &&
+    androidUiNodeWidth(node) >= 48 &&
+    androidUiNodeWidth(node) <= Math.floor(page.width * 0.8) &&
+    androidUiNodeHeight(node) >= 16 &&
+    androidUiNodeHeight(node) <= 160 &&
+    androidUiNodeIsFullyInsideRegion(node, page)
+  );
+}
+
+function physicalOwnedHeaderButtonIsEligible(
+  node: AndroidUiNode,
+  page: PhysicalScreenshotRegion,
+  allowDisabled: boolean
+): boolean {
+  return (
+    node.clickable &&
+    (allowDisabled || node.enabled !== false) &&
+    androidUiNodeWidth(node) >= 24 &&
+    androidUiNodeWidth(node) <= 256 &&
+    androidUiNodeHeight(node) >= 24 &&
+    androidUiNodeHeight(node) <= 256 &&
+    androidUiNodeIsFullyInsideRegion(node, page)
+  );
+}
+
+function physicalOwnedHeaderIsCoherent(
+  title: AndroidUiNode,
+  back: AndroidUiNode | null | undefined,
+  close: AndroidUiNode
+): boolean {
+  const centerX = (node: AndroidUiNode) =>
+    Math.floor((node.bounds.left + node.bounds.right) / 2);
+  const centerY = (node: AndroidUiNode) =>
+    Math.floor((node.bounds.top + node.bounds.bottom) / 2);
+  const nodes = back === null || back === undefined
+    ? [title, close]
+    : [back, title, close];
+  return (
+    centerX(title) < centerX(close) &&
+    (back === null || back === undefined || centerX(back) < centerX(title)) &&
+    Math.max(...nodes.map(centerY)) - Math.min(...nodes.map(centerY)) <= 128 &&
+    Math.max(...nodes.map((node) => node.bounds.bottom)) -
+      Math.min(...nodes.map((node) => node.bounds.top)) <= 256
+  );
 }
 
 function physicalConfirmationSummary(
@@ -22040,12 +23793,9 @@ function assertPairingUiRuntimeTruth(
       inspection.claimRequests === 1 &&
       inspection.csrfRequests === 4 &&
       inspection.noReferrerApiRequests === 5 &&
-      inspection.accessRequests >= 3 &&
-      inspection.accessRequests <= 5 &&
-      inspection.hostStatusRequests >= 2 &&
-      inspection.hostStatusRequests <= 4 &&
-      inspection.sessionListRequests >= 2 &&
-      inspection.sessionListRequests <= 4 &&
+      inspection.accessRequests === 3 &&
+      inspection.hostStatusRequests === 2 &&
+      inspection.sessionListRequests === 2 &&
       inspection.protectedReadRequests === 2 &&
       inspection.protectedReadSuccesses === 1 &&
       inspection.protectedReadRejections === 1 &&
@@ -22093,12 +23843,9 @@ function assertRecoveryUiRuntimeTruth(
       inspection.claimRequests === 1 &&
       inspection.csrfRequests === 3 &&
       inspection.noReferrerApiRequests === 4 &&
-      inspection.accessRequests >= 4 &&
-      inspection.accessRequests <= 7 &&
-      inspection.hostStatusRequests >= 4 &&
-      inspection.hostStatusRequests <= 6 &&
-      inspection.sessionListRequests >= 4 &&
-      inspection.sessionListRequests <= 6 &&
+      inspection.accessRequests === 4 &&
+      inspection.hostStatusRequests === 4 &&
+      inspection.sessionListRequests === 4 &&
       inspection.remoteStatusRequests === 5 &&
       inspection.remoteBrowserStatusRequests === 4 &&
       inspection.remoteEnableRequests === 1 &&
@@ -22151,17 +23898,12 @@ function assertPromptUiRuntimeTruth(
       inspection.csrfRequests === 3 &&
       inspection.noReferrerApiRequests === 4 &&
       inspection.promptNoReferrerRequests === 1 &&
-      inspection.accessRequests >= 2 &&
-      inspection.accessRequests <= 4 &&
-      inspection.hostStatusRequests >= 1 &&
-      inspection.hostStatusRequests <= 3 &&
-      inspection.sessionListRequests >= 1 &&
-      inspection.sessionListRequests <= 3 &&
-      inspection.sessionDetailRequests >= 1 &&
-      inspection.sessionDetailRequests <= 2 &&
+      inspection.accessRequests === 2 &&
+      inspection.hostStatusRequests === 1 &&
+      inspection.sessionListRequests === 1 &&
+      inspection.sessionDetailRequests === 1 &&
       inspection.sessionEventRequests === 0 &&
-      inspection.sessionStreamRequests >= 1 &&
-      inspection.sessionStreamRequests <= 2 &&
+      inspection.sessionStreamRequests === 1 &&
       inspection.promptRequests === 1 &&
       inspection.promptResponseStatuses.length === 1 &&
       inspection.promptResponseStatuses[0] === 202 &&
