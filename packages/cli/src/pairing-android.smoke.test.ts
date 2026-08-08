@@ -427,6 +427,139 @@ describe("physical Android phone-driver protocol", () => {
     15_000
   );
 
+  it("binds physical evidence to one verified current package and browser identity", () => {
+    const sourceHash = "a".repeat(64);
+    const outputHash = "b".repeat(64);
+    const contentHash = "c".repeat(64);
+    const manifestHash = "d".repeat(64);
+    const webHash = "e".repeat(64);
+    const webManifestHash = "f".repeat(64);
+    const packageManifest = {
+      schemaVersion: 4,
+      packageVersion: "0.0.0",
+      source: { count: 619, sha256: sourceHash },
+      output: { count: 1_245, sha256: outputHash },
+      content: { bytes: 35_000_000, entryCount: 6_231, sha256: contentHash },
+      manifestSha256: manifestHash,
+      web: {
+        bytes: 1_200_000,
+        fileCount: 3,
+        manifestSha256: webManifestHash,
+        sha256: webHash
+      }
+    };
+    const buildResult = parsePhysicalPackageBuildOutput(
+      `HostDeck package built: 619 sources, 1245 owned outputs, 6231 entries, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
+    );
+    const verification = parsePhysicalPackageVerificationOutput(
+      `HostDeck package verified: 6231 entries, 1245 owned outputs, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
+    );
+    const browserManifest = {
+      package: {
+        package_version: "0.0.0",
+        content_sha256: contentHash,
+        manifest_sha256: manifestHash,
+        web_sha256: webHash,
+        web_manifest_sha256: webManifestHash
+      }
+    };
+
+    expect(
+      parsePhysicalDashboardPackageIdentity({
+        browserManifest,
+        buildResult,
+        packageManifest,
+        verification
+      })
+    ).toEqual({
+      content_entry_count: 6_231,
+      content_tree_sha256: contentHash,
+      manifest_sha256: manifestHash,
+      output_file_count: 1_245,
+      output_tree_sha256: outputHash,
+      package_schema_version: 4,
+      package_version: "0.0.0",
+      source_file_count: 619,
+      source_tree_sha256: sourceHash,
+      web_manifest_sha256: webManifestHash,
+      web_tree_sha256: webHash
+    });
+
+    expect(() =>
+      parsePhysicalDashboardPackageIdentity({
+        browserManifest: {
+          package: { ...browserManifest.package, content_sha256: sourceHash }
+        },
+        buildResult,
+        packageManifest,
+        verification
+      })
+    ).toThrow("Physical dashboard package and browser identities did not match.");
+    expect(() =>
+      parsePhysicalDashboardPackageIdentity({
+        browserManifest: {
+          package: {
+            package_version: "0.0.0",
+            content_sha256: contentHash,
+            manifest_sha256: manifestHash,
+            web_sha256: webHash
+          }
+        },
+        buildResult,
+        packageManifest,
+        verification
+      })
+    ).toThrow("Physical dashboard package and browser identities did not match.");
+    expect(() =>
+      parsePhysicalDashboardPackageIdentity({
+        browserManifest,
+        buildResult,
+        packageManifest: {
+          ...packageManifest,
+          source: { ...packageManifest.source, count: 618 }
+        },
+        verification
+      })
+    ).toThrow("Physical dashboard package and browser identities did not match.");
+    expect(() =>
+      parsePhysicalDashboardPackageIdentity({
+        browserManifest,
+        buildResult: { ...buildResult, contentSha256: sourceHash },
+        packageManifest,
+        verification
+      })
+    ).toThrow("Physical dashboard package and browser identities did not match.");
+    expect(() =>
+      parsePhysicalDashboardPackageIdentity({
+        browserManifest,
+        buildResult,
+        packageManifest,
+        verification: { ...verification, entryCount: 6_230 }
+      })
+    ).toThrow("Physical dashboard package and browser identities did not match.");
+    expect(() =>
+      parsePhysicalPackageBuildOutput(
+        `HostDeck package built: 619 sources, 1245 owned outputs, 6231 entries, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\nextra\n`
+      )
+    ).toThrow("Physical dashboard package build output was invalid.");
+    expect(() =>
+      parsePhysicalPackageVerificationOutput(
+        `HostDeck package verified: 6231 entries, 1245 outputs, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
+      )
+    ).toThrow("Physical dashboard package verification output was invalid.");
+    expect(() =>
+      parsePhysicalDashboardPackageIdentity({
+        browserManifest,
+        buildResult,
+        packageManifest: {
+          ...packageManifest,
+          web: { ...packageManifest.web, manifestSha256: "invalid" }
+        },
+        verification
+      })
+    ).toThrow("Physical dashboard package and browser identities did not match.");
+  });
+
   it("seeds one repository-valid production pairing session", () => {
     const directory = mkdtempSync(join(tmpdir(), "hostdeck-pairing-session-"));
     const opened = openMigratedDatabase(join(directory, "hostdeck.sqlite"));
@@ -6356,6 +6489,12 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
     "pairs through private HTTPS and proves lifecycle authority, recovery, revocation, and cleanup",
     async () => {
       requireOneAuthorizedDevice();
+      if (requireProductionUiAcceptance || requireRemoteAndroidAcceptance) {
+        requireCleanAcceptanceWorktree();
+      }
+      const dashboardPackageIdentity = requireDashboardUiAcceptance
+        ? buildPhysicalDashboardPackageIdentity()
+        : null;
       const controller = new AbortController();
       const directory = mkdtempSync(join(tmpdir(), "hostdeck-pairing-android-"));
       const talkBackArtifacts = requireDashboardUiAcceptance
@@ -6468,7 +6607,6 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         adbCommandCount = 0;
         deviceForbiddenValues.clear();
         if (requireProductionUiAcceptance || requireRemoteAndroidAcceptance) {
-          requireCleanAcceptanceWorktree();
           requireNoAdbApplicationTunnels();
           initialStayAwakeSetting = readAndroidStayAwakeSetting();
           activePlugType = readAndroidPlugType();
@@ -7446,6 +7584,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             environmentFacts as PhysicalEnvironmentFacts
           );
           requireNoAdbApplicationTunnels();
+          requireCondition(
+            dashboardPackageIdentity !== null,
+            "Physical dashboard package identity was not built."
+          );
           publishPhysicalDashboardEvidence({
             completedAt: new Date().toISOString(),
             environment: environmentFacts as PhysicalEnvironmentFacts,
@@ -7454,6 +7596,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             ).bytes,
             managerAttempts: requireLifecycleManager(lifecycleManager)
               .snapshot().command_attempts,
+            packageIdentity: dashboardPackageIdentity,
             screenshots:
               dashboardScreenshotBytes as readonly PhysicalScreenshot[],
             sequence: dashboardResult as PhysicalDashboardSequenceResult,
@@ -9513,6 +9656,20 @@ interface PhysicalEnvironmentFacts {
   readonly node_version: string;
   readonly physical_density: number;
   readonly tailscale_version: string;
+}
+
+interface PhysicalDashboardPackageIdentity {
+  readonly content_entry_count: number;
+  readonly content_tree_sha256: string;
+  readonly manifest_sha256: string;
+  readonly output_file_count: number;
+  readonly output_tree_sha256: string;
+  readonly package_schema_version: 4;
+  readonly package_version: "0.0.0";
+  readonly source_file_count: number;
+  readonly source_tree_sha256: string;
+  readonly web_manifest_sha256: string;
+  readonly web_tree_sha256: string;
 }
 
 interface PhysicalSequenceResult {
@@ -24321,6 +24478,7 @@ function publishPhysicalDashboardEvidence(input: {
   readonly environment: PhysicalEnvironmentFacts;
   readonly foreignServeBytes: number;
   readonly managerAttempts: number;
+  readonly packageIdentity: PhysicalDashboardPackageIdentity;
   readonly screenshots: readonly PhysicalScreenshot[];
   readonly sequence: PhysicalDashboardSequenceResult;
   readonly startedAt: string;
@@ -24357,7 +24515,6 @@ function publishPhysicalDashboardEvidence(input: {
       input.foreignServeBytes <= 64 * 1024,
     "Physical dashboard evidence inputs were incomplete."
   );
-  const packageIdentity = readPhysicalDashboardPackageIdentity();
   const evidence = Object.freeze({
     schema_version: 2,
     task: "FE-V1-090",
@@ -24369,7 +24526,7 @@ function publishPhysicalDashboardEvidence(input: {
       retry_count: 0,
       started_at: input.startedAt
     }),
-    package: packageIdentity,
+    package: input.packageIdentity,
     browser_matrix: Object.freeze({
       case_count: 76,
       interaction_count: 34,
@@ -24518,80 +24675,166 @@ function publishPhysicalDashboardEvidence(input: {
   }
 }
 
-function readPhysicalDashboardPackageIdentity(): Readonly<{
-  content_entry_count: number;
-  content_tree_sha256: string;
-  manifest_sha256: string;
-  output_file_count: number;
-  output_tree_sha256: string;
-  package_schema_version: number;
-  source_file_count: number;
-  source_tree_sha256: string;
-  web_tree_sha256: string;
-}> {
-  const evidence = JSON.parse(
-    readFileSync(
-      join(
-        process.cwd(),
-        "artifacts",
-        "ifc-v1-091-selected-production-interface-hardening",
-        "evidence.json"
-      ),
-      "utf8"
+function buildPhysicalDashboardPackageIdentity(): PhysicalDashboardPackageIdentity {
+  const outputRoot = join(process.cwd(), "dist", "hostdeck");
+  const buildResult = parsePhysicalPackageBuildOutput(
+    execFileSync(
+      process.execPath,
+      [join(process.cwd(), "scripts", "build-production-package.mjs")],
+      { ...commandOptions(), maxBuffer: 128 * 1024, timeout: 5 * 60_000 }
     )
-  ) as Readonly<Record<string, unknown>>;
-  const production = evidence.production_identity;
-  requireCondition(
-    production !== null &&
-      typeof production === "object" &&
-      !Array.isArray(production),
-    "Physical dashboard package identity evidence was invalid."
   );
-  const identity = production as Readonly<Record<string, unknown>>;
-  const selected = Object.freeze({
-    content_entry_count: identity.content_entry_count,
-    content_tree_sha256: identity.content_tree_sha256,
-    manifest_sha256: identity.manifest_sha256,
-    output_file_count: identity.output_file_count,
-    output_tree_sha256: identity.output_tree_sha256,
-    package_schema_version: identity.package_schema_version,
-    source_file_count: identity.source_file_count,
-    source_tree_sha256: identity.source_tree_sha256,
-    web_tree_sha256: identity.web_tree_sha256
-  });
+  const packageManifest = JSON.parse(
+    readFileSync(join(outputRoot, "hostdeck-package.json"), "utf8")
+  ) as unknown;
+  const verification = parsePhysicalPackageVerificationOutput(
+    execFileSync(
+      process.execPath,
+      [
+        join(process.cwd(), "scripts", "verify-production-package.mjs"),
+        outputRoot
+      ],
+      { ...commandOptions(), maxBuffer: 128 * 1024, timeout: 60_000 }
+    )
+  );
   const browserManifest = JSON.parse(
     readFileSync(
       join(process.cwd(), "tests", "browser", "supported-browser-manifest.json"),
       "utf8"
     )
-  ) as Readonly<Record<string, unknown>>;
-  const browserPackage = browserManifest.package;
+  ) as unknown;
+  return parsePhysicalDashboardPackageIdentity({
+    browserManifest,
+    buildResult,
+    packageManifest,
+    verification
+  });
+}
+
+function parsePhysicalDashboardPackageIdentity(input: Readonly<{
+  readonly browserManifest: unknown;
+  readonly buildResult: unknown;
+  readonly packageManifest: unknown;
+  readonly verification: unknown;
+}>): PhysicalDashboardPackageIdentity {
+  const manifest = physicalPackageIdentityRecord(input.packageManifest);
+  const source = physicalPackageIdentityRecord(manifest.source);
+  const output = physicalPackageIdentityRecord(manifest.output);
+  const content = physicalPackageIdentityRecord(manifest.content);
+  const web = physicalPackageIdentityRecord(manifest.web);
+  const build = physicalPackageIdentityRecord(input.buildResult);
+  const verified = physicalPackageIdentityRecord(input.verification);
+  const browser = physicalPackageIdentityRecord(input.browserManifest);
+  const browserPackage = physicalPackageIdentityRecord(browser.package);
+  const hashes = [
+    source.sha256,
+    output.sha256,
+    content.sha256,
+    manifest.manifestSha256,
+    web.sha256,
+    web.manifestSha256
+  ];
   requireCondition(
-    selected.package_schema_version === 4 &&
-      selected.source_file_count === 619 &&
-      selected.output_file_count === 1_245 &&
-      selected.content_entry_count === 6_466 &&
-      [
-        selected.source_tree_sha256,
-        selected.output_tree_sha256,
-        selected.content_tree_sha256,
-        selected.manifest_sha256,
-        selected.web_tree_sha256
-      ].every(
+    manifest.schemaVersion === 4 &&
+      manifest.packageVersion === "0.0.0" &&
+      source.count === 619 &&
+      output.count === 1_245 &&
+      Number.isSafeInteger(content.entryCount) &&
+      (content.entryCount as number) >= 1_000 &&
+      (content.entryCount as number) <= 10_000 &&
+      Number.isSafeInteger(content.bytes) &&
+      (content.bytes as number) >= 1_000_000 &&
+      (content.bytes as number) <= 128 * 1024 * 1024 &&
+      web.fileCount === 3 &&
+      Number.isSafeInteger(web.bytes) &&
+      (web.bytes as number) >= 100_000 &&
+      (web.bytes as number) <= 8 * 1024 * 1024 &&
+      hashes.every(
         (value) => typeof value === "string" && /^[a-f0-9]{64}$/u.test(value)
       ) &&
-      browserPackage !== null &&
-      typeof browserPackage === "object" &&
-      !Array.isArray(browserPackage) &&
-      (browserPackage as Readonly<Record<string, unknown>>).content_sha256 ===
-        selected.content_tree_sha256 &&
-      (browserPackage as Readonly<Record<string, unknown>>).manifest_sha256 ===
-        selected.manifest_sha256 &&
-      (browserPackage as Readonly<Record<string, unknown>>).web_sha256 ===
-        selected.web_tree_sha256,
+      build.sourceCount === source.count &&
+      build.outputCount === output.count &&
+      build.entryCount === content.entryCount &&
+      build.contentSha256 === content.sha256 &&
+      build.packageVersion === manifest.packageVersion &&
+      build.webBytes === web.bytes &&
+      build.webFileCount === web.fileCount &&
+      build.webSha256 === web.sha256 &&
+      verified.outputCount === output.count &&
+      verified.entryCount === content.entryCount &&
+      verified.contentSha256 === content.sha256 &&
+      verified.webBytes === web.bytes &&
+      verified.webFileCount === web.fileCount &&
+      verified.webSha256 === web.sha256 &&
+      browserPackage.package_version === manifest.packageVersion &&
+      browserPackage.content_sha256 === content.sha256 &&
+      browserPackage.manifest_sha256 === manifest.manifestSha256 &&
+      browserPackage.web_sha256 === web.sha256 &&
+      browserPackage.web_manifest_sha256 === web.manifestSha256,
     "Physical dashboard package and browser identities did not match."
   );
-  return selected as ReturnType<typeof readPhysicalDashboardPackageIdentity>;
+  return Object.freeze({
+    content_entry_count: content.entryCount as number,
+    content_tree_sha256: content.sha256 as string,
+    manifest_sha256: manifest.manifestSha256 as string,
+    output_file_count: output.count as number,
+    output_tree_sha256: output.sha256 as string,
+    package_schema_version: 4,
+    package_version: "0.0.0",
+    source_file_count: source.count as number,
+    source_tree_sha256: source.sha256 as string,
+    web_manifest_sha256: web.manifestSha256 as string,
+    web_tree_sha256: web.sha256 as string
+  });
+}
+
+function parsePhysicalPackageBuildOutput(
+  output: string
+): Readonly<Record<string, unknown>> {
+  const match = output.match(
+    /^HostDeck package built: (\d+) sources, (\d+) owned outputs, (\d+) entries, (\d+) web files \((\d+) bytes, sha256:([a-f0-9]{64})\), package sha256:([a-f0-9]{64})\.\r?\n$/u
+  );
+  requireCondition(match !== null, "Physical dashboard package build output was invalid.");
+  return Object.freeze({
+    contentSha256: match[7],
+    entryCount: Number(match[3]),
+    outputCount: Number(match[2]),
+    packageVersion: "0.0.0",
+    sourceCount: Number(match[1]),
+    webBytes: Number(match[5]),
+    webFileCount: Number(match[4]),
+    webSha256: match[6]
+  });
+}
+
+function parsePhysicalPackageVerificationOutput(
+  output: string
+): Readonly<Record<string, unknown>> {
+  const match = output.match(
+    /^HostDeck package verified: (\d+) entries, (\d+) owned outputs, (\d+) web files \((\d+) bytes, sha256:([a-f0-9]{64})\), package sha256:([a-f0-9]{64})\.\r?\n$/u
+  );
+  requireCondition(
+    match !== null,
+    "Physical dashboard package verification output was invalid."
+  );
+  return Object.freeze({
+    contentSha256: match[6],
+    entryCount: Number(match[1]),
+    outputCount: Number(match[2]),
+    webBytes: Number(match[4]),
+    webFileCount: Number(match[3]),
+    webSha256: match[5]
+  });
+}
+
+function physicalPackageIdentityRecord(
+  value: unknown
+): Readonly<Record<string, unknown>> {
+  requireCondition(
+    value !== null && typeof value === "object" && !Array.isArray(value),
+    "Physical dashboard package and browser identities did not match."
+  );
+  return value as Readonly<Record<string, unknown>>;
 }
 
 function publishPhysicalEvidence(input: {

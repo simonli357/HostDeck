@@ -8,10 +8,10 @@
   "evidence_schema_version": 1,
   "package": {
     "package_version": "0.0.0",
-    "content_sha256": "55ee52d7cd834250e90532dfa6aee5583a5fe6626af2923e95ebb3cd997a82c3",
-    "manifest_sha256": "a40f157604bdbeff29f0cb6b7c48c9780ff34011e90cb8e256e7c152f8563ec8",
-    "web_sha256": "b028a833b2e93c8a007884614e91f8ef7feb5ed58232090cf96aaa3a1c6e67b1",
-    "web_manifest_sha256": "460ebc3ed095d80f02d8fe3d609ccf46fc371899776799306b91f440bb87ac49"
+    "content_sha256": "f8c5d8ac04f26ef4dd35b9018244499fc65a325f6fb54fa1e960989664419e77",
+    "manifest_sha256": "a47baaf1ee218705e33d30dd45bd9ca834c2f0e195827db820e05768ee100807",
+    "web_sha256": "d6df0a013f83209314171e59cbcf97842cc3fe8396cda455b8c38d036525ab5c",
+    "web_manifest_sha256": "66a9b6d583e24f1ffa2a8ce34f5598436db9fdebfc6c50747a42d6fcf0db1b8b"
   },
   "engines": [
     {
