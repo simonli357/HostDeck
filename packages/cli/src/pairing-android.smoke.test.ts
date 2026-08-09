@@ -325,6 +325,15 @@ const physicalApprovalConfirmationReason =
   "Continue the bounded release validation on the selected device.";
 const physicalApprovalConfirmationAction = "Approve once";
 const physicalApprovalConfirmationStatus = "Approval confirmation open";
+const physicalApprovalAction = "Install the Android validation package";
+const physicalApprovalScope = "Connected test phone";
+const physicalApprovalRisk = "Elevated risk";
+const physicalApprovalRespondingStatus = "Confirming decision";
+const physicalApprovalTerminalStatus = "Approved once";
+const physicalApprovalTerminalDetail =
+  "The selected request was approved once.";
+const physicalApprovalCancelAction = "Cancel";
+const physicalApprovalCloseAction = "Close approval confirmation";
 const physicalPromptTurnId = "turn-physical-prompt-001";
 const physicalPromptText = "FE020_android_line_one\nFE020_android_line_two";
 const physicalGoalObjective = "Complete_FE090_device_acceptance";
@@ -4947,6 +4956,295 @@ describe("physical Android phone-driver protocol", () => {
           'content-desc="" bounds="[0,0][100,100]" /></hierarchy>'
       )
     ).toThrow("retained pairing material");
+  });
+
+  it("binds physical approval progress to one pending dialog and one terminal row", () => {
+    const responding = physicalApprovalRespondingFixtureNodes();
+    const respondingOwner = selectPhysicalApprovalRespondingDialogOwner(
+      responding
+    );
+    requireCondition(
+      respondingOwner !== null,
+      "Physical responding approval fixture was not admitted."
+    );
+    expect(Object.isFrozen(respondingOwner)).toBe(true);
+    expect(respondingOwner).toMatchObject({
+      action: expect.objectContaining({ text: physicalApprovalAction }),
+      approve: expect.objectContaining({
+        description: physicalApprovalConfirmationAction,
+        enabled: false
+      }),
+      cancel: expect.objectContaining({
+        enabled: false,
+        text: physicalApprovalCancelAction
+      }),
+      close: expect.objectContaining({
+        description: physicalApprovalCloseAction,
+        enabled: false
+      }),
+      reason: expect.objectContaining({
+        text: physicalApprovalConfirmationReason
+      }),
+      risk: expect.objectContaining({ text: physicalApprovalRisk }),
+      scope: expect.objectContaining({ text: physicalApprovalScope }),
+      status: expect.objectContaining({
+        text: physicalApprovalRespondingStatus
+      }),
+      title: expect.objectContaining({
+        text: physicalApprovalConfirmationTitle
+      })
+    });
+
+    const enableFixtureButton = (node: AndroidUiNode): AndroidUiNode =>
+      Object.freeze({
+        bounds: node.bounds,
+        className: node.className,
+        clickable: node.clickable,
+        description: node.description,
+        resourceId: node.resourceId,
+        text: node.text
+      });
+    const replaceRespondingNode = (
+      target: AndroidUiNode,
+      replacement: AndroidUiNode
+    ): readonly AndroidUiNode[] =>
+      responding.map((node) => (node === target ? replacement : node));
+    const rejectsResponding = (nodes: readonly AndroidUiNode[]): void => {
+      expect(selectPhysicalApprovalRespondingDialogOwner(nodes)).toBeNull();
+    };
+
+    rejectsResponding(
+      responding.filter((node) => node !== respondingOwner.title)
+    );
+    rejectsResponding([
+      ...responding,
+      Object.freeze({ ...respondingOwner.title })
+    ]);
+    rejectsResponding(
+      responding.filter((node) => node !== respondingOwner.status)
+    );
+    rejectsResponding([
+      ...responding,
+      Object.freeze({ ...respondingOwner.status })
+    ]);
+    rejectsResponding(
+      replaceRespondingNode(
+        respondingOwner.status,
+        Object.freeze({
+          ...respondingOwner.status,
+          bounds: Object.freeze({ bottom: 330, left: 40, right: 800, top: 260 })
+        })
+      )
+    );
+    for (const control of [
+      respondingOwner.approve,
+      respondingOwner.cancel,
+      respondingOwner.close
+    ]) {
+      rejectsResponding(
+        replaceRespondingNode(control, enableFixtureButton(control))
+      );
+    }
+    rejectsResponding(
+      responding.filter((node) => node !== respondingOwner.risk)
+    );
+    rejectsResponding(
+      responding.filter(
+        (node) =>
+          !matchesAndroidUiNode(
+            node,
+            "semantic",
+            physicalApprovalConfirmationReason
+          )
+      )
+    );
+    rejectsResponding([
+      ...responding,
+      Object.freeze({ ...respondingOwner.action })
+    ]);
+    rejectsResponding([
+      ...responding,
+      Object.freeze({ ...respondingOwner.approve })
+    ]);
+    rejectsResponding(
+      replaceRespondingNode(
+        respondingOwner.approve,
+        Object.freeze({
+          ...respondingOwner.approve,
+          bounds: Object.freeze({
+            ...respondingOwner.approve.bounds,
+            bottom: 2_401
+          })
+        })
+      )
+    );
+    rejectsResponding(
+      replaceRespondingNode(
+        respondingOwner.approve,
+        Object.freeze({
+          ...respondingOwner.approve,
+          bounds: Object.freeze({ bottom: 1_240, left: 540, right: 1_040, top: 1_100 })
+        })
+      )
+    );
+    rejectsResponding([
+      ...responding,
+      Object.freeze({
+        ...respondingOwner.status,
+        text: physicalApprovalTerminalStatus
+      })
+    ]);
+    rejectsResponding(
+      replaceRespondingNode(
+        respondingOwner.status,
+        Object.freeze({
+          ...respondingOwner.status,
+          text: physicalApprovalConfirmationStatus
+        })
+      )
+    );
+
+    const navigation: PhysicalSessionNavigationSnapshot = Object.freeze({
+      activeSubscribers: 1,
+      missingDetailRequests: 1,
+      openedSubscribers: 4,
+      selectedDetailRequests: 3,
+      streamRequests: 4
+    });
+    const respondingCheckpoint: PhysicalApprovalCheckpointInput =
+      Object.freeze({
+        actualNavigation: navigation,
+        approvalCalls: 1,
+        approvalCallsBefore: 0,
+        expectedNavigation: navigation,
+        nodes: responding,
+        pending: true
+      });
+    expect(
+      physicalApprovalRespondingCheckpointMatches(respondingCheckpoint)
+    ).toBe(true);
+    for (const checkpoint of [
+      Object.freeze({ ...respondingCheckpoint, approvalCalls: 0 }),
+      Object.freeze({ ...respondingCheckpoint, approvalCalls: 2 }),
+      Object.freeze({ ...respondingCheckpoint, pending: false }),
+      Object.freeze({
+        ...respondingCheckpoint,
+        actualNavigation: Object.freeze({
+          ...navigation,
+          streamRequests: navigation.streamRequests + 1
+        })
+      })
+    ]) {
+      expect(physicalApprovalRespondingCheckpointMatches(checkpoint)).toBe(
+        false
+      );
+    }
+
+    const terminal = physicalApprovalTerminalFixtureNodes();
+    const terminalOwner = selectPhysicalApprovalTerminalOwner(terminal);
+    requireCondition(
+      terminalOwner !== null,
+      "Physical terminal approval fixture was not admitted."
+    );
+    expect(Object.isFrozen(terminalOwner)).toBe(true);
+    expect(terminalOwner).toMatchObject({
+      action: expect.objectContaining({ text: physicalApprovalAction }),
+      detail: expect.objectContaining({ text: physicalApprovalTerminalDetail }),
+      scope: expect.objectContaining({ text: physicalApprovalScope }),
+      status: expect.objectContaining({ text: physicalApprovalTerminalStatus })
+    });
+    const rejectsTerminal = (nodes: readonly AndroidUiNode[]): void => {
+      expect(selectPhysicalApprovalTerminalOwner(nodes)).toBeNull();
+    };
+    rejectsTerminal([
+      ...terminal,
+      Object.freeze({
+        ...terminalOwner.status,
+        text: physicalApprovalConfirmationTitle
+      })
+    ]);
+    rejectsTerminal([
+      ...terminal,
+      Object.freeze({ ...terminalOwner.status })
+    ]);
+    rejectsTerminal(terminal.filter((node) => node !== terminalOwner.detail));
+    rejectsTerminal(
+      terminal.map((node) =>
+        node === terminalOwner.detail
+          ? Object.freeze({ ...node, text: "Approval terminal detail drifted." })
+          : node
+      )
+    );
+    rejectsTerminal(
+      terminal.map((node) =>
+        node === terminalOwner.status
+          ? Object.freeze({
+              ...node,
+              bounds: Object.freeze({ bottom: 340, left: 72, right: 500, top: 260 })
+            })
+          : node
+      )
+    );
+    rejectsTerminal(
+      terminal.map((node) =>
+        node === terminalOwner.detail
+          ? Object.freeze({
+              ...node,
+              bounds: Object.freeze({ bottom: 1_020, left: 72, right: 900, top: 940 })
+            })
+          : node
+      )
+    );
+    const terminalCheckpoint: PhysicalApprovalCheckpointInput = Object.freeze({
+      ...respondingCheckpoint,
+      nodes: terminal,
+      pending: false
+    });
+    expect(physicalApprovalTerminalCheckpointMatches(terminalCheckpoint)).toBe(
+      true
+    );
+    for (const checkpoint of [
+      Object.freeze({ ...terminalCheckpoint, approvalCalls: 0 }),
+      Object.freeze({ ...terminalCheckpoint, approvalCalls: 2 }),
+      Object.freeze({ ...terminalCheckpoint, pending: true }),
+      Object.freeze({
+        ...terminalCheckpoint,
+        actualNavigation: Object.freeze({
+          ...navigation,
+          selectedDetailRequests: navigation.selectedDetailRequests + 1
+        })
+      })
+    ]) {
+      expect(physicalApprovalTerminalCheckpointMatches(checkpoint)).toBe(false);
+    }
+
+    const privateDistractor = Object.freeze({
+      ...respondingOwner.status,
+      text: "private hierarchy payload"
+    });
+    const diagnostic = physicalApprovalCheckpointSummary(
+      Object.freeze({
+        ...respondingCheckpoint,
+        nodes: Object.freeze([...responding, privateDistractor])
+      }),
+      true
+    );
+    expect(diagnostic).toContain("owner=yes");
+    expect(diagnostic).toContain("pending=yes");
+    expect(diagnostic).not.toContain("private hierarchy payload");
+    expect(Buffer.byteLength(diagnostic, "utf8")).toBeLessThan(4_096);
+    const observations: string[] = [];
+    for (let index = 0; index < 8; index += 1) {
+      retainPhysicalApprovalObservation(observations, `state-${index}`);
+    }
+    expect(observations).toEqual([
+      "state-2",
+      "state-3",
+      "state-4",
+      "state-5",
+      "state-6",
+      "state-7"
+    ]);
   });
 
   it("selects only the destructive action owned by the Host-lock dialog", () => {
@@ -12678,6 +12976,34 @@ interface AndroidUiNode {
   readonly text: string;
 }
 
+interface PhysicalApprovalRespondingDialogOwner {
+  readonly action: AndroidUiNode;
+  readonly approve: AndroidUiNode;
+  readonly cancel: AndroidUiNode;
+  readonly close: AndroidUiNode;
+  readonly reason: AndroidUiNode;
+  readonly risk: AndroidUiNode;
+  readonly scope: AndroidUiNode;
+  readonly status: AndroidUiNode;
+  readonly title: AndroidUiNode;
+}
+
+interface PhysicalApprovalTerminalOwner {
+  readonly action: AndroidUiNode;
+  readonly detail: AndroidUiNode;
+  readonly scope: AndroidUiNode;
+  readonly status: AndroidUiNode;
+}
+
+interface PhysicalApprovalCheckpointInput {
+  readonly actualNavigation: PhysicalSessionNavigationSnapshot;
+  readonly approvalCalls: number;
+  readonly approvalCallsBefore: number;
+  readonly expectedNavigation: PhysicalSessionNavigationSnapshot;
+  readonly nodes: readonly AndroidUiNode[];
+  readonly pending: boolean;
+}
+
 interface PhysicalScreenshotRegion {
   readonly height: number;
   readonly left: number;
@@ -15568,12 +15894,12 @@ async function runPhysicalApprovalControl(
     true
   );
   await waitForAndroidUiText(
-    "Install the Android validation package",
+    physicalApprovalAction,
     30_000,
     "Physical pending approval request was unavailable."
   );
   await waitForAndroidUiText(
-    "Connected test phone",
+    physicalApprovalScope,
     30_000,
     "Physical pending approval omitted its scope."
   );
@@ -15662,47 +15988,117 @@ async function runPhysicalApprovalControl(
         approvalCallsBefore + 1,
     "Physical approval response did not enter one pending request."
   );
-  await waitFor(
-    async () => {
-      const nodes = await readAndroidUiNodes();
-      return (
-        physicalSessionNavigationMatches(
-          readPhysicalSessionNavigationSnapshot(input),
-          navigationBefore
-        ) &&
-        selectPhysicalApprovalConfirmationAction(nodes) === null &&
-        selectPhysicalSessionContentNode(
-          nodes,
-          "text",
-          "Confirming decision",
-          false
-        ) !== null
-      );
-    },
+  await waitForPhysicalApprovalResponding(
+    input,
+    navigationBefore,
+    approvalCallsBefore,
     30_000,
     "Physical approval did not render owner-local responding truth."
   );
   await capture("fe090-06-approval-responding.png");
   input.controls.releaseApproval();
-  await waitFor(
-    async () => {
-      const nodes = await readAndroidUiNodes();
-      return (
-        physicalSessionNavigationMatches(
-          readPhysicalSessionNavigationSnapshot(input),
-          navigationBefore
-        ) &&
-        physicalDashboardControlCallCount(input.controls, "respond_approval") ===
-          approvalCallsBefore + 1 &&
-        selectPhysicalApprovalConfirmationAction(nodes) === null &&
-        selectPhysicalSessionContentNode(nodes, "text", "Approved once", false) !==
-          null
-      );
-    },
+  await waitForPhysicalApprovalTerminal(
+    input,
+    navigationBefore,
+    approvalCallsBefore,
     30_000,
     "Physical approval did not render exact terminal approved truth."
   );
   await capture("fe090-07-approval-approved.png");
+}
+
+async function waitForPhysicalApprovalResponding(
+  input: ProductionUiEntryInput & {
+    readonly controls: PhysicalDashboardControls;
+    readonly prompt: PhysicalPromptRuntime;
+  },
+  expectedNavigation: PhysicalSessionNavigationSnapshot,
+  approvalCallsBefore: number,
+  timeoutMs: number,
+  message: string
+): Promise<void> {
+  const observations: string[] = [];
+  try {
+    await waitFor(async () => {
+      try {
+        const nodes = await readAndroidUiNodes();
+        const checkpoint: PhysicalApprovalCheckpointInput = Object.freeze({
+          actualNavigation: readPhysicalSessionNavigationSnapshot(input),
+          approvalCalls: physicalDashboardControlCallCount(
+            input.controls,
+            "respond_approval"
+          ),
+          approvalCallsBefore,
+          expectedNavigation,
+          nodes,
+          pending: input.controls.hasPendingApproval()
+        });
+        retainPhysicalApprovalObservation(
+          observations,
+          physicalApprovalCheckpointSummary(
+            checkpoint,
+            selectPhysicalApprovalRespondingDialogOwner(nodes) !== null
+          )
+        );
+        return physicalApprovalRespondingCheckpointMatches(checkpoint);
+      } catch {
+        retainPhysicalApprovalObservation(observations, "read-error");
+        return false;
+      }
+    }, timeoutMs, message);
+  } catch {
+    throw new Error(
+      `${message} (states=${observations.join("||") || "none"}). ` +
+        physicalPromptStreamDiagnostic(input)
+    );
+  }
+}
+
+async function waitForPhysicalApprovalTerminal(
+  input: ProductionUiEntryInput & {
+    readonly controls: PhysicalDashboardControls;
+    readonly prompt: PhysicalPromptRuntime;
+  },
+  expectedNavigation: PhysicalSessionNavigationSnapshot,
+  approvalCallsBefore: number,
+  timeoutMs: number,
+  message: string
+): Promise<void> {
+  const observations: string[] = [];
+  try {
+    await waitFor(async () => {
+      try {
+        const nodes = await readAndroidUiNodes();
+        const checkpoint: PhysicalApprovalCheckpointInput = Object.freeze({
+          actualNavigation: readPhysicalSessionNavigationSnapshot(input),
+          approvalCalls: physicalDashboardControlCallCount(
+            input.controls,
+            "respond_approval"
+          ),
+          approvalCallsBefore,
+          expectedNavigation,
+          nodes,
+          pending: input.controls.hasPendingApproval()
+        });
+        retainPhysicalApprovalObservation(
+          observations,
+          physicalApprovalCheckpointSummary(
+            checkpoint,
+            selectPhysicalApprovalTerminalOwner(nodes) !== null
+          )
+        );
+        return physicalApprovalTerminalCheckpointMatches(checkpoint);
+      } catch {
+        retainPhysicalApprovalObservation(observations, "read-error");
+        return false;
+      }
+    }, timeoutMs, message);
+  } catch {
+    throw new Error(
+      `${message} (states=${observations.join("||") || "none"}). ` +
+        physicalPromptStreamDiagnostic(input)
+    );
+  }
 }
 
 async function waitForPhysicalMissionControlWriteReady(
@@ -21539,6 +21935,58 @@ function physicalSessionActionsFixtureNodes(): readonly AndroidUiNode[] {
   );
 }
 
+function physicalApprovalRespondingFixtureNodes(): readonly AndroidUiNode[] {
+  return parseAndroidUiNodes(
+    '<hierarchy><node text="" class="android.view.ViewGroup" ' +
+      `resource-id="${chromeToolbarResourceId}" bounds="[0,80][1080,240]" />` +
+      '<node text="" class="android.widget.FrameLayout" ' +
+      `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
+      `<node text="${physicalApprovalAction}" class="android.view.View" ` +
+      'bounds="[280,250][1000,290]" />' +
+      `<node text="${physicalApprovalScope}" class="android.view.View" ` +
+      'bounds="[280,295][1000,330]" />' +
+      `<node text="${physicalApprovalConfirmationReason}" class="android.view.View" ` +
+      'bounds="[280,335][1000,350]" />' +
+      `<node text="${physicalApprovalConfirmationTitle}" class="android.view.View" ` +
+      'bounds="[40,360][800,440]" />' +
+      `<node text="" content-desc="${physicalApprovalCloseAction}" ` +
+      'class="android.widget.Button" clickable="true" enabled="false" ' +
+      'bounds="[920,340][1040,460]" />' +
+      `<node text="${physicalApprovalRisk}" class="android.view.View" ` +
+      'bounds="[40,500][600,580]" />' +
+      `<node text="${physicalApprovalAction}" class="android.view.View" ` +
+      'bounds="[280,680][1000,760]" />' +
+      `<node text="${physicalApprovalScope}" class="android.view.View" ` +
+      'bounds="[280,800][1000,880]" />' +
+      `<node text="${physicalApprovalConfirmationReason}" class="android.view.View" ` +
+      'bounds="[280,920][1000,1040]" />' +
+      `<node text="${physicalApprovalRespondingStatus}" class="android.view.View" ` +
+      'bounds="[40,1160][1000,1240]" />' +
+      `<node text="${physicalApprovalCancelAction}" class="android.widget.Button" ` +
+      'clickable="true" enabled="false" bounds="[40,1900][500,2040]" />' +
+      `<node text="" content-desc="${physicalApprovalConfirmationAction}" ` +
+      'class="android.widget.Button" clickable="true" enabled="false" ' +
+      'bounds="[540,1900][1040,2040]" />' +
+      '</hierarchy>'
+  );
+}
+
+function physicalApprovalTerminalFixtureNodes(): readonly AndroidUiNode[] {
+  const terminal = parseAndroidUiNodes(
+    '<hierarchy>' +
+      `<node text="${physicalApprovalTerminalStatus}" class="android.view.View" ` +
+      'bounds="[72,600][500,680]" />' +
+      `<node text="${physicalApprovalTerminalDetail}" class="android.view.View" ` +
+      'bounds="[72,700][900,780]" />' +
+      `<node text="${physicalApprovalAction}" class="android.view.View" ` +
+      'bounds="[280,900][1000,980]" />' +
+      `<node text="${physicalApprovalScope}" class="android.view.View" ` +
+      'bounds="[280,1040][1000,1120]" />' +
+      '</hierarchy>'
+  );
+  return Object.freeze([...physicalSessionActionsFixtureNodes(), ...terminal]);
+}
+
 function selectPhysicalSessionControlDockTop(
   nodes: readonly AndroidUiNode[]
 ): number | null {
@@ -23242,6 +23690,335 @@ function selectPhysicalApprovalConfirmationAction(
     true
   );
   return semantic;
+}
+
+function selectPhysicalApprovalRespondingDialogOwner(
+  nodes: readonly AndroidUiNode[]
+): PhysicalApprovalRespondingDialogOwner | null {
+  const semanticMatches = (value: string): readonly AndroidUiNode[] =>
+    nodes.filter((node) => matchesAndroidUiNode(node, "semantic", value));
+  const titleNodes = semanticMatches(physicalApprovalConfirmationTitle);
+  const riskNodes = semanticMatches(physicalApprovalRisk);
+  const statusNodes = semanticMatches(physicalApprovalRespondingStatus);
+  const actionNodes = semanticMatches(physicalApprovalAction);
+  const scopeNodes = semanticMatches(physicalApprovalScope);
+  const reasonNodes = semanticMatches(physicalApprovalConfirmationReason);
+  const approveNodes = semanticMatches(physicalApprovalConfirmationAction);
+  const cancelNodes = semanticMatches(physicalApprovalCancelAction);
+  const closeNodes = semanticMatches(physicalApprovalCloseAction);
+  if (
+    titleNodes.length !== 1 ||
+    riskNodes.length !== 1 ||
+    statusNodes.length !== 1 ||
+    actionNodes.length < 1 ||
+    actionNodes.length > 2 ||
+    scopeNodes.length < 1 ||
+    scopeNodes.length > 2 ||
+    reasonNodes.length < 1 ||
+    reasonNodes.length > 2 ||
+    approveNodes.length !== 1 ||
+    cancelNodes.length !== 1 ||
+    closeNodes.length !== 1 ||
+    semanticMatches(physicalApprovalConfirmationStatus).length !== 0 ||
+    semanticMatches(physicalApprovalTerminalStatus).length !== 0
+  ) {
+    return null;
+  }
+
+  let page: PhysicalScreenshotRegion;
+  try {
+    page = selectChromePageViewport(nodes);
+  } catch {
+    return null;
+  }
+  const title = titleNodes[0];
+  const risk = riskNodes[0];
+  const status = statusNodes[0];
+  const approve = approveNodes[0];
+  const cancel = cancelNodes[0];
+  const close = closeNodes[0];
+  if (
+    title === undefined ||
+    risk === undefined ||
+    status === undefined ||
+    approve === undefined ||
+    cancel === undefined ||
+    close === undefined
+  ) {
+    return null;
+  }
+  const textIsEligible = (node: AndroidUiNode): boolean =>
+    androidUiNodeIsWebText(node) &&
+    !node.clickable &&
+    node.enabled !== false &&
+    androidUiNodeIsFullyInsideRegion(node, page);
+  const disabledButtonIsEligible = (node: AndroidUiNode): boolean =>
+    node.className === "android.widget.Button" &&
+    node.enabled === false &&
+    androidUiNodeWidth(node) >= 24 &&
+    androidUiNodeHeight(node) >= 24 &&
+    androidUiNodeIsFullyInsideRegion(node, page);
+  if (
+    !textIsEligible(title) ||
+    !textIsEligible(risk) ||
+    !textIsEligible(status) ||
+    !disabledButtonIsEligible(approve) ||
+    !disabledButtonIsEligible(cancel) ||
+    !disabledButtonIsEligible(close) ||
+    !physicalOwnedHeaderIsCoherent(title, null, close)
+  ) {
+    return null;
+  }
+
+  const headerBottom = Math.max(title.bounds.bottom, close.bounds.bottom);
+  const footerTop = Math.min(cancel.bounds.top, approve.bounds.top);
+  const footerCenter = (node: AndroidUiNode): number =>
+    Math.floor((node.bounds.top + node.bounds.bottom) / 2);
+  if (
+    footerTop - headerBottom < 240 ||
+    cancel.bounds.left >= approve.bounds.left ||
+    cancel.bounds.right > approve.bounds.left ||
+    Math.abs(footerCenter(cancel) - footerCenter(approve)) > 128 ||
+    Math.max(cancel.bounds.bottom, approve.bounds.bottom) -
+        Math.min(cancel.bounds.top, approve.bounds.top) >
+      256
+  ) {
+    return null;
+  }
+  const inDialogBody = (node: AndroidUiNode): boolean =>
+    textIsEligible(node) &&
+    node.bounds.top >= headerBottom &&
+    node.bounds.bottom <= footerTop;
+  const selectOneBodyNode = (
+    candidates: readonly AndroidUiNode[]
+  ): AndroidUiNode | null => {
+    const owned = candidates.filter(inDialogBody);
+    return owned.length === 1 ? owned[0] ?? null : null;
+  };
+  const action = selectOneBodyNode(actionNodes);
+  const scope = selectOneBodyNode(scopeNodes);
+  const reason = selectOneBodyNode(reasonNodes);
+  if (
+    action === null ||
+    scope === null ||
+    reason === null ||
+    !inDialogBody(risk) ||
+    !inDialogBody(status) ||
+    risk.bounds.bottom > action.bounds.top ||
+    action.bounds.bottom > scope.bounds.top ||
+    scope.bounds.bottom > reason.bounds.top ||
+    reason.bounds.bottom > status.bounds.top
+  ) {
+    return null;
+  }
+
+  return Object.freeze({
+    action,
+    approve,
+    cancel,
+    close,
+    reason,
+    risk,
+    scope,
+    status,
+    title
+  });
+}
+
+function selectPhysicalApprovalTerminalOwner(
+  nodes: readonly AndroidUiNode[]
+): PhysicalApprovalTerminalOwner | null {
+  const semanticMatches = (value: string): readonly AndroidUiNode[] =>
+    nodes.filter((node) => matchesAndroidUiNode(node, "semantic", value));
+  if (
+    semanticMatches(physicalApprovalConfirmationTitle).length !== 0 ||
+    semanticMatches(physicalApprovalConfirmationStatus).length !== 0 ||
+    semanticMatches(physicalApprovalRespondingStatus).length !== 0 ||
+    semanticMatches(physicalApprovalConfirmationAction).length !== 0 ||
+    semanticMatches(physicalApprovalCancelAction).length !== 0 ||
+    semanticMatches(physicalApprovalCloseAction).length !== 0
+  ) {
+    return null;
+  }
+  const statusNodes = semanticMatches(physicalApprovalTerminalStatus);
+  const detailNodes = semanticMatches(physicalApprovalTerminalDetail);
+  const actionNodes = semanticMatches(physicalApprovalAction);
+  const scopeNodes = semanticMatches(physicalApprovalScope);
+  if (
+    statusNodes.length !== 1 ||
+    detailNodes.length !== 1 ||
+    actionNodes.length !== 1 ||
+    scopeNodes.length !== 1
+  ) {
+    return null;
+  }
+  const status = statusNodes[0];
+  const detail = detailNodes[0];
+  const action = actionNodes[0];
+  const scope = scopeNodes[0];
+  let region: PhysicalScreenshotRegion | null = null;
+  try {
+    region = selectPhysicalSessionContentRegion(nodes);
+  } catch {
+    return null;
+  }
+  if (
+    status === undefined ||
+    detail === undefined ||
+    action === undefined ||
+    scope === undefined ||
+    region === null
+  ) {
+    return null;
+  }
+  const eligible = (node: AndroidUiNode): boolean =>
+    androidUiNodeIsWebText(node) &&
+    !node.clickable &&
+    node.enabled !== false &&
+    androidUiNodeIsFullyInsideRegion(node, region);
+  const centerY = (node: AndroidUiNode): number =>
+    Math.floor((node.bounds.top + node.bounds.bottom) / 2);
+  if (
+    ![status, detail, action, scope].every(eligible) ||
+    centerY(status) >= centerY(detail) ||
+    centerY(detail) >= centerY(action) ||
+    centerY(action) >= centerY(scope)
+  ) {
+    return null;
+  }
+  return Object.freeze({ action, detail, scope, status });
+}
+
+function physicalApprovalRespondingCheckpointMatches(
+  input: PhysicalApprovalCheckpointInput
+): boolean {
+  return (
+    physicalApprovalCheckpointAuthorityMatches(input) &&
+    input.pending &&
+    selectPhysicalApprovalRespondingDialogOwner(input.nodes) !== null
+  );
+}
+
+function physicalApprovalTerminalCheckpointMatches(
+  input: PhysicalApprovalCheckpointInput
+): boolean {
+  return (
+    physicalApprovalCheckpointAuthorityMatches(input) &&
+    !input.pending &&
+    selectPhysicalApprovalTerminalOwner(input.nodes) !== null
+  );
+}
+
+function physicalApprovalCheckpointAuthorityMatches(
+  input: PhysicalApprovalCheckpointInput
+): boolean {
+  const navigationValues = [
+    ...Object.values(input.actualNavigation),
+    ...Object.values(input.expectedNavigation)
+  ];
+  return (
+    navigationValues.every(
+      (value) => Number.isSafeInteger(value) && value >= 0
+    ) &&
+    Number.isSafeInteger(input.approvalCallsBefore) &&
+    input.approvalCallsBefore >= 0 &&
+    Number.isSafeInteger(input.approvalCalls) &&
+    input.approvalCalls === input.approvalCallsBefore + 1 &&
+    physicalSessionNavigationMatches(
+      input.actualNavigation,
+      input.expectedNavigation
+    )
+  );
+}
+
+function physicalApprovalCheckpointSummary(
+  input: PhysicalApprovalCheckpointInput,
+  ownerSelected: boolean
+): string {
+  return (
+    `navigation=${physicalSessionNavigationSummary(input.actualNavigation)};` +
+    `expected=${physicalSessionNavigationSummary(input.expectedNavigation)};` +
+    `calls=${input.approvalCallsBefore}/${input.approvalCalls};` +
+    `pending=${input.pending ? "yes" : "no"};` +
+    `owner=${ownerSelected ? "yes" : "no"};` +
+    `dialog=${physicalApprovalRespondingContextSummary(input.nodes)};` +
+    `terminal=${physicalApprovalTerminalContextSummary(input.nodes)}`
+  );
+}
+
+function retainPhysicalApprovalObservation(
+  observations: string[],
+  observation: string
+): void {
+  requireCondition(
+    Buffer.byteLength(observation, "utf8") >= 1 &&
+      Buffer.byteLength(observation, "utf8") <= 4_096,
+    "Physical approval observation exceeded its private-safe bound."
+  );
+  if (observations.at(-1) === observation) return;
+  observations.push(observation);
+  if (observations.length > 6) observations.shift();
+}
+
+function physicalApprovalRespondingContextSummary(
+  nodes: readonly AndroidUiNode[]
+): string {
+  const observation = (value: string): string => {
+    const matches = nodes.filter((node) =>
+      matchesAndroidUiNode(node, "semantic", value)
+    );
+    return (
+      `${matches.length}:` +
+      `${matches
+        .slice(0, 2)
+        .map(
+          (node) =>
+            `${privateFreeAndroidUiNodeGeometry(node)},` +
+            `${node.enabled === false ? "disabled" : "enabled"}`
+        )
+        .join("|") || "none"}`
+    );
+  };
+  return [
+    `title=${observation(physicalApprovalConfirmationTitle)}`,
+    `facts=${observation(physicalApprovalRisk)}/` +
+      `${observation(physicalApprovalAction)}/` +
+      `${observation(physicalApprovalScope)}/` +
+      `${observation(physicalApprovalConfirmationReason)}`,
+    `status=${observation(physicalApprovalRespondingStatus)}`,
+    `footer=${observation(physicalApprovalCancelAction)}/` +
+      `${observation(physicalApprovalConfirmationAction)}/` +
+      `${observation(physicalApprovalCloseAction)}`,
+    `premature=${observation(physicalApprovalTerminalStatus)}`,
+    `selected=${
+      selectPhysicalApprovalRespondingDialogOwner(nodes) === null ? "no" : "yes"
+    }`
+  ].join(";");
+}
+
+function physicalApprovalTerminalContextSummary(
+  nodes: readonly AndroidUiNode[]
+): string {
+  const observation = (value: string): string => {
+    const matches = nodes.filter((node) =>
+      matchesAndroidUiNode(node, "semantic", value)
+    );
+    return (
+      `${matches.length}:` +
+      `${matches
+        .slice(0, 2)
+        .map(privateFreeAndroidUiNodeGeometry)
+        .join("|") || "none"}`
+    );
+  };
+  return [
+    `dialog=${observation(physicalApprovalConfirmationTitle)}`,
+    `status=${observation(physicalApprovalTerminalStatus)}`,
+    `detail=${observation(physicalApprovalTerminalDetail)}`,
+    `facts=${observation(physicalApprovalAction)}/` +
+      observation(physicalApprovalScope),
+    `selected=${selectPhysicalApprovalTerminalOwner(nodes) === null ? "no" : "yes"}`
+  ].join(";");
 }
 
 function physicalApprovalConfirmationTitleIsOpen(
