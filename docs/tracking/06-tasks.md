@@ -16,9 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-102` Physical approval responding owner | in_progress | none | Correct the structurally impossible in-flight approval oracle found by the single `43b93fc` phone run before creating another candidate. |
+| 1 | `FE-V1-090` Aggregate physical mobile-dashboard hardening | in_progress | none | Prepare one clean candidate from the pushed approval-owner correction, review it, then execute the no-retry phone acceptance once. |
 
-Clean pushed candidate `43b93fc` failed once at the approval responding checkpoint and completed exact cleanup. Production keeps the pending approval dialog open with all actions disabled, while the physical oracle searches the background Session Detail owner and requires the dialog action to disappear. `FE-V1-102` is the only executable queue item; `FE-V1-090` may not be retried on the same commit.
+`FE-V1-102` closed `BUG-073` in pushed `e82873e` with exact pending-dialog and terminal-row owners, authority/counter checkpoints, bounded private-free diagnostics, and hostile owner/geometry/state tests. All focused, full-unit, typecheck, lint/export, planning, runtime-boundary, privacy/diff, and protected-worktree gates pass without phone or remote-environment mutation. Candidate `43b93fc` remains ineligible and will not be retried.
 
 ## Intentional Blockers
 
