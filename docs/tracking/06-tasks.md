@@ -16,9 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-103` Nested prompt aggregate-registry scope | in_progress | none | Replace the impossible standalone assertion reached by candidate `87a6216` with an exact cumulative dashboard-prefix contract before another candidate. |
+| 1 | `FE-V1-090` Aggregate physical mobile-dashboard hardening | in_progress | none | Create one fresh pushed candidate, complete clean host preflight, and execute its single no-retry phone run through the proven detached monitor. |
 
-Candidate `87a6216` proves the detached monitor fix and crosses approval, event, and prompt behavior, then fails only because the nested prompt helper compares cumulative dashboard consumption with the standalone prompt set. `FE-V1-103` is the only executable queue item; exact automatic cleanup passed, no evidence was published, and `87a6216` will not be retried.
+`FE-V1-103` closes `BUG-075` in pushed `01983b9` with exact standalone and cumulative dashboard prompt registry contracts plus all required hostile and broad host gates. `FE-V1-090` is the only executable queue item; candidate `87a6216` remains ineligible and will not be retried.
 
 ## Intentional Blockers
 
