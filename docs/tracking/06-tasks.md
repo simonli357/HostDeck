@@ -16,9 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-090` Aggregate physical mobile-dashboard hardening | in_progress | none | Prepare one distinct clean remote-matched candidate, pass all host/read-only device gates, then run the detached no-retry aggregate through retained deployment. |
+| 1 | `FE-V1-106` Typed physical stream-recovery observation | in_progress | none | Classify the `states=none` boundary from consumed candidate `6124f5c`, prove exact bounded hierarchy/read/state outcomes, and pass host gates without phone mutation. |
 
-`FE-V1-105` closed `BUG-077` in pushed `c8bf276` without further phone or environment mutation. Candidate `2cccd35` and every prior failed candidate remain ineligible and will not be retried; `FE-V1-090` owns the next distinct candidate and retained deployment.
+Candidate `6124f5c` reached the real held stream-recovery fixture after 364 seconds but every Android hierarchy failure was collapsed into `states=none`; exact cleanup passed, no evidence was published, and it will not be retried. `FE-V1-106` owns `BUG-078`; `FE-V1-090` remains blocked until the observer and fresh host gates pass.
 
 ## Intentional Blockers
 
