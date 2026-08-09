@@ -308,6 +308,11 @@ const physicalSessionActionsOverlayMarkers = Object.freeze([
 const physicalSessionActionsStableWindowMs = 2_000;
 const physicalSessionActionsPollMs = 200;
 const physicalEventActionMaxDistancePx = 480;
+const physicalEventDiagnosticStableWindowMs = 2_000;
+const physicalEventDiagnosticPollMs = 200;
+const physicalEventDiagnosticSwipeSettleMs = 350;
+const physicalEventDiagnosticMaximumSwipes = 4;
+const physicalEventDiagnosticObservationMaxBytes = 560;
 const physicalHostAccessHeaderGapPx = 24;
 const physicalSessionOverlayGapPx = 24;
 const physicalApprovalLifetimeMs = 30 * 60 * 1_000;
@@ -903,6 +908,53 @@ describe("physical Android phone-driver protocol", () => {
     );
     executableRegistry.assertConsumed(["model-open"]);
     expect(syntheticTapCount).toBe(1);
+
+    let guardedTapCount = 0;
+    let preTapGuardCount = 0;
+    const guardedRegistry = createPhysicalAggregateActionRegistry({
+      counterSnapshot: () => Object.freeze({ synthetic: 0 }),
+      tapNodeOnceAndWait: async (_node, completed) => {
+        guardedTapCount += 1;
+        expect(await completed()).toBe(true);
+      }
+    });
+    await guardedRegistry.tap(
+      "event-open-boundary",
+      syntheticNode,
+      () => syntheticNode.clickable && syntheticNode.enabled !== false,
+      "synthetic guarded event action",
+      Object.freeze({
+        beforeTap: () => {
+          preTapGuardCount += 1;
+        },
+        timeoutMs: 1_000
+      })
+    );
+    guardedRegistry.assertConsumed(["event-open-boundary"]);
+    expect(preTapGuardCount).toBe(1);
+    expect(guardedTapCount).toBe(1);
+
+    let rejectedTapCount = 0;
+    const rejectedGuardRegistry = createPhysicalAggregateActionRegistry({
+      counterSnapshot: () => Object.freeze({ synthetic: 0 }),
+      tapNodeOnceAndWait: async () => {
+        rejectedTapCount += 1;
+      }
+    });
+    await expect(
+      rejectedGuardRegistry.tap(
+        "event-open-boundary",
+        syntheticNode,
+        () => syntheticNode.clickable && syntheticNode.enabled !== false,
+        "synthetic rejected event action",
+        Object.freeze({
+          beforeTap: () => {
+            throw new Error("synthetic authority drift");
+          }
+        })
+      )
+    ).rejects.toThrow("synthetic authority drift");
+    expect(rejectedTapCount).toBe(0);
 
     let syntheticTalkBackActivationCount = 0;
     const talkBackRegistry = createPhysicalAggregateActionRegistry({
@@ -2656,6 +2708,429 @@ describe("physical Android phone-driver protocol", () => {
         timelineLabel
       )
     ).toBeNull();
+  });
+
+  it("waits for continuous event-target geometry and immutable authority", async () => {
+    const timelineLabel = "Synthetic retained event";
+    const initialNodes = physicalEventDiagnosticFixtureNodes(timelineLabel);
+    const shiftedNodes = physicalEventDiagnosticFixtureNodes(timelineLabel, 48);
+    const shiftedTarget = selectPhysicalEventDiagnosticTarget(
+      shiftedNodes,
+      timelineLabel
+    );
+    requireCondition(
+      shiftedTarget !== null,
+      "Shifted event-diagnostic fixture target was absent."
+    );
+    const absentNodes = initialNodes.filter(
+      (node) =>
+        node.description !== "View event details" && node.text !== timelineLabel
+    );
+    const navigation: PhysicalSessionNavigationSnapshot = Object.freeze({
+      activeSubscribers: 1,
+      missingDetailRequests: 0,
+      openedSubscribers: 1,
+      selectedDetailRequests: 1,
+      streamRequests: 1
+    });
+    const baseline: PhysicalEventDiagnosticAuthoritySnapshot = Object.freeze({
+      navigation,
+      sessionEventRequests: 4
+    });
+    const reads: readonly (readonly AndroidUiNode[] | "error")[] = [
+      absentNodes,
+      initialNodes,
+      shiftedNodes,
+      absentNodes,
+      "error",
+      ...Array.from({ length: 11 }, () => shiftedNodes)
+    ];
+    let now = 0;
+    let readIndex = 0;
+    let swipes = 0;
+    const source: PhysicalEventDiagnosticWaitSource = Object.freeze({
+      readAuthority: () => baseline,
+      readNodes: async () => {
+        const next = reads[Math.min(readIndex, reads.length - 1)];
+        readIndex += 1;
+        if (next === "error") throw new Error("private hierarchy payload");
+        requireCondition(next !== undefined, "Event-diagnostic fixture read was absent.");
+        return next;
+      },
+      swipe: () => {
+        swipes += 1;
+      }
+    });
+
+    const admitted = await revealPhysicalEventDiagnosticTarget(
+      source,
+      baseline,
+      timelineLabel,
+      "backward",
+      5_000,
+      "Stable event target was not admitted.",
+      {
+        now: () => now,
+        sleep: async (milliseconds) => {
+          now += milliseconds;
+        }
+      }
+    );
+    expect(physicalAggregateNodeMatches(admitted.action, shiftedTarget.action)).toBe(
+      true
+    );
+    expect(physicalAggregateNodeMatches(admitted.label, shiftedTarget.label)).toBe(
+      true
+    );
+    expect(now).toBeGreaterThanOrEqual(3_000);
+    expect(swipes).toBe(2);
+    expect(readIndex).toBe(reads.length);
+
+    const rejectAuthorityDrift = async (
+      drifted: PhysicalEventDiagnosticAuthoritySnapshot,
+      marker: string
+    ): Promise<void> => {
+      let current = baseline;
+      let rejectedNow = 0;
+      let rejectedReads = 0;
+      const rejected = revealPhysicalEventDiagnosticTarget(
+        Object.freeze({
+          readAuthority: () => current,
+          readNodes: async () => {
+            rejectedReads += 1;
+            current = drifted;
+            return shiftedNodes;
+          },
+          swipe: () => {
+            throw new Error("authority drift must not swipe");
+          }
+        }),
+        baseline,
+        timelineLabel,
+        "forward",
+        600,
+        "Event authority drift was accepted.",
+        {
+          now: () => rejectedNow,
+          sleep: async (milliseconds) => {
+            rejectedNow += milliseconds;
+          }
+        }
+      );
+      await expect(rejected).rejects.toThrow(marker);
+      expect(rejectedNow).toBe(600);
+      expect(rejectedReads).toBe(1);
+    };
+    await rejectAuthorityDrift(
+      Object.freeze({
+        ...baseline,
+        navigation: Object.freeze({
+          ...navigation,
+          streamRequests: navigation.streamRequests + 1
+        })
+      }),
+      "navigation=drift"
+    );
+    await rejectAuthorityDrift(
+      Object.freeze({
+        ...baseline,
+        sessionEventRequests: baseline.sessionEventRequests + 1
+      }),
+      "event_delta=1"
+    );
+    expect(() =>
+      requirePhysicalEventDiagnosticAuthorityBeforeTap(
+        Object.freeze({
+          readAuthority: () =>
+            Object.freeze({
+              ...baseline,
+              sessionEventRequests: baseline.sessionEventRequests + 1
+            }),
+          readNodes: async () => shiftedNodes,
+          swipe: () => undefined
+        }),
+        baseline,
+        Object.freeze({
+          actionId: "event-open-boundary",
+          counterSnapshot: Object.freeze({
+            session_event_requests: baseline.sessionEventRequests
+          }),
+          currentNodes: shiftedNodes,
+          node: shiftedTarget.action,
+          routeOwner: "Event details"
+        }),
+        shiftedTarget,
+        timelineLabel
+      )
+    ).toThrow("drifted before its only tap");
+    const stableSource: PhysicalEventDiagnosticWaitSource = Object.freeze({
+      readAuthority: () => baseline,
+      readNodes: async () => shiftedNodes,
+      swipe: () => undefined
+    });
+    const preTapContext = Object.freeze({
+      actionId: "event-open-boundary" as const,
+      counterSnapshot: Object.freeze({
+        session_event_requests: baseline.sessionEventRequests
+      }),
+      currentNodes: shiftedNodes,
+      node: shiftedTarget.action,
+      routeOwner: "Event details" as const
+    });
+    expect(() =>
+      requirePhysicalEventDiagnosticAuthorityBeforeTap(
+        stableSource,
+        baseline,
+        Object.freeze({
+          ...preTapContext,
+          currentNodes: shiftedNodes.filter(
+            (node) => node.text !== timelineLabel
+          )
+        }),
+        shiftedTarget,
+        timelineLabel
+      )
+    ).toThrow("owner or counter drifted before its only tap");
+    expect(() =>
+      requirePhysicalEventDiagnosticAuthorityBeforeTap(
+        stableSource,
+        baseline,
+        Object.freeze({
+          ...preTapContext,
+          counterSnapshot: Object.freeze({
+            session_event_requests: baseline.sessionEventRequests + 1
+          })
+        }),
+        shiftedTarget,
+        timelineLabel
+      )
+    ).toThrow("owner or counter drifted before its only tap");
+  });
+
+  it("rejects duplicate, disabled, and occluded event-target owners", async () => {
+    const timelineLabel = "Synthetic hostile event";
+    const nodes = physicalEventDiagnosticFixtureNodes(timelineLabel);
+    const action = nodes.find(
+      (node) => node.description === "View event details"
+    );
+    requireCondition(action !== undefined, "Hostile event action fixture was absent.");
+    const hostileStates: readonly (readonly AndroidUiNode[])[] = [
+      Object.freeze([...nodes, Object.freeze({ ...action })]),
+      Object.freeze(
+        nodes.map((node) =>
+          node === action
+            ? Object.freeze({ ...node, enabled: false as const })
+            : node
+        )
+      ),
+      physicalEventDiagnosticFixtureNodes(timelineLabel, 700)
+    ];
+    const baseline: PhysicalEventDiagnosticAuthoritySnapshot = Object.freeze({
+      navigation: Object.freeze({
+        activeSubscribers: 1,
+        missingDetailRequests: 0,
+        openedSubscribers: 1,
+        selectedDetailRequests: 1,
+        streamRequests: 1
+      }),
+      sessionEventRequests: 2
+    });
+
+    for (const hostileNodes of hostileStates) {
+      expect(selectPhysicalEventDiagnosticTarget(hostileNodes, timelineLabel)).toBeNull();
+      let now = 0;
+      const rejected = revealPhysicalEventDiagnosticTarget(
+        Object.freeze({
+          readAuthority: () => baseline,
+          readNodes: async () => hostileNodes,
+          swipe: () => undefined
+        }),
+        baseline,
+        timelineLabel,
+        "forward",
+        500,
+        "Hostile event target was admitted.",
+        {
+          now: () => now,
+          sleep: async (milliseconds) => {
+            now += milliseconds;
+          }
+        }
+      );
+      await expect(rejected).rejects.toThrow("target=blocked");
+    }
+  });
+
+  it("classifies exact event-sheet outcomes with bounded private-free evidence", () => {
+    const timelineLabel = "private synthetic event detail";
+    const eventNodes = physicalEventDiagnosticFixtureNodes(timelineLabel);
+    const target = selectPhysicalEventDiagnosticTarget(eventNodes, timelineLabel);
+    requireCondition(target !== null, "Event outcome fixture target was absent.");
+    const navigation: PhysicalSessionNavigationSnapshot = Object.freeze({
+      activeSubscribers: 1,
+      missingDetailRequests: 0,
+      openedSubscribers: 1,
+      selectedDetailRequests: 1,
+      streamRequests: 1
+    });
+    const baselineAuthority: PhysicalEventDiagnosticAuthoritySnapshot = Object.freeze({
+      navigation,
+      sessionEventRequests: 4
+    });
+    const currentAuthority: PhysicalEventDiagnosticAuthoritySnapshot = Object.freeze({
+      navigation,
+      sessionEventRequests: 5
+    });
+    const outcome = (
+      nodes: readonly AndroidUiNode[],
+      actualAuthority: PhysicalEventDiagnosticAuthoritySnapshot = currentAuthority
+    ): PhysicalEventDiagnosticOutcomeInput =>
+      Object.freeze({
+        actualAuthority,
+        baselineAuthority,
+        heading: "Replay boundary",
+        limitation: "Content truncated",
+        nodes,
+        target,
+        timelineLabel
+      });
+    const states = [
+      ["Verifying event", "loading"],
+      ["Event details current", "current"],
+      ["Event verification failed", "failure"],
+      ["Local evidence only", "local_only"],
+      ["Retained event detail", "retained"]
+    ] as const;
+    const observations: string[] = [];
+    for (const [status, expectedState] of states) {
+      const nodes = physicalEventDiagnosticSheetFixtureNodes(status);
+      expect(physicalEventDiagnosticSheetState(nodes)).toBe(expectedState);
+      expect(physicalEventDiagnosticCurrentOutcomeVisible(outcome(nodes))).toBe(
+        expectedState === "current"
+      );
+      const summary = physicalEventDiagnosticOutcomeSummary(outcome(nodes));
+      expect(summary).toContain(`sheet=${expectedState}`);
+      expect(summary).toContain("request_delta=1");
+      expect(summary).toContain("navigation=match");
+      expect(summary).toContain("owner=admitted");
+      expect(summary).toContain("heading=1;limitation=1");
+      expect(summary).not.toContain(timelineLabel);
+      retainPhysicalEventDiagnosticObservation(observations, summary);
+    }
+
+    const missed = physicalEventDiagnosticOutcomeSummary(
+      outcome(eventNodes, baselineAuthority)
+    );
+    expect(missed).toContain("target=same");
+    expect(missed).toContain("request_delta=0");
+    expect(missed).toContain("owner=blocked");
+    expect(missed).toContain("sheet=absent");
+    const moved = physicalEventDiagnosticOutcomeSummary(
+      outcome(
+        physicalEventDiagnosticFixtureNodes(timelineLabel, 48),
+        baselineAuthority
+      )
+    );
+    expect(moved).toContain("target=moved");
+    const absent = physicalEventDiagnosticOutcomeSummary(
+      outcome([], baselineAuthority)
+    );
+    expect(absent).toContain("target=absent");
+    const duplicate = physicalEventDiagnosticOutcomeSummary(
+      outcome(
+        [
+          ...eventNodes,
+          Object.freeze({
+            ...target.action,
+            bounds: Object.freeze({
+              ...target.action.bounds,
+              bottom: target.action.bounds.bottom + 24,
+              top: target.action.bounds.top + 24
+            })
+          })
+        ],
+        baselineAuthority
+      )
+    );
+    expect(duplicate).toContain("target=duplicate");
+
+    const currentNodes = physicalEventDiagnosticSheetFixtureNodes(
+      "Event details current"
+    );
+    const close = currentNodes.find(
+      (node) => node.description === "Close event details"
+    );
+    const currentStatus = currentNodes.find(
+      (node) => node.text === "Event details current"
+    );
+    requireCondition(close !== undefined, "Event sheet close fixture was absent.");
+    requireCondition(
+      currentStatus !== undefined,
+      "Event sheet status fixture was absent."
+    );
+    const openNodes = currentNodes.filter(
+      (node) => node.text !== "Event details current"
+    );
+    expect(physicalEventDiagnosticSheetState([])).toBe("absent");
+    expect(physicalEventDiagnosticSheetState(openNodes)).toBe("open");
+    expect(physicalEventDiagnosticCurrentOutcomeVisible(outcome(openNodes))).toBe(
+      false
+    );
+    expect(
+      physicalEventDiagnosticSheetState([
+        ...currentNodes,
+        Object.freeze({ ...close })
+      ])
+    ).toBe("invalid");
+    expect(
+      physicalEventDiagnosticSheetState([
+        ...currentNodes,
+        Object.freeze({ ...currentStatus })
+      ])
+    ).toBe("invalid");
+    expect(
+      physicalEventDiagnosticCurrentOutcomeVisible(
+        outcome(
+          currentNodes.filter((node) => node.text !== "Content truncated")
+        )
+      )
+    ).toBe(false);
+    expect(
+      physicalEventDiagnosticCurrentOutcomeVisible(
+        outcome(
+          currentNodes,
+          Object.freeze({
+            navigation: Object.freeze({
+              ...navigation,
+              streamRequests: navigation.streamRequests + 1
+            }),
+            sessionEventRequests: currentAuthority.sessionEventRequests
+          })
+        )
+      )
+    ).toBe(false);
+    expect(
+      physicalEventDiagnosticCurrentOutcomeVisible(
+        outcome(
+          currentNodes,
+          Object.freeze({
+            navigation,
+            sessionEventRequests: currentAuthority.sessionEventRequests + 1
+          })
+        )
+      )
+    ).toBe(false);
+    retainPhysicalEventDiagnosticObservation(observations, missed);
+    retainPhysicalEventDiagnosticObservation(observations, moved);
+    retainPhysicalEventDiagnosticObservation(observations, absent);
+    expect(observations.length).toBe(6);
+    expect(observations.join("|")).not.toContain(timelineLabel);
+    expect(() =>
+      retainPhysicalEventDiagnosticObservation(
+        observations,
+        "x".repeat(physicalEventDiagnosticObservationMaxBytes + 1)
+      )
+    ).toThrow("observation exceeded its private-safe bound");
   });
 
   it("admits Host actions only below the complete Session Actions header", () => {
@@ -8538,7 +9013,8 @@ type PhysicalAggregateActionTask =
   | "FE-V1-096"
   | "FE-V1-097"
   | "FE-V1-098"
-  | "FE-V1-099";
+  | "FE-V1-099"
+  | "FE-V1-104";
 
 type PhysicalAggregateActionDriver =
   | "android_node"
@@ -8738,8 +9214,15 @@ interface PhysicalAggregateActionRegistry {
     node: AndroidUiNode,
     completed: () => boolean | Promise<boolean>,
     message: string | (() => string),
-    timeoutMs?: number
+    options?: number | PhysicalAggregateTapOptions
   ) => Promise<void>;
+}
+
+interface PhysicalAggregateTapOptions {
+  readonly beforeTap?:
+    | ((context: PhysicalAggregateOwnerContext) => void)
+    | undefined;
+  readonly timeoutMs?: number | undefined;
 }
 
 interface PhysicalAggregateActionRegistryOptions {
@@ -8916,11 +9399,11 @@ const physicalAggregateTaskByAction = Object.freeze({
   "dashboard-open-session": "FE-V1-093",
   "approval-open": "FE-V1-096",
   "approval-submit": "FE-V1-096",
-  "event-open-boundary": "FE-V1-095",
+  "event-open-boundary": "FE-V1-104",
   "event-close-boundary": "FE-V1-095",
-  "event-open-complete": "FE-V1-095",
+  "event-open-complete": "FE-V1-104",
   "event-close-complete": "FE-V1-095",
-  "event-open-redacted": "FE-V1-095",
+  "event-open-redacted": "FE-V1-104",
   "event-close-redacted": "FE-V1-095",
   "detail-expand-quiet": "FE-V1-093",
   "archive-expand-quiet": "FE-V1-093",
@@ -9856,8 +10339,17 @@ function createPhysicalAggregateActionRegistry(
       node: AndroidUiNode,
       completed: () => boolean | Promise<boolean>,
       message: string | (() => string),
-      timeoutMs = 30_000
+      candidateOptions: number | PhysicalAggregateTapOptions = 30_000
     ) => {
+      const tapOptions: PhysicalAggregateTapOptions =
+        typeof candidateOptions === "number"
+          ? Object.freeze({ timeoutMs: candidateOptions })
+          : candidateOptions;
+      const timeoutMs = tapOptions.timeoutMs ?? 30_000;
+      requireCondition(
+        Number.isSafeInteger(timeoutMs) && timeoutMs > 0,
+        `Physical aggregate action ${actionId} had an invalid timeout.`
+      );
       const definition = definitions.get(actionId);
       requireCondition(
         definition !== undefined &&
@@ -9899,6 +10391,13 @@ function createPhysicalAggregateActionRegistry(
           });
         return definition.transitionExecutor(transitionContext);
       };
+      if (tapOptions.beforeTap !== undefined) {
+        const result = tapOptions.beforeTap(context);
+        requireCondition(
+          result === undefined,
+          `Physical aggregate action ${actionId} used an asynchronous pre-tap guard.`
+        );
+      }
       if (options.tapNodeOnceAndWait === undefined) {
         await tapAndroidNodeOnceAndWait(
           node,
@@ -13223,6 +13722,45 @@ interface PhysicalEventDiagnosticTarget {
   readonly label: AndroidUiNode;
 }
 
+interface PhysicalEventDiagnosticAuthoritySnapshot {
+  readonly navigation: PhysicalSessionNavigationSnapshot;
+  readonly sessionEventRequests: number;
+}
+
+interface PhysicalEventDiagnosticWaitSource {
+  readonly readAuthority: () => PhysicalEventDiagnosticAuthoritySnapshot;
+  readonly readNodes: () => Promise<readonly AndroidUiNode[]>;
+  readonly swipe: (
+    nodes: readonly AndroidUiNode[],
+    direction: AndroidVerticalRevealDirection
+  ) => void;
+}
+
+interface PhysicalEventDiagnosticWaitOptions {
+  readonly now?: (() => number) | undefined;
+  readonly sleep?: ((milliseconds: number) => Promise<void>) | undefined;
+}
+
+type PhysicalEventDiagnosticSheetState =
+  | "absent"
+  | "current"
+  | "failure"
+  | "invalid"
+  | "loading"
+  | "local_only"
+  | "open"
+  | "retained";
+
+interface PhysicalEventDiagnosticOutcomeInput {
+  readonly actualAuthority: PhysicalEventDiagnosticAuthoritySnapshot;
+  readonly baselineAuthority: PhysicalEventDiagnosticAuthoritySnapshot;
+  readonly heading: string;
+  readonly limitation: string;
+  readonly nodes: readonly AndroidUiNode[];
+  readonly target: PhysicalEventDiagnosticTarget;
+  readonly timelineLabel: string;
+}
+
 interface PngImage {
   readonly data: Buffer;
   readonly height: number;
@@ -15406,43 +15944,89 @@ async function runPhysicalEventDiagnostic(
   limitation: string,
   screenshot: string
 ): Promise<void> {
-  const navigationBefore = readPhysicalSessionNavigationSnapshot(input);
+  const source: PhysicalEventDiagnosticWaitSource = Object.freeze({
+    readAuthority: () => readPhysicalEventDiagnosticAuthoritySnapshot(input),
+    readNodes: readAndroidUiNodes,
+    swipe: swipeAndroidViewportAbovePhysicalSessionControls
+  });
+  const authorityBefore = source.readAuthority();
   const target = await revealPhysicalEventDiagnosticTarget(
+    source,
+    authorityBefore,
     timelineLabel,
     direction,
     30_000,
-    `Physical event row ${timelineLabel} had no unobscured diagnostic action.`
+    `Physical ${heading} row had no stable unobscured diagnostic action.`
   );
-  const readsBefore = input.requestInspection.sessionEventRequests;
+  const observations: string[] = [];
   await input.actionRegistry.tap(
     actionId,
     target.action,
     async () => {
-      const nodes = await readAndroidUiNodes();
-      return (
-        physicalSessionNavigationMatches(
-          readPhysicalSessionNavigationSnapshot(input),
-          navigationBefore
-        ) &&
-        input.requestInspection.sessionEventRequests === readsBefore + 1 &&
-        physicalFixedSheetTextVisible(nodes, "Event details", heading)
+      let actualAuthority: PhysicalEventDiagnosticAuthoritySnapshot;
+      let nodes: readonly AndroidUiNode[];
+      try {
+        nodes = await source.readNodes();
+        actualAuthority = source.readAuthority();
+      } catch {
+        retainPhysicalEventDiagnosticObservation(
+          observations,
+          "hierarchy-or-authority-read-error"
+        );
+        return false;
+      }
+      const outcome: PhysicalEventDiagnosticOutcomeInput = Object.freeze({
+        actualAuthority,
+        baselineAuthority: authorityBefore,
+        heading,
+        limitation,
+        nodes,
+        target,
+        timelineLabel
+      });
+      retainPhysicalEventDiagnosticObservation(
+        observations,
+        physicalEventDiagnosticOutcomeSummary(outcome)
       );
+      const requestDelta =
+        actualAuthority.sessionEventRequests -
+        authorityBefore.sessionEventRequests;
+      if (
+        !physicalSessionNavigationMatches(
+          actualAuthority.navigation,
+          authorityBefore.navigation
+        ) ||
+        requestDelta < 0 ||
+        requestDelta > 1
+      ) {
+        throw new Error("Physical event diagnostic authority became impossible.");
+      }
+      const sheetState = physicalEventDiagnosticSheetState(nodes);
+      if (
+        sheetState === "failure" ||
+        sheetState === "local_only" ||
+        sheetState === "retained"
+      ) {
+        throw new Error(
+          `Physical event diagnostic reached unexpected ${sheetState} truth.`
+        );
+      }
+      return physicalEventDiagnosticCurrentOutcomeVisible(outcome);
     },
-    `Physical ${heading} diagnostic did not open exactly once.`
-  );
-  await waitFor(
-    async () =>
-      physicalSessionNavigationMatches(
-        readPhysicalSessionNavigationSnapshot(input),
-        navigationBefore
-      ) &&
-      physicalFixedSheetTextVisible(
-        await readAndroidUiNodes(),
-        "Event details",
-        limitation
-      ),
-    30_000,
-    `Physical ${heading} diagnostic omitted owned ${limitation} truth.`
+    () =>
+      `Physical ${heading} diagnostic did not reach one current read;states=${
+        observations.join("||") || "none"
+      }`,
+    Object.freeze({
+      beforeTap: (context: PhysicalAggregateOwnerContext) =>
+        requirePhysicalEventDiagnosticAuthorityBeforeTap(
+          source,
+          authorityBefore,
+          context,
+          target,
+          timelineLabel
+        )
+    })
   );
   await capture(screenshot);
   await closePhysicalDialog(
@@ -15451,48 +16035,465 @@ async function runPhysicalEventDiagnostic(
     "Close event details",
     () => physicalSessionNavigationMatches(
       readPhysicalSessionNavigationSnapshot(input),
-      navigationBefore
+      authorityBefore.navigation
     )
   );
 }
 
 async function revealPhysicalEventDiagnosticTarget(
+  source: PhysicalEventDiagnosticWaitSource,
+  baselineAuthority: PhysicalEventDiagnosticAuthoritySnapshot,
   timelineLabel: string,
   direction: AndroidVerticalRevealDirection,
   timeoutMs: number,
-  message: string
+  message: string,
+  options: PhysicalEventDiagnosticWaitOptions = {}
 ): Promise<PhysicalEventDiagnosticTarget> {
-  let found: PhysicalEventDiagnosticTarget | null = null;
+  requireCondition(
+    Number.isSafeInteger(timeoutMs) && timeoutMs > 0,
+    "Physical event-diagnostic waiter timeout was invalid."
+  );
+  const now = options.now ?? (() => performance.now());
+  const sleep =
+    options.sleep ??
+    ((milliseconds: number): Promise<void> =>
+      new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+  let previousNow = Number.NEGATIVE_INFINITY;
+  const readNow = (): number => {
+    const value = now();
+    requireCondition(
+      Number.isFinite(value) && value >= previousNow,
+      "Physical event-diagnostic waiter clock moved backwards."
+    );
+    previousNow = value;
+    return value;
+  };
+  const startedAt = readNow();
+  const deadline = startedAt + timeoutMs;
+  requireCondition(
+    Number.isFinite(deadline) && deadline > startedAt,
+    "Physical event-diagnostic waiter deadline was invalid."
+  );
+  const pause = async (maximumMs: number): Promise<boolean> => {
+    const remaining = deadline - readNow();
+    if (remaining <= 0) return false;
+    await sleep(Math.min(maximumMs, remaining));
+    return true;
+  };
   let swipeCount = 0;
   const observations: string[] = [];
-  try {
-    await waitFor(async () => {
-      const nodes = await readAndroidUiNodes();
-      const observation = physicalEventDiagnosticGeometrySummary(
-        nodes,
-        timelineLabel
+  let stableSince: number | null = null;
+  let stableTarget: PhysicalEventDiagnosticTarget | null = null;
+
+  while (readNow() < deadline) {
+    let authorityBeforeRead: PhysicalEventDiagnosticAuthoritySnapshot;
+    try {
+      authorityBeforeRead = source.readAuthority();
+    } catch {
+      retainPhysicalEventDiagnosticObservation(
+        observations,
+        "authority-read-error"
       );
-      if (observations.at(-1) !== observation) {
-        observations.push(observation);
-        if (observations.length > 6) observations.shift();
-      }
-      found = selectPhysicalEventDiagnosticTarget(nodes, timelineLabel);
-      if (found !== null) return true;
-      if (swipeCount < 4) {
-        swipeAndroidViewportAbovePhysicalSessionControls(nodes, direction);
+      stableSince = null;
+      stableTarget = null;
+      if (!(await pause(physicalEventDiagnosticPollMs))) break;
+      continue;
+    }
+    if (
+      !physicalEventDiagnosticAuthorityMatches(
+        authorityBeforeRead,
+        baselineAuthority
+      )
+    ) {
+      retainPhysicalEventDiagnosticObservation(
+        observations,
+        physicalEventDiagnosticAuthoritySummary(
+          authorityBeforeRead,
+          baselineAuthority
+        )
+      );
+      stableSince = null;
+      stableTarget = null;
+      if (!(await pause(physicalEventDiagnosticPollMs))) break;
+      continue;
+    }
+
+    let nodes: readonly AndroidUiNode[];
+    try {
+      nodes = await source.readNodes();
+    } catch {
+      retainPhysicalEventDiagnosticObservation(
+        observations,
+        "hierarchy-read-error"
+      );
+      stableSince = null;
+      stableTarget = null;
+      if (!(await pause(physicalEventDiagnosticPollMs))) break;
+      continue;
+    }
+
+    let authorityAfterRead: PhysicalEventDiagnosticAuthoritySnapshot;
+    try {
+      authorityAfterRead = source.readAuthority();
+    } catch {
+      retainPhysicalEventDiagnosticObservation(
+        observations,
+        "authority-read-error"
+      );
+      stableSince = null;
+      stableTarget = null;
+      if (!(await pause(physicalEventDiagnosticPollMs))) break;
+      continue;
+    }
+    const found = selectPhysicalEventDiagnosticTarget(nodes, timelineLabel);
+    retainPhysicalEventDiagnosticObservation(
+      observations,
+      physicalEventDiagnosticAdmissionSummary(
+        nodes,
+        timelineLabel,
+        found,
+        authorityAfterRead,
+        baselineAuthority
+      )
+    );
+    if (
+      !physicalEventDiagnosticAuthorityMatches(
+        authorityAfterRead,
+        baselineAuthority
+      )
+    ) {
+      stableSince = null;
+      stableTarget = null;
+      if (!(await pause(physicalEventDiagnosticPollMs))) break;
+      continue;
+    }
+
+    if (found === null) {
+      stableSince = null;
+      stableTarget = null;
+      if (swipeCount < physicalEventDiagnosticMaximumSwipes) {
+        try {
+          source.swipe(nodes, direction);
+        } catch (error) {
+          throw new Error(
+            `${message} (swipe-geometry-invalid;direction=${direction};swipes=${swipeCount}).`,
+            { cause: error }
+          );
+        }
         swipeCount += 1;
-        await new Promise((resolve) => setTimeout(resolve, 350));
+        if (!(await pause(physicalEventDiagnosticSwipeSettleMs))) break;
+        continue;
       }
-      return false;
-    }, timeoutMs, message);
+    } else {
+      const observedAt = readNow();
+      const retainedSameTarget =
+        stableTarget !== null &&
+        physicalAggregateNodeMatches(stableTarget.action, found.action) &&
+        physicalAggregateNodeMatches(stableTarget.label, found.label);
+      if (stableSince === null || !retainedSameTarget) {
+        stableSince = observedAt;
+        stableTarget = found;
+      } else if (
+        observedAt - stableSince >= physicalEventDiagnosticStableWindowMs
+      ) {
+        return found;
+      }
+    }
+    if (!(await pause(physicalEventDiagnosticPollMs))) break;
+  }
+
+  const diagnostic =
+    `${message} (direction=${direction};swipes=${swipeCount};states=${
+      observations.join("||") || "none"
+    }).`;
+  requireCondition(
+    Buffer.byteLength(diagnostic, "utf8") <= 4_096,
+    "Physical event-diagnostic timeout exceeded its private-safe bound."
+  );
+  throw new Error(diagnostic);
+}
+
+function readPhysicalEventDiagnosticAuthoritySnapshot(
+  input: Readonly<{
+    readonly prompt: PhysicalPromptRuntime;
+    readonly requestInspection: RequestInspection;
+  }>
+): PhysicalEventDiagnosticAuthoritySnapshot {
+  requireCondition(
+    Number.isSafeInteger(input.requestInspection.sessionEventRequests) &&
+      input.requestInspection.sessionEventRequests ===
+        Math.abs(input.requestInspection.sessionEventRequests),
+    "Physical event-diagnostic request authority was invalid."
+  );
+  return Object.freeze({
+    navigation: readPhysicalSessionNavigationSnapshot(input),
+    sessionEventRequests: input.requestInspection.sessionEventRequests
+  });
+}
+
+function physicalEventDiagnosticAuthorityMatches(
+  actual: PhysicalEventDiagnosticAuthoritySnapshot,
+  expected: PhysicalEventDiagnosticAuthoritySnapshot
+): boolean {
+  return (
+    actual.sessionEventRequests === expected.sessionEventRequests &&
+    physicalSessionNavigationMatches(actual.navigation, expected.navigation)
+  );
+}
+
+function physicalEventDiagnosticAuthoritySummary(
+  actual: PhysicalEventDiagnosticAuthoritySnapshot,
+  baseline: PhysicalEventDiagnosticAuthoritySnapshot
+): string {
+  return (
+    `authority=${
+      physicalEventDiagnosticAuthorityMatches(actual, baseline) ? "match" : "drift"
+    };event_delta=${
+      actual.sessionEventRequests - baseline.sessionEventRequests
+    };navigation=${
+      physicalSessionNavigationMatches(actual.navigation, baseline.navigation)
+        ? "match"
+        : "drift"
+    };actual=${physicalSessionNavigationSummary(actual.navigation)};` +
+    `baseline=${physicalSessionNavigationSummary(baseline.navigation)}`
+  );
+}
+
+function retainPhysicalEventDiagnosticObservation(
+  observations: string[],
+  observation: string
+): void {
+  requireCondition(
+    Buffer.byteLength(observation, "utf8") >= 1 &&
+      Buffer.byteLength(observation, "utf8") <=
+        physicalEventDiagnosticObservationMaxBytes,
+    "Physical event-diagnostic observation exceeded its private-safe bound."
+  );
+  if (observations.at(-1) === observation) return;
+  observations.push(observation);
+  if (observations.length > 6) observations.shift();
+}
+
+function physicalEventDiagnosticAdmissionSummary(
+  nodes: readonly AndroidUiNode[],
+  timelineLabel: string,
+  target: PhysicalEventDiagnosticTarget | null,
+  actualAuthority: PhysicalEventDiagnosticAuthoritySnapshot,
+  baselineAuthority: PhysicalEventDiagnosticAuthoritySnapshot
+): string {
+  const actions = nodes.filter(
+    (node) => node.description === "View event details"
+  );
+  const labels = nodes.filter((node) => node.text === timelineLabel);
+  const backCount = nodes.filter(
+    (node) => node.description === "Back to Mission Control"
+  ).length;
+  const dockCounts = physicalSessionControlDescriptions.map(
+    (description) =>
+      nodes.filter((node) => node.description === description).length
+  );
+  let content = "blocked";
+  try {
+    const region = selectPhysicalSessionContentRegion(nodes);
+    if (region !== null) content = physicalRegionGeometry(region);
+  } catch {
+    content = "invalid";
+  }
+  return (
+    `target=${target === null ? "blocked" : "admitted"};` +
+    `action=${actions.length}:${
+      target?.action === undefined
+        ? actions[0] === undefined
+          ? "none"
+          : privateFreeAndroidUiNodeGeometry(actions[0])
+        : privateFreeAndroidUiNodeGeometry(target.action)
+    };label=${labels.length}:${
+      target?.label === undefined
+        ? labels[0] === undefined
+          ? "none"
+          : privateFreeAndroidUiNodeGeometry(labels[0])
+        : privateFreeAndroidUiNodeGeometry(target.label)
+    };back=${backCount};dock=${dockCounts.join("/")};content=${content};` +
+    physicalEventDiagnosticAuthoritySummary(
+      actualAuthority,
+      baselineAuthority
+    )
+  );
+}
+
+function requirePhysicalEventDiagnosticAuthorityBeforeTap(
+  source: PhysicalEventDiagnosticWaitSource,
+  baseline: PhysicalEventDiagnosticAuthoritySnapshot,
+  context: PhysicalAggregateOwnerContext,
+  target: PhysicalEventDiagnosticTarget,
+  timelineLabel: string
+): void {
+  const selected = selectPhysicalEventDiagnosticTarget(
+    context.currentNodes,
+    timelineLabel
+  );
+  requireCondition(
+    context.routeOwner === "Event details" &&
+      context.node === target.action &&
+      selected !== null &&
+      physicalAggregateNodeMatches(selected.action, target.action) &&
+      physicalAggregateNodeMatches(selected.label, target.label) &&
+      context.counterSnapshot.session_event_requests ===
+        baseline.sessionEventRequests,
+    "Physical event-diagnostic owner or counter drifted before its only tap."
+  );
+  let actual: PhysicalEventDiagnosticAuthoritySnapshot;
+  try {
+    actual = source.readAuthority();
   } catch (error) {
     throw new Error(
-      `${message} (direction=${direction};swipes=${swipeCount};states=${observations.join(" -> ") || "none"}).`,
+      "Physical event-diagnostic authority was unreadable before its only tap.",
       { cause: error }
     );
   }
-  requireCondition(found !== null, message);
-  return found;
+  requireCondition(
+    physicalEventDiagnosticAuthorityMatches(actual, baseline),
+    `Physical event-diagnostic authority drifted before its only tap (${physicalEventDiagnosticAuthoritySummary(
+      actual,
+      baseline
+    )}).`
+  );
+}
+
+function physicalEventDiagnosticOwnedTextCount(
+  nodes: readonly AndroidUiNode[],
+  text: string
+): number {
+  const header = selectPhysicalFixedSheetHeader(nodes, "Event details");
+  if (header === null) return 0;
+  return nodes.filter(
+    (node) =>
+      node.text === text &&
+      !node.clickable &&
+      node.enabled !== false &&
+      androidUiNodeIsFullyInsideRegion(node, header.body)
+  ).length;
+}
+
+function physicalEventDiagnosticSheetState(
+  nodes: readonly AndroidUiNode[]
+): PhysicalEventDiagnosticSheetState {
+  const titles = nodes.filter(
+    (node) => node.text === "Event details" && !node.clickable
+  );
+  const closes = nodes.filter(
+    (node) => node.description === "Close event details" && node.clickable
+  );
+  const header = selectPhysicalFixedSheetHeader(nodes, "Event details");
+  if (header === null) {
+    return titles.length === 0 && closes.length === 0 ? "absent" : "invalid";
+  }
+  const statusRows = [
+    ["loading", "Verifying event"],
+    ["current", "Event details current"],
+    ["failure", "Event verification failed"],
+    ["local_only", "Local evidence only"],
+    ["retained", "Retained event detail"]
+  ] as const;
+  const present = statusRows
+    .map(([state, text]) => ({
+      count: physicalEventDiagnosticOwnedTextCount(nodes, text),
+      state
+    }))
+    .filter((row) => row.count > 0);
+  if (present.length === 0) return "open";
+  return present.length === 1 && present[0]?.count === 1
+    ? present[0].state
+    : "invalid";
+}
+
+function physicalEventDiagnosticTargetState(
+  nodes: readonly AndroidUiNode[],
+  target: PhysicalEventDiagnosticTarget,
+  timelineLabel: string
+): "absent" | "duplicate" | "moved" | "same" {
+  const semanticActions = nodes.filter(
+    (node) => node.description === "View event details"
+  );
+  const semanticLabels = nodes.filter((node) => node.text === timelineLabel);
+  const sameActions = semanticActions.filter((node) =>
+    physicalAggregateNodeMatches(node, target.action)
+  );
+  const sameLabels = semanticLabels.filter((node) =>
+    physicalAggregateNodeMatches(node, target.label)
+  );
+  if (semanticActions.length > 1 || semanticLabels.length > 1) return "duplicate";
+  if (sameActions.length === 1 && sameLabels.length === 1) return "same";
+  return semanticActions.length === 0 && semanticLabels.length === 0
+    ? "absent"
+    : "moved";
+}
+
+function physicalEventDiagnosticOutcomeSummary(
+  input: PhysicalEventDiagnosticOutcomeInput
+): string {
+  const actions = input.nodes.filter(
+    (node) => node.description === "View event details"
+  );
+  const labels = input.nodes.filter((node) => node.text === input.timelineLabel);
+  const titleCount = input.nodes.filter(
+    (node) => node.text === "Event details" && !node.clickable
+  ).length;
+  const closeCount = input.nodes.filter(
+    (node) => node.description === "Close event details" && node.clickable
+  ).length;
+  const header = selectPhysicalFixedSheetHeader(input.nodes, "Event details");
+  const actionGeometry = actions
+    .slice(0, 2)
+    .map(privateFreeAndroidUiNodeGeometry)
+    .join("|");
+  const labelGeometry = labels
+    .slice(0, 2)
+    .map(privateFreeAndroidUiNodeGeometry)
+    .join("|");
+  return (
+    `target=${physicalEventDiagnosticTargetState(
+      input.nodes,
+      input.target,
+      input.timelineLabel
+    )};actions=${actions.length}:${actionGeometry || "none"};` +
+    `labels=${labels.length}:${labelGeometry || "none"};` +
+    `request_delta=${
+      input.actualAuthority.sessionEventRequests -
+      input.baselineAuthority.sessionEventRequests
+    };navigation=${
+      physicalSessionNavigationMatches(
+        input.actualAuthority.navigation,
+        input.baselineAuthority.navigation
+      )
+        ? "match"
+        : "drift"
+    };owner=${header === null ? "blocked" : "admitted"};` +
+    `title=${titleCount};close=${closeCount};` +
+    `heading=${physicalEventDiagnosticOwnedTextCount(
+      input.nodes,
+      input.heading
+    )};limitation=${physicalEventDiagnosticOwnedTextCount(
+      input.nodes,
+      input.limitation
+    )};sheet=${physicalEventDiagnosticSheetState(input.nodes)}`
+  );
+}
+
+function physicalEventDiagnosticCurrentOutcomeVisible(
+  input: PhysicalEventDiagnosticOutcomeInput
+): boolean {
+  return (
+    physicalSessionNavigationMatches(
+      input.actualAuthority.navigation,
+      input.baselineAuthority.navigation
+    ) &&
+    input.actualAuthority.sessionEventRequests ===
+      input.baselineAuthority.sessionEventRequests + 1 &&
+    physicalEventDiagnosticSheetState(input.nodes) === "current" &&
+    physicalEventDiagnosticOwnedTextCount(input.nodes, input.heading) === 1 &&
+    physicalEventDiagnosticOwnedTextCount(input.nodes, input.limitation) === 1
+  );
 }
 
 async function runPhysicalStreamRecovery(
@@ -21517,7 +22518,8 @@ function selectPhysicalEventDiagnosticTarget(
       ({ index, node }) =>
         index < labelIndex &&
         node.description === "View event details" &&
-        node.clickable
+        node.clickable &&
+        node.enabled !== false
     )
     .map(({ index, node }) => ({
       distance: Math.abs(
@@ -21534,7 +22536,8 @@ function selectPhysicalEventDiagnosticTarget(
   const owner = precedingActions[0];
   if (
     owner === undefined ||
-    owner.distance > physicalEventActionMaxDistancePx
+    owner.distance > physicalEventActionMaxDistancePx ||
+    nodes.filter((node) => physicalAggregateNodeMatches(node, owner.node)).length !== 1
   ) {
     return null;
   }
@@ -22134,6 +23137,58 @@ function physicalSessionActionsFixtureNodes(): readonly AndroidUiNode[] {
       `content-desc="${physicalSessionActionsTriggerDescription}" clickable="true" enabled="true" ` +
       'bounds="[200,700][880,840]" />' +
       dock +
+      '</hierarchy>'
+  );
+}
+
+function physicalEventDiagnosticFixtureNodes(
+  timelineLabel: string,
+  verticalOffset = 0
+): readonly AndroidUiNode[] {
+  const dock = physicalSessionControlDescriptions
+    .map(
+      (description, index) =>
+        `<node text="" class="android.widget.Button" ` +
+        `content-desc="${description}" clickable="true" enabled="true" ` +
+        `bounds="[${index * 270},1760][${(index + 1) * 270},1900]" />`
+    )
+    .join("");
+  return parseAndroidUiNodes(
+    '<hierarchy><node text="" class="android.view.ViewGroup" ' +
+      `resource-id="${chromeToolbarResourceId}" bounds="[0,80][1080,240]" />` +
+      '<node text="" class="android.widget.FrameLayout" ' +
+      `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
+      '<node text="" class="android.widget.Button" ' +
+      'content-desc="Back to Mission Control" clickable="true" enabled="true" ' +
+      'bounds="[0,250][160,390]" />' +
+      '<node text="" class="android.widget.Button" ' +
+      'content-desc="View event details" clickable="true" enabled="true" ' +
+      `bounds="[900,${985 + verticalOffset}][1040,${1115 + verticalOffset}]" />` +
+      `<node text="${timelineLabel}" class="android.view.View" ` +
+      `bounds="[80,${1200 + verticalOffset}][820,${1300 + verticalOffset}]" />` +
+      dock +
+      '</hierarchy>'
+  );
+}
+
+function physicalEventDiagnosticSheetFixtureNodes(
+  status: "Event details current" | "Event verification failed" | "Local evidence only" | "Retained event detail" | "Verifying event",
+  heading = "Replay boundary",
+  limitation = "Content truncated"
+): readonly AndroidUiNode[] {
+  return parseAndroidUiNodes(
+    '<hierarchy><node text="" class="android.view.ViewGroup" ' +
+      `resource-id="${chromeToolbarResourceId}" bounds="[0,80][1080,240]" />` +
+      '<node text="" class="android.widget.FrameLayout" ' +
+      `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
+      '<node text="Event details" class="android.view.View" ' +
+      'bounds="[80,300][720,400]" />' +
+      '<node text="" class="android.widget.Button" ' +
+      'content-desc="Close event details" clickable="true" enabled="true" ' +
+      'bounds="[916,292][1040,416]" />' +
+      `<node text="${heading}" class="android.view.View" bounds="[80,560][820,640]" />` +
+      `<node text="${limitation}" class="android.view.View" bounds="[80,700][820,780]" />` +
+      `<node text="${status}" class="android.view.View" bounds="[80,1880][820,1960]" />` +
       '</hierarchy>'
   );
 }
