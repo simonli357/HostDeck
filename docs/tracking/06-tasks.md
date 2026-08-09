@@ -16,9 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-104` Stable event-diagnostic one-tap handoff | in_progress | none | Replace the unstable first-event handoff reached by candidate `84af3ab` with continuous exact admission and outcome diagnostics before another candidate. |
+| 1 | `FE-V1-090` Aggregate physical mobile-dashboard hardening | in_progress | none | Prepare one distinct clean remote-matched candidate, pass all host gates, then run the detached no-retry aggregate through retained deployment. |
 
-Candidate `84af3ab` failed once after one exact Replay boundary tap and completed exact automatic cleanup without publishing evidence. `FE-V1-104` is the only executable queue item; `84af3ab` and every prior failed candidate remain ineligible and will not be retried.
+`FE-V1-104` closed `BUG-076` in pushed `440b0bf` without phone or environment mutation. Candidate `84af3ab` and every prior failed candidate remain ineligible and will not be retried; `FE-V1-090` owns the next distinct candidate and retained deployment.
 
 ## Intentional Blockers
 
