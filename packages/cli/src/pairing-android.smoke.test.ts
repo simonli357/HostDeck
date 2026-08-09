@@ -5737,8 +5737,23 @@ describe("physical Android phone-driver protocol", () => {
       ...confirmationReason,
       text: "Session activity is reconnecting."
     });
-    expect(physicalPromptRecoveryHoldingVisible([recoveryNode], 0)).toBe(true);
-    expect(physicalPromptRecoveryHoldingVisible([recoveryNode], 1)).toBe(false);
+    const recoveryUnavailableNode = Object.freeze({
+      ...confirmationStatus,
+      text: "Prompt unavailable"
+    });
+    expect(physicalPromptRecoveryHoldingVisible([recoveryNode], 0)).toBe(false);
+    expect(
+      physicalPromptRecoveryHoldingVisible(
+        [recoveryNode, recoveryUnavailableNode],
+        0
+      )
+    ).toBe(true);
+    expect(
+      physicalPromptRecoveryHoldingVisible(
+        [recoveryNode, recoveryUnavailableNode],
+        1
+      )
+    ).toBe(false);
     for (const conflictingText of [
       "Ready to send",
       "Prompt unavailable",
@@ -5748,6 +5763,7 @@ describe("physical Android phone-driver protocol", () => {
         physicalPromptRecoveryHoldingVisible(
           [
             recoveryNode,
+            recoveryUnavailableNode,
             Object.freeze({ ...confirmationStatus, text: conflictingText })
           ],
           0
@@ -17929,7 +17945,7 @@ function physicalPromptRecoveryHoldingVisible(
     activeSubscribers === 0 &&
     count("Session activity is reconnecting.") === 1 &&
     count("Ready to send") === 0 &&
-    count("Prompt unavailable") === 0
+    count("Prompt unavailable") === 1
   );
 }
 
@@ -17963,51 +17979,64 @@ async function waitForStablePhysicalPromptRecoveryTruth(
   let stableSince: number | null = null;
   let stableObservation: string | null = null;
   const observations: string[] = [];
-  await waitFor(async () => {
-    let nodes: readonly AndroidUiNode[];
-    try {
-      nodes = await readAndroidUiNodes();
-    } catch {
-      stableSince = null;
-      stableObservation = null;
-      return false;
-    }
-    const subscribers = input.prompt.subscribers.snapshot();
-    const active = subscribers.active_subscribers;
-    const navigation = readPhysicalSessionNavigationSnapshot(input);
-    const recovery = input.prompt.recoverySnapshot();
-    const reconnecting = physicalPromptRecoveryHoldingVisible(nodes, active);
-    const completed = physicalPromptCompletionRestored(nodes, active);
-    const visible = truth === "reconnecting" ? reconnecting : completed;
-    const exactNavigation =
-      truth === "reconnecting"
-        ? physicalSessionNavigationRecoveryHolding(navigation, navigationBefore)
-        : physicalSessionNavigationRecoveryCompleted(navigation, navigationBefore);
-    const exactRecovery =
-      recovery.held_requests === 1 &&
-      recovery.state === (truth === "reconnecting" ? "holding" : "released") &&
-      input.prompt.streamFailureCount === 1 &&
-      JSON.stringify(input.prompt.streamFailureCodes) === '["source_failed"]';
-    const observation =
-      `truth=${truth};visible=${visible ? "yes" : "no"};` +
-      `${physicalSessionNavigationSummary(navigation)};` +
-      `recovery=${recovery.state}/${recovery.held_requests};` +
-      `failures=${input.prompt.streamFailureCount}`;
-    if (observations.at(-1) !== observation && observations.length < 6) {
-      observations.push(observation);
-    }
-    if (!visible || !exactNavigation || !exactRecovery) {
-      stableSince = null;
-      stableObservation = null;
-      return false;
-    }
-    if (stableSince === null || stableObservation !== observation) {
-      stableSince = performance.now();
-      stableObservation = observation;
-      return false;
-    }
-    return performance.now() - stableSince >= 2_000;
-  }, timeoutMs, `${message} (states=${observations.join("||") || "none"}).`);
+  try {
+    await waitFor(async () => {
+      let nodes: readonly AndroidUiNode[];
+      try {
+        nodes = await readAndroidUiNodes();
+      } catch {
+        stableSince = null;
+        stableObservation = null;
+        if (
+          observations.at(-1) !== "hierarchy-read-error" &&
+          observations.length < 6
+        ) {
+          observations.push("hierarchy-read-error");
+        }
+        return false;
+      }
+      const subscribers = input.prompt.subscribers.snapshot();
+      const active = subscribers.active_subscribers;
+      const navigation = readPhysicalSessionNavigationSnapshot(input);
+      const recovery = input.prompt.recoverySnapshot();
+      const reconnecting = physicalPromptRecoveryHoldingVisible(nodes, active);
+      const completed = physicalPromptCompletionRestored(nodes, active);
+      const visible = truth === "reconnecting" ? reconnecting : completed;
+      const exactNavigation =
+        truth === "reconnecting"
+          ? physicalSessionNavigationRecoveryHolding(navigation, navigationBefore)
+          : physicalSessionNavigationRecoveryCompleted(navigation, navigationBefore);
+      const exactRecovery =
+        recovery.held_requests === 1 &&
+        recovery.state === (truth === "reconnecting" ? "holding" : "released") &&
+        input.prompt.streamFailureCount === 1 &&
+        JSON.stringify(input.prompt.streamFailureCodes) === '["source_failed"]';
+      const observation =
+        `truth=${truth};visible=${visible ? "yes" : "no"};` +
+        `${physicalSessionNavigationSummary(navigation)};` +
+        `recovery=${recovery.state}/${recovery.held_requests};` +
+        `failures=${input.prompt.streamFailureCount}`;
+      if (observations.at(-1) !== observation && observations.length < 6) {
+        observations.push(observation);
+      }
+      if (!visible || !exactNavigation || !exactRecovery) {
+        stableSince = null;
+        stableObservation = null;
+        return false;
+      }
+      if (stableSince === null || stableObservation !== observation) {
+        stableSince = performance.now();
+        stableObservation = observation;
+        return false;
+      }
+      return performance.now() - stableSince >= 2_000;
+    }, timeoutMs, message);
+  } catch (error) {
+    throw new Error(
+      `${message} (states=${observations.join("||") || "none"}).`,
+      { cause: error }
+    );
+  }
 }
 
 async function runPhysicalModelControl(
