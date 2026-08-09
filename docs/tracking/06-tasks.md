@@ -16,9 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-090` Aggregate physical mobile-dashboard hardening | in_progress | none | Prepare one clean candidate from the pushed approval-owner correction, review it, then execute the no-retry phone acceptance once. |
+| 1 | `FE-V1-090` Aggregate physical mobile-dashboard hardening | in_progress | none | Create one new pushed candidate and execute it through a detached monitored launch that cannot inherit the API command-session lifetime. |
 
-`FE-V1-102` closed `BUG-073` in pushed `e82873e` with exact pending-dialog and terminal-row owners, authority/counter checkpoints, bounded private-free diagnostics, and hostile owner/geometry/state tests. All focused, full-unit, typecheck, lint/export, planning, runtime-boundary, privacy/diff, and protected-worktree gates pass without phone or remote-environment mutation. Candidate `43b93fc` remains ineligible and will not be retried.
+Candidate `39aed8a` passed clean host review but was externally terminated with exit 143 at about 120 seconds because the physical process inherited the bounded API command session; no test assertion fired. Exact manual cleanup passed and no evidence was published. `BUG-074` requires a distinct candidate launched once through a private detached monitor; `39aed8a` and prior failed candidates remain ineligible.
 
 ## Intentional Blockers
 
