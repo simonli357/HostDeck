@@ -363,6 +363,30 @@ const physicalTalkBackMutablePermissionFlags = Object.freeze([
   "user-set"
 ] as const);
 const deviceForbiddenValues = new Set<string>();
+const physicalAsyncAdbOperations = Object.freeze([
+  "tailnet_ping",
+  "private_https_probe",
+  "ui_hierarchy"
+] as const);
+type PhysicalAsyncAdbOperation = (typeof physicalAsyncAdbOperations)[number];
+const physicalAsyncAdbOperationLabels = Object.freeze({
+  private_https_probe: "private HTTPS probe",
+  tailnet_ping: "tailnet ping",
+  ui_hierarchy: "UI hierarchy read"
+} satisfies Readonly<Record<PhysicalAsyncAdbOperation, string>>);
+
+interface PhysicalAsyncAdbCompletion {
+  readonly operation: PhysicalAsyncAdbOperation;
+  readonly status: number;
+  readonly stdout: string;
+}
+
+interface PhysicalAsyncAdbErrorShape {
+  readonly code?: number | string | null | undefined;
+  readonly killed?: boolean | undefined;
+  readonly signal?: NodeJS.Signals | null | undefined;
+}
+
 const { PNG: Png } = createRequire(import.meta.url)("pngjs") as unknown as {
   readonly PNG: PngConstructor;
 };
@@ -5000,6 +5024,166 @@ describe("physical Android phone-driver protocol", () => {
         "probe target was invalid"
       );
     }
+  });
+
+  it("classifies every asynchronous ADB outcome without erasing its operation", () => {
+    expect(physicalAsyncAdbOperations).toEqual([
+      "tailnet_ping",
+      "private_https_probe",
+      "ui_hierarchy"
+    ]);
+    expect(Object.isFrozen(physicalAsyncAdbOperations)).toBe(true);
+
+    const pingSuccess = classifyPhysicalAsyncAdbCompletion(
+      "tailnet_ping",
+      null,
+      "1 packets transmitted, 1 received",
+      ""
+    );
+    expect(pingSuccess).toEqual({
+      operation: "tailnet_ping",
+      status: 0,
+      stdout: "1 packets transmitted, 1 received"
+    });
+    expect(Object.isFrozen(pingSuccess)).toBe(true);
+    expect(physicalAsyncAdbTailnetPingPassed(pingSuccess)).toBe(true);
+
+    const pingMiss = classifyPhysicalAsyncAdbCompletion(
+      "tailnet_ping",
+      Object.freeze({ code: 1, killed: false, signal: null }),
+      "1 packets transmitted, 0 received",
+      ""
+    );
+    expect(pingMiss.status).toBe(1);
+    expect(physicalAsyncAdbTailnetPingPassed(pingMiss)).toBe(false);
+
+    const httpsMiss = classifyPhysicalAsyncAdbCompletion(
+      "private_https_probe",
+      Object.freeze({ code: 7, killed: false, signal: null }),
+      "",
+      "private command detail"
+    );
+    expect(physicalAsyncAdbPrivateHttpsProbePassed(httpsMiss)).toBe(false);
+    expect(
+      physicalAsyncAdbPrivateHttpsProbePassed(
+        classifyPhysicalAsyncAdbCompletion(
+          "private_https_probe",
+          null,
+          "",
+          ""
+        )
+      )
+    ).toBe(true);
+    expect(
+      physicalAsyncAdbPrivateHttpsProbePassed(
+        classifyPhysicalAsyncAdbCompletion(
+          "private_https_probe",
+          null,
+          "unexpected",
+          ""
+        )
+      )
+    ).toBe(false);
+
+    const hierarchyMiss = classifyPhysicalAsyncAdbCompletion(
+      "ui_hierarchy",
+      Object.freeze({ code: 1, killed: false, signal: null }),
+      "",
+      "private hierarchy detail"
+    );
+    expect(() => physicalAsyncAdbUiHierarchyOutput(hierarchyMiss)).toThrow(
+      "UI hierarchy read exited unsuccessfully"
+    );
+    expect(
+      physicalAsyncAdbUiHierarchyOutput(
+        classifyPhysicalAsyncAdbCompletion(
+          "ui_hierarchy",
+          null,
+          '<hierarchy rotation="0"></hierarchy>',
+          ""
+        )
+      )
+    ).toBe('<hierarchy rotation="0"></hierarchy>');
+
+    expect(() =>
+      classifyPhysicalAsyncAdbCompletion(
+        "tailnet_ping",
+        Object.freeze({ code: "ENOENT", killed: false, signal: null }),
+        "",
+        ""
+      )
+    ).toThrow("tailnet ping could not start");
+    expect(() =>
+      classifyPhysicalAsyncAdbCompletion(
+        "private_https_probe",
+        Object.freeze({ code: null, killed: true, signal: "SIGTERM" }),
+        "",
+        ""
+      )
+    ).toThrow("private HTTPS probe was terminated");
+    expect(() =>
+      classifyPhysicalAsyncAdbCompletion(
+        "ui_hierarchy",
+        Object.freeze({ code: 1, killed: false, signal: null }),
+        "",
+        "adb: device offline"
+      )
+    ).toThrow("UI hierarchy read lost device transport");
+    expect(() =>
+      classifyPhysicalAsyncAdbCompletion(
+        "tailnet_ping",
+        Object.freeze({ code: 999, killed: false, signal: null }),
+        "",
+        ""
+      )
+    ).toThrow("tailnet ping returned an invalid completion");
+
+    const privateValue = "private-async-adb-value";
+    deviceForbiddenValues.add(privateValue);
+    try {
+      let transportMessage = "";
+      try {
+        classifyPhysicalAsyncAdbCompletion(
+          "tailnet_ping",
+          Object.freeze({ code: 1, killed: false, signal: null }),
+          "",
+          `error: device '${privateValue}' not found`
+        );
+      } catch (error) {
+        transportMessage = error instanceof Error ? error.message : String(error);
+      }
+      expect(transportMessage).toContain("tailnet ping lost device transport");
+      expect(transportMessage).not.toContain(privateValue);
+
+      for (const [stdout, stderr] of [
+        [privateValue, ""],
+        ["", privateValue]
+      ] as const) {
+        let message = "";
+        try {
+          classifyPhysicalAsyncAdbCompletion(
+            "ui_hierarchy",
+            null,
+            stdout,
+            stderr
+          );
+        } catch (error) {
+          message = error instanceof Error ? error.message : String(error);
+        }
+        expect(message).toContain("UI hierarchy read output was invalid or private");
+        expect(message).not.toContain(privateValue);
+      }
+    } finally {
+      deviceForbiddenValues.delete(privateValue);
+    }
+    expect(() =>
+      classifyPhysicalAsyncAdbCompletion(
+        "ui_hierarchy",
+        null,
+        "x".repeat(512 * 1024 + 1),
+        ""
+      )
+    ).toThrow("UI hierarchy read output was invalid or private");
   });
 
   it("requires separate validated cellular Internet and Tailscale VPN networks", () => {
@@ -12818,15 +13002,12 @@ async function requireAndroidPrivateHttpsReachability(
     androidTailscaleComponent
   ]);
   await waitFor(async () => {
-    const output = await adbAsync(ping);
-    return (
-      Buffer.byteLength(output, "utf8") <= 16 * 1024 &&
-      output.includes("1 received")
-    );
+    const completion = await adbAsync(ping, "tailnet_ping");
+    return physicalAsyncAdbTailnetPingPassed(completion);
   }, 30_000, "Physical Android could not establish a cellular Tailscale peer path.");
   await waitFor(async () => {
-    const output = await adbAsync(probe);
-    return output === "";
+    const completion = await adbAsync(probe, "private_https_probe");
+    return physicalAsyncAdbPrivateHttpsProbePassed(completion);
   }, 45_000, "Physical Android could not reach private HTTPS over Tailscale.");
 }
 
@@ -13225,7 +13406,10 @@ function adb(args: readonly string[]): string {
   return output;
 }
 
-function adbAsync(args: readonly string[]): Promise<string> {
+function adbAsync(
+  args: readonly string[],
+  operation: PhysicalAsyncAdbOperation
+): Promise<PhysicalAsyncAdbCompletion> {
   const serialized = args.join("\u0000");
   requireCondition(
     [...deviceForbiddenValues].every((value) => !serialized.includes(value)),
@@ -13238,24 +13422,107 @@ function adbAsync(args: readonly string[]): Promise<string> {
       [...args],
       commandOptions(),
       (error, stdout, stderr) => {
-        if (error !== null) {
-          reject(new Error("Physical asynchronous ADB command failed."));
-          return;
-        }
         try {
-          requireCondition(
-            [...deviceForbiddenValues].every(
-              (value) => !stdout.includes(value) && !stderr.includes(value)
-            ),
-            "A protected pairing value was rejected in asynchronous ADB output."
+          resolve(
+            classifyPhysicalAsyncAdbCompletion(
+              operation,
+              error,
+              stdout,
+              stderr
+            )
           );
-          resolve(stdout);
         } catch (failure) {
           reject(failure);
         }
       }
     );
   });
+}
+
+function classifyPhysicalAsyncAdbCompletion(
+  operation: PhysicalAsyncAdbOperation,
+  error: PhysicalAsyncAdbErrorShape | null,
+  stdout: string,
+  stderr: string
+): PhysicalAsyncAdbCompletion {
+  const label = physicalAsyncAdbOperationLabels[operation];
+  requireCondition(
+    typeof label === "string",
+    "Physical asynchronous ADB operation was invalid."
+  );
+  requireCondition(
+    Buffer.byteLength(stdout, "utf8") <= 512 * 1024 &&
+      Buffer.byteLength(stderr, "utf8") <= 512 * 1024 &&
+      !stdout.includes("\u0000") &&
+      !stderr.includes("\u0000"),
+    `Physical asynchronous ADB ${label} output was invalid or private.`
+  );
+  if (error !== null && physicalAsyncAdbTransportFailed(stderr)) {
+    throw new Error(`Physical asynchronous ADB ${label} lost device transport.`);
+  }
+  requireCondition(
+    [...deviceForbiddenValues].every(
+      (value) => !stdout.includes(value) && !stderr.includes(value)
+    ),
+    `Physical asynchronous ADB ${label} output was invalid or private.`
+  );
+  if (error === null) {
+    return Object.freeze({ operation, status: 0, stdout });
+  }
+  if (error.killed === true || error.signal !== null && error.signal !== undefined) {
+    throw new Error(`Physical asynchronous ADB ${label} was terminated.`);
+  }
+  if (
+    typeof error.code === "number" &&
+    Number.isSafeInteger(error.code) &&
+    error.code >= 1 &&
+    error.code <= 255
+  ) {
+    return Object.freeze({ operation, status: error.code, stdout });
+  }
+  if (typeof error.code === "string") {
+    throw new Error(`Physical asynchronous ADB ${label} could not start.`);
+  }
+  throw new Error(
+    `Physical asynchronous ADB ${label} returned an invalid completion.`
+  );
+}
+
+function physicalAsyncAdbTransportFailed(stderr: string): boolean {
+  return /(?:^|\n)(?:adb:|error:)\s+(?:device(?:\s+'[^'\r\n]{1,128}')?\s+(?:not found|offline|unauthorized)|more than one device\/emulator|no devices\/emulators found)(?:\.|\r?$)/imu.test(
+    stderr
+  );
+}
+
+function physicalAsyncAdbTailnetPingPassed(
+  completion: PhysicalAsyncAdbCompletion
+): boolean {
+  return (
+    completion.operation === "tailnet_ping" &&
+    completion.status === 0 &&
+    Buffer.byteLength(completion.stdout, "utf8") <= 16 * 1024 &&
+    completion.stdout.includes("1 received")
+  );
+}
+
+function physicalAsyncAdbPrivateHttpsProbePassed(
+  completion: PhysicalAsyncAdbCompletion
+): boolean {
+  return (
+    completion.operation === "private_https_probe" &&
+    completion.status === 0 &&
+    completion.stdout === ""
+  );
+}
+
+function physicalAsyncAdbUiHierarchyOutput(
+  completion: PhysicalAsyncAdbCompletion
+): string {
+  requireCondition(
+    completion.operation === "ui_hierarchy" && completion.status === 0,
+    "Physical asynchronous ADB UI hierarchy read exited unsuccessfully."
+  );
+  return completion.stdout;
 }
 
 function adbWithStatus(args: readonly string[]): Readonly<{
@@ -23941,7 +24208,12 @@ function pairingUiBeforeContinueIsValid(
 
 async function readAndroidUiNodes(): Promise<readonly AndroidUiNode[]> {
   return parseAndroidUiNodes(
-    await adbAsync(["exec-out", "uiautomator", "dump", "/dev/tty"])
+    physicalAsyncAdbUiHierarchyOutput(
+      await adbAsync(
+        ["exec-out", "uiautomator", "dump", "/dev/tty"],
+        "ui_hierarchy"
+      )
+    )
   );
 }
 
