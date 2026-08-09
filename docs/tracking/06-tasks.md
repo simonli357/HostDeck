@@ -16,9 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-090` Mobile dashboard physical hardening | in_progress | none | Prepare one fresh clean candidate now that package/browser publication is exact, then execute it once when the authorized phone is connected and unlocked. |
+| 1 | `FE-V1-102` Physical approval responding owner | in_progress | none | Correct the structurally impossible in-flight approval oracle found by the single `43b93fc` phone run before creating another candidate. |
 
-`FE-V1-101` closes `BUG-072` in pushed `7b67563`: the verified current package, exact 76-case browser matrix, and aggregate publisher now share one complete identity before device mutation. `FE-V1-090` is the only executable queue item. The phone is currently tailnet-offline and ADB-absent, so work is limited to immutable candidate preparation until exactly one authorized unlocked device is present.
+Clean pushed candidate `43b93fc` failed once at the approval responding checkpoint and completed exact cleanup. Production keeps the pending approval dialog open with all actions disabled, while the physical oracle searches the background Session Detail owner and requires the dialog action to disappear. `FE-V1-102` is the only executable queue item; `FE-V1-090` may not be retried on the same commit.
 
 ## Intentional Blockers
 
