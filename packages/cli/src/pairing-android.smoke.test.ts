@@ -1012,12 +1012,14 @@ describe("physical Android phone-driver protocol", () => {
       "exceeded its one-tap boundary"
     );
     expect(recoveryObservationCalls).toBe(1);
-    expect(() => registry.tap(
-      "stream-reconnect-observe",
-      {} as AndroidUiNode,
-      () => false,
-      "synthetic stream observation"
-    )).rejects.toThrow("was not a registered tap");
+    await expect(
+      registry.tap(
+        "stream-reconnect-observe",
+        {} as AndroidUiNode,
+        () => false,
+        "synthetic stream observation"
+      )
+    ).rejects.toThrow("was not a registered tap");
     expect(() => registry.assertConsumed(["stream-recovery-observe"])).not.toThrow();
     const incompleteRegistry = createPhysicalAggregateActionRegistry();
     incompleteRegistry.consume(
@@ -1064,6 +1066,203 @@ describe("physical Android phone-driver protocol", () => {
         "synthetic invalid observation counter"
       )
     ).toThrow("observed an invalid counter snapshot");
+  });
+
+  it("enforces exact standalone and dashboard prompt registry scopes", async () => {
+    const syntheticNode = parseAndroidUiNodes(
+      '<hierarchy><node text="Synthetic prompt action" class="android.widget.Button" ' +
+        'content-desc="Synthetic prompt action" clickable="true" enabled="true" ' +
+        'bounds="[40,400][280,520]" /></hierarchy>'
+    )[0];
+    requireCondition(
+      syntheticNode !== undefined,
+      "Synthetic prompt registry node was absent."
+    );
+
+    const executeActions = async (
+      actionIds: readonly PhysicalAggregateActionId[]
+    ): Promise<PhysicalAggregateActionRegistry> => {
+      let syntheticTransitionCount = 0;
+      const registry = createPhysicalAggregateActionRegistry({
+        counterSnapshot: () => Object.freeze({ synthetic: 0 }),
+        tapNodeOnceAndWait: async (_node, completed) => {
+          syntheticTransitionCount += 1;
+          expect(await completed()).toBe(true);
+        }
+      });
+      for (const actionId of actionIds) {
+        const definition = physicalAggregateActionDefinitions.find(
+          (entry) => entry.actionId === actionId
+        );
+        requireCondition(
+          definition !== undefined,
+          "Synthetic prompt registry definition was absent."
+        );
+        if (definition.driver === "observation") {
+          const observed = definition.driver === "observation";
+          registry.consume(
+            actionId,
+            () => observed,
+            `synthetic ${actionId} observation`
+          );
+        } else if (definition.driver === "talkback") {
+          let activated = false;
+          await registry.activate(
+            actionId,
+            syntheticNode,
+            () => {
+              activated = true;
+            },
+            () => activated,
+            `synthetic ${actionId} TalkBack activation`
+          );
+        } else {
+          const expectedTransitionCount = syntheticTransitionCount + 1;
+          await registry.tap(
+            actionId,
+            syntheticNode,
+            () => syntheticTransitionCount === expectedTransitionCount,
+            `synthetic ${actionId}`
+          );
+        }
+      }
+      return registry;
+    };
+
+    expect(
+      physicalAggregatePromptExpectedActionIdsFor({
+        actionRegistryScope: "standalone",
+        cleanup: true,
+        openMissionControl: true
+      })
+    ).toBe(physicalAggregatePromptExpectedActionIds);
+    expect(
+      physicalAggregatePromptExpectedActionIdsFor({
+        actionRegistryScope: "dashboard",
+        captureScreenshots: false,
+        cleanup: false,
+        openMissionControl: false,
+        sessionAlreadyOpen: true
+      })
+    ).toBe(physicalAggregateDashboardPromptExpectedActionIds);
+    const invalidDashboardOptions = Object.freeze([
+      {
+        actionRegistryScope: "dashboard",
+        captureScreenshots: true,
+        cleanup: false,
+        openMissionControl: false,
+        sessionAlreadyOpen: true
+      },
+      {
+        actionRegistryScope: "dashboard",
+        captureScreenshots: false,
+        cleanup: true,
+        openMissionControl: false,
+        sessionAlreadyOpen: true
+      },
+      {
+        actionRegistryScope: "dashboard",
+        captureScreenshots: false,
+        cleanup: false,
+        openMissionControl: true,
+        sessionAlreadyOpen: true
+      },
+      {
+        actionRegistryScope: "dashboard",
+        captureScreenshots: false,
+        cleanup: false,
+        openMissionControl: false,
+        sessionAlreadyOpen: false
+      }
+    ]);
+    for (const invalidOptions of invalidDashboardOptions) {
+      expect(() =>
+        physicalAggregatePromptExpectedActionIdsFor(
+          invalidOptions as unknown as ProductionPromptUiSequenceOptions
+        )
+      ).toThrow("dashboard registry scope used an invalid embedding shape");
+    }
+    expect(() =>
+      physicalAggregatePromptExpectedActionIdsFor({
+        actionRegistryScope: "standalone",
+        cleanup: false,
+        openMissionControl: false,
+        sessionAlreadyOpen: true
+      } as unknown as ProductionPromptUiSequenceOptions)
+    ).toThrow("standalone registry scope cannot inherit an open session");
+
+    const standaloneRegistry = await executeActions(
+      physicalAggregatePromptExpectedActionIds
+    );
+    expect(() =>
+      standaloneRegistry.assertConsumed(physicalAggregatePromptExpectedActionIds)
+    ).not.toThrow();
+    expect(() =>
+      standaloneRegistry.assertConsumed(
+        physicalAggregateDashboardPromptExpectedActionIds
+      )
+    ).toThrow("consumption was invalid");
+
+    const dashboardRegistry = await executeActions(
+      physicalAggregateDashboardPromptExpectedActionIds
+    );
+    expect(() =>
+      dashboardRegistry.assertConsumed(
+        physicalAggregateDashboardPromptExpectedActionIds
+      )
+    ).not.toThrow();
+    expect(() =>
+      dashboardRegistry.assertConsumed(physicalAggregatePromptExpectedActionIds)
+    ).toThrow("consumption was invalid");
+
+    const missingRegistry = await executeActions(
+      physicalAggregateDashboardPromptExpectedActionIds.slice(0, -1)
+    );
+    expect(() =>
+      missingRegistry.assertConsumed(
+        physicalAggregateDashboardPromptExpectedActionIds
+      )
+    ).toThrow("consumption was invalid");
+
+    const extraRegistry = await executeActions([
+      ...physicalAggregateDashboardPromptExpectedActionIds,
+      "stream-recovery-observe"
+    ]);
+    expect(() =>
+      extraRegistry.assertConsumed(physicalAggregateDashboardPromptExpectedActionIds)
+    ).toThrow("consumption was invalid");
+
+    const duplicateRegistry = await executeActions(
+      physicalAggregateDashboardPromptExpectedActionIds
+    );
+    await expect(
+      duplicateRegistry.tap(
+        "prompt-send",
+        syntheticNode,
+        () => true,
+        "synthetic duplicate prompt send"
+      )
+    ).rejects.toThrow("exceeded its one-tap boundary");
+
+    const reorderedActionIds: PhysicalAggregateActionId[] = [
+      ...physicalAggregateDashboardPromptExpectedActionIds
+    ];
+    const promptEditorIndex = reorderedActionIds.indexOf("prompt-editor");
+    const promptSendIndex = reorderedActionIds.indexOf("prompt-send");
+    requireCondition(
+      promptEditorIndex >= 0 && promptSendIndex >= 0,
+      "Synthetic prompt actions were absent from the dashboard prefix."
+    );
+    [reorderedActionIds[promptEditorIndex], reorderedActionIds[promptSendIndex]] = [
+      reorderedActionIds[promptSendIndex] as PhysicalAggregateActionId,
+      reorderedActionIds[promptEditorIndex] as PhysicalAggregateActionId
+    ];
+    const reorderedRegistry = await executeActions(reorderedActionIds);
+    expect(() =>
+      reorderedRegistry.assertConsumed(
+        physicalAggregateDashboardPromptExpectedActionIds
+      )
+    ).toThrow("execution order was invalid");
   });
 
   it("propagates selector and invariant failures through the physical poller", async () => {
@@ -9355,6 +9554,22 @@ const physicalAggregatePromptExpectedActionIds = Object.freeze([
   "prompt-editor",
   "prompt-send"
 ] satisfies readonly PhysicalAggregateActionId[]);
+const physicalAggregateDashboardPromptExpectedActionIds = Object.freeze([
+  "pairing-continue",
+  "dashboard-bootstrap",
+  "dashboard-expand-quiet",
+  "dashboard-open-session",
+  "approval-open",
+  "approval-submit",
+  "event-open-boundary",
+  "event-close-boundary",
+  "event-open-complete",
+  "event-close-complete",
+  "event-open-redacted",
+  "event-close-redacted",
+  "prompt-editor",
+  "prompt-send"
+] satisfies readonly PhysicalAggregateActionId[]);
 const physicalAggregateRecoveryExpectedActionIds = Object.freeze([
   ...physicalAggregateBaseExpectedActionIds,
   "recovery-ready-open",
@@ -9369,20 +9584,7 @@ const physicalAggregateRecoveryExpectedActionIds = Object.freeze([
   "recovery-return-close"
 ] satisfies readonly PhysicalAggregateActionId[]);
 const physicalAggregateDashboardExpectedActionPrefix = Object.freeze([
-  "pairing-continue",
-  "dashboard-bootstrap",
-  "dashboard-expand-quiet",
-  "dashboard-open-session",
-  "approval-open",
-  "approval-submit",
-  "event-open-boundary",
-  "event-close-boundary",
-  "event-open-complete",
-  "event-close-complete",
-  "event-open-redacted",
-  "event-close-redacted",
-  "prompt-editor",
-  "prompt-send",
+  ...physicalAggregateDashboardPromptExpectedActionIds,
   "stream-recovery-observe",
   "stream-reconnect-observe"
 ] satisfies readonly PhysicalAggregateActionId[]);
@@ -14728,6 +14930,7 @@ async function runProductionDashboardUiSequence(
     "Physical prompt did not recover stable current write authority."
   );
   await runProductionPromptUiSequence(input, {
+    actionRegistryScope: "dashboard",
     captureScreenshots: false,
     cleanup: false,
     openMissionControl: false,
@@ -22257,17 +22460,54 @@ function androidNodeIntersectsRegion(
   );
 }
 
+type ProductionPromptUiSequenceOptions = Readonly<
+  | {
+      readonly actionRegistryScope?: "standalone";
+      readonly captureScreenshots?: boolean;
+      readonly cleanup: boolean;
+      readonly openMissionControl: boolean;
+      readonly sessionAlreadyOpen?: false;
+    }
+  | {
+      readonly actionRegistryScope: "dashboard";
+      readonly captureScreenshots: false;
+      readonly cleanup: false;
+      readonly openMissionControl: false;
+      readonly sessionAlreadyOpen: true;
+    }
+>;
+
+function physicalAggregatePromptExpectedActionIdsFor(
+  options: ProductionPromptUiSequenceOptions
+): readonly PhysicalAggregateActionId[] {
+  const scope = options.actionRegistryScope ?? "standalone";
+  if (scope === "dashboard") {
+    requireCondition(
+      options.captureScreenshots === false &&
+        options.cleanup === false &&
+        options.openMissionControl === false &&
+        options.sessionAlreadyOpen === true,
+      "Physical prompt dashboard registry scope used an invalid embedding shape."
+    );
+    return physicalAggregateDashboardPromptExpectedActionIds;
+  }
+  requireCondition(
+    options.sessionAlreadyOpen !== true,
+    "Physical prompt standalone registry scope cannot inherit an open session."
+  );
+  return physicalAggregatePromptExpectedActionIds;
+}
+
 async function runProductionPromptUiSequence(
   input: ProductionUiEntryInput & {
     readonly prompt: PhysicalPromptRuntime;
   },
-  options: Readonly<{
-    readonly captureScreenshots?: boolean;
-    readonly cleanup: boolean;
-    readonly openMissionControl: boolean;
-    readonly sessionAlreadyOpen?: boolean;
-  }> = Object.freeze({ cleanup: true, openMissionControl: true })
+  options: ProductionPromptUiSequenceOptions = Object.freeze({
+    cleanup: true,
+    openMissionControl: true
+  })
 ): Promise<PhysicalPromptSequenceResult> {
+  const expectedActionIds = physicalAggregatePromptExpectedActionIdsFor(options);
   if (options.openMissionControl) {
     await openProductionMissionControl(input, {
       missionControl: "fe020-02-mission-control.png",
@@ -22514,7 +22754,7 @@ async function runProductionPromptUiSequence(
     input.readProxyRejection() === null,
     "Physical prompt production request was rejected at the Serve boundary."
   );
-  input.actionRegistry.assertConsumed(physicalAggregatePromptExpectedActionIds);
+  input.actionRegistry.assertConsumed(expectedActionIds);
   return Object.freeze({
     acceptedVisible: true,
     completedVisible: true,
