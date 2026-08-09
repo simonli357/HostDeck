@@ -16,9 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-090` Aggregate physical mobile-dashboard hardening | in_progress | none | Create one fresh pushed candidate, complete clean host preflight, and execute its single no-retry phone run through the proven detached monitor. |
+| 1 | `FE-V1-104` Stable event-diagnostic one-tap handoff | in_progress | none | Replace the unstable first-event handoff reached by candidate `84af3ab` with continuous exact admission and outcome diagnostics before another candidate. |
 
-`FE-V1-103` closes `BUG-075` in pushed `01983b9` with exact standalone and cumulative dashboard prompt registry contracts plus all required hostile and broad host gates. `FE-V1-090` is the only executable queue item; candidate `87a6216` remains ineligible and will not be retried.
+Candidate `84af3ab` failed once after one exact Replay boundary tap and completed exact automatic cleanup without publishing evidence. `FE-V1-104` is the only executable queue item; `84af3ab` and every prior failed candidate remain ineligible and will not be retried.
 
 ## Intentional Blockers
 
