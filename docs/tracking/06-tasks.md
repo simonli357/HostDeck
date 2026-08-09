@@ -16,9 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-105` Typed asynchronous ADB outcomes | in_progress | none | Replace the generic early physical failure with exact operation ownership and intended bounded preflight-probe semantics before another candidate. |
+| 1 | `FE-V1-090` Aggregate physical mobile-dashboard hardening | in_progress | none | Prepare one distinct clean remote-matched candidate, pass all host/read-only device gates, then run the detached no-retry aggregate through retained deployment. |
 
-Candidate `2cccd35` passed all host and read-only device gates, then failed once before app interaction because the async ADB wrapper discarded the failing operation and rejected expected nonzero probe observations. Cleanup is exact. `FE-V1-105` is the only executable queue item; `2cccd35` and every prior failed candidate remain ineligible and will not be retried.
+`FE-V1-105` closed `BUG-077` in pushed `c8bf276` without further phone or environment mutation. Candidate `2cccd35` and every prior failed candidate remain ineligible and will not be retried; `FE-V1-090` owns the next distinct candidate and retained deployment.
 
 ## Intentional Blockers
 
