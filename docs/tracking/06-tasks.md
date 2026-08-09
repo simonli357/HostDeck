@@ -16,9 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-090` Aggregate physical mobile-dashboard hardening | in_progress | none | Create one new pushed candidate and execute it through a detached monitored launch that cannot inherit the API command-session lifetime. |
+| 1 | `FE-V1-103` Nested prompt aggregate-registry scope | in_progress | none | Replace the impossible standalone assertion reached by candidate `87a6216` with an exact cumulative dashboard-prefix contract before another candidate. |
 
-Candidate `39aed8a` passed clean host review but was externally terminated with exit 143 at about 120 seconds because the physical process inherited the bounded API command session; no test assertion fired. Exact manual cleanup passed and no evidence was published. `BUG-074` requires a distinct candidate launched once through a private detached monitor; `39aed8a` and prior failed candidates remain ineligible.
+Candidate `87a6216` proves the detached monitor fix and crosses approval, event, and prompt behavior, then fails only because the nested prompt helper compares cumulative dashboard consumption with the standalone prompt set. `FE-V1-103` is the only executable queue item; exact automatic cleanup passed, no evidence was published, and `87a6216` will not be retried.
 
 ## Intentional Blockers
 
