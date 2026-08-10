@@ -4570,6 +4570,101 @@ describe("physical Android phone-driver protocol", () => {
     ).rejects.toThrow("Extra reload generation was accepted.");
   });
 
+  it("requires exact stable missing-session product truth", async () => {
+    const missingNodes = parseAndroidUiNodes(
+      '<hierarchy><node text="" class="android.view.ViewGroup" ' +
+        `resource-id="${chromeToolbarResourceId}" bounds="[0,0][1080,240]" />` +
+        '<node text="" class="android.widget.FrameLayout" ' +
+        `resource-id="${chromeCompositorResourceId}" bounds="[0,0][1080,2200]" />` +
+        '<node text="Session unavailable" bounds="[80,260][900,360]" />' +
+        '<node text="Session unavailable" bounds="[80,420][900,520]" />' +
+        '<node text="This session was not found or is no longer active." ' +
+        'bounds="[80,540][980,660]" />' +
+        "</hierarchy>"
+    );
+    expect(physicalSessionMissingTruthVisible(missingNodes)).toBe(true);
+    const firstUnavailable = missingNodes.findIndex(
+      (node) => node.text === "Session unavailable"
+    );
+    expect(firstUnavailable).toBeGreaterThanOrEqual(0);
+    expect(
+      physicalSessionMissingTruthVisible(
+        missingNodes.filter((_, index) => index !== firstUnavailable)
+      )
+    ).toBe(false);
+    const body = missingNodes.find(
+      (node) => node.text === "This session was not found or is no longer active."
+    );
+    requireCondition(body !== undefined, "Missing-session body fixture was absent.");
+    for (const conflictingText of [
+      "Prompt unavailable",
+      "Ready to send",
+      "Session activity is reconnecting."
+    ]) {
+      expect(
+        physicalSessionMissingTruthVisible([
+          ...missingNodes,
+          Object.freeze({ ...body, text: conflictingText })
+        ])
+      ).toBe(false);
+    }
+
+    const before: PhysicalSessionNavigationSnapshot = Object.freeze({
+      activeSubscribers: 1,
+      missingDetailRequests: 0,
+      openedSubscribers: 4,
+      selectedDetailRequests: 3,
+      streamRequests: 4
+    });
+    const expected = Object.freeze({
+      ...before,
+      missingDetailRequests: before.missingDetailRequests + 1
+    });
+    let now = 0;
+    let reads = 0;
+    await expect(
+      waitForPhysicalSessionMissingSettlement(
+        {
+          readNavigation: () => expected,
+          readNodes: async () => {
+            reads += 1;
+            if (reads === 1) throw new Error("private hierarchy payload");
+            return missingNodes;
+          }
+        },
+        expected,
+        5_000,
+        "Stable missing-session truth was not reached.",
+        { now: () => now, sleep: async (milliseconds) => { now += milliseconds; } }
+      )
+    ).resolves.toBeUndefined();
+    expect(reads).toBeGreaterThan(2);
+    expect(now).toBeGreaterThanOrEqual(2_000);
+
+    let driftNow = 0;
+    await expect(
+      waitForPhysicalSessionMissingSettlement(
+        {
+          readNavigation: () =>
+            Object.freeze({
+              ...expected,
+              openedSubscribers: expected.openedSubscribers + 1
+            }),
+          readNodes: async () => missingNodes
+        },
+        expected,
+        600,
+        "Missing-session authority drift was accepted.",
+        {
+          now: () => driftNow,
+          sleep: async (milliseconds) => {
+            driftNow += milliseconds;
+          }
+        }
+      )
+    ).rejects.toThrow("Missing-session authority drift was accepted.");
+  });
+
   it("holds exactly one armed reconnect request until explicit release", async () => {
     const gate = new PhysicalStreamRecoveryGate();
     await expect(gate.holdIfArmed()).resolves.toBeUndefined();
@@ -17346,15 +17441,12 @@ async function waitForPhysicalSessionMissingSettlement(
       await sleep(Math.min(physicalSessionActionsPollMs, remaining));
       continue;
     }
-    const missing =
-      selectPhysicalChromePageText(nodes, "Session unavailable") !== null &&
-      selectPhysicalChromePageText(nodes, "Ready to send") === null &&
-      selectPhysicalChromePageText(nodes, "Session activity is reconnecting.") === null;
+    const missing = physicalSessionMissingTruthVisible(nodes);
     const exactNavigation = physicalSessionNavigationMatches(
       navigation,
       expectedNavigation
     );
-    const observation = `${physicalSessionNavigationSummary(navigation)};missing=${missing ? "yes" : "no"}`;
+    const observation = `${physicalSessionNavigationSummary(navigation)};${physicalSessionMissingTruthSummary(nodes)}`;
     if (observations.at(-1) !== observation && observations.length < 6) {
       observations.push(observation);
     }
@@ -17372,6 +17464,64 @@ async function waitForPhysicalSessionMissingSettlement(
     await sleep(Math.min(physicalSessionActionsPollMs, remaining));
   }
   throw new Error(`${message} (states=${observations.join("||") || "none"}).`);
+}
+
+function physicalSessionMissingTruthVisible(
+  nodes: readonly AndroidUiNode[]
+): boolean {
+  const counts = physicalSessionMissingTruthCounts(nodes);
+  return (
+    counts !== null &&
+    counts.unavailable === 2 &&
+    counts.reason === 1 &&
+    counts.ready === 0 &&
+    counts.reconnecting === 0 &&
+    counts.promptUnavailable === 0
+  );
+}
+
+function physicalSessionMissingTruthSummary(
+  nodes: readonly AndroidUiNode[]
+): string {
+  const counts = physicalSessionMissingTruthCounts(nodes);
+  return counts === null
+    ? "missing=invalid-page"
+    : `missing=${physicalSessionMissingTruthVisible(nodes) ? "yes" : "no"},` +
+        `unavailable=${counts.unavailable},reason=${counts.reason},` +
+        `ready=${counts.ready},reconnecting=${counts.reconnecting},` +
+        `prompt=${counts.promptUnavailable}`;
+}
+
+function physicalSessionMissingTruthCounts(
+  nodes: readonly AndroidUiNode[]
+): Readonly<{
+  readonly promptUnavailable: number;
+  readonly ready: number;
+  readonly reason: number;
+  readonly reconnecting: number;
+  readonly unavailable: number;
+}> | null {
+  let page: PhysicalScreenshotRegion;
+  try {
+    page = selectChromePageViewport(nodes);
+  } catch {
+    return null;
+  }
+  const count = (value: string): number =>
+    nodes.filter(
+      (node) =>
+        node.text === value &&
+        !node.clickable &&
+        node.enabled !== false &&
+        androidUiNodeIsFullyInsideRegion(node, page)
+    ).length;
+  return Object.freeze({
+    promptUnavailable: count("Prompt unavailable"),
+    ready: count("Ready to send"),
+    reason: count("This session was not found or is no longer active."),
+    reconnecting: count("Session activity is reconnecting."),
+    unavailable: count("Session unavailable")
+  });
 }
 
 function physicalSessionNavigationBackgrounded(
