@@ -4554,6 +4554,11 @@ describe("physical Android phone-driver protocol", () => {
         '<node text="Ready to send" bounds="[80,400][600,500]" />' +
         "</hierarchy>"
     );
+    const completedNodes = currentNodes.map((node) =>
+      node.text === "Ready to send"
+        ? Object.freeze({ ...node, text: "Turn completed" })
+        : node
+    );
     const staleNodes = parseAndroidUiNodes(
       '<hierarchy><node text="" class="android.view.ViewGroup" ' +
         `resource-id="${chromeToolbarResourceId}" bounds="[0,0][1080,240]" />` +
@@ -4570,6 +4575,17 @@ describe("physical Android phone-driver protocol", () => {
     expect(physicalSessionReloadTruthVisible(staleNodes, 1, "current")).toBe(
       false
     );
+    expect(
+      physicalSessionReloadTruthVisible(completedNodes, 1, "current")
+    ).toBe(true);
+    expect(physicalSessionWriteReady(completedNodes, 1)).toBe(true);
+    expect(
+      physicalSessionReloadTruthVisible(
+        [...currentNodes, ...completedNodes.filter((node) => node.text === "Turn completed")],
+        1,
+        "current"
+      )
+    ).toBe(false);
     expect(
       physicalSessionReloadTruthVisible(
         staleNodes.filter(
@@ -4617,6 +4633,32 @@ describe("physical Android phone-driver protocol", () => {
         { now: () => now, sleep: async (milliseconds) => { now += milliseconds; } }
       )
     ).resolves.toBeUndefined();
+
+    let replayNow = 0;
+    let replayReads = 0;
+    await expect(
+      waitForPhysicalSessionReloadSettlement(
+        {
+          readNavigation: () => expected,
+          readNodes: async () => {
+            replayReads += 1;
+            return replayReads === 1 ? currentNodes : completedNodes;
+          }
+        },
+        before,
+        "current",
+        5_000,
+        "Completed replay truth was not reached.",
+        {
+          now: () => replayNow,
+          sleep: async (milliseconds) => {
+            replayNow += milliseconds;
+          }
+        }
+      )
+    ).resolves.toBeUndefined();
+    expect(replayReads).toBeGreaterThan(2);
+    expect(replayNow).toBeGreaterThanOrEqual(2_000);
     expect(readIndex).toBeGreaterThan(2);
     expect(now).toBeGreaterThanOrEqual(2_000);
 
@@ -17642,14 +17684,16 @@ function physicalSessionReloadTruthVisible(
 ): boolean {
   const count = (value: string): number =>
     nodes.filter((node) => matchesAndroidUiNode(node, "semantic", value)).length;
+  const writableTruthCount =
+    count("Ready to send") + count("Turn completed");
   return (
     activeSubscribers === 1 &&
     (truth === "stale"
       ? count("Prompt unavailable") === 1 &&
         count("Session state is stale. Refresh before sending.") === 1 &&
-        count("Ready to send") === 0 &&
+        writableTruthCount === 0 &&
         count("Showing stale session state") <= 1
-      : count("Ready to send") === 1 &&
+      : writableTruthCount === 1 &&
         count("Showing stale session state") === 0 &&
         count("Prompt unavailable") === 0 &&
         count("Session state is stale. Refresh before sending.") === 0) &&
@@ -17670,6 +17714,7 @@ function physicalSessionReloadTruthSummary(
     `truth=${truth}`,
     `stale=${count("Showing stale session state")}`,
     `ready=${count("Ready to send")}`,
+    `completed=${count("Turn completed")}`,
     `reconnecting=${count("Session activity is reconnecting.")}`,
     `unavailable=${count("Prompt unavailable")}`,
     `stale_reason=${count("Session state is stale. Refresh before sending.")}`
@@ -18438,10 +18483,12 @@ function physicalSessionWriteReady(
     nodes.filter((node) => matchesAndroidUiNode(node, "semantic", value)).length;
   return (
     activeSubscribers === 1 &&
-    count("Ready to send") === 1 &&
+    count("Ready to send") + count("Turn completed") === 1 &&
     count("Activity stream reconnecting") === 0 &&
     count("Session activity is reconnecting.") === 0 &&
-    count("Prompt unavailable") === 0
+    count("Prompt unavailable") === 0 &&
+    count("Showing stale session state") === 0 &&
+    count("Session state is stale. Refresh before sending.") === 0
   );
 }
 
