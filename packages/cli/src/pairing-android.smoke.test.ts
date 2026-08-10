@@ -5393,11 +5393,15 @@ describe("physical Android phone-driver protocol", () => {
     const packageBuildAt = source.lastIndexOf(
       "dashboardPackageIdentity = buildPhysicalDashboardPackageIdentity();"
     );
+    const environmentAt = source.lastIndexOf(
+      "environmentFacts = readPhysicalEnvironmentFacts();"
+    );
     const talkBackBuildAt = source.lastIndexOf(
       "talkBackArtifacts = buildPhysicalTalkBackArtifacts(directory);"
     );
 
     expect(enforceAt).toBeGreaterThan(0);
+    expect(environmentAt).toBeGreaterThan(enforceAt);
     expect(packageBuildAt).toBeGreaterThan(enforceAt);
     expect(talkBackBuildAt).toBeGreaterThan(packageBuildAt);
   });
@@ -7959,7 +7963,6 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       let initialWifiEnabled: boolean | null = null;
       let initialMobileDataEnabled: boolean | null = null;
       let initialStayAwakeSetting: number | null = null;
-      let activePlugType: number | null = null;
       let selectedProfile: "away" | "dedicated" = "dedicated";
       let internalErrorCount = 0;
       let acceptanceError: unknown = null;
@@ -7971,14 +7974,14 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
         if (requireProductionUiAcceptance || requireRemoteAndroidAcceptance) {
           requireNoAdbApplicationTunnels();
           initialStayAwakeSetting = readAndroidStayAwakeSetting();
-          activePlugType = readAndroidPlugType();
+          const activePlugType = readAndroidPlugType();
           initialWifiEnabled = readAndroidWifiEnabled();
           initialMobileDataEnabled = readAndroidMobileDataEnabled();
-          environmentFacts = readPhysicalEnvironmentFacts();
-          requireCondition(
-            isAndroidAwakeAndUnlocked(),
-            "Physical acceptance requires an awake and unlocked phone before mutation."
+          await enforceAndroidAwakeAndUnlocked(
+            initialStayAwakeSetting,
+            activePlugType
           );
+          environmentFacts = readPhysicalEnvironmentFacts();
           if (requireDashboardUiAcceptance) {
             requireAndroidTalkBackService();
             requireReadableAndroidAccessibilitySettings();
@@ -7997,15 +8000,6 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           );
         }
         if (requireProductionUiAcceptance || requireRemoteAndroidAcceptance) {
-          const plugType = activePlugType;
-          requireCondition(
-            plugType !== null,
-            "Android power plug type was unavailable before stay-awake enforcement."
-          );
-          await enforceAndroidAwakeAndUnlocked(
-            initialStayAwakeSetting as number,
-            plugType
-          );
           await enforceUnrelatedAndroidNetwork(
             initialWifiEnabled as boolean,
             initialMobileDataEnabled as boolean
