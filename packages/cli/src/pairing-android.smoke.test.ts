@@ -318,6 +318,8 @@ const physicalSessionOverlayGapPx = 24;
 const physicalApprovalLifetimeMs = 30 * 60 * 1_000;
 const physicalScreenshotRedactionInsetPx = 8;
 const physicalScreenshotRedactionRgba = Object.freeze([24, 28, 33, 255] as const);
+const physicalScreenshotSelectionTimeoutMs = 10_000;
+const physicalScreenshotSelectionStableReads = 2;
 const physicalRuntimeIncompatibleTitle = "Codex interface incompatible";
 const physicalRuntimeSupportedTitle = "Codex compatible";
 const physicalGatedClaimAdmissionFailure =
@@ -6629,6 +6631,34 @@ describe("physical Android phone-driver protocol", () => {
         "https://private.example.ts.net"
       )
     ).toEqual({ height: 992, left: 0, top: 288, width: 720 });
+    const pollingSelection =
+      selectPrivateFreeProductionScreenshotEvidenceForPolling(
+        nodes,
+        "https://private.example.ts.net"
+      );
+    expect(pollingSelection).toEqual({
+      redactions: [],
+      region: { height: 992, left: 0, top: 288, width: 720 }
+    });
+    requireCondition(
+      pollingSelection !== null,
+      "Chrome screenshot polling fixture was not selected."
+    );
+    expect(
+      privateFreeProductionScreenshotSelectionGeometry(pollingSelection)
+    ).toBe("0,288,720,992");
+    expect(
+      selectPrivateFreeProductionScreenshotEvidenceForPolling(
+        [],
+        "https://private.example.ts.net"
+      )
+    ).toBeNull();
+    expect(
+      selectPrivateFreeProductionScreenshotEvidenceForPolling(
+        nodes.filter((node) => node.text !== "Mission Control"),
+        "https://private.example.ts.net"
+      )
+    ).toBeNull();
     const collapsed = nodes.filter(
       (node) => node.resourceId !== chromeToolbarResourceId
     );
@@ -6660,6 +6690,12 @@ describe("physical Android phone-driver protocol", () => {
     expect(() => selectChromePageViewport([...nodes, compositor])).toThrow(
       "could not isolate the Chrome compositor"
     );
+    expect(() =>
+      selectPrivateFreeProductionScreenshotEvidenceForPolling(
+        [...nodes, compositor],
+        "https://private.example.ts.net"
+      )
+    ).toThrow("could not isolate the Chrome compositor");
     expect(() =>
       selectPrivateFreeProductionScreenshotRegion(
         [
@@ -22590,9 +22626,7 @@ async function capturePrivateFreeProductionScreenshot(
   externalOrigin: string,
   options: Readonly<{ readonly redactProductOrigin?: boolean }> = {}
 ): Promise<void> {
-  const nodes = await readAndroidUiNodes();
-  const selection = selectPrivateFreeProductionScreenshotEvidence(
-    nodes,
+  const selection = await waitForPrivateFreeProductionScreenshotEvidence(
     externalOrigin,
     options
   );
@@ -22601,6 +22635,79 @@ async function capturePrivateFreeProductionScreenshot(
     selection.region,
     selection.redactions
   );
+}
+
+async function waitForPrivateFreeProductionScreenshotEvidence(
+  externalOrigin: string,
+  options: Readonly<{ readonly redactProductOrigin?: boolean }> = {}
+): Promise<PrivateFreeProductionScreenshotSelection> {
+  let selection: PrivateFreeProductionScreenshotSelection | null = null;
+  let stableObservation: string | null = null;
+  let stableReads = 0;
+  await waitFor(async () => {
+    const nodes = await readAndroidUiNodes();
+    const candidate = selectPrivateFreeProductionScreenshotEvidenceForPolling(
+      nodes,
+      externalOrigin,
+      options
+    );
+    if (candidate === null) {
+      selection = null;
+      stableObservation = null;
+      stableReads = 0;
+      return false;
+    }
+    const observation = privateFreeProductionScreenshotSelectionGeometry(candidate);
+    if (observation === stableObservation) {
+      stableReads += 1;
+    } else {
+      stableObservation = observation;
+      stableReads = 1;
+    }
+    selection = candidate;
+    return stableReads >= physicalScreenshotSelectionStableReads;
+  }, physicalScreenshotSelectionTimeoutMs, "Physical screenshot viewport did not settle.");
+  requireCondition(
+    selection !== null,
+    "Physical screenshot viewport settled without evidence authority."
+  );
+  return selection;
+}
+
+function selectPrivateFreeProductionScreenshotEvidenceForPolling(
+  nodes: readonly AndroidUiNode[],
+  externalOrigin: string,
+  options: Readonly<{ readonly redactProductOrigin?: boolean }> = {}
+): PrivateFreeProductionScreenshotSelection | null {
+  const compositorCount = nodes.filter(
+    (node) => node.resourceId === chromeCompositorResourceId
+  ).length;
+  if (compositorCount === 0) return null;
+  requireCondition(
+    compositorCount === 1,
+    "Physical evidence could not isolate the Chrome compositor."
+  );
+  const selection = selectPrivateFreeProductionScreenshotEvidence(
+    nodes,
+    externalOrigin,
+    options
+  );
+  const hasPageContent = nodes.some(
+    (node) =>
+      node.resourceId === "" &&
+      (node.text !== "" || node.description !== "") &&
+      androidUiNodeIsFullyInsideRegion(node, selection.region)
+  );
+  return hasPageContent ? selection : null;
+}
+
+function privateFreeProductionScreenshotSelectionGeometry(
+  selection: PrivateFreeProductionScreenshotSelection
+): string {
+  return [
+    physicalRegionGeometry(selection.region),
+    ...selection.redactions.map(physicalRegionGeometry)
+  ].join("|");
 }
 
 function selectPrivateFreeProductionScreenshotRegion(
