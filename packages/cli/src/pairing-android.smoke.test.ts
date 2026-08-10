@@ -312,6 +312,7 @@ const physicalSessionActionsOverlayMarkers = Object.freeze([
 const physicalSessionActionsStableWindowMs = 2_000;
 const physicalSessionActionsPollMs = 200;
 const physicalPairingContinueStableWindowMs = 2_000;
+const physicalTailscaleCommandTimeoutMs = 30_000;
 const physicalPairingContinuePollMs = 200;
 const physicalEventActionMaxDistancePx = 480;
 const physicalEventDiagnosticStableWindowMs = 2_000;
@@ -5532,6 +5533,22 @@ describe("physical Android phone-driver protocol", () => {
         ""
       )
     ).toThrow("UI hierarchy read output was invalid or private");
+  });
+
+  it("classifies bounded Tailscale timeouts without retaining command output", () => {
+    expect(
+      physicalTailscaleCommandFailureMessage(
+        Object.freeze({ code: null, killed: true })
+      )
+    ).toBe("Physical Tailscale command timed out.");
+    expect(
+      physicalTailscaleCommandFailureMessage(
+        Object.freeze({ code: "ENOENT", killed: false })
+      )
+    ).toBe("Physical Tailscale command failed.");
+    expect(physicalTailscaleCommandFailureMessage(null)).toBe(
+      "Physical Tailscale command failed."
+    );
   });
 
   it("requires separate validated cellular Internet and Tailscale VPN networks", () => {
@@ -13152,13 +13169,13 @@ function runBoundedTailscaleCommand(
           PATH: "/usr/bin:/bin"
         },
         maxBuffer: 64 * 1024,
-        timeout: 10_000,
+        timeout: physicalTailscaleCommandTimeoutMs,
         windowsHide: true
       },
       (error, stdout, stderr) => {
         const rawExitCode = error === null ? 0 : Reflect.get(error, "code");
         if (typeof rawExitCode !== "number") {
-          reject(new Error("Physical Tailscale command failed."));
+          reject(new Error(physicalTailscaleCommandFailureMessage(error)));
           return;
         }
         resolve(
@@ -13171,6 +13188,14 @@ function runBoundedTailscaleCommand(
       }
     );
   });
+}
+
+function physicalTailscaleCommandFailureMessage(error: unknown): string {
+  return error !== null &&
+    typeof error === "object" &&
+    Reflect.get(error, "killed") === true
+    ? "Physical Tailscale command timed out."
+    : "Physical Tailscale command failed.";
 }
 
 function requireLifecycleManager(
