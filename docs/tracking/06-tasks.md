@@ -16,9 +16,9 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-106` Typed physical stream-recovery observation | in_progress | none | Classify the `states=none` boundary from consumed candidate `6124f5c`, prove exact bounded hierarchy/read/state outcomes, and pass host gates without phone mutation. |
+| 1 | `FE-V1-090` Mobile dashboard physical hardening | in_progress | none | Run one distinct immutable candidate immediately after the phone is proven awake/unlocked; retain and deploy only a complete no-retry pass. |
 
-Candidate `6124f5c` reached the real held stream-recovery fixture after 364 seconds but every Android hierarchy failure was collapsed into `states=none`; exact cleanup passed, no evidence was published, and it will not be retried. `FE-V1-106` owns `BUG-078`; `FE-V1-090` remains blocked until the observer and fresh host gates pass.
+`BUG-078` / `FE-V1-106` is closed, and later candidates crossed the corrected stream-recovery boundary. Candidate `61485d2` passed immutable package and 83/1 driver gates but found the phone asleep/locked before app interaction; exact cleanup passed, no evidence was published, and it will not be retried. The next candidate must start immediately after the device wake/unlock gate.
 
 ## Intentional Blockers
 
