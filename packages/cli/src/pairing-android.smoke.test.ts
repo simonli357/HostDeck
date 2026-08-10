@@ -4412,9 +4412,26 @@ describe("physical Android phone-driver protocol", () => {
         `resource-id="${chromeToolbarResourceId}" bounds="[0,0][1080,240]" />` +
         '<node text="" class="android.widget.FrameLayout" ' +
         `resource-id="${chromeCompositorResourceId}" bounds="[0,0][1080,2200]" />` +
-        '<node text="Showing stale session state" bounds="[80,400][600,500]" />' +
+        '<node text="Prompt unavailable" bounds="[80,400][600,500]" />' +
+        '<node text="Session state is stale. Refresh before sending." ' +
+        'bounds="[80,520][900,620]" />' +
         "</hierarchy>"
     );
+    expect(physicalSessionReloadTruthVisible(staleNodes, 1, "stale")).toBe(
+      true
+    );
+    expect(physicalSessionReloadTruthVisible(staleNodes, 1, "current")).toBe(
+      false
+    );
+    expect(
+      physicalSessionReloadTruthVisible(
+        staleNodes.filter(
+          (node) => node.text !== "Session state is stale. Refresh before sending."
+        ),
+        1,
+        "stale"
+      )
+    ).toBe(false);
     const before: PhysicalSessionNavigationSnapshot = Object.freeze({
       activeSubscribers: 1,
       missingDetailRequests: 0,
@@ -17206,13 +17223,16 @@ function physicalSessionReloadTruthVisible(
   return (
     activeSubscribers === 1 &&
     (truth === "stale"
-      ? count("Showing stale session state") === 1 &&
-        count("Ready to send") === 0
+      ? count("Prompt unavailable") === 1 &&
+        count("Session state is stale. Refresh before sending.") === 1 &&
+        count("Ready to send") === 0 &&
+        count("Showing stale session state") <= 1
       : count("Ready to send") === 1 &&
-        count("Showing stale session state") === 0) &&
+        count("Showing stale session state") === 0 &&
+        count("Prompt unavailable") === 0 &&
+        count("Session state is stale. Refresh before sending.") === 0) &&
     count("Activity stream reconnecting") === 0 &&
-    count("Session activity is reconnecting.") === 0 &&
-    count("Prompt unavailable") === 0
+    count("Session activity is reconnecting.") === 0
   );
 }
 
@@ -17229,7 +17249,8 @@ function physicalSessionReloadTruthSummary(
     `stale=${count("Showing stale session state")}`,
     `ready=${count("Ready to send")}`,
     `reconnecting=${count("Session activity is reconnecting.")}`,
-    `unavailable=${count("Prompt unavailable")}`
+    `unavailable=${count("Prompt unavailable")}`,
+    `stale_reason=${count("Session state is stale. Refresh before sending.")}`
   ].join(",");
 }
 
