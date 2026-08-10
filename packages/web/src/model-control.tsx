@@ -244,7 +244,7 @@ export function ModelControl({ controller }: ModelControlProps) {
                         type="radio"
                         name={`hostdeck-model-${view.sessionId}`}
                         value={model.id}
-                        aria-label={model.label}
+                        aria-label={`${model.label}${view.selectedModelId === model.id ? ", selected" : ""}`}
                         aria-describedby={
                           model.description === null
                             ? undefined

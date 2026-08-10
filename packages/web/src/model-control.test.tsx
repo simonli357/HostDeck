@@ -52,7 +52,7 @@ describe("ModelControl", () => {
 
     response.resolve(modelSnapshot());
     const currentModel = await screen.findByRole("radio", {
-      name: "Codex Alpha"
+      name: "Codex Alpha, selected"
     });
     expect(currentModel).toBeTruthy();
     const descriptionId = currentModel.getAttribute("aria-describedby");
@@ -84,6 +84,8 @@ describe("ModelControl", () => {
     await screen.findByRole("radio", { name: /Codex Alpha/ });
 
     await user.click(screen.getByRole("radio", { name: /Codex Beta/ }));
+    expect(screen.getByRole("radio", { name: "Codex Beta, selected" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Codex Alpha" })).toBeTruthy();
     expect((screen.getByRole("radio", { name: "Medium" }) as HTMLInputElement).checked).toBe(true);
     await user.click(screen.getByRole("radio", { name: "Low" }));
     await user.click(screen.getByRole("button", { name: "Set for next turn" }));

@@ -61,7 +61,7 @@ describe("PlanControl", () => {
     expect(screen.getByText("Current turn")).toBeTruthy();
     expect(screen.getByText("No pending change")).toBeTruthy();
     expect(screen.getByText("No observed Plan execution")).toBeTruthy();
-    expect((screen.getByRole("radio", { name: "Default" }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("radio", { name: "Default, selected" }) as HTMLInputElement).checked).toBe(true);
     expect((screen.getByRole("button", { name: "Set for next turn" }) as HTMLButtonElement).disabled).toBe(true);
     expect(dialog.textContent).not.toMatch(/catalog_revision|selection_operation_id|turn-plan|op_private/u);
 
@@ -80,6 +80,8 @@ describe("PlanControl", () => {
     await screen.findByRole("radio", { name: /Plan/ });
 
     await user.click(screen.getByRole("radio", { name: /Plan/ }));
+    expect(screen.getByRole("radio", { name: "Plan, selected" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Default" })).toBeTruthy();
     screen.getByRole("button", { name: "Set for next turn" }).focus();
     await user.keyboard("{Enter}");
 

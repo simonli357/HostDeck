@@ -1904,6 +1904,27 @@ describe("physical Android phone-driver protocol", () => {
         "Codex Current"
       )
     ).toBe(true);
+    const xiaomiSheetNodes = describedSheetNodes.map((node) => {
+      const { checked: _checked, ...withoutNativeSelection } = node;
+      return Object.freeze(
+        node.description === "Codex Current"
+          ? {
+              ...withoutNativeSelection,
+              description: "Codex Current, selected"
+            }
+          : withoutNativeSelection
+      ) as AndroidUiNode;
+    });
+    expect(
+      physicalSheetChoiceSelected(
+        xiaomiSheetNodes,
+        "/model",
+        "Codex Current"
+      )
+    ).toBe(true);
+    expect(
+      physicalSheetChoiceSelected(xiaomiSheetNodes, "/model", "Codex Fast")
+    ).toBe(false);
     const fastSheetNodes = sheetNodes.map((node) => {
       if (node.text === "Thorough") return node;
       const { checked: _checked, ...unselected } = node;
@@ -1928,6 +1949,21 @@ describe("physical Android phone-driver protocol", () => {
     expect(
       physicalSheetChoiceSelected(
         describedFastSheetNodes,
+        "/model",
+        "Codex Fast"
+      )
+    ).toBe(true);
+    const xiaomiFastSheetNodes = describedFastSheetNodes.map((node) => {
+      const { checked: _checked, ...withoutNativeSelection } = node;
+      return Object.freeze(
+        node.description === "Codex Fast"
+          ? { ...withoutNativeSelection, description: "Codex Fast, selected" }
+          : withoutNativeSelection
+      ) as AndroidUiNode;
+    });
+    expect(
+      physicalSheetChoiceSelected(
+        xiaomiFastSheetNodes,
         "/model",
         "Codex Fast"
       )
@@ -2445,6 +2481,17 @@ describe("physical Android phone-driver protocol", () => {
     expect(
       physicalPlanCurrentTruthVisible(describedCurrentMode, "Default")
     ).toBe(true);
+    const xiaomiCurrentMode = describedCurrentMode.map((node) => {
+      if (node.className !== "android.widget.RadioButton") return node;
+      const { checked: _checked, ...withoutNativeSelection } = node;
+      return Object.freeze({
+        ...withoutNativeSelection,
+        description: "Default, selected"
+      }) as AndroidUiNode;
+    });
+    expect(physicalPlanCurrentTruthVisible(xiaomiCurrentMode, "Default")).toBe(
+      true
+    );
     expect(
       selectPhysicalSheetAction(
         describedCurrentMode,
@@ -15205,23 +15252,31 @@ function physicalSheetChoiceSelected(
 ): boolean {
   const header = selectPhysicalFixedSheetHeader(nodes, ownerTitle);
   if (header === null) return false;
+  const selectedSemantic = `${value}, selected`;
+  const choiceSelected = (node: AndroidUiNode, label: string): boolean =>
+    matchesAndroidUiNode(node, "semantic", `${label}, selected`) ||
+    (matchesAndroidUiNode(node, "semantic", label) &&
+      androidUiNodeIsSelected(node));
   const selected = nodes.filter(
     (node) =>
-      matchesAndroidUiNode(node, "semantic", value) &&
+      (matchesAndroidUiNode(node, "semantic", selectedSemantic) ||
+        (matchesAndroidUiNode(node, "semantic", value) &&
+          androidUiNodeIsSelected(node))) &&
       node.clickable &&
       node.enabled !== false &&
-      androidUiNodeIsSelected(node) &&
       androidUiNodeIsFullyInsideRegion(node, header.body)
   );
   const selectedOptions = nodes.filter(
     (node) =>
       node.clickable &&
       node.enabled !== false &&
-      androidUiNodeIsSelected(node) &&
       (ownerTitle !== "/model" ||
         physicalModelChoiceLabels.some((label) =>
-          matchesAndroidUiNode(node, "semantic", label)
+          choiceSelected(node, label)
         )) &&
+      (ownerTitle === "/model"
+        ? true
+        : choiceSelected(node, "Default") || choiceSelected(node, "Plan")) &&
       androidUiNodeIsFullyInsideRegion(node, header.body)
   );
   return selected.length === 1 && selectedOptions.length === 1;

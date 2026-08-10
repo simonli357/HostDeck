@@ -420,7 +420,7 @@ function PlanModeOption({
         type="radio"
         name={`hostdeck-plan-${sessionId}`}
         value={mode}
-        aria-label={name}
+        aria-label={`${name}${selected ? ", selected" : ""}`}
         aria-describedby={`hostdeck-plan-option-${sessionId}-${mode}-description`}
         checked={selected}
         onChange={() => onSelect(mode)}
