@@ -311,6 +311,8 @@ const physicalSessionActionsOverlayMarkers = Object.freeze([
 ] as const);
 const physicalSessionActionsStableWindowMs = 2_000;
 const physicalSessionActionsPollMs = 200;
+const physicalPairingContinueStableWindowMs = 2_000;
+const physicalPairingContinuePollMs = 200;
 const physicalEventActionMaxDistancePx = 480;
 const physicalEventDiagnosticStableWindowMs = 2_000;
 const physicalEventDiagnosticPollMs = 200;
@@ -6073,6 +6075,111 @@ describe("physical Android phone-driver protocol", () => {
     ).toThrow("retained pairing material");
   });
 
+  it("reacquires a stable pairing continuation without rebasing request authority", async () => {
+    const initialNodes = physicalPairingContinueFixtureNodes();
+    const shiftedNodes = physicalPairingContinueFixtureNodes(-120);
+    const shiftedAction = shiftedNodes.find(
+      (node) => node.text === "Open Mission Control"
+    );
+    requireCondition(
+      shiftedAction !== undefined,
+      "Shifted pairing-continuation fixture action was absent."
+    );
+    const baseline: PhysicalMissionControlRequestSnapshot = Object.freeze({
+      accessRequests: 2,
+      hostStatusRequests: 1,
+      sessionListRequests: 1
+    });
+    const reads: readonly (readonly AndroidUiNode[] | "error")[] = [
+      initialNodes,
+      "error",
+      initialNodes,
+      ...Array.from({ length: 12 }, () => shiftedNodes)
+    ];
+    let now = 0;
+    let readIndex = 0;
+    const admitted = await waitForStablePhysicalPairingContinuation(
+      Object.freeze({
+        readNodes: async () => {
+          const next = reads[Math.min(readIndex, reads.length - 1)];
+          readIndex += 1;
+          if (next === "error") throw new Error("private hierarchy payload");
+          requireCondition(
+            next !== undefined,
+            "Pairing-continuation fixture read was absent."
+          );
+          return next;
+        },
+        readRequests: () => baseline
+      }),
+      baseline,
+      5_000,
+      "Stable pairing continuation was not admitted.",
+      {
+        now: () => now,
+        sleep: async (milliseconds) => {
+          now += milliseconds;
+        }
+      }
+    );
+    expect(physicalAggregateNodeMatches(admitted, shiftedAction)).toBe(true);
+    expect(now).toBeGreaterThanOrEqual(2_600);
+    expect(readIndex).toBe(reads.length - 1);
+
+    let current = baseline;
+    now = 0;
+    await expect(
+      waitForStablePhysicalPairingContinuation(
+        Object.freeze({
+          readNodes: async () => {
+            current = Object.freeze({
+              ...baseline,
+              accessRequests: baseline.accessRequests + 1
+            });
+            return initialNodes;
+          },
+          readRequests: () => current
+        }),
+        baseline,
+        5_000,
+        "Pairing request drift was not rejected.",
+        {
+          now: () => now,
+          sleep: async (milliseconds) => {
+            now += milliseconds;
+          }
+        }
+      )
+    ).rejects.toThrow("request-drift;access=1;host=0;sessions=0");
+
+    now = 0;
+    let caught: unknown = null;
+    try {
+      await waitForStablePhysicalPairingContinuation(
+        Object.freeze({
+          readNodes: async () => {
+            throw new Error("private hierarchy payload");
+          },
+          readRequests: () => baseline
+        }),
+        baseline,
+        600,
+        "Pairing hierarchy failure was not bounded.",
+        {
+          now: () => now,
+          sleep: async (milliseconds) => {
+            now += milliseconds;
+          }
+        }
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toContain("hierarchy-read-error");
+    expect((caught as Error).message).not.toContain("private hierarchy payload");
+  });
+
   it("binds physical approval progress to one pending dialog and one terminal row", () => {
     const responding = physicalApprovalRespondingFixtureNodes();
     const respondingOwner = selectPhysicalApprovalRespondingDialogOwner(
@@ -9433,6 +9540,16 @@ interface PhysicalMissionControlRequestSnapshot {
   readonly accessRequests: number;
   readonly hostStatusRequests: number;
   readonly sessionListRequests: number;
+}
+
+interface PhysicalPairingContinueWaitSource {
+  readonly readNodes: () => Promise<readonly AndroidUiNode[]>;
+  readonly readRequests: () => PhysicalMissionControlRequestSnapshot;
+}
+
+interface PhysicalPairingContinueWaitOptions {
+  readonly now?: () => number;
+  readonly sleep?: (milliseconds: number) => Promise<void>;
 }
 
 interface PhysicalProfileSnapshotInput {
@@ -14468,7 +14585,7 @@ async function openProductionMissionControl(
       { cause: error }
     );
   }
-  const continueButton = await waitForPhysicalSelectedNode(
+  await waitForPhysicalSelectedNode(
     (nodes) =>
       selectPhysicalChromePageText(nodes, "Phone paired") === null
         ? null
@@ -14495,9 +14612,19 @@ async function openProductionMissionControl(
   const requestsBeforeContinue = readPhysicalMissionControlRequestSnapshot(
     input.requestInspection
   );
+  const stableContinueButton = await waitForStablePhysicalPairingContinuation(
+    Object.freeze({
+      readNodes: readAndroidUiNodes,
+      readRequests: () =>
+        readPhysicalMissionControlRequestSnapshot(input.requestInspection)
+    }),
+    requestsBeforeContinue,
+    30_000,
+    "Production pairing continuation did not remain stable after evidence capture."
+  );
   await continueFromPairingUi(
     input.actionRegistry,
-    continueButton,
+    stableContinueButton,
     input.requestInspection,
     requestsBeforeContinue
   );
@@ -23811,6 +23938,25 @@ function physicalSessionActionsStateSummary(
   ].join(";");
 }
 
+function physicalPairingContinueFixtureNodes(
+  verticalOffset = 0
+): readonly AndroidUiNode[] {
+  return parseAndroidUiNodes(
+    '<hierarchy><node text="" class="android.view.ViewGroup" ' +
+      `resource-id="${chromeToolbarResourceId}" bounds="[0,80][1080,240]" />` +
+      '<node text="" class="android.widget.FrameLayout" ' +
+      `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
+      '<node text="Phone paired" class="android.view.View" ' +
+      'bounds="[80,420][760,540]" />' +
+      '<node text="Read &amp; write" class="android.view.View" ' +
+      'bounds="[80,760][760,840]" />' +
+      '<node text="Open Mission Control" class="android.widget.Button" ' +
+      'clickable="true" enabled="true" ' +
+      `bounds="[98,${1_700 + verticalOffset}][990,${1_827 + verticalOffset}]" />` +
+      '</hierarchy>'
+  );
+}
+
 function physicalSessionActionsFixtureNodes(): readonly AndroidUiNode[] {
   const dock = physicalSessionControlDescriptions
     .map(
@@ -25579,6 +25725,145 @@ function swipeAndroidViewport(
   ]);
 }
 
+async function waitForStablePhysicalPairingContinuation(
+  source: PhysicalPairingContinueWaitSource,
+  baseline: PhysicalMissionControlRequestSnapshot,
+  timeoutMs: number,
+  message: string,
+  options: PhysicalPairingContinueWaitOptions = {}
+): Promise<AndroidUiNode> {
+  requireCondition(
+    Number.isSafeInteger(timeoutMs) && timeoutMs > 0,
+    "Physical pairing-continuation timeout was invalid."
+  );
+  const now = options.now ?? (() => performance.now());
+  const sleep =
+    options.sleep ??
+    ((milliseconds: number): Promise<void> =>
+      new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+  let previousNow = Number.NEGATIVE_INFINITY;
+  const readNow = (): number => {
+    const value = now();
+    requireCondition(
+      Number.isFinite(value) && value >= previousNow,
+      "Physical pairing-continuation clock moved backwards."
+    );
+    previousNow = value;
+    return value;
+  };
+  const startedAt = readNow();
+  const deadline = startedAt + timeoutMs;
+  requireCondition(
+    Number.isFinite(deadline) && deadline > startedAt,
+    "Physical pairing-continuation deadline was invalid."
+  );
+  const observations: string[] = [];
+  let stableSince: number | null = null;
+  let stableNode: AndroidUiNode | null = null;
+
+  while (readNow() < deadline) {
+    const requestsBeforeRead = source.readRequests();
+    requireCondition(
+      physicalMissionControlRequestSnapshotMatches(requestsBeforeRead, baseline),
+      `${message} (request-drift;${physicalMissionControlRequestDeltaSummary(
+        requestsBeforeRead,
+        baseline
+      )}).`
+    );
+    let nodes: readonly AndroidUiNode[];
+    try {
+      nodes = await source.readNodes();
+    } catch {
+      retainPhysicalPairingContinueObservation(
+        observations,
+        "hierarchy-read-error"
+      );
+      stableSince = null;
+      stableNode = null;
+      const remaining = deadline - readNow();
+      if (remaining <= 0) break;
+      await sleep(Math.min(physicalPairingContinuePollMs, remaining));
+      continue;
+    }
+    const requestsAfterRead = source.readRequests();
+    requireCondition(
+      physicalMissionControlRequestSnapshotMatches(requestsAfterRead, baseline),
+      `${message} (request-drift;${physicalMissionControlRequestDeltaSummary(
+        requestsAfterRead,
+        baseline
+      )}).`
+    );
+    let selected: AndroidUiNode | null = null;
+    try {
+      selected =
+        selectPhysicalChromePageText(nodes, "Phone paired") === null
+          ? null
+          : selectPhysicalChromePageAction(
+              nodes,
+              "text",
+              "Open Mission Control"
+            );
+    } catch {
+      selected = null;
+    }
+    retainPhysicalPairingContinueObservation(
+      observations,
+      `owner=${
+        nodes.filter((node) => node.text === "Phone paired").length
+      };action=${selected === null ? "blocked" : androidUiNodeGeometry(selected)};` +
+        physicalMissionControlRequestDeltaSummary(requestsAfterRead, baseline)
+    );
+    const observedAt = readNow();
+    if (selected === null) {
+      stableSince = null;
+      stableNode = null;
+    } else if (
+      stableSince === null ||
+      stableNode === null ||
+      !physicalAggregateNodeMatches(stableNode, selected)
+    ) {
+      stableSince = observedAt;
+      stableNode = selected;
+    } else if (
+      observedAt - stableSince >= physicalPairingContinueStableWindowMs
+    ) {
+      return selected;
+    }
+    const remaining = deadline - readNow();
+    if (remaining <= 0) break;
+    await sleep(Math.min(physicalPairingContinuePollMs, remaining));
+  }
+
+  throw new Error(
+    `${message} (states=${observations.join("||") || "none"}).`
+  );
+}
+
+function physicalMissionControlRequestDeltaSummary(
+  current: PhysicalMissionControlRequestSnapshot,
+  baseline: PhysicalMissionControlRequestSnapshot
+): string {
+  return (
+    `access=${current.accessRequests - baseline.accessRequests};` +
+    `host=${current.hostStatusRequests - baseline.hostStatusRequests};` +
+    `sessions=${current.sessionListRequests - baseline.sessionListRequests}`
+  );
+}
+
+function retainPhysicalPairingContinueObservation(
+  observations: string[],
+  observation: string
+): void {
+  requireCondition(
+    Buffer.byteLength(observation, "utf8") >= 1 &&
+      Buffer.byteLength(observation, "utf8") <= 512,
+    "Physical pairing-continuation observation exceeded its private-safe bound."
+  );
+  if (observations.at(-1) === observation) return;
+  observations.push(observation);
+  if (observations.length > 6) observations.shift();
+}
+
 async function continueFromPairingUi(
   actionRegistry: PhysicalAggregateActionRegistry,
   initialButton: AndroidUiNode,
@@ -25593,7 +25878,12 @@ async function continueFromPairingUi(
         readPhysicalMissionControlRequestSnapshot(inspection),
         before
       ),
-    "Production pairing continuation did not issue exactly one Mission Control request set."
+    () =>
+      "Production pairing continuation did not issue exactly one Mission Control request set " +
+      `(${physicalMissionControlRequestDeltaSummary(
+        readPhysicalMissionControlRequestSnapshot(inspection),
+        before
+      )}).`
   );
 }
 
