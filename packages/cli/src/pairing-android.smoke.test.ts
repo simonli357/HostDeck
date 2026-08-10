@@ -268,6 +268,10 @@ const physicalDashboardEvidenceDirectory = join(
 const physicalUiSessionId = "sess_physical_pairing_ui";
 const physicalUiSessionName = "physical-pairing-review";
 const physicalUiThreadId = "thread-physical-pairing-ui";
+const physicalModelChoiceLabels = Object.freeze([
+  "Codex Current",
+  "Codex Fast"
+] as const);
 const physicalSessionControlDescriptions = Object.freeze([
   `/model for ${physicalUiSessionName}`,
   `/goal for ${physicalUiSessionName}`,
@@ -1855,6 +1859,8 @@ describe("physical Android phone-driver protocol", () => {
         'enabled="true" bounds="[80,800][600,940]" />' +
         '<node text="Codex Balanced" class="android.widget.Button" clickable="true" ' +
         'enabled="true" bounds="[80,980][600,1120]" />' +
+        '<node text="Thorough" class="android.widget.RadioButton" clickable="true" checked="true" ' +
+        'enabled="true" bounds="[80,1160][300,1260]" />' +
         '<node text="" class="android.widget.Button" content-desc="Close model control" ' +
         'clickable="true" enabled="true" bounds="[900,400][1040,520]" />' +
         '</hierarchy>'
@@ -1871,6 +1877,7 @@ describe("physical Android phone-driver protocol", () => {
     expect(physicalSheetChoiceSelected(sheetNodes, "/model", "Codex Current")).toBe(true);
     expect(physicalSheetChoiceSelected(sheetNodes, "/model", "Codex Fast")).toBe(false);
     const fastSheetNodes = sheetNodes.map((node) => {
+      if (node.text === "Thorough") return node;
       const { checked: _checked, ...unselected } = node;
       return Object.freeze(
         node.text === "Codex Fast"
@@ -1889,7 +1896,7 @@ describe("physical Android phone-driver protocol", () => {
     expect(
       physicalSheetChoiceSelected(
         fastSheetNodes.map((node) =>
-          node.text === "Codex Balanced"
+          node.text === "Codex Current"
             ? Object.freeze({ ...node, checked: true as const })
             : node
         ),
@@ -14998,6 +15005,8 @@ function physicalSheetChoiceSelected(
       node.clickable &&
       node.enabled !== false &&
       androidUiNodeIsSelected(node) &&
+      (ownerTitle !== "/model" ||
+        physicalModelChoiceLabels.some((label) => label === node.text)) &&
       androidUiNodeIsFullyInsideRegion(node, header.body)
   );
   return selected.length === 1 && selectedOptions.length === 1;
