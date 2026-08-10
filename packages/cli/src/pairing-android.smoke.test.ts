@@ -5351,6 +5351,18 @@ describe("physical Android phone-driver protocol", () => {
       matchesAndroidUiNode(editNode, "className", androidEditTextClass)
     ).toBe(true);
     expect(findAndroidPromptEditor(nodes, "Host & access")).toBe(editNode);
+    const transientEmptyNodes = parseAndroidUiNodes(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<hierarchy rotation="0">' +
+        '<node text="" content-desc="" class="android.view.View" ' +
+        'bounds="[0,0][0,0]" />' +
+        "</hierarchy>"
+    );
+    expect(transientEmptyNodes).toEqual([]);
+    expect(Object.isFrozen(transientEmptyNodes)).toBe(true);
+    expect(() => parseAndroidUiNodes("not an Android hierarchy")).toThrow(
+      "Android UI hierarchy was invalid"
+    );
     const textAction = Object.freeze({
       bounds: Object.freeze({ bottom: 260, left: 20, right: 300, top: 200 }),
       className: "android.widget.Button",
@@ -24247,15 +24259,17 @@ async function readAndroidUiNodes(): Promise<readonly AndroidUiNode[]> {
 }
 
 function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
+  const hierarchy = /<hierarchy\b[^>]*>[\s\S]*<\/hierarchy>/u.exec(output)?.[0];
   requireCondition(
     Buffer.byteLength(output, "utf8") > 0 &&
       Buffer.byteLength(output, "utf8") <= 512 * 1024 &&
       !output.includes("\u0000") &&
-      !output.includes(selectedPairingFragmentPrefix),
+      !output.includes(selectedPairingFragmentPrefix) &&
+      hierarchy !== undefined,
     "Android UI hierarchy was invalid or retained pairing material."
   );
   const nodes: AndroidUiNode[] = [];
-  for (const match of output.matchAll(/<node\b([^>]*)\/?\s*>/gu)) {
+  for (const match of hierarchy.matchAll(/<node\b([^>]*)\/?\s*>/gu)) {
     const attributes = new Map<string, string>();
     for (const attribute of (match[1] ?? "").matchAll(
       /([a-zA-Z][a-zA-Z0-9_-]{0,31})="([^"]*)"/gu
@@ -24356,8 +24370,8 @@ function parseAndroidUiNodes(output: string): readonly AndroidUiNode[] {
     );
   }
   requireCondition(
-    nodes.length >= 1 && nodes.length <= 2_048,
-    "Android UI hierarchy had no bounded semantic nodes."
+    nodes.length <= 2_048,
+    "Android UI hierarchy exceeded its semantic node limit."
   );
   return Object.freeze(nodes);
 }
