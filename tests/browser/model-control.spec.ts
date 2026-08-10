@@ -106,10 +106,19 @@ test("owns one in-flight selection and blocks duplicate submit or dismissal", as
   await openModel(page);
 
   const dialog = page.getByRole("dialog", { name: "/model" });
-  await dialog.getByText("Codex Beta", { exact: true }).click();
+  await dialog.getByRole("radio", { name: "Codex Beta" }).click();
   const submit = dialog.getByRole("button", { name: "Set for next turn" });
   await submit.click();
   await expect(dialog.getByText("Saving next-turn model", { exact: true })).toBeVisible();
+  await expect.poll(async () => {
+    const [status, scroller] = await Promise.all([
+      dialog.locator(".hostdeck-model-sheet__status").boundingBox(),
+      dialog.locator(".hostdeck-model-sheet__body").boundingBox()
+    ]);
+    return status !== null && scroller !== null &&
+      status.y >= scroller.y &&
+      status.y + status.height <= scroller.y + scroller.height;
+  }).toBe(true);
   await expect.poll(() => api.hasPendingModelSelect()).toBe(true);
   await expect(submit).toBeDisabled();
   await expect(dialog.getByRole("button", { name: "Close model control" })).toBeDisabled();
@@ -192,7 +201,7 @@ test("renders the complete deterministic model state and failure matrix", async 
   api.setSnapshotVariant("ready");
   api.setSelectOutcome("known_failure");
   await openModel(page);
-  await dialog.getByText("Codex Beta", { exact: true }).click();
+  await dialog.getByRole("radio", { name: "Codex Beta" }).click();
   await dialog.getByRole("button", { name: "Set for next turn" }).click();
   await expect(dialog.getByText("Model selection was not saved", { exact: true })).toBeVisible();
   await expect(dialog.getByText("HostDeck is temporarily too busy to save this selection.", {
@@ -227,7 +236,7 @@ test("renders the complete deterministic model state and failure matrix", async 
   api.setSelectOutcome("correlation_mismatch");
   await page.reload();
   await openModel(page);
-  await dialog.getByText("Codex Beta", { exact: true }).click();
+  await dialog.getByRole("radio", { name: "Codex Beta" }).click();
   await dialog.getByRole("button", { name: "Set for next turn" }).click();
   await expect(dialog.getByText("Selection outcome unknown", { exact: true })).toBeVisible();
   await expect(dialog.getByRole("group", { name: "Select model" })).toHaveAttribute(

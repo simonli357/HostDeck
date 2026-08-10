@@ -112,6 +112,15 @@ test("owns one in-flight Plan selection and blocks duplicate submit or dismissal
   const submit = dialog.getByRole("button", { name: "Set for next turn" });
   await submit.click();
   await expect(dialog.getByText("Saving next-turn mode", { exact: true })).toBeVisible();
+  await expect.poll(async () => {
+    const [status, scroller] = await Promise.all([
+      dialog.locator(".hostdeck-plan-sheet__status").boundingBox(),
+      dialog.locator(".hostdeck-plan-sheet__body").boundingBox()
+    ]);
+    return status !== null && scroller !== null &&
+      status.y >= scroller.y &&
+      status.y + status.height <= scroller.y + scroller.height;
+  }).toBe(true);
   await expect.poll(() => api.hasPendingPlanSelect()).toBe(true);
   await expect(submit).toBeDisabled();
   await expect(dialog.getByRole("button", { name: "Close Plan control" })).toBeDisabled();

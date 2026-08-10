@@ -28,6 +28,7 @@ import {
   type BrowserConnectionStateCoordinator,
   HostDeckBrowserConnectionError
 } from "./connection-state.js";
+import { useMutationStatusReveal } from "./mutation-status-reveal.js";
 import {
   createPlanControlController,
   type PlanControlController,
@@ -125,6 +126,7 @@ export function PlanControl({ controller }: PlanControlProps) {
     controller.snapshot,
     controller.snapshot
   );
+  const statusRef = useMutationStatusReveal(view.phase);
   if (!view.visible || view.targetLabel === null) return null;
 
   const statusId = `hostdeck-plan-status-${view.sessionId}`;
@@ -338,6 +340,7 @@ export function PlanControl({ controller }: PlanControlProps) {
             )}
 
             <div
+              ref={statusRef}
               className={`hostdeck-plan-sheet__status hostdeck-tone--${view.tone}`}
               id={statusId}
               role={view.tone === "danger" ? "alert" : "status"}

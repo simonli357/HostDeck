@@ -31,6 +31,7 @@ import {
   type ModelControlSelectInput,
   type ModelControlTone
 } from "./model-control-state.js";
+import { useMutationStatusReveal } from "./mutation-status-reveal.js";
 
 export interface UseModelControlControllerOptions {
   readonly createOperationId?: (() => string) | undefined;
@@ -111,6 +112,7 @@ export function ModelControl({ controller }: ModelControlProps) {
     controller.snapshot,
     controller.snapshot
   );
+  const statusRef = useMutationStatusReveal(view.phase);
   if (!view.visible || view.targetLabel === null) return null;
 
   const statusId = `hostdeck-model-status-${view.sessionId}`;
@@ -311,6 +313,7 @@ export function ModelControl({ controller }: ModelControlProps) {
             )}
 
             <div
+              ref={statusRef}
               className={`hostdeck-model-sheet__status hostdeck-tone--${view.tone}`}
               id={statusId}
               role={view.tone === "danger" ? "alert" : "status"}

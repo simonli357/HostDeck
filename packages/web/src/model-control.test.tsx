@@ -27,10 +27,23 @@ import {
 
 const sessionId = "sess_model_ui_001" as SessionId;
 const timestamp = "2026-07-25T21:00:00.000Z";
+const originalScrollIntoView = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "scrollIntoView"
+);
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  if (originalScrollIntoView === undefined) {
+    delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+  } else {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "scrollIntoView",
+      originalScrollIntoView
+    );
+  }
 });
 
 describe("ModelControl", () => {
@@ -72,6 +85,11 @@ describe("ModelControl", () => {
   });
 
   it("selects one catalog model/effort and protects the in-flight command", async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView
+    });
     const user = userEvent.setup();
     const response = createDeferred<ModelControlSnapshot>();
     const port = modelPort({
@@ -90,6 +108,8 @@ describe("ModelControl", () => {
     await user.click(screen.getByRole("radio", { name: "Low" }));
     await user.click(screen.getByRole("button", { name: "Set for next turn" }));
 
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ block: "nearest" });
     expect(port.select).toHaveBeenCalledTimes(1);
     expect(port.select.mock.calls[0]?.[0].request).toEqual({
       operation_id: "op_browser_model_ui_submit_001",
@@ -110,6 +130,7 @@ describe("ModelControl", () => {
       })
     );
     expect(await screen.findByText("Model staged for next turn", { exact: true })).toBeTruthy();
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
     expect(screen.getByText(/Pending next turn:/)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Set for next turn" }) as HTMLButtonElement).disabled).toBe(true);
   });
