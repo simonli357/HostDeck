@@ -13,6 +13,7 @@ This blueprint is implementation-ready only when:
 - storage migration and legacy tmux disposition are explicit;
 - the production Fastify/SSE/auth path has one lifecycle owner and bounded resources;
 - replacement mobile mockups pass the screen/state gate and receive human selection before React screen work;
+- native Ubuntu/Windows platform, package, lifecycle, signing, update, rollback, and clean-host contracts resolve to `BLK-V1-07` leaves;
 - no task must decide product scope, architecture, security policy, or validation while implementing.
 
 ## Maturity Truth
@@ -27,6 +28,7 @@ This blueprint is implementation-ready only when:
 | API/CLI | Selected Fastify/API/SSE/static composition, app auth and bounded command clients, exact Tailscale observation/Serve/proxy boundaries, deterministic server/CLI plus real manifest-verified Vite package, accepted foreground/service lifecycles, one verified compiled `codexdeck` entry, and exact generated systemd user units. | Runnable packaged two-process foundation with real dashboard assets and runtime-proven user-manager evidence. | Persistent service lifecycle/install, clean parity, and aggregate interface hardening. |
 | Web | Structured phone fixtures, selected Focus Rail targets, a real packaged React/Vite two-route dashboard, exact bounded JSON/SSE/CSRF clients, the access-first host/session coordinator, and complete production screens/actions/trust/recovery states. | Dashboard behavior, page-memory authority, coordinated browser state, responsive layout, semantic accessibility, focused physical Android evidence, and exact Chromium/Firefox phone/desktop package coverage are implemented. | Visual fidelity, copy/workflow review, aggregate phone module acceptance, and release-device evidence. |
 | Release | Baseline commands pass; developer/command docs record gaps. | No-go. | Clean package/service/phone/security/aggregate evidence. |
+| Cross-platform distribution | Linux package/systemd behavior is a proven baseline; `DEC-029` selects native Ubuntu/Windows delivery and the exact platform boundaries. | Planning complete; implementation not release-ready. | Windows path/lock/Codex/Tailscale/lifecycle/MSIX evidence, native CI, signing/publication, and clean-host acceptance on both targets. |
 
 Done task records remain historical evidence for their stated scope. They do not imply the selected V1 block is complete.
 
@@ -45,6 +47,8 @@ Done task records remain historical evidence for their stated scope. They do not
 | `RemoteIngressState` | Tailscale availability, selected/active profile identity comparison, Serve ownership/configuration state, external origin, last observation, and bounded unavailable reason. No node key or reusable Tailscale credential. | contracts/server/storage |
 | `TrustContext` | Loopback/local-admin or paired device identity, ingress provenance, read/write permission, expiry/revocation, CSRF generation, external origin, and bounded remote source identity where verified. | contracts/server |
 | `AuditOutcome` | `accepted`, `succeeded`, `failed`, `rejected`, or `incomplete`; accepted is never treated as terminal success. | core/contracts/storage |
+| `HostPlatformCapability` | Exact OS/arch, path family, private Codex endpoint kind, lifecycle kind, executable suffix, package kind, and native-runtime identity. Unsupported or mixed states are invalid. | contracts/platform adapters |
+| `PrivateCodexEndpoint` | Linux Unix path or Windows loopback host/port plus opaque credential source. Public projections contain only endpoint kind/readiness/generation, never path/token. | contracts/codex adapter/server ephemeral runtime |
 
 Timestamps use strict RFC 3339/ISO 8601 parsing with round-trip calendar validation. Cursors and counts are non-negative safe integers. Lifecycle transitions use explicit normal and reconciliation transition tables.
 
@@ -75,7 +79,7 @@ The adapter implementation contains:
 | Component | Responsibility | Failure rule |
 | --- | --- | --- |
 | Binding loader | Generated app-server types/schema identity for the pinned compatibility policy. | Missing/drifted required type blocks build/startup. |
-| IPC transport | `ws+unix:` connection, open/close/ping, bounded frame size, socket error mapping. | No TCP fallback. |
+| Private transport | Linux `ws+unix:` or Windows authenticated loopback WebSocket, open/close/ping, bounded frame/buffer, endpoint-generation and error mapping. | No platform mismatch, non-loopback address, credential output, or unauthenticated TCP fallback. |
 | Handshake | `initialize`/`initialized`, client identity, capabilities. | Pre-initialize message or repeat initialize is fatal to connection. |
 | Request broker | Id assignment, pending map, deadlines, cancellation, response validation, max in-flight. | Timeout/disconnect yields typed unknown outcome for mutations. |
 | Notification decoder | Validate and normalize required events. | Unknown optional events counted; unknown required semantics degrade compatibility. |
@@ -200,13 +204,13 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 
 ### Startup
 
-1. Purely resolve and validate absolute, non-overlapping config/state/runtime paths plus an in-state database path. Derive the stable lease and app-server socket paths before filesystem mutation.
-2. Create/inspect only the owner-owned mode-`0700` state directory and stable mode-`0600` lease file with no-follow, owner/type/hard-link, and descriptor/path-identity checks.
-3. Acquire a nonblocking exclusive `flock(2)` lease. A held lease fails before config/runtime/database/listener/socket/app-server mutation; an unlocked stale file is reused, never unlinked for handoff.
-4. The lease owner creates/repairs the mode-`0700` config, runtime, and database-parent directories, then holds a validated database descriptor across SQLite open/migration and rechecks identity/mode before releasing the guard.
+1. Resolve the exact platform capability and validate absolute, non-overlapping config/state/runtime roots plus an in-state database path. Derive the stable lease and private Codex endpoint owner before filesystem mutation.
+2. Create/inspect only current-user state and lease objects through the platform security adapter: UID/no-follow/mode/link identity on Linux; canonical path/current-user ACL/reparse/link identity on Windows.
+3. Acquire the nonblocking platform lease. A held lease fails before config/runtime/database/listener/endpoint/app-server mutation; crash/stale handling follows the native proven contract and never trusts PID metadata alone.
+4. The lease owner creates/repairs current-user config, runtime, and database-parent directories, then holds a validated database identity guard across SQLite open/migration and rechecks it before release.
 5. Validate local settings and durable remote-ingress configuration without contacting or mutating Tailscale.
 6. Run one bounded no-shell `codex --version` probe against the configured canonical executable. Malformed output or process failure is fatal and reverse-cleaned; a valid unsupported semver is retained as current diagnostic truth.
-7. For the exact reviewed version, start or await the mode-owned app-server and private socket. Foreground mode creates/repairs its private runtime directory, starts one exact child, owns the socket, and observes child exit. Service mode requires an already existing canonical owner-only runtime directory, waits boundedly for the sibling socket, and has no process or socket mutation capability. For valid version drift, do neither and retain an explicit skipped/incompatible runtime-preparation state.
+7. For the exact reviewed version, start or await the mode-owned app-server and private endpoint. Linux retains the owner-only Unix-socket behavior. Windows creates a fresh protected token and random loopback endpoint, starts one exact interactive-user child, and requires authenticated readiness; token/endpoint rotation invalidates stale generations. For valid version drift, create neither and retain an explicit skipped/incompatible state.
 8. Exact-version startup completes the compatibility handshake, adapter reader, managed mapping reconciliation, uncertain-state interruption, event subscriptions, and bounded projection rebuild before admission.
 9. Proven initial incompatibility persists the current compatibility record and runs one local-only restart-gap reconciliation that marks every non-archived durable projection disconnected without a Codex request. Any other reconnect/startup failure remains fatal.
 10. Capture one startup cutoff, reconcile accepted-only audit orphans, then run due retention. Initialize storage health from both bounded results; degraded or incomplete maintenance cannot claim runtime or diagnostic readiness.
@@ -217,6 +221,8 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 The packaged service-host entry executes this sequence with service ownership fixed before any mutable work. It requires no command grammar and rejects arguments before config, filesystem, socket, process, or listener access. Exact-version admission retains the accepted app-server replacement behavior. Valid version drift does not attach to the sibling socket and can serve only diagnostic-ready state; a HostDeck signal still closes only HostDeck-owned stages. Exact and mismatched process smokes must prove both branches without model work or ownership leakage.
 
 The user-unit generator consumes canonical Node/Codex/package/environment-file inputs and the verified schema-4 service-host identity without writing files or contacting the manager. It emits exactly one static Codex unit and one `default.target` HostDeck unit. Only Codex owns `RuntimeDirectory=hostdeck`; HostDeck has only `Wants=` and `After=` toward Codex. Both use `Type=exec`, fixed bounded restart/start-limit/stop policy, `UMask=0077`, control-group termination, and journald. Generated paths are systemd-quoted and specifier-safe, and each mode-`0644` descriptor carries a deterministic content hash. `IFC-V1-056` owns the persistent release selector, strict manifest, environment file, daemon reload/enable, upgrade, status, and lifecycle commands. `IFC-V1-057` owns exact stop/disable/remove/reload uninstall, the forward-only journal, retained split-lock root, and successful-upgrade release cleanup. `IFC-V1-058` adds no production daemon or alternate lifecycle: one bounded host runner creates a pinned Ubuntu userspace, root bootstraps prerequisites and real system/user managers, and the ordinary user alone clones, installs, builds, verifies, runs, upgrades, restarts, and uninstalls. The runner compares sanitized host Tailscale identity before and after, publishes evidence only after teardown, and explicitly does not substitute for the independent release/phone smoke.
+
+The Windows lifecycle adapter consumes the same verified package/release/environment identities and writes only HostDeck-owned current-user program roots plus one exact login-start registration. Its forward-only journal owns release selection, registration, active-state preservation, rollback, and uninstall recovery. It never installs a Session 0 service, edits foreign startup entries, exposes endpoint credentials, or equates a registered/running process with API readiness. `IFC-V1-104` to `IFC-V1-108` own this path; native Windows evidence cannot be inferred from Linux tests.
 
 The selected listener implementation requires cleanup authority before runtime preparation: one exact runtime controller exposes `start`, `beginDrain`, `closeSse`, `closeRuntime`, and `closeStartup`; `start` returns typed context plus a validated loopback bind only after admitted runtime readiness or proven diagnostic readiness. Fastify registration/readiness completes while unbound, Node limits apply before listen, and the actual address must equal that bind. Assigned-private-IP, wildcard, and public binds fail before listen. Tailscale Serve owns external HTTPS and proxies to this loopback listener; HostDeck owns neither TLS private keys nor a second network listener. Diagnostic readiness does not change HTTP authority or open runtime mutation/SSE admission. Close transitions to draining, closes mutation admission, initiates listener refusal, bounds SSE/runtime and newly idle connection settlement, closes Fastify, then storage/lease startup ownership. Failure or timeout at one step is aggregated but cannot skip later cleanup; the exact application-stage order is frozen by `IFC-V1-037` and the incompatibility exception by `IFC-V1-087`.
 
@@ -385,6 +391,7 @@ The Fastify runtime owner therefore exposes exact `beginDrain`, `closeSse`, `clo
 | `BLK-V1-04` | Fastify API/SSE/static, loopback listener, Tailscale profile/Serve ingress, app authorization, CLI/build/service packaging, and resource controls. | Packaged remote path, cellular/profile-switch evidence, and `IFC-V1-091`. |
 | `BLK-V1-05` | Remote-access state rebaseline, replacement visual options/selection, phone-first dashboard, approvals, controls, fidelity/device evidence. | `FE-V1-090`. |
 | `BLK-V1-06` | Security/privacy, clean install/service/browser/remote phone, company-profile noninterference, aggregate validation, completion matrix, go/no-go. | Release-readiness artifact and human acceptance. |
+| `BLK-V1-07` | Native Ubuntu/Windows platform adapters, local Codex transport, package/lifecycle, signing, updates, rollback, CI/publication, and clean-host proof. | `REL-V1-108` release-candidate artifact plus native L1-L4 evidence; no cross-compiled substitute. |
 
 ## Delivery Order
 
@@ -401,8 +408,11 @@ The Fastify runtime owner therefore exposes exact `beginDrain`, `closeSse`, `clo
 | 9 | Interface hardening and physical remote proof | `IFC-V1-079`, `FND-V1-092`, `DAT-V1-092`, and `IFC-V1-091`; hostile/failure matrices, cellular phone path, profile switching, and company-profile noninterference. |
 | 10 | Mobile state and visual gate | `FE-V1-004`, reopened `FE-V1-002`, human `FE-V1-003`. This precedes React screen implementation. |
 | 11 | Dashboard implementation | `FE-V1-010` to `FE-V1-040`; typed clients, screens/actions/trust states, responsive, accessibility, browser, fidelity, and copy evidence. |
-| 12 | Module and release hardening | `FE-V1-090`, release/security/clean-install/aggregate tasks. |
-| 13 | Human acceptance | `REL-V1-010`; explicit go/no-go. |
+| 12 | Aggregate Android acceptance | `FE-V1-090`; retain/deploy one complete no-retry physical candidate. |
+| 13 | Platform contracts and native state/runtime | `REL-V1-100`, `FND-V1-100` to `FND-V1-101`, `DAT-V1-100` to `DAT-V1-104`, `INT-V1-100` to `INT-V1-105`. Linux behavior remains green while Windows-native evidence is added. |
+| 14 | Native packages, lifecycle, and remote parity | `IFC-V1-100` to `IFC-V1-109`; verified Linux artifact and signed Windows MSIX. |
+| 15 | Native CI, publication, and clean-host acceptance | `REL-V1-101` to `REL-V1-108`; checksums/SBOM/provenance, clean Ubuntu/Windows, docs, aggregate release candidate. |
+| 16 | Human acceptance | `REL-V1-010`; explicit go/no-go. |
 
 Tasks may overlap only when dependencies and shared contracts make the work independent. No UI screen implementation starts before order 9 is complete.
 
@@ -412,6 +422,8 @@ Tasks may overlap only when dependencies and shared contracts make the work inde
 - Historical tmux implementation evidence remains in artifacts and Git history; current tmux use is limited to isolated exact-Codex TUI test harnesses.
 - If the real structured vertical fails a required semantic, V1 returns to planning. It does not silently ship both runtimes or resume TUI scraping.
 - If Tailscale ingress cannot meet the pinned remote/security/profile-isolation contract, V1 returns to planning. It does not fall back to a LAN listener, custom CA, public port forwarding, or silent company-profile mutation.
+- If exact Windows Codex authenticated transport, current-user path/lock security, lifecycle, or signed package cannot meet `BLK-V1-07`, Windows remains a visible V1 release blocker. HostDeck does not ship an unsigned public MSIX, unauthenticated loopback Codex endpoint, administrator-only daemon, or Linux-emulation claim.
+- Native artifacts are promoted independently only after both targets bind the same source/version/commit and pass their own package/lifecycle gates. A failed target leaves the release draft and cannot silently publish the other as full V1.
 - Database migrations are forward-only and tested on a copy; destructive pre-release legacy reset requires explicit CLI confirmation and preserves bounded global audit history while removing only inert legacy session state.
 - Dependency additions are committed separately from UI work and include license/version rationale in the owning task.
 - A completed block is reopened whenever its production outcome changes, even if historical package tests still pass.

@@ -201,39 +201,56 @@ Every row is tested at 390 x 844; marked stress states also run at 360 x 800 and
 
 | Gate | Evidence |
 | --- | --- |
-| Clean checkout/install | Exact Node/pnpm/Codex/Ubuntu versions, frozen install, build, tests. |
-| Package/CLI | Runnable `codexdeck`, help/exit codes, no source-only invocation dependency. |
-| User services | Install, start, status, restart each unit, HostDeck-only restart, app-server crash, stop, uninstall, log inspection. |
+| Clean checkout/install | Exact Node/pnpm/Codex plus pinned Ubuntu/Windows runner versions, frozen developer install, native builds/tests, and end-user install without source/runtime toolchain. |
+| Package/CLI | Native runnable `codexdeck`, bundled Node/native modules/web assets, help/exit codes, no source-only invocation dependency. |
+| Per-user lifecycle | Linux systemd-user and Windows interactive-user agent: install, start, status/readiness, login recovery, restart, app-server crash, upgrade/rollback, stop, repeated uninstall/reinstall, log inspection. |
 | Data/privacy | Path/file/socket permissions, no raw HostDeck/Tailscale secrets or transcript copy, retention, no public HostDeck listener or HostDeck telemetry. |
 | Network | Loopback-only HostDeck listener inventory; dedicated saved Tailscale profile; Serve HTTPS; exact host/origin/proxy/rate/cookie tests; wrong/company profile is untouched. |
 | Browser/device | Supported desktop browser and real phone workflow over cellular or unrelated Wi-Fi, including profile switching and no custom CA. |
 | Recovery | Reboot/login or documented service lifecycle, stopped Tailscale, wrong/returned profile, removed/drifted Serve state, stale runtime files, incompatible Codex update, DB backup/recovery policy. |
+| Supply chain | Target/version/commit agreement, native CI, signature policy, SHA-256, SBOM, provenance, draft-on-failure publication, and artifact privacy/tamper inspection. |
 | Documentation | User/developer/command/repo docs contain only verified commands and behavior. |
 | Go/no-go | Block completion matrix links L1-L4 evidence and lists zero hidden blockers. |
+
+## Native Platform Matrix
+
+| Boundary | Ubuntu 24.04 x64 | Windows 11 x64 |
+| --- | --- | --- |
+| Paths/security | XDG roots, UID/modes, no-follow/link/path identity | AppData roots, current-user ACL, canonical/case/reparse/link/stream identity |
+| Daemon/lifecycle locks | Kernel `flock`, process death, contention | Native reviewed lock, contention, crash/stale recovery, exact object identity |
+| Codex | Unix endpoint, exact runtime vertical, TUI resume | Authenticated loopback WebSocket, token secrecy/rotation, exact runtime vertical, TUI resume |
+| Lifecycle | systemd user units, login/restart/upgrade/uninstall | Interactive-user startup registration, login/restart/upgrade/uninstall; no Session 0 service |
+| Tailscale | `tailscale` profile/Serve/noninterference | `tailscale.exe` profile/Serve/noninterference |
+| Distribution | Verified versioned native artifact | Verified signed per-user MSIX; unsigned portable tree is test-only |
+| Clean acceptance | Ordinary-user no-retry install-to-uninstall | Ordinary-user no-retry install-to-uninstall |
+
+Every cell requires native evidence. Shared contract tests may run on both runners, but Linux success, WSL, Wine, mocks, or cross-compilation cannot close a Windows cell.
 
 ## Production Package Matrix
 
 | Case | Required assertion |
 | --- | --- |
-| Exact closure | 614 selected server/CLI sources produce only six HostDeck runtime package roots, plus one fresh deployable Vite `web/` tree bound by the root package identity; source web, test fixtures, tests, smokes, maps, historical interfaces, and dev dependencies are absent. |
-| Determinism | Two unchanged offline builds have identical source/output inventories and content digest; an undeclared stale sentinel is removed. |
-| Metadata/dependencies | Runtime manifests use emitted exports and exact internal/external identities; manifest records Node/pnpm/platform/architecture/ABI, Codex binding, native modules, and downstream deferrals without time/private paths. |
-| Permissions/links | Directories and regular files follow the frozen mode policy; exactly one HostDeck compiled bin target has the reviewed shebang and execute bit, all other HostDeck output is non-executable, and every symlink is relative, contained, and valid after relocation. |
-| Executable invocation | Direct path, Node path, package-manager, packed-runtime, and temporary global-style help/version run from unrelated cwd and read-only relocation; malformed/config/service/serve failures preserve accepted bounded output and side-effect order. |
+| Exact closure | Each native target contains only selected server/CLI roots, bundled Node/native runtime dependencies, one fresh Vite `web/` tree, platform launchers/lifecycle metadata, verifier/licenses, and manifest; source/tests/smokes/maps/dev dependencies/build tools are absent. |
+| Determinism | Two unchanged native builds per target have identical source/output/content/artifact identities except approved signature/timestamp envelopes; stale sentinels are removed. |
+| Metadata/dependencies | Manifest records target OS/arch, bundled Node/ABI, package version/commit, Codex binding, native modules, launchers, lifecycle, artifact kind, source/output/web identities, and deferrals without time/private paths. |
+| Permissions/links | Linux retains frozen modes/contained relative links; Windows package/ACL/reparse/link rules are explicit. Launchers and lifecycle targets resolve only inside the verified release after relocation/install. |
+| Executable invocation | Native launcher/help/version/foreground/background commands run without Node/pnpm from unrelated cwd, read-only program roots, spaces and supported user-path characters; malformed config/lifecycle/Serve failures preserve bounded output and side-effect order. |
 | Integrity/runtime drift | Missing/modified output, manifest drift, wrong Node/platform/architecture/ABI, missing native binary, or escaping link fails nonzero before load. |
-| Relocation/read-only | From unrelated cwd and read-only relocated tree, all six package roots import, native SQLite/flock operations pass, the 22/35 descriptor and strict web identity hold, and real loopback static requests plus lifecycle close/same-port restart succeed. |
+| Relocation/read-only | From unrelated cwd and immutable program root, all production roots import, native SQLite/lease operations pass, route/web identity holds, and loopback static/lifecycle restart succeeds on each target. |
 | Required failures | Missing explicit config, missing/noncanonical static assets, missing/corrupt native module, and package-integrity drift fail loudly with no source/global/dev fallback. |
-| Residue/privacy | No listener/process/socket/database/temp root remains; output and diagnostics contain no checkout/home/staging path, `.env`, token, credential, prompt, transcript, or Tailscale identity. |
+| Upgrade/uninstall | Compatible upgrade retains current/previous verified releases and state; injected failure restores prior readiness; repeated uninstall removes only owned program/lifecycle files unless data deletion is separately confirmed. |
+| Supply chain | Public artifact signature policy, SHA-256, SBOM, provenance, tag/version/commit agreement, and draft-on-failure publication verify; release secrets are absent from PR jobs and artifacts. |
+| Residue/privacy | No owned listener/process/endpoint/registration/temp/program residue remains after removal; output/artifacts contain no checkout/home/staging path, `.env`, token, credential, prompt, transcript, Tailscale identity, or Windows endpoint secret. |
 
 ## Requirement And Block Coverage
 
 | Scope | Minimum evidence |
 | --- | --- |
 | `FR-001` to `FR-018` | Contract plus integration; real Codex for runtime-owned semantics; UI/device where user-facing. |
-| `NFR-001` to `NFR-013` | Architecture inspection, negative/resource/lifecycle tests, clean release smoke. |
+| `NFR-001` to `NFR-014` | Architecture inspection, negative/resource/lifecycle/supply-chain tests, native clean release smoke. |
 | `IR-001` to `IR-012` | State/component/API tests, approved mockups, Playwright screenshots, accessibility, real phone. |
 | `DR-001` to `DR-011` | Migration/repository/transaction/retention/restart/raw-storage evidence. |
-| `PR-001` to `PR-012` | Ubuntu/Codex/browser/package/service/network compatibility evidence. |
+| `PR-001` to `PR-018` | Native Ubuntu/Windows Codex/browser/package/lifecycle/network/distribution evidence. |
 | `SFR-001` to `SFR-018` | Security matrix, side-effect assertions, privacy review, device proof. |
 | `BLK-V1-01` | Rebased runtime and remote-ingress contracts/fixtures/planning checker plus module hardening. |
 | `BLK-V1-02` | Migrated secure state, remote configuration/audit, production retention/auth/lease plus hardening. |
@@ -241,6 +258,7 @@ Every row is tested at 390 x 844; marked stress states also run at 360 x 800 and
 | `BLK-V1-04` | Fastify/SSE loopback host, Tailscale Serve HTTPS, app auth, CLI/package/service production path plus hardening. |
 | `BLK-V1-05` | Mobile-first selected design, complete remote-access states, screenshot/device/fidelity hardening. |
 | `BLK-V1-06` | L1-L4 aggregate, clean setup, remote-phone/profile noninterference, docs, privacy/security, explicit go/no-go. |
+| `BLK-V1-07` | Native platform contracts, path/ACL/lease security, exact Codex, Tailscale parity, packages/lifecycle, signing/CI/publication, clean Ubuntu/Windows, and release-candidate evidence. |
 
 ## Evidence Policy
 

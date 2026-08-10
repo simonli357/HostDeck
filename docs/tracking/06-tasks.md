@@ -17,6 +17,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
 | 1 | `FE-V1-090` Mobile dashboard physical hardening | in_progress | none | Run one distinct immutable candidate immediately after the phone is proven awake/unlocked; retain and deploy only a complete no-retry pass. |
+| 2 | `FND-V1-100` Platform capability contract | ready | none | USB is unavailable; establish the shared native platform boundary needed by every Windows/Linux implementation leaf without consuming the Android candidate. |
 
 `BUG-078` / `FE-V1-106` is closed, and later candidates crossed the corrected stream-recovery boundary. Candidate `61485d2` passed immutable package and 83/1 driver gates but found the phone asleep/locked before app interaction; exact cleanup passed, no evidence was published, and it will not be retried. The next candidate must start immediately after the device wake/unlock gate.
 
@@ -25,6 +26,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
 | Release | `REL-V1-010` | All module hardening, clean package/service/remote-phone/profile/security evidence, human acceptance | V1 release and V2 planning. |
+| Native distribution | `REL-V1-108` | Native Ubuntu/Windows packages, lifecycle, signing, clean-host acceptance, docs, and aggregate Android evidence | First distributable V1 release candidate. |
 
 ## Status Vocabulary
 

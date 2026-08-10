@@ -4,10 +4,10 @@ Owns milestone, module maturity, production passes, and release truth.
 
 ## Snapshot
 
-- Current pass: aggregate physical mobile-dashboard acceptance and release hardening after completing the selected runtime/interface and security/privacy review.
-- Current milestone: M1 selected foundation, M2 real structured vertical, and M3 remote host interface are complete; M4 mobile dashboard is in progress.
-- Release state: no-go; the selected runtime, interface, package/service path, complete dashboard behavior, browser matrix, fidelity, copy/workflow, user guide, and security/privacy review pass, but aggregate physical-device and downstream release gates remain incomplete.
-- Next exit: `FE-V1-090` runs strict aggregate physical Android dashboard acceptance against the current verified package.
+- Current pass: aggregate physical Android acceptance plus native Ubuntu/Windows distribution foundation under `DEC-029`.
+- Current milestone: M1-M3 are complete; M4 mobile dashboard and M6 native distribution are in progress; M5 final release remains no-go.
+- Release state: no-go; the current Linux runtime/interface/package and dashboard evidence pass, but aggregate Android, Windows implementation/native evidence, public artifact signing/publication, and downstream release gates remain incomplete.
+- Next exits: consume the prepared `FE-V1-090` candidate when USB returns; meanwhile execute `FND-V1-100` and the dependency-ordered `BLK-V1-07` queue.
 
 ## Milestones
 
@@ -18,7 +18,8 @@ Owns milestone, module maturity, production passes, and release truth.
 | M2 Real structured vertical | Real thread start/resume, prompt/events/status, controls, approval, interrupt, TUI multi-client, reconnect/restart; legacy disposition. | `INT-V1-091` with L3 real-Codex artifact. | Complete |
 | M3 Production remote host interface | Loopback Fastify/SSE/static, Tailscale profile/Serve ingress, external-origin/proxy/app auth, QR pairing, fanout/health/shutdown, selected API/CLI, bounds, build/user services. | `IFC-V1-079`, `IFC-V1-091`, clean production-path smoke. | Complete |
 | M4 Mobile dashboard | Rebased remote/profile state matrix, two mobile options, human selection, complete screens/controls/approval/trust states, responsive/accessibility/fidelity, remote-phone proof. | `FE-V1-090` with screenshots and L4 device/profile artifact. | In progress |
-| M5 Release hardening | Security/privacy, clean Ubuntu/Tailscale package/service/real-Codex/browser/remote-phone, company-profile noninterference, docs, aggregate validation, block matrix, go/no-go. | `REL-V1-010` human decision. | In progress |
+| M5 Release hardening | Security/privacy, clean native packages/Tailscale/real-Codex/browser/remote-phone, company-profile noninterference, docs, aggregate validation, block matrix, go/no-go. | `REL-V1-010` human decision. | In progress |
+| M6 Native distribution | Shared platform contracts; Ubuntu/Windows paths, locks, Codex transport, Tailscale, packages, per-user lifecycle, upgrade/rollback/uninstall, signing, CI/publication, and clean-host acceptance. | `REL-V1-108` exact distributable release candidate. | In progress |
 
 ## Module Maturity
 
@@ -30,12 +31,13 @@ Owns milestone, module maturity, production passes, and release truth.
 | `BLK-V1-04` API/CLI/security/service | Typed loopback Fastify/SSE/static boundaries, app-auth primitives, bounded fanout, retention-safe replay/live handoff, complete drain, independent local/remote health, exact Tailscale observation/Serve ownership/proxy trust/application authorization, remote control, production remote lifecycle, aggregate hostile plus physical Android acceptance, exact selected route composition, legacy isolation, bounded CLI, cross-owner resource stress, deterministic server/CLI plus real dashboard package output, foreground resources/application/listener, one verified command, one independently restartable packaged service process, exact runtime-proven systemd user units, persistent lifecycle, safe uninstall, bounded release retention, clean supported-user parity, and aggregate module hardening pass. | No implementation gap; formal completion-matrix status is owned by `REL-V1-008`. | `IFC-V1-091`, `REL-V1-008` |
 | `BLK-V1-05` Mobile dashboard | Structured phone-state contract, selected Focus Rail targets, real packaged two-route React/Vite dashboard, bounded coordinated browser clients, complete production screens/actions/trust/recovery states, responsive layout, semantic accessibility, selected-target fidelity, copy/workflow review, focused physical Android evidence, and exact Chromium/Firefox phone/desktop package coverage. | Aggregate phone module acceptance and release-device evidence remain. | `FE-V1-090` |
 | `BLK-V1-06` Release | Baseline commands, both rebaseline decisions, selected-path user guide, and security/privacy review are complete. | Aggregate physical phone, clean selected-path release smoke, aggregate validation, completion matrix, final delivery truth, and go/no-go remain. | `REL-V1-006` to `REL-V1-010` |
+| `BLK-V1-07` Cross-platform distribution | Architecture, security, evidence gates, and 31 dependency-ordered implementation/release leaves are approved under `REL-V1-100`. Existing Linux package/systemd evidence is retained as a baseline. | Platform contracts and all Windows/native distribution, signing, CI, clean-host, and release-candidate evidence remain. | `FND-V1-100` to `REL-V1-108` |
 
 ## Delivery Passes
 
 1. Foundation: M0 through M3 establishes one runnable selected remote vertical with bounded local and remote failure behavior.
 2. Module hardening: `FND-V1-092`, `DAT-V1-092`, `INT-V1-091`, `IFC-V1-091`, and `FE-V1-090` close each module against strict matrices.
-3. Release hardening: M5 validates packaging, Tailscale/profile setup, security/privacy, docs/support, actual remote-phone/browser/Codex workflows, company-profile noninterference, and handoff.
+3. Release hardening: M5/M6 validate native packaging/lifecycle/signing, Tailscale/profile setup, security/privacy, docs/support, actual remote-phone/browser/Codex workflows, company-profile noninterference, clean Ubuntu/Windows, publication, and handoff.
 
 ## Release Gates
 
@@ -45,8 +47,8 @@ Owns milestone, module maturity, production passes, and release truth.
 | Remote contracts and durable state | Complete | `IFC-V1-070`, `FND-V1-018`, `FND-V1-092`, `DAT-V1-031`, `DAT-V1-032`, `DAT-V1-092` |
 | Real Codex compatibility and vertical | Complete | `INT-V1-003` to `INT-V1-008`, `INT-V1-017` to `INT-V1-032`, `INT-V1-091` |
 | Remote HTTPS/app-auth/security boundary | Complete | Aggregate hostile/physical acceptance, selected composition, legacy isolation, resource stress, package/service ownership, live profile noninterference, and `IFC-V1-091` module hardening pass. |
-| Build/package/user services | Complete | Deterministic server/CLI plus dashboard output, executable/service process, exact user units, persistent lifecycle, safe uninstall, release retention, and one no-retry clean supported-environment acceptance pass. |
+| Build/package/user lifecycle | In progress | Linux deterministic package/systemd lifecycle is proven; bundled native artifacts, Windows per-user lifecycle/MSIX, signing, upgrade/rollback, and clean native acceptance remain `BLK-V1-07`. |
 | Mobile visual selection/UI/device | In progress | Visual contracts/selection, complete dashboard screens/actions/trust/recovery states, responsive layout, semantic accessibility, selected-target fidelity, copy/workflow review, packaged assets, focused phone evidence, and exact Chromium/Firefox phone/desktop package coverage are complete. Aggregate phone module acceptance and release acceptance remain. |
 | Security/privacy | Complete | `REL-V1-005`; all 24 criteria pass, two findings fixed, zero unresolved security/privacy blocker. |
-| Clean Ubuntu/aggregate/docs | Blocked | `REL-V1-006`, `REL-V1-007` |
+| Clean Ubuntu/Windows/aggregate/docs | Blocked | `REL-V1-104` to `REL-V1-108`, `REL-V1-006`, `REL-V1-007` |
 | Final go/no-go | Blocked | `REL-V1-008` to `REL-V1-010` |

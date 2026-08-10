@@ -12,6 +12,7 @@ Execution map for the rebaselined V1. Detailed leaf tasks live in group files; r
 | Interface / API And CLI | `BLK-V1-04` | `api-cli-control-plane.md` | Loopback Fastify/SSE; Tailscale profile/Serve ingress; app auth; fanout/health; selected operations; resource bounds; package/services | `IFC-V1-*` |
 | Frontend / Mobile Dashboard | `BLK-V1-05` | `web-dashboard.md` | Mobile remote-state rebaseline; replacement visual gate; screens/controls/approval; responsive/fidelity | `FE-V1-*` |
 | Release / Hardening | `BLK-V1-06` | `hardening-release.md` | System/remote rebaseline; module gates; security/privacy; clean remote-phone release; go/no-go | `REL-V1-*` |
+| Cross-Platform Distribution | `BLK-V1-07` | `cross-platform-distribution.md` | Platform contracts; native paths/locks/runtime/Tailscale; Linux/Windows packages/lifecycle; signing/CI/publication/clean hosts | `FND/DAT/INT/IFC/REL-V1-100+` |
 
 The `tmux-output.md` filename is retained temporarily so historical artifact links remain stable. Its active scope is Codex app-server runtime integration.
 
@@ -69,6 +70,10 @@ The `tmux-output.md` filename is retained temporarily so historical artifact lin
 | Coordinated typed clients | `FE-V1-011` to `FE-V1-015`, `FE-V1-020` to `FE-V1-038` | Screens and actions consume shared exact state instead of owning transport guesses; completed inventory and detail surfaces precede pairing/access and write/action implementation. |
 | Complete UI states/actions | Completed `FE-V1-016`, `FE-V1-039`, `FE-V1-040`, `FE-V1-017`, and `FE-V1-018`; completed pre-phone leaves `FE-V1-091` to `FE-V1-105`; active aggregate `FE-V1-090` | Responsive, accessibility, browser, fidelity, copy, event handoff, and typed async-ADB outcomes are complete. One distinct no-retry phone candidate and retained deployment remain before aggregate module closure. |
 | `FND-V1-092`, `DAT-V1-092`, `INT-V1-091`, `IFC-V1-091`, `FE-V1-090` | `REL-V1-004` to `REL-V1-010` | Release proof uses only the selected remote production path. |
+| `REL-V1-100` cross-platform rebaseline | `FND-V1-100`, then all `BLK-V1-07` implementation | Platform/package/lifecycle/security policy and native evidence are frozen before code changes. |
+| `FND-V1-100`, `FND-V1-101` | `DAT-V1-100` to `DAT-V1-104`, `INT-V1-100` to `INT-V1-105`, `IFC-V1-100` to `IFC-V1-109` | Every OS-sensitive module consumes one exact platform contract and deterministic fixtures. |
+| Native state/runtime/package leaves | `REL-V1-101` to `REL-V1-106` | Native CI and clean-host release proof follow implemented path, lock, transport, lifecycle, Tailscale, and package boundaries. |
+| `REL-V1-104`, `REL-V1-105`, `REL-V1-106`, `REL-V1-107`, `FE-V1-090` | `REL-V1-108`, then `REL-V1-006` to `REL-V1-010` | One cross-platform release candidate precedes final remote-phone aggregate and go/no-go. |
 
 ## Requirement Trace Ownership
 
@@ -79,10 +84,10 @@ The trace table is the canonical V1 completion chain. A task card may cite addit
 | Requirement set | Primary backlog owners |
 | --- | --- |
 | `FR-001` to `FR-018` | Foundation contracts, Codex runtime, API/CLI, dashboard according to trace rows. |
-| `NFR-001` to `NFR-013` | Cross-block hardening with aggregate release proof. |
+| `NFR-001` to `NFR-014` | Cross-block hardening with aggregate native release proof. |
 | `IR-001` to `IR-012` | Frontend plus API/security state providers. |
 | `DR-001` to `DR-011` | Data/local state plus adapter event sources. |
-| `PR-001` to `PR-012` | Runtime, interface/package, frontend device, and release tasks. |
+| `PR-001` to `PR-018` | Runtime, native distribution, interface/package, frontend device, and release tasks. |
 | `SFR-001` to `SFR-018` | Data auth/audit, interface security/resources, frontend safety states, release review. |
 
 ## Ready-State Rules
@@ -104,6 +109,6 @@ A completed task retains its real historical dependencies. Completion does not r
 - Every requirement id is covered by one or more defined task ids; no unknown task/requirement reference exists.
 - Dependency graph is acyclic; `ready` dependencies are done; no task blocks itself.
 - Current queue lists only in-progress/ready tasks and intentional external/human blockers.
-- Module hardening, UI fidelity, security/privacy, package/service, clean setup, device, and go/no-go tasks exist.
+- Module hardening, UI fidelity, security/privacy, native package/lifecycle/signing, clean Ubuntu/Windows, device, publication, and go/no-go tasks exist.
 - Superseded evidence is labeled historical/legacy and cannot complete the selected block.
 - Planning checks run in normal validation and fail loudly.

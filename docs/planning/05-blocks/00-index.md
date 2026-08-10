@@ -19,7 +19,8 @@ Owns the required V1 capability map and completion truth between global planning
 | `BLK-V1-03` Codex runtime and events | Private app-server runtime, version/schema gate, IPC adapter, real thread/turn/control/approval/events, TUI resume, restart/multi-client behavior, and legacy tmux disposition. | `FR-001`, `FR-003` to `FR-009`, `FR-013` to `FR-018`, `NFR-002`, `NFR-012`, `PR-001`, `PR-006`, `PR-010` | `BLK-V1-01`, storage mapping work | `tmux-output.md` | Complete |
 | `BLK-V1-04` Host API, security, CLI | Loopback Fastify API/SSE/static production path, Tailscale profile/Serve remote HTTPS, authorization/CSRF/rate/origin/proxy controls, real runtime compatibility diagnostics, runnable CLI/build, and user services. | `FR-011`, `FR-012`, `FR-017`, `FR-018`, `IR-006`, `IR-008`, `NFR-001`, `NFR-002`, `NFR-005`, `NFR-009` to `NFR-012`, `PR-002` to `PR-005`, `PR-007` to `PR-012`, `SFR-001` to `SFR-008`, `SFR-012` to `SFR-018` | `BLK-V1-01` to `BLK-V1-03` | `api-cli-control-plane.md` | Reopened |
 | `BLK-V1-05` Mobile dashboard | Approved mobile-first design and implemented Mission Control, Session Detail, structured controls/approvals, trust/failure states, accessibility, screenshots, and real-phone evidence. | `FR-002`, `FR-005` to `FR-010`, `FR-016`, `IR-001` to `IR-012`, `NFR-004`, `PR-005` | Stable contracts/API plus selected Focus Rail targets | `web-dashboard.md` | Reopened |
-| `BLK-V1-06` Hardening and release | Clean Ubuntu package/service install, security/privacy, browser/phone/real-Codex/aggregate validation, support docs, completion matrix, and explicit go/no-go. | All NFR/platform/safety release gates | `BLK-V1-01` to `BLK-V1-05` | `hardening-release.md` | In progress |
+| `BLK-V1-06` Hardening and release | Clean native package/lifecycle install, security/privacy, browser/phone/real-Codex/aggregate validation, support docs, completion matrix, and explicit go/no-go. | All NFR/platform/safety release gates | `BLK-V1-01` to `BLK-V1-05`, `BLK-V1-07` | `hardening-release.md` | In progress |
+| `BLK-V1-07` Cross-platform distribution | Native Ubuntu/Windows paths, local Codex transport, lifecycle, packages, signing, updates, rollback, publication, and clean-host evidence. | `NFR-009`, `NFR-013`, `NFR-014`, `PR-001`, `PR-002`, `PR-007` to `PR-010`, `PR-012` to `PR-018`, `SFR-015` | Shared behavior in `BLK-V1-01` to `BLK-V1-05` | `cross-platform-distribution.md` | In progress |
 
 ## Completion Matrix
 
@@ -31,6 +32,7 @@ Owns the required V1 capability map and completion truth between global planning
 | `BLK-V1-04` | `IFC-V1-001` to `IFC-V1-032`, `IFC-V1-034`, `IFC-V1-047`, `IFC-V1-053` to `IFC-V1-058`, `IFC-V1-070` to `IFC-V1-079`, `IFC-V1-086`, `IFC-V1-087`, `IFC-V1-090`, and prior headless/Fastify/direct-LAN artifacts. | `IFC-V1-091`; aggregate interface hardening. | L2/L3/L4 | Reopened pending formal `REL-V1-008` matrix closure; all selected interface implementation and hardening evidence now passes at `artifacts/ifc-v1-091-selected-production-interface-hardening.md` and directory. |
 | `BLK-V1-05` | `FE-V1-001` fixture helpers and rejected legacy boards. | Completed `FE-V1-002` to `FE-V1-004`, `FE-V1-010` to `FE-V1-018`, `FE-V1-019` to `FE-V1-040`, and `IFC-V1-053`; remaining `FE-V1-090`. | L1/L3/L4 | Reopened; Focus Rail, the complete production dashboard behavior, packaged assets, responsive layout, semantic accessibility, selected-target fidelity, copy/workflow review, focused physical phone evidence, and exact Chromium/Firefox phone/desktop package coverage pass. Aggregate phone module acceptance remains. |
 | `BLK-V1-06` | `REL-V1-001` to `REL-V1-003`, `REL-V1-011`, `REL-V1-012`, and baseline audit commands. | All module gates, clean install/remote-phone/profile/security/aggregate/go-no-go tasks. | L4 | In progress; release no-go. |
+| `BLK-V1-07` | Current Linux package/service/clean-user evidence is retained as the Linux behavioral baseline. | `REL-V1-100`, `FND-V1-100` to `FND-V1-101`, `DAT-V1-100` to `DAT-V1-104`, `INT-V1-100` to `INT-V1-105`, `IFC-V1-100` to `IFC-V1-109`, `REL-V1-101` to `REL-V1-108`. | L1/L2/L3/L4 native | In progress; planning is complete, implementation and native Windows evidence remain. |
 
 ## Cross-Block Gates
 
@@ -42,7 +44,8 @@ Owns the required V1 capability map and completion truth between global planning
 | Remote ingress gate | `REL-V1-012`, `IFC-V1-070`, `FND-V1-018`, `DAT-V1-031`, `DAT-V1-032` | Profile-safe Tailscale implementation, remote/auth UI, and release phone smoke. |
 | Visual gate | Completed `FE-V1-004`, `FE-V1-002`, `FE-V1-003`; Focus Rail under `DEC-028` | React screen implementation. |
 | Module hardening | `FND-V1-092`, `DAT-V1-092`, `INT-V1-091`, `IFC-V1-091`, `FE-V1-090` | Aggregate release validation. |
-| Release gate | Security/privacy, clean install/service, real Codex, browser/phone, docs, aggregate validation | Human go/no-go. |
+| Native distribution gate | `BLK-V1-07` contracts, native packages/lifecycle, clean Ubuntu/Windows, signing and publication evidence | Cross-platform aggregate release validation. |
+| Release gate | Security/privacy, clean install/service, real Codex, browser/phone, native distribution, docs, aggregate validation | Human go/no-go. |
 
 ## Completion Rule
 
