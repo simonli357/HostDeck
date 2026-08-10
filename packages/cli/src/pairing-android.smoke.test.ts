@@ -5387,6 +5387,21 @@ describe("physical Android phone-driver protocol", () => {
     );
   });
 
+  it("enforces phone wakefulness before lengthy physical builds", () => {
+    const source = readFileSync(fileURLToPath(import.meta.url), "utf8");
+    const enforceAt = source.lastIndexOf("await enforceAndroidAwakeAndUnlocked(");
+    const packageBuildAt = source.lastIndexOf(
+      "dashboardPackageIdentity = buildPhysicalDashboardPackageIdentity();"
+    );
+    const talkBackBuildAt = source.lastIndexOf(
+      "talkBackArtifacts = buildPhysicalTalkBackArtifacts(directory);"
+    );
+
+    expect(enforceAt).toBeGreaterThan(0);
+    expect(packageBuildAt).toBeGreaterThan(enforceAt);
+    expect(talkBackBuildAt).toBeGreaterThan(packageBuildAt);
+  });
+
   it("parses bounded Android semantic nodes without retaining pairing material", () => {
     const nodes = parseAndroidUiNodes(
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -7843,14 +7858,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       if (requireProductionUiAcceptance || requireRemoteAndroidAcceptance) {
         requireCleanAcceptanceWorktree();
       }
-      const dashboardPackageIdentity = requireDashboardUiAcceptance
-        ? buildPhysicalDashboardPackageIdentity()
-        : null;
       const controller = new AbortController();
       const directory = mkdtempSync(join(tmpdir(), "hostdeck-pairing-android-"));
-      const talkBackArtifacts = requireDashboardUiAcceptance
-        ? buildPhysicalTalkBackArtifacts(directory)
-        : null;
       const dbPath = join(directory, "hostdeck.sqlite");
       const opened = openMigratedDatabase(dbPath);
       const remoteStates = createRemoteIngressStateRepository(opened.db);
@@ -7942,9 +7951,11 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       let recoveryResult: PhysicalRecoverySequenceResult | null = null;
       let promptRuntime: PhysicalPromptRuntime | null = null;
       let dashboardControls: PhysicalDashboardControls | null = null;
+      let dashboardPackageIdentity: PhysicalDashboardPackageIdentity | null = null;
       let promptSubscribers: ReturnType<
         typeof createProjectionSubscriberStreamService
       > | null = null;
+      let talkBackArtifacts: PhysicalTalkBackArtifacts | null = null;
       let initialWifiEnabled: boolean | null = null;
       let initialMobileDataEnabled: boolean | null = null;
       let initialStayAwakeSetting: number | null = null;
@@ -7999,6 +8010,10 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             initialWifiEnabled as boolean,
             initialMobileDataEnabled as boolean
           );
+        }
+        if (requireDashboardUiAcceptance) {
+          dashboardPackageIdentity = buildPhysicalDashboardPackageIdentity();
+          talkBackArtifacts = buildPhysicalTalkBackArtifacts(directory);
         }
         if (
           requireRemoteAndroidAcceptance ||
