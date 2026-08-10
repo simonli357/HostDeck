@@ -28,7 +28,6 @@ import {
   type BrowserConnectionStateCoordinator,
   HostDeckBrowserConnectionError
 } from "./connection-state.js";
-import { useMutationStatusReveal } from "./mutation-status-reveal.js";
 import {
   createPlanControlController,
   type PlanControlController,
@@ -126,7 +125,6 @@ export function PlanControl({ controller }: PlanControlProps) {
     controller.snapshot,
     controller.snapshot
   );
-  const statusRef = useMutationStatusReveal(view.phase);
   if (!view.visible || view.targetLabel === null) return null;
 
   const statusId = `hostdeck-plan-status-${view.sessionId}`;
@@ -338,36 +336,35 @@ export function PlanControl({ controller }: PlanControlProps) {
                 {view.selectionDisabledReason}
               </p>
             )}
-
-            <div
-              ref={statusRef}
-              className={`hostdeck-plan-sheet__status hostdeck-tone--${view.tone}`}
-              id={statusId}
-              role={view.tone === "danger" ? "alert" : "status"}
-              aria-atomic="true"
-            >
-              <StatusIcon
-                size={17}
-                strokeWidth={2}
-                className={view.phase === "loading" || view.phase === "submitting" ? "hostdeck-spin" : undefined}
-                aria-hidden="true"
-              />
-              <span>
-                <strong>{view.status}</strong>
-                {view.statusDetail === null ? null : <small>{view.statusDetail}</small>}
-              </span>
-              <button
-                type="button"
-                className="hostdeck-icon-button hostdeck-plan-sheet__refresh"
-                aria-label={view.phase === "outcome_unknown" ? "Check Plan state" : "Refresh Plan state"}
-                title={view.phase === "outcome_unknown" ? "Check Plan state" : "Refresh Plan state"}
-                disabled={!view.refreshEnabled}
-                onClick={() => void controller.refresh()}
-              >
-                <RefreshCw size={18} strokeWidth={2} aria-hidden="true" />
-              </button>
-            </div>
           </section>
+
+          <div
+            className={`hostdeck-plan-sheet__status hostdeck-tone--${view.tone}`}
+            id={statusId}
+            role={view.tone === "danger" ? "alert" : "status"}
+            aria-atomic="true"
+          >
+            <StatusIcon
+              size={17}
+              strokeWidth={2}
+              className={view.phase === "loading" || view.phase === "submitting" ? "hostdeck-spin" : undefined}
+              aria-hidden="true"
+            />
+            <span>
+              <strong>{view.status}</strong>
+              {view.statusDetail === null ? null : <small>{view.statusDetail}</small>}
+            </span>
+            <button
+              type="button"
+              className="hostdeck-icon-button hostdeck-plan-sheet__refresh"
+              aria-label={view.phase === "outcome_unknown" ? "Check Plan state" : "Refresh Plan state"}
+              title={view.phase === "outcome_unknown" ? "Check Plan state" : "Refresh Plan state"}
+              disabled={!view.refreshEnabled}
+              onClick={() => void controller.refresh()}
+            >
+              <RefreshCw size={18} strokeWidth={2} aria-hidden="true" />
+            </button>
+          </div>
 
           <div className="hostdeck-plan-sheet__footer">
             <Dialog.Close asChild>

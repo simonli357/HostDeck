@@ -113,13 +113,18 @@ test("owns one in-flight Plan selection and blocks duplicate submit or dismissal
   await submit.click();
   await expect(dialog.getByText("Saving next-turn mode", { exact: true })).toBeVisible();
   await expect.poll(async () => {
-    const [status, scroller] = await Promise.all([
+    const [sheet, status, scroller, footer, viewportHeight] = await Promise.all([
+      dialog.boundingBox(),
       dialog.locator(".hostdeck-plan-sheet__status").boundingBox(),
-      dialog.locator(".hostdeck-plan-sheet__body").boundingBox()
+      dialog.locator(".hostdeck-plan-sheet__body").boundingBox(),
+      dialog.locator(".hostdeck-plan-sheet__footer").boundingBox(),
+      page.evaluate(() => window.innerHeight)
     ]);
-    return status !== null && scroller !== null &&
-      status.y >= scroller.y &&
-      status.y + status.height <= scroller.y + scroller.height;
+    return sheet !== null && status !== null && scroller !== null && footer !== null &&
+      status.y >= scroller.y + scroller.height - 1 &&
+      status.y + status.height <= footer.y + 1 &&
+      footer.y + footer.height <= sheet.y + sheet.height + 1 &&
+      sheet.y + sheet.height <= viewportHeight + 1;
   }).toBe(true);
   await expect.poll(() => api.hasPendingPlanSelect()).toBe(true);
   await expect(submit).toBeDisabled();

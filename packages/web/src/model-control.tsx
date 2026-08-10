@@ -31,7 +31,6 @@ import {
   type ModelControlSelectInput,
   type ModelControlTone
 } from "./model-control-state.js";
-import { useMutationStatusReveal } from "./mutation-status-reveal.js";
 
 export interface UseModelControlControllerOptions {
   readonly createOperationId?: (() => string) | undefined;
@@ -112,7 +111,6 @@ export function ModelControl({ controller }: ModelControlProps) {
     controller.snapshot,
     controller.snapshot
   );
-  const statusRef = useMutationStatusReveal(view.phase);
   if (!view.visible || view.targetLabel === null) return null;
 
   const statusId = `hostdeck-model-status-${view.sessionId}`;
@@ -311,36 +309,35 @@ export function ModelControl({ controller }: ModelControlProps) {
                 {view.selectionDisabledReason}
               </p>
             )}
-
-            <div
-              ref={statusRef}
-              className={`hostdeck-model-sheet__status hostdeck-tone--${view.tone}`}
-              id={statusId}
-              role={view.tone === "danger" ? "alert" : "status"}
-              aria-atomic="true"
-            >
-              <StatusIcon
-                size={17}
-                strokeWidth={2}
-                className={view.phase === "loading" || view.phase === "submitting" ? "hostdeck-spin" : undefined}
-                aria-hidden="true"
-              />
-              <span>
-                <strong>{view.status}</strong>
-                {view.statusDetail === null ? null : <small>{view.statusDetail}</small>}
-              </span>
-              <button
-                type="button"
-                className="hostdeck-icon-button hostdeck-model-sheet__refresh"
-                aria-label={view.phase === "outcome_unknown" ? "Check model state" : "Refresh model state"}
-                title={view.phase === "outcome_unknown" ? "Check model state" : "Refresh model state"}
-                disabled={!view.refreshEnabled}
-                onClick={() => void controller.refresh()}
-              >
-                <RefreshCw size={18} strokeWidth={2} aria-hidden="true" />
-              </button>
-            </div>
           </section>
+
+          <div
+            className={`hostdeck-model-sheet__status hostdeck-tone--${view.tone}`}
+            id={statusId}
+            role={view.tone === "danger" ? "alert" : "status"}
+            aria-atomic="true"
+          >
+            <StatusIcon
+              size={17}
+              strokeWidth={2}
+              className={view.phase === "loading" || view.phase === "submitting" ? "hostdeck-spin" : undefined}
+              aria-hidden="true"
+            />
+            <span>
+              <strong>{view.status}</strong>
+              {view.statusDetail === null ? null : <small>{view.statusDetail}</small>}
+            </span>
+            <button
+              type="button"
+              className="hostdeck-icon-button hostdeck-model-sheet__refresh"
+              aria-label={view.phase === "outcome_unknown" ? "Check model state" : "Refresh model state"}
+              title={view.phase === "outcome_unknown" ? "Check model state" : "Refresh model state"}
+              disabled={!view.refreshEnabled}
+              onClick={() => void controller.refresh()}
+            >
+              <RefreshCw size={18} strokeWidth={2} aria-hidden="true" />
+            </button>
+          </div>
 
           <div className="hostdeck-model-sheet__footer">
             <Dialog.Close asChild>

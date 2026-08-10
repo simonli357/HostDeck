@@ -1631,8 +1631,9 @@ textarea:focus-visible {
 
 .hostdeck-model-sheet {
   display: grid;
+  height: min(90dvh, 780px);
   max-height: min(90dvh, 780px);
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   padding-bottom: calc(12px + var(--hostdeck-safe-area-bottom));
   overflow: hidden;
 }
@@ -1983,8 +1984,8 @@ textarea:focus-visible {
   grid-template-columns: 18px minmax(0, 1fr) 44px;
   align-items: start;
   gap: 8px;
-  margin-top: 16px;
-  padding-top: 12px;
+  margin: 0;
+  padding: 12px 0;
   border-top: 1px solid var(--hostdeck-divider);
   font-size: 13px;
   line-height: 18px;
@@ -2551,6 +2552,7 @@ textarea:focus-visible {
 
 .hostdeck-plan-sheet {
   display: grid;
+  height: min(92dvh, 840px);
   max-height: min(92dvh, 840px);
   grid-template-rows: auto auto minmax(0, 1fr);
   padding-bottom: calc(12px + var(--hostdeck-safe-area-bottom));
@@ -2560,7 +2562,7 @@ textarea:focus-visible {
 .hostdeck-plan-sheet__form {
   display: grid;
   min-height: 0;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
 }
 
 .hostdeck-plan-sheet__header > span {
@@ -2909,8 +2911,8 @@ textarea:focus-visible {
   grid-template-columns: 18px minmax(0, 1fr) 44px;
   align-items: start;
   gap: 8px;
-  margin-top: 16px;
-  padding-top: 12px;
+  margin: 0;
+  padding: 12px 0;
   border-top: 1px solid var(--hostdeck-divider);
   font-size: 13px;
   line-height: 18px;
