@@ -4002,6 +4002,53 @@ describe("physical Android phone-driver protocol", () => {
     rejects(offPageBack);
   });
 
+  it("settles dialog closure without requiring unrelated dock visibility", () => {
+    const sessionNodes = physicalSessionActionsFixtureNodes();
+    const withoutDock = sessionNodes.filter(
+      (node) =>
+        !physicalSessionControlDescriptions.includes(
+          node.description as (typeof physicalSessionControlDescriptions)[number]
+        ) && node.description !== physicalSessionActionsTriggerDescription
+    );
+    expect(
+      physicalDialogClosedOnSessionDetail(
+        sessionNodes,
+        "Close event details"
+      )
+    ).toBe(true);
+    expect(
+      physicalDialogClosedOnSessionDetail(
+        withoutDock,
+        "Close event details"
+      )
+    ).toBe(true);
+    const back = sessionNodes.find(
+      (node) => node.description === "Back to Mission Control"
+    );
+    requireCondition(back !== undefined, "Dialog-close fixture back action was absent.");
+    expect(
+      physicalDialogClosedOnSessionDetail(
+        [
+          ...withoutDock.filter((node) => node !== back),
+          Object.freeze({ ...back, clickable: false })
+        ],
+        "Close event details"
+      )
+    ).toBe(false);
+    for (const retained of [
+      Object.freeze({ ...back, description: "Close event details" }),
+      Object.freeze({ ...back, description: "Close model control" }),
+      Object.freeze({ ...back, description: "Back to session actions" })
+    ]) {
+      expect(
+        physicalDialogClosedOnSessionDetail(
+          [...withoutDock, retained],
+          "Close event details"
+        )
+      ).toBe(false);
+    }
+  });
+
   it("waits for a stable Session Actions boundary without rebasing authority", async () => {
     const nodes = physicalSessionActionsFixtureNodes();
     const finalNodes = nodes.map((node) =>
@@ -16702,11 +16749,22 @@ function physicalDialogClosedOnSessionDetail(
       node.clickable &&
       node.enabled !== false
   );
+  const remainingModalControls = nodes.filter(
+    (node) =>
+      node.clickable &&
+      node.enabled !== false &&
+      (Object.values(physicalFixedSheetCloseDescriptions).includes(
+        node.description
+      ) ||
+        node.description === "Close Host and access" ||
+        node.description === "Back to session actions" ||
+        node.description === "Back to session utilities")
+  );
   return (
     ownerRemaining.length === 0 &&
     closeRemaining.length === 0 &&
     backToMission.length === 1 &&
-    selectPhysicalSessionActionsTrigger(nodes, 1) !== null
+    remainingModalControls.length === 0
   );
 }
 
