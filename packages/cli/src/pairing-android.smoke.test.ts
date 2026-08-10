@@ -1876,6 +1876,32 @@ describe("physical Android phone-driver protocol", () => {
     expect(selectPhysicalDialogCloseAction(sheetNodes, "Close model control")).not.toBeNull();
     expect(physicalSheetChoiceSelected(sheetNodes, "/model", "Codex Current")).toBe(true);
     expect(physicalSheetChoiceSelected(sheetNodes, "/model", "Codex Fast")).toBe(false);
+    const describedSheetNodes = sheetNodes.map((node) =>
+      [...physicalModelChoiceLabels, "Codex Balanced", "Thorough"].includes(
+        node.text
+      )
+        ? (Object.freeze({
+            ...node,
+            description: node.text,
+            text: ""
+          }) as AndroidUiNode)
+        : node
+    );
+    expect(
+      selectPhysicalSheetAction(
+        describedSheetNodes,
+        "semantic",
+        "Codex Fast",
+        "/model"
+      )
+    ).not.toBeNull();
+    expect(
+      physicalSheetChoiceSelected(
+        describedSheetNodes,
+        "/model",
+        "Codex Current"
+      )
+    ).toBe(true);
     const fastSheetNodes = sheetNodes.map((node) => {
       if (node.text === "Thorough") return node;
       const { checked: _checked, ...unselected } = node;
@@ -1886,6 +1912,24 @@ describe("physical Android phone-driver protocol", () => {
       ) as AndroidUiNode;
     });
     expect(physicalSheetChoiceSelected(fastSheetNodes, "/model", "Codex Fast")).toBe(true);
+    const describedFastSheetNodes = fastSheetNodes.map((node) =>
+      [...physicalModelChoiceLabels, "Codex Balanced", "Thorough"].includes(
+        node.text
+      )
+        ? (Object.freeze({
+            ...node,
+            description: node.text,
+            text: ""
+          }) as AndroidUiNode)
+        : node
+    );
+    expect(
+      physicalSheetChoiceSelected(
+        describedFastSheetNodes,
+        "/model",
+        "Codex Fast"
+      )
+    ).toBe(true);
     expect(
       physicalSheetChoiceSelected(
         fastSheetNodes.filter((node) => node.text !== "Codex Fast"),
@@ -2387,6 +2431,26 @@ describe("physical Android phone-driver protocol", () => {
     );
 
     expect(physicalPlanCurrentTruthVisible(nodes, "Default")).toBe(true);
+    const describedCurrentMode = nodes.map((node) =>
+      node.className === "android.widget.RadioButton"
+        ? (Object.freeze({
+            ...node,
+            description: node.text,
+            text: ""
+          }) as AndroidUiNode)
+        : node
+    );
+    expect(
+      physicalPlanCurrentTruthVisible(describedCurrentMode, "Default")
+    ).toBe(true);
+    expect(
+      selectPhysicalSheetAction(
+        describedCurrentMode,
+        "semantic",
+        "Default",
+        "/plan"
+      )
+    ).not.toBeNull();
     expect(physicalPlanCurrentTruthVisible(nodes, "Plan")).toBe(false);
     for (const missing of [
       "Default",
@@ -2440,6 +2504,19 @@ describe("physical Android phone-driver protocol", () => {
         '</hierarchy>'
     );
     expect(physicalPlanStagedTruthVisible(staged)).toBe(true);
+    expect(
+      physicalPlanStagedTruthVisible(
+        staged.map((node) =>
+          node.className === "android.widget.RadioButton"
+            ? (Object.freeze({
+                ...node,
+                description: node.text,
+                text: ""
+              }) as AndroidUiNode)
+            : node
+        )
+      )
+    ).toBe(true);
     for (const missing of [
       "Plan",
       "Pending next turn: Staged in HostDeck",
@@ -15003,7 +15080,7 @@ function physicalSheetChoiceSelected(
   if (header === null) return false;
   const selected = nodes.filter(
     (node) =>
-      matchesAndroidUiNode(node, "text", value) &&
+      matchesAndroidUiNode(node, "semantic", value) &&
       node.clickable &&
       node.enabled !== false &&
       androidUiNodeIsSelected(node) &&
@@ -15015,7 +15092,9 @@ function physicalSheetChoiceSelected(
       node.enabled !== false &&
       androidUiNodeIsSelected(node) &&
       (ownerTitle !== "/model" ||
-        physicalModelChoiceLabels.some((label) => label === node.text)) &&
+        physicalModelChoiceLabels.some((label) =>
+          matchesAndroidUiNode(node, "semantic", label)
+        )) &&
       androidUiNodeIsFullyInsideRegion(node, header.body)
   );
   return selected.length === 1 && selectedOptions.length === 1;
@@ -18333,7 +18412,7 @@ async function runPhysicalModelControl(
   );
   const fast = await waitForPhysicalSelectedNode(
     (nodes) =>
-      selectPhysicalSheetAction(nodes, "text", "Codex Fast", "/model"),
+      selectPhysicalSheetAction(nodes, "semantic", "Codex Fast", "/model"),
     30_000,
     "Physical /model omitted the supported Codex Fast choice."
   );
@@ -18655,7 +18734,7 @@ async function runPhysicalPlanControl(
   );
   await capture("fe090-18-plan-current.png");
   const plan = await waitForPhysicalSelectedNode(
-    (nodes) => selectPhysicalSheetAction(nodes, "text", "Plan", "/plan"),
+    (nodes) => selectPhysicalSheetAction(nodes, "semantic", "Plan", "/plan"),
     30_000,
     "Physical /plan omitted the supported Plan choice."
   );

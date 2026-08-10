@@ -48,14 +48,20 @@ describe("PlanControl", () => {
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
 
     response.resolve(planSnapshot());
-    expect(await screen.findByRole("radio", { name: /Plan/ })).toBeTruthy();
+    const planMode = await screen.findByRole("radio", { name: "Plan" });
+    expect(planMode).toBeTruthy();
+    const descriptionId = planMode.getAttribute("aria-describedby");
+    expect(descriptionId).not.toBeNull();
+    expect(document.getElementById(descriptionId as string)?.textContent).not.toBe(
+      ""
+    );
     expect(screen.getByRole("form", { name: "Plan selection" })).toBeTruthy();
     expect(screen.getByText("Current mode")).toBeTruthy();
     expect(screen.getByText("Next turn")).toBeTruthy();
     expect(screen.getByText("Current turn")).toBeTruthy();
     expect(screen.getByText("No pending change")).toBeTruthy();
     expect(screen.getByText("No observed Plan execution")).toBeTruthy();
-    expect((screen.getByRole("radio", { name: /Default/ }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("radio", { name: "Default" }) as HTMLInputElement).checked).toBe(true);
     expect((screen.getByRole("button", { name: "Set for next turn" }) as HTMLButtonElement).disabled).toBe(true);
     expect(dialog.textContent).not.toMatch(/catalog_revision|selection_operation_id|turn-plan|op_private/u);
 

@@ -238,19 +238,31 @@ export function ModelControl({ controller }: ModelControlProps) {
               >
                 <legend>Select model</legend>
                 <div className="hostdeck-model-options__list">
-                  {view.models.map((model) => (
+                  {view.models.map((model, index) => (
                     <label key={model.id} className="hostdeck-model-option">
                       <input
                         type="radio"
                         name={`hostdeck-model-${view.sessionId}`}
                         value={model.id}
+                        aria-label={model.label}
+                        aria-describedby={
+                          model.description === null
+                            ? undefined
+                            : `hostdeck-model-option-${view.sessionId}-${index}-description`
+                        }
                         checked={view.selectedModelId === model.id}
                         onChange={() => controller.selectModel(model.id)}
                       />
                       <span className="hostdeck-model-option__indicator" aria-hidden="true" />
                       <span className="hostdeck-model-option__content">
                         <strong title={model.label}>{model.label}</strong>
-                        {model.description === null ? null : <small>{model.description}</small>}
+                        {model.description === null ? null : (
+                          <small
+                            id={`hostdeck-model-option-${view.sessionId}-${index}-description`}
+                          >
+                            {model.description}
+                          </small>
+                        )}
                         <span className="hostdeck-model-option__metadata">
                           {model.isCurrent ? <span>Current</span> : null}
                           {model.isPending ? <span>Pending</span> : null}

@@ -51,9 +51,17 @@ describe("ModelControl", () => {
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
 
     response.resolve(modelSnapshot());
-    expect(await screen.findByRole("radio", { name: /Codex Alpha/ })).toBeTruthy();
+    const currentModel = await screen.findByRole("radio", {
+      name: "Codex Alpha"
+    });
+    expect(currentModel).toBeTruthy();
+    const descriptionId = currentModel.getAttribute("aria-describedby");
+    expect(descriptionId).not.toBeNull();
+    expect(document.getElementById(descriptionId as string)?.textContent).toBe(
+      "Balanced coding model."
+    );
     expect(screen.getByText("No pending change")).toBeTruthy();
-    expect((screen.getByRole("radio", { name: /Codex Alpha/ }) as HTMLInputElement).checked).toBe(true);
+    expect((currentModel as HTMLInputElement).checked).toBe(true);
     expect((screen.getByRole("radio", { name: "High" }) as HTMLInputElement).checked).toBe(true);
     expect((screen.getByRole("button", { name: "Set for next turn" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("already confirmed", { exact: false })).toBeTruthy();

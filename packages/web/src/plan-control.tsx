@@ -420,13 +420,17 @@ function PlanModeOption({
         type="radio"
         name={`hostdeck-plan-${sessionId}`}
         value={mode}
+        aria-label={name}
+        aria-describedby={`hostdeck-plan-option-${sessionId}-${mode}-description`}
         checked={selected}
         onChange={() => onSelect(mode)}
       />
       <span className="hostdeck-plan-option__indicator" aria-hidden="true" />
       <span className="hostdeck-plan-option__content">
         <strong>{name}</strong>
-        <small>{description}</small>
+        <small id={`hostdeck-plan-option-${sessionId}-${mode}-description`}>
+          {description}
+        </small>
         <span className="hostdeck-plan-option__metadata">
           {current ? <span>Current</span> : null}
           {pending ? <span>Pending</span> : null}
