@@ -412,6 +412,7 @@ test("fragment pairing scrubs, claims once, reloads, and preserves history", asy
     allowedFragments: [pairingCode],
     allowedAbortedRequests: [
       { method: "POST", path: "/api/v1/access/pairing-claims" },
+      exactInterceptedCsrfBootstrapAbort(csrfRequests[0]),
       { method: "GET", path: "/events/stream" },
       { method: "GET", path: "/approvals" }
     ]
@@ -1382,6 +1383,44 @@ function exactInterceptedMutationAbort(
     throw new TypeError("Browser matrix intercepted mutation allowance is invalid.");
   }
   return Object.freeze({ method: "POST", path: url.pathname });
+}
+
+function exactInterceptedCsrfBootstrapAbort(
+  request: Request | undefined
+): Readonly<{ method: "POST"; path: "/api/v1/access/csrf" }> {
+  if (request === undefined) {
+    throw new TypeError("Browser matrix CSRF bootstrap allowance is invalid.");
+  }
+  const url = new URL(request.url());
+  if (
+    request.method() !== "POST" ||
+    url.origin !== remoteRecoveryPrivateOrigin ||
+    url.pathname !== "/api/v1/access/csrf" ||
+    url.search !== "" ||
+    url.hash !== ""
+  ) {
+    throw new TypeError("Browser matrix CSRF bootstrap allowance is invalid.");
+  }
+  const headers = request.headers();
+  if (
+    !/^application\/json(?:;|$)/u.test(headers["content-type"] ?? "") ||
+    headers["x-hostdeck-csrf"] !== undefined ||
+    headers["x-hostdeck-csrf-generation"] !== undefined ||
+    headers["x-hostdeck-local-admin"] !== undefined
+  ) {
+    throw new TypeError("Browser matrix CSRF bootstrap headers are invalid.");
+  }
+  try {
+    if (!selectedCsrfBootstrapRequestSchema.safeParse(request.postDataJSON()).success) {
+      throw new TypeError("Browser matrix CSRF bootstrap body is invalid.");
+    }
+  } catch (error) {
+    if (error instanceof TypeError) throw error;
+    throw new TypeError("Browser matrix CSRF bootstrap body is invalid.", {
+      cause: error
+    });
+  }
+  return Object.freeze({ method: "POST", path: "/api/v1/access/csrf" });
 }
 
 function isProvenInterceptedCsrfBootstrapCompletion(

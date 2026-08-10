@@ -54,6 +54,11 @@ test("reads exact Plan truth and stages one correlated next-turn selection", asy
 
   const defaultMode = dialog.getByRole("radio", { name: /Default/u });
   const planMode = dialog.getByRole("radio", { name: /Plan/u });
+  for (const radio of [defaultMode, planMode]) {
+    const bounds = await radio.boundingBox();
+    expect(bounds?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(bounds?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
   await defaultMode.focus();
   await page.keyboard.press("ArrowUp");
   await expect(planMode).toBeChecked();

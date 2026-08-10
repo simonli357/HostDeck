@@ -52,6 +52,11 @@ test("reads exact model truth and stages one correlated next-turn selection", as
   expectModelRequest(reads[0], "GET");
   const alpha = dialog.getByRole("radio", { name: /Codex Alpha/u });
   const beta = dialog.getByRole("radio", { name: /Codex Beta/u });
+  for (const radio of [alpha, beta]) {
+    const bounds = await radio.boundingBox();
+    expect(bounds?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(bounds?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
   await alpha.focus();
   await page.keyboard.press("ArrowDown");
   await expect(beta).toBeChecked();
