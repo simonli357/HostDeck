@@ -104,6 +104,7 @@ const exactRootModules = new Map([
       "./device-revocation.js",
       "./host-health.js",
       "./host-lock.js",
+      "./host-platform.js",
       "./pairing.js",
       "./pairing-link.js",
       "./remote-ingress.js",
