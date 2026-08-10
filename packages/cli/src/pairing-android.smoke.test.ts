@@ -1847,10 +1847,12 @@ describe("physical Android phone-driver protocol", () => {
         '<node text="" class="android.widget.FrameLayout" ' +
         `resource-id="${chromeCompositorResourceId}" bounds="[0,80][1080,2400]" />` +
       '<node text="/model" class="android.view.View" bounds="[80,400][600,500]" />' +
-        '<node text="Codex Fast" class="android.widget.Button" clickable="true" checked="true" ' +
+        '<node text="Codex Current" class="android.widget.Button" clickable="true" checked="true" ' +
         'enabled="true" bounds="[80,620][600,760]" />' +
-        '<node text="Codex Balanced" class="android.widget.Button" clickable="true" ' +
+        '<node text="Codex Fast" class="android.widget.Button" clickable="true" ' +
         'enabled="true" bounds="[80,800][600,940]" />' +
+        '<node text="Codex Balanced" class="android.widget.Button" clickable="true" ' +
+        'enabled="true" bounds="[80,980][600,1120]" />' +
         '<node text="" class="android.widget.Button" content-desc="Close model control" ' +
         'clickable="true" enabled="true" bounds="[900,400][1040,520]" />' +
         '</hierarchy>'
@@ -1864,17 +1866,27 @@ describe("physical Android phone-driver protocol", () => {
       )
     ).not.toBeNull();
     expect(selectPhysicalDialogCloseAction(sheetNodes, "Close model control")).not.toBeNull();
-    expect(physicalSheetChoiceSelected(sheetNodes, "/model", "Codex Fast")).toBe(true);
+    expect(physicalSheetChoiceSelected(sheetNodes, "/model", "Codex Current")).toBe(true);
+    expect(physicalSheetChoiceSelected(sheetNodes, "/model", "Codex Fast")).toBe(false);
+    const fastSheetNodes = sheetNodes.map((node) => {
+      const { checked: _checked, ...unselected } = node;
+      return Object.freeze(
+        node.text === "Codex Fast"
+          ? { ...unselected, checked: true as const }
+          : unselected
+      ) as AndroidUiNode;
+    });
+    expect(physicalSheetChoiceSelected(fastSheetNodes, "/model", "Codex Fast")).toBe(true);
     expect(
       physicalSheetChoiceSelected(
-        sheetNodes.filter((node) => node.text !== "Codex Fast"),
+        fastSheetNodes.filter((node) => node.text !== "Codex Fast"),
         "/model",
         "Codex Fast"
       )
     ).toBe(false);
     expect(
       physicalSheetChoiceSelected(
-        sheetNodes.map((node) =>
+        fastSheetNodes.map((node) =>
           node.text === "Codex Balanced"
             ? Object.freeze({ ...node, checked: true as const })
             : node
@@ -18261,7 +18273,7 @@ async function runPhysicalModelControl(
       physicalSheetChoiceSelected(
         await readAndroidUiNodes(),
         "/model",
-        "Codex Fast",
+        "Codex Current",
       ),
     "Physical /model did not show current model truth."
   );
