@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { release as osRelease, tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   nativeCiTargetPolicies,
@@ -165,7 +165,7 @@ function runPnpmCheck(checks, id, args, timeout = 5 * 60_000) {
 function runVitestCheck(checks, id, args, reportRoot) {
   runTimedCheck(checks, id, () => {
     const reportPath = join(reportRoot, `${id}.json`);
-    runCommand(
+    const commandResult = runCommand(
       pnpmInvocation.command,
       [
         ...pnpmInvocation.arguments,
@@ -177,10 +177,16 @@ function runVitestCheck(checks, id, args, reportRoot) {
         `--outputFile=${reportPath}`
       ],
       5 * 60_000,
-      id
+      id,
+      { deferFailure: true }
     );
-    const report = JSON.parse(readFileSync(reportPath, "utf8"));
-    requireCondition(
+    let report;
+    try {
+      report = JSON.parse(readFileSync(reportPath, "utf8"));
+    } catch {
+      report = null;
+    }
+    const reportPassed =
       report !== null &&
         typeof report === "object" &&
         report.success === true &&
@@ -191,9 +197,12 @@ function runVitestCheck(checks, id, args, reportRoot) {
         report.numPendingTests === 0 &&
         report.numTodoTests === 0 &&
         Array.isArray(report.testResults) &&
-        report.testResults.length > 0,
-      `Native CI ${id} report contains a failure or unsupported skip.`
-    );
+        report.testResults.length > 0;
+    if (!commandResult.passed || !reportPassed) {
+      const summary = vitestFailureSummary(report);
+      if (summary !== "") process.stderr.write(`${summary}\n`);
+      throw new Error(`Native CI ${id} report contains a failure or unsupported skip.`);
+    }
   });
 }
 
@@ -206,7 +215,7 @@ function runTimedCheck(checks, id, work) {
   return result;
 }
 
-function runCommand(command, args, timeout, label) {
+function runCommand(command, args, timeout, label, options = {}) {
   const result = spawnSync(command, args, {
     cwd: repositoryRoot,
     encoding: "utf8",
@@ -216,13 +225,46 @@ function runCommand(command, args, timeout, label) {
     timeout,
     windowsHide: true
   });
-  if (result.error !== undefined || result.status !== 0 || result.signal !== null) {
+  const passed =
+    result.error === undefined && result.status === 0 && result.signal === null;
+  if (!passed && options.deferFailure !== true) {
     const diagnostic = sanitizeDiagnostic(
       `${result.stdout ?? ""}\n${result.stderr ?? ""}`
     );
     if (diagnostic !== "") process.stderr.write(`${diagnostic}\n`);
     throw new Error(`Native CI ${label} command failed.`);
   }
+  return Object.freeze({ passed });
+}
+
+function vitestFailureSummary(report) {
+  if (report === null || typeof report !== "object" || !Array.isArray(report.testResults)) {
+    return "Vitest did not produce a readable structured report.";
+  }
+  const failures = [];
+  for (const result of report.testResults) {
+    if (result === null || typeof result !== "object" || result.status !== "failed") continue;
+    const assertions = Array.isArray(result.assertionResults)
+      ? result.assertionResults.filter((assertion) => assertion?.status === "failed")
+      : [];
+    if (assertions.length === 0) {
+      failures.push(
+        `${basename(String(result.name ?? "unknown-suite"))}: ${String(
+          result.message ?? "suite failed before assertions"
+        )}`
+      );
+    } else {
+      for (const assertion of assertions) {
+        failures.push(
+          `${basename(String(result.name ?? "unknown-suite"))}: ${String(
+            assertion.fullName ?? assertion.title ?? "failed assertion"
+          )}`
+        );
+      }
+    }
+    if (failures.length >= 8) break;
+  }
+  return sanitizeDiagnostic(failures.slice(0, 8).join("\n"));
 }
 
 function commandEnvironment() {
