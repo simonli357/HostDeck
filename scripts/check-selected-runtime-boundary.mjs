@@ -178,6 +178,7 @@ const exactRootModules = new Map([
     "packages/test-fixtures/src/index.ts",
     [
       "./copy-workflow-matrix.js",
+      "./host-platform.js",
       "./mobile-design-contract.js",
       "./remote-ingress.js",
       "./structured-runtime.js"
@@ -263,6 +264,53 @@ const historicalExceptionImports = new Map([
   ["packages/storage/src/legacy-session-repository.ts", ["better-sqlite3"]],
   ["packages/cli/src/legacy-session-admin.ts", ["./errors.js", "@hostdeck/storage", "node:fs"]]
 ]);
+
+export const directHostApiOwnerPaths = Object.freeze([
+  "packages/cli/src/config.ts",
+  "packages/cli/src/legacy-session-admin.ts",
+  "packages/cli/src/loopback-http.ts",
+  "packages/cli/src/resume-launcher.ts",
+  "packages/cli/src/service-host.ts",
+  "packages/cli/src/service-install-manifest.ts",
+  "packages/cli/src/service-lifecycle-lock.ts",
+  "packages/cli/src/service-lifecycle.ts",
+  "packages/cli/src/service-package-verifier.ts",
+  "packages/cli/src/shell.ts",
+  "packages/cli/src/systemd-user-manager.ts",
+  "packages/cli/src/systemd-user-units.ts",
+  "packages/codex-adapter/src/connection.ts",
+  "packages/codex-adapter/src/transport.ts",
+  "packages/codex-adapter/src/tui-resume.ts",
+  "packages/server/src/codex-hostdeck-restart-smoke-support.ts",
+  "packages/server/src/codex-runtime-hardening-manifest.ts",
+  "packages/server/src/codex-runtime-hardening.ts",
+  "packages/server/src/codex-runtime-lifecycle-acceptance.ts",
+  "packages/server/src/codex-runtime-lifecycle-files.ts",
+  "packages/server/src/codex-runtime-lifecycle-manifest.ts",
+  "packages/server/src/codex-runtime-lifecycle-process.ts",
+  "packages/server/src/codex-runtime-supervisor-node.ts",
+  "packages/server/src/codex-runtime-supervisor.ts",
+  "packages/server/src/codex-structured-vertical-report.ts",
+  "packages/server/src/codex-version-probe.ts",
+  "packages/server/src/fastify-host-lifecycle.ts",
+  "packages/server/src/fastify-request-trust.ts",
+  "packages/server/src/fastify-static-boundary.ts",
+  "packages/server/src/foreground-resource-bootstrap.ts",
+  "packages/server/src/managed-thread-service.ts",
+  "packages/server/src/production-web-assets.test-support.ts",
+  "packages/server/src/tailscale-observer.ts",
+  "packages/server/src/tailscale-serve-manager.ts",
+  "packages/server/src/tailscale-serve-proxy-trust.ts",
+  "packages/storage/src/branch-metadata.ts",
+  "packages/storage/src/daemon-lease.ts",
+  "packages/storage/src/migration-runner.ts",
+  "packages/storage/src/read-only-database.ts",
+  "packages/storage/src/secure-local-paths.ts",
+  "packages/web/vite.config.ts"
+]);
+const directHostApiOwners = new Set(directHostApiOwnerPaths);
+const hostNodeModulePattern = /^node:(?:child_process|cluster|dgram|dns(?:\/promises)?|fs(?:\/promises)?|http|https|net|os|path|process|tls|url|worker_threads)$/u;
+const hostProcessProperties = new Set(["arch", "cwd", "env", "getuid", "platform"]);
 
 const cliLocalStorageOwners = new Map([
   [
@@ -353,9 +401,18 @@ export function validateSelectedRuntimeBoundary(root = process.cwd()) {
 
   const productionSources = sourceFiles(join(repositoryRoot, "packages"))
     .filter((path) => !isTestFile(path));
+  const observedDirectHostApiOwners = new Set();
   for (const absolutePath of productionSources) {
     const path = repositoryPath(repositoryRoot, absolutePath);
     const source = readFileSync(absolutePath, "utf8");
+    const directHostApis = collectDirectHostApis(source);
+    if (directHostApis.length > 0) {
+      if (directHostApiOwners.has(path)) {
+        observedDirectHostApiOwners.add(path);
+      } else {
+        failures.push(`${path} accesses direct host APIs outside a reviewed platform adapter/edge owner: ${directHostApis.join(", ")}`);
+      }
+    }
     for (const token of findLegacyInterfaceTokens(path, source)) {
       failures.push(`${path} contains non-allowlisted legacy token ${JSON.stringify(token)}`);
     }
@@ -368,6 +425,11 @@ export function validateSelectedRuntimeBoundary(root = process.cwd()) {
     forbiddenTmuxInvocationPattern.lastIndex = 0;
     for (const symbol of uniqueMatches(source, forbiddenLegacySymbolPattern)) {
       failures.push(`${path} contains retired production symbol ${symbol}`);
+    }
+  }
+  for (const path of directHostApiOwnerPaths) {
+    if (!observedDirectHostApiOwners.has(path)) {
+      failures.push(`direct host API owner is missing or stale: ${path}`);
     }
   }
 
@@ -423,6 +485,33 @@ export function collectModuleSpecifiers(source) {
     }
   }
   return [...specifiers].sort();
+}
+
+export function collectDirectHostApis(source) {
+  const usages = new Set(
+    collectModuleSpecifiers(source).filter((specifier) => hostNodeModulePattern.test(specifier))
+  );
+  const tokens = scanTokens(source);
+  for (let index = 0; index < tokens.length - 2; index += 1) {
+    if (
+      tokens[index].kind === SyntaxKind.Identifier &&
+      tokens[index].value === "process" &&
+      tokens[index + 1].kind === SyntaxKind.DotToken &&
+      tokens[index + 2].kind === SyntaxKind.Identifier &&
+      hostProcessProperties.has(tokens[index + 2].value)
+    ) {
+      usages.add(`process.${tokens[index + 2].value}`);
+    }
+  }
+  return [...usages].sort();
+}
+
+export function findDirectHostApiBoundaryViolations(path, source) {
+  const usages = collectDirectHostApis(source);
+  if (usages.length === 0 || directHostApiOwners.has(path)) return [];
+  return [
+    `${path} accesses direct host APIs outside a reviewed platform adapter/edge owner: ${usages.join(", ")}`
+  ];
 }
 
 export function compareExactModuleSet(label, actual, expected) {

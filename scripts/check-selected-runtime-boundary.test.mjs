@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  collectDirectHostApis,
   collectModuleSpecifiers,
   compareExactModuleSet,
+  directHostApiOwnerPaths,
   findCliLocalStorageBoundaryViolations,
+  findDirectHostApiBoundaryViolations,
   findLegacyInterfaceTokens,
   isExactSelectedCliBin,
   readConstStringArray,
@@ -40,6 +43,27 @@ test("collects static imports, exports, and import types exactly", () => {
   assert.deepEqual(collectModuleSpecifiers('const blocked = /[#]/u; import value from "./after-regex.js";'), [
     "./after-regex.js"
   ]);
+});
+
+test("keeps direct host APIs inside exact reviewed platform adapter and edge owners", () => {
+  const source = `
+    import { readFile } from "node:fs/promises";
+    import type { Socket } from "node:net";
+    const platform = process.platform;
+    const text = "process.env and node:path are inert fixture text";
+  `;
+  assert.deepEqual(collectDirectHostApis(source), ["node:fs/promises", "node:net", "process.platform"]);
+  assert.deepEqual(
+    findDirectHostApiBoundaryViolations("packages/core/src/new-owner.ts", source),
+    [
+      "packages/core/src/new-owner.ts accesses direct host APIs outside a reviewed platform adapter/edge owner: node:fs/promises, node:net, process.platform"
+    ]
+  );
+  assert.deepEqual(
+    findDirectHostApiBoundaryViolations(directHostApiOwnerPaths[0], source),
+    []
+  );
+  assert.equal(new Set(directHostApiOwnerPaths).size, directHostApiOwnerPaths.length);
 });
 
 test("rejects an unexpected production-root export", () => {

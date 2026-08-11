@@ -17,8 +17,12 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
 | 1 | `FE-V1-090` Mobile dashboard physical hardening | in_progress | none | Run one distinct immutable candidate immediately after the phone is proven awake/unlocked; retain and deploy only a complete no-retry pass. |
-| 2 | `FND-V1-101` Platform fixtures and boundary guard | ready | none | USB is unavailable; give every downstream Windows/Linux leaf deterministic states and enforce the adapter boundary without consuming the Android candidate. |
-| 3 | `REL-V1-101` Native CI matrix | ready | none | Establish required Ubuntu/Windows checks early so every native implementation leaf is exercised on its owning OS. |
+| 2 | `REL-V1-101` Native CI matrix | ready | none | Establish required Ubuntu/Windows checks early so every native implementation leaf is exercised on its owning OS. |
+| 3 | `DAT-V1-100` Platform path boundary | ready | none | Preserve the proven Linux path behavior behind the shared adapter contract before adding Windows ACL semantics. |
+| 4 | `DAT-V1-102` Cross-platform locks | ready | none | Remove the Linux-only native lock dependency from the future Windows package path. |
+| 5 | `IFC-V1-101` Native package identity | ready | none | Bind every future native artifact and bundled runtime to an exact fail-closed manifest before building packages. |
+| 6 | `IFC-V1-100` Platform Tailscale adapter | ready | none | Generalize command discovery and execution while preserving the selected profile/Serve contract. |
+| 7 | `INT-V1-100` Windows Codex transport spike | ready | none | Run on the native Windows CI path once the runner workflow can retain redacted evidence. |
 
 `BUG-078` / `FE-V1-106` is closed, and later candidates crossed the corrected stream-recovery boundary. Candidate `61485d2` passed immutable package and 83/1 driver gates but found the phone asleep/locked before app interaction; exact cleanup passed, no evidence was published, and it will not be retried. The next candidate must start immediately after the device wake/unlock gate.
 
