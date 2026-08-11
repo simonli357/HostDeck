@@ -4,13 +4,13 @@
   "task_id": "FE-V1-040",
   "status": "passed",
   "evidence_schema_version": 1,
-  "support_manifest_sha256": "844c3bf79dcd410619355da8e0da7421c2fb827aee06b1dbb1dc0f52512dde25",
+  "support_manifest_sha256": "c22601511ab690b6aa96bf693b3fe6d4fced48927a4935fe7adf265acd2fb606",
   "package": {
     "package_version": "0.0.0",
-    "content_sha256": "a7e9f5085b76e95fc68093e741e6814efac88dc5fdf60c8615616dd6abe56858",
-    "manifest_sha256": "ea8bff12ca5d37becd51364527a6bac6c13e58d673a56265c75ee915d2a7ddf4",
-    "web_sha256": "77d01d7bef921703cf7063cd49685cc024bf4be60dba64021245c8eb3b360403",
-    "web_manifest_sha256": "cf4cc5427d5f73d8ed1b7f9d3f37934710bd97f42be2a012fe6de0870c1b82e3"
+    "content_sha256": "0233a8d3ebc0d1a8cbb5c6356096571b4c1afa8ccd7af876c893fbb8b31168ee",
+    "manifest_sha256": "b7b3d9cdac25d10c141bac9342c78bfc0d16908e8fac5626db96739c68c62f9d",
+    "web_sha256": "92647af819b2855ada4ccd0d38b726c9f28e71cf0ed502403f5ab953fedb279e",
+    "web_manifest_sha256": "ae4accb9336ef0d9cde36f662558730a321edad97775664db86c8c68151d62bb"
   },
   "project_count": 4,
   "scenario_count_per_project": 19,
@@ -33,7 +33,7 @@
     {
       "project_id": "chromium-phone",
       "report_file": "chromium-phone.json",
-      "report_sha256": "f3637529bfdb75807d8e5d1e7fcda5c09da262aaee17ad379dafd158ad4b3e5d",
+      "report_sha256": "be2b2b856085ec8094aabb833c1fbb16f2052adafe9a1bae0369c286eea862e6",
       "browser_name": "chromium",
       "browser_version": "149.0.7827.55",
       "revision": "1228",
@@ -47,14 +47,14 @@
         "pointer",
         "touch"
       ],
-      "duration_ms": 20225,
+      "duration_ms": 36373,
       "request_count": 78,
       "mutation_count": 13
     },
     {
       "project_id": "chromium-desktop",
       "report_file": "chromium-desktop.json",
-      "report_sha256": "bc4df5e7910c6ba4a9da02665b38a39e9f799fc7947adfb49bb9da14fad3e67b",
+      "report_sha256": "efc2f9118a9ffb342b26c75df905a82c1a5e15fe04d6307eadc91950f84ae87e",
       "browser_name": "chromium",
       "browser_version": "149.0.7827.55",
       "revision": "1228",
@@ -67,14 +67,14 @@
         "keyboard",
         "pointer"
       ],
-      "duration_ms": 19453,
+      "duration_ms": 37038,
       "request_count": 78,
       "mutation_count": 13
     },
     {
       "project_id": "firefox-phone",
       "report_file": "firefox-phone.json",
-      "report_sha256": "60a95708cc0165d2253f34b44b12ac86aae33526eb85b61fba2982c937a892ee",
+      "report_sha256": "c3d71d5c90b4b3529476940923c2320726529b786d0b69d176b25e1f70dd5790",
       "browser_name": "firefox",
       "browser_version": "151.0",
       "revision": "1532",
@@ -88,14 +88,14 @@
         "pointer",
         "touch"
       ],
-      "duration_ms": 33157,
+      "duration_ms": 44776,
       "request_count": 80,
       "mutation_count": 13
     },
     {
       "project_id": "firefox-desktop",
       "report_file": "firefox-desktop.json",
-      "report_sha256": "3fbfe73f079be3fdd48b2e702c7c5e8684360c27778ce0043c910fb318faa961",
+      "report_sha256": "7c40c727e15f688a61615025d1094064eaee75136d2d6675c6fdbf27bbe61eeb",
       "browser_name": "firefox",
       "browser_version": "151.0",
       "revision": "1532",
@@ -108,7 +108,7 @@
         "keyboard",
         "pointer"
       ],
-      "duration_ms": 30872,
+      "duration_ms": 45641,
       "request_count": 80,
       "mutation_count": 13
     }
