@@ -193,6 +193,117 @@ describe("exact Codex event normalizer", () => {
     expect(events.at(-1)).toMatchObject({ method: "thread/archived", codex_event_id: `thread:${threadA}:archived` });
   });
 
+  it("accepts exact completed-only subagent activity without weakening paired item ordering", () => {
+    const normalizer = activeTurnNormalizer(threadA, turnA);
+    const activity = {
+      type: "subAgentActivity",
+      id: "call-subagent-started-a",
+      kind: "started",
+      agentThreadId: threadB,
+      agentPath: "/root/worker"
+    } as const;
+
+    expect(
+      normalizeEvent(
+        normalizer.normalize(
+          selected("item/completed", itemParams(threadA, turnA, activity, "completed"))
+        )
+      )
+    ).toMatchObject({
+      method: "item/completed",
+      item: {
+        id: activity.id,
+        category: "tool",
+        state: "completed",
+        content_state: "redacted"
+      }
+    });
+
+    const tool = {
+      type: "collabAgentToolCall",
+      id: "call-collaboration-a",
+      tool: "wait",
+      status: "inProgress",
+      senderThreadId: threadA,
+      receiverThreadIds: [threadB],
+      prompt: null,
+      model: null,
+      reasoningEffort: null,
+      agentsStates: {
+        [threadB]: { status: "running", message: null }
+      }
+    } as const;
+    expect(
+      normalizeEvent(
+        normalizer.normalize(
+          selected("item/started", itemParams(threadA, turnA, tool, "started"))
+        )
+      )
+    ).toMatchObject({ item: { id: tool.id, state: "started" } });
+    expect(
+      normalizeEvent(
+        normalizer.normalize(
+          selected(
+            "item/completed",
+            itemParams(
+              threadA,
+              turnA,
+              {
+                ...tool,
+                status: "completed",
+                agentsStates: {
+                  [threadB]: { status: "completed", message: null }
+                }
+              },
+              "completed"
+            )
+          )
+        )
+      )
+    ).toMatchObject({ item: { id: tool.id, state: "completed" } });
+    expect(
+      normalizeEvent(
+        normalizer.normalize(
+          selected("turn/completed", {
+            threadId: threadA,
+            turn: rawTurn(turnA, "completed")
+          })
+        )
+      )
+    ).toMatchObject({ method: "turn/completed", status: "completed" });
+    expect(normalizer.failure).toBeNull();
+
+    const duplicate = activeTurnNormalizer("thread-subagent-duplicate", "turn-subagent-duplicate");
+    const duplicateParams = itemParams(
+      "thread-subagent-duplicate",
+      "turn-subagent-duplicate",
+      { ...activity, agentThreadId: "thread-subagent-child" },
+      "completed"
+    );
+    normalizeEvent(duplicate.normalize(selected("item/completed", duplicateParams)));
+    expectNormalizationError(
+      () => duplicate.normalize(selected("item/completed", duplicateParams)),
+      "duplicate_event"
+    );
+
+    const invalidStart = activeTurnNormalizer("thread-subagent-start", "turn-subagent-start");
+    expectNormalizationError(
+      () =>
+        invalidStart.normalize(
+          selected(
+            "item/started",
+            itemParams(
+              "thread-subagent-start",
+              "turn-subagent-start",
+              { ...activity, agentThreadId: "thread-subagent-start-child" },
+              "started"
+            )
+          )
+        ),
+      "malformed_required_event"
+    );
+  });
+
   it("keeps command and reasoning content out of normalized projection input", () => {
     const normalizer = activeTurnNormalizer(threadA, turnA);
     const command = normalizeEvent(

@@ -13,7 +13,10 @@ import type {
 import type { z } from "zod";
 import { codexBindingDescriptor } from "./binding.js";
 import type { CodexConnectionNotification } from "./connection.js";
-import { normalizeCodexItem as normalizeItem } from "./event-normalizer-items.js";
+import {
+  hasCompletedOnlyCodexItemLifecycle,
+  normalizeCodexItem as normalizeItem
+} from "./event-normalizer-items.js";
 import {
   deltaParamsSchema,
   type goalSchema,
@@ -688,6 +691,13 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
         const parsed = parseParams(itemStartedParamsSchema, params, method);
         const state = this.thread(parsed.threadId, method);
         this.requireActiveTurn(state, parsed.turnId, method);
+        if (hasCompletedOnlyCodexItemLifecycle(parsed.item, method)) {
+          throw normalizationError(
+            "malformed_required_event",
+            "Codex emitted a completed-only item through item/started.",
+            method
+          );
+        }
         const item = normalizeItem(parsed.item, "started", method);
         if (state.items.has(item.id)) throw normalizationError("duplicate_event", "Codex repeated item start.", method);
         this.ensureItemCapacity(state, method);
@@ -704,9 +714,10 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
         const state = this.thread(parsed.threadId, method);
         const activeTurn = this.requireActiveTurn(state, parsed.turnId, method);
         const item = normalizeItem(parsed.item, "completed", method);
+        const completedOnly = hasCompletedOnlyCodexItemLifecycle(parsed.item, method);
         const tracked = state.items.get(item.id);
         if (tracked === undefined) {
-          if (!activeTurn.gap_reconciled) {
+          if (!activeTurn.gap_reconciled && !completedOnly) {
             throw normalizationError("event_out_of_order", "Codex completed an item before its start.", method);
           }
           this.ensureItemCapacity(state, method);

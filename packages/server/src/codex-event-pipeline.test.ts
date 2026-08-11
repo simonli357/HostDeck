@@ -349,6 +349,173 @@ describe("ordered Codex event pipeline", () => {
     }
   });
 
+  it("projects a delegated parent turn through completed-only child activity and terminal truth", async () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      repository.create(stateCandidate("sess_pipeline_a", threadA));
+      const pipeline = createCodexEventPipeline({
+        repository,
+        append_port: createProductionProjectionAppendPort({ repository, publish() {} }),
+        normalizer: { now: advancingClock() }
+      });
+      const childThreadId = "thread-pipeline-child";
+      const childActivity = {
+        type: "subAgentActivity",
+        id: "call-pipeline-child-started",
+        kind: "started",
+        agentThreadId: childThreadId,
+        agentPath: "/root/worker"
+      };
+      const collabTool = {
+        type: "collabAgentToolCall",
+        id: "call-pipeline-wait",
+        tool: "wait",
+        status: "inProgress",
+        senderThreadId: threadA,
+        receiverThreadIds: [childThreadId],
+        prompt: null,
+        model: null,
+        reasoningEffort: null,
+        agentsStates: {
+          [childThreadId]: { status: "running", message: null }
+        }
+      };
+
+      await expect(
+        pipeline.consume(
+          selected("turn/started", {
+            threadId: threadA,
+            turn: rawTurn(turnA, "inProgress")
+          })
+        )
+      ).resolves.toMatchObject({ kind: "committed" });
+      await expect(
+        pipeline.consume(
+          selected(
+            "item/completed",
+            rawItemParams(threadA, turnA, childActivity, "completed")
+          )
+        )
+      ).resolves.toMatchObject({ kind: "committed" });
+      await expect(
+        pipeline.consume(
+          selected("turn/started", {
+            threadId: childThreadId,
+            turn: { private: "unmanaged-child" }
+          })
+        )
+      ).resolves.toMatchObject({
+        kind: "unmanaged_observation",
+        thread_id: childThreadId
+      });
+      await expect(
+        pipeline.consume(
+          selected(
+            "item/started",
+            rawItemParams(threadA, turnA, collabTool, "started")
+          )
+        )
+      ).resolves.toMatchObject({ kind: "committed" });
+      await expect(
+        pipeline.consume(
+          selected(
+            "item/completed",
+            rawItemParams(
+              threadA,
+              turnA,
+              {
+                ...collabTool,
+                status: "completed",
+                agentsStates: {
+                  [childThreadId]: { status: "completed", message: null }
+                }
+              },
+              "completed"
+            )
+          )
+        )
+      ).resolves.toMatchObject({ kind: "committed" });
+      await expect(
+        pipeline.consume(
+          selected(
+            "item/started",
+            rawItemParams(
+              threadA,
+              turnA,
+              {
+                type: "agentMessage",
+                id: "item-pipeline-final",
+                text: "",
+                phase: "final_answer",
+                memoryCitation: null
+              },
+              "started"
+            )
+          )
+        )
+      ).resolves.toMatchObject({ kind: "committed" });
+      await expect(
+        pipeline.consume(
+          selected("item/agentMessage/delta", {
+            threadId: threadA,
+            turnId: turnA,
+            itemId: "item-pipeline-final",
+            delta: "Parent complete."
+          })
+        )
+      ).resolves.toMatchObject({ kind: "committed" });
+      await expect(
+        pipeline.consume(
+          selected(
+            "item/completed",
+            rawItemParams(
+              threadA,
+              turnA,
+              {
+                type: "agentMessage",
+                id: "item-pipeline-final",
+                text: "Parent complete.",
+                phase: "final_answer",
+                memoryCitation: null
+              },
+              "completed"
+            )
+          )
+        )
+      ).resolves.toMatchObject({ kind: "committed" });
+      await expect(
+        pipeline.consume(
+          selected("thread/status/changed", {
+            threadId: threadA,
+            status: { type: "idle" }
+          })
+        )
+      ).resolves.toMatchObject({ kind: "committed" });
+      await expect(
+        pipeline.consume(
+          selected("turn/completed", {
+            threadId: threadA,
+            turn: rawTurn(turnA, "completed")
+          })
+        )
+      ).resolves.toMatchObject({ kind: "committed" });
+
+      await expect(pipeline.barrier()).resolves.toMatchObject({ last_sequence: 10 });
+      expect(repository.listEvents("sess_pipeline_a").events).toHaveLength(9);
+      expect(repository.require("sess_pipeline_a").projection.session).toMatchObject({
+        turn_state: "completed",
+        attention: "none",
+        freshness: "current",
+        recent_summary: "Codex turn completed.",
+        last_event_cursor: 9
+      });
+      expect(pipeline.failure).toBeNull();
+    } finally {
+      open.db.close();
+    }
+  });
+
   it("does not normalize a queued frame after publication failure", async () => {
     const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
     try {
@@ -521,6 +688,17 @@ function rawTokenUsage() {
     last: usage,
     modelContextWindow: 200_000
   };
+}
+
+function rawItemParams(
+  threadId: string,
+  turnId: string,
+  item: unknown,
+  lifecycle: "completed" | "started"
+) {
+  return lifecycle === "started"
+    ? { threadId, turnId, item, startedAtMs: 1_752_170_401_000 }
+    : { threadId, turnId, item, completedAtMs: 1_752_170_402_000 };
 }
 
 function advancingClock(): () => string {

@@ -469,7 +469,9 @@ class DefaultCodexPromptControlService implements CodexPromptControlService {
       );
     }
     return Object.freeze({
-      ...accepted,
+      thread_id: accepted.thread_id,
+      turn_id: accepted.turn_id,
+      state: accepted.state,
       action: "start",
       model_revision: modelRevision,
       plan_revision: planRevision,
@@ -551,7 +553,9 @@ class DefaultCodexPromptControlService implements CodexPromptControlService {
         );
       }
       return Object.freeze({
-        ...steered,
+        thread_id: steered.thread_id,
+        turn_id: steered.turn_id,
+        state: steered.state,
         action: "steer",
         model_revision: current.model_revision,
         plan_revision: current.plan_revision,

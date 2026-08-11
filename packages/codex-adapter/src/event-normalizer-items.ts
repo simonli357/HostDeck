@@ -306,6 +306,10 @@ export function parseCodexItemId(candidate: unknown, method: string): CodexItemI
   return parseCodexParams(itemEnvelopeSchema, candidate, method).id;
 }
 
+export function hasCompletedOnlyCodexItemLifecycle(candidate: unknown, method: string): boolean {
+  return parseCodexParams(itemEnvelopeSchema, candidate, method).type === "subAgentActivity";
+}
+
 function validateToolItem(
   candidate: unknown,
   type: string,

@@ -63,7 +63,15 @@ describe("Codex prompt control", () => {
     expect((await harness.service.snapshot(targetA)).phase).toBe("steerable");
 
     const steered = await harness.service.dispatch(promptIntent({ operation_id: "op_prompt_steer_0001", text: "Continue this turn." }));
-    expect(steered).toMatchObject({ action: "steer", turn_id: "turn-thread-prompt-a", steerable: true });
+    expect(steered).toEqual({
+      action: "steer",
+      thread_id: targetA.codex_thread_id,
+      turn_id: "turn-thread-prompt-a",
+      state: "accepted",
+      model_revision: null,
+      plan_revision: null,
+      steerable: true
+    });
     expect(harness.turns.startCalls).toHaveLength(1);
     expect(harness.turns.steerCalls).toEqual([
       expect.objectContaining({
@@ -142,12 +150,50 @@ describe("Codex prompt control", () => {
     const deadline = testOperationDeadline();
     try {
       const result = await harness.service.dispatch(promptIntent(), deadline);
-      expect(result).toMatchObject({ action: "start", model_revision: 4, plan_revision: null });
+      expect(result).toEqual({
+        action: "start",
+        thread_id: targetA.codex_thread_id,
+        turn_id: "turn-thread-prompt-a",
+        state: "accepted",
+        model_revision: 4,
+        plan_revision: null,
+        steerable: false
+      });
       expect(harness.models.dispatchCalls).toEqual([
         expect.objectContaining({ operation_id: "op_prompt_start_0001", expected_pending_revision: 4 })
       ]);
       expect(harness.models.dispatchDeadlines).toEqual([deadline]);
       expect(harness.plans.dispatchCalls).toHaveLength(0);
+      expect(harness.turns.startCalls).toHaveLength(0);
+    } finally {
+      deadline.dispose();
+    }
+  });
+
+  it("routes an exact pending Plan revision without leaking adapter fields", async () => {
+    const harness = createHarness();
+    harness.plans.settings.set(targetA.session_id, pending("plan", 6));
+    const deadline = testOperationDeadline();
+    try {
+      const result = await harness.service.dispatch(promptIntent(), deadline);
+      expect(result).toEqual({
+        action: "start",
+        thread_id: targetA.codex_thread_id,
+        turn_id: "turn-thread-prompt-a",
+        state: "accepted",
+        model_revision: null,
+        plan_revision: 6,
+        steerable: false
+      });
+      expect(harness.plans.dispatchCalls).toEqual([
+        expect.objectContaining({
+          operation_id: "op_prompt_start_0001",
+          expected_model_revision: null,
+          expected_plan_revision: 6
+        })
+      ]);
+      expect(harness.plans.dispatchDeadlines).toEqual([deadline]);
+      expect(harness.models.dispatchCalls).toHaveLength(0);
       expect(harness.turns.startCalls).toHaveLength(0);
     } finally {
       deadline.dispose();
@@ -161,7 +207,15 @@ describe("Codex prompt control", () => {
     const deadline = testOperationDeadline();
     try {
       const result = await harness.service.dispatch(promptIntent(), deadline);
-      expect(result).toMatchObject({ action: "start", model_revision: 5, plan_revision: 7 });
+      expect(result).toEqual({
+        action: "start",
+        thread_id: targetA.codex_thread_id,
+        turn_id: "turn-thread-prompt-a",
+        state: "accepted",
+        model_revision: 5,
+        plan_revision: 7,
+        steerable: false
+      });
       expect(harness.plans.dispatchCalls).toEqual([
         expect.objectContaining({
           operation_id: "op_prompt_start_0001",
