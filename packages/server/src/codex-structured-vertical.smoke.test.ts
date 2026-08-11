@@ -1,30 +1,49 @@
-import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import {
+  type ChildProcess,
+  execFileSync,
+  spawn,
+  spawnSync
+} from "node:child_process";
 import { once } from "node:events";
 import {
   accessSync,
   constants,
+  existsSync,
   lstatSync,
   realpathSync
 } from "node:fs";
-import { access, chmod, copyFile, lstat, mkdir, mkdtemp, rm } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
-import { basename, isAbsolute, join, resolve } from "node:path";
 import {
-  buildCodexTuiResumeCommand,
-  type CodexAppServerConnection,
+  access,
+  chmod,
+  copyFile,
+  lstat,
+  mkdir,
+  mkdtemp,
+  rm,
+  writeFile
+} from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
+import { basename, dirname, isAbsolute, join, resolve, win32 } from "node:path";
+import {
+  buildCodexPlatformTuiResumeCommand,
   type CodexConnectionNotification,
+  type CodexPlatformTuiResumeCommand,
+  type CodexProtectedEnvironmentCredentialSource,
   type CodexProtocolIssue,
   type CodexRequestInput,
+  type CodexRuntimeReconnectController,
   codexBindingDescriptor,
+  codexRemoteAuthEnvironmentVariable,
   createCodexApprovalClient,
-  createCodexAppServerConnection,
   createCodexCompactClient,
   createCodexGoalClient,
   createCodexModelClient,
   createCodexPlanClient,
+  createCodexRuntimeReconnectController,
   createCodexSkillsClient,
   createCodexThreadClient,
   createCodexTurnClient,
+  createCodexUnixSocketEndpoint,
   createCodexUnixWebSocketTransport,
   createCodexUsageClient,
   parseCodexCliVersionOutput
@@ -36,12 +55,17 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema
 } from "@hostdeck/contracts";
-import type { CodexThreadId } from "@hostdeck/core";
+import { type CodexThreadId, createOperationDeadline } from "@hostdeck/core";
 import {
   createProductionProjectionAppendPort,
+  createProductionProjectionContinuityPort,
   createSelectedStateRepository,
   openMigratedDatabase,
-  type SelectedStateRepository
+  prepareHostDeckLocalPaths,
+  resolveNativeWindowsHostDeckDefaultPaths,
+  runStartupAuditOrphanReconciliation,
+  type SelectedStateRepository,
+  secureHostDeckRegularFile
 } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
 import {
@@ -50,7 +74,11 @@ import {
 } from "./codex-approval-control-service.js";
 import { createCodexCompactControlService } from "./codex-compact-control-service.js";
 import { createCodexControlEventObserver } from "./codex-control-event-observer.js";
-import { type CodexEventPipeline, createCodexEventPipeline } from "./codex-event-pipeline.js";
+import {
+  type CodexEventPipeline,
+  type CodexEventPipelineOptions,
+  createCodexEventPipeline
+} from "./codex-event-pipeline.js";
 import { createCodexGoalControlService } from "./codex-goal-control-service.js";
 import {
   isProcessAlive,
@@ -60,6 +88,7 @@ import { createCodexInterruptControlService } from "./codex-interrupt-control-se
 import { createCodexModelControlService } from "./codex-model-control-service.js";
 import { createCodexPlanControlService } from "./codex-plan-control-service.js";
 import { createCodexPromptControlService } from "./codex-prompt-control-service.js";
+import { createCodexRuntimeReconciliationLifecycle } from "./codex-runtime-reconciliation-lifecycle.js";
 import { createCodexSkillsControlService } from "./codex-skills-control-service.js";
 import {
   readStructuredVerticalTurnTerminal,
@@ -72,6 +101,22 @@ import {
 } from "./codex-structured-vertical-report.js";
 import { selectStructuredVerticalPlanModel } from "./codex-structured-vertical-selection.js";
 import { createCodexUsageControlService } from "./codex-usage-control-service.js";
+import { createCodexWindowsRuntimeConnection } from "./codex-windows-runtime-connection.js";
+import {
+  type CodexWindowsRuntimeChildProcess,
+  type CodexWindowsRuntimeProcessPort,
+  type CodexWindowsRuntimeProcessRequest,
+  createCodexWindowsRuntimeSupervisor
+} from "./codex-windows-runtime-supervisor.js";
+import {
+  codexWindowsRuntimeCredentialPath,
+  createNodeCodexWindowsRuntimeProcessPort
+} from "./codex-windows-runtime-supervisor-node.js";
+import {
+  createWindowsStructuredVerticalReport,
+  publishWindowsStructuredVerticalReport,
+  requireWindowsStructuredVerticalReportPath
+} from "./codex-windows-structured-vertical-report.js";
 import { combinePendingTurnSettingsReaders } from "./pending-turn-settings.js";
 import {
   type WithTestOperationDeadlines,
@@ -84,6 +129,16 @@ type TestApprovalControlService = WithTestOperationDeadlines<
 >;
 
 const requireSmoke = process.env.HOSTDECK_REQUIRE_CODEX_VERTICAL_SMOKE === "1";
+const requestedHostTarget =
+  process.env.HOSTDECK_CODEX_VERTICAL_TARGET ?? "linux-x64";
+if (
+  requireSmoke &&
+  requestedHostTarget !== "linux-x64" &&
+  requestedHostTarget !== "windows-x64"
+) {
+  throw new TypeError("Structured vertical host target is invalid.");
+}
+const hostTarget = requestedHostTarget as "linux-x64" | "windows-x64";
 const overallTimeoutMs = 360_000;
 const planPrompt = "Produce a concise two-step plan for inspecting README.md. Do not call tools or modify files.";
 const goalObjective = "Keep aggregate runtime evidence bounded.";
@@ -111,14 +166,11 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
     async () => {
       const startedAt = Date.now();
       const repositoryRoot = realpathSync(process.cwd());
-      const codexBin = requireExactCodexBinary(process.env.HOSTDECK_CODEX_BIN);
-      const reportPath =
-        process.env.HOSTDECK_CODEX_VERTICAL_REPORT === undefined
-          ? null
-          : requireStructuredVerticalReportPath(
-              process.env.HOSTDECK_CODEX_VERTICAL_REPORT,
-              tmpdir()
-            );
+      const codexBin = requireExactCodexBinary(
+        process.env.HOSTDECK_CODEX_BIN,
+        hostTarget
+      );
+      const reportPath = resolveStructuredVerticalReportPath(hostTarget);
       const hostdeckCommit =
         reportPath === null ? null : currentCleanCommit(repositoryRoot);
       const version = parseCodexCliVersionOutput(
@@ -126,56 +178,100 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
       );
       expect(version).toBe(codexBindingDescriptor.codex_version);
 
-      const root = await mkdtemp(join(tmpdir(), "hostdeck-vertical-smoke-"));
-      const runtimeDirectory = join(root, "runtime");
-      const codexHome = join(root, "codex-home");
-      const projectA = join(root, "project-a");
-      const projectB = join(root, "project-b");
-      const databasePath = join(root, "hostdeck.sqlite");
-      const markerPath = join(root, "approved-marker");
+      const layout = await createStructuredVerticalLayout(hostTarget);
+      const {
+        root,
+        runtimeDirectory,
+        codexHome,
+        projectA,
+        projectB,
+        databasePath,
+        markerPath,
+        appEndpointPath,
+        tuiSocketPath
+      } = layout;
       const approvalPrompt =
-        `Use the shell tool exactly once to run \`touch ${shellQuote(markerPath)}\` with elevated permission. ` +
+        `Use the shell tool exactly once to run ${approvalCommand(markerPath, hostTarget)} with elevated permission. ` +
         "Request approval, do not use file-editing tools, and do nothing else.";
-      const appSocketPath = join(runtimeDirectory, "app.sock");
-      const tuiSocketPath = join(runtimeDirectory, "tui.sock");
-      await Promise.all([
-        mkdir(runtimeDirectory, { mode: 0o700 }),
-        mkdir(codexHome, { mode: 0o700 }),
-        mkdir(projectA, { mode: 0o700 }),
-        mkdir(projectB, { mode: 0o700 })
-      ]);
       try {
         await seedCodexAuthentication(codexHome);
+        await seedCodexConfiguration(codexHome);
         execFileSync("git", ["init", "-q", "-b", "main", projectA], { timeout: 10_000 });
         execFileSync("git", ["init", "-q", "-b", "main", projectB], { timeout: 10_000 });
       } catch (error) {
-        await rm(root, { recursive: true, force: true });
+        await layout.cleanup();
         throw error;
       }
 
-      const child = spawn(
-        codexBin,
-        [
-          "--enable",
-          "use_legacy_landlock",
-          "-c",
-          'sandbox_mode="read-only"',
-          "-c",
-          'approval_policy="on-request"',
-          "app-server",
-          "--listen",
-          `unix://${appSocketPath}`
-        ],
-        {
-          cwd: projectA,
-          env: { ...process.env, CODEX_HOME: codexHome },
-          stdio: ["ignore", "ignore", "pipe"]
-        }
-      );
+      const child =
+        hostTarget === "linux-x64"
+          ? spawn(
+              codexBin,
+              [
+                "--enable",
+                "use_legacy_landlock",
+                "-c",
+                'sandbox_mode="read-only"',
+                "-c",
+                'approval_policy="on-request"',
+                "app-server",
+                "--listen",
+                `unix://${appEndpointPath}`
+              ],
+              {
+                cwd: projectA,
+                env: { ...process.env, CODEX_HOME: codexHome },
+                stdio: ["ignore", "ignore", "pipe"]
+              }
+            )
+          : null;
       let appServerStderr = "";
-      child.stderr?.on("data", (chunk: Buffer) => {
+      child?.stderr?.on("data", (chunk: Buffer) => {
         appServerStderr = boundedOutput(appServerStderr, chunk);
       });
+      const windowsChildren: CodexWindowsRuntimeChildProcess[] = [];
+      const windowsObservedPorts: number[] = [];
+      const nativeWindowsProcessPort =
+        hostTarget === "windows-x64"
+          ? createNodeCodexWindowsRuntimeProcessPort()
+          : null;
+      const windowsProcessPort: CodexWindowsRuntimeProcessPort | undefined =
+        nativeWindowsProcessPort === null
+          ? undefined
+          : Object.freeze({
+              spawn(request: CodexWindowsRuntimeProcessRequest) {
+                const spawned = nativeWindowsProcessPort.spawn(request);
+                windowsChildren.push(spawned);
+                return spawned;
+              }
+            });
+      const windowsSupervisor =
+        hostTarget === "windows-x64"
+          ? createCodexWindowsRuntimeSupervisor({
+              codex_bin: codexBin,
+              cwd: projectA,
+              endpoint_file_path: appEndpointPath,
+              environment: {
+                ...process.env,
+                CODEX_HOME: codexHome,
+                NO_COLOR: "1"
+              },
+              process_port:
+                windowsProcessPort ??
+                (() => {
+                  throw new Error(
+                    "Windows structured vertical process port is unavailable."
+                  );
+                })()
+            })
+          : null;
+      const windowsOwner =
+        windowsSupervisor === null
+          ? null
+          : createCodexWindowsRuntimeConnection({
+              supervisor: windowsSupervisor,
+              resource_budget: defaultResourceBudget
+            });
 
       const proof: ProofEntry[] = [];
       const requestRecords: Array<{ readonly method: string; readonly params: unknown }> = [];
@@ -193,19 +289,88 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
       let callbackFailure: Error | null = null;
       let serverRequestFailure: Error | null = null;
       let expectedGeneration: number | null = null;
-      let pipeline: CodexEventPipeline | null = null;
       let callbackMode: "buffering" | "live" = "buffering";
       let approvals: TestApprovalControlService | null = null;
+      let planRehydrate: ((target: unknown) => Promise<unknown>) | null = null;
+      let observeControlEvent: CodexEventPipelineOptions["observe_event"];
       let tui: TuiProbe | null = null;
       const threadIds: CodexThreadId[] = [];
       const compactProgressEvidence: string[] = [];
-      let openDatabase: ReturnType<typeof openMigratedDatabase> | null = null;
+      const openDatabase = openMigratedDatabase(databasePath, {
+        now: () => new Date()
+      });
+      const repository = createSelectedStateRepository(openDatabase.db);
+      const projection = createProductionProjectionAppendPort({
+        repository,
+        publish(committed) {
+          const durable = repository.require(committed.event.event.session_id);
+          expect(durable.projection).toEqual(committed.projection);
+          increment(publicationCounts, committed.event.event.session_id);
+        }
+      });
+      const continuity = createProductionProjectionContinuityPort({
+        repository,
+        publish() {}
+      });
+      const eventClock = monotonicWallClock();
+      const pipeline = createCodexEventPipeline({
+        repository,
+        append_port: projection,
+        normalizer: { now: eventClock },
+        async observe_event(event, generation) {
+          if (observeControlEvent === undefined) {
+            throw new Error(
+              "Codex control observers are unavailable for a live event."
+            );
+          }
+          await observeControlEvent(event, generation);
+        }
+      });
+      const reconciliation = createCodexRuntimeReconciliationLifecycle({
+        approvals: {
+          async disconnect(generation) {
+            if (approvals === null) {
+              throw new Error(
+                "Structured vertical approval control is unavailable."
+              );
+            }
+            return approvals.disconnect(generation);
+          }
+        },
+        audit: {
+          reconcile(input) {
+            return runStartupAuditOrphanReconciliation({
+              db: openDatabase.db,
+              eligible_before: input.eligible_before,
+              reconciled_at: input.reconciled_at,
+              signal: input.deadline.signal,
+              timeout_ms: input.deadline.timeoutMs(2_000)
+            });
+          }
+        },
+        continuity,
+        events: {
+          barrier: (input) => pipeline.barrier(input.signal),
+          reconcile: (input) =>
+            pipeline.reconcile(input.threads, input.signal)
+        },
+        now: monotonicWallClock(),
+        plans: {
+          rehydrate(target) {
+            if (planRehydrate === null) {
+              throw new Error(
+                "Structured vertical Plan control is unavailable."
+              );
+            }
+            return planRehydrate(target);
+          }
+        },
+        projection,
+        repository,
+        resource_budget: defaultResourceBudget
+      });
 
       const consumeThroughPipeline = (message: CodexConnectionNotification, generation: number): void => {
-        if (pipeline === null) {
-          callbackFailure ??= new Error("Codex callback entered live mode before pipeline construction.");
-          return;
-        }
         const operation = pipeline.consume(message, generation);
         callbackTasks.add(operation);
         void operation
@@ -215,9 +380,20 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
           .finally(() => callbackTasks.delete(operation));
       };
 
-      const connection = createCodexAppServerConnection({
-        transport: createCodexUnixWebSocketTransport({ socket_path: appSocketPath }),
+      const connection = createCodexRuntimeReconnectController({
+        transport:
+          windowsOwner?.transport ??
+          createCodexUnixWebSocketTransport({ socket_path: appEndpointPath }),
         observed_version: version,
+        host_target: hostTarget,
+        resource_budget: defaultResourceBudget,
+        lifecycle: Object.freeze({
+          disconnected: reconciliation.disconnected,
+          reconcile: reconciliation.reconcile,
+          resubscribe: reconciliation.resubscribe,
+          ready: reconciliation.ready
+        }),
+        random: () => 0,
         on_notification(message) {
           increment(notificationCounts, summarizeNotification(message));
           let generation: number;
@@ -253,20 +429,21 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
             throw error;
           }
         },
-        on_protocol_issue: (issue) => protocolIssues.push(issue)
+        on_protocol_issue: (issue) => protocolIssues.push(issue),
+        on_background_error: (error) => backgroundErrors.push(error)
       });
 
       let smokeError: Error | null = null;
       try {
-        await waitForSocket(appSocketPath, child, () => appServerStderr);
-        expect((await lstat(runtimeDirectory)).mode & 0o077).toBe(0);
-        await connection.connect();
+        if (child !== null) {
+          await waitForSocket(appEndpointPath, child, () => appServerStderr);
+          expect((await lstat(runtimeDirectory)).mode & 0o077).toBe(0);
+        }
+        await connection.start();
         expectedGeneration = connection.generation;
         expect(expectedGeneration).toBeGreaterThan(0);
         prove(proof, "exact runtime connected", "request_response");
 
-        openDatabase = openMigratedDatabase(databasePath, { now: () => new Date() });
-        const repository = createSelectedStateRepository(openDatabase.db);
         const port = requestRecordingPort(connection, requestRecords);
         const threads = createCodexThreadClient(port);
         const [threadA, threadB] = await Promise.all([
@@ -334,31 +511,26 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
           interrupts: interruptControl,
           prompts: promptControl
         });
-        const eventClock = monotonicWallClock();
-        pipeline = createCodexEventPipeline({
-          repository,
-          append_port: createProductionProjectionAppendPort({
-            repository,
-            publish(committed) {
-              const durable = repository.require(committed.event.event.session_id);
-              expect(durable.projection).toEqual(committed.projection);
-              increment(publicationCounts, committed.event.event.session_id);
-            }
-          }),
-          normalizer: { now: eventClock },
-          async observe_event(event, generation) {
-            const receipt = await controlObserver.observe(event, generation);
-            increment(observerCounts, receipt.method);
-            if (
-              "thread_id" in event &&
-              event.thread_id === targetA.codex_thread_id &&
-              ["turn/started", "item/started", "item/completed", "turn/completed"].includes(event.method)
-            ) {
-              const progress = await compactControl.snapshot(targetA);
-              if (progress !== null) compactProgressEvidence.push(`${event.method}:${progress.state}`);
+        planRehydrate = (target) => planControl.rehydrate(target);
+        observeControlEvent = async (event, generation) => {
+          const receipt = await controlObserver.observe(event, generation);
+          increment(observerCounts, receipt.method);
+          if (
+            "thread_id" in event &&
+            event.thread_id === targetA.codex_thread_id &&
+            [
+              "turn/started",
+              "item/started",
+              "item/completed",
+              "turn/completed"
+            ].includes(event.method)
+          ) {
+            const progress = await compactControl.snapshot(targetA);
+            if (progress !== null) {
+              compactProgressEvidence.push(`${event.method}:${progress.state}`);
             }
           }
-        });
+        };
         const deferredNotificationCount = deferredNotifications.length;
         for (const deferred of deferredNotifications.splice(0)) {
           if (deferred.generation !== expectedGeneration) {
@@ -619,21 +791,129 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
         prove(proof, "compact ran and completed through shared observers", "normalized_event");
         prove(proof, "compact usage reset remained coherent", "durable_projection");
 
-        const tuiCommand = buildCodexTuiResumeCommand({
-          socket_path: appSocketPath,
+        const windowsTuiAuthority = windowsOwner?.current_tui_authority() ?? null;
+        if (
+          windowsTuiAuthority !== null &&
+          windowsTuiAuthority.generation !== expectedGeneration
+        ) {
+          throw new Error("Windows TUI authority generation is stale.");
+        }
+        if (windowsTuiAuthority !== null) {
+          windowsObservedPorts.push(
+            windowsEndpointPort(windowsTuiAuthority.endpoint.address)
+          );
+        }
+        const tuiCommand = buildCodexPlatformTuiResumeCommand({
+          target: hostTarget,
+          endpoint:
+            windowsTuiAuthority?.endpoint ??
+            createCodexUnixSocketEndpoint(appEndpointPath),
           thread_id: threadB,
-          codex_bin: codexBin
+          codex_bin: codexBin,
+          cwd: projectB
         });
-        tui = await startAndInspectTui(tuiCommand, codexHome, projectB, tuiSocketPath);
+        tui = await startAndInspectTui(
+          tuiCommand,
+          windowsTuiAuthority?.credential,
+          codexHome,
+          projectB,
+          tuiSocketPath
+        );
         expect(tui.output).toContain("OpenAI Codex");
         expect(tui.output).toContain(basename(projectB));
         await tui.close();
         tui = null;
         await flushCallbacks(callbackTasks, () => callbackFailure, () => serverRequestFailure, pipeline);
-        expect(connection.state).toBe("ready");
+        expect(connection.snapshot().phase).toBe("ready");
         expect(connection.generation).toBe(expectedGeneration);
         await expect(threads.read(threadB)).resolves.toMatchObject({ id: threadB, status: "idle" });
         prove(proof, "TUI shared thread while HostDeck remained connected", "tui_inspection");
+
+        if (windowsOwner !== null && windowsTuiAuthority !== null) {
+          const firstCredential = windowsTuiAuthority.credential.read(
+            codexRemoteAuthEnvironmentVariable
+          );
+          if (firstCredential === undefined) {
+            throw new Error("Windows runtime credential disappeared before crash injection.");
+          }
+          const firstChild = windowsChildren[0];
+          if (firstChild === undefined || !firstChild.terminateTree()) {
+            throw new Error("Windows app-server crash injection was rejected.");
+          }
+          expectedGeneration = null;
+          await firstChild.exit;
+          await waitFor(
+            () =>
+              connection.snapshot().phase === "ready" &&
+              connection.generation === 2 &&
+              reconciliation.snapshot().phase === "ready" &&
+              reconciliation.snapshot().generation === 2,
+            30_000,
+            () =>
+              "Windows app-server was not reconciled and readmitted after forced exit."
+          );
+          expectedGeneration = connection.generation;
+          await flushCallbacks(
+            callbackTasks,
+            () => callbackFailure,
+            () => serverRequestFailure,
+            pipeline
+          );
+          const secondAuthority = windowsOwner.current_tui_authority();
+          const secondCredential = secondAuthority.credential.read(
+            codexRemoteAuthEnvironmentVariable
+          );
+          if (secondCredential === undefined) {
+            throw new Error("Rotated Windows runtime credential is unavailable.");
+          }
+          expect(secondAuthority.generation).toBe(2);
+          windowsObservedPorts.push(
+            windowsEndpointPort(secondAuthority.endpoint.address)
+          );
+          if (
+            secondAuthority.endpoint.address ===
+              windowsTuiAuthority.endpoint.address ||
+            secondCredential === firstCredential ||
+            windowsTuiAuthority.credential.read(
+              codexRemoteAuthEnvironmentVariable
+            ) !== undefined
+          ) {
+            throw new Error(
+              "Windows runtime authority did not rotate and revoke cleanly."
+            );
+          }
+          expect(connection.snapshot()).toMatchObject({
+            phase: "ready",
+            admitted_generation: 2,
+            completed_reconnects: 1,
+            disconnect_cleanups: 1
+          });
+          expect(reconciliation.snapshot()).toMatchObject({
+            phase: "ready",
+            generation: 2,
+            gap_reason: "disconnect",
+            durable_session_count: 2,
+            boundary_count: 2,
+            ready_count: 2
+          });
+          expect(windowsOwner.snapshot()).toMatchObject({
+            phase: "active",
+            runtime_generation: 2,
+            transport_generation: 2,
+            runtime_restarts: 1,
+            observed_exits: 1
+          });
+          expect(windowsChildren).toHaveLength(2);
+          await expect(threads.read(threadA)).resolves.toMatchObject({
+            id: threadA,
+            status: "idle"
+          });
+          prove(
+            proof,
+            "Windows crash reconciled before runtime readmission",
+            "durable_projection"
+          );
+        }
 
         const threadBEvents = repository.listEvents(targetB.session_id).events;
         expect(threadBEvents.some((event) => event.type === "turn")).toBe(false);
@@ -711,7 +991,7 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
           projectB,
           databasePath,
           markerPath,
-          appSocketPath,
+          appEndpointPath,
           tuiSocketPath,
           ...threadIds
         ]);
@@ -728,11 +1008,10 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
         pipeline
       );
       if (tui !== null) await collectCleanupError(tui.close(), cleanupErrors);
-      if (connection.state === "ready" && threadIds.length > 0) {
+      if (connection.snapshot().phase === "ready" && threadIds.length > 0) {
         const threads = createCodexThreadClient(connection);
         for (const threadId of [...threadIds]) await collectCleanupError(threads.archive(threadId), cleanupErrors);
       }
-      await collectCleanupError(connection.close("HostDeck structured vertical smoke completed."), cleanupErrors);
       await collectCleanupError(settleCallbacks(callbackTasks), cleanupErrors);
       const callbackFailureAfterCleanup = aggregateCallbackFailure(
         () => callbackFailure,
@@ -745,6 +1024,21 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
       ) {
         cleanupErrors.push(callbackFailureAfterCleanup);
       }
+      await collectCleanupError(connection.close(), cleanupErrors);
+      if (windowsOwner !== null) {
+        const deadline = createOperationDeadline({ timeoutMs: 10_000 });
+        await collectCleanupError(windowsOwner.close(deadline), cleanupErrors);
+        deadline.dispose();
+        await collectCleanupError(
+          verifyWindowsRuntimeCleanup({
+            supervisor: windowsSupervisor,
+            children: windowsChildren,
+            ports: windowsObservedPorts,
+            endpointPath: appEndpointPath
+          }),
+          cleanupErrors
+        );
+      }
       if (approvals !== null) {
         try {
           approvals.close();
@@ -752,7 +1046,9 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
           cleanupErrors.push(error);
         }
       }
-      await collectCleanupError(stopChild(child), cleanupErrors);
+      if (child !== null) {
+        await collectCleanupError(stopChild(child), cleanupErrors);
+      }
       if (openDatabase !== null) {
         try {
           openDatabase.db.close();
@@ -760,13 +1056,15 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
           cleanupErrors.push(error);
         }
       }
-      await collectCleanupError(rm(root, { recursive: true, force: true }), cleanupErrors);
+      await collectCleanupError(layout.cleanup(), cleanupErrors);
       if (smokeError !== null && cleanupErrors.length > 0) {
         throw new AggregateError([smokeError, ...cleanupErrors], "Codex structured vertical and cleanup failed.");
       }
       if (smokeError !== null) throw smokeError;
       if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, "Codex structured vertical cleanup failed.");
-      await expect(access(root)).rejects.toBeDefined();
+      for (const path of layout.cleanupPaths) {
+        await expect(access(path)).rejects.toBeDefined();
+      }
       const summary = {
         runtime_version: version,
         duration_ms: Date.now() - startedAt,
@@ -785,18 +1083,26 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
         cleanup: "passed"
       } as const;
       if (reportPath !== null && hostdeckCommit !== null) {
-        publishStructuredVerticalReport(
-          reportPath,
-          createStructuredVerticalReport({
-            observed_at: new Date().toISOString(),
-            hostdeck_commit: hostdeckCommit,
-            duration_ms: summary.duration_ms,
-            request_count: summary.request_count,
-            notification_count: summary.notification_count,
-            observer_count: summary.observer_count,
-            durable_publication_count: summary.durable_publication_count
-          })
-        );
+        const reportInput = {
+          observed_at: new Date().toISOString(),
+          hostdeck_commit: hostdeckCommit,
+          duration_ms: summary.duration_ms,
+          request_count: summary.request_count,
+          notification_count: summary.notification_count,
+          observer_count: summary.observer_count,
+          durable_publication_count: summary.durable_publication_count
+        };
+        if (hostTarget === "windows-x64") {
+          publishWindowsStructuredVerticalReport(
+            reportPath,
+            createWindowsStructuredVerticalReport(reportInput)
+          );
+        } else {
+          publishStructuredVerticalReport(
+            reportPath,
+            createStructuredVerticalReport(reportInput)
+          );
+        }
       }
       process.stdout.write(`[structured-vertical-summary] ${JSON.stringify(summary)}\n`);
     },
@@ -804,7 +1110,28 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
   );
 });
 
-function requireExactCodexBinary(candidate: string | undefined): string {
+function resolveStructuredVerticalReportPath(
+  target: "linux-x64" | "windows-x64"
+): string | null {
+  const candidate = process.env.HOSTDECK_CODEX_VERTICAL_REPORT;
+  if (candidate === undefined) return null;
+  return target === "windows-x64"
+    ? requireWindowsStructuredVerticalReportPath(candidate, tmpdir())
+    : requireStructuredVerticalReportPath(candidate, tmpdir());
+}
+
+function requireExactCodexBinary(
+  candidate: string | undefined,
+  target: "linux-x64" | "windows-x64"
+): string {
+  if (
+    (target === "linux-x64" &&
+      (process.platform !== "linux" || process.arch !== "x64")) ||
+    (target === "windows-x64" &&
+      (process.platform !== "win32" || process.arch !== "x64"))
+  ) {
+    throw new TypeError("Structured vertical target does not match this host.");
+  }
   if (candidate === undefined || !isAbsolute(candidate)) {
     throw new TypeError(
       "Structured vertical requires an absolute Codex binary."
@@ -822,13 +1149,14 @@ function requireExactCodexBinary(candidate: string | undefined): string {
     realpathSync(path) !== path ||
     !metadata.isFile() ||
     metadata.isSymbolicLink() ||
-    metadata.nlink !== 1
+    metadata.nlink !== 1 ||
+    (target === "windows-x64" && !path.toLowerCase().endsWith(".exe"))
   ) {
     throw new TypeError("Structured vertical Codex binary is insecure.");
   }
   const version = parseCodexCliVersionOutput(
     execFileSync(path, ["--version"], {
-      cwd: "/",
+      cwd: dirname(path),
       encoding: "utf8",
       timeout: 10_000,
       maxBuffer: 64 * 1_024
@@ -867,7 +1195,7 @@ function currentCleanCommit(repositoryRoot: string): string {
 }
 
 function requestRecordingPort(
-  connection: CodexAppServerConnection,
+  connection: CodexRuntimeReconnectController,
   records: Array<{ readonly method: string; readonly params: unknown }>
 ) {
   return {
@@ -885,7 +1213,10 @@ function requestRecordingPort(
   };
 }
 
-async function proveUnsupportedSkillsPolicy(connection: CodexAppServerConnection, cwd: string): Promise<void> {
+async function proveUnsupportedSkillsPolicy(
+  connection: CodexRuntimeReconnectController,
+  cwd: string
+): Promise<void> {
   const compatibility: RuntimeCompatibility = {
     ...connection.compatibility,
     state: "degraded",
@@ -1102,11 +1433,26 @@ function redactDiagnostic(value: string, sensitiveValues: readonly string[]): st
 }
 
 async function startAndInspectTui(
-  command: ReturnType<typeof buildCodexTuiResumeCommand>,
+  command: CodexPlatformTuiResumeCommand,
+  credential: CodexProtectedEnvironmentCredentialSource | undefined,
   codexHome: string,
   projectDirectory: string,
   tmuxSocketPath: string
 ): Promise<TuiProbe> {
+  if (command.target === "windows-x64") {
+    if (credential === undefined) {
+      throw new Error("Windows TUI resume credential is unavailable.");
+    }
+    return startAndInspectWindowsTui(
+      command,
+      credential,
+      codexHome,
+      projectDirectory
+    );
+  }
+  if (credential !== undefined) {
+    throw new Error("Linux TUI resume received unexpected credential authority.");
+  }
   const threadId = command.args.at(-1);
   if (threadId === undefined) throw new Error("TUI resume command is missing its exact thread id.");
   const args = [...command.args.slice(0, -1), "--no-alt-screen", threadId];
@@ -1191,6 +1537,90 @@ async function startAndInspectTui(
     }
     if (cleanupErrors.length > 0) {
       throw new AggregateError([error, ...cleanupErrors], "Codex TUI inspection and cleanup failed.");
+    }
+    throw error;
+  }
+}
+
+async function startAndInspectWindowsTui(
+  command: Extract<CodexPlatformTuiResumeCommand, { readonly target: "windows-x64" }>,
+  credential: CodexProtectedEnvironmentCredentialSource,
+  codexHome: string,
+  projectDirectory: string
+): Promise<TuiProbe> {
+  const token = credential.read(codexRemoteAuthEnvironmentVariable);
+  if (token === undefined || !/^[A-Za-z0-9_-]{43,512}$/u.test(token)) {
+    throw new Error("Windows TUI resume credential is unavailable.");
+  }
+  const threadId = command.args.at(-1);
+  if (threadId === undefined) {
+    throw new Error("Windows TUI resume command is missing its exact thread id.");
+  }
+  const args = [...command.args.slice(0, -1), "--no-alt-screen", threadId];
+  const environment = {
+    ...process.env,
+    CODEX_HOME: codexHome,
+    TERM: "xterm-256color",
+    [codexRemoteAuthEnvironmentVariable]: token
+  };
+  const child = spawn(
+    locateWinpty(),
+    ["-Xallow-non-tty", "-Xplain", command.executable, ...args],
+    {
+      cwd: projectDirectory,
+      env: environment,
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true
+    }
+  );
+  let stdout = "";
+  let stderr = "";
+  child.stdout?.on("data", (chunk: Buffer) => {
+    stdout = boundedOutput(stdout, chunk);
+  });
+  child.stderr?.on("data", (chunk: Buffer) => {
+    stderr = boundedOutput(stderr, chunk);
+  });
+  let running = true;
+  try {
+    await waitFor(
+      () => {
+        if (child.exitCode !== null || child.signalCode !== null) {
+          throw new Error("Windows Codex TUI exited before rendering.");
+        }
+        const output = stripTerminalControl(`${stdout}\n${stderr}`);
+        return (
+          output.includes("OpenAI Codex") &&
+          output.includes(basename(projectDirectory))
+        );
+      },
+      15_000,
+      () => "Windows Codex TUI did not render before timeout."
+    );
+    const spawnArguments = JSON.stringify(child.spawnargs);
+    if (
+      spawnArguments.includes(token) ||
+      !spawnArguments.includes("--remote-auth-token-env") ||
+      !spawnArguments.includes(codexRemoteAuthEnvironmentVariable)
+    ) {
+      throw new Error("Windows Codex TUI authority was not environment-only.");
+    }
+    const output = stripTerminalControl(`${stdout}\n${stderr}`);
+    if (output.includes(token)) {
+      throw new Error("Windows Codex TUI output contained credential material.");
+    }
+    return {
+      output,
+      async close() {
+        if (!running) return;
+        await stopWindowsProcessTree(child);
+        running = false;
+      }
+    };
+  } catch (error) {
+    if (running) {
+      await stopWindowsProcessTree(child).catch(() => undefined);
+      running = false;
     }
     throw error;
   }
@@ -1292,6 +1722,73 @@ async function waitForSocket(socketPath: string, child: ChildProcess, readStderr
   );
 }
 
+async function verifyWindowsRuntimeCleanup(input: {
+  readonly supervisor: ReturnType<
+    typeof createCodexWindowsRuntimeSupervisor
+  > | null;
+  readonly children: readonly CodexWindowsRuntimeChildProcess[];
+  readonly ports: readonly number[];
+  readonly endpointPath: string;
+}): Promise<void> {
+  if (
+    input.supervisor === null ||
+    input.children.length !== 2 ||
+    input.ports.length !== 2 ||
+    new Set(input.ports).size !== 2
+  ) {
+    throw new Error("Windows structured vertical cleanup inventory is invalid.");
+  }
+  for (const port of input.ports) await waitForClosedWindowsPort(port);
+  if (input.children.some((child) => child.isRunning())) {
+    throw new Error("Windows structured vertical retained an owned app-server.");
+  }
+  expect(input.supervisor.snapshot()).toMatchObject({
+    phase: "closed",
+    endpoint_ready: false,
+    credential_file_present: false,
+    claim_held: false,
+    process_state: "exited"
+  });
+  expect(lstatSync(input.endpointPath).size).toBe(0);
+  expect(
+    existsSync(codexWindowsRuntimeCredentialPath(input.endpointPath))
+  ).toBe(false);
+}
+
+async function waitForClosedWindowsPort(port: number): Promise<void> {
+  const { createConnection } = await import("node:net");
+  await waitFor(
+    () =>
+      new Promise<boolean>((resolveClosed) => {
+        const socket = createConnection({ host: "127.0.0.1", port });
+        const timeout = setTimeout(() => {
+          socket.destroy();
+          resolveClosed(false);
+        }, 250);
+        socket.once("connect", () => {
+          clearTimeout(timeout);
+          socket.destroy();
+          resolveClosed(false);
+        });
+        socket.once("error", () => {
+          clearTimeout(timeout);
+          resolveClosed(true);
+        });
+      }),
+    5_000,
+    () => "Windows Codex app-server listener remained after cleanup."
+  );
+}
+
+function windowsEndpointPort(address: string): number {
+  const parsed = /^ws:\/\/127\.0\.0\.1:([1-9][0-9]{3,4})$/u.exec(address);
+  const port = parsed === null ? Number.NaN : Number(parsed[1]);
+  if (!Number.isSafeInteger(port) || port < 1_024 || port > 65_535) {
+    throw new Error("Windows Codex app-server endpoint port is invalid.");
+  }
+  return port;
+}
+
 async function stopChild(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
   const exited = once(child, "exit").then(() => undefined);
@@ -1299,6 +1796,59 @@ async function stopChild(child: ChildProcess): Promise<void> {
   if (await settlesWithin(exited, 2_000)) return;
   child.kill("SIGKILL");
   if (!(await settlesWithin(exited, 1_000))) throw new Error("Codex vertical-smoke app-server did not exit after SIGKILL.");
+}
+
+async function stopWindowsProcessTree(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (!Number.isSafeInteger(child.pid) || (child.pid ?? 0) < 1) {
+    throw new Error("Windows Codex TUI process identity is unavailable.");
+  }
+  const exited = once(child, "exit").then(() => undefined);
+  const result = spawnSync(
+    "taskkill.exe",
+    ["/PID", String(child.pid), "/T", "/F"],
+    {
+      encoding: "utf8",
+      maxBuffer: 64 * 1_024,
+      shell: false,
+      timeout: 10_000,
+      windowsHide: true
+    }
+  );
+  if (
+    result.error !== undefined ||
+    result.signal !== null ||
+    (result.status !== 0 && child.exitCode === null && child.signalCode === null)
+  ) {
+    if (await settlesWithin(exited, 500)) return;
+    throw new Error("Windows Codex TUI process tree could not be terminated.");
+  }
+  if (!(await settlesWithin(exited, 5_000))) {
+    throw new Error("Windows Codex TUI process tree remained after termination.");
+  }
+}
+
+function locateWinpty(): string {
+  const candidates = [
+    "C:\\Program Files\\Git\\usr\\bin\\winpty.exe",
+    "C:\\Program Files\\Git\\mingw64\\bin\\winpty.exe"
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate) && lstatSync(candidate).isFile()) {
+      return realpathSync(candidate);
+    }
+  }
+  throw new Error("Windows Codex TUI requires the reviewed winpty harness.");
+}
+
+function stripTerminalControl(value: string): string {
+  const ansiEscapePattern = new RegExp(
+    `${String.fromCharCode(27)}\\[[0-9;]*m`,
+    "gu"
+  );
+  return value
+    .replaceAll(ansiEscapePattern, "")
+    .replaceAll("\r", "");
 }
 
 async function settlesWithin(promise: Promise<void>, milliseconds: number): Promise<boolean> {
@@ -1312,20 +1862,170 @@ async function settlesWithin(promise: Promise<void>, milliseconds: number): Prom
   return settled;
 }
 
+interface StructuredVerticalLayout {
+  readonly root: string;
+  readonly runtimeDirectory: string;
+  readonly codexHome: string;
+  readonly projectA: string;
+  readonly projectB: string;
+  readonly databasePath: string;
+  readonly markerPath: string;
+  readonly appEndpointPath: string;
+  readonly tuiSocketPath: string;
+  readonly cleanupPaths: readonly string[];
+  readonly cleanup: () => Promise<void>;
+}
+
+async function createStructuredVerticalLayout(
+  target: "linux-x64" | "windows-x64"
+): Promise<StructuredVerticalLayout> {
+  if (target === "linux-x64") {
+    const root = await mkdtemp(join(tmpdir(), "hostdeck-vertical-smoke-"));
+    const runtimeDirectory = join(root, "runtime");
+    const codexHome = join(root, "codex-home");
+    const projectA = join(root, "project-a");
+    const projectB = join(root, "project-b");
+    await Promise.all([
+      mkdir(runtimeDirectory, { mode: 0o700 }),
+      mkdir(codexHome, { mode: 0o700 }),
+      mkdir(projectA, { mode: 0o700 }),
+      mkdir(projectB, { mode: 0o700 })
+    ]);
+    return Object.freeze({
+      root,
+      runtimeDirectory,
+      codexHome,
+      projectA,
+      projectB,
+      databasePath: join(root, "hostdeck.sqlite"),
+      markerPath: join(root, "approved-marker"),
+      appEndpointPath: join(runtimeDirectory, "app.sock"),
+      tuiSocketPath: join(runtimeDirectory, "tui.sock"),
+      cleanupPaths: Object.freeze([root]),
+      cleanup: () => rm(root, { recursive: true, force: true })
+    });
+  }
+
+  if (process.platform !== "win32" || process.arch !== "x64") {
+    throw new Error("Windows structured vertical requires native Windows x64.");
+  }
+  const defaults = resolveNativeWindowsHostDeckDefaultPaths();
+  const suffix = `Vertical-${process.pid}-${Date.now()}`;
+  const paths = prepareHostDeckLocalPaths({
+    config_dir: win32.join(defaults.config_dir, suffix),
+    state_dir: win32.join(defaults.state_dir, suffix),
+    runtime_dir: win32.join(defaults.runtime_dir, suffix),
+    database_path: win32.join(defaults.state_dir, suffix, "hostdeck.sqlite")
+  });
+  const projectA = win32.join(paths.state_dir, "project-a");
+  const projectB = win32.join(paths.state_dir, "project-b");
+  await Promise.all([
+    mkdir(projectA, { mode: 0o700 }),
+    mkdir(projectB, { mode: 0o700 })
+  ]);
+  const cleanupPaths = Object.freeze([
+    paths.config_dir,
+    paths.state_dir,
+    paths.runtime_dir
+  ]);
+  return Object.freeze({
+    root: paths.state_dir,
+    runtimeDirectory: paths.runtime_dir,
+    codexHome: paths.config_dir,
+    projectA,
+    projectB,
+    databasePath: paths.database_path,
+    markerPath: win32.join(paths.state_dir, "approved-marker"),
+    appEndpointPath: win32.join(paths.runtime_dir, "app-server.endpoint"),
+    tuiSocketPath: win32.join(paths.runtime_dir, "unused-tui.sock"),
+    cleanupPaths,
+    async cleanup() {
+      const failures: unknown[] = [];
+      for (const path of cleanupPaths) {
+        await collectCleanupError(
+          rm(path, { recursive: true, force: true }),
+          failures
+        );
+      }
+      if (failures.length > 0) {
+        throw new AggregateError(
+          failures,
+          "Windows structured vertical temporary paths were not removed."
+        );
+      }
+    }
+  });
+}
+
 async function seedCodexAuthentication(codexHome: string): Promise<void> {
   const sourceHome = process.env.CODEX_HOME ?? join(homedir(), ".codex");
   const source = join(sourceHome, "auth.json");
   const sourceMetadata = await lstat(source);
-  if (!sourceMetadata.isFile() || (sourceMetadata.mode & 0o077) !== 0) {
+  if (
+    !sourceMetadata.isFile() ||
+    sourceMetadata.isSymbolicLink() ||
+    sourceMetadata.nlink !== 1 ||
+    (process.platform !== "win32" && (sourceMetadata.mode & 0o077) !== 0)
+  ) {
     throw new Error("Installed Codex authentication must be a private regular auth.json file for the vertical smoke.");
   }
   const destination = join(codexHome, "auth.json");
   await copyFile(source, destination);
-  await chmod(destination, 0o600);
+  if (process.platform === "win32") {
+    secureHostDeckRegularFile(destination, {
+      label: "Structured vertical Codex authentication",
+      mode: 0o600,
+      repair_mode: true
+    });
+  } else {
+    await chmod(destination, 0o600);
+  }
   const destinationMetadata = await lstat(destination);
-  if (!destinationMetadata.isFile() || (destinationMetadata.mode & 0o077) !== 0) {
+  if (
+    !destinationMetadata.isFile() ||
+    destinationMetadata.isSymbolicLink() ||
+    destinationMetadata.nlink !== 1 ||
+    (process.platform !== "win32" && (destinationMetadata.mode & 0o077) !== 0)
+  ) {
     throw new Error("Temporary Codex authentication copy is not private.");
   }
+}
+
+async function seedCodexConfiguration(codexHome: string): Promise<void> {
+  const destination = join(codexHome, "config.toml");
+  await writeFile(
+    destination,
+    [
+      "check_for_update_on_startup = false",
+      'sandbox_mode = "read-only"',
+      'approval_policy = "on-request"',
+      "[features]",
+      "goals = true",
+      "plugins = false",
+      ""
+    ].join("\n"),
+    { encoding: "utf8", flag: "wx", mode: 0o600 }
+  );
+  if (process.platform === "win32") {
+    secureHostDeckRegularFile(destination, {
+      label: "Structured vertical Codex configuration",
+      mode: 0o600,
+      repair_mode: true
+    });
+  } else {
+    await chmod(destination, 0o600);
+  }
+}
+
+function approvalCommand(
+  markerPath: string,
+  target: "linux-x64" | "windows-x64"
+): string {
+  if (target === "linux-x64") {
+    return `\`touch ${shellQuote(markerPath)}\``;
+  }
+  const escaped = markerPath.replaceAll("'", "''");
+  return `\`[System.IO.File]::WriteAllText('${escaped}', 'approved')\``;
 }
 
 function shellQuote(value: string): string {

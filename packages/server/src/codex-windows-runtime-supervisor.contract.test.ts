@@ -294,7 +294,9 @@ if (process.env[crashWorkerEnvironment] === "1") {
         const first = owner.current_tui_authority();
         firstPort = endpointPort(first.endpoint.address);
         firstToken = first.credential.read(codexRemoteAuthEnvironmentVariable) ?? "";
-        expect(firstToken).toMatch(/^[A-Za-z0-9_-]{64}$/u);
+        if (!/^[A-Za-z0-9_-]{64}$/u.test(firstToken)) {
+          throw new TypeError("Codex Windows connection credential is invalid.");
+        }
         expect(owner.snapshot()).toMatchObject({
           phase: "active",
           runtime_generation: 1,
@@ -322,9 +324,13 @@ if (process.env[crashWorkerEnvironment] === "1") {
         secondToken = second.credential.read(codexRemoteAuthEnvironmentVariable) ?? "";
         expect(second.generation).toBe(2);
         expect(secondPort).not.toBe(firstPort);
-        expect(secondToken).toMatch(/^[A-Za-z0-9_-]{64}$/u);
-        expect(secondToken).not.toBe(firstToken);
-        expect(first.credential.read(codexRemoteAuthEnvironmentVariable)).toBeUndefined();
+        if (
+          !/^[A-Za-z0-9_-]{64}$/u.test(secondToken) ||
+          secondToken === firstToken ||
+          first.credential.read(codexRemoteAuthEnvironmentVariable) !== undefined
+        ) {
+          throw new TypeError("Codex Windows connection authority did not rotate safely.");
+        }
         expect(reconnect.snapshot()).toMatchObject({
           phase: "ready",
           current_generation: 2,
@@ -353,9 +359,13 @@ if (process.env[crashWorkerEnvironment] === "1") {
           owner: owner.snapshot(),
           reconnect: reconnect.snapshot()
         });
-        expect(publicState).not.toContain(firstToken);
-        expect(publicState).not.toContain(secondToken);
-        expect(publicState).not.toContain("ws://");
+        if (
+          publicState.includes(firstToken) ||
+          publicState.includes(secondToken) ||
+          publicState.includes("ws://")
+        ) {
+          throw new TypeError("Codex Windows connection snapshot contains private authority.");
+        }
       } finally {
         await reconnect.close().catch(() => undefined);
         const deadline = createOperationDeadline({ timeoutMs: 10_000 });
@@ -372,8 +382,9 @@ if (process.env[crashWorkerEnvironment] === "1") {
       }
       await waitForClosedPort(firstPort);
       await waitForClosedPort(secondPort);
-      expect(firstToken).not.toBe("");
-      expect(secondToken).not.toBe("");
+      if (firstToken === "" || secondToken === "") {
+        throw new TypeError("Codex Windows connection credential evidence is incomplete.");
+      }
       expect(supervisor.snapshot()).toMatchObject({
         phase: "closed",
         endpoint_ready: false,

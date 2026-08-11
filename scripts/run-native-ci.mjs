@@ -227,6 +227,15 @@ function runWindowsCodexSpike(checks, nativeEvidencePath) {
       10_000,
       "codex_transport_spike_evidence"
     );
+    runCommand(
+      process.execPath,
+      [
+        join(repositoryRoot, "scripts", "run-windows-codex-vertical.mjs"),
+        "--validate-harness"
+      ],
+      60_000,
+      "codex_vertical_harness_preflight"
+    );
   });
 }
 

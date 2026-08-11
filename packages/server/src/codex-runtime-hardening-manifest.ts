@@ -67,6 +67,7 @@ export const runtimeHardeningDeterministicTests = Object.freeze([
   "packages/server/src/codex-windows-runtime-supervisor-node.test.ts",
   "packages/server/src/codex-windows-runtime-supervisor.contract.test.ts",
   "packages/server/src/codex-windows-runtime-supervisor.test.ts",
+  "packages/server/src/codex-windows-structured-vertical-report.test.ts",
   "packages/server/src/managed-thread-service.test.ts",
   "packages/server/src/pending-turn-settings.test.ts"
 ] as const);
