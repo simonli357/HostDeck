@@ -810,10 +810,29 @@ async function rejectedUpgradeStatus(url, headers) {
       rejectStatus(new Error("Rejected WebSocket probe unexpectedly opened."));
     });
     socket.once("unexpected-response", (_request, response) => {
-      clearTimeout(timer);
       const status = response.statusCode;
+      let responseSettled = false;
+      const resolveResponse = () => {
+        if (responseSettled) return;
+        responseSettled = true;
+        clearTimeout(timer);
+        resolveStatus(status);
+      };
+      const rejectResponse = (error) => {
+        if (isConnectionResetError(error)) {
+          resolveResponse();
+          return;
+        }
+        if (responseSettled) return;
+        responseSettled = true;
+        clearTimeout(timer);
+        rejectStatus(new Error("Rejected WebSocket response stream failed.", { cause: error }));
+      };
+      response.once("end", resolveResponse);
+      response.once("close", resolveResponse);
+      response.once("error", rejectResponse);
+      response.socket.once("error", rejectResponse);
       response.resume();
-      resolveStatus(status);
     });
     socket.once("error", (error) => {
       if (/Unexpected server response/iu.test(error.message)) return;
@@ -821,6 +840,14 @@ async function rejectedUpgradeStatus(url, headers) {
       rejectStatus(new Error("Rejected WebSocket probe failed.", { cause: error }));
     });
   });
+}
+
+function isConnectionResetError(error) {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    error.code === "ECONNRESET"
+  );
 }
 
 async function waitForLoopbackEndpoint(child, capture) {
