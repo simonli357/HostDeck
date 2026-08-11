@@ -17,11 +17,11 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
 | 1 | `FE-V1-090` Mobile dashboard physical hardening | blocked | phone unavailable | Diagnose physical touch delivery and run one distinct immutable candidate when the phone returns; retain only a complete no-retry pass. |
-| 2 | `INT-V1-100` Windows Codex transport spike | ready | none | Use the accepted native Windows CI path for a redacted exact-runtime capture. |
+| 2 | `INT-V1-101` Cross-platform Codex transport | ready | none | Implement the typed Unix/authenticated-loopback endpoint boundary now that the Windows spike and secure-path dependency pass. |
 | 3 | `DAT-V1-103` Native storage parity | ready | none | Prove target-built SQLite migration, recovery, backup, and rollback parity now that native paths and locks are complete. |
 | 4 | `REL-V1-102` Native supply-chain metadata | ready | none | Build checksums, SBOM, license, and provenance contracts now that package identity and native CI are complete. |
 
-`IFC-V1-100` is complete through `0a34008` and native run `31474471365`; `IFC-V1-101` remains complete through run `31471194169`. The latest `FE-V1-090` branch candidate `6829bd2` reached a stable first continuation target but delivered no request after the tap; no acceptance evidence was retained. The next phone run must use a distinct commit after touch-delivery diagnosis.
+`INT-V1-100` is complete at `37b2a6b` and native run `31478791010`; `IFC-V1-100` is complete through native run `31474471365`, and `IFC-V1-101` remains complete through run `31471194169`. The latest `FE-V1-090` branch candidate `6829bd2` reached a stable first continuation target but delivered no request after the tap; no acceptance evidence was retained. The next phone run must use a distinct commit after touch-delivery diagnosis.
 
 ## Intentional Blockers
 

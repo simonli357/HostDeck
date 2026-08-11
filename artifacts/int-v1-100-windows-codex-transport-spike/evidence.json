@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "task_id": "INT-V1-100",
+  "status": "passed",
+  "generated_at": "2026-08-11T09:42:08.963Z",
+  "workflow": {
+    "run_attempt": 1,
+    "run_id": "31478791010"
+  },
+  "source": {
+    "commit": "37b2a6b6ffb3232823269931df76e87044ee024d",
+    "lockfile_sha256": "2548e92407502af5c2fe4417039e6be83ba2f12f1b2d3c7cd401f8075083618a"
+  },
+  "runner": {
+    "architecture": "x64",
+    "image_version": "20260802.262.1",
+    "label": "windows-2022",
+    "node_platform": "win32",
+    "os_release": "10.0.20348"
+  },
+  "runtime": {
+    "binding_id": "codex-app-server-0.144.0-experimental:sha256:e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24",
+    "cli_version": "0.144.0",
+    "native_binary_sha256": "2b3c18d9393ed794531ae3da13f43a6de3bcd91dc577222bd31a17c59f7de0aa",
+    "native_package_integrity": "sha512-QiholLCYqNeYvNM77HOmPtrOFrY0rQc/N9nXt+sQGXO3rEGmcWjpLzujY4Oegl3CLRHoieWqlep3EqEvFBjoIA==",
+    "package_integrity": "sha512-QFh6f+v5QUx/Vg0HjIl9HB94p7aDLBDkZjc4IXX5RXUcXHPVCZNb6Hl2R49Og/fqW7orgZkeDcgWfRANUa1WoQ==",
+    "target": "x86_64-pc-windows-msvc"
+  },
+  "observations": {
+    "authentication": {
+      "accepted": true,
+      "invalid_status": 401,
+      "missing_status": 401,
+      "origin_status": 403
+    },
+    "capabilities": {
+      "collaboration_modes": [
+        "default",
+        "plan"
+      ],
+      "experimental_api": true
+    },
+    "initialization": {
+      "client_name": "hostdeck-windows-spike",
+      "platform_family": "windows",
+      "platform_os": "windows",
+      "version_corroborated": true
+    },
+    "multi_client": {
+      "initialized_clients": 2,
+      "survived_peer_close": true
+    },
+    "process": {
+      "address": "127.0.0.1",
+      "argv_clean": true,
+      "credential_acl": "current-user-only",
+      "listener_count": 1
+    },
+    "resume": {
+      "credential_via_environment": true,
+      "rendered_thread": true,
+      "thread_turn_count": 0
+    },
+    "privacy": {
+      "capture_scanned": true,
+      "credential_value_found": false
+    },
+    "shutdown": {
+      "credential_file_removed": true,
+      "listener_closed": true,
+      "process_exited": true
+    }
+  }
+}
