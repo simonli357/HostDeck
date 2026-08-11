@@ -88,7 +88,7 @@ Exact defaults, cross-field invariants, and downstream consumers are recorded in
 
 ### Production Output Foundation
 
-`IFC-V1-021` emits one private self-contained `dist/hostdeck` runtime from the exact selected server/CLI transitive graph, currently 626 source modules across `core`, `contracts`, `codex-adapter`, `storage`, `server`, and `cli`. The shared browser-resource policy enters through the server resource registry; independent web and test-fixture roots remain excluded. Each selected source emits Node ESM JavaScript plus declarations; HostDeck TypeScript, tests, source maps, fixtures, secrets, temporary state, and historical interface code cannot enter the owned output.
+`IFC-V1-021` emits one private self-contained `dist/hostdeck` runtime from the exact selected server/CLI transitive graph, currently 627 source modules across `core`, `contracts`, `codex-adapter`, `storage`, `server`, and `cli`. The shared browser-resource policy enters through the server resource registry; independent web and test-fixture roots remain excluded. Each selected source emits Node ESM JavaScript plus declarations; HostDeck TypeScript, tests, source maps, fixtures, secrets, temporary state, and historical interface code cannot enter the owned output.
 
 The runtime tree carries rewritten exact package manifests and the production dependency graph resolved offline from the frozen lockfile. Every link is relative and contained; no deployed path may resolve to the checkout, package store, home directory, or staging tree. Package identity binds the workspace version, exact Node/pnpm/platform/architecture/ABI contract, reviewed Codex binding, source closure, output content, entrypoints, dependencies, and native modules without timestamps or private paths. Ordinary files are non-executable and non-writable by group/other; dependency-declared binaries, native modules, and the one verified `codexdeck -> ./dist/shell.js` command retain execute bits.
 
@@ -131,7 +131,7 @@ Install registers but does not silently start work. Explicit start creates a fre
 
 `codexdeck resume <session>` resolves the stable thread id and executes:
 
-Linux uses `codex resume --remote unix://PATH THREAD_ID`. Windows uses the exact authenticated loopback WebSocket endpoint and passes its token only through the reviewed Codex auth-token environment variable.
+Linux uses `codex resume --remote unix://PATH THREAD_ID`. Windows uses the exact authenticated loopback WebSocket endpoint and passes its token only through the reviewed `HOSTDECK_CODEX_REMOTE_AUTH` environment variable.
 
 The TUI and HostDeck may connect to the same app-server. Multi-client correctness is a blocking integration test, not an assumption.
 
