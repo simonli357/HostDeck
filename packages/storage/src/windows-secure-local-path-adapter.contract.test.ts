@@ -3,9 +3,10 @@ import type {
   HostDeckLocalPathErrorCode,
   PrepareHostDeckLocalPathsInput
 } from "./secure-local-path-contract.js";
-import type {
-  WindowsKnownFolderRoots,
-  WindowsNativeFileSecurityPort
+import {
+  hasWindowsCurrentUserOnlySecurity,
+  type WindowsKnownFolderRoots,
+  type WindowsNativeFileSecurityPort
 } from "./windows-native-file-security.js";
 import {
   createWindowsHostDeckLocalPathAdapter,
@@ -23,6 +24,27 @@ const equalOrdinalIgnoreCase = (left: string, right: string): boolean =>
   left.toUpperCase() === right.toUpperCase();
 
 describe("Windows secure local-path contract", () => {
+  it("requires both current-user ownership and a current-user-only ACL", () => {
+    expect(
+      hasWindowsCurrentUserOnlySecurity({
+        acl_current_user_only: true,
+        owner_current_user: true
+      })
+    ).toBe(true);
+    expect(
+      hasWindowsCurrentUserOnlySecurity({
+        acl_current_user_only: true,
+        owner_current_user: false
+      })
+    ).toBe(false);
+    expect(
+      hasWindowsCurrentUserOnlySecurity({
+        acl_current_user_only: false,
+        owner_current_user: true
+      })
+    ).toBe(false);
+  });
+
   it("derives exact per-user defaults without trusting environment variables", () => {
     expect(defaults).toEqual({
       config_dir: "C:\\Users\\selected\\AppData\\Roaming\\HostDeck",

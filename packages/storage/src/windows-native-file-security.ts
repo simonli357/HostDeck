@@ -67,6 +67,15 @@ export interface WindowsNativeFileSecurityPort {
   ) => WindowsNativeAclResult;
 }
 
+export function hasWindowsCurrentUserOnlySecurity(
+  inspection: Pick<
+    WindowsNativePathInspection,
+    "acl_current_user_only" | "owner_current_user"
+  >
+): boolean {
+  return inspection.owner_current_user && inspection.acl_current_user_only;
+}
+
 const csidlAppData = 0x001a;
 const csidlLocalAppData = 0x001c;
 const shgfpTypeCurrent = 0;
@@ -183,7 +192,7 @@ function secureCurrentUserOnly(
         "path_type"
       );
     }
-    if (before.acl_current_user_only) {
+    if (hasWindowsCurrentUserOnlySecurity(before)) {
       return Object.freeze({ inspection: before, repaired: false });
     }
 
