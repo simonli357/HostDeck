@@ -51,10 +51,16 @@ describe("Windows-native secure local paths", () => {
     }
 
     const root = mkdtempSync(win32.join(tmpdir(), "hostdeck-windows-paths-"));
-    const localRoot = win32.join(root, "Local");
-    const roamingRoot = win32.join(root, "Roaming");
-    mkdirSync(localRoot);
-    mkdirSync(roamingRoot);
+    const localRootAlias = win32.join(root, "Local");
+    const roamingRootAlias = win32.join(root, "Roaming");
+    mkdirSync(localRootAlias);
+    mkdirSync(roamingRootAlias);
+    const localRoot = nativeWindowsFileSecurityPort.inspectPath(
+      localRootAlias
+    ).canonical_path;
+    const roamingRoot = nativeWindowsFileSecurityPort.inspectPath(
+      roamingRootAlias
+    ).canonical_path;
     const isolatedSecurity = Object.freeze({
       ...nativeWindowsFileSecurityPort,
       currentUserRoots: () =>
