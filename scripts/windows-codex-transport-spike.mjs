@@ -628,7 +628,9 @@ async function startResumeProbe(input) {
     await waitFor(
       () => {
         if (child.exitCode !== null || child.signalCode !== null) {
-          throw new Error("Codex resume TUI exited before rendering.");
+          throw new Error(
+            `Codex resume TUI exited before rendering (${resumeFailureDiagnostic(child, capture, input)}).`
+          );
         }
         const output = stripTerminalControl(`${capture.stdout}\n${capture.stderr}`);
         return output.includes("OpenAI Codex") && output.includes(basename(input.project));
@@ -657,6 +659,23 @@ async function startResumeProbe(input) {
     await stopProcessTree(child).catch(() => undefined);
     throw error;
   }
+}
+
+function resumeFailureDiagnostic(child, capture, input) {
+  let output = stripTerminalControl(`${capture.stdout}\n${capture.stderr}`);
+  const privateValues = [
+    input.websocketCredential,
+    fakeApiCredential,
+    input.endpoint,
+    input.executable,
+    input.codexHome,
+    input.project,
+    dirname(input.project)
+  ].sort((left, right) => right.length - left.length);
+  for (const value of privateValues) output = output.replaceAll(value, "<redacted>");
+  output = output.replaceAll(/[A-Za-z]:\\[^\r\n"']+/gu, "<redacted-path>");
+  const normalized = output.replaceAll(/\s+/gu, " ").trim().slice(0, 1_024);
+  return `status=${String(child.exitCode)}, signal=${String(child.signalCode)}, output=${JSON.stringify(normalized)}`;
 }
 
 function locateWinpty() {
