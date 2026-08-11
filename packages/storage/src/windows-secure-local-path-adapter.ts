@@ -378,7 +378,9 @@ export function createWindowsHostDeckLocalPathAdapter(
         parsedPath,
         options.label,
         "file",
-        false
+        false,
+        true,
+        options.repair_mode !== true
       );
     }
     const descriptor = openRegularFile(
@@ -395,20 +397,26 @@ export function createWindowsHostDeckLocalPathAdapter(
         descriptor,
         parsedPath,
         options.label,
-        false
+        false,
+        options.repair_mode !== true
       );
       let repair: HostDeckPathAclRepair | null = null;
       const before = inspectDescriptor(nativeSecurity, descriptor, parsedPath, options.label);
       const beforePath = inspectPath(nativeSecurity, parsedPath, options.label);
-      if (!before.owner_current_user || !beforePath.owner_current_user) {
-        throw pathError(
-          "wrong_owner",
-          `${options.label} must be owned by the current Windows user.`,
-          parsedPath
-        );
-      }
-      if (!before.acl_current_user_only || !beforePath.acl_current_user_only) {
+      if (
+        !before.owner_current_user ||
+        !beforePath.owner_current_user ||
+        !before.acl_current_user_only ||
+        !beforePath.acl_current_user_only
+      ) {
         if (options.repair_mode !== true) {
+          if (!before.owner_current_user || !beforePath.owner_current_user) {
+            throw pathError(
+              "wrong_owner",
+              `${options.label} must be owned by the current Windows user.`,
+              parsedPath
+            );
+          }
           throw pathError(
             "permission_update_failed",
             `${options.label} must have a current-user-only ACL.`,
@@ -427,10 +435,14 @@ export function createWindowsHostDeckLocalPathAdapter(
           parsedPath,
           options.label
         );
-        if (!result.repaired) {
+        if (
+          !result.repaired ||
+          !result.inspection.owner_current_user ||
+          !result.inspection.acl_current_user_only
+        ) {
           throw pathError(
             "permission_update_failed",
-            `${options.label} ACL remained insecure after repair.`,
+            `${options.label} ownership or ACL remained insecure after repair.`,
             parsedPath
           );
         }
@@ -720,17 +732,19 @@ function ensureDirectoryFromRoot(
       candidate,
       label,
       "directory",
+      false,
+      true,
       false
     );
-    if (!before.owner_current_user) {
-      throw pathError(
-        "wrong_owner",
-        `${label} must be owned by the current Windows user.`,
-        candidate
-      );
-    }
-    if (!before.acl_current_user_only) {
+    if (!before.owner_current_user || !before.acl_current_user_only) {
       if (!repairAcl) {
+        if (!before.owner_current_user) {
+          throw pathError(
+            "wrong_owner",
+            `${label} must be owned by the current Windows user.`,
+            candidate
+          );
+        }
         throw pathError(
           "permission_update_failed",
           `${label} must have a current-user-only ACL.`,
@@ -749,10 +763,14 @@ function ensureDirectoryFromRoot(
         candidate,
         label
       );
-      if (!result.repaired || !result.inspection.acl_current_user_only) {
+      if (
+        !result.repaired ||
+        !result.inspection.owner_current_user ||
+        !result.inspection.acl_current_user_only
+      ) {
         throw pathError(
           "permission_update_failed",
-          `${label} ACL remained insecure after repair.`,
+          `${label} ownership or ACL remained insecure after repair.`,
           candidate
         );
       }
@@ -894,7 +912,8 @@ function validateOpenFile(
   descriptor: number,
   path: string,
   label: string,
-  requireSecureAcl: boolean
+  requireSecureAcl: boolean,
+  requireCurrentUserOwner = true
 ): WindowsFileIdentity {
   const descriptorInspection = inspectDescriptor(
     nativeSecurity,
@@ -910,7 +929,8 @@ function validateOpenFile(
     label,
     "file",
     requireSecureAcl,
-    false
+    false,
+    requireCurrentUserOwner
   );
   assertSafeInspection(
     nativeSecurity,
@@ -918,7 +938,9 @@ function validateOpenFile(
     path,
     label,
     "file",
-    requireSecureAcl
+    requireSecureAcl,
+    true,
+    requireCurrentUserOwner
   );
   assertSameNativeIdentity(
     pathInspection.identity,

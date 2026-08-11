@@ -73,6 +73,7 @@ const fileReadAttributes = 0x0000_0080;
 const openExisting = 3;
 const readControl = 0x0002_0000;
 const writeDac = 0x0004_0000;
+const writeOwner = 0x0008_0000;
 const fileShareRead = 0x0000_0001;
 const fileShareWrite = 0x0000_0002;
 const fileShareDelete = 0x0000_0004;
@@ -165,7 +166,7 @@ function secureCurrentUserOnly(
   const handle = openPathHandle(
     bindings,
     path,
-    readControl | writeDac | fileReadAttributes
+    readControl | writeDac | writeOwner | fileReadAttributes
   );
   try {
     const before = inspectHandle(bindings, handle);
@@ -175,20 +176,16 @@ function secureCurrentUserOnly(
         "path_type"
       );
     }
-    const acl = inspectCurrentUserAcl(bindings, handle, kind);
-    if (!acl.owner_current_user) {
-      throw new WindowsNativeFileSecurityError("wrong_owner", "owner");
-    }
-    if (acl.current_user_only) {
+    if (before.acl_current_user_only) {
       return Object.freeze({ inspection: before, repaired: false });
     }
 
-    applyCurrentUserDacl(bindings, handle, kind);
+    applyCurrentUserSecurity(bindings, handle, kind);
     const afterAcl = inspectCurrentUserAcl(bindings, handle, kind);
     if (!afterAcl.owner_current_user || !afterAcl.current_user_only) {
       throw new WindowsNativeFileSecurityError(
         "acl_update_failed",
-        "verify_dacl"
+        "verify_owner_and_dacl"
       );
     }
     const after = inspectHandle(bindings, handle);
@@ -361,7 +358,7 @@ function inspectCurrentUserAcl(
   }
 }
 
-function applyCurrentUserDacl(
+function applyCurrentUserSecurity(
   bindings: ReturnType<typeof createWindowsBindings>,
   handle: bigint,
   kind: "directory" | "file"
@@ -369,13 +366,21 @@ function applyCurrentUserDacl(
   const sid = currentUserSid(bindings);
   const descriptor = stringToSecurityDescriptor(
     bindings,
-    daclSddl(kind, sid)
+    `O:${sid}${daclSddl(kind, sid)}`
   );
   try {
+    const owner = [null];
+    const ownerDefaulted = [0];
     const present = [0];
     const defaulted = [0];
     const dacl = [null];
     if (
+      !(bindings.GetSecurityDescriptorOwner(
+        descriptor,
+        owner,
+        ownerDefaulted
+      ) as boolean) ||
+      owner[0] === null ||
       !(bindings.GetSecurityDescriptorDacl(
         descriptor,
         present,
@@ -385,13 +390,15 @@ function applyCurrentUserDacl(
       present[0] !== 1 ||
       dacl[0] === null
     ) {
-      throw nativeError("GetSecurityDescriptorDacl");
+      throw nativeError("GetSecurityDescriptorOwnerOrDacl");
     }
     const result = bindings.SetSecurityInfo(
       handle,
       seFileObject,
-      daclSecurityInformation | protectedDaclSecurityInformation,
-      null,
+      ownerSecurityInformation |
+        daclSecurityInformation |
+        protectedDaclSecurityInformation,
+      owner[0],
       null,
       dacl[0],
       null
@@ -885,6 +892,9 @@ function createWindowsBindings() {
     ),
     GetSecurityDescriptorDacl: advapi32.func(
       "int32_t __stdcall GetSecurityDescriptorDacl(HOSTDECK_WIN_PSECURITY_DESCRIPTOR pSecurityDescriptor, _Out_ int32_t *lpbDaclPresent, _Out_ HOSTDECK_WIN_PACL *pDacl, _Out_ int32_t *lpbDaclDefaulted)"
+    ),
+    GetSecurityDescriptorOwner: advapi32.func(
+      "int32_t __stdcall GetSecurityDescriptorOwner(HOSTDECK_WIN_PSECURITY_DESCRIPTOR pSecurityDescriptor, _Out_ HOSTDECK_WIN_PSID *pOwner, _Out_ int32_t *lpbOwnerDefaulted)"
     ),
     GetSecurityInfo: advapi32.func(
       "uint32_t __stdcall GetSecurityInfo(HOSTDECK_WIN_HANDLE handle, int32_t ObjectType, uint32_t SecurityInfo, _Out_ HOSTDECK_WIN_PSID *ppsidOwner, _Out_ HOSTDECK_WIN_PSID *ppsidGroup, _Out_ HOSTDECK_WIN_PACL *ppDacl, _Out_ HOSTDECK_WIN_PACL *ppSacl, _Out_ HOSTDECK_WIN_PSECURITY_DESCRIPTOR *ppSecurityDescriptor)"
