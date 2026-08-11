@@ -298,7 +298,6 @@ class DefaultCodexInterruptControlService implements CodexInterruptControlServic
     if (!("thread_id" in event)) return;
     const state = this.readStateByThreadId(event.thread_id);
     if (state === null) return;
-    this.requireRuntimeState(state);
     const sessionId = state.mapping.id;
 
     if (event.method === "thread/archived") this.archivedSessions.add(sessionId);

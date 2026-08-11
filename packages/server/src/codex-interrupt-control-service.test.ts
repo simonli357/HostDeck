@@ -131,6 +131,36 @@ describe("Codex interrupt control", () => {
     expect(harness.turns.calls).toHaveLength(1);
   });
 
+  it("observes reconnect events before the live runtime client becomes readable", async () => {
+    const harness = createHarness();
+    harness.states.set(targetA.session_id, selectedState(targetA, "in_progress"));
+    let runtimeReads = 0;
+    Object.defineProperty(harness.turns, "runtime_version", {
+      configurable: true,
+      get() {
+        runtimeReads += 1;
+        throw new HostDeckCodexAdapterError(
+          "handshake_failed",
+          "runtime reconnect is not ready",
+          { outcome: "not_sent", retry_safe: true }
+        );
+      }
+    });
+
+    await expect(
+      harness.service.observeEvent(turnStartedEvent(targetA))
+    ).resolves.toBeUndefined();
+    expect(harness.service.active_count).toBe(1);
+    expect(runtimeReads).toBe(0);
+
+    await expectInterruptError(
+      harness.service.requireInterruptible(targetA),
+      "runtime_unavailable"
+    );
+    expect(runtimeReads).toBe(1);
+    expect(harness.turns.calls).toHaveLength(0);
+  });
+
   it("serializes concurrent attempts and preserves an early interrupted event", async () => {
     const harness = await activeHarness();
     const gate = deferred<void>();
