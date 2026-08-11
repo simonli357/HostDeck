@@ -16,15 +16,13 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-090` Mobile dashboard physical hardening | in_progress | none | Run one distinct immutable candidate immediately after the phone is proven awake/unlocked; retain and deploy only a complete no-retry pass. |
-| 2 | `REL-V1-101` Native CI matrix | ready | none | Establish required Ubuntu/Windows checks early so every native implementation leaf is exercised on its owning OS. |
-| 3 | `DAT-V1-100` Platform path boundary | ready | none | Preserve the proven Linux path behavior behind the shared adapter contract before adding Windows ACL semantics. |
-| 4 | `DAT-V1-102` Cross-platform locks | ready | none | Remove the Linux-only native lock dependency from the future Windows package path. |
-| 5 | `IFC-V1-101` Native package identity | ready | none | Bind every future native artifact and bundled runtime to an exact fail-closed manifest before building packages. |
-| 6 | `IFC-V1-100` Platform Tailscale adapter | ready | none | Generalize command discovery and execution while preserving the selected profile/Serve contract. |
-| 7 | `INT-V1-100` Windows Codex transport spike | ready | none | Run on the native Windows CI path once the runner workflow can retain redacted evidence. |
+| 1 | `FE-V1-090` Mobile dashboard physical hardening | blocked | phone unavailable | Diagnose physical touch delivery and run one distinct immutable candidate when the phone returns; retain only a complete no-retry pass. |
+| 2 | `DAT-V1-100` Platform path boundary | ready | none | Preserve the proven Linux path behavior behind the shared adapter contract before adding Windows ACL semantics. |
+| 3 | `IFC-V1-101` Native package identity | ready | none | Bind every future native artifact and bundled runtime to an exact fail-closed manifest before building packages. |
+| 4 | `IFC-V1-100` Platform Tailscale adapter | ready | none | Generalize command discovery and execution while preserving the selected profile/Serve contract. |
+| 5 | `INT-V1-100` Windows Codex transport spike | ready | none | Use the accepted native Windows CI path for a redacted exact-runtime capture. |
 
-`BUG-078` / `FE-V1-106` is closed, and later candidates crossed the corrected stream-recovery boundary. Candidate `61485d2` passed immutable package and 83/1 driver gates but found the phone asleep/locked before app interaction; exact cleanup passed, no evidence was published, and it will not be retried. The next candidate must start immediately after the device wake/unlock gate.
+`REL-V1-101` and `DAT-V1-102` are complete through native run `31459318098`. The latest `FE-V1-090` branch candidate `6829bd2` reached a stable first continuation target but delivered no request after the tap; no acceptance evidence was retained. The next phone run must use a distinct commit after touch-delivery diagnosis.
 
 ## Intentional Blockers
 

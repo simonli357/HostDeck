@@ -90,6 +90,7 @@ pnpm lint
 pnpm test
 pnpm test:unit
 pnpm test:contract
+pnpm check:native-ci
 pnpm exec vitest run --config vitest.contract.config.ts packages/cli/src/cli.contract.test.ts
 pnpm test:integration
 pnpm test:web
