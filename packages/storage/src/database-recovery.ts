@@ -8,7 +8,7 @@ import {
   rmSync,
   unlinkSync
 } from "node:fs";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve, win32 } from "node:path";
 import Database from "better-sqlite3";
 import {
   inspectCurrentMigrations,
@@ -16,6 +16,10 @@ import {
   openCurrentReadOnlyDatabase
 } from "./migration-runner.js";
 import { defaultMigrations, type StorageMigration } from "./migrations.js";
+import {
+  nativeWindowsFileSecurityPort,
+  type WindowsNativePathInspection
+} from "./windows-native-file-security.js";
 
 export type HostDeckDatabaseRecoveryErrorCode =
   | "aborted"
@@ -331,6 +335,10 @@ function requireCanonicalAbsolutePath(candidate: unknown, label: string): string
 
 function requireCanonicalParent(path: string): void {
   const parent = dirname(path);
+  if (process.platform === "win32") {
+    requireSafeWindowsDirectoryTree(parent);
+    return;
+  }
   let metadata: ReturnType<typeof lstatSync>;
   let actual: string;
   try {
@@ -356,6 +364,22 @@ function requireCanonicalParent(path: string): void {
 }
 
 function requireCanonicalExistingRegularFile(path: string): void {
+  if (process.platform === "win32") {
+    requireSafeWindowsDirectoryTree(dirname(path));
+    const inspection = inspectWindowsPath(path, "database file");
+    if (
+      inspection.is_directory ||
+      inspection.is_reparse_point ||
+      inspection.has_named_streams ||
+      inspection.link_count !== 1
+    ) {
+      throw new HostDeckDatabaseRecoveryError(
+        "invalid_input",
+        "HostDeck database file identity is invalid."
+      );
+    }
+    return;
+  }
   let metadata: ReturnType<typeof lstatSync>;
   let actual: string;
   try {
@@ -377,6 +401,48 @@ function requireCanonicalExistingRegularFile(path: string): void {
     throw new HostDeckDatabaseRecoveryError(
       "invalid_input",
       "HostDeck database file identity is invalid."
+    );
+  }
+}
+
+function requireSafeWindowsDirectoryTree(path: string): void {
+  const root = win32.parse(path).root;
+  let cursor = path;
+  for (;;) {
+    const inspection = inspectWindowsPath(cursor, "database parent directory");
+    if (
+      !inspection.is_directory ||
+      inspection.is_reparse_point ||
+      inspection.has_named_streams
+    ) {
+      throw new HostDeckDatabaseRecoveryError(
+        "invalid_input",
+        "HostDeck database parent directory is not canonical."
+      );
+    }
+    if (sameNativePath(cursor, root)) return;
+    const parent = win32.dirname(cursor);
+    if (sameNativePath(parent, cursor)) {
+      throw new HostDeckDatabaseRecoveryError(
+        "invalid_input",
+        "HostDeck database parent directory is not canonical."
+      );
+    }
+    cursor = parent;
+  }
+}
+
+function inspectWindowsPath(
+  path: string,
+  label: string
+): WindowsNativePathInspection {
+  try {
+    return nativeWindowsFileSecurityPort.inspectPath(path);
+  } catch (error) {
+    throw new HostDeckDatabaseRecoveryError(
+      "invalid_input",
+      `HostDeck ${label} is unavailable.`,
+      { cause: error }
     );
   }
 }
