@@ -705,13 +705,19 @@ function baseWindowsEnvironment() {
 }
 
 function secureCurrentUserOnly(path, kind) {
-  const identity = runBoundedCommand("whoami.exe", [], 10_000).stdout.trim();
+  const identity = runBoundedCommand(
+    "whoami.exe",
+    [],
+    10_000,
+    "current-identity"
+  ).stdout.trim();
   requireCondition(identity.length >= 3 && identity.length <= 256, "Current Windows identity is invalid.");
   const inheritance = kind === "directory" ? "(OI)(CI)F" : "F";
   runBoundedCommand(
     "icacls.exe",
     [path, "/inheritance:r", "/grant:r", `${identity}:${inheritance}`],
-    10_000
+    10_000,
+    "acl-update"
   );
   requireCondition(inspectCurrentUserOnlyAcl(path), "Windows path ACL hardening failed.");
 }
@@ -720,18 +726,17 @@ function inspectCurrentUserOnlyAcl(path) {
   const script = [
     `$path = ${powershellLiteral(path)}`,
     "$acl = Get-Acl -LiteralPath $path",
-    "$current = [Security.Principal.WindowsIdentity]::GetCurrent().User",
-    "$owner = ([Security.Principal.NTAccount]$acl.Owner).Translate([Security.Principal.SecurityIdentifier])",
+    "$identity = [Security.Principal.WindowsIdentity]::GetCurrent()",
+    "$current = $identity.User",
     "$allowed = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | Where-Object AccessControlType -eq 'Allow' | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique)",
-    "[pscustomobject]@{ owner = ($owner.Value -eq $current.Value); allowed = @($allowed) } | ConvertTo-Json -Compress"
+    "[pscustomobject]@{ owner = ($acl.Owner -ieq $identity.Name); current = ($allowed.Count -eq 1 -and $allowed[0] -eq $current.Value) } | ConvertTo-Json -Compress"
   ].join("; ");
-  const value = runPowerShellJson(script);
+  const value = runPowerShellJson(script, "acl");
   return (
     value !== null &&
     typeof value === "object" &&
     value.owner === true &&
-    Array.isArray(value.allowed) &&
-    value.allowed.length === 1
+    value.current === true
   );
 }
 
@@ -741,7 +746,7 @@ function inspectProcessCommandLine(pid) {
     "if ($null -eq $process) { throw 'missing process' }",
     "[Console]::Out.Write($process.CommandLine)"
   ].join("; ");
-  return runPowerShell(script).stdout;
+  return runPowerShell(script, "process-command-line").stdout;
 }
 
 function inspectProcessTreeCommandLines(pid) {
@@ -753,7 +758,7 @@ function inspectProcessTreeCommandLines(pid) {
     "$lines = @($all | Where-Object { $ids -contains $_.ProcessId } | ForEach-Object CommandLine)",
     "[Console]::Out.Write(($lines -join \"`n\"))"
   ].join("; ");
-  return runPowerShell(script).stdout;
+  return runPowerShell(script, "process-tree").stdout;
 }
 
 async function inspectProcessListeners(pid, expectedPort) {
@@ -764,7 +769,7 @@ async function inspectProcessListeners(pid, expectedPort) {
         `$connections = @(Get-NetTCPConnection -State Listen -OwningProcess ${pid} -ErrorAction Stop)`,
         "$connections | Select-Object @{Name='address';Expression={$_.LocalAddress}}, @{Name='port';Expression={$_.LocalPort}} | ConvertTo-Json -Compress"
       ].join("; ");
-      const parsed = runPowerShellJson(script);
+      const parsed = runPowerShellJson(script, "listeners");
       const rows = parsed === null ? [] : Array.isArray(parsed) ? parsed : [parsed];
       const listeners = rows.map((row) => ({
         address: requireString(requireRecord(row, "listener").address, "listener address"),
@@ -916,8 +921,8 @@ async function waitForClosedPort(port) {
   );
 }
 
-function runPowerShellJson(script) {
-  const output = runPowerShell(script).stdout.trim();
+function runPowerShellJson(script, label) {
+  const output = runPowerShell(script, label).stdout.trim();
   if (output === "") return null;
   try {
     return JSON.parse(output);
@@ -926,16 +931,17 @@ function runPowerShellJson(script) {
   }
 }
 
-function runPowerShell(script) {
+function runPowerShell(script, label) {
   const encoded = Buffer.from(script, "utf16le").toString("base64");
   return runBoundedCommand(
     "powershell.exe",
     ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-    30_000
+    30_000,
+    label
   );
 }
 
-function runBoundedCommand(command, args, timeout) {
+function runBoundedCommand(command, args, timeout, label = "native-command") {
   const result = spawnSync(command, args, {
     cwd: repositoryRoot,
     encoding: "utf8",
@@ -945,10 +951,15 @@ function runBoundedCommand(command, args, timeout) {
     timeout,
     windowsHide: true
   });
-  requireCondition(
-    result.error === undefined && result.status === 0 && result.signal === null,
-    "Native Windows inspection command failed."
-  );
+  if (result.error !== undefined || result.status !== 0 || result.signal !== null) {
+    const code =
+      result.error !== undefined && "code" in result.error
+        ? String(result.error.code)
+        : "none";
+    throw new Error(
+      `Native Windows inspection ${label} failed (status=${String(result.status)}, signal=${String(result.signal)}, code=${code}).`
+    );
+  }
   return Object.freeze({ stderr: result.stderr, stdout: result.stdout });
 }
 
