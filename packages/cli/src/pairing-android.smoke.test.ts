@@ -185,6 +185,7 @@ const physicalServeCleanupObservationDelayMs = 5_000;
 const physicalRemoteCheckResponseTimeoutMs = 45_000;
 const physicalAndroidChromeAbsenceSettleMs = 30_000;
 const physicalAndroidChromeStopTimeoutMs = 45_000;
+const physicalAndroidChromeStopAttempts = 2;
 const physicalAndroidChromeProcessPollMs = 200;
 const androidTailscaleComponent = "com.tailscale.ipn/.MainActivity";
 const androidEditTextClass = "android.widget.EditText";
@@ -5275,7 +5276,7 @@ describe("physical Android phone-driver protocol", () => {
       "set -eu",
       "IFS= read -r url",
       link,
-      `am start --user 0 -n ${component} -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "$url" >/dev/null 2>&1`,
+      `am start --user 0 -W -n ${component} -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "$url" >/dev/null 2>&1`,
       "unset url",
       ""
     ]);
@@ -5310,6 +5311,39 @@ describe("physical Android phone-driver protocol", () => {
         "proxy=none;ui=Pairing this phone)."
     );
     expect(diagnostic).not.toContain(privateUiText);
+
+    const claimingNodes = physicalPairingContinueFixtureNodes().map((node) =>
+      node.text === "Phone paired"
+        ? Object.freeze({ ...node, text: "Pairing this phone" })
+        : node
+    );
+    expect(
+      physicalPairingStartupObservation(claimingNodes, "Pairing this phone")
+    ).toEqual({
+      summary: "page=chrome;ui=Pairing this phone;expected=yes",
+      visible: true
+    });
+    const nonChrome = physicalPairingStartupObservation(
+      [
+        ...claimingNodes.filter(
+          (node) => node.resourceId !== chromeCompositorResourceId
+        ),
+        Object.freeze({
+          bounds: Object.freeze({ bottom: 700, left: 80, right: 760, top: 620 }),
+          className: "android.view.View",
+          clickable: false,
+          description: "",
+          resourceId: "",
+          text: privateUiText
+        })
+      ],
+      "Pairing this phone"
+    );
+    expect(nonChrome).toEqual({
+      summary: "page=other;ui=Pairing this phone;expected=no",
+      visible: false
+    });
+    expect(nonChrome.summary).not.toContain(privateUiText);
   });
 
   it("injects the two-line prompt without placing prompt text in ADB arguments or stdin", () => {
@@ -7712,6 +7746,34 @@ describe("physical Android phone-driver protocol", () => {
     expect(Object.isFrozen(physicalAndroidChromeStopCommandPlan[1])).toBe(true);
   });
 
+  it("reissues only the idempotent Chrome stop after a late process restart", async () => {
+    const commands: string[][] = [];
+    const sleeps: number[] = [];
+    let settlementAttempts = 0;
+    await stopPhysicalAndroidChrome({
+      runCommand(args) {
+        commands.push([...args]);
+      },
+      settle: async () => {
+        settlementAttempts += 1;
+        if (settlementAttempts === 1) {
+          throw new Error("Chrome process restarted during settlement.");
+        }
+      },
+      sleep: async (delayMs) => {
+        sleeps.push(delayMs);
+      }
+    });
+
+    expect(commands).toEqual([
+      physicalAndroidChromeStopCommandPlan[0],
+      physicalAndroidChromeStopCommandPlan[1],
+      physicalAndroidChromeStopCommandPlan[1]
+    ]);
+    expect(sleeps).toEqual([250]);
+    expect(settlementAttempts).toBe(2);
+  });
+
   it("closes the external Chrome tab before a canonical app return", () => {
     expect(physicalAndroidChromeCloseExternalTabCommand).toEqual([
       "shell",
@@ -8979,7 +9041,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             expectedExternalOrigin: candidate.externalOrigin,
             remote: selectedRemote
           });
-          await waitForAndroidUiText(
+          await waitForPhysicalPairingStartupText(
             "Pairing this phone",
             30_000,
             "Physical dashboard did not render claiming truth."
@@ -14288,7 +14350,7 @@ function createPrivatePairingChromeHandoff(
     "set -eu",
     "IFS= read -r url",
     selectedLink,
-    `am start --user 0 -n ${component} -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "$url" >/dev/null 2>&1`,
+      `am start --user 0 -W -n ${component} -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "$url" >/dev/null 2>&1`,
     "unset url",
     ""
   ].join("\n");
@@ -14478,11 +14540,37 @@ function isChromeStopped(): boolean {
   ) === "stopped";
 }
 
-async function stopPhysicalAndroidChrome(): Promise<void> {
-  adb(physicalAndroidChromeStopCommandPlan[0]);
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  adb(physicalAndroidChromeStopCommandPlan[1]);
-  await waitForSettledChromeAbsence();
+interface PhysicalAndroidChromeStopRuntime {
+  readonly runCommand: (args: readonly string[]) => void;
+  readonly settle: () => Promise<void>;
+  readonly sleep: (delayMs: number) => Promise<void>;
+}
+
+async function stopPhysicalAndroidChrome(
+  runtime: PhysicalAndroidChromeStopRuntime = {
+    runCommand: (args) => {
+      adb(args);
+    },
+    settle: () => waitForSettledChromeAbsence(),
+    sleep: (delayMs) =>
+      new Promise((resolve) => setTimeout(resolve, delayMs))
+  }
+): Promise<void> {
+  runtime.runCommand(physicalAndroidChromeStopCommandPlan[0]);
+  await runtime.sleep(250);
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < physicalAndroidChromeStopAttempts; attempt += 1) {
+    runtime.runCommand(physicalAndroidChromeStopCommandPlan[1]);
+    try {
+      await runtime.settle();
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error("Physical Android Chrome cleanup exhausted its bounded attempts.", {
+    cause: lastError
+  });
 }
 
 interface PhysicalChromeAbsenceRuntime {
@@ -16606,6 +16694,73 @@ async function waitForAndroidUiText(
     timeoutMs,
     message
   );
+}
+
+function physicalPairingStartupObservation(
+  nodes: readonly AndroidUiNode[],
+  expected: string
+): Readonly<{ readonly summary: string; readonly visible: boolean }> {
+  requireCondition(
+    pairingStartupDiagnosticLabels.some((label) => label === expected),
+    "Physical pairing startup expectation was invalid."
+  );
+  let pageVisible = false;
+  try {
+    pageVisible = selectChromePageViewport(nodes) !== null;
+  } catch {
+    // The bounded summary reports a non-Chrome surface without raw hierarchy data.
+  }
+  const knownStates = pairingStartupDiagnosticLabels.filter((label) =>
+    nodes.some((node) => node.text === label || node.description === label)
+  );
+  const visible =
+    pageVisible && selectPhysicalChromePageText(nodes, expected) !== null;
+  return Object.freeze({
+    summary:
+      `page=${pageVisible ? "chrome" : "other"};` +
+      `ui=${knownStates.length === 0 ? "unknown" : knownStates.join("|")};` +
+      `expected=${visible ? "yes" : "no"}`,
+    visible
+  });
+}
+
+async function waitForPhysicalPairingStartupText(
+  value: string,
+  timeoutMs: number,
+  message: string
+): Promise<void> {
+  const observations: string[] = [];
+  try {
+    await waitFor(async () => {
+      let observation: Readonly<{
+        readonly summary: string;
+        readonly visible: boolean;
+      }>;
+      try {
+        observation = physicalPairingStartupObservation(
+          await readAndroidUiNodes(),
+          value
+        );
+      } catch {
+        observation = Object.freeze({
+          summary: "hierarchy-read-error",
+          visible: false
+        });
+      }
+      if (
+        observations.at(-1) !== observation.summary &&
+        observations.length < 6
+      ) {
+        observations.push(observation.summary);
+      }
+      return observation.visible;
+    }, timeoutMs, message);
+  } catch (error) {
+    throw new Error(
+      `${message} (states=${observations.join("||") || "none"}).`,
+      { cause: error }
+    );
+  }
 }
 
 async function waitForPhysicalSessionActions(
