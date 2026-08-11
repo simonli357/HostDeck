@@ -9,8 +9,13 @@ import { HostDeckCodexAdapterError } from "./errors.js";
 import {
   type CodexTextTransport,
   type CodexTransportEvent,
+  createCodexLocalWebSocketTransport,
   createCodexUnixWebSocketTransport
 } from "./transport.js";
+import {
+  codexRemoteAuthEnvironmentVariable,
+  createCodexUnixSocketEndpoint
+} from "./transport-endpoint.js";
 
 const cleanup: Array<() => void | Promise<void>> = [];
 
@@ -36,6 +41,44 @@ describe("Codex Unix WebSocket transport configuration", () => {
     { socket_path: "/tmp/hostdeck.sock", tcp_fallback: true }
   ])("rejects invalid or non-Unix transport config %#", (candidate) => {
     expectAdapterError(() => createCodexUnixWebSocketTransport(candidate), "invalid_transport_config");
+  });
+
+  it("rejects ambiguous Unix credentials even when explicitly undefined", () => {
+    const endpoint = createCodexUnixSocketEndpoint("/tmp/hostdeck.sock");
+    for (const credentialCandidate of [
+      undefined,
+      {
+        kind: "protected_environment",
+        environment_variable: codexRemoteAuthEnvironmentVariable,
+        read: () => "A".repeat(64)
+      }
+    ]) {
+      expectAdapterError(
+        () =>
+          createCodexLocalWebSocketTransport({
+            host_target: "linux-x64",
+            endpoint,
+            credential: credentialCandidate
+          } as never),
+        "invalid_transport_config"
+      );
+    }
+  });
+
+  it("does not execute or disclose transport option accessors", () => {
+    const canary = "transport-option-private-canary";
+    const candidate = Object.defineProperty({}, "socket_path", {
+      enumerable: true,
+      get(): never {
+        throw new Error(canary);
+      }
+    });
+    const error = expectAdapterError(
+      () => createCodexUnixWebSocketTransport(candidate),
+      "invalid_transport_config"
+    );
+    expect(error.message).not.toContain(canary);
+    expect(error.stack ?? "").not.toContain(canary);
   });
 });
 
@@ -249,13 +292,16 @@ function waitForTransportEvent(
   });
 }
 
-function expectAdapterError(fn: () => unknown, code: HostDeckCodexAdapterError["code"]): void {
+function expectAdapterError(
+  fn: () => unknown,
+  code: HostDeckCodexAdapterError["code"]
+): HostDeckCodexAdapterError {
   try {
     fn();
   } catch (error) {
     expect(error).toBeInstanceOf(HostDeckCodexAdapterError);
     expect((error as HostDeckCodexAdapterError).code).toBe(code);
-    return;
+    return error as HostDeckCodexAdapterError;
   }
   throw new Error(`Expected HostDeckCodexAdapterError ${code}.`);
 }

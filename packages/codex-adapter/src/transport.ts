@@ -1,8 +1,22 @@
 import { Buffer } from "node:buffer";
-import { isAbsolute } from "node:path";
-import { defaultResourceBudget, resourceBudgetDefinitionByKey } from "@hostdeck/contracts";
-import WebSocket, { type RawData } from "ws";
+import type { IncomingMessage } from "node:http";
+import {
+  defaultResourceBudget,
+  resourceBudgetDefinitionByKey,
+  type SupportedHostTarget
+} from "@hostdeck/contracts";
+import WebSocket, { type ClientOptions, type RawData } from "ws";
 import { boundedProtocolText, HostDeckCodexAdapterError } from "./errors.js";
+import {
+  type CodexAuthenticatedLoopbackWebSocketEndpoint,
+  type CodexProtectedEnvironmentCredentialSource,
+  type CodexUnixSocketEndpoint,
+  createCodexUnixSocketEndpoint,
+  formatCodexUnixRemoteAddress,
+  parseCodexUnixSocketPath,
+  type ResolvedCodexEndpointConnection,
+  resolveCodexEndpointConnection
+} from "./transport-endpoint.js";
 
 export type CodexTransportState = "closed" | "closing" | "connecting" | "idle" | "open";
 
@@ -32,8 +46,7 @@ export interface CodexTextTransport {
   readonly subscribe: (listener: CodexTransportListener) => UnsubscribeCodexTransport;
 }
 
-export interface CodexUnixWebSocketTransportOptions {
-  readonly socket_path: string;
+interface CodexTransportResourceOptions {
   readonly handshake_timeout_ms?: number;
   readonly close_timeout_ms?: number;
   readonly heartbeat_interval_ms?: number;
@@ -42,8 +55,28 @@ export interface CodexUnixWebSocketTransportOptions {
   readonly max_buffered_bytes?: number;
 }
 
-interface ParsedTransportOptions {
+export type CodexLocalWebSocketTransportOptions = Readonly<
+  CodexTransportResourceOptions &
+    (
+      | {
+          readonly host_target: "linux-x64";
+          readonly endpoint: CodexUnixSocketEndpoint;
+          readonly credential?: never;
+        }
+      | {
+          readonly host_target: "windows-x64";
+          readonly endpoint: CodexAuthenticatedLoopbackWebSocketEndpoint;
+          readonly credential: CodexProtectedEnvironmentCredentialSource;
+        }
+    )
+>;
+
+export interface CodexUnixWebSocketTransportOptions extends CodexTransportResourceOptions {
   readonly socket_path: string;
+}
+
+interface ParsedTransportOptions {
+  readonly connection: ResolvedCodexEndpointConnection;
   readonly handshake_timeout_ms: number;
   readonly close_timeout_ms: number;
   readonly heartbeat_interval_ms: number;
@@ -62,14 +95,18 @@ const transportDefaults = {
 } as const;
 
 export function createCodexUnixWebSocketTransport(options: unknown): CodexTextTransport {
-  return new CodexUnixWebSocketTransport(parseTransportOptions(options));
+  return new CodexLocalWebSocketTransport(parseUnixTransportOptions(options));
 }
 
-export function formatCodexUnixRemoteAddress(socketPath: string): string {
-  return `unix://${parseSocketPath(socketPath)}`;
+export function createCodexLocalWebSocketTransport(
+  options: CodexLocalWebSocketTransportOptions
+): CodexTextTransport {
+  return new CodexLocalWebSocketTransport(parseLocalTransportOptions(options));
 }
 
-class CodexUnixWebSocketTransport implements CodexTextTransport {
+export { formatCodexUnixRemoteAddress };
+
+class CodexLocalWebSocketTransport implements CodexTextTransport {
   private readonly listeners = new Set<CodexTransportListener>();
   private readonly closeWaiters = new Set<() => void>();
   private readonly outboundReservations = new WeakMap<WebSocket, number>();
@@ -101,12 +138,34 @@ class CodexUnixWebSocketTransport implements CodexTextTransport {
 
     this.clearHeartbeat();
     this.currentState = "connecting";
-    const socket = new WebSocket(`ws+unix:${this.options.socket_path}`, {
+    const clientOptions: ClientOptions = {
       followRedirects: false,
       handshakeTimeout: this.options.handshake_timeout_ms,
       maxPayload: this.options.max_frame_bytes,
-      perMessageDeflate: false
-    });
+      perMessageDeflate: false,
+      ...(this.options.connection.authorization_header === null
+        ? {}
+        : {
+            headers: {
+              Authorization: this.options.connection.authorization_header
+            }
+          })
+    };
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(
+        this.options.connection.web_socket_address,
+        clientOptions
+      );
+    } catch {
+      this.currentState = "closed";
+      throw transportError(
+        "transport_connect_failed",
+        "Unable to create the private Codex local transport.",
+        "not_sent",
+        true
+      );
+    }
     this.socket = socket;
     this.attachSocket(socket);
 
@@ -116,14 +175,22 @@ class CodexUnixWebSocketTransport implements CodexTextTransport {
         socket.off("open", onOpen);
         socket.off("error", onError);
         socket.off("close", onCloseBeforeOpen);
+        socket.off("unexpected-response", onUnexpectedResponse);
         signal?.removeEventListener("abort", onAbort);
       };
       const rejectOnce = (error: HostDeckCodexAdapterError) => {
         if (settled) return;
         settled = true;
         cleanup();
-        if (this.socket === socket) this.currentState = "closed";
-        socket.terminate();
+        if (this.socket === socket) {
+          this.currentState = "closed";
+          this.socket = null;
+        }
+        try {
+          socket.terminate();
+        } catch {
+          // The typed rejection remains authoritative if ws is already torn down.
+        }
         reject(error);
       };
       const onOpen = () => {
@@ -136,23 +203,42 @@ class CodexUnixWebSocketTransport implements CodexTextTransport {
         this.emit({ type: "open", generation: this.currentGeneration });
         resolve();
       };
-      const onError = (cause: Error) => {
+      const onError = () =>
         rejectOnce(
-          new HostDeckCodexAdapterError("transport_connect_failed", "Unable to connect to the private Codex Unix socket.", {
-            cause,
-            outcome: "not_sent",
-            retry_safe: true
-          })
+          transportError(
+            "transport_connect_failed",
+            "Unable to connect to the private Codex local endpoint.",
+            "not_sent",
+            true
+          )
+        );
+      const onCloseBeforeOpen = () => {
+        rejectOnce(
+          transportError(
+            "transport_connect_failed",
+            "Codex local endpoint closed before WebSocket handshake.",
+            "not_sent",
+            true
+          )
         );
       };
-      const onCloseBeforeOpen = () => {
-        rejectOnce(transportError("transport_connect_failed", "Codex Unix socket closed before WebSocket handshake.", "not_sent", true));
+      const onUnexpectedResponse = (_request: unknown, response: IncomingMessage) => {
+        response.resume();
+        rejectOnce(
+          transportError(
+            "transport_connect_failed",
+            "Codex local endpoint rejected the WebSocket handshake.",
+            "not_sent",
+            true
+          )
+        );
       };
       const onAbort = () => rejectOnce(transportError("transport_aborted", "Codex transport connection was aborted.", "not_sent", true));
 
       socket.once("open", onOpen);
       socket.once("error", onError);
       socket.once("close", onCloseBeforeOpen);
+      socket.once("unexpected-response", onUnexpectedResponse);
       signal?.addEventListener("abort", onAbort, { once: true });
     });
   }
@@ -189,24 +275,25 @@ class CodexUnixWebSocketTransport implements CodexTextTransport {
         socket.send(text, { binary: false, compress: false }, (cause) => {
           release();
           if (cause === undefined || cause === null) resolve();
-          else {
+          else
             reject(
-              new HostDeckCodexAdapterError("transport_send_failed", "Codex transport could not confirm the outbound frame write.", {
-                cause,
-                outcome: "unknown",
-                retry_safe: false
-              })
+              transportError(
+                "transport_send_failed",
+                "Codex transport could not confirm the outbound frame write.",
+                "unknown",
+                false
+              )
             );
-          }
         });
-      } catch (cause) {
+      } catch {
         release();
         reject(
-          new HostDeckCodexAdapterError("transport_send_failed", "Codex transport rejected the outbound frame.", {
-            cause,
-            outcome: "not_sent",
-            retry_safe: true
-          })
+          transportError(
+            "transport_send_failed",
+            "Codex transport rejected the outbound frame.",
+            "not_sent",
+            true
+          )
         );
       }
     });
@@ -222,7 +309,15 @@ class CodexUnixWebSocketTransport implements CodexTextTransport {
     this.currentState = "closing";
     const closed = this.waitForClose();
     try {
-      socket.close(1000, websocketCloseReason(reason));
+      socket.close(
+        1000,
+        websocketCloseReason(
+          redactTransportCredential(
+            reason,
+            this.options.connection.authorization_header
+          )
+        )
+      );
     } catch {
       socket.terminate();
     }
@@ -268,16 +363,17 @@ class CodexUnixWebSocketTransport implements CodexTextTransport {
       this.heartbeatDeadline = null;
       this.scheduleHeartbeat(socket);
     });
-    socket.on("error", (cause) => {
+    socket.on("error", () => {
       if (this.socket !== socket) return;
       this.emit({
         type: "error",
         generation: this.currentGeneration,
-        error: new HostDeckCodexAdapterError("transport_closed", "Codex WebSocket transport reported an error.", {
-          cause,
-          outcome: "not_applicable",
-          retry_safe: false
-        })
+        error: transportError(
+          "transport_closed",
+          "Codex WebSocket transport reported an error.",
+          "not_applicable",
+          false
+        )
       });
     });
     socket.on("close", (code, reason) => {
@@ -286,7 +382,13 @@ class CodexUnixWebSocketTransport implements CodexTextTransport {
       this.outboundReservations.delete(socket);
       this.socket = null;
       this.currentState = "closed";
-      const boundedReason = boundedProtocolText(reason.toString("utf8"), "Codex transport closed without a reason.");
+      const boundedReason = boundedProtocolText(
+        redactTransportCredential(
+          reason.toString("utf8"),
+          this.options.connection.authorization_header
+        ),
+        "Codex transport closed without a reason."
+      );
       this.emit({ type: "close", generation: this.currentGeneration, code, reason: boundedReason, clean: code === 1000 });
       for (const resolve of this.closeWaiters) resolve();
       this.closeWaiters.clear();
@@ -316,13 +418,14 @@ class CodexUnixWebSocketTransport implements CodexTextTransport {
       if (this.socket !== socket || this.currentState !== "open") return;
       try {
         socket.ping();
-      } catch (cause) {
+      } catch {
         this.terminate(
-          new HostDeckCodexAdapterError("transport_closed", "Codex heartbeat ping failed.", {
-            cause,
-            outcome: "not_applicable",
-            retry_safe: false
-          })
+          transportError(
+            "transport_closed",
+            "Codex heartbeat ping failed.",
+            "not_applicable",
+            false
+          )
         );
         return;
       }
@@ -346,23 +449,65 @@ class CodexUnixWebSocketTransport implements CodexTextTransport {
   }
 }
 
-function parseTransportOptions(candidate: unknown): ParsedTransportOptions {
-  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) throw invalidTransportConfig("options must be an object");
-  const value = candidate as Record<string, unknown>;
-  const allowed = [
-    "close_timeout_ms",
-    "handshake_timeout_ms",
-    "heartbeat_interval_ms",
-    "heartbeat_timeout_ms",
-    "max_buffered_bytes",
-    "max_frame_bytes",
-    "socket_path"
-  ];
-  const keys = Object.keys(value).sort();
-  if (keys.some((key) => !allowed.includes(key))) throw invalidTransportConfig(`unknown option ${keys.find((key) => !allowed.includes(key))}`);
+const resourceOptionKeys = Object.freeze([
+  "close_timeout_ms",
+  "handshake_timeout_ms",
+  "heartbeat_interval_ms",
+  "heartbeat_timeout_ms",
+  "max_buffered_bytes",
+  "max_frame_bytes"
+] as const);
+const localTransportOptionKeys = Object.freeze([
+  ...resourceOptionKeys,
+  "credential",
+  "endpoint",
+  "host_target"
+].sort());
+const unixTransportOptionKeys = Object.freeze([
+  ...resourceOptionKeys,
+  "socket_path"
+].sort());
 
-  const socketPath = parseSocketPath(value.socket_path);
+function parseLocalTransportOptions(candidate: unknown): ParsedTransportOptions {
+  const value = parseTransportOptionsRecord(candidate);
+  requireAllowedTransportKeys(value, localTransportOptionKeys);
+  const resources = parseTransportResources(value);
+  const hostTarget = parseNativeHostTarget(value.host_target);
+  if (hostTarget === "linux-x64" && Object.hasOwn(value, "credential")) {
+    throw invalidTransportConfig(
+      "Unix endpoints cannot declare a credential source"
+    );
+  }
+  return Object.freeze({
+    connection: resolveCodexEndpointConnection(
+      value.endpoint,
+      hostTarget,
+      value.credential
+    ),
+    ...resources
+  });
+}
 
+function parseUnixTransportOptions(candidate: unknown): ParsedTransportOptions {
+  const value = parseTransportOptionsRecord(candidate);
+  requireAllowedTransportKeys(value, unixTransportOptionKeys);
+  const resources = parseTransportResources(value);
+  const hostTarget = parseNativeHostTarget("linux-x64");
+  return Object.freeze({
+    connection: resolveCodexEndpointConnection(
+      createCodexUnixSocketEndpoint(
+        parseCodexUnixSocketPath(value.socket_path)
+      ),
+      hostTarget,
+      undefined
+    ),
+    ...resources
+  });
+}
+
+function parseTransportResources(
+  value: Readonly<Record<string, unknown>>
+): Omit<ParsedTransportOptions, "connection"> {
   const handshakeTimeout = parseBoundedInteger(
     value.handshake_timeout_ms,
     transportDefaults.handshake_timeout_ms,
@@ -405,39 +550,72 @@ function parseTransportOptions(candidate: unknown): ParsedTransportOptions {
     resourceBudgetDefinitionByKey.protocol_max_buffered_bytes.maximum,
     "max_buffered_bytes"
   );
-  return {
-    socket_path: socketPath,
+  return Object.freeze({
     handshake_timeout_ms: handshakeTimeout,
     close_timeout_ms: closeTimeout,
     heartbeat_interval_ms: heartbeatInterval,
     heartbeat_timeout_ms: heartbeatTimeout,
     max_frame_bytes: maxFrameBytes,
     max_buffered_bytes: maxBufferedBytes
-  };
+  });
 }
 
-function parseSocketPath(candidate: unknown): string {
-  if (
-    typeof candidate !== "string" ||
-    !isAbsolute(candidate) ||
-    candidate.length < 2 ||
-    Buffer.byteLength(candidate, "utf8") > 107 ||
-    [":", "?", "#", "%"].some((character) => candidate.includes(character)) ||
-    containsControlCharacter(candidate)
-  ) {
+function parseTransportOptionsRecord(candidate: unknown): Record<string, unknown> {
+  try {
+    if (
+      candidate === null ||
+      typeof candidate !== "object" ||
+      Array.isArray(candidate)
+    ) {
+      throw invalidTransportConfig("options must be a plain object");
+    }
+    const prototype = Object.getPrototypeOf(candidate);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw invalidTransportConfig("options must be a plain object");
+    }
+    const value: Record<string, unknown> = Object.create(null);
+    for (const key of Reflect.ownKeys(candidate)) {
+      if (typeof key !== "string") {
+        throw invalidTransportConfig("options contain an unknown field");
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(candidate, key);
+      if (
+        descriptor === undefined ||
+        !("value" in descriptor) ||
+        descriptor.enumerable !== true
+      ) {
+        throw invalidTransportConfig("options must use readable data fields");
+      }
+      value[key] = descriptor.value;
+    }
+    return value;
+  } catch {
+    throw invalidTransportConfig("options are invalid");
+  }
+}
+
+function requireAllowedTransportKeys(
+  value: Record<string, unknown>,
+  allowedKeys: readonly string[]
+): void {
+  if (Object.keys(value).some((key) => !allowedKeys.includes(key))) {
+    throw invalidTransportConfig("options contain an unknown field");
+  }
+}
+
+function parseNativeHostTarget(candidate: unknown): SupportedHostTarget {
+  const currentTarget =
+    process.arch === "x64" && process.platform === "linux"
+      ? "linux-x64"
+      : process.arch === "x64" && process.platform === "win32"
+        ? "windows-x64"
+        : null;
+  if (candidate !== currentTarget || currentTarget === null) {
     throw invalidTransportConfig(
-      "socket_path must be an absolute Linux Unix-socket path of at most 107 UTF-8 bytes without URL delimiters, escapes, or control characters"
+      "endpoint target does not match the native host"
     );
   }
-  return candidate;
-}
-
-function containsControlCharacter(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (code <= 31 || code === 127) return true;
-  }
-  return false;
+  return currentTarget;
 }
 
 function parseBoundedInteger(candidate: unknown, fallback: number, min: number, max: number, label: string): number {
@@ -449,7 +627,12 @@ function parseBoundedInteger(candidate: unknown, fallback: number, min: number, 
 }
 
 function invalidTransportConfig(detail: string): HostDeckCodexAdapterError {
-  return transportError("invalid_transport_config", `Invalid Codex Unix transport configuration: ${detail}.`, "not_sent", true);
+  return transportError(
+    "invalid_transport_config",
+    `Invalid Codex local transport configuration: ${detail}.`,
+    "not_sent",
+    true
+  );
 }
 
 function transportError(
@@ -471,6 +654,19 @@ function websocketCloseReason(value: string): string {
   const characters = [...boundedProtocolText(value)];
   while (Buffer.byteLength(characters.join(""), "utf8") > 100) characters.pop();
   return characters.join("");
+}
+
+function redactTransportCredential(
+  value: string,
+  authorizationHeader: string | null
+): string {
+  if (authorizationHeader === null) return value;
+  const token = authorizationHeader.slice("Bearer ".length);
+  return value
+    .split(authorizationHeader)
+    .join("[credential redacted]")
+    .split(token)
+    .join("[credential redacted]");
 }
 
 async function settlesWithin(promise: Promise<void>, milliseconds: number): Promise<boolean> {

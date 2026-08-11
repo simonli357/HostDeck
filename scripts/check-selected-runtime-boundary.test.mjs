@@ -63,6 +63,12 @@ test("keeps direct host APIs inside exact reviewed platform adapter and edge own
     findDirectHostApiBoundaryViolations(directHostApiOwnerPaths[0], source),
     []
   );
+  assert.equal(
+    directHostApiOwnerPaths.includes(
+      "packages/codex-adapter/src/transport-endpoint.ts"
+    ),
+    true
+  );
   assert.equal(new Set(directHostApiOwnerPaths).size, directHostApiOwnerPaths.length);
 });
 

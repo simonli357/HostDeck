@@ -190,14 +190,27 @@ export {
   isSupportedCodexThreadSource
 } from "./thread-client.js";
 export {
+  type CodexLocalWebSocketTransportOptions,
   type CodexTextTransport,
   type CodexTransportEvent,
   type CodexTransportListener,
   type CodexTransportState,
   type CodexUnixWebSocketTransportOptions,
+  createCodexLocalWebSocketTransport,
   createCodexUnixWebSocketTransport,
   formatCodexUnixRemoteAddress
 } from "./transport.js";
+export {
+  type CodexAuthenticatedLoopbackWebSocketEndpoint,
+  type CodexLocalEndpoint,
+  type CodexProtectedEnvironmentCredentialSource,
+  type CodexUnixSocketEndpoint,
+  codexRemoteAuthEnvironmentVariable,
+  createCodexUnixSocketEndpoint,
+  describeCodexLocalEndpoint,
+  formatCodexLocalRemoteAddress,
+  parseCodexLocalEndpoint
+} from "./transport-endpoint.js";
 export {
   buildCodexTuiResumeCommand,
   type CodexTuiResumeCommand,
