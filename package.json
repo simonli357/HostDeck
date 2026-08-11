@@ -11,7 +11,7 @@
   "scripts": {
     "check:scaffold": "node scripts/check-scaffold.mjs",
     "check:planning": "node --test scripts/check-planning.test.mjs && node scripts/check-planning.mjs",
-    "check:native-ci": "node --test scripts/native-ci-evidence.test.mjs scripts/native-ci-workflow.test.mjs && node scripts/native-ci-workflow.mjs",
+    "check:native-ci": "node --test scripts/native-ci-evidence.test.mjs scripts/native-ci-workflow.test.mjs scripts/windows-codex-spike-evidence.test.mjs && node scripts/native-ci-workflow.mjs",
     "check:runtime-boundary": "node --test scripts/check-selected-runtime-boundary.test.mjs && node scripts/check-selected-runtime-boundary.mjs",
     "check:codex-bindings": "node scripts/codex-bindings.mjs --check",
     "generate:codex-bindings": "node scripts/codex-bindings.mjs --write",
@@ -66,6 +66,7 @@
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",
     "@biomejs/biome": "2.5.3",
+    "@openai/codex": "0.144.0",
     "@playwright/test": "1.61.1",
     "@types/node": "26.1.1",
     "typescript": "7.0.2",

@@ -30,10 +30,15 @@ const allowedEnvironmentKeys = new Set([
   "CI",
   "COMSPEC",
   "COREPACK_HOME",
+  "GITHUB_RUN_ATTEMPT",
+  "GITHUB_RUN_ID",
+  "GITHUB_SHA",
   "GITHUB_ACTIONS",
   "HOME",
   "HOMEDRIVE",
   "HOMEPATH",
+  "HOSTDECK_NATIVE_RUNNER_LABEL",
+  "IMAGEVERSION",
   "LANG",
   "LC_ALL",
   "LOCALAPPDATA",
@@ -44,6 +49,7 @@ const allowedEnvironmentKeys = new Set([
   "PROGRAMDATA",
   "RUNNER_ARCH",
   "RUNNER_OS",
+  "RUNNER_TEMP",
   "SYSTEMROOT",
   "TEMP",
   "TERM",
@@ -109,6 +115,9 @@ async function main() {
       ["packages/server/src/tailscale-command-adapter.test.ts"],
       reportRoot
     );
+    if (target === "windows-x64") {
+      runWindowsCodexSpike(checks, outputPath);
+    }
     if (target === "linux-x64") {
       runVitestCheck(
         checks,
@@ -161,6 +170,35 @@ async function main() {
     checks
   });
   process.stdout.write(`HostDeck native CI passed: ${target}, ${checks.length} checks.\n`);
+}
+
+function runWindowsCodexSpike(checks, nativeEvidencePath) {
+  runTimedCheck(checks, "codex_transport_spike", () => {
+    const evidencePath = join(
+      dirname(nativeEvidencePath),
+      "int-v1-100-windows-codex-transport-spike.json"
+    );
+    runCommand(
+      process.execPath,
+      [
+        join(repositoryRoot, "scripts", "windows-codex-transport-spike.mjs"),
+        "--output",
+        evidencePath
+      ],
+      3 * 60_000,
+      "codex_transport_spike"
+    );
+    runCommand(
+      process.execPath,
+      [
+        join(repositoryRoot, "scripts", "windows-codex-spike-evidence.mjs"),
+        "verify",
+        evidencePath
+      ],
+      10_000,
+      "codex_transport_spike_evidence"
+    );
+  });
 }
 
 function runPnpmCheck(checks, id, args, timeout = 5 * 60_000) {

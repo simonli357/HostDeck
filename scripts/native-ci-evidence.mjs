@@ -45,6 +45,7 @@ export const nativeCiTargetPolicies = Object.freeze({
       "native_lock",
       "windows_paths",
       "tailscale_adapter",
+      "codex_transport_spike",
       "web_build",
       "native_modules"
     ]),
