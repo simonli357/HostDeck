@@ -20,7 +20,7 @@ import {
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = realpathSync(resolve(scriptDirectory, ".."));
-const pnpmExecutable = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const pnpmInvocation = resolvePnpmInvocation();
 const ansiEscapePattern = new RegExp(
   `${String.fromCharCode(27)}\\[[0-9;]*m`,
   "gu"
@@ -153,7 +153,12 @@ async function main() {
 
 function runPnpmCheck(checks, id, args, timeout = 5 * 60_000) {
   runTimedCheck(checks, id, () => {
-    runCommand(pnpmExecutable, args, timeout, id);
+    runCommand(
+      pnpmInvocation.command,
+      [...pnpmInvocation.arguments, ...args],
+      timeout,
+      id
+    );
   });
 }
 
@@ -161,8 +166,9 @@ function runVitestCheck(checks, id, args, reportRoot) {
   runTimedCheck(checks, id, () => {
     const reportPath = join(reportRoot, `${id}.json`);
     runCommand(
-      pnpmExecutable,
+      pnpmInvocation.command,
       [
+        ...pnpmInvocation.arguments,
         "exec",
         "vitest",
         "run",
@@ -272,7 +278,10 @@ function probeNativeModules() {
 }
 
 function readPnpmVersion() {
-  const result = spawnSync(pnpmExecutable, ["--version"], {
+  const result = spawnSync(
+    pnpmInvocation.command,
+    [...pnpmInvocation.arguments, "--version"],
+    {
     cwd: repositoryRoot,
     encoding: "utf8",
     env: commandEnvironment(),
@@ -280,7 +289,8 @@ function readPnpmVersion() {
     shell: false,
     timeout: 10_000,
     windowsHide: true
-  });
+    }
+  );
   requireCondition(
     result.error === undefined &&
       result.status === 0 &&
@@ -290,6 +300,19 @@ function readPnpmVersion() {
     "Native CI could not verify pnpm."
   );
   return result.stdout.trim();
+}
+
+function resolvePnpmInvocation() {
+  if (process.platform !== "win32") {
+    return Object.freeze({ arguments: Object.freeze([]), command: "pnpm" });
+  }
+  const cli = realpathSync(
+    join(dirname(process.execPath), "node_modules", "corepack", "dist", "pnpm.js")
+  );
+  return Object.freeze({
+    arguments: Object.freeze([cli]),
+    command: realpathSync(process.execPath)
+  });
 }
 
 function parseArguments(args) {
