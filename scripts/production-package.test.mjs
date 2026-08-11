@@ -43,7 +43,7 @@ import {
 } from "./verify-production-package.mjs";
 
 const deployedWorkspacePackageNames = ["core", "contracts", "codex-adapter", "storage", "server"];
-const deployedExternalPackageNames = ["fs-ext", "qrcode", "zod"];
+const deployedExternalPackageNames = ["qrcode", "zod"];
 
 function createWorkspaceDeployEntry(root, name, index) {
   const entryName = `@hostdeck+${name}@file++++private+checkout+packages+${name}_${index}`;

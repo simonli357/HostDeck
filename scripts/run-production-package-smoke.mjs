@@ -110,7 +110,7 @@ function assertNativeOperations() {
   const storageManifest = realpathSync(join(packageRoot, storage.root, "package.json"));
   const require = createRequire(storageManifest);
   const Database = require("better-sqlite3");
-  const fsExt = require("fs-ext");
+  const fileLock = require("fs-native-extensions");
   const databasePath = join(temporaryRoot, "native.sqlite");
   const database = new Database(databasePath);
   try {
@@ -123,8 +123,8 @@ function assertNativeOperations() {
   const lockPath = join(temporaryRoot, "native.lock");
   const descriptor = openSync(lockPath, "w", 0o600);
   try {
-    fsExt.flockSync(descriptor, "exnb");
-    fsExt.flockSync(descriptor, "un");
+    assert.equal(fileLock.tryLock(descriptor), true);
+    fileLock.unlock(descriptor);
   } finally {
     closeSync(descriptor);
   }

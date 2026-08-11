@@ -7,7 +7,11 @@ import {
   openSync,
   realpathSync
 } from "node:fs";
-import { flockSync } from "fs-ext";
+import {
+  type HostDeckFileLock,
+  type HostDeckFileLockPort,
+  nativeHostDeckFileLockPort
+} from "@hostdeck/storage";
 
 export type HostDeckServiceLifecycleLockErrorCode =
   | "invalid_lock"
@@ -30,7 +34,8 @@ export interface HostDeckServiceLifecycleLock {
 }
 
 export function acquireHostDeckServiceLifecycleLock(
-  path: string
+  path: string,
+  lockPort: HostDeckFileLockPort = nativeHostDeckFileLockPort
 ): HostDeckServiceLifecycleLock {
   let descriptor: number;
   try {
@@ -47,17 +52,33 @@ export function acquireHostDeckServiceLifecycleLock(
     throw lockError("invalid_lock", error);
   }
 
+  let fileLock: HostDeckFileLock | null = null;
   try {
-    flockSync(descriptor, "exnb");
+    const acquired = lockPort.tryAcquireExclusive(descriptor);
+    if (acquired === null) {
+      const closeError = closeDescriptor(descriptor);
+      throw lockError("lock_held", closeError ?? undefined);
+    }
+    fileLock = acquired;
     assertDescriptorOwnsExactLock(path, descriptor);
   } catch (error) {
+    if (error instanceof HostDeckServiceLifecycleLockError) throw error;
+    const cleanupErrors: unknown[] = [];
+    if (fileLock !== null) {
+      try {
+        fileLock.release();
+      } catch (releaseError) {
+        cleanupErrors.push(releaseError);
+      }
+    }
     const closeError = closeDescriptor(descriptor);
-    const cause =
-      closeError === null
-        ? error
-        : new AggregateError([error, closeError], "Lock acquisition cleanup failed.");
-    throw lockError(isContention(error) ? "lock_held" : "lock_io_failed", cause);
+    if (closeError !== null) cleanupErrors.push(closeError);
+    const cause = cleanupErrors.length === 0
+      ? error
+      : new AggregateError([error, ...cleanupErrors], "Lock acquisition cleanup failed.");
+    throw lockError("lock_io_failed", cause);
   }
+  const heldLock = fileLock;
 
   let released = false;
   return Object.freeze({
@@ -68,7 +89,7 @@ export function acquireHostDeckServiceLifecycleLock(
       if (released) return;
       const errors: unknown[] = [];
       try {
-        flockSync(descriptor, "un");
+        heldLock.release();
       } catch (error) {
         errors.push(error);
       }
@@ -114,14 +135,6 @@ function closeDescriptor(descriptor: number): unknown | null {
   } catch (error) {
     return error;
   }
-}
-
-function isContention(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    "code" in error &&
-    (error.code === "EAGAIN" || error.code === "EWOULDBLOCK")
-  );
 }
 
 function lockError(

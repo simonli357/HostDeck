@@ -1371,14 +1371,11 @@ function requireNativeModules() {
   const storageRequire = createRequire(
     join(repositoryRoot, "packages", "storage", "package.json")
   );
-  const cliRequire = createRequire(
-    join(repositoryRoot, "packages", "cli", "package.json")
-  );
   const betterSqlite = realpathSync(storageRequire.resolve("better-sqlite3"));
-  const fsExt = realpathSync(cliRequire.resolve("fs-ext"));
+  const fileLock = realpathSync(storageRequire.resolve("fs-native-extensions"));
   const script =
     "import { createRequire } from 'node:module'; const require=createRequire(import.meta.url); require(process.argv[1]); require(process.argv[2]);";
-  runCommand(process.execPath, ["--input-type=module", "--eval", script, betterSqlite, fsExt], {
+  runCommand(process.execPath, ["--input-type=module", "--eval", script, betterSqlite, fileLock], {
     cwd: repositoryRoot
   });
   return true;

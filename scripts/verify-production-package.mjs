@@ -10,7 +10,7 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } 
 import { pathToFileURL } from "node:url";
 
 export const productionPackageManifestName = "hostdeck-package.json";
-export const productionPackageSourceCount = 620;
+export const productionPackageSourceCount = 621;
 export const productionPackageVerifierName = "verify.mjs";
 export const productionWebManifestName = "hostdeck-web.json";
 export const productionWebManifestSchemaVersion = 1;
@@ -1081,7 +1081,7 @@ function validateNativeManifest(nativeModules, executableFiles) {
   if (!Array.isArray(nativeModules) || nativeModules.length !== 2) {
     throw new TypeError("Required native-module inventory must contain exactly two entries.");
   }
-  const expected = ["better-sqlite3", "fs-ext"];
+  const expected = ["better-sqlite3", "fs-native-extensions"];
   const executableSet = new Set(executableFiles);
   for (const [index, packageName] of expected.entries()) {
     const native = assertRecord(nativeModules[index], "Native-module descriptor");

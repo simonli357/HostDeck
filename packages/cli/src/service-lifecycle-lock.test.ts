@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { HostDeckFileLockPort } from "@hostdeck/storage";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   acquireHostDeckServiceLifecycleLock,
@@ -64,6 +65,62 @@ describe("IFC-V1-056 lifecycle advisory lock", () => {
       expect(observed).toMatchObject({ code: "invalid_lock" });
       if (kind === "mode") expect(lstatSync(path).mode & 0o7777).toBe(0o644);
     }
+  });
+
+  it("maps only the port's explicit null result to contention", () => {
+    const path = fixturePath("normalized-contention");
+    const heldPort: HostDeckFileLockPort = Object.freeze({
+      tryAcquireExclusive: () => null
+    });
+    expect(() => acquireHostDeckServiceLifecycleLock(path, heldPort)).toThrowError(
+      expect.objectContaining({ code: "lock_held" })
+    );
+
+    const privateValue = "private-lock-binding-failure";
+    const failedPort: HostDeckFileLockPort = Object.freeze({
+      tryAcquireExclusive() {
+        throw Object.assign(new Error(privateValue), { code: "EAGAIN" });
+      }
+    });
+    let observed: unknown;
+    try {
+      acquireHostDeckServiceLifecycleLock(path, failedPort);
+    } catch (error) {
+      observed = error;
+    }
+    expect(observed).toBeInstanceOf(HostDeckServiceLifecycleLockError);
+    expect(observed).toMatchObject({
+      code: "lock_io_failed",
+      message: "HostDeck service lifecycle lock operation failed."
+    });
+    expect(JSON.stringify({
+      name: (observed as Error).name,
+      message: (observed as Error).message
+    })).not.toContain(privateValue);
+
+    const recovered = acquireHostDeckServiceLifecycleLock(path);
+    recovered.release();
+  });
+
+  it("closes ownership even when the injected release reports failure", () => {
+    const path = fixturePath("release-failure");
+    const failedReleasePort: HostDeckFileLockPort = Object.freeze({
+      tryAcquireExclusive: () => Object.freeze({
+        released: false,
+        release() {
+          throw new Error("private-release-failure");
+        }
+      })
+    });
+    const lock = acquireHostDeckServiceLifecycleLock(path, failedReleasePort);
+    expect(() => lock.release()).toThrowError(
+      expect.objectContaining({ code: "lock_io_failed" })
+    );
+    expect(lock.released).toBe(true);
+    expect(() => lock.release()).not.toThrow();
+
+    const recovered = acquireHostDeckServiceLifecycleLock(path);
+    recovered.release();
   });
 });
 

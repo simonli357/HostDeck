@@ -16,6 +16,7 @@ import {
   symlinkSync,
   writeFileSync
 } from "node:fs";
+import { createRequire } from "node:module";
 import { createConnection, createServer } from "node:net";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
@@ -641,20 +642,36 @@ function assertLinkedUnits(generatedPaths) {
 
 function assertLeaseReleased() {
   if (!existsSync(leasePath)) return;
-  const result = runCommand("/usr/bin/flock", ["--nonblock", leasePath, "/bin/true"], {
-    allowedStatuses: [0]
-  });
+  const result = runFileLockProbe(0);
   assert.equal(result.stdout, "");
   assert.equal(result.stderr, "");
 }
 
 function assertLeaseHeld() {
   assert.equal(existsSync(leasePath), true);
-  const result = runCommand("/usr/bin/flock", ["--nonblock", leasePath, "/bin/true"], {
-    allowedStatuses: [1]
-  });
+  const result = runFileLockProbe(73);
   assert.equal(result.stdout, "");
   assert.equal(result.stderr, "");
+}
+
+function runFileLockProbe(expectedStatus) {
+  const storage = sourceManifest.packages.find((entry) => entry.name === "@hostdeck/storage");
+  assert.ok(storage !== undefined);
+  const storageRequire = createRequire(
+    realpathSync(join(packageRoot, storage.root, "package.json"))
+  );
+  const nativeModule = realpathSync(storageRequire.resolve("fs-native-extensions"));
+  const source = [
+    "const fs = require('node:fs');",
+    "const lock = require(process.argv[1]);",
+    "const descriptor = fs.openSync(process.argv[2], 'r+');",
+    "let acquired = false;",
+    "try { acquired = lock.tryLock(descriptor); if (acquired) lock.unlock(descriptor); } finally { fs.closeSync(descriptor); }",
+    "process.exitCode = acquired ? 0 : 73;"
+  ].join(" ");
+  return runCommand(process.execPath, ["--eval", source, nativeModule, leasePath], {
+    allowedStatuses: [expectedStatus]
+  });
 }
 
 function listFailedUserUnits() {

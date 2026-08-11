@@ -1,6 +1,10 @@
 import { Buffer } from "node:buffer";
 import { closeSync, fstatSync, fsyncSync, ftruncateSync, writeSync } from "node:fs";
-import { flockSync } from "fs-ext";
+import {
+  type HostDeckFileLock,
+  type HostDeckFileLockPort,
+  nativeHostDeckFileLockPort
+} from "./platform-file-lock.js";
 import {
   type HostDeckPathModeRepair,
   openSecureHostDeckRegularFile
@@ -22,6 +26,7 @@ export class HostDeckDaemonLeaseError extends Error {
 
 export interface AcquireHostDeckDaemonLeaseInput {
   readonly lease_path: string;
+  readonly lock_port?: HostDeckFileLockPort;
   readonly now?: () => Date;
   readonly pid?: number;
 }
@@ -60,15 +65,24 @@ export function acquireHostDeckDaemonLease(input: AcquireHostDeckDaemonLeaseInpu
     throw leaseError("invalid_lease", "HostDeck daemon lease file is insecure.", leasePath, error);
   }
   const descriptor = opened.descriptor;
+  let fileLock: HostDeckFileLock;
 
   try {
-    flockSync(descriptor, "exnb");
+    const acquired = (input.lock_port ?? nativeHostDeckFileLockPort).tryAcquireExclusive(descriptor);
+    if (acquired === null) {
+      const closeError = closeDescriptor(descriptor);
+      throw leaseError(
+        "lease_held",
+        "Another HostDeck daemon already owns this state directory.",
+        opened.path,
+        closeError ?? undefined
+      );
+    }
+    fileLock = acquired;
   } catch (error) {
+    if (error instanceof HostDeckDaemonLeaseError) throw error;
     const closeError = closeDescriptor(descriptor);
     const cause = closeError === null ? error : new AggregateError([error, closeError], "Lease acquisition and descriptor close failed.");
-    if (isLockContention(error)) {
-      throw leaseError("lease_held", "Another HostDeck daemon already owns this state directory.", opened.path, cause);
-    }
     throw leaseError("lease_io_failed", "HostDeck daemon lease could not be acquired.", opened.path, cause);
   }
 
@@ -81,7 +95,7 @@ export function acquireHostDeckDaemonLease(input: AcquireHostDeckDaemonLeaseInpu
     fsyncSync(descriptor);
     opened.verifyPath();
   } catch (error) {
-    const cleanupErrors = unlockAndClose(descriptor);
+    const cleanupErrors = unlockAndClose(fileLock, descriptor);
     const cause = cleanupErrors.length === 0 ? error : new AggregateError([error, ...cleanupErrors], "Lease metadata and cleanup failed.");
     throw leaseError("lease_io_failed", "HostDeck daemon lease metadata could not be written.", opened.path, cause);
   }
@@ -99,7 +113,7 @@ export function acquireHostDeckDaemonLease(input: AcquireHostDeckDaemonLeaseInpu
     release() {
       if (released) return;
       released = true;
-      const cleanupErrors = unlockAndClose(descriptor);
+      const cleanupErrors = unlockAndClose(fileLock, descriptor);
       if (cleanupErrors.length > 0) {
         throw leaseError(
           "lease_io_failed",
@@ -135,10 +149,10 @@ function writeAll(descriptor: number, data: Buffer): void {
   }
 }
 
-function unlockAndClose(descriptor: number): unknown[] {
+function unlockAndClose(lock: HostDeckFileLock, descriptor: number): unknown[] {
   const errors: unknown[] = [];
   try {
-    flockSync(descriptor, "un");
+    lock.release();
   } catch (error) {
     errors.push(error);
   }
@@ -154,10 +168,6 @@ function closeDescriptor(descriptor: number): unknown | null {
   } catch (error) {
     return error;
   }
-}
-
-function isLockContention(error: unknown): boolean {
-  return error instanceof Error && "code" in error && ["EAGAIN", "EWOULDBLOCK"].includes(String(error.code));
 }
 
 function leaseError(

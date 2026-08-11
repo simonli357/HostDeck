@@ -484,8 +484,8 @@ describe("physical Android phone-driver protocol", () => {
     const packageManifest = {
       schemaVersion: 4,
       packageVersion: "0.0.0",
-      source: { count: 620, sha256: sourceHash },
-      output: { count: 1_247, sha256: outputHash },
+      source: { count: 621, sha256: sourceHash },
+      output: { count: 1_249, sha256: outputHash },
       content: { bytes: 35_000_000, entryCount: 6_233, sha256: contentHash },
       manifestSha256: manifestHash,
       web: {
@@ -496,10 +496,10 @@ describe("physical Android phone-driver protocol", () => {
       }
     };
     const buildResult = parsePhysicalPackageBuildOutput(
-      `HostDeck package built: 620 sources, 1247 owned outputs, 6233 entries, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
+      `HostDeck package built: 621 sources, 1249 owned outputs, 6233 entries, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
     );
     const verification = parsePhysicalPackageVerificationOutput(
-      `HostDeck package verified: 6233 entries, 1247 owned outputs, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
+      `HostDeck package verified: 6233 entries, 1249 owned outputs, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
     );
     const browserManifest = {
       package: {
@@ -522,11 +522,11 @@ describe("physical Android phone-driver protocol", () => {
       content_entry_count: 6_233,
       content_tree_sha256: contentHash,
       manifest_sha256: manifestHash,
-      output_file_count: 1_247,
+      output_file_count: 1_249,
       output_tree_sha256: outputHash,
       package_schema_version: 4,
       package_version: "0.0.0",
-      source_file_count: 620,
+      source_file_count: 621,
       source_tree_sha256: sourceHash,
       web_manifest_sha256: webManifestHash,
       web_tree_sha256: webHash
@@ -586,12 +586,12 @@ describe("physical Android phone-driver protocol", () => {
     ).toThrow("Physical dashboard package and browser identities did not match.");
     expect(() =>
       parsePhysicalPackageBuildOutput(
-        `HostDeck package built: 620 sources, 1247 owned outputs, 6233 entries, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\nextra\n`
+        `HostDeck package built: 621 sources, 1249 owned outputs, 6233 entries, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\nextra\n`
       )
     ).toThrow("Physical dashboard package build output was invalid.");
     expect(() =>
       parsePhysicalPackageVerificationOutput(
-        `HostDeck package verified: 6233 entries, 1247 outputs, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
+        `HostDeck package verified: 6233 entries, 1249 outputs, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
       )
     ).toThrow("Physical dashboard package verification output was invalid.");
     expect(() =>
@@ -27986,8 +27986,8 @@ function parsePhysicalDashboardPackageIdentity(input: Readonly<{
   requireCondition(
     manifest.schemaVersion === 4 &&
       manifest.packageVersion === "0.0.0" &&
-      source.count === 620 &&
-      output.count === 1_247 &&
+      source.count === 621 &&
+      output.count === 1_249 &&
       Number.isSafeInteger(content.entryCount) &&
       (content.entryCount as number) >= 1_000 &&
       (content.entryCount as number) <= 10_000 &&

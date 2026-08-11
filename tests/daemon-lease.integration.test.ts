@@ -13,7 +13,7 @@ import {
 const cleanup: string[] = [];
 const fixturePath = resolve("tests/fixtures/daemon-lease-holder.cjs");
 const requireFromStorage = createRequire(resolve("packages/storage/package.json"));
-const fsExtPath = requireFromStorage.resolve("fs-ext");
+const nativeFileLockPath = requireFromStorage.resolve("fs-native-extensions");
 
 afterEach(() => {
   for (const path of cleanup.splice(0).reverse()) rmSync(path, { force: true, recursive: true });
@@ -24,7 +24,7 @@ describe("daemon lease process lifecycle", () => {
     const root = mkdtempSync(join(tmpdir(), "hostdeck-daemon-crash-"));
     cleanup.push(root);
     const leasePath = join(root, "hostdeck.lock");
-    const child = spawn(process.execPath, [fixturePath, fsExtPath, leasePath], {
+    const child = spawn(process.execPath, [fixturePath, nativeFileLockPath, leasePath], {
       stdio: ["pipe", "pipe", "pipe"]
     });
 

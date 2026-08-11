@@ -49,6 +49,15 @@ export {
   type StorageMigration
 } from "./migrations.js";
 export {
+  createHostDeckFileLockPort,
+  type HostDeckFileLock,
+  HostDeckFileLockError,
+  type HostDeckFileLockErrorCode,
+  type HostDeckFileLockPort,
+  type HostDeckNativeFileLockBindings,
+  nativeHostDeckFileLockPort
+} from "./platform-file-lock.js";
+export {
   type CommittedProjectionAppend,
   createProductionProjectionAppendPort,
   createProductionProjectionContinuityPort,

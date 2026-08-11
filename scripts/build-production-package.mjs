@@ -44,7 +44,7 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const defaultRepositoryRoot = resolve(scriptDirectory, "..");
 const packageNames = ["core", "contracts", "codex-adapter", "storage", "server", "cli"];
 const deployedWorkspacePackageNames = packageNames.filter((name) => name !== "cli");
-const deployedVirtualRootExternalPackageNames = ["fs-ext", "qrcode", "zod"];
+const deployedVirtualRootExternalPackageNames = ["qrcode", "zod"];
 const productionBuildResultKeys = [
   "contentSha256",
   "entryCount",
@@ -62,7 +62,7 @@ const expectedExternalModules = [
   "better-sqlite3",
   "cookie",
   "fastify",
-  "fs-ext",
+  "fs-native-extensions",
   "qrcode",
   "ws",
   "zod"
@@ -870,13 +870,17 @@ export function normalizeDeployedWorkspaceLayout(deployRoot) {
 }
 
 function pruneNativeBuildIntermediates(root) {
-  const fsExtRoot = realpathSync(join(root, "node_modules", "fs-ext"));
-  if (!isInside(root, fsExtRoot)) throw new Error("fs-ext package root escapes the staging tree.");
-  const buildRoot = join(fsExtRoot, "build");
-  const canonicalNative = join(buildRoot, "Release", "fs_ext.node");
+  const storageRoot = realpathSync(join(root, "node_modules", "@hostdeck", "storage"));
+  const storageDependencyRoot = dirname(dirname(storageRoot));
+  const fsNativeRoot = realpathSync(join(storageDependencyRoot, "fs-native-extensions"));
+  if (!isInside(root, fsNativeRoot)) {
+    throw new Error("fs-native-extensions package root escapes the staging tree.");
+  }
+  const prebuildRoot = join(fsNativeRoot, "prebuilds");
+  const canonicalNative = join(prebuildRoot, "linux-x64", "fs-native-extensions.node");
   const nativeContent = readFileSync(canonicalNative);
-  rmSync(buildRoot, { force: true, recursive: true });
-  mkdirSync(join(buildRoot, "Release"), { mode: 0o755, recursive: true });
+  rmSync(prebuildRoot, { force: true, recursive: true });
+  mkdirSync(join(prebuildRoot, "linux-x64"), { mode: 0o755, recursive: true });
   writeFileSync(canonicalNative, nativeContent, { mode: 0o755 });
 }
 
@@ -1042,7 +1046,7 @@ function collectRequiredNativeModules(root, executableFiles) {
   const candidates = listRegularFiles(root).filter((path) => path.endsWith(".node"));
   const requirements = [
     ["better-sqlite3", "/better-sqlite3/build/Release/better_sqlite3.node"],
-    ["fs-ext", "/fs-ext/build/Release/fs_ext.node"]
+    ["fs-native-extensions", "/fs-native-extensions/prebuilds/linux-x64/fs-native-extensions.node"]
   ];
   return requirements.map(([packageName, suffix]) => {
     const matches = candidates.filter((path) => portable(path).endsWith(suffix));

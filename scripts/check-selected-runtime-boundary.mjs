@@ -338,6 +338,17 @@ const cliLocalStorageOwners = new Map([
         "openExistingHostDeckReadOnlyDatabase"
       ]
     }
+  ],
+  [
+    "packages/cli/src/service-lifecycle-lock.ts",
+    {
+      modules: ["@hostdeck/storage", "node:fs"],
+      storageSymbols: [
+        "HostDeckFileLock",
+        "HostDeckFileLockPort",
+        "nativeHostDeckFileLockPort"
+      ]
+    }
   ]
 ]);
 

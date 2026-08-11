@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { acquireHostDeckDaemonLease, HostDeckDaemonLeaseError } from "./daemon-lease.js";
+import type { HostDeckFileLockPort } from "./platform-file-lock.js";
 
 const cleanup: string[] = [];
 
@@ -84,6 +85,69 @@ describe("HostDeck daemon lease", () => {
     writeFileSync(leasePath, "", { mode: 0o600 });
     linkSync(leasePath, join(leasePath, "..", "lease-copy.lock"));
     expectLeaseError(() => acquireHostDeckDaemonLease({ lease_path: leasePath }), "invalid_lease");
+  });
+
+  it("maps normalized contention and binding failures without trusting raw errno", () => {
+    const leasePath = testLeasePath();
+    const heldPort: HostDeckFileLockPort = Object.freeze({
+      tryAcquireExclusive: () => null
+    });
+    expectLeaseError(
+      () => acquireHostDeckDaemonLease({ lease_path: leasePath, lock_port: heldPort }),
+      "lease_held"
+    );
+
+    const privateValue = "private-daemon-lock-failure";
+    const failedPort: HostDeckFileLockPort = Object.freeze({
+      tryAcquireExclusive() {
+        throw Object.assign(new Error(privateValue), { code: "EAGAIN" });
+      }
+    });
+    let observed: unknown;
+    try {
+      acquireHostDeckDaemonLease({
+        lease_path: leasePath,
+        lock_port: failedPort
+      });
+    } catch (error) {
+      observed = error;
+    }
+    expect(observed).toBeInstanceOf(HostDeckDaemonLeaseError);
+    expect(observed).toMatchObject({
+      code: "lease_io_failed",
+      message: "HostDeck daemon lease could not be acquired."
+    });
+    expect(JSON.stringify({
+      name: (observed as Error).name,
+      message: (observed as Error).message
+    })).not.toContain(privateValue);
+
+    const recovered = acquireHostDeckDaemonLease({ lease_path: leasePath });
+    recovered.release();
+  });
+
+  it("makes an uncertain native unlock terminal and still closes the descriptor", () => {
+    const leasePath = testLeasePath();
+    const failedReleasePort: HostDeckFileLockPort = Object.freeze({
+      tryAcquireExclusive: () => Object.freeze({
+        released: false,
+        release() {
+          throw new Error("private-daemon-release-failure");
+        }
+      })
+    });
+    const lease = acquireHostDeckDaemonLease({
+      lease_path: leasePath,
+      lock_port: failedReleasePort
+    });
+    expect(() => lease.release()).toThrowError(
+      expect.objectContaining({ code: "lease_io_failed" })
+    );
+    expect(lease.released).toBe(true);
+    expect(() => lease.release()).not.toThrow();
+
+    const recovered = acquireHostDeckDaemonLease({ lease_path: leasePath });
+    recovered.release();
   });
 });
 

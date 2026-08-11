@@ -2,18 +2,18 @@
 
 const fs = require("node:fs");
 
-const fsExtPath = process.argv[2];
+const nativeFileLockPath = process.argv[2];
 const leasePath = process.argv[3];
-if (fsExtPath === undefined || leasePath === undefined) {
-  throw new Error("Expected fs-ext module path and lease path.");
+if (nativeFileLockPath === undefined || leasePath === undefined) {
+  throw new Error("Expected native file-lock module path and lease path.");
 }
 
-const { flockSync } = require(fsExtPath);
+const { tryLock } = require(nativeFileLockPath);
 const descriptor = fs.openSync(
   leasePath,
   fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW,
   0o600
 );
-flockSync(descriptor, "ex");
+if (!tryLock(descriptor)) throw new Error("Fixture lock was unexpectedly held.");
 process.stdout.write("acquired\n");
 setInterval(() => {}, 2 ** 30);
