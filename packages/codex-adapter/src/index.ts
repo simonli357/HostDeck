@@ -164,6 +164,12 @@ export {
   codexResourceOptionsFromBudget
 } from "./resource-options.js";
 export {
+  type CodexRotatingTextTransportOptions,
+  type CodexRotatingTransportAcquireInput,
+  type CodexRotatingTransportProvider,
+  createCodexRotatingTextTransport
+} from "./rotating-transport.js";
+export {
   type CodexSkillsClient,
   type CodexSkillsClientOptions,
   type CodexSkillsListInput,

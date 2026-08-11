@@ -11,6 +11,10 @@ import {
 import { createRequire } from "node:module";
 import { dirname, join, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  codexRemoteAuthEnvironmentVariable,
+  createCodexRuntimeReconnectController
+} from "@hostdeck/codex-adapter";
 import { defaultResourceBudget } from "@hostdeck/contracts";
 import { createOperationDeadline } from "@hostdeck/core";
 import {
@@ -19,6 +23,7 @@ import {
   secureHostDeckRegularFile
 } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
+import { createCodexWindowsRuntimeConnection } from "./codex-windows-runtime-connection.js";
 import {
   type CodexWindowsRuntimeChildProcess,
   type CodexWindowsRuntimeProcessPort,
@@ -212,6 +217,170 @@ if (process.env[crashWorkerEnvironment] === "1") {
         await closeQuietly(duplicate);
         layout.cleanup();
       }
+    }, 60_000);
+
+    it("reconnects the production controller through exact Codex process rotation", async () => {
+      if (process.platform !== "win32") return;
+      expect(process.arch).toBe("x64");
+      const layout = createNativeLayout();
+      const runtime = locateExactWindowsCodex();
+      const nativeProcessPort = createNodeCodexWindowsRuntimeProcessPort();
+      const spawnedChildren: CodexWindowsRuntimeChildProcess[] = [];
+      const processPort: CodexWindowsRuntimeProcessPort = Object.freeze({
+        spawn(request: CodexWindowsRuntimeProcessRequest) {
+          const child = nativeProcessPort.spawn(request);
+          spawnedChildren.push(child);
+          return child;
+        }
+      });
+      const supervisor = createCodexWindowsRuntimeSupervisor({
+        codex_bin: runtime.executable,
+        cwd: layout.paths.runtime_dir,
+        endpoint_file_path: layout.paths.app_server_socket_path,
+        environment: {
+          ...process.env,
+          CODEX_HOME: layout.paths.config_dir,
+          CODEX_MANAGED_BY_PNPM: "1",
+          CODEX_MANAGED_PACKAGE_ROOT: runtime.managedPackageRoot,
+          PATH: `${runtime.pathDirectory};${requiredEnvironment("PATH")}`,
+          NO_COLOR: "1"
+        },
+        process_port: processPort
+      });
+      const owner = createCodexWindowsRuntimeConnection({
+        supervisor,
+        resource_budget: defaultResourceBudget
+      });
+      const lifecycle: string[] = [];
+      const backgroundErrors: unknown[] = [];
+      const reconnect = createCodexRuntimeReconnectController({
+        transport: owner.transport,
+        observed_version: "0.144.0",
+        host_target: "windows-x64",
+        resource_budget: defaultResourceBudget,
+        lifecycle: Object.freeze({
+          disconnected({ generation }: { readonly generation: number }) {
+            lifecycle.push(`disconnected:${generation}`);
+          },
+          reconcile({ generation }: { readonly generation: number }) {
+            lifecycle.push(`reconcile:${generation}`);
+            return Object.freeze({
+              continuity:
+                generation === 1 ? "continuous" as const : "boundary_required" as const
+            });
+          },
+          resubscribe({ generation }: { readonly generation: number }) {
+            lifecycle.push(`resubscribe:${generation}`);
+          },
+          ready({ generation }: { readonly generation: number }) {
+            lifecycle.push(`ready:${generation}`);
+          }
+        }),
+        random: () => 0,
+        on_background_error: (error) => backgroundErrors.push(error)
+      });
+      let firstPort: number | null = null;
+      let secondPort: number | null = null;
+      let firstToken = "";
+      let secondToken = "";
+
+      try {
+        await expect(reconnect.start()).resolves.toMatchObject({
+          generation: 1,
+          continuity: "continuous",
+          reconnected: false,
+          compatibility: { state: "ready", mutation_policy: "allowed" }
+        });
+        const first = owner.current_tui_authority();
+        firstPort = endpointPort(first.endpoint.address);
+        firstToken = first.credential.read(codexRemoteAuthEnvironmentVariable) ?? "";
+        expect(firstToken).toMatch(/^[A-Za-z0-9_-]{64}$/u);
+        expect(owner.snapshot()).toMatchObject({
+          phase: "active",
+          runtime_generation: 1,
+          transport_generation: 1,
+          runtime_starts: 1,
+          runtime_restarts: 0
+        });
+
+        const firstChild = spawnedChildren[0];
+        if (firstChild === undefined || !firstChild.terminateTree()) {
+          throw new TypeError("Codex Windows connection crash injection failed.");
+        }
+        await firstChild.exit;
+        await waitForCondition(
+          () => supervisor.snapshot().phase === "exited",
+          "Codex Windows supervisor did not observe the forced process exit."
+        );
+        await waitForCondition(
+          () => reconnect.snapshot().phase === "ready" && reconnect.generation === 2,
+          "Codex Windows reconnect controller did not readmit the rotated runtime."
+        );
+
+        const second = owner.current_tui_authority();
+        secondPort = endpointPort(second.endpoint.address);
+        secondToken = second.credential.read(codexRemoteAuthEnvironmentVariable) ?? "";
+        expect(second.generation).toBe(2);
+        expect(secondPort).not.toBe(firstPort);
+        expect(secondToken).toMatch(/^[A-Za-z0-9_-]{64}$/u);
+        expect(secondToken).not.toBe(firstToken);
+        expect(first.credential.read(codexRemoteAuthEnvironmentVariable)).toBeUndefined();
+        expect(reconnect.snapshot()).toMatchObject({
+          phase: "ready",
+          current_generation: 2,
+          admitted_generation: 2,
+          completed_reconnects: 1,
+          disconnect_cleanups: 1
+        });
+        expect(owner.snapshot()).toMatchObject({
+          phase: "active",
+          runtime_generation: 2,
+          transport_generation: 2,
+          runtime_restarts: 1,
+          observed_exits: 1
+        });
+        expect(lifecycle).toEqual([
+          "reconcile:1",
+          "resubscribe:1",
+          "ready:1",
+          "disconnected:1",
+          "reconcile:2",
+          "resubscribe:2",
+          "ready:2"
+        ]);
+        expect(backgroundErrors).toEqual([]);
+        const publicState = JSON.stringify({
+          owner: owner.snapshot(),
+          reconnect: reconnect.snapshot()
+        });
+        expect(publicState).not.toContain(firstToken);
+        expect(publicState).not.toContain(secondToken);
+        expect(publicState).not.toContain("ws://");
+      } finally {
+        await reconnect.close().catch(() => undefined);
+        const deadline = createOperationDeadline({ timeoutMs: 10_000 });
+        try {
+          await owner.close(deadline).catch(() => undefined);
+        } finally {
+          deadline.dispose();
+        }
+        layout.cleanup();
+      }
+
+      if (firstPort === null || secondPort === null) {
+        throw new TypeError("Codex Windows connection ports were not observed.");
+      }
+      await waitForClosedPort(firstPort);
+      await waitForClosedPort(secondPort);
+      expect(firstToken).not.toBe("");
+      expect(secondToken).not.toBe("");
+      expect(supervisor.snapshot()).toMatchObject({
+        phase: "closed",
+        endpoint_ready: false,
+        credential_file_present: false,
+        process_state: "not_started"
+      });
+      expect(existsSync(codexWindowsRuntimeCredentialPath(layout.paths.app_server_socket_path))).toBe(false);
     }, 60_000);
 
     it("kills the assigned process tree when the supervisor process exits abruptly", async () => {
@@ -479,6 +648,17 @@ async function waitForFile(path: string): Promise<void> {
     await delay(25);
   }
   throw new Error("Owned process fixture did not publish its pid file.");
+}
+
+async function waitForCondition(
+  predicate: () => boolean,
+  message: string
+): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (predicate()) return;
+    await delay(50);
+  }
+  throw new Error(message);
 }
 
 async function waitForProcessExit(pid: number): Promise<void> {

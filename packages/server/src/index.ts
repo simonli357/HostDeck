@@ -15,6 +15,7 @@ export * from "./codex-runtime-supervisor.js";
 export * from "./codex-skills-control-service.js";
 export * from "./codex-usage-control-service.js";
 export * from "./codex-version-probe.js";
+export * from "./codex-windows-runtime-connection.js";
 export * from "./codex-windows-runtime-supervisor.js";
 export * from "./codex-windows-runtime-supervisor-node.js";
 export * from "./compact-routes.js";

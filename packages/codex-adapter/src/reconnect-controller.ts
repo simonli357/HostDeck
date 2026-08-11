@@ -2,7 +2,8 @@ import {
   assertResolvedResourceBudget,
   type ResourceBudget,
   type RuntimeCompatibility,
-  runtimeCompatibilitySchema
+  runtimeCompatibilitySchema,
+  type SupportedHostTarget
 } from "@hostdeck/contracts";
 import {
   createOperationDeadline,
@@ -177,6 +178,7 @@ export interface CodexReconnectLifecyclePort {
 export interface CodexRuntimeReconnectControllerOptions {
   readonly transport: CodexTextTransport;
   readonly observed_version: string | null;
+  readonly host_target?: SupportedHostTarget;
   readonly resource_budget: ResourceBudget;
   readonly lifecycle: CodexReconnectLifecyclePort;
   readonly client_version?: string;
@@ -238,6 +240,7 @@ export interface CodexRuntimeReconnectController {
 interface ParsedOptions {
   readonly transport: CodexTextTransport;
   readonly observedVersion: string | null;
+  readonly hostTarget: SupportedHostTarget;
   readonly resourceBudget: ResourceBudget;
   readonly lifecycle: CodexReconnectLifecyclePort;
   readonly clientVersion: string | undefined;
@@ -282,6 +285,7 @@ interface LifecycleRuntimeLease {
 const optionKeys = [
   "client_version",
   "clock",
+  "host_target",
   "lifecycle",
   "observed_version",
   "on_background_error",
@@ -376,6 +380,7 @@ class DefaultCodexRuntimeReconnectController implements CodexRuntimeReconnectCon
     this.connection = createCodexAppServerConnection({
       transport: options.transport,
       observed_version: options.observedVersion,
+      host_target: options.hostTarget,
       ...(options.clientVersion === undefined ? {} : { client_version: options.clientVersion }),
       handshake_timeout_ms: options.resourceBudget.protocol_handshake_timeout_ms,
       max_in_flight: options.resourceBudget.protocol_max_in_flight_requests,
@@ -1029,10 +1034,23 @@ function parseOptions(candidate: unknown): ParsedOptions {
   if (observedVersion !== null && typeof observedVersion !== "string") {
     throw reconnectError("invalid_contract", "configuration", "Reconnect observed version must be a string or null.");
   }
+  const hostTarget = dataProperty(value, "host_target");
+  if (
+    hostTarget !== undefined &&
+    hostTarget !== "linux-x64" &&
+    hostTarget !== "windows-x64"
+  ) {
+    throw reconnectError(
+      "invalid_contract",
+      "configuration",
+      "Reconnect host target must be linux-x64 or windows-x64."
+    );
+  }
   const clientVersion = parseClientVersion(dataProperty(value, "client_version"));
   return Object.freeze({
     transport,
     observedVersion,
+    hostTarget: hostTarget ?? "linux-x64",
     resourceBudget,
     lifecycle: parseLifecycle(dataProperty(value, "lifecycle")),
     clientVersion,

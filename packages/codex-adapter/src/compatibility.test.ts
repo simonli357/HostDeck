@@ -147,14 +147,49 @@ describe("Codex generated binding compatibility", () => {
     ).toMatchObject({ state: "disconnected", mutation_policy: "blocked", reason: expect.stringContaining("timed out") });
   });
 
-  it("rejects unsupported initialized platforms", () => {
+  it("binds initialized platform identity to the selected host target", () => {
     expect(
       assessCodexCompatibility({
         observed_version: "0.144.0",
         checked_at: checkedAt,
         handshake: initializedProbe({ platform_os: "windows", platform_family: "windows" })
       })
-    ).toMatchObject({ state: "incompatible", mutation_policy: "blocked", reason: expect.stringContaining("Linux/Unix") });
+    ).toMatchObject({
+      state: "incompatible",
+      mutation_policy: "blocked",
+      reason: expect.stringContaining("linux-x64")
+    });
+    expect(
+      assessCodexCompatibility({
+        observed_version: "0.144.0",
+        host_target: "windows-x64",
+        checked_at: checkedAt,
+        handshake: initializedProbe({
+          platform_os: "windows",
+          platform_family: "windows"
+        })
+      })
+    ).toMatchObject({ state: "ready", mutation_policy: "allowed" });
+    expect(
+      assessCodexCompatibility({
+        observed_version: "0.144.0",
+        host_target: "windows-x64",
+        checked_at: checkedAt,
+        handshake: initializedProbe()
+      })
+    ).toMatchObject({
+      state: "incompatible",
+      mutation_policy: "blocked",
+      reason: expect.stringContaining("windows-x64")
+    });
+    expect(() =>
+      assessCodexCompatibility({
+        observed_version: "0.144.0",
+        host_target: "darwin-x64" as never,
+        checked_at: checkedAt,
+        handshake: initializedProbe()
+      })
+    ).toThrow(HostDeckCodexCompatibilityError);
   });
 
   it("rejects a connected app-server whose user agent reports a different runtime version", () => {

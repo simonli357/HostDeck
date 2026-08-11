@@ -1,7 +1,8 @@
 import {
   codexVersionSchema,
   type RuntimeCompatibility,
-  runtimeCompatibilitySchema
+  runtimeCompatibilitySchema,
+  type SupportedHostTarget
 } from "@hostdeck/contracts";
 import {
   type RuntimeCapability,
@@ -43,6 +44,7 @@ export interface AssessCodexCompatibilityInput {
   readonly observed_version: string | null;
   readonly checked_at: string;
   readonly handshake: CodexHandshakeProbe;
+  readonly host_target?: SupportedHostTarget;
   readonly binding?: CodexBindingDescriptor;
 }
 
@@ -111,6 +113,7 @@ export function parseCodexCliVersionOutput(output: string): string {
 
 export function assessCodexCompatibility(input: AssessCodexCompatibilityInput): RuntimeCompatibility {
   const binding = input.binding ?? codexBindingDescriptor;
+  const hostTarget = parseHostTarget(input.host_target);
   const parsedVersion = input.observed_version === null ? null : codexVersionSchema.safeParse(input.observed_version);
 
   if (parsedVersion === null || !parsedVersion.success) {
@@ -169,8 +172,20 @@ export function assessCodexCompatibility(input: AssessCodexCompatibilityInput): 
   if (!matchesRuntimeUserAgent(input.handshake.user_agent, parsedVersion.data)) {
     return incompatible(input.checked_at, parsedVersion.data, binding, "Initialized app-server version does not match the probed Codex binary.");
   }
-  if (input.handshake.platform_family !== "unix" || input.handshake.platform_os !== "linux") {
-    return incompatible(input.checked_at, parsedVersion.data, binding, "Initialized app-server is not the supported Linux/Unix runtime.");
+  const expectedPlatform =
+    hostTarget === "linux-x64"
+      ? { family: "unix", os: "linux" }
+      : { family: "windows", os: "windows" };
+  if (
+    input.handshake.platform_family !== expectedPlatform.family ||
+    input.handshake.platform_os !== expectedPlatform.os
+  ) {
+    return incompatible(
+      input.checked_at,
+      parsedVersion.data,
+      binding,
+      `Initialized app-server platform does not match selected ${hostTarget} runtime.`
+    );
   }
 
   const modes = new Set(input.handshake.collaboration_modes.map((mode) => mode.trim().toLowerCase()));
@@ -202,6 +217,15 @@ export function assessCodexCompatibility(input: AssessCodexCompatibilityInput): 
     checked_at: input.checked_at,
     reason: null
   });
+}
+
+function parseHostTarget(candidate: unknown): SupportedHostTarget {
+  if (candidate === undefined || candidate === "linux-x64") return "linux-x64";
+  if (candidate === "windows-x64") return candidate;
+  throw new HostDeckCodexCompatibilityError(
+    "invalid_compatibility_result",
+    "Codex compatibility host target is invalid."
+  );
 }
 
 function evaluateSurface(surface: CodexProtocolSurface): RuntimeCompatibility["capabilities"] {

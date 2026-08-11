@@ -4,7 +4,8 @@ import {
   defaultResourceBudget,
   type RuntimeCompatibility,
   resourceBudgetDefinitionByKey,
-  runtimeCompatibilitySchema
+  runtimeCompatibilitySchema,
+  type SupportedHostTarget
 } from "@hostdeck/contracts";
 import {
   type CodexProtocolIssue,
@@ -33,6 +34,7 @@ export type CodexConnectionServerRequest = Extract<DecodedCodexInboundMessage, {
 export interface CodexAppServerConnectionOptions {
   readonly transport: CodexTextTransport;
   readonly observed_version: string | null;
+  readonly host_target?: SupportedHostTarget;
   readonly client_version?: string;
   readonly handshake_timeout_ms?: number;
   readonly max_in_flight?: number;
@@ -137,7 +139,12 @@ class DefaultCodexAppServerConnection implements CodexAppServerConnection {
     if (signal?.aborted === true) throw connectionError("transport_aborted", "Codex app-server connection was aborted.");
 
     const checkedAt = this.options.now();
-    const preflight = assessSafely(this.options.observed_version, checkedAt, { state: "not_attempted" });
+    const preflight = assessSafely(
+      this.options.observed_version,
+      this.options.host_target,
+      checkedAt,
+      { state: "not_attempted" }
+    );
     this.currentCompatibility = preflight;
     if (preflight.state === "incompatible") {
       this.currentState = "incompatible";
@@ -192,13 +199,18 @@ class DefaultCodexAppServerConnection implements CodexAppServerConnection {
         })
       );
 
-      const compatibility = assessSafely(this.options.observed_version, checkedAt, {
-        state: "initialized",
-        user_agent: initialized.user_agent,
-        platform_family: initialized.platform_family,
-        platform_os: initialized.platform_os,
-        collaboration_modes: collaborationModes
-      });
+      const compatibility = assessSafely(
+        this.options.observed_version,
+        this.options.host_target,
+        checkedAt,
+        {
+          state: "initialized",
+          user_agent: initialized.user_agent,
+          platform_family: initialized.platform_family,
+          platform_os: initialized.platform_os,
+          collaboration_modes: collaborationModes
+        }
+      );
       this.currentCompatibility = compatibility;
       if (compatibility.state !== "ready" || compatibility.mutation_policy !== "allowed") {
         this.currentState = "incompatible";
@@ -372,7 +384,12 @@ class DefaultCodexAppServerConnection implements CodexAppServerConnection {
   }
 
   private assess(handshake: Parameters<typeof assessCodexCompatibility>[0]["handshake"]): RuntimeCompatibility {
-    return assessSafely(this.options.observed_version, this.options.now(), handshake);
+    return assessSafely(
+      this.options.observed_version,
+      this.options.host_target,
+      this.options.now(),
+      handshake
+    );
   }
 
   private withHandshakeCloseReason(error: HostDeckCodexAdapterError): HostDeckCodexAdapterError {
@@ -390,9 +407,10 @@ class DefaultCodexAppServerConnection implements CodexAppServerConnection {
   }
 }
 
-interface ParsedConnectionOptions extends Omit<CodexAppServerConnectionOptions, "client_version" | "handshake_timeout_ms" | "now"> {
+interface ParsedConnectionOptions extends Omit<CodexAppServerConnectionOptions, "client_version" | "handshake_timeout_ms" | "host_target" | "now"> {
   readonly client_version: string;
   readonly handshake_timeout_ms: number;
+  readonly host_target: SupportedHostTarget;
   readonly now: () => string;
 }
 
@@ -406,8 +424,16 @@ function parseConnectionOptions(options: CodexAppServerConnectionOptions): Parse
   if (options.observed_version !== null && typeof options.observed_version !== "string") {
     throw connectionError("handshake_failed", "Codex observed version must be a string or null.");
   }
+  if (
+    options.host_target !== undefined &&
+    options.host_target !== "linux-x64" &&
+    options.host_target !== "windows-x64"
+  ) {
+    throw connectionError("handshake_failed", "Codex connection host target is invalid.");
+  }
   return {
     ...options,
+    host_target: options.host_target ?? "linux-x64",
     client_version: parsePrintableString(options.client_version ?? defaults.client_version, "HostDeck client version", 64),
     handshake_timeout_ms: parseBoundedInteger(
       options.handshake_timeout_ms,
@@ -451,11 +477,17 @@ function parseCollaborationModes(candidate: unknown): readonly string[] {
 
 function assessSafely(
   observedVersion: string | null,
+  hostTarget: SupportedHostTarget,
   checkedAt: string,
   handshake: Parameters<typeof assessCodexCompatibility>[0]["handshake"]
 ): RuntimeCompatibility {
   try {
-    return assessCodexCompatibility({ observed_version: observedVersion, checked_at: checkedAt, handshake });
+    return assessCodexCompatibility({
+      observed_version: observedVersion,
+      host_target: hostTarget,
+      checked_at: checkedAt,
+      handshake
+    });
   } catch (error) {
     if (error instanceof HostDeckCodexCompatibilityError) {
       throw new HostDeckCodexAdapterError("handshake_failed", error.message, { cause: error, outcome: "not_sent", retry_safe: false });
