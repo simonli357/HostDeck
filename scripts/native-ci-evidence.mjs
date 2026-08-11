@@ -24,6 +24,7 @@ export const nativeCiTargetPolicies = Object.freeze({
       "contract",
       "native_lock",
       "windows_paths",
+      "tailscale_adapter",
       "integration",
       "web_build",
       "native_modules",
@@ -43,6 +44,7 @@ export const nativeCiTargetPolicies = Object.freeze({
       "contract",
       "native_lock",
       "windows_paths",
+      "tailscale_adapter",
       "web_build",
       "native_modules"
     ]),

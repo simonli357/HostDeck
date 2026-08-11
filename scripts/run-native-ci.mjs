@@ -103,6 +103,12 @@ async function main() {
       ["packages/storage/src/windows-secure-local-path-adapter.native.test.ts"],
       reportRoot
     );
+    runVitestCheck(
+      checks,
+      "tailscale_adapter",
+      ["packages/server/src/tailscale-command-adapter.test.ts"],
+      reportRoot
+    );
     if (target === "linux-x64") {
       runVitestCheck(
         checks,
