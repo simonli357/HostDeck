@@ -261,10 +261,18 @@ function vitestFailureSummary(report) {
       );
     } else {
       for (const assertion of assertions) {
+        const failureMessages = Array.isArray(assertion.failureMessages)
+          ? assertion.failureMessages
+              .filter((message) => typeof message === "string" && message.trim() !== "")
+              .slice(0, 2)
+          : [];
         failures.push(
-          `${basename(String(result.name ?? "unknown-suite"))}: ${String(
-            assertion.fullName ?? assertion.title ?? "failed assertion"
-          )}`
+          [
+            `${basename(String(result.name ?? "unknown-suite"))}: ${String(
+              assertion.fullName ?? assertion.title ?? "failed assertion"
+            )}`,
+            ...failureMessages
+          ].join("\n")
         );
       }
     }
@@ -287,7 +295,9 @@ function probeNativeModules() {
   const requireFromStorage = createRequire(join(repositoryRoot, "packages", "storage", "package.json"));
   const sqlitePackage = requireFromStorage("better-sqlite3/package.json");
   const lockPackage = requireFromStorage("fs-native-extensions/package.json");
-  const koffiPackage = requireFromStorage("koffi/package.json");
+  const koffiPackage = JSON.parse(
+    readFileSync(join(dirname(requireFromStorage.resolve("koffi")), "package.json"), "utf8")
+  );
   requireCondition(sqlitePackage.version === "12.11.1", "Native SQLite version is invalid.");
   requireCondition(lockPackage.version === "1.3.4", "Native file-lock version is invalid.");
   requireCondition(koffiPackage.version === "3.1.4", "Native Windows FFI version is invalid.");
