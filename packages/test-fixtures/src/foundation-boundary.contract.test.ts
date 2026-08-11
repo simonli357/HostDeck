@@ -15,7 +15,7 @@ describe("selected foundation package boundary", () => {
     const violations: string[] = [];
 
     for (const file of typescriptFiles(packagesRoot)) {
-      const repositoryPath = relative(repositoryRoot, file);
+      const repositoryPath = repositoryRelativePath(file);
       if (repositoryPath.startsWith("packages/codex-adapter/")) continue;
 
       for (const specifier of moduleSpecifiers(readFileSync(file, "utf8"))) {
@@ -31,7 +31,7 @@ describe("selected foundation package boundary", () => {
     const normalizedConsumers = ["packages/contracts/", "packages/core/", "packages/test-fixtures/", "packages/web/"];
 
     for (const file of typescriptFiles(packagesRoot)) {
-      const repositoryPath = relative(repositoryRoot, file);
+      const repositoryPath = repositoryRelativePath(file);
       if (!normalizedConsumers.some((prefix) => repositoryPath.startsWith(prefix))) continue;
 
       for (const specifier of moduleSpecifiers(readFileSync(file, "utf8"))) {
@@ -96,6 +96,10 @@ function typescriptFiles(directory: string): readonly string[] {
     }
   }
   return files;
+}
+
+function repositoryRelativePath(file: string): string {
+  return relative(repositoryRoot, file).replaceAll("\\", "/");
 }
 
 function moduleSpecifiers(source: string): readonly string[] {
