@@ -378,7 +378,7 @@ if (process.env[crashWorkerEnvironment] === "1") {
         phase: "closed",
         endpoint_ready: false,
         credential_file_present: false,
-        process_state: "not_started"
+        process_state: "exited"
       });
       expect(existsSync(codexWindowsRuntimeCredentialPath(layout.paths.app_server_socket_path))).toBe(false);
     }, 60_000);
