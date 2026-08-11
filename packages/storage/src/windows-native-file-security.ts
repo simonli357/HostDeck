@@ -10,13 +10,20 @@ export type WindowsNativeFileSecurityErrorCode =
   | "wrong_owner";
 
 export class WindowsNativeFileSecurityError extends Error {
+  readonly code: WindowsNativeFileSecurityErrorCode;
+  readonly operation: string;
+  readonly native_error: number | null;
+
   constructor(
-    readonly code: WindowsNativeFileSecurityErrorCode,
-    readonly operation: string,
-    readonly native_error: number | null = null
+    code: WindowsNativeFileSecurityErrorCode,
+    operation: string,
+    native_error: number | null = null
   ) {
     super(`Windows file-security operation ${operation} failed.`);
     this.name = "WindowsNativeFileSecurityError";
+    this.code = code;
+    this.operation = operation;
+    this.native_error = native_error;
   }
 }
 

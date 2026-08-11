@@ -23,6 +23,7 @@ import {
 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
+import { nativeWindowsFileSecurityPort } from "../packages/storage/src/windows-native-file-security.ts";
 import {
   verifyWindowsCodexSpikeEvidenceFile,
   windowsCodexSpikeRuntimePolicy,
@@ -705,51 +706,27 @@ function baseWindowsEnvironment() {
 }
 
 function secureCurrentUserOnly(path, kind) {
-  const identity = runBoundedCommand(
-    "whoami.exe",
-    [],
-    10_000,
-    "current-identity"
-  ).stdout.trim();
-  requireCondition(identity.length >= 3 && identity.length <= 256, "Current Windows identity is invalid.");
-  const inheritance = kind === "directory" ? "(OI)(CI)F" : "F";
-  runBoundedCommand(
-    "icacls.exe",
-    [path, "/inheritance:r", "/grant:r", `${identity}:${inheritance}`],
-    10_000,
-    "acl-update"
+  const result = nativeWindowsFileSecurityPort.secureCurrentUserOnly(path, kind);
+  requireCondition(
+    result.inspection.owner_current_user &&
+      result.inspection.acl_current_user_only &&
+      result.inspection.is_directory === (kind === "directory") &&
+      !result.inspection.is_reparse_point &&
+      !result.inspection.has_named_streams &&
+      (kind === "directory" || result.inspection.link_count === 1),
+    "Windows path security hardening failed."
   );
-  requireCondition(inspectCurrentUserOnlyAcl(path), "Windows path ACL hardening failed.");
 }
 
 function inspectCurrentUserOnlyAcl(path) {
-  const identity = runBoundedCommand(
-    "whoami.exe",
-    [],
-    10_000,
-    "acl-identity"
-  ).stdout.trim();
-  const lines = runBoundedCommand(
-    "icacls.exe",
-    [path],
-    10_000,
-    "acl-inspect"
-  ).stdout
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => line !== "");
-  const footer = lines.pop();
-  if (footer !== "Successfully processed 1 files; Failed processing 0 files") return false;
-  const first = lines.shift();
-  if (first === undefined || !first.toLowerCase().startsWith(path.toLowerCase())) return false;
-  const entries = [first.slice(path.length).trim(), ...lines].filter((line) => line !== "");
-  if (entries.length !== 1 || entries[0].includes("(I)")) return false;
-  const normalized = entries[0].toLowerCase();
-  const prefix = `${identity.toLowerCase()}:`;
+  const inspection = nativeWindowsFileSecurityPort.inspectPath(path);
   return (
-    normalized.startsWith(prefix) &&
-    (normalized.slice(prefix.length) === "(f)" ||
-      normalized.slice(prefix.length) === "(oi)(ci)(f)")
+    inspection.owner_current_user &&
+    inspection.acl_current_user_only &&
+    !inspection.is_directory &&
+    !inspection.is_reparse_point &&
+    !inspection.has_named_streams &&
+    inspection.link_count === 1
   );
 }
 
