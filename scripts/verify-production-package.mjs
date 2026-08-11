@@ -10,6 +10,7 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } 
 import { pathToFileURL } from "node:url";
 
 export const productionPackageManifestName = "hostdeck-package.json";
+export const productionPackageManifestSchemaVersion = 5;
 export const productionPackageSourceCount = 625;
 export const productionPackageVerifierName = "verify.mjs";
 export const productionWebManifestName = "hostdeck-web.json";
@@ -38,12 +39,56 @@ const expectedPackageNames = [
   "@hostdeck/cli"
 ];
 const expectedDeferrals = [];
+const sourceCommitPattern = /^[a-f0-9]{40}$/u;
 const supportedBuildRuntime = Object.freeze({
   architecture: "x64",
   node: "22.22.2",
   nodeAbi: "127",
   platform: "linux",
   pnpm: "10.29.2"
+});
+const nativeTargetProfiles = Object.freeze({
+  "linux-x64": Object.freeze({
+    architecture: "x64",
+    lifecycle: "systemd_user",
+    platform: "linux",
+    publicPackageKind: "linux_archive",
+    runtimeExecutable: "runtime/bin/node"
+  }),
+  "windows-x64": Object.freeze({
+    architecture: "x64",
+    lifecycle: "windows_user_agent",
+    platform: "win32",
+    publicPackageKind: "windows_msix",
+    runtimeExecutable: "runtime/node.exe"
+  })
+});
+const nativeArtifactProfiles = Object.freeze({
+  runtime_tree: Object.freeze({
+    delivery: "host_provided",
+    targets: Object.freeze(["linux-x64"])
+  }),
+  native_tree: Object.freeze({
+    delivery: "bundled",
+    targets: Object.freeze(["linux-x64", "windows-x64"])
+  }),
+  linux_archive: Object.freeze({
+    delivery: "bundled",
+    targets: Object.freeze(["linux-x64"])
+  }),
+  windows_portable: Object.freeze({
+    delivery: "bundled",
+    targets: Object.freeze(["windows-x64"])
+  }),
+  windows_msix: Object.freeze({
+    delivery: "bundled",
+    targets: Object.freeze(["windows-x64"])
+  })
+});
+const nativeModuleVersions = Object.freeze({
+  "better-sqlite3": "12.11.1",
+  "fs-native-extensions": "1.3.4",
+  koffi: "3.1.4"
 });
 const sha256Pattern = /^[a-f0-9]{64}$/u;
 const exactVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
@@ -72,6 +117,104 @@ export function currentRuntimeIdentity() {
     node: process.versions.node,
     nodeAbi: process.versions.modules,
     platform: process.platform
+  });
+}
+
+export function validateNativePackageIdentityContract(candidate) {
+  const value = assertRecord(candidate, "Native package identity");
+  assertExactKeys(
+    value,
+    ["artifact", "runtime", "source", "target"],
+    "Native package identity"
+  );
+
+  const artifact = assertRecord(value.artifact, "Artifact identity");
+  assertExactKeys(artifact, ["kind"], "Artifact identity");
+  const artifactProfile = Object.hasOwn(nativeArtifactProfiles, artifact.kind)
+    ? nativeArtifactProfiles[artifact.kind]
+    : undefined;
+  if (artifactProfile === undefined) {
+    throw new TypeError("Package artifact kind is unsupported.");
+  }
+
+  const target = assertRecord(value.target, "Package target");
+  assertExactKeys(
+    target,
+    ["architecture", "id", "lifecycle", "platform", "publicPackageKind"],
+    "Package target"
+  );
+  const targetProfile = Object.hasOwn(nativeTargetProfiles, target.id)
+    ? nativeTargetProfiles[target.id]
+    : undefined;
+  if (targetProfile === undefined) {
+    throw new TypeError("Package target is unsupported.");
+  }
+  for (const key of ["architecture", "lifecycle", "platform", "publicPackageKind"]) {
+    if (target[key] !== targetProfile[key]) {
+      throw new TypeError(`Package target ${key} is inconsistent.`);
+    }
+  }
+  if (!artifactProfile.targets.includes(target.id)) {
+    throw new TypeError("Package artifact kind does not support the selected target.");
+  }
+
+  const runtime = assertRecord(value.runtime, "Runtime identity");
+  assertExactKeys(
+    runtime,
+    ["architecture", "bundle", "delivery", "node", "nodeAbi", "platform", "pnpm"],
+    "Runtime identity"
+  );
+  for (const key of ["node", "nodeAbi", "pnpm"]) {
+    if (runtime[key] !== supportedBuildRuntime[key]) {
+      throw new TypeError(`Package runtime ${key} is unsupported.`);
+    }
+  }
+  if (
+    runtime.platform !== target.platform ||
+    runtime.architecture !== target.architecture
+  ) {
+    throw new TypeError("Package runtime and target are inconsistent.");
+  }
+  if (runtime.delivery !== artifactProfile.delivery) {
+    throw new TypeError("Package runtime delivery is inconsistent with its artifact kind.");
+  }
+  if (runtime.delivery === "host_provided") {
+    if (runtime.bundle !== null) {
+      throw new TypeError("Host-provided runtime must not declare a bundled executable.");
+    }
+  } else if (runtime.delivery === "bundled") {
+    const bundle = assertRecord(runtime.bundle, "Bundled runtime executable");
+    assertExactKeys(bundle, ["path", "sha256", "size"], "Bundled runtime executable");
+    const path = parseRelativePath(bundle.path, "Bundled runtime path", false);
+    if (path !== targetProfile.runtimeExecutable) {
+      throw new TypeError("Bundled runtime path does not match the selected target.");
+    }
+    parseSha256(bundle.sha256, "Bundled runtime SHA-256");
+    if (!Number.isSafeInteger(bundle.size) || bundle.size < 1) {
+      throw new TypeError("Bundled runtime size is invalid.");
+    }
+  } else {
+    throw new TypeError("Package runtime delivery is unsupported.");
+  }
+
+  const source = assertRecord(value.source, "Source identity");
+  assertExactKeys(source, ["commit", "count", "sha256"], "Source identity");
+  if (typeof source.commit !== "string" || !sourceCommitPattern.test(source.commit)) {
+    throw new TypeError("Source commit is invalid.");
+  }
+  validateIdentity(source, "Source identity", "count", ["commit"]);
+
+  return Object.freeze({
+    artifact: Object.freeze({ ...artifact }),
+    runtime: Object.freeze({
+      ...runtime,
+      bundle:
+        runtime.bundle === null
+          ? null
+          : Object.freeze({ ...runtime.bundle })
+    }),
+    source: Object.freeze({ ...source }),
+    target: Object.freeze({ ...target })
   });
 }
 
@@ -542,6 +685,7 @@ export function verifyProductionPackage(root, options = {}) {
 
   const runtime = options.runtime ?? currentRuntimeIdentity();
   assertRuntimeIdentity(manifest.runtime, runtime);
+  verifyBundledRuntime(packageRoot, manifest.runtime, manifest.executableFiles);
   verifyPackageManifests(packageRoot, manifest);
   verifyCommand(packageRoot, manifest.command, manifest.executableFiles);
   verifyServiceHost(packageRoot, manifest.serviceHost, manifest.executableFiles);
@@ -584,6 +728,7 @@ function validateManifest(manifest) {
       "content",
       "deferrals",
       "executableFiles",
+      "artifact",
       "manifestSha256",
       "name",
       "nativeBuildPolicy",
@@ -596,11 +741,15 @@ function validateManifest(manifest) {
       "schemaVersion",
       "serviceHost",
       "source",
+      "target",
       "web"
     ],
     "Package manifest"
   );
-  if (value.schemaVersion !== 4 || value.name !== "hostdeck-production-package") {
+  if (
+    value.schemaVersion !== productionPackageManifestSchemaVersion ||
+    value.name !== "hostdeck-production-package"
+  ) {
     throw new TypeError("HostDeck package manifest schema is unsupported.");
   }
   if (value.nativeBuildPolicy !== "canonical-runtime-binary-only") {
@@ -609,16 +758,17 @@ function validateManifest(manifest) {
   parseExactVersion(value.packageVersion, "Package version");
   parseSha256(value.manifestSha256, "Manifest SHA-256");
 
-  const runtime = assertRecord(value.runtime, "Runtime identity");
-  assertExactKeys(runtime, ["architecture", "node", "nodeAbi", "platform", "pnpm"], "Runtime identity");
-  for (const [key, expected] of Object.entries(supportedBuildRuntime)) {
-    if (runtime[key] !== expected) throw new TypeError(`Package runtime ${key} is unsupported.`);
-  }
+  validateNativePackageIdentityContract({
+    artifact: value.artifact,
+    runtime: value.runtime,
+    source: value.source,
+    target: value.target
+  });
+  const runtime = value.runtime;
   if (value.packageManager !== `pnpm@${runtime.pnpm}`) {
     throw new TypeError("Package-manager identity is inconsistent.");
   }
 
-  validateIdentity(value.source, "Source identity", "count");
   if (value.source.count !== productionPackageSourceCount) {
     throw new TypeError(
       `Selected source count must be exactly ${productionPackageSourceCount}.`
@@ -647,16 +797,21 @@ function validateManifest(manifest) {
     throw new TypeError("Codex package identity is inconsistent.");
   }
 
-  validateCommand(value.command, value.packageVersion);
-  validateServiceHost(value.serviceHost, value.packageVersion);
+  validateCommand(value.command, value.packageVersion, value.target);
+  validateServiceHost(value.serviceHost, value.packageVersion, value.target);
   validateWebDescriptor(value.web, value.packageVersion);
 
   if (!Array.isArray(value.deferrals) || !sameArray(value.deferrals, expectedDeferrals)) {
     throw new TypeError("Package downstream deferrals are invalid.");
   }
   validatePackages(value.packages, value.packageVersion, value.output);
-  validateExecutables(value.executableFiles, value.command.path);
-  validateNativeManifest(value.nativeModules, value.executableFiles);
+  validateExecutables(value.executableFiles, value.command.path, value.runtime);
+  validateNativeManifest(
+    value.nativeModules,
+    value.executableFiles,
+    value.target,
+    value.runtime
+  );
 }
 
 function validateProductionWebManifest(manifest, options = {}) {
@@ -987,9 +1142,11 @@ function assertWebDescriptorIdentity(expected, actual) {
   validateWebBrowserRoutes(expected.browserRoutes, actual.browserRoutes);
 }
 
-function validateIdentity(identity, label, countKey) {
+function validateIdentity(identity, label, countKey, additionalKeys = []) {
   const value = assertRecord(identity, label);
-  const keys = countKey === "entryCount" ? ["bytes", "entryCount", "sha256"] : [countKey, "sha256"];
+  const keys = countKey === "entryCount"
+    ? ["bytes", "entryCount", "sha256", ...additionalKeys]
+    : [countKey, "sha256", ...additionalKeys];
   assertExactKeys(value, keys, label);
   if (!Number.isSafeInteger(value[countKey]) || value[countKey] < 1) {
     throw new TypeError(`${label} count is invalid.`);
@@ -1046,19 +1203,21 @@ function validateDependencies(dependencies, packageName) {
   }
 }
 
-function validateCommand(command, packageVersion) {
+function validateCommand(command, packageVersion, target) {
   const value = assertRecord(command, "CLI command descriptor");
   assertExactKeys(
     value,
-    ["name", "package", "path", "sha256", "shebang", "size", "version"],
+    ["kind", "name", "package", "path", "sha256", "shebang", "size", "version"],
     "CLI command descriptor"
   );
   if (
+    value.kind !== "node_script" ||
     value.name !== "codexdeck" ||
     value.package !== "@hostdeck/cli" ||
     value.path !== "dist/shell.js" ||
     value.shebang !== "#!/usr/bin/env node" ||
     value.version !== packageVersion ||
+    target.id !== "linux-x64" ||
     !Number.isSafeInteger(value.size) ||
     value.size < 1
   ) {
@@ -1068,14 +1227,15 @@ function validateCommand(command, packageVersion) {
   parseSha256(value.sha256, "CLI command SHA-256");
 }
 
-function validateServiceHost(serviceHost, packageVersion) {
+function validateServiceHost(serviceHost, packageVersion, target) {
   const value = assertRecord(serviceHost, "Service-host descriptor");
   assertExactKeys(
     value,
-    ["package", "path", "sha256", "size", "version"],
+    ["lifecycle", "package", "path", "sha256", "size", "version"],
     "Service-host descriptor"
   );
   if (
+    value.lifecycle !== target.lifecycle ||
     value.package !== "@hostdeck/cli" ||
     value.path !== "dist/service-host.js" ||
     value.version !== packageVersion ||
@@ -1088,7 +1248,7 @@ function validateServiceHost(serviceHost, packageVersion) {
   parseSha256(value.sha256, "Service-host SHA-256");
 }
 
-function validateExecutables(executables, commandPath) {
+function validateExecutables(executables, commandPath, runtime) {
   if (!Array.isArray(executables)) throw new TypeError("Executable inventory must be an array.");
   const parsed = executables.map((path) => parseRelativePath(path, "Executable path", false));
   const sorted = [...parsed].sort((left, right) => left.localeCompare(right));
@@ -1098,12 +1258,18 @@ function validateExecutables(executables, commandPath) {
   if (!parsed.includes(commandPath)) {
     throw new TypeError("CLI command is absent from the executable inventory.");
   }
+  if (
+    runtime.delivery === "bundled" &&
+    !parsed.includes(runtime.bundle.path)
+  ) {
+    throw new TypeError("Bundled runtime is absent from the executable inventory.");
+  }
   if (parsed.some((path) => (path.startsWith("dist/") && path !== commandPath) || path === productionPackageVerifierName)) {
     throw new TypeError("Undeclared HostDeck-owned files cannot be executable.");
   }
 }
 
-function validateNativeManifest(nativeModules, executableFiles) {
+function validateNativeManifest(nativeModules, executableFiles, target, runtime) {
   if (!Array.isArray(nativeModules) || nativeModules.length !== 3) {
     throw new TypeError("Required native-module inventory must contain exactly three entries.");
   }
@@ -1111,8 +1277,19 @@ function validateNativeManifest(nativeModules, executableFiles) {
   const executableSet = new Set(executableFiles);
   for (const [index, packageName] of expected.entries()) {
     const native = assertRecord(nativeModules[index], "Native-module descriptor");
-    assertExactKeys(native, ["package", "path", "sha256", "size"], "Native-module descriptor");
-    if (native.package !== packageName) throw new TypeError("Required native-module order or identity is invalid.");
+    assertExactKeys(
+      native,
+      ["nodeAbi", "package", "path", "sha256", "size", "target", "version"],
+      "Native-module descriptor"
+    );
+    if (
+      native.package !== packageName ||
+      native.version !== nativeModuleVersions[packageName] ||
+      native.target !== target.id ||
+      native.nodeAbi !== runtime.nodeAbi
+    ) {
+      throw new TypeError("Required native-module order or identity is invalid.");
+    }
     const path = parseRelativePath(native.path, `${packageName} native path`, false);
     if (!path.endsWith(".node") || !executableSet.has(path)) {
       throw new TypeError(`${packageName} native path is not a declared executable module.`);
@@ -1130,6 +1307,27 @@ function assertRuntimeIdentity(expected, actual) {
     if (runtime[key] !== expected[key]) {
       throw new TypeError(`Current runtime ${key} does not match the package contract.`);
     }
+  }
+}
+
+function verifyBundledRuntime(root, runtime, executableFiles) {
+  if (runtime.delivery === "host_provided") return;
+  const descriptor = runtime.bundle;
+  const path = resolveContained(root, descriptor.path, "Bundled runtime path");
+  const stats = lstatOrNull(path);
+  if (
+    stats === null ||
+    !stats.isFile() ||
+    stats.isSymbolicLink() ||
+    stats.nlink !== 1 ||
+    stats.size !== descriptor.size ||
+    !executableFiles.includes(descriptor.path)
+  ) {
+    throw new TypeError("Bundled runtime executable is missing or incompatible.");
+  }
+  assertFileMode(stats.mode, descriptor.path, true);
+  if (sha256Hex(readFileSync(path)) !== descriptor.sha256) {
+    throw new TypeError("Bundled runtime executable integrity check failed.");
   }
 }
 

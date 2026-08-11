@@ -109,7 +109,7 @@ export function parseCleanEnvironmentManifest(candidate) {
   );
   requireExact(
     candidate.contracts.package_manifest_schema,
-    4,
+    5,
     "Package manifest schema"
   );
   requireExact(

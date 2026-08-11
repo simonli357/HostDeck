@@ -21,7 +21,7 @@ const commit = "a".repeat(40);
 
 test("loads one frozen exact clean-environment manifest", () => {
   assert.equal(manifest.schema_version, 1);
-  assert.equal(manifest.contracts.package_manifest_schema, 4);
+  assert.equal(manifest.contracts.package_manifest_schema, 5);
   assert.equal(manifest.base_image.version, "24.04");
   assert.equal(manifest.node.version, "22.22.2");
   assert.equal(manifest.pnpm_version, "10.29.2");

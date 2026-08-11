@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { buildProductionPackage } from "./build-production-package.mjs";
 import {
   computeManifestSha256,
+  productionPackageManifestSchemaVersion,
   verifyProductionPackage
 } from "./verify-production-package.mjs";
 
@@ -44,7 +45,32 @@ try {
     join(outputRoot, firstManifest.web.manifestPath),
     "utf8"
   );
-  assert.equal(firstManifest.schemaVersion, 4);
+  assert.equal(firstManifest.schemaVersion, productionPackageManifestSchemaVersion);
+  assert.deepEqual(firstManifest.artifact, { kind: "runtime_tree" });
+  assert.deepEqual(firstManifest.target, {
+    architecture: "x64",
+    id: "linux-x64",
+    lifecycle: "systemd_user",
+    platform: "linux",
+    publicPackageKind: "linux_archive"
+  });
+  assert.equal(firstManifest.runtime.delivery, "host_provided");
+  assert.equal(firstManifest.runtime.bundle, null);
+  assert.equal(firstManifest.source.commit, first.sourceCommit);
+  assert.match(firstManifest.source.commit, /^[a-f0-9]{40}$/u);
+  assert.deepEqual(
+    firstManifest.nativeModules.map(({ nodeAbi, package: name, target, version }) => ({
+      name,
+      nodeAbi,
+      target,
+      version
+    })),
+    [
+      { name: "better-sqlite3", nodeAbi: "127", target: "linux-x64", version: "12.11.1" },
+      { name: "fs-native-extensions", nodeAbi: "127", target: "linux-x64", version: "1.3.4" },
+      { name: "koffi", nodeAbi: "127", target: "linux-x64", version: "3.1.4" }
+    ]
+  );
   assert.equal(firstManifest.web.sha256, first.webSha256);
   assert.equal(firstManifest.web.fileCount, first.webFileCount);
   assert.equal(firstManifest.web.bytes, first.webBytes);
@@ -125,6 +151,97 @@ try {
       return () => writeFileSync(path, original);
     },
     /manifest fields are invalid/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "unknown package artifact",
+    () => {
+      const path = join(relocated, "hostdeck-package.json");
+      return mutateJson(path, (value) => {
+        value.artifact.kind = "unknown";
+        value.manifestSha256 = computeManifestSha256(value);
+      });
+    },
+    /artifact kind is unsupported/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "mixed package target",
+    () => {
+      const path = join(relocated, "hostdeck-package.json");
+      return mutateJson(path, (value) => {
+        value.target.platform = "win32";
+        value.manifestSha256 = computeManifestSha256(value);
+      });
+    },
+    /target platform is inconsistent/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "mixed runtime delivery",
+    () => {
+      const path = join(relocated, "hostdeck-package.json");
+      return mutateJson(path, (value) => {
+        value.runtime.delivery = "bundled";
+        value.manifestSha256 = computeManifestSha256(value);
+      });
+    },
+    /runtime delivery is inconsistent/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "invalid source commit",
+    () => {
+      const path = join(relocated, "hostdeck-package.json");
+      return mutateJson(path, (value) => {
+        value.source.commit = "A".repeat(40);
+        value.manifestSha256 = computeManifestSha256(value);
+      });
+    },
+    /source commit is invalid/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "mixed command kind",
+    () => {
+      const path = join(relocated, "hostdeck-package.json");
+      return mutateJson(path, (value) => {
+        value.command.kind = "native_executable";
+        value.manifestSha256 = computeManifestSha256(value);
+      });
+    },
+    /command descriptor is inconsistent/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "mixed service lifecycle",
+    () => {
+      const path = join(relocated, "hostdeck-package.json");
+      return mutateJson(path, (value) => {
+        value.serviceHost.lifecycle = "windows_user_agent";
+        value.manifestSha256 = computeManifestSha256(value);
+      });
+    },
+    /service-host descriptor is inconsistent/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "mixed native module ABI",
+    () => {
+      const path = join(relocated, "hostdeck-package.json");
+      return mutateJson(path, (value) => {
+        value.nativeModules[0].nodeAbi = "126";
+        value.manifestSha256 = computeManifestSha256(value);
+      });
+    },
+    /native-module order or identity is invalid/iu
   );
   runMutationProbe(
     relocated,

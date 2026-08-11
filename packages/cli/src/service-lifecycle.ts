@@ -3194,15 +3194,36 @@ function readProductionPackageManifest(
     throw lifecycleError("package_invalid", "package");
   }
   const manifest = value as Record<string, unknown>;
+  const artifact = manifest.artifact;
   const content = manifest.content;
   const codex = manifest.codex;
+  const runtime = manifest.runtime;
+  const target = manifest.target;
   if (
-    manifest.schemaVersion !== 4 ||
+    manifest.schemaVersion !== 5 ||
     manifest.name !== "hostdeck-production-package" ||
     typeof manifest.packageVersion !== "string" ||
     !isSupportedVersion(manifest.packageVersion) ||
     typeof manifest.manifestSha256 !== "string" ||
     !sha256Pattern.test(manifest.manifestSha256) ||
+    artifact === null ||
+    typeof artifact !== "object" ||
+    Array.isArray(artifact) ||
+    (artifact as Record<string, unknown>).kind !== "runtime_tree" ||
+    target === null ||
+    typeof target !== "object" ||
+    Array.isArray(target) ||
+    (target as Record<string, unknown>).id !== "linux-x64" ||
+    (target as Record<string, unknown>).platform !== "linux" ||
+    (target as Record<string, unknown>).architecture !== "x64" ||
+    (target as Record<string, unknown>).lifecycle !== "systemd_user" ||
+    runtime === null ||
+    typeof runtime !== "object" ||
+    Array.isArray(runtime) ||
+    (runtime as Record<string, unknown>).platform !== "linux" ||
+    (runtime as Record<string, unknown>).architecture !== "x64" ||
+    (runtime as Record<string, unknown>).delivery !== "host_provided" ||
+    (runtime as Record<string, unknown>).bundle !== null ||
     codex === null ||
     typeof codex !== "object" ||
     Array.isArray(codex) ||

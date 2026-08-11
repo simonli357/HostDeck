@@ -380,6 +380,9 @@ describe("IFC-V1-055 systemd user-unit generator", () => {
       ["manifest-schema", (layout) => mutateManifest(layout, { schemaVersion: 3 })],
       ["manifest-name", (layout) => mutateManifest(layout, { name: "other" })],
       ["manifest-version", (layout) => mutateManifest(layout, { packageVersion: "9.9.9" })],
+      ["artifact-kind", (layout) => mutateManifest(layout, { artifact: { kind: "windows_msix" } })],
+      ["target-id", (layout) => mutateManifest(layout, { target: { id: "windows-x64" } })],
+      ["runtime-delivery", (layout) => mutateManifest(layout, { runtime: { delivery: "bundled" } })],
       [
         "service-extra",
         (layout) =>
@@ -388,6 +391,7 @@ describe("IFC-V1-055 systemd user-unit generator", () => {
       ["service-package", (layout) => mutateServiceHost(layout, { package: "other" })],
       ["service-path", (layout) => mutateServiceHost(layout, { path: "dist/other.js" })],
       ["service-version", (layout) => mutateServiceHost(layout, { version: "9.9.9" })],
+      ["service-lifecycle", (layout) => mutateServiceHost(layout, { lifecycle: "windows_user_agent" })],
       ["service-hash-shape", (layout) => mutateServiceHost(layout, { sha256: "short" })],
       ["service-hash", (layout) => mutateServiceHost(layout, { sha256: "0".repeat(64) })],
       ["service-size", (layout) => mutateServiceHost(layout, { size: 1 })],
@@ -597,15 +601,29 @@ function writeManifest(path: string, serviceHostContent: string): void {
     { manifestPath: path },
     `${JSON.stringify(
       {
+        artifact: { kind: "runtime_tree" },
         name: "hostdeck-production-package",
         packageVersion: version,
-        schemaVersion: 4,
+        runtime: {
+          architecture: "x64",
+          bundle: null,
+          delivery: "host_provided",
+          platform: "linux"
+        },
+        schemaVersion: 5,
         serviceHost: {
+          lifecycle: "systemd_user",
           package: "@hostdeck/cli",
           path: "dist/service-host.js",
           sha256: sha256(serviceHostContent),
           size: Buffer.byteLength(serviceHostContent),
           version
+        },
+        target: {
+          architecture: "x64",
+          id: "linux-x64",
+          lifecycle: "systemd_user",
+          platform: "linux"
         }
       },
       null,

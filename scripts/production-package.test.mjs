@@ -34,11 +34,13 @@ import {
   computeManifestSha256,
   createProductionWebManifest,
   inspectProductionPackageTree,
+  productionPackageManifestSchemaVersion,
   productionPackageSourceCount,
   productionWebBrowserRoutes,
   productionWebManifestName,
   productionWebViteVersion,
   stableJson,
+  validateNativePackageIdentityContract,
   verifyProductionWebAssets
 } from "./verify-production-package.mjs";
 
@@ -237,6 +239,7 @@ test("compares repeat builds by package identity rather than output location", (
     outputCount: 2,
     outputRoot: join(tmpdir(), "hostdeck-first"),
     packageVersion: "1.0.0",
+    sourceCommit: "a".repeat(40),
     sourceCount: 1,
     webBytes: 5,
     webFileCount: 1,
@@ -257,6 +260,97 @@ test("compares repeat builds by package identity rather than output location", (
     () => productionBuildIdentity({ ...first, unexpected: true }),
     /fields are invalid/u
   );
+});
+
+test("binds native package identity to one coherent target and runtime", () => {
+  const linuxIdentity = {
+    artifact: { kind: "runtime_tree" },
+    runtime: {
+      architecture: "x64",
+      bundle: null,
+      delivery: "host_provided",
+      node: "22.22.2",
+      nodeAbi: "127",
+      platform: "linux",
+      pnpm: "10.29.2"
+    },
+    source: {
+      commit: "a".repeat(40),
+      count: productionPackageSourceCount,
+      sha256: "b".repeat(64)
+    },
+    target: {
+      architecture: "x64",
+      id: "linux-x64",
+      lifecycle: "systemd_user",
+      platform: "linux",
+      publicPackageKind: "linux_archive"
+    }
+  };
+  const windowsIdentity = {
+    artifact: { kind: "windows_portable" },
+    runtime: {
+      architecture: "x64",
+      bundle: {
+        path: "runtime/node.exe",
+        sha256: "c".repeat(64),
+        size: 32_000_000
+      },
+      delivery: "bundled",
+      node: "22.22.2",
+      nodeAbi: "127",
+      platform: "win32",
+      pnpm: "10.29.2"
+    },
+    source: {
+      commit: "d".repeat(40),
+      count: productionPackageSourceCount,
+      sha256: "e".repeat(64)
+    },
+    target: {
+      architecture: "x64",
+      id: "windows-x64",
+      lifecycle: "windows_user_agent",
+      platform: "win32",
+      publicPackageKind: "windows_msix"
+    }
+  };
+
+  assert.equal(productionPackageManifestSchemaVersion, 5);
+  assert.deepEqual(validateNativePackageIdentityContract(linuxIdentity), linuxIdentity);
+  assert.deepEqual(validateNativePackageIdentityContract(windowsIdentity), windowsIdentity);
+  assert.equal(Object.isFrozen(validateNativePackageIdentityContract(windowsIdentity)), true);
+
+  const mutations = [
+    ["unknown artifact", linuxIdentity, (value) => { value.artifact.kind = "zip"; }, /artifact kind is unsupported/u],
+    ["extra identity field", linuxIdentity, (value) => { value.unexpected = true; }, /identity fields are invalid/u],
+    ["mixed target platform", windowsIdentity, (value) => { value.target.platform = "linux"; }, /target platform is inconsistent/u],
+    ["mixed target lifecycle", windowsIdentity, (value) => { value.target.lifecycle = "systemd_user"; }, /target lifecycle is inconsistent/u],
+    ["mixed public package kind", windowsIdentity, (value) => { value.target.publicPackageKind = "linux_archive"; }, /publicPackageKind is inconsistent/u],
+    ["unsupported target pair", windowsIdentity, (value) => { value.artifact.kind = "linux_archive"; }, /does not support the selected target/u],
+    ["runtime platform drift", windowsIdentity, (value) => { value.runtime.platform = "linux"; }, /runtime and target are inconsistent/u],
+    ["runtime architecture drift", windowsIdentity, (value) => { value.runtime.architecture = "arm64"; }, /runtime and target are inconsistent/u],
+    ["runtime version drift", windowsIdentity, (value) => { value.runtime.node = "22.22.1"; }, /runtime node is unsupported/u],
+    ["runtime ABI drift", windowsIdentity, (value) => { value.runtime.nodeAbi = "126"; }, /runtime nodeAbi is unsupported/u],
+    ["runtime manager drift", windowsIdentity, (value) => { value.runtime.pnpm = "10.29.1"; }, /runtime pnpm is unsupported/u],
+    ["delivery drift", windowsIdentity, (value) => { value.runtime.delivery = "host_provided"; value.runtime.bundle = null; }, /runtime delivery is inconsistent/u],
+    ["host runtime bundle", linuxIdentity, (value) => { value.runtime.bundle = { path: "runtime/bin/node", sha256: "f".repeat(64), size: 1 }; }, /must not declare a bundled executable/u],
+    ["bundled runtime path drift", windowsIdentity, (value) => { value.runtime.bundle.path = "runtime/bin/node"; }, /path does not match the selected target/u],
+    ["bundled runtime hash drift", windowsIdentity, (value) => { value.runtime.bundle.sha256 = "invalid"; }, /SHA-256 is invalid/u],
+    ["bundled runtime size drift", windowsIdentity, (value) => { value.runtime.bundle.size = 0; }, /size is invalid/u],
+    ["source commit drift", linuxIdentity, (value) => { value.source.commit = "A".repeat(40); }, /source commit is invalid/iu],
+    ["source hash drift", linuxIdentity, (value) => { value.source.sha256 = "invalid"; }, /source identity SHA-256 is invalid/iu],
+    ["source count drift", linuxIdentity, (value) => { value.source.count = 0; }, /source identity count is invalid/iu]
+  ];
+  for (const [label, baseline, mutate, expected] of mutations) {
+    const candidate = structuredClone(baseline);
+    mutate(candidate);
+    assert.throws(
+      () => validateNativePackageIdentityContract(candidate),
+      expected,
+      label
+    );
+  }
 });
 
 test("normalizes source-derived workspace deploy paths and links", (context) => {

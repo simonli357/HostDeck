@@ -28,6 +28,7 @@ import {
   createProductionWebManifest,
   inspectProductionPackageTree,
   productionPackageManifestName,
+  productionPackageManifestSchemaVersion,
   productionPackageSourceCount,
   productionPackageVerifierName,
   productionWebBrowserRoutes,
@@ -51,6 +52,7 @@ const productionBuildResultKeys = [
   "outputCount",
   "outputRoot",
   "packageVersion",
+  "sourceCommit",
   "sourceCount",
   "webBytes",
   "webFileCount",
@@ -70,6 +72,46 @@ const expectedExternalModules = [
 ];
 const downstreamDeferrals = [];
 const exactVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
+const sourceCommitPattern = /^[a-f0-9]{40}$/u;
+const packageSourceCommitPathspecs = Object.freeze([
+  "package.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  "tsconfig.base.json",
+  "tsconfig.json",
+  "scripts/build-production-package.mjs",
+  "scripts/check-selected-runtime-boundary.mjs",
+  "scripts/verify-production-package.mjs",
+  "packages/core/package.json",
+  "packages/core/src",
+  "packages/core/tsconfig.json",
+  "packages/contracts/package.json",
+  "packages/contracts/src",
+  "packages/contracts/tsconfig.json",
+  "packages/codex-adapter/package.json",
+  "packages/codex-adapter/src",
+  "packages/codex-adapter/tsconfig.json",
+  "packages/storage/package.json",
+  "packages/storage/src",
+  "packages/storage/tsconfig.json",
+  "packages/server/package.json",
+  "packages/server/src",
+  "packages/server/tsconfig.json",
+  "packages/cli/package.json",
+  "packages/cli/src",
+  "packages/cli/tsconfig.json",
+  "packages/web/index.html",
+  "packages/web/package.json",
+  "packages/web/src",
+  "packages/web/tsconfig.json",
+  "packages/web/vite.config.ts",
+  ":(exclude,glob)packages/**/*.test.ts",
+  ":(exclude,glob)packages/**/*.test.tsx",
+  ":(exclude,glob)packages/**/*.spec.ts",
+  ":(exclude,glob)packages/**/*.spec.tsx",
+  ":(exclude,glob)packages/**/*.smoke.ts",
+  ":(exclude,glob)packages/**/*.smoke.test.ts"
+]);
 
 export function selectedProductionSources(repositoryRoot = defaultRepositoryRoot) {
   const result = validateSelectedRuntimeBoundary(repositoryRoot);
@@ -163,6 +205,7 @@ export function buildProductionPackage(options = {}) {
   const sourceIdentity = computeFileIdentity(
     sources.map((path) => ({ content: readFileSync(join(repositoryRoot, path)), path }))
   );
+  const sourceCommit = resolvePackageSourceCommit(repositoryRoot);
   const sourceCounts = countSourcesByPackage(sources);
   const codex = readCodexBindingIdentity(repositoryRoot);
   const packageVersion = parseExactVersion(
@@ -226,20 +269,45 @@ export function buildProductionPackage(options = {}) {
       packageVersion,
       viteVersion: productionWebViteVersion
     });
-    const nativeModules = collectRequiredNativeModules(packageRoot, executableFiles);
+    const artifact = Object.freeze({ kind: "runtime_tree" });
+    const target = Object.freeze({
+      architecture: runtime.architecture,
+      id: "linux-x64",
+      lifecycle: "systemd_user",
+      platform: runtime.platform,
+      publicPackageKind: "linux_archive"
+    });
+    const nativeModules = collectRequiredNativeModules(
+      packageRoot,
+      executableFiles,
+      target.id,
+      runtime.nodeAbi
+    );
+    assertPackageSourceUnchanged(
+      repositoryRoot,
+      sources,
+      sourceIdentity,
+      sourceCommit
+    );
     const ownedOutput = computeOwnedOutputIdentity(packageRoot, descriptors);
     const content = inspectProductionPackageTree(packageRoot, executableFiles);
     const manifest = {
-      schemaVersion: 4,
+      schemaVersion: productionPackageManifestSchemaVersion,
       name: "hostdeck-production-package",
       packageVersion,
       packageManager: `pnpm@${runtime.pnpm}`,
       nativeBuildPolicy: "canonical-runtime-binary-only",
+      artifact,
+      target,
       runtime,
       codex,
       command,
       serviceHost,
-      source: { count: sourceIdentity.count, sha256: sourceIdentity.sha256 },
+      source: {
+        commit: sourceCommit,
+        count: sourceIdentity.count,
+        sha256: sourceIdentity.sha256
+      },
       output: { count: ownedOutput.count, sha256: ownedOutput.sha256 },
       content,
       packages: descriptors,
@@ -261,6 +329,7 @@ export function buildProductionPackage(options = {}) {
       outputCount: verification.outputCount,
       outputRoot,
       packageVersion,
+      sourceCommit,
       sourceCount: sources.length,
       webBytes: web.bytes,
       webFileCount: web.fileCount,
@@ -304,6 +373,7 @@ function collectHostDeckServiceHost(root, packageVersion) {
     throw new Error("Production service-host module is invalid.");
   }
   return Object.freeze({
+    lifecycle: "systemd_user",
     package: "@hostdeck/cli",
     path,
     sha256: sha256Hex(content),
@@ -339,6 +409,7 @@ function collectHostDeckCommand(root, packageVersion) {
     throw new Error("Production CLI command target is invalid.");
   }
   return Object.freeze({
+    kind: "node_script",
     name: "codexdeck",
     package: "@hostdeck/cli",
     path,
@@ -367,6 +438,8 @@ function assertBuildRuntime(repositoryRoot, rootManifest) {
   }
   return Object.freeze({
     architecture: process.arch,
+    bundle: null,
+    delivery: "host_provided",
     node: process.versions.node,
     nodeAbi: process.versions.modules,
     platform: process.platform,
@@ -1082,9 +1155,10 @@ function normalizePackageModes(root, executableFiles) {
   visit(root);
 }
 
-function collectRequiredNativeModules(root, executableFiles) {
+function collectRequiredNativeModules(root, executableFiles, target, nodeAbi) {
   const executableSet = new Set(executableFiles);
   const candidates = listRegularFiles(root).filter((path) => path.endsWith(".node"));
+  const installedVersions = collectInstalledPackageVersions(root);
   const requirements = [
     ["better-sqlite3", "/better-sqlite3/build/Release/better_sqlite3.node"],
     ["fs-native-extensions", "/fs-native-extensions/prebuilds/linux-x64/fs-native-extensions.node"],
@@ -1099,13 +1173,81 @@ function collectRequiredNativeModules(root, executableFiles) {
     const relativePath = portable(relative(root, path));
     if (!executableSet.has(relativePath)) throw new Error(`${packageName} native module is not executable.`);
     const content = readFileSync(path);
+    const versions = installedVersions.get(packageName);
+    if (versions === undefined || versions.size !== 1) {
+      throw new Error(`${packageName} installed package version is ambiguous.`);
+    }
+    const [version] = versions;
     return Object.freeze({
+      nodeAbi,
       package: packageName,
       path: relativePath,
       sha256: sha256Hex(content),
-      size: content.length
+      size: content.length,
+      target,
+      version: parseExactVersion(version, `${packageName} version`)
     });
   });
+}
+
+function collectInstalledPackageVersions(root) {
+  const required = new Set(["better-sqlite3", "fs-native-extensions", "koffi"]);
+  const versions = new Map();
+  for (const path of listRegularFiles(root)) {
+    if (basename(path) !== "package.json") continue;
+    const manifest = readJson(path);
+    if (!required.has(manifest.name)) continue;
+    const version = parseExactVersion(manifest.version, `${manifest.name} version`);
+    const packageVersions = versions.get(manifest.name) ?? new Set();
+    packageVersions.add(version);
+    versions.set(manifest.name, packageVersions);
+  }
+  return versions;
+}
+
+export function resolvePackageSourceCommit(repositoryRoot = defaultRepositoryRoot) {
+  const root = realpathSync(resolve(repositoryRoot));
+  const status = runChecked(
+    "git",
+    ["status", "--porcelain=v1", "--untracked-files=all", "--", ...packageSourceCommitPathspecs],
+    root,
+    "Production package source status"
+  ).stdout.trim();
+  if (status.length > 0) {
+    throw new Error("Production package inputs must be committed before packaging.");
+  }
+  const commit = runChecked(
+    "git",
+    ["log", "-1", "--format=%H", "--", ...packageSourceCommitPathspecs],
+    root,
+    "Production package source commit"
+  ).stdout.trim();
+  if (!sourceCommitPattern.test(commit)) {
+    throw new Error("Production package source commit is invalid.");
+  }
+  return commit;
+}
+
+function assertPackageSourceUnchanged(
+  repositoryRoot,
+  sources,
+  expectedIdentity,
+  expectedCommit
+) {
+  const observedIdentity = computeFileIdentity(
+    sources.map((path) => ({
+      content: readFileSync(join(repositoryRoot, path)),
+      path
+    }))
+  );
+  if (
+    observedIdentity.count !== expectedIdentity.count ||
+    observedIdentity.bytes !== expectedIdentity.bytes ||
+    observedIdentity.sha256 !== expectedIdentity.sha256 ||
+    resolvePackageSourceCommit(repositoryRoot) !== expectedCommit
+  ) {
+    throw new Error("Production package inputs changed during packaging.");
+  }
 }
 
 function scanForbiddenBuildReferences(root, privatePaths, homePath) {

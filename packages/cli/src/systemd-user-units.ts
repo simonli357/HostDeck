@@ -117,6 +117,7 @@ interface ValidatedInput {
 }
 
 interface ServiceHostManifest {
+  readonly lifecycle: "systemd_user";
   readonly package: "@hostdeck/cli";
   readonly path: typeof serviceHostRelativePath;
   readonly sha256: string;
@@ -340,10 +341,25 @@ function parsePackageManifest(
     fail("package_invalid", "package");
   }
   if (!isRecord(parsed)) fail("package_invalid", "package");
+  const artifact = parsed.artifact;
+  const runtime = parsed.runtime;
+  const target = parsed.target;
   if (
-    parsed.schemaVersion !== 4 ||
+    parsed.schemaVersion !== 5 ||
     parsed.name !== "hostdeck-production-package" ||
-    parsed.packageVersion !== expectedVersion
+    parsed.packageVersion !== expectedVersion ||
+    !isRecord(artifact) ||
+    artifact.kind !== "runtime_tree" ||
+    !isRecord(target) ||
+    target.id !== "linux-x64" ||
+    target.platform !== "linux" ||
+    target.architecture !== "x64" ||
+    target.lifecycle !== "systemd_user" ||
+    !isRecord(runtime) ||
+    runtime.platform !== "linux" ||
+    runtime.architecture !== "x64" ||
+    runtime.delivery !== "host_provided" ||
+    runtime.bundle !== null
   ) {
     fail("package_invalid", "package");
   }
@@ -351,11 +367,12 @@ function parsePackageManifest(
   if (!isRecord(serviceHost)) fail("package_invalid", "package");
   requireExactRecord(
     serviceHost,
-    ["package", "path", "sha256", "size", "version"],
+    ["lifecycle", "package", "path", "sha256", "size", "version"],
     "package_invalid",
     "package"
   );
   if (
+    serviceHost.lifecycle !== "systemd_user" ||
     serviceHost.package !== "@hostdeck/cli" ||
     serviceHost.path !== serviceHostRelativePath ||
     serviceHost.version !== expectedVersion ||
@@ -368,6 +385,7 @@ function parsePackageManifest(
     fail("package_invalid", "package");
   }
   return Object.freeze({
+    lifecycle: "systemd_user" as const,
     package: "@hostdeck/cli" as const,
     path: serviceHostRelativePath,
     sha256: serviceHost.sha256,

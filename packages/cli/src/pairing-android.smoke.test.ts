@@ -482,12 +482,25 @@ describe("physical Android phone-driver protocol", () => {
     const webHash = "e".repeat(64);
     const webManifestHash = "f".repeat(64);
     const packageManifest = {
-      schemaVersion: 4,
+      artifact: { kind: "runtime_tree" },
+      schemaVersion: 5,
       packageVersion: "0.0.0",
-      source: { count: 623, sha256: sourceHash },
-      output: { count: 1_253, sha256: outputHash },
+      runtime: {
+        architecture: "x64",
+        bundle: null,
+        delivery: "host_provided",
+        platform: "linux"
+      },
+      source: { commit: "1".repeat(40), count: 625, sha256: sourceHash },
+      output: { count: 1_257, sha256: outputHash },
       content: { bytes: 35_000_000, entryCount: 6_239, sha256: contentHash },
       manifestSha256: manifestHash,
+      target: {
+        architecture: "x64",
+        id: "linux-x64",
+        lifecycle: "systemd_user",
+        platform: "linux"
+      },
       web: {
         bytes: 1_200_000,
         fileCount: 3,
@@ -496,10 +509,10 @@ describe("physical Android phone-driver protocol", () => {
       }
     };
     const buildResult = parsePhysicalPackageBuildOutput(
-      `HostDeck package built: 623 sources, 1253 owned outputs, 6239 entries, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
+      `HostDeck package built: 625 sources, 1257 owned outputs, 6239 entries, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
     );
     const verification = parsePhysicalPackageVerificationOutput(
-      `HostDeck package verified: 6239 entries, 1253 owned outputs, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
+      `HostDeck package verified: 6239 entries, 1257 owned outputs, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
     );
     const browserManifest = {
       package: {
@@ -522,11 +535,11 @@ describe("physical Android phone-driver protocol", () => {
       content_entry_count: 6_239,
       content_tree_sha256: contentHash,
       manifest_sha256: manifestHash,
-      output_file_count: 1_253,
+      output_file_count: 1_257,
       output_tree_sha256: outputHash,
-      package_schema_version: 4,
+      package_schema_version: 5,
       package_version: "0.0.0",
-      source_file_count: 623,
+      source_file_count: 625,
       source_tree_sha256: sourceHash,
       web_manifest_sha256: webManifestHash,
       web_tree_sha256: webHash
@@ -586,12 +599,12 @@ describe("physical Android phone-driver protocol", () => {
     ).toThrow("Physical dashboard package and browser identities did not match.");
     expect(() =>
       parsePhysicalPackageBuildOutput(
-        `HostDeck package built: 623 sources, 1253 owned outputs, 6239 entries, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\nextra\n`
+        `HostDeck package built: 625 sources, 1257 owned outputs, 6239 entries, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\nextra\n`
       )
     ).toThrow("Physical dashboard package build output was invalid.");
     expect(() =>
       parsePhysicalPackageVerificationOutput(
-        `HostDeck package verified: 6239 entries, 1253 outputs, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
+        `HostDeck package verified: 6239 entries, 1257 outputs, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
       )
     ).toThrow("Physical dashboard package verification output was invalid.");
     expect(() =>
@@ -11398,7 +11411,7 @@ interface PhysicalDashboardPackageIdentity {
   readonly manifest_sha256: string;
   readonly output_file_count: number;
   readonly output_tree_sha256: string;
-  readonly package_schema_version: 4;
+  readonly package_schema_version: 5;
   readonly package_version: "0.0.0";
   readonly source_file_count: number;
   readonly source_tree_sha256: string;
@@ -27967,10 +27980,13 @@ function parsePhysicalDashboardPackageIdentity(input: Readonly<{
   readonly verification: unknown;
 }>): PhysicalDashboardPackageIdentity {
   const manifest = physicalPackageIdentityRecord(input.packageManifest);
+  const artifact = physicalPackageIdentityRecord(manifest.artifact);
   const source = physicalPackageIdentityRecord(manifest.source);
   const output = physicalPackageIdentityRecord(manifest.output);
   const content = physicalPackageIdentityRecord(manifest.content);
   const web = physicalPackageIdentityRecord(manifest.web);
+  const runtime = physicalPackageIdentityRecord(manifest.runtime);
+  const target = physicalPackageIdentityRecord(manifest.target);
   const build = physicalPackageIdentityRecord(input.buildResult);
   const verified = physicalPackageIdentityRecord(input.verification);
   const browser = physicalPackageIdentityRecord(input.browserManifest);
@@ -27984,10 +28000,21 @@ function parsePhysicalDashboardPackageIdentity(input: Readonly<{
     web.manifestSha256
   ];
   requireCondition(
-    manifest.schemaVersion === 4 &&
+    manifest.schemaVersion === 5 &&
       manifest.packageVersion === "0.0.0" &&
-      source.count === 623 &&
-      output.count === 1_253 &&
+      artifact.kind === "runtime_tree" &&
+      target.id === "linux-x64" &&
+      target.platform === "linux" &&
+      target.architecture === "x64" &&
+      target.lifecycle === "systemd_user" &&
+      runtime.platform === "linux" &&
+      runtime.architecture === "x64" &&
+      runtime.delivery === "host_provided" &&
+      runtime.bundle === null &&
+      typeof source.commit === "string" &&
+      /^[a-f0-9]{40}$/u.test(source.commit) &&
+      source.count === 625 &&
+      output.count === 1_257 &&
       Number.isSafeInteger(content.entryCount) &&
       (content.entryCount as number) >= 1_000 &&
       (content.entryCount as number) <= 10_000 &&
@@ -28028,7 +28055,7 @@ function parsePhysicalDashboardPackageIdentity(input: Readonly<{
     manifest_sha256: manifest.manifestSha256 as string,
     output_file_count: output.count as number,
     output_tree_sha256: output.sha256 as string,
-    package_schema_version: 4,
+    package_schema_version: 5,
     package_version: "0.0.0",
     source_file_count: source.count as number,
     source_tree_sha256: source.sha256 as string,
