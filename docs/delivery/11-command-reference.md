@@ -103,6 +103,7 @@ pnpm build
 dist/hostdeck/dist/shell.js --help
 dist/hostdeck/dist/shell.js --version
 pnpm test:package
+pnpm test:supply-chain
 node dist/hostdeck/verify.mjs dist/hostdeck
 pnpm test:browser:package
 pnpm smoke:clean-environment
@@ -141,6 +142,13 @@ pnpm smoke:remote-control
 pnpm smoke:codex-compatibility
 pnpm smoke:codex-ipc
 pnpm smoke:codex-threads
+```
+
+## Supply-Chain Metadata
+
+```bash
+pnpm release:metadata --package /absolute/path/to/hostdeck-package --evidence /absolute/path/to/native-ci.json --output /absolute/path/to/release-metadata --repository /absolute/path/to/HostDeck
+pnpm verify:release-metadata --package /absolute/path/to/hostdeck-package --evidence /absolute/path/to/native-ci.json --output /absolute/path/to/release-metadata --repository /absolute/path/to/HostDeck
 ```
 
 ## Physical Android Security Acceptance

@@ -1,12 +1,11 @@
-import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   readlinkSync,
   realpathSync,
   renameSync,
@@ -22,7 +21,7 @@ import {
   resolve,
   sep
 } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import {
   ComponentScope,
   ComponentType,
@@ -48,8 +47,6 @@ import {
   verifyProductionPackage
 } from "./verify-production-package.mjs";
 
-const scriptDirectory = dirname(fileURLToPath(import.meta.url));
-const defaultRepositoryRoot = realpathSync(resolve(scriptDirectory, ".."));
 const sha256Pattern = /^[a-f0-9]{64}$/u;
 const exactVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 const packageNamePattern = /^(?:@[a-z0-9][a-z0-9._-]{0,213}\/[a-z0-9][a-z0-9._-]{0,213}|[a-z0-9][a-z0-9._-]{0,213})$/u;
