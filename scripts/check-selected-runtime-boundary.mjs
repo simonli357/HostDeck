@@ -306,6 +306,9 @@ export const directHostApiOwnerPaths = Object.freeze([
   "packages/storage/src/migration-runner.ts",
   "packages/storage/src/read-only-database.ts",
   "packages/storage/src/linux-secure-local-path-adapter.ts",
+  "packages/storage/src/secure-local-paths.ts",
+  "packages/storage/src/windows-native-file-security.ts",
+  "packages/storage/src/windows-secure-local-path-adapter.ts",
   "packages/web/vite.config.ts"
 ]);
 const directHostApiOwners = new Set(directHostApiOwnerPaths);
@@ -313,6 +316,23 @@ const hostNodeModulePattern = /^node:(?:child_process|cluster|dgram|dns(?:\/prom
 const hostProcessProperties = new Set(["arch", "cwd", "env", "getuid", "platform"]);
 
 const cliLocalStorageOwners = new Map([
+  [
+    "packages/cli/src/config.ts",
+    {
+      modules: [
+        "./errors.js",
+        "@hostdeck/contracts",
+        "@hostdeck/storage",
+        "node:fs",
+        "node:os",
+        "node:path"
+      ],
+      storageSymbols: [
+        "resolveNativeWindowsHostDeckDefaultPaths",
+        "resolveWindowsHostDeckDefaultPaths"
+      ]
+    }
+  ],
   [
     "packages/cli/src/legacy-session-admin.ts",
     {

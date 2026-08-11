@@ -77,7 +77,12 @@ describe("secure HostDeck local paths", () => {
     expect(new Set(prepared.repairs.map((repair) => repair.path))).toEqual(
       new Set([layout.state_dir, layout.config_dir, layout.runtime_dir])
     );
-    expect(prepared.repairs.every((repair) => [0o700, 0o600].includes(repair.to_mode))).toBe(true);
+    expect(
+      prepared.repairs.every(
+        (repair) =>
+          "to_mode" in repair && [0o700, 0o600].includes(repair.to_mode)
+      )
+    ).toBe(true);
     expect(mode(layout.state_dir)).toBe(0o700);
     expect(mode(layout.database_path)).toBe(0o644);
   });

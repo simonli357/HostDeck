@@ -2,7 +2,7 @@ import { linuxHostDeckLocalPathAdapter } from "./linux-secure-local-path-adapter
 import type {
   ExistingHostDeckStatePaths,
   HostDeckLocalPathAdapter,
-  HostDeckPathModeRepair,
+  HostDeckPathSecurityRepair,
   HostDeckStatePathsInput,
   OpenedSecureHostDeckRegularFile,
   OpenSecureHostDeckRegularFileOptions,
@@ -13,13 +13,17 @@ import type {
   SecureHostDeckRegularFileOptions,
   SecureHostDeckSocketOptions
 } from "./secure-local-path-contract.js";
+import { hostDeckLocalPathError } from "./secure-local-path-contract.js";
+import { windowsHostDeckLocalPathAdapter } from "./windows-secure-local-path-adapter.js";
 
 export {
   type ExistingHostDeckStatePaths,
   type HostDeckLocalPathAdapter,
   HostDeckLocalPathError,
   type HostDeckLocalPathErrorCode,
+  type HostDeckPathAclRepair,
   type HostDeckPathModeRepair,
+  type HostDeckPathSecurityRepair,
   type HostDeckStatePathsInput,
   type OpenedSecureHostDeckRegularFile,
   type OpenSecureHostDeckRegularFileOptions,
@@ -30,9 +34,29 @@ export {
   type SecureHostDeckRegularFileOptions,
   type SecureHostDeckSocketOptions
 } from "./secure-local-path-contract.js";
+export {
+  createWindowsHostDeckLocalPathAdapter,
+  resolveNativeWindowsHostDeckDefaultPaths,
+  resolveWindowsHostDeckDefaultPaths,
+  resolveWindowsHostDeckLocalPathsForRoots
+} from "./windows-secure-local-path-adapter.js";
 
 export const nativeHostDeckLocalPathAdapter: HostDeckLocalPathAdapter =
-  linuxHostDeckLocalPathAdapter;
+  selectNativeHostDeckLocalPathAdapter();
+
+function selectNativeHostDeckLocalPathAdapter(): HostDeckLocalPathAdapter {
+  if (process.platform === "linux" && process.arch === "x64") {
+    return linuxHostDeckLocalPathAdapter;
+  }
+  if (process.platform === "win32" && process.arch === "x64") {
+    return windowsHostDeckLocalPathAdapter;
+  }
+  throw hostDeckLocalPathError(
+    "unsupported_platform",
+    "HostDeck secure local paths require a supported native x64 host.",
+    null
+  );
+}
 
 export function resolveHostDeckLocalPaths(
   input: PrepareHostDeckLocalPathsInput
@@ -48,7 +72,7 @@ export function prepareHostDeckLocalPaths(
 
 export function prepareHostDeckDaemonLeasePath(
   paths: ResolvedHostDeckLocalPaths
-): readonly HostDeckPathModeRepair[] {
+): readonly HostDeckPathSecurityRepair[] {
   return nativeHostDeckLocalPathAdapter.prepareDaemonLeasePath(paths);
 }
 
@@ -79,7 +103,7 @@ export function inspectExistingHostDeckStatePaths(
 export function secureHostDeckRegularFile(
   path: string,
   options: SecureHostDeckRegularFileOptions
-): HostDeckPathModeRepair | null {
+): HostDeckPathSecurityRepair | null {
   return nativeHostDeckLocalPathAdapter.secureRegularFile(path, options);
 }
 
@@ -93,6 +117,6 @@ export function openSecureHostDeckRegularFile(
 export function secureHostDeckSocket(
   path: string,
   options: SecureHostDeckSocketOptions
-): HostDeckPathModeRepair | null {
+): HostDeckPathSecurityRepair | null {
   return nativeHostDeckLocalPathAdapter.secureSocket(path, options);
 }

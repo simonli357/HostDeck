@@ -103,7 +103,8 @@ function fixture(target) {
     },
     native_dependencies: [
       { name: "better-sqlite3", version: "12.11.1" },
-      { name: "fs-native-extensions", version: "1.3.4" }
+      { name: "fs-native-extensions", version: "1.3.4" },
+      { name: "koffi", version: "3.1.4" }
     ],
     checks: policy.checks.map((id, index) => ({
       duration_ms: index + 1,

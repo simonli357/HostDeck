@@ -9,10 +9,7 @@ import {
   resolveHostDeckPathRoots,
   resolveHostDeckStatePathRoots
 } from "./secure-local-path-contract.js";
-import {
-  nativeHostDeckLocalPathAdapter,
-  resolveHostDeckLocalPaths
-} from "./secure-local-paths.js";
+import { nativeHostDeckLocalPathAdapter } from "./secure-local-paths.js";
 
 const posixDialect = pathDialect("posix");
 const windowsDialect = pathDialect("windows");
@@ -176,23 +173,19 @@ describe("shared secure local-path contract", () => {
     );
   });
 
-  it("keeps native filesystem work fail-closed until the host adapter exists", () => {
-    expect(nativeHostDeckLocalPathAdapter.target).toBe("linux-x64");
+  it("selects only the exact native filesystem adapter", () => {
     if (process.platform === "win32") {
-      expectPathError(
-        () =>
-          resolveHostDeckLocalPaths({
-            config_dir: "C:\\Users\\user\\AppData\\Roaming\\HostDeck",
-            state_dir: "C:\\Users\\user\\AppData\\Local\\HostDeck\\State",
-            runtime_dir: "C:\\Users\\user\\AppData\\Local\\HostDeck\\Runtime",
-            database_path:
-              "C:\\Users\\user\\AppData\\Local\\HostDeck\\State\\hostdeck.sqlite"
-          }),
-        "unsupported_platform"
+      expect(process.arch).toBe("x64");
+      expect(nativeHostDeckLocalPathAdapter.target).toBe("windows-x64");
+      expect(nativeHostDeckLocalPathAdapter.path_family).toBe("windows");
+      expect(nativeHostDeckLocalPathAdapter.path_security).toBe(
+        "current_user_acl"
       );
       return;
     }
     expect(process.platform).toBe("linux");
+    expect(process.arch).toBe("x64");
+    expect(nativeHostDeckLocalPathAdapter.target).toBe("linux-x64");
     expect(nativeHostDeckLocalPathAdapter.path_family).toBe("posix");
     expect(nativeHostDeckLocalPathAdapter.path_security).toBe("uid_mode");
   });

@@ -19,6 +19,7 @@ import {
   type HostDeckLocalPathErrorCode,
   type HostDeckPathDialect,
   type HostDeckPathModeRepair,
+  type HostDeckPathSecurityRepair,
   type HostDeckStatePathsInput,
   hostDeckLocalPathError,
   type OpenedSecureHostDeckRegularFile,
@@ -52,13 +53,25 @@ function freezeRepairs(repairs: readonly HostDeckPathModeRepair[]): readonly Hos
   return Object.freeze(repairs.map((repair) => Object.freeze({ ...repair })));
 }
 
+function requireModeRepairs(
+  repairs: readonly HostDeckPathSecurityRepair[]
+): readonly HostDeckPathModeRepair[] {
+  if (repairs.some((repair) => !("from_mode" in repair))) {
+    throw new TypeError("Linux path adapter produced a non-mode repair.");
+  }
+  return repairs as readonly HostDeckPathModeRepair[];
+}
+
 export function prepareHostDeckLocalPaths(input: PrepareHostDeckLocalPathsInput): PreparedHostDeckLocalPaths {
   const resolved = resolveHostDeckLocalPaths(input);
   const leaseRepairs = prepareHostDeckDaemonLeasePath(resolved);
   const prepared = prepareHostDeckLocalPathsAfterLease(resolved);
   return Object.freeze({
     ...prepared,
-    repairs: freezeRepairs([...leaseRepairs, ...prepared.repairs])
+    repairs: freezeRepairs([
+      ...requireModeRepairs(leaseRepairs),
+      ...requireModeRepairs(prepared.repairs)
+    ])
   });
 }
 
@@ -205,7 +218,9 @@ export function secureHostDeckRegularFile(
 ): HostDeckPathModeRepair | null {
   const opened = openSecureHostDeckRegularFile(path, options);
   try {
-    return opened.repair;
+    return requireModeRepairs(
+      opened.repair === null ? [] : [opened.repair]
+    )[0] ?? null;
   } finally {
     closeSync(opened.descriptor);
   }

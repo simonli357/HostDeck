@@ -97,6 +97,12 @@ async function main() {
       ["packages/storage/src/platform-file-lock.test.ts"],
       reportRoot
     );
+    runVitestCheck(
+      checks,
+      "windows_paths",
+      ["packages/storage/src/windows-secure-local-path-adapter.native.test.ts"],
+      reportRoot
+    );
     if (target === "linux-x64") {
       runVitestCheck(
         checks,
@@ -281,10 +287,17 @@ function probeNativeModules() {
   const requireFromStorage = createRequire(join(repositoryRoot, "packages", "storage", "package.json"));
   const sqlitePackage = requireFromStorage("better-sqlite3/package.json");
   const lockPackage = requireFromStorage("fs-native-extensions/package.json");
+  const koffiPackage = requireFromStorage("koffi/package.json");
   requireCondition(sqlitePackage.version === "12.11.1", "Native SQLite version is invalid.");
   requireCondition(lockPackage.version === "1.3.4", "Native file-lock version is invalid.");
+  requireCondition(koffiPackage.version === "3.1.4", "Native Windows FFI version is invalid.");
   const Database = requireFromStorage("better-sqlite3");
   const nativeLock = requireFromStorage("fs-native-extensions");
+  const koffi = requireFromStorage("koffi");
+  requireCondition(
+    koffi.version === "3.1.4" && koffi.sizeof("uint32_t") === 4,
+    "Native Windows FFI probe failed."
+  );
   const database = new Database(":memory:");
   const root = mkdtempSync(join(tmpdir(), "hostdeck-native-ci-probe-"));
   const lockPath = join(root, "native.lock");
@@ -315,7 +328,8 @@ function probeNativeModules() {
   }
   return Object.freeze([
     Object.freeze({ name: "better-sqlite3", version: sqlitePackage.version }),
-    Object.freeze({ name: "fs-native-extensions", version: lockPackage.version })
+    Object.freeze({ name: "fs-native-extensions", version: lockPackage.version }),
+    Object.freeze({ name: "koffi", version: koffiPackage.version })
   ]);
 }
 

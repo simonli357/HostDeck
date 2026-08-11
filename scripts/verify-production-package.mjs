@@ -10,7 +10,7 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } 
 import { pathToFileURL } from "node:url";
 
 export const productionPackageManifestName = "hostdeck-package.json";
-export const productionPackageSourceCount = 623;
+export const productionPackageSourceCount = 625;
 export const productionPackageVerifierName = "verify.mjs";
 export const productionWebManifestName = "hostdeck-web.json";
 export const productionWebManifestSchemaVersion = 1;
@@ -432,6 +432,13 @@ export function inspectProductionPackageTree(root, executableFiles = []) {
 
 function assertProductionPackagePathPolicy(relativePath) {
   const name = basename(relativePath).toLowerCase();
+  const lowerPath = relativePath.toLowerCase();
+  const koffiGeneratedSourceMarker =
+    "/node_modules/koffi/src/koffi/src/";
+  const forbiddenKoffiGeneratedSource =
+    lowerPath.includes(koffiGeneratedSourceMarker) &&
+    !lowerPath.endsWith(`${koffiGeneratedSourceMarker}static.cjs`) &&
+    !lowerPath.endsWith(`${koffiGeneratedSourceMarker}static.js`);
   if (name.endsWith(".map")) {
     throw new TypeError(`Package contains a forbidden source map: ${relativePath}`);
   }
@@ -444,6 +451,25 @@ function assertProductionPackagePathPolicy(relativePath) {
     /\.(?:cer|crt|key|p12|pem|pfx)$/u.test(name)
   ) {
     throw new TypeError(`Package contains a forbidden credential file: ${relativePath}`);
+  }
+  if (
+    /\/node_modules\/koffi\/(?:build|doc|lib|vendor)(?:\/|$)/u.test(
+      relativePath
+    ) ||
+    /\/node_modules\/koffi\/src\/koffi\/cmakelists\.txt$/iu.test(
+      relativePath
+    ) ||
+    /\/node_modules\/koffi\/(?:changelog\.md|cnoke\.cjs|readme\.md)$/iu.test(
+      relativePath
+    ) ||
+    /\/node_modules\/@koromix\/koffi-linux-x64\/(?:musl_x64(?:\/|$)|readme\.md$)/iu.test(
+      relativePath
+    ) ||
+    forbiddenKoffiGeneratedSource
+  ) {
+    throw new TypeError(
+      `Package contains forbidden Koffi build-only material: ${relativePath}`
+    );
   }
 }
 
@@ -1078,10 +1104,10 @@ function validateExecutables(executables, commandPath) {
 }
 
 function validateNativeManifest(nativeModules, executableFiles) {
-  if (!Array.isArray(nativeModules) || nativeModules.length !== 2) {
-    throw new TypeError("Required native-module inventory must contain exactly two entries.");
+  if (!Array.isArray(nativeModules) || nativeModules.length !== 3) {
+    throw new TypeError("Required native-module inventory must contain exactly three entries.");
   }
-  const expected = ["better-sqlite3", "fs-native-extensions"];
+  const expected = ["better-sqlite3", "fs-native-extensions", "koffi"];
   const executableSet = new Set(executableFiles);
   for (const [index, packageName] of expected.entries()) {
     const native = assertRecord(nativeModules[index], "Native-module descriptor");

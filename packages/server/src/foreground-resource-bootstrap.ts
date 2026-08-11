@@ -22,7 +22,7 @@ import {
   acquireHostDeckDaemonLease,
   type HostDeckDaemonLease,
   HostDeckDaemonLeaseError,
-  type HostDeckPathModeRepair,
+  type HostDeckPathSecurityRepair,
   openMigratedDatabase,
   openSecureHostDeckRegularFile,
   prepareHostDeckDaemonLeasePath,
@@ -142,7 +142,7 @@ export interface HostDeckForegroundResources {
   readonly database: ReturnType<typeof openMigratedDatabase>["db"];
   readonly migration: ReturnType<typeof openMigratedDatabase>["result"];
   readonly runtime: HostDeckPreparedCodexRuntime;
-  readonly path_repairs: readonly HostDeckPathModeRepair[];
+  readonly path_repairs: readonly HostDeckPathSecurityRepair[];
   readonly shutdown: HostDeckForegroundResourceShutdownPorts;
   readonly snapshot: () => HostDeckForegroundResourceSnapshot;
   readonly close: () => Promise<void>;
@@ -184,7 +184,7 @@ interface ParsedDependencies {
 
 interface OpenedGuardedDatabase {
   readonly database: ReturnType<typeof openMigratedDatabase>;
-  readonly repair: HostDeckPathModeRepair | null;
+  readonly repair: HostDeckPathSecurityRepair | null;
 }
 
 const startInputKeys = [
@@ -270,7 +270,7 @@ async function startHostDeckProductionResources(
   let lease: HostDeckDaemonLease | null = null;
   let opened: OpenedGuardedDatabase | null = null;
   let runtimeStartAttempted = false;
-  const repairs: HostDeckPathModeRepair[] = [];
+  const repairs: HostDeckPathSecurityRepair[] = [];
 
   try {
     repairs.push(...prepareHostDeckDaemonLeasePath(parsed.paths));
@@ -280,7 +280,7 @@ async function startHostDeckProductionResources(
       now: ports.now,
       ...(ports.pid === undefined ? {} : { pid: ports.pid })
     });
-    if (lease.mode_repair !== null) repairs.push(lease.mode_repair);
+    if (lease.security_repair !== null) repairs.push(lease.security_repair);
     assertNotAborted(parsed.signal, stage);
 
     stage = "paths";
@@ -406,7 +406,7 @@ function createResourceHandle(input: {
   readonly lease: HostDeckDaemonLease;
   readonly opened: OpenedGuardedDatabase;
   readonly parsed: ParsedStartInput;
-  readonly repairs: readonly HostDeckPathModeRepair[];
+  readonly repairs: readonly HostDeckPathSecurityRepair[];
   readonly runtime: HostDeckPreparedCodexRuntime;
   readonly supervisor: HostDeckCodexRuntimeSupervisor;
 }): HostDeckForegroundResources {

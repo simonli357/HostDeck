@@ -16,7 +16,8 @@
   "dependencies": {
     "@hostdeck/contracts": "workspace:*",
     "better-sqlite3": "12.11.1",
-    "fs-native-extensions": "1.3.4"
+    "fs-native-extensions": "1.3.4",
+    "koffi": "3.1.4"
   },
   "devDependencies": {
     "@types/better-sqlite3": "7.6.13"

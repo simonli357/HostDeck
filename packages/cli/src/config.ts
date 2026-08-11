@@ -11,11 +11,15 @@ import {
   isAbsolute,
   join,
   normalize,
-  relative,
+  posix,
   resolve,
-  sep
+  win32
 } from "node:path";
 import { hostDeckLoopbackOriginSchema } from "@hostdeck/contracts";
+import {
+  resolveNativeWindowsHostDeckDefaultPaths,
+  resolveWindowsHostDeckDefaultPaths
+} from "@hostdeck/storage";
 import { configFailure, internalFailure } from "./errors.js";
 
 export interface CliConfigFlags {
@@ -40,6 +44,11 @@ export interface LoadCliConfigOptions {
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly cwd?: string;
   readonly readFile?: (path: string) => string;
+  readonly platform?: NodeJS.Platform;
+  readonly windowsUserRoots?: () => Readonly<{
+    local_app_data: string;
+    roaming_app_data: string;
+  }>;
 }
 
 type RawConfigFile = {
@@ -69,9 +78,21 @@ const maximumPathEntries = 256;
 const exactPackageVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 const maximumPackageManifestBytes = 65_536;
 
+type StoragePathApi = Pick<
+  typeof posix,
+  "isAbsolute" | "join" | "relative" | "resolve" | "sep"
+>;
+type WindowsDefaultPaths = ReturnType<
+  typeof resolveWindowsHostDeckDefaultPaths
+>;
+
 export function loadCliConfig(options: LoadCliConfigOptions = {}): CliConfig {
   const flags = options.flags ?? {};
   const env = options.env ?? process.env;
+  const platform = resolveStoragePlatform(options.platform ?? process.platform);
+  const storagePathApi = platform === "win32" ? win32 : posix;
+  const windowsDefaults =
+    platform === "win32" ? resolveWindowsDefaults(options) : null;
   const configFile = loadConfigFile(flags.configPath, options);
   rejectRetiredHostConfiguration(flags, env);
   const envBaseUrl = readOriginString(
@@ -88,21 +109,30 @@ export function loadCliConfig(options: LoadCliConfigOptions = {}): CliConfig {
     readString(flags.stateDir, "--state-dir") ??
       readString(env.HOSTDECK_STATE_DIR, "HOSTDECK_STATE_DIR") ??
       readString(configFile.state_dir ?? configFile.stateDir, "state_dir") ??
-      defaultStateDir(env),
+      defaultStateDir(env, platform, windowsDefaults),
     options.cwd,
-    "state_dir"
+    "state_dir",
+    storagePathApi
   );
+  if (platform === "win32") {
+    assertWindowsStateInsideOwner(
+      stateDir,
+      requireWindowsDefaults(windowsDefaults).state_dir,
+      storagePathApi
+    );
+  }
   const databasePath = resolveStoragePath(
     readString(flags.databasePath, "--database") ??
       readString(env.HOSTDECK_DATABASE_PATH, "HOSTDECK_DATABASE_PATH") ??
       readString(configFile.database_path ?? configFile.databasePath, "database_path") ??
-      join(stateDir, defaultDatabaseFileName),
+      storagePathApi.join(stateDir, defaultDatabaseFileName),
     options.cwd,
-    "database_path"
+    "database_path",
+    storagePathApi
   );
-  assertDatabaseInsideState(databasePath, stateDir);
-  const configDir = defaultConfigDir(env);
-  const runtimeDir = defaultRuntimeDir(env);
+  assertDatabaseInsideState(databasePath, stateDir, storagePathApi);
+  const configDir = defaultConfigDir(env, platform, windowsDefaults);
+  const runtimeDir = defaultRuntimeDir(env, platform, windowsDefaults);
 
   if (baseUrl !== undefined) {
     const source = sourceOf(
@@ -391,24 +421,44 @@ function resolveConfigPath(configPath: string, cwd = process.cwd()): string {
   return resolve(cwd, configPath);
 }
 
-function resolveStoragePath(path: string, cwd = process.cwd(), field: string): string {
+function resolveStoragePath(
+  path: string,
+  cwd = process.cwd(),
+  field: string,
+  pathApi: StoragePathApi
+): string {
   const trimmed = path.trim();
 
   if (trimmed.length === 0) {
     throw configFailure(`${field} must not be empty.`, field);
   }
 
-  return isAbsolute(trimmed) ? resolve(trimmed) : resolve(cwd, trimmed);
+  return pathApi.isAbsolute(trimmed)
+    ? pathApi.resolve(trimmed)
+    : pathApi.resolve(cwd, trimmed);
 }
 
-function defaultStateDir(env: Readonly<Record<string, string | undefined>>): string {
-  const xdgStateHome = readOptionalAbsolutePath(env.XDG_STATE_HOME, "XDG_STATE_HOME");
+function defaultStateDir(
+  env: Readonly<Record<string, string | undefined>>,
+  platform: "linux" | "win32",
+  windowsDefaults: WindowsDefaultPaths | null
+): string {
+  if (platform === "win32") {
+    return requireWindowsDefaults(windowsDefaults).state_dir;
+  }
+  const xdgStateHome = readOptionalAbsolutePath(
+    env.XDG_STATE_HOME,
+    "XDG_STATE_HOME",
+    posix
+  );
 
   if (xdgStateHome !== undefined) {
     return join(xdgStateHome, "hostdeck");
   }
 
-  const home = readOptionalAbsolutePath(env.HOME, "HOME") ?? readOptionalAbsolutePath(homedir(), "home directory");
+  const home =
+    readOptionalAbsolutePath(env.HOME, "HOME", posix) ??
+    readOptionalAbsolutePath(homedir(), "home directory", posix);
 
   if (home === undefined) {
     throw configFailure("HOSTDECK_STATE_DIR is required when no home directory is available.", "state_dir");
@@ -417,35 +467,130 @@ function defaultStateDir(env: Readonly<Record<string, string | undefined>>): str
   return join(home, ".local", "state", "hostdeck");
 }
 
-function assertDatabaseInsideState(databasePath: string, stateDir: string): void {
-  const candidate = relative(stateDir, databasePath);
-  if (candidate.length === 0 || candidate === ".." || candidate.startsWith(`..${sep}`) || isAbsolute(candidate)) {
+function assertDatabaseInsideState(
+  databasePath: string,
+  stateDir: string,
+  pathApi: StoragePathApi
+): void {
+  const candidate = pathApi.relative(stateDir, databasePath);
+  if (
+    candidate.length === 0 ||
+    candidate === ".." ||
+    candidate.startsWith(`..${pathApi.sep}`) ||
+    pathApi.isAbsolute(candidate)
+  ) {
     throw configFailure("database_path must be inside state_dir.", "database_path");
   }
 }
 
-function defaultConfigDir(env: Readonly<Record<string, string | undefined>>): string {
-  const xdgConfigHome = readOptionalAbsolutePath(env.XDG_CONFIG_HOME, "XDG_CONFIG_HOME");
+function assertWindowsStateInsideOwner(
+  stateDir: string,
+  ownerRoot: string,
+  pathApi: StoragePathApi
+): void {
+  const candidate = pathApi.relative(ownerRoot, stateDir);
+  if (
+    candidate === ".." ||
+    candidate.startsWith(`..${pathApi.sep}`) ||
+    pathApi.isAbsolute(candidate)
+  ) {
+    throw configFailure(
+      "state_dir must remain inside the current-user HostDeck state root.",
+      "state_dir"
+    );
+  }
+}
+
+function defaultConfigDir(
+  env: Readonly<Record<string, string | undefined>>,
+  platform: "linux" | "win32",
+  windowsDefaults: WindowsDefaultPaths | null
+): string {
+  if (platform === "win32") {
+    return requireWindowsDefaults(windowsDefaults).config_dir;
+  }
+  const xdgConfigHome = readOptionalAbsolutePath(
+    env.XDG_CONFIG_HOME,
+    "XDG_CONFIG_HOME",
+    posix
+  );
   if (xdgConfigHome !== undefined) return join(xdgConfigHome, "hostdeck");
-  const home = readOptionalAbsolutePath(env.HOME, "HOME") ?? readOptionalAbsolutePath(homedir(), "home directory");
+  const home =
+    readOptionalAbsolutePath(env.HOME, "HOME", posix) ??
+    readOptionalAbsolutePath(homedir(), "home directory", posix);
   if (home === undefined) throw configFailure("HOME or XDG_CONFIG_HOME is required to resolve HostDeck config.", "config_dir");
   return join(home, ".config", "hostdeck");
 }
 
-function defaultRuntimeDir(env: Readonly<Record<string, string | undefined>>): string | null {
-  const xdgRuntimeDir = readOptionalAbsolutePath(env.XDG_RUNTIME_DIR, "XDG_RUNTIME_DIR");
+function defaultRuntimeDir(
+  env: Readonly<Record<string, string | undefined>>,
+  platform: "linux" | "win32",
+  windowsDefaults: WindowsDefaultPaths | null
+): string | null {
+  if (platform === "win32") {
+    return requireWindowsDefaults(windowsDefaults).runtime_dir;
+  }
+  const xdgRuntimeDir = readOptionalAbsolutePath(
+    env.XDG_RUNTIME_DIR,
+    "XDG_RUNTIME_DIR",
+    posix
+  );
   return xdgRuntimeDir === undefined ? null : join(xdgRuntimeDir, "hostdeck");
 }
 
-function readOptionalAbsolutePath(value: unknown, source: string): string | undefined {
+function readOptionalAbsolutePath(
+  value: unknown,
+  source: string,
+  pathApi: StoragePathApi
+): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
 
   const trimmed = value.trim();
   if (trimmed.length === 0) return undefined;
-  if (!isAbsolute(trimmed)) throw configFailure(`${source} must be an absolute path.`, source);
-  return resolve(trimmed);
+  if (!pathApi.isAbsolute(trimmed)) {
+    throw configFailure(`${source} must be an absolute path.`, source);
+  }
+  return pathApi.resolve(trimmed);
+}
+
+function resolveStoragePlatform(
+  platform: NodeJS.Platform
+): "linux" | "win32" {
+  if (platform === "linux" || platform === "win32") return platform;
+  throw configFailure(
+    "HostDeck storage paths require a supported Linux or Windows host.",
+    "platform"
+  );
+}
+
+function resolveWindowsDefaults(
+  options: LoadCliConfigOptions
+): WindowsDefaultPaths {
+  try {
+    return options.windowsUserRoots === undefined
+      ? resolveNativeWindowsHostDeckDefaultPaths()
+      : resolveWindowsHostDeckDefaultPaths(options.windowsUserRoots());
+  } catch (error) {
+    throw configFailure(
+      "Windows current-user AppData folders are unavailable or unsafe.",
+      "platform_paths",
+      error
+    );
+  }
+}
+
+function requireWindowsDefaults(
+  defaults: WindowsDefaultPaths | null
+): WindowsDefaultPaths {
+  if (defaults === null) {
+    throw configFailure(
+      "Windows current-user AppData folders were not resolved.",
+      "platform_paths"
+    );
+  }
+  return defaults;
 }
 
 function sourceOf(...candidates: readonly [string, unknown][]): string {

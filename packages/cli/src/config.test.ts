@@ -200,6 +200,86 @@ describe("CLI config loading", () => {
       })
     );
   });
+
+  it("uses Windows known folders instead of inherited AppData environment values", () => {
+    const config = loadCliConfig({
+      platform: "win32",
+      env: {
+        APPDATA: "D:\\untrusted\\roaming",
+        LOCALAPPDATA: "D:\\untrusted\\local",
+        XDG_CONFIG_HOME: "/untrusted/config",
+        XDG_RUNTIME_DIR: "/untrusted/runtime",
+        XDG_STATE_HOME: "/untrusted/state"
+      },
+      windowsUserRoots: () => ({
+        local_app_data: "C:\\Users\\selected\\AppData\\Local",
+        roaming_app_data: "C:\\Users\\selected\\AppData\\Roaming"
+      })
+    });
+    expect(config.configDir).toBe(
+      "C:\\Users\\selected\\AppData\\Roaming\\HostDeck"
+    );
+    expect(config.stateDir).toBe(
+      "C:\\Users\\selected\\AppData\\Local\\HostDeck\\State"
+    );
+    expect(config.runtimeDir).toBe(
+      "C:\\Users\\selected\\AppData\\Local\\HostDeck\\Runtime"
+    );
+    expect(config.databasePath).toBe(
+      "C:\\Users\\selected\\AppData\\Local\\HostDeck\\State\\hostdeck.sqlite"
+    );
+  });
+
+  it("accepts only Windows state overrides inside the current-user HostDeck root", () => {
+    const options = {
+      cwd: "C:\\Users\\selected\\AppData\\Local\\HostDeck\\State",
+      env: {},
+      platform: "win32" as const,
+      windowsUserRoots: () => ({
+        local_app_data: "C:\\Users\\selected\\AppData\\Local",
+        roaming_app_data: "C:\\Users\\selected\\AppData\\Roaming"
+      })
+    };
+    const config = loadCliConfig({
+      ...options,
+      flags: {
+        stateDir: "Selected",
+        databasePath: "Selected\\selected.sqlite"
+      }
+    });
+    expect(config.stateDir).toBe(
+      "C:\\Users\\selected\\AppData\\Local\\HostDeck\\State\\Selected"
+    );
+    expect(config.databasePath).toBe(
+      "C:\\Users\\selected\\AppData\\Local\\HostDeck\\State\\Selected\\selected.sqlite"
+    );
+
+    expectConfigFailure(() =>
+      loadCliConfig({
+        ...options,
+        flags: {
+          stateDir: "D:\\external\\state",
+          databasePath: "D:\\external\\state\\hostdeck.sqlite"
+        }
+      })
+    );
+  });
+
+  it("fails closed for unsafe Windows known folders and unsupported hosts", () => {
+    expectConfigFailure(() =>
+      loadCliConfig({
+        env: {},
+        platform: "win32",
+        windowsUserRoots: () => ({
+          local_app_data: "\\\\server\\share\\Local",
+          roaming_app_data: "\\\\server\\share\\Roaming"
+        })
+      })
+    );
+    expectConfigFailure(() =>
+      loadCliConfig({ env: {}, platform: "darwin" })
+    );
+  });
 });
 
 function expectConfigFailure(action: () => unknown): void {

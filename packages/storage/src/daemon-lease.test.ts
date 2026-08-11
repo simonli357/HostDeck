@@ -25,7 +25,7 @@ describe("HostDeck daemon lease", () => {
         lease_path: leasePath,
         acquired_at: "2026-07-09T22:00:00.000Z",
         pid: 12_345,
-        mode_repair: null,
+        security_repair: null,
         replaced_stale_metadata: false,
         released: false
       });
@@ -54,7 +54,10 @@ describe("HostDeck daemon lease", () => {
     });
     try {
       expect(lease.replaced_stale_metadata).toBe(true);
-      expect(lease.mode_repair).toMatchObject({ from_mode: 0o666, to_mode: 0o600 });
+      expect(lease.security_repair).toMatchObject({
+        from_mode: 0o666,
+        to_mode: 0o600
+      });
       expect(lstatSync(leasePath).mode & 0o7777).toBe(0o600);
       expect(JSON.parse(readFileSync(leasePath, "utf8"))).toEqual({
         pid: 54_321,

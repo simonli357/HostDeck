@@ -63,6 +63,7 @@ const expectedExternalModules = [
   "cookie",
   "fastify",
   "fs-native-extensions",
+  "koffi",
   "qrcode",
   "ws",
   "zod"
@@ -882,6 +883,46 @@ function pruneNativeBuildIntermediates(root) {
   rmSync(prebuildRoot, { force: true, recursive: true });
   mkdirSync(join(prebuildRoot, "linux-x64"), { mode: 0o755, recursive: true });
   writeFileSync(canonicalNative, nativeContent, { mode: 0o755 });
+
+  const koffiRoot = realpathSync(join(storageDependencyRoot, "koffi"));
+  if (!isInside(root, koffiRoot)) {
+    throw new Error("Koffi package root escapes the staging tree.");
+  }
+  const koffiStaticModules = new Map(
+    ["static.cjs", "static.js"].map((name) => [
+      name,
+      readFileSync(join(koffiRoot, "src", "koffi", "src", name))
+    ])
+  );
+  for (const relativePath of [
+    "CHANGELOG.md",
+    "README.md",
+    "build",
+    "cnoke.cjs",
+    "doc",
+    "lib",
+    "src/koffi/CMakeLists.txt",
+    "src/koffi/src",
+    "vendor"
+  ]) {
+    rmSync(join(koffiRoot, relativePath), { force: true, recursive: true });
+  }
+  const koffiStaticRoot = join(koffiRoot, "src", "koffi", "src");
+  mkdirSync(koffiStaticRoot, { mode: 0o755, recursive: true });
+  for (const [name, content] of koffiStaticModules) {
+    writeFileSync(join(koffiStaticRoot, name), content, { mode: 0o644 });
+  }
+  const koffiBinaryRoot = realpathSync(
+    join(dirname(koffiRoot), "@koromix", "koffi-linux-x64")
+  );
+  if (!isInside(root, koffiBinaryRoot)) {
+    throw new Error("Koffi native package root escapes the staging tree.");
+  }
+  rmSync(join(koffiBinaryRoot, "README.md"), { force: true });
+  rmSync(join(koffiBinaryRoot, "musl_x64"), {
+    force: true,
+    recursive: true
+  });
 }
 
 function installCompiledPackages(input) {
@@ -1046,7 +1087,8 @@ function collectRequiredNativeModules(root, executableFiles) {
   const candidates = listRegularFiles(root).filter((path) => path.endsWith(".node"));
   const requirements = [
     ["better-sqlite3", "/better-sqlite3/build/Release/better_sqlite3.node"],
-    ["fs-native-extensions", "/fs-native-extensions/prebuilds/linux-x64/fs-native-extensions.node"]
+    ["fs-native-extensions", "/fs-native-extensions/prebuilds/linux-x64/fs-native-extensions.node"],
+    ["koffi", "/@koromix/koffi-linux-x64/linux_x64/koffi.node"]
   ];
   return requirements.map(([packageName, suffix]) => {
     const matches = candidates.filter((path) => portable(path).endsWith(suffix));

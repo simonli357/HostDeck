@@ -4,6 +4,8 @@ import type {
 } from "@hostdeck/contracts";
 
 export type HostDeckLocalPathErrorCode =
+  | "alternate_stream_rejected"
+  | "case_collision"
   | "hard_link_rejected"
   | "invalid_path"
   | "path_not_canonical"
@@ -11,7 +13,9 @@ export type HostDeckLocalPathErrorCode =
   | "path_type_mismatch"
   | "permission_update_failed"
   | "runtime_parent_insecure"
+  | "reserved_name_rejected"
   | "symlink_rejected"
+  | "unsupported_filesystem"
   | "unsupported_platform"
   | "wrong_owner";
 
@@ -34,6 +38,17 @@ export interface HostDeckPathModeRepair {
   readonly to_mode: number;
 }
 
+export interface HostDeckPathAclRepair {
+  readonly path: string;
+  readonly kind: "directory" | "file";
+  readonly from_acl: "not_current_user_only";
+  readonly to_acl: "current_user_only";
+}
+
+export type HostDeckPathSecurityRepair =
+  | HostDeckPathModeRepair
+  | HostDeckPathAclRepair;
+
 export interface PrepareHostDeckLocalPathsInput {
   readonly config_dir: string;
   readonly state_dir: string;
@@ -54,7 +69,7 @@ export interface ResolvedHostDeckLocalPaths extends ResolvedHostDeckPathRoots {
 }
 
 export interface PreparedHostDeckLocalPaths extends ResolvedHostDeckLocalPaths {
-  readonly repairs: readonly HostDeckPathModeRepair[];
+  readonly repairs: readonly HostDeckPathSecurityRepair[];
 }
 
 export interface HostDeckStatePathsInput {
@@ -63,7 +78,7 @@ export interface HostDeckStatePathsInput {
 }
 
 export interface PreparedHostDeckStatePaths extends HostDeckStatePathsInput {
-  readonly repairs: readonly HostDeckPathModeRepair[];
+  readonly repairs: readonly HostDeckPathSecurityRepair[];
 }
 
 export type ExistingHostDeckStatePaths = HostDeckStatePathsInput;
@@ -82,7 +97,7 @@ export interface OpenSecureHostDeckRegularFileOptions extends SecureHostDeckRegu
 export interface OpenedSecureHostDeckRegularFile {
   readonly descriptor: number;
   readonly path: string;
-  readonly repair: HostDeckPathModeRepair | null;
+  readonly repair: HostDeckPathSecurityRepair | null;
   readonly verifyPath: () => void;
 }
 
@@ -114,7 +129,7 @@ export interface HostDeckLocalPathAdapter {
   ) => PreparedHostDeckLocalPaths;
   readonly prepareDaemonLeasePath: (
     paths: ResolvedHostDeckLocalPaths
-  ) => readonly HostDeckPathModeRepair[];
+  ) => readonly HostDeckPathSecurityRepair[];
   readonly prepareLocalPathsAfterLease: (
     paths: ResolvedHostDeckLocalPaths
   ) => PreparedHostDeckLocalPaths;
@@ -130,7 +145,7 @@ export interface HostDeckLocalPathAdapter {
   readonly secureRegularFile: (
     path: string,
     options: SecureHostDeckRegularFileOptions
-  ) => HostDeckPathModeRepair | null;
+  ) => HostDeckPathSecurityRepair | null;
   readonly openSecureRegularFile: (
     path: string,
     options: OpenSecureHostDeckRegularFileOptions
@@ -138,7 +153,7 @@ export interface HostDeckLocalPathAdapter {
   readonly secureSocket: (
     path: string,
     options: SecureHostDeckSocketOptions
-  ) => HostDeckPathModeRepair | null;
+  ) => HostDeckPathSecurityRepair | null;
 }
 
 export function defineHostDeckLocalPathAdapter(

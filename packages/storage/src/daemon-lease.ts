@@ -6,7 +6,7 @@ import {
   nativeHostDeckFileLockPort
 } from "./platform-file-lock.js";
 import {
-  type HostDeckPathModeRepair,
+  type HostDeckPathSecurityRepair,
   openSecureHostDeckRegularFile
 } from "./secure-local-paths.js";
 
@@ -35,7 +35,7 @@ export interface HostDeckDaemonLease {
   readonly lease_path: string;
   readonly acquired_at: string;
   readonly pid: number;
-  readonly mode_repair: HostDeckPathModeRepair | null;
+  readonly security_repair: HostDeckPathSecurityRepair | null;
   readonly replaced_stale_metadata: boolean;
   readonly released: boolean;
   readonly release: () => void;
@@ -105,7 +105,7 @@ export function acquireHostDeckDaemonLease(input: AcquireHostDeckDaemonLeaseInpu
     lease_path: opened.path,
     acquired_at: acquiredAt,
     pid,
-    mode_repair: opened.repair,
+      security_repair: opened.repair,
     replaced_stale_metadata: replacedStaleMetadata,
     get released() {
       return released;

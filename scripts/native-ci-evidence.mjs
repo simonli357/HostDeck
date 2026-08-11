@@ -23,6 +23,7 @@ export const nativeCiTargetPolicies = Object.freeze({
       "lint",
       "contract",
       "native_lock",
+      "windows_paths",
       "integration",
       "web_build",
       "native_modules",
@@ -41,6 +42,7 @@ export const nativeCiTargetPolicies = Object.freeze({
       "lint",
       "contract",
       "native_lock",
+      "windows_paths",
       "web_build",
       "native_modules"
     ]),
@@ -79,10 +81,11 @@ export function createNativeCiEvidence(input) {
       });
     }
   );
-  const dependencies = exactArray(value.native_dependencies, 2, "native_dependencies");
+  const dependencies = exactArray(value.native_dependencies, 3, "native_dependencies");
   const expectedDependencies = [
     ["better-sqlite3", "12.11.1"],
-    ["fs-native-extensions", "1.3.4"]
+    ["fs-native-extensions", "1.3.4"],
+    ["koffi", "3.1.4"]
   ];
   const parsedDependencies = dependencies.map((candidate, index) => {
     const value = exactRecord(candidate, ["name", "version"], `native_dependencies[${index}]`);
