@@ -207,6 +207,9 @@ function runVitestCheck(checks, id, args, reportRoot) {
     if (!commandResult.passed || !reportPassed) {
       const summary = vitestFailureSummary(report);
       if (summary !== "") process.stderr.write(`${summary}\n`);
+      if (!commandResult.passed && commandResult.diagnostic !== "") {
+        process.stderr.write(`${commandResult.diagnostic}\n`);
+      }
       throw new Error(`Native CI ${id} report contains a failure or unsupported skip.`);
     }
   });
@@ -233,14 +236,14 @@ function runCommand(command, args, timeout, label, options = {}) {
   });
   const passed =
     result.error === undefined && result.status === 0 && result.signal === null;
+  const diagnostic = passed
+    ? ""
+    : sanitizeDiagnostic(`${result.stdout ?? ""}\n${result.stderr ?? ""}`);
   if (!passed && options.deferFailure !== true) {
-    const diagnostic = sanitizeDiagnostic(
-      `${result.stdout ?? ""}\n${result.stderr ?? ""}`
-    );
     if (diagnostic !== "") process.stderr.write(`${diagnostic}\n`);
     throw new Error(`Native CI ${label} command failed.`);
   }
-  return Object.freeze({ passed });
+  return Object.freeze({ diagnostic, passed });
 }
 
 function vitestFailureSummary(report) {
