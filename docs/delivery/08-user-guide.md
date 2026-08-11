@@ -7,6 +7,7 @@ Android application.
 
 Exact copy-paste commands live in
 `docs/delivery/11-command-reference.md#installed-user-workflow`.
+For the shortest phone setup, use `docs/delivery/12-quick-connect.md`.
 
 ## Supported Setup
 
