@@ -1091,7 +1091,9 @@ function mapNativeError(
                 : "invalid_path";
     return pathError(
       code,
-      `${label} failed Windows-native security validation.`,
+      `${label} failed Windows-native security validation at ${error.operation}${
+        error.native_error === null ? "" : ` (native error ${error.native_error})`
+      }.`,
       path,
       error
     );
