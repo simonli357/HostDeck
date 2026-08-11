@@ -203,6 +203,14 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
         throw error;
       }
 
+      let setupChild: ChildProcess | null = null;
+      let setupOwner: ReturnType<
+        typeof createCodexWindowsRuntimeConnection
+      > | null = null;
+      let setupDatabase: ReturnType<typeof openMigratedDatabase> | null = null;
+      let setupConnection: CodexRuntimeReconnectController | null = null;
+      let setupComplete = false;
+      try {
       const child =
         hostTarget === "linux-x64"
           ? spawn(
@@ -225,6 +233,7 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
               }
             )
           : null;
+      setupChild = child;
       let appServerStderr = "";
       child?.stderr?.on("data", (chunk: Buffer) => {
         appServerStderr = boundedOutput(appServerStderr, chunk);
@@ -272,6 +281,7 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
               supervisor: windowsSupervisor,
               resource_budget: defaultResourceBudget
             });
+      setupOwner = windowsOwner;
 
       const proof: ProofEntry[] = [];
       const requestRecords: Array<{ readonly method: string; readonly params: unknown }> = [];
@@ -299,6 +309,7 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
       const openDatabase = openMigratedDatabase(databasePath, {
         now: () => new Date()
       });
+      setupDatabase = openDatabase;
       const repository = createSelectedStateRepository(openDatabase.db);
       const projection = createProductionProjectionAppendPort({
         repository,
@@ -432,6 +443,8 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
         on_protocol_issue: (issue) => protocolIssues.push(issue),
         on_background_error: (error) => backgroundErrors.push(error)
       });
+      setupConnection = connection;
+      setupComplete = true;
 
       let smokeError: Error | null = null;
       try {
@@ -1105,6 +1118,23 @@ describe.skipIf(!requireSmoke)("exact Codex assembled structured vertical", () =
         }
       }
       process.stdout.write(`[structured-vertical-summary] ${JSON.stringify(summary)}\n`);
+      } catch (error) {
+        if (setupComplete) throw error;
+        const cleanupErrors = await cleanupPartialStructuredVerticalSetup({
+          connection: setupConnection,
+          owner: setupOwner,
+          child: setupChild,
+          database: setupDatabase,
+          layout
+        });
+        if (cleanupErrors.length > 0) {
+          throw new AggregateError(
+            [error, ...cleanupErrors],
+            "Codex structured vertical setup and cleanup failed."
+          );
+        }
+        throw error;
+      }
     },
     overallTimeoutMs
   );
@@ -1796,6 +1826,36 @@ async function stopChild(child: ChildProcess): Promise<void> {
   if (await settlesWithin(exited, 2_000)) return;
   child.kill("SIGKILL");
   if (!(await settlesWithin(exited, 1_000))) throw new Error("Codex vertical-smoke app-server did not exit after SIGKILL.");
+}
+
+async function cleanupPartialStructuredVerticalSetup(input: {
+  readonly connection: CodexRuntimeReconnectController | null;
+  readonly owner: ReturnType<typeof createCodexWindowsRuntimeConnection> | null;
+  readonly child: ChildProcess | null;
+  readonly database: ReturnType<typeof openMigratedDatabase> | null;
+  readonly layout: StructuredVerticalLayout;
+}): Promise<unknown[]> {
+  const failures: unknown[] = [];
+  if (input.connection !== null) {
+    await collectCleanupError(input.connection.close(), failures);
+  }
+  if (input.owner !== null) {
+    const deadline = createOperationDeadline({ timeoutMs: 10_000 });
+    await collectCleanupError(input.owner.close(deadline), failures);
+    deadline.dispose();
+  }
+  if (input.child !== null) {
+    await collectCleanupError(stopChild(input.child), failures);
+  }
+  if (input.database !== null) {
+    try {
+      input.database.db.close();
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  await collectCleanupError(input.layout.cleanup(), failures);
+  return failures;
 }
 
 async function stopWindowsProcessTree(child: ChildProcess): Promise<void> {
