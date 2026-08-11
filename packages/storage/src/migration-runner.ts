@@ -142,7 +142,9 @@ function requireNonCreatingReadOnlyOpen(path: string): void {
   try {
     descriptor = openSync(
       path,
-      fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK
+      fsConstants.O_RDONLY |
+        fsConstants.O_NONBLOCK |
+        (process.platform === "win32" ? 0 : fsConstants.O_NOFOLLOW)
     );
   } catch (error) {
     throw new HostDeckMigrationError(
@@ -269,7 +271,7 @@ export function runMigrations(db: Database.Database, options: RunMigrationsOptio
   }
 }
 
-function inspectCurrentMigrations(
+export function inspectCurrentMigrations(
   db: Database.Database,
   migrations: readonly StorageMigration[]
 ): MigrationResult {

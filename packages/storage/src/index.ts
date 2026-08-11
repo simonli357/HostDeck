@@ -29,6 +29,15 @@ export {
   type HostDeckDaemonLeaseErrorCode
 } from "./daemon-lease.js";
 export {
+  type CreateHostDeckDatabaseBackupInput,
+  createHostDeckDatabaseBackup,
+  HostDeckDatabaseRecoveryError,
+  type HostDeckDatabaseRecoveryErrorCode,
+  type HostDeckDatabaseRecoveryResult,
+  type RestoreHostDeckDatabaseBackupInput,
+  restoreHostDeckDatabaseBackup
+} from "./database-recovery.js";
+export {
   createLegacySessionRepository,
   HostDeckLegacySessionRepositoryError,
   type LegacySessionRepository,
@@ -38,6 +47,7 @@ export {
 } from "./legacy-session-repository.js";
 export {
   HostDeckMigrationError,
+  inspectCurrentMigrations,
   type MigrationResult,
   type OpenMigratedDatabaseOptions,
   openMigratedDatabase,

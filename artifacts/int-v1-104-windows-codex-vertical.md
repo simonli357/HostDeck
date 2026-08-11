@@ -1,6 +1,6 @@
 # INT-V1-104 Windows Codex Vertical
 
-Status: in progress
+Status: blocked on an authenticated native Windows Codex host
 
 ## Frozen Acceptance
 

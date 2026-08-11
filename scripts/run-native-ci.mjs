@@ -105,6 +105,17 @@ async function main() {
     );
     runVitestCheck(
       checks,
+      "native_storage",
+      [
+        "packages/storage/src/migration-runner.test.ts",
+        "packages/storage/src/cross-platform-cwd-migration.test.ts",
+        "packages/storage/src/database-recovery.test.ts",
+        "packages/storage/src/native-storage-parity.native.test.ts"
+      ],
+      reportRoot
+    );
+    runVitestCheck(
+      checks,
       "windows_paths",
       ["packages/storage/src/windows-secure-local-path-adapter.native.test.ts"],
       reportRoot

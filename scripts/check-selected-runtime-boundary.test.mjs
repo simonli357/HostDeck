@@ -69,6 +69,12 @@ test("keeps direct host APIs inside exact reviewed platform adapter and edge own
     ),
     true
   );
+  assert.equal(
+    directHostApiOwnerPaths.includes(
+      "packages/storage/src/database-recovery.ts"
+    ),
+    true
+  );
   assert.equal(new Set(directHostApiOwnerPaths).size, directHostApiOwnerPaths.length);
 });
 

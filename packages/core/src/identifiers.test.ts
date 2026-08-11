@@ -43,8 +43,24 @@ describe("selected identifiers", () => {
 
   it("validates absolute working directories without filesystem access", () => {
     expect(parseAbsoluteCwd("/home/simonli/project")).toMatchObject({ ok: true });
-    expect(parseAbsoluteCwd("relative/path")).toMatchObject({ ok: false, code: "not_absolute" });
+    expect(parseAbsoluteCwd("C:\\Users\\selected\\project")).toMatchObject({ ok: true });
+    expect(parseAbsoluteCwd("d:/work/project")).toMatchObject({ ok: true });
+    for (const cwd of [
+      "relative/path",
+      "C:drive-relative",
+      "\\root-relative",
+      "\\\\server\\share\\project"
+    ]) {
+      expect(parseAbsoluteCwd(cwd)).toMatchObject({
+        ok: false,
+        code: "not_absolute"
+      });
+    }
     expect(parseAbsoluteCwd("/tmp/\0bad")).toMatchObject({ ok: false, code: "invalid_format" });
+    expect(parseAbsoluteCwd("C:\\project\0bad")).toMatchObject({
+      ok: false,
+      code: "invalid_format"
+    });
   });
 
   it("validates timestamps and output cursors", () => {

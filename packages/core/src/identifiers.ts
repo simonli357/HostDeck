@@ -27,6 +27,7 @@ export type ValidationResult<T> =
 const sessionIdPattern = /^sess_[a-z0-9][a-z0-9_-]{5,63}$/u;
 const sessionNamePattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/u;
 const isoTimestampPattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{3})(Z|[+-]\d{2}:\d{2})$/u;
+const windowsDriveAbsolutePathPattern = /^[A-Za-z]:[\\/]/u;
 
 export function parseSessionId(value: string): ValidationResult<SessionId> {
   if (value.length === 0) return invalid("empty", "Session id is required.");
@@ -64,8 +65,13 @@ export function hasSessionNameCollision(existingNames: readonly SessionName[], c
 
 export function parseAbsoluteCwd(value: string): ValidationResult<AbsoluteCwd> {
   if (value.length === 0) return invalid("empty", "Working directory is required.");
-  if (!value.startsWith("/")) return invalid("not_absolute", "Working directory must be an absolute path.");
   if (value.includes("\0")) return invalid("invalid_format", "Working directory must not contain NUL bytes.");
+  if (!value.startsWith("/") && !windowsDriveAbsolutePathPattern.test(value)) {
+    return invalid(
+      "not_absolute",
+      "Working directory must be a local absolute POSIX or Windows drive path."
+    );
+  }
   return valid(value as AbsoluteCwd);
 }
 

@@ -119,9 +119,10 @@ describe("remote state and audit aggregate hardening", () => {
             "202607130015_remote_admission_proof",
             "202607150016_session_start_audit_catalog",
             "202607160017_selected_session_settings_projection",
-            "202607200018_selected_network_retirement"
+            "202607200018_selected_network_retirement",
+            "202608110019_cross_platform_cwd"
           ],
-          currentVersion: "202607200018_selected_network_retirement"
+          currentVersion: "202608110019_cross_platform_cwd"
         });
         expect(rawAuditRows(current.db)).toEqual(historicalBefore);
         expect(
@@ -369,7 +370,7 @@ describe("remote state and audit aggregate hardening", () => {
       try {
         expect(restarted.result).toEqual({
           applied: [],
-          currentVersion: "202607200018_selected_network_retirement"
+          currentVersion: "202608110019_cross_platform_cwd"
         });
         const state = createRemoteIngressStateRepository(restarted.db);
         const audit = createSelectedAuditRepository(restarted.db);
@@ -563,7 +564,7 @@ describe("remote state and audit aggregate hardening", () => {
     try {
       expect(fresh.result.applied).toHaveLength(defaultMigrations.length);
       expect(fresh.result.currentVersion).toBe(
-        "202607200018_selected_network_retirement"
+        "202608110019_cross_platform_cwd"
       );
       inspectSchemaAndHealth(fresh.db);
     } finally {

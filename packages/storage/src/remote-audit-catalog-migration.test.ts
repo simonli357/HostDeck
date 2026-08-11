@@ -50,7 +50,8 @@ describe("remote audit catalog migration", () => {
         "202607130015_remote_admission_proof",
         "202607150016_session_start_audit_catalog",
         "202607160017_selected_session_settings_projection",
-        "202607200018_selected_network_retirement"
+        "202607200018_selected_network_retirement",
+        "202608110019_cross_platform_cwd"
       ]);
       expect(rawRows(open.db)).toEqual(before);
       expect(createSelectedAuditRepository(open.db).require(versioned.operation_id).records).toHaveLength(2);

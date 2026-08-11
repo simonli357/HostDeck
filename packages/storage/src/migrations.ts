@@ -1290,6 +1290,161 @@ export const hostDeckSelectedNetworkRetirementMigration: StorageMigration = {
   `
 };
 
+export const hostDeckCrossPlatformCwdMigration: StorageMigration = {
+  version: "202608110019_cross_platform_cwd",
+  sql: `
+    CREATE TABLE selected_sessions_next (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      codex_thread_id TEXT NOT NULL UNIQUE,
+      cwd TEXT NOT NULL CHECK (
+        instr(cwd, char(0)) = 0 AND (
+          substr(cwd, 1, 1) = '/' OR (
+            length(cwd) >= 3 AND
+            substr(cwd, 1, 1) GLOB '[A-Za-z]' AND
+            substr(cwd, 2, 1) = ':' AND
+            (substr(cwd, 3, 1) = '/' OR unicode(substr(cwd, 3, 1)) = 92)
+          )
+        )
+      ),
+      runtime_source TEXT NOT NULL CHECK (runtime_source = 'codex_app_server'),
+      runtime_version TEXT NOT NULL,
+      disposition TEXT NOT NULL CHECK (disposition IN ('selected', 'recovery_required')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      archived_at TEXT
+    );
+
+    CREATE TABLE selected_session_projections_next (
+      session_id TEXT PRIMARY KEY REFERENCES selected_sessions_next(id) ON DELETE CASCADE,
+      session_state TEXT NOT NULL CHECK (session_state IN ('starting', 'active', 'archived', 'stale', 'incompatible', 'unknown')),
+      turn_state TEXT NOT NULL CHECK (turn_state IN ('idle', 'in_progress', 'waiting_for_input', 'waiting_for_approval', 'completed', 'interrupted', 'failed', 'unknown')),
+      attention TEXT NOT NULL CHECK (attention IN ('none', 'watch', 'needs_input', 'needs_approval', 'failed', 'stuck', 'unknown')),
+      freshness TEXT NOT NULL CHECK (freshness IN ('current', 'stale', 'disconnected', 'incompatible')),
+      freshness_reason TEXT,
+      updated_at TEXT NOT NULL,
+      last_activity_at TEXT,
+      branch TEXT,
+      model TEXT,
+      goal_json TEXT CHECK (goal_json IS NULL OR json_valid(goal_json)),
+      recent_summary TEXT NOT NULL,
+      last_event_cursor INTEGER CHECK (last_event_cursor IS NULL OR last_event_cursor BETWEEN 0 AND 9007199254740991),
+      retained_event_count INTEGER NOT NULL CHECK (retained_event_count BETWEEN 0 AND 1000000),
+      retained_event_bytes INTEGER NOT NULL CHECK (retained_event_bytes BETWEEN 0 AND 1000000000),
+      earliest_retained_cursor INTEGER CHECK (earliest_retained_cursor IS NULL OR earliest_retained_cursor BETWEEN 0 AND 9007199254740991),
+      retention_boundary_cursor INTEGER CHECK (retention_boundary_cursor IS NULL OR retention_boundary_cursor BETWEEN 0 AND 9007199254740991),
+      settings_json TEXT CHECK (
+        settings_json IS NULL OR
+        (json_valid(settings_json) AND length(CAST(settings_json AS BLOB)) BETWEEN 2 AND 1024)
+      ),
+      CHECK ((freshness = 'current' AND freshness_reason IS NULL) OR (freshness <> 'current' AND freshness_reason IS NOT NULL)),
+      CHECK ((retained_event_count = 0 AND earliest_retained_cursor IS NULL) OR (retained_event_count > 0 AND earliest_retained_cursor IS NOT NULL)),
+      CHECK (retention_boundary_cursor IS NULL OR earliest_retained_cursor IS NULL OR retention_boundary_cursor < earliest_retained_cursor)
+    );
+
+    CREATE TABLE selected_projected_events_next (
+      session_id TEXT NOT NULL REFERENCES selected_sessions_next(id) ON DELETE CASCADE,
+      cursor INTEGER NOT NULL CHECK (cursor BETWEEN 0 AND 9007199254740991),
+      normalized_type TEXT NOT NULL CHECK (normalized_type IN ('message', 'turn', 'activity', 'approval', 'control', 'runtime', 'replay_boundary', 'unknown_optional')),
+      codex_event_id TEXT,
+      codex_event_type TEXT,
+      captured_at TEXT NOT NULL,
+      content_state TEXT NOT NULL CHECK (content_state IN ('complete', 'redacted', 'truncated', 'redacted_and_truncated')),
+      byte_length INTEGER NOT NULL CHECK (byte_length BETWEEN 1 AND 1000000),
+      event_json TEXT NOT NULL CHECK (json_valid(event_json)),
+      PRIMARY KEY (session_id, cursor),
+      UNIQUE (session_id, codex_event_id)
+    );
+
+    CREATE TABLE selected_session_start_recovery_next (
+      operation_id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL UNIQUE,
+      cwd TEXT NOT NULL CHECK (
+        instr(cwd, char(0)) = 0 AND (
+          substr(cwd, 1, 1) = '/' OR (
+            length(cwd) >= 3 AND
+            substr(cwd, 1, 1) GLOB '[A-Za-z]' AND
+            substr(cwd, 2, 1) = ':' AND
+            (substr(cwd, 3, 1) = '/' OR unicode(substr(cwd, 3, 1)) = 92)
+          )
+        )
+      ),
+      codex_thread_id TEXT UNIQUE,
+      state TEXT NOT NULL CHECK (state IN ('reserved', 'thread_created', 'persisted', 'failed')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      error_code TEXT,
+      error_message TEXT
+    );
+
+    CREATE TABLE legacy_session_dispositions_next (
+      id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      cwd TEXT NOT NULL CHECK (
+        instr(cwd, char(0)) = 0 AND (
+          substr(cwd, 1, 1) = '/' OR (
+            length(cwd) >= 3 AND
+            substr(cwd, 1, 1) GLOB '[A-Za-z]' AND
+            substr(cwd, 2, 1) = ':' AND
+            (substr(cwd, 3, 1) = '/' OR unicode(substr(cwd, 3, 1)) = 92)
+          )
+        )
+      ),
+      disposition TEXT NOT NULL CHECK (disposition = 'legacy_unmigrated'),
+      reason TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    INSERT INTO selected_sessions_next SELECT * FROM selected_sessions;
+    INSERT INTO selected_session_projections_next SELECT * FROM selected_session_projections;
+    INSERT INTO selected_projected_events_next SELECT * FROM selected_projected_events;
+    INSERT INTO selected_session_start_recovery_next SELECT * FROM selected_session_start_recovery;
+    INSERT INTO legacy_session_dispositions_next SELECT * FROM legacy_session_dispositions;
+
+    DROP TRIGGER legacy_session_disposition_after_insert;
+    DROP TRIGGER legacy_session_disposition_after_update;
+    DROP TABLE selected_projected_events;
+    DROP TABLE selected_session_projections;
+    DROP TABLE selected_sessions;
+    DROP TABLE selected_session_start_recovery;
+    DROP TABLE legacy_session_dispositions;
+
+    ALTER TABLE selected_sessions_next RENAME TO selected_sessions;
+    ALTER TABLE selected_session_projections_next RENAME TO selected_session_projections;
+    ALTER TABLE selected_projected_events_next RENAME TO selected_projected_events;
+    ALTER TABLE selected_session_start_recovery_next RENAME TO selected_session_start_recovery;
+    ALTER TABLE legacy_session_dispositions_next RENAME TO legacy_session_dispositions;
+
+    CREATE INDEX selected_sessions_created_idx ON selected_sessions(created_at, id);
+    CREATE INDEX selected_projected_events_session_cursor_idx ON selected_projected_events(session_id, cursor);
+
+    CREATE TRIGGER legacy_session_disposition_after_insert
+    AFTER INSERT ON sessions
+    BEGIN
+      INSERT INTO legacy_session_dispositions (id, name, cwd, disposition, reason, updated_at)
+      VALUES (
+        NEW.id,
+        NEW.name,
+        NEW.cwd,
+        'legacy_unmigrated',
+        'Pre-app-server tmux record has no proven Codex thread id.',
+        NEW.updated_at
+      );
+    END;
+
+    CREATE TRIGGER legacy_session_disposition_after_update
+    AFTER UPDATE OF name, cwd, updated_at ON sessions
+    BEGIN
+      UPDATE legacy_session_dispositions SET
+        name = NEW.name,
+        cwd = NEW.cwd,
+        updated_at = NEW.updated_at
+      WHERE id = NEW.id;
+    END;
+  `
+};
+
 export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckBaseSchemaMigration,
   hostDeckSessionMetadataFailedStatusMigration,
@@ -1308,5 +1463,6 @@ export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckRemoteAdmissionProofMigration,
   hostDeckSessionStartAuditCatalogMigration,
   hostDeckSelectedSessionSettingsProjectionMigration,
-  hostDeckSelectedNetworkRetirementMigration
+  hostDeckSelectedNetworkRetirementMigration,
+  hostDeckCrossPlatformCwdMigration
 ] as const;

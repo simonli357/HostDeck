@@ -306,6 +306,7 @@ export const directHostApiOwnerPaths = Object.freeze([
   "packages/server/src/tailscale-command-adapter.ts",
   "packages/server/src/tailscale-serve-proxy-trust.ts",
   "packages/storage/src/branch-metadata.ts",
+  "packages/storage/src/database-recovery.ts",
   "packages/storage/src/daemon-lease.ts",
   "packages/storage/src/migration-runner.ts",
   "packages/storage/src/read-only-database.ts",
