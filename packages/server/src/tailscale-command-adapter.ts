@@ -731,9 +731,19 @@ function canonicalPathMatches(
   expected: string,
   actual: string
 ): boolean {
-  return target === "windows-x64"
-    ? win32.normalize(actual).toLowerCase() === win32.normalize(expected).toLowerCase()
-    : posix.normalize(actual) === expected;
+  if (target === "windows-x64") {
+    const expectedPath = normalizedWindowsDrivePath(expected);
+    const actualPath = normalizedWindowsDrivePath(actual);
+    return expectedPath !== null && actualPath === expectedPath;
+  }
+  return posix.normalize(actual) === expected;
+}
+
+function normalizedWindowsDrivePath(value: string): string | null {
+  const withoutNativePrefix = value.startsWith("\\\\?\\") ? value.slice(4) : value;
+  if (!/^[A-Za-z]:[\\/]/u.test(withoutNativePrefix)) return null;
+  const normalized = win32.normalize(withoutNativePrefix);
+  return /^[A-Za-z]:\\/u.test(normalized) ? normalized.toLowerCase() : null;
 }
 
 function validPath(value: string): boolean {

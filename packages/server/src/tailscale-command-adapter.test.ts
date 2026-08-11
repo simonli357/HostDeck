@@ -131,6 +131,29 @@ describe("platform Tailscale command adapter", () => {
     expect(harness.processRequests).toHaveLength(0);
   });
 
+  it("accepts only the native extended-length form of the reviewed Windows drive path", async () => {
+    const inspection = validInspection("windows-x64") as Extract<
+      TailscaleExecutableInspection,
+      { status: "present" }
+    >;
+    const accepted = createHarness("windows-x64", {
+      ...inspection,
+      canonical_path: `\\\\?\\${inspection.canonical_path}`
+    });
+    await expect(accepted.adapter.run(commandRequest("version"))).resolves.toMatchObject({
+      completion: "succeeded"
+    });
+
+    const rejected = createHarness("windows-x64", {
+      ...inspection,
+      canonical_path: "\\\\?\\UNC\\server\\Tailscale\\tailscale.exe"
+    });
+    await expect(rejected.adapter.run(commandRequest("version"))).resolves.toMatchObject({
+      completion: "executable_invalid"
+    });
+    expect(rejected.processRequests).toHaveLength(0);
+  });
+
   it.each(invalidInspectionCases())(
     "rejects $label before spawning",
     async ({ target, inspection }) => {
@@ -332,7 +355,9 @@ describe("native bounded Tailscale process edge", () => {
         expect({
           canonical_matches:
             process.platform === "win32"
-              ? win32.normalize(inspection.canonical_path).toLowerCase() ===
+              ? win32
+                  .normalize(inspection.canonical_path.replace(/^\\\\\?\\/u, ""))
+                  .toLowerCase() ===
                 win32.normalize(candidate).toLowerCase()
               : inspection.canonical_path === candidate,
           identity_stable: inspection.identity_stable,
