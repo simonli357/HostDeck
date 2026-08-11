@@ -52,6 +52,7 @@ import {
   createHostDeckSelectedWriteShutdownPort,
   type HostDeckApplicationShutdown
 } from "./application-shutdown.js";
+import { createBoundFunctionView } from "./bound-function-view.js";
 import {
   type CodexApprovalControlService,
   createCodexApprovalControlService
@@ -658,7 +659,7 @@ export function createHostDeckProductionApplication(
     codexBin: resources.codex_bin,
     runtime: runtimeView,
     socketPath: resources.runtime.socket_path,
-    state: functionView(stateRepository, ["require"])
+    state: createBoundFunctionView(stateRepository, ["require"])
   });
 
   const remote = createHostDeckRemoteIngressLifecycle({
@@ -696,24 +697,24 @@ export function createHostDeckProductionApplication(
     audit: selectedAudit,
     authentication,
     controls: Object.freeze({
-      approvals: functionView(approvalControl, [
+      approvals: createBoundFunctionView(approvalControl, [
         "list",
         "respond",
         "snapshot",
         "waitForTerminal"
       ]),
-      compact: functionView(compactControl, ["compact", "snapshot"]),
-      goals: functionView(goalControl, ["mutate", "snapshot"]),
-      interrupts: functionView(interruptControl, [
+      compact: createBoundFunctionView(compactControl, ["compact", "snapshot"]),
+      goals: createBoundFunctionView(goalControl, ["mutate", "snapshot"]),
+      interrupts: createBoundFunctionView(interruptControl, [
         "interrupt",
         "requireInterruptible",
         "waitForTerminal"
       ]),
-      models: functionView(modelControl, ["select", "snapshot"]),
-      plans: functionView(planControl, ["select", "snapshot"]),
-      prompts: functionView(promptControl, ["dispatch", "snapshot"]),
-      skills: functionView(skillsControl, ["list"]),
-      usage: functionView(usageControl, ["read"])
+      models: createBoundFunctionView(modelControl, ["select", "snapshot"]),
+      plans: createBoundFunctionView(planControl, ["select", "snapshot"]),
+      prompts: createBoundFunctionView(promptControl, ["dispatch", "snapshot"]),
+      skills: createBoundFunctionView(skillsControl, ["list"]),
+      usage: createBoundFunctionView(usageControl, ["read"])
     }),
     csrf,
     devices: Object.freeze({
@@ -742,12 +743,12 @@ export function createHostDeckProductionApplication(
     }),
     securityAudit,
     sessions: Object.freeze({
-      managed: functionView(managedSessions, ["archive", "read", "start"]),
+      managed: createBoundFunctionView(managedSessions, ["archive", "read", "start"]),
       read: sessionReadRepository,
       resume,
       subscribers
     }),
-    state: functionView(stateRepository, ["get", "listEvents", "require"])
+    state: createBoundFunctionView(stateRepository, ["get", "listEvents", "require"])
   });
   const routeRegistrations = Object.freeze([
     ...selectedRoutes,
@@ -1507,23 +1508,6 @@ function assertRouteInventory(
       "HostDeck production route registration inventory is invalid."
     );
   }
-}
-
-function functionView<
-  TSource extends object,
-  const TKey extends keyof TSource & string
->(source: TSource, keys: readonly TKey[]): Pick<TSource, TKey> {
-  const view: Partial<Pick<TSource, TKey>> = Object.create(null) as Partial<
-    Pick<TSource, TKey>
-  >;
-  for (const key of keys) {
-    const value = source[key];
-    if (typeof value !== "function") {
-      throw new TypeError(`HostDeck production function port ${key} is invalid.`);
-    }
-    view[key] = value;
-  }
-  return Object.freeze(view) as Pick<TSource, TKey>;
 }
 
 function readExactDataObject<const TKey extends string>(
