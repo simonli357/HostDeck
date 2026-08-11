@@ -355,8 +355,11 @@ function inspectCurrentUserAcl(
     const currentSid = currentUserSid(bindings);
     const ownerSid = sidToString(bindings, owner[0]);
     const actual = securityDescriptorToString(bindings, descriptor[0]);
+    const expected = expectedSddl(bindings, kind, currentSid);
     return Object.freeze({
-      current_user_only: actual === expectedSddl(bindings, kind, currentSid),
+      current_user_only:
+        actual === expected ||
+        actual === expected.replace("D:P(", "D:PAI("),
       owner_current_user: ownerSid === currentSid
     });
   } finally {
