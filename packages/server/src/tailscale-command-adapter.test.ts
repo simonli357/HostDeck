@@ -7,7 +7,7 @@ import {
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, win32 } from "node:path";
 import {
   type HostPlatformCapability,
   resolveHostPlatformCapability,
@@ -327,16 +327,29 @@ describe("native bounded Tailscale process edge", () => {
 
       const inspection = nativeTailscaleExecutableDiscoveryPort.inspect(candidate, target);
       const after = statSync(candidate, { bigint: true });
-      expect(inspection).toMatchObject({
-        status: "present",
-        canonical_path: candidate,
-        is_file: true,
-        is_symbolic_link: false,
-        identity_stable: true,
-        size_bytes: bytes.byteLength,
-        link_count: 1
-      });
-      if (inspection.status === "present") expect(inspection.header).toHaveLength(4_096);
+      expect(inspection.status).toBe("present");
+      if (inspection.status === "present") {
+        expect({
+          canonical_matches:
+            process.platform === "win32"
+              ? win32.normalize(inspection.canonical_path).toLowerCase() ===
+                win32.normalize(candidate).toLowerCase()
+              : inspection.canonical_path === candidate,
+          identity_stable: inspection.identity_stable,
+          is_file: inspection.is_file,
+          is_symbolic_link: inspection.is_symbolic_link,
+          link_count: inspection.link_count,
+          size_bytes: inspection.size_bytes
+        }).toEqual({
+          canonical_matches: true,
+          identity_stable: true,
+          is_file: true,
+          is_symbolic_link: false,
+          link_count: 1,
+          size_bytes: bytes.byteLength
+        });
+        expect(inspection.header).toHaveLength(4_096);
+      }
       expect(after.size).toBe(before.size);
       expect(after.mtimeNs).toBe(before.mtimeNs);
       expect(readFileSync(candidate)).toEqual(bytes);
