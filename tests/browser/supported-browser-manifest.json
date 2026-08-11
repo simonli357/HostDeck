@@ -8,8 +8,8 @@
   "evidence_schema_version": 1,
   "package": {
     "package_version": "0.0.0",
-    "content_sha256": "20b8eecea55882655082f512f9200f6097e9ba8c90c69965ae9f38315e39e53b",
-    "manifest_sha256": "88525b251f8852df8bac822034c10af1869645884546f82be70318bae927dad9",
+    "content_sha256": "f3886ef14769952a4c71689333bcc29ddaaf0483d81063dda81edef0f36206bf",
+    "manifest_sha256": "ed7cc872d1296f815b71db1c36e9a72124f0e86585129583fccefc42ef1448fe",
     "web_sha256": "471eb1c46535cc9be2627a08c90b3c49732d2f4ec77951151085540bc064a458",
     "web_manifest_sha256": "3a3dfc06fc70f75a6b9ed6e52640a3209d97191bce5dd3d3126029b05346f9ef"
   },

@@ -124,9 +124,9 @@ export const hostPlatformFixtureProfiles: readonly HostPlatformFixtureProfile[] 
     }),
     configuration: {
       config_root: "C:\\Users\\hostdeck-fixture\\AppData\\Roaming\\HostDeck",
-      state_root: "C:\\Users\\hostdeck-fixture\\AppData\\Local\\HostDeck",
+      state_root: "C:\\Users\\hostdeck-fixture\\AppData\\Local\\HostDeck\\State",
       runtime_root: "C:\\Users\\hostdeck-fixture\\AppData\\Local\\HostDeck\\Runtime",
-      database_path: "C:\\Users\\hostdeck-fixture\\AppData\\Local\\HostDeck\\hostdeck.sqlite",
+      database_path: "C:\\Users\\hostdeck-fixture\\AppData\\Local\\HostDeck\\State\\hostdeck.sqlite",
       loopback_port: 3777
     },
     endpoint: {

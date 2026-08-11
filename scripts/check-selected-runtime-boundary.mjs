@@ -305,7 +305,7 @@ export const directHostApiOwnerPaths = Object.freeze([
   "packages/storage/src/daemon-lease.ts",
   "packages/storage/src/migration-runner.ts",
   "packages/storage/src/read-only-database.ts",
-  "packages/storage/src/secure-local-paths.ts",
+  "packages/storage/src/linux-secure-local-path-adapter.ts",
   "packages/web/vite.config.ts"
 ]);
 const directHostApiOwners = new Set(directHostApiOwnerPaths);

@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   HostDeckLocalPathError,
+  nativeHostDeckLocalPathAdapter,
   openSecureHostDeckRegularFile,
   prepareHostDeckDaemonLeasePath,
   prepareHostDeckLocalPaths,
@@ -38,6 +39,13 @@ describe("secure HostDeck local paths", () => {
     const layout = testLayout();
     const prepared = prepareHostDeckLocalPaths(layout);
 
+    expect(nativeHostDeckLocalPathAdapter.target).toBe("linux-x64");
+    expect(nativeHostDeckLocalPathAdapter.path_family).toBe("posix");
+    expect(nativeHostDeckLocalPathAdapter.path_security).toBe("uid_mode");
+    expect(Object.isFrozen(nativeHostDeckLocalPathAdapter)).toBe(true);
+    expect(nativeHostDeckLocalPathAdapter.resolveLocalPaths(layout)).toEqual(
+      resolveHostDeckLocalPaths(layout)
+    );
     expect(prepared).toMatchObject({
       config_dir: layout.config_dir,
       state_dir: layout.state_dir,

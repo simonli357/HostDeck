@@ -105,10 +105,13 @@ export {
 } from "./runtime-compatibility-repository.js";
 export {
   type ExistingHostDeckStatePaths,
+  type HostDeckLocalPathAdapter,
   HostDeckLocalPathError,
   type HostDeckLocalPathErrorCode,
   type HostDeckPathModeRepair,
+  type HostDeckStatePathsInput,
   inspectExistingHostDeckStatePaths,
+  nativeHostDeckLocalPathAdapter,
   type OpenedSecureHostDeckRegularFile,
   type OpenSecureHostDeckRegularFileOptions,
   openSecureHostDeckRegularFile,
