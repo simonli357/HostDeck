@@ -34,6 +34,8 @@ const crashWorkerEnvironment = "HOSTDECK_WINDOWS_SUPERVISOR_CRASH_WORKER";
 const crashFixtureDirectoryEnvironment =
   "HOSTDECK_WINDOWS_SUPERVISOR_CRASH_FIXTURE";
 const crashPidFileEnvironment = "HOSTDECK_WINDOWS_SUPERVISOR_CRASH_PID_FILE";
+const crashArmedFileEnvironment =
+  "HOSTDECK_WINDOWS_SUPERVISOR_CRASH_ARMED_FILE";
 const thisFile = fileURLToPath(import.meta.url);
 const repositoryRoot = resolve(dirname(thisFile), "../../..");
 
@@ -47,7 +49,13 @@ if (process.env[crashWorkerEnvironment] === "1") {
       );
       await child.endpoint;
       await waitForFile(requiredEnvironment(crashPidFileEnvironment));
-      process.exit(91);
+      writeFileSync(requiredEnvironment(crashArmedFileEnvironment), "armed\n", {
+        encoding: "utf8",
+        flag: "wx",
+        mode: 0o600
+      });
+      process.kill(process.pid, "SIGKILL");
+      throw new Error("Codex Windows crash worker remained active.");
     });
   });
 } else {
@@ -229,6 +237,7 @@ if (process.env[crashWorkerEnvironment] === "1") {
         )
       });
       const pidFile = join(paths.runtime_dir, "owned-pids.json");
+      const armedFile = join(paths.runtime_dir, "crash-armed");
       writeProcessTreeFixture(paths.runtime_dir);
       const vitestEntry = join(
         dirname(createRequire(import.meta.url).resolve("vitest/package.json")),
@@ -243,7 +252,7 @@ if (process.env[crashWorkerEnvironment] === "1") {
             thisFile,
             "--config",
             join(repositoryRoot, "vitest.contract.config.ts"),
-            "--pool=threads",
+            "--pool=forks",
             "--maxWorkers=1"
           ],
           {
@@ -253,7 +262,8 @@ if (process.env[crashWorkerEnvironment] === "1") {
               ...process.env,
               [crashWorkerEnvironment]: "1",
               [crashFixtureDirectoryEnvironment]: paths.runtime_dir,
-              [crashPidFileEnvironment]: pidFile
+              [crashPidFileEnvironment]: pidFile,
+              [crashArmedFileEnvironment]: armedFile
             },
             maxBuffer: 128 * 1_024,
             shell: false,
@@ -263,7 +273,8 @@ if (process.env[crashWorkerEnvironment] === "1") {
         );
         expect(result.error).toBeUndefined();
         expect(result.signal).toBeNull();
-        expect(result.status).toBe(91);
+        expect(result.status).toBe(1);
+        expect(readFileSync(armedFile, "utf8")).toBe("armed\n");
         expect(existsSync(pidFile)).toBe(true);
         const pids = parsePidFile(pidFile);
         await waitForProcessExit(pids.root_pid);
