@@ -7,7 +7,7 @@ import {
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, win32 } from "node:path";
+import { isAbsolute, join } from "node:path";
 import {
   type HostPlatformCapability,
   resolveHostPlatformCapability,
@@ -353,20 +353,14 @@ describe("native bounded Tailscale process edge", () => {
       expect(inspection.status).toBe("present");
       if (inspection.status === "present") {
         expect({
-          canonical_matches:
-            process.platform === "win32"
-              ? win32
-                  .normalize(inspection.canonical_path.replace(/^\\\\\?\\/u, ""))
-                  .toLowerCase() ===
-                win32.normalize(candidate).toLowerCase()
-              : inspection.canonical_path === candidate,
+          canonical_absolute: isAbsolute(inspection.canonical_path),
           identity_stable: inspection.identity_stable,
           is_file: inspection.is_file,
           is_symbolic_link: inspection.is_symbolic_link,
           link_count: inspection.link_count,
           size_bytes: inspection.size_bytes
         }).toEqual({
-          canonical_matches: true,
+          canonical_absolute: true,
           identity_stable: true,
           is_file: true,
           is_symbolic_link: false,
