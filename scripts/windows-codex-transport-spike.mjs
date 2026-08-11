@@ -100,6 +100,9 @@ async function main() {
       join(codexHome, "config.toml"),
       [
         "check_for_update_on_startup = false",
+        "[features]",
+        "goals = true",
+        "plugins = false",
         `[projects.${JSON.stringify(project)}]`,
         'trust_level = "trusted"',
         ""
@@ -196,6 +199,26 @@ async function main() {
     );
     requireCondition(readTurns(startedThread).length === 0, "No-model thread unexpectedly contains turns.");
 
+    const materialized = requireRecord(
+      await secondClient.request("thread/goal/set", {
+        threadId,
+        objective: "Verify the Windows local transport without model work.",
+        status: "paused"
+      }),
+      "thread/goal/set result"
+    );
+    const materializedGoal = requireRecord(materialized.goal, "thread/goal/set goal");
+    requireCondition(
+      materializedGoal.objective === "Verify the Windows local transport without model work." &&
+        materializedGoal.status === "paused",
+      "No-model thread materialization returned an invalid goal."
+    );
+    const clearedGoal = requireRecord(
+      await secondClient.request("thread/goal/clear", { threadId }),
+      "thread/goal/clear result"
+    );
+    requireCondition(clearedGoal.cleared === true, "No-model thread materialization did not clear its goal.");
+
     resumeProbe = await startResumeProbe({
       captures,
       codexHome,
@@ -262,7 +285,7 @@ async function main() {
     if (firstClient !== null) await collectCleanupError(firstClient.close(), cleanupErrors);
     if (secondClient !== null) await collectCleanupError(secondClient.close(), cleanupErrors);
     if (appServer !== null) {
-      await collectCleanupError(stopProcess(appServer), cleanupErrors);
+      await collectCleanupError(stopProcessTree(appServer), cleanupErrors);
       processExited = appServer.exitCode !== null || appServer.signalCode !== null;
     }
     if (listenerPort !== null) {
@@ -924,14 +947,6 @@ function assertCapturePrivacy(captures, forbiddenValues) {
   for (const forbidden of forbiddenValues) {
     requireCondition(!text.includes(forbidden), "Spike capture contains credential material.");
   }
-}
-
-async function stopProcess(child) {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  const exited = new Promise((resolveExit) => child.once("exit", resolveExit));
-  child.kill("SIGTERM");
-  if (await settlesWithin(exited, 5_000)) return;
-  await stopProcessTree(child);
 }
 
 async function stopProcessTree(child) {
