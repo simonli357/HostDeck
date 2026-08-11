@@ -120,7 +120,11 @@ async function main() {
       runVitestCheck(
         checks,
         "windows_supervisor",
-        ["packages/server/src/codex-windows-runtime-supervisor.contract.test.ts"],
+        [
+          "packages/server/src/codex-windows-runtime-supervisor.contract.test.ts",
+          "--config",
+          "vitest.contract.config.ts"
+        ],
         reportRoot
       );
     }
