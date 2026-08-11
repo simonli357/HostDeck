@@ -238,7 +238,17 @@ function runCommand(command, args, timeout, label, options = {}) {
     result.error === undefined && result.status === 0 && result.signal === null;
   const diagnostic = passed
     ? ""
-    : sanitizeDiagnostic(`${result.stdout ?? ""}\n${result.stderr ?? ""}`);
+    : sanitizeDiagnostic(
+        [
+          `Process status=${String(result.status)} signal=${String(result.signal)} error=${
+            result.error instanceof Error
+              ? `${result.error.name}:${result.error.message}`
+              : "none"
+          }`,
+          result.stdout ?? "",
+          result.stderr ?? ""
+        ].join("\n")
+      );
   if (!passed && options.deferFailure !== true) {
     if (diagnostic !== "") process.stderr.write(`${diagnostic}\n`);
     throw new Error(`Native CI ${label} command failed.`);
@@ -281,7 +291,23 @@ function vitestFailureSummary(report) {
     }
     if (failures.length >= 8) break;
   }
-  return sanitizeDiagnostic(failures.slice(0, 8).join("\n"));
+  if (failures.length > 0) {
+    return sanitizeDiagnostic(failures.slice(0, 8).join("\n"));
+  }
+  return sanitizeDiagnostic(
+    [
+      "Vitest report did not contain a failed assertion.",
+      `success=${String(report.success)}`,
+      `total=${String(report.numTotalTests)}`,
+      `passed=${String(report.numPassedTests)}`,
+      `failed=${String(report.numFailedTests)}`,
+      `pending=${String(report.numPendingTests)}`,
+      `todo=${String(report.numTodoTests)}`,
+      `suite_statuses=${report.testResults
+        .map((result) => String(result?.status ?? "unknown"))
+        .join(",")}`
+    ].join(" ")
+  );
 }
 
 function commandEnvironment() {
