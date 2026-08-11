@@ -1,6 +1,6 @@
 # DAT-V1-103 Native Storage Parity
 
-Status: in progress
+Status: complete
 
 ## Frozen Acceptance
 
@@ -15,3 +15,10 @@ Status: in progress
 ## Completion Authority
 
 One no-skip native suite must pass on both pinned CI targets from the same clean commit. The accepted run and implementation commit are recorded here before closure.
+
+## Accepted Evidence
+
+- Implementation: `649e794`; Windows corrections: `200f4c1`, `42fd03c`.
+- Native CI run `31509712124` passed all no-skip checks and sanitized-evidence verification on pinned `linux-x64` and `windows-x64` jobs from `42fd03c`.
+- The storage gate passed 25 tests on each target, covering exact native SQLite provenance, schema/query-plan identity, cross-platform cwd migration, process-death migration recovery, validated backup/restore, retained-release re-upgrade, and process-death restore atomicity.
+- Local closure passed the same 25 storage tests, full typecheck, lint/package exports, runtime boundary (633 production modules, 23 externals), and native-CI policy verification.
