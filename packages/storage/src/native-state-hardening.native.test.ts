@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   chmodSync,
+  existsSync,
   linkSync,
   lstatSync,
   mkdtempSync,
@@ -133,6 +134,7 @@ describe("native state hardening", () => {
       restored.db.close();
     }
 
+    proveStateSurvivesReleaseRemoval(databasePath, backupPath);
     assertNativeSecurity(root, databasePath, backupPath, leasePath);
     expect(
       readdirSync(root).filter(
@@ -147,6 +149,7 @@ describe("native state hardening", () => {
       `[DAT-V1-104] ${JSON.stringify({
         files_checked: 3,
         path_security: nativeHostDeckLocalPathAdapter.path_security,
+        release_removal_rounds: 2,
         target: nativeHostDeckLocalPathAdapter.target
       })}\n`
     );
@@ -164,6 +167,24 @@ function secureStateRoot(): string {
       : mkdtempSync(join(tmpdir(), "hostdeck-native-state-hardening-"));
   cleanup.push(root);
   return root;
+}
+
+function proveStateSurvivesReleaseRemoval(
+  databasePath: string,
+  backupPath: string
+): void {
+  const releaseRoot = mkdtempSync(join(tmpdir(), "hostdeck-native-release-removal-"));
+  cleanup.push(releaseRoot);
+  writeFileSync(join(releaseRoot, "owned-runtime.bin"), "release-owned\n");
+  const databaseSha256 = sha256(databasePath);
+  const backupSha256 = sha256(backupPath);
+
+  rmSync(releaseRoot, { recursive: true });
+  rmSync(releaseRoot, { force: true, recursive: true });
+
+  expect(existsSync(releaseRoot)).toBe(false);
+  expect(sha256(databasePath)).toBe(databaseSha256);
+  expect(sha256(backupPath)).toBe(backupSha256);
 }
 
 function exerciseNativeRepair(root: string, databasePath: string): void {
