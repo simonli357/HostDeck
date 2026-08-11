@@ -476,8 +476,12 @@ function sidToString(
   bindings: ReturnType<typeof createWindowsBindings>,
   sid: unknown
 ): string {
-  const output = [null];
-  if (!(bindings.ConvertSidToStringSidW(sid, output) as boolean) || output[0] === null) {
+  const output: unknown[] = [null];
+  if (
+    !(bindings.ConvertSidToStringSidW(sid, output) as boolean) ||
+    typeof output[0] !== "bigint" ||
+    output[0] === 0n
+  ) {
     throw nativeError("ConvertSidToStringSidW");
   }
   try {
@@ -542,7 +546,7 @@ function securityDescriptorToString(
   bindings: ReturnType<typeof createWindowsBindings>,
   descriptor: unknown
 ): string {
-  const output = [null];
+  const output: unknown[] = [null];
   const length = [0];
   if (
     !(bindings.ConvertSecurityDescriptorToStringSecurityDescriptorW(
@@ -552,7 +556,11 @@ function securityDescriptorToString(
       output,
       length
     ) as boolean) ||
-    output[0] === null
+    typeof output[0] !== "bigint" ||
+    output[0] === 0n ||
+    !Number.isSafeInteger(length[0]) ||
+    (length[0] ?? 0) < 2 ||
+    (length[0] ?? 0) > 16_384
   ) {
     throw nativeError("ConvertSecurityDescriptorToStringSecurityDescriptorW");
   }
@@ -660,6 +668,12 @@ function localFree(
   bindings: ReturnType<typeof createWindowsBindings>,
   pointer: unknown
 ): void {
+  if (typeof pointer !== "bigint" || pointer === 0n) {
+    throw new WindowsNativeFileSecurityError(
+      "native_call_failed",
+      "LocalFree.pointer"
+    );
+  }
   const result = bindings.LocalFree(pointer) as bigint | null;
   if (result !== null && result !== 0n) throw nativeError("LocalFree");
 }
@@ -836,10 +850,10 @@ function createWindowsBindings() {
       "int32_t __stdcall CompareStringOrdinal(const char16_t *lpString1, int32_t cchCount1, const char16_t *lpString2, int32_t cchCount2, int32_t bIgnoreCase)"
     ),
     ConvertSecurityDescriptorToStringSecurityDescriptorW: advapi32.func(
-      "int32_t __stdcall ConvertSecurityDescriptorToStringSecurityDescriptorW(HOSTDECK_WIN_PSECURITY_DESCRIPTOR SecurityDescriptor, uint32_t RequestedStringSDRevision, uint32_t SecurityInformation, _Out_ char16_t **StringSecurityDescriptor, _Out_ uint32_t *StringSecurityDescriptorLen)"
+      "int32_t __stdcall ConvertSecurityDescriptorToStringSecurityDescriptorW(HOSTDECK_WIN_PSECURITY_DESCRIPTOR SecurityDescriptor, uint32_t RequestedStringSDRevision, uint32_t SecurityInformation, _Out_ void **StringSecurityDescriptor, _Out_ uint32_t *StringSecurityDescriptorLen)"
     ),
     ConvertSidToStringSidW: advapi32.func(
-      "int32_t __stdcall ConvertSidToStringSidW(HOSTDECK_WIN_PSID Sid, _Out_ char16_t **StringSid)"
+      "int32_t __stdcall ConvertSidToStringSidW(HOSTDECK_WIN_PSID Sid, _Out_ void **StringSid)"
     ),
     ConvertStringSecurityDescriptorToSecurityDescriptorW: advapi32.func(
       "int32_t __stdcall ConvertStringSecurityDescriptorToSecurityDescriptorW(const char16_t *StringSecurityDescriptor, uint32_t StringSDRevision, _Out_ HOSTDECK_WIN_PSECURITY_DESCRIPTOR *SecurityDescriptor, _Out_ uint32_t *SecurityDescriptorSize)"
@@ -888,7 +902,7 @@ function createWindowsBindings() {
       "int32_t __stdcall GetVolumePathNameW(const char16_t *lpszFileName, _Out_ char16_t *lpszVolumePathName, uint32_t cchBufferLength)"
     ),
     LocalFree: kernel32.func(
-      "HOSTDECK_WIN_HANDLE __stdcall LocalFree(HOSTDECK_WIN_HANDLE hMem)"
+      "void * __stdcall LocalFree(void *hMem)"
     ),
     OpenProcessToken: advapi32.func(
       "int32_t __stdcall OpenProcessToken(HOSTDECK_WIN_HANDLE ProcessHandle, uint32_t DesiredAccess, _Out_ HOSTDECK_WIN_HANDLE *TokenHandle)"
