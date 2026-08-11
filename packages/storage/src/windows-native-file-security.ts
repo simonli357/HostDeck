@@ -182,10 +182,16 @@ function secureCurrentUserOnly(
 
     applyCurrentUserSecurity(bindings, handle, kind);
     const afterAcl = inspectCurrentUserAcl(bindings, handle, kind);
-    if (!afterAcl.owner_current_user || !afterAcl.current_user_only) {
+    if (!afterAcl.owner_current_user) {
       throw new WindowsNativeFileSecurityError(
         "acl_update_failed",
-        "verify_owner_and_dacl"
+        "verify_owner"
+      );
+    }
+    if (!afterAcl.current_user_only) {
+      throw new WindowsNativeFileSecurityError(
+        "acl_update_failed",
+        "verify_dacl"
       );
     }
     const after = inspectHandle(bindings, handle);
