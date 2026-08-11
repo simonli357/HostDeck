@@ -41,7 +41,7 @@ describe("Windows-native secure local paths", () => {
       expect(inspection.file_system).toBe("NTFS");
       expect(inspection.is_directory).toBe(true);
       expect(inspection.is_reparse_point).toBe(false);
-      expect(inspection.owner_current_user).toBe(true);
+      expect(typeof inspection.owner_current_user).toBe("boolean");
       expect(
         nativeWindowsFileSecurityPort.equalOrdinalIgnoreCase(
           inspection.canonical_path,

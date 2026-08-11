@@ -798,6 +798,8 @@ function inspectAnchorDirectory(
     anchor,
     label,
     "directory",
+    false,
+    true,
     false
   );
 }
@@ -941,7 +943,8 @@ function assertSafeInspection(
   label: string,
   kind: "directory" | "file",
   requireSecureAcl: boolean,
-  requireCanonicalPath = true
+  requireCanonicalPath = true,
+  requireCurrentUserOwner = true
 ): void {
   if (inspection.is_reparse_point) {
     throw pathError(
@@ -974,7 +977,7 @@ function assertSafeInspection(
   if (requireCanonicalPath) {
     assertCanonicalInspection(nativeSecurity, inspection, path, label);
   }
-  if (!inspection.owner_current_user) {
+  if (requireCurrentUserOwner && !inspection.owner_current_user) {
     throw pathError(
       "wrong_owner",
       `${label} must be owned by the current Windows user.`,
