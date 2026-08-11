@@ -17,11 +17,11 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
 | 1 | `FE-V1-090` Mobile dashboard physical hardening | blocked | phone unavailable | Diagnose physical touch delivery and run one distinct immutable candidate when the phone returns; retain only a complete no-retry pass. |
-| 2 | `INT-V1-103` Platform TUI resume | ready | none | Generalize exact Linux/Windows resume command execution over the proven endpoint contract. |
+| 2 | `INT-V1-104` Complete Windows Codex vertical | ready | none | Prove the assembled exact runtime, controls, recovery, concurrent TUI, and cleanup on native Windows. |
 | 3 | `DAT-V1-103` Native storage parity | ready | none | Prove target-built SQLite migration, recovery, backup, and rollback parity now that native paths and locks are complete. |
 | 4 | `REL-V1-102` Native supply-chain metadata | ready | none | Build checksums, SBOM, license, and provenance contracts now that package identity and native CI are complete. |
 
-`INT-V1-102` is complete through `4faaba3` and native run `31490136692`; `INT-V1-101` remains complete through run `31481942844`, `IFC-V1-100` through run `31474471365`, and `IFC-V1-101` through run `31471194169`. The latest `FE-V1-090` branch candidate `6829bd2` reached a stable first continuation target but delivered no request after the tap; no acceptance evidence was retained. The next phone run must use a distinct commit after touch-delivery diagnosis.
+`INT-V1-103` is complete through `040c133` and native run `31494425909`; `INT-V1-102` remains complete through run `31490136692`, `INT-V1-101` through run `31481942844`, `IFC-V1-100` through run `31474471365`, and `IFC-V1-101` through run `31471194169`. The latest `FE-V1-090` branch candidate `6829bd2` reached a stable first continuation target but delivered no request after the tap; no acceptance evidence was retained. The next phone run must use a distinct commit after touch-delivery diagnosis.
 
 ## Intentional Blockers
 
