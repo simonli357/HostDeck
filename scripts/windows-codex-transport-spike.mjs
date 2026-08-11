@@ -136,7 +136,7 @@ async function main() {
     const endpoint = await waitForLoopbackEndpoint(appServer, appCapture);
     listenerPort = endpoint.port;
 
-    const commandLine = inspectProcessCommandLine(appServer.pid);
+    const commandLine = inspectSpawnArguments(appServer);
     captures.push(commandLine);
     requireCondition(commandLine.includes("app-server"), "App-server process command line is incomplete.");
     requireCondition(commandLine.includes("--ws-token-file"), "App-server credential source is missing.");
@@ -635,13 +635,13 @@ async function startResumeProbe(input) {
       15_000,
       "Codex resume TUI did not render before timeout."
     );
-    const processTree = inspectProcessTreeCommandLines(child.pid);
-    input.captures.push(processTree);
+    const resumeArguments = inspectSpawnArguments(child);
+    input.captures.push(resumeArguments);
     requireCondition(
-      !processTree.includes(input.websocketCredential) &&
-        processTree.includes("--remote-auth-token-env") &&
-        processTree.includes(resumeCredentialEnvironment),
-      "Codex resume process tree did not keep credential material environment-only."
+      !resumeArguments.includes(input.websocketCredential) &&
+        resumeArguments.includes("--remote-auth-token-env") &&
+        resumeArguments.includes(resumeCredentialEnvironment),
+      "Codex resume arguments did not keep credential material environment-only."
     );
     let closed = false;
     return Object.freeze({
@@ -723,58 +723,60 @@ function secureCurrentUserOnly(path, kind) {
 }
 
 function inspectCurrentUserOnlyAcl(path) {
-  const script = [
-    `$path = ${powershellLiteral(path)}`,
-    "$acl = Get-Acl -LiteralPath $path",
-    "$identity = [Security.Principal.WindowsIdentity]::GetCurrent()",
-    "$current = $identity.User",
-    "$allowed = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | Where-Object AccessControlType -eq 'Allow' | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique)",
-    "[pscustomobject]@{ owner = ($acl.Owner -ieq $identity.Name); current = ($allowed.Count -eq 1 -and $allowed[0] -eq $current.Value) } | ConvertTo-Json -Compress"
-  ].join("; ");
-  const value = runPowerShellJson(script, "acl");
+  const identity = runBoundedCommand(
+    "whoami.exe",
+    [],
+    10_000,
+    "acl-identity"
+  ).stdout.trim();
+  const lines = runBoundedCommand(
+    "icacls.exe",
+    [path],
+    10_000,
+    "acl-inspect"
+  ).stdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  const footer = lines.pop();
+  if (footer !== "Successfully processed 1 files; Failed processing 0 files") return false;
+  const first = lines.shift();
+  if (first === undefined || !first.toLowerCase().startsWith(path.toLowerCase())) return false;
+  const entries = [first.slice(path.length).trim(), ...lines].filter((line) => line !== "");
+  if (entries.length !== 1 || entries[0].includes("(I)")) return false;
+  const normalized = entries[0].toLowerCase();
+  const prefix = `${identity.toLowerCase()}:`;
   return (
-    value !== null &&
-    typeof value === "object" &&
-    value.owner === true &&
-    value.current === true
+    normalized.startsWith(prefix) &&
+    (normalized.slice(prefix.length) === "(f)" ||
+      normalized.slice(prefix.length) === "(oi)(ci)(f)")
   );
 }
 
-function inspectProcessCommandLine(pid) {
-  const script = [
-    `$process = Get-CimInstance Win32_Process -Filter ${powershellLiteral(`ProcessId = ${pid}`)}`,
-    "if ($null -eq $process) { throw 'missing process' }",
-    "[Console]::Out.Write($process.CommandLine)"
-  ].join("; ");
-  return runPowerShell(script, "process-command-line").stdout;
-}
-
-function inspectProcessTreeCommandLines(pid) {
-  const script = [
-    `$root = ${pid}`,
-    "$all = @(Get-CimInstance Win32_Process)",
-    "$ids = @($root)",
-    "do { $before = $ids.Count; $ids += @($all | Where-Object { $ids -contains $_.ParentProcessId } | ForEach-Object ProcessId); $ids = @($ids | Sort-Object -Unique) } while ($ids.Count -gt $before)",
-    "$lines = @($all | Where-Object { $ids -contains $_.ProcessId } | ForEach-Object CommandLine)",
-    "[Console]::Out.Write(($lines -join \"`n\"))"
-  ].join("; ");
-  return runPowerShell(script, "process-tree").stdout;
+function inspectSpawnArguments(child) {
+  requireCondition(
+    Number.isSafeInteger(child.pid) &&
+      child.pid > 0 &&
+      child.exitCode === null &&
+      child.signalCode === null &&
+      Array.isArray(child.spawnargs) &&
+      child.spawnargs.every((argument) => typeof argument === "string"),
+    "Spawned Windows process is unavailable for argument inspection."
+  );
+  return JSON.stringify(child.spawnargs);
 }
 
 async function inspectProcessListeners(pid, expectedPort) {
   let lastError = null;
   for (let attempt = 0; attempt < 50; attempt += 1) {
     try {
-      const script = [
-        `$connections = @(Get-NetTCPConnection -State Listen -OwningProcess ${pid} -ErrorAction Stop)`,
-        "$connections | Select-Object @{Name='address';Expression={$_.LocalAddress}}, @{Name='port';Expression={$_.LocalPort}} | ConvertTo-Json -Compress"
-      ].join("; ");
-      const parsed = runPowerShellJson(script, "listeners");
-      const rows = parsed === null ? [] : Array.isArray(parsed) ? parsed : [parsed];
-      const listeners = rows.map((row) => ({
-        address: requireString(requireRecord(row, "listener").address, "listener address"),
-        port: requirePort(requireRecord(row, "listener").port, "listener port")
-      }));
+      const output = runBoundedCommand(
+        "netstat.exe",
+        ["-ano", "-p", "tcp"],
+        10_000,
+        "listeners"
+      ).stdout;
+      const listeners = parseNetstatListeners(output, pid);
       if (listeners.some((entry) => entry.port === expectedPort)) return listeners;
     } catch (error) {
       lastError = error;
@@ -784,6 +786,33 @@ async function inspectProcessListeners(pid, expectedPort) {
   throw new Error("Windows listener inspection did not observe the app-server endpoint.", {
     cause: lastError
   });
+}
+
+function parseNetstatListeners(output, pid) {
+  const expectedPid = String(pid);
+  return output
+    .split(/\r?\n/u)
+    .map((line) => line.trim().split(/\s+/u))
+    .filter(
+      (fields) =>
+        fields.length === 5 &&
+        fields[0].toUpperCase() === "TCP" &&
+        fields[3].toUpperCase() === "LISTENING" &&
+        fields[4] === expectedPid
+    )
+    .map((fields) => {
+      const endpoint = fields[1];
+      const separator = endpoint.lastIndexOf(":");
+      requireCondition(separator > 0, "Windows listener endpoint is invalid.");
+      const rawAddress = endpoint.slice(0, separator);
+      return {
+        address:
+          rawAddress.startsWith("[") && rawAddress.endsWith("]")
+            ? rawAddress.slice(1, -1)
+            : rawAddress,
+        port: requirePort(Number(endpoint.slice(separator + 1)), "listener port")
+      };
+    });
 }
 
 async function rejectedUpgradeStatus(url, headers) {
@@ -921,26 +950,6 @@ async function waitForClosedPort(port) {
   );
 }
 
-function runPowerShellJson(script, label) {
-  const output = runPowerShell(script, label).stdout.trim();
-  if (output === "") return null;
-  try {
-    return JSON.parse(output);
-  } catch (error) {
-    throw new Error("PowerShell inspection returned invalid JSON.", { cause: error });
-  }
-}
-
-function runPowerShell(script, label) {
-  const encoded = Buffer.from(script, "utf16le").toString("base64");
-  return runBoundedCommand(
-    "powershell.exe",
-    ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-    30_000,
-    label
-  );
-}
-
 function runBoundedCommand(command, args, timeout, label = "native-command") {
   const result = spawnSync(command, args, {
     cwd: repositoryRoot,
@@ -961,10 +970,6 @@ function runBoundedCommand(command, args, timeout, label = "native-command") {
     );
   }
   return Object.freeze({ stderr: result.stderr, stdout: result.stdout });
-}
-
-function powershellLiteral(value) {
-  return `'${value.replaceAll("'", "''")}'`;
 }
 
 function parseJsonFile(path, label) {
