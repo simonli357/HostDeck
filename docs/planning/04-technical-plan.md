@@ -291,6 +291,8 @@ Default paths:
 
 Overrides outside their owning roots reject. Linux service mode fails without a secure user runtime. Windows rejects unsafe inherited ACLs, reparse points, alternate streams, hard links, path substitutions, and canonical/case collisions before opening state or endpoint secrets.
 
+Lexical root validation is dialect-explicit and shared. Native filesystem enforcement is adapter-owned: Linux retains UID/mode and no-follow checks, while Windows native calls fail closed until the current-user ACL adapter is available.
+
 A nonblocking OS file lock in the state directory enforces one HostDeck daemon owner. SQLite remains the transactional data owner; the lock is not a substitute for transactions.
 
 The lease prevents cooperating HostDeck daemons from sharing one state directory. Linux retains kernel-held descriptor release on process death; Windows must prove equivalent bounded crash/stale recovery under `DAT-V1-102`. Owner-only permissions/ACLs isolate other OS users, but they do not sandbox malicious code already running as the same user; release review must not overstate that boundary.
