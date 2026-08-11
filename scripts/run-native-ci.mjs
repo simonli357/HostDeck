@@ -171,6 +171,7 @@ async function main() {
     if (target === "linux-x64") {
       runPnpmCheck(checks, "package", ["test:package"], 10 * 60_000);
     }
+    runPnpmCheck(checks, "supply_chain", ["test:supply-chain"], 10 * 60_000);
   } finally {
     rmSync(reportRoot, { force: true, recursive: true });
   }

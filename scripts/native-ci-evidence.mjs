@@ -31,7 +31,8 @@ export const nativeCiTargetPolicies = Object.freeze({
       "integration",
       "web_build",
       "native_modules",
-      "package"
+      "package",
+      "supply_chain"
     ]),
     node_platform: "linux",
     runner_label: "ubuntu-24.04"
@@ -53,7 +54,8 @@ export const nativeCiTargetPolicies = Object.freeze({
       "windows_supervisor",
       "platform_tui_resume",
       "web_build",
-      "native_modules"
+      "native_modules",
+      "supply_chain"
     ]),
     node_platform: "win32",
     runner_label: "windows-2022"
