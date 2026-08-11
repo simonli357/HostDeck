@@ -167,7 +167,12 @@ describe("HostDeck database backup and restore", () => {
       migrations: priorMigrations,
       now: fixedNow
     });
-    insertSelectedSession(prior.db, "sess_retained_01", "retained-user-state");
+    insertSelectedSession(
+      prior.db,
+      "sess_retained_01",
+      "retained-user-state",
+      legacyCwd
+    );
     await createHostDeckDatabaseBackup({
       database: prior.db,
       destination_path: layout.backup,
@@ -209,7 +214,7 @@ describe("HostDeck database backup and restore", () => {
         {
           id: "sess_retained_01",
           name: "retained-user-state",
-          cwd: nativeCwd()
+          cwd: legacyCwd
         }
       ]);
       expect(reupgraded.db.pragma("foreign_key_check")).toEqual([]);
@@ -222,7 +227,8 @@ describe("HostDeck database backup and restore", () => {
 function insertSelectedSession(
   db: import("better-sqlite3").Database,
   id: string,
-  name: string
+  name: string,
+  cwd = nativeCwd()
 ): void {
   db.prepare(
     `
@@ -231,8 +237,10 @@ function insertSelectedSession(
         disposition, created_at, updated_at, archived_at
       ) VALUES (?, ?, ?, ?, 'codex_app_server', '0.144.0', 'selected', ?, ?, NULL)
     `
-  ).run(id, name, `thread-${id}`, nativeCwd(), at, at);
+  ).run(id, name, `thread-${id}`, cwd, at, at);
 }
+
+const legacyCwd = "/home/selected/HostDeck Project";
 
 function nativeCwd(): string {
   return process.platform === "win32"

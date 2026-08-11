@@ -355,7 +355,7 @@ function insertLegacySession(
         lifecycle_state, created_at, updated_at, stale_reason
       ) VALUES (?, ?, ?, 'tmux', ?, NULL, NULL, 'running', ?, ?, NULL)
     `
-  ).run(id, name, nativeCwd(), `tmux-${id}`, at, at);
+  ).run(id, name, legacyCwd, `tmux-${id}`, at, at);
   const insert = db.prepare(
     `
       INSERT INTO output_events (
@@ -465,6 +465,8 @@ function nativeCwd(): string {
     ? "C:\\Users\\selected\\Native Project"
     : "/home/selected/Native Project";
 }
+
+const legacyCwd = "/home/selected/Native Project";
 
 function sha256(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");

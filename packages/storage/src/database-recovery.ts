@@ -470,8 +470,13 @@ function sameNativePath(left: string, right: string): boolean {
 }
 
 function normalizeWindowsPath(path: string): string {
-  const withoutNamespace = path.startsWith("\\\\?\\") ? path.slice(4) : path;
-  return withoutNamespace.toLocaleLowerCase("en-US");
+  const separators = path.replaceAll("/", "\\");
+  const withoutNamespace = separators.startsWith("\\\\?\\UNC\\")
+    ? `\\\\${separators.slice(8)}`
+    : separators.startsWith("\\\\?\\")
+      ? separators.slice(4)
+      : separators;
+  return withoutNamespace.toLowerCase();
 }
 
 function requireNotAborted(signal: AbortSignal | undefined): void {
