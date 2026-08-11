@@ -4199,6 +4199,67 @@ describe("physical Android phone-driver protocol", () => {
     expect(diagnostic.length).toBeLessThan(4_096);
   });
 
+  it("does not admit a transient dock target after a fixed sheet closes", async () => {
+    const nodes = physicalSessionActionsFixtureNodes();
+    const goalDescription = physicalSessionControlDescriptions[1];
+    requireCondition(goalDescription !== undefined, "Goal dock fixture was absent.");
+    const shiftedNodes = nodes.map((node) =>
+      node.description === goalDescription
+        ? Object.freeze({
+            ...node,
+            bounds: Object.freeze({
+              ...node.bounds,
+              bottom: node.bounds.bottom - 40,
+              top: node.bounds.top - 40
+            })
+          })
+        : node
+    );
+    const shiftedGoal = shiftedNodes.find(
+      (node) => node.description === goalDescription
+    );
+    requireCondition(shiftedGoal !== undefined, "Shifted Goal dock fixture was absent.");
+    const navigation: PhysicalSessionNavigationSnapshot = Object.freeze({
+      activeSubscribers: 1,
+      missingDetailRequests: 0,
+      openedSubscribers: 1,
+      selectedDetailRequests: 1,
+      streamRequests: 1
+    });
+    const reads = [
+      nodes,
+      ...Array.from({ length: 11 }, () => shiftedNodes)
+    ] as const;
+    let now = 0;
+    let readIndex = 0;
+
+    const admitted = await waitForStablePhysicalSessionDockAction(
+      {
+        readNavigation: () => navigation,
+        readNodes: async () => {
+          const next = reads[Math.min(readIndex, reads.length - 1)];
+          readIndex += 1;
+          requireCondition(next !== undefined, "Goal dock test read was absent.");
+          return next;
+        }
+      },
+      goalDescription,
+      5_000,
+      "Goal dock stability was not reached.",
+      {
+        baseline: navigation,
+        now: () => now,
+        sleep: async (milliseconds) => {
+          now += milliseconds;
+        }
+      }
+    );
+
+    expect(admitted).toBe(shiftedGoal);
+    expect(now).toBeGreaterThanOrEqual(2_200);
+    expect(readIndex).toBe(reads.length);
+  });
+
   it("gives the post-Done Session Actions handoff a fresh stability budget", async () => {
     const nodes = physicalSessionActionsFixtureNodes();
     const navigation: PhysicalSessionNavigationSnapshot = Object.freeze({
@@ -9686,6 +9747,10 @@ interface PhysicalSessionActionsWaitSource {
 interface PhysicalSessionActionsWaitOptions {
   readonly baseline?: PhysicalSessionNavigationSnapshot;
   readonly now?: () => number;
+  readonly selector?: (
+    nodes: readonly AndroidUiNode[],
+    activeSubscribers: number
+  ) => AndroidUiNode | null;
   readonly sleep?: (milliseconds: number) => Promise<void>;
 }
 
@@ -16642,7 +16707,7 @@ async function waitForPhysicalSessionActions(
       );
     }
 
-    const selected = selectPhysicalSessionActionsTrigger(
+    const selected = (options.selector ?? selectPhysicalSessionActionsTrigger)(
       nodes,
       afterReadNavigation.activeSubscribers
     );
@@ -16678,6 +16743,20 @@ async function waitForPhysicalSessionActions(
       observations.length === 0 ? "none" : observations.join("||")
     }).`
   );
+}
+
+async function waitForStablePhysicalSessionDockAction(
+  source: PhysicalSessionActionsWaitSource,
+  description: string,
+  timeoutMs: number,
+  message: string,
+  options: PhysicalSessionActionsWaitOptions = {}
+): Promise<AndroidUiNode> {
+  return waitForPhysicalSessionActions(source, timeoutMs, message, {
+    ...options,
+    selector: (nodes, activeSubscribers) =>
+      selectPhysicalSessionDockAction(nodes, activeSubscribers, description)
+  });
 }
 
 function createPhysicalSessionActionsAdmissionWindow(
@@ -18740,10 +18819,15 @@ async function runPhysicalModelControl(
     "Physical /model flow started with a prechanged mutation count."
   );
   const triggerLabel = `/model for ${physicalUiSessionName}`;
-  const trigger = await waitForPhysicalSelectedNode(
-    (nodes) => selectPhysicalSessionDockAction(nodes, 1, triggerLabel),
+  const trigger = await waitForStablePhysicalSessionDockAction(
+    {
+      readNavigation: () => readPhysicalSessionNavigationSnapshot(input),
+      readNodes: readAndroidUiNodes
+    },
+    triggerLabel,
     30_000,
-    "Physical /model trigger was unavailable."
+    "Physical /model trigger was unavailable.",
+    { baseline: navigationBefore }
   );
   measure(trigger, "open-model");
   await input.actionRegistry.tap(
@@ -18849,10 +18933,15 @@ async function runPhysicalModelControl(
     )
   );
 
-  const reopened = await waitForPhysicalSelectedNode(
-    (nodes) => selectPhysicalSessionDockAction(nodes, 1, triggerLabel),
+  const reopened = await waitForStablePhysicalSessionDockAction(
+    {
+      readNavigation: () => readPhysicalSessionNavigationSnapshot(input),
+      readNodes: readAndroidUiNodes
+    },
+    triggerLabel,
     30_000,
-    "Physical /model trigger was unavailable after close."
+    "Physical /model trigger was unavailable after close.",
+    { baseline: navigationBefore }
   );
   await input.actionRegistry.tap(
     "model-reopen",
@@ -18915,10 +19004,15 @@ async function runPhysicalGoalControl(
     goalCallsBefore === 0,
     "Physical /goal flow started with a prechanged mutation count."
   );
-  const trigger = await waitForPhysicalSelectedNode(
-    (nodes) => selectPhysicalSessionDockAction(nodes, 1, `/goal for ${physicalUiSessionName}`),
+  const trigger = await waitForStablePhysicalSessionDockAction(
+    {
+      readNavigation: () => readPhysicalSessionNavigationSnapshot(input),
+      readNodes: readAndroidUiNodes
+    },
+    `/goal for ${physicalUiSessionName}`,
     30_000,
-    "Physical /goal trigger was unavailable."
+    "Physical /goal trigger was unavailable.",
+    { baseline: navigationBefore }
   );
   measure(trigger, "open-goal");
   await input.actionRegistry.tap(
@@ -19061,10 +19155,15 @@ async function runPhysicalPlanControl(
     "Physical /plan flow started with a prechanged mutation count."
   );
   const triggerLabel = `/plan for ${physicalUiSessionName}`;
-  const trigger = await waitForPhysicalSelectedNode(
-    (nodes) => selectPhysicalSessionDockAction(nodes, 1, triggerLabel),
+  const trigger = await waitForStablePhysicalSessionDockAction(
+    {
+      readNavigation: () => readPhysicalSessionNavigationSnapshot(input),
+      readNodes: readAndroidUiNodes
+    },
+    triggerLabel,
     30_000,
-    "Physical /plan trigger was unavailable."
+    "Physical /plan trigger was unavailable.",
+    { baseline: navigationBefore }
   );
   measure(trigger, "open-plan");
   await openPhysicalPlanSheet(
@@ -19159,10 +19258,15 @@ async function runPhysicalPlanControl(
       navigationBefore
     )
   );
-  const reopened = await waitForPhysicalSelectedNode(
-    (nodes) => selectPhysicalSessionDockAction(nodes, 1, triggerLabel),
+  const reopened = await waitForStablePhysicalSessionDockAction(
+    {
+      readNavigation: () => readPhysicalSessionNavigationSnapshot(input),
+      readNodes: readAndroidUiNodes
+    },
+    triggerLabel,
     30_000,
-    "Physical /plan trigger was unavailable after close."
+    "Physical /plan trigger was unavailable after close.",
+    { baseline: navigationBefore }
   );
   await openPhysicalPlanSheet(
     input.actionRegistry,
@@ -19303,15 +19407,15 @@ async function runPhysicalSessionUtilities(
     input.controls,
     "start_compact"
   );
-  const more = await waitForPhysicalSelectedNode(
-    (nodes) =>
-      selectPhysicalSessionDockAction(
-        nodes,
-        1,
-        `More session utilities for ${physicalUiSessionName}`
-      ),
+  const more = await waitForStablePhysicalSessionDockAction(
+    {
+      readNavigation: () => readPhysicalSessionNavigationSnapshot(input),
+      readNodes: readAndroidUiNodes
+    },
+    `More session utilities for ${physicalUiSessionName}`,
     30_000,
-    "Physical session utilities trigger was unavailable."
+    "Physical session utilities trigger was unavailable.",
+    { baseline: navigationBefore }
   );
   measure(more, "open-session-utilities");
   await input.actionRegistry.tap(
