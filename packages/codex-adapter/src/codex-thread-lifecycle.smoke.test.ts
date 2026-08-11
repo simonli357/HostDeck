@@ -1,23 +1,36 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
-import { chmod, copyFile, lstat, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import {
+  chmod,
+  copyFile,
+  lstat,
+  mkdir,
+  mkdtemp,
+  rm,
+  stat,
+  writeFile
+} from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, isAbsolute, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { codexBindingDescriptor } from "./binding.js";
 import { parseCodexCliVersionOutput } from "./compatibility.js";
 import { createCodexAppServerConnection } from "./connection.js";
 import { createCodexThreadClient } from "./thread-client.js";
 import { createCodexUnixWebSocketTransport } from "./transport.js";
-import { buildCodexTuiResumeCommand } from "./tui-resume.js";
+import { createCodexUnixSocketEndpoint } from "./transport-endpoint.js";
+import { buildCodexPlatformTuiResumeCommand } from "./tui-resume-platform.js";
 
 const requireSmoke = process.env.HOSTDECK_REQUIRE_CODEX_THREAD_SMOKE === "1";
-const codexBin = process.env.HOSTDECK_CODEX_BIN ?? "codex";
+const configuredCodexBin = process.env.HOSTDECK_CODEX_BIN ?? "codex";
+const fakeAuthenticationFixture =
+  process.env.HOSTDECK_CODEX_FAKE_AUTH_FIXTURE;
 
 describe.skipIf(!requireSmoke)("installed Codex managed-thread lifecycle smoke", () => {
   it(
     "starts, lists, reads, resumes, and archives one exact no-turn thread",
     async () => {
+      const codexBin = resolveCodexExecutable(configuredCodexBin);
       const version = parseCodexCliVersionOutput(
         execFileSync(codexBin, ["--version"], { encoding: "utf8", timeout: 10_000, maxBuffer: 64 * 1024 })
       );
@@ -120,12 +133,14 @@ describe.skipIf(!requireSmoke)("installed Codex managed-thread lifecycle smoke",
           thread_source: null
         });
 
-        const command = buildCodexTuiResumeCommand({
-          socket_path: socketPath,
+        const command = buildCodexPlatformTuiResumeCommand({
+          target: "linux-x64",
+          endpoint: createCodexUnixSocketEndpoint(socketPath),
           thread_id: started.thread.id,
-          codex_bin: codexBin
+          codex_bin: codexBin,
+          cwd: projectDirectory
         });
-        tui = await startAndInspectTui(command, codexHome, projectDirectory, tuiSocketPath);
+        tui = await startAndInspectTui(command, codexHome, tuiSocketPath);
         expect(tui.output).toContain("OpenAI Codex");
         expect(tui.output).toContain(basename(projectDirectory));
         await tui.close();
@@ -160,11 +175,11 @@ describe.skipIf(!requireSmoke)("installed Codex managed-thread lifecycle smoke",
 });
 
 async function startAndInspectTui(
-  command: ReturnType<typeof buildCodexTuiResumeCommand>,
+  command: ReturnType<typeof buildCodexPlatformTuiResumeCommand>,
   codexHome: string,
-  projectDirectory: string,
   tmuxSocketPath: string
 ): Promise<TuiProbe> {
+  const projectDirectory = command.cwd;
   const threadId = command.args.at(-1);
   if (threadId === undefined) throw new Error("TUI resume command is missing its exact thread id.");
   const args = [...command.args.slice(0, -1), "--no-alt-screen", threadId];
@@ -238,6 +253,22 @@ async function startAndInspectTui(
     }
     throw error;
   }
+}
+
+function resolveCodexExecutable(candidate: string): string {
+  if (isAbsolute(candidate)) return candidate;
+  if (!/^[A-Za-z0-9._+-]{1,128}$/u.test(candidate)) {
+    throw new Error("Codex smoke executable name is invalid.");
+  }
+  const resolved = execFileSync("which", [candidate], {
+    encoding: "utf8",
+    timeout: 10_000,
+    maxBuffer: 64 * 1024
+  }).trim();
+  if (!isAbsolute(resolved)) {
+    throw new Error("Codex smoke executable did not resolve to an absolute path.");
+  }
+  return resolved;
 }
 
 interface TuiProbe {
@@ -328,15 +359,32 @@ function boundedOutput(current: string, chunk: Buffer): string {
 }
 
 async function seedCodexAuthentication(codexHome: string): Promise<void> {
-  const sourceHome = process.env.CODEX_HOME ?? join(homedir(), ".codex");
-  const source = join(sourceHome, "auth.json");
-  const sourceMetadata = await lstat(source);
-  if (!sourceMetadata.isFile() || (sourceMetadata.mode & 0o077) !== 0) {
-    throw new Error("Installed Codex authentication must be a private regular auth.json file for the TUI smoke.");
+  if (
+    fakeAuthenticationFixture !== undefined &&
+    fakeAuthenticationFixture !== "1"
+  ) {
+    throw new Error("Codex smoke fake-auth fixture setting is invalid.");
   }
   const destination = join(codexHome, "auth.json");
-  await copyFile(source, destination);
-  await chmod(destination, 0o600);
+  if (fakeAuthenticationFixture === "1") {
+    await writeFile(
+      destination,
+      `${JSON.stringify({
+        auth_mode: "apikey",
+        OPENAI_API_KEY: "hostdeck-ci-fixture-not-a-key"
+      })}\n`,
+      { encoding: "utf8", mode: 0o600 }
+    );
+  } else {
+    const sourceHome = process.env.CODEX_HOME ?? join(homedir(), ".codex");
+    const source = join(sourceHome, "auth.json");
+    const sourceMetadata = await lstat(source);
+    if (!sourceMetadata.isFile() || (sourceMetadata.mode & 0o077) !== 0) {
+      throw new Error("Installed Codex authentication must be a private regular auth.json file for the TUI smoke.");
+    }
+    await copyFile(source, destination);
+    await chmod(destination, 0o600);
+  }
   const destinationMetadata = await lstat(destination);
   if (!destinationMetadata.isFile() || (destinationMetadata.mode & 0o077) !== 0) {
     throw new Error("Temporary Codex authentication copy is not private.");

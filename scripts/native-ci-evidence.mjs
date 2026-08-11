@@ -25,6 +25,8 @@ export const nativeCiTargetPolicies = Object.freeze({
       "native_lock",
       "windows_paths",
       "tailscale_adapter",
+      "codex_tui_resume_smoke",
+      "platform_tui_resume",
       "integration",
       "web_build",
       "native_modules",
@@ -47,6 +49,7 @@ export const nativeCiTargetPolicies = Object.freeze({
       "tailscale_adapter",
       "codex_transport_spike",
       "windows_supervisor",
+      "platform_tui_resume",
       "web_build",
       "native_modules"
     ]),

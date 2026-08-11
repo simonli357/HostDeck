@@ -217,6 +217,24 @@ export {
   type CodexTuiResumeCommandInput
 } from "./tui-resume.js";
 export {
+  type BuildCodexPlatformTuiResumeCommandInput,
+  buildCodexPlatformTuiResumeCommand,
+  type CodexLinuxTuiResumeCommand,
+  type CodexPlatformTuiResumeChildProcess,
+  type CodexPlatformTuiResumeCommand,
+  type CodexPlatformTuiResumeErrorCode,
+  type CodexPlatformTuiResumeExecutor,
+  type CodexPlatformTuiResumeSpawn,
+  type CodexPlatformTuiResumeSpawnOptions,
+  type CodexPlatformTuiResumeStage,
+  type CodexWindowsTuiResumeCommand,
+  type CreateCodexPlatformTuiResumeExecutorInput,
+  codexPlatformTuiResumeErrorCodes,
+  createCodexPlatformTuiResumeExecutor,
+  type ExecuteCodexPlatformTuiResumeInput,
+  HostDeckCodexPlatformTuiResumeError
+} from "./tui-resume-platform.js";
+export {
   type CodexTurnAccepted,
   type CodexTurnClient,
   type CodexTurnClientOptions,

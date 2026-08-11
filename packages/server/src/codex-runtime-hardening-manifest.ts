@@ -29,6 +29,8 @@ export const runtimeHardeningDeterministicTests = Object.freeze([
   "packages/codex-adapter/src/transport-endpoint.test.ts",
   "packages/codex-adapter/src/transport.contract.test.ts",
   "packages/codex-adapter/src/transport.test.ts",
+  "packages/codex-adapter/src/tui-resume-platform.contract.test.ts",
+  "packages/codex-adapter/src/tui-resume-platform.test.ts",
   "packages/codex-adapter/src/tui-resume.test.ts",
   "packages/codex-adapter/src/turn-client.test.ts",
   "packages/codex-adapter/src/usage-client.test.ts",

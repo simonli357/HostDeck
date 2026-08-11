@@ -129,6 +129,25 @@ async function main() {
       );
     }
     if (target === "linux-x64") {
+      runPnpmCheck(
+        checks,
+        "codex_tui_resume_smoke",
+        ["smoke:codex-threads"],
+        60_000,
+        { HOSTDECK_CODEX_FAKE_AUTH_FIXTURE: "1" }
+      );
+    }
+    runVitestCheck(
+      checks,
+      "platform_tui_resume",
+      [
+        "packages/codex-adapter/src/tui-resume-platform.contract.test.ts",
+        "--config",
+        "vitest.contract.config.ts"
+      ],
+      reportRoot
+    );
+    if (target === "linux-x64") {
       runVitestCheck(
         checks,
         "integration",
@@ -211,13 +230,20 @@ function runWindowsCodexSpike(checks, nativeEvidencePath) {
   });
 }
 
-function runPnpmCheck(checks, id, args, timeout = 5 * 60_000) {
+function runPnpmCheck(
+  checks,
+  id,
+  args,
+  timeout = 5 * 60_000,
+  environment = {}
+) {
   runTimedCheck(checks, id, () => {
     runCommand(
       pnpmInvocation.command,
       [...pnpmInvocation.arguments, ...args],
       timeout,
-      id
+      id,
+      { environment }
     );
   });
 }
@@ -282,7 +308,7 @@ function runCommand(command, args, timeout, label, options = {}) {
   const result = spawnSync(command, args, {
     cwd: repositoryRoot,
     encoding: "utf8",
-    env: commandEnvironment(),
+    env: { ...commandEnvironment(), ...options.environment },
     maxBuffer: 16 * 1024 * 1024,
     shell: false,
     timeout,

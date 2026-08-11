@@ -281,6 +281,7 @@ export const directHostApiOwnerPaths = Object.freeze([
   "packages/codex-adapter/src/connection.ts",
   "packages/codex-adapter/src/transport-endpoint.ts",
   "packages/codex-adapter/src/transport.ts",
+  "packages/codex-adapter/src/tui-resume-platform.ts",
   "packages/codex-adapter/src/tui-resume.ts",
   "packages/server/src/codex-hostdeck-restart-smoke-support.ts",
   "packages/server/src/codex-runtime-hardening-manifest.ts",
