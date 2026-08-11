@@ -151,7 +151,7 @@ function inspectDescriptor(descriptor: number): WindowsNativePathInspection {
   if (isInvalidHandle(handle)) {
     throw new WindowsNativeFileSecurityError(
       "path_unavailable",
-      "_get_osfhandle",
+      "uv_get_osfhandle",
       lastError(bindings)
     );
   }
@@ -802,7 +802,7 @@ function windowsBindings() {
 function createWindowsBindings() {
   const kernel32 = koffi.load("kernel32.dll");
   const advapi32 = koffi.load("advapi32.dll");
-  const ucrtbase = koffi.load("ucrtbase.dll");
+  const nodeProcess = koffi.load(null);
   const shell32 = koffi.load("shell32.dll");
   const handleValue = koffi.opaque("HOSTDECK_WIN_HANDLE_VALUE");
   const _HOSTDECK_WIN_HANDLE = koffi.pointer(
@@ -896,8 +896,8 @@ function createWindowsBindings() {
       "uint32_t __stdcall GetFinalPathNameByHandleW(HOSTDECK_WIN_HANDLE hFile, _Out_ char16_t *lpszFilePath, uint32_t cchFilePath, uint32_t dwFlags)"
     ),
     GetLastError: kernel32.func("uint32_t __stdcall GetLastError(void)"),
-    GetOsFileHandle: ucrtbase.func(
-      "HOSTDECK_WIN_HANDLE __cdecl _get_osfhandle(int32_t fd)"
+    GetOsFileHandle: nodeProcess.func(
+      "HOSTDECK_WIN_HANDLE __cdecl uv_get_osfhandle(int32_t fd)"
     ),
     GetSecurityDescriptorDacl: advapi32.func(
       "int32_t __stdcall GetSecurityDescriptorDacl(HOSTDECK_WIN_PSECURITY_DESCRIPTOR pSecurityDescriptor, _Out_ int32_t *lpbDaclPresent, _Out_ HOSTDECK_WIN_PACL *pDacl, _Out_ int32_t *lpbDaclDefaulted)"
