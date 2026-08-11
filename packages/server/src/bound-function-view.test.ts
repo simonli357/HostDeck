@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createBoundFunctionView } from "./bound-function-view.js";
+import { createHostDeckBoundFunctionView } from "./production-application-composition.js";
 
 describe("production bound function views", () => {
   it("preserves the owning receiver through a detached route port", () => {
@@ -12,7 +12,7 @@ describe("production bound function views", () => {
     }
 
     const source = new ReceiverPort("managed-session-service");
-    const view = createBoundFunctionView(source, ["read"]);
+    const view = createHostDeckBoundFunctionView(source, ["read"]);
     const detached = view.read;
 
     expect(Object.getPrototypeOf(view)).toBeNull();
@@ -24,7 +24,7 @@ describe("production bound function views", () => {
 
   it("rejects a selected port that is not callable", () => {
     expect(() =>
-      createBoundFunctionView({ read: "not-callable" }, ["read"])
+      createHostDeckBoundFunctionView({ read: "not-callable" }, ["read"])
     ).toThrow("HostDeck production function port read is invalid.");
   });
 });
