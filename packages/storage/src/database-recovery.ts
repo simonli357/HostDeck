@@ -1,34 +1,40 @@
 import { randomUUID } from "node:crypto";
 import {
-  chmodSync,
+  closeSync,
   existsSync,
   linkSync,
-  lstatSync,
-  realpathSync,
   rmSync,
   unlinkSync
 } from "node:fs";
-import { basename, dirname, isAbsolute, join, resolve, win32 } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import Database from "better-sqlite3";
+import {
+  type HostDeckDaemonLease,
+  requireActiveHostDeckDaemonLease
+} from "./daemon-lease.js";
 import {
   inspectCurrentMigrations,
   type MigrationResult,
-  openCurrentReadOnlyDatabase
+  openCurrentReadOnlyDatabase,
+  snapshotStorageMigrations
 } from "./migration-runner.js";
-import { defaultMigrations, type StorageMigration } from "./migrations.js";
+import type { StorageMigration } from "./migrations.js";
 import {
-  nativeWindowsFileSecurityPort,
-  type WindowsNativePathInspection
-} from "./windows-native-file-security.js";
+  inspectExistingHostDeckStatePaths,
+  type OpenedSecureHostDeckRegularFile,
+  openSecureHostDeckRegularFile
+} from "./secure-local-paths.js";
 
 export type HostDeckDatabaseRecoveryErrorCode =
   | "aborted"
+  | "authority_invalid"
   | "backup_failed"
   | "backup_invalid"
   | "destination_exists"
   | "invalid_input"
   | "restore_failed"
-  | "source_closed";
+  | "source_closed"
+  | "state_insecure";
 
 export class HostDeckDatabaseRecoveryError extends Error {
   constructor(
@@ -44,15 +50,19 @@ export class HostDeckDatabaseRecoveryError extends Error {
 export interface CreateHostDeckDatabaseBackupInput {
   readonly database: Database.Database;
   readonly destination_path: string;
+  readonly lease: HostDeckDaemonLease;
   readonly migrations?: readonly StorageMigration[];
   readonly signal?: AbortSignal;
+  readonly state_dir: string;
 }
 
 export interface RestoreHostDeckDatabaseBackupInput {
   readonly backup_path: string;
   readonly database_path: string;
+  readonly lease: HostDeckDaemonLease;
   readonly migrations?: readonly StorageMigration[];
   readonly signal?: AbortSignal;
+  readonly state_dir: string;
 }
 
 export interface HostDeckDatabaseRecoveryResult {
@@ -61,6 +71,10 @@ export interface HostDeckDatabaseRecoveryResult {
 }
 
 const sqliteSidecarSuffixes = ["", "-journal", "-shm", "-wal"] as const;
+
+interface HostDeckDatabaseRecoveryAuthority {
+  readonly verify: () => void;
+}
 
 export async function createHostDeckDatabaseBackup(
   input: CreateHostDeckDatabaseBackupInput
@@ -74,29 +88,66 @@ export async function createHostDeckDatabaseBackup(
     input?.destination_path,
     "backup destination"
   );
-  const migrations = snapshotMigrations(input?.migrations);
-  requireCanonicalExistingRegularFile(source);
+  const stateDir = requireCanonicalAbsolutePath(input?.state_dir, "state directory");
+  const migrations = requireMigrationCatalog(input?.migrations);
   requireDistinctPaths(source, destination);
-  requireCanonicalParent(destination);
+  const authority = requireRecoveryState(
+    stateDir,
+    [source, destination],
+    input?.lease
+  );
   requireDestinationAbsent(destination);
   requireNotAborted(input?.signal);
-  validateOpenDatabase(database, migrations);
 
   const partial = join(
     dirname(destination),
     `.${basename(destination)}.partial-${process.pid}-${randomUUID()}`
   );
+  let published = false;
   try {
-    const metadata = await transferDatabase(database, partial, input.signal);
+    const metadata = await withSecureRecoveryFile(
+      source,
+      "database source",
+      false,
+      async () => {
+        authority.verify();
+        validateOpenDatabase(database, migrations);
+        const metadata = await transferDatabase(database, partial, input.signal);
+        authority.verify();
+        return metadata;
+      }
+    );
     requireNotAborted(input.signal);
-    normalizeStandaloneDatabase(partial);
-    chmodSync(partial, 0o600);
-    const migration = validateStoredDatabase(partial, migrations);
-    const result = freezeResult(metadata.totalPages, migration);
+    const result = await withSecureRecoveryFile(
+      partial,
+      "database backup partial",
+      true,
+      () => {
+        normalizeStandaloneDatabase(partial);
+        const migration = validateStoredDatabase(partial, migrations);
+        requireStandaloneDatabase(partial);
+        return freezeResult(metadata.totalPages, migration);
+      }
+    );
+    requireDestinationAbsent(destination);
+    authority.verify();
     publishExclusive(partial, destination);
+    published = true;
+    await withSecureRecoveryFile(
+      destination,
+      "database backup",
+      false,
+      () => {
+        requireStandaloneDatabase(destination);
+      }
+    );
+    authority.verify();
     return result;
   } catch (error) {
-    const cleanupErrors = removeSqliteFiles(partial);
+    const cleanupErrors = [
+      ...removeSqliteFiles(partial),
+      ...(published ? removeSqliteFiles(destination) : [])
+    ];
     if (error instanceof HostDeckDatabaseRecoveryError) {
       if (cleanupErrors.length === 0) throw error;
       throw new HostDeckDatabaseRecoveryError(
@@ -134,53 +185,72 @@ export async function restoreHostDeckDatabaseBackup(
     input?.database_path,
     "database destination"
   );
-  const migrations = snapshotMigrations(input?.migrations);
+  const stateDir = requireCanonicalAbsolutePath(input?.state_dir, "state directory");
+  const migrations = requireMigrationCatalog(input?.migrations);
   requireDistinctPaths(backup, destination);
-  requireCanonicalParent(destination);
-  requireCanonicalExistingRegularFile(backup);
+  const authority = requireRecoveryState(
+    stateDir,
+    [backup, destination],
+    input?.lease
+  );
   requireNotAborted(input?.signal);
   const destinationExisted = existsSync(destination);
-  if (destinationExisted) requireCanonicalExistingRegularFile(destination);
-
-  let source: ReturnType<typeof openCurrentReadOnlyDatabase> | null = null;
-  try {
-    source = openCurrentReadOnlyDatabase(backup, { migrations });
-    validateOpenDatabase(source.db, migrations);
-  } catch (error) {
-    const failures: unknown[] = [error];
-    if (source !== null) {
-      try {
-        source.db.close();
-      } catch (closeError) {
-        failures.push(closeError);
-      }
-    }
-    throw new HostDeckDatabaseRecoveryError(
-      "backup_invalid",
-      "The HostDeck database backup is not a valid current snapshot.",
-      {
-        cause:
-          failures.length === 1
-            ? error
-            : new AggregateError(
-                failures,
-                "Database backup validation and cleanup failed."
-              )
-      }
-    );
-  }
-  const currentSource = source;
 
   try {
-    const metadata = await transferDatabase(
-      currentSource.db,
-      destination,
-      input.signal
+    const result = await withSecureRecoveryFile(
+      backup,
+      "database backup",
+      false,
+      async () => {
+        authority.verify();
+        const source = openValidatedBackup(backup, migrations);
+        try {
+          const restore = async (): Promise<HostDeckDatabaseRecoveryResult> => {
+            const metadata = await transferDatabase(
+              source.db,
+              destination,
+              input.signal
+            );
+            authority.verify();
+            requireNotAborted(input.signal);
+            normalizeStandaloneDatabase(destination);
+            const migration = validateStoredDatabase(destination, migrations);
+            requireStandaloneDatabase(destination);
+            return freezeResult(metadata.totalPages, migration);
+          };
+          if (destinationExisted) {
+            return await withSecureRecoveryFile(
+              destination,
+              "database destination",
+              false,
+              restore
+            );
+          }
+          const metadata = await transferDatabase(
+            source.db,
+            destination,
+            input.signal
+          );
+          authority.verify();
+          requireNotAborted(input.signal);
+          return await withSecureRecoveryFile(
+            destination,
+            "database destination",
+            true,
+            () => {
+              normalizeStandaloneDatabase(destination);
+              const migration = validateStoredDatabase(destination, migrations);
+              requireStandaloneDatabase(destination);
+              return freezeResult(metadata.totalPages, migration);
+            }
+          );
+        } finally {
+          source.db.close();
+        }
+      }
     );
-    normalizeStandaloneDatabase(destination);
-    chmodSync(destination, 0o600);
-    const migration = validateStoredDatabase(destination, migrations);
-    return freezeResult(metadata.totalPages, migration);
+    authority.verify();
+    return result;
   } catch (error) {
     const cleanupErrors = destinationExisted
       ? []
@@ -207,8 +277,6 @@ export async function restoreHostDeckDatabaseBackup(
               )
       }
     );
-  } finally {
-    currentSource.db.close();
   }
 }
 
@@ -269,16 +337,46 @@ function validateStoredDatabase(
   }
 }
 
+function openValidatedBackup(
+  path: string,
+  migrations: readonly StorageMigration[]
+): ReturnType<typeof openCurrentReadOnlyDatabase> {
+  let source: ReturnType<typeof openCurrentReadOnlyDatabase> | null = null;
+  try {
+    source = openCurrentReadOnlyDatabase(path, { migrations });
+    validateOpenDatabase(source.db, migrations);
+    return source;
+  } catch (error) {
+    const failures: unknown[] = [error];
+    if (source !== null) {
+      try {
+        source.db.close();
+      } catch (closeError) {
+        failures.push(closeError);
+      }
+    }
+    throw new HostDeckDatabaseRecoveryError(
+      "backup_invalid",
+      "The HostDeck database backup is not a valid current snapshot.",
+      {
+        cause:
+          failures.length === 1
+            ? error
+            : new AggregateError(
+                failures,
+                "Database backup validation and cleanup failed."
+              )
+      }
+    );
+  }
+}
+
 function requireHealthyDatabase(database: Database.Database): void {
-  const quickCheck = database.pragma("quick_check") as Array<{
-    readonly quick_check: string;
-  }>;
-  const foreignKeyCheck = database.pragma("foreign_key_check") as unknown[];
-  if (
-    quickCheck.length !== 1 ||
-    quickCheck[0]?.quick_check !== "ok" ||
-    foreignKeyCheck.length !== 0
-  ) {
+  const quickCheck = database.pragma("quick_check(1)", { simple: true });
+  const foreignKeyFailure = database
+    .prepare("PRAGMA foreign_key_check")
+    .get();
+  if (quickCheck !== "ok" || foreignKeyFailure !== undefined) {
     throw new HostDeckDatabaseRecoveryError(
       "backup_invalid",
       "The HostDeck database snapshot failed SQLite integrity validation."
@@ -301,6 +399,15 @@ function normalizeStandaloneDatabase(path: string): void {
   }
 }
 
+function requireStandaloneDatabase(path: string): void {
+  if (sqliteSidecarSuffixes.slice(1).some((suffix) => existsSync(`${path}${suffix}`))) {
+    throw new HostDeckDatabaseRecoveryError(
+      "backup_invalid",
+      "The HostDeck database snapshot retained SQLite sidecars."
+    );
+  }
+}
+
 function requireOpenDatabase(candidate: unknown): Database.Database {
   if (
     candidate === null ||
@@ -320,7 +427,8 @@ function requireCanonicalAbsolutePath(candidate: unknown, label: string): string
   if (
     typeof candidate !== "string" ||
     candidate.length === 0 ||
-    candidate.includes("\0") ||
+    candidate.length > 4_096 ||
+    containsControlCharacter(candidate) ||
     !isAbsolute(candidate) ||
     resolve(candidate) !== candidate ||
     basename(candidate).length === 0
@@ -333,115 +441,115 @@ function requireCanonicalAbsolutePath(candidate: unknown, label: string): string
   return candidate;
 }
 
-function requireCanonicalParent(path: string): void {
-  const parent = dirname(path);
-  if (process.platform === "win32") {
-    requireSafeWindowsDirectoryTree(parent);
-    return;
-  }
-  let metadata: ReturnType<typeof lstatSync>;
-  let actual: string;
+function requireRecoveryState(
+  stateDir: string,
+  databasePaths: readonly string[],
+  lease: unknown
+): HostDeckDatabaseRecoveryAuthority {
   try {
-    metadata = lstatSync(parent);
-    actual = realpathSync.native(parent);
+    for (const databasePath of databasePaths) {
+      inspectExistingHostDeckStatePaths({
+        state_dir: stateDir,
+        database_path: databasePath
+      });
+    }
   } catch (error) {
     throw new HostDeckDatabaseRecoveryError(
-      "invalid_input",
-      "HostDeck database parent directory is unavailable.",
+      "state_insecure",
+      "HostDeck database recovery state paths are insecure.",
       { cause: error }
     );
   }
-  if (
-    !metadata.isDirectory() ||
-    metadata.isSymbolicLink() ||
-    !sameNativePath(actual, parent)
-  ) {
-    throw new HostDeckDatabaseRecoveryError(
-      "invalid_input",
-      "HostDeck database parent directory is not canonical."
-    );
-  }
-}
-
-function requireCanonicalExistingRegularFile(path: string): void {
-  if (process.platform === "win32") {
-    requireSafeWindowsDirectoryTree(dirname(path));
-    const inspection = inspectWindowsPath(path, "database file");
-    if (
-      inspection.is_directory ||
-      inspection.is_reparse_point ||
-      inspection.has_named_streams ||
-      inspection.link_count !== 1
-    ) {
+  const expectedLeasePath = join(stateDir, "hostdeck.lock");
+  const verify = (): void => {
+    try {
+      requireActiveHostDeckDaemonLease(lease, expectedLeasePath);
+    } catch (error) {
       throw new HostDeckDatabaseRecoveryError(
-        "invalid_input",
-        "HostDeck database file identity is invalid."
+        "authority_invalid",
+        "HostDeck database recovery authority is invalid.",
+        { cause: error }
       );
     }
-    return;
-  }
-  let metadata: ReturnType<typeof lstatSync>;
-  let actual: string;
-  try {
-    metadata = lstatSync(path);
-    actual = realpathSync.native(path);
-  } catch (error) {
-    throw new HostDeckDatabaseRecoveryError(
-      "invalid_input",
-      "HostDeck database file is unavailable.",
-      { cause: error }
-    );
-  }
-  if (
-    !metadata.isFile() ||
-    metadata.isSymbolicLink() ||
-    metadata.nlink !== 1 ||
-    !sameNativePath(actual, path)
-  ) {
-    throw new HostDeckDatabaseRecoveryError(
-      "invalid_input",
-      "HostDeck database file identity is invalid."
-    );
-  }
+  };
+  verify();
+  return Object.freeze({ verify });
 }
 
-function requireSafeWindowsDirectoryTree(path: string): void {
-  const root = win32.parse(path).root;
-  let cursor = path;
-  for (;;) {
-    const inspection = inspectWindowsPath(cursor, "database parent directory");
-    if (
-      !inspection.is_directory ||
-      inspection.is_reparse_point ||
-      inspection.has_named_streams
-    ) {
-      throw new HostDeckDatabaseRecoveryError(
-        "invalid_input",
-        "HostDeck database parent directory is not canonical."
-      );
-    }
-    if (sameNativePath(cursor, root)) return;
-    const parent = win32.dirname(cursor);
-    if (sameNativePath(parent, cursor)) {
-      throw new HostDeckDatabaseRecoveryError(
-        "invalid_input",
-        "HostDeck database parent directory is not canonical."
-      );
-    }
-    cursor = parent;
-  }
-}
-
-function inspectWindowsPath(
+async function withSecureRecoveryFile<T>(
   path: string,
-  label: string
-): WindowsNativePathInspection {
+  label: string,
+  repairMode: boolean,
+  operation: () => T | Promise<T>
+): Promise<T> {
+  let opened: OpenedSecureHostDeckRegularFile;
   try {
-    return nativeWindowsFileSecurityPort.inspectPath(path);
+    opened = openSecureHostDeckRegularFile(path, {
+      label,
+      mode: 0o600,
+      repair_mode: repairMode
+    });
   } catch (error) {
     throw new HostDeckDatabaseRecoveryError(
-      "invalid_input",
-      `HostDeck ${label} is unavailable.`,
+      "state_insecure",
+      "HostDeck database recovery file security is invalid.",
+      { cause: error }
+    );
+  }
+
+  let result: T | undefined;
+  let operationError: unknown;
+  let operationFailed = false;
+  try {
+    verifyRecoveryFile(opened);
+    result = await operation();
+    verifyRecoveryFile(opened);
+  } catch (error) {
+    operationFailed = true;
+    operationError = error;
+  }
+  let closeError: unknown;
+  try {
+    closeSync(opened.descriptor);
+  } catch (error) {
+    closeError = error;
+  }
+  if (operationFailed) {
+    if (closeError === undefined) throw operationError;
+    if (operationError instanceof HostDeckDatabaseRecoveryError) {
+      throw new HostDeckDatabaseRecoveryError(
+        operationError.code,
+        operationError.message,
+        {
+          cause: new AggregateError(
+            [operationError, closeError],
+            "Database recovery operation and secure descriptor cleanup failed."
+          )
+        }
+      );
+    }
+    throw new AggregateError(
+      [operationError, closeError],
+      "Database recovery operation and secure descriptor cleanup failed."
+    );
+  }
+  if (closeError !== undefined) {
+    throw new HostDeckDatabaseRecoveryError(
+      "state_insecure",
+      "HostDeck database recovery file could not be closed securely.",
+      { cause: closeError }
+    );
+  }
+  return result as T;
+}
+
+function verifyRecoveryFile(opened: OpenedSecureHostDeckRegularFile): void {
+  try {
+    opened.verifyPath();
+  } catch (error) {
+    throw new HostDeckDatabaseRecoveryError(
+      "state_insecure",
+      "HostDeck database recovery file identity changed.",
       { cause: error }
     );
   }
@@ -473,32 +581,26 @@ function publishExclusive(partial: string, destination: string): void {
   }
 }
 
-function snapshotMigrations(
+function requireMigrationCatalog(
   migrations: readonly StorageMigration[] | undefined
 ): readonly StorageMigration[] {
-  const selected = migrations ?? defaultMigrations;
-  if (!Array.isArray(selected)) {
+  try {
+    return snapshotStorageMigrations(migrations);
+  } catch (error) {
     throw new HostDeckDatabaseRecoveryError(
       "invalid_input",
-      "HostDeck database migrations are invalid."
+      "HostDeck database migrations are invalid.",
+      { cause: error }
     );
   }
-  return Object.freeze(
-    selected.map((migration) => {
-      if (
-        migration === null ||
-        typeof migration !== "object" ||
-        typeof migration.version !== "string" ||
-        typeof migration.sql !== "string"
-      ) {
-        throw new HostDeckDatabaseRecoveryError(
-          "invalid_input",
-          "HostDeck database migrations are invalid."
-        );
-      }
-      return Object.freeze({ version: migration.version, sql: migration.sql });
-    })
-  );
+}
+
+function containsControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
 }
 
 function hasErrorCode(error: unknown, code: string): boolean {

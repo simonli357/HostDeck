@@ -41,6 +41,8 @@ export interface HostDeckDaemonLease {
   readonly release: () => void;
 }
 
+const activeDaemonLeases = new WeakMap<HostDeckDaemonLease, () => void>();
+
 export function acquireHostDeckDaemonLease(input: AcquireHostDeckDaemonLeaseInput): HostDeckDaemonLease {
   const leasePath = typeof input.lease_path === "string" ? input.lease_path : "<unknown>";
   const now = input.now ?? (() => new Date());
@@ -101,7 +103,7 @@ export function acquireHostDeckDaemonLease(input: AcquireHostDeckDaemonLeaseInpu
   }
 
   let released = false;
-  return {
+  const lease: HostDeckDaemonLease = {
     lease_path: opened.path,
     acquired_at: acquiredAt,
     pid,
@@ -113,6 +115,7 @@ export function acquireHostDeckDaemonLease(input: AcquireHostDeckDaemonLeaseInpu
     release() {
       if (released) return;
       released = true;
+      activeDaemonLeases.delete(lease);
       const cleanupErrors = unlockAndClose(fileLock, descriptor);
       if (cleanupErrors.length > 0) {
         throw leaseError(
@@ -124,6 +127,42 @@ export function acquireHostDeckDaemonLease(input: AcquireHostDeckDaemonLeaseInpu
       }
     }
   };
+  activeDaemonLeases.set(lease, opened.verifyPath);
+  return Object.freeze(lease);
+}
+
+export function requireActiveHostDeckDaemonLease(
+  candidate: unknown,
+  expectedLeasePath: string
+): HostDeckDaemonLease {
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    !activeDaemonLeases.has(candidate as HostDeckDaemonLease) ||
+    (candidate as HostDeckDaemonLease).released ||
+    !sameNativePath(
+      (candidate as HostDeckDaemonLease).lease_path,
+      expectedLeasePath
+    )
+  ) {
+    throw leaseError(
+      "invalid_lease",
+      "HostDeck database recovery requires the active daemon lease for its state directory.",
+      expectedLeasePath
+    );
+  }
+  const lease = candidate as HostDeckDaemonLease;
+  try {
+    activeDaemonLeases.get(lease)?.();
+  } catch (error) {
+    throw leaseError(
+      "invalid_lease",
+      "HostDeck database recovery lease identity changed.",
+      expectedLeasePath,
+      error
+    );
+  }
+  return lease;
 }
 
 function parseTimestamp(candidate: Date, leasePath: string): string {
@@ -138,6 +177,13 @@ function parsePid(candidate: number, leasePath: string): number {
     throw leaseError("invalid_lease", "HostDeck daemon lease pid must be a positive safe integer.", leasePath);
   }
   return candidate;
+}
+
+function sameNativePath(left: unknown, right: string): boolean {
+  if (typeof left !== "string") return false;
+  if (process.platform !== "win32") return left === right;
+  return left.replaceAll("/", "\\").toLowerCase() ===
+    right.replaceAll("/", "\\").toLowerCase();
 }
 
 function writeAll(descriptor: number, data: Buffer): void {

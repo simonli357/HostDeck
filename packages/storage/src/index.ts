@@ -26,7 +26,8 @@ export {
   acquireHostDeckDaemonLease,
   type HostDeckDaemonLease,
   HostDeckDaemonLeaseError,
-  type HostDeckDaemonLeaseErrorCode
+  type HostDeckDaemonLeaseErrorCode,
+  requireActiveHostDeckDaemonLease
 } from "./daemon-lease.js";
 export {
   type CreateHostDeckDatabaseBackupInput,
@@ -52,7 +53,8 @@ export {
   type OpenMigratedDatabaseOptions,
   openMigratedDatabase,
   type RunMigrationsOptions,
-  runMigrations
+  runMigrations,
+  snapshotStorageMigrations
 } from "./migration-runner.js";
 export {
   defaultMigrations,

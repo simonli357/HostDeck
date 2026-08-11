@@ -1,8 +1,10 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
+  chmodSync,
   existsSync,
   linkSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync
@@ -11,18 +13,30 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  acquireHostDeckDaemonLease,
+  type HostDeckDaemonLease
+} from "./daemon-lease.js";
+import {
   createHostDeckDatabaseBackup,
   HostDeckDatabaseRecoveryError,
   restoreHostDeckDatabaseBackup
 } from "./database-recovery.js";
 import { openMigratedDatabase } from "./migration-runner.js";
 import { defaultMigrations } from "./migrations.js";
+import {
+  prepareHostDeckStatePaths,
+  resolveNativeWindowsHostDeckDefaultPaths
+} from "./secure-local-paths.js";
 
 const cleanup: string[] = [];
+const leases: HostDeckDaemonLease[] = [];
 const priorMigrations = defaultMigrations.slice(0, -1);
 const at = "2026-08-11T12:00:00.000Z";
 
 afterEach(() => {
+  for (const lease of leases.splice(0).reverse()) {
+    lease.release();
+  }
   for (const root of cleanup.splice(0).reverse()) {
     rmSync(root, { force: true, recursive: true });
   }
@@ -36,7 +50,8 @@ describe("HostDeck database backup and restore", () => {
 
     const backup = await createHostDeckDatabaseBackup({
       database: live.db,
-      destination_path: layout.backup
+      destination_path: layout.backup,
+      ...recoveryAuthority(layout)
     });
     expect(backup).toMatchObject({
       migration: {
@@ -53,15 +68,17 @@ describe("HostDeck database backup and restore", () => {
     await expect(
       restoreHostDeckDatabaseBackup({
         backup_path: layout.backup,
-        database_path: layout.database
+        database_path: layout.database,
+        ...recoveryAuthority(layout)
       })
-    ).rejects.toMatchObject({ code: "invalid_input" });
+    ).rejects.toMatchObject({ code: "state_insecure" });
     rmSync(alias);
 
     await expect(
       createHostDeckDatabaseBackup({
         database: live.db,
-        destination_path: layout.backup
+        destination_path: layout.backup,
+        ...recoveryAuthority(layout)
       })
     ).rejects.toMatchObject({ code: "destination_exists" });
     live.db
@@ -71,7 +88,8 @@ describe("HostDeck database backup and restore", () => {
 
     const restored = await restoreHostDeckDatabaseBackup({
       backup_path: layout.backup,
-      database_path: layout.database
+      database_path: layout.database,
+      ...recoveryAuthority(layout)
     });
     expect(restored.page_count).toBeGreaterThan(0);
     expect(sha256(layout.backup)).toBe(backupIdentity);
@@ -101,27 +119,31 @@ describe("HostDeck database backup and restore", () => {
       createHostDeckDatabaseBackup({
         database: live.db,
         destination_path: join(layout.root, "aborted.sqlite"),
-        signal: abort.signal
+        signal: abort.signal,
+        ...recoveryAuthority(layout)
       })
     ).rejects.toMatchObject({ code: "aborted" });
     expect(existsSync(join(layout.root, "aborted.sqlite"))).toBe(false);
     await expect(
       createHostDeckDatabaseBackup({
         database: live.db,
-        destination_path: layout.database
+        destination_path: layout.database,
+        ...recoveryAuthority(layout)
       })
     ).rejects.toMatchObject({ code: "invalid_input" });
     await expect(
       createHostDeckDatabaseBackup({
         database: live.db,
-        destination_path: "relative.sqlite"
+        destination_path: "relative.sqlite",
+        ...recoveryAuthority(layout)
       })
     ).rejects.toMatchObject({ code: "invalid_input" });
     live.db.close();
     await expect(
       createHostDeckDatabaseBackup({
         database: live.db,
-        destination_path: layout.backup
+        destination_path: layout.backup,
+        ...recoveryAuthority(layout)
       })
     ).rejects.toMatchObject({ code: "source_closed" });
 
@@ -130,7 +152,8 @@ describe("HostDeck database backup and restore", () => {
     await expect(
       restoreHostDeckDatabaseBackup({
         backup_path: layout.backup,
-        database_path: layout.database
+        database_path: layout.database,
+        ...recoveryAuthority(layout)
       })
     ).rejects.toBeInstanceOf(HostDeckDatabaseRecoveryError);
     expect(sha256(layout.database)).toBe(destinationIdentity);
@@ -148,10 +171,15 @@ describe("HostDeck database backup and restore", () => {
       )
       .run(at);
     invalid.db.close();
+    prepareHostDeckStatePaths({
+      state_dir: layout.root,
+      database_path: layout.backup
+    });
     await expect(
       restoreHostDeckDatabaseBackup({
         backup_path: layout.backup,
-        database_path: layout.database
+        database_path: layout.database,
+        ...recoveryAuthority(layout)
       })
     ).rejects.toMatchObject({ code: "backup_invalid" });
     rmSync(layout.backup);
@@ -176,7 +204,8 @@ describe("HostDeck database backup and restore", () => {
     await createHostDeckDatabaseBackup({
       database: prior.db,
       destination_path: layout.backup,
-      migrations: priorMigrations
+      migrations: priorMigrations,
+      ...recoveryAuthority(layout)
     });
     prior.db.close();
 
@@ -190,7 +219,8 @@ describe("HostDeck database backup and restore", () => {
     await restoreHostDeckDatabaseBackup({
       backup_path: layout.backup,
       database_path: layout.database,
-      migrations: priorMigrations
+      migrations: priorMigrations,
+      ...recoveryAuthority(layout)
     });
     const retained = openMigratedDatabase(layout.database, {
       migrations: priorMigrations,
@@ -222,6 +252,100 @@ describe("HostDeck database backup and restore", () => {
       reupgraded.db.close();
     }
   });
+
+  it("rejects fake, mismatched, released, insecure, and invalid recovery authority before output", async () => {
+    const layout = createLayout();
+    const other = createLayout();
+    const live = openMigratedDatabase(layout.database, { now: fixedNow });
+    const fakeLease = { ...layout.lease } as HostDeckDaemonLease;
+    const fakeDestination = join(layout.root, "fake.sqlite");
+
+    await expect(
+      createHostDeckDatabaseBackup({
+        database: live.db,
+        destination_path: fakeDestination,
+        lease: fakeLease,
+        state_dir: layout.root
+      })
+    ).rejects.toMatchObject({ code: "authority_invalid" });
+    expect(existsSync(fakeDestination)).toBe(false);
+
+    await expect(
+      createHostDeckDatabaseBackup({
+        database: live.db,
+        destination_path: fakeDestination,
+        lease: other.lease,
+        state_dir: layout.root
+      })
+    ).rejects.toMatchObject({ code: "authority_invalid" });
+    expect(existsSync(fakeDestination)).toBe(false);
+
+    await expect(
+      createHostDeckDatabaseBackup({
+        database: live.db,
+        destination_path: fakeDestination,
+        lease: layout.lease,
+        migrations: [{ version: "private_invalid_version", sql: "SELECT 1;" }],
+        state_dir: layout.root
+      })
+    ).rejects.toMatchObject({ code: "invalid_input" });
+    expect(existsSync(fakeDestination)).toBe(false);
+
+    if (process.platform === "linux") {
+      chmodSync(layout.database, 0o640);
+      await expect(
+        createHostDeckDatabaseBackup({
+          database: live.db,
+          destination_path: fakeDestination,
+          ...recoveryAuthority(layout)
+        })
+      ).rejects.toMatchObject({ code: "state_insecure" });
+      expect(existsSync(fakeDestination)).toBe(false);
+      prepareHostDeckStatePaths({
+        state_dir: layout.root,
+        database_path: layout.database
+      });
+    }
+
+    layout.lease.release();
+    await expect(
+      createHostDeckDatabaseBackup({
+        database: live.db,
+        destination_path: fakeDestination,
+        ...recoveryAuthority(layout)
+      })
+    ).rejects.toMatchObject({ code: "authority_invalid" });
+    expect(existsSync(fakeDestination)).toBe(false);
+    live.db.close();
+  });
+
+  it("fails and cleans partial output when lease authority is released during transfer", async () => {
+    const layout = createLayout();
+    const live = openMigratedDatabase(layout.database, { now: fixedNow });
+    const destination = join(layout.root, "released-during-transfer.sqlite");
+    let reads = 0;
+    const signal = {
+      get aborted() {
+        reads += 1;
+        if (reads === 2) layout.lease.release();
+        return false;
+      }
+    } as AbortSignal;
+
+    await expect(
+      createHostDeckDatabaseBackup({
+        database: live.db,
+        destination_path: destination,
+        signal,
+        ...recoveryAuthority(layout)
+      })
+    ).rejects.toMatchObject({ code: "authority_invalid" });
+    expect(existsSync(destination)).toBe(false);
+    expect(
+      readdirSync(layout.root).filter((name) => name.includes(".partial-"))
+    ).toEqual([]);
+    live.db.close();
+  });
 });
 
 function insertSelectedSession(
@@ -251,15 +375,33 @@ function nativeCwd(): string {
 function createLayout(): {
   readonly backup: string;
   readonly database: string;
+  readonly lease: HostDeckDaemonLease;
   readonly root: string;
 } {
-  const root = mkdtempSync(join(tmpdir(), "hostdeck-database-recovery-"));
+  const root =
+    process.platform === "win32"
+      ? join(
+          resolveNativeWindowsHostDeckDefaultPaths().state_dir,
+          "Tests",
+          `database-recovery-${randomUUID()}`
+        )
+      : mkdtempSync(join(tmpdir(), "hostdeck-database-recovery-"));
   cleanup.push(root);
-  return {
-    backup: join(root, "hostdeck-backup.sqlite"),
-    database: join(root, "hostdeck.sqlite"),
-    root
-  };
+  const database = join(root, "hostdeck.sqlite");
+  prepareHostDeckStatePaths({ state_dir: root, database_path: database });
+  const lease = acquireHostDeckDaemonLease({
+    lease_path: join(root, "hostdeck.lock"),
+    now: fixedNow
+  });
+  leases.push(lease);
+  return { backup: join(root, "hostdeck-backup.sqlite"), database, lease, root };
+}
+
+function recoveryAuthority(layout: {
+  readonly lease: HostDeckDaemonLease;
+  readonly root: string;
+}): { readonly lease: HostDeckDaemonLease; readonly state_dir: string } {
+  return { lease: layout.lease, state_dir: layout.root };
 }
 
 function sqliteFiles(root: string): readonly string[] {

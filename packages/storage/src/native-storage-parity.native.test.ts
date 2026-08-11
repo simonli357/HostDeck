@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import {
   existsSync,
@@ -24,6 +24,10 @@ import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  acquireHostDeckDaemonLease,
+  type HostDeckDaemonLease
+} from "./daemon-lease.js";
+import {
   createHostDeckDatabaseBackup,
   restoreHostDeckDatabaseBackup
 } from "./database-recovery.js";
@@ -32,6 +36,10 @@ import {
   defaultMigrations,
   hostDeckCrossPlatformCwdMigration
 } from "./migrations.js";
+import {
+  prepareHostDeckStatePaths,
+  resolveNativeWindowsHostDeckDefaultPaths
+} from "./secure-local-paths.js";
 
 const testFile = fileURLToPath(import.meta.url);
 const repositoryRoot = realpathSync(resolve(dirname(testFile), "../../.."));
@@ -42,11 +50,13 @@ const workerPath = fileURLToPath(
 );
 const priorMigrations = defaultMigrations.slice(0, -1);
 const cleanup: string[] = [];
+const leases: HostDeckDaemonLease[] = [];
 const at = "2026-08-11T12:00:00.000Z";
 const expectedSchemaSha256 =
   "857f1de8aa02f74f6c313670d7daf2b19c00ea20139b8b11551833f7a89aebd7";
 
 afterEach(() => {
+  for (const lease of leases.splice(0).reverse()) lease.release();
   for (const root of cleanup.splice(0).reverse()) {
     rmSync(root, { force: true, recursive: true });
   }
@@ -211,15 +221,30 @@ describe("native SQLite storage parity", () => {
       const backupPath = join(root, "retained.sqlite");
       const destinationPath = join(root, "live.sqlite");
       const signalPath = join(root, "restore.ready");
+      prepareHostDeckStatePaths({
+        state_dir: root,
+        database_path: sourcePath
+      });
       const source = openMigratedDatabase(sourcePath, { now: fixedNow });
       insertLegacySession(source.db, "sess_retained_source_01", "retained-source", 256);
+      let lease = acquireHostDeckDaemonLease({
+        lease_path: join(root, "hostdeck.lock"),
+        now: fixedNow
+      });
+      leases.push(lease);
       await createHostDeckDatabaseBackup({
         database: source.db,
-        destination_path: backupPath
+        destination_path: backupPath,
+        lease,
+        state_dir: root
       });
       source.db.close();
       const backupIdentity = sha256(backupPath);
 
+      prepareHostDeckStatePaths({
+        state_dir: root,
+        database_path: destinationPath
+      });
       const destination = openMigratedDatabase(destinationPath, {
         now: fixedNow
       });
@@ -227,11 +252,14 @@ describe("native SQLite storage parity", () => {
       const liveBefore = legacySnapshot(destination.db);
       destination.db.close();
 
+      lease.release();
+
       const worker = spawnWorker([
         "restore",
         backupPath,
         destinationPath,
-        signalPath
+        signalPath,
+        join(root, "hostdeck.lock")
       ]);
       await waitForSignal(worker, signalPath);
       await terminateWorker(worker);
@@ -248,9 +276,16 @@ describe("native SQLite storage parity", () => {
       }
       expect(sha256(backupPath)).toBe(backupIdentity);
 
+      lease = acquireHostDeckDaemonLease({
+        lease_path: join(root, "hostdeck.lock"),
+        now: fixedNow
+      });
+      leases.push(lease);
       await restoreHostDeckDatabaseBackup({
         backup_path: backupPath,
-        database_path: destinationPath
+        database_path: destinationPath,
+        lease,
+        state_dir: root
       });
       const restored = openMigratedDatabase(destinationPath, { now: fixedNow });
       try {
@@ -455,8 +490,21 @@ function ownedResidue(root: string): readonly string[] {
 }
 
 function temporaryRoot(prefix: string): string {
-  const root = mkdtempSync(join(tmpdir(), prefix));
+  const root =
+    process.platform === "win32"
+      ? join(
+          resolveNativeWindowsHostDeckDefaultPaths().state_dir,
+          "Tests",
+          `${prefix}${randomUUID()}`
+        )
+      : mkdtempSync(join(tmpdir(), prefix));
   cleanup.push(root);
+  const bootstrapPath = join(root, ".state-bootstrap.sqlite");
+  prepareHostDeckStatePaths({
+    state_dir: root,
+    database_path: bootstrapPath
+  });
+  rmSync(bootstrapPath, { force: true });
   return root;
 }
 

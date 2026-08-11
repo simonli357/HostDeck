@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { closeSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,16 +8,18 @@ const requireFromStorage = createRequire(
   fileURLToPath(new URL("../package.json", import.meta.url))
 );
 const Database = requireFromStorage("better-sqlite3");
+const nativeFileLock = requireFromStorage("fs-native-extensions");
 
 try {
-  const [mode, source, auxiliary, signal] = process.argv.slice(2);
+  const [mode, source, auxiliary, signal, leasePath] = process.argv.slice(2);
   requirePath(source);
   requirePath(auxiliary);
   requirePath(signal);
   if (mode === "migration") {
     runInterruptedMigration(source, auxiliary, signal);
   } else if (mode === "restore") {
-    await runInterruptedRestore(source, auxiliary, signal);
+    requirePath(leasePath);
+    await runInterruptedRestore(source, auxiliary, signal, leasePath);
   } else {
     throw new TypeError("Unknown native storage worker mode.");
   }
@@ -53,7 +55,17 @@ function runInterruptedMigration(databasePath, migrationPath, signalPath) {
   signalAndWait(signalPath);
 }
 
-async function runInterruptedRestore(backupPath, databasePath, signalPath) {
+async function runInterruptedRestore(
+  backupPath,
+  databasePath,
+  signalPath,
+  leasePath
+) {
+  const leaseDescriptor = openSync(leasePath, "r+");
+  if (nativeFileLock.tryLock(leaseDescriptor) !== true) {
+    closeSync(leaseDescriptor);
+    throw new Error("Native storage worker could not acquire the daemon lease.");
+  }
   const source = new Database(backupPath, {
     fileMustExist: true,
     readonly: true
@@ -67,6 +79,8 @@ async function runInterruptedRestore(backupPath, databasePath, signalPath) {
     }
   });
   source.close();
+  nativeFileLock.unlock(leaseDescriptor);
+  closeSync(leaseDescriptor);
   throw new Error("Interrupted restore unexpectedly completed.");
 }
 

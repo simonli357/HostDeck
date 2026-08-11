@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
@@ -1102,6 +1102,249 @@ describe("SQLite migration runner", () => {
     writeFileSync(path, "not a sqlite database");
 
     expect(() => openMigratedDatabase(path, { now: fixedNow })).toThrow(HostDeckMigrationError);
+  });
+
+  it("rejects malformed and unbounded catalogs before schema or file mutation", () => {
+    const tooMany = Array.from({ length: 129 }, (_, index) => ({
+      version: `20990101${String(index).padStart(4, "0")}_bounded`,
+      sql: `CREATE TABLE bounded_${index} (id TEXT PRIMARY KEY);`
+    }));
+    const invalidCatalogs: readonly unknown[] = [
+      null,
+      [{ version: "invalid", sql: "SELECT 1;" }],
+      [{ version: "209901010001_empty", sql: "   " }],
+      [
+        { version: "209901010002_second", sql: "SELECT 2;" },
+        { version: "209901010001_first", sql: "SELECT 1;" }
+      ],
+      [
+        { version: "209901010001_duplicate", sql: "SELECT 1;" },
+        { version: "209901010001_duplicate", sql: "SELECT 2;" }
+      ],
+      [
+        {
+          version: "209901010001_oversized",
+          sql: `SELECT 1;${"x".repeat(1024 * 1024)}`
+        }
+      ],
+      tooMany
+    ];
+
+    for (const migrations of invalidCatalogs) {
+      const db = new Database(":memory:");
+      try {
+        expect(() =>
+          runMigrations(db, {
+            migrations: migrations as readonly StorageMigration[],
+            now: fixedNow
+          })
+        ).toThrowError(
+          expect.objectContaining({
+            name: "HostDeckMigrationError"
+          })
+        );
+        expect(tableNames(db)).toEqual([]);
+      } finally {
+        db.close();
+      }
+    }
+
+    const path = tempDbPath();
+    expect(() =>
+      openMigratedDatabase(path, {
+        migrations: invalidCatalogs[1] as readonly StorageMigration[],
+        now: fixedNow
+      })
+    ).toThrowError(
+      expect.objectContaining({ code: "invalid_migration_catalog" })
+    );
+    expect(existsSync(path)).toBe(false);
+  });
+
+  it("snapshots caller-owned migrations and returns immutable result truth", () => {
+    const db = new Database(":memory:");
+    const second = {
+      version: "209901010002_second",
+      sql: "CREATE TABLE second_snapshot (id TEXT PRIMARY KEY);"
+    };
+    const migrations = [
+      {
+        version: "209901010001_first",
+        sql: "SELECT mutate_catalog(); CREATE TABLE first_snapshot (id TEXT PRIMARY KEY);"
+      },
+      second
+    ];
+    db.function("mutate_catalog", () => {
+      second.version = "private_mutated_version";
+      second.sql = "CREATE TABLE attacker_table (id TEXT PRIMARY KEY);";
+      migrations.length = 1;
+      return 1;
+    });
+
+    try {
+      const result = runMigrations(db, { migrations, now: fixedNow });
+      expect(tableNames(db)).toEqual([
+        "first_snapshot",
+        "schema_migrations",
+        "second_snapshot"
+      ]);
+      expect(result).toEqual({
+        applied: ["209901010001_first", "209901010002_second"],
+        currentVersion: "209901010002_second"
+      });
+      expect(Object.isFrozen(result)).toBe(true);
+      expect(Object.isFrozen(result.applied)).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rolls back invalid clock output and does not reflect private state", () => {
+    const db = new Database(":memory:");
+    try {
+      expect(() =>
+        runMigrations(db, {
+          migrations: [
+            {
+              version: "209901010001_clock",
+              sql: "CREATE TABLE clock_table (id TEXT PRIMARY KEY);"
+            }
+          ],
+          now: () => new Date(Number.NaN)
+        })
+      ).toThrowError(
+        expect.objectContaining({ code: "invalid_migration_clock" })
+      );
+      expect(tableNames(db)).toEqual(["schema_migrations"]);
+      expect(
+        db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()
+      ).toEqual({ count: 0 });
+
+      const sentinel = "private_migration_record_sentinel";
+      db.prepare(
+        "INSERT INTO schema_migrations (version, checksum, applied_at) VALUES (?, ?, ?)"
+      ).run(
+        `209901010001_${sentinel}`,
+        "0".repeat(64),
+        fixedNow().toISOString()
+      );
+      let observed: HostDeckMigrationError | null = null;
+      try {
+        runMigrations(db, { now: fixedNow });
+      } catch (error) {
+        observed = error as HostDeckMigrationError;
+      }
+      expect(observed).toBeInstanceOf(HostDeckMigrationError);
+      expect(observed?.message).not.toContain(sentinel);
+    } finally {
+      db.close();
+    }
+
+    const privatePath = join(
+      tempDbPath(),
+      "private-account-path-sentinel",
+      "hostdeck.sqlite"
+    );
+    let openError: HostDeckMigrationError | null = null;
+    try {
+      openMigratedDatabase(privatePath, { now: fixedNow });
+    } catch (error) {
+      openError = error as HostDeckMigrationError;
+    }
+    expect(openError).toBeInstanceOf(HostDeckMigrationError);
+    expect(openError?.message).not.toContain("private-account-path-sentinel");
+  });
+
+  it("bounds and validates stored migration history before trusting it", () => {
+    const oversized = new Database(":memory:");
+    try {
+      oversized.exec(
+        "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TEXT NOT NULL);"
+      );
+      const insert = oversized.prepare(
+        "INSERT INTO schema_migrations (version, checksum, applied_at) VALUES (?, ?, ?)"
+      );
+      for (let index = 0; index < 129; index += 1) {
+        insert.run(
+          `20990101${String(index).padStart(4, "0")}_history`,
+          "0".repeat(64),
+          fixedNow().toISOString()
+        );
+      }
+      expect(() => runMigrations(oversized, { now: fixedNow })).toThrowError(
+        expect.objectContaining({ code: "unknown_migration" })
+      );
+    } finally {
+      oversized.close();
+    }
+
+    const invalidTimestamp = new Database(":memory:");
+    const sentinel = "private_timestamp_sentinel";
+    try {
+      invalidTimestamp.exec(
+        "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TEXT NOT NULL);"
+      );
+      const first = defaultMigrations[0];
+      if (first === undefined) throw new Error("Missing base migration fixture.");
+      invalidTimestamp
+        .prepare(
+          "INSERT INTO schema_migrations (version, checksum, applied_at) VALUES (?, ?, ?)"
+        )
+        .run(
+          first.version,
+          createHash("sha256").update(first.sql).digest("hex"),
+          sentinel
+        );
+      let error: HostDeckMigrationError | null = null;
+      try {
+        runMigrations(invalidTimestamp, {
+          migrations: [first],
+          now: fixedNow
+        });
+      } catch (caught) {
+        error = caught as HostDeckMigrationError;
+      }
+      expect(error).toMatchObject({ code: "unknown_migration" });
+      expect(error?.message).not.toContain(sentinel);
+    } finally {
+      invalidTimestamp.close();
+    }
+
+    for (const schema of [
+      "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TEXT NOT NULL, extra TEXT)",
+      `
+        CREATE TABLE schema_migrations (
+          version TEXT PRIMARY KEY,
+          checksum TEXT NOT NULL,
+          applied_at TEXT NOT NULL
+        );
+        CREATE TRIGGER mutate_migration_history
+        AFTER INSERT ON schema_migrations
+        BEGIN
+          DELETE FROM schema_migrations WHERE version = NEW.version;
+        END;
+      `
+    ]) {
+      const malformed = new Database(":memory:");
+      try {
+        malformed.exec(schema);
+        expect(() =>
+          runMigrations(malformed, {
+            migrations: [defaultMigrations[0] as StorageMigration],
+            now: fixedNow
+          })
+        ).toThrowError(
+          expect.objectContaining({ code: "corrupt_database" })
+        );
+        expect(
+          malformed
+            .prepare("SELECT COUNT(*) AS count FROM schema_migrations")
+            .get()
+        ).toEqual({ count: 0 });
+      } finally {
+        malformed.close();
+      }
+    }
   });
 });
 

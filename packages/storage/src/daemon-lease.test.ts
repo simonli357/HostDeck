@@ -1,8 +1,12 @@
-import { chmodSync, linkSync, lstatSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, linkSync, lstatSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { acquireHostDeckDaemonLease, HostDeckDaemonLeaseError } from "./daemon-lease.js";
+import {
+  acquireHostDeckDaemonLease,
+  HostDeckDaemonLeaseError,
+  requireActiveHostDeckDaemonLease
+} from "./daemon-lease.js";
 import type { HostDeckFileLockPort } from "./platform-file-lock.js";
 
 const cleanup: string[] = [];
@@ -151,6 +155,29 @@ describe("HostDeck daemon lease", () => {
 
     const recovered = acquireHostDeckDaemonLease({ lease_path: leasePath });
     recovered.release();
+  });
+
+  it("rejects forged, released, and substituted recovery authority", () => {
+    const leasePath = testLeasePath();
+    const movedPath = join(leasePath, "..", "moved.lock");
+    const lease = acquireHostDeckDaemonLease({ lease_path: leasePath });
+    expect(requireActiveHostDeckDaemonLease(lease, leasePath)).toBe(lease);
+    expectLeaseError(
+      () => requireActiveHostDeckDaemonLease({ ...lease }, leasePath),
+      "invalid_lease"
+    );
+
+    renameSync(leasePath, movedPath);
+    writeFileSync(leasePath, "replacement\n", { mode: 0o600 });
+    expectLeaseError(
+      () => requireActiveHostDeckDaemonLease(lease, leasePath),
+      "invalid_lease"
+    );
+    lease.release();
+    expectLeaseError(
+      () => requireActiveHostDeckDaemonLease(lease, leasePath),
+      "invalid_lease"
+    );
   });
 });
 

@@ -116,6 +116,12 @@ async function main() {
     );
     runVitestCheck(
       checks,
+      "state_hardening",
+      ["packages/storage/src/native-state-hardening.native.test.ts"],
+      reportRoot
+    );
+    runVitestCheck(
+      checks,
       "windows_paths",
       ["packages/storage/src/windows-secure-local-path-adapter.native.test.ts"],
       reportRoot
