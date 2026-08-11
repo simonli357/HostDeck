@@ -17,12 +17,12 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
 | 1 | `FE-V1-090` Mobile dashboard physical hardening | blocked | phone unavailable | Diagnose physical touch delivery and run one distinct immutable candidate when the phone returns; retain only a complete no-retry pass. |
-| 2 | `IFC-V1-101` Native package identity | ready | none | Bind every future native artifact and bundled runtime to an exact fail-closed manifest before building packages. |
-| 3 | `IFC-V1-100` Platform Tailscale adapter | ready | none | Generalize command discovery and execution while preserving the selected profile/Serve contract. |
-| 4 | `INT-V1-100` Windows Codex transport spike | ready | none | Use the accepted native Windows CI path for a redacted exact-runtime capture. |
-| 5 | `DAT-V1-103` Native storage parity | ready | none | Prove target-built SQLite migration, recovery, backup, and rollback parity now that native paths and locks are complete. |
+| 2 | `IFC-V1-100` Platform Tailscale adapter | ready | none | Generalize command discovery and execution while preserving the selected profile/Serve contract. |
+| 3 | `INT-V1-100` Windows Codex transport spike | ready | none | Use the accepted native Windows CI path for a redacted exact-runtime capture. |
+| 4 | `DAT-V1-103` Native storage parity | ready | none | Prove target-built SQLite migration, recovery, backup, and rollback parity now that native paths and locks are complete. |
+| 5 | `REL-V1-102` Native supply-chain metadata | ready | none | Build checksums, SBOM, license, and provenance contracts now that package identity and native CI are complete. |
 
-`DAT-V1-101` is complete at `9663834` through native run `31468773680`; `DAT-V1-100`, `DAT-V1-102`, and `REL-V1-101` remain complete. The latest `FE-V1-090` branch candidate `6829bd2` reached a stable first continuation target but delivered no request after the tap; no acceptance evidence was retained. The next phone run must use a distinct commit after touch-delivery diagnosis.
+`IFC-V1-101` is complete at `c0f3f4d` through native run `31471194169`; `DAT-V1-101` remains complete at `9663834` through run `31468773680`. The latest `FE-V1-090` branch candidate `6829bd2` reached a stable first continuation target but delivered no request after the tap; no acceptance evidence was retained. The next phone run must use a distinct commit after touch-delivery diagnosis.
 
 ## Intentional Blockers
 
