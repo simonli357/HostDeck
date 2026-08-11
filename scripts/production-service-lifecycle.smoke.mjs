@@ -22,7 +22,10 @@ import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildProductionPackage } from "./build-production-package.mjs";
-import { verifyProductionPackage } from "./verify-production-package.mjs";
+import {
+  productionPackageSourceCount,
+  verifyProductionPackage
+} from "./verify-production-package.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "..");
@@ -89,7 +92,7 @@ try {
     rmSync(outputRoot, { force: true, recursive: true });
     buildProductionPackage({ outputRoot, packageVersion });
     const verification = verifyProductionPackage(outputRoot);
-    assert.equal(verification.sourceCount, 619);
+    assert.equal(verification.sourceCount, productionPackageSourceCount);
     return realpathSync(outputRoot);
   });
   const port = await availablePort();
