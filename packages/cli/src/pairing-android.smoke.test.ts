@@ -1879,6 +1879,43 @@ describe("physical Android phone-driver protocol", () => {
     expect(selectPhysicalDialogCloseAction(sheetNodes, "Close model control")).not.toBeNull();
     expect(physicalSheetChoiceSelected(sheetNodes, "/model", "Codex Current")).toBe(true);
     expect(physicalSheetChoiceSelected(sheetNodes, "/model", "Codex Fast")).toBe(false);
+    const submittingSheetNodes: readonly AndroidUiNode[] = [
+      ...sheetNodes.map((node) =>
+        node.description === "Close model control" || node.text === "Codex Fast"
+          ? (Object.freeze({ ...node, enabled: false }) as AndroidUiNode)
+          : node
+      ),
+      Object.freeze({
+        bounds: Object.freeze({ bottom: 1_460, left: 80, right: 760, top: 1_340 }),
+        className: "android.view.View",
+        clickable: false,
+        description: "",
+        resourceId: "",
+        text: "Saving next-turn model"
+      })
+    ];
+    expect(selectPhysicalFixedSheetHeader(submittingSheetNodes, "/model")).not.toBeNull();
+    expect(
+      physicalFixedSheetTextVisible(
+        submittingSheetNodes,
+        "/model",
+        "Saving next-turn model"
+      )
+    ).toBe(true);
+    expect(
+      selectPhysicalDialogCloseAction(
+        submittingSheetNodes,
+        "Close model control"
+      )
+    ).toBeNull();
+    expect(
+      selectPhysicalSheetAction(
+        submittingSheetNodes,
+        "text",
+        "Codex Fast",
+        "/model"
+      )
+    ).toBeNull();
     const describedSheetNodes = sheetNodes.map((node) =>
       [...physicalModelChoiceLabels, "Codex Balanced", "Thorough"].includes(
         node.text
@@ -15272,7 +15309,6 @@ function selectPhysicalFixedSheetHeader(
     (node) =>
       node.description === closeDescription &&
       node.clickable &&
-      node.enabled !== false &&
       androidUiNodeIsFullyInsideRegion(node, page)
   );
   if (titles.length !== 1 || closes.length !== 1) return null;
@@ -16023,7 +16059,10 @@ function selectPhysicalDialogCloseAction(
   const ownerTitle = ownerTitles[description];
   if (ownerTitle === undefined) return null;
   const header = selectPhysicalFixedSheetHeader(nodes, ownerTitle);
-  return header?.close.description === description ? header.close : null;
+  return header?.close.description === description &&
+    header.close.enabled !== false
+    ? header.close
+    : null;
 }
 
 function selectPhysicalExternalPageAction(
