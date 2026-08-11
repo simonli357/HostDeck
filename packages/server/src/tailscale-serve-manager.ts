@@ -1,5 +1,3 @@
-import { spawn } from "node:child_process";
-import { isDeepStrictEqual } from "node:util";
 import {
   assertResolvedResourceBudget,
   defaultResourceBudget,
@@ -13,10 +11,14 @@ import {
 } from "@hostdeck/contracts";
 import type { RemoteIngressUnavailableReason } from "@hostdeck/core";
 import {
+  createNativeTailscalePlatformCommandAdapter,
+  type TailscalePlatformCommandAdapter,
+  type TailscalePlatformCommandResult,
+  tailscalePlatformCommandCompletions
+} from "./tailscale-command-adapter.js";
+import {
   HostDeckTailscaleObserverError,
-  type TailscaleObserver,
-  tailscaleExecutablePath,
-  tailscaleObserverEnvironment
+  type TailscaleObserver
 } from "./tailscale-observer.js";
 
 export const tailscaleServeMutationCommands = ["enable", "disable"] as const;
@@ -34,10 +36,7 @@ export type TailscaleServeCommandCompletion = (typeof tailscaleServeCommandCompl
 
 export interface TailscaleServeCommandRequest {
   readonly command: TailscaleServeMutationCommand;
-  readonly executable: typeof tailscaleExecutablePath;
-  readonly args: readonly string[];
-  readonly cwd: "/";
-  readonly environment: Readonly<Record<string, string>>;
+  readonly proxy_origin: string | null;
   readonly timeout_ms: number;
   readonly output_max_bytes: number;
   readonly signal: AbortSignal;
@@ -137,21 +136,34 @@ interface InternalCommandResult {
 const managerOptionKeys = ["observer", "signal", "resourceBudget", "runner"] as const;
 const mutationInputKeys = ["expected_profile_key", "expected_serve"] as const;
 const commandResultKeys = ["completion", "consent_required", "permission_denied"] as const;
-const permissionMarkers = [
-  "access denied:",
-  "permission denied",
-  "serve config denied",
-  "must be root, or be an operator"
-] as const;
-const consentMarkers = ["https://login.tailscale.com/"] as const;
-const maxMarkerTailLength = 512;
 const maxCounter = Number.MAX_SAFE_INTEGER;
 
-export function createRealTailscaleServeCommandRunner(): TailscaleServeCommandRunner {
+export function createRealTailscaleServeCommandRunner(
+  adapter: TailscalePlatformCommandAdapter = createNativeTailscalePlatformCommandAdapter()
+): TailscaleServeCommandRunner {
+  assertPlatformCommandAdapter(adapter);
   return Object.freeze({
     async run(request: TailscaleServeCommandRequest) {
       assertCommandRequest(request);
-      return runBoundedMutationCommand(request);
+      let result: TailscalePlatformCommandResult;
+      try {
+        result = parsePlatformCommandResult(
+          await adapter.run({
+            command: request.command,
+            proxy_origin: request.proxy_origin,
+            timeout_ms: request.timeout_ms,
+            output_max_bytes: request.output_max_bytes,
+            signal: request.signal
+          })
+        );
+      } catch {
+        return commandResult(request.signal.aborted ? "aborted" : "command_failed", false, false);
+      }
+      const completion: TailscaleServeCommandCompletion =
+        result.completion === "executable_invalid" || result.completion === "output_invalid"
+          ? "command_failed"
+          : result.completion;
+      return commandResult(completion, result.consent_required, result.permission_denied);
     }
   });
 }
@@ -362,13 +374,7 @@ async function runMutation(
 ): Promise<InternalCommandResult> {
   const request: TailscaleServeCommandRequest = Object.freeze({
     command: action,
-    executable: tailscaleExecutablePath,
-    args:
-      action === "enable"
-        ? Object.freeze(["serve", "--bg", expectedServe.proxy_origin])
-        : Object.freeze(["serve", "--https=443", "--set-path=/", "off"]),
-    cwd: "/",
-    environment: tailscaleObserverEnvironment,
+    proxy_origin: action === "enable" ? expectedServe.proxy_origin : null,
     timeout_ms: context.resourceBudget.remote_observer_command_timeout_ms,
     output_max_bytes: context.resourceBudget.remote_observer_output_max_bytes,
     signal: context.signal
@@ -565,84 +571,6 @@ function result(
   });
 }
 
-function runBoundedMutationCommand(
-  request: TailscaleServeCommandRequest
-): Promise<TailscaleServeCommandResult> {
-  return new Promise((resolve) => {
-    if (request.signal.aborted) {
-      resolve(commandResult("aborted", false, false));
-      return;
-    }
-
-    let observedBytes = 0;
-    let markerTail = "";
-    let consentRequired = false;
-    let permissionDenied = false;
-    let pendingCompletion: TailscaleServeCommandCompletion | null = null;
-    let settled = false;
-    let child: ReturnType<typeof spawn>;
-    try {
-      child = spawn(request.executable, request.args, {
-        cwd: request.cwd,
-        env: request.environment,
-        shell: false,
-        stdio: ["ignore", "pipe", "pipe"],
-        windowsHide: true
-      });
-    } catch {
-      resolve(commandResult("command_failed", false, false));
-      return;
-    }
-
-    const timer = setTimeout(() => stop("command_timeout"), request.timeout_ms);
-    timer.unref();
-    const onAbort = () => stop("aborted");
-    request.signal.addEventListener("abort", onAbort, { once: true });
-    if (request.signal.aborted) onAbort();
-
-    child.once("error", (error: NodeJS.ErrnoException) => {
-      pendingCompletion ??= error.code === "ENOENT" ? "not_installed" : "command_failed";
-    });
-    child.once("close", (code) => {
-      cleanup();
-      const completion = pendingCompletion ?? (code === 0 ? "succeeded" : "command_failed");
-      settled = true;
-      resolve(commandResult(completion, consentRequired, permissionDenied));
-    });
-    if (child.stdout === null || child.stderr === null) {
-      stop("command_failed");
-    } else {
-      child.stdout.on("data", capture);
-      child.stderr.on("data", capture);
-    }
-
-    function capture(chunk: Buffer): void {
-      if (pendingCompletion !== null) return;
-      observedBytes += chunk.byteLength;
-      if (observedBytes > request.output_max_bytes) {
-        stop("output_oversized");
-        return;
-      }
-      const scan = `${markerTail}${chunk.toString("latin1")}`.toLowerCase();
-      consentRequired ||= consentMarkers.some((marker) => scan.includes(marker));
-      permissionDenied ||= permissionMarkers.some((marker) => scan.includes(marker));
-      markerTail = scan.slice(-maxMarkerTailLength);
-    }
-
-    function stop(completion: TailscaleServeCommandCompletion): void {
-      if (settled || pendingCompletion !== null) return;
-      pendingCompletion = completion;
-      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
-    }
-
-    function cleanup(): void {
-      clearTimeout(timer);
-      request.signal.removeEventListener("abort", onAbort);
-      markerTail = "";
-    }
-  });
-}
-
 function commandResult(
   completion: TailscaleServeCommandCompletion,
   consentRequired: boolean,
@@ -656,28 +584,77 @@ function commandResult(
 }
 
 function assertCommandRequest(request: TailscaleServeCommandRequest): void {
-  const validArgs =
-    request.command === "enable"
-      ? request.args.length === 3 &&
-        request.args[0] === "serve" &&
-        request.args[1] === "--bg" &&
-        hostDeckLoopbackOriginSchema.safeParse(request.args[2]).success
-      : request.command === "disable" &&
-        isDeepStrictEqual(request.args, ["serve", "--https=443", "--set-path=/", "off"]);
+  let value: Readonly<
+    Record<"command" | "proxy_origin" | "timeout_ms" | "output_max_bytes" | "signal", unknown>
+  >;
+  try {
+    value = readExactDataObject(request, [
+      "command",
+      "proxy_origin",
+      "timeout_ms",
+      "output_max_bytes",
+      "signal"
+    ] as const);
+  } catch {
+    throw new TypeError("Tailscale Serve command request is invalid.");
+  }
+  const validProxy =
+    value.command === "enable"
+      ? hostDeckLoopbackOriginSchema.safeParse(value.proxy_origin).success
+      : value.command === "disable" && value.proxy_origin === null;
   if (
-    !tailscaleServeMutationCommands.includes(request.command) ||
-    request.executable !== tailscaleExecutablePath ||
-    request.cwd !== "/" ||
-    !validArgs ||
-    !isDeepStrictEqual(request.environment, tailscaleObserverEnvironment) ||
-    !Number.isSafeInteger(request.timeout_ms) ||
-    request.timeout_ms <= 0 ||
-    !Number.isSafeInteger(request.output_max_bytes) ||
-    request.output_max_bytes <= 0
+    typeof value.command !== "string" ||
+    !tailscaleServeMutationCommands.includes(value.command as TailscaleServeMutationCommand) ||
+    !validProxy ||
+    !Number.isSafeInteger(value.timeout_ms) ||
+    (value.timeout_ms as number) <= 0 ||
+    !Number.isSafeInteger(value.output_max_bytes) ||
+    (value.output_max_bytes as number) <= 0
   ) {
     throw new TypeError("Tailscale Serve command request is invalid.");
   }
-  assertAbortSignal(request.signal);
+  assertAbortSignal(value.signal);
+}
+
+function assertPlatformCommandAdapter(
+  adapter: unknown
+): asserts adapter is TailscalePlatformCommandAdapter {
+  if (
+    adapter === null ||
+    typeof adapter !== "object" ||
+    ((adapter as TailscalePlatformCommandAdapter).target !== "linux-x64" &&
+      (adapter as TailscalePlatformCommandAdapter).target !== "windows-x64") ||
+    typeof (adapter as TailscalePlatformCommandAdapter).run !== "function"
+  ) {
+    throw new TypeError("Tailscale platform command adapter is invalid.");
+  }
+}
+
+function parsePlatformCommandResult(raw: unknown): TailscalePlatformCommandResult {
+  const value = readExactDataObject(raw, [
+    "completion",
+    "stdout",
+    "consent_required",
+    "permission_denied"
+  ] as const);
+  if (
+    typeof value.completion !== "string" ||
+    !tailscalePlatformCommandCompletions.includes(
+      value.completion as TailscalePlatformCommandResult["completion"]
+    ) ||
+    typeof value.stdout !== "string" ||
+    value.stdout !== "" ||
+    typeof value.consent_required !== "boolean" ||
+    typeof value.permission_denied !== "boolean"
+  ) {
+    throw new TypeError("Tailscale platform command result is invalid.");
+  }
+  return Object.freeze({
+    completion: value.completion as TailscalePlatformCommandResult["completion"],
+    stdout: "",
+    consent_required: value.consent_required,
+    permission_denied: value.permission_denied
+  });
 }
 
 function parseMutationInput(input: TailscaleServeMutationInput): ParsedMutationInput {

@@ -13,9 +13,7 @@ import {
   supportedTailscaleVersion,
   type TailscaleReadCommandName,
   type TailscaleReadCommandRequest,
-  type TailscaleReadCommandRunner,
-  tailscaleExecutablePath,
-  tailscaleObserverEnvironment
+  type TailscaleReadCommandRunner
 } from "./tailscale-observer.js";
 
 const observedAt = new Date("2026-07-13T19:00:00.000Z");
@@ -105,24 +103,16 @@ describe("bounded Tailscale observer", () => {
       "status",
       "profile_list"
     ]);
-    expect(harness.fake.requests.map((request) => request.args)).toEqual([
-      ["version"],
-      ["status", "--json"],
-      ["switch", "--list", "--json"],
-      ["serve", "status", "--json"],
-      ["funnel", "status", "--json"],
-      ["status", "--json"],
-      ["switch", "--list", "--json"]
-    ]);
     for (const request of harness.fake.requests) {
-      expect(request.executable).toBe(tailscaleExecutablePath);
-      expect(request.cwd).toBe("/");
-      expect(request.environment).toBe(tailscaleObserverEnvironment);
-      expect(Object.keys(request.environment).sort()).toEqual(["LANG", "LC_ALL", "PATH", "TERM"]);
+      expect(Object.keys(request).sort()).toEqual([
+        "command",
+        "output_max_bytes",
+        "signal",
+        "timeout_ms"
+      ]);
       expect(request.signal).toBe(harness.controller.signal);
       expect(request.timeout_ms).toBe(defaultResourceBudget.remote_observer_command_timeout_ms);
       expect(request.output_max_bytes).toBe(defaultResourceBudget.remote_observer_output_max_bytes);
-      expect(request.args.join(" ")).not.toMatch(/\b(?:up|down|login|logout|reset|set|off)\b/u);
     }
   });
 
@@ -618,16 +608,13 @@ describe("bounded Tailscale observer", () => {
   it("makes mutation-shaped requests impossible in the real command runner", async () => {
     const controller = new AbortController();
     const runner = createRealTailscaleReadCommandRunner();
-    const request: TailscaleReadCommandRequest = {
+    const request = {
       command: "version",
-      executable: tailscaleExecutablePath,
       args: ["up"],
-      cwd: "/",
-      environment: tailscaleObserverEnvironment,
       timeout_ms: 1_000,
       output_max_bytes: 4_096,
       signal: controller.signal
-    };
+    } as unknown as TailscaleReadCommandRequest;
     await expect(runner.run(request)).rejects.toMatchObject({ code: "schema_invalid" });
   });
 });

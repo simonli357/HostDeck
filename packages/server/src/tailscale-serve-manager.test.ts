@@ -7,9 +7,7 @@ import {
 import { describe, expect, it } from "vitest";
 import {
   HostDeckTailscaleObserverError,
-  type TailscaleObserver,
-  tailscaleExecutablePath,
-  tailscaleObserverEnvironment
+  type TailscaleObserver
 } from "./tailscale-observer.js";
 import {
   createRealTailscaleServeCommandRunner,
@@ -57,10 +55,7 @@ describe("ownership-safe Tailscale Serve manager", () => {
     expect(harness.runner.requests).toHaveLength(1);
     expect(harness.runner.requests[0]).toMatchObject({
       command: "enable",
-      executable: tailscaleExecutablePath,
-      args: ["serve", "--bg", expectedServe.proxy_origin],
-      cwd: "/",
-      environment: tailscaleObserverEnvironment,
+      proxy_origin: expectedServe.proxy_origin,
       timeout_ms: defaultResourceBudget.remote_observer_command_timeout_ms,
       output_max_bytes: defaultResourceBudget.remote_observer_output_max_bytes,
       signal: harness.controller.signal
@@ -85,9 +80,7 @@ describe("ownership-safe Tailscale Serve manager", () => {
       serve_result: "removed",
       reason: null
     });
-    expect(harness.runner.requests.map((request) => request.args)).toEqual([
-      ["serve", "--https=443", "--set-path=/", "off"]
-    ]);
+    expect(harness.runner.requests.map((request) => request.proxy_origin)).toEqual([null]);
   });
 
   it.each([
@@ -412,7 +405,7 @@ describe("ownership-safe Tailscale Serve manager", () => {
     expect(JSON.stringify(result)).not.toContain("raw");
   });
 
-  it("makes reset, Funnel, profile, and broad mutation argv impossible in the real runner", async () => {
+  it("rejects caller-supplied reset, Funnel, profile, and broad mutation argv", async () => {
     const runner = createRealTailscaleServeCommandRunner();
     const controller = new AbortController();
     for (const args of [
@@ -424,14 +417,12 @@ describe("ownership-safe Tailscale Serve manager", () => {
       await expect(
         runner.run({
           command: "enable",
-          executable: tailscaleExecutablePath,
           args,
-          cwd: "/",
-          environment: tailscaleObserverEnvironment,
+          proxy_origin: expectedServe.proxy_origin,
           timeout_ms: 1_000,
           output_max_bytes: 4_096,
           signal: controller.signal
-        })
+        } as never)
       ).rejects.toThrow("Tailscale Serve command request is invalid.");
     }
   });
@@ -443,10 +434,7 @@ describe("ownership-safe Tailscale Serve manager", () => {
     await expect(
       runner.run({
         command: "enable",
-        executable: tailscaleExecutablePath,
-        args: ["serve", "--bg", expectedServe.proxy_origin],
-        cwd: "/",
-        environment: tailscaleObserverEnvironment,
+        proxy_origin: expectedServe.proxy_origin,
         timeout_ms: defaultResourceBudget.remote_observer_command_timeout_ms,
         output_max_bytes: defaultResourceBudget.remote_observer_output_max_bytes,
         signal: controller.signal

@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -14,8 +13,13 @@ import {
   remoteServeDescriptorSchema
 } from "@hostdeck/contracts";
 import { z } from "zod";
+import {
+  createNativeTailscalePlatformCommandAdapter,
+  type TailscalePlatformCommandAdapter,
+  type TailscalePlatformCommandResult,
+  tailscalePlatformCommandCompletions
+} from "./tailscale-command-adapter.js";
 
-export const tailscaleExecutablePath = "/usr/bin/tailscale" as const;
 export const supportedTailscaleVersion = Object.freeze({
   short: "1.98.8",
   long: "1.98.8-t1241b225b-g0520dfda5",
@@ -32,21 +36,6 @@ export const tailscaleReadCommandNames = [
   "funnel_status"
 ] as const;
 export type TailscaleReadCommandName = (typeof tailscaleReadCommandNames)[number];
-
-const tailscaleReadCommandArguments: Readonly<Record<TailscaleReadCommandName, readonly string[]>> = Object.freeze({
-  version: Object.freeze(["version"]),
-  status: Object.freeze(["status", "--json"]),
-  profile_list: Object.freeze(["switch", "--list", "--json"]),
-  serve_status: Object.freeze(["serve", "status", "--json"]),
-  funnel_status: Object.freeze(["funnel", "status", "--json"])
-});
-
-export const tailscaleObserverEnvironment = Object.freeze({
-  LANG: "C",
-  LC_ALL: "C",
-  PATH: "/usr/bin:/bin",
-  TERM: "dumb"
-});
 
 export type TailscaleReadCommandErrorCode =
   | "not_installed"
@@ -72,10 +61,6 @@ export class HostDeckTailscaleObserverError extends Error {
 
 export interface TailscaleReadCommandRequest {
   readonly command: TailscaleReadCommandName;
-  readonly executable: typeof tailscaleExecutablePath;
-  readonly args: readonly string[];
-  readonly cwd: "/";
-  readonly environment: Readonly<Record<string, string>>;
   readonly timeout_ms: number;
   readonly output_max_bytes: number;
   readonly signal: AbortSignal;
@@ -232,11 +217,42 @@ const expectedVersionOutput = [
   `  go version: ${supportedTailscaleVersion.go_version}`
 ].join("\n");
 
-export function createRealTailscaleReadCommandRunner(): TailscaleReadCommandRunner {
+export function createRealTailscaleReadCommandRunner(
+  adapter: TailscalePlatformCommandAdapter = createNativeTailscalePlatformCommandAdapter()
+): TailscaleReadCommandRunner {
+  assertPlatformCommandAdapter(adapter);
   return Object.freeze({
     async run(request: TailscaleReadCommandRequest) {
       assertCommandRequest(request);
-      return runBoundedCommand(request);
+      let result: TailscalePlatformCommandResult;
+      try {
+        result = parsePlatformCommandResult(
+          await adapter.run({
+            command: request.command,
+            proxy_origin: null,
+            timeout_ms: request.timeout_ms,
+            output_max_bytes: request.output_max_bytes,
+            signal: request.signal
+          })
+        );
+      } catch {
+        throw new HostDeckTailscaleReadCommandError(
+          request.signal.aborted ? "aborted" : "command_failed"
+        );
+      }
+      switch (result.completion) {
+        case "succeeded":
+          return Object.freeze({ stdout: result.stdout });
+        case "not_installed":
+        case "aborted":
+        case "command_failed":
+        case "command_timeout":
+        case "output_oversized":
+          throw new HostDeckTailscaleReadCommandError(result.completion);
+        case "executable_invalid":
+        case "output_invalid":
+          throw new HostDeckTailscaleReadCommandError("schema_invalid");
+      }
     }
   });
 }
@@ -422,10 +438,6 @@ async function runReadCommand(
   const timeout = Math.min(context.budget.remote_observer_command_timeout_ms, remaining);
   const request: TailscaleReadCommandRequest = Object.freeze({
     command,
-    executable: tailscaleExecutablePath,
-    args: tailscaleReadCommandArguments[command],
-    cwd: "/",
-    environment: tailscaleObserverEnvironment,
     timeout_ms: timeout,
     output_max_bytes: context.budget.remote_observer_output_max_bytes,
     signal: context.signal
@@ -452,104 +464,66 @@ async function runReadCommand(
   return parsed.stdout;
 }
 
-function runBoundedCommand(request: TailscaleReadCommandRequest): Promise<TailscaleReadCommandResult> {
-  return new Promise((resolve, reject) => {
-    if (request.signal.aborted) {
-      reject(new HostDeckTailscaleReadCommandError("aborted"));
-      return;
-    }
-
-    const stdout: Buffer[] = [];
-    let observedBytes = 0;
-    let pendingFailure: HostDeckTailscaleReadCommandError | null = null;
-    let settled = false;
-    const child = spawn(request.executable, request.args, {
-      cwd: request.cwd,
-      env: request.environment,
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true
-    });
-
-    const timer = setTimeout(() => stop(new HostDeckTailscaleReadCommandError("command_timeout")), request.timeout_ms);
-    timer.unref();
-    const onAbort = () => stop(new HostDeckTailscaleReadCommandError("aborted"));
-    request.signal.addEventListener("abort", onAbort, { once: true });
-    if (request.signal.aborted) onAbort();
-
-    child.stdout.on("data", (chunk: Buffer) => capture(chunk, true));
-    child.stderr.on("data", (chunk: Buffer) => capture(chunk, false));
-    child.once("error", (error: NodeJS.ErrnoException) => {
-      pendingFailure ??= new HostDeckTailscaleReadCommandError(
-        error.code === "ENOENT" ? "not_installed" : request.signal.aborted ? "aborted" : "command_failed"
-      );
-    });
-    child.once("close", (code) => {
-      cleanup();
-      if (pendingFailure !== null) {
-        settleReject(pendingFailure);
-        return;
-      }
-      if (code !== 0) {
-        settleReject(new HostDeckTailscaleReadCommandError("command_failed"));
-        return;
-      }
-      try {
-        const decoded = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(stdout));
-        settled = true;
-        resolve(Object.freeze({ stdout: decoded }));
-      } catch {
-        settleReject(new HostDeckTailscaleReadCommandError("schema_invalid"));
-      }
-    });
-
-    function capture(chunk: Buffer, retain: boolean): void {
-      if (pendingFailure !== null) return;
-      observedBytes += chunk.byteLength;
-      if (observedBytes > request.output_max_bytes) {
-        stop(new HostDeckTailscaleReadCommandError("output_oversized"));
-        return;
-      }
-      if (retain) stdout.push(Buffer.from(chunk));
-    }
-
-    function stop(error: HostDeckTailscaleReadCommandError): void {
-      if (settled || pendingFailure !== null) return;
-      pendingFailure = error;
-      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
-    }
-
-    function cleanup(): void {
-      clearTimeout(timer);
-      request.signal.removeEventListener("abort", onAbort);
-    }
-
-    function settleReject(error: HostDeckTailscaleReadCommandError): void {
-      if (settled) return;
-      settled = true;
-      reject(error);
-    }
-  });
-}
-
 function assertCommandRequest(request: TailscaleReadCommandRequest): void {
-  if (!tailscaleReadCommandNames.includes(request.command)) {
+  let value: Readonly<Record<"command" | "timeout_ms" | "output_max_bytes" | "signal", unknown>>;
+  try {
+    value = readExactObject(request, ["command", "timeout_ms", "output_max_bytes", "signal"]);
+  } catch {
     throw new HostDeckTailscaleReadCommandError("schema_invalid");
   }
-  const expectedArgs = tailscaleReadCommandArguments[request.command];
   if (
-    request.executable !== tailscaleExecutablePath ||
-    request.cwd !== "/" ||
-    !isDeepStrictEqual(request.args, expectedArgs) ||
-    !isDeepStrictEqual(request.environment, tailscaleObserverEnvironment) ||
-    !Number.isSafeInteger(request.timeout_ms) ||
-    request.timeout_ms <= 0 ||
-    !Number.isSafeInteger(request.output_max_bytes) ||
-    request.output_max_bytes <= 0
+    typeof value.command !== "string" ||
+    !tailscaleReadCommandNames.includes(value.command as TailscaleReadCommandName) ||
+    !Number.isSafeInteger(value.timeout_ms) ||
+    (value.timeout_ms as number) <= 0 ||
+    !Number.isSafeInteger(value.output_max_bytes) ||
+    (value.output_max_bytes as number) <= 0
   ) {
     throw new HostDeckTailscaleReadCommandError("schema_invalid");
   }
-  assertAbortSignal(request.signal);
+  assertAbortSignal(value.signal);
+}
+
+function assertPlatformCommandAdapter(
+  adapter: unknown
+): asserts adapter is TailscalePlatformCommandAdapter {
+  if (
+    adapter === null ||
+    typeof adapter !== "object" ||
+    ((adapter as TailscalePlatformCommandAdapter).target !== "linux-x64" &&
+      (adapter as TailscalePlatformCommandAdapter).target !== "windows-x64") ||
+    typeof (adapter as TailscalePlatformCommandAdapter).run !== "function"
+  ) {
+    throw new TypeError("Tailscale platform command adapter is invalid.");
+  }
+}
+
+function parsePlatformCommandResult(raw: unknown): TailscalePlatformCommandResult {
+  const value = readExactObject(raw, [
+    "completion",
+    "stdout",
+    "consent_required",
+    "permission_denied"
+  ] as const);
+  if (
+    typeof value.completion !== "string" ||
+    !tailscalePlatformCommandCompletions.includes(
+      value.completion as TailscalePlatformCommandResult["completion"]
+    ) ||
+    typeof value.stdout !== "string" ||
+    typeof value.consent_required !== "boolean" ||
+    typeof value.permission_denied !== "boolean" ||
+    value.consent_required ||
+    value.permission_denied
+  ) {
+    throw new TypeError("Tailscale platform command result is invalid.");
+  }
+  return Object.freeze({
+    completion: value.completion as TailscalePlatformCommandResult["completion"],
+    stdout: value.stdout,
+    consent_required: false,
+    permission_denied: false
+  });
 }
 
 function parseConfiguredExpectation(input: TailscaleConfiguredObservationInput): ConfiguredExpectation {

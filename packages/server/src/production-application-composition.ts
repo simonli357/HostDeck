@@ -135,8 +135,15 @@ import {
   createHostDeckSelectedWriteAdmissionPolicy
 } from "./selected-write-admission-policy.js";
 import { createHostDeckSelectedWriteAuditExecutor } from "./selected-write-audit-executor.js";
-import { createTailscaleObserver } from "./tailscale-observer.js";
-import { createTailscaleServeManager } from "./tailscale-serve-manager.js";
+import { createNativeTailscalePlatformCommandAdapter } from "./tailscale-command-adapter.js";
+import {
+  createRealTailscaleReadCommandRunner,
+  createTailscaleObserver
+} from "./tailscale-observer.js";
+import {
+  createRealTailscaleServeCommandRunner,
+  createTailscaleServeManager
+} from "./tailscale-serve-manager.js";
 
 export const hostDeckProductionStaticRegistrationId =
   "hostdeck-production-static" as const;
@@ -657,16 +664,19 @@ export function createHostDeckProductionApplication(
   const remote = createHostDeckRemoteIngressLifecycle({
     health,
     createControl: ({ monotonicNow, signal }) => {
+      const commands = createNativeTailscalePlatformCommandAdapter();
       const observer = createTailscaleObserver({
         signal,
         resourceBudget: budget,
         now: readNow,
-        monotonicNow
+        monotonicNow,
+        runner: createRealTailscaleReadCommandRunner(commands)
       });
       const manager = createTailscaleServeManager({
         observer,
         signal,
-        resourceBudget: budget
+        resourceBudget: budget,
+        runner: createRealTailscaleServeCommandRunner(commands)
       });
       return createRemoteIngressControlService({
         admissionProofs: remoteAdmissionRepository,
