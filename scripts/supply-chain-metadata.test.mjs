@@ -15,6 +15,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { Version } from "@cyclonedx/cyclonedx-library/Spec";
+import { JsonStrictValidator } from "@cyclonedx/cyclonedx-library/Validation";
 import { buildProductionPackage } from "./build-production-package.mjs";
 import {
   nativeCiTargetPolicies,
@@ -49,7 +51,7 @@ const nativePackages = [
   ["koffi", "3.1.4"]
 ];
 
-test("creates canonical checksum, license, CycloneDX, provenance, and index records", () => {
+test("creates canonical checksum, license, CycloneDX, provenance, and index records", async () => {
   const snapshot = fixtureSnapshot("linux-x64");
   const first = createSupplyChainDocuments(snapshot);
   const second = createSupplyChainDocuments(structuredClone(snapshot));
@@ -68,6 +70,7 @@ test("creates canonical checksum, license, CycloneDX, provenance, and index reco
   assert.equal(sbom.specVersion, "1.7");
   assert.equal(sbom.components.length, snapshot.graph.nodes.length);
   assert.equal(sbom.dependencies.length, snapshot.graph.nodes.length + 1);
+  assert.equal(await new JsonStrictValidator(Version.v1dot7).validate(first["hostdeck.cdx.json"]), null);
 
   const provenance = JSON.parse(first["hostdeck.provenance.json"]);
   assert.equal(provenance._type, "https://in-toto.io/Statement/v1");
@@ -277,7 +280,7 @@ if (process.platform === "linux") {
         );
         assert.equal(existsSync(failedOutput), false);
         assert.equal(
-          readdirSync(root).some((name) => name.startsWith(".hostdeck-metadata-")),
+          readdirSync(root).some((name) => name.startsWith("hostdeck-metadata-stage-")),
           false
         );
         writeFileSync(evidenceSidecar, sidecarBytes);

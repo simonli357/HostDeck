@@ -10,6 +10,8 @@ Status: in progress.
 - Output is one detached directory containing canonical UTF-8/LF `SHA256SUMS`,
   `licenses.json`, CycloneDX 1.7 JSON, SLSA provenance v1 in an in-toto Statement
   v1 envelope, and a self-bound `metadata.json` index.
+- CycloneDX uses the pinned OWASP JavaScript model/serializer and its strict AJV-backed
+  1.7 validator; HostDeck owns the narrower graph, license, privacy, and identity checks.
 - `SHA256SUMS` covers every regular package file exactly once, in lexical portable-
   path order. The package-tree subject also binds directories and safe contained
   symlinks; hard links, special files, unsafe links/paths, and changed trees fail closed.

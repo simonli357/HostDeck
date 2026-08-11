@@ -51,7 +51,6 @@ import {
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const defaultRepositoryRoot = realpathSync(resolve(scriptDirectory, ".."));
 const sha256Pattern = /^[a-f0-9]{64}$/u;
-const commitPattern = /^[a-f0-9]{40}$/u;
 const exactVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 const packageNamePattern = /^(?:@[a-z0-9][a-z0-9._-]{0,213}\/[a-z0-9][a-z0-9._-]{0,213}|[a-z0-9][a-z0-9._-]{0,213})$/u;
 const metadataFileNames = Object.freeze([
@@ -88,6 +87,11 @@ const approvedLicenseExpressions = Object.freeze([
   "MIT"
 ]);
 const approvedLicenseSet = new Set(approvedLicenseExpressions);
+const nativeDependencyVersions = Object.freeze([
+  Object.freeze({ name: "better-sqlite3", version: "12.11.1" }),
+  Object.freeze({ name: "fs-native-extensions", version: "1.3.4" }),
+  Object.freeze({ name: "koffi", version: "3.1.4" })
+]);
 const limits = Object.freeze({
   dependencyCount: 2_000,
   documentBytes: 16 * 1024 * 1024,
@@ -100,7 +104,7 @@ const knownPublicUrls = new Set([
   "https://in-toto.io/Statement/v1",
   "https://slsa.dev/provenance/v1"
 ]);
-const privatePathPattern = /(?:^|["'\s])(?:[A-Za-z]:[\\/](?:Users|home|tmp|private)[\\/]|\/(?:home|Users|tmp|private)\/)/u;
+const privatePathPattern = /(?:^|["'\s])(?:[A-Za-z]:[\\/]|\\{2}[^\\\s]|\/(?!\/))/u;
 const privateIdentityPattern = /(?:[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|\.ts\.net\b|\btskey-[A-Za-z0-9_-]+|\bgh[oprsu]_[A-Za-z0-9_]+|\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|\b100\.(?:6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.\d{1,3}\.\d{1,3}\b)/iu;
 
 export const supplyChainMetadataSchemaVersion = 1;
@@ -135,6 +139,17 @@ export function collectPackageFileRecords(root) {
         throw new TypeError(`Package entry is not one regular non-linked file: ${portablePath}`);
       }
       const bytes = readFileSync(absolutePath);
+      const finalStats = lstatSync(absolutePath);
+      if (
+        !finalStats.isFile() ||
+        finalStats.nlink !== 1 ||
+        finalStats.dev !== stats.dev ||
+        finalStats.ino !== stats.ino ||
+        finalStats.size !== stats.size ||
+        bytes.byteLength !== stats.size
+      ) {
+        throw new TypeError(`Package file changed while it was inventoried: ${portablePath}`);
+      }
       totalBytes += bytes.byteLength;
       if (records.length >= limits.packageFileCount || totalBytes > limits.packageBytes) {
         throw new TypeError("Package file inventory exceeds its release bound.");
@@ -197,14 +212,14 @@ export function collectProductionDependencyGraph(repositoryRoot, packageVersion,
     };
     nodeByRef.set(ref, node);
     rootToRef.set(workspace.root, ref);
-    queue.push({ manifest: workspace.manifest, node });
+    queue.push({ manifest: workspace.manifest, node, root: workspace.root });
   }
 
-  const visited = new Set();
+  const visitedRoots = new Set();
   while (queue.length > 0) {
     const current = queue.shift();
-    if (current === undefined || visited.has(current.node.ref)) continue;
-    visited.add(current.node.ref);
+    if (current === undefined || visitedRoots.has(current.root)) continue;
+    visitedRoots.add(current.root);
     const dependencies = declaredRuntimeDependencies(current.manifest);
     for (const dependency of dependencies) {
       const workspace = workspaceByName.get(dependency.name);
@@ -220,7 +235,7 @@ export function collectProductionDependencyGraph(repositoryRoot, packageVersion,
 
       const dependencyRoot = resolveInstalledPackageRoot(
         root,
-        current.node.root,
+        current.root,
         dependency.name,
         dependency.optional
       );
@@ -252,8 +267,7 @@ export function collectProductionDependencyGraph(repositoryRoot, packageVersion,
           version
         };
         nodeByRef.set(ref, child);
-        rootToRef.set(dependencyRoot, ref);
-        queue.push({ manifest, node: child });
+        queue.push({ manifest, node: child, root: dependencyRoot });
       } else if (child.root !== dependencyRoot) {
         const otherManifest = readPackageManifest(child.root, "Installed package");
         if (
@@ -263,6 +277,7 @@ export function collectProductionDependencyGraph(repositoryRoot, packageVersion,
         ) {
           throw new TypeError("Duplicate package identity resolves to inconsistent manifests.");
         }
+        queue.push({ manifest, node: child, root: dependencyRoot });
       }
       current.node.dependencies.add(ref);
       if (current.node.kind === "workspace") {
@@ -340,7 +355,7 @@ export function generateSupplyChainMetadata(options) {
   }
   const snapshot = loadSupplyChainSnapshot(paths);
   const documents = createSupplyChainDocuments(snapshot);
-  const stagingRoot = mkdtempSync(join(paths.outputParent, ".hostdeck-metadata-"));
+  const stagingRoot = mkdtempSync(join(paths.outputParent, "hostdeck-metadata-stage-"));
   try {
     for (const name of metadataFileNames) {
       writeFileSync(join(stagingRoot, name), documents[name], {
@@ -351,8 +366,10 @@ export function generateSupplyChainMetadata(options) {
       chmodSync(join(stagingRoot, name), 0o644);
     }
     verifySupplyChainMetadata({
-      ...paths,
-      outputRoot: stagingRoot
+      nativeEvidencePath: paths.nativeEvidencePath,
+      outputRoot: stagingRoot,
+      packageRoot: paths.packageRoot,
+      repositoryRoot: paths.repositoryRoot
     });
     renameSync(stagingRoot, paths.outputRoot);
   } catch (error) {
@@ -364,6 +381,10 @@ export function generateSupplyChainMetadata(options) {
 
 export function verifySupplyChainMetadata(options) {
   const paths = resolveReleasePaths(options, true);
+  const outputStats = lstatSync(paths.outputRoot);
+  if (!outputStats.isDirectory() || outputStats.isSymbolicLink()) {
+    throw new TypeError("Supply-chain metadata output must be one real directory.");
+  }
   const outputRoot = realpathSync(paths.outputRoot);
   const entries = readdirSync(outputRoot, { withFileTypes: true }).sort((left, right) =>
     compareText(left.name, right.name)
@@ -766,6 +787,25 @@ function validateSnapshot(candidate) {
   if (!Array.isArray(manifest.nativeModules) || manifest.nativeModules.length !== 3) {
     throw new TypeError("Package native-module snapshot is invalid.");
   }
+  for (const [index, candidate] of manifest.nativeModules.entries()) {
+    const descriptor = exactRecord(
+      candidate,
+      ["nodeAbi", "package", "path", "sha256", "size", "target", "version"],
+      `Package native module ${index}`
+    );
+    const expected = nativeDependencyVersions[index];
+    if (
+      descriptor.nodeAbi !== manifest.runtime.nodeAbi ||
+      descriptor.package !== expected.name ||
+      descriptor.target !== manifest.target.id ||
+      descriptor.version !== expected.version
+    ) {
+      throw new TypeError("Package native-module identity is inconsistent.");
+    }
+    assertMetadataPath(descriptor.path, `Package native module ${index}`);
+    parseSha256(descriptor.sha256, `Package native module ${index} SHA-256`);
+    exactInteger(descriptor.size, 1, limits.packageBytes, `Package native module ${index} size`);
+  }
   assertPackageEvidenceAgreement(manifest, value.evidence, value.lockfileSha256);
   validateDependencyGraph(value.graph);
   assertReleaseGraphManifestAgreement(value.graph, manifest);
@@ -1057,7 +1097,19 @@ function readBoundedRegularFile(path, maximumBytes, label, requireSingleLink = t
   ) {
     throw new TypeError(`${label} is not one bounded regular file.`);
   }
-  return readFileSync(path);
+  const bytes = readFileSync(path);
+  const finalStats = lstatSync(path);
+  if (
+    !finalStats.isFile() ||
+    (requireSingleLink && finalStats.nlink !== 1) ||
+    finalStats.dev !== stats.dev ||
+    finalStats.ino !== stats.ino ||
+    finalStats.size !== stats.size ||
+    bytes.byteLength !== stats.size
+  ) {
+    throw new TypeError(`${label} changed while it was read.`);
+  }
+  return bytes;
 }
 
 function packageSupportsTarget(manifest, target) {
@@ -1100,12 +1152,18 @@ function resolveReleasePaths(options, outputMustExist = false) {
     ["nativeEvidencePath", "outputRoot", "packageRoot", "repositoryRoot"],
     "Release metadata paths"
   );
-  const repositoryRoot = realpathSync(resolve(value.repositoryRoot));
-  const packageRoot = realpathSync(resolve(value.packageRoot));
-  const nativeEvidencePath = realpathSync(resolve(value.nativeEvidencePath));
+  const repositoryRoot = resolveRealDirectory(value.repositoryRoot, "Repository root");
+  const packageRoot = resolveRealDirectory(value.packageRoot, "Package root");
+  const nativeEvidencePath = resolveRealFile(value.nativeEvidencePath, "Native CI evidence");
   const requestedOutput = resolve(value.outputRoot);
   const outputParentRequested = dirname(requestedOutput);
-  mkdirSync(outputParentRequested, { mode: 0o755, recursive: true });
+  if (outputMustExist) {
+    if (!existsSync(outputParentRequested)) {
+      throw new TypeError("Supply-chain metadata output parent is missing.");
+    }
+  } else {
+    mkdirSync(outputParentRequested, { mode: 0o755, recursive: true });
+  }
   const outputParent = realpathSync(outputParentRequested);
   const outputRoot = join(outputParent, basename(requestedOutput));
   if (outputRoot !== requestedOutput || basename(outputRoot).startsWith(".")) {
@@ -1121,6 +1179,24 @@ function resolveReleasePaths(options, outputMustExist = false) {
     packageRoot,
     repositoryRoot
   });
+}
+
+function resolveRealDirectory(candidate, label) {
+  const requested = resolve(candidate);
+  const stats = lstatSync(requested);
+  if (!stats.isDirectory() || stats.isSymbolicLink()) {
+    throw new TypeError(`${label} must be one real directory.`);
+  }
+  return realpathSync(requested);
+}
+
+function resolveRealFile(candidate, label) {
+  const requested = resolve(candidate);
+  const stats = lstatSync(requested);
+  if (!stats.isFile() || stats.isSymbolicLink() || stats.nlink !== 1) {
+    throw new TypeError(`${label} must be one regular non-linked file.`);
+  }
+  return realpathSync(requested);
 }
 
 function resourceDescriptor(name, text) {
