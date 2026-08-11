@@ -11,7 +11,7 @@ import { pathToFileURL } from "node:url";
 
 export const productionPackageManifestName = "hostdeck-package.json";
 export const productionPackageManifestSchemaVersion = 5;
-export const productionPackageSourceCount = 625;
+export const productionPackageSourceCount = 626;
 export const productionPackageVerifierName = "verify.mjs";
 export const productionWebManifestName = "hostdeck-web.json";
 export const productionWebManifestSchemaVersion = 1;
