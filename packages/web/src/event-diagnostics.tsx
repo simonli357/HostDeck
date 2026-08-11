@@ -27,6 +27,7 @@ import type {
   BrowserConnectionSnapshot,
   BrowserConnectionStateCoordinator
 } from "./connection-state.js";
+import { HostDeckDialogContent } from "./dialog-content.js";
 import {
   createEventDiagnosticsController,
   type EventDiagnosticsController,
@@ -179,7 +180,7 @@ export function EventDiagnosticsSheet({
       <Dialog.Portal>
         <Dialog.Overlay className="hostdeck-sheet-overlay" />
         {view.sheetOpen ? (
-          <Dialog.Content
+          <HostDeckDialogContent
             className={`hostdeck-sheet hostdeck-event-sheet hostdeck-event-sheet--${view.tone}`}
             aria-describedby={`${targetId} ${limitationId} ${statusId}`}
             onOpenAutoFocus={(event) => {
@@ -230,7 +231,7 @@ export function EventDiagnosticsSheet({
             </section>
 
             <EventStatus controller={controller} statusId={statusId} view={view} />
-          </Dialog.Content>
+          </HostDeckDialogContent>
         ) : null}
       </Dialog.Portal>
     </Dialog.Root>

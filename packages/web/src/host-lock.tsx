@@ -21,6 +21,7 @@ import {
 } from "react";
 import { createSecureBrowserOperationId } from "./browser-operation-id.js";
 import type { BrowserConnectionStateCoordinator } from "./connection-state.js";
+import { HostDeckDialogContent } from "./dialog-content.js";
 import {
   createHostLockController,
   type HostLockController,
@@ -224,7 +225,7 @@ function HostLockConfirmationDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="hostdeck-sheet-overlay hostdeck-lock-confirmation-overlay" />
         {confirmation === null ? null : (
-          <Dialog.Content
+          <HostDeckDialogContent
             className="hostdeck-sheet hostdeck-lock-confirmation"
             aria-describedby="hostdeck-lock-confirmation-description"
             onOpenAutoFocus={(event) => {
@@ -333,7 +334,7 @@ function HostLockConfirmationDialog({
                 </button>
               </div>
             </div>
-          </Dialog.Content>
+          </HostDeckDialogContent>
         )}
       </Dialog.Portal>
     </Dialog.Root>

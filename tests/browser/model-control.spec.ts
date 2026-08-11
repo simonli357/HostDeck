@@ -98,6 +98,50 @@ test("reads exact model truth and stages one correlated next-turn selection", as
   await expectCleanBrowser(diagnostics);
 });
 
+test("restores dock touch ownership after repeated model sheets", async ({ page }) => {
+  await installModelControlApi(page);
+  await page.goto(detailPath);
+
+  const model = page.getByRole("button", { name: "/model for android-release" });
+  const modelDialog = page.getByRole("dialog", { name: "/model" });
+  await page.evaluate(() => {
+    document.body.style.pointerEvents = "none";
+  });
+  for (let opening = 0; opening < 2; opening += 1) {
+    if (opening === 0) {
+      await model.evaluate((button) => (button as HTMLButtonElement).click());
+    } else {
+      await model.click();
+    }
+    await expect(modelDialog).toBeVisible();
+    await modelDialog.getByRole("button", { name: "Close model control" }).click();
+    await expect(modelDialog).toBeHidden();
+  }
+
+  const goal = page.getByRole("button", { name: "/goal for android-release" });
+  const bounds = await goal.boundingBox();
+  expect(bounds).not.toBeNull();
+  const touchOwner = await goal.evaluate((button) => {
+    const bounds = button.getBoundingClientRect();
+    const hit = document.elementFromPoint(
+      bounds.left + bounds.width / 2,
+      bounds.top + bounds.height / 2
+    );
+    return {
+      bodyPointerEvents: getComputedStyle(document.body).pointerEvents,
+      ownsCenter: hit !== null && (hit === button || button.contains(hit))
+    };
+  });
+  expect(touchOwner).toEqual({ bodyPointerEvents: "auto", ownsCenter: true });
+  if (bounds === null) throw new TypeError("Goal touch target bounds are unavailable.");
+
+  await page.touchscreen.tap(
+    bounds.x + bounds.width / 2,
+    bounds.y + bounds.height / 2
+  );
+  await expect(page.getByRole("dialog", { name: "/goal" })).toBeVisible();
+});
+
 test("owns one in-flight selection and blocks duplicate submit or dismissal", async ({ page }) => {
   const diagnostics = observePage(page);
   const api = await installModelControlApi(page);

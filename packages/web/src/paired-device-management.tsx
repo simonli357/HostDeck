@@ -20,6 +20,7 @@ import type {
   BrowserConnectionSnapshot,
   BrowserConnectionStateCoordinator
 } from "./connection-state.js";
+import { HostDeckDialogContent } from "./dialog-content.js";
 import {
   createPairedDeviceManagementController,
   HostDeckPairedDeviceManagementError,
@@ -234,7 +235,7 @@ export function PairedDeviceManagementPanel({
         <Dialog.Portal>
           <Dialog.Overlay className="hostdeck-sheet-overlay hostdeck-device-confirmation-overlay" />
           {confirmation === null ? null : (
-            <Dialog.Content
+            <HostDeckDialogContent
               className="hostdeck-sheet hostdeck-device-confirmation"
               aria-describedby="hostdeck-device-confirmation-detail"
               onOpenAutoFocus={(event) => {
@@ -330,7 +331,7 @@ export function PairedDeviceManagementPanel({
                   </button>
                 </div>
               </div>
-            </Dialog.Content>
+            </HostDeckDialogContent>
           )}
         </Dialog.Portal>
       </Dialog.Root>

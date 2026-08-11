@@ -27,6 +27,7 @@ import type {
   BrowserConnectionSnapshot,
   BrowserConnectionStateCoordinator
 } from "./connection-state.js";
+import { HostDeckDialogContent } from "./dialog-content.js";
 import {
   createGoalControlController,
   type GoalControlActionView,
@@ -162,7 +163,7 @@ export function GoalControl({ controller }: GoalControlProps) {
 
       <Dialog.Portal>
         <Dialog.Overlay className="hostdeck-sheet-overlay" />
-        <Dialog.Content
+        <HostDeckDialogContent
           className={`hostdeck-sheet hostdeck-goal-sheet hostdeck-goal-sheet--${view.tone}`}
           aria-describedby={`${targetId} ${statusId}`}
           onEscapeKeyDown={(event) => {
@@ -425,7 +426,7 @@ export function GoalControl({ controller }: GoalControlProps) {
               {view.saveLabel}
             </button>
           </div>
-        </Dialog.Content>
+        </HostDeckDialogContent>
       </Dialog.Portal>
     </Dialog.Root>
   );

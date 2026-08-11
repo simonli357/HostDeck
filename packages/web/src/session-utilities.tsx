@@ -18,6 +18,7 @@ import {
 } from "react";
 import { CompactSheetBody } from "./compact-control.js";
 import type { CompactControlController } from "./compact-control-state.js";
+import { HostDeckDialogContent } from "./dialog-content.js";
 import { SkillsSheetBody } from "./skills-control.js";
 import type { SkillsControlController } from "./skills-control-state.js";
 import { UsageSheetBody } from "./usage-control.js";
@@ -196,7 +197,7 @@ export function SessionUtilities({ compact, skills, usage }: SessionUtilitiesPro
 
       <Dialog.Portal>
         <Dialog.Overlay className="hostdeck-sheet-overlay" />
-        <Dialog.Content
+        <HostDeckDialogContent
           className={`hostdeck-sheet hostdeck-usage-sheet hostdeck-usage-sheet--${activeTone}`}
           aria-describedby={statusId === null ? targetId : `${targetId} ${statusId}`}
           onEscapeKeyDown={(event) => {
@@ -275,7 +276,7 @@ export function SessionUtilities({ compact, skills, usage }: SessionUtilitiesPro
               view={skillsView}
             />
           )}
-        </Dialog.Content>
+        </HostDeckDialogContent>
       </Dialog.Portal>
     </Dialog.Root>
   );

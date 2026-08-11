@@ -37,6 +37,7 @@ import {
   createProductionBrowserConnectionCoordinator
 } from "./browser-runtime.js";
 import type { BrowserConnectionStateCoordinator } from "./connection-state.js";
+import { HostDeckDialogContent } from "./dialog-content.js";
 import { ConnectedHostAccess } from "./host-access.js";
 import { ConnectedHostLock } from "./host-lock.js";
 import { SessionActionsSheet } from "./interrupt-control.js";
@@ -661,7 +662,7 @@ function HostAccessSheet({ children }: Readonly<{ children: ReactNode }>) {
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="hostdeck-sheet-overlay" />
-        <Dialog.Content className="hostdeck-sheet hostdeck-host-access-sheet">
+        <HostDeckDialogContent className="hostdeck-sheet hostdeck-host-access-sheet">
           <span className="hostdeck-sheet__handle" aria-hidden="true" />
           <div className="hostdeck-sheet__header">
             <Dialog.Title className="hostdeck-sheet__title">Host &amp; access</Dialog.Title>
@@ -682,7 +683,7 @@ function HostAccessSheet({ children }: Readonly<{ children: ReactNode }>) {
           >
             {children}
           </section>
-        </Dialog.Content>
+        </HostDeckDialogContent>
       </Dialog.Portal>
     </Dialog.Root>
   );

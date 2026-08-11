@@ -34,6 +34,7 @@ import {
   type BrowserConnectionStateCoordinator,
   HostDeckBrowserConnectionError
 } from "./connection-state.js";
+import { HostDeckDialogContent } from "./dialog-content.js";
 import { EventDiagnosticsAction } from "./event-diagnostics.js";
 import type { EventDiagnosticsController } from "./event-diagnostics-state.js";
 import type {
@@ -314,7 +315,7 @@ export function ApprovalConfirmationDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="hostdeck-sheet-overlay" />
         {confirmation === null ? null : (
-          <Dialog.Content
+          <HostDeckDialogContent
             className={`hostdeck-sheet hostdeck-approval-sheet hostdeck-approval-sheet--${confirmation.tone}`}
             aria-describedby={`${targetDescriptionId} ${statusDescriptionId}`}
             onOpenAutoFocus={(event) => {
@@ -447,7 +448,7 @@ export function ApprovalConfirmationDialog({
                 </button>
               </div>
             </form>
-          </Dialog.Content>
+          </HostDeckDialogContent>
         )}
       </Dialog.Portal>
     </Dialog.Root>

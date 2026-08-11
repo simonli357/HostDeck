@@ -24,6 +24,7 @@ import type {
   BrowserConnectionSnapshot,
   BrowserConnectionStateCoordinator
 } from "./connection-state.js";
+import { HostDeckDialogContent } from "./dialog-content.js";
 import {
   createModelControlController,
   type ModelControlController,
@@ -141,7 +142,7 @@ export function ModelControl({ controller }: ModelControlProps) {
 
       <Dialog.Portal>
         <Dialog.Overlay className="hostdeck-sheet-overlay" />
-        <Dialog.Content
+        <HostDeckDialogContent
           className={`hostdeck-sheet hostdeck-model-sheet hostdeck-model-sheet--${view.tone}`}
           aria-describedby={statusId}
           onEscapeKeyDown={(event) => {
@@ -361,7 +362,7 @@ export function ModelControl({ controller }: ModelControlProps) {
               {view.submitLabel}
             </button>
           </div>
-        </Dialog.Content>
+        </HostDeckDialogContent>
       </Dialog.Portal>
     </Dialog.Root>
   );

@@ -19159,6 +19159,7 @@ async function runPhysicalGoalControl(
     goalCallsBefore === 0,
     "Physical /goal flow started with a prechanged mutation count."
   );
+  const goalReadsBefore = input.requestInspection.protectedReadRequests;
   const trigger = await waitForStablePhysicalSessionDockAction(
     {
       readNavigation: () => readPhysicalSessionNavigationSnapshot(input),
@@ -19178,7 +19179,15 @@ async function runPhysicalGoalControl(
         readPhysicalSessionNavigationSnapshot(input),
         navigationBefore
       ) && physicalGoalCurrentTruthVisible(await readAndroidUiNodes()),
-    "Physical /goal did not render current objective truth."
+    () =>
+      "Physical /goal did not render current objective truth " +
+      `(read_delta=${
+        input.requestInspection.protectedReadRequests - goalReadsBefore
+      }).`
+  );
+  requireCondition(
+    input.requestInspection.protectedReadRequests === goalReadsBefore + 1,
+    "Physical /goal did not issue exactly one protected read."
   );
   await capture("fe090-15-goal-current.png");
   const editor = await waitForPhysicalSelectedNode(

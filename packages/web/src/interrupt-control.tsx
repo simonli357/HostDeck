@@ -40,6 +40,7 @@ import type {
   BrowserConnectionSnapshot,
   BrowserConnectionStateCoordinator
 } from "./connection-state.js";
+import { HostDeckDialogContent } from "./dialog-content.js";
 import {
   createInterruptControlController,
   type InterruptControlController,
@@ -361,7 +362,7 @@ export function SessionActionsSheet({
 
       <Dialog.Portal>
         <Dialog.Overlay className="hostdeck-sheet-overlay" />
-        <Dialog.Content
+        <HostDeckDialogContent
           ref={contentRef}
           className={`hostdeck-sheet hostdeck-session-actions-sheet hostdeck-session-actions-sheet--${tone}`}
           aria-describedby={descriptionId}
@@ -472,7 +473,7 @@ export function SessionActionsSheet({
               />
             )}
           </div>
-        </Dialog.Content>
+        </HostDeckDialogContent>
       </Dialog.Portal>
     </Dialog.Root>
   );

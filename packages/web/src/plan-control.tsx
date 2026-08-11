@@ -28,6 +28,7 @@ import {
   type BrowserConnectionStateCoordinator,
   HostDeckBrowserConnectionError
 } from "./connection-state.js";
+import { HostDeckDialogContent } from "./dialog-content.js";
 import {
   createPlanControlController,
   type PlanControlController,
@@ -157,7 +158,7 @@ export function PlanControl({ controller }: PlanControlProps) {
 
       <Dialog.Portal>
         <Dialog.Overlay className="hostdeck-sheet-overlay" />
-        <Dialog.Content
+        <HostDeckDialogContent
           className={`hostdeck-sheet hostdeck-plan-sheet hostdeck-plan-sheet--${view.tone}`}
           aria-describedby={`${targetId} ${statusId}`}
           onEscapeKeyDown={(event) => {
@@ -389,7 +390,7 @@ export function PlanControl({ controller }: PlanControlProps) {
             </button>
           </div>
           </form>
-        </Dialog.Content>
+        </HostDeckDialogContent>
       </Dialog.Portal>
     </Dialog.Root>
   );
