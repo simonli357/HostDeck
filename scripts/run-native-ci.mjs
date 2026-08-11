@@ -117,6 +117,12 @@ async function main() {
     );
     if (target === "windows-x64") {
       runWindowsCodexSpike(checks, outputPath);
+      runVitestCheck(
+        checks,
+        "windows_supervisor",
+        ["packages/server/src/codex-windows-runtime-supervisor.contract.test.ts"],
+        reportRoot
+      );
     }
     if (target === "linux-x64") {
       runVitestCheck(

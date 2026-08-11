@@ -22,6 +22,7 @@
     "@hostdeck/storage": "workspace:*",
     "cookie": "1.1.1",
     "fastify": "5.10.0",
+    "koffi": "3.1.4",
     "zod": "4.4.3"
   }
 }

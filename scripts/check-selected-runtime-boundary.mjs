@@ -291,6 +291,8 @@ export const directHostApiOwnerPaths = Object.freeze([
   "packages/server/src/codex-runtime-lifecycle-process.ts",
   "packages/server/src/codex-runtime-supervisor-node.ts",
   "packages/server/src/codex-runtime-supervisor.ts",
+  "packages/server/src/codex-windows-runtime-supervisor-node.ts",
+  "packages/server/src/codex-windows-runtime-supervisor.ts",
   "packages/server/src/codex-structured-vertical-report.ts",
   "packages/server/src/codex-version-probe.ts",
   "packages/server/src/fastify-host-lifecycle.ts",
