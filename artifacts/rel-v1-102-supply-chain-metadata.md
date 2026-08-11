@@ -1,6 +1,9 @@
 # REL-V1-102 Supply-Chain Metadata
 
-Status: in progress.
+Status: done.
+
+Implementation: `8669347`, `5a2df7c`, `15cae7b`; portable-path correction:
+`0dd98f3`. Accepted native run: `31513897607`.
 
 ## Frozen Contract
 
@@ -30,11 +33,24 @@ Status: in progress.
   rejects private paths, accounts, credentials, tokens, Tailscale identities, or
   non-public URLs.
 
-## Acceptance
+## Evidence
 
-- Same inputs produce byte-identical outputs on Ubuntu and Windows.
-- Schema, target, runtime, native-dependency, missing-file, extra-file, tamper,
-  traversal, link, privacy, and interrupted-publication mutations fail.
-- Native CI runs the metadata contract on both targets without skips.
-- The completed artifact records exact commands, counts, hashes, commits, and the
-  accepted native run; no generated release metadata is retained from a private host.
+- Six metadata tests pass with strict CycloneDX validation, target/runtime/license
+  closure, two deterministic generations, and schema, graph, target, checksum,
+  package/evidence tamper, missing/extra file, path/link, privacy, and publication
+  failure mutations. Package acceptance passes 43 tests and two 6,293-entry builds.
+- Run `31513897607` binds commit `0dd98f3c43a03efe352293c300e42f91f4210a16`
+  and lockfile `18ff003698c457578ba3e041074e522cd4fcfdf73e1e7d60ece7354cb43b7458`.
+  Linux passes 17 checks; Windows passes 16, both including `supply_chain` with no skip.
+- Independently downloaded evidence verifies at SHA-256
+  `60073f20775764816e240e8b4507d5f8b080b98aca5a5d36d194d5079500eab2`
+  for Linux and `bfc777cd92ac264894fbdf33259d1c47fe1bfd41609ccd32852ebc5a48990b7f`
+  for Windows.
+- The real accepted Linux input emits byte-identical five-record sets over 4,983 files,
+  181 licensed third-party packages, 188 CycloneDX components, and 189 dependency
+  records. Metadata identity is
+  `08e904236ba12bbf65dc12436ca87cf041d750c562baa360b9e62a4801c741e2`.
+- Failed run `31513526951` exposed host-dialect normalization in the existing package
+  verifier; `0dd98f3` moved both affected checks to explicit portable POSIX semantics.
+  No generated metadata, native evidence, private path, account, token, or host residue
+  is retained.
