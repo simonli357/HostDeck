@@ -17,7 +17,7 @@ import {
   writeFileSync
 } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { validateSelectedRuntimeBoundary } from "./check-selected-runtime-boundary.mjs";
@@ -662,7 +662,7 @@ function parseViteOutputPath(candidate, label) {
     candidate.length > 4_096 ||
     candidate.includes("\\") ||
     candidate.includes("\0") ||
-    portable(resolve("/", candidate).slice(1)) !== candidate ||
+    posix.normalize(candidate) !== candidate ||
     !/-[a-zA-Z0-9_-]{8,}(?:\.[a-zA-Z0-9]+)+$/u.test(basename(candidate))
   ) {
     throw new TypeError(`${label} is invalid.`);

@@ -6,7 +6,7 @@ import {
   readlinkSync,
   realpathSync
 } from "node:fs";
-import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const productionPackageManifestName = "hostdeck-package.json";
@@ -1637,7 +1637,7 @@ function parseRelativePath(value, label, allowDot) {
   ) {
     throw new TypeError(`${label} must be a portable relative path.`);
   }
-  const normalized = toPortablePath(resolve("/", value).slice(1));
+  const normalized = posix.normalize(value);
   if (value !== normalized && !(allowDot && value === ".")) {
     throw new TypeError(`${label} must be normalized.`);
   }
