@@ -656,8 +656,13 @@ async function startResumeProbe(input) {
       }
     });
   } catch (error) {
+    const reportedError =
+      error instanceof Error &&
+      error.message === "Codex resume TUI did not render before timeout."
+        ? new Error(`${error.message} (${resumeFailureDiagnostic(child, capture, input)}).`)
+        : error;
     await stopProcessTree(child).catch(() => undefined);
-    throw error;
+    throw reportedError;
   }
 }
 
@@ -940,6 +945,10 @@ async function stopProcessTree(child) {
     timeout: 10_000,
     windowsHide: true
   });
+  if (result.status !== 0 || result.error !== undefined || result.signal !== null) {
+    await delay(100);
+    if (child.exitCode !== null || child.signalCode !== null) return;
+  }
   requireCondition(
     result.error === undefined && result.status === 0 && result.signal === null,
     "Windows process tree could not be terminated."
@@ -1142,9 +1151,21 @@ function requireCondition(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function safeErrorReport(error) {
+  const messages = [];
+  const visit = (candidate) => {
+    if (!(candidate instanceof Error)) return;
+    messages.push(candidate.message);
+    if (candidate instanceof AggregateError) {
+      for (const nested of candidate.errors) visit(nested);
+    }
+  };
+  visit(error);
+  const unique = [...new Set(messages)].join("\n");
+  return stripTerminalControl(unique).slice(0, 4_096) || "Windows Codex transport spike failed.";
+}
+
 main().catch((error) => {
-  process.stderr.write(
-    `${error instanceof Error ? error.message : "Windows Codex transport spike failed."}\n`
-  );
+  process.stderr.write(`${safeErrorReport(error)}\n`);
   process.exitCode = 1;
 });
