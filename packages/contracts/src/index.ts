@@ -5,6 +5,7 @@ export * from "./device-revocation.js";
 export * from "./host-health.js";
 export * from "./host-lock.js";
 export * from "./host-platform.js";
+export * from "./native-session.js";
 export * from "./pairing.js";
 export * from "./pairing-link.js";
 export * from "./remote-ingress.js";

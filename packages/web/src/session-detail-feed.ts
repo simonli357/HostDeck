@@ -35,7 +35,7 @@ export interface SessionDetailFeedState {
 export interface SessionDetailContinuityBoundary {
   readonly after: number | null;
   readonly cursor: number;
-  readonly reason: "retention" | "disconnect" | "restart" | "schema_change";
+  readonly reason: "retention" | "disconnect" | "restart" | "schema_change" | "adoption";
 }
 
 export interface SessionDetailTimelineFact {
@@ -601,6 +601,12 @@ function boundaryCopy(reason: SessionDetailContinuityBoundary["reason"]): {
   readonly body: string;
 } {
   switch (reason) {
+    case "adoption":
+      return {
+        state: "Adopted",
+        title: "Earlier Codex activity",
+        body: "This session joined HostDeck here. Earlier activity remains in Codex."
+      };
     case "retention":
       return {
         state: "History limited",

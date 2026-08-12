@@ -126,7 +126,7 @@ export interface BrowserSseConnectOptions {
 export interface BrowserSseBoundary {
   readonly after: number | null;
   readonly cursor: number;
-  readonly reason: "retention" | "disconnect" | "restart" | "schema_change";
+  readonly reason: "retention" | "disconnect" | "restart" | "schema_change" | "adoption";
 }
 
 export interface BrowserSseFailure {

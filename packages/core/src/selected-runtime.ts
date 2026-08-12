@@ -151,7 +151,11 @@ export const persistedSelectedSecurityAuditActions = [
 ] as const;
 export type PersistedSelectedSecurityAuditAction = (typeof persistedSelectedSecurityAuditActions)[number];
 
-export const selectedSessionLifecycleAuditActions = ["session_start"] as const;
+export const selectedSessionLifecycleAuditActions = [
+  "session_start",
+  "session_adopt",
+  "session_unmanage"
+] as const;
 export type SelectedSessionLifecycleAuditAction = (typeof selectedSessionLifecycleAuditActions)[number];
 
 export const selectedAuditActions = [

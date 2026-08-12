@@ -1060,7 +1060,7 @@ function selectedEventVariants(): SelectedProjectionEvent[] {
 function boundaryEvent(
   cursor: number,
   after: number | null,
-  reason: "retention" | "disconnect" | "restart" | "schema_change"
+  reason: "retention" | "disconnect" | "restart" | "schema_change" | "adoption"
 ): SelectedProjectionEvent {
   return selectedProjectionEventSchema.parse({
     session_id: sessionId,

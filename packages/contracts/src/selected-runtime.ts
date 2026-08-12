@@ -369,7 +369,7 @@ export const replayBoundaryProjectionEventSchema = z
     type: z.literal("replay_boundary"),
     after: outputCursorSchema.nullable(),
     next_cursor: outputCursorSchema,
-    reason: z.enum(["retention", "disconnect", "restart", "schema_change"])
+    reason: z.enum(["retention", "disconnect", "restart", "schema_change", "adoption"])
   })
   .strict()
   .superRefine((value, context) => {

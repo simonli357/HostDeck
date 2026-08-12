@@ -37,6 +37,7 @@ import {
   selectedProjectionEventSchema
 } from "./selected-runtime.js";
 import { auditPayloadSummarySchema } from "./storage.js";
+import { nativeCodexThreadTargetSchema } from "./native-session.js";
 
 const selectedStorageLimits = {
   idLength: 120,
@@ -211,7 +212,8 @@ export const selectedAuditTargetSchema = z.discriminatedUnion("type", [
   selectedApprovalAuditTargetSchema,
   selectedTurnAuditTargetSchema,
   selectedDeviceAuditTargetSchema,
-  selectedHostAuditTargetSchema
+  selectedHostAuditTargetSchema,
+  nativeCodexThreadTargetSchema
 ]);
 
 export const selectedAuditEventRecordSchema = createAuditEventRecordSchema(selectedAuditActions);
@@ -270,6 +272,81 @@ export const selectedSessionStartAuditEventRecordSchema = selectedAuditEventReco
         message: "Session-start audit summary contradicts its phase or outcome.",
         path: ["payload_summary"]
       });
+    }
+  }
+);
+
+export const selectedNativeSessionAdoptionAuditPayloadSummarySchema = z
+  .object({
+    schema_version: z.literal(1),
+    handoff_confirmed: z.literal(true).optional(),
+    name_length: positiveSafeIntegerSchema.max(64).optional(),
+    history_turn_count: nonNegativeSafeIntegerSchema.max(20).optional(),
+    adopted: z.literal(true).optional(),
+    activation_pending: z.literal(true).optional()
+  })
+  .strict();
+
+export const selectedNativeSessionAdoptionAuditEventRecordSchema = selectedAuditEventRecordSchema.superRefine(
+  (value, context) => {
+    if (value.action !== "session_adopt") {
+      context.addIssue({ code: "custom", message: "Native-session adoption audit requires session_adopt." });
+      return;
+    }
+    if (value.actor.type !== "cli" || value.target.type !== "native_codex_thread") {
+      context.addIssue({ code: "custom", message: "Native-session adoption requires local CLI authority and one native thread target." });
+    }
+    const summary = selectedNativeSessionAdoptionAuditPayloadSummarySchema.safeParse(value.payload_summary);
+    if (!summary.success) {
+      context.addIssue({ code: "custom", message: "Native-session adoption audit summary is invalid.", path: ["payload_summary"] });
+      return;
+    }
+    const keys = Object.keys(summary.data).sort();
+    const expected =
+      value.phase === "accepted"
+        ? ["handoff_confirmed", "name_length", "schema_version"]
+        : value.outcome === "succeeded"
+          ? ["adopted", "history_turn_count", "schema_version"]
+          : value.outcome === "incomplete"
+            ? ["activation_pending", "schema_version"]
+            : ["schema_version"];
+    if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
+      context.addIssue({ code: "custom", message: "Native-session adoption audit summary contradicts its phase or outcome.", path: ["payload_summary"] });
+    }
+  }
+);
+
+export const selectedNativeSessionUnmanageAuditPayloadSummarySchema = z
+  .object({
+    schema_version: z.literal(1),
+    confirm: z.literal(true).optional(),
+    unmanaged: z.literal(true).optional()
+  })
+  .strict();
+
+export const selectedNativeSessionUnmanageAuditEventRecordSchema = selectedAuditEventRecordSchema.superRefine(
+  (value, context) => {
+    if (value.action !== "session_unmanage") {
+      context.addIssue({ code: "custom", message: "Native-session unmanage audit requires session_unmanage." });
+      return;
+    }
+    if (value.actor.type !== "cli" || value.target.type !== "managed_session") {
+      context.addIssue({ code: "custom", message: "Native-session unmanage requires local CLI authority and one managed-session target." });
+    }
+    const summary = selectedNativeSessionUnmanageAuditPayloadSummarySchema.safeParse(value.payload_summary);
+    if (!summary.success) {
+      context.addIssue({ code: "custom", message: "Native-session unmanage audit summary is invalid.", path: ["payload_summary"] });
+      return;
+    }
+    const keys = Object.keys(summary.data).sort();
+    const expected =
+      value.phase === "accepted"
+        ? ["confirm", "schema_version"]
+        : value.outcome === "succeeded"
+          ? ["schema_version", "unmanaged"]
+          : ["schema_version"];
+    if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
+      context.addIssue({ code: "custom", message: "Native-session unmanage audit summary contradicts its phase or outcome.", path: ["payload_summary"] });
     }
   }
 );
@@ -486,6 +563,12 @@ function createAuditEventRecordSchema<const Actions extends readonly [string, ..
       if (value.action === "interrupt" && value.target.type !== "turn") {
         context.addIssue({ code: "custom", message: "Interrupts must audit one exact turn target." });
       }
+      if (value.action === "session_adopt" && value.target.type !== "native_codex_thread") {
+        context.addIssue({ code: "custom", message: "Session adoption must audit one exact native Codex thread target." });
+      }
+      if (value.action === "session_unmanage" && value.target.type !== "managed_session") {
+        context.addIssue({ code: "custom", message: "Session unmanage must audit one exact managed-session target." });
+      }
       const deviceAction = value.action === "device_revoke" || value.action === "csrf_bootstrap";
       if (deviceAction && value.target.type !== "device") {
         context.addIssue({ code: "custom", message: "Device authority actions must audit one exact device target." });
@@ -494,6 +577,8 @@ function createAuditEventRecordSchema<const Actions extends readonly [string, ..
         !sessionActions.has(value.action) &&
         value.action !== "approval_response" &&
         value.action !== "interrupt" &&
+        value.action !== "session_adopt" &&
+        value.action !== "session_unmanage" &&
         !deviceAction &&
         value.target.type !== "host"
       ) {
@@ -529,6 +614,12 @@ export type SelectedAuditTarget = z.infer<typeof selectedAuditTargetSchema>;
 export type SelectedAuditEventRecord = z.infer<typeof selectedAuditEventRecordSchema>;
 export type PersistedSelectedAuditEventRecord = z.infer<typeof persistedSelectedAuditEventRecordSchema>;
 export type SelectedSessionStartAuditEventRecord = z.infer<typeof selectedSessionStartAuditEventRecordSchema>;
+export type SelectedNativeSessionAdoptionAuditEventRecord = z.infer<
+  typeof selectedNativeSessionAdoptionAuditEventRecordSchema
+>;
+export type SelectedNativeSessionUnmanageAuditEventRecord = z.infer<
+  typeof selectedNativeSessionUnmanageAuditEventRecordSchema
+>;
 export type SelectedSecurityAuditEventRecord = z.infer<typeof selectedSecurityAuditEventRecordSchema>;
 export type SelectedSecurityAuditV1EventRecord = z.infer<typeof selectedSecurityAuditV1EventRecordSchema>;
 export type HistoricalSelectedNetworkAuditEventRecord = z.infer<typeof historicalSelectedNetworkAuditEventRecordSchema>;
@@ -557,6 +648,8 @@ function sameAuditTarget(left: z.infer<typeof selectedAuditTargetSchema>, right:
       return right.type === "device" && left.device_id === right.device_id;
     case "host":
       return right.type === "host" && left.host_id === right.host_id;
+    case "native_codex_thread":
+      return right.type === "native_codex_thread" && left.codex_thread_id === right.codex_thread_id;
   }
 }
 

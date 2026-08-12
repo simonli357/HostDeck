@@ -105,6 +105,7 @@ const exactRootModules = new Map([
       "./host-health.js",
       "./host-lock.js",
       "./host-platform.js",
+      "./native-session.js",
       "./pairing.js",
       "./pairing-link.js",
       "./remote-ingress.js",
@@ -252,6 +253,7 @@ const historicalExceptionImports = new Map([
     "packages/contracts/src/selected-storage.ts",
     [
       "@hostdeck/core",
+      "./native-session.js",
       "./scalars.js",
       "./security-audit.js",
       "./selected-operations.js",

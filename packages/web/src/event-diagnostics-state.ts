@@ -1068,7 +1068,7 @@ function parseBoundary(candidate: unknown): SessionDetailContinuityBoundary {
     !Number.isSafeInteger(cursor) ||
     (cursor as number) < 0 ||
     (after !== null && (cursor as number) <= (after as number)) ||
-    !["retention", "disconnect", "restart", "schema_change"].includes(reason as string)
+    !["retention", "disconnect", "restart", "schema_change", "adoption"].includes(reason as string)
   ) {
     throw new TypeError("HostDeck event-diagnostics boundary is invalid.");
   }
@@ -1192,6 +1192,7 @@ function eventTypeLabel(type: SelectedProjectionEvent["type"]): string {
 
 function boundaryReasonLabel(reason: SessionDetailContinuityBoundary["reason"]): string {
   switch (reason) {
+    case "adoption": return "HostDeck adoption";
     case "retention": return "Retention";
     case "disconnect": return "Disconnect";
     case "restart": return "Runtime restart";
@@ -1201,6 +1202,7 @@ function boundaryReasonLabel(reason: SessionDetailContinuityBoundary["reason"]):
 
 function boundaryReason(reason: SessionDetailContinuityBoundary["reason"]): string {
   switch (reason) {
+    case "adoption": return "Earlier activity remains in Codex before this HostDeck adoption boundary.";
     case "retention": return "Earlier events are outside retained history.";
     case "disconnect": return "Event continuity was interrupted by a runtime disconnect.";
     case "restart": return "Event continuity was interrupted by a runtime restart.";
