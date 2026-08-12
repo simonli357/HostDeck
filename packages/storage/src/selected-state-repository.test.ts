@@ -1,9 +1,14 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type SelectedProjectedEventRecord, selectedProjectionEventSchema } from "@hostdeck/contracts";
+import {
+  type SelectedProjectedEventRecord,
+  selectedProjectionEventSchema,
+  selectedSessionListInputSchema
+} from "@hostdeck/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { openMigratedDatabase } from "./migration-runner.js";
+import { createSelectedSessionReadRepository } from "./selected-session-read-repository.js";
 import {
   createSelectedStateRepository,
   HostDeckSelectedStateRepositoryError,
@@ -39,6 +44,39 @@ describe("selected session state repository", () => {
           { type: "message", role: "agent", cursor: 2 },
           { type: "turn", state: "completed", cursor: 3 }
         ]
+      });
+      const publicRead = createSelectedSessionReadRepository(first.db);
+      expect(
+        publicRead.list(
+          selectedSessionListInputSchema.parse({
+            after: null,
+            expected_order_snapshot: null,
+            limit: 10
+          })
+        )
+      ).toMatchObject({
+        sessions: [
+          {
+            event_window: {
+              boundary_cursor: null,
+              earliest_retained_cursor: 1,
+              retained_event_count: 3,
+              state: "contiguous"
+            },
+            session: {
+              id: adopted.state.mapping.id,
+              codex_thread_id: adopted.state.mapping.codex_thread_id
+            }
+          }
+        ]
+      });
+      expect(publicRead.get(adopted.state.mapping.id)).toMatchObject({
+        event_window: {
+          boundary_cursor: null,
+          earliest_retained_cursor: 1,
+          retained_event_count: 3,
+          state: "contiguous"
+        }
       });
     } finally {
       first.db.close();

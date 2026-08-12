@@ -662,6 +662,7 @@ function assertEventAggregate(
   const invalidRows = nonNegativeSafeInteger(row.invalid_event_rows);
   const replayBoundaryCount = nonNegativeSafeInteger(row.replay_boundary_count);
   const firstType = row.first_event_type;
+  const firstIsBoundary = firstType === "replay_boundary";
   if (
     (firstType !== null && typeof firstType !== "string") ||
     invalidRows !== 0 ||
@@ -690,13 +691,25 @@ function assertEventAggregate(
     earliest === null ||
     latest === null ||
     earliest > latest ||
-    latest - earliest + 1 !== count ||
-    (projection.retention_boundary_cursor === null
-      ? earliest !== 1 || replayBoundaryCount !== 0
-      : projection.retention_boundary_cursor + 1 !== earliest ||
-        firstType !== "replay_boundary" ||
-        replayBoundaryCount !== 1 ||
-        count < 2)
+    latest - earliest + 1 !== count
+  ) {
+    throw repositoryError("invalid_state", "Managed-session retained event state is inconsistent.");
+  }
+  if (projection.retention_boundary_cursor === null) {
+    if (
+      earliest !== 1 ||
+      (firstIsBoundary
+        ? replayBoundaryCount !== 1
+        : replayBoundaryCount !== 0)
+    ) {
+      throw repositoryError("invalid_state", "Managed-session retained event state is inconsistent.");
+    }
+    return;
+  }
+  if (
+    projection.retention_boundary_cursor + 1 !== earliest ||
+    replayBoundaryCount !== 1 ||
+    !firstIsBoundary
   ) {
     throw repositoryError("invalid_state", "Managed-session retained event state is inconsistent.");
   }

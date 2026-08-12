@@ -145,8 +145,12 @@ describe("selected session-read repository", () => {
       });
       seedSession(open.db, { id: "sess_detail_contiguous" });
       seedEvents(open.db, "sess_detail_contiguous", 1, 3, null, privateSentinel);
+      seedSession(open.db, { id: "sess_detail_initial_boundary" });
+      seedEvents(open.db, "sess_detail_initial_boundary", 1, 1, null, privateSentinel, 1);
       seedSession(open.db, { id: "sess_detail_bounded" });
       seedEvents(open.db, "sess_detail_bounded", 5, 7, 4, privateSentinel);
+      seedSession(open.db, { id: "sess_detail_boundary_only" });
+      seedEvents(open.db, "sess_detail_boundary_only", 5, 5, 4, privateSentinel);
 
       const repository = createSelectedSessionReadRepository(open.db);
       expect(repository.get("sess_detail_empty")?.event_window).toEqual({
@@ -165,6 +169,18 @@ describe("selected session-read repository", () => {
         boundary_cursor: 4,
         earliest_retained_cursor: 5,
         retained_event_count: 3,
+        state: "bounded"
+      });
+      expect(repository.get("sess_detail_initial_boundary")?.event_window).toEqual({
+        boundary_cursor: null,
+        earliest_retained_cursor: 1,
+        retained_event_count: 1,
+        state: "contiguous"
+      });
+      expect(repository.get("sess_detail_boundary_only")?.event_window).toEqual({
+        boundary_cursor: 4,
+        earliest_retained_cursor: 5,
+        retained_event_count: 1,
         state: "bounded"
       });
       expect(repository.get("sess_detail_stale")?.session).toMatchObject({
@@ -364,17 +380,14 @@ describe("selected session-read repository", () => {
       "hole",
       "boundary",
       "type",
-      "unexpected_boundary",
-      "duplicate_boundary",
-      "boundary_only"
+      "nonfirst_boundary",
+      "duplicate_boundary"
     ] as const) {
       const open = openDatabase();
       try {
         seedSession(open.db, { id: "sess_events_corrupt" });
         if (corruption === "duplicate_boundary") {
           seedEvents(open.db, "sess_events_corrupt", 5, 7, 4, "event-private-sentinel");
-        } else if (corruption === "boundary_only") {
-          seedEvents(open.db, "sess_events_corrupt", 5, 5, 4, "event-private-sentinel");
         } else {
           seedEvents(open.db, "sess_events_corrupt", 1, 3, null, "event-private-sentinel");
         }
@@ -392,9 +405,9 @@ describe("selected session-read repository", () => {
           open.db
             .prepare("UPDATE selected_projected_events SET normalized_type = 'private_invalid' WHERE session_id = ? AND cursor = 1")
             .run("sess_events_corrupt");
-        } else if (corruption === "unexpected_boundary") {
+        } else if (corruption === "nonfirst_boundary") {
           open.db
-            .prepare("UPDATE selected_projected_events SET normalized_type = 'replay_boundary' WHERE session_id = ? AND cursor = 1")
+            .prepare("UPDATE selected_projected_events SET normalized_type = 'replay_boundary' WHERE session_id = ? AND cursor = 2")
             .run("sess_events_corrupt");
         } else if (corruption === "duplicate_boundary") {
           open.db
@@ -633,7 +646,8 @@ function seedEvents(
   earliest: number,
   latest: number,
   boundary: number | null,
-  privateSentinel: string
+  privateSentinel: string,
+  initialBoundaryCursor: number | null = null
 ): void {
   const byteLength = 100;
   const insert = db.prepare(
@@ -649,7 +663,10 @@ function seedEvents(
       insert.run(
         sessionId,
         cursor,
-        cursor === earliest && boundary !== null ? "replay_boundary" : "message",
+        cursor === earliest &&
+          (boundary !== null || cursor === initialBoundaryCursor)
+          ? "replay_boundary"
+          : "message",
         activeUpdatedAt,
         byteLength,
         JSON.stringify({ private: privateSentinel, cursor })
