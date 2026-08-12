@@ -226,7 +226,13 @@ class DefaultNativeSessionAdministrationService
     requireNativeDeadline(deadline);
     this.assertAvailableIdentity(request);
 
-    const state = this.buildAdoptionState(request, snapshot);
+    let runtimeVersion: string;
+    try {
+      runtimeVersion = this.options.native.runtime_version;
+    } catch (error) {
+      throw mapAdapterError(error, "Native Codex runtime identity could not be confirmed for adoption.");
+    }
+    const state = this.buildAdoptionState(request, snapshot, runtimeVersion);
     try {
       await this.options.events.transitionMembership(
         () => this.options.states.adopt(state),
@@ -359,7 +365,8 @@ class DefaultNativeSessionAdministrationService
 
   private buildAdoptionState(
     request: NativeSessionAdoptRequest,
-    snapshot: NativeCodexAdoptionSnapshot
+    snapshot: NativeCodexAdoptionSnapshot,
+    runtimeVersion: string
   ): {
     readonly membership: unknown;
     readonly state: SelectedSessionState;
@@ -428,7 +435,7 @@ class DefaultNativeSessionAdministrationService
         codex_thread_id: snapshot.thread.thread_id,
         cwd: snapshot.thread.cwd,
         runtime_source: "codex_app_server",
-        runtime_version: snapshot.thread.runtime_version,
+        runtime_version: runtimeVersion,
         disposition: "selected",
         created_at: snapshot.thread.created_at,
         updated_at: adoptedAt,
@@ -441,7 +448,7 @@ class DefaultNativeSessionAdministrationService
           codex_thread_id: snapshot.thread.thread_id,
           cwd: snapshot.thread.cwd,
           runtime_source: "codex_app_server",
-          runtime_version: snapshot.thread.runtime_version,
+          runtime_version: runtimeVersion,
           created_at: snapshot.thread.created_at,
           archived_at: null,
           session_state: "active",

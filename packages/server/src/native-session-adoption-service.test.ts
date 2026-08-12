@@ -63,6 +63,13 @@ describe("native session administration service", () => {
 
   it("atomically bootstraps a visible bounded history and resumes the exact id once", async () => {
     const fixture = createFixture();
+    fixture.native.snapshot = {
+      ...fixture.native.snapshot,
+      thread: {
+        ...fixture.native.snapshot.thread,
+        runtime_version: "0.146.0"
+      }
+    };
 
     const adopted = await fixture.service.adopt(adoptRequest, deadline());
 
@@ -71,10 +78,12 @@ describe("native session administration service", () => {
         id: "sess_native_001",
         name: "existing-work",
         codex_thread_id: threadId,
+        runtime_version: "0.144.0",
         disposition: "selected"
       },
       projection: {
         session: {
+          runtime_version: "0.144.0",
           session_state: "active",
           turn_state: "idle",
           freshness: "current",

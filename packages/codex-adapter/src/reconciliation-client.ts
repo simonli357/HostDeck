@@ -183,7 +183,7 @@ export function createCodexReconciliationReadClient(
 
   const runtimeVersion = () => requireRuntimeVersion(guarded.compatibility);
   const listAllThreads = async (signal?: AbortSignal): Promise<readonly CodexThreadRecord[]> => {
-    const expectedRuntimeVersion = runtimeVersion();
+    void runtimeVersion();
     const threads: CodexThreadRecord[] = [];
     for (const archived of [false, true]) {
       let cursor: string | null = null;
@@ -209,7 +209,7 @@ export function createCodexReconciliationReadClient(
         );
         assertExactKeys(result, ["backwardsCursor", "data", "nextCursor"], "Codex reconciliation thread/list fields are invalid.");
         const page = requireArray(result.data, "Codex reconciliation thread/list data must be an array.", options.thread.page_size)
-          .map((candidate) => parseThread(candidate, archived, expectedRuntimeVersion));
+          .map((candidate) => parseThread(candidate, archived));
         assertUniqueThreadIds(page, "Codex reconciliation thread/list page contains duplicate thread ids.");
         validateBackwardsCursor(result.backwardsCursor, page.length, "thread-list");
         threads.push(...page);
@@ -242,7 +242,7 @@ export function createCodexReconciliationReadClient(
     }
     if (remaining.size === 0) return Object.freeze([]);
 
-    const expectedRuntimeVersion = runtimeVersion();
+    void runtimeVersion();
     const threads: CodexThreadRecord[] = [];
     for (const archived of [false, true]) {
       let cursor: string | null = null;
@@ -280,7 +280,7 @@ export function createCodexReconciliationReadClient(
         for (const candidate of page) {
           const candidateId = targetCandidateId(candidate);
           if (candidateId === null || !remaining.has(candidateId)) continue;
-          threads.push(parseThread(candidate, archived, expectedRuntimeVersion));
+          threads.push(parseThread(candidate, archived));
           remaining.delete(candidateId);
         }
 
@@ -307,7 +307,7 @@ export function createCodexReconciliationReadClient(
     threadId: CodexThreadId | string,
     signal?: AbortSignal
   ): Promise<CodexThreadRecord> => {
-    const expectedRuntimeVersion = runtimeVersion();
+    void runtimeVersion();
     const parsedThreadId = parseInputThreadId(threadId);
     const params = { threadId: parsedThreadId, includeTurns: false } satisfies ThreadReadParams;
     const result = requireRecord(
@@ -321,7 +321,7 @@ export function createCodexReconciliationReadClient(
       "Codex reconciliation thread/read result must be an object."
     );
     assertExactKeys(result, ["thread"], "Codex reconciliation thread/read fields are invalid.");
-    const thread = parseThread(result.thread, null, expectedRuntimeVersion);
+    const thread = parseThread(result.thread, null);
     if (thread.id !== parsedThreadId) throw invalidPayload("Codex reconciliation thread/read returned a different thread id.");
     return thread;
   };
@@ -445,8 +445,7 @@ function createGuardedPort<
 
 function parseThread(
   candidate: unknown,
-  archived: boolean | null,
-  expectedRuntimeVersion: string
+  archived: boolean | null
 ): CodexThreadRecord {
   const value = requireRecord(candidate, "Codex reconciliation thread payload must be an object.");
   assertExactKeys(value, threadKeys, "Codex reconciliation thread fields are invalid.");
@@ -463,10 +462,7 @@ function parseThread(
   if (updatedAt < createdAt) throw invalidPayload("Codex thread updatedAt precedes createdAt.");
   if (value.recencyAt !== null) unixSecondsToIso(value.recencyAt, "thread recencyAt");
   if (value.path !== null) parseAbsolutePath(value.path, "Codex thread path");
-  const cliVersion = parsePrintableString(value.cliVersion, "Codex thread CLI version", 120);
-  if (cliVersion !== expectedRuntimeVersion) {
-    throw invalidPayload("Codex thread CLI version contradicts the compatible runtime version.");
-  }
+  parsePrintableString(value.cliVersion, "Codex thread CLI version", 120);
   parseNullablePrintableString(value.agentNickname, "Codex thread agent nickname", 240);
   parseNullablePrintableString(value.agentRole, "Codex thread agent role", 240);
   validateGitInfo(value.gitInfo);

@@ -588,14 +588,15 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
       }
 
       expect(runtime.requests.filter((request) => request.method === "thread/resume").map(threadIdFromRequest)).toEqual([
-        "thread-matrix-exact_idle"
+        "thread-matrix-exact_idle",
+        "thread-matrix-not_loaded"
       ]);
       expect(harness.repository.require("sess_matrix_exact_idle").projection.session).toMatchObject({
         turn_state: "completed",
         freshness: "current",
         model: "runtime-exact"
       });
-      for (const id of ["active_terminal", "idle_active", "not_loaded", "wrong_cwd"]) {
+      for (const id of ["active_terminal", "idle_active", "wrong_cwd"]) {
         expect(harness.repository.require(`sess_matrix_${id}`).projection.session).toMatchObject({
           session_state: "unknown",
           turn_state: "unknown",
@@ -604,6 +605,12 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
           settings: null
         });
       }
+      expect(harness.repository.require("sess_matrix_not_loaded").projection.session).toMatchObject({
+        session_state: "active",
+        turn_state: "idle",
+        freshness: "current",
+        model: "runtime-default"
+      });
       expect(harness.repository.require("sess_matrix_wrong_cwd").mapping.disposition).toBe("recovery_required");
       expect(harness.repository.require("sess_matrix_runtime_archived")).toMatchObject({
         mapping: { archived_at: expect.stringMatching(/^2026-07-16T13:/u) },
@@ -617,11 +624,11 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
         }
       });
       expect(harness.lifecycle.snapshot()).toMatchObject({
-        recoverable_session_count: 1,
+        recoverable_session_count: 2,
         boundary_count: 6,
-        resumed_count: 1,
-        ready_count: 1,
-        issues: { archived: 1, contradictions: 3, missing: 0, stale: 4, unavailable: 1 }
+        resumed_count: 2,
+        ready_count: 2,
+        issues: { archived: 1, contradictions: 3, missing: 0, stale: 3, unavailable: 0 }
       });
     } finally {
       harness.close();

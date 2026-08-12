@@ -59,7 +59,12 @@ describe("native Codex session adapter", () => {
 
     expect(result).toEqual({
       limit: 1,
-      threads: [expect.objectContaining({ thread_id: threadA, source: "cli", archived: false })],
+      threads: [expect.objectContaining({
+        thread_id: "0198a006-version",
+        source: "cli",
+        runtime_version: "0.143.0",
+        archived: false
+      })],
       truncated: true
     });
     expect(Object.keys(result.threads[0] as object).sort()).toEqual([
@@ -83,6 +88,16 @@ describe("native Codex session adapter", () => {
     expect(port.requests).toHaveLength(2);
   });
 
+  it("accepts a strict quiet CLI history written by a different Codex version", async () => {
+    const client = createCodexNativeSessionClient(
+      fakePort(() => page([rawThread({ cliVersion: "0.146.0" })], null, "back"))
+    );
+
+    await expect(client.discover()).resolves.toMatchObject({
+      threads: [{ thread_id: threadA, runtime_version: "0.146.0" }]
+    });
+  });
+
   it("excludes every reviewed ineligible native-thread class", async () => {
     const candidates = [
       rawThread({ id: "thread-archived-simulation", status: { type: "systemError" } }),
@@ -91,7 +106,6 @@ describe("native Codex session adapter", () => {
       rawThread({ id: "thread-fork", forkedFromId: "source-thread" }),
       rawThread({ id: "thread-subagent", source: { subAgent: "review" } }),
       rawThread({ id: "thread-agent-role", agentRole: "reviewer" }),
-      rawThread({ id: "thread-incompatible", cliVersion: "0.145.0" }),
       rawThread({ id: "thread-invalid-cwd", cwd: "not/absolute" })
     ];
     const client = createCodexNativeSessionClient(fakePort(() => page(candidates, null, "back")));

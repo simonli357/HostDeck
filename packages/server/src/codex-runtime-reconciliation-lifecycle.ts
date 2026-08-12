@@ -973,11 +973,8 @@ function deriveOutcome(
   if (goal === undefined) {
     return stale("contradiction", "Managed Codex goal exceeds the selected projection contract.");
   }
-  if (read.status === "not_loaded" || read.status === "system_error") {
-    return stale(
-      read.status === "system_error" ? "contradiction" : "unavailable",
-      read.status === "system_error" ? "Codex reported a thread system error." : "Codex thread is not loaded."
-    );
+  if (read.status === "system_error") {
+    return stale("contradiction", "Codex reported a thread system error.");
   }
   if (read.status === "active") {
     if (observation.latest_turn?.status !== "in_progress") {

@@ -177,7 +177,7 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
     deadline?: OperationDeadline
   ): Promise<NativeSessionDiscoveryResponse> {
     const request = parseDiscoveryInput(input);
-    const runtimeVersion = this.runtime_version;
+    void this.runtime_version;
     const identities: NativeCodexThreadIdentity[] = [];
     const seenThreadIds = new Set<string>();
     const seenCursors = new Set<string>();
@@ -223,7 +223,7 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
         }
         seenThreadIds.add(candidateId);
         if (parsed !== null) {
-          const identity = eligibleIdentity(parsed, runtimeVersion);
+          const identity = eligibleIdentity(parsed);
           if (identity !== null) identities.push(identity);
         }
       }
@@ -257,7 +257,7 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
     deadline?: OperationDeadline
   ): Promise<NativeCodexThreadIdentity | null> {
     const parsedThreadId = parseInputThreadId(threadId);
-    const runtimeVersion = this.runtime_version;
+    void this.runtime_version;
     const params = { threadId: parsedThreadId, includeTurns: false } satisfies ThreadReadParams;
     const result = requireRecord(
       await this.port.request({
@@ -277,7 +277,7 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
     }
     const parsed = parseThreadCandidate(result.thread);
     if (parsed === null) return null;
-    return eligibleIdentity(parsed, runtimeVersion);
+    return eligibleIdentity(parsed);
   }
 
   async readAdoptionSnapshot(
@@ -333,7 +333,7 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
     deadline?: OperationDeadline
   ): Promise<CodexNativeSessionResumeResult> {
     const parsedThreadId = parseInputThreadId(threadId);
-    const runtimeVersion = this.runtime_version;
+    void this.runtime_version;
     const params = { threadId: parsedThreadId, excludeTurns: true } satisfies ThreadResumeParams;
     const result = requireRecord(
       await this.port.request({
@@ -354,7 +354,7 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
     }
     const parsed = parseThreadCandidate(result.thread);
     if (parsed === null) throw ineligible();
-    const thread = eligibleIdentity(parsed, runtimeVersion);
+    const thread = eligibleIdentity(parsed);
     if (thread === null) throw ineligible();
     const cwd = parseAbsoluteCwd(result.cwd, "Codex native thread/resume cwd");
     if (cwd !== thread.cwd) throw invalidPayload("Codex native thread/resume returned contradictory working directories.");
@@ -522,7 +522,7 @@ function parseThreadCandidate(candidate: unknown): ParsedRawThread | null {
   throw invalidPayload("Codex native thread metadata is malformed.");
 }
 
-function eligibleIdentity(raw: ParsedRawThread, runtimeVersion: string): NativeCodexThreadIdentity | null {
+function eligibleIdentity(raw: ParsedRawThread): NativeCodexThreadIdentity | null {
   const status = raw.status.type === "idle" ? "idle" : raw.status.type === "notLoaded" ? "not_loaded" : null;
   if (
     raw.source !== "cli" ||
@@ -531,7 +531,6 @@ function eligibleIdentity(raw: ParsedRawThread, runtimeVersion: string): NativeC
     raw.forkedFromId !== null ||
     raw.agentNickname !== null ||
     raw.agentRole !== null ||
-    raw.cliVersion !== runtimeVersion ||
     status === null
   ) {
     return null;

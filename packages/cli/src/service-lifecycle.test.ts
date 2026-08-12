@@ -625,6 +625,25 @@ describe("IFC-V1-056 service lifecycle owner", () => {
 });
 
 describe("IFC-V1-057 safe uninstall and retention", () => {
+  it("uninstalls a failed zero-pid service without waiting for systemd reset-failed", async () => {
+    const fixture = createFixture();
+    const source = createSourcePackage(fixture, "1.0.0", "f1");
+    const lifecycle = createLifecycle(fixture, source);
+    await lifecycle.execute("install");
+    fixture.manager.hostDeck = {
+      ...fixture.manager.hostDeck,
+      active_state: "failed",
+      main_pid: 0,
+      sub_state: "failed"
+    };
+
+    await expect(lifecycle.execute("uninstall")).resolves.toMatchObject({
+      action: "uninstall",
+      install_state: "not_installed"
+    });
+    expect(fixture.manager.calls).not.toContain("stop_hostdeck");
+  });
+
   it("uninstalls an active service, preserves user data, repeats without mutation, and reinstalls", async () => {
     const fixture = createFixture();
     const source = createSourcePackage(fixture, "1.0.0", "1");

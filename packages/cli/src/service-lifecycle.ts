@@ -1352,7 +1352,11 @@ function assertUninstallManagerUnit(
 
 function isUninstallStopped(state: HostDeckSystemdUnitState): boolean {
   return (
-    (state.load_state === "not-found" || state.active_state === "inactive") &&
+    (
+      state.load_state === "not-found" ||
+      state.active_state === "inactive" ||
+      state.active_state === "failed"
+    ) &&
     state.main_pid === 0
   );
 }

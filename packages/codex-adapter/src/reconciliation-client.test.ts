@@ -235,13 +235,12 @@ describe("Codex reconnect-only reconciliation clients", () => {
       "invalid_protocol_message"
     );
 
-    await expectAdapterError(
+    await expect(
       createCodexReconciliationReadClient(
         fakeReadPort(() => page([rawThread({ cliVersion: "0.143.0" })], null, "back")),
         budget()
-      ).listAllThreads(),
-      "invalid_protocol_message"
-    );
+      ).listTargetThreads([threadA])
+    ).resolves.toMatchObject([{ id: threadA }]);
 
     const overlap = createCodexReconciliationReadClient(
       fakeReadPort(() => page([rawThread({ id: threadA })], null, "back")),
