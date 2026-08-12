@@ -97,7 +97,11 @@ class DefaultCodexProjectionService implements CodexProjectionService {
     if (event.scope === "runtime") return { kind: "runtime_observation", sequence: event.sequence, event };
 
     const current = this.options.repository.getByThreadId(event.thread_id);
-    if (current === null || current.mapping.archived_at !== null) {
+    if (
+      current === null ||
+      current.mapping.archived_at !== null ||
+      current.mapping.disposition !== "selected"
+    ) {
       return {
         kind: "unmanaged_observation",
         sequence: event.sequence,

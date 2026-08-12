@@ -71,9 +71,19 @@ export interface CodexEventPipeline {
     threads: readonly CodexEventNormalizerReconciliation[],
     signal?: AbortSignal
   ) => Promise<CodexEventPipelineBarrier>;
+  readonly transitionMembership: <T>(
+    operation: (normalizer: CodexEventPipelineMembershipNormalizer) =>
+      | T
+      | Promise<T>,
+    signal?: AbortSignal
+  ) => Promise<T>;
   readonly failure: Error | null;
   readonly last_sequence: number;
   readonly pending_count: number;
+}
+
+export interface CodexEventPipelineMembershipNormalizer {
+  readonly forgetThread: (threadId: CodexThreadId | string) => boolean;
 }
 
 export interface CodexEventPipelineBarrier {
@@ -186,6 +196,56 @@ class DefaultCodexEventPipeline implements CodexEventPipeline {
     return operation;
   }
 
+  transitionMembership<T>(
+    operation: (normalizer: CodexEventPipelineMembershipNormalizer) =>
+      | T
+      | Promise<T>,
+    signal?: AbortSignal
+  ): Promise<T> {
+    if (this.currentFailure !== null) return Promise.reject(this.stoppedError());
+    if (typeof operation !== "function") {
+      return Promise.reject(
+        new TypeError("Codex event-pipeline membership transition requires an operation.")
+      );
+    }
+    if (signal !== undefined && !isAbortSignal(signal)) {
+      return Promise.reject(
+        new TypeError("Codex event-pipeline membership transition signal is invalid.")
+      );
+    }
+    let started = false;
+    let queuedAbort: HostDeckCodexEventPipelineError | null = null;
+    let rejectAbort: ((error: Error) => void) | null = null;
+    const onAbort = (): void => {
+      if (started || queuedAbort !== null || signal === undefined) return;
+      queuedAbort = barrierAborted(signal);
+      signal.removeEventListener("abort", onAbort);
+      rejectAbort?.(queuedAbort);
+    };
+    const aborted = new Promise<never>((_resolve, reject) => {
+      rejectAbort = reject;
+      signal?.addEventListener("abort", onAbort, { once: true });
+      if (signal?.aborted === true) onAbort();
+    });
+    const execution = this.tail.then(async () => {
+      signal?.removeEventListener("abort", onAbort);
+      if (queuedAbort !== null) throw queuedAbort;
+      if (this.currentFailure !== null) throw this.stoppedError();
+      started = true;
+      return await operation(
+        Object.freeze({
+          forgetThread: (threadId: CodexThreadId | string) =>
+            this.normalizer.forgetThread(threadId)
+        })
+      );
+    });
+    this.tail = execution.then(
+      () => undefined,
+      () => undefined
+    );
+    return Promise.race([execution, aborted]);
+  }
+
   private async consumeOne(
     notification: CodexConnectionNotification,
     connectionGeneration: number | undefined
@@ -246,7 +306,11 @@ export function createCodexEventPipeline(options: CodexEventPipelineOptions): Co
     options.is_managed_thread ??
     ((threadId: CodexThreadId) => {
       const state = options.repository.getByThreadId(threadId);
-      return state !== null && state.mapping.archived_at === null;
+      return (
+        state !== null &&
+        state.mapping.archived_at === null &&
+        state.mapping.disposition === "selected"
+      );
     });
   const normalizer = createCodexEventNormalizer({
     ...(options.normalizer ?? {}),
@@ -265,6 +329,13 @@ export function createCodexEventPipeline(options: CodexEventPipelineOptions): Co
     barrier: (signal?: AbortSignal) => pipeline.barrier(signal),
     reconcile: (threads: readonly CodexEventNormalizerReconciliation[], signal?: AbortSignal) =>
       pipeline.reconcile(threads, signal),
+    transitionMembership: <T>(
+      operation: (normalizer: CodexEventPipelineMembershipNormalizer) =>
+        | T
+        | Promise<T>,
+      signal?: AbortSignal
+    ) =>
+      pipeline.transitionMembership(operation, signal),
     get failure() {
       return pipeline.failure;
     },

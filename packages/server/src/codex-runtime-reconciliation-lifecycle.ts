@@ -380,7 +380,9 @@ class DefaultCodexRuntimeReconciliationLifecycle {
       for (const observation of observations) this.assertArchivedMapping(observation);
       const outcomes = observations
         .filter((observation) => observation.current.mapping.archived_at === null)
-        .map((observation) => deriveOutcome(observation, reads.runtime_version));
+        .map((observation) =>
+          deriveOutcome(observation, reads.runtime_version, this.options.repository)
+        );
       const normalizerStates = Object.freeze(
         outcomes.flatMap((outcome) => outcome.normalizer_state === null ? [] : [outcome.normalizer_state])
       );
@@ -689,7 +691,7 @@ class DefaultCodexRuntimeReconciliationLifecycle {
       };
     }
     const read = readResult.value;
-    if (!safeRuntimeIdentity(current, read)) {
+    if (!safeRuntimeIdentity(current, read, this.options.repository)) {
       return {
         current,
         listed,
@@ -731,8 +733,12 @@ class DefaultCodexRuntimeReconciliationLifecycle {
     if (
       listed.archived !== true ||
       observation.read === null ||
-      !safeRuntimeIdentity(observation.current, listed) ||
-      !safeRuntimeIdentity(observation.current, observation.read)
+      !safeRuntimeIdentity(observation.current, listed, this.options.repository) ||
+      !safeRuntimeIdentity(
+        observation.current,
+        observation.read,
+        this.options.repository
+      )
     ) {
       throw this.fail("mapping_contradiction", "A durable archived mapping contradicts current runtime identity.");
     }
@@ -884,7 +890,11 @@ class DefaultCodexRuntimeReconciliationLifecycle {
   }
 }
 
-function deriveOutcome(observation: RuntimeObservation, runtimeVersion: string): SessionOutcome {
+function deriveOutcome(
+  observation: RuntimeObservation,
+  runtimeVersion: string,
+  repository: SelectedStateRepository
+): SessionOutcome {
   const current = observation.current;
   const target = targetFor(current);
   const identity = identityFor(current);
@@ -916,7 +926,10 @@ function deriveOutcome(observation: RuntimeObservation, runtimeVersion: string):
   if (read === null) {
     return stale("unavailable", "Managed Codex thread details are unavailable.");
   }
-  if (!safeRuntimeIdentity(current, listed) || !safeRuntimeIdentity(current, read)) {
+  if (
+    !safeRuntimeIdentity(current, listed, repository) ||
+    !safeRuntimeIdentity(current, read, repository)
+  ) {
     return stale("contradiction", "Managed Codex thread identity changed.", "recovery_required");
   }
   if (current.mapping.runtime_version !== runtimeVersion) {
@@ -1107,11 +1120,25 @@ function goalPatch(goal: CodexThreadGoal | null): ManagedSessionProjection["goal
   return { objective: goal.objective, state: goal.status };
 }
 
-function safeRuntimeIdentity(state: SelectedSessionState, thread: CodexThreadRecord): boolean {
+function safeRuntimeIdentity(
+  state: SelectedSessionState,
+  thread: CodexThreadRecord,
+  repository: SelectedStateRepository
+): boolean {
+  const membership =
+    thread.source === "cli"
+      ? repository.getNativeMembership(state.mapping.id)
+      : null;
+  const sourceMatches =
+    isSupportedCodexThreadSource(thread.source) ||
+    (thread.source === "cli" &&
+      membership !== null &&
+      membership.session_id === state.mapping.id &&
+      membership.codex_thread_id === state.mapping.codex_thread_id);
   return (
     thread.id === state.mapping.codex_thread_id &&
     thread.cwd === state.mapping.cwd &&
-    isSupportedCodexThreadSource(thread.source)
+    sourceMatches
   );
 }
 

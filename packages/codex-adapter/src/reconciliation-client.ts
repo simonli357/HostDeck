@@ -518,8 +518,9 @@ function parseThreadStatus(candidate: unknown): {
 
 function parseThreadSource(candidate: unknown): CodexThreadSessionSource {
   if (candidate === "appServer") return "app_server";
+  if (candidate === "cli") return "cli";
   if (candidate === "vscode") return "vscode";
-  if (["cli", "exec", "unknown"].includes(candidate as string)) return "other";
+  if (["exec", "unknown"].includes(candidate as string)) return "other";
   const value = requireRecord(candidate, "Codex thread source is malformed.");
   const keys = Object.keys(value);
   if (keys.length !== 1) throw invalidPayload("Codex thread source fields are invalid.");

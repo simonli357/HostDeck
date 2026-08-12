@@ -16,6 +16,7 @@ import {
   absoluteCwdSchema,
   codexThreadIdSchema,
   isoTimestampSchema,
+  selectedProjectionEventSchema,
   selectedSessionStartRecoveryRecordSchema
 } from "@hostdeck/contracts";
 import {
@@ -26,7 +27,8 @@ import {
 import {
   createSelectedStateRepository,
   openMigratedDatabase,
-  type SelectedStateRepository
+  type SelectedStateRepository,
+  selectedProjectedEventByteLength
 } from "@hostdeck/storage";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -780,6 +782,44 @@ describe("managed Codex archive and reconciliation", () => {
     });
     expect(fixture.states.list()).toHaveLength(1);
   });
+
+  it("reconciles CLI-source runtime identity only for an exact adopted membership", async () => {
+    const fixture = createFixture();
+    fixture.states.adopt(nativeAdoptionCandidate());
+    fixture.threads.records.push(
+      threadRecord({
+        id: "thread-native-managed",
+        cwd: "/tmp/native-project",
+        source: "cli"
+      })
+    );
+
+    await expect(fixture.service.reconcile()).resolves.toMatchObject({
+      reconciled_sessions: 1,
+      stale_sessions: 0,
+      ignored_unmanaged_threads: 0
+    });
+    expect(fixture.states.require("sess_native_managed")).toMatchObject({
+      mapping: { disposition: "selected" },
+      projection: { session: { freshness: "current" } }
+    });
+
+    const current = fixture.states.require("sess_native_managed");
+    fixture.states.unmanageAdopted(
+      current.mapping.id,
+      {
+        mapping_updated_at: current.mapping.updated_at,
+        projection_updated_at: current.projection.session.updated_at,
+        last_event_cursor: current.projection.session.last_event_cursor
+      }
+    );
+    expect(fixture.states.list()).toEqual([]);
+    await expect(fixture.service.reconcile()).resolves.toMatchObject({
+      reconciled_sessions: 0,
+      stale_sessions: 0,
+      ignored_unmanaged_threads: 1
+    });
+  });
 });
 
 interface Fixture {
@@ -894,6 +934,78 @@ function recoveryRecord() {
     error_code: null,
     error_message: null
   });
+}
+
+function nativeAdoptionCandidate() {
+  const capturedAt = "2026-07-09T21:00:00.000Z";
+  const event = selectedProjectionEventSchema.parse({
+    session_id: "sess_native_managed",
+    cursor: 1,
+    captured_at: capturedAt,
+    upstream_at: null,
+    codex_event_id: null,
+    codex_event_type: null,
+    content_state: "complete",
+    content_notice: null,
+    type: "replay_boundary",
+    after: null,
+    next_cursor: 1,
+    reason: "adoption"
+  });
+  const byteLength = selectedProjectedEventByteLength(event);
+  return {
+    membership: {
+      session_id: "sess_native_managed",
+      codex_thread_id: "thread-native-managed",
+      origin: "adopted" as const,
+      adopted_at: capturedAt,
+      handoff_confirmed_at: capturedAt
+    },
+    events: [{ event, byte_length: byteLength }],
+    state: {
+      mapping: {
+        id: "sess_native_managed",
+        name: "native-managed",
+        codex_thread_id: "thread-native-managed",
+        cwd: "/tmp/native-project",
+        runtime_source: "codex_app_server" as const,
+        runtime_version: "0.144.0",
+        disposition: "selected" as const,
+        created_at: "2026-07-09T20:00:00.000Z",
+        updated_at: capturedAt,
+        archived_at: null
+      },
+      projection: {
+        session: {
+          id: "sess_native_managed",
+          name: "native-managed",
+          codex_thread_id: "thread-native-managed",
+          cwd: "/tmp/native-project",
+          runtime_source: "codex_app_server" as const,
+          runtime_version: "0.144.0",
+          created_at: "2026-07-09T20:00:00.000Z",
+          archived_at: null,
+          session_state: "active" as const,
+          turn_state: "idle" as const,
+          attention: "none" as const,
+          freshness: "current" as const,
+          freshness_reason: null,
+          updated_at: capturedAt,
+          last_activity_at: capturedAt,
+          branch: "main",
+          model: null,
+          settings: null,
+          goal: null,
+          recent_summary: "Adopted native session.",
+          last_event_cursor: 1
+        },
+        retained_event_count: 1,
+        retained_event_bytes: byteLength,
+        earliest_retained_cursor: 1,
+        retention_boundary_cursor: null
+      }
+    }
+  };
 }
 
 function threadRecord(overrides: Record<string, unknown> = {}): CodexThreadRecord {

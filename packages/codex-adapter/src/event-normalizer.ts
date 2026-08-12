@@ -242,6 +242,7 @@ export interface CodexEventNormalizerReconciliation {
 export interface CodexEventNormalizer {
   readonly normalize: (notification: CodexConnectionNotification) => CodexNotificationNormalizationResult;
   readonly reconcile: (threads: readonly CodexEventNormalizerReconciliation[]) => void;
+  readonly forgetThread: (threadId: CodexThreadId | string) => boolean;
   readonly optional_diagnostic_count: number;
   readonly redundant_observation_count: number;
   readonly unmanaged_observation_count: number;
@@ -413,6 +414,27 @@ class DefaultCodexEventNormalizer implements CodexEventNormalizer {
       this.currentFailure = asError(error);
       throw error;
     }
+  }
+
+  forgetThread(candidate: CodexThreadId | string): boolean {
+    if (this.currentFailure !== null) {
+      throw normalizationError(
+        "normalizer_stopped",
+        "Codex event normalization stopped after an earlier fatal input or state failure.",
+        "runtime/forget-thread",
+        this.currentFailure
+      );
+    }
+    const parsed = codexThreadIdSchema.safeParse(candidate);
+    if (!parsed.success) {
+      throw normalizationError(
+        "malformed_required_event",
+        "Codex event forget-thread identity is invalid.",
+        "runtime/forget-thread",
+        parsed.error
+      );
+    }
+    return this.threads.delete(parsed.data);
   }
 
   private normalizeOne(notification: CodexConnectionNotification): CodexNotificationNormalizationResult {

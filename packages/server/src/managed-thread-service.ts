@@ -226,6 +226,7 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
       requireManagedThreadDeadline(deadline);
       const current = this.read(parsedSessionId);
       assertArchivableState(current);
+      const allowsNativeCliSource = this.hasExactNativeMembership(current);
       requireManagedThreadDeadline(deadline);
       let runtimeVersion: string;
       try {
@@ -284,7 +285,7 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
           current.mapping.codex_thread_id
         );
       }
-      assertRuntimeThreadArchivable(listedThread, current);
+      assertRuntimeThreadArchivable(listedThread, current, allowsNativeCliSource);
 
       let runtimeThread: CodexThreadRecord;
       try {
@@ -292,7 +293,7 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
       } catch (error) {
         throw mapAdapterError(error, "Codex thread could not be verified before archive.");
       }
-      assertRuntimeThreadArchivable(runtimeThread, current);
+      assertRuntimeThreadArchivable(runtimeThread, current, allowsNativeCliSource);
       requireManagedThreadDeadline(deadline);
 
       const dispatchState = this.read(parsedSessionId);
@@ -415,7 +416,10 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
         if (runtime === undefined) {
           this.markStale(current, "Managed Codex thread is missing from active and archived runtime lists.");
           staleSessions += 1;
-        } else if (runtime.cwd !== current.mapping.cwd || !isSupportedCodexThreadSource(runtime.source)) {
+        } else if (
+          runtime.cwd !== current.mapping.cwd ||
+          !this.isExpectedRuntimeSource(current, runtime.source)
+        ) {
           this.markStale(current, "Managed Codex thread identity no longer matches its durable mapping.");
           staleSessions += 1;
         } else {
@@ -450,6 +454,33 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
     } catch (error) {
       throw mapStorageError(error, "Failed session-start recovery could not be cleared.");
     }
+  }
+
+  private hasExactNativeMembership(current: SelectedSessionState): boolean {
+    try {
+      const membership = this.options.states.getNativeMembership(current.mapping.id);
+      return (
+        membership !== null &&
+        membership.session_id === current.mapping.id &&
+        membership.codex_thread_id === current.mapping.codex_thread_id
+      );
+    } catch (error) {
+      throw mapStorageError(
+        error,
+        "Native session membership could not be verified.",
+        current.mapping.codex_thread_id
+      );
+    }
+  }
+
+  private isExpectedRuntimeSource(
+    current: SelectedSessionState,
+    source: CodexThreadRecord["source"]
+  ): boolean {
+    return (
+      isSupportedCodexThreadSource(source) ||
+      (source === "cli" && this.hasExactNativeMembership(current))
+    );
   }
 
   private async resumeRecovery(
@@ -1005,12 +1036,14 @@ function assertArchivableState(state: SelectedSessionState): void {
 
 function assertRuntimeThreadArchivable(
   thread: CodexThreadRecord,
-  state: SelectedSessionState
+  state: SelectedSessionState,
+  allowsNativeCliSource: boolean
 ): void {
   if (
     thread.id !== state.mapping.codex_thread_id ||
     thread.cwd !== state.mapping.cwd ||
-    !isSupportedCodexThreadSource(thread.source)
+    (!isSupportedCodexThreadSource(thread.source) &&
+      !(thread.source === "cli" && allowsNativeCliSource))
   ) {
     throw serviceError(
       "identity_mismatch",

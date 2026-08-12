@@ -7,7 +7,11 @@ import {
   type CodexReconnectResubscribeRequestInput,
   HostDeckCodexAdapterError
 } from "@hostdeck/codex-adapter";
-import { type RuntimeCompatibility, resolveResourceBudget } from "@hostdeck/contracts";
+import {
+  type RuntimeCompatibility,
+  resolveResourceBudget,
+  selectedProjectionEventSchema
+} from "@hostdeck/contracts";
 import { createOperationDeadline, type OperationDeadline } from "@hostdeck/core";
 import {
   createProductionProjectionAppendPort,
@@ -16,6 +20,7 @@ import {
   openMigratedDatabase,
   type SelectedStateRepository,
   type StartupAuditOrphanReconciliationResult,
+  selectedProjectedEventByteLength,
   selectedStateRevision
 } from "@hostdeck/storage";
 import { afterEach, describe, expect, it } from "vitest";
@@ -28,12 +33,90 @@ import {
 const tempDirs: string[] = [];
 const createdAt = "2026-07-16T12:00:00.000Z";
 const checkedAt = "2026-07-16T12:30:00.000Z";
+const threadIdForNativeAdoption = "thread-native-reconcile";
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true });
 });
 
 describe("Codex runtime crash reconciliation lifecycle", () => {
+  it("reconciles and resumes an adopted CLI-source thread only with exact durable membership", async () => {
+    const harness = createHarness();
+    try {
+      const adopted = nativeAdoptionCandidate();
+      harness.repository.adopt(adopted);
+      const runtime = scriptedRuntime([
+        runtimeThread(threadIdForNativeAdoption, adopted.state.mapping.cwd, {
+          source: "cli",
+          status: { type: "idle" },
+          latest: rawTurn("turn-native-reconcile", "completed"),
+          resume_model: "runtime-native",
+          resume_effort: "high"
+        }),
+        runtimeThread("thread-unmanaged-cli", "/tmp/unmanaged-cli", {
+          source: "cli",
+          status: { type: "idle" }
+        })
+      ]);
+      const operation = testDeadline();
+      try {
+        const reconciliation = await reconcile(
+          harness.lifecycle,
+          runtime,
+          operation,
+          7,
+          null
+        );
+        await resubscribe(
+          harness.lifecycle,
+          runtime,
+          operation,
+          reconciliation,
+          7,
+          null
+        );
+        await ready(
+          harness.lifecycle,
+          runtime,
+          operation,
+          reconciliation,
+          7,
+          null
+        );
+      } finally {
+        operation.dispose();
+      }
+
+      expect(
+        runtime.requests
+          .filter((request) => request.method === "thread/resume")
+          .map(threadIdFromRequest)
+      ).toEqual([threadIdForNativeAdoption]);
+      expect(harness.lifecycle.snapshot()).toMatchObject({
+        durable_session_count: 1,
+        recoverable_session_count: 1,
+        unmanaged_runtime_count: 1,
+        resumed_count: 1,
+        ready_count: 1,
+        issues: { contradictions: 0, stale: 0 }
+      });
+      expect(
+        harness.repository.require(adopted.state.mapping.id)
+      ).toMatchObject({
+        mapping: { disposition: "selected" },
+        projection: {
+          session: {
+            session_state: "active",
+            freshness: "current",
+            model: "runtime-native"
+          }
+        }
+      });
+    } finally {
+      harness.close();
+    }
+  });
+
   it("reconciles an initial restart across active, interrupted, missing, archived, and unmanaged threads", async () => {
     const harness = createHarness();
     try {
@@ -1109,6 +1192,60 @@ function stateCandidate(
       retained_event_bytes: 0,
       earliest_retained_cursor: null,
       retention_boundary_cursor: null
+    }
+  };
+}
+
+function nativeAdoptionCandidate() {
+  const state = stateCandidate(
+    "sess_native_reconcile",
+    threadIdForNativeAdoption,
+    {
+      updated_at: "2026-07-16T12:30:00.000Z",
+      last_activity_at: "2026-07-16T12:30:00.000Z"
+    }
+  );
+  const boundary = selectedProjectionEventSchema.parse({
+    session_id: state.mapping.id,
+    cursor: 1,
+    captured_at: "2026-07-16T12:30:00.000Z",
+    upstream_at: null,
+    codex_event_id: null,
+    codex_event_type: null,
+    content_state: "complete",
+    content_notice: null,
+    type: "replay_boundary",
+    after: null,
+    next_cursor: 1,
+    reason: "adoption"
+  });
+  const event = {
+    event: boundary,
+    byte_length: selectedProjectedEventByteLength(boundary)
+  };
+  return {
+    membership: {
+      session_id: state.mapping.id,
+      codex_thread_id: state.mapping.codex_thread_id,
+      origin: "adopted" as const,
+      adopted_at: "2026-07-16T12:30:00.000Z",
+      handoff_confirmed_at: "2026-07-16T12:30:00.000Z"
+    },
+    events: [event],
+    state: {
+      ...state,
+      projection: {
+        ...state.projection,
+        session: {
+          ...state.projection.session,
+          last_event_cursor: boundary.cursor,
+          recent_summary: "Adopted native session."
+        },
+        retained_event_count: 1,
+        retained_event_bytes: event.byte_length,
+        earliest_retained_cursor: boundary.cursor,
+        retention_boundary_cursor: null
+      }
     }
   };
 }

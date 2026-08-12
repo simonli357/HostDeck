@@ -29,7 +29,7 @@ import { codexRequestOptionsFromDeadline } from "./request-deadline.js";
 
 export type CodexThreadRuntimeStatus = "active" | "idle" | "not_loaded" | "system_error";
 export type CodexThreadActiveFlag = "waiting_on_approval" | "waiting_on_user_input";
-export type CodexThreadSessionSource = "app_server" | "other" | "vscode";
+export type CodexThreadSessionSource = "app_server" | "cli" | "other" | "vscode";
 
 export interface CodexThreadRecord {
   readonly id: CodexThreadId;
@@ -599,10 +599,10 @@ function parseStatus(candidate: unknown): {
 
 function parseSource(candidate: unknown): CodexThreadSessionSource {
   if (candidate === "appServer") return "app_server";
+  if (candidate === "cli") return "cli";
   if (candidate === "vscode") return "vscode";
   if (
     [
-      "cli",
       "exec",
       "subAgent",
       "subAgentCompact",

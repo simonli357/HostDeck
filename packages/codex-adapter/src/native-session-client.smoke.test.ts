@@ -159,7 +159,11 @@ async function startNativeTui(
     8_000,
     () => `Native Codex TUI did not render before timeout (pane=${lastPane}): ${lastOutput || "empty"}`
   );
-  await runFile("tmux", ["-S", tmuxSocketPath, "send-keys", "-t", "native:0.0", "!pwd", "Enter"], {
+  await runFile("tmux", ["-S", tmuxSocketPath, "send-keys", "-l", "-t", "native:0.0", "!pwd"], {
+    env: environment
+  });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  await runFile("tmux", ["-S", tmuxSocketPath, "send-keys", "-t", "native:0.0", "C-m"], {
     env: environment
   });
   await waitFor(
