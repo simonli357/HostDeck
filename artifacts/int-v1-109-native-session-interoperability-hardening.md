@@ -8,6 +8,7 @@ Status: passed
 - Existing authenticated phone-facing list, detail, event-page, and SSE routes expose the adopted session and ordered HostDeck turn without transcript copying.
 - Unmanage removes HostDeck membership only. It issues no Codex archive, delete, fork, or replacement request.
 - `BUG-082` now admits the valid cursor-1 adoption boundary while retaining strict corruption rejection.
+- `BUG-083` makes shared-home startup independent of malformed unrelated history, restores managed `notLoaded` threads by exact id, and admits compatible histories created by nearby Codex versions without rewriting their provenance.
 
 ## Validation
 
@@ -20,6 +21,7 @@ Status: passed
 | Static | Root typecheck; Biome and eight-package exports across 897 files; 638-module runtime boundary; exact 671-file Codex binding. |
 | Package | Commit `76f5016` built and independently verified a deterministic Linux package with 6,303 entries and 1,283 owned outputs. All 43 package contract tests passed. |
 | Supply chain | Six metadata and real-package tests passed. |
+| Live shared home | Preserved-state deployment is ready with both managed sessions current, paired write authority retained, and ordinary CLI sessions from Codex 0.130.0 through 0.146.0 discoverable. Exact read/resume probes preserved id and cwd for 0.144.5 and 0.146.0 histories; a full 20-turn 0.130.0 adoption snapshot parsed under the pinned 0.144.0 controller without mutation. |
 
 ## Remaining Boundary
 

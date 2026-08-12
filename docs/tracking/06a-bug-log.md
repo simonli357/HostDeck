@@ -1060,3 +1060,12 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Root cause: adoption correctly stores a replay boundary at cursor 1 with no retention floor, while the public read repository incorrectly required every null-floor window to contain zero replay boundaries.
 - Fix: accept exactly one initial boundary only as the first event, preserve strict cursor/count/byte checks, admit a valid boundary-only retained window, and continue rejecting non-first or duplicate boundaries.
 - Current state: closed in `76f5016`. Direct list/detail regressions and the exact 0.144.0 adoption aggregate prove authenticated phone-facing list, detail, event page, and SSE reads before and after HostDeck restart.
+
+### BUG-083 Shared Codex History Breaks Startup And Existing-Session Continuity
+
+- Symptom: with the user's real shared `~/.codex`, HostDeck could report Mission Control unavailable, leave managed sessions unavailable after an app-server restart, and hide ordinary Codex sessions created by nearby CLI versions.
+- Impact: phone control and the required normal-Codex-to-HostDeck handoff were unreliable on the actual laptop even though isolated interoperability tests passed.
+- Route: critical completed-task bugfix owned by `INT-V1-109`; no public API, UI, setup, or security contract change.
+- Root cause: startup strictly parsed the entire foreign history inventory instead of only managed ids; app-server `notLoaded` state was treated as a contradiction instead of resumable idle state; discovery required a history's creation version to equal the controlling runtime; and Linux uninstall waited forever on a stopped `failed` unit with PID zero.
+- Fix: reconcile from bounded state-database inventory and strictly read only managed ids, exact-resume managed `notLoaded` threads, preserve the source history version while recording the current controlling runtime on adoption, and accept a failed/PID-zero unit as stopped during uninstall.
+- Current state: closed in `495fde2` and `dbe641e`. Focused 70, unit 3,220/32 opt-in skipped, contract 287, integration 36, typecheck, 897-file lint, exact model-backed interoperability, deterministic package build/verification, preserved-state install, API readiness, and live shared-home discovery pass. The installed service retained both managed sessions and paired write device; existing normal sessions from Codex 0.130.0 through 0.146.0 are discoverable, and a 0.130.0 full adoption snapshot parses through the pinned 0.144.0 runtime without mutation.
