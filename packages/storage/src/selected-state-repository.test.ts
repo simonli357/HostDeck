@@ -22,6 +22,141 @@ afterEach(() => {
 });
 
 describe("selected session state repository", () => {
+  it("atomically adopts bounded native history and reloads immutable membership", () => {
+    const path = tempDbPath();
+    const first = openMigratedDatabase(path, { now: fixedNow });
+    const adopted = nativeAdoptionCandidate();
+    try {
+      const repository = createSelectedStateRepository(first.db);
+      expect(repository.adopt(adopted)).toEqual(adopted.state);
+      expect(repository.getNativeMembership(adopted.state.mapping.id)).toEqual(adopted.membership);
+      expect(repository.listNativeMemberships()).toEqual([adopted.membership]);
+      expect(repository.listEvents(adopted.state.mapping.id)).toMatchObject({
+        truncated: true,
+        next_cursor: 3,
+        events: [
+          { type: "replay_boundary", reason: "adoption", cursor: 1 },
+          { type: "message", role: "agent", cursor: 2 },
+          { type: "turn", state: "completed", cursor: 3 }
+        ]
+      });
+    } finally {
+      first.db.close();
+    }
+
+    const second = openMigratedDatabase(path, { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(second.db);
+      expect(repository.require(adopted.state.mapping.id)).toEqual(adopted.state);
+      expect(repository.getNativeMembership(adopted.state.mapping.id)).toEqual(adopted.membership);
+      expect(() =>
+        second.db
+          .prepare("UPDATE selected_native_session_memberships SET adopted_at = ? WHERE session_id = ?")
+          .run(updatedAt, adopted.state.mapping.id)
+      ).toThrow("native session membership is immutable");
+    } finally {
+      second.db.close();
+    }
+  });
+
+  it("rolls back every adopted-session row when bounded history is invalid or a duplicate conflicts", () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      const adoption = nativeAdoptionCandidate();
+      const invalidEvents = adoption.events.map((record, index) =>
+        index === 2
+          ? {
+              ...record,
+              event: { ...record.event, cursor: 4 }
+            }
+          : record
+      );
+      expectRepositoryError(() => repository.adopt({ ...adoption, events: invalidEvents }), "cursor_not_monotonic");
+      expect(repository.list()).toEqual([]);
+      expect(rawSelectedCounts(open.db)).toEqual({ events: 0, memberships: 0, projections: 0, sessions: 0 });
+
+      open.db.exec(`
+        CREATE TRIGGER force_native_adoption_event_failure
+        BEFORE INSERT ON selected_projected_events
+        WHEN NEW.cursor = 3
+        BEGIN
+          SELECT RAISE(ABORT, 'forced native adoption event failure');
+        END;
+      `);
+      expectRepositoryError(() => repository.adopt(adoption), "projection_write_failed");
+      expect(rawSelectedCounts(open.db)).toEqual({ events: 0, memberships: 0, projections: 0, sessions: 0 });
+      open.db.exec("DROP TRIGGER force_native_adoption_event_failure");
+
+      repository.create(stateCandidate());
+      const duplicate = nativeAdoptionCandidate({ id: "sess_adopted_002", name: "selected-session" });
+      expectRepositoryError(() => repository.adopt(duplicate), "duplicate_session_name");
+      expect(repository.getNativeMembership(duplicate.state.mapping.id)).toBeNull();
+      expect(rawSelectedCounts(open.db)).toEqual({ events: 0, memberships: 0, projections: 1, sessions: 1 });
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("unmanages only a quiet adopted session and cascades HostDeck-owned state", () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      const adoption = nativeAdoptionCandidate();
+      const adopted = repository.adopt(adoption);
+      const activeAt = "2026-07-09T20:02:00.000Z";
+      const quietAt = "2026-07-09T20:03:00.000Z";
+      const active = {
+        ...adopted,
+        mapping: { ...adopted.mapping, updated_at: activeAt },
+        projection: {
+          ...adopted.projection,
+          session: {
+            ...adopted.projection.session,
+            turn_state: "in_progress" as const,
+            attention: "watch" as const,
+            updated_at: activeAt
+          }
+        }
+      };
+      const activeState = repository.replace(active, selectedStateRevision(adopted));
+      expectRepositoryError(
+        () => repository.unmanageAdopted(activeState.mapping.id, selectedStateRevision(activeState)),
+        "session_not_quiet"
+      );
+      expect(rawSelectedCounts(open.db)).toEqual({ events: 3, memberships: 1, projections: 1, sessions: 1 });
+
+      const quiet = {
+        ...activeState,
+        mapping: { ...activeState.mapping, updated_at: quietAt },
+        projection: {
+          ...activeState.projection,
+          session: {
+            ...activeState.projection.session,
+            turn_state: "completed" as const,
+            attention: "none" as const,
+            updated_at: quietAt
+          }
+        }
+      };
+      const quietState = repository.replace(quiet, selectedStateRevision(activeState));
+      expect(repository.unmanageAdopted(quietState.mapping.id, selectedStateRevision(quietState))).toEqual({
+        membership: adoption.membership,
+        state: quietState
+      });
+      expect(rawSelectedCounts(open.db)).toEqual({ events: 0, memberships: 0, projections: 0, sessions: 0 });
+
+      const ordinary = repository.create(stateCandidate());
+      expectRepositoryError(
+        () => repository.unmanageAdopted(ordinary.mapping.id, selectedStateRevision(ordinary)),
+        "session_not_adopted"
+      );
+      expect(repository.require(ordinary.mapping.id)).toEqual(ordinary);
+    } finally {
+      open.db.close();
+    }
+  });
+
   it("creates, replaces, lists, and reloads a stable Codex thread mapping", () => {
     const path = tempDbPath();
     const first = openMigratedDatabase(path, { now: fixedNow });
@@ -651,6 +786,7 @@ function stateCandidate(input: { readonly id?: string; readonly name?: string; r
         last_activity_at: null,
         branch: "main",
         model: "gpt-5.5-codex",
+        settings: null,
         goal: null,
         recent_summary: "Selected session created.",
         last_event_cursor: null
@@ -660,6 +796,100 @@ function stateCandidate(input: { readonly id?: string; readonly name?: string; r
       earliest_retained_cursor: null,
       retention_boundary_cursor: null
     }
+  };
+}
+
+function nativeAdoptionCandidate(
+  input: { readonly id?: string; readonly name?: string; readonly threadId?: string } = {}
+) {
+  const empty = stateCandidate({
+    id: input.id ?? "sess_adopted_001",
+    name: input.name ?? "adopted-session",
+    threadId: input.threadId ?? "thread-native-001"
+  });
+  const membership = {
+    session_id: empty.mapping.id,
+    codex_thread_id: empty.mapping.codex_thread_id,
+    origin: "adopted" as const,
+    adopted_at: updatedAt,
+    handoff_confirmed_at: updatedAt
+  };
+  const boundaryEvent = selectedProjectionEventSchema.parse({
+    session_id: empty.mapping.id,
+    cursor: 1,
+    captured_at: updatedAt,
+    upstream_at: null,
+    codex_event_id: null,
+    codex_event_type: null,
+    content_state: "complete",
+    content_notice: null,
+    type: "replay_boundary",
+    after: null,
+    next_cursor: 1,
+    reason: "adoption"
+  });
+  const messageEvent = selectedProjectionEventSchema.parse({
+    session_id: empty.mapping.id,
+    cursor: 2,
+    captured_at: updatedAt,
+    upstream_at: createdAt,
+    codex_event_id: "native:item:agent-001",
+    codex_event_type: "native_history/agent_message",
+    content_state: "complete",
+    content_notice: null,
+    type: "message",
+    role: "agent",
+    phase: "completed",
+    item_id: "item-agent-001",
+    text: "Bounded native history."
+  });
+  const turnEvent = selectedProjectionEventSchema.parse({
+    session_id: empty.mapping.id,
+    cursor: 3,
+    captured_at: updatedAt,
+    upstream_at: updatedAt,
+    codex_event_id: "native:turn:turn-native-001",
+    codex_event_type: "native_history/turn",
+    content_state: "complete",
+    content_notice: null,
+    type: "turn",
+    turn_id: "turn-native-001",
+    state: "completed",
+    error: null
+  });
+  const events = [boundaryEvent, messageEvent, turnEvent].map((event) => ({
+    event,
+    byte_length: selectedProjectedEventByteLength(event)
+  }));
+  const retainedBytes = events.reduce((total, event) => total + event.byte_length, 0);
+  const state = {
+    mapping: { ...empty.mapping, updated_at: updatedAt },
+    projection: {
+      ...empty.projection,
+      session: {
+        ...empty.projection.session,
+        updated_at: updatedAt,
+        last_activity_at: updatedAt,
+        recent_summary: "Bounded native history.",
+        last_event_cursor: 3
+      },
+      retained_event_count: 3,
+      retained_event_bytes: retainedBytes,
+      earliest_retained_cursor: 1,
+      retention_boundary_cursor: null
+    }
+  };
+  return { events, membership, state };
+}
+
+function rawSelectedCounts(db: import("better-sqlite3").Database) {
+  const count = (table: string): number =>
+    (db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { readonly count: number }).count;
+  return {
+    events: count("selected_projected_events"),
+    memberships: count("selected_native_session_memberships"),
+    projections: count("selected_session_projections"),
+    sessions: count("selected_sessions")
   };
 }
 

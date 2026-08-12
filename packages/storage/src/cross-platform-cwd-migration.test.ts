@@ -14,7 +14,12 @@ import {
 } from "./migrations.js";
 
 const cleanup: string[] = [];
-const priorMigrations = defaultMigrations.slice(0, -1);
+const crossPlatformMigrationIndex = defaultMigrations.findIndex(
+  ({ version }) => version === hostDeckCrossPlatformCwdMigration.version
+);
+if (crossPlatformMigrationIndex < 1) throw new Error("Cross-platform cwd migration is missing or unordered.");
+const priorMigrations = defaultMigrations.slice(0, crossPlatformMigrationIndex);
+const crossPlatformMigrations = defaultMigrations.slice(0, crossPlatformMigrationIndex + 1);
 const at = "2026-08-11T12:00:00.000Z";
 
 afterEach(() => {
@@ -33,7 +38,7 @@ describe("cross-platform durable cwd migration", () => {
     seedPriorRows(prior.db);
     const before = durableSnapshot(prior.db);
 
-    expect(runMigrations(prior.db, { now: fixedNow }).applied).toEqual([
+    expect(runMigrations(prior.db, { migrations: crossPlatformMigrations, now: fixedNow }).applied).toEqual([
       hostDeckCrossPlatformCwdMigration.version
     ]);
     expect(durableSnapshot(prior.db)).toEqual(before);
@@ -153,7 +158,7 @@ describe("cross-platform durable cwd migration", () => {
     ).toEqual([]);
     expect(prior.db.pragma("foreign_key_check")).toEqual([]);
 
-    expect(runMigrations(prior.db, { now: fixedNow }).applied).toEqual([
+    expect(runMigrations(prior.db, { migrations: crossPlatformMigrations, now: fixedNow }).applied).toEqual([
       hostDeckCrossPlatformCwdMigration.version
     ]);
     expect(durableSnapshot(prior.db)).toEqual(before);

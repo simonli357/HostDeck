@@ -15,6 +15,8 @@ import {
   type SelectedAuditTrail,
   selectedAuditEventRecordSchema,
   selectedAuditTrailSchema,
+  selectedNativeSessionAdoptionAuditEventRecordSchema,
+  selectedNativeSessionUnmanageAuditEventRecordSchema,
   selectedSecurityAuditEventRecordSchema,
   selectedSecurityAuditV1EventRecordSchema,
   selectedSessionStartAuditEventRecordSchema
@@ -849,6 +851,10 @@ function parseRecord(candidate: unknown, catalog: AuditWriteCatalog): WritableAu
         ? selectedSecurityAuditEventRecordSchema.safeParse(candidate)
         : securityAction === "session_start"
           ? selectedSessionStartAuditEventRecordSchema.safeParse(candidate)
+          : securityAction === "session_adopt"
+            ? selectedNativeSessionAdoptionAuditEventRecordSchema.safeParse(candidate)
+            : securityAction === "session_unmanage"
+              ? selectedNativeSessionUnmanageAuditEventRecordSchema.safeParse(candidate)
         : selectedAuditEventRecordSchema.safeParse(candidate);
   if (!result.success) {
     throw new HostDeckSelectedAuditRepositoryError(
@@ -914,7 +920,11 @@ function parseStoredRecord(row: SelectedAuditRow): PersistedSelectedAuditEventRe
     const result =
       row.action === "session_start"
         ? selectedSessionStartAuditEventRecordSchema.safeParse(candidate)
-        : persistedSelectedAuditEventRecordSchema.safeParse(candidate);
+        : row.action === "session_adopt"
+          ? selectedNativeSessionAdoptionAuditEventRecordSchema.safeParse(candidate)
+          : row.action === "session_unmanage"
+            ? selectedNativeSessionUnmanageAuditEventRecordSchema.safeParse(candidate)
+            : persistedSelectedAuditEventRecordSchema.safeParse(candidate);
     if (!result.success) {
       throw new HostDeckSelectedAuditRepositoryError("invalid_audit_trail", "Stored selected audit record is invalid.", {
         cause: result.error
@@ -967,6 +977,15 @@ function reconciliationPayloadSummary(
       reconciliation_reason: "host_restart_without_terminal"
     });
   }
+  if (accepted.action === "session_adopt") {
+    return Object.freeze({
+      schema_version: 1,
+      activation_pending: true
+    });
+  }
+  if (accepted.action === "session_unmanage") {
+    return Object.freeze({ schema_version: 1 });
+  }
   if (!candidate.securityAction) return Object.freeze({ reason: "host_restart_without_terminal" });
   if (
     reconciliationSecuritySchemaVersion(candidate) === 2 &&
@@ -1010,6 +1029,10 @@ function parseReconciliationRecord(
         ? selectedSecurityAuditV1EventRecordSchema.safeParse(candidate)
         : action === "session_start"
           ? selectedSessionStartAuditEventRecordSchema.safeParse(candidate)
+          : action === "session_adopt"
+            ? selectedNativeSessionAdoptionAuditEventRecordSchema.safeParse(candidate)
+            : action === "session_unmanage"
+              ? selectedNativeSessionUnmanageAuditEventRecordSchema.safeParse(candidate)
         : selectedAuditEventRecordSchema.safeParse(candidate);
   if (!result.success) {
     throw new HostDeckSelectedAuditRepositoryError(

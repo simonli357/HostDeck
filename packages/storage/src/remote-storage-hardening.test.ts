@@ -120,9 +120,10 @@ describe("remote state and audit aggregate hardening", () => {
             "202607150016_session_start_audit_catalog",
             "202607160017_selected_session_settings_projection",
             "202607200018_selected_network_retirement",
-            "202608110019_cross_platform_cwd"
+            "202608110019_cross_platform_cwd",
+            "202608120020_native_session_membership"
           ],
-          currentVersion: "202608110019_cross_platform_cwd"
+          currentVersion: "202608120020_native_session_membership"
         });
         expect(rawAuditRows(current.db)).toEqual(historicalBefore);
         expect(
@@ -370,7 +371,7 @@ describe("remote state and audit aggregate hardening", () => {
       try {
         expect(restarted.result).toEqual({
           applied: [],
-          currentVersion: "202608110019_cross_platform_cwd"
+          currentVersion: "202608120020_native_session_membership"
         });
         const state = createRemoteIngressStateRepository(restarted.db);
         const audit = createSelectedAuditRepository(restarted.db);
@@ -564,7 +565,7 @@ describe("remote state and audit aggregate hardening", () => {
     try {
       expect(fresh.result.applied).toHaveLength(defaultMigrations.length);
       expect(fresh.result.currentVersion).toBe(
-        "202608110019_cross_platform_cwd"
+        "202608120020_native_session_membership"
       );
       inspectSchemaAndHealth(fresh.db);
     } finally {
@@ -1011,6 +1012,7 @@ function inspectSchemaAndHealth(db: Database.Database): void {
     "retention_boundaries",
     "schema_migrations",
     "selected_audit_events",
+    "selected_native_session_memberships",
     "selected_projected_events",
     "selected_remote_ingress_admission_proof",
     "selected_remote_ingress_state",
@@ -1040,6 +1042,8 @@ function inspectSchemaAndHealth(db: Database.Database): void {
     "selected_audit_events_no_update",
     "selected_audit_events_start_requires_empty",
     "selected_audit_events_terminal_requires_accepted",
+    "selected_native_session_membership_identity",
+    "selected_native_session_membership_no_update",
     "selected_remote_ingress_admission_proof_invalidate",
     "selected_remote_ingress_generation_step",
     "selected_remote_ingress_initial_generation",

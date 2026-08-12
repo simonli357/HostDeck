@@ -70,7 +70,8 @@ describe("remote ingress state migration", () => {
         "202607150016_session_start_audit_catalog",
         "202607160017_selected_session_settings_projection",
         "202607200018_selected_network_retirement",
-        "202608110019_cross_platform_cwd"
+        "202608110019_cross_platform_cwd",
+        "202608120020_native_session_membership"
       ]);
       expect(historicalBefore).toBeDefined();
       expect(

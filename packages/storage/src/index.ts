@@ -186,11 +186,13 @@ export {
   type SelectedSessionReadRepositoryErrorCode
 } from "./selected-session-read-repository.js";
 export {
+  type AdoptSelectedNativeSessionInput,
   type AppendSelectedEventResult,
   createSelectedStateRepository,
   HostDeckSelectedStateRepositoryError,
   type ListSelectedEventsInput,
   maintainSelectedProjectionRetentionBatch,
+  type SelectedNativeSessionUnmanageResult,
   type SelectedProjectionRetentionBatchInput,
   type SelectedProjectionRetentionBatchResult,
   type SelectedSessionState,

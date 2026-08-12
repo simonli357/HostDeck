@@ -71,7 +71,7 @@ const privateMaterial = "-----BEGIN PRIVATE KEY-----aggregate-private-material";
 const fullTranscript = "aggregate-full-transcript-must-never-become-hostdeck-durable-truth";
 const selectedDeviceId = `client_${"d".repeat(24)}`;
 const pairingSourceKey = `sha256:${"a".repeat(64)}`;
-const currentMigrationVersion = "202608110019_cross_platform_cwd";
+const currentMigrationVersion = "202608120020_native_session_membership";
 
 afterEach(() => {
   for (const root of cleanup.splice(0).reverse()) {
@@ -923,6 +923,7 @@ function inspectSchemaAndHealth(db: Database.Database): void {
     "retention_boundaries",
     "schema_migrations",
     "selected_audit_events",
+    "selected_native_session_memberships",
     "selected_projected_events",
     "selected_remote_ingress_admission_proof",
     "selected_remote_ingress_state",
@@ -952,6 +953,8 @@ function inspectSchemaAndHealth(db: Database.Database): void {
     "selected_audit_events_no_update",
     "selected_audit_events_start_requires_empty",
     "selected_audit_events_terminal_requires_accepted",
+    "selected_native_session_membership_identity",
+    "selected_native_session_membership_no_update",
     "selected_remote_ingress_admission_proof_invalidate",
     "selected_remote_ingress_generation_step",
     "selected_remote_ingress_initial_generation",

@@ -34,7 +34,8 @@ import {
 import { openMigratedDatabase } from "./migration-runner.js";
 import {
   defaultMigrations,
-  hostDeckCrossPlatformCwdMigration
+  hostDeckCrossPlatformCwdMigration,
+  hostDeckNativeSessionMembershipMigration
 } from "./migrations.js";
 import {
   prepareHostDeckStatePaths,
@@ -48,12 +49,17 @@ const requireFromStorage = createRequire(storageManifest);
 const workerPath = fileURLToPath(
   new URL("../test-support/native-storage-crash-worker.mjs", import.meta.url)
 );
-const priorMigrations = defaultMigrations.slice(0, -1);
+const crossPlatformMigrationIndex = defaultMigrations.findIndex(
+  ({ version }) => version === hostDeckCrossPlatformCwdMigration.version
+);
+if (crossPlatformMigrationIndex < 1) throw new Error("Cross-platform cwd migration is missing or unordered.");
+const priorMigrations = defaultMigrations.slice(0, crossPlatformMigrationIndex);
+const crossPlatformMigrations = defaultMigrations.slice(0, crossPlatformMigrationIndex + 1);
 const cleanup: string[] = [];
 const leases: HostDeckDaemonLease[] = [];
 const at = "2026-08-11T12:00:00.000Z";
 const expectedSchemaSha256 =
-  "857f1de8aa02f74f6c313670d7daf2b19c00ea20139b8b11551833f7a89aebd7";
+  "e6c2e0e18cdee68c0fae234ca43107908968c9c8aadb271ca5ca4005ae160e7a";
 
 afterEach(() => {
   for (const lease of leases.splice(0).reverse()) lease.release();
@@ -111,7 +117,7 @@ describe("native SQLite storage parity", () => {
     try {
       insertSelectedSession(opened.db, "sess_native_schema_01", "native-schema");
       expect(opened.result.currentVersion).toBe(
-        hostDeckCrossPlatformCwdMigration.version
+        hostDeckNativeSessionMembershipMigration.version
       );
       expect(schemaSha256(opened.db)).toBe(expectedSchemaSha256);
       expectPlanUses(
@@ -199,14 +205,17 @@ describe("native SQLite storage parity", () => {
         recovered.db.close();
       }
 
-      const migrated = openMigratedDatabase(path, { now: fixedNow });
+      const crossPlatform = openMigratedDatabase(path, {
+        migrations: crossPlatformMigrations,
+        now: fixedNow
+      });
       try {
-        expect(migrated.result.applied).toEqual([
+        expect(crossPlatform.result.applied).toEqual([
           hostDeckCrossPlatformCwdMigration.version
         ]);
-        expect(migrated.db.pragma("foreign_key_check")).toEqual([]);
+        expect(crossPlatform.db.pragma("foreign_key_check")).toEqual([]);
       } finally {
-        migrated.db.close();
+        crossPlatform.db.close();
       }
       expect(ownedResidue(root)).toEqual([]);
     },
