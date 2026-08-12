@@ -122,7 +122,7 @@ export interface CodexRuntimeReconciliationSnapshot {
   readonly cycle_count: number;
   readonly durable_session_count: number;
   readonly recoverable_session_count: number;
-  readonly unmanaged_runtime_count: number;
+  readonly unmanaged_runtime_count: number | null;
   readonly boundary_count: number;
   readonly resumed_count: number;
   readonly ready_count: number;
@@ -188,7 +188,7 @@ interface ActiveCycle {
   readonly outcomes: readonly SessionOutcome[];
   readonly recoverable_outcomes: readonly SessionOutcome[];
   readonly durable_session_count: number;
-  readonly unmanaged_runtime_count: number;
+  readonly unmanaged_runtime_count: number | null;
   readonly boundary_count: number;
   readonly issues: CodexRuntimeReconciliationIssueCounts;
   resumed_outcomes: readonly SessionOutcome[];
@@ -203,7 +203,7 @@ interface MutablePublicState {
   cycleCount: number;
   durableSessionCount: number;
   recoverableSessionCount: number;
-  unmanagedRuntimeCount: number;
+  unmanagedRuntimeCount: number | null;
   boundaryCount: number;
   resumedCount: number;
   readyCount: number;
@@ -276,7 +276,7 @@ class DefaultCodexRuntimeReconciliationLifecycle {
     cycleCount: 0,
     durableSessionCount: 0,
     recoverableSessionCount: 0,
-    unmanagedRuntimeCount: 0,
+    unmanagedRuntimeCount: null,
     boundaryCount: 0,
     resumedCount: 0,
     readyCount: 0,
@@ -363,10 +363,12 @@ class DefaultCodexRuntimeReconciliationLifecycle {
       }
 
       const states = this.options.repository.list();
-      const runtimeThreads = await reads.listAllThreads(input.deadline.signal);
+      const runtimeThreads = await reads.listTargetThreads(
+        states.map((state) => state.mapping.codex_thread_id),
+        input.deadline.signal
+      );
       input.deadline.throwIfAborted();
-      const durableThreadIds = new Set(states.map((state) => state.mapping.codex_thread_id));
-      const unmanagedRuntimeCount = runtimeThreads.filter((thread) => !durableThreadIds.has(thread.id)).length;
+      const unmanagedRuntimeCount = null;
       const runtimeById = new Map(runtimeThreads.map((thread) => [thread.id, thread]));
       const observations: RuntimeObservation[] = [];
       for (const current of states) {

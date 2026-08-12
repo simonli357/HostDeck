@@ -57,7 +57,7 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
           source: "cli",
           status: { type: "idle" }
         })
-      ]);
+      ], 7, [{ id: "thread-malformed-foreign", unexpected: true }]);
       const operation = testDeadline();
       try {
         const reconciliation = await reconcile(
@@ -92,10 +92,20 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
           .filter((request) => request.method === "thread/resume")
           .map(threadIdFromRequest)
       ).toEqual([threadIdForNativeAdoption]);
+      expect(
+        runtime.requests
+          .filter((request) => request.method === "thread/read")
+          .map(threadIdFromRequest)
+      ).toEqual([threadIdForNativeAdoption]);
+      expect(
+        runtime.requests
+          .filter((request) => request.method === "thread/list")
+          .every((request) => (request.params as { readonly useStateDbOnly?: boolean }).useStateDbOnly === true)
+      ).toBe(true);
       expect(harness.lifecycle.snapshot()).toMatchObject({
         durable_session_count: 1,
         recoverable_session_count: 1,
-        unmanaged_runtime_count: 1,
+        unmanaged_runtime_count: null,
         resumed_count: 1,
         ready_count: 1,
         issues: { contradictions: 0, stale: 0 }
@@ -117,7 +127,7 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
     }
   });
 
-  it("reconciles an initial restart across active, interrupted, missing, archived, and unmanaged threads", async () => {
+  it("reconciles an initial restart across active, interrupted, missing, and archived threads", async () => {
     const harness = createHarness();
     try {
       harness.repository.create(stateCandidate("sess_reconcile_a", "thread-reconcile-a", {
@@ -237,7 +247,7 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
         cycle_count: 1,
         durable_session_count: 4,
         recoverable_session_count: 2,
-        unmanaged_runtime_count: 1,
+        unmanaged_runtime_count: null,
         boundary_count: 3,
         resumed_count: 2,
         ready_count: 2,
@@ -991,7 +1001,11 @@ function createHarness(overrides: {
   };
 }
 
-function scriptedRuntime(fixtures: readonly RuntimeFixture[], generation = 7): ScriptedRuntime {
+function scriptedRuntime(
+  fixtures: readonly RuntimeFixture[],
+  generation = 7,
+  foreignListCandidates: readonly Record<string, unknown>[] = []
+): ScriptedRuntime {
   const compatibility = readyCompatibility();
   const requests: CodexReconnectResubscribeRequestInput[] = [];
   const byThread = new Map(fixtures.map((fixture) => [fixture.thread_id, fixture]));
@@ -1006,6 +1020,7 @@ function scriptedRuntime(fixtures: readonly RuntimeFixture[], generation = 7): S
         const selected = fixtures
           .filter((fixture) => fixture.list === (archived ? "archived" : "active"))
           .map((fixture) => rawThread(fixture));
+        if (!archived) selected.unshift(...foreignListCandidates);
         return {
           data: selected,
           nextCursor: null,

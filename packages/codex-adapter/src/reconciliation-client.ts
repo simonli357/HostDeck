@@ -88,6 +88,10 @@ export interface CodexReconciliationReadClient {
   readonly runtime_version: string;
   readonly generation: number;
   readonly listAllThreads: (signal?: AbortSignal) => Promise<readonly CodexThreadRecord[]>;
+  readonly listTargetThreads: (
+    threadIds: readonly (CodexThreadId | string)[],
+    signal?: AbortSignal
+  ) => Promise<readonly CodexThreadRecord[]>;
   readonly readThread: (threadId: CodexThreadId | string, signal?: AbortSignal) => Promise<CodexThreadRecord>;
   readonly readGoal: (threadId: CodexThreadId | string, signal?: AbortSignal) => Promise<CodexThreadGoal | null>;
   readonly readLatestTurn: (
@@ -226,6 +230,79 @@ export function createCodexReconciliationReadClient(
     return Object.freeze(threads);
   };
 
+  const listTargetThreads = async (
+    threadIds: readonly (CodexThreadId | string)[],
+    signal?: AbortSignal
+  ): Promise<readonly CodexThreadRecord[]> => {
+    if (!Array.isArray(threadIds)) throw invalidInput("Codex reconciliation target thread ids must be an array.");
+    const targets = threadIds.map(parseInputThreadId);
+    const remaining = new Set(targets);
+    if (remaining.size !== targets.length) {
+      throw invalidInput("Codex reconciliation target thread ids contain duplicates.");
+    }
+    if (remaining.size === 0) return Object.freeze([]);
+
+    const expectedRuntimeVersion = runtimeVersion();
+    const threads: CodexThreadRecord[] = [];
+    for (const archived of [false, true]) {
+      let cursor: string | null = null;
+      const seenCursors = new Set<string>();
+      for (let pageNumber = 0; pageNumber < options.thread.max_pages; pageNumber += 1) {
+        const params = {
+          archived,
+          cursor,
+          limit: options.thread.page_size,
+          sortDirection: "desc",
+          sortKey: "created_at",
+          useStateDbOnly: true
+        } satisfies ThreadListParams;
+        const result = requireRecord(
+          await guarded.request({
+            method: "thread/list",
+            params,
+            kind: "read",
+            timeout_ms: options.thread.read_timeout_ms,
+            ...(signal === undefined ? {} : { signal })
+          }),
+          "Codex reconciliation target thread/list result must be an object."
+        );
+        assertExactKeys(
+          result,
+          ["backwardsCursor", "data", "nextCursor"],
+          "Codex reconciliation target thread/list fields are invalid."
+        );
+        const page = requireArray(
+          result.data,
+          "Codex reconciliation target thread/list data must be an array.",
+          options.thread.page_size
+        );
+        validateBackwardsCursor(result.backwardsCursor, page.length, "target-thread-list");
+        for (const candidate of page) {
+          const candidateId = targetCandidateId(candidate);
+          if (candidateId === null || !remaining.has(candidateId)) continue;
+          threads.push(parseThread(candidate, archived, expectedRuntimeVersion));
+          remaining.delete(candidateId);
+        }
+
+        const nextCursor = result.nextCursor === null
+          ? null
+          : parseCursor(result.nextCursor, "Codex reconciliation target thread-list cursor");
+        if (remaining.size === 0 || nextCursor === null) break;
+        if (nextCursor === cursor || seenCursors.has(nextCursor)) {
+          throw invalidPayload("Codex reconciliation target thread/list pagination cursor repeated.");
+        }
+        seenCursors.add(nextCursor);
+        cursor = nextCursor;
+        if (pageNumber === options.thread.max_pages - 1) {
+          throw overloaded("Codex reconciliation target thread/list exceeded the configured page bound.");
+        }
+      }
+      if (remaining.size === 0) break;
+    }
+    assertUniqueThreadIds(threads, "Codex reconciliation target thread lists overlap.");
+    return Object.freeze(threads);
+  };
+
   const readThread = async (
     threadId: CodexThreadId | string,
     signal?: AbortSignal
@@ -289,6 +366,7 @@ export function createCodexReconciliationReadClient(
     },
     generation,
     listAllThreads,
+    listTargetThreads,
     readThread,
     readGoal: (threadId: CodexThreadId | string, signal?: AbortSignal) =>
       withSignalDeadline(signal, options.thread.read_timeout_ms, (deadline) =>
@@ -296,6 +374,12 @@ export function createCodexReconciliationReadClient(
       ),
     readLatestTurn
   });
+}
+
+function targetCandidateId(candidate: unknown): CodexThreadId | null {
+  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) return null;
+  const parsed = codexThreadIdSchema.safeParse((candidate as Record<string, unknown>).id);
+  return parsed.success ? parsed.data : null;
 }
 
 export function createCodexReconciliationResubscribeClient(

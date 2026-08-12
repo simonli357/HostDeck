@@ -63,6 +63,7 @@ describe("Codex reconnect-only reconciliation clients", () => {
     expect(Object.keys(client).sort()).toEqual([
       "generation",
       "listAllThreads",
+      "listTargetThreads",
       "readGoal",
       "readLatestTurn",
       "readThread",
@@ -71,6 +72,45 @@ describe("Codex reconnect-only reconciliation clients", () => {
     expect(client).not.toHaveProperty("archive");
     expect(client).not.toHaveProperty("ensureMaterialized");
     expect(client).not.toHaveProperty("start");
+  });
+
+  it("finds only managed targets while ignoring malformed unrelated inventory rows", async () => {
+    const requests: CodexReconnectReadRequestInput[] = [];
+    const malformedForeign = { id: "thread-foreign-malformed", unexpected: true };
+    const port = fakeReadPort((request) => {
+      requests.push(request);
+      expect(request.method).toBe("thread/list");
+      const params = request.params as { readonly archived: boolean; readonly cursor: string | null };
+      expect(params).toMatchObject({
+        limit: 1,
+        sortDirection: "desc",
+        sortKey: "created_at",
+        useStateDbOnly: true
+      });
+      if (params.archived) throw new Error("Target was found before archived inventory was needed.");
+      return params.cursor === null
+        ? page([malformedForeign], "managed-page", "foreign-back")
+        : page([rawThread({ id: threadA })], null, "managed-back");
+    });
+    const client = createCodexReconciliationReadClient(port, budget({
+      protocol_thread_page_size: 1,
+      protocol_thread_max_pages: 2
+    }));
+
+    await expect(client.listTargetThreads([threadA])).resolves.toMatchObject([
+      { id: threadA, archived: false }
+    ]);
+    expect(requests).toHaveLength(2);
+    await expect(client.listTargetThreads([threadA, threadA])).rejects.toMatchObject({
+      code: "invalid_protocol_message",
+      outcome: "not_sent"
+    });
+
+    const malformedTarget = createCodexReconciliationReadClient(
+      fakeReadPort(() => page([{ id: threadA, unexpected: true }], null, "target-back")),
+      budget()
+    );
+    await expectAdapterError(malformedTarget.listTargetThreads([threadA]), "invalid_protocol_message");
   });
 
   it("normalizes every reviewed latest-turn state without returning failure text or item content", async () => {
