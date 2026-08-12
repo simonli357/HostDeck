@@ -1,7 +1,10 @@
 import {
+  codexThreadIdSchema,
   selectedDeviceIdSchema,
   selectedDeviceListCursorSchema,
-  selectedSessionListCursorSchema
+  selectedSessionListCursorSchema,
+  sessionIdSchema,
+  sessionNameSchema
 } from "@hostdeck/contracts";
 import { usageFailure } from "./errors.js";
 
@@ -20,6 +23,24 @@ export type ParsedCliCommand =
       readonly kind: "devices";
       readonly limit: number | null;
       readonly cursor: string | null;
+      readonly json: boolean;
+    }
+  | {
+      readonly kind: "discover";
+      readonly limit: number | null;
+      readonly json: boolean;
+    }
+  | {
+      readonly kind: "adopt";
+      readonly thread: string;
+      readonly name: string;
+      readonly confirmHandoff: true;
+      readonly json: boolean;
+    }
+  | {
+      readonly kind: "unmanage";
+      readonly session: string;
+      readonly confirm: true;
       readonly json: boolean;
     }
   | {
@@ -319,6 +340,9 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
         positionals[0] === "status" ||
         positionals[0] === "list" ||
         positionals[0] === "devices" ||
+        positionals[0] === "discover" ||
+        positionals[0] === "adopt" ||
+        positionals[0] === "unmanage" ||
         positionals[0] === "revoke" ||
         positionals[0] === "service"
       ) {
@@ -396,6 +420,21 @@ export function parseCliArgs(args: readonly string[]): ParsedCliArgs {
       command: parsePaginationCommand("devices", rest, json),
       configFlags
     };
+  }
+
+  if (command === "discover") {
+    return {
+      command: parseDiscoveryCommand(rest, json),
+      configFlags
+    };
+  }
+
+  if (command === "adopt") {
+    return { command: parseAdoptCommand(rest, json), configFlags };
+  }
+
+  if (command === "unmanage") {
+    return { command: parseUnmanageCommand(rest, json), configFlags };
   }
 
   if (command === "revoke") {
@@ -711,7 +750,110 @@ function parsePaginationCommand(
   return { kind: command, limit, cursor, json };
 }
 
-function parsePageLimit(candidate: string, command: "devices" | "list"): number {
+function parseDiscoveryCommand(
+  args: readonly string[],
+  globalJson: boolean
+): Extract<ParsedCliCommand, { readonly kind: "discover" }> {
+  let limit: number | null = null;
+  let limitSeen = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+    if (token === undefined) continue;
+    if (token === "--limit") {
+      if (limitSeen) throw usageFailure("The discover command accepts --limit only once.");
+      limit = parsePageLimit(readOptionValue(args, index, "--limit"), "discover");
+      limitSeen = true;
+      index += 1;
+      continue;
+    }
+    if (token.startsWith("--limit=")) {
+      if (limitSeen) throw usageFailure("The discover command accepts --limit only once.");
+      limit = parsePageLimit(readInlineOptionValue(token, "--limit"), "discover");
+      limitSeen = true;
+      continue;
+    }
+    if (token.startsWith("-")) throw usageFailure(`Unknown discover option: ${token}`);
+    throw usageFailure("The discover command does not accept positional arguments.");
+  }
+
+  return { kind: "discover", limit, json: globalJson };
+}
+
+function parseAdoptCommand(
+  args: readonly string[],
+  globalJson: boolean
+): Extract<ParsedCliCommand, { readonly kind: "adopt" }> {
+  const [threadCandidate, ...rest] = args;
+  const thread = codexThreadIdSchema.safeParse(threadCandidate);
+  if (!thread.success) {
+    throw usageFailure("The adopt command requires one valid native Codex thread id.", "thread_id");
+  }
+  let name: string | undefined;
+  let confirmHandoff = false;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const token = rest[index];
+    if (token === undefined) continue;
+    if (token === "--name") {
+      if (name !== undefined) throw usageFailure("The adopt command accepts --name only once.");
+      name = readOptionValue(rest, index, "--name");
+      index += 1;
+      continue;
+    }
+    if (token.startsWith("--name=")) {
+      if (name !== undefined) throw usageFailure("The adopt command accepts --name only once.");
+      name = readInlineOptionValue(token, "--name");
+      continue;
+    }
+    if (token === "--confirm-handoff") {
+      if (confirmHandoff) {
+        throw usageFailure("The adopt command accepts --confirm-handoff only once.");
+      }
+      confirmHandoff = true;
+      continue;
+    }
+    if (token.startsWith("-")) throw usageFailure(`Unknown adopt option: ${token}`);
+    throw usageFailure(`Unexpected adopt argument: ${token}`);
+  }
+
+  const parsedName = sessionNameSchema.safeParse(name);
+  if (!parsedName.success) {
+    throw usageFailure("The adopt command requires one valid --name value.", "name");
+  }
+  if (!confirmHandoff) {
+    throw usageFailure("Native session adoption requires --confirm-handoff.");
+  }
+  return {
+    kind: "adopt",
+    thread: thread.data,
+    name: parsedName.data,
+    confirmHandoff: true,
+    json: globalJson
+  };
+}
+
+function parseUnmanageCommand(
+  args: readonly string[],
+  globalJson: boolean
+): Extract<ParsedCliCommand, { readonly kind: "unmanage" }> {
+  const [sessionCandidate, ...rest] = args;
+  const session = sessionIdSchema.safeParse(sessionCandidate);
+  if (!session.success) {
+    throw usageFailure("The unmanage command requires one valid managed session id.", "session_id");
+  }
+  if (rest.length !== 1 || rest[0] !== "--confirm") {
+    throw usageFailure("Native session unmanage requires SESSION_ID --confirm.");
+  }
+  return {
+    kind: "unmanage",
+    session: session.data,
+    confirm: true,
+    json: globalJson
+  };
+}
+
+function parsePageLimit(candidate: string, command: "devices" | "discover" | "list"): number {
   if (!/^(?:[1-9]|[1-9][0-9]|100)$/u.test(candidate)) {
     throw usageFailure(`${command} limit must be an integer from 1 through 100.`, "--limit");
   }

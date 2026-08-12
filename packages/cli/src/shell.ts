@@ -12,6 +12,10 @@ import type {
   InterruptResponse,
   ModelControlSnapshot,
   ModelSelectionRequest,
+  NativeSessionAdoptRequest,
+  NativeSessionAdoptResponse,
+  NativeSessionDiscoveryResponse,
+  NativeSessionUnmanageResponse,
   PendingApprovalListResponse,
   PendingApprovalResponse,
   PlanControlSnapshot,
@@ -46,6 +50,12 @@ import {
   interruptResponseSchema,
   modelControlSnapshotSchema,
   modelSelectionRequestSchema,
+  nativeSessionAdoptRequestSchema,
+  nativeSessionAdoptResponseSchema,
+  nativeSessionContractLimits,
+  nativeSessionDiscoveryResponseSchema,
+  nativeSessionUnmanageRequestSchema,
+  nativeSessionUnmanageResponseSchema,
   pendingApprovalListResponseSchema,
   pendingApprovalResponseSchema,
   planControlSnapshotSchema,
@@ -158,6 +168,12 @@ import {
   type HostDeckModelClientSelectionRequest
 } from "./model-client.js";
 import {
+  createHostDeckNativeSessionClient,
+  type HostDeckNativeSessionClient,
+  type HostDeckNativeSessionDiscoveryInput,
+  type HostDeckNativeSessionUnmanageRequest
+} from "./native-session-client.js";
+import {
   createHostDeckPairingLinkClient,
   type HostDeckPairingLinkClient
 } from "./pairing-link-client.js";
@@ -193,6 +209,9 @@ import {
   renderLegacySessionReset,
   renderLegacySessionStatus,
   renderModelSnapshot,
+  renderNativeSessionAdoption,
+  renderNativeSessionDiscovery,
+  renderNativeSessionUnmanage,
   renderPairingLink,
   renderPlanSnapshot,
   renderPromptDispatch,
@@ -259,6 +278,7 @@ export interface CliRunOptions {
   readonly approvalClient?: HostDeckApprovalClient;
   readonly interruptClient?: HostDeckInterruptClient;
   readonly modelClient?: HostDeckModelClient;
+  readonly nativeSessionClient?: HostDeckNativeSessionClient;
   readonly planClient?: HostDeckPlanClient;
   readonly archiveClient?: HostDeckArchiveClient;
   readonly promptClient?: HostDeckPromptClient;
@@ -285,6 +305,8 @@ export interface CliRunOptions {
   readonly createInterruptOperationId?: () => string;
   readonly createGoalOperationId?: () => string;
   readonly createModelOperationId?: () => string;
+  readonly createNativeAdoptOperationId?: () => string;
+  readonly createNativeUnmanageOperationId?: () => string;
   readonly createPlanOperationId?: () => string;
   readonly createPromptOperationId?: () => string;
   readonly createStartOperationId?: () => string;
@@ -423,6 +445,50 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
         request
       );
       return success(renderSessionList(response, parsed.command.json));
+    }
+
+    if (parsed.command.kind === "discover") {
+      const client =
+        options.nativeSessionClient ??
+        createHostDeckNativeSessionClient(selectedClientOptions);
+      const request = Object.freeze({
+        limit: parsed.command.limit
+      }) satisfies HostDeckNativeSessionDiscoveryInput;
+      const response = parseNativeSessionDiscoveryResponse(
+        await Reflect.apply(client.discover, undefined, [request]),
+        request
+      );
+      return success(renderNativeSessionDiscovery(response, parsed.command.json));
+    }
+
+    if (parsed.command.kind === "adopt") {
+      const client =
+        options.nativeSessionClient ??
+        createHostDeckNativeSessionClient(selectedClientOptions);
+      const request = createNativeSessionAdoptRequest(
+        parsed.command,
+        options.createNativeAdoptOperationId ?? createNativeAdoptOperationId
+      );
+      const response = parseNativeSessionAdoptResponse(
+        await Reflect.apply(client.adopt, undefined, [request]),
+        request
+      );
+      return success(renderNativeSessionAdoption(response, parsed.command.json));
+    }
+
+    if (parsed.command.kind === "unmanage") {
+      const client =
+        options.nativeSessionClient ??
+        createHostDeckNativeSessionClient(selectedClientOptions);
+      const request = createNativeSessionUnmanageRequest(
+        parsed.command,
+        options.createNativeUnmanageOperationId ?? createNativeUnmanageOperationId
+      );
+      const response = parseNativeSessionUnmanageResponse(
+        await Reflect.apply(client.unmanage, undefined, [request]),
+        request
+      );
+      return success(renderNativeSessionUnmanage(response, parsed.command.json));
     }
 
     if (parsed.command.kind === "revoke") {
@@ -937,6 +1003,52 @@ function parseDeviceRevokeResponse(
   return parsed.data;
 }
 
+function parseNativeSessionDiscoveryResponse(
+  candidate: unknown,
+  request: HostDeckNativeSessionDiscoveryInput
+): NativeSessionDiscoveryResponse {
+  const parsed = nativeSessionDiscoveryResponseSchema.safeParse(candidate);
+  if (
+    !parsed.success ||
+    parsed.data.limit !==
+      (request.limit ?? nativeSessionContractLimits.discoveryDefaultLimit)
+  ) {
+    throw internalFailure("Native-session client returned invalid discovery data.");
+  }
+  return parsed.data;
+}
+
+function parseNativeSessionAdoptResponse(
+  candidate: unknown,
+  request: NativeSessionAdoptRequest
+): NativeSessionAdoptResponse {
+  const parsed = nativeSessionAdoptResponseSchema.safeParse(candidate);
+  if (
+    !parsed.success ||
+    parsed.data.operation_id !== request.operation_id ||
+    parsed.data.session.codex_thread_id !== request.thread_id ||
+    parsed.data.session.name !== request.name
+  ) {
+    throw internalFailure("Native-session client returned invalid adoption data.");
+  }
+  return parsed.data;
+}
+
+function parseNativeSessionUnmanageResponse(
+  candidate: unknown,
+  request: HostDeckNativeSessionUnmanageRequest
+): NativeSessionUnmanageResponse {
+  const parsed = nativeSessionUnmanageResponseSchema.safeParse(candidate);
+  if (
+    !parsed.success ||
+    parsed.data.operation_id !== request.operation_id ||
+    parsed.data.session_id !== request.session_id
+  ) {
+    throw internalFailure("Native-session client returned invalid unmanage data.");
+  }
+  return parsed.data;
+}
+
 function createRemoteMutationRequest(
   action: "disable" | "enable",
   createOperationId: (action: "disable" | "enable") => string
@@ -1047,6 +1159,80 @@ function createDeviceRevokeRequest(
   });
 }
 
+function createNativeSessionAdoptRequest(
+  command: Extract<
+    ReturnType<typeof parseCliArgs>["command"],
+    { readonly kind: "adopt" }
+  >,
+  createOperationId: () => string
+): NativeSessionAdoptRequest {
+  const operationId = generateNativeSessionOperationId(
+    createOperationId,
+    "adoption"
+  );
+  const parsed = nativeSessionAdoptRequestSchema.safeParse({
+    operation_id: operationId,
+    thread_id: command.thread,
+    name: command.name,
+    confirm_handoff: command.confirmHandoff
+  });
+  if (!parsed.success) {
+    throw usageFailure(
+      "Adopt options do not satisfy the native-session contract.",
+      "adopt"
+    );
+  }
+  return parsed.data;
+}
+
+function createNativeSessionUnmanageRequest(
+  command: Extract<
+    ReturnType<typeof parseCliArgs>["command"],
+    { readonly kind: "unmanage" }
+  >,
+  createOperationId: () => string
+): HostDeckNativeSessionUnmanageRequest {
+  const operationId = generateNativeSessionOperationId(
+    createOperationId,
+    "unmanage"
+  );
+  const request = nativeSessionUnmanageRequestSchema.safeParse({
+    operation_id: operationId,
+    confirm: command.confirm
+  });
+  const params = sessionIdParamsSchema.safeParse({
+    session_id: command.session
+  });
+  if (!request.success || !params.success) {
+    throw usageFailure(
+      "Unmanage options do not satisfy the native-session contract.",
+      "unmanage"
+    );
+  }
+  return Object.freeze({ session_id: params.data.session_id, ...request.data });
+}
+
+function generateNativeSessionOperationId(
+  createOperationId: () => string,
+  operation: "adoption" | "unmanage"
+): string {
+  let operationId: unknown;
+  try {
+    operationId = Reflect.apply(createOperationId, undefined, []);
+  } catch (error) {
+    throw internalFailure(
+      `Native-session ${operation} operation id generation failed.`,
+      error
+    );
+  }
+  if (!clientOperationIdSchema.safeParse(operationId).success) {
+    throw internalFailure(
+      `Native-session ${operation} operation id generation failed.`
+    );
+  }
+  return operationId as string;
+}
+
 function createRemoteOperationId(action: "disable" | "enable"): string {
   return `op_remote_${action}_${randomUUID().replaceAll("-", "")}`;
 }
@@ -1061,6 +1247,14 @@ function createHostLockOperationId(action: "lock" | "unlock"): string {
 
 function createDeviceRevokeOperationId(): string {
   return `op_device_revoke_${randomUUID().replaceAll("-", "")}`;
+}
+
+function createNativeAdoptOperationId(): string {
+  return `op_native_adopt_${randomUUID().replaceAll("-", "")}`;
+}
+
+function createNativeUnmanageOperationId(): string {
+  return `op_native_unmanage_${randomUUID().replaceAll("-", "")}`;
 }
 
 function createStartOperationId(): string {

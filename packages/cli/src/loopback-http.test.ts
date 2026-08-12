@@ -223,7 +223,7 @@ describe("IFC-V1-051 bounded loopback HTTP transport", () => {
     for (const url of [
       "not a URL",
       "http://127.0.0.1:3777/",
-      "http://127.0.0.1:3777/api/v1/status?private=yes",
+      "http://127.0.0.1:3777/api/v1/status/../status",
       "http://127.0.0.1:3777/api/v1/status#private"
     ]) {
       await expect(fetch(url, getRequest)).rejects.toMatchObject({
@@ -235,6 +235,17 @@ describe("IFC-V1-051 bounded loopback HTTP transport", () => {
         status: undefined
       });
     }
+    await expect(
+      fetch("http://127.0.0.1:3777/api/v1/status?private=yes", {
+        ...getRequest,
+        body: "{}",
+        headers: {
+          ...getRequest.headers,
+          "content-type": "application/json"
+        },
+        method: "POST"
+      })
+    ).rejects.toMatchObject({ code: "invalid_config" });
     await expect(
       fetch("http://127.0.0.1:3777/api/v1/status", {
         ...getRequest,
@@ -294,7 +305,10 @@ describe("IFC-V1-051 bounded loopback HTTP transport", () => {
     });
     try {
       const fetch = createBoundedLoopbackFetch();
-      const get = await fetch(`${server.origin}/api/v1/status`, getRequest);
+      const get = await fetch(
+        `${server.origin}/api/v1/status?limit=1&cursor=cursor_001`,
+        getRequest
+      );
       expect(await get.json()).toEqual({ method: "GET" });
       const body = JSON.stringify({ operation_id: "op_cli_transport_001" });
       const post = await fetch(`${server.origin}/api/v1/mutate`, {
@@ -310,7 +324,11 @@ describe("IFC-V1-051 bounded loopback HTTP transport", () => {
       expect(post).toMatchObject({ ok: true, status: 202 });
       expect(await post.json()).toEqual({ method: "POST" });
       expect(observed).toHaveLength(2);
-      expect(observed[0]).toMatchObject({ body: "", method: "GET", path: "/api/v1/status" });
+      expect(observed[0]).toMatchObject({
+        body: "",
+        method: "GET",
+        path: "/api/v1/status?limit=1&cursor=cursor_001"
+      });
       expect(observed[1]).toMatchObject({ body, method: "POST", path: "/api/v1/mutate" });
       expect(observed[1]?.headers).toMatchObject({
         accept: "application/json",

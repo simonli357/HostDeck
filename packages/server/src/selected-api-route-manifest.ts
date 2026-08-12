@@ -42,6 +42,7 @@ export const selectedApiTargetKinds = [
   "none",
   "host",
   "new_managed_session",
+  "native_codex_thread",
   "managed_session",
   "approval",
   "turn",
@@ -78,7 +79,8 @@ export const selectedApiRouteOwnerTasks = [
   "IFC-V1-065",
   "IFC-V1-068",
   "IFC-V1-069",
-  "IFC-V1-076"
+  "IFC-V1-076",
+  "IFC-V1-110"
 ] as const;
 
 export const selectedApiSchemaIds = [
@@ -91,6 +93,9 @@ export const selectedApiSchemaIds = [
   "selected_stream_cursor_query_v1",
   "device_list_query_v1",
   "selected_start_session_request_v1",
+  "native_session_discovery_query_v1",
+  "native_session_adopt_request_v1",
+  "native_session_unmanage_request_v1",
   "prompt_dispatch_request_v1",
   "model_selection_request_v1",
   "goal_mutation_request_v1",
@@ -112,6 +117,9 @@ export const selectedApiSchemaIds = [
   "host_status_response_v1",
   "selected_session_list_response_v1",
   "selected_session_start_response_v1",
+  "native_session_discovery_response_v1",
+  "native_session_adopt_response_v1",
+  "native_session_unmanage_response_v1",
   "selected_session_detail_response_v1",
   "selected_event_page_response_v1",
   "selected_projection_event_v1",
@@ -229,6 +237,12 @@ const hostLockPolicy = policy(
   "lock_transition"
 );
 const localAdminPolicy = policy("local_admin", "local_admin", "none", "not_applicable");
+const localAdminUnlockedPolicy = policy(
+  "local_admin",
+  "local_admin",
+  "none",
+  "requires_unlocked_host"
+);
 
 export const selectedApiRouteManifest: readonly SelectedApiRouteManifestEntry[] = deepFreeze([
   route({
@@ -305,6 +319,51 @@ export const selectedApiRouteManifest: readonly SelectedApiRouteManifestEntry[] 
     audit: selectedWriteAudit("session_start"),
     handler: "sessions.start",
     owner_task: "IFC-V1-040"
+  }),
+  route({
+    id: "native_session_discovery",
+    family: "sessions",
+    method: "GET",
+    path: "/api/v1/native-sessions",
+    transport: "json",
+    request: request(null, "native_session_discovery_query_v1", null),
+    response: response("native_session_discovery_response_v1"),
+    ...localAdminUnlockedPolicy,
+    target: "none",
+    operation_kind: null,
+    audit: null,
+    handler: "sessions.discoverNative",
+    owner_task: "IFC-V1-110"
+  }),
+  route({
+    id: "native_session_adopt",
+    family: "sessions",
+    method: "POST",
+    path: "/api/v1/native-sessions",
+    transport: "json",
+    request: request(null, null, "native_session_adopt_request_v1"),
+    response: response("native_session_adopt_response_v1"),
+    ...localAdminUnlockedPolicy,
+    target: "native_codex_thread",
+    operation_kind: null,
+    audit: selectedWriteAudit("session_adopt"),
+    handler: "sessions.adoptNative",
+    owner_task: "IFC-V1-110"
+  }),
+  route({
+    id: "native_session_unmanage",
+    family: "sessions",
+    method: "POST",
+    path: "/api/v1/sessions/:session_id/unmanage",
+    transport: "json",
+    request: request("session_id_params_v1", null, "native_session_unmanage_request_v1"),
+    response: response("native_session_unmanage_response_v1"),
+    ...localAdminUnlockedPolicy,
+    target: "managed_session",
+    operation_kind: null,
+    audit: selectedWriteAudit("session_unmanage"),
+    handler: "sessions.unmanageNative",
+    owner_task: "IFC-V1-110"
   }),
   route({
     id: "session_detail",

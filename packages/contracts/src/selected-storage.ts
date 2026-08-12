@@ -7,6 +7,7 @@ import {
   selectedRuntimeSource
 } from "@hostdeck/core";
 import { z } from "zod";
+import { nativeCodexThreadTargetSchema } from "./native-session.js";
 import {
   absoluteCwdSchema,
   isoTimestampSchema,
@@ -37,7 +38,6 @@ import {
   selectedProjectionEventSchema
 } from "./selected-runtime.js";
 import { auditPayloadSummarySchema } from "./storage.js";
-import { nativeCodexThreadTargetSchema } from "./native-session.js";
 
 const selectedStorageLimits = {
   idLength: 120,

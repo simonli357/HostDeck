@@ -8634,6 +8634,17 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             securityAudit: auditExecutor,
             sessions: Object.freeze({
               managed: dashboardControls.managed,
+              native: Object.freeze({
+                adopt: async () => {
+                  throw new Error("Physical native-session adoption is not exercised by this fixture.");
+                },
+                discover: async () => {
+                  throw new Error("Physical native-session discovery is not exercised by this fixture.");
+                },
+                unmanage: async () => {
+                  throw new Error("Physical native-session unmanage is not exercised by this fixture.");
+                }
+              }),
               read: sessionReads,
               resume: dashboardControls.resume,
               subscribers: promptSubscribers

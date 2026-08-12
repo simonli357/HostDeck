@@ -140,6 +140,7 @@ type SelectedWriteAuditOutcome =
 interface SelectedWriteSummaryContract {
   readonly intent: readonly string[];
   readonly success: readonly string[];
+  readonly incomplete: readonly string[];
 }
 
 const acceptedAuditPorts = new WeakSet<object>();
@@ -158,6 +159,12 @@ const selectedWriteSummaryContracts: Partial<
   Record<SelectedApiAuditAction, SelectedWriteSummaryContract>
 > = Object.freeze({
   session_start: summaryContract(["name_length", "cwd_present"], ["created"]),
+  session_adopt: summaryContract(
+    ["handoff_confirmed", "name_length"],
+    ["history_turn_count", "adopted"],
+    ["activation_pending"]
+  ),
+  session_unmanage: summaryContract(["confirm"], ["unmanaged"]),
   prompt: summaryContract(["text_length"], ["accepted"]),
   model: summaryContract(
     ["model_id", "reasoning_effort", "expected_revision_present"],
@@ -390,11 +397,23 @@ export function requireSelectedWriteManifest(
   if (entry === undefined || !Object.isFrozen(entry) || entry.audit === null) {
     throw new TypeError("HostDeck selected-write gate requires one selected manifest entry by identity.");
   }
+  const csrfProtectedWrite =
+    entry.auth === "local_admin_or_device_cookie" &&
+    entry.csrf === "required_for_device";
+  const localLifecycleWrite =
+    entry.auth === "local_admin" &&
+    entry.authority === "local_admin" &&
+    entry.csrf === "none" &&
+    ((entry.id === "native_session_adopt" &&
+      entry.audit.action === "session_adopt" &&
+      entry.target === "native_codex_thread") ||
+      (entry.id === "native_session_unmanage" &&
+        entry.audit.action === "session_unmanage" &&
+        entry.target === "managed_session"));
   if (
     entry.method !== "POST" ||
     entry.transport !== "json" ||
-    entry.auth !== "local_admin_or_device_cookie" ||
-    entry.csrf !== "required_for_device" ||
+    (!csrfProtectedWrite && !localLifecycleWrite) ||
     !["not_applicable", "requires_unlocked_host"].includes(entry.lock) ||
     entry.audit.executor !== executor ||
     entry.audit.catalog_state !== "selected" ||
@@ -406,9 +425,15 @@ export function requireSelectedWriteManifest(
   if (executor === "selected_write_gate") {
     if (
       entry.lock !== "requires_unlocked_host" ||
-      entry.authority !== "session_write" ||
+      (!localLifecycleWrite && entry.authority !== "session_write") ||
       entry.credential_effect !== "none" ||
-      !["new_managed_session", "managed_session", "approval", "turn"].includes(entry.target)
+      ![
+        "new_managed_session",
+        "native_codex_thread",
+        "managed_session",
+        "approval",
+        "turn"
+      ].includes(entry.target)
     ) {
       throw new TypeError("Selected operation manifest entry is not a common write-gate route.");
     }
@@ -507,7 +532,9 @@ export function parseSelectedWriteAuditSummary(
       ? contract.intent
       : outcome === "succeeded"
         ? contract.success
-        : [];
+        : outcome === "incomplete"
+          ? contract.incomplete
+          : [];
   const allowed = new Set(["schema_version", ...required]);
   for (const [key, value] of Object.entries(summary)) {
     if (!allowed.has(key) || !validSummaryField(key, value)) {
@@ -681,11 +708,13 @@ function assertDataObject(candidate: unknown, message: string): void {
 
 function summaryContract(
   intent: readonly string[],
-  success: readonly string[]
+  success: readonly string[],
+  incomplete: readonly string[] = []
 ): SelectedWriteSummaryContract {
   return Object.freeze({
     intent: Object.freeze([...intent]),
-    success: Object.freeze([...success])
+    success: Object.freeze([...success]),
+    incomplete: Object.freeze([...incomplete])
   });
 }
 
@@ -698,6 +727,8 @@ function validSummaryField(
       return value === 1;
     case "name_length":
       return isBoundedLength(value, 64, 1);
+    case "history_turn_count":
+      return isBoundedLength(value, 20, 0);
     case "text_length":
       return isBoundedLength(value, 20_000, 1);
     case "objective_length":
@@ -719,11 +750,16 @@ function validSummaryField(
     case "accepted":
     case "decision_finalized":
     case "archived":
+    case "activation_pending":
+    case "adopted":
     case "confirmed":
+    case "confirm":
     case "created":
     case "cwd_present":
     case "interrupted":
+    case "handoff_confirmed":
     case "started":
+    case "unmanaged":
       return value === true;
     default:
       return false;

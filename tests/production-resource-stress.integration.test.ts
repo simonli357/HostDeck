@@ -99,7 +99,7 @@ describe("IFC-V1-052 selected production resource stress", () => {
     expect(Object.isFrozen(harness.budget)).toBe(true);
     expect(harness.startedBudget).toBe(harness.budget);
     expect(harness.service.context.budget).toBe(harness.budget);
-    expect(harness.service.context.registrations).toHaveLength(22);
+    expect(harness.service.context.registrations).toHaveLength(23);
     expect(harness.service.context.input.admission).toBe(harness.admission);
     expect(harness.service.context.input.sessions.subscribers).toBe(harness.subscribers);
     expect(harness.budget).toMatchObject({
@@ -145,7 +145,7 @@ describe("IFC-V1-052 selected production resource stress", () => {
     });
 
     const inventory = hostDeckFastifyRouteInventory(harness.service.app);
-    expect(inventory).toHaveLength(35);
+    expect(inventory).toHaveLength(38);
     expect(inventory.map((entry) => `${entry.method} ${entry.path}`).sort()).toEqual(
       selectedApiRouteManifest.map((entry) => `${entry.method} ${entry.path}`).sort(),
     );
@@ -961,6 +961,11 @@ async function createStressHarness(options: { readonly port?: number } = {}): Pr
           archive: failUnused,
           read: state.require,
           start: failUnused,
+        },
+        native: {
+          adopt: failUnused,
+          discover: failUnused,
+          unmanage: failUnused,
         },
         read: { get: failUnused, list: failUnused },
         resume: { read: failUnused },

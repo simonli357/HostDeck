@@ -132,7 +132,7 @@ describe.skipIf(!requireSmoke)("exact production foreground serve smoke", () => 
           phase: "ready",
           application: {
             phase: "runtime_ready",
-            route_registration_count: 23,
+            route_registration_count: 24,
             reconnect: { phase: "ready", current_generation: 1 },
             reconciliation: { phase: "ready", cycle_count: 1 }
           },

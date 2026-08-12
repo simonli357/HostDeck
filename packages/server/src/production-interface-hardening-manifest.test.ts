@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  createProductionInterfaceHardeningLedger,
+  createIfcV1091ProductionInterfaceHardeningLedger,
   productionInterfaceHardeningCriteria,
   productionInterfaceHardeningCriterionIds,
   productionInterfaceHardeningDimensions,
@@ -34,8 +34,8 @@ const privateEvidencePattern =
 const sha256Pattern = /^[a-f0-9]{64}$/u;
 
 describe("IFC-V1-091 production interface hardening ledger", () => {
-  it("binds the stored ledger to exact production routes and registrations", () => {
-    const expected = createProductionInterfaceHardeningLedger();
+  it("preserves the frozen IFC-V1-091 ledger and validates the current route extension", () => {
+    const expected = createIfcV1091ProductionInterfaceHardeningLedger();
     if (process.env.HOSTDECK_WRITE_INTERFACE_HARDENING_LEDGER === "1") {
       mkdirSync(dirname(ledgerPath), { mode: 0o755, recursive: true });
       writeFileSync(ledgerPath, `${JSON.stringify(expected, null, 2)}\n`, {
@@ -46,11 +46,20 @@ describe("IFC-V1-091 production interface hardening ledger", () => {
     expect(existsSync(ledgerPath)).toBe(true);
     expect(JSON.parse(readFileSync(ledgerPath, "utf8"))).toEqual(expected);
     expect(Object.isFrozen(expected)).toBe(true);
-    expect(selectedApiRouteManifest).toHaveLength(35);
-    expect(hostDeckSelectedApiRouteCompositionDescriptor).toHaveLength(22);
+    expect(selectedApiRouteManifest).toHaveLength(38);
+    expect(hostDeckSelectedApiRouteCompositionDescriptor).toHaveLength(23);
     expect(
       hostDeckSelectedApiRouteCompositionDescriptor.flatMap((entry) => entry.manifestIds)
-    ).toHaveLength(35);
+    ).toHaveLength(38);
+    expect(
+      selectedApiRouteManifest
+        .filter((entry) => entry.owner_task === "IFC-V1-110")
+        .map((entry) => entry.id)
+    ).toEqual([
+      "native_session_discovery",
+      "native_session_adopt",
+      "native_session_unmanage"
+    ]);
   });
 
   it("covers every frozen criterion, dimension, requirement, and evidence owner once", () => {

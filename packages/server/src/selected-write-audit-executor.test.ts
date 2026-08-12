@@ -227,6 +227,8 @@ describe("selected non-security write audit executor", () => {
   it("executes every common selected write action accepted-to-succeeded exactly once", async () => {
     expect(hostDeckSelectedWriteAuditActions).toEqual([
       "session_start",
+      "session_adopt",
+      "session_unmanage",
       "prompt",
       "model",
       "goal",
@@ -466,6 +468,12 @@ function targetFor(action: HostDeckSelectedWriteAuditAction, index: number): Sel
   if (action === "session_start") {
     return selectedAuditTargetSchema.parse({ type: "host", host_id: "local_host" });
   }
+  if (action === "session_adopt") {
+    return selectedAuditTargetSchema.parse({
+      type: "native_codex_thread",
+      codex_thread_id: `thread-selected-write-${index}`
+    });
+  }
   if (action === "approval_response") {
     return selectedAuditTargetSchema.parse({
       type: "approval",
@@ -492,6 +500,8 @@ function targetFor(action: HostDeckSelectedWriteAuditAction, index: number): Sel
 function acceptedSummary(action: HostDeckSelectedWriteAuditAction) {
   const summaries = {
     session_start: { schema_version: 1, name_length: 12, cwd_present: true },
+    session_adopt: { schema_version: 1, handoff_confirmed: true, name_length: 12 },
+    session_unmanage: { schema_version: 1, confirm: true },
     prompt: { schema_version: 1, text_length: 12 },
     model: { schema_version: 1, model_id: "gpt-test", reasoning_effort: null, expected_revision_present: false },
     goal: { schema_version: 1, goal_action: "set", objective_length: 12, expected_revision_present: false },
@@ -507,6 +517,8 @@ function acceptedSummary(action: HostDeckSelectedWriteAuditAction) {
 function successSummary(action: HostDeckSelectedWriteAuditAction) {
   const summaries = {
     session_start: { schema_version: 1, created: true },
+    session_adopt: { schema_version: 1, history_turn_count: 2, adopted: true },
+    session_unmanage: { schema_version: 1, unmanaged: true },
     prompt: { schema_version: 1, accepted: true },
     model: { schema_version: 1, changed: true },
     goal: { schema_version: 1, changed: true },

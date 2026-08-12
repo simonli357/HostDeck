@@ -9,6 +9,7 @@ import {
   createCodexCompactClient,
   createCodexGoalClient,
   createCodexModelClient,
+  createCodexNativeSessionClient,
   createCodexPlanClient,
   createCodexRuntimeReconnectController,
   createCodexSkillsClient,
@@ -108,6 +109,7 @@ import {
   runHostDeckStartupMaintenance
 } from "./host-startup-maintenance.js";
 import { createManagedCodexThreadService } from "./managed-thread-service.js";
+import { createNativeSessionAdministrationService } from "./native-session-adoption-service.js";
 import { createHostDeckPairingPolicy } from "./pairing-routes.js";
 import { combinePendingTurnSettingsReaders } from "./pending-turn-settings.js";
 import {
@@ -198,8 +200,8 @@ export interface HostDeckProductionListenerHealthPort {
 
 export interface HostDeckProductionApplicationSnapshot {
   readonly phase: HostDeckProductionApplicationPhase;
-  readonly route_registration_count: 23;
-  readonly api_registration_count: 21;
+  readonly route_registration_count: 24;
+  readonly api_registration_count: 22;
   readonly sse_registration_count: 1;
   readonly static_registration_count: 1;
   readonly reported_issue_count: number;
@@ -654,6 +656,14 @@ export function createHostDeckProductionApplication(
   const runtimeView = Object.freeze({
     read: () => reconnectController.compatibility
   });
+  const nativeSessions = createNativeSessionAdministrationService({
+    native: createCodexNativeSessionClient(reconnectController, {
+      read_timeout_ms: budget.protocol_read_timeout_ms
+    }),
+    states: stateRepository,
+    events: pipeline,
+    now: readNow
+  });
   const resume = createHostDeckResumeMetadataReader({
     codexBin: resources.codex_bin,
     runtime: runtimeView,
@@ -743,6 +753,7 @@ export function createHostDeckProductionApplication(
     securityAudit,
     sessions: Object.freeze({
       managed: createHostDeckBoundFunctionView(managedSessions, ["archive", "read", "start"]),
+      native: createHostDeckBoundFunctionView(nativeSessions, ["adopt", "discover", "unmanage"]),
       read: sessionReadRepository,
       resume,
       subscribers
@@ -935,8 +946,8 @@ export function createHostDeckProductionApplication(
   const snapshot = (): HostDeckProductionApplicationSnapshot =>
     Object.freeze({
       phase,
-      route_registration_count: 23 as const,
-      api_registration_count: 21 as const,
+      route_registration_count: 24 as const,
+      api_registration_count: 22 as const,
       sse_registration_count: 1 as const,
       static_registration_count: 1 as const,
       reported_issue_count: issues.count,
@@ -1483,8 +1494,8 @@ function assertRouteInventory(
 ): void {
   const selectedCount = hostDeckSelectedApiRouteCompositionDescriptor.length;
   if (
-    registrations.length !== 23 ||
-    selectedCount !== 22 ||
+    registrations.length !== 24 ||
+    selectedCount !== 23 ||
     registrations.slice(0, selectedCount).some((registration, index) => {
       const expected = hostDeckSelectedApiRouteCompositionDescriptor[index];
       return (
@@ -1495,9 +1506,9 @@ function assertRouteInventory(
     }) ||
     registrations.at(-1)?.id !== hostDeckProductionStaticRegistrationId ||
     registrations.at(-1)?.surface !== "static" ||
-    new Set(registrations.map((registration) => registration.id)).size !== 23 ||
+    new Set(registrations.map((registration) => registration.id)).size !== 24 ||
     registrations.filter((registration) => registration.surface === "api")
-      .length !== 21 ||
+      .length !== 22 ||
     registrations.filter((registration) => registration.surface === "sse")
       .length !== 1 ||
     registrations.filter((registration) => registration.surface === "static")

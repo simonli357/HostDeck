@@ -58,6 +58,10 @@ tailscale switch HOSTDECK_PROFILE_ID
 ```bash
 ~/.local/bin/codexdeck start --name "Session name" --cwd /absolute/project/path
 ~/.local/bin/codexdeck list
+~/.local/bin/codexdeck discover --limit 20
+~/.local/bin/codexdeck adopt THREAD_ID --name "Session name" --confirm-handoff
+~/.local/bin/codexdeck resume "Session name"
+~/.local/bin/codexdeck unmanage "Session name" --confirm
 ~/.local/bin/codexdeck devices --limit 20
 ~/.local/bin/codexdeck revoke DEVICE_ID --confirm
 ~/.local/bin/codexdeck lock
@@ -114,6 +118,8 @@ pnpm exec vitest run packages/cli/src/remote-control-client.test.ts packages/cli
 pnpm exec vitest run packages/cli/src/start-client.test.ts packages/cli/src/start-cli.test.ts packages/server/src/selected-write-audit-executor.test.ts packages/server/src/session-start-routes.test.ts packages/server/src/managed-thread-service.test.ts packages/storage/src/session-start-audit-catalog-migration.test.ts
 pnpm exec vitest run packages/cli/src/config.test.ts packages/cli/src/host-lock-client.test.ts packages/cli/src/host-lock-cli.test.ts packages/cli/src/pairing-link-client.test.ts packages/cli/src/selected-api-route-inventory.test.ts packages/cli/src/legacy-session-admin.test.ts packages/storage/src/legacy-session-repository.test.ts
 pnpm exec vitest run packages/cli/src/host-status-client.test.ts packages/cli/src/session-list-client.test.ts packages/cli/src/device-revoke-client.test.ts packages/cli/src/administrative-cli.test.ts packages/cli/src/selected-api-route-inventory.test.ts
+pnpm exec vitest run packages/cli/src/native-session-cli.test.ts packages/cli/src/native-session-loopback.smoke.test.ts packages/server/src/native-session-routes.test.ts
+HOSTDECK_CODEX_BIN="$PWD/node_modules/.bin/codex" HOSTDECK_CODEX_FAKE_AUTH_FIXTURE=1 HOSTDECK_REQUIRE_NATIVE_SESSION_ADAPTER_SMOKE=1 HOSTDECK_REQUIRE_NATIVE_SESSION_SERVICE_SMOKE=1 pnpm exec vitest run packages/codex-adapter/src/native-session-client.smoke.test.ts packages/server/src/native-session-adoption-service.smoke.test.ts --maxWorkers=1
 pnpm exec vitest run packages/storage/src/read-only-database.test.ts packages/cli/src/local-device-list.test.ts
 pnpm exec vitest run packages/cli/src/archive-client.test.ts packages/cli/src/archive-cli.test.ts packages/server/src/selected-write-audit-executor.test.ts packages/server/src/selected-write-gate.test.ts packages/server/src/session-archive-routes.test.ts packages/server/src/managed-thread-service.test.ts
 pnpm exec vitest run --config vitest.integration.config.ts tests/archive-vertical.integration.test.ts

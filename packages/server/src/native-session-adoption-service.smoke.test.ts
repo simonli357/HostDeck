@@ -159,7 +159,7 @@ describe.skipIf(!requireSmoke)(
             },
             createOperationDeadline({ timeoutMs: 10_000 })
           );
-          expect(adopted).toMatchObject({
+          expect(adopted.state).toMatchObject({
             mapping: {
               id: "sess_native_smoke",
               codex_thread_id: threadId,

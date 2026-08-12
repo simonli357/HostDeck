@@ -87,7 +87,7 @@ describe("IFC-V1-082 production application composition", () => {
     ).toThrow(TypeError);
     expect(application.resource_budget).toBe(defaultResourceBudget);
     expect(application.bind).toBe(fixture.resources.bind);
-    expect(application.route_registrations).toHaveLength(23);
+    expect(application.route_registrations).toHaveLength(24);
     expect(Object.isFrozen(application.route_registrations)).toBe(true);
     expect(
       application.route_registrations.map(({ id, surface }) => ({ id, surface }))
@@ -106,8 +106,8 @@ describe("IFC-V1-082 production application composition", () => {
 
     expect(application.snapshot()).toMatchObject({
       phase: "assembled",
-      route_registration_count: 23,
-      api_registration_count: 21,
+      route_registration_count: 24,
+      api_registration_count: 22,
       sse_registration_count: 1,
       static_registration_count: 1,
       reported_issue_count: 0,
@@ -146,7 +146,7 @@ describe("IFC-V1-082 production application composition", () => {
         .map((entry) => `${entry.method} ${entry.path}`)
         .sort()
     );
-    expect(selectedInventory).toHaveLength(35);
+    expect(selectedInventory).toHaveLength(38);
     expect(
       hostDeckFastifyRouteInventory(app).some((entry) =>
         /\/(?:acceptance|certificates?|lan|network|raw|tmux)(?:\/|$)/u.test(

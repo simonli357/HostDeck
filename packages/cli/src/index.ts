@@ -13,6 +13,7 @@ export * from "./interrupt-client.js";
 export * from "./legacy-session-admin.js";
 export * from "./local-device-list.js";
 export * from "./model-client.js";
+export * from "./native-session-client.js";
 export * from "./pairing-link-client.js";
 export * from "./parser.js";
 export * from "./plan-client.js";

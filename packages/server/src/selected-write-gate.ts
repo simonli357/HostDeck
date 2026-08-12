@@ -282,7 +282,6 @@ const gateErrorMessages: Record<HostDeckSelectedWriteGateErrorCode, string> = {
   parse_contract_failed: "Selected-write parser returned invalid state.",
   target_contract_failed: "Selected-write target boundary returned invalid state."
 };
-const timeoutSummary = Object.freeze({ schema_version: 1 as const });
 const maxCounter = Number.MAX_SAFE_INTEGER;
 
 export function createHostDeckSelectedWriteGate<
@@ -639,6 +638,8 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
       );
     }
     const finalizedMutation = mutation;
+    const failedSummary = terminalSummary(finalizedMutation.action, "failed");
+    const incompleteSummary = terminalSummary(finalizedMutation.action, "incomplete");
     try {
       admissionOwner.bindTarget(finalizedMutation.target);
     } catch (error) {
@@ -676,7 +677,7 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
         return Object.freeze({
           outcome: "failed" as const,
           error_code: "operation_timeout" as const,
-          payload_summary: timeoutSummary
+          payload_summary: failedSummary
         });
       }
       try {
@@ -688,7 +689,7 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
             Object.freeze({
               outcome: "failed" as const,
               error_code: "permission_denied" as const,
-              payload_summary: Object.freeze({ schema_version: 1 as const })
+              payload_summary: failedSummary
             })
           );
           if (revoked.outcome === "succeeded") throw new TypeError();
@@ -709,7 +710,7 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
         return Object.freeze({
           outcome: "failed" as const,
           error_code: readinessCode,
-          payload_summary: timeoutSummary
+          payload_summary: failedSummary
         });
       }
       increment(this.counters, "dispatches");
@@ -737,7 +738,7 @@ class DefaultHostDeckSelectedWriteGate<TAction extends SelectedApiAuditAction> {
           return Object.freeze({
             outcome: "incomplete" as const,
             error_code: "operation_timeout" as const,
-            payload_summary: timeoutSummary
+            payload_summary: incompleteSummary
           });
         }
         throw error;
@@ -1001,12 +1002,15 @@ function authorizeRequest(
   manifest: SelectedApiRouteManifestEntry,
   csrf: HostDeckCsrfPolicy
 ): HostDeckSelectedWriteAuthorizationContext {
-  if (manifest.auth !== "local_admin_or_device_cookie") {
+  if (
+    manifest.auth !== "local_admin_or_device_cookie" &&
+    manifest.auth !== "local_admin"
+  ) {
     throw new TypeError("Selected-write manifest authentication is invalid.");
   }
   const authentication = requireHostDeckRequestAuthentication(
     request,
-    "local_admin_or_device_cookie"
+    manifest.auth
   );
   requireHostDeckRequestWritePermission(authentication);
   if (authentication.state === "paired_device" && authentication.transport !== "https") {
@@ -1017,11 +1021,20 @@ function authorizeRequest(
       status: 426
     });
   }
-  const authorization = requireHostDeckRequestCsrfWriteAuthorization(
-    request,
-    "local_admin_or_device_cookie",
-    csrf
-  );
+  const authorization =
+    manifest.auth === "local_admin"
+      ? Object.freeze({
+          authority: "local_admin" as const,
+          device_id: null,
+          permission: "local_admin" as const,
+          csrf_generation: null,
+          verified_at: null
+        })
+      : requireHostDeckRequestCsrfWriteAuthorization(
+          request,
+          "local_admin_or_device_cookie",
+          csrf
+        );
   const deviceAuthority =
     authentication.state === "paired_device"
       ? requireHostDeckRequestActiveDeviceAuthority(request)
@@ -1102,12 +1115,14 @@ function assertResolutionMatchesUnresolvedMutation(
 
 function expectedAuditTargetType(
   manifest: SelectedApiRouteManifestEntry
-): "approval" | "device" | "host" | "managed_session" | "turn" {
+): "approval" | "device" | "host" | "managed_session" | "native_codex_thread" | "turn" {
   switch (manifest.target) {
     case "new_managed_session":
       return "host";
     case "managed_session":
       return "managed_session";
+    case "native_codex_thread":
+      return "native_codex_thread";
     case "approval":
       return "approval";
     case "turn":
@@ -1121,8 +1136,20 @@ function expectedAuditTargetType(
 
 function expectedCapability(manifest: SelectedApiRouteManifestEntry): RuntimeCapability | null {
   if (manifest.operation_kind !== null) return operationCapability(manifest.operation_kind);
-  if (manifest.id === "session_start") return "thread_lifecycle";
+  if (manifest.id === "session_start" || manifest.id === "native_session_adopt") {
+    return "thread_lifecycle";
+  }
   return null;
+}
+
+function terminalSummary(
+  action: SelectedApiAuditAction,
+  outcome: "failed" | "incomplete"
+): Readonly<Record<string, number | boolean>> {
+  if (action === "session_adopt" && outcome === "incomplete") {
+    return Object.freeze({ schema_version: 1 as const, activation_pending: true as const });
+  }
+  return Object.freeze({ schema_version: 1 as const });
 }
 
 function requireOpenDeadline(deadline: OperationDeadline): void {

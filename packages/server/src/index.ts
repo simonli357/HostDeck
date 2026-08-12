@@ -43,6 +43,7 @@ export * from "./interrupt-routes.js";
 export * from "./managed-thread-service.js";
 export * from "./model-routes.js";
 export * from "./native-session-adoption-service.js";
+export * from "./native-session-routes.js";
 export * from "./pairing-routes.js";
 export * from "./pending-turn-settings.js";
 export * from "./plan-routes.js";

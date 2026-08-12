@@ -10,9 +10,9 @@ import {
 } from "./http-route-contracts.js";
 
 describe("FE-V1-019 browser HTTP route contracts", () => {
-  it("binds exactly the 34 selected JSON routes and excludes SSE", () => {
+  it("binds exactly the 34 browser JSON routes and excludes local administration and SSE", () => {
     const selectedJson = selectedApiRouteManifest.filter(
-      (route) => route.transport === "json"
+      (route) => route.transport === "json" && route.owner_task !== "IFC-V1-110"
     );
     const browser = Object.values(browserHttpRouteContracts);
 
@@ -34,6 +34,13 @@ describe("FE-V1-019 browser HTTP route contracts", () => {
     expect(Reflect.has(browserHttpRouteContracts, "session_event_stream")).toBe(
       false
     );
+    for (const routeId of [
+      "native_session_discovery",
+      "native_session_adopt",
+      "native_session_unmanage"
+    ]) {
+      expect(Reflect.has(browserHttpRouteContracts, routeId)).toBe(false);
+    }
   });
 
   it("freezes route metadata and binds executable schemas and exact statuses", () => {

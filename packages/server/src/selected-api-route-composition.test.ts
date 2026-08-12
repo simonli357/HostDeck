@@ -27,7 +27,10 @@ import {
   hostDeckLocalAdminRequestHeaderName,
   hostDeckLocalAdminRequestHeaderValue
 } from "./fastify-request-trust.js";
-import { createHostDeckHostHealthService } from "./host-health.js";
+import {
+  createHostDeckHostHealthService,
+  hostDeckLocalHealthComponents
+} from "./host-health.js";
 import { createHostDeckHostLockPolicy } from "./host-lock-routes.js";
 import { createHostDeckPairingPolicy } from "./pairing-routes.js";
 import { createProjectionSubscriberStreamService } from "./projection-subscriber-stream.js";
@@ -71,14 +74,14 @@ afterEach(() => {
 });
 
 describe("IFC-V1-046 selected API production route composition", () => {
-  it("freezes an exact 22-registrar descriptor over all 35 manifest rows", () => {
+  it("freezes an exact 23-registrar descriptor over all 38 manifest rows", () => {
     expect(Object.isFrozen(hostDeckSelectedApiRouteCompositionDescriptor)).toBe(true);
-    expect(hostDeckSelectedApiRouteCompositionDescriptor).toHaveLength(22);
+    expect(hostDeckSelectedApiRouteCompositionDescriptor).toHaveLength(23);
     expect(
       hostDeckSelectedApiRouteCompositionDescriptor.filter(
         (entry) => entry.surface === "api"
       )
-    ).toHaveLength(21);
+    ).toHaveLength(22);
     expect(
       hostDeckSelectedApiRouteCompositionDescriptor.filter(
         (entry) => entry.surface === "sse"
@@ -91,8 +94,8 @@ describe("IFC-V1-046 selected API production route composition", () => {
     const manifestIds = hostDeckSelectedApiRouteCompositionDescriptor.flatMap(
       (entry) => entry.manifestIds
     );
-    expect(new Set(registrationIds).size).toBe(22);
-    expect(new Set(manifestIds).size).toBe(35);
+    expect(new Set(registrationIds).size).toBe(23);
+    expect(new Set(manifestIds).size).toBe(38);
     expect([...manifestIds].sort()).toEqual(
       selectedApiRouteManifest.map((entry) => entry.id).sort()
     );
@@ -134,7 +137,7 @@ describe("IFC-V1-046 selected API production route composition", () => {
       fixture.input
     );
     expect(Object.isFrozen(registrations)).toBe(true);
-    expect(registrations).toHaveLength(22);
+    expect(registrations).toHaveLength(23);
     expect(
       registrations.map(({ id, surface }) => ({ id, surface }))
     ).toEqual(
@@ -151,7 +154,7 @@ describe("IFC-V1-046 selected API production route composition", () => {
     ).toThrow("Selected API route composition already owns this admission policy.");
   });
 
-  it("registers exactly the canonical 35 method/path pairs in a ready Fastify app", async () => {
+  it("registers exactly the canonical 38 method/path pairs in a ready Fastify app", async () => {
     const fixture = createFixture();
     const app = createHostDeckFastifyApp({
       observeInternalError: () => undefined,
@@ -175,7 +178,7 @@ describe("IFC-V1-046 selected API production route composition", () => {
           .map((entry) => `${entry.method} ${entry.path}`)
           .sort()
       );
-      expect(inventory).toHaveLength(35);
+      expect(inventory).toHaveLength(38);
       expect(inventory.every((entry) => Object.isFrozen(entry))).toBe(true);
       expect(inventory.some((entry) => entry.method === "HEAD")).toBe(false);
       expect(
@@ -250,6 +253,18 @@ describe("IFC-V1-046 selected API production route composition", () => {
               cwd: "/tmp/hostdeck-composition-probe"
             },
             url: "/api/v1/sessions"
+          }
+        },
+        {
+          manifestId: "native_session_discovery",
+          port: "sessions.native.discover",
+          request: {
+            headers: {
+              [hostDeckLocalAdminRequestHeaderName]:
+                hostDeckLocalAdminRequestHeaderValue
+            },
+            method: "GET",
+            url: "/api/v1/native-sessions"
           }
         },
         {
@@ -690,6 +705,14 @@ function createHandlerProbeFixture(): HandlerProbeFixture {
     now
   });
   const health = createHostDeckHostHealthService({ now });
+  for (const component of hostDeckLocalHealthComponents) {
+    health.updateLocal({
+      component,
+      state: "ready",
+      reasons: [],
+      source_generation: 1
+    });
+  }
   const compatibility = createHostDeckRuntimeCompatibilityRecordReader({
     read: () => null
   });
@@ -817,6 +840,16 @@ function createHandlerProbeFixture(): HandlerProbeFixture {
         archive: () => requireProbe("sessions.managed.archive"),
         read: () => invoke("sessions.managed.read", selectedState),
         start: () => requireProbe("sessions.managed.start")
+      },
+      native: {
+        adopt: () => requireProbe("sessions.native.adopt"),
+        discover: async () =>
+          invoke("sessions.native.discover", {
+            limit: 50,
+            threads: [],
+            truncated: false
+          }),
+        unmanage: () => requireProbe("sessions.native.unmanage")
       },
       read: {
         get: () => requireProbe("sessions.read.get"),
@@ -1070,6 +1103,7 @@ function createFixture(): CompositionFixture {
     securityAudit,
     sessions: {
       managed: { archive: fail, read: fail, start: fail },
+      native: { adopt: fail, discover: fail, unmanage: fail },
       read: { get: fail, list: fail },
       resume: { read: fail },
       subscribers

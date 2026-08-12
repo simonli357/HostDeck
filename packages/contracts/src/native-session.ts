@@ -58,6 +58,21 @@ export const nativeSessionDiscoveryRequestSchema = z
   })
   .strict();
 
+const nativeSessionDiscoveryLimitTextSchema = z
+  .string()
+  .regex(/^(?:[1-9]|[1-9][0-9]|100)$/u);
+
+export const nativeSessionDiscoveryQuerySchema = z
+  .object({
+    limit: nativeSessionDiscoveryLimitTextSchema.optional()
+  })
+  .strict()
+  .transform((value) =>
+    nativeSessionDiscoveryRequestSchema.parse({
+      ...(value.limit === undefined ? {} : { limit: Number(value.limit) })
+    })
+  );
+
 export const nativeSessionDiscoveryResponseSchema = z
   .object({
     limit: positiveSafeIntegerSchema.max(nativeSessionContractLimits.discoveryLimit),

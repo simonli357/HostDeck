@@ -348,27 +348,31 @@ export const productionInterfaceHardeningCriteria = Object.freeze([
   )
 ] as const);
 
-export function createProductionInterfaceHardeningLedger(): Readonly<Record<string, unknown>> {
+export function createIfcV1091ProductionInterfaceHardeningLedger(): Readonly<Record<string, unknown>> {
   return deepFreeze({
     schema_version: 1,
     task: "IFC-V1-091",
     criteria: productionInterfaceHardeningCriteria,
     dimensions: productionInterfaceHardeningDimensions,
     evidence: productionInterfaceHardeningEvidence,
-    registrations: hostDeckSelectedApiRouteCompositionDescriptor.map((entry) => ({
-      id: entry.registrationId,
-      surface: entry.surface,
-      route_ids: entry.manifestIds
-    })),
+    registrations: hostDeckSelectedApiRouteCompositionDescriptor
+      .filter((entry) => entry.registrationId !== "selected-native-session-administration")
+      .map((entry) => ({
+        id: entry.registrationId,
+        surface: entry.surface,
+        route_ids: entry.manifestIds
+      })),
     requirements: productionInterfaceHardeningRequirementIds,
-    routes: selectedApiRouteManifest.map((entry) => ({
-      id: entry.id,
-      family: entry.family,
-      method: entry.method,
-      path: entry.path,
-      transport: entry.transport,
-      owner_task: entry.owner_task
-    }))
+    routes: selectedApiRouteManifest
+      .filter((entry) => entry.owner_task !== "IFC-V1-110")
+      .map((entry) => ({
+        id: entry.id,
+        family: entry.family,
+        method: entry.method,
+        path: entry.path,
+        transport: entry.transport,
+        owner_task: entry.owner_task
+      }))
   });
 }
 

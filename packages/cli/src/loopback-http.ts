@@ -47,6 +47,7 @@ interface LoopbackLimits {
   readonly maxInFlight: number;
   readonly requestBodyMaxBytes: number;
   readonly requestTimeoutMs: number;
+  readonly requestUrlMaxBytes: number;
   readonly responseHeadersMaxBytes: number;
   readonly responseHeadersMaxCount: number;
   readonly responseIdleTimeoutMs: number;
@@ -85,6 +86,7 @@ export function createBoundedLoopbackFetch(
     maxInFlight: budget.cli_max_in_flight_requests,
     requestBodyMaxBytes: budget.cli_request_body_max_bytes,
     requestTimeoutMs: budget.cli_request_timeout_ms,
+    requestUrlMaxBytes: budget.http_url_max_bytes,
     responseHeadersMaxBytes: budget.http_headers_max_bytes,
     responseHeadersMaxCount: budget.http_headers_max_count,
     responseIdleTimeoutMs: budget.cli_stream_idle_timeout_ms,
@@ -287,10 +289,14 @@ function prepareLoopbackRequest(
       "--api-url"
     );
   }
-  requireLoopbackRequestUrl(url);
-
   const values = readExactRequestInit(init);
   const method = values.method;
+  requireLoopbackRequestUrl(
+    url,
+    rawUrl,
+    method,
+    limits.requestUrlMaxBytes
+  );
   const body = values.body ?? "";
   const headers = readRequestHeaders(values.headers, method, body.length > 0);
   if ((method === "GET" && body.length !== 0) || (method === "POST" && body.length === 0)) {
@@ -876,13 +882,20 @@ function readRequestHeaders(
   }
 }
 
-function requireLoopbackRequestUrl(url: URL): void {
+function requireLoopbackRequestUrl(
+  url: URL,
+  rawUrl: string,
+  method: "GET" | "POST",
+  maxBytes: number
+): void {
   requireLoopbackBaseUrl(new URL(url.origin));
   if (
+    rawUrl !== url.toString() ||
+    Buffer.byteLength(`${url.pathname}${url.search}`, "utf8") > maxBytes ||
     url.username.length !== 0 ||
     url.password.length !== 0 ||
     !url.pathname.startsWith("/api/") ||
-    url.search.length !== 0 ||
+    (method === "POST" && url.search.length !== 0) ||
     url.hash.length !== 0
   ) {
     throw configFailure(

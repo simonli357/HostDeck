@@ -78,7 +78,11 @@ describe("managed-session Plan CLI command", () => {
     expect(result.stdout).toContain(
       "codexdeck plan SESSION_ID enter|exit [--expected-revision REVISION] [--json]"
     );
-    expect(result.stdout).not.toMatch(/operation-id|target|thread|runtime-mode|\/plan/iu);
+    const planHelp = result.stdout
+      .split("\n")
+      .filter((line) => line.trimStart().startsWith("codexdeck plan"))
+      .join("\n");
+    expect(planHelp).not.toMatch(/operation-id|target|thread|runtime-mode|\/plan/iu);
   });
 
   it("reads one validated snapshot receiverlessly without constructing mutation or legacy ports", async () => {

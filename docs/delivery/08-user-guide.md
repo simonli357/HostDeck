@@ -72,9 +72,16 @@ is 90 days. Create a new link when an authority expires or is revoked.
 | Revoke a device | In **Host and access**, choose the revoke icon for the exact device and confirm. | That browser loses protected reads and writes immediately. Revoking this phone closes its current dashboard authority. |
 | Lock remote writes | In **Host and access**, choose the host lock action and confirm. | Every paired phone becomes read-only. Monitoring remains available; unlock is laptop-only. |
 
-Start a new managed session from the laptop with `codexdeck start`; the phone does
-not expose arbitrary path entry or a shell. Closing Chrome, losing phone network,
-or switching the laptop away from the HostDeck profile does not cancel Codex work.
+Start a new managed session from the laptop with `codexdeck start`. To use an
+existing eligible Codex CLI session, close its standalone client, run
+`codexdeck discover`, then run `codexdeck adopt THREAD_ID --name NAME
+--confirm-handoff`. Refresh Mission Control and use the adopted session normally.
+Its Codex thread id and history remain unchanged; HostDeck stores only bounded
+projection state. Use `codexdeck resume NAME` for the laptop TUI while managed, or
+quiet the session and run `codexdeck unmanage NAME --confirm` to remove only its
+HostDeck membership. The phone does not expose discovery, arbitrary path entry, or
+a shell. Closing Chrome, losing phone network, or switching the laptop away from
+the HostDeck profile does not cancel Codex work.
 
 ## Profile Switching
 
@@ -131,7 +138,7 @@ HostDeck user data.
 | Session state is stale or the activity stream is reconnecting | Wait for `Current` truth or use the offered safe refresh. Observe the result before sending another mutation. | HostDeck does not auto-resend prompts, controls, approvals, interrupts, archives, or device actions. |
 | A mutation result is unknown | Reopen or refresh the relevant state and determine whether the requested change occurred. | Unknown post-dispatch outcomes are not retry permission. |
 | Host compatibility says update required or incompatible | Verify the installed service uses exact Codex 0.144.0. Install or select the reviewed binary, then restart the HostDeck service and recheck status. | HostDeck does not emulate unsupported commands or dispatch through a different Codex version. |
-| No sessions appear | Start a managed session from the laptop with `codexdeck start --name ... --cwd ...`, then refresh Mission Control. | V1 has no phone file picker, shell, or arbitrary working-directory input. |
+| No sessions appear | Start a managed session with `codexdeck start --name ... --cwd ...`, or close an eligible standalone Codex CLI session and adopt its exact id with `codexdeck discover` followed by confirmed `codexdeck adopt`. Then refresh Mission Control. | Discovery and adoption are laptop-only. V1 has no phone file picker, shell, arbitrary working-directory input, transcript copy, or concurrent standalone-client takeover. |
 | Resume command cannot be copied | Confirm the page is on trusted HTTPS and allow the browser's clipboard action, then reopen **Resume on laptop**. | The command is a laptop-only handoff and may contain a private socket/thread target; do not retain it in screenshots or support logs. |
 | Phone is lost or no longer trusted | On the laptop, list devices, identify the exact bounded device id, and run confirmed revoke. Lock remote writes first when immediate global containment is needed. | Tailscale membership alone is not HostDeck authorization. |
 | Laptop sleeps, shuts down, or loses Internet | Wake and reconnect the laptop, start the user service if needed, restore the HostDeck profile, and check remote status. | V1 has no hosted relay; Codex work cannot be reached while the laptop is offline. |

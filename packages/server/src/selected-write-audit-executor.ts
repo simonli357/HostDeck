@@ -8,6 +8,8 @@ import {
   selectedAuditEventRecordSchema,
   selectedAuditTargetSchema,
   selectedAuditTrailSchema,
+  selectedNativeSessionAdoptionAuditEventRecordSchema,
+  selectedNativeSessionUnmanageAuditEventRecordSchema,
   selectedSessionStartAuditEventRecordSchema
 } from "@hostdeck/contracts";
 import {
@@ -31,7 +33,12 @@ import {
 } from "./selected-write-gate-contracts.js";
 
 export const hostDeckSelectedWriteAuditActions = Object.freeze(
-  ["session_start", ...selectedMutationOperationKinds] as const
+  [
+    "session_start",
+    "session_adopt",
+    "session_unmanage",
+    ...selectedMutationOperationKinds
+  ] as const
 );
 export type HostDeckSelectedWriteAuditAction = (typeof hostDeckSelectedWriteAuditActions)[number];
 
@@ -132,7 +139,6 @@ interface MutableCounters {
   transitionContractFailures: number;
 }
 
-const incompleteSummary = Object.freeze({ schema_version: 1 as const });
 const acceptedExecutors = new WeakSet<object>();
 const errorMessages: Record<HostDeckSelectedWriteAuditExecutorErrorCode, string> = {
   audit_preflight_failed: "Selected-write audit preflight failed before dispatch.",
@@ -295,7 +301,9 @@ class DefaultSelectedWriteAuditExecutor {
     increment(this.counters, "transitionContractFailures");
     this.recordTerminal(accepted, {
       outcome: "incomplete",
-      payload_summary: incompleteSummary,
+      payload_summary: incompleteSummaryForAction(
+        accepted.action as HostDeckSelectedWriteAuditAction
+      ),
       error_code: "internal_error"
     });
     increment(this.counters, "incompleteOperations");
@@ -474,6 +482,10 @@ function parseWriteRecord(
   const result =
     action === "session_start"
       ? selectedSessionStartAuditEventRecordSchema.safeParse(candidate)
+      : action === "session_adopt"
+        ? selectedNativeSessionAdoptionAuditEventRecordSchema.safeParse(candidate)
+        : action === "session_unmanage"
+          ? selectedNativeSessionUnmanageAuditEventRecordSchema.safeParse(candidate)
       : selectedAuditEventRecordSchema.safeParse(candidate);
   if (
     !result.success ||
@@ -489,6 +501,15 @@ function parseWriteRecord(
     result.data.payload_summary
   );
   return deepFreeze(result.data);
+}
+
+function incompleteSummaryForAction(
+  action: HostDeckSelectedWriteAuditAction
+): Readonly<Record<string, number | boolean>> {
+  if (action === "session_adopt") {
+    return Object.freeze({ schema_version: 1 as const, activation_pending: true as const });
+  }
+  return Object.freeze({ schema_version: 1 as const });
 }
 
 function proveAcceptedTrail(candidate: unknown, accepted: SelectedAuditEventRecord): void {

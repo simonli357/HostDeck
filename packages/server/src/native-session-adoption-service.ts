@@ -86,6 +86,11 @@ export interface NativeSessionAdministrationServiceOptions {
   readonly capture_branch?: (cwd: string) => string | null;
 }
 
+export interface NativeSessionAdoptionResult {
+  readonly history_turn_count: number;
+  readonly state: SelectedSessionState;
+}
+
 export interface NativeSessionAdministrationService {
   readonly discover: (
     input: unknown,
@@ -94,7 +99,7 @@ export interface NativeSessionAdministrationService {
   readonly adopt: (
     input: unknown,
     deadline: OperationDeadline
-  ) => Promise<SelectedSessionState>;
+  ) => Promise<NativeSessionAdoptionResult>;
   readonly unmanage: (
     sessionId: string,
     input: unknown,
@@ -170,7 +175,7 @@ class DefaultNativeSessionAdministrationService
   adopt(
     input: unknown,
     deadlineInput: OperationDeadline
-  ): Promise<SelectedSessionState> {
+  ): Promise<NativeSessionAdoptionResult> {
     const deadline = requireNativeDeadline(deadlineInput);
     const request = parseAdoptRequest(input);
     return runSerializedWithDeadline(
@@ -204,7 +209,7 @@ class DefaultNativeSessionAdministrationService
   private async adoptSerialized(
     request: NativeSessionAdoptRequest,
     deadline: OperationDeadline
-  ): Promise<SelectedSessionState> {
+  ): Promise<NativeSessionAdoptionResult> {
     requireNativeDeadline(deadline);
     this.assertAvailableIdentity(request);
     requireNativeDeadline(deadline);
@@ -241,7 +246,10 @@ class DefaultNativeSessionAdministrationService
       const resumed = await this.options.native.resume(request.thread_id, deadline);
       requireNativeDeadline(deadline);
       assertResumedIdentity(snapshot, resumed.thread);
-      return deepFreeze(this.options.states.require(state.state.mapping.id));
+      return deepFreeze({
+        history_turn_count: snapshot.turns.length,
+        state: this.options.states.require(state.state.mapping.id)
+      });
     } catch (error) {
       const latchError = this.markRecoveryRequired(
         state.state.mapping.id,

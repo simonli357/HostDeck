@@ -13,6 +13,12 @@ import {
   type ModelSelectionRequest,
   modelControlSnapshotSchema,
   modelSelectionRequestSchema,
+  type NativeSessionAdoptResponse,
+  type NativeSessionDiscoveryResponse,
+  type NativeSessionUnmanageResponse,
+  nativeSessionAdoptResponseSchema,
+  nativeSessionDiscoveryResponseSchema,
+  nativeSessionUnmanageResponseSchema,
   type PendingApprovalListResponse,
   type PendingApprovalResponse,
   type PlanControlSnapshot,
@@ -70,7 +76,10 @@ export function renderHelp(): string {
     "  codexdeck serve",
     "  codexdeck status [--json]",
     "  codexdeck list [--limit N] [--cursor CURSOR] [--json]",
+    "  codexdeck discover [--limit N] [--json]",
+    "  codexdeck adopt THREAD_ID --name NAME --confirm-handoff [--json]",
     "  codexdeck start --name NAME --cwd PATH [--json]",
+    "  codexdeck unmanage SESSION_ID --confirm [--json]",
     "  codexdeck archive SESSION_ID [--json]",
     "  codexdeck send SESSION_ID TEXT... [--json]",
     "  codexdeck resume SESSION_ID",
@@ -134,6 +143,82 @@ export function renderStartSession(
     `Runtime: ${response.session.runtime_source} ${escapeTerminalText(response.session.runtime_version)}`,
     ""
   ].join("\n");
+}
+
+export function renderNativeSessionDiscovery(
+  candidate: NativeSessionDiscoveryResponse,
+  json: boolean
+): string {
+  const parsed = nativeSessionDiscoveryResponseSchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw internalFailure("Native-session discovery rendering input is invalid.");
+  }
+  const response = parsed.data;
+  const lines = [`Eligible native Codex sessions: ${response.threads.length}`];
+  if (response.threads.length === 0) {
+    lines.push("", "No eligible native Codex sessions found.");
+  } else {
+    for (const thread of response.threads) {
+      lines.push(
+        "",
+        `Thread: ${escapeTerminalText(thread.thread_id)}`,
+        `CWD: ${escapeTerminalText(thread.cwd)}`,
+        `Updated: ${thread.updated_at}`,
+        `Runtime: ${escapeTerminalText(thread.runtime_version)}`,
+        `State: ${thread.status}`
+      );
+    }
+  }
+  lines.push("", `Results truncated: ${response.truncated ? "yes" : "no"}`, "");
+  const output = json
+    ? `${JSON.stringify(response, null, 2)}\n`
+    : lines.join("\n");
+  requireBoundedRender(output, "Native-session discovery");
+  return output;
+}
+
+export function renderNativeSessionAdoption(
+  candidate: NativeSessionAdoptResponse,
+  json: boolean
+): string {
+  const parsed = nativeSessionAdoptResponseSchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw internalFailure("Native-session adoption rendering input is invalid.");
+  }
+  const response = parsed.data;
+  const output = json
+    ? `${JSON.stringify(response, null, 2)}\n`
+    : [
+        `Adopted session: ${escapeTerminalText(response.session.name)}`,
+        `ID: ${escapeTerminalText(response.session.id)}`,
+        `Thread: ${escapeTerminalText(response.session.codex_thread_id)}`,
+        `State: ${response.session.session_state}`,
+        `CWD: ${escapeTerminalText(response.session.cwd)}`,
+        ""
+      ].join("\n");
+  requireBoundedRender(output, "Native-session adoption");
+  return output;
+}
+
+export function renderNativeSessionUnmanage(
+  candidate: NativeSessionUnmanageResponse,
+  json: boolean
+): string {
+  const parsed = nativeSessionUnmanageResponseSchema.safeParse(candidate);
+  if (!parsed.success) {
+    throw internalFailure("Native-session unmanage rendering input is invalid.");
+  }
+  const response = parsed.data;
+  const output = json
+    ? `${JSON.stringify(response, null, 2)}\n`
+    : [
+        `Unmanaged session: ${escapeTerminalText(response.session_id)}`,
+        `Thread: ${escapeTerminalText(response.codex_thread_id)}`,
+        `Unmanaged: ${response.unmanaged_at}`,
+        ""
+      ].join("\n");
+  requireBoundedRender(output, "Native-session unmanage");
+  return output;
 }
 
 export function renderArchiveSession(

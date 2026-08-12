@@ -66,7 +66,7 @@ describe("native session administration service", () => {
 
     const adopted = await fixture.service.adopt(adoptRequest, deadline());
 
-    expect(adopted).toMatchObject({
+    expect(adopted.state).toMatchObject({
       mapping: {
         id: "sess_native_001",
         name: "existing-work",
@@ -345,7 +345,7 @@ describe("native session administration service", () => {
       },
       deadline()
     );
-    expect(readopted.mapping.id).toBe("sess_native_002");
+    expect(readopted.state.mapping.id).toBe("sess_native_002");
     await expect(
       fixture.events.consume({
         kind: "notification",

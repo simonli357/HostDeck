@@ -63,6 +63,11 @@ import {
   hostDeckModelRouteRegistrationId
 } from "./model-routes.js";
 import {
+  type CreateHostDeckNativeSessionRouteRegistrationInput,
+  createHostDeckNativeSessionRouteRegistration,
+  hostDeckNativeSessionRouteRegistrationId
+} from "./native-session-routes.js";
+import {
   assertHostDeckPairingPolicy,
   type CreateHostDeckPairingRouteRegistrationInput,
   createHostDeckPairingRouteRegistration,
@@ -181,6 +186,7 @@ export interface HostDeckSelectedApiSessions {
   readonly managed:
     & CreateHostDeckSessionStartRouteRegistrationInput["sessions"]
     & CreateHostDeckSessionArchiveRouteRegistrationInput["sessions"];
+  readonly native: CreateHostDeckNativeSessionRouteRegistrationInput["native"];
   readonly read: CreateHostDeckSessionReadRouteRegistrationInput["sessions"];
   readonly resume: CreateHostDeckResumeRouteRegistrationInput["resume"];
   readonly subscribers: CreateHostDeckProjectionStreamRouteRegistrationInput["subscribers"];
@@ -232,6 +238,7 @@ interface ParsedComposition {
   readonly managedArchive: CreateHostDeckSessionArchiveRouteRegistrationInput["sessions"];
   readonly managedRead: CreateHostDeckPromptRouteRegistrationInput["sessions"];
   readonly managedStart: CreateHostDeckSessionStartRouteRegistrationInput["sessions"];
+  readonly native: CreateHostDeckNativeSessionRouteRegistrationInput["native"];
   readonly now: CreateHostDeckDeviceRevokeRouteRegistrationInput["now"];
   readonly observeSseError: CreateHostDeckProjectionStreamRouteRegistrationInput["observe_error"];
   readonly pairing: CreateHostDeckPairingRouteRegistrationInput["pairing"];
@@ -284,7 +291,7 @@ const runtimeKeys = [
   "sessionArchive",
   "sessionStart"
 ] as const;
-const sessionKeys = ["managed", "read", "resume", "subscribers"] as const;
+const sessionKeys = ["managed", "native", "read", "resume", "subscribers"] as const;
 const stateKeys = ["get", "listEvents", "require"] as const;
 const deviceKeys = ["list", "revoke"] as const;
 const registrationKeys = ["id", "register", "surface"] as const;
@@ -314,6 +321,11 @@ export const hostDeckSelectedApiRouteCompositionDescriptor: readonly HostDeckSel
       "session_detail"
     ]),
     descriptor(hostDeckSessionStartRouteRegistrationId, "api", ["session_start"]),
+    descriptor(hostDeckNativeSessionRouteRegistrationId, "api", [
+      "native_session_discovery",
+      "native_session_adopt",
+      "native_session_unmanage"
+    ]),
     descriptor(hostDeckProjectedEventRouteRegistrationId, "api", ["session_events"]),
     descriptor(hostDeckProjectionStreamRouteRegistrationId, "sse", ["session_event_stream"]),
     descriptor(hostDeckResumeRouteRegistrationId, "api", ["session_resume_metadata"]),
@@ -366,6 +378,17 @@ export function createHostDeckSelectedApiRouteComposition(
       lock: parsed.lock,
       runtime: parsed.runtimes.sessionStart,
       sessions: parsed.managedStart
+    }),
+    createHostDeckNativeSessionRouteRegistration({
+      admission: parsed.admission,
+      audit: parsed.audit,
+      csrf: parsed.csrf,
+      health: parsed.health,
+      lock: parsed.lock,
+      native: parsed.native,
+      state: Object.freeze({
+        require: parsed.eventState.require
+      })
     }),
     createHostDeckProjectedEventRouteRegistration({ state: parsed.eventState }),
     createHostDeckProjectionStreamRouteRegistration({
@@ -562,6 +585,11 @@ function parseCompositionInput(input: unknown): ParsedComposition {
     ["archive", "read", "start"],
     "Managed session service is invalid."
   );
+  const native = readFunctionPort(
+    sessions.native,
+    ["adopt", "discover", "unmanage"],
+    "Native session service is invalid."
+  );
   const state = readFunctionPort(values.state, stateKeys, "Selected state service is invalid.");
   const devices = readFunctionPort(values.devices, deviceKeys, "Selected device service is invalid.");
 
@@ -581,6 +609,7 @@ function parseCompositionInput(input: unknown): ParsedComposition {
     managedArchive: functionView(managed, ["archive", "read"]),
     managedRead: functionView(managed, ["read"]),
     managedStart: functionView(managed, ["start"]),
+    native,
     now: values.now,
     observeSseError: values.observeSseError,
     pairing: values.pairing,
@@ -632,9 +661,9 @@ function assertCompositionDescriptor(
   manifest: readonly SelectedApiRouteManifestEntry[]
 ): void {
   if (
-    manifest.length !== 35 ||
+    manifest.length !== 38 ||
     !Object.isFrozen(manifest) ||
-    hostDeckSelectedApiRouteCompositionDescriptor.length !== 22 ||
+    hostDeckSelectedApiRouteCompositionDescriptor.length !== 23 ||
     !Object.isFrozen(hostDeckSelectedApiRouteCompositionDescriptor)
   ) {
     throw new TypeError("Selected API route composition descriptor is invalid.");
@@ -665,10 +694,10 @@ function assertCompositionDescriptor(
     else throw new TypeError("Selected API route composition descriptor is invalid.");
   }
   if (
-    apiCount !== 21 ||
+    apiCount !== 22 ||
     sseCount !== 1 ||
-    new Set(manifestIds).size !== 35 ||
-    new Set(describedIds).size !== 35 ||
+    new Set(manifestIds).size !== 38 ||
+    new Set(describedIds).size !== 38 ||
     describedIds.length !== manifestIds.length ||
     describedIds.some((id) => !manifestIds.includes(id))
   ) {
