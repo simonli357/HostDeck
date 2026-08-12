@@ -11,7 +11,7 @@ Owns the production browser/operator boundary: loopback Fastify/SSE, Tailscale S
 - `codexdeck` is runnable after build/install and manages foreground plus unprivileged service mode.
 - Runtime/storage/stream health changes after startup and blocks unsafe mutations; proven initial Codex incompatibility remains reachable only through a mutation-closed diagnostic listener.
 
-Requirement refs: `FR-011`, `FR-012`, `FR-017`, `FR-018`, `IR-006`, `IR-008`, `NFR-001`, `NFR-002`, `NFR-005`, `NFR-009` to `NFR-012`, `PR-002` to `PR-005`, `PR-007` to `PR-012`, `SFR-001` to `SFR-008`, `SFR-012` to `SFR-018`.
+Requirement refs: `FR-011`, `FR-012`, `FR-017` to `FR-021`, `IR-006`, `IR-008`, `NFR-001`, `NFR-002`, `NFR-005`, `NFR-009` to `NFR-012`, `PR-002` to `PR-012`, `SFR-001` to `SFR-008`, `SFR-012` to `SFR-018`.
 
 ## Local Architecture
 
@@ -63,6 +63,7 @@ Local-admin CLI calls use an explicit loopback/admin authority, not a magic miss
 | Deterministic production-output foundation | `IFC-V1-021` | Complete: exact 600-source closure, 1,207 owned outputs, offline frozen dependencies, deterministic runtime/Codex/native/content identity, rollback publication, contained links/modes, and unrelated-path read-only imports/native/Fastify/failure evidence pass. |
 | Built assets, CLI binary, service-owned process, user units, lifecycle commands, uninstall, and clean parity | `IFC-V1-053` to `IFC-V1-058`, `IFC-V1-086` | Complete: the real manifest-verified dashboard assets, CLI binary, independently restartable packaged service process, exact runtime-proven user units, persistent lifecycle, safe uninstall/retention, and one no-retry clean Noble ordinary-user acceptance pass. Evidence: `artifacts/ifc-v1-058-clean-environment-parity.md`. |
 | Reopened interface hardening | `IFC-V1-091` | Complete: all `PIH-01` to `PIH-24` criteria pass with executable aggregate traceability, current L2/L3 package and service proof, accepted unchanged L4 clean-user/phone evidence, live profile noninterference, privacy inspection, and zero residue. Evidence: `artifacts/ifc-v1-091-selected-production-interface-hardening.md` and directory. Formal block-matrix completion remains owned by `REL-V1-008`. |
+| Local native session administration | `IFC-V1-110` | Reopened: loopback-only discover/adopt/unmanage routes, CLI, audit gates, production composition, and package truth are required. |
 
 Owning backlog: `docs/tracking/backlog/api-cli-control-plane.md`.
 

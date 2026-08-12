@@ -56,6 +56,9 @@ Unavailable commands fail loudly with owning task id. No placeholder command may
 
 ## Codex Compatibility Matrix
 
+- Existing-thread discovery validates exact source, root/parent/ephemeral/archive/cwd/version metadata, pagination bounds, and malformed/additive responses without exposing transcript content.
+- Bounded `thread/turns/list` plus before/after `thread/read` proves one stable adoption snapshot; exact `thread/resume` activates only the selected id.
+
 | Case | Required assertion |
 | --- | --- |
 | Supported version | Binding regeneration matches reviewed identity; handshake and required capabilities pass. |
@@ -94,6 +97,9 @@ Skills contract/adapter/control tests require one exact selected-cwd `skills/lis
 
 ## Storage And Audit Matrix
 
+- Adoption atomically commits one mapping, initial projection, visible adoption boundary, bounded recent events, and accepted/terminal audit; every injected boundary failure leaves either no mapping or one explicit recovery-required mapping.
+- Unmanage rejects active/uncertain sessions and atomically removes only HostDeck-owned mapping/projection/events for quiet sessions while the Codex thread remains readable.
+
 | Area | Cases |
 | --- | --- |
 | Migration | Empty DB, current DB, prior tmux-shaped DB, remote-ingress settings/audit/admission-proof upgrade, interrupted migration, checksum/version drift, incompatible future schema. |
@@ -108,6 +114,8 @@ Skills contract/adapter/control tests require one exact selected-cwd `skills/lis
 Permission/lease evidence also proves pure path validation before mutation, minimal state/lease bootstrap, acquisition before config/runtime/database/listener mutation, owner/type/hard-link rejection, descriptor/path-substitution detection, mode-repair reporting, idempotent release, release after each later startup failure, and child-process crash recovery against the real Linux lock implementation.
 
 ## HTTP, SSE, And Security Matrix
+
+- Discover/adopt/unmanage accept only explicit loopback local-admin requests; paired remote cookies, spoofed local headers, locked/not-ready hosts, duplicate aliases/threads, malformed ids, and response loss cannot dispatch twice or disclose unmanaged metadata.
 
 | Dimension | Required cases |
 | --- | --- |
@@ -246,7 +254,7 @@ Every cell requires native evidence. Shared contract tests may run on both runne
 
 | Scope | Minimum evidence |
 | --- | --- |
-| `FR-001` to `FR-018` | Contract plus integration; real Codex for runtime-owned semantics; UI/device where user-facing. |
+| `FR-001` to `FR-021` | Contract plus integration; real Codex for runtime-owned semantics; UI/device where user-facing. |
 | `NFR-001` to `NFR-014` | Architecture inspection, negative/resource/lifecycle/supply-chain tests, native clean release smoke. |
 | `IR-001` to `IR-012` | State/component/API tests, approved mockups, Playwright screenshots, accessibility, real phone. |
 | `DR-001` to `DR-011` | Migration/repository/transaction/retention/restart/raw-storage evidence. |

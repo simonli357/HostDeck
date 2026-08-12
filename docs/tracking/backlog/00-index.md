@@ -74,6 +74,10 @@ The `tmux-output.md` filename is retained temporarily so historical artifact lin
 | `FND-V1-100`, `FND-V1-101` | `DAT-V1-100` to `DAT-V1-104`, `INT-V1-100` to `INT-V1-105`, `IFC-V1-100` to `IFC-V1-109` | Every OS-sensitive module consumes one exact platform contract and deterministic fixtures. |
 | Native state/runtime/package leaves | `REL-V1-101` to `REL-V1-106` | Native CI and clean-host release proof follow implemented path, lock, transport, lifecycle, Tailscale, and package boundaries. |
 | `REL-V1-104`, `REL-V1-105`, `REL-V1-106`, `REL-V1-107`, `FE-V1-090` | `REL-V1-108`, then `REL-V1-006` to `REL-V1-010` | One cross-platform release candidate precedes final remote-phone aggregate and go/no-go. |
+| `INT-V1-106` exact native-thread spike | `FND-V1-102`, then `INT-V1-107` | Eligibility, history paging, resume, and independent-client behavior are observed before contracts or adapter implementation. |
+| `FND-V1-102` adoption contracts | `DAT-V1-105`, `INT-V1-107` | Storage and adapter consume one strict non-destructive membership model. |
+| `DAT-V1-105`, `INT-V1-107` | `INT-V1-108`, then `IFC-V1-110` | Atomic state and exact adapter behavior precede service orchestration and local control-plane exposure. |
+| `IFC-V1-110` complete local adoption path | `INT-V1-109` | End-to-end hardening consumes implemented contracts, persistence, runtime, API, CLI, and production composition. |
 
 ## Requirement Trace Ownership
 
@@ -83,7 +87,7 @@ The trace table is the canonical V1 completion chain. A task card may cite addit
 
 | Requirement set | Primary backlog owners |
 | --- | --- |
-| `FR-001` to `FR-018` | Foundation contracts, Codex runtime, API/CLI, dashboard according to trace rows. |
+| `FR-001` to `FR-021` | Foundation contracts, Codex runtime, API/CLI, dashboard according to trace rows. |
 | `NFR-001` to `NFR-014` | Cross-block hardening with aggregate native release proof. |
 | `IR-001` to `IR-012` | Frontend plus API/security state providers. |
 | `DR-001` to `DR-011` | Data/local state plus adapter event sources. |

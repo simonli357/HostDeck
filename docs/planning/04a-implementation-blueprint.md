@@ -37,6 +37,7 @@ Done task records remain historical evidence for their stated scope. They do not
 | Contract | Required shape/invariant | Owner |
 | --- | --- | --- |
 | `ManagedSession` | HostDeck id, alias, Codex thread id, cwd/project, optional branch, runtime version/source, archived state. Ids are immutable and distinct. | core/contracts |
+| `CodexAdoptionCandidate` | Exact thread id, bounded name/preview/project cue, cwd, exact source kind, runtime version, timestamps/status, eligibility and one bounded rejection reason. No transcript or rollout path. | contracts/codex adapter/server/CLI |
 | `SessionProjection` | Lifecycle, turn state, attention, summary, last activity, model/goal cue, last HostDeck cursor, freshness/degraded reason. | core/contracts |
 | `ProjectedEvent` | Session id, safe integer cursor, normalized kind, Codex event id/type when available, timestamp, bounded payload, redaction/truncation/boundary metadata. | contracts/storage |
 | `RuntimeCompatibility` | Codex version, generated binding identity, negotiated capabilities, check result/time, bounded incompatibility reason. | contracts/codex adapter/storage |
@@ -141,7 +142,7 @@ This foundation exposes compiled library entrypoints only. `FE-V1-010` provides 
 | --- | --- | --- | --- |
 | Runtime supervisor | Mode, Codex path, socket path, process port, clock. | Process/socket readiness and ownership. | Kills only processes it owns; service mode keeps app-server independent of HostDeck restart. |
 | Compatibility service | Bounded configured-binary probe, adapter handshake/policy, durable record, and sanitized public projection. | Supported/degraded/incompatible/unknown/disconnected/version-drift truth. | Mutation readiness requires a current exact successful compatibility result; only proven incompatibility may serve diagnostic-ready state. |
-| Session service | Codex adapter, mapping repo, projection repo. | Start/list/detail/resume/archive. | Never creates a second thread to hide an uncertain first start. |
+| Session service | Codex adapter, mapping repo, projection repo. | Start/discover/adopt/unmanage/list/detail/resume/archive. | Never creates a second thread to hide an uncertain first start; adoption/unmanage never mutate Codex history. |
 | Turn/control dispatcher | Trust, lock, compatibility, target, audit, adapter. | Accepted/rejected/terminal result. | Validation -> auth/origin/CSRF -> lock -> target/capability -> audit accepted -> dispatch -> audit terminal outcome. |
 | Approval service | Pending server requests, trust, lock, audit, adapter. | Exact approve/deny response. | At most one terminal response per request id. |
 | Projection service | Normalized runtime events, transaction, classifier. | Committed event plus updated session projection. | Publish only after durable commit and retention. |
@@ -149,6 +150,8 @@ This foundation exposes compiled library entrypoints only. `FE-V1-010` provides 
 | Trust service | Pairing/device repos, cookie/CSRF/origin/rate policy. | Read/write trust context. | Raw device token never enters JS-readable durable storage or database. |
 | Remote ingress service | Tailscale observer, persisted selected profile/external origin/Serve descriptor, bounded command runner, audit. | Disabled, ready, or unavailable remote state. | Wrong/unknown profile is observation-only; local HostDeck remains available and no company profile is changed. |
 | Host health | Storage, runtime, compatibility, projector, fanout, listener, remote ingress, lease. | Bounded local readiness plus separately generated remote-access state and a generation-bound mutation proof. | Every required local source must be explicitly ready; remote degradation cannot alter local truth or local mutation admission. |
+
+Session membership has four explicit operations. `start` creates and materializes a Codex thread. `discover` exposes only bounded metadata for eligible unmanaged persisted root CLI threads to local admin. `adopt` validates identity twice around one bounded recent-turn page, atomically persists mapping/projection/adoption boundary, then resumes the exact thread through the dedicated app-server. `unmanage` accepts only a quiet, certain session and removes HostDeck-owned state without a Codex request. Archived, ephemeral, child/subagent, incompatible, invalid-cwd, already-managed, changed-between-reads, or unconfirmed-handoff candidates reject. A separately running native client must be closed before adoption; subsequent laptop use goes through `codexdeck resume`.
 
 ### Mutable Host Health Boundary
 
@@ -201,6 +204,24 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 8. If Codex proves no thread was sent, mark the reservation failed for explicit cleanup and safe retry. A response-serialization failure after success does not retry start.
 
 ## Critical Sequences
+
+### Discover And Adopt Existing Codex Thread
+
+1. Local CLI calls the loopback-only discovery route under explicit local-admin authority.
+2. Adapter paginates a bounded recent candidate set and returns no transcript content or rollout path.
+3. User selects one exact thread id and unique HostDeck alias, then confirms the standalone client is closed.
+4. Service reads exact identity, reads one bounded recent full-turn page, and reads identity again; any id/cwd/version/archive/parent/ephemeral change rejects before persistence.
+5. Storage atomically inserts mapping, initial projection, one adoption replay boundary, and bounded normalized recent events; audit records accepted then terminal truth.
+6. Adapter resumes the exact thread through HostDeck's dedicated app-server after identity is managed, so later notifications enter the normal ordered pipeline.
+7. Activation failure after commit leaves one visible stale/recovery-required mapping and is never retried automatically.
+8. Existing Mission Control, Session Detail, and `codexdeck resume` consume that same thread id.
+
+### Unmanage Existing Codex Thread
+
+1. Local CLI targets one HostDeck session and explicitly confirms unmanage.
+2. Service rejects active, approval-pending, reconnecting, stale, or otherwise uncertain state.
+3. Storage atomically removes HostDeck projected events, projection, mapping, and owned recovery metadata with accepted/terminal audit truth.
+4. No Codex protocol mutation runs; exact read-back proves the persisted Codex thread remains available.
 
 ### Startup
 
@@ -368,6 +389,9 @@ The Fastify runtime owner therefore exposes exact `beginDrain`, `closeSse`, `clo
 | Invalid calendar timestamp or unsafe cursor | Contract rejection before persistence/dispatch. | `FND-V1-016` |
 | Two starts with same alias | One reservation succeeds; the other gets duplicate conflict. | `DAT-V1-018`, `INT-V1-005` |
 | Thread created, DB write fails | No automatic second thread; explicit recoverable/incomplete result. | `INT-V1-005` |
+| Existing-thread eligibility or identity race | Reject before mapping with one bounded reason; no copied content, mapping, or Codex mutation persists. | `INT-V1-107`, `INT-V1-108` |
+| Adoption activation fails after mapping commit | Preserve one stale/recovery-required mapping and failed/incomplete audit; no hidden rollback, fork, archive, or resume retry. | `DAT-V1-105`, `INT-V1-108` |
+| Unmanage while active or uncertain | Reject with no HostDeck deletion and no Codex request. Quiet unmanage removes only HostDeck state. | `DAT-V1-105`, `INT-V1-108` |
 | App-server disconnect after accepted mutation | Audit becomes incomplete/unknown unless a terminal event proves outcome. | `DAT-V1-023`, `INT-V1-028`, `IFC-V1-050` |
 | HostDeck restart while turn runs | Service-mode app-server continues; reconciliation restores projection or explicit boundary. | `INT-V1-030`, `IFC-V1-036`, `IFC-V1-037` |
 | Approval double tap/two clients | Exactly one response wins; loser sees resolved conflict. | `INT-V1-025`, `IFC-V1-044`, `FE-V1-022` |

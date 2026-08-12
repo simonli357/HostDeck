@@ -68,3 +68,9 @@ Owns `BLK-V1-02`: SQLite-backed local state, auth/pairing, audit, retention, con
 - Reuse: use existing production repositories, migration runner, startup reconciliation/retention, secure-path helpers, daemon lease, `better-sqlite3`, and Vitest. Add no dependency, fallback, database policy, or new abstraction unless an executable criterion exposes a root-cause gap.
 - Manual review: independently inspect migration SQL, transaction ownership, chronology, query plans, filesystem state, raw bytes, and failure boundaries. Leaf tests retain exhaustive per-repository races; the aggregate must not replace them with mocks.
 - Boundary: completion may close `BLK-V1-02`; it does not prove the Tailscale observer/manager, API/CLI orchestration, route removal, browser/phone behavior, service packaging, or release readiness.
+
+## EP-DAT-07 Native Session Membership State
+
+| ID | Status | Refs | Requires | Blocked by | Blocks | Description | Success criteria | Validation / evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DAT-V1-105` | todo | `BLK-V1-02`, `FR-020`, `FR-021`, `DR-001`, `DR-004` to `DR-008`, `DR-010`, `NFR-006`, `NFR-008`, `SFR-016`, `DEC-030` | normalized adoption contracts | `FND-V1-102` | `INT-V1-108`, `IFC-V1-110` | Add atomic adoption bootstrap, recovery-state, unmanage, and lifecycle-audit persistence. | One immediate transaction commits mapping, projection, visible adoption boundary, bounded recent events, and exact derived cursor/byte truth without requiring start recovery; duplicate identity/name and every injected boundary roll back. Quiet unmanage atomically removes only HostDeck mapping/projection/events/recovery metadata. Active/uncertain state rejects. Append-only migrations preserve prior rows/audit and accepted-only crash truth becomes explicit. | Migration/repository/failure-injection/retention/restart/raw-SQLite tests and `artifacts/dat-v1-105-native-session-membership-state.md`. |

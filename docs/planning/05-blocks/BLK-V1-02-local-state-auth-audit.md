@@ -11,7 +11,7 @@ Owns HostDeck's durable state and local filesystem safety. Codex remains the own
 - State, database, and runtime paths are owner-only and protected by one daemon lease; no Tailscale node key or reusable credential enters HostDeck storage.
 - Restart and partial failure preserve recoverable truth without raw secrets or duplicate full Codex transcripts.
 
-Requirement refs: `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-013`, `PR-009`, `SFR-006`, `SFR-007`, `SFR-014` to `SFR-016`.
+Requirement refs: `FR-020`, `FR-021`, `DR-001` to `DR-011`, `NFR-008`, `NFR-010`, `NFR-011`, `NFR-013`, `PR-009`, `SFR-006`, `SFR-007`, `SFR-014` to `SFR-016`.
 
 ## Local Design
 

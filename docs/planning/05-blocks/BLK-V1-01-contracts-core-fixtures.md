@@ -11,7 +11,7 @@ Owns the normalized HostDeck language consumed by storage, Codex adapter, API/CL
 - Deterministic fixtures cover required structured runtime, Tailscale/profile/Serve, security, replay, and mobile states.
 - Planning validation makes task/requirement/dependency drift fail in the normal check path.
 
-Requirement refs: `FR-002`, `FR-006` to `FR-009`, `FR-011` to `FR-018`, `NFR-001` to `NFR-003`, `NFR-005` to `NFR-007`, `IR-001` to `IR-012`, `DR-010`, `PR-002`, `PR-003`, `PR-005`, `PR-007`, `PR-009`, `SFR-001`, `SFR-002`, `SFR-005`, `SFR-008`, `SFR-010` to `SFR-013`, `SFR-015`, `SFR-016`, `SFR-018`.
+Requirement refs: `FR-002`, `FR-006` to `FR-009`, `FR-011` to `FR-021`, `NFR-001` to `NFR-003`, `NFR-005` to `NFR-007`, `IR-001` to `IR-012`, `DR-010`, `PR-002`, `PR-003`, `PR-005` to `PR-007`, `PR-009`, `SFR-001`, `SFR-002`, `SFR-005`, `SFR-008`, `SFR-010` to `SFR-013`, `SFR-015`, `SFR-016`, `SFR-018`.
 
 ## Local Design
 

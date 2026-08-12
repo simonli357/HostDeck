@@ -16,6 +16,7 @@ The architecture is acceptable for V1 only when all of the following are true:
 
 - One typed adapter owns every Codex protocol request, response, notification, server request, timeout, capability, and compatibility error.
 - Codex is the source of truth for threads, turns, approvals, goals, model state, and full history; HostDeck stores a bounded projection, not a competing transcript.
+- Eligible persisted root Codex CLI threads can become HostDeck-managed by durable identity reference only. Discovery/adoption/unmanage are local-admin operations, and adoption cannot overlap an independently running Codex client.
 - Foreground and user-service modes have explicit process ownership and can restart HostDeck without killing the dedicated app-server process in service mode.
 - Browser replay plus live subscription has a tested no-gap handoff, bounded queues, disconnect cleanup, heartbeat, and shutdown behavior.
 - A phone on an unrelated network reaches a trusted HTTPS origin without a public HostDeck listener, router change, or manually installed CA; remote reads and writes still require HostDeck pairing and authorization.
@@ -144,7 +145,7 @@ The TUI and HostDeck may connect to the same app-server. Multi-client correctnes
 | --- | --- | --- |
 | Full conversation, turns, items, active runtime status, goal, model, approvals | Codex/app-server | Stable thread id plus bounded projection only. |
 | Unapplied next-turn model/Plan intent | HostDeck process | Revisioned ephemeral control state only; restart drops unapplied intent and never replays it. Model has a read-back path; exact 0.144.0 has no read-only collaboration-mode endpoint, so Plan mode is `unknown` until committed settings state is rehydrated by restart reconciliation. |
-| Session alias and HostDeck-managed membership | HostDeck | `managed_sessions`. |
+| Session alias and HostDeck-managed membership, whether started or adopted | HostDeck | `managed_sessions`; membership never changes the Codex thread identity or transcript. |
 | Attention, recent summary, last HostDeck cursor | HostDeck projection derived from Codex events | `session_projection`. Recomputable and marked stale when disconnected. |
 | Device trust, lock, selected remote origin/profile comparison identity and desired ingress mode | HostDeck | Auth/settings repositories. Raw Tailscale login, company profile details, and node keys are not retained. |
 | Active Tailscale profile/device state, Serve configuration, HTTPS certificate and network path | Tailscale | Observed through bounded adapter snapshots only; Tailscale remains authoritative. |
@@ -173,7 +174,8 @@ Exact 0.144.0 may emit bounded notifications after the successful initialize res
 
 | Product action | App-server operation class | HostDeck rule |
 | --- | --- | --- |
-| Start/list/read/resume/archive | Thread methods | Store and target stable thread id. Arbitrary import is rejected. |
+| Start/list/read/resume/archive | Thread methods | Store and target stable thread id. |
+| Discover/adopt/unmanage | Bounded thread list/read/turn-page/resume plus HostDeck mapping operations | Discover only eligible persisted root CLI threads. Revalidate exact identity/cwd/version around a bounded history read; require explicit closed-client handoff; add/remove only HostDeck membership. Never copy, rename, fork, archive, delete, or take over an independently running client. |
 | Prompt | `turn/start`; `turn/steer` only after matching `turn/started` | Response means accepted, not yet steerable. Exact thread/turn plus client message id; stale/early steer rejects. |
 | Interrupt | Turn interrupt | Never reported as archive or completion. |
 | Model | Model list plus `turn/start.model`/`effort` | UI choices come from the bounded live runtime catalog. Exact model/effort and pending revision remain separate from confirmed current state until matching settings or later read-back; loaded `thread/resume.model` is not a selection control. |
@@ -216,7 +218,7 @@ Same-origin route families:
 | Family | Operations | Authorization |
 | --- | --- | --- |
 | Health/runtime | Liveness, readiness, bounded host/runtime status. | Liveness reveals no sensitive state; detailed status is loopback local or paired. |
-| Sessions | Start, list, detail, projected events, stream, resume metadata, interrupt, archive. | Remote reads require admitted Serve ingress plus pairing; mutations require write permission and unlocked host. |
+| Sessions | Start, local discover/adopt/unmanage, list, detail, projected events, stream, resume metadata, interrupt, archive. | Discovery/adoption/unmanage require loopback local-admin authority and an unlocked/ready host. Remote reads require admitted Serve ingress plus pairing; other mutations require write permission and unlocked host. |
 | Controls | Prompt, model, goal, plan, usage, compact, skills. | One thread, write permission where mutating, capability check, audit. |
 | Approvals | Read pending projected approval and approve/deny exact request. | Write permission, unlocked host, pending request, confirmation policy, audit. |
 | Access | Pair claim, CSRF bootstrap/rotate, security state, device list/revoke, lock. | Rate-limited; local-admin restrictions for unlock and broad device administration as specified. |
@@ -341,6 +343,9 @@ The lease prevents cooperating HostDeck daemons from sharing one state directory
 | Unsupported/stopped Tailscale, wrong profile, or missing/drifted Serve entry | Keep local work available, mark remote ingress unavailable, reject remote-readiness claims, and never auto-switch or mutate an unowned profile/configuration. |
 | Proxy/origin/permission failure | Reject the request before data, credential, audit success, or dispatch. Never trust generic forwarding headers or downgrade to direct LAN/plaintext. |
 | Partial session start | Reconcile returned thread id if created; persist a recoverable failed mapping or archive the created empty thread according to tested compensation. |
+| Adoption identity/version/cwd changes during bounded read | Reject before mapping; retain no copied content or success audit. |
+| Adoption resume fails after mapping commit | Keep one explicit stale/recovery-required managed mapping and terminal failed/incomplete audit; never create, fork, archive, delete, or auto-retry a Codex thread. |
+| Unmanage conflicts with active/uncertain work | Reject without deleting HostDeck or Codex state. Quiet confirmed unmanage atomically removes only HostDeck mapping/projection/events. |
 | Response serialization failure after mutation | Record unknown client delivery with operation id; do not repeat mutation automatically. |
 
 ## Migration From Current Code
@@ -365,6 +370,7 @@ No stored tmux session is silently converted to a Codex thread. Existing rows re
 | `SPK-SEC-001` / `IFC-V1-015` | Which local HTTPS certificate enrollment works on supported phone browsers? | Historical complete evidence in `artifacts/ifc-v1-015-https-phone-enrollment.md`; superseded for selected V1 by `DEC-027`. | Optional direct-LAN work only. |
 | `SPK-NET-001` / `IFC-V1-070` | What exact supported Tailscale version/profile/Serve behavior, request metadata, non-root control, config coexistence, SSE behavior, and switch persistence can V1 depend on? | Redacted real-client/profile-switch/Serve/phone spike with exact commands, config diffs, header captures, failure cases, and no company-profile mutation. | Remote contracts, storage, adapter, ingress trust, CLI, UI states, and release matrix. |
 | `SPK-PLAT-001` / `INT-V1-100` | Does exact Codex 0.144.0 on Windows satisfy authenticated loopback WebSocket, required capabilities, multi-client, TUI resume, and secret-boundary requirements? | No-model Windows-native capture with auth rejection/acceptance, handshake, resume, process/listener/token inspection, and cleanup. | Windows transport, supervisor, lifecycle, package, and release evidence. |
+| `INT-V1-107` | Can exact 0.144.0 expose and resume an eligible persisted native CLI thread without changing identity/history or overlapping an independently running client? | Deterministic protocol capture plus real no-model closed-client handoff, bounded turn page, exact resume, unchanged read-back, and cleanup. | Adoption adapter, service, API/CLI, and hardening. |
 
 ## External References
 

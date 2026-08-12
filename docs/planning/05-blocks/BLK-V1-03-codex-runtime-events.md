@@ -5,12 +5,12 @@ Owns the selected Codex boundary: dedicated app-server process, private Unix tra
 ## Outcome
 
 - HostDeck controls supported Codex through generated, version-checked app-server contracts rather than TUI text.
-- One dedicated runtime supports multiple managed threads plus a normal laptop TUI client.
+- One dedicated runtime supports multiple new or non-destructively adopted managed threads plus a normal laptop TUI client.
 - Real events drive durable projections, attention, controls, approvals, and replay.
 - HostDeck/app-server restart and uncertain outcomes are honest and recoverable.
 - The executable legacy tmux runtime is removed after structured-path acceptance; published legacy data remains inert and explicitly administrable.
 
-Requirement refs: `FR-001`, `FR-003` to `FR-009`, `FR-013` to `FR-018`, `NFR-002`, `NFR-005` to `NFR-007`, `NFR-010`, `NFR-012`, `PR-001`, `PR-006`, `PR-007`, `PR-010`, `SFR-010`, `SFR-011`.
+Requirement refs: `FR-001`, `FR-003` to `FR-009`, `FR-013` to `FR-021`, `NFR-002`, `NFR-005` to `NFR-007`, `NFR-010`, `NFR-012`, `PR-001`, `PR-006`, `PR-007`, `PR-010`, `SFR-010`, `SFR-011`.
 
 ## Local Architecture
 
@@ -18,7 +18,7 @@ Requirement refs: `FR-001`, `FR-003` to `FR-009`, `FR-013` to `FR-018`, `NFR-002
 | --- | --- | --- |
 | Runtime supervisor | Start/await dedicated app-server and private socket according to foreground/service ownership. | Missing/incompatible binary, socket collision, crash loop, wrong owner/mode. |
 | IPC adapter | `ws+unix:` connection, initialize handshake, request broker, frame/message validation, reconnect. | Timeout, malformed/unknown required message, overload, disconnect/incomplete mutation. |
-| Thread service port | Start/list/read/archive and stable id mapping. | Duplicate alias, uncertain partial start, missing/archived thread. |
+| Thread service port | Start/discover/adopt/unmanage/list/read/archive and stable id mapping. | Duplicate alias, uncertain partial start/adoption, ineligible or changed native thread, active unmanage, missing/archived thread. |
 | Turn/control port | Prompt/steer/interrupt/model/goal/plan/usage/compact/skills. | Unsupported capability, active-turn conflict, unknown outcome. |
 | Approval router | Pending server request registration and exact response. | Duplicate/expired/superseded/connection-generation mismatch. |
 | Event pipeline | Identity-gate unmanaged TUI notifications, normalize managed runtime events, and serialize durable projection/publication. | Unknown required semantic, malformed managed payload/order, mapping race, bounded-capacity exhaustion, storage/publication failure. |
@@ -31,6 +31,7 @@ Requirement refs: `FR-001`, `FR-003` to `FR-009`, `FR-013` to `FR-018`, `NFR-002
 - Safe approval approve/deny/duplicate/expiry.
 - Interrupt distinct from completion/archive.
 - TUI resume of the exact thread on the same Unix socket while HostDeck is connected.
+- Native CLI thread discovery, closed-client adoption by unchanged id, bounded history boundary, HostDeck prompt/stream, restart, shared TUI resume, and non-destructive unmanage/read-back.
 - HostDeck-only restart, app-server crash/restart, event gap/boundary, and persisted-thread recovery.
 - Bounded request/frame/in-flight/reconnect behavior.
 
@@ -56,6 +57,7 @@ No fake-Codex or fake-tmux test can satisfy these gates.
 | Aggregate runtime lifecycle acceptance | `INT-V1-032` | Done: fixed deterministic plus exact 0.144.0 subprocess matrix passes ownership/reconnect/crash/restart/TUI/integrity/privacy/cleanup acceptance with no retry. |
 | Legacy tmux disposition | `INT-V1-008` | Done: package/runtime/CLI reachability is removed, migration data stays inert, and bounded confirmed local reset is proven. |
 | Reopened runtime hardening | `INT-V1-091` | Done: fixed deterministic and exact structured/lifecycle evidence is commit-bound, privacy-bounded, no-retry, and cleanup-complete. |
+| Native thread interoperability | `INT-V1-106` to `INT-V1-109` | Reopened: exact spike, adapter, service, and end-to-end hardening are required. |
 
 Owning backlog: `docs/tracking/backlog/tmux-output.md` (filename retained to preserve historical links; title/scope are rebaselined).
 
