@@ -116,7 +116,7 @@ export function appendSessionDetailEvent(
   if (
     state.lastCursor !== null &&
     acceptedEvent.type === "replay_boundary" &&
-    acceptedEvent.after !== state.lastCursor
+    (acceptedEvent.after === null || acceptedEvent.after < state.lastCursor)
   ) {
     throw new TypeError("HostDeck Session Detail received an inconsistent boundary.");
   }

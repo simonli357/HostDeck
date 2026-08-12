@@ -245,7 +245,7 @@ describe("bounded browser SSE client", () => {
     });
     await settle();
     reader.pushText(
-      eventFrame(boundaryEvent(9, 5, "retention")) +
+      eventFrame(boundaryEvent(9, 8, "retention")) +
         eventFrame(messageEvent(10, "after boundary"))
     );
     await waitFor(() => connection.snapshot().cursor === 10);
@@ -254,7 +254,7 @@ describe("bounded browser SSE client", () => {
       transport: "https",
       continuity: "boundary",
       boundary: {
-        after: 5,
+        after: 8,
         cursor: 9,
         reason: "retention"
       }
@@ -266,6 +266,70 @@ describe("bounded browser SSE client", () => {
     expect(connection.snapshot()).toMatchObject({
       cursor: 10,
       continuity: "boundary",
+      failure: { reason: "invalid_event" }
+    });
+  });
+
+  it("accepts a forward replay boundary after reconnecting from a committed cursor", async () => {
+    const clock = new ManualClock();
+    const firstReader = new ControlledReader();
+    const secondReader = new ControlledReader();
+    const delivered: number[] = [];
+    const paths: string[] = [];
+    let attempt = 0;
+    const connection = createBrowserSseClient({
+      origin,
+      clock: clock.port,
+      fetch: async (path) => {
+        paths.push(path);
+        attempt += 1;
+        return sseResponse(attempt === 1 ? firstReader : secondReader);
+      }
+    }).connect({
+      sessionId,
+      after: 5,
+      onEvent(event) {
+        delivered.push(event.cursor);
+      }
+    });
+    await settle();
+    firstReader.pushText(eventFrame(messageEvent(6)));
+    await waitFor(() => connection.snapshot().cursor === 6);
+    firstReader.end();
+    await waitFor(() => connection.snapshot().phase === "reconnecting");
+    clock.advance(500);
+    await waitFor(() => paths.length === 2);
+
+    secondReader.pushText(
+      eventFrame(boundaryEvent(30, 29, "restart")) +
+        eventFrame(messageEvent(31, "after restart"))
+    );
+    await waitFor(() => connection.snapshot().cursor === 31);
+    expect(paths).toEqual([
+      `/api/v1/sessions/${sessionId}/events/stream?after=5`,
+      `/api/v1/sessions/${sessionId}/events/stream?after=6`
+    ]);
+    expect(delivered).toEqual([6, 30, 31]);
+    expect(connection.snapshot()).toMatchObject({
+      phase: "connected",
+      continuity: "boundary",
+      boundary: { after: 29, cursor: 30, reason: "restart" },
+      failure: null
+    });
+    connection.close();
+  });
+
+  it("rejects a replay boundary behind the committed cursor", async () => {
+    const reader = new ControlledReader();
+    const connection = createBrowserSseClient({
+      origin,
+      fetch: async () => sseResponse(reader)
+    }).connect({ sessionId, after: 5, onEvent() {} });
+    await settle();
+    reader.pushText(eventFrame(boundaryEvent(9, 4, "retention")));
+    await waitFor(() => connection.snapshot().phase === "failed");
+    expect(connection.snapshot()).toMatchObject({
+      cursor: 5,
       failure: { reason: "invalid_event" }
     });
   });

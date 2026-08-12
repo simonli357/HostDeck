@@ -1700,7 +1700,7 @@ function validateEventContinuity(
     if (
       attempt.eventCount !== 0 ||
       runtime.boundary !== null ||
-      event.after !== current ||
+      (current !== null && (event.after === null || event.after < current)) ||
       (current === null && event.cursor < 1)
     ) {
       throw new AttemptFailure("invalid_event", false);

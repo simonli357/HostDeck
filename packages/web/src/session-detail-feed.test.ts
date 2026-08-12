@@ -76,6 +76,18 @@ describe("Session Detail feed reducer", () => {
       appendSessionDetailEvent(state, boundaryEvent(30, "restart", 9))
     ).toThrow(/boundary/u);
   });
+
+  it("accepts a retention boundary that advances beyond the last observed cursor", () => {
+    let state = appendSessionDetailEvent(
+      createSessionDetailFeed(sessionId),
+      activityEvent(10)
+    );
+    state = appendSessionDetailEvent(state, boundaryEvent(20, "retention", 19));
+    state = appendSessionDetailEvent(state, activityEvent(21));
+
+    expect(state.events.map((event) => event.cursor)).toEqual([10, 20, 21]);
+    expect(state.lastCursor).toBe(21);
+  });
 });
 
 describe("Session Detail timeline projection", () => {
