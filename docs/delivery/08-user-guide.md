@@ -77,8 +77,9 @@ existing eligible Codex CLI session, close its standalone client, run
 `codexdeck discover`, then run `codexdeck adopt THREAD_ID --name NAME
 --confirm-handoff`. Refresh Mission Control and use the adopted session normally.
 Its Codex thread id and history remain unchanged; HostDeck stores only bounded
-projection state. Use `codexdeck resume NAME` for the laptop TUI while managed, or
-quiet the session and run `codexdeck unmanage NAME --confirm` to remove only its
+projection state. Use the returned session id with `codexdeck resume SESSION_ID`
+for the laptop TUI while managed, or quiet the session and run
+`codexdeck unmanage SESSION_ID --confirm` to remove only its
 HostDeck membership. The phone does not expose discovery, arbitrary path entry, or
 a shell. Closing Chrome, losing phone network, or switching the laptop away from
 the HostDeck profile does not cancel Codex work.

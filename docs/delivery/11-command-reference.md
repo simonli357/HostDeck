@@ -59,9 +59,9 @@ tailscale switch HOSTDECK_PROFILE_ID
 ~/.local/bin/codexdeck start --name "Session name" --cwd /absolute/project/path
 ~/.local/bin/codexdeck list
 ~/.local/bin/codexdeck discover --limit 20
-~/.local/bin/codexdeck adopt THREAD_ID --name "Session name" --confirm-handoff
-~/.local/bin/codexdeck resume "Session name"
-~/.local/bin/codexdeck unmanage "Session name" --confirm
+~/.local/bin/codexdeck adopt THREAD_ID --name existing-work --confirm-handoff
+~/.local/bin/codexdeck resume SESSION_ID
+~/.local/bin/codexdeck unmanage SESSION_ID --confirm
 ~/.local/bin/codexdeck devices --limit 20
 ~/.local/bin/codexdeck revoke DEVICE_ID --confirm
 ~/.local/bin/codexdeck lock
