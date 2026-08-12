@@ -4,6 +4,7 @@ import {
   nativeCodexAdoptionSnapshotSchema,
   nativeCodexThreadIdentitySchema,
   nativeSessionAdoptRequestSchema,
+  nativeSessionContractLimits,
   nativeSessionDiscoveryRequestSchema,
   nativeSessionDiscoveryResponseSchema,
   nativeSessionUnmanageRequestSchema,
@@ -20,6 +21,16 @@ const threadId = "019ff711-d30a-7c92-98dc-6d770ccb6218";
 const operationId = "op_native_session_contract_0001";
 
 describe("native Codex session contracts", () => {
+  it("freezes bounded discovery and history defaults", () => {
+    expect(nativeSessionContractLimits).toEqual({
+      discoveryDefaultLimit: 50,
+      discoveryLimit: 100,
+      historyTurns: 20,
+      messagesPerTurn: 64,
+      messageTextLength: 12_000
+    });
+    expect(Object.isFrozen(nativeSessionContractLimits)).toBe(true);
+  });
   it("accepts only a quiet persisted root CLI identity without path or preview disclosure", () => {
     const identity = nativeIdentity();
     expect(nativeCodexThreadIdentitySchema.parse(identity)).toEqual(identity);

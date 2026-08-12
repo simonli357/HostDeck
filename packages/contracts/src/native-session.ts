@@ -16,6 +16,7 @@ import {
 } from "./selected-runtime.js";
 
 export const nativeSessionContractLimits = Object.freeze({
+  discoveryDefaultLimit: 50,
   discoveryLimit: 100,
   historyTurns: 20,
   messagesPerTurn: 64,

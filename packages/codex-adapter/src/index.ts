@@ -93,6 +93,15 @@ export {
   createCodexModelClient
 } from "./model-client.js";
 export {
+  type CodexNativeSessionClient,
+  type CodexNativeSessionClientOptions,
+  type CodexNativeSessionErrorCode,
+  type CodexNativeSessionRequestPort,
+  type CodexNativeSessionResumeResult,
+  createCodexNativeSessionClient,
+  HostDeckCodexNativeSessionError
+} from "./native-session-client.js";
+export {
   type CodexPlanCatalog,
   type CodexPlanClient,
   type CodexPlanClientOptions,
