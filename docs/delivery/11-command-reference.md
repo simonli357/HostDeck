@@ -206,6 +206,7 @@ HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-supervisor
 HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-restart
 HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-tui-coexistence
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:codex-lifecycle
+HOSTDECK_REQUIRE_NATIVE_SESSION_INTEROPERABILITY_SMOKE=1 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm exec vitest run packages/cli/src/native-session-interoperability.smoke.test.ts
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:executable-serve
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/unsupported-codex)" HOSTDECK_EXPECT_DIAGNOSTIC=1 pnpm smoke:executable-serve
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:service-host
@@ -214,6 +215,8 @@ HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:s
 ```
 
 `HOSTDECK_EXPECT_DIAGNOSTIC=1` is validation-only. It requires a valid Codex semver different from the reviewed version and proves the packaged listener remains read-only and reachable without app-server admission; ordinary HostDeck startup never reads this variable.
+
+The native-session interoperability smoke is model-backed. It requires `tmux` and an authenticated Codex home, copies only authentication into a private temporary Codex home, and removes its isolated runtime, state, project, and transcript data during cleanup.
 
 ## Regenerate Reviewed Codex Binding
 

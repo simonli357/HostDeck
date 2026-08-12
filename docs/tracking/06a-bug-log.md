@@ -87,6 +87,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 | BUG-079 | Production route ports detach class methods from their owning service, so managed session start fails before dispatch with `internal_error`. | Critical | Release blocker | Closed | `IFC-V1-082` / `IFC-V1-040` | Pushed `793e69b` and `08c210f`; focused 94 tests, typecheck, planning/runtime gates, deterministic build, standalone package verification, live upgrade, one successful managed session, zero recovery rows, and paired-phone `Current`/`Ready to send` inspection pass. |
 | BUG-080 | An accepted paired-phone prompt reports failure and delegated child completion stops parent projection. | Critical | Release blocker | Closed | `IFC-V1-041` / `INT-V1-017` / `FE-V1-020` | `0.0.3` paired-phone send produced one accepted/succeeded dashboard operation, live user/agent output, and terminal current/quiet truth without retry. |
 | BUG-081 | Browser SSE rejects a valid forward replay boundary when retained history begins after its requested cursor. | Critical | Release blocker | Closed | `FE-V1-023` / `FE-V1-012` | Pushed `8230f5b`; focused 40 tests, complete 909-test web suite, clean package verification, preserved-state upgrade, and paired-phone live-stream evidence pass. |
+| BUG-082 | A newly adopted native session makes Mission Control unavailable because its valid initial replay boundary is rejected as corrupt retained state. | Critical | Backlog bugfix | Closed | `INT-V1-109` | Fixed in `76f5016`; public list/detail regressions, full suites, and the exact 0.144.0 phone-read lifecycle pass. |
 
 ## Routing
 
@@ -1050,3 +1051,12 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Root cause: both browser continuity layers required replay-boundary `after` to equal the browser's stale requested cursor. The server correctly returns its newer durable retention floor when unavailable history lies between them.
 - Fix: accept a first boundary whose `after` is at or ahead of the committed browser cursor; continue rejecting null, backward, repeated, or mid-attempt boundaries and ordinary unmarked gaps.
 - Current state: closed in pushed `8230f5b` and installed `0.0.3` from source commit `acb27b0`. Exact paired-browser capture reproduced request `after=15` and valid boundary `after=29`, cursor `30`. Focused 40 tests, all 909 web tests, web typecheck, deterministic 6,293-entry package build and independent verification pass. After preserved-state upgrade, the paired phone displayed `Current`, retained the restart boundary, enabled the composer, streamed one exact phone prompt through completion, and showed no prompt or stream failure.
+
+### BUG-082 Initial Adoption Boundary Rejected By Public Reads
+
+- Symptom: adopting a native Codex thread succeeds, but `/api/v1/sessions` and Session Detail fail closed, so the phone reports Mission Control unavailable.
+- Impact: an adopted existing session cannot be used from HostDeck even though its mapping and projected history are valid.
+- Route: critical backlog bugfix owned by `INT-V1-109`; no contract or UI change.
+- Root cause: adoption correctly stores a replay boundary at cursor 1 with no retention floor, while the public read repository incorrectly required every null-floor window to contain zero replay boundaries.
+- Fix: accept exactly one initial boundary only as the first event, preserve strict cursor/count/byte checks, admit a valid boundary-only retained window, and continue rejecting non-first or duplicate boundaries.
+- Current state: closed in `76f5016`. Direct list/detail regressions and the exact 0.144.0 adoption aggregate prove authenticated phone-facing list, detail, event page, and SSE reads before and after HostDeck restart.
