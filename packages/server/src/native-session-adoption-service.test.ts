@@ -106,6 +106,55 @@ describe("native session administration service", () => {
     ]);
   });
 
+  it("adopts a top-level user fork and preserves interrupted-turn truth", async () => {
+    const fixture = createFixture();
+    const forkedFromId = "0197f000-fork-source-thread" as never;
+    const turn = fixture.native.snapshot.turns[0];
+    if (turn === undefined) throw new Error("Native adoption fixture is missing its turn.");
+    fixture.native.snapshot = {
+      ...fixture.native.snapshot,
+      thread: { ...fixture.native.snapshot.thread, forked_from_id: forkedFromId },
+      turns: [{ ...turn, status: "interrupted", completed_at: null }]
+    };
+
+    await expect(fixture.service.adopt(adoptRequest, deadline())).resolves.toMatchObject({
+      state: { mapping: { codex_thread_id: threadId } }
+    });
+    expect(fixture.native.resumeCalls).toEqual([threadId]);
+    expect(fixture.states.listEvents("sess_native_001").events.at(-1)).toMatchObject({
+      type: "turn",
+      state: "interrupted",
+      upstream_at: null
+    });
+  });
+
+  it("latches recovery when fork provenance changes during activation", async () => {
+    const fixture = createFixture();
+    fixture.native.snapshot = {
+      ...fixture.native.snapshot,
+      thread: {
+        ...fixture.native.snapshot.thread,
+        forked_from_id: "0197f000-original-fork-source" as never
+      }
+    };
+    fixture.native.resumeOperation = async () => ({
+      thread: {
+        ...fixture.native.snapshot.thread,
+        forked_from_id: "0197f001-changed-fork-source" as never
+      },
+      runtime_model: "gpt-5.5-codex",
+      reasoning_effort: "high"
+    });
+
+    await expectServiceError(
+      fixture.service.adopt(adoptRequest, deadline()),
+      "recovery_required"
+    );
+    expect(fixture.states.require("sess_native_001").mapping.disposition).toBe(
+      "recovery_required"
+    );
+  });
+
   it("serializes adoption races so one exact thread mapping wins without duplicate resume", async () => {
     const fixture = createFixture();
     const second = { ...adoptRequest, operation_id: "op_native_adopt_0002", name: "other-alias" };

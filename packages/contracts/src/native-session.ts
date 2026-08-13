@@ -19,6 +19,7 @@ export const nativeSessionContractLimits = Object.freeze({
   discoveryDefaultLimit: 50,
   discoveryLimit: 100,
   historyTurns: 20,
+  historyItemsPerTurn: 1_024,
   messagesPerTurn: 64,
   messageTextLength: 12_000
 });
@@ -42,7 +43,7 @@ export const nativeCodexThreadIdentitySchema = z
     archived: z.literal(false),
     ephemeral: z.literal(false),
     parent_thread_id: z.null(),
-    forked_from_id: z.null(),
+    forked_from_id: codexThreadIdSchema.nullable(),
     history_mode: z.enum(["legacy", "paginated"])
   })
   .strict()
@@ -122,12 +123,15 @@ export const nativeCodexHistoryTurnSchema = z
     turn_id: codexTurnIdSchema,
     status: z.enum(["completed", "interrupted", "failed"]),
     started_at: isoTimestampSchema,
-    completed_at: isoTimestampSchema,
+    completed_at: isoTimestampSchema.nullable(),
     messages: z.array(nativeCodexHistoryMessageSchema).max(nativeSessionContractLimits.messagesPerTurn)
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.completed_at < value.started_at) {
+    if (value.status !== "interrupted" && value.completed_at === null) {
+      context.addIssue({ code: "custom", message: "Completed and failed native Codex turns require a completion timestamp." });
+    }
+    if (value.completed_at !== null && value.completed_at < value.started_at) {
       context.addIssue({ code: "custom", message: "Native Codex turn completion cannot precede its start." });
     }
     if (new Set(value.messages.map((message) => message.item_id)).size !== value.messages.length) {
@@ -162,7 +166,7 @@ export const nativeCodexAdoptionSnapshotSchema = z
           path: ["turns", turnIndex]
         });
       }
-      priorCompletedAt = turn.completed_at;
+      priorCompletedAt = turn.completed_at ?? turn.started_at;
       for (const [messageIndex, message] of turn.messages.entries()) {
         if (itemIds.has(message.item_id)) {
           context.addIssue({

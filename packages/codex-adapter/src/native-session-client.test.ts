@@ -18,7 +18,12 @@ describe("native Codex session adapter", () => {
   it("discovers only bounded eligible metadata in deterministic order", async () => {
     const privateSentinels = ["private-preview", "private-rollout", "private-origin", "private-title"];
     let pageNumber = 0;
+    const exact = new Map<string, Record<string, unknown>>();
     const port = fakePort((request) => {
+      if (request.method === "thread/read") {
+        const threadId = (request.params as { threadId: string }).threadId;
+        return { thread: exact.get(threadId) };
+      }
       expect(request.method).toBe("thread/list");
       expect(request.kind).toBe("read");
       expect(request.params).toEqual({
@@ -32,7 +37,7 @@ describe("native Codex session adapter", () => {
       });
       pageNumber += 1;
       if (pageNumber === 1) {
-        return page([
+        const candidates = [
           rawThread({
             id: threadB,
             updatedAt: unixSeconds("2026-08-12T14:30:00.000Z"),
@@ -43,13 +48,18 @@ describe("native Codex session adapter", () => {
           }),
           rawThread({ id: "0198a003-active", status: { type: "active", activeFlags: [] } }),
           rawThread({ id: "0198a004-invalid-cwd", cwd: "relative/private" })
-        ], "page-2", "back-1");
+        ];
+        exact.set(threadB, candidates[0] as Record<string, unknown>);
+        return page(candidates, "page-2", "back-1");
       }
-      return page([
+      const candidates = [
         rawThread({ id: threadA, updatedAt: unixSeconds("2026-08-12T14:30:00.000Z") }),
         rawThread({ id: "0198a005-ephemeral", ephemeral: true }),
         rawThread({ id: "0198a006-version", cliVersion: "0.143.0" })
-      ], null, "back-2");
+      ];
+      exact.set(threadA, candidates[0] as Record<string, unknown>);
+      exact.set("0198a006-version", candidates[2] as Record<string, unknown>);
+      return page(candidates, null, "back-2");
     });
     const result = await createCodexNativeSessionClient(port, {
       page_size: 3,
@@ -85,17 +95,52 @@ describe("native Codex session adapter", () => {
     expect(Object.isFrozen(result)).toBe(true);
     expect(Object.isFrozen(result.threads)).toBe(true);
     expect(Object.isFrozen(result.threads[0])).toBe(true);
-    expect(port.requests).toHaveLength(2);
+    expect(port.requests.map(({ method }) => method)).toEqual([
+      "thread/list",
+      "thread/read",
+      "thread/list",
+      "thread/read",
+      "thread/read"
+    ]);
   });
 
   it("accepts a strict quiet CLI history written by a different Codex version", async () => {
-    const client = createCodexNativeSessionClient(
-      fakePort(() => page([rawThread({ cliVersion: "0.146.0" })], null, "back"))
-    );
+    const thread = rawThread({ cliVersion: "0.146.0" });
+    const client = createCodexNativeSessionClient(fakePort((request) =>
+      request.method === "thread/read" ? { thread } : page([thread], null, "back")
+    ));
 
     await expect(client.discover()).resolves.toMatchObject({
       threads: [{ thread_id: threadA, runtime_version: "0.146.0" }]
     });
+  });
+
+  it("accepts a quiet top-level user fork while retaining its provenance", async () => {
+    const forkedFromId = "0198a006-fork-source";
+    const listed = rawThread();
+    const exact = rawThread({ forkedFromId });
+    const client = createCodexNativeSessionClient(fakePort((request) =>
+      request.method === "thread/read" ? { thread: exact } : page([listed], null, "back")
+    ));
+
+    await expect(client.discover()).resolves.toMatchObject({
+      threads: [{ thread_id: threadA, forked_from_id: forkedFromId, parent_thread_id: null }]
+    });
+  });
+
+  it("excludes a parent thread revealed only by exact metadata", async () => {
+    const listed = rawThread();
+    const exact = rawThread({ parentThreadId: "0198a000-parent-thread" });
+    const port = fakePort((request) =>
+      request.method === "thread/read" ? { thread: exact } : page([listed], null, "back")
+    );
+
+    await expect(createCodexNativeSessionClient(port).discover()).resolves.toEqual({
+      limit: nativeSessionContractLimits.discoveryDefaultLimit,
+      threads: [],
+      truncated: false
+    });
+    expect(port.requests.map(({ method }) => method)).toEqual(["thread/list", "thread/read"]);
   });
 
   it("excludes every reviewed ineligible native-thread class", async () => {
@@ -103,7 +148,6 @@ describe("native Codex session adapter", () => {
       rawThread({ id: "thread-archived-simulation", status: { type: "systemError" } }),
       rawThread({ id: "thread-ephemeral", ephemeral: true }),
       rawThread({ id: "thread-child", parentThreadId: "parent-thread" }),
-      rawThread({ id: "thread-fork", forkedFromId: "source-thread" }),
       rawThread({ id: "thread-subagent", source: { subAgent: "review" } }),
       rawThread({ id: "thread-agent-role", agentRole: "reviewer" }),
       rawThread({ id: "thread-invalid-cwd", cwd: "not/absolute" })
@@ -141,7 +185,11 @@ describe("native Codex session adapter", () => {
     await expectAdapterError(pageOverflow.discover(), "broker_overloaded");
 
     const entryOverflow = createCodexNativeSessionClient(
-      fakePort(() => page([rawThread(), rawThread({ id: threadB })], null, "back")),
+      fakePort((request) =>
+        request.method === "thread/read"
+          ? { thread: rawThread() }
+          : page([rawThread(), rawThread({ id: threadB })], null, "back")
+      ),
       { max_entries: 1 }
     );
     await expectAdapterError(entryOverflow.discover(), "broker_overloaded");
@@ -267,6 +315,47 @@ describe("native Codex session adapter", () => {
         items: [agentMessage("item-one", "one", null), agentMessage("item-two", "two", null)]
       })]), { max_history_items_per_turn: 1 }).readAdoptionSnapshot(threadA),
       "broker_overloaded"
+    );
+  });
+
+  it("projects a bounded contiguous suffix from mature and interrupted turns", async () => {
+    const manyMessages = Array.from({ length: nativeSessionContractLimits.messagesPerTurn + 3 }, (_, index) =>
+      agentMessage(`item-message-${index}`, `answer-${index}`, null)
+    );
+    const matureItems = [
+      ...Array.from({ length: 612 }, (_, index) => ({
+        type: "fileChange",
+        id: `item-file-${index}`,
+        changes: [],
+        status: "completed"
+      })),
+      ...manyMessages
+    ];
+    const port = adoptionPort([
+      rawTurn({
+        id: "turn-newest",
+        status: "interrupted",
+        completedAt: null,
+        items: matureItems
+      }),
+      rawTurn({
+        id: "turn-older-unretained",
+        startedAt: unixSeconds("2026-08-12T13:00:00.000Z"),
+        completedAt: unixSeconds("2026-08-12T13:01:00.000Z"),
+        items: [{ type: "futureItem", id: "item-older-unsupported" }]
+      })
+    ]);
+
+    const snapshot = await createCodexNativeSessionClient(port).readAdoptionSnapshot(threadA);
+
+    expect(snapshot).toMatchObject({
+      truncated_before: true,
+      turns: [{ turn_id: "turn-newest", status: "interrupted", completed_at: null }]
+    });
+    expect(snapshot.turns[0]?.messages).toHaveLength(nativeSessionContractLimits.messagesPerTurn);
+    expect(snapshot.turns[0]?.messages[0]?.item_id).toBe("item-message-3");
+    expect(snapshot.turns[0]?.messages.at(-1)?.item_id).toBe(
+      `item-message-${nativeSessionContractLimits.messagesPerTurn + 2}`
     );
   });
 

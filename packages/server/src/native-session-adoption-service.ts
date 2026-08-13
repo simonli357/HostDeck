@@ -707,7 +707,7 @@ function assertResumedIdentity(
     resumed.archived !== false ||
     resumed.ephemeral !== false ||
     resumed.parent_thread_id !== null ||
-    resumed.forked_from_id !== null ||
+    resumed.forked_from_id !== expected.forked_from_id ||
     resumed.history_mode !== expected.history_mode
   ) {
     throw administrationError(

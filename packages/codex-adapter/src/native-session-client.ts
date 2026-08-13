@@ -139,7 +139,7 @@ const defaults = Object.freeze({
   page_size: defaultResourceBudget.protocol_thread_page_size,
   max_pages: defaultResourceBudget.protocol_thread_max_pages,
   max_entries: 4_096,
-  max_history_items_per_turn: 256,
+  max_history_items_per_turn: nativeSessionContractLimits.historyItemsPerTurn,
   read_timeout_ms: defaultResourceBudget.protocol_read_timeout_ms
 });
 
@@ -223,10 +223,19 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
         }
         seenThreadIds.add(candidateId);
         if (parsed !== null) {
-          const identity = eligibleIdentity(parsed);
-          if (identity !== null) identities.push(identity);
+          const listedIdentity = eligibleIdentity(parsed);
+          if (listedIdentity !== null) {
+            const exactIdentity = await this.readIdentity(candidateId, deadline);
+            if (exactIdentity !== null) {
+              identities.push(mergeDiscoveryIdentity(listedIdentity, exactIdentity));
+            }
+          }
         }
       }
+
+      // Finish validating the current newest-first page, then stop once the
+      // requested result and one proven overflow entry have been found.
+      if (identities.length > request.limit) break;
 
       if (result.nextCursor === null) break;
       const nextCursor = parseCursor(result.nextCursor, "Codex native thread-list cursor");
@@ -314,7 +323,17 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
     const nextCursor = result.nextCursor === null
       ? null
       : parseCursor(result.nextCursor, "Codex native turn-list cursor");
-    const turns = page.map((candidate) => this.parseHistoryTurn(candidate)).reverse();
+    const retainedNewestFirst: NativeCodexHistoryTurn[] = [];
+    let projectionTruncated = nextCursor !== null;
+    for (const candidate of page) {
+      const parsedTurn = this.parseHistoryTurn(candidate);
+      retainedNewestFirst.push(parsedTurn.turn);
+      if (parsedTurn.truncated_before) {
+        projectionTruncated = true;
+        break;
+      }
+    }
+    const turns = retainedNewestFirst.reverse();
 
     const after = await this.readIdentity(parsedThreadId, deadline);
     if (after === null) throw ineligible();
@@ -325,7 +344,7 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
         true
       );
     }
-    return parseSnapshot({ thread: after, turns, truncated_before: nextCursor !== null });
+    return parseSnapshot({ thread: after, turns, truncated_before: projectionTruncated });
   }
 
   async resume(
@@ -372,7 +391,10 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
     });
   }
 
-  private parseHistoryTurn(candidate: unknown): NativeCodexHistoryTurn {
+  private parseHistoryTurn(candidate: unknown): {
+    readonly turn: NativeCodexHistoryTurn;
+    readonly truncated_before: boolean;
+  } {
     const parsed = turnSchema.safeParse(candidate);
     if (!parsed.success) throw invalidPayload("Codex native turn history is malformed.");
     if (parsed.data.itemsView !== "full") {
@@ -382,16 +404,17 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
       throw invalidPayload("Codex native turn history contains non-terminal work.");
     }
     const status = parsed.data.status as "completed" | "failed" | "interrupted";
-    if (parsed.data.startedAt === null || parsed.data.completedAt === null) {
-      throw invalidPayload("Codex native terminal turn is missing timestamps.");
+    if (parsed.data.startedAt === null || (status !== "interrupted" && parsed.data.completedAt === null)) {
+      throw invalidPayload("Codex native terminal turn is missing required timestamps.");
     }
     if (status === "failed") validateTurnError(parsed.data.error);
     if (parsed.data.items.length > this.options.max_history_items_per_turn) {
       throw overloaded("Codex native turn history exceeded its configured item bound.");
     }
-    const messages: NativeCodexHistoryMessage[] = [];
+    const messages: Array<NativeCodexHistoryMessage & { readonly source_index: number }> = [];
     const seenItems = new Set<string>();
-    for (const item of parsed.data.items) {
+    let latestTruncatedMessageIndex = -1;
+    for (const [index, item] of parsed.data.items.entries()) {
       let normalized: ReturnType<typeof normalizeCodexItem>;
       try {
         normalized = normalizeCodexItem(item, "completed", "thread/turns/list");
@@ -404,23 +427,34 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
         continue;
       }
       if (normalized.content_state === "truncated" || normalized.content_state === "redacted_and_truncated") {
-        throw overloaded("Codex native message exceeds the bounded adoption projection.");
-      }
-      if (messages.length >= nativeSessionContractLimits.messagesPerTurn) {
-        throw overloaded("Codex native turn history exceeded its projected-message bound.");
+        latestTruncatedMessageIndex = index;
+        continue;
       }
       messages.push(Object.freeze({
+        source_index: index,
         item_id: normalized.id,
         role: normalized.category === "agent_message" ? "agent" : "user",
         text: normalized.text
       }));
     }
+    const completeSuffix = messages.filter((message) => message.source_index > latestTruncatedMessageIndex);
+    const retainedMessages = completeSuffix
+      .slice(-nativeSessionContractLimits.messagesPerTurn)
+      .map(({ source_index: _sourceIndex, ...message }) => Object.freeze(message));
+    const truncatedBefore =
+      latestTruncatedMessageIndex >= 0 || completeSuffix.length > retainedMessages.length;
     return Object.freeze({
-      turn_id: parsed.data.id,
-      status,
-      started_at: unixSecondsToIso(parsed.data.startedAt, "native turn start"),
-      completed_at: unixSecondsToIso(parsed.data.completedAt, "native turn completion"),
-      messages
+      turn: Object.freeze({
+        turn_id: parsed.data.id,
+        status,
+        started_at: unixSecondsToIso(parsed.data.startedAt, "native turn start"),
+        completed_at:
+          parsed.data.completedAt === null
+            ? null
+            : unixSecondsToIso(parsed.data.completedAt, "native turn completion"),
+        messages: retainedMessages
+      }),
+      truncated_before: truncatedBefore
     });
   }
 }
@@ -528,7 +562,6 @@ function eligibleIdentity(raw: ParsedRawThread): NativeCodexThreadIdentity | nul
     raw.source !== "cli" ||
     raw.ephemeral ||
     raw.parentThreadId !== null ||
-    raw.forkedFromId !== null ||
     raw.agentNickname !== null ||
     raw.agentRole !== null ||
     status === null
@@ -547,7 +580,7 @@ function eligibleIdentity(raw: ParsedRawThread): NativeCodexThreadIdentity | nul
       archived: false,
       ephemeral: false,
       parent_thread_id: null,
-      forked_from_id: null,
+      forked_from_id: raw.forkedFromId,
       history_mode: raw.historyMode
     }));
   } catch {
@@ -721,6 +754,32 @@ function validateBackwardsCursor(candidate: unknown, count: number, label: strin
 
 function sameIdentity(left: NativeCodexThreadIdentity, right: NativeCodexThreadIdentity): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function mergeDiscoveryIdentity(
+  listed: NativeCodexThreadIdentity,
+  exact: NativeCodexThreadIdentity
+): NativeCodexThreadIdentity {
+  if (
+    listed.thread_id !== exact.thread_id ||
+    listed.cwd !== exact.cwd ||
+    listed.source !== exact.source ||
+    listed.runtime_version !== exact.runtime_version ||
+    listed.created_at !== exact.created_at ||
+    listed.archived !== exact.archived ||
+    listed.ephemeral !== exact.ephemeral ||
+    listed.parent_thread_id !== exact.parent_thread_id ||
+    listed.history_mode !== exact.history_mode
+  ) {
+    throw invalidPayload("Codex native discovery identity disagrees with exact thread metadata.");
+  }
+  return Object.freeze(
+    nativeCodexThreadIdentitySchema.parse({
+      ...listed,
+      status: exact.status,
+      forked_from_id: exact.forked_from_id
+    })
+  );
 }
 
 function assertExactThreadKeys(candidate: unknown): void {

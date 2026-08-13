@@ -26,14 +26,18 @@ describe("native Codex session contracts", () => {
       discoveryDefaultLimit: 50,
       discoveryLimit: 100,
       historyTurns: 20,
+      historyItemsPerTurn: 1_024,
       messagesPerTurn: 64,
       messageTextLength: 12_000
     });
     expect(Object.isFrozen(nativeSessionContractLimits)).toBe(true);
   });
-  it("accepts only a quiet persisted root CLI identity without path or preview disclosure", () => {
+  it("accepts only a quiet persisted top-level CLI identity without path or preview disclosure", () => {
     const identity = nativeIdentity();
     expect(nativeCodexThreadIdentitySchema.parse(identity)).toEqual(identity);
+    expect(
+      nativeCodexThreadIdentitySchema.parse({ ...identity, forked_from_id: "019ff700-d30a-7c92-98dc-6d770ccb6218" })
+    ).toMatchObject({ forked_from_id: "019ff700-d30a-7c92-98dc-6d770ccb6218" });
 
     for (const candidate of [
       { ...identity, source: "appServer" },
@@ -41,7 +45,7 @@ describe("native Codex session contracts", () => {
       { ...identity, archived: true },
       { ...identity, ephemeral: true },
       { ...identity, parent_thread_id: "parent-thread" },
-      { ...identity, forked_from_id: "fork-thread" },
+      { ...identity, forked_from_id: "invalid fork id" },
       { ...identity, runtime_version: "not-a-version" },
       { ...identity, cwd: "relative/path" },
       { ...identity, updated_at: "2026-08-12T11:59:59.000Z" },
@@ -120,6 +124,12 @@ describe("native Codex session contracts", () => {
       truncated_before: true
     };
     expect(nativeCodexAdoptionSnapshotSchema.parse(snapshot)).toEqual(snapshot);
+    expect(
+      nativeCodexAdoptionSnapshotSchema.parse({
+        ...snapshot,
+        turns: [{ ...snapshot.turns[1], completed_at: null }]
+      })
+    ).toMatchObject({ turns: [{ status: "interrupted", completed_at: null }] });
 
     const first = snapshot.turns[0];
     const second = snapshot.turns[1];
@@ -128,6 +138,7 @@ describe("native Codex session contracts", () => {
     if (first === undefined || second === undefined) return;
     for (const candidate of [
       { ...snapshot, turns: [{ ...first, status: "in_progress" }] },
+      { ...snapshot, turns: [{ ...first, completed_at: null }] },
       { ...snapshot, turns: [{ ...first, completed_at: "2026-08-12T12:00:59.000Z" }] },
       { ...snapshot, turns: [second, first] },
       { ...snapshot, turns: [first, { ...second, turn_id: first.turn_id }] },
