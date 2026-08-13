@@ -18,6 +18,7 @@ import {
   parseCodexParams,
   requiredValueSchema
 } from "./event-normalizer-support.js";
+import type { ThreadItem } from "./generated/v2/ThreadItem.js";
 
 const imageDetailSchema = z.enum(["auto", "low", "high", "original"]);
 
@@ -123,6 +124,51 @@ const collabAgentStateSchema = z
     message: boundedStringSchema(maximumTextLength).nullable()
   })
   .strict();
+
+const nativeHistoryItemPolicy = Object.freeze({
+  userMessage: "retain",
+  hookPrompt: "omit",
+  agentMessage: "retain",
+  plan: "omit",
+  reasoning: "omit",
+  commandExecution: "omit",
+  fileChange: "omit",
+  mcpToolCall: "omit",
+  dynamicToolCall: "omit",
+  collabAgentToolCall: "omit",
+  subAgentActivity: "omit",
+  webSearch: "omit",
+  imageView: "omit",
+  sleep: "omit",
+  imageGeneration: "omit",
+  enteredReviewMode: "omit",
+  exitedReviewMode: "omit",
+  contextCompaction: "omit"
+} as const satisfies Record<ThreadItem["type"], "omit" | "retain">);
+
+export interface NormalizedCodexHistoryItem {
+  readonly id: CodexItemId;
+  readonly message: NormalizedCodexItem | null;
+}
+
+export function normalizeCodexHistoryItem(
+  candidate: unknown,
+  method: string
+): NormalizedCodexHistoryItem {
+  const envelope = parseCodexParams(itemEnvelopeSchema, candidate, method);
+  const policy = nativeHistoryItemPolicy[envelope.type as ThreadItem["type"]];
+  if (policy === undefined) {
+    throw codexNormalizationError(
+      "unsupported_item_type",
+      `Codex item type ${boundedCodexText(envelope.type, 80)} is unsupported.`,
+      method
+    );
+  }
+  return Object.freeze({
+    id: envelope.id,
+    message: policy === "retain" ? normalizeCodexItem(candidate, "completed", method) : null
+  });
+}
 
 export function normalizeCodexItem(
   candidate: unknown,

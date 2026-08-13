@@ -19,7 +19,7 @@ import {
 import type { CodexThreadId, IsoTimestamp, OperationDeadline } from "@hostdeck/core";
 import type { CodexRequestInput } from "./broker.js";
 import { HostDeckCodexAdapterError } from "./errors.js";
-import { normalizeCodexItem } from "./event-normalizer-items.js";
+import { normalizeCodexHistoryItem } from "./event-normalizer-items.js";
 import { rawThreadSchema, turnSchema } from "./event-normalizer-schemas.js";
 import type { ThreadListParams } from "./generated/v2/ThreadListParams.js";
 import type { ThreadReadParams } from "./generated/v2/ThreadReadParams.js";
@@ -415,14 +415,16 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
     const seenItems = new Set<string>();
     let latestTruncatedMessageIndex = -1;
     for (const [index, item] of parsed.data.items.entries()) {
-      let normalized: ReturnType<typeof normalizeCodexItem>;
+      let historyItem: ReturnType<typeof normalizeCodexHistoryItem>;
       try {
-        normalized = normalizeCodexItem(item, "completed", "thread/turns/list");
+        historyItem = normalizeCodexHistoryItem(item, "thread/turns/list");
       } catch {
         throw invalidPayload("Codex native turn item is malformed or unsupported.");
       }
-      if (seenItems.has(normalized.id)) throw invalidPayload("Codex native turn history repeats an item id.");
-      seenItems.add(normalized.id);
+      if (seenItems.has(historyItem.id)) throw invalidPayload("Codex native turn history repeats an item id.");
+      seenItems.add(historyItem.id);
+      const normalized = historyItem.message;
+      if (normalized === null) continue;
       if (!["agent_message", "user_message"].includes(normalized.category) || normalized.text === null || normalized.text.length === 0) {
         continue;
       }

@@ -283,6 +283,44 @@ describe("native Codex session adapter", () => {
     });
   });
 
+  it("omits oversized private payloads from recognized non-message history items", async () => {
+    const privateDiff = `private-large-diff-${"x".repeat(64_000)}`;
+    const snapshot = await createCodexNativeSessionClient(adoptionPort([
+      rawTurn({
+        items: [
+          {
+            type: "fileChange",
+            id: "item-large-file-change",
+            changes: [{
+              path: "/private/large-generated-file",
+              kind: { type: "add" },
+              diff: privateDiff
+            }],
+            status: "completed"
+          },
+          agentMessage("item-retained-agent", "Retained answer", null)
+        ]
+      })
+    ])).readAdoptionSnapshot(threadA);
+
+    expect(snapshot.turns[0]?.messages).toEqual([
+      { item_id: "item-retained-agent", role: "agent", text: "Retained answer" }
+    ]);
+    expect(JSON.stringify(snapshot)).not.toContain("private-large-diff");
+
+    await expectAdapterError(
+      createCodexNativeSessionClient(adoptionPort([
+        rawTurn({
+          items: [
+            { type: "fileChange", id: "item-duplicate", changes: [], status: "completed" },
+            agentMessage("item-duplicate", "Duplicate identity", null)
+          ]
+        })
+      ])).readAdoptionSnapshot(threadA),
+      "invalid_protocol_message"
+    );
+  });
+
   it("rejects identity races, newly ineligible state, active history, malformed items, and item overflow", async () => {
     const changed = adoptionPort([rawTurn()], {
       after: rawThread({ updatedAt: unixSeconds("2026-08-12T15:01:00.000Z") })
