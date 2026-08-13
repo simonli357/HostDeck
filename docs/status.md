@@ -4,9 +4,9 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Snapshot
 
-- Phase: M4 aggregate physical mobile-dashboard hardening is paused while the phone is unavailable; M6 native Ubuntu/Windows distribution foundation is active. M5 release remains no-go.
-- Active work: `DAT-V1-104` native state/security hardening is in progress. `REL-V1-102` supply-chain metadata is complete through `0dd98f3` and accepted Linux/Windows run `31513897607`; `INT-V1-104` still waits for one authenticated native Windows aggregate, and `FE-V1-090` remains blocked until the phone returns. All 18 pre-existing user-modified PNGs and the unrelated mobile-copy timeout edit remain unstaged.
-- Primary-flow blocker: `BUG-086` prevents one closed, ordinary top-level SideCue CLI fork from being adopted. Its exact live history now passes the corrected read-only adapter path; package upgrade, unchanged-id adoption, and shared-TUI handoff remain before closure.
+- Phase: M4 aggregate physical mobile-dashboard hardening and M6 native Ubuntu/Windows distribution foundation are active. M5 release remains no-go.
+- Active work: `DAT-V1-104` native state/security hardening is in progress. `REL-V1-102` supply-chain metadata is complete through `0dd98f3` and accepted Linux/Windows run `31513897607`; `INT-V1-104` still waits for one authenticated native Windows aggregate, and `FE-V1-090` remains unfinished after the task-local phone check. All 18 pre-existing user-modified PNGs and the unrelated mobile-copy timeout edit remain unstaged.
+- Primary continuity flow: `BUG-086` and `BUG-087` are closed on installed `0.0.7`. The exact SideCue top-level fork is managed by unchanged Codex id, renders with current SSE and an enabled composer on the paired phone, survives preserved-state upgrade, and opens through the shared laptop TUI by managed session id.
 - The reviewed runtime/binding remains exact Codex 0.144.0 with four complete `INT-V1-027` two-thread aggregate runs. The user's default 0.146.0 binary is ineligible as exact-runtime evidence and passes the required no-runtime diagnostic path; the isolated exact 0.144.0 binary passes the supported-path regression.
 - Direction: phone-first HostDeck dashboard reached from another network through a human-selected saved HostDeck Tailscale profile and private Serve HTTPS. HostDeck remains loopback-only, app pairing stays mandatory, company profile state is never auto-switched or mutated, and Codex app-server stays on a private Unix socket on Linux or authenticated loopback WebSocket on Windows. Existing tmux and direct-LAN/custom-CA paths are historical evidence only.
 - UI gate: selected-target fidelity and copy/workflow review are complete across all seven Focus Rail assets, 141 states, 39 interactions, 15 surfaces, 12 journeys, five viewports, and the exact Chromium/Firefox package matrix. Real-phone aggregate hardening remains open; both legacy desktop-led boards remain rejected.
@@ -369,6 +369,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 
 ## Git
 
+- Native top-level fork adoption `2a63fd5` and adopted-session mobile rendering `f923874` are pushed to `main`; installed `0.0.7` retains the exact SideCue mapping and shared Codex process.
 - `FE-V1-090` implementation `2017215` and deterministic candidate `38c2a48` are pushed. The candidate physically closes `BUG-065` and `BUG-066`, then fails at new `BUG-067`; all 18 user PNG changes remain unstaged.
 - `IFC-V1-091` criteria `ad74557`, ledger `9eb43d9`, exact-smoke fix `4735abc`, observer-scheduler fix `d91c090`, and final evidence `120af2f` are pushed. This owner-doc closure advances the active queue to `FE-V1-090`, makes `REL-V1-005` ready, and preserves all 18 unstaged user PNG changes.
 - `FE-V1-018` criteria `852c91c`, ledger `89353ed`, production copy/browser corrections through `f8b46ab`, task evidence `daac7ad`, boundary correction `3034907`, package repin `b2acc63`, and supported-browser evidence refresh `936de0c` are pushed. This owner-doc closure advances the active queue to `IFC-V1-091`, makes `FE-V1-090` ready, and preserves all 18 unstaged user PNG changes.
