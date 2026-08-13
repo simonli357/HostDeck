@@ -302,7 +302,7 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
       cursor: null,
       limit: nativeSessionContractLimits.historyTurns,
       sortDirection: "desc",
-      itemsView: "full"
+      itemsView: "summary"
     } satisfies ThreadTurnsListParams;
     const result = requireRecord(
       await this.port.request({
@@ -397,8 +397,8 @@ class DefaultCodexNativeSessionClient implements CodexNativeSessionClient {
   } {
     const parsed = turnSchema.safeParse(candidate);
     if (!parsed.success) throw invalidPayload("Codex native turn history is malformed.");
-    if (parsed.data.itemsView !== "full") {
-      throw invalidPayload("Codex native turn history did not include full item data.");
+    if (parsed.data.itemsView !== "summary") {
+      throw invalidPayload("Codex native turn history did not include summary item data.");
     }
     if (!(["completed", "failed", "interrupted"] as readonly string[]).includes(parsed.data.status)) {
       throw invalidPayload("Codex native turn history contains non-terminal work.");

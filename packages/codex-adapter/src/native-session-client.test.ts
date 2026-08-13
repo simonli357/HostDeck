@@ -279,7 +279,7 @@ describe("native Codex session adapter", () => {
       cursor: null,
       limit: 20,
       sortDirection: "desc",
-      itemsView: "full"
+      itemsView: "summary"
     });
   });
 
@@ -321,6 +321,62 @@ describe("native Codex session adapter", () => {
     );
   });
 
+  it("imports retained text without validating recognized omitted user-input bodies", async () => {
+    const privateImagePath = "/private/legacy-image.png";
+    const privateCitation = { futurePrivateShape: "private-citation" };
+    const snapshot = await createCodexNativeSessionClient(adoptionPort([
+      rawTurn({
+        items: [
+          {
+            type: "userMessage",
+            id: "item-legacy-user",
+            clientId: null,
+            content: [
+              {
+                type: "text",
+                text: "Retained question",
+                text_elements: [{ legacyPrivateShape: true }]
+              },
+              { type: "localImage", detail: null, path: privateImagePath }
+            ]
+          },
+          {
+            ...agentMessage("item-agent-private-metadata", "Retained answer", null),
+            memoryCitation: privateCitation
+          }
+        ]
+      })
+    ])).readAdoptionSnapshot(threadA);
+
+    expect(snapshot.turns[0]?.messages).toEqual([
+      { item_id: "item-legacy-user", role: "user", text: "Retained question" },
+      { item_id: "item-agent-private-metadata", role: "agent", text: "Retained answer" }
+    ]);
+    expect(JSON.stringify(snapshot)).not.toContain(privateImagePath);
+    expect(JSON.stringify(snapshot)).not.toContain("private-citation");
+
+    for (const item of [
+      {
+        type: "userMessage",
+        id: "item-unknown-input",
+        clientId: null,
+        content: [{ type: "futureInput", privatePayload: true }]
+      },
+      {
+        type: "userMessage",
+        id: "item-malformed-text",
+        clientId: null,
+        content: [{ type: "text", text: 42, text_elements: [] }]
+      }
+    ]) {
+      await expectAdapterError(
+        createCodexNativeSessionClient(adoptionPort([rawTurn({ items: [item] })]))
+          .readAdoptionSnapshot(threadA),
+        "invalid_protocol_message"
+      );
+    }
+  });
+
   it("rejects identity races, newly ineligible state, active history, malformed items, and item overflow", async () => {
     const changed = adoptionPort([rawTurn()], {
       after: rawThread({ updatedAt: unixSeconds("2026-08-12T15:01:00.000Z") })
@@ -336,7 +392,7 @@ describe("native Codex session adapter", () => {
 
     const invalidTurns = [
       rawTurn({ status: "inProgress", completedAt: null }),
-      rawTurn({ itemsView: "summary" }),
+      rawTurn({ itemsView: "full" }),
       rawTurn({ items: [{ ...agentMessage("item-agent", "answer", null), additive: true }] }),
       rawTurn({ items: [{ type: "futureItem", id: "item-future" }] }),
       rawTurn({ status: "failed", error: { message: "failed", codexErrorInfo: { future: {} }, additionalDetails: null } })
@@ -584,7 +640,7 @@ function rawTurn(overrides: Record<string, unknown> = {}): Record<string, unknow
   return {
     id: "turn-older",
     items: [agentMessage("item-agent", "answer", null)],
-    itemsView: "full",
+    itemsView: "summary",
     status: "completed",
     error: null,
     startedAt: unixSeconds("2026-08-12T14:10:00.000Z"),

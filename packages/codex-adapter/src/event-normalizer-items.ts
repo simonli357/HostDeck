@@ -19,6 +19,7 @@ import {
   requiredValueSchema
 } from "./event-normalizer-support.js";
 import type { ThreadItem } from "./generated/v2/ThreadItem.js";
+import type { UserInput } from "./generated/v2/UserInput.js";
 
 const imageDetailSchema = z.enum(["auto", "low", "high", "original"]);
 
@@ -146,6 +147,18 @@ const nativeHistoryItemPolicy = Object.freeze({
   contextCompaction: "omit"
 } as const satisfies Record<ThreadItem["type"], "omit" | "retain">);
 
+const nativeHistoryUserInputPolicy = Object.freeze({
+  text: "retain",
+  image: "omit",
+  localImage: "omit",
+  skill: "omit",
+  mention: "omit"
+} as const satisfies Record<UserInput["type"], "omit" | "retain">);
+
+const nativeHistoryUserInputEnvelopeSchema = z
+  .object({ type: boundedNonemptyStringSchema(80) })
+  .passthrough();
+
 export interface NormalizedCodexHistoryItem {
   readonly id: CodexItemId;
   readonly message: NormalizedCodexItem | null;
@@ -164,10 +177,96 @@ export function normalizeCodexHistoryItem(
       method
     );
   }
+  if (policy === "omit") return Object.freeze({ id: envelope.id, message: null });
+  if (envelope.type !== "agentMessage" && envelope.type !== "userMessage") {
+    throw codexNormalizationError(
+      "unsupported_item_type",
+      `Codex history item type ${boundedCodexText(envelope.type, 80)} has an invalid retention policy.`,
+      method
+    );
+  }
   return Object.freeze({
     id: envelope.id,
-    message: policy === "retain" ? normalizeCodexItem(candidate, "completed", method) : null
+    message: normalizeCodexHistoryMessage(candidate, envelope.type, method)
   });
+}
+
+function normalizeCodexHistoryMessage(
+  candidate: unknown,
+  type: "agentMessage" | "userMessage",
+  method: string
+): NormalizedCodexItem {
+  if (type === "agentMessage") {
+    const parsed = parseCodexParams(
+      z
+        .object({
+          type: z.literal("agentMessage"),
+          id: codexItemIdSchema,
+          text: boundedStringSchema(maximumTextLength * 4),
+          phase: z.enum(["commentary", "final_answer"]).nullable(),
+          memoryCitation: requiredValueSchema
+        })
+        .strict(),
+      candidate,
+      method
+    );
+    return normalizedItem(
+      parsed.id,
+      "agent_message",
+      "completed",
+      "Agent message",
+      boundCodexContent(parsed.text, maximumTextLength, "Agent message was truncated for projection.")
+    );
+  }
+
+  const parsed = parseCodexParams(
+    z
+      .object({
+        type: z.literal("userMessage"),
+        id: codexItemIdSchema,
+        clientId: z.string().max(128).nullable(),
+        content: z.array(requiredValueSchema).max(maximumCollectionLength)
+      })
+      .strict(),
+    candidate,
+    method
+  );
+  const textInputs: string[] = [];
+  let hasOmitted = false;
+  for (const input of parsed.content) {
+    const envelope = parseCodexParams(nativeHistoryUserInputEnvelopeSchema, input, method);
+    const policy = nativeHistoryUserInputPolicy[envelope.type as UserInput["type"]];
+    if (policy === undefined) {
+      throw codexNormalizationError(
+        "unsupported_item_type",
+        `Codex user input type ${boundedCodexText(envelope.type, 80)} is unsupported.`,
+        method
+      );
+    }
+    if (policy === "omit") {
+      hasOmitted = true;
+      continue;
+    }
+    const textInput = parseCodexParams(
+      z
+        .object({
+          type: z.literal("text"),
+          text: boundedStringSchema(maximumTextLength * 4),
+          text_elements: z.array(requiredValueSchema).max(maximumCollectionLength)
+        })
+        .strict(),
+      input,
+      method
+    );
+    textInputs.push(textInput.text);
+  }
+  const content = boundCodexContent(
+    textInputs.join("\n"),
+    maximumTextLength,
+    hasOmitted ? "Non-text user input was omitted from projection." : "User message was truncated for projection.",
+    hasOmitted
+  );
+  return normalizedItem(parsed.id, "user_message", "completed", "User message", content);
 }
 
 export function normalizeCodexItem(
