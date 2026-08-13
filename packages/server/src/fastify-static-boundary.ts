@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import { basename, extname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
+import { Readable } from "node:stream";
+import { createBrotliCompress, createGzip, constants as zlibConstants } from "node:zlib";
 import fastifyStatic from "@fastify/static";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { HostDeckRoutePluginRegistration } from "./fastify-app.js";
@@ -99,6 +101,7 @@ const staticManifestMaximumBytes = 1_048_576;
 const staticManifestSchemaVersion = 1;
 const staticManifestViteVersion = "8.1.4";
 const immutableCacheControl = "public, max-age=31536000, immutable";
+const compressibleStaticMediaTypes = new Set(["text/css", "text/javascript"]);
 const supportedMediaTypes = Object.freeze({
   ".css": "text/css",
   ".gif": "image/gif",
@@ -137,6 +140,28 @@ export function createHostDeckStaticBoundaryRegistration(
             retryable: false
           });
         }
+      });
+      app.addHook("onSend", async (request, reply, payload) => {
+        if (request.method !== "GET" || reply.statusCode !== 200) return payload;
+        const descriptor = staticAssetDescriptor(request.raw.url ?? request.url, build);
+        if (
+          descriptor === undefined ||
+          !compressibleStaticMediaTypes.has(descriptor.mediaType)
+        ) {
+          return payload;
+        }
+        const encoding = selectStaticContentEncoding(request.headers["accept-encoding"]);
+        if (encoding === null) return payload;
+        reply.removeHeader("Content-Length");
+        reply.header("Content-Encoding", encoding);
+        const compressor = encoding === "br"
+          ? createBrotliCompress({
+              params: {
+                [zlibConstants.BROTLI_PARAM_QUALITY]: 4
+              }
+            })
+          : createGzip({ level: 6 });
+        return staticPayloadStream(payload).pipe(compressor);
       });
       await app.register(fastifyStatic, {
         allowedPath(pathName, root) {
@@ -191,6 +216,9 @@ export function createHostDeckStaticBoundaryRegistration(
           reply.type(descriptor.mediaType);
           reply.header("X-Content-Type-Options", "nosniff");
           reply.header("Cache-Control", descriptor.cacheControl);
+          if (compressibleStaticMediaTypes.has(descriptor.mediaType)) {
+            reply.header("Vary", "Accept-Encoding");
+          }
         },
         wildcard: true
       });
@@ -772,6 +800,73 @@ function isAllowedRawStaticTarget(rawTarget: string): boolean {
   if (!decodedPath.startsWith("/assets/")) return false;
   const relativePath = decodedPath.slice("/assets/".length);
   return parseAllowedStaticPath(relativePath, false) !== null;
+}
+
+function staticAssetDescriptor(
+  rawTarget: string,
+  build: ValidatedStaticBuild
+): StaticFileDescriptor | undefined {
+  const queryStart = rawTarget.indexOf("?");
+  const encodedPath = queryStart === -1 ? rawTarget : rawTarget.slice(0, queryStart);
+  if (!encodedPath.startsWith("/assets/")) return undefined;
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(encodedPath);
+  } catch {
+    return undefined;
+  }
+  const relativePath = parseAllowedStaticPath(
+    decodedPath.slice("/assets/".length),
+    false
+  );
+  return relativePath === null ? undefined : build.assets.get(relativePath);
+}
+
+function selectStaticContentEncoding(
+  header: string | undefined
+): "br" | "gzip" | null {
+  if (header === undefined) return null;
+  const qualities = new Map<string, number>();
+  for (const member of header.split(",")) {
+    const [rawName, ...rawParameters] = member.split(";");
+    const name = rawName?.trim().toLowerCase();
+    if (name === undefined || name.length === 0) continue;
+    let quality = 1;
+    let valid = true;
+    for (const rawParameter of rawParameters) {
+      const [rawKey, rawValue, ...extra] = rawParameter.split("=");
+      if (rawKey?.trim().toLowerCase() !== "q" || rawValue === undefined || extra.length > 0) {
+        valid = false;
+        break;
+      }
+      const value = rawValue.trim();
+      if (!/^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/u.test(value)) {
+        valid = false;
+        break;
+      }
+      quality = Number(value);
+    }
+    if (valid) qualities.set(name, Math.max(qualities.get(name) ?? 0, quality));
+  }
+  const wildcard = qualities.get("*") ?? 0;
+  const brotli = qualities.get("br") ?? wildcard;
+  const gzip = qualities.get("gzip") ?? wildcard;
+  if (brotli <= 0 && gzip <= 0) return null;
+  return brotli >= gzip ? "br" : "gzip";
+}
+
+function staticPayloadStream(payload: unknown): Readable {
+  if (typeof payload === "string" || Buffer.isBuffer(payload) || payload instanceof Uint8Array) {
+    return Readable.from([payload]);
+  }
+  if (
+    payload !== null &&
+    typeof payload === "object" &&
+    typeof (payload as { readonly pipe?: unknown }).pipe === "function"
+  ) {
+    return payload as Readable;
+  }
+  throw new TypeError("Validated static response payload is not streamable.");
 }
 
 function isAllowedStaticSegment(segment: string): boolean {

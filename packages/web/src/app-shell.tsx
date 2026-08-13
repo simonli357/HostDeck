@@ -37,7 +37,11 @@ import {
   createProductionBrowserConnectionCoordinator
 } from "./browser-runtime.js";
 import type { BrowserConnectionStateCoordinator } from "./connection-state.js";
-import { ConnectedHostAccess } from "./host-access.js";
+import {
+  ConnectedHostAccess,
+  HostAccessActivationProvider,
+  useHostAccessActivation
+} from "./host-access.js";
 import { ConnectedHostLock } from "./host-lock.js";
 import { SessionActionsSheet } from "./interrupt-control.js";
 import {
@@ -216,35 +220,37 @@ export function HostDeckRoutes({
 }: HostDeckRoutesProps) {
   if (coordinator !== undefined) {
     return (
-      <ResponsiveMissionContextOwner coordinator={coordinator}>
-        {(missionContext) => (
-          <ConnectedHostLock coordinator={coordinator}>
-            {(hostLock) =>
-              outlets.hostAccess === undefined ? (
-                <ConnectedHostAccess coordinator={coordinator} hostLock={hostLock}>
-                  {(content) => (
-                    <HostDeckRouteTable
-                      outlets={Object.freeze({ ...outlets, hostAccess: content })}
-                      coordinator={coordinator}
-                      focusMainOnMount={focusMainOnMount}
-                      missionContext={missionContext}
-                      runtimeFailed={runtimeFailed}
-                    />
-                  )}
-                </ConnectedHostAccess>
-              ) : (
-                <HostDeckRouteTable
-                  outlets={outlets}
-                  coordinator={coordinator}
-                  focusMainOnMount={focusMainOnMount}
-                  missionContext={missionContext}
-                  runtimeFailed={runtimeFailed}
-                />
-              )
-            }
-          </ConnectedHostLock>
-        )}
-      </ResponsiveMissionContextOwner>
+      <HostAccessActivationProvider>
+        <ResponsiveMissionContextOwner coordinator={coordinator}>
+          {(missionContext) => (
+            <ConnectedHostLock coordinator={coordinator}>
+              {(hostLock) =>
+                outlets.hostAccess === undefined ? (
+                  <ConnectedHostAccess coordinator={coordinator} hostLock={hostLock}>
+                    {(content) => (
+                      <HostDeckRouteTable
+                        outlets={Object.freeze({ ...outlets, hostAccess: content })}
+                        coordinator={coordinator}
+                        focusMainOnMount={focusMainOnMount}
+                        missionContext={missionContext}
+                        runtimeFailed={runtimeFailed}
+                      />
+                    )}
+                  </ConnectedHostAccess>
+                ) : (
+                  <HostDeckRouteTable
+                    outlets={outlets}
+                    coordinator={coordinator}
+                    focusMainOnMount={focusMainOnMount}
+                    missionContext={missionContext}
+                    runtimeFailed={runtimeFailed}
+                  />
+                )
+              }
+            </ConnectedHostLock>
+          )}
+        </ResponsiveMissionContextOwner>
+      </HostAccessActivationProvider>
     );
   }
   return (
@@ -652,8 +658,13 @@ function SessionBackButton() {
 }
 
 function HostAccessSheet({ children }: Readonly<{ children: ReactNode }>) {
+  const hostAccessActivation = useHostAccessActivation();
   return (
-    <Dialog.Root>
+    <Dialog.Root
+      onOpenChange={(open) => {
+        if (open) hostAccessActivation.activate();
+      }}
+    >
       <Dialog.Trigger asChild>
         <button type="button" className="hostdeck-icon-button" aria-label="Open Host and access">
           <Menu size={24} strokeWidth={2} />

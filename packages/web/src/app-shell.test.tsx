@@ -317,8 +317,9 @@ describe("HostDeck phone shell", () => {
       </StrictMode>
     );
 
-    await waitFor(() => expect(harness.requestDeviceList).toHaveBeenCalledTimes(1));
+    expect(harness.requestDeviceList).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Open Host and access" }));
+    await waitFor(() => expect(harness.requestDeviceList).toHaveBeenCalledTimes(1));
     expect(screen.getByText("Checking paired devices.")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Close Host and access" }));
     await user.click(screen.getByRole("button", { name: "Open Host and access" }));

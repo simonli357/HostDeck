@@ -13,6 +13,7 @@ import { request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { defaultResourceBudget } from "@hostdeck/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { createHostDeckFastifyApp, hostDeckFastifyResourceSnapshot } from "./fastify-app.js";
@@ -36,7 +37,7 @@ const loopbackTrustPolicy = createHostDeckRequestTrustPolicy({
 });
 
 const indexBody = '<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"><meta name="theme-color" content="#121313"><meta name="hostdeck-package-version" content="0.0.0"><title>HostDeck</title><script type="module" src="/assets/app-ABC123xy.js"></script><link rel="stylesheet" href="/assets/styles-12345678.css"></head><body><div id="root"></div>HOSTDECK_STATIC_INDEX_SENTINEL</body></html>';
-const javascriptBody = "globalThis.__hostdeckStaticFixture = true;\n";
+const javascriptBody = `globalThis.__hostdeckStaticFixture = true;\n${"void 0;\n".repeat(256)}`;
 const temporaryDirectories = new Set<string>();
 
 afterEach(() => {
@@ -175,6 +176,28 @@ describe("explicit Fastify static-dashboard boundary", () => {
       expect(javascript.headers["content-type"]).toContain("javascript");
       expect(javascript.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
       expect(javascript.headers["x-content-type-options"]).toBe("nosniff");
+      expect(javascript.headers.vary).toBe("Accept-Encoding");
+      expect(javascript.headers["content-encoding"]).toBeUndefined();
+
+      const brotliJavascript = await injectHostDeckLoopback(app, {
+        method: "GET",
+        url: "/assets/app-ABC123xy.js",
+        headers: { "accept-encoding": "gzip, br" }
+      });
+      expect(brotliJavascript.statusCode).toBe(200);
+      expect(brotliJavascript.headers["content-encoding"]).toBe("br");
+      expect(brotliJavascript.headers["content-length"]).toBeUndefined();
+      expect(brotliJavascript.headers.vary).toBe("Accept-Encoding");
+      expect(brotliDecompressSync(brotliJavascript.rawPayload).toString()).toBe(javascriptBody);
+
+      const gzipJavascript = await injectHostDeckLoopback(app, {
+        method: "GET",
+        url: "/assets/app-ABC123xy.js",
+        headers: { "accept-encoding": "br;q=0, gzip" }
+      });
+      expect(gzipJavascript.statusCode).toBe(200);
+      expect(gzipJavascript.headers["content-encoding"]).toBe("gzip");
+      expect(gunzipSync(gzipJavascript.rawPayload).toString()).toBe(javascriptBody);
 
       const stylesheet = await injectHostDeckLoopback(app, "/assets/styles-12345678.css");
       expect(stylesheet.statusCode).toBe(200);
@@ -197,6 +220,8 @@ describe("explicit Fastify static-dashboard boundary", () => {
       expect(assetHead.body).toBe("");
       expect(assetHead.headers["content-length"]).toBe(String(Buffer.byteLength(javascriptBody)));
       expect(assetHead.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
+      expect(assetHead.headers.vary).toBe("Accept-Encoding");
+      expect(assetHead.headers["content-encoding"]).toBeUndefined();
 
       expectJsonError(await injectHostDeckLoopback(app, "/api/missing"), 404, "route_not_found");
       expectJsonError(await injectHostDeckLoopback(app, "/dashboard"), 404, "route_not_found");

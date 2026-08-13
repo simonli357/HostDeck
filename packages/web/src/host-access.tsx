@@ -21,11 +21,15 @@ import {
   WifiOff
 } from "lucide-react";
 import {
+  createContext,
   type ReactNode,
+  useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore
 } from "react";
 import type {
@@ -60,6 +64,38 @@ import {
 import { projectRuntimeCompatibility } from "./runtime-compatibility-state.js";
 
 export type HostAccessTone = "connected" | "attention" | "danger" | "muted";
+
+interface HostAccessActivation {
+  readonly activated: boolean;
+  readonly activate: () => void;
+}
+
+const defaultHostAccessActivation = Object.freeze({
+  activated: true,
+  activate: () => undefined
+});
+
+const HostAccessActivationContext = createContext<HostAccessActivation>(
+  defaultHostAccessActivation
+);
+
+export function HostAccessActivationProvider({ children }: Readonly<{ children: ReactNode }>) {
+  const [activated, setActivated] = useState(false);
+  const activate = useCallback(() => setActivated(true), []);
+  const value = useMemo(
+    () => Object.freeze({ activated, activate }),
+    [activate, activated]
+  );
+  return (
+    <HostAccessActivationContext.Provider value={value}>
+      {children}
+    </HostAccessActivationContext.Provider>
+  );
+}
+
+export function useHostAccessActivation(): HostAccessActivation {
+  return useContext(HostAccessActivationContext);
+}
 
 export interface HostAccessFact {
   readonly id:
@@ -126,7 +162,13 @@ export function ConnectedHostAccess({
     compatibilityController.snapshot,
     compatibilityController.snapshot
   );
-  const deviceController = usePairedDeviceManagementController(coordinator, snapshot);
+  const hostAccessActivation = useHostAccessActivation();
+  const deviceController = usePairedDeviceManagementController(
+    coordinator,
+    snapshot,
+    undefined,
+    hostAccessActivation.activated
+  );
   const devices = useSyncExternalStore(
     deviceController.subscribe,
     deviceController.snapshot,

@@ -40,6 +40,7 @@ import type {
   BrowserConnectionSnapshot,
   BrowserConnectionStateCoordinator
 } from "./connection-state.js";
+import { useHostAccessActivation } from "./host-access.js";
 import {
   createInterruptControlController,
   type InterruptControlController,
@@ -180,6 +181,7 @@ export function SessionActionsSheet({
   laptopResume,
   onArchiveSucceeded
 }: SessionActionsSheetProps) {
+  const hostAccessActivation = useHostAccessActivation();
   const view = useInterruptControlView(controller);
   const archiveView = useArchiveControlView(archive);
   const laptopResumeView = useLaptopResumeControlView(laptopResume);
@@ -424,7 +426,10 @@ export function SessionActionsSheet({
                 laptopResumeItemRef={laptopResumeItemRef}
                 laptopResumeView={laptopResumeView}
                 onArchive={beginArchive}
-                onHostAccess={() => setPage("host")}
+                onHostAccess={() => {
+                  hostAccessActivation.activate();
+                  setPage("host");
+                }}
                 onInterrupt={beginInterrupt}
                 onLaptopResume={beginLaptopResume}
                 view={view}

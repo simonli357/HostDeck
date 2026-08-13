@@ -61,7 +61,8 @@ export function ConnectedPairedDeviceManagement({
 export function usePairedDeviceManagementController(
   coordinator: BrowserConnectionStateCoordinator,
   connectionSnapshot: BrowserConnectionSnapshot,
-  createOperationId: () => string = createDeviceRevokeOperationId
+  createOperationId: () => string = createDeviceRevokeOperationId,
+  load: boolean = true
 ): PairedDeviceManagementController {
   const owner = useMemo(
     () =>
@@ -79,8 +80,8 @@ export function usePairedDeviceManagementController(
   useLayoutEffect(() => {
     void connectionSnapshot;
     owner.synchronize();
-    runDeviceAction(owner, owner.ensureLoaded());
-  }, [connectionSnapshot, owner]);
+    if (load) runDeviceAction(owner, owner.ensureLoaded());
+  }, [connectionSnapshot, load, owner]);
 
   useEffect(() => {
     const token = Object.freeze({});
