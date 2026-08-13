@@ -28,3 +28,9 @@ Status: passed
 - V1 adopts an eligible inactive standalone CLI thread through laptop-only `discover` and confirmed `adopt`; it does not take over a concurrently active standalone client.
 - The package harness's synthetic uninstalled-service invocation cannot pass on this laptop while the real HostDeck user units are active. The committed package itself builds and verifies; validation did not stop or alter the installed service.
 - Native model-backed Windows execution remains owned by blocked `INT-V1-104`; deterministic Windows transport and package contracts pass here.
+
+## Physical Phone Follow-Up
+
+- Installed `0.0.5` fixes `BUG-085`, where a recent stream requested at cursor zero rejected the valid nullable initial adoption boundary.
+- One standalone Codex 0.144.0 thread was adopted by unchanged id, retained its original turn, accepted and streamed exact `ADOPTED_PHONE_OK` from the physical phone, reopened through the shared HostDeck TUI, unmanaged, and reopened as a normal Codex session with both turns intact.
+- SideCue, MarketPilot, and ScandyControl histories are discoverable from the shared home. They were not adopted because V1 deliberately requires the separately running owner to be closed before confirmed handoff.

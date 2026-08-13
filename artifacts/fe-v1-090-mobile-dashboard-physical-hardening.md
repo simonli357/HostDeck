@@ -67,3 +67,10 @@ Requirement refs: `FR-002`, `FR-005` to `FR-010`, `FR-016`, `IR-001` to `IR-012`
 ## Documentation Impact
 
 Tier 1 criteria update: this artifact, its machine ledger, and the owning `FE-V1-090` backlog row. Product/UX/architecture owners change only if the audit proves their contracts wrong.
+
+## 2026-08-13 Runtime Follow-Up
+
+- Installed `0.0.5` from commits `ee68dcc` and `07f7355` preserves the Codex process and both real managed sessions.
+- Cache-disabled physical-phone startup improved from 724 ms DOM ready / 776 ms FCP to 369 ms / 400 ms. Brotli reduced the JavaScript transfer from 1,105,233 to 270,710 bytes and CSS to 15,443 bytes; the primary route makes no device-list request until Host/access opens.
+- A phone prompt on an adopted normal Codex thread returned `202`, streamed exact completion in 5.2 seconds, and showed no failed request, console error, overlap, or stale-state banner. Mission Control also loaded over cellular with Wi-Fi disabled through private Tailscale Serve in 1.8 seconds.
+- This focused runtime evidence closes `BUG-084` and `BUG-085`; it does not replace or complete the frozen 39-interaction no-retry `FE-V1-090` aggregate.

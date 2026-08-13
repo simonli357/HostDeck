@@ -1069,3 +1069,21 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Root cause: startup strictly parsed the entire foreign history inventory instead of only managed ids; app-server `notLoaded` state was treated as a contradiction instead of resumable idle state; discovery required a history's creation version to equal the controlling runtime; and Linux uninstall waited forever on a stopped `failed` unit with PID zero.
 - Fix: reconcile from bounded state-database inventory and strictly read only managed ids, exact-resume managed `notLoaded` threads, preserve the source history version while recording the current controlling runtime on adoption, and accept a failed/PID-zero unit as stopped during uninstall.
 - Current state: closed in `495fde2` and `dbe641e`. Focused 70, unit 3,220/32 opt-in skipped, contract 287, integration 36, typecheck, 897-file lint, exact model-backed interoperability, deterministic package build/verification, preserved-state install, API readiness, and live shared-home discovery pass. The installed service retained both managed sessions and paired write device; existing normal sessions from Codex 0.130.0 through 0.146.0 are discoverable, and a 0.130.0 full adoption snapshot parses through the pinned 0.144.0 runtime without mutation.
+
+### BUG-084 Mobile Startup Transfers Uncompressed Assets And Eager Device State
+
+- Symptom: Mission Control felt slow on the physical phone; a cache-disabled load transferred 1.11 MB of JavaScript and fetched the paired-device list before Host/access was opened.
+- Impact: the primary phone route paid avoidable network, parse, and API work on every cold load.
+- Route: high completed-task bugfix owned by `FE-V1-090`; no product, security, or setup contract change.
+- Root cause: validated JS/CSS assets had no content-encoding negotiation, and the always-mounted Host/access controller eagerly loaded device state.
+- Fix: stream Brotli or gzip only for validated JS/CSS assets with exact `Accept-Encoding` handling and `Vary`; defer the device read until the user first opens Host/access, then retain activation across routes.
+- Current state: closed in `ee68dcc` and installed as `0.0.5`. On the Xiaomi phone, cache-disabled DOM ready/FCP improved from 724/776 ms to 369/400 ms; JavaScript transfer fell from 1,105,233 bytes to 270,710 bytes, CSS to 15,443 bytes, and startup made zero device-list requests. Opening Host/access issued exactly one device read. Static decompression identity tests, all 910 web tests, typecheck, lint, contract 287, integration 36, package 43, package verification, and manual phone inspection pass without fallback or browser errors.
+
+### BUG-085 Adopted Session Start Boundary Stops Browser Streaming
+
+- Symptom: an adopted native session appeared on the phone with retained history, then Session Detail changed to `Stream stopped` and disabled prompting while direct API reads remained healthy.
+- Impact: existing Codex sessions could be adopted but not reliably controlled from the phone.
+- Route: critical completed-task bugfix owned by `INT-V1-109`; no public contract or adoption-policy change.
+- Root cause: the browser requested recent history with `after=0`, but rejected the valid initial adoption boundary whose durable predecessor is represented as `after=null`; the client canceled the otherwise healthy SSE response.
+- Fix: treat `null` as the cursor-zero floor only when validating the first boundary, while preserving rejection of backward, duplicate, repeated, and mid-attempt boundaries.
+- Current state: closed in `07f7355` and installed as `0.0.5`. A real Codex 0.144.0 thread was created normally, adopted unchanged, opened on the phone with a stable SSE connection, accepted one `202` prompt, streamed exact `ADOPTED_PHONE_OK` in 5.2 seconds, reopened through `codexdeck resume`, unmanaged, and reopened in normal Codex with both original and phone turns intact. The regression test, all 910 web tests, package verification, service restart continuity, Wi-Fi-off cellular/Tailscale load, and browser request/error inspection pass; no active user session was taken over.
