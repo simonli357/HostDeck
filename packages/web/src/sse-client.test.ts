@@ -270,6 +270,35 @@ describe("bounded browser SSE client", () => {
     });
   });
 
+  it("accepts an adoption boundary from the explicit start-of-history cursor", async () => {
+    const reader = new ControlledReader();
+    const delivered: number[] = [];
+    const connection = createBrowserSseClient({
+      origin: remoteOrigin,
+      fetch: async () => sseResponse(reader)
+    }).connect({
+      sessionId,
+      after: 0,
+      onEvent(event) {
+        delivered.push(event.cursor);
+      }
+    });
+    await settle();
+    reader.pushText(
+      eventFrame(boundaryEvent(1, null, "adoption")) +
+        eventFrame(messageEvent(2, "retained native history"))
+    );
+    await waitFor(() => connection.snapshot().cursor === 2);
+    expect(delivered).toEqual([1, 2]);
+    expect(connection.snapshot()).toMatchObject({
+      phase: "connected",
+      continuity: "boundary",
+      boundary: { after: null, cursor: 1, reason: "adoption" },
+      failure: null
+    });
+    connection.close();
+  });
+
   it("accepts a forward replay boundary after reconnecting from a committed cursor", async () => {
     const clock = new ManualClock();
     const firstReader = new ControlledReader();

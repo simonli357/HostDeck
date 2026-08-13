@@ -1700,7 +1700,8 @@ function validateEventContinuity(
     if (
       attempt.eventCount !== 0 ||
       runtime.boundary !== null ||
-      (current !== null && (event.after === null || event.after < current)) ||
+      // A null boundary is the durable floor before cursor 1, equivalent to after=0.
+      (current !== null && (event.after ?? 0) < current) ||
       (current === null && event.cursor < 1)
     ) {
       throw new AttemptFailure("invalid_event", false);
