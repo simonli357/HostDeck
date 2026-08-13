@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  replayBoundaryReasonSchema,
   type SelectedProjectionEvent,
   selectedEventDiagnosticsSchema,
   selectedEventPageMaxSize,
@@ -1068,7 +1069,7 @@ function parseBoundary(candidate: unknown): SessionDetailContinuityBoundary {
     !Number.isSafeInteger(cursor) ||
     (cursor as number) < 0 ||
     (after !== null && (cursor as number) <= (after as number)) ||
-    !["retention", "disconnect", "restart", "schema_change", "adoption"].includes(reason as string)
+    !replayBoundaryReasonSchema.safeParse(reason).success
   ) {
     throw new TypeError("HostDeck event-diagnostics boundary is invalid.");
   }

@@ -3,6 +3,7 @@ import {
   type InterruptRequest,
   interruptRequestSchema,
   interruptResponseSchema,
+  replayBoundaryReasonSchema,
   type SelectedProjectionEvent,
   selectedEventPageMaxSize,
   selectedProjectionEventSchema,
@@ -1102,7 +1103,7 @@ function parseBoundary(candidate: unknown): SessionDetailContinuityBoundary {
     !Number.isSafeInteger(value.cursor) ||
     (value.cursor as number) < 0 ||
     (value.after !== null && (value.cursor as number) <= (value.after as number)) ||
-    !["retention", "disconnect", "restart", "schema_change"].includes(value.reason as string)
+    !replayBoundaryReasonSchema.safeParse(value.reason).success
   ) {
     throw new TypeError("HostDeck interrupt-control boundary is invalid.");
   }

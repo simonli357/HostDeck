@@ -2,6 +2,7 @@ import {
   type ApiErrorEnvelope,
   interruptResponseSchema,
   managedSessionProjectionSchema,
+  type SelectedProjectionEvent,
   selectedAccessStateResponseSchema,
   selectedHostLocalHealthComponents,
   selectedHostStatusResponseSchema,
@@ -141,6 +142,25 @@ describe("interrupt control state", () => {
       expect(view.actionEnabled).toBe(false);
       expect(view.actionDisabledReason).not.toBeNull();
     }
+  });
+
+  it("accepts adoption boundaries and derives interrupt authority only from later turn evidence", () => {
+    const boundary = { after: null, cursor: 1, reason: "adoption" } as const;
+    const idle = createController(undefined, context({
+      turnState: "idle",
+      events: [boundaryEvent(1, null, "adoption"), turnEvent(2, "completed")],
+      boundary
+    })).snapshot();
+    expect(idle).toMatchObject({ actionEnabled: false, target: null });
+
+    const active = createController(undefined, context({
+      events: [boundaryEvent(1, null, "adoption"), turnEvent(2, "in_progress")],
+      boundary
+    })).snapshot();
+    expect(active).toMatchObject({
+      actionEnabled: true,
+      target: { turnId, state: "in_progress" }
+    });
   });
 
   it("freezes the exact confirmation target and invalidates it before dispatch when state changes", async () => {
@@ -627,7 +647,7 @@ function context(input: Readonly<{
   sessionState?: "active" | "archived";
   turnState?: "idle" | "in_progress" | "waiting_for_input" | "waiting_for_approval" | "completed" | "interrupted" | "failed" | "unknown";
   projectedThreadId?: string;
-  events?: readonly ReturnType<typeof turnEvent>[];
+  events?: readonly SelectedProjectionEvent[];
   boundary?: InterruptControlContext["boundary"];
   streamState?: BrowserConnectionSnapshot["stream"]["state"];
   continuity?: BrowserConnectionSnapshot["stream"]["continuity"];
@@ -752,6 +772,27 @@ function turnEvent(
     error: state === "failed"
       ? { code: "runtime_unavailable", message: "Bounded selected failure." }
       : null
+  });
+}
+
+function boundaryEvent(
+  cursor: number,
+  after: number | null,
+  reason: "retention" | "disconnect" | "restart" | "schema_change" | "adoption"
+): SelectedProjectionEvent {
+  return selectedProjectionEventSchema.parse({
+    session_id: sessionId,
+    cursor,
+    captured_at: timestamp,
+    upstream_at: null,
+    codex_event_id: null,
+    codex_event_type: null,
+    content_state: "complete",
+    content_notice: null,
+    type: "replay_boundary",
+    after,
+    next_cursor: cursor,
+    reason
   });
 }
 

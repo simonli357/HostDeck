@@ -363,13 +363,24 @@ export const runtimeProjectionEventSchema = z
     }
   });
 
+export const replayBoundaryReasons = Object.freeze([
+  "retention",
+  "disconnect",
+  "restart",
+  "schema_change",
+  "adoption"
+] as const);
+
+export const replayBoundaryReasonSchema = z.enum(replayBoundaryReasons);
+export type ReplayBoundaryReason = z.infer<typeof replayBoundaryReasonSchema>;
+
 export const replayBoundaryProjectionEventSchema = z
   .object({
     ...eventBaseShape,
     type: z.literal("replay_boundary"),
     after: outputCursorSchema.nullable(),
     next_cursor: outputCursorSchema,
-    reason: z.enum(["retention", "disconnect", "restart", "schema_change", "adoption"])
+    reason: replayBoundaryReasonSchema
   })
   .strict()
   .superRefine((value, context) => {

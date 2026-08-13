@@ -1,4 +1,5 @@
 import {
+  type ReplayBoundaryReason,
   type SelectedProjectionEvent,
   selectedEventPageMaxSize,
   selectedProjectionEventSchema,
@@ -35,7 +36,7 @@ export interface SessionDetailFeedState {
 export interface SessionDetailContinuityBoundary {
   readonly after: number | null;
   readonly cursor: number;
-  readonly reason: "retention" | "disconnect" | "restart" | "schema_change" | "adoption";
+  readonly reason: ReplayBoundaryReason;
 }
 
 export interface SessionDetailTimelineFact {
