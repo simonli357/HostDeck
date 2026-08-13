@@ -1105,3 +1105,12 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Root cause: interrupt control duplicated the replay-boundary reason list and omitted the valid `adoption` reason, so its strict parser threw during React rendering.
 - Fix: export the replay-boundary reasons and schema from the shared contract, consume that schema in both strict UI boundary parsers, and cover adoption boundaries before idle and active turn evidence.
 - Current state: closed in pushed `f923874` and installed as `0.0.7`. All 911 web tests, 3,227 unit tests/32 intentional skips, 287 contract tests, 36 integration tests, typecheck, lint, planning, runtime-boundary, package verification, and a cache-disabled Xiaomi phone trace pass. The exact SideCue page renders at 384 by 736 with current SSE, enabled composer, no failure copy, and no current exception, console error, or HostDeck request failure.
+
+### BUG-088 Mature Native History Rejects Valid Private Payloads
+
+- Symptom: confirmed adoption of the closed MarketPilot thread returned `protocol_error` with HTTP 502 before creating a managed session.
+- Impact: valid mature Codex sessions containing large file changes could not enter the laptop-to-phone continuity flow.
+- Route: critical completed-task bugfix owned by `INT-V1-109`; no public product, security, setup, or UI contract change.
+- Root cause: adoption reused the live-event item parser for native history and applied projection text limits to recognized private `fileChange` payloads even though native adoption deliberately retains only bounded user and agent messages.
+- Fix: validate every history item's bounded id and generated item type, reject unknown types and duplicate ids, fully parse retained user/agent messages, and omit recognized non-message payload bodies without reading or copying them.
+- Current state: closed in `5b0d6e1` and installed as `0.0.8`. Focused 37, unit 3,228/32 intentional skips, contract 287, integration 36, typecheck, lint, planning, runtime-boundary, deterministic package build, and independent package verification pass. Exact live read/identity/resume probes now accept MarketPilot; confirmed adoption succeeded unchanged as `sess_04148572a7253dc60de5`, the failed attempt left no membership, and the managed session is current, idle, deduplicated from discovery, and retains its branch and paused goal.

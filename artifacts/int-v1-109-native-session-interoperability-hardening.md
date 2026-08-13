@@ -11,20 +11,22 @@ Status: passed
 - `BUG-083` makes shared-home startup independent of malformed unrelated history, restores managed `notLoaded` threads by exact id, and admits compatible histories created by nearby Codex versions without rewriting their provenance.
 - `BUG-086` admits ordinary top-level user-facing CLI forks by unchanged id while preserving exact fork provenance, excluding parent/subagent sessions, and retaining an explicit bounded suffix from mature or interrupted history.
 - `BUG-087` centralizes replay-boundary reasons in the shared contract so a valid adoption boundary cannot crash strict Session Detail controls.
+- `BUG-088` validates only the strict id/type envelope of recognized non-message native-history items, so private payloads that adoption never retains cannot invalidate an otherwise eligible mature session; retained messages, duplicate ids, and unknown types remain fail-closed.
 
 ## Validation
 
 | Gate | Result |
 | --- | --- |
 | Exact runtime | Pinned 0.144.0 model-backed aggregate: 1/1 passed in 22.58 seconds with complete isolated cleanup. |
-| Deterministic behavior | Focused native adoption cluster: 82 passed; duplicate/race/post-commit loss/active/uncertain/malformed/unmanage cases remain covered by owning suites. |
-| Workspace | Unit 3,227 passed/32 opt-in skipped; web 911 passed; contract 287 passed; integration 36 passed. |
+| Deterministic behavior | Focused native-history cluster: 37 passed, including a valid 64 KB private file diff that is omitted and a duplicate id across omitted/retained item types that is rejected. Duplicate/race/post-commit loss/active/uncertain/malformed/unmanage cases remain covered by owning suites. |
+| Workspace | Unit 3,228 passed/32 opt-in skipped; contract 287 passed; integration 36 passed. |
 | Platform | Focused Unix/WebSocket/TUI/Windows-supervisor contracts 9 passed; native Linux/Windows CI evidence gate 8 passed. |
 | Static | Root typecheck; Biome and eight-package exports across 897 files; 638-module runtime boundary; exact 671-file Codex binding. |
-| Package | Commit `f923874` built and independently verified `0.0.7`: 6,303 entries, 1,283 owned outputs, 638 sources, three web files, package SHA-256 `40b6fa57db736260473f8d8c47ae92baaf5ae6e02d24d09dcc8e4c39f0bb066f`. |
+| Package | Commit `5b0d6e1` built and independently verified `0.0.8`: 6,303 entries, 1,283 owned outputs, 638 sources, three web files, package SHA-256 `6cb5a785378141b49a83d671374f344a659dd5652074e764bad2f0681fe9d122`. |
 | Supply chain | Six metadata and real-package tests passed. |
 | Live shared home | Preserved-state deployment is ready with both managed sessions current, paired write authority retained, and ordinary CLI sessions from Codex 0.130.0 through 0.146.0 discoverable. Exact read/resume probes preserved id and cwd for 0.144.5 and 0.146.0 histories; a full 20-turn 0.130.0 adoption snapshot parsed under the pinned 0.144.0 controller without mutation. |
 | Live SideCue fork | Exact thread `019fc8bd-25ef-74c3-a3bf-c6e59e4122a4` parsed through three read-only requests, retained top-level fork provenance, and was adopted unchanged as `sess_f3ce8660795f47a23dc3`. The mapping survived upgrade and opened through managed-id `codexdeck resume` with the same cwd and native id. |
+| Live MarketPilot fork | Exact identity/read/resume probes against the mature thread pass under installed `0.0.8`. Confirmed adoption succeeded unchanged as `sess_04148572a7253dc60de5`; audit records one clean pre-commit failure followed by one success, one immutable membership exists, discovery excludes the managed id, and list reports current/idle with exact cwd, branch, and paused goal. |
 
 ## Remaining Boundary
 
@@ -34,6 +36,6 @@ Status: passed
 
 ## Physical Phone Follow-Up
 
-- Installed `0.0.7` preserves the shared Codex PID/socket while upgrading HostDeck and retaining all managed sessions.
+- Installed `0.0.8` preserves the shared Codex PID/socket while upgrading HostDeck and retaining all managed sessions.
 - A cache-disabled Xiaomi 15 Pro reload of exact `sidecue_sol` used the new JS/CSS assets and returned `200` for authenticated access, host, detail, approval, CSRF, and SSE requests. The 384 by 736 page rendered `Current`, an enabled composer, and `Ready to send` with no current runtime exception, console error, request failure, or failure banner.
-- SideCue is adopted. MarketPilot and ScandyControl remain discoverable and require their separately running owner to close before confirmed handoff.
+- SideCue and MarketPilot are adopted. ScandyControl remains discoverable and requires its separately running owner to close before confirmed handoff.
